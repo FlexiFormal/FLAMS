@@ -1,0 +1,91 @@
+[package]
+name = "immt-api"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 2
+lto = true
+
+[features]
+default = []
+server = ["serde"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+#env_logger = "0.11.1"
+
+[dependencies]
+#log={version="0.4.20",features=["kv_unstable"]}
+walkdir = "2.4.0"
+#env_logger = "0.11.1"
+either = "1.9.0"
+# tokio = { version = "1.35.1", features = ["macros","rt-multi-thread"] }
+rayon = "1.8.1"
+spliter = "0.1.0"
+tracing = "0.1.40"
+parking_lot = "0.12"
+tracing-subscriber = { version="0.3.18",features = ["smallvec","parking_lot"] }
+
+
+# maybe: does rdf, can split into namespaces (woohoo), might need binarydf or something
+#oxigraph = "0.4.0-alpha.3"
+# https://docs.rs/oxigraph
+
+# probably not:
+# can store all the things(TM), but apparently doesn't support splitting into archives
+#surrealdb = { version = "1.1.1", features = ["kv-mem","kv-rocksdb"] }
+
+# probably not: also just relational data, then might as well use rdf
+# indradb-lib = "4.0.0"
+# https://crates.io/crates/indradb
+
+# probably not: relational, everything is a relation, doesn't support splitting into archives
+# but maybe fixable(?) <- probably not
+# also: only interaction possible is via string commands
+# https://docs.cozodb.org/en/latest/releases/v0.2.html https://crates.io/crates/cozo
+# cozo = { version="0.7.6",features = ["storage-rocksdb","graph-algo","jemalloc"] }
+
+# probably not: relational, but nodes need to exist before relations, making relations between
+# archives impossible
+# https://crates.io/crates/kuzu
+
+# probably not: vector database for embeddings, no support for splitting into archives, but maybe
+# usable for search or something
+# https://crates.io/crates/vectordb
+
+# basically a build-your-own-database; no import/export functionality, apparently
+# https://crates.io/crates/bonsaidb
+
+# nope: vc for arbitrary data structures
+# https://crates.io/crates/vsdb
+
+# basically just kv-store
+# https://crates.io/crates/sled
+
+# https://crates.io/crates/rusqlite
+# https://docs.rs/sqlx/0.7.3/sqlx/ and https://crates.io/crates/diesel
+# https://crates.io/crates/rocksdb
+
+# ---
+
+
+# search:
+# https://sachaarbonel.medium.com/how-to-build-a-semantic-search-engine-in-rust-e96e6378cfd9
+# https://github.com/hora-search/hora
+
+
+# other stuff:
+# https://medium.com/coderhack-com/rust-codecs-and-processing-binary-data-2609002a02b6
+# https://docs.rs/lz4_flex/latest/lz4_flex/
+# https://crates.io/crates/bincode
+
+
+
+serde = { version = "1.0.196", features = ["derive"],optional = true }
+once_cell = "1.19.0"
