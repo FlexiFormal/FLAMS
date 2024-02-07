@@ -20,7 +20,7 @@ strip = "symbols"
 [dev-dependencies]
 
 [dependencies]
-immt-api = {path = "../api"}
+immt-api = {path = "../api",features=["bincode","fs","pariter"]}
 immt-system = {path = "../system"}
 immt-stex = {path = "../stex"}
 rayon = "1.8"

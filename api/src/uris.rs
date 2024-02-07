@@ -41,10 +41,10 @@ impl DomURI {
     pub fn new<S:Into<Str>>(s:S) -> Self { Self(s.into()) } // TODO verify that this is a valid URI
     #[inline]
     pub fn as_ref(&self) -> DomURIRef<'_> {
-        DomURIRef(self.0.as_str())
+        DomURIRef(&self.0)
     }
     #[inline]
-    pub fn as_str(&self) -> &str { self.0.as_str() }
+    pub fn as_str(&self) -> &str { &self.0 }
 }
 impl Display for DomURI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -79,13 +79,13 @@ impl ArchiveURI {
     #[inline]
     pub fn base(&self) -> DomURIRef<'_> {
         DomURIRef(
-            &self.inner.as_str()[0..self.archive_index as usize - 3]
+            &self.inner[0..self.archive_index as usize - 3]
         )
     }
     #[inline]
     pub fn id(&self) -> ArchiveIdRef {
         ArchiveIdRef(
-            &self.inner.as_str()[self.archive_index as usize..]
+            &self.inner[self.archive_index as usize..]
         )
     }
 
@@ -115,7 +115,7 @@ impl<'a> ArchiveURIRef<'a> {
     pub fn to_owned(&self) -> ArchiveURI {
         let archive_index = (self.base.as_str().len() + 3) as u8;
         ArchiveURI{
-            inner:self.to_string(),
+            inner:self.to_string().into(),
             archive_index
         }
     }

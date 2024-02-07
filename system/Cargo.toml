@@ -23,7 +23,7 @@ default = []
 #env_logger = "0.11.1"
 
 [dependencies]
-immt-api = {path="../api",features=["bincode","fs"]}
+immt-api = {path="../api",features=["bincode","fs","pariter"]}
 #log={version="0.4.20",features=["kv_unstable"]}
 walkdir = "2.4"
 #env_logger = "0.11.1"

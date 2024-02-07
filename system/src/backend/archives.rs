@@ -3,14 +3,38 @@ use std::path::{Path, PathBuf};
 use either::Either;
 use immt_api::{Seq,Str,utils::HMap,formats::FormatStore};
 use parking_lot::RwLockWriteGuard;
+use immt_api::archives::{ArchiveData, ArchiveGroupBase, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
+use immt_api::source_files::{ParseError, SerializeError, SourceDir};
 use immt_api::utils::problems::{ProblemHandler as PHandlerT};
+use tracing::{event, instrument};
+use crate::utils::problems::ProblemHandler;
 
 #[derive(Debug)]
 pub struct Archive {
-    pub(in crate::backend) manifest:ArchiveManifest,
+    pub(in crate::backend) manifest:ArchiveData,
     path:PathBuf,
     state:parking_lot::RwLock<ArchiveState>,
     //watcher: Option<RecommendedWatcher>
+}
+impl ArchiveT for Archive {
+    #[instrument(level = "info", name = "initialize", target = "backend::archive", skip(data, handler, formats))]
+    fn new_from<P: PHandlerT>(data: ArchiveData, path: &Path, handler: &P, formats: &FormatStore) -> Self {
+        let mut state = ArchiveState::default();
+        state.initialized = true;
+        event!(tracing::Level::DEBUG,"Initializing archive {}",data.id);
+        if !Self::ls_f(&mut state, path, &data.ignores, handler, formats) && !data.is_meta {
+            handler.add("Missing source", format!("Archive has no source directory: {}",data.id));
+        }
+        event!(tracing::Level::DEBUG,"Done");
+        Self {
+            manifest:data,
+            path:path.to_path_buf(),
+            state:parking_lot::RwLock::new(state),
+            //watcher:None
+        }
+    }
+    #[inline]
+    fn data(&self) -> &ArchiveData { &self.manifest }
 }
 
 #[derive(Debug)]
@@ -28,26 +52,7 @@ impl Default for ArchiveState {
 }
 // use notify::{Watcher, RecommendedWatcher, RecursiveMode};
 impl Archive {
-    pub fn id(&self) -> &ArchiveId { &self.manifest.id }
-    pub fn formats(&self) -> &[FormatId] { &self.manifest.formats }
-    pub fn path(&self) -> &Path { &self.path }
-    pub fn new(manifest:ArchiveManifest,path:PathBuf) -> Self {
-        Self { manifest, path, state:parking_lot::RwLock::new(ArchiveState::default())}//,watcher:None }
-    }
-
-    #[instrument(level = "info",name = "initialize", target = "backend::archive", skip(self,handler,formats))]
-    pub(in crate::backend) fn initialize(&mut self,handler:&ProblemHandler,formats:&FormatStore) {
-        let mut state = self.state.write();
-        if state.initialized { return }
-        state.initialized = true;
-        event!(tracing::Level::DEBUG,"Initializing archive {}",self.manifest.id);
-        if !Self::ls_f(&mut state, &self.path, &self.manifest.ignores, handler, formats) && !self.manifest.is_meta {
-            handler.add("Missing source", format!("Archive has no source directory: {}",self.manifest.id));
-        }
-        event!(tracing::Level::DEBUG,"Done");
-    }
-
-    fn ls_f(state:&mut RwLockWriteGuard<ArchiveState>, path:&Path,ignore:&IgnoreSource, handler:&ProblemHandler,formats:&FormatStore) -> bool {
+    fn ls_f<P: PHandlerT>(state:&mut ArchiveState, path:&Path,ignore:&IgnoreSource, handler:&P,formats:&FormatStore) -> bool {
         let dirfile = path.join(".out").join("ls_f.db");
         if dirfile.exists() {
             match SourceDir::parse(&dirfile) {
@@ -132,219 +137,18 @@ impl Archive {
 
 #[derive(Debug)]
 pub struct ArchiveGroup {
-    id:ArchiveId,
-    meta:Option<Archive>,
-    pub(in crate::backend) len:usize,
-    pub(in crate::backend) archives:Vec<Either<ArchiveGroup,Archive>>
+    base:ArchiveGroupBase<Archive,Self>
 }
-impl ArchiveGroup {
-    pub fn set_meta(&mut self,meta:Archive) {
-        self.meta = Some(meta)
-    }
-    pub fn meta(&self) -> Option<&Archive> { self.meta.as_ref() }
-    pub fn id(&self) -> &ArchiveId { &self.id }
-    pub fn new<S:Into<ArchiveId>>(id:S) -> Self {
+impl ArchiveGroupT<Archive> for ArchiveGroup {
+    fn new(id:ArchiveId) -> Self {
         Self {
-            id:id.into(),
-            meta:None,
-            len:0,
-            archives:Vec::new()
-        }
-    }
-    pub fn children(&self) -> &[Either<ArchiveGroup,Archive>] { &self.archives }
-    pub fn num_archives(&self) -> usize { self.len }
-}
-impl<'a> IntoIterator for &'a ArchiveGroup {
-    type Item = &'a Archive;
-    type IntoIter = ArchiveGroupIter<'a>;
-    fn into_iter(self) -> Self::IntoIter {
-        ArchiveGroupIter::new(self.meta.as_ref(), &self.archives, self.len)
-    }
-}
-
-use rayon::prelude::IntoParallelIterator;
-use spliter::ParallelSpliterator;
-
-impl<'a> IntoParallelIterator for &'a ArchiveGroup {
-    type Iter = ParSpliter<ParArchiveGroupIter<'a>>;
-    type Item = &'a Archive;
-    fn into_par_iter(self) -> Self::Iter {
-        ParArchiveGroupIter::new(self.meta.as_ref(), &self.archives)
-    }
-}
-
-use immt_api::formats::FormatId;
-
-#[derive(Debug)]
-pub struct ArchiveManifest {
-    pub id:ArchiveId,
-    pub formats:Seq<FormatId>,
-    pub is_meta:bool,
-    pub url_base:Str,
-    pub dependencies:Seq<ArchiveId>,
-    pub ignores:IgnoreSource,
-    pub attrs:HMap<String,String>
-}
-
-
-#[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
-#[derive(Clone,Hash,PartialEq,Eq)]
-pub struct ArchiveId(pub(in crate::backend) Seq<Str>);
-impl ArchiveId {
-    pub fn is_empty(&self) -> bool { self.0.is_empty() }
-    pub fn steps(&self) -> &[Str] { &self.0 }
-}
-impl Debug for ArchiveId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self,f)
-    }
-}
-impl Display for ArchiveId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i,s) in self.0.iter().enumerate() {
-            if i > 0 { write!(f,"/")? }
-            write!(f,"{}",s)?
-        }
-        Ok(())
-    }
-}
-impl From<&str> for ArchiveId {
-    fn from(s:&str) -> Self {
-        Self(s.split('/').map(|c| c.into()).collect())
-    }
-}
-impl From<String> for ArchiveId {
-    fn from(s:String) -> Self {
-        Self(s.split('/').map(|c| c.into()).collect())
-    }
-}
-impl From<Vec<Str>> for ArchiveId {
-    fn from(v:Vec<Str>) -> Self {
-        Self(v.into())
-    }
-}
-
-pub struct ArchiveGroupIter<'a> {
-    stack:Vec<&'a [Either<ArchiveGroup,Archive>]>,
-    curr:&'a[Either<ArchiveGroup,Archive>],
-    meta:Option<&'a Archive>,
-    len:usize
-}
-impl<'a> ArchiveGroupIter<'a> {
-    pub(in crate::backend) fn new(meta:Option<&'a Archive>,group:&'a [Either<ArchiveGroup,Archive>],len:usize) -> Self {
-        Self {
-            stack:Vec::new(),
-            curr:group,
-            len,meta
-        }
-    }
-}
-impl<'a> ExactSizeIterator for ArchiveGroupIter<'a> {
-    fn len(&self) -> usize { self.len }
-}
-impl<'a> Iterator for ArchiveGroupIter<'a> {
-    type Item = &'a Archive;
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(m) = std::mem::take(&mut self.meta) {
-            self.len -= 1;
-            return Some(m)
-        }
-        loop {
-            if self.curr.is_empty() {
-                match self.stack.pop() {
-                    Some(s) => { self.curr = s; }
-                    None => return None
-                }
-            } else {
-                let next = &self.curr[0];
-                self.curr = &self.curr[1..];
-                match next {
-                    Either::Left(g) => {
-                        let meta = g.meta.as_ref();
-                        let old = std::mem::replace(&mut self.curr,g.archives.as_slice());
-                        self.stack.push(old);
-                        if let Some(a) = meta {
-                            self.len -= 1;
-                            return Some(a)
-                        }
-                    }
-                    Either::Right(a) => {
-                        self.len -= 1;
-                        return Some(a)
-                    }
-                }
+            base:ArchiveGroupBase {
+                id,meta:None,archives:Vec::new()
             }
         }
     }
-}
-
-pub struct ParArchiveGroupIter<'a> {
-    stack:Vec<&'a [Either<ArchiveGroup,Archive>]>,
-    curr:&'a[Either<ArchiveGroup,Archive>],
-    meta:Option<&'a Archive>,
-}
-use spliter::ParSpliter;
-use tracing::{event, instrument};
-use immt_api::source_files::{ParseError, SerializeError, SourceDir};
-use immt_api::archives::IgnoreSource;
-use crate::utils::problems::ProblemHandler;
-
-impl<'a> ParArchiveGroupIter<'a> {
-    pub(in crate::backend) fn new(meta:Option<&'a Archive>,group:&'a [Either<ArchiveGroup,Archive>]) -> ParSpliter<Self> {
-        Self {
-            stack:Vec::new(),
-            curr:group, meta
-        }.par_split()
+    fn base(&self) -> &ArchiveGroupBase<Archive,Self> { &self.base }
+    fn base_mut(&mut self) -> &mut ArchiveGroupBase<Archive,Self> {
+        &mut self.base
     }
 }
-impl<'a> Iterator for ParArchiveGroupIter<'a> {
-    type Item = &'a Archive;
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(m) = std::mem::take(&mut self.meta) {
-            return Some(m)
-        }
-        loop {
-            if self.curr.is_empty() {
-                match self.stack.pop() {
-                    Some(s) => { self.curr = s; }
-                    None => return None
-                }
-            } else {
-                let next = &self.curr[0];
-                self.curr = &self.curr[1..];
-                match next {
-                    Either::Left(g) => {
-                        let meta = g.meta.as_ref();
-                        let old = std::mem::replace(&mut self.curr,g.archives.as_slice());
-                        self.stack.push(old);
-                        if let Some(a) = meta {
-                            return Some(a)
-                        }
-                    }
-                    Either::Right(a) => {
-                        return Some(a)
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl<'a> spliter::Spliterator for ParArchiveGroupIter<'a> {
-    fn split(&mut self) -> Option<Self> {
-        if self.curr.len() < 2 && self.stack.len() < 2 { return None }
-        let currsplit = self.curr.len()/2;
-        let stacksplit = self.stack.len()/2;
-        let (leftcurr,rightcurr) = self.curr.split_at(currsplit);
-        let rightstack = self.stack.split_off(stacksplit);
-        self.curr = leftcurr;
-        Some(Self {
-            curr:rightcurr,
-            stack:rightstack,
-            meta:None,
-        })
-    }
-}
-
-// https://geo-ant.github.io/blog/2022/implementing-parallel-iterators-rayon/
-// https://tavianator.com/2022/parallel_graph_search.html

@@ -16,9 +16,9 @@ use crate::utils::HMap;
 pub struct ArchiveId(Str);
 impl ArchiveId {
     #[inline]
-    pub fn as_str(&self) -> &str { self.0.as_str() }
+    pub fn as_str(&self) -> &str { &self.0 }
     #[inline]
-    pub fn as_ref(&self) -> ArchiveIdRef<'_> { ArchiveIdRef(self.0.as_str()) }
+    pub fn as_ref(&self) -> ArchiveIdRef<'_> { ArchiveIdRef(&self.0) }
     #[inline]
     pub fn is_empty(&self) -> bool { self.0.is_empty() }
     #[inline]
@@ -32,7 +32,7 @@ impl ArchiveId {
 impl Display for ArchiveId {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.as_str())
+        f.write_str(&self.0)
     }
 }
 
@@ -69,7 +69,7 @@ pub struct ArchiveData {
     pub attrs:HMap<String,String>
 }
 pub trait ArchiveT {
-    fn new_from(data:ArchiveData,path:&Path) -> Self;
+    fn new_from<P:ProblemHandler>(data:ArchiveData,path:&Path,handler:&P,formats: &FormatStore) -> Self;
     fn data(&self) -> &ArchiveData;
     #[inline]
     fn attr(&self,key:&str) -> Option<&str> {
@@ -122,11 +122,11 @@ pub trait ArchiveGroupT<A:ArchiveT>:Sized {
         self.base().meta.as_ref()
     }
     fn archives<'a>(&'a self) -> impl Iterator<Item=&'a A> where A:'a {
-        ArchiveIter::new(self.meta(),self.base().archives.as_slice())
+        ArchiveIter::new(self.meta(),&self.base().archives)
     }
     #[cfg(feature = "pariter")]
     fn archives_par<'a>(&'a self) -> impl rayon::iter::ParallelIterator<Item=&'a A> where A:'a+Sync,Self:Sync {
-        pariter::ParArchiveIter::new(self.meta(),self.base().archives.as_slice())
+        pariter::ParArchiveIter::new(self.meta(),&self.base().archives)
     }
     #[cfg(feature="fs")]
     #[inline]
@@ -208,7 +208,7 @@ mod load_dir {
                         match self.get_manifest(&path) {
                             Some(Ok(m)) => {
                                 let p = path.parent().unwrap();
-                                self.add(A::new_from(m,p));
+                                self.add(A::new_from(m,p,self.handler,self.formats));
                                 stack.pop();
                                 next!();
                             }
@@ -227,7 +227,7 @@ mod load_dir {
 
         fn add(&mut self,a:A) {
             let mut id = a.id().steps().map(|s| s.to_string()).collect::<Vec<_>>();
-            assert!(id.len()>1);
+            assert!(!id.is_empty());
             if id.len() == 1 {
                 self.archives.push(Either::Right(a));
                 return

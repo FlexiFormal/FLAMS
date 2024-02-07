@@ -249,11 +249,11 @@ fn archives() {
     });
     let f = |_| {std::thread::sleep(std::time::Duration::from_secs_f32(0.2))};
     measure("iterating single threaded",|| {
-        for a in controller.archives().into_iter() {
+        for a in controller.archives().iter() {
             f(a);
         }
     });
     measure("iterating parallel",|| {
-        controller.archives().into_par_iter().for_each(f);
+        controller.archives().par_iter().for_each(f);
     });
 }
