@@ -45,23 +45,27 @@ impl Format {
     pub fn id(&self) -> FormatId { self.id }
     #[inline]
     pub fn get_extensions(&self) -> &'static [&'static str] { self.file_extensions }
-    /*
-    pub fn register_new(id:&'static str, file_extensions:&'static [&'static str]) -> Result<FormatRef,FormatRef> {
-        let r = Self { id, file_extensions };
-        register_format(r)
-    }
-    pub fn parse<S:AsRef<str>>(s:S) -> Option<FormatRef> {
-        FORMAT_STORE.read().iter().enumerate().find_map(|(i,f)| {
-            if f.id.eq_ignore_ascii_case(s.as_ref()) { Some(FormatRef(i as u16)) }
-            else { None }
-        })
-    }
-    pub fn from_extension<S:AsRef<str>>(ext:S) -> Option<FormatRef> {
-        FORMAT_STORE.read().iter().enumerate().find_map(|(i,f)| {
-            if f.file_extensions.iter().any(|e| e.eq_ignore_ascii_case(ext.as_ref())) { Some(FormatRef(i as u16)) }
-            else { None }
-        })
-    }
+}
 
-     */
+
+#[derive(Default)]
+pub struct FormatStore {
+    formats:Vec<Format>
+}
+impl FormatStore {
+    pub fn from_ext<S:AsRef<str>>(&self,s:S) -> Option<FormatId> {
+        let s = s.as_ref();
+        for f in &self.formats {
+            if f.get_extensions().iter().any(|e| e.eq_ignore_ascii_case(s)) {
+                return Some(f.id())
+            }
+        }
+        None
+    }
+    pub fn register(&mut self,format:Format) {
+        match self.formats.iter_mut().find(|f| f.id() == format.id()) {
+            Some(f) => *f = format,
+            _ => self.formats.push(format)
+        }
+    }
 }

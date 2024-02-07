@@ -5,7 +5,7 @@ use either::Either;
 use spliter::ParSpliter;
 use tracing::{event, instrument, span};
 use crate::backend::archives::{Archive, ArchiveGroup, ArchiveGroupIter, ArchiveId, ArchiveManifest, ParArchiveGroupIter};
-use immt_api::formats::FormatId;
+use immt_api::formats::{FormatId,FormatStore};
 use immt_api::{Str,utils::HMap};
 
 pub struct ArchiveManager {
@@ -21,7 +21,6 @@ impl<'a> IntoIterator for &'a ArchiveManager {
 }
 use rayon::prelude::IntoParallelIterator;
 use immt_api::archives::IgnoreSource;
-use crate::formats::FormatStore;
 use crate::utils::problems::ProblemHandler;
 use immt_api::utils::problems::{ProblemHandler as PHandlerT};
 

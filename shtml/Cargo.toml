@@ -1,5 +1,5 @@
 [package]
-name = "immt-stex"
+name = "immt-shtml"
 version = "0.0.1"
 authors = ["Dennis Müller <d.mueller@kwarc.info>"]
 license = "MIT OR Apache-2.0"
@@ -18,4 +18,3 @@ path = "src/lib.rs"
 [dependencies]
 immt-api = {path = "../api"}
 immt-system = {path = "../system"}
-immt-shtml = {path = "../shtml"}

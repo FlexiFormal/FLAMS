@@ -38,6 +38,7 @@ impl<'a> MMTUriRef<'a> {
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
 pub struct DomURI(Str);
 impl DomURI {
+    pub fn new<S:Into<Str>>(s:S) -> Self { Self(s.into()) } // TODO verify that this is a valid URI
     #[inline]
     pub fn as_ref(&self) -> DomURIRef<'_> {
         DomURIRef(self.0.as_str())

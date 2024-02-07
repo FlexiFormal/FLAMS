@@ -1,13 +1,14 @@
 use std::fmt::Display;
-use std::ops::Deref;
 use std::path::Path;
 use either::Either;
 use crate::formats::FormatId;
+#[cfg(feature="fs")]
+use crate::formats::FormatStore;
+#[cfg(feature="fs")]
+use crate::utils::problems::ProblemHandler;
 use crate::{Seq, Str};
-use crate::source_files::FileLike;
 use crate::uris::{ArchiveURIRef, DomURI, DomURIRef};
 use crate::utils::HMap;
-use crate::utils::iter::{HasChildren, HasChildrenRef, LeafIterator};
 
 #[derive(Clone,Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
@@ -21,8 +22,11 @@ impl ArchiveId {
     #[inline]
     pub fn is_empty(&self) -> bool { self.0.is_empty() }
     #[inline]
-    pub fn steps(&self) -> impl Iterator<Item=&str> {
+    pub fn steps(&self) -> impl DoubleEndedIterator<Item=&str> {
         self.0.split('/')
+    }
+    pub fn new<S:Into<Str>>(s:S) -> Self {
+        Self(s.into())
     }
 }
 impl Display for ArchiveId {
@@ -40,6 +44,10 @@ impl<'a> ArchiveIdRef<'a> {
     #[inline]
     pub fn as_str(&self) -> &str { self.0 }
     pub fn to_owned(&self) -> ArchiveId { ArchiveId(self.0.into()) }
+    #[inline]
+    pub fn steps(&self) -> impl Iterator<Item=&str> {
+        self.0.split('/')
+    }
 }
 impl<'a> Display for ArchiveIdRef<'a> {
     #[inline]
@@ -61,6 +69,7 @@ pub struct ArchiveData {
     pub attrs:HMap<String,String>
 }
 pub trait ArchiveT {
+    fn new_from(data:ArchiveData,path:&Path) -> Self;
     fn data(&self) -> &ArchiveData;
     #[inline]
     fn attr(&self,key:&str) -> Option<&str> {
@@ -101,7 +110,9 @@ pub struct ArchiveGroupBase<A:ArchiveT,G:ArchiveGroupT<A>> {
 }
 
 pub trait ArchiveGroupT<A:ArchiveT>:Sized {
+    fn new(id:ArchiveId) -> Self;
     fn base(&self) -> &ArchiveGroupBase<A,Self>;
+    fn base_mut(&mut self) -> &mut ArchiveGroupBase<A,Self>;
     #[inline]
     fn id<'a>(&'a self) -> ArchiveIdRef where A:'a {
         self.base().id.as_ref()
@@ -117,7 +128,252 @@ pub trait ArchiveGroupT<A:ArchiveT>:Sized {
     fn archives_par<'a>(&'a self) -> impl rayon::iter::ParallelIterator<Item=&'a A> where A:'a+Sync,Self:Sync {
         pariter::ParArchiveIter::new(self.meta(),self.base().archives.as_slice())
     }
+    #[cfg(feature="fs")]
+    #[inline]
+    fn load_dir<P:ProblemHandler>(path:&Path,formats:&FormatStore,handler:&P) -> Vec<Either<Self,A>> where A:std::fmt::Debug {
+        load_dir::ArchiveLoader {
+            archives:Vec::new(),
+            formats,
+            handler,
+            mh:path
+        }.run()
+    }
     //fn iter(&self) -> LeafIterator<&Either<Self,A>> { self.iter_leafs() }
+}
+
+#[cfg(feature="fs")]
+mod load_dir {
+    use std::path::Path;
+    use either::Either;
+    use tracing::{event, span};
+    use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
+    use crate::formats::{FormatId, FormatStore};
+    use crate::utils::problems::ProblemHandler;
+    use std::fmt::Debug;
+    use std::io::BufRead;
+    use crate::Str;
+    use crate::uris::DomURI;
+    use crate::utils::HMap;
+
+    pub struct ArchiveLoader<'a,P:ProblemHandler,A:ArchiveT+Debug,G:ArchiveGroupT<A>> {
+        pub archives: Vec<Either<G,A>>,
+        pub formats:&'a FormatStore,
+        pub handler:&'a P,
+        pub mh:&'a Path
+    }
+    impl<'a,P:ProblemHandler+'a,A:ArchiveT+Debug,G:ArchiveGroupT<A>> ArchiveLoader<'a,P,A,G> {
+        pub fn run(mut self) -> Vec<Either<G,A>> {
+            let mut stack = vec!(vec!());
+            let mut curr = match std::fs::read_dir(self.mh) {
+                Ok(rd) => rd,
+                _ => {
+                    self.handler.add("archives",format!("Could not read directory {}",self.mh.display()));
+                    return self.archives
+                }
+            };
+            'top: loop {
+                macro_rules! next {
+                    () => {
+                        loop {
+                            match stack.last_mut() {
+                                None => break 'top,
+                                Some(s) => {
+                                    match s.pop() {
+                                        Some(e) => {
+                                            curr = std::fs::read_dir(&e).unwrap();
+                                            stack.push( Vec::new() );
+                                            continue 'top
+                                        }
+                                        None => { stack.pop();}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                let d = match curr.next() {
+                    None => next!(),
+                    Some(Ok(d)) => d,
+                    _ => continue
+                };
+                let md = match d.metadata() {
+                    Ok(md) => md,
+                    _ => continue
+                };
+                let path = d.path();
+                let _span = span!(target:"archives",tracing::Level::TRACE,"checking","{}",path.display()).entered();
+                if md.is_dir() {
+                    if d.file_name().to_str().map_or(true,|s| s.starts_with('.')) {continue}
+                    if d.file_name().eq_ignore_ascii_case("meta-inf") {
+                        match self.get_manifest(&path) {
+                            Some(Ok(m)) => {
+                                let p = path.parent().unwrap();
+                                self.add(A::new_from(m,p));
+                                stack.pop();
+                                next!();
+                            }
+                            Some(_) => {
+                                stack.pop();
+                                next!();
+                            }
+                            _ => ()
+                        }
+                    }
+                    stack.last_mut().unwrap().push(path);
+                }
+            }
+            self.archives
+        }
+
+        fn add(&mut self,a:A) {
+            let mut id = a.id().steps().map(|s| s.to_string()).collect::<Vec<_>>();
+            assert!(id.len()>1);
+            if id.len() == 1 {
+                self.archives.push(Either::Right(a));
+                return
+            }
+            for c in &mut self.archives {
+                match c {
+                    Either::Left(ref mut g) if g.id().steps().last().map_or(false, |x| x == *id.first().unwrap()) => {
+                        id.remove(0);
+                        return Self::add_i(a,g,id,1);
+                    }
+                    _ => ()
+                }
+            }
+            let g = G::new(ArchiveId::new(id.first().unwrap().to_string()));
+            self.archives.push(Either::Left(g));
+            id.remove(0);
+            Self::add_i(a,self.archives.last_mut().unwrap().as_mut().unwrap_left(),id,1)
+        }
+
+
+        fn add_i(a:A,curr:&mut G,mut id:Vec<String>,mut depth:usize) {
+            if id.len() <= 1 {
+                if a.data().is_meta {
+                    curr.base_mut().meta= Some(a);
+                } else {
+                    curr.base_mut().archives.push(Either::Right(a));
+                }
+                return
+            }
+            depth += 1;
+            let head = id.remove(0);
+            for g in curr.base_mut().archives.iter_mut().filter_map(|g| g.as_mut().left()) {
+                if g.id().steps().last().map_or(false, |x| x == head) {
+                    return Self::add_i(a,g,id,depth)
+                }
+            }
+            let g = G::new(ArchiveId::new(a.id().steps().take(depth).collect::<Vec<_>>().join("/")));
+            curr.base_mut().archives.push(Either::Left(g));
+            Self::add_i(a,curr.base_mut().archives.last_mut().unwrap().as_mut().unwrap_left(),id,depth)
+        }
+
+        fn get_manifest(&self,metainf:&Path) -> Option<Result<ArchiveData,()>> {
+            event!(tracing::Level::TRACE,"Checking for manifest");
+            match std::fs::read_dir(metainf) {
+                Ok(rd) => {
+                    for d in rd {
+                        let d = match d {
+                            Err(_) => {
+                                self.handler.add("archives",format!("Could not read directory {}",metainf.display()));
+                                continue
+                            },
+                            Ok(d) => d
+                        };
+                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") {continue}
+                        let path = d.path();
+                        if !path.is_file() { continue }
+                        return Some(self.do_manifest(&path))
+                    }
+                    event!(tracing::Level::TRACE,"not found");
+                    None
+                }
+                _ => {
+                    self.handler.add("archives",format!("Could not read directory {}",metainf.display()));
+                    None
+                }
+            }
+        }
+        fn do_manifest(&self,path:&Path) -> Result<ArchiveData,()> {
+            let reader = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+            let mut id:Str = Str::default();
+            let mut formats = Vec::new();
+            let mut dom_uri:Str = "".into();
+            let mut dependencies = Vec::new();
+            let mut ignores = IgnoreSource::default();
+            let mut is_meta = false;
+            let mut attrs = HMap::default();
+            for line in reader.lines() {
+                let line = match line {
+                    Err(_) => continue,
+                    Ok(l) => l
+                };
+                let (k,v) = match line.split_once(':') {
+                    Some((k,v)) => (k.trim(),v.trim()),
+                    _ => continue
+                };
+                match k {
+                    "id" => { id = v.into() }
+                    "format" => { formats = v.split(',').flat_map(FormatId::try_from).collect() }
+                    "url-base" => { dom_uri = v.into() }
+                    "dependencies" => {
+                        for d in v.split(',') {
+                            dependencies.push(ArchiveId::new(d))
+                        }
+                    }
+                    "ignore" => {
+                        ignores = IgnoreSource::new(v,&path.parent().unwrap().parent().unwrap().join("source"));//Some(v.into());
+                    }
+                    _ => {attrs.insert(k.into(),v.into());}
+                }
+            }
+            let id = ArchiveId::new(id);
+            if id.steps().last().is_some_and(|s| s.eq_ignore_ascii_case("meta-inf") ) {
+                is_meta = true;
+            }
+            if formats.is_empty() && !is_meta {
+                self.handler.add("archives",format!("No formats found for archive {}",id));
+                return Err(())
+            }
+            if id.is_empty() {
+                self.handler.add("archives","No id found for archive");
+                return Err(())
+            }
+            let checks_out = {
+                let mut ip = path.parent().unwrap().parent().unwrap();
+                let ids = id.steps().rev().collect::<Vec<_>>();
+                let mut checks_out = true;
+                for name in ids {
+                    if ip.file_name().map_or(false,|f| f == name) {
+                        ip = ip.parent().unwrap();
+                    } else {
+                        checks_out = false; break
+                    }
+                }
+                checks_out && ip == self.mh
+            };
+            if !checks_out {
+                self.handler.add("archives",format!("Archive {}'s id does not match its location ({})",id,path.display()));
+                return Err(())
+            }
+            if dom_uri.is_empty() {
+                self.handler.add("archives",format!("Archive {} has no URL base",id));
+                return Err(())
+            }
+            let id: ArchiveId = id.into();
+            dependencies.retain(|d:&ArchiveId| !d.is_empty() && d.as_str() != id.as_str());
+            let a = ArchiveData {
+                id, formats:formats.into(),
+                dom_uri:DomURI::new(dom_uri),
+                dependencies:dependencies.into(),
+                ignores,attrs,is_meta
+            };
+            event!(tracing::Level::DEBUG,"Archive found: {}",a.id);
+            event!(tracing::Level::TRACE,"{:?}",a);
+            Ok(a)
+        }
+    }
 }
 
 struct ArchiveIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {

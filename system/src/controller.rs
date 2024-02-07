@@ -1,8 +1,7 @@
 use std::path::Path;
 use crate::backend::archive_manager::ArchiveManager;
 use std::path::PathBuf;
-use immt_api::formats::Format;
-use crate::formats::FormatStore;
+use immt_api::formats::{Format,FormatStore};
 use crate::ontology::relational::RelationalManager;
 use crate::utils::problems::ProblemHandler;
 

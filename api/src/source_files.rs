@@ -1,11 +1,13 @@
+#[cfg(feature="fs")]
 use std::path::Path;
+#[cfg(feature="fs")]
+use crate::utils::problems::ProblemHandler;
+#[cfg(feature="fs")]
+use crate::archives::IgnoreSource;
 use either::Either;
-use tracing::event;
 use crate::formats::FormatId;
 use crate::{Seq, Str};
-use crate::archives::IgnoreSource;
 use crate::utils::iter::{HasChildren, HasChildrenMut, HasChildrenRef, LeafIterator, TreeLike, TreeMutLike, TreeRefLike};
-use crate::utils::problems::ProblemHandler;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
@@ -34,7 +36,7 @@ pub struct SourceDir{pub name:Str,pub children:Seq<FileLike>}
 impl SourceDir {
     pub fn iter(&self) -> LeafIterator<&FileLike> { self.iter_leafs() }
     pub fn iter_mut(&mut self) -> LeafIterator<&mut FileLike> { self.iter_leafs() }
-    #[cfg(feature="bincode")]
+    #[cfg(all(feature="bincode",feature="fs"))]
     pub fn parse<F:AsRef<Path>>(file:F) -> Result<Seq<FileLike>,ParseError> {
         let file = file.as_ref();
         match std::fs::File::open(file) {
@@ -45,7 +47,7 @@ impl SourceDir {
             _ => Err(ParseError::FileError)
         }
     }
-    #[cfg(feature="bincode")]
+    #[cfg(all(feature="bincode",feature="fs"))]
     pub fn write_to<F:AsRef<Path>>(&self,file:F) -> Result<(),SerializeError> {
         let file = file.as_ref();
         file.parent().map(std::fs::create_dir_all);
@@ -57,7 +59,9 @@ impl SourceDir {
             Err(SerializeError::EncodingError)
         } else { Ok(()) }
     }
+    #[cfg(feature="fs")]
     pub fn update<F:AsRef<Path>,P:ProblemHandler>(in_dir:F,old:&mut Seq<FileLike>,handler:&P,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
+        use tracing::event;
         let mut dones_v = Vec::new();
         let mut todos = Vec::new();
         let mut oldv: Vec<_> = std::mem::take(old).into();

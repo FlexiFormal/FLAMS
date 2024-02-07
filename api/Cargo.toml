@@ -15,6 +15,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
+fs = []
 pariter = ["dep:rayon","dep:spliter"]
 serde = ["dep:serde","either/serde"]
 bincode = ["dep:bincode","serde"]
