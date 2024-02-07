@@ -1,28 +1,12 @@
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::io::BufRead;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use either::Either;
 use spliter::ParSpliter;
 use tracing::{event, instrument, span};
 use crate::backend::archives::{Archive, ArchiveGroup, ArchiveGroupIter, ArchiveId, ArchiveManifest, ParArchiveGroupIter};
-use crate::InputFormat;
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-    use crate::backend::archive_manager::ArchiveManager;
-    use crate::utils::measure;
-
-    #[test]
-    fn test_mh() {
-        env_logger::builder().filter_level(log::LevelFilter::Info).try_init().unwrap();
-        let a = measure("archive manager",|| {
-            let mgr = ArchiveManager::new(Path::new("/home/jazzpirate/work/MathHub"));
-            mgr.archives
-        });
-    }
-}
+use immt_api::formats::FormatId;
+use immt_api::{Str,utils::HMap};
 
 pub struct ArchiveManager {
     archives:Vec<Either<ArchiveGroup,Archive>>,
@@ -36,7 +20,10 @@ impl<'a> IntoIterator for &'a ArchiveManager {
     }
 }
 use rayon::prelude::IntoParallelIterator;
+use immt_api::archives::IgnoreSource;
+use crate::formats::FormatStore;
 use crate::utils::problems::ProblemHandler;
+use immt_api::utils::problems::{ProblemHandler as PHandlerT};
 
 impl<'a> IntoParallelIterator for &'a ArchiveManager {
     type Item = &'a Archive;
@@ -47,21 +34,20 @@ impl<'a> IntoParallelIterator for &'a ArchiveManager {
 }
 
 impl ArchiveManager {
-    pub fn new(mh:&Path,handler:&ProblemHandler) -> Self {
+    pub fn new(mh:&Path,handler:&ProblemHandler,formats:&FormatStore) -> Self {
         let mut manager = Self{ archives:Vec::new(),len:0 };
-        manager.load(mh,handler);
+        manager.load(mh,handler,formats);
         manager
     }
 
-
     pub fn find<Id:for<'a>Into<ArchiveId>>(&self,id:Id) -> Option<Either<&ArchiveGroup,&Archive>> {
-        self.find_i(id.into().0.into_vec())
+        self.find_i(id.into().0.into())
     }
 
     pub fn get_top(&self) -> &[Either<ArchiveGroup,Archive>] { &self.archives }
     pub fn num_archives(&self) -> usize { self.len }
 
-    fn find_i(&self,mut id:Vec<Box<str>>) -> Option<Either<&ArchiveGroup,&Archive>> {
+    fn find_i(&self,mut id:Vec<Str>) -> Option<Either<&ArchiveGroup,&Archive>> {
         if id.is_empty() { return None }
         let mut curr = &self.archives;
         loop {
@@ -91,17 +77,16 @@ impl ArchiveManager {
         }
     }
 
-    #[instrument(level = "info",name = "initialization", target = "backend", skip(self,handler), fields(found) )]
-    fn load(&mut self, in_path:&Path,handler:&ProblemHandler) {
+    #[instrument(level = "info",name = "initialization", target = "backend", skip(self,handler,formats), fields(found) )]
+    fn load(&mut self, in_path:&Path,handler:&ProblemHandler,formats:&FormatStore) {
         event!(tracing::Level::INFO,"Searching for archives");
-        self.load_i(in_path,handler);
-        tracing::Span::current().record("found", self.into_iter().count());//self.len);
+        self.load_i(in_path,handler,formats);
+        tracing::Span::current().record("found", self.len);
         event!(tracing::Level::INFO,"Done");
     }
 
-    fn load_i(&mut self, mh:&Path,handler:&ProblemHandler) {
-        let mut stack = vec!();
-        stack.push(Dir { children:Vec::new()});
+    fn load_i(&mut self, mh:&Path,handler:&ProblemHandler,formats:&FormatStore) {
+        let mut stack = vec!(vec!());
         let mut curr = match std::fs::read_dir(mh) {
             Ok(rd) => rd,
             _ => {
@@ -116,10 +101,10 @@ impl ArchiveManager {
                         match stack.last_mut() {
                             None => break 'top,
                             Some(s) => {
-                                match s.children.pop() {
+                                match s.pop() {
                                     Some(e) => {
                                         curr = std::fs::read_dir(&e).unwrap();
-                                        stack.push(Dir { children: Vec::new() });
+                                        stack.push( Vec::new() );
                                         continue 'top
                                     }
                                     None => { stack.pop();}
@@ -146,7 +131,8 @@ impl ArchiveManager {
                     match get_manifest(&path, mh,handler) {
                         Some(Ok(m)) => {
                             self.add(
-                                Archive::new(m,path.parent().unwrap().to_path_buf())
+                                Archive::new(m,path.parent().unwrap().to_path_buf()),
+                                handler,formats
                             );
                             stack.pop();
                             next!();
@@ -158,12 +144,13 @@ impl ArchiveManager {
                         _ => ()
                     }
                 }
-                stack.last_mut().unwrap().children.push(path);
+                stack.last_mut().unwrap().push(path);
             }
         }
     }
 
-    fn add(&mut self,a:Archive) {
+    fn add(&mut self,mut a:Archive,handler:&ProblemHandler,formats:&FormatStore) {
+        a.initialize(handler,formats);
         if a.id().is_empty() { return }
         if a.id().steps().len() == 1 {
             self.len += 1;
@@ -185,7 +172,7 @@ impl ArchiveManager {
         Self::add_i(a,self.archives.last_mut().unwrap().as_mut().left().unwrap(),id,1,vec!(&mut self.len))
     }
 
-    fn add_i<'a>(a:Archive,curr:&'a mut ArchiveGroup,mut id:Vec<Box<str>>,mut depth:usize,mut lens:Vec<&'a mut usize>) {
+    fn add_i<'a>(a:Archive,curr:&'a mut ArchiveGroup,mut id:Vec<Str>,mut depth:usize,mut lens:Vec<&'a mut usize>) {
         if id.len() <= 1 {
             if a.manifest.is_meta {
                 curr.len += 1;
@@ -247,15 +234,13 @@ fn get_manifest(metainf:&Path,mh:&Path,handler:&ProblemHandler) -> Option<Result
 
 fn do_manifest(path:&Path,mh:&Path,handler:&ProblemHandler) -> Result<ArchiveManifest,()> {
     let reader = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-    let mut id:Vec<Box<str>> = Vec::new();
+    let mut id:Vec<Str> = Vec::new();
     let mut formats = Vec::new();
-    let mut content_uri:Box<str> = "".into();
-    let mut narrative_uri:Box<str> = "".into();
-    let mut url_base:Box<str> = "".into();
+    let mut url_base:Str = "".into();
     let mut dependencies = Vec::new();
-    let mut ignores = None;
+    let mut ignores = IgnoreSource::default();
     let mut is_meta = false;
-    let mut attrs = BTreeMap::new();
+    let mut attrs = HMap::default();
     for line in reader.lines() {
         let line = match line {
             Err(_) => continue,
@@ -267,17 +252,15 @@ fn do_manifest(path:&Path,mh:&Path,handler:&ProblemHandler) -> Result<ArchiveMan
         };
         match k {
             "id" => { id = v.split('/').map(|c| c.into()).collect() }
-            "format" => { formats = v.split(',').flat_map(InputFormat::from_str).collect() }
-            "ns" | "source-base" => { content_uri = v.into() }
-            "narration-base" => { narrative_uri = v.into() }
+            "format" => { formats = v.split(',').flat_map(FormatId::try_from).collect() }
             "url-base" => { url_base = v.into() }
             "dependencies" => {
                 for d in v.split(',') {
                     dependencies.push(d.into())
                 }
             }
-            "ignores" => {
-                ignores = Some(v.into());
+            "ignore" => {
+                ignores = IgnoreSource::new(v,&path.parent().unwrap().parent().unwrap().join("source"));//Some(v.into());
             }
             _ => {attrs.insert(k.into(),v.into());}
         }
@@ -313,21 +296,19 @@ fn do_manifest(path:&Path,mh:&Path,handler:&ProblemHandler) -> Result<ArchiveMan
         handler.add("ArchiveManager",format!("Archive {}'s id does not match its location ({})",id.join("/"),path.display()));
         return Err(())
     }
-    if !is_meta {
-        if content_uri.is_empty() { return Err(()) }
-        if narrative_uri.is_empty() { return Err(()) }
+    if url_base.is_empty() {
+        handler.add("ArchiveManager",format!("Archive {} has no URL base",id.join("/")));
+        return Err(())
     }
     let id: ArchiveId = id.into();
     dependencies.retain(|d:&ArchiveId| !d.is_empty() && *d != id);
     let a = ArchiveManifest {
         id, formats:formats.into(),
-        content_uri, narrative_uri, url_base,
-        dependencies:dependencies.into_boxed_slice(),
+        url_base,
+        dependencies:dependencies.into(),
         ignores,attrs,is_meta
     };
     event!(tracing::Level::DEBUG,"Archive found: {}",a.id);
     event!(tracing::Level::TRACE,"{:?}",a);
     Ok(a)
 }
-
-struct Dir{ children:Vec<PathBuf> }

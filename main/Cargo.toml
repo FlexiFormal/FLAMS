@@ -1,0 +1,28 @@
+[package]
+name = "immt"
+version = "0.0.1"
+authors = ["Dennis Müller <d.mueller@kwarc.info>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = """
+
+"""
+edition = "2021"
+
+[profile.release]
+opt-level = 2
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+
+[dev-dependencies]
+
+[dependencies]
+immt-api = {path = "../api"}
+immt-system = {path = "../system"}
+immt-stex = {path = "../stex"}
+rayon = "1.8"
+tracing = "0.1"
+tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot"] }

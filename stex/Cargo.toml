@@ -1,0 +1,20 @@
+[package]
+name = "immt-stex"
+version = "0.0.1"
+authors = ["Dennis Müller <d.mueller@kwarc.info>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = """
+
+"""
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+path = "src/lib.rs"
+
+[dev-dependencies]
+
+[dependencies]
+immt-api = {path = "../api"}
+immt-system = {path = "../system"}

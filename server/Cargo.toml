@@ -25,7 +25,7 @@ tracing = { version = "0.1", optional = true }
 
 serde = { version = "1.0", features = ["derive"] }
 either = { version="1.9.0" }
-immt-api = { path = "../api",features = ["server"],optional = true }
+immt-system = { path = "../system",features = ["server"],optional = true }
 lazy_static = { version="1.4",optional = true }
 log={version="0.4.20",features=["kv_unstable"],optional = true }
 env_logger = { version="0.11.1", optional = true }
@@ -43,7 +43,7 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
     "dep:tracing",
-    "immt-api","lazy_static","log","env_logger"
+    "immt-system","lazy_static","log","env_logger"
 ]
 
 # Defines a size-optimized profile for the WASM bundle in release mode

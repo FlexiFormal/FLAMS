@@ -1,27 +1,36 @@
-pub trait ProblemHandler:Default+Clone {
-    fn add(&self,kind:&'static str,message:impl std::fmt::Display);
-}
-impl ProblemHandler for () {
-    fn add(&self,_kind:&'static str,_message:impl std::fmt::Display) {}
-}
-
-/*
 use std::sync::Arc;
 use tracing::event;
-use crate::utils::HMap;
+use immt_api::utils::HMap;
+/*
+pub struct PHandler2 {
+    id:&'static str,
+    sender:std::sync::mpsc::Sender<String>,
+    parent:Option<Box<PHandler2>>
+}
+impl PHandler2 {
+    pub fn new() -> Self {
+        let (send,recv) = std::sync::mpsc::channel();
+    }
+}
+
+ */
 
 #[derive(Clone)]
 pub struct ProblemHandler(Arc<parking_lot::RwLock<ProblemHandlerI>>);
 impl ProblemHandler {
-    pub fn add(&self,kind:&'static str,message:impl std::fmt::Display) {
-        self.add_i(kind,message.to_string());
-    }
     fn add_i(&self,kind:&'static str,message:String) {
         event!(tracing::Level::WARN,"Problem {}: {}",kind,message);
         self.0.write().add(kind,message);
     }
-    pub(crate) fn new() -> Self {
+}
+impl Default for ProblemHandler {
+    fn default() -> Self {
         ProblemHandler(Arc::new(ProblemHandlerI{problems:HMap::default(),counter:0}.into()))
+    }
+}
+impl immt_api::utils::problems::ProblemHandler for ProblemHandler {
+    fn add(&self,kind:&'static str,message:impl std::fmt::Display) {
+        self.add_i(kind,message.to_string());
     }
 }
 
@@ -40,5 +49,3 @@ pub(crate) struct Problem {
     pub(crate) kind:&'static str,
     pub(crate) message:String
 }
-
- */

@@ -1,27 +1,32 @@
-//mod backend;
-pub mod backend;
+#![recursion_limit="256"]
+
+#[cfg(debug_assertions)]
+pub type Str = String;
+#[cfg(not(debug_assertions))]
+pub type Str = Box<str>;
+
+#[cfg(debug_assertions)]
+pub type Seq<A> = Vec<A>;
+#[cfg(not(debug_assertions))]
+pub type Seq<A> = Box<[A]>;
+
+pub mod ontology {
+    pub mod rdf;
+}
+
+pub mod formats;
+pub mod source_files;
+pub mod uris;
+pub mod archives;
 
 pub mod utils {
+    use crate::Str;
+
     pub mod parsing;
     pub mod problems;
+    pub mod iter;
 
-    pub fn measure<R,F:FnOnce() -> R>(prefix:&str,f:F) -> R {
-        let start = std::time::Instant::now();
-        let r = f();
-        tracing::info!("{}: Finished after {:?}",prefix, start.elapsed());
-        r
-    }
-    pub type MMTURI = Box<str>;
-}
+    pub type HMap<A,B> = ahash::HashMap<A,B>;
 
-#[allow(non_camel_case_types)]
-#[derive(Debug,Clone,Copy,Hash,PartialEq,Eq)]
-pub enum InputFormat {
-    sTeX
-}
-impl InputFormat {
-    pub fn from_str(s:&str) -> Option<Self> {
-        if s.eq_ignore_ascii_case("stex") { return Some(InputFormat::sTeX) }
-        None
-    }
+    pub type MMTURI = Str;
 }
