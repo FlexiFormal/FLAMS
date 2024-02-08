@@ -1,18 +1,15 @@
 use std::fmt::Debug;
-use std::io::BufRead;
 use std::path::Path;
 use either::Either;
-use spliter::ParSpliter;
-use tracing::{event, instrument, span};
+use tracing::{event, instrument};
 use crate::backend::archives::{Archive, ArchiveGroup};
-use immt_api::formats::{FormatId,FormatStore};
-use immt_api::{Str,utils::HMap};
+use immt_api::formats::FormatStore;
+use immt_api::Str;
 use immt_api::archives::{ArchiveId,ArchiveGroupT,ArchiveT};
 
 pub struct ArchiveManager {
     top:ArchiveGroup
 }
-use immt_api::utils::problems::{ProblemHandler as PHandlerT};
 use crate::utils::problems::ProblemHandler;
 
 impl ArchiveManager {
@@ -29,7 +26,7 @@ impl ArchiveManager {
         self.top.archives_par()
     }
 
-    pub fn get_top(&self) -> &[Either<ArchiveGroup,Archive>] { &self.top.base().archives }
+    pub fn get_top(&self) -> &ArchiveGroup { &self.top }
     pub fn num_archives(&self) -> usize { self.top.archives().count() }
 
     pub fn find<Id:for<'a>Into<ArchiveId>>(&self,id:Id) -> Option<Either<&ArchiveGroup,&Archive>> {

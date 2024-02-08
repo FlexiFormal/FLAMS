@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use oxrdf::NamedNode;
 use crate::archives::ArchiveIdRef;
 use crate::Str;
 
@@ -45,6 +46,10 @@ impl DomURI {
     }
     #[inline]
     pub fn as_str(&self) -> &str { &self.0 }
+
+    pub fn to_iri(&self) -> NamedNode {
+        NamedNode::new(format!("{}#",self.0)).unwrap()
+    }
 }
 impl Display for DomURI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,6 +66,9 @@ impl<'a> DomURIRef<'a> {
     pub fn as_str(&self) -> &str { self.0 }
     #[inline]
     pub fn to_owned(&self) -> DomURI { DomURI(self.0.into()) }
+    pub fn to_iri(&self) -> NamedNode {
+        NamedNode::new(format!("{}#",self.0)).unwrap()
+    }
 }
 impl<'a> Display for DomURIRef<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -95,6 +103,9 @@ impl ArchiveURI {
             archive:self.id()
         }
     }
+    pub fn to_iri(&self) -> NamedNode {
+        NamedNode::new(format!("{}#{}",self.base(),self.id())).unwrap()
+    }
 }
 impl Display for ArchiveURI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -118,6 +129,9 @@ impl<'a> ArchiveURIRef<'a> {
             inner:self.to_string().into(),
             archive_index
         }
+    }
+    pub fn to_iri(&self) -> NamedNode {
+        NamedNode::new(format!("{}#{}",self.base(),self.id())).unwrap()
     }
 }
 impl<'a> Display for ArchiveURIRef<'a> {

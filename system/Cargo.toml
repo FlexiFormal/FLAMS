@@ -98,4 +98,14 @@ oxigraph = "0.4.0-alpha.3"
 # other stuff:
 # https://medium.com/coderhack-com/rust-codecs-and-processing-binary-data-2609002a02b6
 # https://docs.rs/lz4_flex/latest/lz4_flex/
-# https://crates.io/crates/bincode
+# https://crates.io/crates/self-replace
+
+
+# repl things:
+# https://crates.io/crates/reedline-repl-rs
+# https://crates.io/crates/rustyrepl
+# https://crates.io/crates/easy-repl
+
+# https://docs.rs/console/latest/console/ <- also: dialoguer, indicatif
+
+# https://crates.io/crates/rusteval

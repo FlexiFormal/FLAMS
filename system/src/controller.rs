@@ -1,6 +1,9 @@
 use std::path::Path;
 use crate::backend::archive_manager::ArchiveManager;
 use std::path::PathBuf;
+use oxigraph::model::GraphName;
+use tracing::event;
+use immt_api::archives::ArchiveGroupT;
 use immt_api::formats::{Format,FormatStore};
 use crate::ontology::relational::RelationalManager;
 use crate::utils::problems::ProblemHandler;
@@ -31,9 +34,11 @@ impl Controller {
 
 impl ControllerBuilder {
     pub fn build(self) -> Controller {
-        let handler = self.handler.unwrap_or_else(ProblemHandler::default);
+        let handler = self.handler.unwrap_or_default();
         let mgr = ArchiveManager::new(&self.main_mh,&handler,&self.formats);
-        let relman = RelationalManager::default();
+        let mut relman = RelationalManager::default();
+        relman.loader().load_quads(mgr.get_top().archive_triples().map(|t| t.in_graph(GraphName::DefaultGraph))).unwrap();
+        event!(tracing::Level::INFO,"Controller initialized; base ontology has {} quads",relman.size());
         Controller {
             mgr,
             main_mh:self.main_mh,handler,relman,

@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::path::Path;
 use either::Either;
+use oxrdf::{Subject, Triple};
 use crate::formats::FormatId;
 #[cfg(feature="fs")]
 use crate::formats::FormatStore;
@@ -124,6 +125,12 @@ pub trait ArchiveGroupT<A:ArchiveT>:Sized {
     fn archives<'a>(&'a self) -> impl Iterator<Item=&'a A> where A:'a {
         ArchiveIter::new(self.meta(),&self.base().archives)
     }
+    fn iter_all<'a>(&'a self) -> impl Iterator<Item=Either<&'a Self,&'a A>> where A:'a {
+        FullIter {
+            stack:Vec::new(),
+            curr:self.base().archives.iter()
+        }
+    }
     #[cfg(feature = "pariter")]
     fn archives_par<'a>(&'a self) -> impl rayon::iter::ParallelIterator<Item=&'a A> where A:'a+Sync,Self:Sync {
         pariter::ParArchiveIter::new(self.meta(),&self.base().archives)
@@ -138,7 +145,98 @@ pub trait ArchiveGroupT<A:ArchiveT>:Sized {
             mh:path
         }.run()
     }
+    #[inline]
+    fn uri<'a>(&'a self) -> Option<ArchiveURIRef<'a>> where A:'a {
+        self.meta().map(|m| ArchiveURIRef{
+            base:m.dom_uri(),
+            archive:self.id()
+        })
+    }
+
+    fn archive_triples<'a>(&'a self) -> impl Iterator<Item=Triple> where A:'a {
+        TripleIter {
+            curr:self.base().archives.iter(),
+            buf1:None,
+            buf2:None,
+            buf3:None,
+            currtop:None,
+            stack:Vec::new()
+        }
+    }
     //fn iter(&self) -> LeafIterator<&Either<Self,A>> { self.iter_leafs() }
+}
+
+struct TripleIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {
+    curr:std::slice::Iter<'a,Either<G,A>>,
+    buf1:Option<Triple>,
+    buf2:Option<Triple>,
+    buf3:Option<Triple>,
+    currtop:Option<ArchiveURIRef<'a>>,
+    stack:Vec<(&'a G,Option<ArchiveURIRef<'a>>)>,
+}
+impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for TripleIter<'a,A,G> {
+    type Item = Triple;
+    fn next(&mut self) -> Option<Self::Item> {
+        use crate::ontology::rdf::ulo2::{LIBRARY,LIBRARY_GROUP,CONTAINS};
+        if let Some(t) = std::mem::replace(&mut self.buf1,std::mem::replace(&mut self.buf2,self.buf3.take())) { return Some(t) }
+        loop {
+            match self.curr.next() {
+                Some(Either::Right(a)) => {
+                    let next = Triple {
+                        subject: Subject::NamedNode(a.uri().to_iri()),
+                        predicate: oxrdf::vocab::rdf::TYPE.into_owned(),
+                        object: oxrdf::Term::NamedNode(LIBRARY.into_owned())
+                    };
+                    if let Some(currtop) = self.currtop {
+                        self.buf1 = Some(Triple {
+                            subject: Subject::NamedNode(currtop.to_iri()),
+                            predicate: CONTAINS.into_owned(),
+                            object: oxrdf::Term::NamedNode(a.uri().to_iri())
+                        });
+                    }
+                    return Some(next)
+                }
+                Some(Either::Left(g)) => {
+                    if let Some(uri) = g.uri() {
+                        self.stack.push((g,Some(uri)));
+                        let next = Triple {
+                            subject: Subject::NamedNode(uri.to_iri()),
+                            predicate: oxrdf::vocab::rdf::TYPE.into_owned(),
+                            object: oxrdf::Term::NamedNode(LIBRARY_GROUP.into_owned())
+                        };
+                        let meta = g.meta().unwrap();
+                        self.buf1 = Some(Triple {
+                            subject: Subject::NamedNode(meta.uri().to_iri()),
+                            predicate: oxrdf::vocab::rdf::TYPE.into_owned(),
+                            object: oxrdf::Term::NamedNode(LIBRARY.into_owned())
+                        });
+                        self.buf2 = Some(Triple {
+                            subject: Subject::NamedNode(uri.to_iri()),
+                            predicate: CONTAINS.into_owned(),
+                            object: oxrdf::Term::NamedNode(meta.uri().to_iri())
+                        });
+                        if let Some(currtop) = self.currtop {
+                            self.buf3 = Some(Triple {
+                                subject: Subject::NamedNode(currtop.to_iri()),
+                                predicate: CONTAINS.into_owned(),
+                                object: oxrdf::Term::NamedNode(uri.to_iri())
+                            });
+                        }
+                        return Some(next)
+                    } else {
+                        self.stack.push((g,self.currtop));
+                    };
+                }
+                None => match self.stack.pop() {
+                    Some((g,currtop)) => {
+                        self.currtop = currtop;
+                        self.curr = g.base().archives.iter();
+                    }
+                    None => return None
+                }
+            }
+        }
+    }
 }
 
 #[cfg(feature="fs")]
@@ -372,6 +470,30 @@ mod load_dir {
             event!(tracing::Level::DEBUG,"Archive found: {}",a.id);
             event!(tracing::Level::TRACE,"{:?}",a);
             Ok(a)
+        }
+    }
+}
+
+struct FullIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {
+    stack:Vec<std::slice::Iter<'a,Either<G,A>>>,
+    curr:std::slice::Iter<'a,Either<G,A>>,
+}
+impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for FullIter<'a, A, G> {
+    type Item = Either<&'a G,&'a A>;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.curr.next() {
+                Some(Either::Left(g)) => {
+                    let old = std::mem::replace(&mut self.curr, g.base().archives.iter());
+                    self.stack.push(old);
+                    return Some(Either::Left(g))
+                }
+                Some(Either::Right(a)) => return Some(Either::Right(a)),
+                None => match self.stack.pop() {
+                    Some(s) => { self.curr = s; }
+                    None => return None
+                }
+            }
         }
     }
 }

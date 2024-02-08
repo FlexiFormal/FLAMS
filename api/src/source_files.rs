@@ -74,7 +74,7 @@ impl SourceDir {
         let curr = match std::fs::read_dir(path) {
             Ok(d) => d,
             _ => {
-                handler.add("ArchiveManager",format!("Could not read directory {}",path.display()));
+                handler.add("archives",format!("{}"),format!("Could not read directory {}",path.display()));
                 return
             }
         };
