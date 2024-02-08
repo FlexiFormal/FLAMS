@@ -61,13 +61,13 @@ impl SourceDir {
     }
     #[cfg(feature="fs")]
     pub fn update<F:AsRef<Path>,P:ProblemHandler>(in_dir:F,old:&mut Seq<FileLike>,handler:&P,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
-        use tracing::event;
+        use tracing::trace;
         let mut dones_v = Vec::new();
         let mut todos = Vec::new();
         let mut oldv: Vec<_> = std::mem::take(old).into();
         let path = in_dir.as_ref();
         if ignore.ignores(path) {
-            event!(tracing::Level::TRACE,"Ignoring {} because of {}",path.display(),ignore);
+            trace!("Ignoring {} because of {}",path.display(),ignore);
             return
         }
         oldv.reverse();
@@ -88,7 +88,7 @@ impl SourceDir {
             };
             let path = d.path();
             if ignore.ignores(&path) {
-                event!(tracing::Level::TRACE,"Ignoring {} because of {}",path.display(),ignore);
+                trace!("Ignoring {} because of {}",path.display(),ignore);
                 return
             }
             let md = match d.metadata() {

@@ -153,7 +153,7 @@ pub trait ArchiveGroupT<A:ArchiveT>:Sized {
         })
     }
 
-    fn archive_triples<'a>(&'a self) -> impl Iterator<Item=Triple> where A:'a {
+    fn all_archive_triples<'a>(&'a self) -> impl Iterator<Item=Triple> where A:'a {
         TripleIter {
             curr:self.base().archives.iter(),
             buf1:None,
@@ -243,7 +243,7 @@ impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for TripleIter<'a,A,G> {
 mod load_dir {
     use std::path::Path;
     use either::Either;
-    use tracing::{event, span};
+    use tracing::{debug, span, trace, trace_span};
     use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
     use crate::formats::{FormatId, FormatStore};
     use crate::utils::problems::ProblemHandler;
@@ -299,7 +299,7 @@ mod load_dir {
                     _ => continue
                 };
                 let path = d.path();
-                let _span = span!(target:"archives",tracing::Level::TRACE,"checking","{}",path.display()).entered();
+                let _span = trace_span!(target:"archives","checking","{}",path.display()).entered();
                 if md.is_dir() {
                     if d.file_name().to_str().map_or(true,|s| s.starts_with('.')) {continue}
                     if d.file_name().eq_ignore_ascii_case("meta-inf") {
@@ -368,7 +368,7 @@ mod load_dir {
         }
 
         fn get_manifest(&self,metainf:&Path) -> Option<Result<ArchiveData,()>> {
-            event!(tracing::Level::TRACE,"Checking for manifest");
+            trace!("Checking for manifest");
             match std::fs::read_dir(metainf) {
                 Ok(rd) => {
                     for d in rd {
@@ -384,7 +384,7 @@ mod load_dir {
                         if !path.is_file() { continue }
                         return Some(self.do_manifest(&path))
                     }
-                    event!(tracing::Level::TRACE,"not found");
+                    trace!("not found");
                     None
                 }
                 _ => {
@@ -467,8 +467,8 @@ mod load_dir {
                 dependencies:dependencies.into(),
                 ignores,attrs,is_meta
             };
-            event!(tracing::Level::DEBUG,"Archive found: {}",a.id);
-            event!(tracing::Level::TRACE,"{:?}",a);
+            debug!("Archive found: {}",a.id);
+            trace!("{:?}",a);
             Ok(a)
         }
     }

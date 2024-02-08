@@ -9,11 +9,15 @@ pub mod ontology {
 
 
 pub mod utils {
-    pub fn measure<R,F:FnOnce() -> R>(prefix:&str,f:F) -> R {
-        let start = std::time::Instant::now();
-        let r = f();
-        tracing::info!("{}: Finished after {:?}",prefix, start.elapsed());
-        r
+    use tracing::info_span;
+
+    pub fn measure<R,F:FnOnce() -> R>(prefix:&str, f:F) -> R {
+        info_span!("measure",prefix).in_scope(|| {
+            let start = std::time::Instant::now();
+            let r = f();
+            tracing::info!("Finished after {:?}", start.elapsed());
+            r
+        })
     }
 
     pub mod problems;

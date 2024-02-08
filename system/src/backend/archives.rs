@@ -13,6 +13,9 @@ pub struct Archive {
     state:parking_lot::RwLock<ArchiveState>,
     //watcher: Option<RecommendedWatcher>
 }
+impl Archive {
+    pub fn path(&self) -> &Path { &self.path }
+}
 impl ArchiveT for Archive {
     #[instrument(level = "info", name = "initialize", target = "backend::archive", skip(data, handler, formats))]
     fn new_from<P: PHandlerT>(data: ArchiveData, path: &Path, handler: &P, formats: &FormatStore) -> Self {

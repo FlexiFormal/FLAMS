@@ -26,3 +26,11 @@ immt-stex = {path = "../stex"}
 rayon = "1.8"
 tracing = "0.1"
 tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot"] }
+
+
+walkdir = "2.4"
+oxigraph = "0.4.0-alpha.3"
+
+reedline-repl-rs = "1.0.7"
+indicatif = "0.17.7"
+tracing-indicatif = "0.3.6"

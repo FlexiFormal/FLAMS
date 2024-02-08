@@ -41,6 +41,9 @@ bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 ahash = "0.8.7"
 regex = "1.10"
 
+tracing-indicatif = "0.3.6"
+indicatif = { version="0.17.7",features = ["rayon","improved_unicode"] }
+
 oxigraph = "0.4.0-alpha.3"
 #oxrocksdb-sys = "0.4.0-alpha.3"
 #oxigraph = {path = "../oxigraph/lib"}

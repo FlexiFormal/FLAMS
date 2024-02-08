@@ -1,4 +1,9 @@
-use std::path::Path;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
+use tracing::{info, instrument};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::fmt::writer::MakeWriterExt;
 use immt_system::controller::Controller;
 use immt_system::utils::measure;
 
@@ -213,9 +218,27 @@ mod test {
 //#[tokio::main]
 /*async*/ fn main() {
 
-    // tracing_subscriber::FmtSubscriber::default()
-    //tracing::subscriber::set_global_default(
-        tracing_subscriber::FmtSubscriber::builder()
+    // simple:
+
+    /*tracing_subscriber::FmtSubscriber::builder()
+        .compact()
+        //.pretty()
+        .with_ansi(true)
+        .with_file(false)
+        .with_line_number(false)
+        .with_level(true)
+        .with_thread_names(false)
+        .with_thread_ids(false)
+        .with_max_level(tracing::Level::INFO)
+        .with_target(true)
+        .init(); */
+
+    use tracing_subscriber::layer::Layer;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    let indicatif_layer = tracing_indicatif::IndicatifLayer::new();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer()
             .compact()
             //.pretty()
             .with_ansi(true)
@@ -224,14 +247,19 @@ mod test {
             .with_level(true)
             .with_thread_names(false)
             .with_thread_ids(false)
-            .with_max_level(tracing::Level::INFO)
             .with_target(true)
-            .init();
-    //).unwrap();
+            .with_writer(indicatif_layer.get_stderr_writer())
+            .with_filter(LevelFilter::INFO)
+        )
+        .with(indicatif_layer)
+        //.with_max_level(tracing::Level::INFO)
+        .init();
+
     //test::rdfreadtest();
     //test::rdfstoretest();
 
     //ulo_roundtrip();
+    //copy_shit()
     archives();
     //test::test()//.await;
 }
@@ -255,5 +283,45 @@ fn archives() {
     });
     measure("iterating parallel",|| {
         controller.archives().par_iter().for_each(f);
+    });
+}
+
+#[instrument]
+fn copy_shit() {
+    measure("parsing nquads",|| {
+        let dir = Path::new("/home/jazzpirate/temp/dbtest/nquads");
+        for e in walkdir::WalkDir::new(dir).min_depth(1).into_iter().filter_map(|e| e.ok()) {
+            match e.path().extension() {
+                Some(ext) if ext == "nq" => (),
+                _ => continue
+            }
+            let path = e.path();
+            let outpath = format!("/home/jazzpirate/work/MathHub{}/.out",&path.parent().unwrap().to_str().unwrap()[dir.to_str().unwrap().len()..]);
+            let outpath = PathBuf::from(outpath);
+            if !outpath.exists() {continue}
+            let ps = outpath.to_str().unwrap();
+            let id = &ps["/home/jazzpirate/work/MathHub/".len()..ps.len()-"/.out".len()];
+            let outpath = outpath.join("rel.ttl");
+            info!("Loading nquads from {}",path.display());
+            let file = File::open(path).unwrap();
+            let buf = BufReader::new(file);
+            let reader = oxigraph::io::RdfParser::from_format(oxigraph::io::RdfFormat::NQuads);
+            let mut triples = Vec::new();
+            reader.parse_read(buf).for_each(|t| {
+                if let Ok(oxigraph::model::Quad { subject, predicate, object,..}) = t {
+                    triples.push(oxigraph::model::Triple { subject, predicate, object });
+                }
+            });
+            info!("Loaded {} triples",triples.len());
+            let out = File::create(outpath).unwrap();
+            let mut writer = oxigraph::io::RdfSerializer::from_format(oxigraph::io::RdfFormat::Turtle)
+                .with_prefix("ulo","http://mathhub.info/ulo").unwrap()
+                .with_prefix("schema",format!("http://mathhub.info/{}",id)).unwrap()
+                .serialize_to_write(out);
+            for t in triples {
+                writer.write_triple(&t).unwrap();
+            }
+            info!("Wrote triples");
+        }
     });
 }
