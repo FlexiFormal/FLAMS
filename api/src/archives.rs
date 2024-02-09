@@ -300,6 +300,7 @@ mod load_dir {
                 };
                 let path = d.path();
                 let _span = trace_span!(target:"archives","checking","{}",path.display()).entered();
+                //std::thread::sleep(std::time::Duration::from_secs_f32(0.01));
                 if md.is_dir() {
                     if d.file_name().to_str().map_or(true,|s| s.starts_with('.')) {continue}
                     if d.file_name().eq_ignore_ascii_case("meta-inf") {

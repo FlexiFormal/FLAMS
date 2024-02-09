@@ -65,7 +65,7 @@ impl ArchiveManager {
         }
     }
 
-    #[instrument(level = "info",name = "initialization", target = "backend", skip(self,handler,formats), fields(found) )]
+    #[instrument(level = "info",name = "Loading archives", target = "backend", skip(self,handler,formats), fields(found) )]
     fn load(&mut self, in_path:&Path,handler:&ProblemHandler,formats:&FormatStore) {
         event!(tracing::Level::INFO,"Searching for archives");
         self.top.base_mut().archives = ArchiveGroupT::load_dir(in_path,formats,handler).into();

@@ -34,3 +34,14 @@ oxigraph = "0.4.0-alpha.3"
 reedline-repl-rs = "1.0.7"
 indicatif = "0.17.7"
 tracing-indicatif = "0.3.6"
+
+#ratatui = { version = "0.26", features = ["crossterm","all-widgets"] }
+#crossterm = "0.27"
+#tui-logger = { version = "0.11.0", features = ["tracing-support","crossterm"] }
+
+# https://blog.logrocket.com/rust-and-tui-building-a-command-line-interface-in-rust/
+# https://github.com/sayanarijit/tui-input/tree/main
+# https://github.com/ratatui-org/ratatui/tree/main/examples
+# https://www.monkeypatch.io/blog/2021-05-31-rust-tui
+# https://dev.to/protium/creating-a-text-based-ui-with-rust-420
+# https://crates.io/crates/fuzzy-matcher/

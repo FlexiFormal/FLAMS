@@ -17,11 +17,11 @@ impl Archive {
     pub fn path(&self) -> &Path { &self.path }
 }
 impl ArchiveT for Archive {
-    #[instrument(level = "info", name = "initialize", target = "backend::archive", skip(data, handler, formats))]
+    #[instrument(level = "info", name = "Loading archive", target = "backend::archive", skip_all, fields(id = %data.id))]
     fn new_from<P: PHandlerT>(data: ArchiveData, path: &Path, handler: &P, formats: &FormatStore) -> Self {
         let mut state = ArchiveState::default();
         state.initialized = true;
-        event!(tracing::Level::DEBUG,"Initializing archive {}",data.id);
+        //event!(tracing::Level::DEBUG,"Initializing archive {}",data.id);
         if !Self::ls_f(&mut state, path, &data.ignores, handler, formats) && !data.is_meta {
             handler.add("Missing source", format!("Archive has no source directory: {}",data.id));
         }

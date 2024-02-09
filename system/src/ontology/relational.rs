@@ -3,6 +3,7 @@ use oxigraph::model::{GraphName, Quad};
 use tracing::{info, info_span, instrument, Span};
 use immt_api::archives::ArchiveT;
 use crate::backend::archive_manager::ArchiveManager;
+use crate::controller::Controller;
 
 pub struct RelationalManager {
     store:Arc<oxigraph::store::Store>
@@ -22,13 +23,22 @@ impl RelationalManager {
         loader.load_quads(immt_api::ontology::rdf::ulo2::QUADS.iter().copied()).unwrap();
         //relman.loader().load_quads(mgr.get_top().all_archive_triples().map(|t| t.in_graph(GraphName::DefaultGraph))).unwrap();
     }
-    pub fn load_archives(&mut self,mgr:&ArchiveManager) {
+    pub(crate) fn load_archives(ctrl:Controller) {
+       // std::thread::spawn(move || {
+            let mgr = ctrl.archives();
+            let relman = ctrl.relational_manager();
+            relman.load_archives_i(mgr);
+        //});
+    }
+    fn load_archives_i(&self,mgr:&ArchiveManager) {
         use tracing_indicatif::span_ext::IndicatifSpanExt;
         use indicatif::ProgressStyle;
         use rayon::iter::ParallelIterator;
         let old = self.size();
         let header_span = info_span!("relational");
-        header_span.pb_set_style(&ProgressStyle::default_bar());
+        header_span.pb_set_style(
+            &crate::utils::progress::in_progress("📈 Loading relational...").build()
+        );//::default_bar());
         let num = mgr.num_archives();
         header_span.pb_set_length(num as u64);
         let header_span_enter = header_span.enter();
@@ -43,6 +53,8 @@ impl RelationalManager {
                 let reader = oxigraph::io::RdfParser::from_format(oxigraph::io::RdfFormat::Turtle);
                 let mut file = std::fs::File::open(dir).unwrap();
                 let mut buf = std::io::BufReader::new(&mut file);
+                //std::thread::sleep(std::time::Duration::from_secs_f32(0.5));
+                sp.pb_set_message(a.id().as_str());
                 let _ = loader.load_quads(
                     reader.parse_read(&mut buf).filter_map(|q| q.ok().map(|q|
                         Quad{subject:q.subject, predicate:q.predicate, object:q.object, graph_name:GraphName::NamedNode(iri.clone())}

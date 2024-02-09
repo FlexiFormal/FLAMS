@@ -3,6 +3,9 @@ use oxrdf::NamedNode;
 use crate::archives::ArchiveIdRef;
 use crate::Str;
 
+
+// SERDE HAS URL ENCODING!
+
 #[derive(Clone,Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]

@@ -217,6 +217,13 @@ mod test {
 
 //#[tokio::main]
 /*async*/ fn main() {
+    use std::io;
+    //use tui::{backend::CrosstermBackend, Terminal};
+
+    let stdout = io::stdout();
+    //let backend = CrosstermBackend::new(stdout);
+    //let mut terminal = Terminal::new(backend).unwrap();
+
 
     // simple:
 
@@ -239,16 +246,16 @@ mod test {
     let indicatif_layer = tracing_indicatif::IndicatifLayer::new();
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer()
-            .compact()
+            //.compact()
             //.pretty()
-            .with_ansi(true)
+            //.with_ansi(true)
             .with_file(false)
             .with_line_number(false)
             .with_level(true)
             .with_thread_names(false)
             .with_thread_ids(false)
             .with_target(true)
-            .with_writer(indicatif_layer.get_stderr_writer())
+            .with_writer(indicatif_layer.get_stdout_writer())
             .with_filter(LevelFilter::INFO)
         )
         .with(indicatif_layer)
@@ -269,12 +276,14 @@ mod test {
 fn archives() {
     use rayon::prelude::*;
     //env_logger::builder().filter_level(log::LevelFilter::Info).try_init();//.unwrap();
-    let controller = measure("archive manager",|| {
+    let controller = /*measure("archive manager",||*/ {
         let mut builder = Controller::builder(Path::new("/home/jazzpirate/work/MathHub"));
         immt_stex::register(&mut builder);
         builder.build()
         //tracing::info!("Found {} archives",mgr.into_iter().count());
-    });
+    };//);
+    controller.run_repl();
+    /*
     let f = |_| {std::thread::sleep(std::time::Duration::from_secs_f32(0.2))};
     measure("iterating single threaded",|| {
         for a in controller.archives().iter() {
@@ -284,7 +293,12 @@ fn archives() {
     measure("iterating parallel",|| {
         controller.archives().par_iter().for_each(f);
     });
+
+     */
 }
+
+
+use reedline_repl_rs::{Repl,Result as Res,clap::{Command,Arg,ArgMatches}};
 
 #[instrument]
 fn copy_shit() {

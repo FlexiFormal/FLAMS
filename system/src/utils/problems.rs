@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tracing::event;
+use tracing::{event, warn};
 use immt_api::utils::HMap;
 /*
 pub struct PHandler2 {
@@ -19,7 +19,7 @@ impl PHandler2 {
 pub struct ProblemHandler(Arc<parking_lot::RwLock<ProblemHandlerI>>);
 impl ProblemHandler {
     fn add_i(&self,kind:&'static str,message:String) {
-        event!(tracing::Level::WARN,"Problem {}: {}",kind,message);
+        //warn!("Problem {}: {}",kind,message);
         self.0.write().add(kind,message);
     }
 }

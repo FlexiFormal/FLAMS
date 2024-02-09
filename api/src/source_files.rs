@@ -87,6 +87,7 @@ impl SourceDir {
                 }
             };
             let path = d.path();
+            //std::thread::sleep(std::time::Duration::from_secs_f32(0.001));
             if ignore.ignores(&path) {
                 trace!("Ignoring {} because of {}",path.display(),ignore);
                 return

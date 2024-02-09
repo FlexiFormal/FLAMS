@@ -32,14 +32,19 @@ impl Debug for FormatId {
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result { <Self as Display>::fmt(self,f) }
 }
 
+pub trait FormatExtension {
+
+}
+
 pub struct Format {
     id:FormatId,
     file_extensions:&'static [&'static str],
+    extension: Box<dyn FormatExtension>
 }
 impl Format {
     #[inline]
-    pub const fn new(id:FormatId,file_extensions:&'static [&'static str]) -> Self {
-        Self { id, file_extensions }
+    pub const fn new(id:FormatId,file_extensions:&'static [&'static str],extension:Box<dyn FormatExtension>) -> Self {
+        Self { id, file_extensions,extension }
     }
     #[inline]
     pub fn id(&self) -> FormatId { self.id }

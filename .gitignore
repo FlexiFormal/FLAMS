@@ -1,4 +1,7 @@
 Cargo.lock
 **/target/**
 oxigraph
+reedline-repl-rs
+reedline
+tracing-indicatif
 app/**
