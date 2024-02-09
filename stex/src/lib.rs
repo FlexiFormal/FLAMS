@@ -1,5 +1,9 @@
 pub mod quickparse;
 
+#[cfg(test)]
+#[doc(hidden)]
+mod test;
+
 use immt_api::formats::{Format, FormatExtension, FormatId};
 use immt_system::controller::ControllerBuilder;
 

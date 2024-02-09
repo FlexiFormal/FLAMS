@@ -243,7 +243,7 @@ impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for TripleIter<'a,A,G> {
 mod load_dir {
     use std::path::Path;
     use either::Either;
-    use tracing::{debug, span, trace, trace_span};
+    use tracing::{debug, trace, trace_span};
     use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
     use crate::formats::{FormatId, FormatStore};
     use crate::utils::problems::ProblemHandler;

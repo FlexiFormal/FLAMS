@@ -7,5 +7,6 @@ pub enum TeXToken<'a,P:SourcePos> {
     BeginMath{display:bool,start:P},
     EndMath{display:bool,start:P},
     ControlSequence{start:P,name:&'a str},
-    Text(SourceRange<P>)
+    Text(SourceRange<P>),
+    Directive(&'a str)
 }

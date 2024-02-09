@@ -193,15 +193,23 @@ impl<'a,P:SourcePos> Parser<'a, P> {
         self.curr_pos.step_until_line_end(&mut self.input)
     }
 
-    pub fn read_while<Pr:FnMut(char) -> bool>(&mut self,mut p:Pr) -> &'a str {
+    pub fn read_until<Pr:FnMut(&'a str) -> bool>(&mut self,mut p:Pr) -> &'a str {
         let curr = self.input;
         let mut i = 0;
-        while !self.input.starts_with(&mut p) {
+        while !p(self.input) {
             match self.curr_pos.step(&mut self.input) {
                 None => break,
                 Some(c) => i += c.len_utf8()
             }
         }
         &curr[..i]
+    }
+
+    pub fn read_while<Pr:FnMut(char) -> bool>(&mut self,mut p:Pr) -> &'a str {
+        self.read_until(|s| !s.starts_with(&mut p))
+    }
+
+    pub fn trim_start(&mut self) {
+        self.read_while(|c| c.is_whitespace());
     }
 }
