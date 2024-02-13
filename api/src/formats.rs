@@ -32,7 +32,7 @@ impl Debug for FormatId {
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result { <Self as Display>::fmt(self,f) }
 }
 
-pub trait FormatExtension {
+pub trait FormatExtension:Send+Sync {
 
 }
 

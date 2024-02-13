@@ -1,10 +1,12 @@
 #[cfg(feature="fs")]
 use std::path::Path;
+use std::path::PathBuf;
 #[cfg(feature="fs")]
 use crate::utils::problems::ProblemHandler;
 #[cfg(feature="fs")]
 use crate::archives::IgnoreSource;
 use either::Either;
+use spliter::ParallelSpliterator;
 use crate::formats::FormatId;
 use crate::{Seq, Str};
 use crate::utils::iter::{HasChildren, HasChildrenMut, HasChildrenRef, LeafIterator, TreeLike, TreeMutLike, TreeRefLike};
@@ -15,6 +17,14 @@ use crate::utils::iter::{HasChildren, HasChildrenMut, HasChildrenRef, LeafIterat
 pub enum FileLike {
     Dir(SourceDir),
     File(SourceFile)
+}
+impl FileLike {
+    fn rel_path(&self) -> &str {
+        match self {
+            FileLike::Dir(d) => &d.rel_path,
+            FileLike::File(f) => &f.rel_path
+        }
+    }
 }
 
 #[cfg(feature="bincode")]
@@ -29,11 +39,18 @@ pub enum SerializeError {
     IOError
 }
 
+#[cfg(feature = "pariter")]
+use rayon::iter::IntoParallelIterator;
+#[cfg(feature = "pariter")]
+use spliter::ParSpliter;
+
 #[derive(Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct SourceDir{pub name:Str,pub children:Seq<FileLike>}
+pub struct SourceDir{pub rel_path:Str,pub children:Seq<FileLike>}
 impl SourceDir {
+    #[cfg(feature = "pariter")]
+    pub fn par_iter(&self) -> ParSpliter<LeafIterator<&FileLike>> { self.iter_leafs().par_split().into_par_iter() }
     pub fn iter(&self) -> LeafIterator<&FileLike> { self.iter_leafs() }
     pub fn iter_mut(&mut self) -> LeafIterator<&mut FileLike> { self.iter_leafs() }
     #[cfg(all(feature="bincode",feature="fs"))]
@@ -60,7 +77,7 @@ impl SourceDir {
         } else { Ok(()) }
     }
     #[cfg(feature="fs")]
-    pub fn update<F:AsRef<Path>,P:ProblemHandler>(in_dir:F,old:&mut Seq<FileLike>,handler:&P,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
+    pub fn update<F:AsRef<Path>,P:ProblemHandler>(in_dir:F,rel_path:&str,old:&mut Seq<FileLike>,handler:&P,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
         use tracing::trace;
         let mut dones_v = Vec::new();
         let mut todos = Vec::new();
@@ -100,8 +117,9 @@ impl SourceDir {
                 }
             };
             if md.is_dir() {
+                let rel_path:Str = format!("{}/{}",rel_path,path.file_name().unwrap().to_str().unwrap()).into();
                 let old = oldv.iter().enumerate().rfind(|s| match s {
-                    (_,FileLike::Dir(s)) => &*s.name == path.file_name().unwrap(),
+                    (_,FileLike::Dir(s)) => s.rel_path == rel_path,
                     _ => false
                 }).map(|(i,_)| i);
                 if let Some(i) = old {
@@ -109,12 +127,13 @@ impl SourceDir {
                     dones_v.push(old);
                 } else {
                     dones_v.push(FileLike::Dir(SourceDir{
-                        name:path.file_name().unwrap().to_str().unwrap().to_string().into(),
+                        rel_path:rel_path.clone(),
                         children:Vec::new().into()
                     }));
                 }
-                todos.push((path,dones_v.len()-1));
+                todos.push((path,rel_path,dones_v.len()-1));
             } else {
+                let rel_path:Str = format!("{}/{}",rel_path,path.file_name().unwrap().to_str().unwrap()).into();
                 let format = match path.extension() {
                     Some(ext) => match from_ext(ext.to_str().unwrap()) {
                         Some(f) => f,
@@ -123,21 +142,21 @@ impl SourceDir {
                     _ => continue
                 };
                 let old = oldv.iter().enumerate().rfind(|s| match s {
-                    (_,FileLike::File(s)) => &*s.name == path.file_name().unwrap(),
+                    (_,FileLike::File(s)) => s.rel_path == rel_path,
                     _ => false
                 }).map(|(i,_)| i);
                 if let Some(i) = old {
                     let mut old = oldv.remove(i).into_either().unwrap_right();
-                    if let BuildState::UpToDate { last_built } = old.state {
+                    if let BuildState::UpToDate { last_built,md5 } = &mut old.state {
                         let changed = md.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-                        if changed > last_built {
-                            old.state = BuildState::Stale { last_built: changed };
+                        if changed > *last_built {
+                            old.state = BuildState::Stale { last_built: changed,md5:std::mem::take(md5) };
                         }
                     }
                     dones_v.push(FileLike::File(old));
                 } else {
                     dones_v.push(FileLike::File(SourceFile{
-                        name:path.file_name().unwrap().to_str().unwrap().to_string().into(),
+                        rel_path,
                         state:BuildState::New,
                         format
                     }));
@@ -156,8 +175,8 @@ impl SourceDir {
             dones_v.push(c);
         }
         *old = dones_v.into();
-        for (p,i) in todos {
-            Self::update(&p,&mut old[i].as_either_mut().unwrap_left().children,handler,ignore,from_ext);
+        for (p,r,i) in todos {
+            Self::update(&p,&r,&mut old[i].as_either_mut().unwrap_left().children,handler,ignore,from_ext);
         }
     }
 }
@@ -165,17 +184,22 @@ impl SourceDir {
 #[derive(Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct SourceFile{name:Str,state:BuildState,format: FormatId }
+pub struct SourceFile{pub rel_path:Str,pub state:BuildState,pub format: FormatId }
+impl SourceFile {
+    pub fn path_in_archive(&self,archive_path:&Path) -> PathBuf {
+        archive_path.join("source").join(&self.rel_path[1..])
+    }
+}
 
 
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash)]
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
 pub enum BuildState {
     Deleted,
     New,
-    Stale{last_built:u64},
-    UpToDate{last_built:u64}
+    Stale{last_built:u64,md5:Str},
+    UpToDate{last_built:u64,md5:Str}
 }
 
 impl TreeLike for FileLike {

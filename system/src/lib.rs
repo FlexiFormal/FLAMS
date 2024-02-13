@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod controller;
+pub mod buildqueue;
 
 
 pub mod ontology {
@@ -19,10 +20,23 @@ pub mod utils {
             r
         })
     }
+    pub fn measure_average<F:FnMut()>(prefix:&str,i:usize, mut f:F) {
+        info_span!("measure average",prefix).in_scope(|| {
+            let mut elapsed = vec!();
+            for _ in 0..i {
+                let start = std::time::Instant::now();
+                f();
+                elapsed.push(start.elapsed());
+            }
+            let av = elapsed.iter().sum::<std::time::Duration>() / i as u32;
+            tracing::info!("Finished; average: {:?}", av);
+        })
+    }
 
     pub mod problems;
     pub mod progress;
     pub mod parse;
+    pub mod sourcerefs;
 }
 /*
 #[allow(non_camel_case_types)]

@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tracing::{info, instrument};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::fmt::writer::MakeWriterExt;
@@ -216,7 +217,7 @@ mod test {
 }
 
 //#[tokio::main]
-/*async*/ fn main() {
+fn main() {
     use std::io;
     //use tui::{backend::CrosstermBackend, Terminal};
 
@@ -282,7 +283,8 @@ fn archives() {
         builder.build()
         //tracing::info!("Found {} archives",mgr.into_iter().count());
     };//);
-    controller.run_repl();
+    std::thread::sleep(Duration::from_secs(60))
+    //controller.run_repl();
     /*
     let f = |_| {std::thread::sleep(std::time::Duration::from_secs_f32(0.2))};
     measure("iterating single threaded",|| {

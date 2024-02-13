@@ -7,8 +7,8 @@ mod test;
 use immt_api::formats::{Format, FormatExtension, FormatId};
 use immt_system::controller::ControllerBuilder;
 
-const ID : FormatId = FormatId::new_unchecked(*b"sTeX");
-const EXTENSIONS : &[&str] = &["tex", "ltx"];
+pub const ID : FormatId = FormatId::new_unchecked(*b"sTeX");
+pub const EXTENSIONS : &[&str] = &["tex", "ltx"];
 
 pub fn register(controller:&mut ControllerBuilder) {
     immt_shtml::register(controller);

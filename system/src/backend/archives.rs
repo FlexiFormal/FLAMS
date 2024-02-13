@@ -1,10 +1,12 @@
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
+use spliter::ParSpliter;
 use immt_api::formats::FormatStore;
 use immt_api::archives::{ArchiveData, ArchiveGroupBase, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
-use immt_api::source_files::{ParseError, SerializeError, SourceDir};
+use immt_api::source_files::{FileLike, ParseError, SerializeError, SourceDir, SourceFile};
 use immt_api::utils::problems::{ProblemHandler as PHandlerT};
-use tracing::{event, instrument};
+use tracing::{debug, event, instrument};
+use immt_api::utils::iter::LeafIterator;
 
 #[derive(Debug)]
 pub struct Archive {
@@ -25,7 +27,7 @@ impl ArchiveT for Archive {
         if !Self::ls_f(&mut state, path, &data.ignores, handler, formats) && !data.is_meta {
             handler.add("Missing source", format!("Archive has no source directory: {}",data.id));
         }
-        event!(tracing::Level::DEBUG,"Done");
+        debug!("Done");
         Self {
             manifest:data,
             path:path.to_path_buf(),
@@ -46,7 +48,7 @@ impl Default for ArchiveState {
     fn default() -> Self {
         Self {
             initialized:false,
-            source_dir:SourceDir{name:"source".into(),children:Vec::new().into()}
+            source_dir:SourceDir{ rel_path:"source".into(),children:Vec::new().into()}
         }
     }
 }
@@ -63,7 +65,7 @@ impl Archive {
         }
         let source = path.join("source");
         if source.exists() {
-            SourceDir::update(&source, &mut state.source_dir.children, handler,ignore, &|s| formats.from_ext(s));
+            SourceDir::update(&source,"", &mut state.source_dir.children, handler,ignore, &|s| formats.from_ext(s));
             match state.source_dir.write_to(&dirfile) {
                 Ok(_) => {},
                 Err(SerializeError::EncodingError) => handler.add("ArchiveManager",format!("Error encoding {}",dirfile.display())),
@@ -71,6 +73,19 @@ impl Archive {
             }
             true
         } else {false}
+    }
+
+    pub fn iter_sources<R,F:FnMut(&SourceFile,&mut R)>(&self,mut init:R,mut f:F) -> R {
+        let state = self.state.read();
+        let i = state.source_dir.iter();//TreeIter::new(, |s:&SourceDir| s.children.iter(), |e| e.as_ref());
+        for fl in i { f(fl,&mut init) }
+        init
+    }
+
+    pub fn iter_sources_par<R,F:FnOnce(ParSpliter<LeafIterator<&FileLike>>) -> R>(&self,f:F) -> R {
+        let state = self.state.read();
+        let i = state.source_dir.par_iter();//TreeIter::new(, |s:&SourceDir| s.children.iter(), |e| e.as_ref());
+        f(i)
     }
 /*
     pub(in crate::backend) fn watch(&mut self,handler:&ProblemHandler) {
@@ -125,13 +140,6 @@ impl Archive {
         }
     }
 
-    fn iter_sources<R,F:FnMut(&SourceFile,&mut R)>(&self,mut init:R,mut f:F) -> R {
-        let state = self.state.read();
-        let i = state.source_dir.iter();//TreeIter::new(, |s:&SourceDir| s.children.iter(), |e| e.as_ref());
-        for fl in i { f(fl,&mut init) }
-        init
-    }
-
  */
 }
 
@@ -139,7 +147,8 @@ impl Archive {
 pub struct ArchiveGroup {
     base:ArchiveGroupBase<Archive,Self>
 }
-impl ArchiveGroupT<Archive> for ArchiveGroup {
+impl ArchiveGroupT for ArchiveGroup {
+    type Archive=Archive;
     fn new(id:ArchiveId) -> Self {
         Self {
             base:ArchiveGroupBase {

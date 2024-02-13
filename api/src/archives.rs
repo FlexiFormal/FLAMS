@@ -11,7 +11,7 @@ use crate::{Seq, Str};
 use crate::uris::{ArchiveURIRef, DomURI, DomURIRef};
 use crate::utils::HMap;
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Default,PartialEq,Eq,Hash,PartialOrd,Ord)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
 pub struct ArchiveId(Str);
@@ -30,6 +30,11 @@ impl ArchiveId {
         Self(s.into())
     }
 }
+impl From<Vec<Str>> for ArchiveId {
+    fn from(v: Vec<Str>) -> Self {
+        Self(v.join("/").into())
+    }
+}
 impl Display for ArchiveId {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -37,7 +42,7 @@ impl Display for ArchiveId {
     }
 }
 
-#[derive(Clone,Copy,Hash,Debug,PartialEq,Eq)]
+#[derive(Clone,Copy,Hash,Debug,PartialEq,Eq,PartialOrd,Ord)]
 #[cfg_attr(feature="serde",derive(serde::Serialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode))]
 pub struct ArchiveIdRef<'a>(pub(crate) &'a str);
@@ -45,8 +50,11 @@ impl<'a> ArchiveIdRef<'a> {
     #[inline]
     pub fn as_str(&self) -> &str { self.0 }
     pub fn to_owned(&self) -> ArchiveId { ArchiveId(self.0.into()) }
+    pub fn last_name(&self) -> &'a str {
+        self.0.rsplit_once('/').map(|(_,s)| s).unwrap_or(self.0)
+    }
     #[inline]
-    pub fn steps(&self) -> impl Iterator<Item=&str> {
+    pub fn steps(&self) -> impl DoubleEndedIterator<Item=&str> {
         self.0.split('/')
     }
 }
@@ -100,44 +108,51 @@ pub trait ArchiveT {
         }
     }
 }
+impl ArchiveT for ArchiveData {
+    #[inline(always)]
+    fn new_from<P:ProblemHandler>(data:ArchiveData,path:&Path,handler:&P,formats: &FormatStore) -> Self { data }
+    #[inline(always)]
+    fn data(&self) -> &ArchiveData { self }
+}
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 //#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct ArchiveGroupBase<A:ArchiveT,G:ArchiveGroupT<A>> {
+pub struct ArchiveGroupBase<A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
     pub id:ArchiveId,
     pub meta:Option<A>,
     pub archives:Vec<Either<G,A>>,
 }
 
-pub trait ArchiveGroupT<A:ArchiveT>:Sized {
+pub trait ArchiveGroupT:Sized {
+    type Archive:ArchiveT;
     fn new(id:ArchiveId) -> Self;
-    fn base(&self) -> &ArchiveGroupBase<A,Self>;
-    fn base_mut(&mut self) -> &mut ArchiveGroupBase<A,Self>;
+    fn base(&self) -> &ArchiveGroupBase<Self::Archive,Self>;
+    fn base_mut(&mut self) -> &mut ArchiveGroupBase<Self::Archive,Self>;
     #[inline]
-    fn id<'a>(&'a self) -> ArchiveIdRef where A:'a {
+    fn id<'a>(&'a self) -> ArchiveIdRef where Self::Archive:'a {
         self.base().id.as_ref()
     }
     #[inline]
-    fn meta(&self) -> Option<&A> {
+    fn meta(&self) -> Option<&Self::Archive> {
         self.base().meta.as_ref()
     }
-    fn archives<'a>(&'a self) -> impl Iterator<Item=&'a A> where A:'a {
+    fn archives<'a>(&'a self) -> impl Iterator<Item=&'a Self::Archive> where Self::Archive:'a {
         ArchiveIter::new(self.meta(),&self.base().archives)
     }
-    fn iter_all<'a>(&'a self) -> impl Iterator<Item=Either<&'a Self,&'a A>> where A:'a {
+    fn iter_all<'a>(&'a self) -> impl Iterator<Item=Either<&'a Self,&'a Self::Archive>> where Self::Archive:'a {
         FullIter {
             stack:Vec::new(),
             curr:self.base().archives.iter()
         }
     }
     #[cfg(feature = "pariter")]
-    fn archives_par<'a>(&'a self) -> impl rayon::iter::ParallelIterator<Item=&'a A> where A:'a+Sync,Self:Sync {
+    fn archives_par<'a>(&'a self) -> impl rayon::iter::ParallelIterator<Item=&'a Self::Archive> where Self::Archive:'a+Sync,Self:Sync {
         pariter::ParArchiveIter::new(self.meta(),&self.base().archives)
     }
     #[cfg(feature="fs")]
     #[inline]
-    fn load_dir<P:ProblemHandler>(path:&Path,formats:&FormatStore,handler:&P) -> Vec<Either<Self,A>> where A:std::fmt::Debug {
+    fn load_dir<P:ProblemHandler>(path:&Path,formats:&FormatStore,handler:&P) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
         load_dir::ArchiveLoader {
             archives:Vec::new(),
             formats,
@@ -146,14 +161,14 @@ pub trait ArchiveGroupT<A:ArchiveT>:Sized {
         }.run()
     }
     #[inline]
-    fn uri<'a>(&'a self) -> Option<ArchiveURIRef<'a>> where A:'a {
+    fn uri<'a>(&'a self) -> Option<ArchiveURIRef<'a>> where Self::Archive:'a {
         self.meta().map(|m| ArchiveURIRef{
             base:m.dom_uri(),
             archive:self.id()
         })
     }
 
-    fn all_archive_triples<'a>(&'a self) -> impl Iterator<Item=Triple> where A:'a {
+    fn all_archive_triples<'a>(&'a self) -> impl Iterator<Item=Triple> where Self::Archive:'a {
         TripleIter {
             curr:self.base().archives.iter(),
             buf1:None,
@@ -166,7 +181,7 @@ pub trait ArchiveGroupT<A:ArchiveT>:Sized {
     //fn iter(&self) -> LeafIterator<&Either<Self,A>> { self.iter_leafs() }
 }
 
-struct TripleIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {
+struct TripleIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
     curr:std::slice::Iter<'a,Either<G,A>>,
     buf1:Option<Triple>,
     buf2:Option<Triple>,
@@ -174,7 +189,7 @@ struct TripleIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {
     currtop:Option<ArchiveURIRef<'a>>,
     stack:Vec<(&'a G,Option<ArchiveURIRef<'a>>)>,
 }
-impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for TripleIter<'a,A,G> {
+impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for TripleIter<'a,A,G> {
     type Item = Triple;
     fn next(&mut self) -> Option<Self::Item> {
         use crate::ontology::rdf::ulo2::{LIBRARY,LIBRARY_GROUP,CONTAINS};
@@ -244,7 +259,7 @@ mod load_dir {
     use std::path::Path;
     use either::Either;
     use tracing::{debug, trace, trace_span};
-    use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
+    use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveIdRef, ArchiveT, IgnoreSource};
     use crate::formats::{FormatId, FormatStore};
     use crate::utils::problems::ProblemHandler;
     use std::fmt::Debug;
@@ -253,13 +268,18 @@ mod load_dir {
     use crate::uris::DomURI;
     use crate::utils::HMap;
 
-    pub struct ArchiveLoader<'a,P:ProblemHandler,A:ArchiveT+Debug,G:ArchiveGroupT<A>> {
+    macro_rules! id { ($e:expr) => { match $e.as_ref() {
+        Either::Left(g) => g.id(),
+        Either::Right(a) => a.id()
+    }};}
+
+    pub struct ArchiveLoader<'a,P:ProblemHandler,A:ArchiveT+Debug,G:ArchiveGroupT<Archive=A>> {
         pub archives: Vec<Either<G,A>>,
         pub formats:&'a FormatStore,
         pub handler:&'a P,
         pub mh:&'a Path
     }
-    impl<'a,P:ProblemHandler+'a,A:ArchiveT+Debug,G:ArchiveGroupT<A>> ArchiveLoader<'a,P,A,G> {
+    impl<'a,P:ProblemHandler+'a,A:ArchiveT+Debug,G:ArchiveGroupT<Archive=A>> ArchiveLoader<'a,P,A,G> {
         pub fn run(mut self) -> Vec<Either<G,A>> {
             let mut stack = vec!(vec!());
             let mut curr = match std::fs::read_dir(self.mh) {
@@ -299,7 +319,7 @@ mod load_dir {
                     _ => continue
                 };
                 let path = d.path();
-                let _span = trace_span!(target:"archives","checking","{}",path.display()).entered();
+                let _span = trace_span!("checking","{}",path.display()).entered();
                 //std::thread::sleep(std::time::Duration::from_secs_f32(0.01));
                 if md.is_dir() {
                     if d.file_name().to_str().map_or(true,|s| s.starts_with('.')) {continue}
@@ -328,22 +348,26 @@ mod load_dir {
             let mut id = a.id().steps().map(|s| s.to_string()).collect::<Vec<_>>();
             assert!(!id.is_empty());
             if id.len() == 1 {
-                self.archives.push(Either::Right(a));
+                match self.archives.binary_search_by_key(&a.id(),|e| id!(e)) {
+                    Ok(i) => self.archives[i] = Either::Right(a),
+                    Err(i) => self.archives.insert(i,Either::Right(a))
+                }
                 return
             }
-            for c in &mut self.archives {
-                match c {
-                    Either::Left(ref mut g) if g.id().steps().last().map_or(false, |x| x == *id.first().unwrap()) => {
+            let i = match self.archives.binary_search_by_key(&id.first().unwrap().as_str(),|e| id!(e).last_name()) {
+                Ok(i) => match &mut self.archives[i] {
+                    Either::Left(g) => {
                         id.remove(0);
                         return Self::add_i(a,g,id,1);
                     }
-                    _ => ()
-                }
-            }
+                    _ => unreachable!()
+                },
+                Err(i) => i
+            };
             let g = G::new(ArchiveId::new(id.first().unwrap().to_string()));
-            self.archives.push(Either::Left(g));
+            self.archives.insert(i,Either::Left(g));
             id.remove(0);
-            Self::add_i(a,self.archives.last_mut().unwrap().as_mut().unwrap_left(),id,1)
+            Self::add_i(a,self.archives[i].as_mut().unwrap_left(),id,1)
         }
 
 
@@ -352,20 +376,27 @@ mod load_dir {
                 if a.data().is_meta {
                     curr.base_mut().meta= Some(a);
                 } else {
-                    curr.base_mut().archives.push(Either::Right(a));
+                    match curr.base_mut().archives.binary_search_by_key(&a.id().last_name(),|e| id!(e).last_name()) {
+                        Ok(i) => curr.base_mut().archives[i] = Either::Right(a),
+                        Err(i) => curr.base_mut().archives.insert(i,Either::Right(a))
+                    }
                 }
                 return
             }
             depth += 1;
             let head = id.remove(0);
-            for g in curr.base_mut().archives.iter_mut().filter_map(|g| g.as_mut().left()) {
-                if g.id().steps().last().map_or(false, |x| x == head) {
-                    return Self::add_i(a,g,id,depth)
-                }
-            }
+            let i = match curr.base_mut().archives.binary_search_by_key(&head.as_str(),|e| id!(e).last_name()) {
+                Ok(i) => match &mut curr.base_mut().archives[i] {
+                    Either::Left(g) => {
+                        return Self::add_i(a,g,id,depth)
+                    }
+                    _ => unreachable!()
+                },
+                Err(i) => i
+            };
             let g = G::new(ArchiveId::new(a.id().steps().take(depth).collect::<Vec<_>>().join("/")));
-            curr.base_mut().archives.push(Either::Left(g));
-            Self::add_i(a,curr.base_mut().archives.last_mut().unwrap().as_mut().unwrap_left(),id,depth)
+            curr.base_mut().archives.insert(i,Either::Left(g));
+            Self::add_i(a,curr.base_mut().archives[i].as_mut().unwrap_left(),id,depth)
         }
 
         fn get_manifest(&self,metainf:&Path) -> Option<Result<ArchiveData,()>> {
@@ -475,11 +506,11 @@ mod load_dir {
     }
 }
 
-struct FullIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {
+struct FullIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
     stack:Vec<std::slice::Iter<'a,Either<G,A>>>,
     curr:std::slice::Iter<'a,Either<G,A>>,
 }
-impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for FullIter<'a, A, G> {
+impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for FullIter<'a, A, G> {
     type Item = Either<&'a G,&'a A>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -499,12 +530,12 @@ impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for FullIter<'a, A, G> {
     }
 }
 
-struct ArchiveIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {
+struct ArchiveIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
     stack:Vec<&'a [Either<G,A>]>,
     curr:&'a[Either<G,A>],
     meta:Option<&'a A>,
 }
-impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> ArchiveIter<'a,A,G> {
+impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> ArchiveIter<'a,A,G> {
     fn new(meta:Option<&'a A>,group:&'a [Either<G,A>]) -> Self {
         Self {
             stack:Vec::new(),
@@ -513,7 +544,7 @@ impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> ArchiveIter<'a,A,G> {
     }
 }
 
-impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for ArchiveIter<'a,A,G> {
+impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for ArchiveIter<'a,A,G> {
     type Item = &'a A;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(m) = std::mem::take(&mut self.meta) {
@@ -552,12 +583,12 @@ mod pariter {
     use spliter::{ParSpliter, Spliterator,ParallelSpliterator};
     use crate::archives::{ArchiveGroupT, ArchiveT};
 
-    pub(in crate::archives) struct ParArchiveIter<'a,A:ArchiveT,G:ArchiveGroupT<A>> {
+    pub(in crate::archives) struct ParArchiveIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
         stack:Vec<&'a [Either<G,A>]>,
         curr:&'a[Either<G,A>],
         meta:Option<&'a A>,
     }
-    impl<'a,A:ArchiveT+Sync,G:ArchiveGroupT<A>+Sync> ParArchiveIter<'a,A,G> {
+    impl<'a,A:ArchiveT+Sync,G:ArchiveGroupT<Archive=A>+Sync> ParArchiveIter<'a,A,G> {
         pub(in crate::archives) fn new(meta:Option<&'a A>,group:&'a [Either<G,A>]) -> ParSpliter<Self> {
             Self {
                 stack:Vec::new(),
@@ -566,7 +597,7 @@ mod pariter {
         }
     }
 
-    impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Iterator for ParArchiveIter<'a,A,G> {
+    impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for ParArchiveIter<'a,A,G> {
         type Item = &'a A;
         fn next(&mut self) -> Option<Self::Item> {
             if let Some(m) = std::mem::take(&mut self.meta) {
@@ -599,7 +630,7 @@ mod pariter {
         }
     }
 
-    impl<'a,A:ArchiveT,G:ArchiveGroupT<A>> Spliterator for ParArchiveIter<'a,A,G> {
+    impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Spliterator for ParArchiveIter<'a,A,G> {
         fn split(&mut self) -> Option<Self> {
             if self.curr.len() < 2 && self.stack.len() < 2 { return None }
             let currsplit = self.curr.len()/2;

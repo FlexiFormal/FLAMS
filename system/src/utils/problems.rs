@@ -19,7 +19,7 @@ impl PHandler2 {
 pub struct ProblemHandler(Arc<parking_lot::RwLock<ProblemHandlerI>>);
 impl ProblemHandler {
     fn add_i(&self,kind:&'static str,message:String) {
-        //warn!("Problem {}: {}",kind,message);
+        warn!("Problem {}: {}",kind,message);
         self.0.write().add(kind,message);
     }
 }

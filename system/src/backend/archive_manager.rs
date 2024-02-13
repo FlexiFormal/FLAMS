@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::path::Path;
 use either::Either;
-use tracing::{event, instrument};
+use tracing::{event, info, instrument};
 use crate::backend::archives::{Archive, ArchiveGroup};
 use immt_api::formats::FormatStore;
 use immt_api::Str;
@@ -36,28 +36,21 @@ impl ArchiveManager {
     }
 
     fn find_i(&self,mut id:Vec<&str>) -> Option<Either<&ArchiveGroup,&Archive>> {
+        macro_rules! id { ($e:expr) => { match $e.as_ref() {
+            Either::Left(g) => g.id(),
+            Either::Right(a) => a.id()
+        }};}
         if id.is_empty() { return None }
         let mut curr = &self.top.base().archives;
         loop {
             let head = id.remove(0);
             if id.is_empty() {
-                return curr.iter().find_map(|g| {
-                    match g {
-                        Either::Left(g) if g.id().steps().last().map_or(false, |x| x == head) => Some(Either::Left(g)),
-                        Either::Right(a) if a.id().steps().next().map_or(false, |x| x == head) => Some(Either::Right(a)),
-                        _ => None
-                    }
-                })
+                return curr.binary_search_by_key(&head, |g| id!(g).last_name()).ok().map(|i|curr[i].as_ref())
             }
-            let g = match curr.iter().find_map(|g| {
-                match g {
-                    Either::Left(g) if g.id().steps().last().map_or(false, |x| x == head) => Some(g),
-                    _ => None
-                }
-            }) {
-                Some(c) => c,
-                None => return None
-            };
+            let g = if let Ok(i) = curr.binary_search_by_key(&head, |g| id!(g).last_name()) {
+                if let Either::Left(g) = curr[i].as_ref() {g} else {return None}
+            } else { return None };
+
             if id.len() == 1 && id.last().unwrap().eq_ignore_ascii_case("meta-inf") {
                 return g.meta().map(Either::Right)
             }
@@ -67,10 +60,10 @@ impl ArchiveManager {
 
     #[instrument(level = "info",name = "Loading archives", target = "backend", skip(self,handler,formats), fields(found) )]
     fn load(&mut self, in_path:&Path,handler:&ProblemHandler,formats:&FormatStore) {
-        event!(tracing::Level::INFO,"Searching for archives");
+        info!("Searching for archives");
         self.top.base_mut().archives = ArchiveGroupT::load_dir(in_path,formats,handler).into();
         tracing::Span::current().record("found", self.num_archives());
-        event!(tracing::Level::INFO,"Done");
+        info!("Done");
     }
 }
 impl Debug for ArchiveManager {

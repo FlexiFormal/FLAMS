@@ -24,27 +24,30 @@ impl RelationalManager {
         //relman.loader().load_quads(mgr.get_top().all_archive_triples().map(|t| t.in_graph(GraphName::DefaultGraph))).unwrap();
     }
     pub(crate) fn load_archives(ctrl:Controller) {
-       // std::thread::spawn(move || {
+        //use tracing::Instrument;
+        let span = tracing::Span::current();
+        //tokio::spawn(async move {
+        std::thread::spawn(move || {
+            let _span = span.enter();
             let mgr = ctrl.archives();
             let relman = ctrl.relational_manager();
             relman.load_archives_i(mgr);
-        //});
+        });
+        //}.instrument(tracing::Span::current()));
     }
+    #[instrument(level="info",name="relational",skip_all)]
     fn load_archives_i(&self,mgr:&ArchiveManager) {
         use tracing_indicatif::span_ext::IndicatifSpanExt;
         use indicatif::ProgressStyle;
         use rayon::iter::ParallelIterator;
-        let old = self.size();
-        let header_span = info_span!("relational");
-        header_span.pb_set_style(
-            &crate::utils::progress::in_progress("📈 Loading relational...").build()
-        );//::default_bar());
         let num = mgr.num_archives();
-        header_span.pb_set_length(num as u64);
-        let header_span_enter = header_span.enter();
-        let store = self.store.clone();
+        let pb = crate::utils::progress::in_progress("📈 Loading relational...")
+            .with_length(num as u64).set();
+
         info!("Loading relational for {num} archives...");
-        let sp = &header_span;
+
+        let old = self.size();
+        let store = self.store.clone();
         mgr.par_iter().for_each(move |a|{
             let loader = store.bulk_loader();
             let dir = a.path().join(".out").join("rel.ttl");
@@ -54,13 +57,13 @@ impl RelationalManager {
                 let mut file = std::fs::File::open(dir).unwrap();
                 let mut buf = std::io::BufReader::new(&mut file);
                 //std::thread::sleep(std::time::Duration::from_secs_f32(0.5));
-                sp.pb_set_message(a.id().as_str());
+                pb.set_message(a.id().as_str());
                 let _ = loader.load_quads(
                     reader.parse_read(&mut buf).filter_map(|q| q.ok().map(|q|
                         Quad{subject:q.subject, predicate:q.predicate, object:q.object, graph_name:GraphName::NamedNode(iri.clone())}
                     ))
                 );
-                sp.pb_inc(1);
+                pb.tick();
                 //Span::current().pb_inc(1);
             }
         });

@@ -25,7 +25,7 @@ bincode = ["dep:bincode","serde"]
 
 [dependencies]
 #walkdir = "2.4"
-either = "1.9"
+either = "1.10"
 parking_lot = "0.12"
 rayon = {version="1.8",optional = true}
 spliter = {version="0.1",optional = true}

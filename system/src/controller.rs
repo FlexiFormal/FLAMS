@@ -25,7 +25,8 @@ struct ControllerI {
     handler:ProblemHandler,
     relman:RelationalManager,
     formats:FormatStore,
-    commands:Vec<(Command,Callback<Controller,Error>)>
+    commands:Vec<(Command,Callback<Controller,Error>)>,
+    queue:BuildQueue
 }
 
 #[derive(Clone)]
@@ -45,6 +46,7 @@ impl Controller {
             )
         }
     }
+    pub fn build_queue(&self) -> &BuildQueue { &self.0.queue }
     pub fn archives(&self) -> &ArchiveManager { &self.0.mgr }
     pub fn mathhub(&self) -> &Path { &self.0.main_mh }
     pub fn relational_manager(&self) -> &RelationalManager { &self.0.relman }
@@ -66,12 +68,14 @@ impl ControllerBuilder {
     pub fn build(self) -> Controller {
         let handler = self.handler.unwrap_or_default();
         let mgr = ArchiveManager::new(&self.main_mh,&handler,&self.formats);
+        let mut queue = BuildQueue::default();
+        queue.init(&mgr);
         let mut relman = RelationalManager::default();
         relman.init();
         info!("Controller initialized; base ontology has {} quads",relman.size());
         //relman.load_archives(&mgr);
         let ctrl = Controller(Arc::new(ControllerI{
-            mgr,
+            mgr,queue,
             main_mh:self.main_mh,handler,relman,
             formats:self.formats,commands:self.commands
         }));
@@ -89,6 +93,7 @@ impl ControllerBuilder {
 
 
 use reedline_repl_rs::{Result as Res,clap::{Arg,ArgMatches}};
+use crate::buildqueue::BuildQueue;
 
 fn exit(args: ArgMatches, _context: &mut Controller) -> Res<Option<String>> {
     std::process::exit(1);

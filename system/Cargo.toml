@@ -27,7 +27,7 @@ immt-api = {path="../api",features=["bincode","fs","pariter"]}
 #log={version="0.4.20",features=["kv_unstable"]}
 walkdir = "2.4"
 #env_logger = "0.11.1"
-either = { version="1.9",features = ["serde"] }
+either = { version="1.10",features = ["serde"] }
 # tokio = { version = "1.35.1", features = ["macros","rt-multi-thread"] }
 rayon = "1.8"
 spliter = "0.1"
@@ -40,6 +40,7 @@ bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 # notify = "6.1"
 ahash = "0.8.7"
 regex = "1.10"
+tokio = { version="1.36",features = ["full"] }
 
 tracing-indicatif = "0.3.6"
 indicatif = { version="0.17.7",features = ["rayon","improved_unicode"] }
@@ -113,3 +114,5 @@ oxigraph = "0.4.0-alpha.3"
 # https://docs.rs/console/latest/console/ <- also: dialoguer, indicatif
 
 # https://crates.io/crates/rusteval
+
+# https://zicklag.github.io/rust-tutorials/rust-plugins.html

@@ -25,6 +25,7 @@ pub mod utils {
     pub mod parsing;
     pub mod problems;
     pub mod iter;
+    pub mod circular_buffer;
 
     pub type HMap<A,B> = ahash::HashMap<A,B>;
 

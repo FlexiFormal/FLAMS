@@ -1,5 +1,6 @@
 use indicatif::ProgressStyle;
 use tracing::Level;
+use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 pub mod spinners {
     /*! // https://jsbin.com/lezohatoho/edit?js,output */
@@ -98,9 +99,8 @@ pub mod bars {
 pub fn in_progress(prefix:&'static str) -> ProgressBarBuilder {
     ProgressBarBuilder {
         prefix,
-        initial_message: "".to_string(),
-        level: Level::INFO,
         template: None,
+        length:None,
         spinner: spinners::ARROW3,
         progress: bars::BAR6,
         bar_length: 40,
@@ -111,8 +111,7 @@ pub fn in_progress(prefix:&'static str) -> ProgressBarBuilder {
 
 pub struct ProgressBarBuilder {
     prefix:&'static str,
-    initial_message:String,
-    level: Level,
+    length:Option<u64>,
     template:Option<String>,
     spinner: &'static[&'static str],
     progress:&'static str,
@@ -121,7 +120,11 @@ pub struct ProgressBarBuilder {
     todo_color:&'static str,
 }
 impl ProgressBarBuilder {
-    pub fn build(self) -> ProgressStyle {
+    pub fn with_length(mut self,length:u64) -> Self {
+        self.length = Some(length);
+        self
+    }
+    pub fn set(self) -> ProgressBar {
         let s = match self.template {
             Some(t) => ProgressStyle::with_template(t.as_str()).unwrap(),
             None => {
@@ -133,7 +136,28 @@ impl ProgressBarBuilder {
                     self.todo_color
                 )).unwrap()
             }
-        };
-        s.tick_strings(self.spinner).progress_chars(self.progress)
+        }.tick_strings(self.spinner).progress_chars(self.progress);
+        let span = tracing::Span::current();
+        span.pb_set_style(&s);
+        if let Some(l) = self.length {
+            span.pb_set_length(l);
+        }
+        ProgressBar { span }
+    }
+}
+
+#[derive(Clone)]
+pub struct ProgressBar {
+    span: tracing::Span,
+}
+impl ProgressBar {
+    pub fn set_message(&self,msg:&str) {
+        self.span.pb_set_message(msg);
+    }
+    pub fn tick(&self) {
+        self.span.pb_inc(1);
+    }
+    pub fn advance(&self,by:u64) {
+        self.span.pb_inc(by);
     }
 }

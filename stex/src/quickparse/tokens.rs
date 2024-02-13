@@ -1,12 +1,12 @@
-use immt_system::utils::parse::{SourcePos, SourceRange};
+use immt_system::utils::sourcerefs::{SourcePos, SourceRange};
 
-pub enum TeXToken<'a,P:SourcePos> {
+pub enum TeXToken<P:SourcePos,S> {
     Comment(SourceRange<P>),
     BeginGroupChar(P),
     EndGroupChar(P),
     BeginMath{display:bool,start:P},
-    EndMath{display:bool,start:P},
-    ControlSequence{start:P,name:&'a str},
-    Text(SourceRange<P>),
-    Directive(&'a str)
+    EndMath{start:P},
+    ControlSequence{start:P,name:S},
+    Text{range:SourceRange<P>,text:S},
+    Directive(S)
 }
