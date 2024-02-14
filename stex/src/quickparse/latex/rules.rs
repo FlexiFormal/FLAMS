@@ -1,4 +1,3 @@
-use std::convert::identity;
 use immt_api::utils::problems::ProblemHandler;
 use immt_system::utils::parse::ParseSource;
 use immt_system::utils::sourcerefs::{SourcePos, SourceRange};

@@ -1,5 +1,6 @@
 pub mod rules;
 
+use std::collections::hash_map::Entry;
 use std::convert::Into;
 use std::marker::PhantomData;
 use immt_api::utils::HMap;
@@ -96,7 +97,18 @@ pub struct RuleGroup<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a
     previous_letters:Option<String>,
     macro_rule_changes:HMap<Pa::Str,Option<MacroRule<'a,Pa,Pr,T>>>,
     environment_rule_changes:HMap<Pa::Str,Option<EnvironmentRule<'a,Pa,Pr,T>>>,
-    environment:Option<&'a str>
+}
+impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> RuleGroup<'a,Pa,Pr,T> {
+    pub fn add_macro_rule(&mut self,name:Pa::Str,old:Option<MacroRule<'a,Pa,Pr,T>>) {
+        if let Entry::Vacant(e) =self.macro_rule_changes.entry(name) {
+            e.insert(old);
+        }
+    }
+    pub fn add_environment_rule(&mut self,name:Pa::Str,old:Option<EnvironmentRule<'a,Pa,Pr,T>>) {
+        if let Entry::Vacant(e) =self.environment_rule_changes.entry(name) {
+            e.insert(old);
+        }
+    }
 }
 impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> TokenizerGroup<'a> for RuleGroup<'a,Pa,Pr,T> {
     fn new<Pa2:ParseSource<'a>,Pr2:ProblemHandler>(_: &mut TeXTokenizer<'a, Pa2, Pr2, Self>) -> Self {
@@ -104,12 +116,18 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
             previous_letters:None,
             macro_rule_changes:HMap::default(),
             environment_rule_changes:HMap::default(),
-            environment:None
         }
     }
     fn close<Pa2:ParseSource<'a>,Pr2:ProblemHandler>(self, tokenizer: &mut TeXTokenizer<'a, Pa2, Pr2, Self>) {
         if let Some(l) = self.previous_letters {
             tokenizer.letters = l
+        }
+        for (n,r) in self.macro_rule_changes {
+            if let Some(r) = r {
+                tokenizer.parser.macro_rules.insert(n,r);
+            } else {
+                tokenizer.parser.macro_rules.remove(&n);
+            }
         }
     }
     fn letter_change(&mut self, old: &str) {
