@@ -4,7 +4,7 @@ use crate::quickparse::tokens::TeXToken;
 use immt_system::utils::parse::ParseSource;
 use immt_system::utils::sourcerefs::SourceRange;
 use immt_system::utils::parse::StringOrStr;
-
+/*
 pub trait TokenizerGroup<'a>:Sized {
     fn new<Pa:ParseSource<'a>,Pr:ProblemHandler>(tokenizer:&mut TeXTokenizer<'a,Pa,Pr,Self>) -> Self;
     fn close<Pa:ParseSource<'a>,Pr:ProblemHandler>(self,tokenizer:&mut TeXTokenizer<'a,Pa,Pr,Self>);
@@ -32,27 +32,29 @@ impl<'a> TokenizerGroup<'a> for LetterGroup {
     }
 }
 
+ */
+
 #[derive(Copy,Clone,PartialEq,Eq)]
 pub enum Mode { Text, Math{display:bool} }
 
-pub struct TeXTokenizer<'a,Pa:ParseSource<'a>,Pr:ProblemHandler=(),G:TokenizerGroup<'a>=LetterGroup> {
-    pub reader: Pa,pub letters:String,groups:Vec<G>,pub mode:Mode,
+pub struct TeXTokenizer<'a,Pa:ParseSource<'a>,Pr:ProblemHandler=()> {
+    pub reader: Pa,pub letters:String,pub mode:Mode,
     source_file:Option<&'a Path>,handler:&'a Pr
 }
-impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,G:TokenizerGroup<'a>> TeXTokenizer<'a,Pa,Pr,G> {
+impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler> TeXTokenizer<'a,Pa,Pr> {
     pub(crate) fn new(reader:Pa,source_file:Option<&'a Path>,handler:&'a Pr) -> Self {
         TeXTokenizer {
-            reader,groups:Vec::new(),mode:Mode::Text, source_file, handler,
+            reader,mode:Mode::Text, source_file, handler,
             letters:"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string()
         }
     }
 }
-impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler,G:TokenizerGroup<'a>> Iterator for TeXTokenizer<'a,Pa,Pr,G> {
+impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler> Iterator for TeXTokenizer<'a,Pa,Pr> {
     type Item = TeXToken<Pa::Pos,Pa::Str>;
     fn next(&mut self) -> Option<Self::Item> { self.read_next() }
 }
 
-impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler,G:TokenizerGroup<'a>> TeXTokenizer<'a,Pa,Pr,G> {
+impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler> TeXTokenizer<'a,Pa,Pr> {
     fn read_next(&mut self) -> Option<TeXToken<Pa::Pos,Pa::Str>> {
         self.reader.trim_start();
         let start = self.reader.curr_pos().clone();
@@ -64,12 +66,10 @@ impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler,G:TokenizerGroup<'a>> TeXTokenizer
             },
             Some('{') => {
                 self.reader.pop_head();
-                self.open_group();
                 Some(TeXToken::BeginGroupChar(start))
             }
             Some('}') => {
                 self.reader.pop_head();
-                self.close_group();
                 Some(TeXToken::EndGroupChar(start))
             }
             Some('$') => {
@@ -122,23 +122,9 @@ impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler,G:TokenizerGroup<'a>> TeXTokenizer
 
     pub fn open_math(&mut self,display:bool) {
         self.mode = Mode::Math { display };
-        self.open_group();
     }
     pub fn close_math(&mut self) {
         self.mode = Mode::Text;
-        self.close_group();
-    }
-
-    pub fn open_group(&mut self) {
-        let g = G::new(self);
-        self.groups.push(g);
-    }
-
-    pub fn close_group(&mut self) {
-        match self.groups.pop() {
-            None => self.problem("Unmatched }"),
-            Some(g) => g.close(self)
-        }
     }
 
     pub fn problem(&mut self,msg: impl std::fmt::Display) {
@@ -159,16 +145,4 @@ impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler,G:TokenizerGroup<'a>> TeXTokenizer
         }
     }
 
-    pub fn add_letters(&mut self,s:&str) {
-        if let Some(g) = self.groups.last_mut() {
-            g.letter_change(&self.letters);
-        }
-        self.letters.extend(s.chars());
-    }
-    pub fn remove_letters(&mut self,s:&str) {
-        if let Some(g) = self.groups.last_mut() {
-            g.letter_change(&self.letters);
-        }
-        self.letters.retain(|x| s.contains(s));
-    }
 }

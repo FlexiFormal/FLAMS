@@ -15,7 +15,6 @@ use immt_system::utils::problems::ProblemHandler;
 use immt_system::utils::sourcerefs::SourceOffsetLineCol;
 use crate::{EXTENSIONS, ID, STeXExtension};
 use crate::quickparse::latex::LaTeXToken;
-use crate::quickparse::tokenizer::LetterGroup;
 
 fn test_setup() -> ProblemHandler {
     use tracing_subscriber::layer::Layer;
@@ -40,7 +39,7 @@ fn test_setup() -> ProblemHandler {
 fn check_file_string_tokens<P:PH>(path:&Path,handler:&P) {
     let contents = std::fs::read_to_string(path).unwrap();
     let i = ParseStr::<SourceOffsetLineCol>::new(&contents);
-    let tokenizer = crate::quickparse::tokenizer::TeXTokenizer::<_,_,LetterGroup>::new(i,Some(path),handler);
+    let tokenizer = crate::quickparse::tokenizer::TeXTokenizer::new(i,Some(path),handler);
     let v = tokenizer.collect::<Vec<_>>();
     //println!("Done: {}",v.len())
 }
@@ -58,7 +57,7 @@ fn check_file_string_parsed<P:PH>(path:&Path,handler:&P) {
 fn check_file_tokens<P:PH>(path:&Path,handler:&P) {
     let f = std::fs::File::open(path).unwrap();
     let i = ParseReader::<_,SourceOffsetLineCol>::new(BufReader::new(f));
-    let tokenizer = crate::quickparse::tokenizer::TeXTokenizer::<_,_,LetterGroup>::new(i,Some(path),handler);
+    let tokenizer = crate::quickparse::tokenizer::TeXTokenizer::new(i,Some(path),handler);
     let v = tokenizer.collect::<Vec<_>>();
     //println!("Done: {}",v.len())
 }

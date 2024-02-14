@@ -5,7 +5,7 @@ use std::convert::Into;
 use std::marker::PhantomData;
 use immt_api::utils::HMap;
 use immt_api::utils::problems::ProblemHandler;
-use crate::quickparse::tokenizer::{TeXTokenizer, TokenizerGroup};
+use crate::quickparse::tokenizer::TeXTokenizer;
 use crate::quickparse::tokens::TeXToken;
 use immt_system::utils::parse::{ParseSource, StringOrStr};
 use immt_system::utils::sourcerefs::{SourcePos, SourceRange};
@@ -93,12 +93,12 @@ pub type EnvironmentRule<'a,Pa:ParseSource<'a>,Pr,T:FromLaTeXToken<'a,Pa::Str,Pa
 );
 
 
-pub struct RuleGroup<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> {
+pub struct Group<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> {
     previous_letters:Option<String>,
     macro_rule_changes:HMap<Pa::Str,Option<MacroRule<'a,Pa,Pr,T>>>,
     environment_rule_changes:HMap<Pa::Str,Option<EnvironmentRule<'a,Pa,Pr,T>>>,
 }
-impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> RuleGroup<'a,Pa,Pr,T> {
+impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> Group<'a,Pa,Pr,T> {
     pub fn add_macro_rule(&mut self,name:Pa::Str,old:Option<MacroRule<'a,Pa,Pr,T>>) {
         if let Entry::Vacant(e) =self.macro_rule_changes.entry(name) {
             e.insert(old);
@@ -109,24 +109,22 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
             e.insert(old);
         }
     }
-}
-impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> TokenizerGroup<'a> for RuleGroup<'a,Pa,Pr,T> {
-    fn new<Pa2:ParseSource<'a>,Pr2:ProblemHandler>(_: &mut TeXTokenizer<'a, Pa2, Pr2, Self>) -> Self {
-        RuleGroup {
+    fn new() -> Self {
+        Group {
             previous_letters:None,
             macro_rule_changes:HMap::default(),
             environment_rule_changes:HMap::default(),
         }
     }
-    fn close<Pa2:ParseSource<'a>,Pr2:ProblemHandler>(self, tokenizer: &mut TeXTokenizer<'a, Pa2, Pr2, Self>) {
+    fn close(self, parser: &mut LaTeXParser<'a, Pa, Pr, T>) {
         if let Some(l) = self.previous_letters {
-            tokenizer.letters = l
+            parser.tokenizer.letters = l
         }
         for (n,r) in self.macro_rule_changes {
             if let Some(r) = r {
-                tokenizer.parser.macro_rules.insert(n,r);
+                parser.macro_rules.insert(n,r);
             } else {
-                tokenizer.parser.macro_rules.remove(&n);
+                parser.macro_rules.remove(&n);
             }
         }
     }
@@ -138,8 +136,9 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
 }
 
 pub struct LaTeXParser<'a,Pa:ParseSource<'a>,Pr:ProblemHandler = (),T:FromLaTeXToken<'a,Pa::Str,Pa::Pos> = LaTeXToken<'a,<Pa as ParseSource<'a>>::Pos,<Pa as ParseSource<'a>>::Str>> {
-    tokenizer:super::tokenizer::TeXTokenizer<'a,Pa,Pr,RuleGroup<'a,Pa,Pr,T>>,
+    tokenizer:super::tokenizer::TeXTokenizer<'a,Pa,Pr>,
     macro_rules:HMap<Pa::Str,MacroRule<'a,Pa,Pr,T>>,
+    groups:Vec<Group<'a,Pa,Pr,T>>,
     environment_rules:HMap<Pa::Str,EnvironmentRule<'a,Pa,Pr,T>>,
     directives:HMap<Pa::Str,fn(&mut Self)>,
     buf:Vec<T>
@@ -181,6 +180,7 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
         LaTeXParser {
             tokenizer:super::tokenizer::TeXTokenizer::new(input,source_file,handler),
             macro_rules,
+            groups:Vec::new(),
             environment_rules,
             directives:HMap::default(),
             buf:Vec::new()
@@ -194,6 +194,7 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
         LaTeXParser {
             tokenizer:super::tokenizer::TeXTokenizer::new(input,source_file,handler),
             macro_rules,
+            groups:Vec::new(),
             environment_rules:HMap::default(),
             directives:HMap::default(),
             buf:Vec::new()
@@ -239,6 +240,30 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
         }
     }
 
+    pub fn open_group(&mut self) {
+        let g = Group::new();
+        self.groups.push(g);
+    }
+
+    pub fn close_group(&mut self) {
+        match self.groups.pop() {
+            None => self.tokenizer.problem("Unmatched }"),
+            Some(g) => g.close(self)
+        }
+    }
+    pub fn add_letters(&mut self,s:&str) {
+        if let Some(g) = self.groups.last_mut() {
+            g.letter_change(&self.tokenizer.letters);
+        }
+        self.tokenizer.letters.extend(s.chars());
+    }
+    pub fn remove_letters(&mut self,s:&str) {
+        if let Some(g) = self.groups.last_mut() {
+            g.letter_change(&self.tokenizer.letters);
+        }
+        self.tokenizer.letters.retain(|x| s.contains(s));
+    }
+
     fn cs(&mut self,name:Pa::Str,start:Pa::Pos) -> Option<T> {
         match self.macro_rules.get(&name) {
             Some(r) => {
@@ -279,7 +304,7 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
             }
             _ => None
         };
-        self.tokenizer.open_group();
+        self.open_group();
         while let Some(next) = self.tokenizer.next() {
             if let TeXToken::ControlSequence{start,name:endname} = &next {
                 if endname.as_ref() == "end" {
@@ -295,11 +320,11 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
                             match close {
                                 Some(close) => {
                                     let ret = close(env, self);
-                                    self.tokenizer.close_group();
+                                    self.close_group();
                                     return ret
                                 },
                                 None => {
-                                    self.tokenizer.close_group();
+                                    self.close_group();
                                     return EnvironmentResult::Simple(env)
                                 }
                             }
@@ -319,7 +344,7 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
                 env.children.push(n)
             }
         }
-        self.tokenizer.close_group();
+        self.close_group();
         self.tokenizer.problem("Unclosed environment");
         EnvironmentResult::Simple(env)
     }
@@ -333,23 +358,28 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
     }
 
     fn math(&mut self,_display:bool) -> Vec<T> {
+        self.open_group();
         let mut v = Vec::new();
         while let Some(next) = self.tokenizer.next() {
             if matches!(next,TeXToken::EndMath{..}) {
+                self.close_group();
                 return v
             }
             if let Some(n) = self.default(next) {
                 v.push(n)
             }
         }
-        self.tokenizer.problem("Unclosed group");
+        self.tokenizer.problem("Unclosed math group");
+        self.close_group();
         v
     }
 
     fn group(&mut self) -> Vec<T> {
+        self.open_group();
         let mut v = Vec::new();
         while let Some(next) = self.tokenizer.next() {
             if matches!(next,TeXToken::EndGroupChar(_)) {
+                self.close_group();
                 return v
             }
             if let Some(n) = self.default(next) {

@@ -96,12 +96,12 @@ pub fn skip_args<'a,
 const N : ArgType = ArgType::Normal;
 const O : ArgType = ArgType::Optional;
 
-simple!(begingroup,m,p => { p.tokenizer.open_group() });
-simple!(endgroup,m,p => { p.tokenizer.close_group() });
-simple!(makeatletter,m,p => { p.tokenizer.add_letters("@") });
-simple!(makeatother,m,p => { p.tokenizer.remove_letters("@") });
-simple!(ExplSyntaxOn,m,p => { p.tokenizer.add_letters(":_") });
-simple!(ExplSyntaxOff,m,p => { p.tokenizer.remove_letters(":_") });
+simple!(begingroup,m,p => { p.open_group() });
+simple!(endgroup,m,p => { p.close_group() });
+simple!(makeatletter,m,p => { p.add_letters("@") });
+simple!(makeatother,m,p => { p.remove_letters("@") });
+simple!(ExplSyntaxOn,m,p => { p.add_letters(":_") });
+simple!(ExplSyntaxOff,m,p => { p.remove_letters(":_") });
 csrule!(lstinline,m,p => {inline_verbatim(m,p)});
 csrule!(verb,m,p => {inline_verbatim(m,p)});
 csrule!(stexcodeinline,m,p => {inline_verbatim(m,p)});
@@ -133,11 +133,11 @@ macro_rules! switch_mode {
     ($i:ident,$m:expr) => {
         simple!($i,m,p => {
             let mode = p.tokenizer.mode;
-            p.tokenizer.open_group();
+            p.open_group();
             p.tokenizer.mode = $m;
             p.read_argument(&mut m);
             p.tokenizer.mode = mode;
-            p.tokenizer.close_group();
+            p.close_group();
         });
     }
 }
@@ -159,11 +159,11 @@ simple!(ensuremath,m,p => {
 });
 simple!(scalebox,m,p => {
     let mode = p.tokenizer.mode;
-    p.tokenizer.open_group();
+    p.open_group();
     p.skip_arg(&mut m);
     p.read_argument(&mut m);
     p.tokenizer.mode = mode;
-    p.tokenizer.close_group();
+    p.close_group();
 });
 
 use super::Environment;
