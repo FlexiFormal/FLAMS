@@ -237,7 +237,7 @@ impl TreeState {
      */
 }
 
-#[derive(Default,PartialEq,Eq)]
+#[derive(PartialEq,Eq)]
 struct TreeElement {
     id:ArchiveId,
     render:Str,

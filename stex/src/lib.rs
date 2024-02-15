@@ -4,7 +4,10 @@ pub mod quickparse;
 #[doc(hidden)]
 mod test;
 
+use std::path::Path;
+use async_trait::async_trait;
 use immt_api::formats::{Format, FormatExtension, FormatId};
+use immt_api::formats::building::{BuildResult, BuildTask, BuildTaskStep, SourceTaskStep};
 use immt_system::controller::ControllerBuilder;
 
 pub const ID : FormatId = FormatId::new_unchecked(*b"sTeX");
@@ -16,7 +19,44 @@ pub fn register(controller:&mut ControllerBuilder) {
     controller.register_format(format);
 }
 
+pub struct PdfLaTeX;
+#[async_trait]
+impl SourceTaskStep for PdfLaTeX {
+    async fn run(&self, file: &Path) -> BuildResult {
+        // Do Something
+        BuildResult::None
+    }
+}
+
+pub struct BibTeX;
+#[async_trait]
+impl SourceTaskStep for BibTeX {
+    async fn run(&self, file: &Path) -> BuildResult {
+        // Do Something
+        BuildResult::None
+    }
+}
+
+pub struct RusTeX;
+#[async_trait]
+impl SourceTaskStep for RusTeX {
+    async fn run(&self, file: &Path) -> BuildResult {
+        // Do Something
+        BuildResult::None
+    }
+}
+
 pub struct STeXExtension;
 impl FormatExtension for STeXExtension {
-
+    fn get_task(&self, source: &Path) -> Option<BuildTask> {
+        Some(BuildTask {
+            steps: vec![
+                BuildTaskStep::Source(Box::new(PdfLaTeX)),
+                BuildTaskStep::Source(Box::new(BibTeX)),
+                BuildTaskStep::Source(Box::new(RusTeX)),
+                BuildTaskStep::Complex(Box::new(immt_shtml::SHMLTaskStep))
+            ],
+            state: None
+        })
+    }
 }

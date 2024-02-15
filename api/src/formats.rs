@@ -1,4 +1,11 @@
-use std::fmt::{Display, Debug,Write};
+pub mod building;
+
+use std::any::Any;
+use std::fmt::{Display, Debug, Write};
+use std::future::Future;
+use std::path::Path;
+use crate::formats::building::BuildTask;
+use crate::Str;
 
 #[derive(Copy,Clone,PartialEq,Eq,Hash)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
@@ -32,8 +39,11 @@ impl Debug for FormatId {
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result { <Self as Display>::fmt(self,f) }
 }
 
-pub trait FormatExtension:Send+Sync {
 
+
+pub trait FormatExtension:Send+Sync {
+    //fn estimate_dependencies(&self,source:&Path);
+    fn get_task(&self, source:&Path) -> Option<BuildTask>;
 }
 
 pub struct Format {

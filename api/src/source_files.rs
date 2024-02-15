@@ -13,7 +13,7 @@ use crate::utils::iter::{HasChildren, HasChildrenMut, HasChildrenRef, LeafIterat
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
-#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
+//#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
 pub enum FileLike {
     Dir(SourceDir),
     File(SourceFile)
@@ -46,84 +46,50 @@ use spliter::ParSpliter;
 
 #[derive(Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
-#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct SourceDir{pub rel_path:Str,pub children:Seq<FileLike>}
+//#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
+pub struct SourceDir{pub rel_path:Str,pub children:Vec<FileLike>}
 impl SourceDir {
-    #[cfg(feature = "pariter")]
-    pub fn par_iter(&self) -> ParSpliter<LeafIterator<&FileLike>> { self.iter_leafs().par_split().into_par_iter() }
-    pub fn iter(&self) -> LeafIterator<&FileLike> { self.iter_leafs() }
-    pub fn iter_mut(&mut self) -> LeafIterator<&mut FileLike> { self.iter_leafs() }
-    #[cfg(all(feature="bincode",feature="fs"))]
-    pub fn parse<F:AsRef<Path>>(file:F) -> Result<Seq<FileLike>,ParseError> {
-        let file = file.as_ref();
-        match std::fs::File::open(file) {
-            Ok(mut f) => match bincode::decode_from_std_read(&mut f,bincode::config::standard()) {
-                Ok(v) => Ok(v),
-                _ => Err(ParseError::DecodingError)
-            },
-            _ => Err(ParseError::FileError)
-        }
+    pub fn delete(&mut self) -> bool {
+        self.children.retain_mut(|c| match c {
+            FileLike::File(f) if matches!(f.state, BuildState::Deleted | BuildState::New) => false,
+            FileLike::Dir(d) => !d.delete(),
+            _ => true
+        });
+        self.children.is_empty()
     }
-    #[cfg(all(feature="bincode",feature="fs"))]
-    pub fn write_to<F:AsRef<Path>>(&self,file:F) -> Result<(),SerializeError> {
-        let file = file.as_ref();
-        file.parent().map(std::fs::create_dir_all);
-        let mut f = match std::fs::File::create(file) {
-            Ok(f) => f,
-            _ => return Err(SerializeError::IOError)
-        };
-        if bincode::encode_into_std_write(&self.children,&mut f,bincode::config::standard()).is_err() {
-            Err(SerializeError::EncodingError)
-        } else { Ok(()) }
-    }
-    #[cfg(feature="fs")]
-    pub fn update<F:AsRef<Path>,P:ProblemHandler>(in_dir:F,rel_path:&str,old:&mut Seq<FileLike>,handler:&P,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
-        use tracing::trace;
+}
+
+#[cfg(feature="tokio")]
+use futures::future::{BoxFuture, FutureExt};
+
+macro_rules! update {
+    ($rel_path:ident,$oldv:ident,$ignore:ident,$todos:ident,$handler:ident,$get:expr;$d:ident => $meta:expr;$from_ext:ident;$ret:expr) => {
         let mut dones_v = Vec::new();
-        let mut todos = Vec::new();
-        let mut oldv: Vec<_> = std::mem::take(old).into();
-        let path = in_dir.as_ref();
-        if ignore.ignores(path) {
-            trace!("Ignoring {} because of {}",path.display(),ignore);
-            return
-        }
-        oldv.reverse();
-        let curr = match std::fs::read_dir(path) {
-            Ok(d) => d,
-            _ => {
-                handler.add("archives",format!("Could not read directory {}",path.display()));
-                return
-            }
-        };
-        for d in curr {
-            let d = match d {
-                Ok(d) => d,
-                _ => {
-                    handler.add("ArchiveManager",format!("Error when reading directory {}",path.display()));
-                    continue
-                }
-            };
-            let path = d.path();
+        $oldv.reverse();
+        loop {
+            let $d = $get;
+            let path = $d.path();
             //std::thread::sleep(std::time::Duration::from_secs_f32(0.001));
-            if ignore.ignores(&path) {
-                trace!("Ignoring {} because of {}",path.display(),ignore);
-                return
+            if $ignore.ignores(&path) {
+                trace!("Ignoring {} because of {}",path.display(),$ignore);
+                $oldv.reverse();
+                return $ret
             }
-            let md = match d.metadata() {
+            let md = match $meta {
                 Ok(d) => d,
                 _ => {
-                    handler.add("ArchiveManager",format!("Could not read metadata of file {}",path.display()));
+                    $handler.add("ArchiveManager",format!("Could not read metadata of file {}",path.display()));
                     continue
                 }
             };
             if md.is_dir() {
-                let rel_path:Str = format!("{}/{}",rel_path,path.file_name().unwrap().to_str().unwrap()).into();
-                let old = oldv.iter().enumerate().rfind(|s| match s {
+                let rel_path:Str = format!("{}/{}",$rel_path,path.file_name().unwrap().to_str().unwrap()).into();
+                let old = $oldv.iter().enumerate().rfind(|s| match s {
                     (_,FileLike::Dir(s)) => s.rel_path == rel_path,
                     _ => false
                 }).map(|(i,_)| i);
                 if let Some(i) = old {
-                    let old = oldv.remove(i);
+                    let old = $oldv.remove(i);
                     dones_v.push(old);
                 } else {
                     dones_v.push(FileLike::Dir(SourceDir{
@@ -131,26 +97,26 @@ impl SourceDir {
                         children:Vec::new().into()
                     }));
                 }
-                todos.push((path,rel_path,dones_v.len()-1));
+                $todos.push((path,rel_path,dones_v.len()-1));
             } else {
-                let rel_path:Str = format!("{}/{}",rel_path,path.file_name().unwrap().to_str().unwrap()).into();
+                let rel_path:Str = format!("{}/{}",$rel_path,path.file_name().unwrap().to_str().unwrap()).into();
                 let format = match path.extension() {
-                    Some(ext) => match from_ext(ext.to_str().unwrap()) {
+                    Some(ext) => match $from_ext(ext.to_str().unwrap()) {
                         Some(f) => f,
                         _ => continue
                     }
                     _ => continue
                 };
-                let old = oldv.iter().enumerate().rfind(|s| match s {
+                let old = $oldv.iter().enumerate().rfind(|s| match s {
                     (_,FileLike::File(s)) => s.rel_path == rel_path,
                     _ => false
                 }).map(|(i,_)| i);
                 if let Some(i) = old {
-                    let mut old = oldv.remove(i).into_either().unwrap_right();
+                    let mut old = $oldv.remove(i).into_either().unwrap_right();
                     if let BuildState::UpToDate { last_built,md5 } = &mut old.state {
                         let changed = md.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
                         if changed > *last_built {
-                            old.state = BuildState::Stale { last_built: changed,md5:std::mem::take(md5) };
+                            old.state = BuildState::Stale { last_built: changed,md5:md5.clone() };
                         }
                     }
                     dones_v.push(FileLike::File(old));
@@ -163,18 +129,135 @@ impl SourceDir {
                 }
             }
         }
-        for mut c in oldv {
+        for mut c in $oldv {
             match &mut c {
-                FileLike::File(f) => {
+                FileLike::File(f) if matches!(f.state,BuildState::Stale {..} | BuildState::UpToDate {..}) => {
                     f.state = BuildState::Deleted;
                 },
-                FileLike::Dir(l) => for c in l.iter_mut() {
-                    c.state = BuildState::Deleted;
-                }
+                FileLike::Dir(l) => if l.delete() { continue },
+                _ => continue
             }
             dones_v.push(c);
         }
-        *old = dones_v.into();
+        $oldv = dones_v.into();
+    };
+}
+
+impl SourceDir {
+    #[cfg(feature = "pariter")]
+    pub fn par_iter(&self) -> ParSpliter<LeafIterator<&FileLike>> { self.iter_leafs().par_split().into_par_iter() }
+    pub fn iter(&self) -> LeafIterator<&FileLike> { self.iter_leafs() }
+    pub fn iter_mut(&mut self) -> LeafIterator<&mut FileLike> { self.iter_leafs() }
+    #[cfg(all(feature="bincode",feature="fs"))]
+    pub fn parse<F:AsRef<Path>>(file:F) -> Result<Vec<FileLike>,ParseError> {
+        let file = file.as_ref();
+        match std::fs::File::open(file) {
+            Ok(mut f) => match bincode::serde::decode_from_std_read(&mut f,bincode::config::standard()) {
+                Ok(v) => Ok(v),
+                _ => Err(ParseError::DecodingError)
+            },
+            _ => Err(ParseError::FileError)
+        }
+    }
+
+    #[cfg(all(feature="bincode",feature="tokio"))]
+    pub async fn write_to_async<F:AsRef<Path>>(&self,file:F) -> Result<(),SerializeError> {
+        use tokio::io::AsyncWriteExt;
+        let file = file.as_ref();
+        match file.parent() {
+            None => (),
+            Some(f) => {let _ = tokio::fs::create_dir_all(f).await; }
+        }
+        let f = match tokio::fs::File::create(file).await {
+            Ok(f) => f,
+            _ => return Err(SerializeError::IOError)
+        };
+        let vec = match bincode::serde::encode_to_vec(&self.children,bincode::config::standard()) {
+            Ok(v) => v,
+            Err(_) => return Err(SerializeError::EncodingError)
+        };
+        let mut writer = tokio::io::BufWriter::new(f);
+        match writer.write_all(vec.as_slice()).await {
+            Ok(_) => (),
+            _ => return Err(SerializeError::IOError)
+        };
+        match writer.flush().await {
+            Ok(_) => (),
+            _ => return Err(SerializeError::IOError)
+        };
+        Ok(())
+    }
+
+    #[cfg(all(feature="bincode",feature="fs"))]
+    pub fn write_to<F:AsRef<Path>>(&self,file:F) -> Result<(),SerializeError> {
+        let file = file.as_ref();
+        file.parent().map(std::fs::create_dir_all);
+        let mut f = match std::fs::File::create(file) {
+            Ok(f) => f,
+            _ => return Err(SerializeError::IOError)
+        };
+        if bincode::serde::encode_into_std_write(&self.children,&mut f,bincode::config::standard()).is_err() {
+            Err(SerializeError::EncodingError)
+        } else { Ok(()) }
+    }
+
+
+    #[cfg(feature="tokio")]
+    pub fn update_async<'a,Pr:ProblemHandler+Sync,F:Fn(&str) -> Option<FormatId>+Sync>(path:&'a Path,rel_path:&'a str,mut oldv:Vec<FileLike>,handler:&'a Pr,ignore:&'a IgnoreSource,from_ext:&'a F)
+        -> BoxFuture<'a,Vec<FileLike>> { async move {
+        use tracing::trace;
+        if ignore.ignores(path) {
+            trace!("Ignoring {} because of {}",path.display(),ignore);
+            return oldv
+        }
+        let mut curr = match tokio::fs::read_dir(path).await {
+            Ok(d) => d,
+            _ => {
+                handler.add("archives",format!("Could not read directory {}",path.display()));
+                return oldv
+            }
+        };
+        let mut todos = Vec::new();
+        update!{rel_path,oldv,ignore,todos,handler,match curr.next_entry().await {
+            Ok(Some(d)) => d,
+            Ok(None) => break,
+            _ => {
+                handler.add("ArchiveManager",format!("Error when reading directory {}",path.display()));
+                continue
+            }
+        };d => d.metadata().await;from_ext;oldv};
+        for (p,r,i) in todos {
+            oldv[i].as_either_mut().unwrap_left().children = Self::update_async(&p,&r,std::mem::take(&mut oldv[i].as_either_mut().unwrap_left().children),handler,ignore,from_ext).await;
+        }
+        oldv
+    }.boxed() }
+
+    #[cfg(feature="fs")]
+    pub fn update<F:AsRef<Path>,P:ProblemHandler>(in_dir:F,rel_path:&str,old:&mut Vec<FileLike>,handler:&P,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
+        use tracing::trace;
+        let path = in_dir.as_ref();
+        if ignore.ignores(path) {
+            trace!("Ignoring {} because of {}",path.display(),ignore);
+            return
+        }
+        let mut curr = match std::fs::read_dir(path) {
+            Ok(d) => d,
+            _ => {
+                handler.add("archives",format!("Could not read directory {}",path.display()));
+                return
+            }
+        };
+        let mut oldv: Vec<_> = std::mem::take(old);
+        let mut todos = Vec::new();
+        update!{rel_path,oldv,ignore,todos,handler,match curr.next() {
+            Some(Ok(d)) => d,
+            None => break,
+            _ => {
+                handler.add("ArchiveManager",format!("Error when reading directory {}",path.display()));
+                continue
+            }
+        };d => d.metadata();from_ext;()};
+        *old = oldv;
         for (p,r,i) in todos {
             Self::update(&p,&r,&mut old[i].as_either_mut().unwrap_left().children,handler,ignore,from_ext);
         }

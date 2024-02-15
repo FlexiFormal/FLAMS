@@ -120,7 +120,7 @@ fn check_mh() {
 
     let ph = Counter::default();
     let mut counter = 0;
-    measure("str_sync",|| {
+    measure_average("str_sync",10,|| {
         mh.archives().for_each(|a| {
             let p = a.path();
             a.iter_sources((),|f,_| {
@@ -134,7 +134,7 @@ fn check_mh() {
 
     let ph = Counter::default();
     let mut counter = 0;
-    measure("file_sync",|| {
+    measure_average("file_sync",10,|| {
         mh.archives().for_each(|a| {
             let p = a.path();
             a.iter_sources((),|f,_| {
@@ -148,7 +148,7 @@ fn check_mh() {
 
     let ph = Counter::default();
     let counter = Arc::new(AtomicUsize::new(0));
-    measure("str",|| {
+    measure_average("str",10,|| {
         mh.archives_par().for_each(|a| {
             let p = a.path();
             a.iter_sources_par(|iter| {
@@ -164,7 +164,7 @@ fn check_mh() {
 
     let ph = Counter::default();
     let counter = Arc::new(AtomicUsize::new(0));
-    measure("file",|| {
+    measure_average("file",10,|| {
         mh.archives_par().for_each(|a| {
             let p = a.path();
             a.iter_sources_par(|iter| {

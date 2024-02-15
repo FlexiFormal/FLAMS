@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod controller;
 pub mod buildqueue;
+pub mod tracing;
 
 
 pub mod ontology {

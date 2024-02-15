@@ -18,3 +18,4 @@ path = "src/lib.rs"
 [dependencies]
 immt-api = {path = "../api"}
 immt-system = {path = "../system"}
+async-trait = "0.1"

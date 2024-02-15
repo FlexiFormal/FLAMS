@@ -2,12 +2,111 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tracing::{info, instrument};
+use tracing::{info, instrument, Level};
 use tracing::level_filters::LevelFilter;
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::writer::MakeWriterExt;
+use tracing_subscriber::layer::SubscriberExt;
 use immt_system::controller::Controller;
 use immt_system::utils::measure;
+fn main() {
+    let cli = Cli::parse();
+    let mh = get_mathhub();
+    let (mut ui,_guard) = tracing();
+    let controller = {
+        let mut builder = Controller::builder(mh);
+        immt_stex::register(&mut builder);
+        builder.build()
+    };
+    ui.run(controller).unwrap();
+}
 
+use clap::{Parser,Subcommand};
+#[derive(Parser,Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Cli {
+    /// Whether to start the server. Note that the server can also be started from the UI.
+    #[clap(long)]
+    #[arg(default_value_t = false)]
+    server:bool,
+    /// The host to bind the server to.
+    #[clap(long)]
+    #[arg(default_value_t = {"http://localhost".to_string()})]
+    server_host:String,
+    /// The port to bind the server to.
+    #[clap(long)]
+    #[arg(default_value_t = 7070)]
+    server_port:u16,
+    #[clap(long)]
+    #[arg(default_value_t = false)]
+    lsp:bool,
+
+}
+
+
+fn tracing() -> (immt_ui::ui::Ui,Option<WorkerGuard>) {
+    let now = chrono::Local::now();
+    let file_appender = get_logdir().map(|f| {
+        tracing_appender::rolling::RollingFileAppender::builder()
+            .rotation(tracing_appender::rolling::Rotation::DAILY)
+            .filename_prefix(now.format("%Y-%m-%d-%H.%M.%S").to_string())
+            .build(f.display().to_string())
+            .expect("failed to initialize file logging")
+    });
+    let layer_guard = file_appender.map(tracing_appender::non_blocking);
+    let (ui,uilayer) = immt_ui::ui::Ui::new();
+    let guard = match layer_guard {
+        None => {
+            tracing::subscriber::set_global_default(tracing_subscriber::registry().with(uilayer)).unwrap();
+            None
+        }
+        Some((file_layer,guard)) => {
+            let subscriber = tracing_subscriber::registry().with(tracing_subscriber::fmt::Layer::default()
+                .with_writer(file_layer.with_max_level(Level::DEBUG))
+                .with_ansi(false)
+                .with_file(false)
+                .with_line_number(false)
+                .json()
+            ).with(uilayer);
+            tracing::subscriber::set_global_default(subscriber).unwrap();
+            Some(guard)
+        }
+    };
+    // TODO
+    (ui,guard)
+}
+
+fn get_logdir() -> Option<PathBuf> {
+    if let Ok(f) = std::env::var("IMMT_LOGDIR") {
+        let path = PathBuf::from(f);
+        if std::fs::create_dir_all(&path).is_ok() {
+            return Some(path)
+        }
+    }
+    if let Ok(p) = std::env::current_exe() {
+        if let Some(path) = p.parent().map(|p| p.join("logs")) {
+            if std::fs::create_dir_all(&path).is_ok() {
+                return Some(path)
+            }
+        }
+    }
+    let path = std::env::temp_dir().join("immt").join("logs");
+    if let Ok(_) = std::fs::create_dir_all(&path) {
+        return Some(path)
+    }
+    None
+}
+
+fn get_mathhub() -> PathBuf {
+    let mh = immt_api::mathhub();
+    if !mh.exists() {
+        std::fs::create_dir_all(&mh).expect("Could not create non-existent MathHub directory")
+    }
+    // TODO:initialize?
+    mh
+}
+
+/*
 mod test {
     //mod oxigraph;
     //mod surrealdb;
@@ -217,7 +316,7 @@ mod test {
 }
 
 //#[tokio::main]
-fn main() {
+fn main_old() {
     use std::io;
     //use tui::{backend::CrosstermBackend, Terminal};
 
@@ -341,3 +440,5 @@ fn copy_shit() {
         }
     });
 }
+
+ */

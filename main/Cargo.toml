@@ -20,20 +20,24 @@ strip = "symbols"
 [dev-dependencies]
 
 [dependencies]
-immt-api = {path = "../api",features=["bincode","fs","pariter"]}
+immt-api = {path = "../api",features=["bincode","fs","pariter","tokio"]}
 immt-system = {path = "../system"}
 immt-stex = {path = "../stex"}
+immt-ui = {path = "../ui"}
 rayon = "1.8"
 tracing = "0.1"
-tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot"] }
+tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot","json"] }
+tracing-appender = "0.2"
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive"] }
 
 
 walkdir = "2.4"
 oxigraph = "0.4.0-alpha.3"
 
-reedline-repl-rs = "1.0.7"
-indicatif = "0.17.7"
-tracing-indicatif = "0.3.6"
+#reedline-repl-rs = "1.0.7"
+#indicatif = "0.17.7"
+#tracing-indicatif = "0.3.6"
 
 #ratatui = { version = "0.26", features = ["crossterm","all-widgets"] }
 #crossterm = "0.27"

@@ -11,7 +11,7 @@ use crate::{Seq, Str};
 use crate::uris::{ArchiveURIRef, DomURI, DomURIRef};
 use crate::utils::HMap;
 
-#[derive(Clone,Debug,Default,PartialEq,Eq,Hash,PartialOrd,Ord)]
+#[derive(Clone,Debug,PartialEq,Eq,Hash,PartialOrd,Ord)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
 pub struct ArchiveId(Str);
@@ -160,6 +160,16 @@ pub trait ArchiveGroupT:Sized {
             mh:path
         }.run()
     }
+    #[cfg(feature="tokio")]
+    #[inline]
+    async fn load_dir_async<P:ProblemHandler>(path:&Path,formats:&FormatStore,handler:&P) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
+        load_dir::ArchiveLoader {
+            archives:Vec::new(),
+            formats,
+            handler,
+            mh:path
+        }.run_async().await
+    }
     #[inline]
     fn uri<'a>(&'a self) -> Option<ArchiveURIRef<'a>> where Self::Archive:'a {
         self.meta().map(|m| ArchiveURIRef{
@@ -273,174 +283,26 @@ mod load_dir {
         Either::Right(a) => a.id()
     }};}
 
-    pub struct ArchiveLoader<'a,P:ProblemHandler,A:ArchiveT+Debug,G:ArchiveGroupT<Archive=A>> {
-        pub archives: Vec<Either<G,A>>,
-        pub formats:&'a FormatStore,
-        pub handler:&'a P,
-        pub mh:&'a Path
+    pub struct ArchiveLoader<'a, P: ProblemHandler, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> {
+        pub archives: Vec<Either<G, A>>,
+        pub formats: &'a FormatStore,
+        pub handler: &'a P,
+        pub mh: &'a Path
     }
-    impl<'a,P:ProblemHandler+'a,A:ArchiveT+Debug,G:ArchiveGroupT<Archive=A>> ArchiveLoader<'a,P,A,G> {
-        pub fn run(mut self) -> Vec<Either<G,A>> {
-            let mut stack = vec!(vec!());
-            let mut curr = match std::fs::read_dir(self.mh) {
-                Ok(rd) => rd,
-                _ => {
-                    self.handler.add("archives",format!("Could not read directory {}",self.mh.display()));
-                    return self.archives
-                }
-            };
-            'top: loop {
-                macro_rules! next {
-                    () => {
-                        loop {
-                            match stack.last_mut() {
-                                None => break 'top,
-                                Some(s) => {
-                                    match s.pop() {
-                                        Some(e) => {
-                                            curr = std::fs::read_dir(&e).unwrap();
-                                            stack.push( Vec::new() );
-                                            continue 'top
-                                        }
-                                        None => { stack.pop();}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                let d = match curr.next() {
-                    None => next!(),
-                    Some(Ok(d)) => d,
-                    _ => continue
-                };
-                let md = match d.metadata() {
-                    Ok(md) => md,
-                    _ => continue
-                };
-                let path = d.path();
-                let _span = trace_span!("checking","{}",path.display()).entered();
-                //std::thread::sleep(std::time::Duration::from_secs_f32(0.01));
-                if md.is_dir() {
-                    if d.file_name().to_str().map_or(true,|s| s.starts_with('.')) {continue}
-                    if d.file_name().eq_ignore_ascii_case("meta-inf") {
-                        match self.get_manifest(&path) {
-                            Some(Ok(m)) => {
-                                let p = path.parent().unwrap();
-                                self.add(A::new_from(m,p,self.handler,self.formats));
-                                stack.pop();
-                                next!();
-                            }
-                            Some(_) => {
-                                stack.pop();
-                                next!();
-                            }
-                            _ => ()
-                        }
-                    }
-                    stack.last_mut().unwrap().push(path);
-                }
-            }
-            self.archives
-        }
 
-        fn add(&mut self,a:A) {
-            let mut id = a.id().steps().map(|s| s.to_string()).collect::<Vec<_>>();
-            assert!(!id.is_empty());
-            if id.len() == 1 {
-                match self.archives.binary_search_by_key(&a.id(),|e| id!(e)) {
-                    Ok(i) => self.archives[i] = Either::Right(a),
-                    Err(i) => self.archives.insert(i,Either::Right(a))
-                }
-                return
-            }
-            let i = match self.archives.binary_search_by_key(&id.first().unwrap().as_str(),|e| id!(e).last_name()) {
-                Ok(i) => match &mut self.archives[i] {
-                    Either::Left(g) => {
-                        id.remove(0);
-                        return Self::add_i(a,g,id,1);
-                    }
-                    _ => unreachable!()
-                },
-                Err(i) => i
-            };
-            let g = G::new(ArchiveId::new(id.first().unwrap().to_string()));
-            self.archives.insert(i,Either::Left(g));
-            id.remove(0);
-            Self::add_i(a,self.archives[i].as_mut().unwrap_left(),id,1)
-        }
-
-
-        fn add_i(a:A,curr:&mut G,mut id:Vec<String>,mut depth:usize) {
-            if id.len() <= 1 {
-                if a.data().is_meta {
-                    curr.base_mut().meta= Some(a);
-                } else {
-                    match curr.base_mut().archives.binary_search_by_key(&a.id().last_name(),|e| id!(e).last_name()) {
-                        Ok(i) => curr.base_mut().archives[i] = Either::Right(a),
-                        Err(i) => curr.base_mut().archives.insert(i,Either::Right(a))
-                    }
-                }
-                return
-            }
-            depth += 1;
-            let head = id.remove(0);
-            let i = match curr.base_mut().archives.binary_search_by_key(&head.as_str(),|e| id!(e).last_name()) {
-                Ok(i) => match &mut curr.base_mut().archives[i] {
-                    Either::Left(g) => {
-                        return Self::add_i(a,g,id,depth)
-                    }
-                    _ => unreachable!()
-                },
-                Err(i) => i
-            };
-            let g = G::new(ArchiveId::new(a.id().steps().take(depth).collect::<Vec<_>>().join("/")));
-            curr.base_mut().archives.insert(i,Either::Left(g));
-            Self::add_i(a,curr.base_mut().archives[i].as_mut().unwrap_left(),id,depth)
-        }
-
-        fn get_manifest(&self,metainf:&Path) -> Option<Result<ArchiveData,()>> {
-            trace!("Checking for manifest");
-            match std::fs::read_dir(metainf) {
-                Ok(rd) => {
-                    for d in rd {
-                        let d = match d {
-                            Err(_) => {
-                                self.handler.add("archives",format!("Could not read directory {}",metainf.display()));
-                                continue
-                            },
-                            Ok(d) => d
-                        };
-                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") {continue}
-                        let path = d.path();
-                        if !path.is_file() { continue }
-                        return Some(self.do_manifest(&path))
-                    }
-                    trace!("not found");
-                    None
-                }
-                _ => {
-                    self.handler.add("archives",format!("Could not read directory {}",metainf.display()));
-                    None
-                }
-            }
-        }
-        fn do_manifest(&self,path:&Path) -> Result<ArchiveData,()> {
-            let reader = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-            let mut id:Str = Str::default();
+    macro_rules! do_manifest {
+        ($self:ident,$path:expr,$next_line:expr) => {
+            let mut id: String = String::new();
             let mut formats = Vec::new();
-            let mut dom_uri:Str = "".into();
+            let mut dom_uri: String = String::new();
             let mut dependencies = Vec::new();
             let mut ignores = IgnoreSource::default();
             let mut is_meta = false;
             let mut attrs = HMap::default();
-            for line in reader.lines() {
-                let line = match line {
-                    Err(_) => continue,
-                    Ok(l) => l
-                };
-                let (k,v) = match line.split_once(':') {
-                    Some((k,v)) => (k.trim(),v.trim()),
+            loop {
+                let line = $next_line;
+                let (k, v) = match line.split_once(':') {
+                    Some((k, v)) => (k.trim(), v.trim()),
                     _ => continue
                 };
                 match k {
@@ -453,55 +315,282 @@ mod load_dir {
                         }
                     }
                     "ignore" => {
-                        ignores = IgnoreSource::new(v,&path.parent().unwrap().parent().unwrap().join("source"));//Some(v.into());
+                        ignores = IgnoreSource::new(v, &$path.parent().unwrap().parent().unwrap().join("source"));//Some(v.into());
                     }
-                    _ => {attrs.insert(k.into(),v.into());}
+                    _ => { attrs.insert(k.into(), v.into()); }
                 }
             }
             let id = ArchiveId::new(id);
-            if id.steps().last().is_some_and(|s| s.eq_ignore_ascii_case("meta-inf") ) {
+            if id.steps().last().is_some_and(|s| s.eq_ignore_ascii_case("meta-inf")) {
                 is_meta = true;
             }
             if formats.is_empty() && !is_meta {
-                self.handler.add("archives",format!("No formats found for archive {}",id));
+                $self.handler.add("archives", format!("No formats found for archive {}", id));
                 return Err(())
             }
             if id.is_empty() {
-                self.handler.add("archives","No id found for archive");
+                $self.handler.add("archives", "No id found for archive");
                 return Err(())
             }
             let checks_out = {
-                let mut ip = path.parent().unwrap().parent().unwrap();
+                let mut ip = $path.parent().unwrap().parent().unwrap();
                 let ids = id.steps().rev().collect::<Vec<_>>();
                 let mut checks_out = true;
                 for name in ids {
-                    if ip.file_name().map_or(false,|f| f == name) {
+                    if ip.file_name().map_or(false, |f| f == name) {
                         ip = ip.parent().unwrap();
                     } else {
-                        checks_out = false; break
+                        checks_out = false;
+                        break
                     }
                 }
-                checks_out && ip == self.mh
+                checks_out && ip == $self.mh
             };
             if !checks_out {
-                self.handler.add("archives",format!("Archive {}'s id does not match its location ({})",id,path.display()));
+                $self.handler.add("archives", format!("Archive {}'s id does not match its location ({})", id, $path.display()));
                 return Err(())
             }
             if dom_uri.is_empty() {
-                self.handler.add("archives",format!("Archive {} has no URL base",id));
+                $self.handler.add("archives", format!("Archive {} has no URL base", id));
                 return Err(())
             }
             let id: ArchiveId = id.into();
-            dependencies.retain(|d:&ArchiveId| !d.is_empty() && d.as_str() != id.as_str());
+            dependencies.retain(|d: &ArchiveId| !d.is_empty() && d.as_str() != id.as_str());
             let a = ArchiveData {
-                id, formats:formats.into(),
-                dom_uri:DomURI::new(dom_uri),
-                dependencies:dependencies.into(),
-                ignores,attrs,is_meta
+                id,
+                formats: formats.into(),
+                dom_uri: DomURI::new(dom_uri),
+                dependencies: dependencies.into(),
+                ignores,
+                attrs,
+                is_meta
             };
             debug!("Archive found: {}",a.id);
             trace!("{:?}",a);
             Ok(a)
+        }
+    }
+
+    macro_rules! run {
+        ($self:ident,$f:ident => $readdir:expr;$curr:ident => $next:expr;$d:ident => $meta:expr;$path:ident => $manifest:expr) => {
+            let mut stack = vec!(vec!());
+            let mut $curr =  match {let $f=$self.mh;$readdir} {
+                Ok(rd) => rd,
+                _ => {
+                    $self.handler.add("archives", format!("Could not read directory {}", $self.mh.display()));
+                    return $self.archives
+                }
+            };
+            'top: loop {
+                macro_rules! next {
+                    () => {
+                        loop {
+                            match stack.last_mut() {
+                                None => break 'top,
+                                Some(s) => {
+                                    match s.pop() {
+                                        Some(e) => {
+                                            $curr = {let $f=&e;$readdir}.unwrap();
+                                            stack.push( Vec::new() );
+                                            continue 'top
+                                        }
+                                        None => { stack.pop();}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                let $d = $next;
+                let md = match $meta {
+                    Ok(md) => md,
+                    _ => continue
+                };
+                let $path = $d.path();
+                let _span = trace_span!("checking","{}",$path.display()).entered();
+                //std::thread::sleep(std::time::Duration::from_secs_f32(0.01));
+                if md.is_dir() {
+                    if $d.file_name().to_str().map_or(true, |s| s.starts_with('.')) { continue }
+                    if $d.file_name().eq_ignore_ascii_case("meta-inf") {
+                        match $manifest {
+                            Some(Ok(m)) => {
+                                let p = $path.parent().unwrap();
+                                $self.add(A::new_from(m, p, $self.handler, $self.formats));
+                                stack.pop();
+                                next!();
+                            }
+                            Some(_) => {
+                                stack.pop();
+                                next!();
+                            }
+                            _ => ()
+                        }
+                    }
+                    stack.last_mut().unwrap().push($path);
+                }
+            }
+            $self.archives
+        }
+    }
+
+    impl<'a, P: ProblemHandler + 'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> ArchiveLoader<'a, P, A, G> {
+        #[cfg(feature = "tokio")]
+        pub async fn run_async(mut self) -> Vec<Either<G, A>> {
+            run!{self,
+                f=>tokio::fs::read_dir(f).await;
+                curr => match curr.next_entry().await {
+                    Ok(None) => next!(),
+                    Ok(Some(d)) => d,
+                    _ => continue
+                };
+                d => d.metadata().await;
+                p => self.get_manifest_async(&p).await
+            }
+        }
+
+        pub fn run(mut self) -> Vec<Either<G, A>> {
+            run!{self,
+                f => std::fs::read_dir(f);
+                curr => match curr.next() {
+                    None => next!(),
+                    Some(Ok(d)) => d,
+                    _ => continue
+                };
+                d => d.metadata();
+                p => self.get_manifest(&p)
+            }
+        }
+
+        fn add(&mut self, a: A) {
+            let mut id = a.id().steps().map(|s| s.to_string()).collect::<Vec<_>>();
+            assert!(!id.is_empty());
+            if id.len() == 1 {
+                match self.archives.binary_search_by_key(&a.id(), |e| id!(e)) {
+                    Ok(i) => self.archives[i] = Either::Right(a),
+                    Err(i) => self.archives.insert(i, Either::Right(a))
+                }
+                return
+            }
+            let i = match self.archives.binary_search_by_key(&id.first().unwrap().as_str(), |e| id!(e).last_name()) {
+                Ok(i) => match &mut self.archives[i] {
+                    Either::Left(g) => {
+                        id.remove(0);
+                        return Self::add_i(a, g, id, 1);
+                    }
+                    _ => unreachable!()
+                },
+                Err(i) => i
+            };
+            let g = G::new(ArchiveId::new(id.first().unwrap().to_string()));
+            self.archives.insert(i, Either::Left(g));
+            id.remove(0);
+            Self::add_i(a, self.archives[i].as_mut().unwrap_left(), id, 1)
+        }
+
+        fn add_i(a: A, curr: &mut G, mut id: Vec<String>, mut depth: usize) {
+            if id.len() <= 1 {
+                if a.data().is_meta {
+                    curr.base_mut().meta = Some(a);
+                } else {
+                    match curr.base_mut().archives.binary_search_by_key(&a.id().last_name(), |e| id!(e).last_name()) {
+                        Ok(i) => curr.base_mut().archives[i] = Either::Right(a),
+                        Err(i) => curr.base_mut().archives.insert(i, Either::Right(a))
+                    }
+                }
+                return
+            }
+            depth += 1;
+            let head = id.remove(0);
+            let i = match curr.base_mut().archives.binary_search_by_key(&head.as_str(), |e| id!(e).last_name()) {
+                Ok(i) => match &mut curr.base_mut().archives[i] {
+                    Either::Left(g) => {
+                        return Self::add_i(a, g, id, depth)
+                    }
+                    _ => unreachable!()
+                },
+                Err(i) => i
+            };
+            let g = G::new(ArchiveId::new(a.id().steps().take(depth).collect::<Vec<_>>().join("/")));
+            curr.base_mut().archives.insert(i, Either::Left(g));
+            Self::add_i(a, curr.base_mut().archives[i].as_mut().unwrap_left(), id, depth)
+        }
+
+        #[cfg(feature = "tokio")]
+        async fn get_manifest_async(&self, metainf: &Path) -> Option<Result<ArchiveData, ()>> {
+            trace!("Checking for manifest");
+            match tokio::fs::read_dir(metainf).await {
+                Ok(mut rd) => {
+                    loop {
+                        let d = match rd.next_entry().await {
+                            Err(_) => {
+                                self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                                continue
+                            },
+                            Ok(Some(d)) => d,
+                            Ok(None) => break
+                        };
+                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") { continue }
+                        let path = d.path();
+                        if !path.is_file() { continue }
+                        return Some(self.do_manifest_async(&path).await)
+                    }
+                    trace!("not found");
+                    None
+                }
+                _ => {
+                    self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                    None
+                }
+            }
+        }
+
+        fn get_manifest(&self, metainf: &Path) -> Option<Result<ArchiveData, ()>> {
+            trace!("Checking for manifest");
+            match std::fs::read_dir(metainf) {
+                Ok(rd) => {
+                    for d in rd {
+                        let d = match d {
+                            Err(_) => {
+                                self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                                continue
+                            },
+                            Ok(d) => d
+                        };
+                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") { continue }
+                        let path = d.path();
+                        if !path.is_file() { continue }
+                        return Some(self.do_manifest(&path))
+                    }
+                    trace!("not found");
+                    None
+                }
+                _ => {
+                    self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                    None
+                }
+            }
+        }
+
+        #[cfg(feature = "tokio")]
+        async fn do_manifest_async(&self, path: &Path) -> Result<ArchiveData, ()> {
+            use tokio::io::AsyncBufReadExt;
+            let reader = tokio::io::BufReader::new(tokio::fs::File::open(path).await.unwrap());
+            let mut lines = reader.lines();
+            do_manifest!{self,path,match lines.next_line().await {
+                Err(_) => continue,
+                Ok(Some(l)) => l,
+                _ => break
+            }}
+        }
+
+        fn do_manifest(&self, path: &Path) -> Result<ArchiveData, ()> {
+            let reader = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+            let mut lines = reader.lines();
+            do_manifest!{self,path,match lines.next() {
+                Some(Err(_)) => continue,
+                Some(Ok(l)) => l,
+                _ => break
+            }}
         }
     }
 }

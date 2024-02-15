@@ -16,16 +16,16 @@ impl BuildQueue {
        let (stale,new,deleted) = mgr.par_iter().fold(|| (vec!(),vec!(),vec!()), |(stale,new,deleted),a| {
             a.iter_sources((stale,new,deleted),|f,(stale,new,deleted)| {
                 match f.state {
-                    BuildState::Deleted => deleted.push((a.id().to_owned(),f.rel_path.clone())),
-                    BuildState::New => new.push((a.id().to_owned(),f.rel_path.clone())),
                     BuildState::Stale {last_built,..} => stale.push((a.id().to_owned(),f.rel_path.clone(),last_built)),
+                    BuildState::New => new.push((a.id().to_owned(),f.rel_path.clone())),
+                    BuildState::Deleted => deleted.push((a.id().to_owned(),f.rel_path.clone())),
                     _ => ()
                 }
             })
-        }).reduce(|| (vec!(),vec!(),vec!()),|(mut stale,mut new,mut deleted),(d,e,f)| {
-            stale.extend(d);
-            new.extend(e);
-            deleted.extend(f);
+        }).reduce(|| (vec!(),vec!(),vec!()),|(mut stale,mut new,mut deleted),(s,n,d)| {
+            stale.extend(s);
+            new.extend(n);
+            deleted.extend(d);
             (stale,new,deleted)
         });
         self.stale = stale;

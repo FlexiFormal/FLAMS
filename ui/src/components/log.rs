@@ -51,6 +51,16 @@ impl Default for Logger {
 }
 
 impl Logger {
+    pub fn new() -> (Self,layer::Layer) {
+        let (layer,log_store) = layer::Layer::new();
+        let s = Self {
+            log_state:Vec::new(),
+            scroll_state:ScrollViewState::default(),
+            log_store,
+            filter:Level::INFO
+        };
+        (s,layer)
+    }
     fn do_line(line:&mut LogL,rect:Rect,buf:&mut Buffer) {
         match line {
             LogL::Simple(l) => l.clone().render(rect,buf),

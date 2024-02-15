@@ -31,10 +31,10 @@ pub struct Ui {
     progress:Vec<ProgressBar>
 }
 
-
-impl Default for Ui {
-    fn default() -> Self {
-        Self {
+impl Ui {
+    pub fn new() -> (Self,super::components::log::layer::Layer) {
+        let (log,layer) = super::components::log::Logger::new();
+        let s = Self {
             millis_per_frame:100,
             act_framerate:0,
             selected_tab:0,
@@ -42,19 +42,18 @@ impl Default for Ui {
             progress:vec!(),
             tabs:vec!(
                 (LIBRARY,Box::<super::components::library::Library>::default()),
-                (LOG,Box::<super::components::log::Logger>::default()),
+                (LOG,Box::new(log)),
                 (BUILD,Box::<super::components::buildqueue::BuildqueueUI>::default()),
                 (SETTINGS,Box::<super::components::settings::Settings>::default()),
             ),
             tabs_width:
-                LIBRARY_LEN + 2 + 1 +
-                    LOG_LEN + 2 + 1 +
-                    BUILD_LEN + 2 + 1 +
-                    SETTINGS_LEN + 2
-        }
+            LIBRARY_LEN + 2 + 1 +
+                LOG_LEN + 2 + 1 +
+                BUILD_LEN + 2 + 1 +
+                SETTINGS_LEN + 2
+        };
+        (s,layer)
     }
-}
-impl Ui {
     pub fn add_progress(&mut self,pb:ProgressBar) {
         self.progress.push(pb);
     }

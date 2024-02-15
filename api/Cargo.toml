@@ -15,10 +15,11 @@ path = "src/lib.rs"
 
 [features]
 default = []
-fs = []
+fs = ["dep:simple-home-dir"]
 pariter = ["dep:rayon","dep:spliter"]
 serde = ["dep:serde","either/serde"]
 bincode = ["dep:bincode","serde"]
+tokio = ["dep:tokio","fs","dep:futures"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
@@ -30,12 +31,16 @@ parking_lot = "0.12"
 rayon = {version="1.8",optional = true}
 spliter = {version="0.1",optional = true}
 #chrono = "0.4"
-serde = { version = "1", features = ["derive"],optional = true }
+serde = { version = "1", features = ["derive","rc"],optional = true }
 bincode = { version="2.0.0-rc.3",features = ["derive","serde"],optional=true }
 ahash = "0.8"
 oxrdf = "0.2.0-alpha.2"
 regex = "1.10"
 tracing = "0.1"
+async-trait = "0.1"
+tokio = { version = "1", features = ["fs","io-util"], optional = true }
+simple-home-dir = { version="0.3",optional = true }
+futures = { version="0.3",optional = true }
 
 #oxrocksdb-sys = "0.4.0-alpha.3"
 #oxigraph = {path = "../oxigraph/lib"}
