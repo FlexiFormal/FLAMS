@@ -2,6 +2,7 @@ pub mod backend;
 pub mod controller;
 pub mod buildqueue;
 pub mod tracing;
+pub mod settings;
 
 
 pub mod ontology {
@@ -11,18 +12,22 @@ pub mod ontology {
 
 
 pub mod utils {
-    use tracing::info_span;
+    pub mod progress;
+    pub mod parse;
+    pub mod sourcerefs;
+
+    use tracing::{info,info_span};
 
     pub fn measure<R,F:FnOnce() -> R>(prefix:&str, f:F) -> R {
         info_span!("measure",prefix).in_scope(|| {
             let start = std::time::Instant::now();
             let r = f();
-            tracing::info!("Finished after {:?}", start.elapsed());
+            info!("Finished after {:?}", start.elapsed());
             r
         })
     }
     pub fn measure_average<F:FnMut()>(prefix:&str,i:usize, mut f:F) {
-        info_span!("measure average",prefix).in_scope(|| {
+        info_span!("measure",prefix).in_scope(|| {
             let mut elapsed = vec!();
             for _ in 0..i {
                 let start = std::time::Instant::now();
@@ -30,14 +35,9 @@ pub mod utils {
                 elapsed.push(start.elapsed());
             }
             let av = elapsed.iter().sum::<std::time::Duration>() / i as u32;
-            tracing::info!("Finished; average: {:?}", av);
+            info!("Finished; average: {:?}", av);
         })
     }
-
-    pub mod problems;
-    pub mod progress;
-    pub mod parse;
-    pub mod sourcerefs;
 }
 /*
 #[allow(non_camel_case_types)]

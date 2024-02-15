@@ -10,20 +10,21 @@ use tracing::{event, info, instrument};
 use immt_api::archives::ArchiveGroupT;
 use immt_api::formats::{Format,FormatStore};
 use crate::ontology::relational::RelationalManager;
-use crate::utils::problems::ProblemHandler;
 use crate::buildqueue::BuildQueue;
+use crate::settings::Settings;
 
 
 pub struct ControllerBuilder {
-    main_mh:PathBuf,handler:Option<ProblemHandler>,
+    main_mh:PathBuf,
     formats:FormatStore,
+    settings:Settings,
     //commands:Vec<(Command,Callback<Controller,Error>)>
 }
 
 struct ControllerI {
     mgr:ArchiveManager,
+    settings:Settings,
     main_mh:PathBuf,
-    handler:ProblemHandler,
     relman:RelationalManager,
     formats:FormatStore,
     //commands:Vec<(Command,Callback<Controller,Error>)>,
@@ -36,7 +37,8 @@ pub struct Controller(Arc<ControllerI>);
 impl Controller {
     pub fn builder<S:AsRef<Path>+Into<PathBuf>>(mh:S) -> ControllerBuilder {
         ControllerBuilder {
-            main_mh:mh.into(),handler:None,formats:FormatStore::default(),
+            main_mh:mh.into(),formats:FormatStore::default(),
+            settings:Settings::default(),
             /*commands:vec!(
                 (
                     Command::new("exit").about("Exit the program")
@@ -51,6 +53,7 @@ impl Controller {
     pub fn archives(&self) -> &ArchiveManager { &self.0.mgr }
     pub fn mathhub(&self) -> &Path { &self.0.main_mh }
     pub fn relational_manager(&self) -> &RelationalManager { &self.0.relman }
+    pub fn settings(&self) -> &Settings { &self.0.settings }
     /*pub fn run_repl(&self) {
         let mut repl:Repl<Controller,Error> = Repl::new(self.clone())
             .with_name("iMMT")
@@ -67,8 +70,7 @@ impl Controller {
 impl ControllerBuilder {
     #[instrument(level="info",name="Initializing controller",skip_all)]
     pub fn build(self) -> Controller {
-        let handler = self.handler.unwrap_or_default();
-        let mgr = ArchiveManager::new(&self.main_mh,&handler,&self.formats);
+        let mgr = ArchiveManager::new(&self.main_mh,&self.formats);
         let mut queue = BuildQueue::default();
         queue.init(&mgr);
         let mut relman = RelationalManager::default();
@@ -77,15 +79,12 @@ impl ControllerBuilder {
         //relman.load_archives(&mgr);
         let ctrl = Controller(Arc::new(ControllerI{
             mgr,queue,
-            main_mh:self.main_mh,handler,relman,
+            settings:self.settings,
+            main_mh:self.main_mh,relman,
             formats:self.formats//,commands:self.commands
         }));
         RelationalManager::load_archives(ctrl.clone());
         ctrl
-    }
-    pub fn with_handler(mut self,handler:ProblemHandler) -> Self {
-        self.handler = Some(handler);
-        self
     }
     pub fn register_format(&mut self,format:Format) {
         self.formats.register(format);

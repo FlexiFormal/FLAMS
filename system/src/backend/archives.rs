@@ -4,8 +4,7 @@ use spliter::ParSpliter;
 use immt_api::formats::FormatStore;
 use immt_api::archives::{ArchiveData, ArchiveGroupBase, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
 use immt_api::source_files::{FileLike, ParseError, SerializeError, SourceDir, SourceFile};
-use immt_api::utils::problems::{ProblemHandler as PHandlerT};
-use tracing::{debug, event, instrument};
+use tracing::{debug, event, instrument, warn};
 use immt_api::utils::iter::LeafIterator;
 
 #[derive(Debug)]
@@ -19,13 +18,13 @@ impl Archive {
     pub fn path(&self) -> &Path { &self.path }
 }
 impl ArchiveT for Archive {
-    #[instrument(level = "info", name = "Loading archive", target = "backend::archive", skip_all, fields(id = %data.id))]
-    fn new_from<P: PHandlerT>(data: ArchiveData, path: &Path, handler: &P, formats: &FormatStore) -> Self {
+    #[instrument(level = "info", name = "Loading archive", skip_all, fields(id = %data.id))]
+    fn new_from(data: ArchiveData, path: &Path, formats: &FormatStore) -> Self {
         let mut state = ArchiveState::default();
         state.initialized = true;
         //event!(tracing::Level::DEBUG,"Initializing archive {}",data.id);
-        if !Self::ls_f(&mut state, path, &data.ignores, handler, formats) && !data.is_meta {
-            handler.add("Missing source", format!("Archive has no source directory: {}",data.id));
+        if !Self::ls_f(&mut state, path, &data.ignores, formats) && !data.is_meta {
+            warn!(target:"archives","Archive has no source directory: {}",data.id);
         }
         debug!("Done");
         Self {
@@ -54,22 +53,22 @@ impl Default for ArchiveState {
 }
 // use notify::{Watcher, RecommendedWatcher, RecursiveMode};
 impl Archive {
-    fn ls_f<P: PHandlerT>(state:&mut ArchiveState, path:&Path,ignore:&IgnoreSource, handler:&P,formats:&FormatStore) -> bool {
+    fn ls_f(state:&mut ArchiveState, path:&Path,ignore:&IgnoreSource, formats:&FormatStore) -> bool {
         let dirfile = path.join(".out").join("ls_f.db");
         if dirfile.exists() {
             match SourceDir::parse(&dirfile) {
                 Ok(v) => state.source_dir.children = v,
-                Err(ParseError::DecodingError) => handler.add("ArchiveManager",format!("Error decoding {}",dirfile.display())),
-                Err(ParseError::FileError) => handler.add("ArchiveManager",format!("Error reading {}",dirfile.display()))
+                Err(ParseError::DecodingError) => warn!(target:"archives","Error decoding {}",dirfile.display()),
+                Err(ParseError::FileError) => warn!(target:"archives","Error reading {}",dirfile.display())
             }
         }
         let source = path.join("source");
         if source.exists() {
-            SourceDir::update(&source,"", &mut state.source_dir.children, handler,ignore, &|s| formats.from_ext(s));
+            SourceDir::update(&source,"", &mut state.source_dir.children, ignore, &|s| formats.from_ext(s));
             match state.source_dir.write_to(&dirfile) {
                 Ok(_) => {},
-                Err(SerializeError::EncodingError) => handler.add("ArchiveManager",format!("Error encoding {}",dirfile.display())),
-                Err(SerializeError::IOError) => handler.add("ArchiveManager",format!("Error writing to {}",dirfile.display()))
+                Err(SerializeError::EncodingError) => warn!(target:"archives","Error encoding {}",dirfile.display()),
+                Err(SerializeError::IOError) => warn!(target:"archives","Error writing to {}",dirfile.display())
             }
             true
         } else {false}

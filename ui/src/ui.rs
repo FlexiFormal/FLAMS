@@ -10,6 +10,7 @@ use ratatui::layout::Constraint::{Fill, Length, Min};
 use ratatui::widgets::WidgetRef;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 use immt_system::controller::Controller;
+use immt_system::settings::SettingsValue;
 use crate::components::progress::{ProgressBar, Summary};
 use crate::components::UITab;
 
@@ -26,19 +27,21 @@ pub struct Ui {
     selected_tab:usize,
     state:UIState,
     tabs_width:u16,
-    millis_per_frame:u64,
+    //millis_per_frame:u64,
     act_framerate:u64,
-    progress:Vec<ProgressBar>
+    progress:Vec<ProgressBar>,
+    show_framerate:bool
 }
 
 impl Ui {
     pub fn new() -> (Self,super::components::log::layer::Layer) {
         let (log,layer) = super::components::log::Logger::new();
         let s = Self {
-            millis_per_frame:100,
+            //millis_per_frame:100,
             act_framerate:0,
             selected_tab:0,
             state:UIState::Hidden,
+            show_framerate:false,
             progress:vec!(),
             tabs:vec!(
                 (LIBRARY,Box::<super::components::library::Library>::default()),
@@ -58,10 +61,14 @@ impl Ui {
         self.progress.push(pb);
     }
     pub fn run(&mut self,controller: Controller) -> std::io::Result<()> {
+        controller.settings().set_default([
+            ("ui","framerate",SettingsValue::PositiveInteger(10)),
+            ("ui","show framerate",SettingsValue::Boolean(false))
+        ]);
         self.tabs.first_mut().unwrap().1.activate(&controller);
         self.state = UIState::Running;
         let mut terminal = init_terminal()?;
-        /* // {---
+        // /* // {---
         let mut start = std::time::Instant::now();
         let mut frames = 0;
         // ---} */
@@ -69,21 +76,28 @@ impl Ui {
         loop {
             match &self.state {
                 UIState::Running => {
-                    /* // {---
-                    if start.elapsed().as_millis() > 3000 {
+                    let (millis_per_frame,show_rate) = controller.settings().get([("ui", "framerate"),("ui","show framerate")], |[v,fr]| {
+                        (
+                            if let Some(SettingsValue::PositiveInteger(f)) = v { 1000 / *f } else { unreachable!() },
+                            if let Some(SettingsValue::Boolean(b)) = fr { *b } else { false }
+                        )
+                    });
+                    self.show_framerate = show_rate;
+                    // /* // {---
+                    if show_rate && start.elapsed().as_millis() > 3000 {
                         self.act_framerate = frames / 3;
                         start = std::time::Instant::now();
                         frames = 0;
                     }
                     // ---} */
                     terminal.draw(|frame| frame.render_widget(&mut *self, frame.size()))?;
-                    /* // {---
-                    frames += 1;
+                    // /* // {---
+                    if show_rate {frames += 1};
                     // ---} */
                     let ms = now.elapsed().as_millis() as u64;
                     now = std::time::Instant::now();
-                    if ms < self.millis_per_frame {
-                        self.handle_events(self.millis_per_frame - ms,&controller)?;
+                    if ms < millis_per_frame {
+                        self.handle_events(millis_per_frame - ms, &controller)?;
                     } else {
                         self.handle_events(0,&controller)?;
                     }
@@ -247,8 +261,11 @@ impl Widget for &mut Ui {
             self.progress(bot,buf);
         }
         fill_vertical(right, buf);
-        render_footer(footer_area, buf,None);
-        //render_footer(footer_area, buf,Some(&format!("{}fps",self.act_framerate)));
+        if self.show_framerate {
+            render_footer(footer_area, buf,Some(&format!("{}fps",self.act_framerate)));
+        } else {
+            render_footer(footer_area, buf, None);
+        }
     }
 }
 

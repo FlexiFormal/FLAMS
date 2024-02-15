@@ -4,7 +4,6 @@ use std::collections::hash_map::Entry;
 use std::convert::Into;
 use std::marker::PhantomData;
 use immt_api::utils::HMap;
-use immt_api::utils::problems::ProblemHandler;
 use crate::quickparse::tokenizer::TeXTokenizer;
 use crate::quickparse::tokens::TeXToken;
 use immt_system::utils::parse::{ParseSource, StringOrStr};
@@ -86,25 +85,25 @@ pub enum EnvironmentResult<'a,S:StringOrStr<'a>,P:SourcePos,T:FromLaTeXToken<'a,
     Other(Vec<T>)
 }
 
-pub type MacroRule<'a,Pa:ParseSource<'a>,Pr,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> = fn(Macro<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,Pr,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T>;
-pub type EnvironmentRule<'a,Pa:ParseSource<'a>,Pr,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> = (
-    fn(&mut Environment<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,Pr,T>),
-    fn(Environment<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,Pr,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T>
+pub type MacroRule<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> = fn(Macro<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T>;
+pub type EnvironmentRule<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> = (
+    fn(&mut Environment<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,T>),
+    fn(Environment<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T>
 );
 
 
-pub struct Group<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> {
+pub struct Group<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> {
     previous_letters:Option<String>,
-    macro_rule_changes:HMap<Pa::Str,Option<MacroRule<'a,Pa,Pr,T>>>,
-    environment_rule_changes:HMap<Pa::Str,Option<EnvironmentRule<'a,Pa,Pr,T>>>,
+    macro_rule_changes:HMap<Pa::Str,Option<MacroRule<'a,Pa,T>>>,
+    environment_rule_changes:HMap<Pa::Str,Option<EnvironmentRule<'a,Pa,T>>>,
 }
-impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> Group<'a,Pa,Pr,T> {
-    pub fn add_macro_rule(&mut self,name:Pa::Str,old:Option<MacroRule<'a,Pa,Pr,T>>) {
+impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> Group<'a,Pa,T> {
+    pub fn add_macro_rule(&mut self,name:Pa::Str,old:Option<MacroRule<'a,Pa,T>>) {
         if let Entry::Vacant(e) =self.macro_rule_changes.entry(name) {
             e.insert(old);
         }
     }
-    pub fn add_environment_rule(&mut self,name:Pa::Str,old:Option<EnvironmentRule<'a,Pa,Pr,T>>) {
+    pub fn add_environment_rule(&mut self,name:Pa::Str,old:Option<EnvironmentRule<'a,Pa,T>>) {
         if let Entry::Vacant(e) =self.environment_rule_changes.entry(name) {
             e.insert(old);
         }
@@ -116,7 +115,7 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
             environment_rule_changes:HMap::default(),
         }
     }
-    fn close(self, parser: &mut LaTeXParser<'a, Pa, Pr, T>) {
+    fn close(self, parser: &mut LaTeXParser<'a, Pa, T>) {
         if let Some(l) = self.previous_letters {
             parser.tokenizer.letters = l
         }
@@ -135,11 +134,11 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
     }
 }
 
-pub struct LaTeXParser<'a,Pa:ParseSource<'a>,Pr:ProblemHandler = (),T:FromLaTeXToken<'a,Pa::Str,Pa::Pos> = LaTeXToken<'a,<Pa as ParseSource<'a>>::Pos,<Pa as ParseSource<'a>>::Str>> {
-    tokenizer:super::tokenizer::TeXTokenizer<'a,Pa,Pr>,
-    macro_rules:HMap<Pa::Str,MacroRule<'a,Pa,Pr,T>>,
-    groups:Vec<Group<'a,Pa,Pr,T>>,
-    environment_rules:HMap<Pa::Str,EnvironmentRule<'a,Pa,Pr,T>>,
+pub struct LaTeXParser<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos> = LaTeXToken<'a,<Pa as ParseSource<'a>>::Pos,<Pa as ParseSource<'a>>::Str>> {
+    tokenizer:super::tokenizer::TeXTokenizer<'a,Pa>,
+    macro_rules:HMap<Pa::Str,MacroRule<'a,Pa,T>>,
+    groups:Vec<Group<'a,Pa,T>>,
+    environment_rules:HMap<Pa::Str,EnvironmentRule<'a,Pa,T>>,
     directives:HMap<Pa::Str,fn(&mut Self)>,
     buf:Vec<T>
 }
@@ -150,7 +149,7 @@ macro_rules! count {
 
 macro_rules! default_rules {
     ($( $($name:ident)? $(($l:literal,$lname:ident))? ),*) => {
-        pub fn default_rules() -> [(Pa::Str,MacroRule<'a,Pa,Pr,T>);count!($( $($name;)? $($lname;)? )*)] {[
+        pub fn default_rules() -> [(Pa::Str,MacroRule<'a,Pa,T>);count!($( $($name;)? $($lname;)? )*)] {[
             $($((stringify!($name).into(),rules::$name))?$(($l.into(),rules::$lname))?),*
         ]}
     }
@@ -158,7 +157,7 @@ macro_rules! default_rules {
 
 macro_rules! default_envs {
     ($( $($name:ident)? $(($l:literal,$lname:ident))? ),*) => {
-        pub fn default_env_rules() -> [(Pa::Str,EnvironmentRule<'a,Pa,Pr,T>);count!($( $($name;)? $($lname;)? )*)] {[
+        pub fn default_env_rules() -> [(Pa::Str,EnvironmentRule<'a,Pa,T>);count!($( $($name;)? $($lname;)? )*)] {[
             $(paste::paste!(
                 $((stringify!($name).into(),(rules::[<$name _open>],rules::[<$name _close>])))?
                 $(($l.into(),(rules::$lname,rules::rules::[<$lname _close>])))?
@@ -167,8 +166,8 @@ macro_rules! default_envs {
     }
 }
 
-impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> LaTeXParser<'a,Pa,Pr,T> {
-    pub fn new(input:Pa,source_file:Option<&'a std::path::Path>,handler:&'a Pr) -> Self {
+impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> LaTeXParser<'a,Pa,T> {
+    pub fn new(input:Pa,source_file:Option<&'a std::path::Path>) -> Self {
         let mut macro_rules = HMap::default();
         let mut environment_rules = HMap::default();
         for (k,v) in Self::default_rules() {
@@ -178,7 +177,7 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
             environment_rules.insert(k,v);
         }
         LaTeXParser {
-            tokenizer:super::tokenizer::TeXTokenizer::new(input,source_file,handler),
+            tokenizer:super::tokenizer::TeXTokenizer::new(input,source_file),
             macro_rules,
             groups:Vec::new(),
             environment_rules,
@@ -186,13 +185,13 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
             buf:Vec::new()
         }
     }
-    pub fn with_rules(input:Pa,source_file:Option<&'a std::path::Path>,handler:&'a Pr,rules:impl Iterator<Item=(Pa::Str,MacroRule<'a,Pa,Pr,T>)>) -> Self {
+    pub fn with_rules(input:Pa,source_file:Option<&'a std::path::Path>,rules:impl Iterator<Item=(Pa::Str,MacroRule<'a,Pa,T>)>) -> Self {
         let mut macro_rules = HMap::default();
         for (k,v) in rules {
             macro_rules.insert(k,v);
         }
         LaTeXParser {
-            tokenizer:super::tokenizer::TeXTokenizer::new(input,source_file,handler),
+            tokenizer:super::tokenizer::TeXTokenizer::new(input,source_file),
             macro_rules,
             groups:Vec::new(),
             environment_rules:HMap::default(),
@@ -491,7 +490,7 @@ impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos
     }
 }
 
-impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> Iterator for LaTeXParser<'a,Pa,Pr,T> {
+impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> Iterator for LaTeXParser<'a,Pa,T> {
     type Item = T;
     fn next(&mut self) -> Option<T> {
         if let Some(t) = self.buf.pop() { return Some(t) }

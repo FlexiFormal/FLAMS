@@ -1,4 +1,3 @@
-use immt_api::utils::problems::ProblemHandler;
 use immt_system::utils::parse::ParseSource;
 use immt_system::utils::sourcerefs::{SourcePos, SourceRange};
 use crate::quickparse::latex::{EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult};
@@ -9,9 +8,8 @@ macro_rules! csrule {
         #[allow(unused_mut,non_snake_case)]
         pub fn $name<'a,
             Pa:ParseSource<'a>,
-            Pr:ProblemHandler,
             T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >(mut $m:Macro<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,Pr,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> $c
+        >(mut $m:Macro<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> $c
     };
 }
 
@@ -81,9 +79,8 @@ pub enum ArgType {
 
 pub fn skip_args<'a,
     Pa:ParseSource<'a>,
-    Pr:ProblemHandler,
     T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
->(args:&[ArgType],mut m:Macro<'a,Pa::Str,Pa::Pos,T>,p:&mut LaTeXParser<'a,Pa,Pr,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> {
+>(args:&[ArgType],mut m:Macro<'a,Pa::Str,Pa::Pos,T>,p:&mut LaTeXParser<'a,Pa,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> {
     for a in args {
         match a {
             ArgType::Normal => p.skip_arg(&mut m),
@@ -173,15 +170,13 @@ macro_rules! envrule {
         #[allow(unused_mut,non_snake_case)]
         pub fn [<$name _open>]<'a,
             Pa:ParseSource<'a>,
-            Pr:ProblemHandler,
             T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >($e:&mut Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,Pr,T>) $open
+        >($e:&mut Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) $open
         #[allow(unused_mut,non_snake_case)]
         pub fn [<$name _close>]<'a,
             Pa:ParseSource<'a>,
-            Pr:ProblemHandler,
             T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >(mut $e:Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,Pr,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T> $close
+        >(mut $e:Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T> $close
     );};
 }
 

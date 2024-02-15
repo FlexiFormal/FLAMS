@@ -2,8 +2,6 @@
 use std::path::Path;
 use std::path::PathBuf;
 #[cfg(feature="fs")]
-use crate::utils::problems::ProblemHandler;
-#[cfg(feature="fs")]
 use crate::archives::IgnoreSource;
 use either::Either;
 use spliter::ParallelSpliterator;
@@ -61,9 +59,10 @@ impl SourceDir {
 
 #[cfg(feature="tokio")]
 use futures::future::{BoxFuture, FutureExt};
+use tracing::warn;
 
 macro_rules! update {
-    ($rel_path:ident,$oldv:ident,$ignore:ident,$todos:ident,$handler:ident,$get:expr;$d:ident => $meta:expr;$from_ext:ident;$ret:expr) => {
+    ($rel_path:ident,$oldv:ident,$ignore:ident,$todos:ident,$get:expr;$d:ident => $meta:expr;$from_ext:ident;$ret:expr) => {
         let mut dones_v = Vec::new();
         $oldv.reverse();
         loop {
@@ -78,7 +77,7 @@ macro_rules! update {
             let md = match $meta {
                 Ok(d) => d,
                 _ => {
-                    $handler.add("ArchiveManager",format!("Could not read metadata of file {}",path.display()));
+                    warn!(target:"archives","Could not read metadata of file {}",path.display());
                     continue
                 }
             };
@@ -203,7 +202,7 @@ impl SourceDir {
 
 
     #[cfg(feature="tokio")]
-    pub fn update_async<'a,Pr:ProblemHandler+Sync,F:Fn(&str) -> Option<FormatId>+Sync>(path:&'a Path,rel_path:&'a str,mut oldv:Vec<FileLike>,handler:&'a Pr,ignore:&'a IgnoreSource,from_ext:&'a F)
+    pub fn update_async<'a,F:Fn(&str) -> Option<FormatId>+Sync>(path:&'a Path,rel_path:&'a str,mut oldv:Vec<FileLike>,ignore:&'a IgnoreSource,from_ext:&'a F)
         -> BoxFuture<'a,Vec<FileLike>> { async move {
         use tracing::trace;
         if ignore.ignores(path) {
@@ -213,27 +212,27 @@ impl SourceDir {
         let mut curr = match tokio::fs::read_dir(path).await {
             Ok(d) => d,
             _ => {
-                handler.add("archives",format!("Could not read directory {}",path.display()));
+                warn!(target:"archives","Could not read directory {}",path.display());
                 return oldv
             }
         };
         let mut todos = Vec::new();
-        update!{rel_path,oldv,ignore,todos,handler,match curr.next_entry().await {
+        update!{rel_path,oldv,ignore,todos,match curr.next_entry().await {
             Ok(Some(d)) => d,
             Ok(None) => break,
             _ => {
-                handler.add("ArchiveManager",format!("Error when reading directory {}",path.display()));
+                warn!(target:"archives","Error when reading directory {}",path.display());
                 continue
             }
         };d => d.metadata().await;from_ext;oldv};
         for (p,r,i) in todos {
-            oldv[i].as_either_mut().unwrap_left().children = Self::update_async(&p,&r,std::mem::take(&mut oldv[i].as_either_mut().unwrap_left().children),handler,ignore,from_ext).await;
+            oldv[i].as_either_mut().unwrap_left().children = Self::update_async(&p,&r,std::mem::take(&mut oldv[i].as_either_mut().unwrap_left().children),ignore,from_ext).await;
         }
         oldv
     }.boxed() }
 
     #[cfg(feature="fs")]
-    pub fn update<F:AsRef<Path>,P:ProblemHandler>(in_dir:F,rel_path:&str,old:&mut Vec<FileLike>,handler:&P,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
+    pub fn update<F:AsRef<Path>>(in_dir:F,rel_path:&str,old:&mut Vec<FileLike>,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
         use tracing::trace;
         let path = in_dir.as_ref();
         if ignore.ignores(path) {
@@ -243,23 +242,23 @@ impl SourceDir {
         let mut curr = match std::fs::read_dir(path) {
             Ok(d) => d,
             _ => {
-                handler.add("archives",format!("Could not read directory {}",path.display()));
+                warn!(target:"archives","Could not read directory {}",path.display());
                 return
             }
         };
         let mut oldv: Vec<_> = std::mem::take(old);
         let mut todos = Vec::new();
-        update!{rel_path,oldv,ignore,todos,handler,match curr.next() {
+        update!{rel_path,oldv,ignore,todos,match curr.next() {
             Some(Ok(d)) => d,
             None => break,
             _ => {
-                handler.add("ArchiveManager",format!("Error when reading directory {}",path.display()));
+                warn!(target:"archives","Error when reading directory {}",path.display());
                 continue
             }
         };d => d.metadata();from_ext;()};
         *old = oldv;
         for (p,r,i) in todos {
-            Self::update(&p,&r,&mut old[i].as_either_mut().unwrap_left().children,handler,ignore,from_ext);
+            Self::update(&p,&r,&mut old[i].as_either_mut().unwrap_left().children,ignore,from_ext);
         }
     }
 }

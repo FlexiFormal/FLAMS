@@ -27,7 +27,6 @@ pub mod utils {
     use crate::Str;
 
     pub mod parsing;
-    pub mod problems;
     pub mod iter;
     pub mod circular_buffer;
 

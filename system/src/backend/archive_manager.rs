@@ -10,13 +10,12 @@ use immt_api::archives::{ArchiveId,ArchiveGroupT,ArchiveT};
 pub struct ArchiveManager {
     top:ArchiveGroup
 }
-use crate::utils::problems::ProblemHandler;
 
 impl ArchiveManager {
-    pub fn new(mh:&Path,handler:&ProblemHandler,formats:&FormatStore) -> Self {
+    pub fn new(mh:&Path,formats:&FormatStore) -> Self {
         let top = ArchiveGroup::new(ArchiveId::new(Str::from("")));
         let mut manager = Self{ top };
-        manager.load(mh,handler,formats);
+        manager.load(mh,formats);
         manager
     }
     pub fn iter(&self) -> impl Iterator<Item=&Archive> {
@@ -58,10 +57,10 @@ impl ArchiveManager {
         }
     }
 
-    #[instrument(level = "info",name = "Loading archives", target = "backend", skip(self,handler,formats), fields(found) )]
-    fn load(&mut self, in_path:&Path,handler:&ProblemHandler,formats:&FormatStore) {
+    #[instrument(level = "info",name = "Loading archives", skip(self,formats), fields(found) )]
+    fn load(&mut self, in_path:&Path,formats:&FormatStore) {
         info!("Searching for archives");
-        self.top.base_mut().archives = ArchiveGroupT::load_dir(in_path,formats,handler).into();
+        self.top.base_mut().archives = ArchiveGroupT::load_dir(in_path,formats).into();
         tracing::Span::current().record("found", self.num_archives());
         info!("Done");
     }

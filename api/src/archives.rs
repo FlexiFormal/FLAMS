@@ -5,8 +5,6 @@ use oxrdf::{Subject, Triple};
 use crate::formats::FormatId;
 #[cfg(feature="fs")]
 use crate::formats::FormatStore;
-#[cfg(feature="fs")]
-use crate::utils::problems::ProblemHandler;
 use crate::{Seq, Str};
 use crate::uris::{ArchiveURIRef, DomURI, DomURIRef};
 use crate::utils::HMap;
@@ -78,7 +76,7 @@ pub struct ArchiveData {
     pub attrs:HMap<String,String>
 }
 pub trait ArchiveT {
-    fn new_from<P:ProblemHandler>(data:ArchiveData,path:&Path,handler:&P,formats: &FormatStore) -> Self;
+    fn new_from(data:ArchiveData,path:&Path,formats: &FormatStore) -> Self;
     fn data(&self) -> &ArchiveData;
     #[inline]
     fn attr(&self,key:&str) -> Option<&str> {
@@ -110,7 +108,7 @@ pub trait ArchiveT {
 }
 impl ArchiveT for ArchiveData {
     #[inline(always)]
-    fn new_from<P:ProblemHandler>(data:ArchiveData,path:&Path,handler:&P,formats: &FormatStore) -> Self { data }
+    fn new_from(data:ArchiveData,path:&Path,formats: &FormatStore) -> Self { data }
     #[inline(always)]
     fn data(&self) -> &ArchiveData { self }
 }
@@ -152,21 +150,19 @@ pub trait ArchiveGroupT:Sized {
     }
     #[cfg(feature="fs")]
     #[inline]
-    fn load_dir<P:ProblemHandler>(path:&Path,formats:&FormatStore,handler:&P) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
+    fn load_dir(path:&Path,formats:&FormatStore) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
         load_dir::ArchiveLoader {
             archives:Vec::new(),
             formats,
-            handler,
             mh:path
         }.run()
     }
     #[cfg(feature="tokio")]
     #[inline]
-    async fn load_dir_async<P:ProblemHandler>(path:&Path,formats:&FormatStore,handler:&P) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
+    async fn load_dir_async(path:&Path,formats:&FormatStore) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
         load_dir::ArchiveLoader {
             archives:Vec::new(),
             formats,
-            handler,
             mh:path
         }.run_async().await
     }
@@ -268,10 +264,9 @@ impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for TripleIter<'a,A,G> {
 mod load_dir {
     use std::path::Path;
     use either::Either;
-    use tracing::{debug, trace, trace_span};
+    use tracing::{debug, trace, trace_span, warn};
     use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveIdRef, ArchiveT, IgnoreSource};
     use crate::formats::{FormatId, FormatStore};
-    use crate::utils::problems::ProblemHandler;
     use std::fmt::Debug;
     use std::io::BufRead;
     use crate::Str;
@@ -283,10 +278,9 @@ mod load_dir {
         Either::Right(a) => a.id()
     }};}
 
-    pub struct ArchiveLoader<'a, P: ProblemHandler, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> {
+    pub struct ArchiveLoader<'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> {
         pub archives: Vec<Either<G, A>>,
         pub formats: &'a FormatStore,
-        pub handler: &'a P,
         pub mh: &'a Path
     }
 
@@ -325,11 +319,11 @@ mod load_dir {
                 is_meta = true;
             }
             if formats.is_empty() && !is_meta {
-                $self.handler.add("archives", format!("No formats found for archive {}", id));
+                warn!(target:"archives","No formats found for archive {}",id);
                 return Err(())
             }
             if id.is_empty() {
-                $self.handler.add("archives", "No id found for archive");
+                warn!(target:"archives","No id found for archive");
                 return Err(())
             }
             let checks_out = {
@@ -347,11 +341,11 @@ mod load_dir {
                 checks_out && ip == $self.mh
             };
             if !checks_out {
-                $self.handler.add("archives", format!("Archive {}'s id does not match its location ({})", id, $path.display()));
+                warn!(target:"archives","Archive {}'s id does not match its location ({})", id, $path.display());
                 return Err(())
             }
             if dom_uri.is_empty() {
-                $self.handler.add("archives", format!("Archive {} has no URL base", id));
+                warn!(target:"archives","Archive {} has no URL base", id);
                 return Err(())
             }
             let id: ArchiveId = id.into();
@@ -377,7 +371,7 @@ mod load_dir {
             let mut $curr =  match {let $f=$self.mh;$readdir} {
                 Ok(rd) => rd,
                 _ => {
-                    $self.handler.add("archives", format!("Could not read directory {}", $self.mh.display()));
+                    warn!(target:"archives","Could not read directory {}", $self.mh.display());
                     return $self.archives
                 }
             };
@@ -415,7 +409,7 @@ mod load_dir {
                         match $manifest {
                             Some(Ok(m)) => {
                                 let p = $path.parent().unwrap();
-                                $self.add(A::new_from(m, p, $self.handler, $self.formats));
+                                $self.add(A::new_from(m, p, $self.formats));
                                 stack.pop();
                                 next!();
                             }
@@ -433,7 +427,7 @@ mod load_dir {
         }
     }
 
-    impl<'a, P: ProblemHandler + 'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> ArchiveLoader<'a, P, A, G> {
+    impl<'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> ArchiveLoader<'a, A, G> {
         #[cfg(feature = "tokio")]
         pub async fn run_async(mut self) -> Vec<Either<G, A>> {
             run!{self,
@@ -523,7 +517,7 @@ mod load_dir {
                     loop {
                         let d = match rd.next_entry().await {
                             Err(_) => {
-                                self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                                warn!(target:"archives","Could not read directory {}", metainf.display());
                                 continue
                             },
                             Ok(Some(d)) => d,
@@ -538,7 +532,7 @@ mod load_dir {
                     None
                 }
                 _ => {
-                    self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                    warn!(target:"archives","Could not read directory {}", metainf.display());
                     None
                 }
             }
@@ -551,7 +545,7 @@ mod load_dir {
                     for d in rd {
                         let d = match d {
                             Err(_) => {
-                                self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                                warn!(target:"archives","Could not read directory {}", metainf.display());
                                 continue
                             },
                             Ok(d) => d
@@ -565,7 +559,7 @@ mod load_dir {
                     None
                 }
                 _ => {
-                    self.handler.add("archives", format!("Could not read directory {}", metainf.display()));
+                    warn!(target:"archives","Could not read directory {}", metainf.display());
                     None
                 }
             }

@@ -1,5 +1,5 @@
 use std::path::Path;
-use immt_api::utils::problems::ProblemHandler;
+use tracing::warn;
 use crate::quickparse::tokens::TeXToken;
 use immt_system::utils::parse::ParseSource;
 use immt_system::utils::sourcerefs::SourceRange;
@@ -37,24 +37,24 @@ impl<'a> TokenizerGroup<'a> for LetterGroup {
 #[derive(Copy,Clone,PartialEq,Eq)]
 pub enum Mode { Text, Math{display:bool} }
 
-pub struct TeXTokenizer<'a,Pa:ParseSource<'a>,Pr:ProblemHandler=()> {
+pub struct TeXTokenizer<'a,Pa:ParseSource<'a>> {
     pub reader: Pa,pub letters:String,pub mode:Mode,
-    source_file:Option<&'a Path>,handler:&'a Pr
+    source_file:Option<&'a Path>
 }
-impl<'a,Pa:ParseSource<'a>,Pr:ProblemHandler> TeXTokenizer<'a,Pa,Pr> {
-    pub(crate) fn new(reader:Pa,source_file:Option<&'a Path>,handler:&'a Pr) -> Self {
+impl<'a,Pa:ParseSource<'a>> TeXTokenizer<'a,Pa> {
+    pub(crate) fn new(reader:Pa,source_file:Option<&'a Path>) -> Self {
         TeXTokenizer {
-            reader,mode:Mode::Text, source_file, handler,
+            reader,mode:Mode::Text, source_file,
             letters:"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string()
         }
     }
 }
-impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler> Iterator for TeXTokenizer<'a,Pa,Pr> {
+impl<'a, Pa:ParseSource<'a>> Iterator for TeXTokenizer<'a,Pa> {
     type Item = TeXToken<Pa::Pos,Pa::Str>;
     fn next(&mut self) -> Option<Self::Item> { self.read_next() }
 }
 
-impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler> TeXTokenizer<'a,Pa,Pr> {
+impl<'a, Pa:ParseSource<'a>> TeXTokenizer<'a,Pa> {
     fn read_next(&mut self) -> Option<TeXToken<Pa::Pos,Pa::Str>> {
         self.reader.trim_start();
         let start = self.reader.curr_pos().clone();
@@ -128,13 +128,13 @@ impl<'a, Pa:ParseSource<'a>,Pr:ProblemHandler> TeXTokenizer<'a,Pa,Pr> {
     }
 
     pub fn problem(&mut self,msg: impl std::fmt::Display) {
-        self.handler.add("tex-linter",format!("{} at {}{:?}",msg,
+        warn!(target:"tex-linter","{} at {}{:?}",msg,
                                               match self.source_file {
                                                   Some(p) => format!("{}: ",p.display()),
                                                   None => "".to_string()
                                               }
                                               ,self.reader.curr_pos()
-        ))
+        )
     }
 
     fn read_comment(&mut self,start:Pa::Pos) -> TeXToken<Pa::Pos,Pa::Str> {
