@@ -1,12 +1,12 @@
 use std::any::Any;
-use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use async_trait::async_trait;
-use crate::Str;
+use crate::CloneStr;
+use crate::formats::Id;
 
 pub enum BuildResult {
     None,
-    Err(Str),
+    Err(CloneStr),
     Intermediate(Box<dyn Any>),
     Final
 }
@@ -20,9 +20,13 @@ pub trait ComplexTaskStep:Any {
     async fn run(&self,input:Box<dyn Any+Send>) -> BuildResult;
 }
 
-pub enum BuildTaskStep {
+pub enum BuildTaskStepKind {
     Source(Box<dyn SourceTaskStep>),
     Complex(Box<dyn ComplexTaskStep>)
+}
+pub struct BuildTaskStep {
+    pub kind:BuildTaskStepKind,
+    pub id:Id
 }
 
 pub struct BuildTask {

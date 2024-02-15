@@ -6,11 +6,11 @@ mod test;
 
 use std::path::Path;
 use async_trait::async_trait;
-use immt_api::formats::{Format, FormatExtension, FormatId};
-use immt_api::formats::building::{BuildResult, BuildTask, BuildTaskStep, SourceTaskStep};
+use immt_api::formats::{Format, FormatExtension, Id};
+use immt_api::formats::building::{BuildResult, BuildTask, BuildTaskStep, BuildTaskStepKind, SourceTaskStep};
 use immt_system::controller::ControllerBuilder;
 
-pub const ID : FormatId = FormatId::new_unchecked(*b"sTeX");
+pub const ID : Id = Id::new_unchecked(*b"sTeX");
 pub const EXTENSIONS : &[&str] = &["tex", "ltx"];
 
 pub fn register(controller:&mut ControllerBuilder) {
@@ -51,10 +51,22 @@ impl FormatExtension for STeXExtension {
     fn get_task(&self, source: &Path) -> Option<BuildTask> {
         Some(BuildTask {
             steps: vec![
-                BuildTaskStep::Source(Box::new(PdfLaTeX)),
-                BuildTaskStep::Source(Box::new(BibTeX)),
-                BuildTaskStep::Source(Box::new(RusTeX)),
-                BuildTaskStep::Complex(Box::new(immt_shtml::SHMLTaskStep))
+                BuildTaskStep {
+                    kind: BuildTaskStepKind::Source(Box::new(PdfLaTeX)),
+                    id: Id::new_unchecked(*b"pLTX")
+                },
+                BuildTaskStep {
+                    kind: BuildTaskStepKind::Source(Box::new(BibTeX)),
+                    id: Id::new_unchecked(*b"bTeX")
+                },
+                BuildTaskStep {
+                    kind: BuildTaskStepKind::Source(Box::new(RusTeX)),
+                    id: Id::new_unchecked(*b"rTeX")
+                },
+                BuildTaskStep {
+                    kind: BuildTaskStepKind::Complex(Box::new(immt_shtml::SHMLTaskStep)),
+                    id: Id::new_unchecked(*b"sHTM")
+                },
             ],
             state: None
         })

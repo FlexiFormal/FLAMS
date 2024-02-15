@@ -1,20 +1,17 @@
 pub mod building;
 
-use std::any::Any;
 use std::fmt::{Display, Debug, Write};
-use std::future::Future;
 use std::path::Path;
 use crate::formats::building::BuildTask;
-use crate::Str;
 
 #[derive(Copy,Clone,PartialEq,Eq,Hash)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct FormatId([u8;4]);
-impl FormatId {
+pub struct Id([u8;4]);
+impl Id {
     pub const fn new_unchecked(id:[u8;4]) -> Self { Self(id) }
 }
-impl<'a> TryFrom<&'a str> for FormatId {
+impl<'a> TryFrom<&'a str> for Id {
     type Error = ();
     fn try_from(s:&'a str) -> Result<Self,Self::Error> {
         if s.len() != 4 { return Err(()); }
@@ -25,7 +22,7 @@ impl<'a> TryFrom<&'a str> for FormatId {
         Ok(Self(id))
     }
 }
-impl Display for FormatId {
+impl Display for Id {
     #[inline]
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result {
         for b in self.0 {
@@ -34,7 +31,7 @@ impl Display for FormatId {
         Ok(())
     }
 }
-impl Debug for FormatId {
+impl Debug for Id {
     #[inline]
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result { <Self as Display>::fmt(self,f) }
 }
@@ -47,17 +44,17 @@ pub trait FormatExtension:Send+Sync {
 }
 
 pub struct Format {
-    id:FormatId,
+    id: Id,
     file_extensions:&'static [&'static str],
     extension: Box<dyn FormatExtension>
 }
 impl Format {
     #[inline]
-    pub const fn new(id:FormatId,file_extensions:&'static [&'static str],extension:Box<dyn FormatExtension>) -> Self {
+    pub const fn new(id: Id, file_extensions:&'static [&'static str], extension:Box<dyn FormatExtension>) -> Self {
         Self { id, file_extensions,extension }
     }
     #[inline]
-    pub fn id(&self) -> FormatId { self.id }
+    pub fn id(&self) -> Id { self.id }
     #[inline]
     pub fn get_extensions(&self) -> &'static [&'static str] { self.file_extensions }
 }
@@ -68,7 +65,7 @@ pub struct FormatStore {
     formats:Vec<Format>
 }
 impl FormatStore {
-    pub fn from_ext<S:AsRef<str>>(&self,s:S) -> Option<FormatId> {
+    pub fn from_ext<S:AsRef<str>>(&self,s:S) -> Option<Id> {
         let s = s.as_ref();
         for f in &self.formats {
             if f.get_extensions().iter().any(|e| e.eq_ignore_ascii_case(s)) {

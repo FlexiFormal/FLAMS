@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use oxrdf::NamedNode;
 use crate::archives::ArchiveIdRef;
-use crate::Str;
+use crate::CloneStr;
 
 
 // SERDE HAS URL ENCODING!
@@ -40,9 +40,9 @@ impl<'a> MMTUriRef<'a> {
 #[derive(Clone,Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct DomURI(Str);
+pub struct DomURI(CloneStr);
 impl DomURI {
-    pub fn new<S:Into<Str>>(s:S) -> Self { Self(s.into()) } // TODO verify that this is a valid URI
+    pub fn new<S:Into<CloneStr>>(s:S) -> Self { Self(s.into()) } // TODO verify that this is a valid URI
     #[inline]
     pub fn as_ref(&self) -> DomURIRef<'_> {
         DomURIRef(&self.0)
@@ -83,7 +83,7 @@ impl<'a> Display for DomURIRef<'a> {
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
 pub struct ArchiveURI {
-    inner:Str,
+    inner:CloneStr,
     archive_index:u8
 }
 impl ArchiveURI {

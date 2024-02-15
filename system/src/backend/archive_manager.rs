@@ -4,7 +4,6 @@ use either::Either;
 use tracing::{event, info, instrument};
 use crate::backend::archives::{Archive, ArchiveGroup};
 use immt_api::formats::FormatStore;
-use immt_api::Str;
 use immt_api::archives::{ArchiveId,ArchiveGroupT,ArchiveT};
 
 pub struct ArchiveManager {
@@ -13,7 +12,7 @@ pub struct ArchiveManager {
 
 impl ArchiveManager {
     pub fn new(mh:&Path,formats:&FormatStore) -> Self {
-        let top = ArchiveGroup::new(ArchiveId::new(Str::from("")));
+        let top = ArchiveGroup::new(ArchiveId::new(""));
         let mut manager = Self{ top };
         manager.load(mh,formats);
         manager

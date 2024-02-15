@@ -4,15 +4,21 @@ use std::path::PathBuf;
 //use std::rc::Rc;
 use std::sync::Arc;
 
+pub type CloneStr = Arc<str>;
+pub type FinalStr = Box<str>;
+
+pub type CloneSeq<A> = Arc<[A]>;
+pub type FinalSeq<A> = Box<[A]>;
+
 //#[cfg(debug_assertions)]
 //pub type Str = String;
 //#[cfg(not(debug_assertions))]
-pub type Str = Arc<str>;
+//pub type Str = Arc<str>;
 
 //#[cfg(debug_assertions)]
 //pub type Seq<A> = Vec<A>;
 //#[cfg(not(debug_assertions))]
-pub type Seq<A> = Arc<[A]>;
+//pub type Seq<A> = Arc<[A]>;
 
 pub mod ontology {
     pub mod rdf;
@@ -24,15 +30,12 @@ pub mod uris;
 pub mod archives;
 
 pub mod utils {
-    use crate::Str;
-
     pub mod parsing;
     pub mod iter;
     pub mod circular_buffer;
 
     pub type HMap<A,B> = ahash::HashMap<A,B>;
 
-    pub type MMTURI = Str;
 }
 
 #[cfg(feature = "fs")]

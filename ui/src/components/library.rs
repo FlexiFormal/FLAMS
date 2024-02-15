@@ -9,7 +9,7 @@ use ratatui::layout::Size;
 use tui_scrollview::{ScrollView, ScrollViewState};
 use immt_api::archives::{ArchiveGroupT, ArchiveId};
 use immt_api::archives::ArchiveT;
-use immt_api::Str;
+use immt_api::FinalStr;
 use immt_system::backend::archives::{Archive, ArchiveGroup};
 use crate::utils::Depth;
 
@@ -240,7 +240,7 @@ impl TreeState {
 #[derive(PartialEq,Eq)]
 struct TreeElement {
     id:ArchiveId,
-    render:Str,
+    render:FinalStr,
     depth:u8,
     children:Option<usize>
 }

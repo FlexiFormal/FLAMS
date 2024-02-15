@@ -1,12 +1,9 @@
 #[cfg(feature="fs")]
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path,PathBuf};
 #[cfg(feature="fs")]
 use crate::archives::IgnoreSource;
 use either::Either;
-use spliter::ParallelSpliterator;
-use crate::formats::FormatId;
-use crate::{Seq, Str};
+use crate::formats::Id;
 use crate::utils::iter::{HasChildren, HasChildrenMut, HasChildrenRef, LeafIterator, TreeLike, TreeMutLike, TreeRefLike};
 
 #[derive(Debug)]
@@ -45,7 +42,7 @@ use spliter::ParSpliter;
 #[derive(Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 //#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct SourceDir{pub rel_path:Str,pub children:Vec<FileLike>}
+pub struct SourceDir{pub rel_path:CloneStr,pub children:Vec<FileLike>}
 impl SourceDir {
     pub fn delete(&mut self) -> bool {
         self.children.retain_mut(|c| match c {
@@ -60,6 +57,7 @@ impl SourceDir {
 #[cfg(feature="tokio")]
 use futures::future::{BoxFuture, FutureExt};
 use tracing::warn;
+use crate::{CloneStr, FinalStr};
 
 macro_rules! update {
     ($rel_path:ident,$oldv:ident,$ignore:ident,$todos:ident,$get:expr;$d:ident => $meta:expr;$from_ext:ident;$ret:expr) => {
@@ -82,7 +80,7 @@ macro_rules! update {
                 }
             };
             if md.is_dir() {
-                let rel_path:Str = format!("{}/{}",$rel_path,path.file_name().unwrap().to_str().unwrap()).into();
+                let rel_path:CloneStr = format!("{}/{}",$rel_path,path.file_name().unwrap().to_str().unwrap()).into();
                 let old = $oldv.iter().enumerate().rfind(|s| match s {
                     (_,FileLike::Dir(s)) => s.rel_path == rel_path,
                     _ => false
@@ -98,7 +96,7 @@ macro_rules! update {
                 }
                 $todos.push((path,rel_path,dones_v.len()-1));
             } else {
-                let rel_path:Str = format!("{}/{}",$rel_path,path.file_name().unwrap().to_str().unwrap()).into();
+                let rel_path:CloneStr = format!("{}/{}",$rel_path,path.file_name().unwrap().to_str().unwrap()).into();
                 let format = match path.extension() {
                     Some(ext) => match $from_ext(ext.to_str().unwrap()) {
                         Some(f) => f,
@@ -141,6 +139,9 @@ macro_rules! update {
         $oldv = dones_v.into();
     };
 }
+
+#[cfg(feature = "pariter")]
+use spliter::ParallelSpliterator;
 
 impl SourceDir {
     #[cfg(feature = "pariter")]
@@ -202,8 +203,8 @@ impl SourceDir {
 
 
     #[cfg(feature="tokio")]
-    pub fn update_async<'a,F:Fn(&str) -> Option<FormatId>+Sync>(path:&'a Path,rel_path:&'a str,mut oldv:Vec<FileLike>,ignore:&'a IgnoreSource,from_ext:&'a F)
-        -> BoxFuture<'a,Vec<FileLike>> { async move {
+    pub fn update_async<'a,F:Fn(&str) -> Option<Id>+Sync>(path:&'a Path, rel_path:&'a str, mut oldv:Vec<FileLike>, ignore:&'a IgnoreSource, from_ext:&'a F)
+                                                          -> BoxFuture<'a,Vec<FileLike>> { async move {
         use tracing::trace;
         if ignore.ignores(path) {
             trace!("Ignoring {} because of {}",path.display(),ignore);
@@ -232,7 +233,7 @@ impl SourceDir {
     }.boxed() }
 
     #[cfg(feature="fs")]
-    pub fn update<F:AsRef<Path>>(in_dir:F,rel_path:&str,old:&mut Vec<FileLike>,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<FormatId>) {
+    pub fn update<F:AsRef<Path>>(in_dir:F,rel_path:&str,old:&mut Vec<FileLike>,ignore:&IgnoreSource,from_ext:&impl Fn(&str) -> Option<Id>) {
         use tracing::trace;
         let path = in_dir.as_ref();
         if ignore.ignores(path) {
@@ -266,7 +267,7 @@ impl SourceDir {
 #[derive(Debug)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct SourceFile{pub rel_path:Str,pub state:BuildState,pub format: FormatId }
+pub struct SourceFile{pub rel_path:CloneStr,pub state:BuildState,pub format: Id }
 impl SourceFile {
     pub fn path_in_archive(&self,archive_path:&Path) -> PathBuf {
         archive_path.join("source").join(&self.rel_path[1..])
@@ -280,8 +281,8 @@ impl SourceFile {
 pub enum BuildState {
     Deleted,
     New,
-    Stale{last_built:u64,md5:Str},
-    UpToDate{last_built:u64,md5:Str}
+    Stale{last_built:u64,md5:FinalStr},
+    UpToDate{last_built:u64,md5:FinalStr}
 }
 
 impl TreeLike for FileLike {

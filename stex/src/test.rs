@@ -10,7 +10,6 @@ use tracing_subscriber::fmt::writer::MakeWriterExt;
 use tracing_subscriber::Layer;
 use immt_api::archives::{ArchiveData, ArchiveGroupBase, ArchiveGroupT, ArchiveId};
 use immt_api::formats::FormatStore;
-use immt_api::Str;
 use immt_system::utils::{measure, measure_average};
 use immt_system::utils::parse::{ParseReader, ParseStr};
 use immt_system::backend::archives::ArchiveGroup;
@@ -40,7 +39,7 @@ fn test_setup(filter:bool) {
     if filter {
         let _ = tracing_subscriber::Registry::default()
             .with(
-                fmt.with_filter(Targets::new().with_default(LevelFilter::INFO).with_target("tex-linter",LevelFilter::OFF))
+                fmt.with_filter(Targets::new().with_default(LevelFilter::INFO).with_target("source_file",LevelFilter::OFF))
             )
             .try_init();
     } else {
@@ -122,7 +121,7 @@ fn check_latex_ltx() {
 }
 
 fn get_mh() -> ArchiveGroup {
-    let mut top = ArchiveGroup::new(ArchiveId::new(Str::from("")));
+    let mut top = ArchiveGroup::new(ArchiveId::new(""));
     let path = Path::new("/home/jazzpirate/work/MathHub");
     let mut store = FormatStore::default();
     store.register(immt_api::formats::Format::new(ID,EXTENSIONS,Box::new(STeXExtension)));
@@ -133,7 +132,7 @@ fn get_mh() -> ArchiveGroup {
 #[test]
 fn check_mh() {
     use rayon::iter::ParallelIterator;
-    let handler = test_setup(true);
+    test_setup(true);
     let mh = get_mh();
 
     let mut counter = 0;

@@ -2,12 +2,12 @@ use std::any::Any;
 use std::future::Future;
 use std::path::Path;
 use async_trait::async_trait;
-use immt_api::formats::{Format, FormatExtension, FormatId};
+use immt_api::FinalStr;
+use immt_api::formats::{Format, FormatExtension, Id};
 use immt_api::formats::building::{BuildResult, ComplexTaskStep, SourceTaskStep};
-use immt_api::Str;
 use immt_system::controller::ControllerBuilder;
 
-const ID:FormatId = FormatId::new_unchecked(*b"SHTM");
+const ID: Id = Id::new_unchecked(*b"SHTM");
 const EXTENSIONS:&[&str] = &["html"];
 
 pub struct SHMLTaskStep;
@@ -21,7 +21,7 @@ impl SourceTaskStep for SHMLTaskStep {
 #[async_trait]
 impl ComplexTaskStep for SHMLTaskStep {
     async fn run(&self, input: Box<dyn Any+Send>) -> BuildResult {
-        match input.downcast_ref::<&Str>() {
+        match input.downcast_ref::<&FinalStr>() {
             None => BuildResult::Err("Expected a string".into()),
             Some(_) => {
                 // Do Something

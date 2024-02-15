@@ -2,17 +2,17 @@ use std::fmt::Display;
 use std::path::Path;
 use either::Either;
 use oxrdf::{Subject, Triple};
-use crate::formats::FormatId;
+use crate::{CloneStr, FinalSeq};
+use crate::formats::Id;
 #[cfg(feature="fs")]
 use crate::formats::FormatStore;
-use crate::{Seq, Str};
 use crate::uris::{ArchiveURIRef, DomURI, DomURIRef};
 use crate::utils::HMap;
 
 #[derive(Clone,Debug,PartialEq,Eq,Hash,PartialOrd,Ord)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct ArchiveId(Str);
+pub struct ArchiveId(CloneStr);
 impl ArchiveId {
     #[inline]
     pub fn as_str(&self) -> &str { &self.0 }
@@ -24,13 +24,19 @@ impl ArchiveId {
     pub fn steps(&self) -> impl DoubleEndedIterator<Item=&str> {
         self.0.split('/')
     }
-    pub fn new<S:Into<Str>>(s:S) -> Self {
+    pub fn new<S:Into<CloneStr>>(s:S) -> Self {
         Self(s.into())
     }
 }
-impl From<Vec<Str>> for ArchiveId {
-    fn from(v: Vec<Str>) -> Self {
-        Self(v.join("/").into())
+impl<S:AsRef<str>> From<Vec<S>> for ArchiveId {
+    fn from(v: Vec<S>) -> Self {
+        let mut inner = String::new();
+        for s in v {
+            inner.push_str(s.as_ref());
+            inner.push('/');
+        }
+        inner.pop();
+        Self(inner.into())
     }
 }
 impl Display for ArchiveId {
@@ -68,10 +74,10 @@ impl<'a> Display for ArchiveIdRef<'a> {
 #[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
 pub struct ArchiveData {
     pub id:ArchiveId,
-    pub formats:Seq<FormatId>,
+    pub formats:FinalSeq<Id>,
     pub is_meta:bool,
     pub dom_uri:DomURI,
-    pub dependencies:Seq<ArchiveId>,
+    pub dependencies:FinalSeq<ArchiveId>,
     pub ignores:IgnoreSource,
     pub attrs:HMap<String,String>
 }
@@ -87,7 +93,7 @@ pub trait ArchiveT {
         self.data().id.as_ref()
     }
     #[inline]
-    fn formats(&self) -> &[FormatId] {
+    fn formats(&self) -> &[Id] {
         &self.data().formats
     }
     #[inline]
@@ -266,10 +272,9 @@ mod load_dir {
     use either::Either;
     use tracing::{debug, trace, trace_span, warn};
     use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveIdRef, ArchiveT, IgnoreSource};
-    use crate::formats::{FormatId, FormatStore};
+    use crate::formats::{Id, FormatStore};
     use std::fmt::Debug;
     use std::io::BufRead;
-    use crate::Str;
     use crate::uris::DomURI;
     use crate::utils::HMap;
 
@@ -301,7 +306,7 @@ mod load_dir {
                 };
                 match k {
                     "id" => { id = v.into() }
-                    "format" => { formats = v.split(',').flat_map(FormatId::try_from).collect() }
+                    "format" => { formats = v.split(',').flat_map(Id::try_from).collect() }
                     "url-base" => { dom_uri = v.into() }
                     "dependencies" => {
                         for d in v.split(',') {

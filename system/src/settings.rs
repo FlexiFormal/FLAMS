@@ -1,22 +1,22 @@
-use immt_api::Str;
+use immt_api::{CloneStr, FinalStr};
 use immt_api::utils::HMap;
 
 #[derive(Default)]
 pub struct Settings {
-    scopes:parking_lot::RwLock<HMap<Str,SettingsScope>>
+    scopes:parking_lot::RwLock<HMap<FinalStr,SettingsScope>>
 }
 impl Settings {
     /*pub fn get_all(&self) -> impl Iterator<Item=((&str,&str),&SettingsValue)> {
         self.scopes.read().iter().flat_map(|(k,v)| v.settings.iter().map(|(k2,v2)| ((&**k,&**k2),v2)))
     }*/
-    pub fn set<const NUM:usize>(&self,settings:[(Str,Str,SettingsValue);NUM]) {
+    pub fn set<const NUM:usize>(&self,settings:[(FinalStr,FinalStr,SettingsValue);NUM]) {
         let mut lock = self.scopes.write();
         for (scope,key,value) in settings.into_iter() {
             let scope = lock.entry(scope).or_insert_with(|| SettingsScope{settings:HMap::default()});
             scope.settings.insert(key,value);
         }
     }
-    pub fn set_default<S1:Into<Str>,S2:Into<Str>,const NUM:usize>(&self,settings:[(S1,S2,SettingsValue);NUM]) {
+    pub fn set_default<S1:Into<FinalStr>,S2:Into<FinalStr>,const NUM:usize>(&self,settings:[(S1,S2,SettingsValue);NUM]) {
         let mut lock = self.scopes.write();
         for (scope,key,value) in settings.into_iter() {
             let scope = lock.entry(scope.into()).or_insert_with(|| SettingsScope{settings:HMap::default()});
@@ -37,11 +37,11 @@ impl Settings {
 }
 
 pub struct SettingsScope {
-    settings:HMap<Str,SettingsValue>
+    settings:HMap<FinalStr,SettingsValue>
 }
 
 pub enum SettingsValue {
-    String(Str),
+    String(CloneStr),
     Integer(i64),
     PositiveInteger(u64),
     Float(f64),

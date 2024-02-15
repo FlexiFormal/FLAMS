@@ -1,15 +1,15 @@
 use immt_api::archives::ArchiveId;
 use immt_api::source_files::BuildState;
-use immt_api::Str;
 use crate::backend::archive_manager::ArchiveManager;
 use rayon::prelude::*;
 use immt_api::archives::ArchiveT;
+use immt_api::CloneStr;
 
 #[derive(Default)]
 pub struct BuildQueue {
-    pub stale: Vec<(ArchiveId,Str,u64)>,
-    pub new: Vec<(ArchiveId,Str)>,
-    pub deleted: Vec<(ArchiveId,Str)>
+    pub stale: Vec<(ArchiveId,CloneStr,u64)>,
+    pub new: Vec<(ArchiveId,CloneStr)>,
+    pub deleted: Vec<(ArchiveId,CloneStr)>
 }
 impl BuildQueue {
     pub(crate) fn init(&mut self,mgr:&ArchiveManager) {

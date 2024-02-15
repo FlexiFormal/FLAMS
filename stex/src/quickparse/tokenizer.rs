@@ -128,13 +128,10 @@ impl<'a, Pa:ParseSource<'a>> TeXTokenizer<'a,Pa> {
     }
 
     pub fn problem(&mut self,msg: impl std::fmt::Display) {
-        warn!(target:"tex-linter","{} at {}{:?}",msg,
-                                              match self.source_file {
-                                                  Some(p) => format!("{}: ",p.display()),
-                                                  None => "".to_string()
-                                              }
-                                              ,self.reader.curr_pos()
-        )
+        match self.source_file {
+            Some(f) => warn!(target:"source_file::tex-linter",source_file=%f.display(),pos = ?self.reader.curr_pos(),"{}",msg),
+            _ => warn!(target:"source_file::tex-linter",source_file="(unknown file)",pos = ?self.reader.curr_pos(),"{}",msg)
+        }
     }
 
     fn read_comment(&mut self,start:Pa::Pos) -> TeXToken<Pa::Pos,Pa::Str> {
