@@ -11,7 +11,8 @@ use ratatui::widgets::WidgetRef;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 use immt_system::controller::Controller;
 use immt_system::settings::SettingsValue;
-use crate::components::progress::{ProgressBar, Summary};
+use immt_system::utils::progress::PROGRESS_BARS;
+use crate::components::progress::{PBWidget, Summary};
 use crate::components::UITab;
 
 #[derive(Default, Clone)]
@@ -29,8 +30,8 @@ pub struct Ui {
     tabs_width:u16,
     //millis_per_frame:u64,
     act_framerate:u64,
-    progress:Vec<ProgressBar>,
-    show_framerate:bool
+    show_framerate:bool,
+    show_tasks:bool
 }
 
 impl Ui {
@@ -41,8 +42,8 @@ impl Ui {
             act_framerate:0,
             selected_tab:0,
             state:UIState::Hidden,
+            show_tasks:false,
             show_framerate:false,
-            progress:vec!(),
             tabs:vec!(
                 (LIBRARY,Box::<super::components::library::Library>::default()),
                 (LOG,Box::new(log)),
@@ -56,9 +57,6 @@ impl Ui {
                 SETTINGS_LEN + 2
         };
         (s,layer)
-    }
-    pub fn add_progress(&mut self,pb:ProgressBar) {
-        self.progress.push(pb);
     }
     pub fn run(&mut self,controller: Controller) -> std::io::Result<()> {
         controller.settings().set_default([
@@ -153,6 +151,10 @@ impl Ui {
                                 self.hide();
                                 return Ok(())
                             },
+                            Char('p') => {
+                                self.show_tasks = !self.show_tasks;
+                                return Ok(())
+                            },
                             _ => ()
                         }
                     }
@@ -216,7 +218,7 @@ impl Ui {
             .render(content, buf);
         fill_horizontal(fill_right, buf);
     }
-
+/*
     fn progress(&mut self,mut area:Rect,buf:&mut Buffer) {
         let (top,b) = split_line(area);
         Self::progress_sep(top, buf);
@@ -228,6 +230,8 @@ impl Ui {
             area = b;
         }
     }
+
+ */
 }
 impl Widget for &mut Ui {
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -237,8 +241,53 @@ impl Widget for &mut Ui {
                 .areas(area);
         self.render_top(header_area, buf);
 
-        let [left,main,right] = Layout::horizontal([Length(1), Fill(1), Length(1)]).areas(center_area);
+        let [left, main, right] = Layout::horizontal([Length(1), Fill(1), Length(1)]).areas(center_area);
         fill_vertical(left, buf);
+        fill_vertical(right, buf);
+        if self.show_framerate {
+            render_footer(footer_area, buf, Some(&format!("{}fps", self.act_framerate)));
+        } else {
+            render_footer(footer_area, buf, None);
+        }
+        let main = if self.show_tasks {
+            let [main,bar,mut side] = Layout::horizontal([Fill(2),Length(1),Fill(1)]).areas(main);
+            fill_vertical(bar, buf);
+            PROGRESS_BARS.with(|bt| {
+                if bt.is_empty() {
+                    Paragraph::new("No current processes").render(side,buf);
+                } else {
+                    for (_, p) in bt.iter() {
+                        let (a, b) = split_line(side);
+                        PBWidget { state: p, bar_size: 20 }.render(a, buf);
+                        side = b;
+                    }
+                }
+            });
+            main
+        } else {
+            PROGRESS_BARS.with(|bt| {
+                if bt.is_empty() {
+                    main
+                } else if bt.len() > 2 {
+                    let [main, line, bot] = Layout::vertical([Fill(1), Length(1), Length(1)]).areas(main);
+                    Ui::progress_sep(line, buf);
+                    Summary { states: bt.iter().map(|(_, b)| b), bar_size: 60 }.render(bot, buf);
+                    main
+                } else {
+                    let [main, sep, mut bot] = Layout::vertical([Fill(1), Length(1), Length(bt.len() as u16)]).areas(main);
+                    Ui::progress_sep(sep, buf);
+                    for (_, p) in bt.iter() {
+                        let (a, b) = split_line(bot);
+                        PBWidget { state: p, bar_size: 60 }.render(a, buf);
+                        bot = b;
+                    }
+                    // TODO
+                    main
+                }
+            })
+        };
+        self.tabs.get_mut(self.selected_tab).unwrap().1.render(main, buf);
+        /*
         self.progress.retain(|p|!p.done());
         if self.progress.is_empty() {
             self.tabs.get_mut(self.selected_tab).unwrap().1.render(main, buf);
@@ -260,12 +309,8 @@ impl Widget for &mut Ui {
             self.tabs.get_mut(self.selected_tab).unwrap().1.render(main, buf);
             self.progress(bot,buf);
         }
-        fill_vertical(right, buf);
-        if self.show_framerate {
-            render_footer(footer_area, buf,Some(&format!("{}fps",self.act_framerate)));
-        } else {
-            render_footer(footer_area, buf, None);
-        }
+
+         */
     }
 }
 
@@ -403,7 +448,7 @@ macro_rules! len_const {
     };
 }
 len_const!(TITLE = " ⟨iMMT⟩ ");
-len_const!(FOOTER = " CTRL+◄/► to change tab | CTRL+C to quit | CTRL+H to hide ");
+len_const!(FOOTER = " CTRL+◄/► to change tab | CTRL+C to quit | CTRL+H to hide | CTRL+P to show active processes ");
 len_const!(LOG = "📋 Log";1);
 len_const!(BUILD = "👷 Building";1);
 len_const!(LIBRARY = "📚 Library";1);

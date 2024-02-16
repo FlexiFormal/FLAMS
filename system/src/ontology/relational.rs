@@ -41,8 +41,8 @@ impl RelationalManager {
         use indicatif::ProgressStyle;
         use rayon::iter::ParallelIterator;
         let num = mgr.num_archives();
-        let pb = crate::utils::progress::in_progress("📈 Loading relational...")
-            .with_length(num as u64).set();
+        let pb = crate::utils::progress::in_progress2("📈 Loading relational...",num,false,"");
+            //.with_length(num as u64).set();
 
         info!("Loading relational for {num} archives...");
 
@@ -57,15 +57,16 @@ impl RelationalManager {
                 let mut file = std::fs::File::open(dir).unwrap();
                 let mut buf = std::io::BufReader::new(&mut file);
                 //std::thread::sleep(std::time::Duration::from_secs_f32(0.5));
-                pb.set_message(a.id().as_str());
+                if let Some(pb) = pb { pb.set_message(a.id().as_str());}
                 let _ = loader.load_quads(
                     reader.parse_read(&mut buf).filter_map(|q| q.ok().map(|q|
                         Quad{subject:q.subject, predicate:q.predicate, object:q.object, graph_name:GraphName::NamedNode(iri.clone())}
                     ))
                 );
-                pb.tick();
+                //pb.tick();
                 //Span::current().pb_inc(1);
             }
+            if let Some(pb) = pb { pb.tick();}
         });
         info!("Loaded {} relations",self.size()-old);
     }

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use chrono::Local;
 use tracing::Id;
 use tracing_subscriber::layer::Context;
+use immt_api::CloneStr;
 use immt_api::utils::circular_buffer::CircularBuffer;
 use immt_api::utils::HMap;
 
@@ -15,14 +16,16 @@ pub enum LogLine {
 
 pub struct SimpleLogLine {
     pub level: tracing::Level,
-    pub message:String,
+    pub message:CloneStr,
+    pub target:Option<CloneStr>,
     pub timestamp:chrono::DateTime<Local>,
     pub attrs:StringVisitor
 }
 pub struct SpanLine {
     pub level: tracing::Level,
-    pub name:String,
+    pub name:CloneStr,
     pub attrs:StringVisitor,
+    pub target:Option<CloneStr>,
     pub timestamp:chrono::DateTime<Local>,
     pub children: Vec<LogLine>,
     id: Id,
@@ -92,10 +95,14 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Layer {
         else {event.parent().cloned().or_else(|| ctx.current_span().id().cloned())};
         let mut visitor = StringVisitor::default();
         event.record(&mut visitor);
-        let message = visitor.0.remove("message").unwrap_or_default();
+        let target = {
+            let tg = event.metadata().target();
+            if tg.starts_with("immt_") {None} else {Some(tg.into())}
+        };
+        let message = visitor.0.remove("message").map_or("".into(),|s| s);
         let line = LogLine::Simple(SimpleLogLine{
             level: *event.metadata().level(),
-            timestamp:Local::now(),
+            timestamp:Local::now(), target,
             message,attrs:visitor
         });
         match parent {
@@ -111,17 +118,21 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Layer {
         let parent = if attrs.is_root() { None }
         else {attrs.parent().cloned().or_else(|| ctx.current_span().id().cloned())};
         let mut visitor = StringVisitor::default();
+        let target = {
+            let tg = attrs.metadata().target();
+            if tg.starts_with("immt_") {None} else {Some(tg.into())}
+        };
         attrs.record(&mut visitor);
         let line = LogLine::Span(SpanLine {
             level: *attrs.metadata().level(),
-            name: attrs.metadata().name().to_string(),
-            attrs: visitor,
+            name: attrs.metadata().name().to_string().into(),
+            attrs: visitor, target,
             timestamp:Local::now(),
             children: Vec::new(),
             id: id.clone(),
             open:Some(OpenSpan {
                 subspans:Vec::new(),
-                spinner:&["▹▹▹▹▹", "▹▹▹▹▹","▹▹▹▹▹","▸▹▹▹▹", "▸▹▹▹▹", "▸▹▹▹▹", "▹▸▹▹▹", "▹▸▹▹▹", "▹▸▹▹▹", "▹▹▸▹▹", "▹▹▸▹▹", "▹▹▸▹▹", "▹▹▹▸▹","▹▹▹▸▹","▹▹▹▸▹", "▹▹▹▹▸","▹▹▹▹▸","▹▹▹▹▸"]
+                spinner:&["▹▹▹▹▹", "▹▹▹▹▹","▸▹▹▹▹", "▸▹▹▹▹", "▹▸▹▹▹","▹▸▹▹▹", "▹▹▸▹▹", "▹▹▸▹▹", "▹▹▹▸▹", "▹▹▹▸▹", "▹▹▹▹▸", "▹▹▹▹▸"]
                 //immt_system::utils::progress::spinners::ARROW3
             })
         });
@@ -142,11 +153,11 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Layer {
 }
 
 #[derive(Default)]
-pub struct StringVisitor(HMap<String, String>);
+pub struct StringVisitor(HMap<&'static str, CloneStr>);
 impl Display for StringVisitor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0.is_empty() {return Ok(())}
-        f.write_char('[')?;
+        f.write_char('{')?;
         let mut had = false;
         for (k,v) in &self.0 {
             if had { f.write_str(", ")?;}
@@ -154,34 +165,34 @@ impl Display for StringVisitor {
             f.write_char(':')?;
             f.write_str(v)?;
         }
-        f.write_char(']')
+        f.write_char('}')
     }
 }
 
 impl tracing::field::Visit for StringVisitor {
     fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
         self.0
-            .insert(field.name().to_string(), value.to_string());
+            .insert(field.name(), value.to_string().into());
     }
 
     fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
         self.0
-            .insert(field.name().to_string(), value.to_string());
+            .insert(field.name(), value.to_string().into());
     }
 
     fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
         self.0
-            .insert(field.name().to_string(), value.to_string());
+            .insert(field.name(), value.to_string().into());
     }
 
     fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
         self.0
-            .insert(field.name().to_string(), value.to_string());
+            .insert(field.name(), value.to_string().into());
     }
 
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         self.0
-            .insert(field.name().to_string(), value.to_string());
+            .insert(field.name(), value.to_string().into());
     }
 
     fn record_error(
@@ -190,11 +201,11 @@ impl tracing::field::Visit for StringVisitor {
         value: &(dyn std::error::Error + 'static),
     ) {
         self.0
-            .insert(field.name().to_string(), value.to_string());
+            .insert(field.name(), value.to_string().into());
     }
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         self.0
-            .insert(field.name().to_string(), format!("{:?}", value));
+            .insert(field.name(), format!("{:?}", value).into());
     }
 }

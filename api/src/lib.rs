@@ -1,6 +1,7 @@
 #![recursion_limit="256"]
 
 use std::path::PathBuf;
+use std::string::ToString;
 //use std::rc::Rc;
 use std::sync::Arc;
 

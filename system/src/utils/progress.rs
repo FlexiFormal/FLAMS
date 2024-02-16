@@ -1,6 +1,7 @@
-use indicatif::ProgressStyle;
-use tracing::Level;
-use tracing_indicatif::span_ext::IndicatifSpanExt;
+use std::any::TypeId;
+use std::collections::BTreeMap;
+use std::marker::PhantomData;
+use tracing::Id;
 
 pub mod spinners {
     /*! // https://jsbin.com/lezohatoho/edit?js,output */
@@ -96,6 +97,8 @@ pub mod bars {
     pub const BAR12 : &str = "▰╍";
 }
 
+// -------------------------------------------------------------------------------------------------
+
 pub fn in_progress(prefix:&'static str) -> ProgressBarBuilder {
     ProgressBarBuilder {
         prefix,
@@ -108,6 +111,8 @@ pub fn in_progress(prefix:&'static str) -> ProgressBarBuilder {
         todo_color: "blue"
     }
 }
+
+use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 pub struct ProgressBarBuilder {
     prefix:&'static str,
@@ -125,6 +130,7 @@ impl ProgressBarBuilder {
         self
     }
     pub fn set(self) -> ProgressBar {
+        use indicatif::ProgressStyle;
         let s = match self.template {
             Some(t) => ProgressStyle::with_template(t.as_str()).unwrap(),
             None => {
@@ -159,5 +165,228 @@ impl ProgressBar {
     }
     pub fn advance(&self,by:u64) {
         self.span.pb_inc(by);
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+
+pub struct ProgressBarManager {
+    bars:parking_lot::RwLock<(usize,BTreeMap<usize, ProgressBarState>)>
+}
+pub static PROGRESS_BARS:ProgressBarManager = ProgressBarManager { bars: parking_lot::RwLock::new((0,BTreeMap::new())) };
+
+impl ProgressBarManager {
+    fn register(&self, bar: ProgressBarState) -> usize {
+        let mut lock = self.bars.write();
+        let len = lock.0;
+        lock.0 += 1;
+        lock.1.insert(len,bar);
+        len
+    }
+
+    fn tick(&self,idx:usize) {
+        let mut lock = self.bars.write();
+        if let Some(pb) = lock.1.get_mut(&idx){
+            pb.current += 1;
+            if pb.current == pb.length {
+                lock.1.remove(&idx);
+            } else {
+                pb.ms_per_tick = ((pb.ms_per_tick * (pb.current - 1)) + (pb.last_tick.elapsed().as_millis() as usize)) / pb.current;
+                pb.last_tick = std::time::Instant::now();
+            }
+        }
+    }
+    fn advance(&self,index:usize,by:usize) {
+        let mut lock = self.bars.write();
+        if let Some(pb) = lock.1.get_mut(&index){
+            let old = pb.current;
+            pb.current += by;
+            if pb.current >= pb.length {
+                lock.1.remove(&index);
+            } else {
+                pb.ms_per_tick = ((pb.ms_per_tick * old) + pb.last_tick.elapsed().as_millis() as usize) / pb.current;
+                pb.last_tick = std::time::Instant::now();
+            }
+        }
+    }
+
+    fn set_msg<S:Into<FinalStr>>(&self,index:usize,msg:S) {
+        let mut lock = self.bars.write();
+        if let Some(pb) = lock.1.get_mut(&index){
+            pb.curr_label = msg.into();
+        }
+    }
+
+    fn close(&self,index:usize) {
+        let mut lock = self.bars.write();
+        lock.1.remove(&index);
+    }
+
+    fn done(&self,idx:usize) -> bool {
+        let lock = self.bars.read();
+        lock.1.get(&idx).is_some()
+    }
+    pub fn with<R>(&self,f:impl FnOnce(&BTreeMap<usize,ProgressBarState>) -> R) -> R {
+        let lock = self.bars.read();
+        f(&lock.1)
+    }
+}
+
+pub struct ProgressBarState {
+    pub prefix:&'static str,
+    pub curr_label:FinalStr,
+    pub length:usize,
+    pub current:usize,
+    pub percentage:bool,
+    last_tick:std::time::Instant,
+    pub ms_per_tick:usize,
+    pub parent:Option<usize>,
+}
+
+
+#[derive(Clone,Copy)]
+pub struct ProgressBar2(usize);
+
+impl ProgressBar2 {
+
+    pub fn tick(&self) {
+        PROGRESS_BARS.tick(self.0);
+    }
+    pub fn done(&self) -> bool {
+        PROGRESS_BARS.done(self.0)
+    }
+    pub fn set_message<S:Into<FinalStr>>(&self,msg:S) {
+        PROGRESS_BARS.set_msg(self.0,msg);
+    }
+    pub fn advance(&self,by:usize) {
+        PROGRESS_BARS.advance(self.0,by);
+    }
+}
+
+pub fn in_progress2<S:Into<FinalStr>>(prefix:&'static str,length:usize,percentage:bool,label:S) -> Option<ProgressBar2> {
+    //let i = PROGRESS_BARS.register(pbi);
+    let mut label = label.into();
+    let lbl = &mut label;
+    let span:tracing::Span = tracing::Span::current();
+    let r = tracing::Span::with_subscriber(&span,move |(id,sub):(&tracing::Id,&tracing::Dispatch)| {
+        if let Some(ctx) = sub.downcast_ref::<WithProgressSpanContext>() {
+            let mut r = None;
+            let mut rr = &mut r;
+            (ctx.0)(sub,id,&mut move |pbo:&mut ProgressSpanContext| {
+                let mut pbi = ProgressBarState {
+                    prefix,
+                    curr_label: std::mem::take(lbl),
+                    length,
+                    current: 0,
+                    percentage,
+                    last_tick: std::time::Instant::now(),
+                    ms_per_tick: 0,
+                    parent:None
+                };
+                if let Some((_,p)) = pbo.parent {
+                    pbi.parent = Some(p)
+                }
+                let i = PROGRESS_BARS.register(pbi);
+                pbo.index = Some(i);
+                *rr = Some(i)
+            });
+            r
+        } else {None}
+    }).flatten();
+    r.map(ProgressBar2)
+}
+
+use tracing_subscriber::layer::Context;
+use tracing_subscriber::registry::LookupSpan;
+use tracing::span::Attributes;
+use immt_api::FinalStr;
+
+// -------------------------------------------------------------------------------------------------
+
+
+struct ProgressSpanContext {
+    index:Option<usize>,
+    parent:Option<(tracing::Id,usize)>
+}
+
+struct WithProgressSpanContext(
+    fn(&tracing::Dispatch, &tracing::span::Id, f: &mut dyn FnMut(&mut ProgressSpanContext))
+);
+
+pub struct ProgressLayer<S: tracing::Subscriber> {
+    phantom:PhantomData<S>,
+    get: WithProgressSpanContext,
+}
+impl<S> Default for ProgressLayer<S>
+    where S: tracing::Subscriber + for<'a> LookupSpan<'a> {
+    fn default() -> Self {
+        Self {
+            phantom: PhantomData,
+            get: WithProgressSpanContext(Self::with_context)
+        }
+    }
+}
+impl<S> ProgressLayer<S>
+    where S: tracing::Subscriber + for<'a> LookupSpan<'a> {
+
+    fn with_context(
+        dispatch: &tracing::Dispatch,
+        id: &tracing::span::Id,
+        f: &mut dyn FnMut(&mut ProgressSpanContext),
+    ) {
+        let subscriber: &S = dispatch
+            .downcast_ref::<S>()
+            .expect("subscriber should downcast to expected type; this is a bug!");
+        let span = subscriber
+            .span(id)
+            .expect("Span not found in context, this is a bug");
+
+        let mut ext = span.extensions_mut();
+
+        if let Some(ctx) = ext.get_mut::<ProgressSpanContext>() {
+            f(ctx);
+        }
+    }
+}
+
+impl<S> tracing_subscriber::layer::Layer<S> for ProgressLayer<S>
+    where S: tracing::Subscriber + for<'a> LookupSpan<'a>
+{
+    fn on_new_span(&self, _attrs: &Attributes<'_>, id: &tracing::Id, ctx: Context<'_, S>) {
+        let span = ctx
+            .span(id)
+            .expect("Span not found in context, this is a bug");
+        let mut ext = span.extensions_mut();
+        let parent_span = ctx.span_scope(id).and_then(|scope| {
+            scope.skip(1).find_map(|span| {
+                let ext = span.extensions();
+                ext.get::<ProgressSpanContext>().and_then(|c| c.index.map(|i| (span.id().clone(),i)))
+            })
+        });
+
+        ext.insert::<ProgressSpanContext>(ProgressSpanContext {
+            index: None,
+            parent: parent_span,
+        });
+    }
+
+    fn on_close(&self, id: Id, ctx: Context<'_, S>) {
+        let span = ctx
+            .span(&id)
+            .expect("Span not found in context, this is a bug");
+        let mut ext = span.extensions_mut();
+        if let Some(i) = ext.get_mut::<ProgressSpanContext>().and_then(|f| f.index) {
+            PROGRESS_BARS.close(i)
+        }
+    }
+
+    unsafe fn downcast_raw(&self, id: TypeId) -> Option<*const ()> {
+        match id {
+            id if id == TypeId::of::<Self>() => Some(self as *const _ as *const ()),
+            id if id == TypeId::of::<WithProgressSpanContext>() => {
+                Some(&self.get as *const _ as *const ())
+            }
+            _ => None,
+        }
     }
 }

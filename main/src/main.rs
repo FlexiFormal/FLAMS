@@ -18,10 +18,13 @@ fn main() {
         immt_stex::register(&mut builder);
         builder.build()
     };
+    //test_progress();
     ui.run(controller).unwrap();
 }
 
 use clap::{Parser,Subcommand};
+use immt_system::utils::progress::{ProgressBar2, ProgressLayer};
+
 #[derive(Parser,Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
@@ -57,7 +60,7 @@ fn tracing() -> (immt_ui::ui::Ui,Option<WorkerGuard>) {
     let (ui,uilayer) = immt_ui::ui::Ui::new();
     let guard = match layer_guard {
         None => {
-            tracing::subscriber::set_global_default(tracing_subscriber::registry().with(uilayer)).unwrap();
+            tracing::subscriber::set_global_default(tracing_subscriber::registry().with(uilayer).with(ProgressLayer::default())).unwrap();
             None
         }
         Some((file_layer,guard)) => {
@@ -67,7 +70,7 @@ fn tracing() -> (immt_ui::ui::Ui,Option<WorkerGuard>) {
                 .with_file(false)
                 .with_line_number(false)
                 .json()
-            ).with(uilayer);
+            ).with(uilayer).with(ProgressLayer::default());
             tracing::subscriber::set_global_default(subscriber).unwrap();
             Some(guard)
         }
@@ -104,6 +107,34 @@ fn get_mathhub() -> PathBuf {
     }
     // TODO:initialize?
     mh
+}
+
+
+#[instrument(level="info",name="test one",skip_all)]
+fn test_progress() {
+    let pb = immt_system::utils::progress::in_progress2("Test progress",10,false,"Loading...");
+    let span = tracing::Span::current();
+    std::thread::spawn(move || {
+        let _span = span.enter();
+        for i in 0..10 {
+            std::thread::sleep(Duration::from_millis(100));
+            test_progress2((i + 1) * 100,pb);
+        }
+    });
+}
+
+#[instrument(level="info",name="test two",skip_all)]
+fn test_progress2(millis:u64,outer:Option<ProgressBar2>) {
+    let pb = immt_system::utils::progress::in_progress2("Test progress 2",100,true,"Loading...");
+    let span = tracing::Span::current();
+    std::thread::spawn(move || {
+        let _span = span.enter();
+        for _ in 0..100 {
+            std::thread::sleep(Duration::from_millis(millis));
+            if let Some(pb) = pb { pb.tick() }
+        }
+        if let Some(pb) = outer { pb.tick() }
+    });
 }
 
 /*

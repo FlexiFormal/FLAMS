@@ -14,6 +14,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 //use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget, TuiWidgetState};
 use immt_system::controller::Controller;
 use tui_scrollview::{ScrollView, ScrollViewState};
+use immt_api::CloneStr;
 use immt_api::utils::HMap;
 use crate::components::log::layer::{LogLine, LogStore, OpenSpan, SimpleLogLine, SpanLine, StringVisitor};
 use crate::ui::{split_line, text_line_styled};
@@ -72,15 +73,18 @@ impl Logger {
                 if *frame == (spinner.len() as u8) { *frame = 0 }
                 let [spin,rest] = Layout::horizontal([Length(len + 1), Fill(1)])
                     .areas(rect);
-                Line::raw(format!("{} ",spinstr)).render(spin,buf);
+                Line::styled(format!("{} ",spinstr),Style::default().fg(tailwind::GREEN.c300).bold()).render(spin,buf);
                 l.render(rest,buf);
             }
         }
     }
 
-    fn simple_line(level: Level,message:&str,timestamp:&chrono::DateTime<Local>,attrs:&StringVisitor,depth:u8,has_next:bool) -> LogL {
+    fn simple_line(level: Level,message:&str,timestamp:&chrono::DateTime<Local>,target:&Option<CloneStr>,attrs:&StringVisitor,depth:u8,has_next:bool) -> LogL {
         LogL::Simple(Line::default().spans(vec!(Span::styled(
-            format!("{}{} {}: {} {}",Depth(depth,has_next),timestamp.format("%Y-%m-%d %H:%M:%S"),level,message,attrs),match level {
+            format!("{}{} {}: {}{} {}",Depth(depth,has_next),timestamp.format("%Y-%m-%d %H:%M:%S"),level,match target {
+                Some(t) => format!("[{}] ",t),
+                None => "".to_string(),
+            },message,attrs),match level {
                 Level::ERROR => tailwind::RED.c500,
                 Level::WARN => tailwind::ORANGE.c500,
                 Level::INFO => tailwind::YELLOW.c500,
@@ -90,10 +94,13 @@ impl Logger {
         ))))
     }
 
-    fn complex_line(level:Level,message:&str,timestamp:&chrono::DateTime<Local>,attrs:&StringVisitor,spinner:&'static [&'static str],depth:u8,has_next:bool) -> LogL {
+    fn complex_line(level:Level,message:&str,timestamp:&chrono::DateTime<Local>,target:&Option<CloneStr>,attrs:&StringVisitor,spinner:&'static [&'static str],depth:u8,has_next:bool) -> LogL {
         LogL::Spinning(
             Line::default().spans(vec!(Span::styled(
-                format!("{}{} {}: {} {}",Depth(depth,has_next),timestamp.format("%Y-%m-%d %H:%M:%S"),level,message,attrs),match level {
+                format!("{}{} {}: {}{} {}",Depth(depth,has_next),timestamp.format("%Y-%m-%d %H:%M:%S"),level,match target {
+                Some(t) => format!("[{}] ",t),
+                None => "".to_string(),
+            },message,attrs),match level {
                     Level::ERROR => tailwind::RED.c500,
                     Level::WARN => tailwind::ORANGE.c500,
                     Level::INFO => tailwind::YELLOW.c500,
@@ -104,7 +111,7 @@ impl Logger {
             spinner,0
         )
     }
-    fn do_lines(target:&mut Vec<LogL>,children:&Vec<LogLine>,filter:Level) {
+    fn do_lines(vec:&mut Vec<LogL>,children:&Vec<LogLine>,filter:Level) {
         let mut curr = children;
         let mut depth = 1;
         let mut idx = 0;
@@ -112,21 +119,21 @@ impl Logger {
         loop {
             while let Some(e) = curr.get(idx) {
                 match e {
-                    LogLine::Simple(SimpleLogLine{level,message,timestamp,attrs}) if *level <= filter => {
-                        target.push(Self::simple_line(*level,message,timestamp,attrs,depth,idx < curr.len() - 1));
+                    LogLine::Simple(SimpleLogLine{level,message,timestamp,attrs,target,..}) if *level <= filter => {
+                        vec.push(Self::simple_line(*level,message,timestamp,target,attrs,depth,idx < curr.len() - 1));
                         idx += 1;
                     }
-                    LogLine::Span(SpanLine{level,name,attrs,timestamp,children,open:None,..}) => {
+                    LogLine::Span(SpanLine{level,name,attrs,timestamp,target,children,open:None,..}) => {
                         if *level <= filter {
-                            target.push(Self::simple_line(*level, name, timestamp, attrs, depth, idx < curr.len() - 1))
+                            vec.push(Self::simple_line(*level, name, timestamp,target, attrs, depth, idx < curr.len() - 1))
                         }
                         let old = std::mem::replace(&mut curr,children);
                         stack.push((idx,old));
                         idx = 0;
                         depth += 1;
                     }
-                    LogLine::Span(SpanLine{level,name,attrs,timestamp,children,open:Some(OpenSpan{spinner,..}),..}) => {
-                        if *level <= filter{ target.push(Self::complex_line(*level,name,timestamp,attrs,spinner,depth,idx < curr.len() - 1)) }
+                    LogLine::Span(SpanLine{level,name,attrs,target,timestamp,children,open:Some(OpenSpan{spinner,..}),..}) => {
+                        if *level <= filter{ vec.push(Self::complex_line(*level,name,timestamp,target,attrs,spinner,depth,idx < curr.len() - 1)) }
                         let old = std::mem::replace(&mut curr,children);
                         stack.push((idx,old));
                         idx = 0;
@@ -152,15 +159,15 @@ impl Logger {
         self.log_state.clear();
         for e in lock.0.iter().rev() {
             match e {
-                LogLine::Simple(SimpleLogLine{level,message,timestamp,attrs}) if *level <= self.filter => {
-                    self.log_state.push(Self::simple_line(*level,message,timestamp,attrs,0,false))
+                LogLine::Simple(SimpleLogLine{level,message,timestamp,attrs,target}) if *level <= self.filter => {
+                    self.log_state.push(Self::simple_line(*level,message,timestamp,target,attrs,0,false))
                 }
-                LogLine::Span(SpanLine{level,name,attrs,timestamp,children,open:None,..}) => {
-                    if *level <= self.filter {self.log_state.push(Self::simple_line(*level,name,timestamp,attrs,0,false))}
+                LogLine::Span(SpanLine{level,name,attrs,timestamp,children,open:None,target,..}) => {
+                    if *level <= self.filter {self.log_state.push(Self::simple_line(*level,name,timestamp,target,attrs,0,false))}
                     Self::do_lines(&mut self.log_state,children,self.filter);
                 }
-                LogLine::Span(SpanLine{level,name,attrs,timestamp,children,open:Some(OpenSpan{spinner,..}),..}) => {
-                    if *level <= self.filter {self.log_state.push(Self::complex_line(*level,name,timestamp,attrs,spinner,0,false)) }
+                LogLine::Span(SpanLine{level,name,attrs,timestamp,children,target,open:Some(OpenSpan{spinner,..}),..}) => {
+                    if *level <= self.filter {self.log_state.push(Self::complex_line(*level,name,timestamp,target,attrs,spinner,0,false)) }
                     Self::do_lines(&mut self.log_state,children,self.filter);
                 }
                 _ => ()
@@ -259,4 +266,5 @@ impl UITab for Logger {
         self.logview(scroll_view.buf_mut(),max);
         scroll_view.render(area, buf, &mut self.scroll_state);
     }
+
 }
