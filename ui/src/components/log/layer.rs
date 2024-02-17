@@ -162,8 +162,9 @@ impl Display for StringVisitor {
         for (k,v) in &self.0 {
             if had { f.write_str(", ")?;}
             f.write_str(k)?;
-            f.write_char(':')?;
+            f.write_char('=')?;
             f.write_str(v)?;
+            had = true;
         }
         f.write_char('}')
     }

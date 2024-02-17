@@ -4,6 +4,7 @@ use std::collections::hash_map::Entry;
 use std::convert::Into;
 use std::marker::PhantomData;
 use immt_api::utils::HMap;
+use immt_api::utils::iter::VecMap;
 use crate::quickparse::tokenizer::TeXTokenizer;
 use crate::quickparse::tokens::TeXToken;
 use immt_system::utils::parse::{ParseSource, StringOrStr};
@@ -66,12 +67,12 @@ pub struct Macro<'a,S:StringOrStr<'a>,P:SourcePos,T:FromLaTeXToken<'a,S,P>> {
     phantom:PhantomData<&'a T>
 }
 pub struct Environment<'a,S:StringOrStr<'a>,P:SourcePos,T:FromLaTeXToken<'a,S,P>> {
-    begin:Macro<'a,S,P,T>,
-    end:Option<Macro<'a,S,P,T>>,
-    name:S,
-    args:Vec<T>,
-    children:Vec<T>,
-    phantom:PhantomData<&'a T>
+    pub begin:Macro<'a,S,P,T>,
+    pub end:Option<Macro<'a,S,P,T>>,
+    pub name:S,
+    pub args:Vec<T>,
+    pub children:Vec<T>,
+    //phantom:PhantomData<&'a T>
 }
 
 pub enum MacroResult<'a,S:StringOrStr<'a>,P:SourcePos,T:FromLaTeXToken<'a,S,P>> {
@@ -90,6 +91,28 @@ pub type EnvironmentRule<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::P
     fn(&mut Environment<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,T>),
     fn(Environment<'a,Pa::Str,Pa::Pos,T>,&mut LaTeXParser<'a,Pa,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T>
 );
+
+
+pub struct OptArg<'a,S:StringOrStr<'a>> {
+    inner:Option<S>,phantom:&'a PhantomData<S>
+}
+impl<'a,S:StringOrStr<'a>> OptArg<'a,S> {
+    pub fn is_some(&self) -> bool { self.inner.is_some() }
+    pub fn into_name(self) -> Option<S> {
+        self.inner
+    }
+    pub fn as_keyvals(&'a self) -> VecMap<&'a str,&'a str> {
+        let mut map:VecMap<&'a str,&'a str> = VecMap::default();
+        if let Some(s) = &self.inner {
+            for e in s.split_noparens::<'{','}'>(',') {
+                if let Some((a,b)) = e.split_once('=') {
+                    map.insert(a.trim(),b.trim());
+                }
+            }
+        }
+        map
+    }
+}
 
 
 pub struct Group<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> {
@@ -135,7 +158,7 @@ impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> Group<'a,Pa,T> 
 }
 
 pub struct LaTeXParser<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos> = LaTeXToken<'a,<Pa as ParseSource<'a>>::Pos,<Pa as ParseSource<'a>>::Str>> {
-    tokenizer:super::tokenizer::TeXTokenizer<'a,Pa>,
+    pub tokenizer:super::tokenizer::TeXTokenizer<'a,Pa>,
     macro_rules:HMap<Pa::Str,MacroRule<'a,Pa,T>>,
     groups:Vec<Group<'a,Pa,T>>,
     environment_rules:HMap<Pa::Str,EnvironmentRule<'a,Pa,T>>,
@@ -168,12 +191,15 @@ macro_rules! default_envs {
 
 impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> LaTeXParser<'a,Pa,T> {
     pub fn new(input:Pa,source_file:Option<&'a std::path::Path>) -> Self {
+        Self::with_rules(input,source_file,Self::default_rules().into_iter(),Self::default_env_rules().into_iter())
+    }
+    pub fn with_rules(input:Pa,source_file:Option<&'a std::path::Path>,rules:impl Iterator<Item=(Pa::Str,MacroRule<'a,Pa,T>)>,envs:impl Iterator<Item=(Pa::Str,EnvironmentRule<'a,Pa,T>)>) -> Self {
         let mut macro_rules = HMap::default();
         let mut environment_rules = HMap::default();
-        for (k,v) in Self::default_rules() {
+        for (k,v) in rules {
             macro_rules.insert(k,v);
         }
-        for (k,v) in Self::default_env_rules() {
+        for (k,v) in envs {
             environment_rules.insert(k,v);
         }
         LaTeXParser {
@@ -181,20 +207,6 @@ impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> LaTeXParser<'a,
             macro_rules,
             groups:Vec::new(),
             environment_rules,
-            directives:HMap::default(),
-            buf:Vec::new()
-        }
-    }
-    pub fn with_rules(input:Pa,source_file:Option<&'a std::path::Path>,rules:impl Iterator<Item=(Pa::Str,MacroRule<'a,Pa,T>)>) -> Self {
-        let mut macro_rules = HMap::default();
-        for (k,v) in rules {
-            macro_rules.insert(k,v);
-        }
-        LaTeXParser {
-            tokenizer:super::tokenizer::TeXTokenizer::new(input,source_file),
-            macro_rules,
-            groups:Vec::new(),
-            environment_rules:HMap::default(),
             directives:HMap::default(),
             buf:Vec::new()
         }
@@ -293,7 +305,7 @@ impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> LaTeXParser<'a,
             name:name.clone(),
             args:Vec::new(),
             children:Vec::new(),
-            phantom:PhantomData
+            //phantom:PhantomData
         };
         let close = match self.environment_rules.get(&name) {
             Some((open,close)) => {
@@ -428,6 +440,25 @@ impl<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>> LaTeXParser<'a,
         }
         else {
             let _ = self.tokenizer.next();
+        }
+    }
+
+    pub fn read_opt_str(&mut self,in_macro:&mut Macro<'a,Pa::Str,Pa::Pos,T>) -> OptArg<'a,Pa::Str> {
+        self.tokenizer.reader.trim_start();
+        if self.tokenizer.reader.starts_with('[') {
+            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.trim_start();
+            let tstart = self.curr_pos().clone();
+            let s = self.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == ']');
+            let text = T::from_text(SourceRange{start:tstart,end:self.curr_pos().clone()},s.clone());
+            self.tokenizer.reader.pop_head();
+            if let Some(t) = text {
+                in_macro.args.push(t)
+            }
+            in_macro.range.end = self.curr_pos().clone();
+            OptArg { inner:Some(s),phantom:&PhantomData }
+        } else {
+            OptArg { inner:None,phantom:&PhantomData }
         }
     }
 

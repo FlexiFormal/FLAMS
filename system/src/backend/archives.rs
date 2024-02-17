@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use spliter::ParSpliter;
 use immt_api::formats::FormatStore;
 use immt_api::archives::{ArchiveData, ArchiveGroupBase, ArchiveGroupT, ArchiveId, ArchiveT, IgnoreSource};
@@ -10,12 +11,12 @@ use immt_api::utils::iter::LeafIterator;
 #[derive(Debug)]
 pub struct Archive {
     pub(in crate::backend) manifest:ArchiveData,
-    path:PathBuf,
+    path:Arc<Path>,
     state:parking_lot::RwLock<ArchiveState>,
     //watcher: Option<RecommendedWatcher>
 }
 impl Archive {
-    pub fn path(&self) -> &Path { &self.path }
+    pub fn path(&self) -> Option<Arc<Path>> { Some(self.path.clone()) }
 }
 impl ArchiveT for Archive {
     #[instrument(level = "info", name = "Loading archive", skip_all, fields(id = %data.id))]
@@ -29,7 +30,7 @@ impl ArchiveT for Archive {
         debug!("Done");
         Self {
             manifest:data,
-            path:path.to_path_buf(),
+            path:path.to_path_buf().into(),
             state:parking_lot::RwLock::new(state),
             //watcher:None
         }

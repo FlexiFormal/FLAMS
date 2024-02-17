@@ -1,4 +1,4 @@
-
+use std::io::Error;
 use crate::components::UITab;
 use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 use crossterm::event::{Event, KeyCode, MouseEvent, MouseEventKind};
@@ -20,9 +20,10 @@ impl BuildqueueUI {
 }
 impl UITab for BuildqueueUI {
     fn activate(&mut self, controller: &Controller) {
-        self.new = controller.build_queue().new.len();
-        self.stale = controller.build_queue().stale.len();
-        self.deleted = controller.build_queue().deleted.len();
+        let (stale,new,deleted) = controller.build_queue().unqueued();
+        self.new = new;
+        self.stale = stale;
+        self.deleted = deleted;
     }
     fn render(&mut self, area: Rect, buf: &mut Buffer) {
         Paragraph::new::<_>(format!("No currently running build tasks\n\
@@ -30,5 +31,11 @@ impl UITab for BuildqueueUI {
         Stale:   {}\n\
         Deleted: {}",self.new,self.stale,self.deleted))
             .render(area, buf);
+    }
+    fn handle_event(&mut self, controller: &Controller, event: Event) -> Result<(), Error> {
+        if let Event::Key(key) = event { if let KeyCode::Char('q') = key.code {
+            controller.build_queue().run_all(controller.archives())
+        }}
+        Ok(())
     }
 }

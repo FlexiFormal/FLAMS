@@ -50,7 +50,7 @@ impl RelationalManager {
         let store = self.store.clone();
         mgr.par_iter().for_each(move |a|{
             let loader = store.bulk_loader();
-            let dir = a.path().join(".out").join("rel.ttl");
+            let dir = a.path().unwrap().join(".out").join("rel.ttl");
             if dir.exists() {
                 let iri = a.uri().to_iri();
                 let reader = oxigraph::io::RdfParser::from_format(oxigraph::io::RdfFormat::Turtle);

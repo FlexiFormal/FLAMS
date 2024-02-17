@@ -20,7 +20,7 @@ strip = "symbols"
 [dev-dependencies]
 
 [dependencies]
-immt-api = {path = "../api",features=["bincode","fs","pariter"]}
+immt-api = {path = "../api",features=["bincode","fs","pariter","tokio"]}
 immt-system = {path = "../system"}
 either = "1.10"
 tracing = "0.1.40"

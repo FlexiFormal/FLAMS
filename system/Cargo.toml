@@ -23,7 +23,7 @@ default = []
 #env_logger = "0.11.1"
 
 [dependencies]
-immt-api = {path="../api",features=["bincode","fs","pariter"]}
+immt-api = {path="../api",features=["bincode","fs","pariter","tokio"]}
 #log={version="0.4.20",features=["kv_unstable"]}
 walkdir = "2.4"
 #env_logger = "0.11.1"
@@ -41,6 +41,7 @@ bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 ahash = "0.8.7"
 regex = "1.10"
 tokio = { version="1.36",features = ["full"] }
+tokio-rayon = "2.1"
 
 tracing-subscriber = "0.3"
 

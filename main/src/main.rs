@@ -1,18 +1,19 @@
+use immt_system::controller::Controller;
+use immt_system::utils::measure;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tracing::{info, instrument, Level};
 use tracing::level_filters::LevelFilter;
+use tracing::{info, instrument, Level};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::writer::MakeWriterExt;
 use tracing_subscriber::layer::SubscriberExt;
-use immt_system::controller::Controller;
-use immt_system::utils::measure;
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
     let mh = get_mathhub();
-    let (mut ui,_guard) = tracing();
+    let (mut ui, _guard) = tracing();
     let controller = {
         let mut builder = Controller::builder(mh);
         immt_stex::register(&mut builder);
@@ -22,32 +23,30 @@ fn main() {
     ui.run(controller).unwrap();
 }
 
-use clap::{Parser,Subcommand};
+use clap::{Parser, Subcommand};
 use immt_system::utils::progress::{ProgressBar2, ProgressLayer};
 
-#[derive(Parser,Debug)]
+#[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
     /// Whether to start the server. Note that the server can also be started from the UI.
     #[clap(long)]
     #[arg(default_value_t = false)]
-    server:bool,
+    server: bool,
     /// The host to bind the server to.
     #[clap(long)]
     #[arg(default_value_t = {"http://localhost".to_string()})]
-    server_host:String,
+    server_host: String,
     /// The port to bind the server to.
     #[clap(long)]
     #[arg(default_value_t = 7070)]
-    server_port:u16,
+    server_port: u16,
     #[clap(long)]
     #[arg(default_value_t = false)]
-    lsp:bool,
-
+    lsp: bool,
 }
 
-
-fn tracing() -> (immt_ui::ui::Ui,Option<WorkerGuard>) {
+fn tracing() -> (immt_ui::ui::Ui, Option<WorkerGuard>) {
     let now = chrono::Local::now();
     let file_appender = get_logdir().map(|f| {
         tracing_appender::rolling::RollingFileAppender::builder()
@@ -57,45 +56,54 @@ fn tracing() -> (immt_ui::ui::Ui,Option<WorkerGuard>) {
             .expect("failed to initialize file logging")
     });
     let layer_guard = file_appender.map(tracing_appender::non_blocking);
-    let (ui,uilayer) = immt_ui::ui::Ui::new();
+    let (ui, uilayer) = immt_ui::ui::Ui::new();
     let guard = match layer_guard {
         None => {
-            tracing::subscriber::set_global_default(tracing_subscriber::registry().with(uilayer).with(ProgressLayer::default())).unwrap();
+            tracing::subscriber::set_global_default(
+                tracing_subscriber::registry()
+                    .with(uilayer)
+                    .with(ProgressLayer::default()),
+            )
+            .unwrap();
             None
         }
-        Some((file_layer,guard)) => {
-            let subscriber = tracing_subscriber::registry().with(tracing_subscriber::fmt::Layer::default()
-                .with_writer(file_layer.with_max_level(Level::DEBUG))
-                .with_ansi(false)
-                .with_file(false)
-                .with_line_number(false)
-                .json()
-            ).with(uilayer).with(ProgressLayer::default());
+        Some((file_layer, guard)) => {
+            let subscriber = tracing_subscriber::registry()
+                .with(
+                    tracing_subscriber::fmt::Layer::default()
+                        .with_writer(file_layer.with_max_level(Level::DEBUG))
+                        .with_ansi(false)
+                        .with_file(false)
+                        .with_line_number(false)
+                        .json(),
+                )
+                .with(uilayer)
+                .with(ProgressLayer::default());
             tracing::subscriber::set_global_default(subscriber).unwrap();
             Some(guard)
         }
     };
     // TODO
-    (ui,guard)
+    (ui, guard)
 }
 
 fn get_logdir() -> Option<PathBuf> {
     if let Ok(f) = std::env::var("IMMT_LOGDIR") {
         let path = PathBuf::from(f);
         if std::fs::create_dir_all(&path).is_ok() {
-            return Some(path)
+            return Some(path);
         }
     }
     if let Ok(p) = std::env::current_exe() {
         if let Some(path) = p.parent().map(|p| p.join("logs")) {
             if std::fs::create_dir_all(&path).is_ok() {
-                return Some(path)
+                return Some(path);
             }
         }
     }
     let path = std::env::temp_dir().join("immt").join("logs");
     if let Ok(_) = std::fs::create_dir_all(&path) {
-        return Some(path)
+        return Some(path);
     }
     None
 }
@@ -109,31 +117,34 @@ fn get_mathhub() -> PathBuf {
     mh
 }
 
-
-#[instrument(level="info",name="test one",skip_all)]
+#[instrument(level = "info", name = "test one", skip_all)]
 fn test_progress() {
-    let pb = immt_system::utils::progress::in_progress2("Test progress",10,false,"Loading...");
+    let pb = immt_system::utils::progress::in_progress2("Test progress", 10, false, "Loading...");
     let span = tracing::Span::current();
     std::thread::spawn(move || {
         let _span = span.enter();
         for i in 0..10 {
             std::thread::sleep(Duration::from_millis(100));
-            test_progress2((i + 1) * 100,pb);
+            test_progress2((i + 1) * 100, pb);
         }
     });
 }
 
-#[instrument(level="info",name="test two",skip_all)]
-fn test_progress2(millis:u64,outer:Option<ProgressBar2>) {
-    let pb = immt_system::utils::progress::in_progress2("Test progress 2",100,true,"Loading...");
+#[instrument(level = "info", name = "test two", skip_all)]
+fn test_progress2(millis: u64, outer: Option<ProgressBar2>) {
+    let pb = immt_system::utils::progress::in_progress2("Test progress 2", 100, true, "Loading...");
     let span = tracing::Span::current();
     std::thread::spawn(move || {
         let _span = span.enter();
         for _ in 0..100 {
             std::thread::sleep(Duration::from_millis(millis));
-            if let Some(pb) = pb { pb.tick() }
+            if let Some(pb) = pb {
+                pb.tick()
+            }
         }
-        if let Some(pb) = outer { pb.tick() }
+        if let Some(pb) = outer {
+            pb.tick()
+        }
     });
 }
 

@@ -3,6 +3,7 @@ use immt_system::utils::sourcerefs::{SourcePos, SourceRange};
 use crate::quickparse::latex::{EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult};
 use crate::quickparse::tokenizer::Mode;
 
+#[macro_export]
 macro_rules! csrule {
     ($name:ident,$m:ident,$p:ident => $c:block) => {
         #[allow(unused_mut,non_snake_case)]
@@ -13,6 +14,7 @@ macro_rules! csrule {
     };
 }
 
+#[macro_export]
 macro_rules! simple {
     ($name:ident,$m:ident,$p:ident => $c:block) => {
         csrule!($name,$m,$p => {
@@ -126,6 +128,7 @@ simple!(lstdefinelanguage,m,p => {
     p.skip_arg(&mut m);
 });
 
+#[macro_export]
 macro_rules! switch_mode {
     ($i:ident,$m:expr) => {
         simple!($i,m,p => {
@@ -165,6 +168,7 @@ simple!(scalebox,m,p => {
 
 use super::Environment;
 
+#[macro_export]
 macro_rules! envrule {
     ($name:ident,$e:ident,$p:ident => $open:block $close:block) => {paste::paste!(
         #[allow(unused_mut,non_snake_case)]

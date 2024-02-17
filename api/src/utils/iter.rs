@@ -1,6 +1,31 @@
 use std::marker::PhantomData;
 use either::Either;
 
+#[derive(Clone)]
+pub struct VecMap<K,V> {
+    inner:Vec<(K,V)>
+}
+impl<K,V> Default for VecMap<K,V> {
+    fn default() -> Self {
+        Self { inner:Vec::new() }
+    }
+}
+impl<K:PartialEq,V> VecMap<K,V> {
+    pub fn get(&self,key:&K) -> Option<&V> {
+        self.inner.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+    }
+    pub fn get_mut(&mut self,key:&K) -> Option<&mut V> {
+        self.inner.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v)
+    }
+    pub fn insert(&mut self,key:K,value:V) {
+        match self.inner.iter_mut().find(|(k, _)| k == &key) {
+            Some((_,v)) => *v = value,
+            None => self.inner.push((key,value))
+        };
+    }
+}
+
+
 pub trait HasChildren<T:TreeLike>:Sized {
     type ChildIter:Iterator<Item=T>;
     fn into_children(self) -> Self::ChildIter;

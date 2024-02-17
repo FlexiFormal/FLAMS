@@ -2,7 +2,8 @@ pub mod building;
 
 use std::fmt::{Display, Debug, Write};
 use std::path::Path;
-use crate::formats::building::BuildTask;
+use async_trait::async_trait;
+use crate::formats::building::{Backend, BuildInfo, BuildTask};
 
 #[derive(Copy,Clone,PartialEq,Eq,Hash)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
@@ -36,17 +37,15 @@ impl Debug for Id {
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result { <Self as Display>::fmt(self,f) }
 }
 
-
-
 pub trait FormatExtension:Send+Sync {
     //fn estimate_dependencies(&self,source:&Path);
-    fn get_task(&self, source:&Path) -> Option<BuildTask>;
+    fn get_task(&self, info:&BuildInfo,backend:&Backend<'_>) -> Option<BuildTask>;
 }
 
 pub struct Format {
     id: Id,
     file_extensions:&'static [&'static str],
-    extension: Box<dyn FormatExtension>
+    pub extension: Box<dyn FormatExtension>
 }
 impl Format {
     #[inline]
@@ -79,5 +78,8 @@ impl FormatStore {
             Some(f) => *f = format,
             _ => self.formats.push(format)
         }
+    }
+    pub fn get(&self,id:Id) -> Option<&Format> {
+        self.formats.iter().find(|f| f.id() == id)
     }
 }

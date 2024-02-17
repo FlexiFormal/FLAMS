@@ -161,7 +161,7 @@ impl Widget for Summary {
 
 pub struct PBWidget<'a>{pub state:&'a ProgressBarState,pub bar_size: u16}
 impl<'a> PBWidget<'a> {
-    fn render(area:Rect,buf:&mut Buffer,percentage:bool,current:usize,length:usize,ms_per_tick:usize,prefix:&str,curr_label:&str,bar_size:u16) {
+    fn render(area:Rect, buf:&mut Buffer, percentage:bool, current:usize, length:usize, ns_per_tick:u128, prefix:&str, curr_label:&str, bar_size:u16) {
         use ratatui::style::Stylize;
         use ratatui::widgets::Widget;
 
@@ -170,10 +170,10 @@ impl<'a> PBWidget<'a> {
         } else {
             format!(" {}/{} ",current,length)
         };
-        let etalabel = if ms_per_tick == 0 {
+        let etalabel = if ns_per_tick == 0 {
             "(ca. ∞)".to_string()
         } else {
-            let eta = ((length - current) as u64 * ms_per_tick as u64) / 1000;
+            let eta = ((length - current) as u64 * ns_per_tick as u64) / 1000000;
             let eta = std::time::Duration::from_secs(eta + 1);
             format!("(ca. {:02}:{:02})", eta.as_secs() / 60, eta.as_secs() % 60)
         };
@@ -199,7 +199,7 @@ impl<'a> PBWidget<'a> {
 }
 impl<'a> Widget for PBWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) where Self: Sized {
-        Self::render(area,buf,self.state.percentage,self.state.current,self.state.length,self.state.ms_per_tick,self.state.prefix,&*self.state.curr_label,self.bar_size);
+        Self::render(area, buf, self.state.percentage, self.state.current, self.state.length, self.state.ns_per_tick, self.state.prefix, &*self.state.curr_label, self.bar_size);
     }
 }
 
@@ -217,10 +217,10 @@ impl<'a,I:Iterator<Item = &'a ProgressBarState>> Widget for Summary<'a,I> {
             count += 1;
             current += pb.current;
             length += pb.length;
-            ms_per_tick += pb.ms_per_tick * (pb.length - pb.current);
+            ms_per_tick += pb.ns_per_tick * (pb.length - pb.current) as u128;
         }
         let rem = length - current;
-        let ms_per_tick = ms_per_tick / rem;
+        let ms_per_tick = ms_per_tick / (rem as u128);
         let prefix = format!("{} running tasks", count);
         PBWidget::render(area,buf,true,current,length,ms_per_tick,prefix.as_str(),"",self.bar_size);
     }

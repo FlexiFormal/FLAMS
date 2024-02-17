@@ -36,6 +36,7 @@ pub mod utils {
     pub mod circular_buffer;
 
     pub type HMap<A,B> = ahash::HashMap<A,B>;
+    pub type HSet<A> = ahash::HashSet<A>;
 
 }
 

@@ -191,7 +191,7 @@ impl ProgressBarManager {
             if pb.current == pb.length {
                 lock.1.remove(&idx);
             } else {
-                pb.ms_per_tick = ((pb.ms_per_tick * (pb.current - 1)) + (pb.last_tick.elapsed().as_millis() as usize)) / pb.current;
+                pb.ns_per_tick = ((pb.ns_per_tick * (pb.current - 1) as u128) + pb.last_tick.elapsed().as_micros()) / (pb.current as u128);
                 pb.last_tick = std::time::Instant::now();
             }
         }
@@ -199,12 +199,12 @@ impl ProgressBarManager {
     fn advance(&self,index:usize,by:usize) {
         let mut lock = self.bars.write();
         if let Some(pb) = lock.1.get_mut(&index){
-            let old = pb.current;
+            let old = pb.current as u128;
             pb.current += by;
             if pb.current >= pb.length {
                 lock.1.remove(&index);
             } else {
-                pb.ms_per_tick = ((pb.ms_per_tick * old) + pb.last_tick.elapsed().as_millis() as usize) / pb.current;
+                pb.ns_per_tick = ((pb.ns_per_tick * old) + pb.last_tick.elapsed().as_micros()) / (pb.current as u128);
                 pb.last_tick = std::time::Instant::now();
             }
         }
@@ -239,7 +239,7 @@ pub struct ProgressBarState {
     pub current:usize,
     pub percentage:bool,
     last_tick:std::time::Instant,
-    pub ms_per_tick:usize,
+    pub ns_per_tick:u128,
     pub parent:Option<usize>,
 }
 
@@ -280,7 +280,7 @@ pub fn in_progress2<S:Into<FinalStr>>(prefix:&'static str,length:usize,percentag
                     current: 0,
                     percentage,
                     last_tick: std::time::Instant::now(),
-                    ms_per_tick: 0,
+                    ns_per_tick: 0,
                     parent:None
                 };
                 if let Some((_,p)) = pbo.parent {

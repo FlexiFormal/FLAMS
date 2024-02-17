@@ -5,10 +5,27 @@ use crate::utils::sourcerefs::SourcePos;
 pub trait StringOrStr<'a>:AsRef<str> + From<&'a str> + Debug + Display + Eq + std::hash::Hash +
     Clone + for<'b> PartialEq<&'b str> {
     fn strip_prefix(self,s:&str) -> Result<Self,Self>;
+    fn split_noparens<const OPEN:char,const CLOSE:char>(&'a self,split_char:char) -> impl Iterator<Item=&'a str>;
 }
 impl<'a> StringOrStr<'a> for &'a str {
     fn strip_prefix(self,s: &str) -> Result<Self, Self> {
         str::strip_prefix(self,s).map(|s| s.trim_start()).ok_or(self)
+    }
+    fn split_noparens<const OPEN:char,const CLOSE:char>(&'a self,split_char:char) -> impl Iterator<Item=&'a str> {
+        let mut depth = 0;
+        self.split(move |c:char| {
+            if c == OPEN {
+                depth += 1;
+                false
+            } else if c == CLOSE && depth > 0 {
+                depth -= 1;
+                false
+            } else if depth > 0 {
+                false
+            } else {
+                c == split_char
+            }
+        })
     }
 }
 impl<'a> StringOrStr<'a> for String {
@@ -17,6 +34,22 @@ impl<'a> StringOrStr<'a> for String {
             Some(s) => Ok(s.trim_start().to_string()),
             None => Err(self)
         }
+    }
+    fn split_noparens<const OPEN:char,const CLOSE:char>(&'a self,split_char:char) -> impl Iterator<Item=&'a str> {
+        let mut depth = 0;
+        self.split(move |c:char| {
+            if c == OPEN {
+                depth += 1;
+                false
+            } else if c == CLOSE && depth > 0 {
+                depth -= 1;
+                false
+            } else if depth > 0 {
+                false
+            } else {
+                c == split_char
+            }
+        })
     }
 }
 
