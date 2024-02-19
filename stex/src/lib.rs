@@ -1,21 +1,24 @@
 pub mod quickparse;
 
 mod dependencies;
+mod tasks;
 #[cfg(test)]
 #[doc(hidden)]
 mod test;
 
 use crate::dependencies::STeXDependency;
+use crate::tasks::{PdfLaTeX, RusTeX};
 use async_trait::async_trait;
 use immt_api::archives::ArchiveId;
-use immt_api::formats::building::Backend;
+use immt_api::formats::building::{Backend, BuildData};
 use immt_api::formats::building::{
-    BuildInfo, BuildResult, BuildStep, BuildStepKind, BuildTask, Dependency, SourceTaskStep,
+    BuildInfo, BuildResult, BuildStep, BuildStepKind, Dependency, TaskStep,
 };
 use immt_api::formats::{Format, FormatExtension, Id};
 use immt_api::CloneStr;
 use immt_system::controller::ControllerBuilder;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub const ID: Id = Id::new_unchecked(*b"sTeX");
 pub const EXTENSIONS: &[&str] = &["tex", "ltx"];
@@ -26,39 +29,11 @@ pub fn register(controller: &mut ControllerBuilder) {
     controller.register_format(format);
 }
 
-pub struct PdfLaTeX;
-#[async_trait]
-impl SourceTaskStep for PdfLaTeX {
-    async fn run(&self, file: &Path) -> BuildResult {
-        // Do Something
-        BuildResult::None
-    }
-}
-
-pub struct BibTeX;
-#[async_trait]
-impl SourceTaskStep for BibTeX {
-    async fn run(&self, file: &Path) -> BuildResult {
-        // Do Something
-        BuildResult::None
-    }
-}
-
-pub struct RusTeX;
-#[async_trait]
-impl SourceTaskStep for RusTeX {
-    async fn run(&self, file: &Path) -> BuildResult {
-        // Do Something
-        BuildResult::None
-    }
-}
-
 pub struct STeXExtension;
 
 impl FormatExtension for STeXExtension {
-    fn get_task(&self, info: &BuildInfo, backend: &Backend<'_>) -> Option<BuildTask> {
-        let deps =
-            dependencies::get_deps(info.source().unwrap(), info.build_path.as_ref().unwrap());
+    fn get_task(&self, info: &mut BuildInfo, backend: &Backend<'_>) -> Vec<BuildStep> {
+        let deps = dependencies::get_deps(info.source().unwrap(), info.path().unwrap());
         let mut pdfdeps = Vec::new();
         let mut contentdeps = vec![Dependency::Physical {
             id: "sHTML",
@@ -79,8 +54,7 @@ impl FormatExtension for STeXExtension {
                         .map(ArchiveId::new)
                         .unwrap_or_else(|| info.archive_id.clone());
                     if let Some((a, p)) = info
-                        .build_path
-                        .as_ref()
+                        .path()
                         .and_then(|p| to_file_path(p, archive, module, backend))
                     {
                         pdfdeps.push(Dependency::Physical {
@@ -102,8 +76,7 @@ impl FormatExtension for STeXExtension {
                         .map(ArchiveId::new)
                         .unwrap_or_else(|| info.archive_id.clone());
                     if let Some((a, p)) = info
-                        .build_path
-                        .as_ref()
+                        .path()
                         .and_then(|p| to_file_path(p, archive, module, backend))
                     {
                         pdfdeps.push(Dependency::Physical {
@@ -125,8 +98,7 @@ impl FormatExtension for STeXExtension {
                         .map(ArchiveId::new)
                         .unwrap_or_else(|| info.archive_id.clone());
                     if let Some((a, p)) = info
-                        .build_path
-                        .as_ref()
+                        .path()
                         .and_then(|p| to_file_path_ref(archive, filepath, backend))
                     {
                         pdfdeps.push(Dependency::Physical {
@@ -139,56 +111,43 @@ impl FormatExtension for STeXExtension {
                 }
             }
         }
-        Some(BuildTask {
-            steps: vec![
-                BuildStep {
-                    kind: BuildStepKind::Source(Box::new(PdfLaTeX)),
+        vec![
+            BuildStep {
+                kind: BuildStepKind::Source(Arc::new(PdfLaTeX)),
+                id: "pdfLaTeX",
+                dependencies: pdfdeps,
+            },
+            BuildStep {
+                kind: BuildStepKind::Source(Arc::new(RusTeX)),
+                id: "RusTeX",
+                dependencies: vec![Dependency::Physical {
                     id: "pdfLaTeX",
-                    dependencies: pdfdeps,
-                },
-                BuildStep {
-                    kind: BuildStepKind::Source(Box::new(BibTeX)),
-                    id: "BibTeX/Biber",
-                    dependencies: vec![Dependency::Physical {
-                        id: "pdfLaTeX",
-                        archive: info.archive_id.clone(),
-                        filepath: info.rel_path.clone(),
-                        strong: true,
-                    }],
-                },
-                BuildStep {
-                    kind: BuildStepKind::Source(Box::new(RusTeX)),
+                    archive: info.archive_id.clone(),
+                    filepath: info.rel_path.clone(),
+                    strong: true,
+                }],
+            },
+            BuildStep {
+                kind: BuildStepKind::Source(Arc::new(immt_shtml::SHMLTaskStep)),
+                id: "sHTML",
+                dependencies: vec![Dependency::Physical {
                     id: "RusTeX",
-                    dependencies: vec![Dependency::Physical {
-                        id: "BibTeX/Biber",
-                        archive: info.archive_id.clone(),
-                        filepath: info.rel_path.clone(),
-                        strong: true,
-                    }],
-                },
-                BuildStep {
-                    kind: BuildStepKind::Complex(Box::new(immt_shtml::SHMLTaskStep)),
-                    id: "sHTML",
-                    dependencies: vec![Dependency::Physical {
-                        id: "RusTeX",
-                        archive: info.archive_id.clone(),
-                        filepath: info.rel_path.clone(),
-                        strong: true,
-                    }],
-                },
-                BuildStep {
-                    kind: BuildStepKind::Check,
-                    id: "content",
-                    dependencies: contentdeps,
-                },
-                BuildStep {
-                    kind: BuildStepKind::Check,
-                    id: "narration",
-                    dependencies: narrationdeps,
-                },
-            ],
-            state: None,
-        })
+                    archive: info.archive_id.clone(),
+                    filepath: info.rel_path.clone(),
+                    strong: true,
+                }],
+            },
+            BuildStep {
+                kind: BuildStepKind::Check,
+                id: "content",
+                dependencies: contentdeps,
+            },
+            BuildStep {
+                kind: BuildStepKind::Check,
+                id: "narration",
+                dependencies: narrationdeps,
+            },
+        ]
     }
 }
 

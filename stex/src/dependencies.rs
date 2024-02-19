@@ -193,6 +193,6 @@ pub fn inputref<'a>(
             p.tokenizer.problem("Expected { after \\inputref");
             MacroResult::Simple(m)
         }
-        Some(module) => MacroResult::Success(DepToken::UseModule { archive, module }),
+        Some(filepath) => MacroResult::Success(DepToken::Inputref { archive, filepath }),
     }
 }
