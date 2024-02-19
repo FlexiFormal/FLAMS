@@ -28,18 +28,53 @@ pub struct BuildQueue {
 
 #[derive(Default)]
 struct BuildQueueI {
-    pub stale: Vec<(ArchiveId, Id, CloneStr, u64)>,
-    pub new: Vec<(ArchiveId, Id, CloneStr)>,
-    pub deleted: Vec<(ArchiveId, CloneStr)>,
+    stale: Vec<(ArchiveId, Id, CloneStr, u64)>,
+    new: Vec<(ArchiveId, Id, CloneStr)>,
+    deleted: Vec<(ArchiveId, CloneStr)>,
     todo: Vec<(ArchiveId, Id, CloneStr)>,
     queue: VecDeque<QueuedTask>,
     processes: Vec<BuildProcess>,
 }
 
+#[derive(Default)]
+pub struct BuildQueueState {
+    pub stale: usize,
+    pub new: usize,
+    pub deleted: usize,
+    pub queued: usize,
+    pub running: Vec<String>,
+}
+
 impl BuildQueue {
-    pub fn unqueued(&self) -> (usize, usize, usize) {
+    pub fn state(&self) -> BuildQueueState {
         let lock = self.inner.read();
-        (lock.stale.len(), lock.new.len(), lock.deleted.len())
+        BuildQueueState {
+            stale: lock.stale.len(),
+            new: lock.new.len(),
+            deleted: lock.deleted.len(),
+            queued: lock.queue.len(),
+            running: lock
+                .processes
+                .iter()
+                .map(|p| {
+                    let inner = p.inner.read();
+                    match &inner.current {
+                        None => format!("Thread {}: idle", p.index),
+                        Some(c) => {
+                            format!(
+                                "Thread {}: {} [{}]{} ({} of {})",
+                                p.index,
+                                c.as_dep.id,
+                                c.as_dep.archive,
+                                c.as_dep.filepath,
+                                c.index,
+                                c.of
+                            )
+                        }
+                    }
+                })
+                .collect(),
+        }
     }
     pub(crate) fn init(controller: Controller) {
         controller.settings().set_default([(
