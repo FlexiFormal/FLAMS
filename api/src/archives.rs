@@ -1,34 +1,40 @@
-use std::fmt::Display;
-use std::path::Path;
-use either::Either;
-use oxrdf::{Subject, Triple};
-use crate::{CloneStr, FinalSeq};
-use crate::formats::Id;
-#[cfg(feature="fs")]
+#[cfg(feature = "fs")]
 use crate::formats::FormatStore;
+use crate::formats::Id;
 use crate::uris::{ArchiveURIRef, DomURI, DomURIRef};
 use crate::utils::HMap;
+use crate::{CloneStr, FinalSeq};
+use either::Either;
+use oxrdf::{Subject, Triple};
+use std::fmt::Display;
+use std::path::Path;
 
-#[derive(Clone,Debug,PartialEq,Eq,Hash,PartialOrd,Ord)]
-#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
-#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct ArchiveId(CloneStr);
 impl ArchiveId {
     #[inline]
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
     #[inline]
-    pub fn as_ref(&self) -> ArchiveIdRef<'_> { ArchiveIdRef(&self.0) }
+    pub fn as_ref(&self) -> ArchiveIdRef<'_> {
+        ArchiveIdRef(&self.0)
+    }
     #[inline]
-    pub fn is_empty(&self) -> bool { self.0.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
     #[inline]
-    pub fn steps(&self) -> impl DoubleEndedIterator<Item=&str> {
+    pub fn steps(&self) -> impl DoubleEndedIterator<Item = &str> {
         self.0.split('/')
     }
-    pub fn new<S:Into<CloneStr>>(s:S) -> Self {
+    pub fn new<S: Into<CloneStr>>(s: S) -> Self {
         Self(s.into())
     }
 }
-impl<S:AsRef<str>> From<Vec<S>> for ArchiveId {
+impl<S: AsRef<str>> From<Vec<S>> for ArchiveId {
     fn from(v: Vec<S>) -> Self {
         let mut inner = String::new();
         for s in v {
@@ -46,19 +52,23 @@ impl Display for ArchiveId {
     }
 }
 
-#[derive(Clone,Copy,Hash,Debug,PartialEq,Eq,PartialOrd,Ord)]
-#[cfg_attr(feature="serde",derive(serde::Serialize))]
-#[cfg_attr(feature="bincode",derive(bincode::Encode))]
+#[derive(Clone, Copy, Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode))]
 pub struct ArchiveIdRef<'a>(pub(crate) &'a str);
 impl<'a> ArchiveIdRef<'a> {
     #[inline]
-    pub fn as_str(&self) -> &str { self.0 }
-    pub fn to_owned(&self) -> ArchiveId { ArchiveId(self.0.into()) }
+    pub fn as_str(&self) -> &str {
+        self.0
+    }
+    pub fn to_owned(&self) -> ArchiveId {
+        ArchiveId(self.0.into())
+    }
     pub fn last_name(&self) -> &'a str {
-        self.0.rsplit_once('/').map(|(_,s)| s).unwrap_or(self.0)
+        self.0.rsplit_once('/').map(|(_, s)| s).unwrap_or(self.0)
     }
     #[inline]
-    pub fn steps(&self) -> impl DoubleEndedIterator<Item=&str> {
+    pub fn steps(&self) -> impl DoubleEndedIterator<Item = &str> {
         self.0.split('/')
     }
 }
@@ -68,24 +78,29 @@ impl<'a> Display for ArchiveIdRef<'a> {
         f.write_str(self.0)
     }
 }
+impl<'a> From<ArchiveIdRef<'a>> for ArchiveId {
+    fn from(a: ArchiveIdRef<'a>) -> Self {
+        Self(a.0.into())
+    }
+}
 
-#[derive(Debug,Clone)]
-#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
-#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct ArchiveData {
-    pub id:ArchiveId,
-    pub formats:FinalSeq<Id>,
-    pub is_meta:bool,
-    pub dom_uri:DomURI,
-    pub dependencies:FinalSeq<ArchiveId>,
-    pub ignores:IgnoreSource,
-    pub attrs:HMap<String,String>
+    pub id: ArchiveId,
+    pub formats: FinalSeq<Id>,
+    pub is_meta: bool,
+    pub dom_uri: DomURI,
+    pub dependencies: FinalSeq<ArchiveId>,
+    pub ignores: IgnoreSource,
+    pub attrs: HMap<String, String>,
 }
 pub trait ArchiveT {
-    fn new_from(data:ArchiveData,path:&Path,formats: &FormatStore) -> Self;
+    fn new_from(data: ArchiveData, path: &Path, formats: &FormatStore) -> Self;
     fn data(&self) -> &ArchiveData;
     #[inline]
-    fn attr(&self,key:&str) -> Option<&str> {
+    fn attr(&self, key: &str) -> Option<&str> {
         self.data().attrs.get(key).map(|s| s.as_str())
     }
     #[inline]
@@ -106,187 +121,230 @@ pub trait ArchiveT {
     }
     #[inline]
     fn uri(&self) -> ArchiveURIRef<'_> {
-        ArchiveURIRef{
-            base:self.data().dom_uri.as_ref(),
-            archive:self.id()
+        ArchiveURIRef {
+            base: self.data().dom_uri.as_ref(),
+            archive: self.id(),
         }
     }
 }
 impl ArchiveT for ArchiveData {
     #[inline(always)]
-    fn new_from(data:ArchiveData,path:&Path,formats: &FormatStore) -> Self { data }
+    fn new_from(data: ArchiveData, path: &Path, formats: &FormatStore) -> Self {
+        data
+    }
     #[inline(always)]
-    fn data(&self) -> &ArchiveData { self }
+    fn data(&self) -> &ArchiveData {
+        self
+    }
 }
 
-#[derive(Debug,Clone)]
-#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 //#[cfg_attr(feature="bincode",derive(bincode::Encode,bincode::Decode))]
-pub struct ArchiveGroupBase<A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
-    pub id:ArchiveId,
-    pub meta:Option<A>,
-    pub archives:Vec<Either<G,A>>,
+pub struct ArchiveGroupBase<A: ArchiveT, G: ArchiveGroupT<Archive = A>> {
+    pub id: ArchiveId,
+    pub meta: Option<A>,
+    pub archives: Vec<Either<G, A>>,
 }
 
-pub trait ArchiveGroupT:Sized {
-    type Archive:ArchiveT;
-    fn new(id:ArchiveId) -> Self;
-    fn base(&self) -> &ArchiveGroupBase<Self::Archive,Self>;
-    fn base_mut(&mut self) -> &mut ArchiveGroupBase<Self::Archive,Self>;
+pub trait ArchiveGroupT: Sized {
+    type Archive: ArchiveT;
+    fn new(id: ArchiveId) -> Self;
+    fn base(&self) -> &ArchiveGroupBase<Self::Archive, Self>;
+    fn base_mut(&mut self) -> &mut ArchiveGroupBase<Self::Archive, Self>;
     #[inline]
-    fn id<'a>(&'a self) -> ArchiveIdRef where Self::Archive:'a {
+    fn id<'a>(&'a self) -> ArchiveIdRef
+    where
+        Self::Archive: 'a,
+    {
         self.base().id.as_ref()
     }
     #[inline]
     fn meta(&self) -> Option<&Self::Archive> {
         self.base().meta.as_ref()
     }
-    fn archives<'a>(&'a self) -> impl Iterator<Item=&'a Self::Archive> where Self::Archive:'a {
-        ArchiveIter::new(self.meta(),&self.base().archives)
+    fn archives<'a>(&'a self) -> impl Iterator<Item = &'a Self::Archive>
+    where
+        Self::Archive: 'a,
+    {
+        ArchiveIter::new(self.meta(), &self.base().archives)
     }
-    fn iter_all<'a>(&'a self) -> impl Iterator<Item=Either<&'a Self,&'a Self::Archive>> where Self::Archive:'a {
+    fn iter_all<'a>(&'a self) -> impl Iterator<Item = Either<&'a Self, &'a Self::Archive>>
+    where
+        Self::Archive: 'a,
+    {
         FullIter {
-            stack:Vec::new(),
-            curr:self.base().archives.iter()
+            stack: Vec::new(),
+            curr: self.base().archives.iter(),
         }
     }
     #[cfg(feature = "pariter")]
-    fn archives_par<'a>(&'a self) -> impl rayon::iter::ParallelIterator<Item=&'a Self::Archive> where Self::Archive:'a+Sync,Self:Sync {
-        pariter::ParArchiveIter::new(self.meta(),&self.base().archives)
+    fn archives_par<'a>(&'a self) -> impl rayon::iter::ParallelIterator<Item = &'a Self::Archive>
+    where
+        Self::Archive: 'a + Sync,
+        Self: Sync,
+    {
+        pariter::ParArchiveIter::new(self.meta(), &self.base().archives)
     }
-    #[cfg(feature="fs")]
+    #[cfg(feature = "fs")]
     #[inline]
-    fn load_dir(path:&Path,formats:&FormatStore) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
+    fn load_dir(path: &Path, formats: &FormatStore) -> Vec<Either<Self, Self::Archive>>
+    where
+        Self::Archive: std::fmt::Debug,
+    {
         load_dir::ArchiveLoader {
-            archives:Vec::new(),
+            archives: Vec::new(),
             formats,
-            mh:path
-        }.run()
+            mh: path,
+        }
+        .run()
     }
-    #[cfg(feature="tokio")]
+    #[cfg(feature = "tokio")]
     #[inline]
-    async fn load_dir_async(path:&Path,formats:&FormatStore) -> Vec<Either<Self,Self::Archive>> where Self::Archive:std::fmt::Debug {
+    async fn load_dir_async(path: &Path, formats: &FormatStore) -> Vec<Either<Self, Self::Archive>>
+    where
+        Self::Archive: std::fmt::Debug,
+    {
         load_dir::ArchiveLoader {
-            archives:Vec::new(),
+            archives: Vec::new(),
             formats,
-            mh:path
-        }.run_async().await
+            mh: path,
+        }
+        .run_async()
+        .await
     }
     #[inline]
-    fn uri<'a>(&'a self) -> Option<ArchiveURIRef<'a>> where Self::Archive:'a {
-        self.meta().map(|m| ArchiveURIRef{
-            base:m.dom_uri(),
-            archive:self.id()
+    fn uri<'a>(&'a self) -> Option<ArchiveURIRef<'a>>
+    where
+        Self::Archive: 'a,
+    {
+        self.meta().map(|m| ArchiveURIRef {
+            base: m.dom_uri(),
+            archive: self.id(),
         })
     }
 
-    fn all_archive_triples<'a>(&'a self) -> impl Iterator<Item=Triple> where Self::Archive:'a {
+    fn all_archive_triples<'a>(&'a self) -> impl Iterator<Item = Triple>
+    where
+        Self::Archive: 'a,
+    {
         TripleIter {
-            curr:self.base().archives.iter(),
-            buf1:None,
-            buf2:None,
-            buf3:None,
-            currtop:None,
-            stack:Vec::new()
+            curr: self.base().archives.iter(),
+            buf1: None,
+            buf2: None,
+            buf3: None,
+            currtop: None,
+            stack: Vec::new(),
         }
     }
     //fn iter(&self) -> LeafIterator<&Either<Self,A>> { self.iter_leafs() }
 }
 
-struct TripleIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
-    curr:std::slice::Iter<'a,Either<G,A>>,
-    buf1:Option<Triple>,
-    buf2:Option<Triple>,
-    buf3:Option<Triple>,
-    currtop:Option<ArchiveURIRef<'a>>,
-    stack:Vec<(&'a G,Option<ArchiveURIRef<'a>>)>,
+struct TripleIter<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> {
+    curr: std::slice::Iter<'a, Either<G, A>>,
+    buf1: Option<Triple>,
+    buf2: Option<Triple>,
+    buf3: Option<Triple>,
+    currtop: Option<ArchiveURIRef<'a>>,
+    stack: Vec<(&'a G, Option<ArchiveURIRef<'a>>)>,
 }
-impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for TripleIter<'a,A,G> {
+impl<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> Iterator for TripleIter<'a, A, G> {
     type Item = Triple;
     fn next(&mut self) -> Option<Self::Item> {
-        use crate::ontology::rdf::ulo2::{LIBRARY,LIBRARY_GROUP,CONTAINS};
-        if let Some(t) = std::mem::replace(&mut self.buf1,std::mem::replace(&mut self.buf2,self.buf3.take())) { return Some(t) }
+        use crate::ontology::rdf::ulo2::{CONTAINS, LIBRARY, LIBRARY_GROUP};
+        if let Some(t) = std::mem::replace(
+            &mut self.buf1,
+            std::mem::replace(&mut self.buf2, self.buf3.take()),
+        ) {
+            return Some(t);
+        }
         loop {
             match self.curr.next() {
                 Some(Either::Right(a)) => {
                     let next = Triple {
                         subject: Subject::NamedNode(a.uri().to_iri()),
                         predicate: oxrdf::vocab::rdf::TYPE.into_owned(),
-                        object: oxrdf::Term::NamedNode(LIBRARY.into_owned())
+                        object: oxrdf::Term::NamedNode(LIBRARY.into_owned()),
                     };
                     if let Some(currtop) = self.currtop {
                         self.buf1 = Some(Triple {
                             subject: Subject::NamedNode(currtop.to_iri()),
                             predicate: CONTAINS.into_owned(),
-                            object: oxrdf::Term::NamedNode(a.uri().to_iri())
+                            object: oxrdf::Term::NamedNode(a.uri().to_iri()),
                         });
                     }
-                    return Some(next)
+                    return Some(next);
                 }
                 Some(Either::Left(g)) => {
                     if let Some(uri) = g.uri() {
-                        self.stack.push((g,Some(uri)));
+                        self.stack.push((g, Some(uri)));
                         let next = Triple {
                             subject: Subject::NamedNode(uri.to_iri()),
                             predicate: oxrdf::vocab::rdf::TYPE.into_owned(),
-                            object: oxrdf::Term::NamedNode(LIBRARY_GROUP.into_owned())
+                            object: oxrdf::Term::NamedNode(LIBRARY_GROUP.into_owned()),
                         };
                         let meta = g.meta().unwrap();
                         self.buf1 = Some(Triple {
                             subject: Subject::NamedNode(meta.uri().to_iri()),
                             predicate: oxrdf::vocab::rdf::TYPE.into_owned(),
-                            object: oxrdf::Term::NamedNode(LIBRARY.into_owned())
+                            object: oxrdf::Term::NamedNode(LIBRARY.into_owned()),
                         });
                         self.buf2 = Some(Triple {
                             subject: Subject::NamedNode(uri.to_iri()),
                             predicate: CONTAINS.into_owned(),
-                            object: oxrdf::Term::NamedNode(meta.uri().to_iri())
+                            object: oxrdf::Term::NamedNode(meta.uri().to_iri()),
                         });
                         if let Some(currtop) = self.currtop {
                             self.buf3 = Some(Triple {
                                 subject: Subject::NamedNode(currtop.to_iri()),
                                 predicate: CONTAINS.into_owned(),
-                                object: oxrdf::Term::NamedNode(uri.to_iri())
+                                object: oxrdf::Term::NamedNode(uri.to_iri()),
                             });
                         }
-                        return Some(next)
+                        return Some(next);
                     } else {
-                        self.stack.push((g,self.currtop));
+                        self.stack.push((g, self.currtop));
                     };
                 }
                 None => match self.stack.pop() {
-                    Some((g,currtop)) => {
+                    Some((g, currtop)) => {
                         self.currtop = currtop;
                         self.curr = g.base().archives.iter();
                     }
-                    None => return None
-                }
+                    None => return None,
+                },
             }
         }
     }
 }
 
-#[cfg(feature="fs")]
+#[cfg(feature = "fs")]
 mod load_dir {
-    use std::path::Path;
-    use either::Either;
-    use tracing::{debug, trace, trace_span, warn};
-    use crate::archives::{ArchiveData, ArchiveGroupT, ArchiveId, ArchiveIdRef, ArchiveT, IgnoreSource};
-    use crate::formats::{Id, FormatStore};
-    use std::fmt::Debug;
-    use std::io::BufRead;
+    use crate::archives::{
+        ArchiveData, ArchiveGroupT, ArchiveId, ArchiveIdRef, ArchiveT, IgnoreSource,
+    };
+    use crate::formats::{FormatStore, Id};
     use crate::uris::DomURI;
     use crate::utils::HMap;
+    use either::Either;
+    use std::fmt::Debug;
+    use std::io::BufRead;
+    use std::path::Path;
+    use tracing::{debug, trace, trace_span, warn};
 
-    macro_rules! id { ($e:expr) => { match $e.as_ref() {
-        Either::Left(g) => g.id(),
-        Either::Right(a) => a.id()
-    }};}
+    macro_rules! id {
+        ($e:expr) => {
+            match $e.as_ref() {
+                Either::Left(g) => g.id(),
+                Either::Right(a) => a.id(),
+            }
+        };
+    }
 
-    pub struct ArchiveLoader<'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> {
+    pub struct ArchiveLoader<'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive = A>> {
         pub archives: Vec<Either<G, A>>,
         pub formats: &'a FormatStore,
-        pub mh: &'a Path
+        pub mh: &'a Path,
     }
 
     macro_rules! do_manifest {
@@ -432,10 +490,10 @@ mod load_dir {
         }
     }
 
-    impl<'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive=A>> ArchiveLoader<'a, A, G> {
+    impl<'a, A: ArchiveT + Debug, G: ArchiveGroupT<Archive = A>> ArchiveLoader<'a, A, G> {
         #[cfg(feature = "tokio")]
         pub async fn run_async(mut self) -> Vec<Either<G, A>> {
-            run!{self,
+            run! {self,
                 f=>tokio::fs::read_dir(f).await;
                 curr => match curr.next_entry().await {
                     Ok(None) => next!(),
@@ -448,7 +506,7 @@ mod load_dir {
         }
 
         pub fn run(mut self) -> Vec<Either<G, A>> {
-            run!{self,
+            run! {self,
                 f => std::fs::read_dir(f);
                 curr => match curr.next() {
                     None => next!(),
@@ -466,19 +524,22 @@ mod load_dir {
             if id.len() == 1 {
                 match self.archives.binary_search_by_key(&a.id(), |e| id!(e)) {
                     Ok(i) => self.archives[i] = Either::Right(a),
-                    Err(i) => self.archives.insert(i, Either::Right(a))
+                    Err(i) => self.archives.insert(i, Either::Right(a)),
                 }
-                return
+                return;
             }
-            let i = match self.archives.binary_search_by_key(&id.first().unwrap().as_str(), |e| id!(e).last_name()) {
+            let i = match self
+                .archives
+                .binary_search_by_key(&id.first().unwrap().as_str(), |e| id!(e).last_name())
+            {
                 Ok(i) => match &mut self.archives[i] {
                     Either::Left(g) => {
                         id.remove(0);
                         return Self::add_i(a, g, id, 1);
                     }
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 },
-                Err(i) => i
+                Err(i) => i,
             };
             let g = G::new(ArchiveId::new(id.first().unwrap().to_string()));
             self.archives.insert(i, Either::Left(g));
@@ -491,27 +552,40 @@ mod load_dir {
                 if a.data().is_meta {
                     curr.base_mut().meta = Some(a);
                 } else {
-                    match curr.base_mut().archives.binary_search_by_key(&a.id().last_name(), |e| id!(e).last_name()) {
+                    match curr
+                        .base_mut()
+                        .archives
+                        .binary_search_by_key(&a.id().last_name(), |e| id!(e).last_name())
+                    {
                         Ok(i) => curr.base_mut().archives[i] = Either::Right(a),
-                        Err(i) => curr.base_mut().archives.insert(i, Either::Right(a))
+                        Err(i) => curr.base_mut().archives.insert(i, Either::Right(a)),
                     }
                 }
-                return
+                return;
             }
             depth += 1;
             let head = id.remove(0);
-            let i = match curr.base_mut().archives.binary_search_by_key(&head.as_str(), |e| id!(e).last_name()) {
+            let i = match curr
+                .base_mut()
+                .archives
+                .binary_search_by_key(&head.as_str(), |e| id!(e).last_name())
+            {
                 Ok(i) => match &mut curr.base_mut().archives[i] {
-                    Either::Left(g) => {
-                        return Self::add_i(a, g, id, depth)
-                    }
-                    _ => unreachable!()
+                    Either::Left(g) => return Self::add_i(a, g, id, depth),
+                    _ => unreachable!(),
                 },
-                Err(i) => i
+                Err(i) => i,
             };
-            let g = G::new(ArchiveId::new(a.id().steps().take(depth).collect::<Vec<_>>().join("/")));
+            let g = G::new(ArchiveId::new(
+                a.id().steps().take(depth).collect::<Vec<_>>().join("/"),
+            ));
             curr.base_mut().archives.insert(i, Either::Left(g));
-            Self::add_i(a, curr.base_mut().archives[i].as_mut().unwrap_left(), id, depth)
+            Self::add_i(
+                a,
+                curr.base_mut().archives[i].as_mut().unwrap_left(),
+                id,
+                depth,
+            )
         }
 
         #[cfg(feature = "tokio")]
@@ -523,15 +597,19 @@ mod load_dir {
                         let d = match rd.next_entry().await {
                             Err(_) => {
                                 warn!(target:"archives","Could not read directory {}", metainf.display());
-                                continue
-                            },
+                                continue;
+                            }
                             Ok(Some(d)) => d,
-                            Ok(None) => break
+                            Ok(None) => break,
                         };
-                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") { continue }
+                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") {
+                            continue;
+                        }
                         let path = d.path();
-                        if !path.is_file() { continue }
-                        return Some(self.do_manifest_async(&path).await)
+                        if !path.is_file() {
+                            continue;
+                        }
+                        return Some(self.do_manifest_async(&path).await);
                     }
                     trace!("not found");
                     None
@@ -551,14 +629,18 @@ mod load_dir {
                         let d = match d {
                             Err(_) => {
                                 warn!(target:"archives","Could not read directory {}", metainf.display());
-                                continue
-                            },
-                            Ok(d) => d
+                                continue;
+                            }
+                            Ok(d) => d,
                         };
-                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") { continue }
+                        if !d.file_name().eq_ignore_ascii_case("manifest.mf") {
+                            continue;
+                        }
                         let path = d.path();
-                        if !path.is_file() { continue }
-                        return Some(self.do_manifest(&path))
+                        if !path.is_file() {
+                            continue;
+                        }
+                        return Some(self.do_manifest(&path));
                     }
                     trace!("not found");
                     None
@@ -575,7 +657,7 @@ mod load_dir {
             use tokio::io::AsyncBufReadExt;
             let reader = tokio::io::BufReader::new(tokio::fs::File::open(path).await.unwrap());
             let mut lines = reader.lines();
-            do_manifest!{self,path,match lines.next_line().await {
+            do_manifest! {self,path,match lines.next_line().await {
                 Err(_) => continue,
                 Ok(Some(l)) => l,
                 _ => break
@@ -585,7 +667,7 @@ mod load_dir {
         fn do_manifest(&self, path: &Path) -> Result<ArchiveData, ()> {
             let reader = std::io::BufReader::new(std::fs::File::open(path).unwrap());
             let mut lines = reader.lines();
-            do_manifest!{self,path,match lines.next() {
+            do_manifest! {self,path,match lines.next() {
                 Some(Err(_)) => continue,
                 Some(Ok(l)) => l,
                 _ => break
@@ -594,55 +676,60 @@ mod load_dir {
     }
 }
 
-struct FullIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
-    stack:Vec<std::slice::Iter<'a,Either<G,A>>>,
-    curr:std::slice::Iter<'a,Either<G,A>>,
+struct FullIter<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> {
+    stack: Vec<std::slice::Iter<'a, Either<G, A>>>,
+    curr: std::slice::Iter<'a, Either<G, A>>,
 }
-impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for FullIter<'a, A, G> {
-    type Item = Either<&'a G,&'a A>;
+impl<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> Iterator for FullIter<'a, A, G> {
+    type Item = Either<&'a G, &'a A>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.curr.next() {
                 Some(Either::Left(g)) => {
                     let old = std::mem::replace(&mut self.curr, g.base().archives.iter());
                     self.stack.push(old);
-                    return Some(Either::Left(g))
+                    return Some(Either::Left(g));
                 }
                 Some(Either::Right(a)) => return Some(Either::Right(a)),
                 None => match self.stack.pop() {
-                    Some(s) => { self.curr = s; }
-                    None => return None
-                }
+                    Some(s) => {
+                        self.curr = s;
+                    }
+                    None => return None,
+                },
             }
         }
     }
 }
 
-struct ArchiveIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
-    stack:Vec<&'a [Either<G,A>]>,
-    curr:&'a[Either<G,A>],
-    meta:Option<&'a A>,
+struct ArchiveIter<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> {
+    stack: Vec<&'a [Either<G, A>]>,
+    curr: &'a [Either<G, A>],
+    meta: Option<&'a A>,
 }
-impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> ArchiveIter<'a,A,G> {
-    fn new(meta:Option<&'a A>,group:&'a [Either<G,A>]) -> Self {
+impl<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> ArchiveIter<'a, A, G> {
+    fn new(meta: Option<&'a A>, group: &'a [Either<G, A>]) -> Self {
         Self {
-            stack:Vec::new(),
-            curr:group,meta
+            stack: Vec::new(),
+            curr: group,
+            meta,
         }
     }
 }
 
-impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for ArchiveIter<'a,A,G> {
+impl<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> Iterator for ArchiveIter<'a, A, G> {
     type Item = &'a A;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(m) = std::mem::take(&mut self.meta) {
-            return Some(m)
+            return Some(m);
         }
         loop {
             if self.curr.is_empty() {
                 match self.stack.pop() {
-                    Some(s) => { self.curr = s; }
-                    None => return None
+                    Some(s) => {
+                        self.curr = s;
+                    }
+                    None => return None,
                 }
             } else {
                 let next = &self.curr[0];
@@ -650,15 +737,13 @@ impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for ArchiveIter<'a,A,G> 
                 match next {
                     Either::Left(g) => {
                         let meta = g.meta();
-                        let old = std::mem::replace(&mut self.curr,g.base().archives.as_slice());
+                        let old = std::mem::replace(&mut self.curr, g.base().archives.as_slice());
                         self.stack.push(old);
                         if let Some(a) = meta {
-                            return Some(a)
+                            return Some(a);
                         }
                     }
-                    Either::Right(a) => {
-                        return Some(a)
-                    }
+                    Either::Right(a) => return Some(a),
                 }
             }
         }
@@ -667,35 +752,42 @@ impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for ArchiveIter<'a,A,G> 
 
 #[cfg(feature = "pariter")]
 mod pariter {
-    use either::Either;
-    use spliter::{ParSpliter, Spliterator,ParallelSpliterator};
     use crate::archives::{ArchiveGroupT, ArchiveT};
+    use either::Either;
+    use spliter::{ParSpliter, ParallelSpliterator, Spliterator};
 
-    pub(in crate::archives) struct ParArchiveIter<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> {
-        stack:Vec<&'a [Either<G,A>]>,
-        curr:&'a[Either<G,A>],
-        meta:Option<&'a A>,
+    pub(in crate::archives) struct ParArchiveIter<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> {
+        stack: Vec<&'a [Either<G, A>]>,
+        curr: &'a [Either<G, A>],
+        meta: Option<&'a A>,
     }
-    impl<'a,A:ArchiveT+Sync,G:ArchiveGroupT<Archive=A>+Sync> ParArchiveIter<'a,A,G> {
-        pub(in crate::archives) fn new(meta:Option<&'a A>,group:&'a [Either<G,A>]) -> ParSpliter<Self> {
+    impl<'a, A: ArchiveT + Sync, G: ArchiveGroupT<Archive = A> + Sync> ParArchiveIter<'a, A, G> {
+        pub(in crate::archives) fn new(
+            meta: Option<&'a A>,
+            group: &'a [Either<G, A>],
+        ) -> ParSpliter<Self> {
             Self {
-                stack:Vec::new(),
-                curr:group, meta
-            }.par_split()
+                stack: Vec::new(),
+                curr: group,
+                meta,
+            }
+            .par_split()
         }
     }
 
-    impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Iterator for ParArchiveIter<'a,A,G> {
+    impl<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> Iterator for ParArchiveIter<'a, A, G> {
         type Item = &'a A;
         fn next(&mut self) -> Option<Self::Item> {
             if let Some(m) = std::mem::take(&mut self.meta) {
-                return Some(m)
+                return Some(m);
             }
             loop {
                 if self.curr.is_empty() {
                     match self.stack.pop() {
-                        Some(s) => { self.curr = s; }
-                        None => return None
+                        Some(s) => {
+                            self.curr = s;
+                        }
+                        None => return None,
                     }
                 } else {
                     let next = &self.curr[0];
@@ -703,75 +795,79 @@ mod pariter {
                     match next {
                         Either::Left(g) => {
                             let meta = g.meta();
-                            let old = std::mem::replace(&mut self.curr,g.base().archives.as_slice());
+                            let old =
+                                std::mem::replace(&mut self.curr, g.base().archives.as_slice());
                             self.stack.push(old);
                             if let Some(a) = meta {
-                                return Some(a)
+                                return Some(a);
                             }
                         }
-                        Either::Right(a) => {
-                            return Some(a)
-                        }
+                        Either::Right(a) => return Some(a),
                     }
                 }
             }
         }
     }
 
-    impl<'a,A:ArchiveT,G:ArchiveGroupT<Archive=A>> Spliterator for ParArchiveIter<'a,A,G> {
+    impl<'a, A: ArchiveT, G: ArchiveGroupT<Archive = A>> Spliterator for ParArchiveIter<'a, A, G> {
         fn split(&mut self) -> Option<Self> {
-            if self.curr.len() < 2 && self.stack.len() < 2 { return None }
-            let currsplit = self.curr.len()/2;
-            let stacksplit = self.stack.len()/2;
-            let (leftcurr,rightcurr) = self.curr.split_at(currsplit);
+            if self.curr.len() < 2 && self.stack.len() < 2 {
+                return None;
+            }
+            let currsplit = self.curr.len() / 2;
+            let stacksplit = self.stack.len() / 2;
+            let (leftcurr, rightcurr) = self.curr.split_at(currsplit);
             let rightstack = self.stack.split_off(stacksplit);
             self.curr = leftcurr;
             Some(Self {
-                curr:rightcurr,
-                stack:rightstack,
-                meta:None,
+                curr: rightcurr,
+                stack: rightstack,
+                meta: None,
             })
         }
     }
 }
 
-
 // -------------------------------------------------------------------------
 
 #[cfg(target_os = "windows")]
-const PATH_SEPARATOR:&str = "\\\\";
+const PATH_SEPARATOR: &str = "\\\\";
 #[cfg(not(target_os = "windows"))]
-const PATH_SEPARATOR:char = '/';
+const PATH_SEPARATOR: char = '/';
 
-#[derive(Default,Clone,Debug)]
-pub struct IgnoreSource (
-    Option<regex::Regex>
-);
+#[derive(Default, Clone, Debug)]
+pub struct IgnoreSource(Option<regex::Regex>);
 impl Display for IgnoreSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
-            Some(r) => write!(f,"{}",r),
-            None => write!(f,"(None)")
+            Some(r) => write!(f, "{}", r),
+            None => write!(f, "(None)"),
         }
     }
 }
 impl IgnoreSource {
-    pub fn new(regex:&str,source_path:&Path) -> IgnoreSource {
-        if regex.is_empty() { return Self::default() }
+    pub fn new(regex: &str, source_path: &Path) -> IgnoreSource {
+        if regex.is_empty() {
+            return Self::default();
+        }
         #[cfg(target_os = "windows")]
-            let regex = regex.replace('/', PATH_SEPARATOR);
-        let s = regex.replace('.',r"\.").replace('*',".*");//.replace('/',r"\/");
-        let s = s.split('|').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("|");
-        let p = source_path.display();//path.to_str().unwrap().replace('/',r"\/");
+        let regex = regex.replace('/', PATH_SEPARATOR);
+        let s = regex.replace('.', r"\.").replace('*', ".*"); //.replace('/',r"\/");
+        let s = s
+            .split('|')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("|");
+        let p = source_path.display(); //path.to_str().unwrap().replace('/',r"\/");
         #[cfg(target_os = "windows")]
-            let p = p.to_string().replace('\\', PATH_SEPARATOR);
-        let s= format!("{}{}({})", p, PATH_SEPARATOR, s);
+        let p = p.to_string().replace('\\', PATH_SEPARATOR);
+        let s = format!("{}{}({})", p, PATH_SEPARATOR, s);
         Self(regex::Regex::new(&s).ok())
     }
-    pub fn ignores(&self,p:&Path) -> bool {
+    pub fn ignores(&self, p: &Path) -> bool {
         match &self.0 {
             Some(r) => r.is_match(p.to_str().unwrap()),
-            None => false
+            None => false,
         }
     }
 }
@@ -779,60 +875,71 @@ impl IgnoreSource {
 #[cfg(feature = "serde")]
 impl serde::Serialize for IgnoreSource {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer {
+    where
+        S: serde::Serializer,
+    {
         match &self.0 {
             None => Option::<&str>::None.serialize(serializer),
-            Some(r) => Some(r.as_str()).serialize(serializer)
+            Some(r) => Some(r.as_str()).serialize(serializer),
         }
     }
 }
 #[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for IgnoreSource {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: serde::Deserializer<'de> {
+    where
+        D: serde::Deserializer<'de>,
+    {
         Ok(IgnoreSource(
             match Option::<&'de str>::deserialize(deserializer)? {
                 None => None,
                 Some(s) => Some(
-                    regex::Regex::new(s).map_err(|_| serde::de::Error::custom("Invalid regex"))?
-                )
-            }
+                    regex::Regex::new(s).map_err(|_| serde::de::Error::custom("Invalid regex"))?,
+                ),
+            },
         ))
     }
 }
 
 #[cfg(feature = "bincode")]
 impl bincode::Encode for IgnoreSource {
-    fn encode<E: bincode::enc::Encoder>(&self, encoder: &mut E) -> Result<(), bincode::error::EncodeError> {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
         match &self.0 {
             None => Option::<&str>::None.encode(encoder),
-            Some(r) => Some(r.as_str()).encode(encoder)
+            Some(r) => Some(r.as_str()).encode(encoder),
         }
     }
 }
 #[cfg(feature = "bincode")]
 impl bincode::Decode for IgnoreSource {
-    fn decode<D: bincode::de::Decoder>(decoder: &mut D) -> Result<Self, bincode::error::DecodeError> {
-        Ok(IgnoreSource(
-            match Option::<String>::decode(decoder)? {
-                None => None,
-                Some(s) => Some(
-                    regex::Regex::new(&s).map_err(|_| bincode::error::DecodeError::Other("Invalid regex"))?
-                )
-            }
-        ))
+    fn decode<D: bincode::de::Decoder>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Ok(IgnoreSource(match Option::<String>::decode(decoder)? {
+            None => None,
+            Some(s) => Some(
+                regex::Regex::new(&s)
+                    .map_err(|_| bincode::error::DecodeError::Other("Invalid regex"))?,
+            ),
+        }))
     }
 }
 #[cfg(feature = "bincode")]
 impl<'de> bincode::BorrowDecode<'de> for IgnoreSource {
-    fn borrow_decode<D: bincode::de::BorrowDecoder<'de>>(decoder: &mut D) -> Result<Self, bincode::error::DecodeError> {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'de>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
         Ok(IgnoreSource(
             match Option::<&'de str>::borrow_decode(decoder)? {
                 None => None,
                 Some(s) => Some(
-                    regex::Regex::new(s).map_err(|_| bincode::error::DecodeError::Other("Invalid regex"))?
-                )
-            }
+                    regex::Regex::new(s)
+                        .map_err(|_| bincode::error::DecodeError::Other("Invalid regex"))?,
+                ),
+            },
         ))
     }
 }

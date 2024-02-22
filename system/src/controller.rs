@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::buildqueue::BuildQueue;
 use crate::ontology::relational::RelationalManager;
 use crate::settings::Settings;
-use immt_api::archives::{ArchiveGroupT, ArchiveId};
+use immt_api::archives::{ArchiveGroupT, ArchiveId, ArchiveT};
 use immt_api::formats::building::Backend;
 use immt_api::formats::{Format, FormatStore};
 use tracing::{event, info, instrument};
@@ -51,12 +51,17 @@ impl Controller {
             )*/
         }
     }
-    pub fn as_backend<'a>(&'a self) -> Backend<'a> {
+    pub fn as_backend(&self) -> Backend<'_> {
         Backend {
             mathhub: &self.0.main_mh,
-            get_path: Box::new(move |id| match self.archives().find(id.clone()) {
-                Some(Either::Right(a)) => a.path().clone(),
-                _ => None,
+            get_path: Box::new(move |id| match self.archives().get(id) {
+                Some(Either::Right(a)) => (a.path().clone(), Some(a.data().uri())),
+                _ => (None, None),
+            }),
+            find_archive: Box::new(move |path| {
+                self.archives()
+                    .find(path)
+                    .map(|a| a.data().uri().to_owned())
             }),
         }
     }

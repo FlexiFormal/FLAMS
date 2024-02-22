@@ -8,8 +8,10 @@ use immt_api::formats::building::{
 };
 use immt_api::formats::Id;
 use immt_api::source_files::BuildState;
+use immt_api::uris::{ArchiveURI, DocumentURI};
 use immt_api::utils::{HMap, HSet};
 use immt_api::CloneStr;
+use parking_lot::Condvar;
 use rayon::prelude::*;
 use std::any::Any;
 use std::cell::OnceCell;
@@ -24,14 +26,15 @@ use tracing::{debug, info, info_span, instrument, trace, warn};
 #[derive(Default)]
 pub struct BuildQueue {
     inner: parking_lot::RwLock<BuildQueueI>,
+    condvar: Condvar,
 }
 
 #[derive(Default)]
 struct BuildQueueI {
-    stale: Vec<(ArchiveId, Id, CloneStr, u64)>,
-    new: Vec<(ArchiveId, Id, CloneStr)>,
-    deleted: Vec<(ArchiveId, CloneStr)>,
-    todo: Vec<(ArchiveId, Id, CloneStr)>,
+    stale: Vec<(ArchiveURI, Id, CloneStr, u64)>,
+    new: Vec<(ArchiveURI, Id, CloneStr)>,
+    deleted: Vec<(ArchiveURI, CloneStr)>,
+    todo: Vec<(ArchiveURI, Id, CloneStr)>,
     queue: VecDeque<QueuedTask>,
     processes: Vec<BuildProcess>,
 }
@@ -65,7 +68,7 @@ impl BuildQueue {
                                 "Thread {}: {} [{}]{} ({} of {})",
                                 p.index,
                                 c.as_dep.id,
-                                c.as_dep.archive,
+                                c.as_dep.archive.id(),
                                 c.as_dep.filepath,
                                 c.index,
                                 c.of
@@ -80,7 +83,7 @@ impl BuildQueue {
         controller.settings().set_default([(
             "build queue",
             "threads",
-            SettingsValue::PositiveInteger(4),
+            SettingsValue::PositiveInteger(1),
         )]);
         let (stale, new, deleted) = controller
             .archives()
@@ -91,16 +94,16 @@ impl BuildQueue {
                     a.iter_sources((stale, new, deleted), |f, (stale, new, deleted)| {
                         match f.state {
                             BuildState::Stale { last_built, .. } => stale.push((
-                                a.id().to_owned(),
+                                a.uri().to_owned(),
                                 f.format,
                                 f.rel_path.clone(),
                                 last_built,
                             )),
                             BuildState::New => {
-                                new.push((a.id().to_owned(), f.format, f.rel_path.clone()))
+                                new.push((a.uri().to_owned(), f.format, f.rel_path.clone()))
                             }
                             BuildState::Deleted => {
-                                deleted.push((a.id().to_owned(), f.rel_path.clone()))
+                                deleted.push((a.uri().to_owned(), f.rel_path.clone()))
                             }
                             _ => (),
                         }
@@ -189,9 +192,9 @@ impl BuildQueue {
     }
 
     #[instrument(level="info",name="sorting build jobs",skip_all,fields(num=todos.len()))]
-    fn sort_build_jobs(controller: &Controller, todos: Vec<(ArchiveId, Id, CloneStr)>) {
+    fn sort_build_jobs(controller: &Controller, todos: Vec<(ArchiveURI, Id, CloneStr)>) {
         let pb =
-            crate::utils::progress::in_progress2("Sorting build jobs...", todos.len(), false, "");
+            crate::utils::progress::in_progress("Sorting build jobs...", todos.len(), false, "");
         let now = std::time::SystemTime::now();
         let span = tracing::Span::current();
         let mut qb = QueueBuilder::default();
@@ -208,18 +211,15 @@ impl BuildQueue {
             //set.spawn(async move {
             let apath = controller
                 .archives()
-                .find(a.clone())
+                .get(a.id().to_owned())
                 .and_then(|a| a.right().map(|a| a.path().clone()))
                 .flatten();
             let bpath = apath
                 .as_ref()
                 .map(|a| PathBuf::from(format!("{}/source{}", a.display(), path)).into());
             let mut info = BuildInfo {
-                archive_id: a,
                 format: id,
-                rel_path: path,
-                archive_path: apath,
-                state_data: BuildData::new(bpath),
+                state_data: BuildData::new(bpath, apath, a, path),
             };
             //std::thread::sleep(Duration::from_secs_f32(0.05));
             if let Some(format) = controller.formats().get(id) {
@@ -265,6 +265,8 @@ struct QueueBuilderI {
 struct QueueBuilder(QueueBuilderI); //Arc<parking_lot::Mutex<QueueBuilderI>>);
 impl QueueBuilder {
     pub fn add(&mut self, bt: Vec<BuildStep>, info: BuildInfo) {
+        let archive = info.state_data.archive_uri.clone();
+        let filepath = info.state_data.rel_path.clone();
         let state = Arc::new(parking_lot::Mutex::new(info.state_data));
 
         //let mut lock = self.0.lock();
@@ -303,8 +305,8 @@ impl QueueBuilder {
             }
             let nd = PhysicalDependency {
                 id: step.id,
-                archive: info.archive_id.clone(),
-                filepath: info.rel_path.clone(),
+                archive: archive.clone(),
+                filepath: filepath.clone(),
             };
             let constraint = Constraint::get(&nd, &strong_deps, &weak_deps, &*constraints);
 
@@ -424,7 +426,7 @@ impl QueueBuilder {
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
 struct PhysicalDependency {
     id: &'static str,
-    archive: ArchiveId,
+    archive: ArchiveURI,
     filepath: CloneStr,
 }
 

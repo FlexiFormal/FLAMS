@@ -1,9 +1,11 @@
 use crate::quickparse::latex::{
-    Environment, FromLaTeXToken, LaTeXParser, Macro, MacroResult, MacroRule,
+    EnvCloseRule, EnvOpenRule, Environment, EnvironmentResult, EnvironmentRule, FromLaTeXToken,
+    LaTeXParser, Macro, MacroResult, MacroRule,
 };
 use immt_api::archives::ArchiveId;
+use immt_api::narration::document::Language;
+use immt_api::utils::sourcerefs::SourceRange;
 use immt_system::utils::parse::{ParseSource, ParseStr};
-use immt_system::utils::sourcerefs::SourceRange;
 use std::path::Path;
 
 pub(crate) enum DepToken<'a> {
@@ -20,6 +22,7 @@ pub(crate) enum DepToken<'a> {
         filepath: &'a str,
     },
     Vec(Vec<DepToken<'a>>),
+    Signature(Language),
 }
 
 pub(crate) enum STeXDependency<'a> {
@@ -35,6 +38,7 @@ pub(crate) enum STeXDependency<'a> {
         archive: Option<&'a str>,
         filepath: &'a str,
     },
+    Signature(Language),
 }
 
 pub(crate) struct DepParser<'a> {
@@ -44,18 +48,21 @@ pub(crate) struct DepParser<'a> {
 }
 
 pub(crate) fn get_deps<'a>(source: &'a str, path: &'a Path) -> Vec<STeXDependency<'a>> {
-    let mut parser = LaTeXParser::with_rules(
+    let parser = LaTeXParser::with_rules(
         ParseStr::new(source),
         Some(path),
-        LaTeXParser::default_rules().into_iter().chain(
-            vec![
-                ("importmodule", importmodule as MacroRule<'_, _, _>),
-                ("usemodule", usemodule as MacroRule<'_, _, _>),
-                ("inputref", inputref as MacroRule<'_, _, _>),
-            ]
-            .into_iter(),
-        ),
-        LaTeXParser::default_env_rules().into_iter(),
+        LaTeXParser::default_rules().into_iter().chain(vec![
+            ("importmodule", importmodule as MacroRule<'a, _, _>),
+            ("usemodule", usemodule as MacroRule<'a, _, _>),
+            ("inputref", inputref as MacroRule<'a, _, _>),
+        ]),
+        LaTeXParser::default_env_rules().into_iter().chain(vec![(
+            "smodule",
+            (
+                smodule_open as EnvOpenRule<'a, _, _>,
+                smodule_close as EnvCloseRule<'a, _, _>,
+            ),
+        )]),
     );
     let mut deps = Vec::new();
     let mut dep_parser = DepParser {
@@ -82,6 +89,7 @@ impl<'a> Iterator for DepParser<'a> {
                         DepToken::UseModule { archive, module } => {
                             return Some(STeXDependency::UseModule { archive, module })
                         }
+                        DepToken::Signature(lang) => return Some(STeXDependency::Signature(lang)),
                         DepToken::Inputref {
                             archive,
                             filepath: module,
@@ -108,6 +116,9 @@ impl<'a> Iterator for DepParser<'a> {
                     }
                     Some(DepToken::UseModule { archive, module }) => {
                         return Some(STeXDependency::UseModule { archive, module })
+                    }
+                    Some(DepToken::Signature(lang)) => {
+                        return Some(STeXDependency::Signature(lang))
                     }
                     Some(DepToken::Inputref {
                         archive,
@@ -195,4 +206,26 @@ pub fn inputref<'a>(
         }
         Some(filepath) => MacroResult::Success(DepToken::Inputref { archive, filepath }),
     }
+}
+
+pub fn smodule_open<'a>(
+    env: &mut Environment<'a, &'a str, (), DepToken<'a>>,
+    p: &mut LaTeXParser<'a, ParseStr<'a, ()>, DepToken<'a>>,
+) {
+    let opt = p.read_opt_str(&mut env.begin);
+    let name = p.read_name(&mut env.begin);
+    match opt.as_keyvals().get(&"sig") {
+        Some(v) => {
+            if let Ok(l) = (*v).try_into() {
+                env.children.push(DepToken::Signature(l))
+            }
+        }
+        _ => (),
+    }
+}
+pub fn smodule_close<'a>(
+    mut env: Environment<'a, &'a str, (), DepToken<'a>>,
+    p: &mut LaTeXParser<'a, ParseStr<'a, ()>, DepToken<'a>>,
+) -> EnvironmentResult<'a, &'a str, (), DepToken<'a>> {
+    EnvironmentResult::Simple(env)
 }

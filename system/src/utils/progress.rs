@@ -8,15 +8,33 @@ pub mod spinners {
     pub const DOTS: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     pub const DOTS2: &[&str] = &["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
     pub const DOTS3: &[&str] = &["⠋", "⠙", "⠚", "⠞", "⠖", "⠦", "⠴", "⠲", "⠳", "⠓"];
-    pub const DOTS4: &[&str] = &["⠄", "⠆", "⠇", "⠋", "⠙", "⠸", "⠰", "⠠", "⠰", "⠸", "⠙", "⠋", "⠇", "⠆"];
-    pub const DOTS5: &[&str] = &["⠋", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠦", "⠖", "⠒", "⠐", "⠐", "⠒", "⠓", "⠋"];
-    pub const DOTS6: &[&str] = &["⠁", "⠉", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠤", "⠄", "⠄", "⠤", "⠴", "⠲", "⠒", "⠂", "⠂", "⠒", "⠚", "⠙", "⠉", "⠁"];
-    pub const DOTS7: &[&str] = &["⠈", "⠉", "⠋", "⠓", "⠒", "⠐", "⠐", "⠒", "⠖", "⠦", "⠤", "⠠", "⠠", "⠤", "⠦", "⠖", "⠒", "⠐", "⠐", "⠒", "⠓", "⠋", "⠉", "⠈"];
-    pub const DOTS8: &[&str] = &["⠁", "⠁", "⠉", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠤", "⠄", "⠄", "⠤", "⠠", "⠠", "⠤", "⠦", "⠖", "⠒", "⠐", "⠐", "⠒", "⠓", "⠋", "⠉", "⠈", "⠈"];
+    pub const DOTS4: &[&str] = &[
+        "⠄", "⠆", "⠇", "⠋", "⠙", "⠸", "⠰", "⠠", "⠰", "⠸", "⠙", "⠋", "⠇", "⠆",
+    ];
+    pub const DOTS5: &[&str] = &[
+        "⠋", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠦", "⠖", "⠒", "⠐", "⠐", "⠒", "⠓", "⠋",
+    ];
+    pub const DOTS6: &[&str] = &[
+        "⠁", "⠉", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠤", "⠄", "⠄", "⠤", "⠴", "⠲", "⠒", "⠂",
+        "⠂", "⠒", "⠚", "⠙", "⠉", "⠁",
+    ];
+    pub const DOTS7: &[&str] = &[
+        "⠈", "⠉", "⠋", "⠓", "⠒", "⠐", "⠐", "⠒", "⠖", "⠦", "⠤", "⠠", "⠠", "⠤", "⠦", "⠖", "⠒", "⠐",
+        "⠐", "⠒", "⠓", "⠋", "⠉", "⠈",
+    ];
+    pub const DOTS8: &[&str] = &[
+        "⠁", "⠁", "⠉", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠤", "⠄", "⠄", "⠤", "⠠", "⠠", "⠤",
+        "⠦", "⠖", "⠒", "⠐", "⠐", "⠒", "⠓", "⠋", "⠉", "⠈", "⠈",
+    ];
     pub const DOTS9: &[&str] = &["⢹", "⢺", "⢼", "⣸", "⣇", "⡧", "⡗", "⡏"];
     pub const DOTS10: &[&str] = &["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"];
     pub const DOTS11: &[&str] = &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"];
-    pub const DOTS12: &[&str] = &["⢀⠀", "⡀⠀", "⠄⠀", "⢂⠀", "⡂⠀", "⠅⠀", "⢃⠀", "⡃⠀", "⠍⠀", "⢋⠀", "⡋⠀", "⠍⠁", "⢋⠁", "⡋⠁", "⠍⠉", "⠋⠉", "⠋⠉", "⠉⠙", "⠉⠙", "⠉⠩", "⠈⢙", "⠈⡙", "⢈⠩", "⡀⢙", "⠄⡙", "⢂⠩", "⡂⢘", "⠅⡘", "⢃⠨", "⡃⢐", "⠍⡐", "⢋⠠", "⡋⢀", "⠍⡁", "⢋⠁", "⡋⠁", "⠍⠉", "⠋⠉", "⠋⠉", "⠉⠙", "⠉⠙", "⠉⠩", "⠈⢙", "⠈⡙", "⠈⠩", "⠀⢙", "⠀⡙", "⠀⠩", "⠀⢘", "⠀⡘", "⠀⠨", "⠀⢐", "⠀⡐", "⠀⠠", "⠀⢀", "⠀⡀"];
+    pub const DOTS12: &[&str] = &[
+        "⢀⠀", "⡀⠀", "⠄⠀", "⢂⠀", "⡂⠀", "⠅⠀", "⢃⠀", "⡃⠀", "⠍⠀", "⢋⠀", "⡋⠀", "⠍⠁", "⢋⠁", "⡋⠁", "⠍⠉",
+        "⠋⠉", "⠋⠉", "⠉⠙", "⠉⠙", "⠉⠩", "⠈⢙", "⠈⡙", "⢈⠩", "⡀⢙", "⠄⡙", "⢂⠩", "⡂⢘", "⠅⡘", "⢃⠨", "⡃⢐",
+        "⠍⡐", "⢋⠠", "⡋⢀", "⠍⡁", "⢋⠁", "⡋⠁", "⠍⠉", "⠋⠉", "⠋⠉", "⠉⠙", "⠉⠙", "⠉⠩", "⠈⢙", "⠈⡙", "⠈⠩",
+        "⠀⢙", "⠀⡙", "⠀⠩", "⠀⢘", "⠀⡘", "⠀⠨", "⠀⢐", "⠀⡐", "⠀⠠", "⠀⢀", "⠀⡀",
+    ];
     pub const LINE: &[&str] = &["-", "\\", "|", "/"];
     pub const LINE2: &[&str] = &["⠂", "-", "–", "—", "–", "-"];
     pub const PIPE: &[&str] = &["┤", "┘", "┴", "└", "├", "┌", "┬", "┐"];
@@ -27,7 +45,8 @@ pub mod spinners {
     pub const FLIP: &[&str] = &["_", "_", "_", "-", "`", "`", "'", "´", "-", "_", "_", "_"];
     pub const HAMBURGER: &[&str] = &["☱", "☲", "☴"];
     pub const GROW_VERTICAL: &[&str] = &["▁", "▃", "▄", "▅", "▆", "▇", "▆", "▅", "▄", "▃"];
-    pub const GROW_HORIZONTAL: &[&str] = &["▏", "▎", "▍", "▌", "▋", "▊", "▉", "▊", "▋", "▌", "▍", "▎"];
+    pub const GROW_HORIZONTAL: &[&str] =
+        &["▏", "▎", "▍", "▌", "▋", "▊", "▉", "▊", "▋", "▌", "▍", "▎"];
     pub const BALLOON: &[&str] = &[" ", ".", "o", "O", "@", "*", " "];
     pub const BALLOON2: &[&str] = &[".", "o", "O", "°", "O", "o", "."];
     pub const NOISE: &[&str] = &["▓", "▒", "░"];
@@ -43,62 +62,154 @@ pub mod spinners {
     pub const SQUISH: &[&str] = &["╫", "╪"];
     pub const TOGGLE: &[&str] = &["⊶", "⊷"];
     // ----
-    pub const TOGGLE2: &[&str] = &["▫", "▪","▫"];
-    pub const TOGGLE3: &[&str] = &["□", "■","□"];
-    pub const TOGGLE4: &[&str] = &["■", "□", "▪", "▫","■"];
-    pub const TOGGLE5: &[&str] = &["▮", "▯","▮"];
-    pub const TOGGLE6: &[&str] = &["ဝ", "၀","ဝ"];
-    pub const TOGGLE7: &[&str] = &["⦾", "⦿","⦾"];
-    pub const TOGGLE8: &[&str] = &["◍", "◌","◍"];
-    pub const TOGGLE9: &[&str] = &["◉", "◎","◉"];
-    pub const TOGGLE10: &[&str] = &["㊂", "㊀", "㊁","㊂"];
-    pub const TOGGLE11: &[&str] = &["⧇", "⧆","⧇"];
-    pub const TOGGLE12: &[&str] = &["☗", "☖","☗"];
-    pub const TOGGLE13: &[&str] = &["=", "*", "-","="];
-    pub const ARROW: &[&str] = &["←", "↖", "↑", "↗", "→", "↘", "↓", "↙","←"];
-    pub const ARROW2: &[&str] = &["⬆️ ", "↗️ ", "➡️ ", "↘️ ", "⬇️ ", "↙️ ", "⬅️ ", "↖️ ","⬆️ "];
-    pub const ARROW3: &[&str] = &["▹▹▹▹▹", "▸▹▹▹▹", "▹▸▹▹▹", "▹▹▸▹▹", "▹▹▹▸▹", "▹▹▹▹▸","▸▸▸▸▸"];
-    pub const BOUNCING_BAR: &[&str] = &["[    ]", "[=   ]", "[==  ]", "[=== ]", "[ ===]", "[  ==]", "[   =]", "[    ]", "[   =]", "[  ==]", "[ ===]", "[====]", "[=== ]", "[==  ]", "[=   ]"];
-    pub const BOUNCING_BALL: &[&str] = &["( ●    )", "(  ●   )", "(   ●  )", "(    ● )", "(     ●)", "(    ● )", "(   ●  )", "(  ●   )", "( ●    )", "(●     )"];
-    pub const SMILEY: &[&str] = &["😄 ", "😝 ","😄 "];
+    pub const TOGGLE2: &[&str] = &["▫", "▪", "▫"];
+    pub const TOGGLE3: &[&str] = &["□", "■", "□"];
+    pub const TOGGLE4: &[&str] = &["■", "□", "▪", "▫", "■"];
+    pub const TOGGLE5: &[&str] = &["▮", "▯", "▮"];
+    pub const TOGGLE6: &[&str] = &["ဝ", "၀", "ဝ"];
+    pub const TOGGLE7: &[&str] = &["⦾", "⦿", "⦾"];
+    pub const TOGGLE8: &[&str] = &["◍", "◌", "◍"];
+    pub const TOGGLE9: &[&str] = &["◉", "◎", "◉"];
+    pub const TOGGLE10: &[&str] = &["㊂", "㊀", "㊁", "㊂"];
+    pub const TOGGLE11: &[&str] = &["⧇", "⧆", "⧇"];
+    pub const TOGGLE12: &[&str] = &["☗", "☖", "☗"];
+    pub const TOGGLE13: &[&str] = &["=", "*", "-", "="];
+    pub const ARROW: &[&str] = &["←", "↖", "↑", "↗", "→", "↘", "↓", "↙", "←"];
+    pub const ARROW2: &[&str] = &["⬆️ ", "↗️ ", "➡️ ", "↘️ ", "⬇️ ", "↙️ ", "⬅️ ", "↖️ ", "⬆️ "];
+    pub const ARROW3: &[&str] = &[
+        "▹▹▹▹▹",
+        "▸▹▹▹▹",
+        "▹▸▹▹▹",
+        "▹▹▸▹▹",
+        "▹▹▹▸▹",
+        "▹▹▹▹▸",
+        "▸▸▸▸▸",
+    ];
+    pub const BOUNCING_BAR: &[&str] = &[
+        "[    ]", "[=   ]", "[==  ]", "[=== ]", "[ ===]", "[  ==]", "[   =]", "[    ]", "[   =]",
+        "[  ==]", "[ ===]", "[====]", "[=== ]", "[==  ]", "[=   ]",
+    ];
+    pub const BOUNCING_BALL: &[&str] = &[
+        "( ●    )",
+        "(  ●   )",
+        "(   ●  )",
+        "(    ● )",
+        "(     ●)",
+        "(    ● )",
+        "(   ●  )",
+        "(  ●   )",
+        "( ●    )",
+        "(●     )",
+    ];
+    pub const SMILEY: &[&str] = &["😄 ", "😝 ", "😄 "];
     pub const MONKEY: &[&str] = &["🙈 ", "🙈 ", "🙉 ", "🙉 ", "🙊 ", "🙊 "];
-    pub const HEARTS: &[&str] = &["💛 ", "💙 ", "💜 ", "💚 ", "❤️ ","💛 "];
-    pub const CLOCK: &[&str] = &["🕛 ", "🕐 ", "🕑 ", "🕒 ", "🕓 ", "🕔 ", "🕕 ", "🕖 ", "🕗 ", "🕘 ", "🕙 ", "🕚 ","🕛 "];
-    pub const EARTH: &[&str] = &["🌍 ", "🌍 ","🌎 ","🌎 ", "🌏 ", "🌏 ","🌏 "];
-    pub const MOON: &[&str] = &["🌑 ", "🌒 ", "🌓 ", "🌔 ", "🌕 ", "🌖 ", "🌗 ", "🌘 ","🌑 "];
-    pub const RUNNER: &[&str] = &["🚶 ", "🚶 ","🏃 ","🏃 ","🚶 ","🚶 ", "🏃 ","🏃 ","🚶 "];
-    pub const PONG: &[&str] = &["▐⠂       ▌", "▐⠈       ▌", "▐ ⠂      ▌", "▐ ⠠      ▌", "▐  ⡀     ▌", "▐  ⠠     ▌", "▐   ⠂    ▌", "▐   ⠈    ▌", "▐    ⠂   ▌", "▐    ⠠   ▌", "▐     ⡀  ▌", "▐     ⠠  ▌", "▐      ⠂ ▌", "▐      ⠈ ▌", "▐       ⠂▌", "▐       ⠠▌", "▐       ⡀▌", "▐      ⠠ ▌", "▐      ⠂ ▌", "▐     ⠈  ▌", "▐     ⠂  ▌", "▐    ⠠   ▌", "▐    ⡀   ▌", "▐   ⠠    ▌", "▐   ⠂    ▌", "▐  ⠈     ▌", "▐  ⠂     ▌", "▐ ⠠      ▌", "▐ ⡀      ▌", "▐⠠       ▌","▐⠂       ▌"];
-    pub const SHARK: &[&str] = &["▐|\\____________▌", "▐_|\\___________▌", "▐__|\\__________▌", "▐___|\\_________▌", "▐____|\\________▌", "▐_____|\\_______▌", "▐______|\\______▌", "▐_______|\\_____▌", "▐________|\\____▌", "▐_________|\\___▌", "▐__________|\\__▌", "▐___________|\\_▌", "▐____________|\\▌", "▐____________/|▌", "▐___________/|_▌", "▐__________/|__▌", "▐_________/|___▌", "▐_______/|____▌", "▐______/|______▌", "▐_____/|_______▌", "▐____/|________▌", "▐___/|_________▌", "▐__/|__________▌", "▐_/|___________▌", "▐/|____________▌"];
+    pub const HEARTS: &[&str] = &["💛 ", "💙 ", "💜 ", "💚 ", "❤️ ", "💛 "];
+    pub const CLOCK: &[&str] = &[
+        "🕛 ", "🕐 ", "🕑 ", "🕒 ", "🕓 ", "🕔 ", "🕕 ", "🕖 ", "🕗 ", "🕘 ", "🕙 ", "🕚 ", "🕛 ",
+    ];
+    pub const EARTH: &[&str] = &["🌍 ", "🌍 ", "🌎 ", "🌎 ", "🌏 ", "🌏 ", "🌏 "];
+    pub const MOON: &[&str] = &[
+        "🌑 ", "🌒 ", "🌓 ", "🌔 ", "🌕 ", "🌖 ", "🌗 ", "🌘 ", "🌑 ",
+    ];
+    pub const RUNNER: &[&str] = &[
+        "🚶 ", "🚶 ", "🏃 ", "🏃 ", "🚶 ", "🚶 ", "🏃 ", "🏃 ", "🚶 ",
+    ];
+    pub const PONG: &[&str] = &[
+        "▐⠂       ▌",
+        "▐⠈       ▌",
+        "▐ ⠂      ▌",
+        "▐ ⠠      ▌",
+        "▐  ⡀     ▌",
+        "▐  ⠠     ▌",
+        "▐   ⠂    ▌",
+        "▐   ⠈    ▌",
+        "▐    ⠂   ▌",
+        "▐    ⠠   ▌",
+        "▐     ⡀  ▌",
+        "▐     ⠠  ▌",
+        "▐      ⠂ ▌",
+        "▐      ⠈ ▌",
+        "▐       ⠂▌",
+        "▐       ⠠▌",
+        "▐       ⡀▌",
+        "▐      ⠠ ▌",
+        "▐      ⠂ ▌",
+        "▐     ⠈  ▌",
+        "▐     ⠂  ▌",
+        "▐    ⠠   ▌",
+        "▐    ⡀   ▌",
+        "▐   ⠠    ▌",
+        "▐   ⠂    ▌",
+        "▐  ⠈     ▌",
+        "▐  ⠂     ▌",
+        "▐ ⠠      ▌",
+        "▐ ⡀      ▌",
+        "▐⠠       ▌",
+        "▐⠂       ▌",
+    ];
+    pub const SHARK: &[&str] = &[
+        "▐|\\____________▌",
+        "▐_|\\___________▌",
+        "▐__|\\__________▌",
+        "▐___|\\_________▌",
+        "▐____|\\________▌",
+        "▐_____|\\_______▌",
+        "▐______|\\______▌",
+        "▐_______|\\_____▌",
+        "▐________|\\____▌",
+        "▐_________|\\___▌",
+        "▐__________|\\__▌",
+        "▐___________|\\_▌",
+        "▐____________|\\▌",
+        "▐____________/|▌",
+        "▐___________/|_▌",
+        "▐__________/|__▌",
+        "▐_________/|___▌",
+        "▐_______/|____▌",
+        "▐______/|______▌",
+        "▐_____/|_______▌",
+        "▐____/|________▌",
+        "▐___/|_________▌",
+        "▐__/|__________▌",
+        "▐_/|___________▌",
+        "▐/|____________▌",
+    ];
     pub const DQPB: &[&str] = &["d", "q", "p", "b"];
-    pub const WEATHER: &[&str] = &["☀️ ", "☀️ ", "☀️ ", "🌤 ", "⛅️ ", "🌥 ", "☁️ ", "🌧 ", "🌨 ", "🌧 ", "🌨 ", "🌧 ", "🌨 ", "⛈ ", "🌨 ", "🌧 ", "🌨 ", "☁️ ", "🌥 ", "⛅️ ", "🌤 ", "☀️ ", "☀️ "];
+    pub const WEATHER: &[&str] = &[
+        "☀️ ", "☀️ ", "☀️ ", "🌤 ", "⛅️ ", "🌥 ", "☁️ ", "🌧 ", "🌨 ", "🌧 ", "🌨 ", "🌧 ", "🌨 ", "⛈ ", "🌨 ",
+        "🌧 ", "🌨 ", "☁️ ", "🌥 ", "⛅️ ", "🌤 ", "☀️ ", "☀️ ",
+    ];
     pub const CHRISTMAS: &[&str] = &["🌲", "🎄", "🎄"];
-    pub const GRENADE: &[&str] = &["،   ", "′   ", " ´ ", " ‾ ", "  ⸌", "  ⸊", "  |", "  ⁎", "  ⁕", " ෴ ", "  ⁓", "   ", "   ", "   "];
+    pub const GRENADE: &[&str] = &[
+        "،   ", "′   ", " ´ ", " ‾ ", "  ⸌", "  ⸊", "  |", "  ⁎", "  ⁕", " ෴ ", "  ⁓", "   ",
+        "   ", "   ",
+    ];
     pub const POINT: &[&str] = &["∙∙∙", "●∙∙", "∙●∙", "∙∙●", "∙∙∙", "∙∙∙"];
     pub const LAYER: &[&str] = &["-", "=", "≡", "≡"];
-    pub const STAR3: &[&str] = &["⭐","⭐","🌟","🌟","🌟"];
-    pub const RAINBOW_CIRCLE: &[&str] = &["🔴","🟠","🟡","🟢","🔵","🟣","🔴"];
-    pub const RAINBOW_BOXES: &[&str] = &["🟥","🟧","🟨","🟩","🟦","🟪"];
+    pub const STAR3: &[&str] = &["⭐", "⭐", "🌟", "🌟", "🌟"];
+    pub const RAINBOW_CIRCLE: &[&str] = &["🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "🔴"];
+    pub const RAINBOW_BOXES: &[&str] = &["🟥", "🟧", "🟨", "🟩", "🟦", "🟪"];
     // 🟥🟧🟨🟩🟦🟪
 }
 
 pub mod bars {
     /*! https://changaco.oy.lc/unicode-progress-bars/ */
-    pub const BAR1 : &str = "█▁";
-    pub const BAR2 : &str = "⣿⣀";
-    pub const BAR3 : &str = "⬤○";
-    pub const BAR4 : &str = "■□";
-    pub const BAR5 : &str = "█░";
-    pub const BAR6 : &str = "▰▱";
-    pub const BAR7 : &str = "◼▭";
-    pub const BAR8 : &str = "▮▯";
-    pub const BAR9 : &str = "⚫⚪";
-    pub const BAR10 : &str = "■▢";
-    pub const BAR11 : &str = "▰═";
-    pub const BAR12 : &str = "▰╍";
+    pub const BAR1: &str = "█▁";
+    pub const BAR2: &str = "⣿⣀";
+    pub const BAR3: &str = "⬤○";
+    pub const BAR4: &str = "■□";
+    pub const BAR5: &str = "█░";
+    pub const BAR6: &str = "▰▱";
+    pub const BAR7: &str = "◼▭";
+    pub const BAR8: &str = "▮▯";
+    pub const BAR9: &str = "⚫⚪";
+    pub const BAR10: &str = "■▢";
+    pub const BAR11: &str = "▰═";
+    pub const BAR12: &str = "▰╍";
 }
 
 // -------------------------------------------------------------------------------------------------
-
+/*
 pub fn in_progress(prefix:&'static str) -> ProgressBarBuilder {
     ProgressBarBuilder {
         prefix,
@@ -168,167 +279,185 @@ impl ProgressBar {
     }
 }
 
+ */
+
 // -------------------------------------------------------------------------------------------------
 
 pub struct ProgressBarManager {
-    bars:parking_lot::RwLock<(usize,BTreeMap<usize, ProgressBarState>)>
+    bars: parking_lot::RwLock<(usize, BTreeMap<usize, ProgressBarState>)>,
 }
-pub static PROGRESS_BARS:ProgressBarManager = ProgressBarManager { bars: parking_lot::RwLock::new((0,BTreeMap::new())) };
+pub static PROGRESS_BARS: ProgressBarManager = ProgressBarManager {
+    bars: parking_lot::RwLock::new((0, BTreeMap::new())),
+};
 
 impl ProgressBarManager {
     fn register(&self, bar: ProgressBarState) -> usize {
         let mut lock = self.bars.write();
         let len = lock.0;
         lock.0 += 1;
-        lock.1.insert(len,bar);
+        lock.1.insert(len, bar);
         len
     }
 
-    fn tick(&self,idx:usize) {
+    fn tick(&self, idx: usize) {
         let mut lock = self.bars.write();
-        if let Some(pb) = lock.1.get_mut(&idx){
+        if let Some(pb) = lock.1.get_mut(&idx) {
             pb.current += 1;
             if pb.current == pb.length {
                 lock.1.remove(&idx);
             } else {
-                pb.ns_per_tick = ((pb.ns_per_tick * (pb.current - 1) as u128) + pb.last_tick.elapsed().as_micros()) / (pb.current as u128);
+                pb.ns_per_tick = ((pb.ns_per_tick * (pb.current - 1) as u128)
+                    + pb.last_tick.elapsed().as_micros())
+                    / (pb.current as u128);
                 pb.last_tick = std::time::Instant::now();
             }
         }
     }
-    fn advance(&self,index:usize,by:usize) {
+    fn advance(&self, index: usize, by: usize) {
         let mut lock = self.bars.write();
-        if let Some(pb) = lock.1.get_mut(&index){
+        if let Some(pb) = lock.1.get_mut(&index) {
             let old = pb.current as u128;
             pb.current += by;
             if pb.current >= pb.length {
                 lock.1.remove(&index);
             } else {
-                pb.ns_per_tick = ((pb.ns_per_tick * old) + pb.last_tick.elapsed().as_micros()) / (pb.current as u128);
+                pb.ns_per_tick = ((pb.ns_per_tick * old) + pb.last_tick.elapsed().as_micros())
+                    / (pb.current as u128);
                 pb.last_tick = std::time::Instant::now();
             }
         }
     }
 
-    fn set_msg<S:Into<FinalStr>>(&self,index:usize,msg:S) {
+    fn set_msg<S: Into<FinalStr>>(&self, index: usize, msg: S) {
         let mut lock = self.bars.write();
-        if let Some(pb) = lock.1.get_mut(&index){
+        if let Some(pb) = lock.1.get_mut(&index) {
             pb.curr_label = msg.into();
         }
     }
 
-    fn close(&self,index:usize) {
+    fn close(&self, index: usize) {
         let mut lock = self.bars.write();
         lock.1.remove(&index);
     }
 
-    fn done(&self,idx:usize) -> bool {
+    fn done(&self, idx: usize) -> bool {
         let lock = self.bars.read();
         lock.1.get(&idx).is_some()
     }
-    pub fn with<R>(&self,f:impl FnOnce(&BTreeMap<usize,ProgressBarState>) -> R) -> R {
+    pub fn with<R>(&self, f: impl FnOnce(&BTreeMap<usize, ProgressBarState>) -> R) -> R {
         let lock = self.bars.read();
         f(&lock.1)
     }
 }
 
 pub struct ProgressBarState {
-    pub prefix:&'static str,
-    pub curr_label:FinalStr,
-    pub length:usize,
-    pub current:usize,
-    pub percentage:bool,
-    last_tick:std::time::Instant,
-    pub ns_per_tick:u128,
-    pub parent:Option<usize>,
+    pub prefix: &'static str,
+    pub curr_label: FinalStr,
+    pub length: usize,
+    pub current: usize,
+    pub percentage: bool,
+    last_tick: std::time::Instant,
+    pub ns_per_tick: u128,
+    pub parent: Option<usize>,
 }
 
+#[derive(Clone, Copy)]
+pub struct ProgressBar(usize);
 
-#[derive(Clone,Copy)]
-pub struct ProgressBar2(usize);
-
-impl ProgressBar2 {
-
+impl ProgressBar {
     pub fn tick(&self) {
         PROGRESS_BARS.tick(self.0);
     }
     pub fn done(&self) -> bool {
         PROGRESS_BARS.done(self.0)
     }
-    pub fn set_message<S:Into<FinalStr>>(&self,msg:S) {
-        PROGRESS_BARS.set_msg(self.0,msg);
+    pub fn set_message<S: Into<FinalStr>>(&self, msg: S) {
+        PROGRESS_BARS.set_msg(self.0, msg);
     }
-    pub fn advance(&self,by:usize) {
-        PROGRESS_BARS.advance(self.0,by);
+    pub fn advance(&self, by: usize) {
+        PROGRESS_BARS.advance(self.0, by);
     }
 }
 
-pub fn in_progress2<S:Into<FinalStr>>(prefix:&'static str,length:usize,percentage:bool,label:S) -> Option<ProgressBar2> {
+pub fn in_progress<S: Into<FinalStr>>(
+    prefix: &'static str,
+    length: usize,
+    percentage: bool,
+    label: S,
+) -> Option<ProgressBar> {
     //let i = PROGRESS_BARS.register(pbi);
     let mut label = label.into();
     let lbl = &mut label;
-    let span:tracing::Span = tracing::Span::current();
-    let r = tracing::Span::with_subscriber(&span,move |(id,sub):(&tracing::Id,&tracing::Dispatch)| {
-        if let Some(ctx) = sub.downcast_ref::<WithProgressSpanContext>() {
-            let mut r = None;
-            let mut rr = &mut r;
-            (ctx.0)(sub,id,&mut move |pbo:&mut ProgressSpanContext| {
-                let mut pbi = ProgressBarState {
-                    prefix,
-                    curr_label: std::mem::take(lbl),
-                    length,
-                    current: 0,
-                    percentage,
-                    last_tick: std::time::Instant::now(),
-                    ns_per_tick: 0,
-                    parent:None
-                };
-                if let Some((_,p)) = pbo.parent {
-                    pbi.parent = Some(p)
-                }
-                let i = PROGRESS_BARS.register(pbi);
-                pbo.index = Some(i);
-                *rr = Some(i)
-            });
-            r
-        } else {None}
-    }).flatten();
-    r.map(ProgressBar2)
+    let span: tracing::Span = tracing::Span::current();
+    let r = tracing::Span::with_subscriber(
+        &span,
+        move |(id, sub): (&tracing::Id, &tracing::Dispatch)| {
+            if let Some(ctx) = sub.downcast_ref::<WithProgressSpanContext>() {
+                let mut r = None;
+                let mut rr = &mut r;
+                (ctx.0)(sub, id, &mut move |pbo: &mut ProgressSpanContext| {
+                    let mut pbi = ProgressBarState {
+                        prefix,
+                        curr_label: std::mem::take(lbl),
+                        length,
+                        current: 0,
+                        percentage,
+                        last_tick: std::time::Instant::now(),
+                        ns_per_tick: 0,
+                        parent: None,
+                    };
+                    if let Some((_, p)) = pbo.parent {
+                        pbi.parent = Some(p)
+                    }
+                    let i = PROGRESS_BARS.register(pbi);
+                    pbo.index = Some(i);
+                    *rr = Some(i)
+                });
+                r
+            } else {
+                None
+            }
+        },
+    )
+    .flatten();
+    r.map(ProgressBar)
 }
 
+use immt_api::FinalStr;
+use tracing::span::Attributes;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
-use tracing::span::Attributes;
-use immt_api::FinalStr;
 
 // -------------------------------------------------------------------------------------------------
 
-
 struct ProgressSpanContext {
-    index:Option<usize>,
-    parent:Option<(tracing::Id,usize)>
+    index: Option<usize>,
+    parent: Option<(tracing::Id, usize)>,
 }
 
 struct WithProgressSpanContext(
-    fn(&tracing::Dispatch, &tracing::span::Id, f: &mut dyn FnMut(&mut ProgressSpanContext))
+    fn(&tracing::Dispatch, &tracing::span::Id, f: &mut dyn FnMut(&mut ProgressSpanContext)),
 );
 
 pub struct ProgressLayer<S: tracing::Subscriber> {
-    phantom:PhantomData<S>,
+    phantom: PhantomData<S>,
     get: WithProgressSpanContext,
 }
 impl<S> Default for ProgressLayer<S>
-    where S: tracing::Subscriber + for<'a> LookupSpan<'a> {
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+{
     fn default() -> Self {
         Self {
             phantom: PhantomData,
-            get: WithProgressSpanContext(Self::with_context)
+            get: WithProgressSpanContext(Self::with_context),
         }
     }
 }
 impl<S> ProgressLayer<S>
-    where S: tracing::Subscriber + for<'a> LookupSpan<'a> {
-
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+{
     fn with_context(
         dispatch: &tracing::Dispatch,
         id: &tracing::span::Id,
@@ -350,7 +479,8 @@ impl<S> ProgressLayer<S>
 }
 
 impl<S> tracing_subscriber::layer::Layer<S> for ProgressLayer<S>
-    where S: tracing::Subscriber + for<'a> LookupSpan<'a>
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_new_span(&self, _attrs: &Attributes<'_>, id: &tracing::Id, ctx: Context<'_, S>) {
         let span = ctx
@@ -360,7 +490,8 @@ impl<S> tracing_subscriber::layer::Layer<S> for ProgressLayer<S>
         let parent_span = ctx.span_scope(id).and_then(|scope| {
             scope.skip(1).find_map(|span| {
                 let ext = span.extensions();
-                ext.get::<ProgressSpanContext>().and_then(|c| c.index.map(|i| (span.id().clone(),i)))
+                ext.get::<ProgressSpanContext>()
+                    .and_then(|c| c.index.map(|i| (span.id().clone(), i)))
             })
         });
 

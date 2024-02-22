@@ -19,3 +19,4 @@ path = "src/lib.rs"
 immt-api = {path = "../api"}
 immt-system = {path = "../system"}
 async-trait = "0.1"
+const_format = "0.2"

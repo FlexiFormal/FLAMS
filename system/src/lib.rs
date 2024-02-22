@@ -1,34 +1,31 @@
 pub mod backend;
-pub mod controller;
 pub mod buildqueue;
-pub mod tracing;
+pub mod controller;
 pub mod settings;
-
+pub mod tracing;
 
 pub mod ontology {
     //pub mod rdf;
     pub mod relational;
 }
 
-
 pub mod utils {
-    pub mod progress;
     pub mod parse;
-    pub mod sourcerefs;
+    pub mod progress;
 
-    use tracing::{info,info_span};
+    use tracing::{info, info_span};
 
-    pub fn measure<R,F:FnOnce() -> R>(prefix:&str, f:F) -> R {
-        info_span!("measure",prefix).in_scope(|| {
+    pub fn measure<R, F: FnOnce() -> R>(prefix: &str, f: F) -> R {
+        info_span!("measure", prefix).in_scope(|| {
             let start = std::time::Instant::now();
             let r = f();
             info!("Finished after {:?}", start.elapsed());
             r
         })
     }
-    pub fn measure_average<F:FnMut()>(prefix:&str,i:usize, mut f:F) {
-        info_span!("measure",prefix).in_scope(|| {
-            let mut elapsed = vec!();
+    pub fn measure_average<F: FnMut()>(prefix: &str, i: usize, mut f: F) {
+        info_span!("measure", prefix).in_scope(|| {
+            let mut elapsed = vec![];
             for _ in 0..i {
                 let start = std::time::Instant::now();
                 f();

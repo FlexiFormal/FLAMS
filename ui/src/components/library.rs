@@ -1,49 +1,60 @@
-use std::fmt::Display;
-use std::io::Error;
+use crate::components::UITab;
+use crate::utils::Depth;
 use crossterm::event::{Event, KeyCode, MouseEvent, MouseEventKind};
 use either::Either;
-use immt_system::controller::Controller;
-use crate::components::UITab;
-use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
-use ratatui::layout::Size;
-use tui_scrollview::{ScrollView, ScrollViewState};
-use immt_api::archives::{ArchiveGroupT, ArchiveId};
 use immt_api::archives::ArchiveT;
+use immt_api::archives::{ArchiveGroupT, ArchiveId};
 use immt_api::FinalStr;
 use immt_system::backend::archives::{Archive, ArchiveGroup};
-use crate::utils::Depth;
+use immt_system::controller::Controller;
+use ratatui::layout::Size;
+use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
+use std::fmt::Display;
+use std::io::Error;
+use tui_scrollview::{ScrollView, ScrollViewState};
 
 pub struct Library {
-    scroll_state:ScrollViewState,
-    tree_state:TreeState
+    scroll_state: ScrollViewState,
+    tree_state: TreeState,
 }
 impl Default for Library {
     fn default() -> Self {
         Self {
-            scroll_state:ScrollViewState::default(),
-            tree_state:TreeState {
-                tree:vec!(),
-                active:None
-            }
+            scroll_state: ScrollViewState::default(),
+            tree_state: TreeState {
+                tree: vec![],
+                active: None,
+            },
         }
     }
 }
 
-
 impl Library {
-    fn treeview(&mut self, buf: &mut Buffer,height:u16) {
+    fn treeview(&mut self, buf: &mut Buffer, height: u16) {
         //let mut depth = 0;
-        let range = (self.scroll_state.offset().y,self.scroll_state.offset().y + height - 1);
+        let range = (
+            self.scroll_state.offset().y,
+            self.scroll_state.offset().y + height - 1,
+        );
         let mut curr = buf.area;
         let mut i = 0;
         while i < self.tree_state.tree.len() {
             let c = &self.tree_state.tree[i];
-            let has_next = if let Some(e) = self.tree_state.tree.get(i+1) {
+            let has_next = if let Some(e) = self.tree_state.tree.get(i + 1) {
                 e.depth >= c.depth
-            } else {false};
+            } else {
+                false
+            };
             if self.tree_state.active == Some(i) {
-                Line::default().spans(vec!(Span::styled(format!("⮕ {}{}",Depth(c.depth,has_next),c.render),Style::new().bg(tailwind::LIME.c600).fg(tailwind::BLACK).add_modifier(Modifier::BOLD))))
-                    .render(curr,buf);
+                Line::default()
+                    .spans(vec![Span::styled(
+                        format!("⮕ {}{}", Depth(c.depth, has_next), c.render),
+                        Style::new()
+                            .bg(tailwind::LIME.c600)
+                            .fg(tailwind::BLACK)
+                            .add_modifier(Modifier::BOLD),
+                    )])
+                    .render(curr, buf);
                 if curr.y > range.1 {
                     let mut copy = curr;
                     if height > curr.y + 1 {
@@ -56,7 +67,7 @@ impl Library {
                     self.scroll_state.set_offset(curr.as_position())
                 }
             } else {
-                Line::raw(format!("  {}{}",Depth(c.depth,has_next),c.render)).render(curr,buf);
+                Line::raw(format!("  {}{}", Depth(c.depth, has_next), c.render)).render(curr, buf);
             }
             curr.y += 1;
             i += 1;
@@ -85,7 +96,7 @@ impl Library {
             if let Some(e) = self.tree_state.tree.get_mut(i) {
                 if let Some(c) = e.children {
                     e.children = None;
-                    self.key_left_i(i+1,i+1+c);
+                    self.key_left_i(i + 1, i + 1 + c);
                 } else if e.depth > 0 {
                     let d = e.depth;
                     let mut j = i;
@@ -99,33 +110,35 @@ impl Library {
                     if let Some(e) = self.tree_state.tree.get_mut(j) {
                         if let Some(c) = e.children {
                             e.children = None;
-                            self.key_left_i(j+1,j+1+c);
+                            self.key_left_i(j + 1, j + 1 + c);
                         }
                     }
                 }
             }
         }
     }
-    fn key_left_i(&mut self,from:usize,to:usize) {
-        self.tree_state.tree.drain(from.. to);
+    fn key_left_i(&mut self, from: usize, to: usize) {
+        self.tree_state.tree.drain(from..to);
     }
-    fn key_right(&mut self,controller: &Controller) {
+    fn key_right(&mut self, controller: &Controller) {
         if let Some(i) = self.tree_state.active {
             let r = if let Some(e) = self.tree_state.tree.get_mut(i) {
                 let dp = e.depth + 1;
                 let id = e.id.as_ref();
-                match controller.archives().find(id.to_owned()) {
+                match controller.archives().get(id.to_owned()) {
                     None => None,
                     Some(Either::Right(_)) => None, // TODO
                     Some(Either::Left(g)) => {
                         e.children = Some(g.base().archives.len());
-                        Some((dp,g))
+                        Some((dp, g))
                     }
                 }
-            } else {None};
-            if let Some((dp,g)) = r {
+            } else {
+                None
+            };
+            if let Some((dp, g)) = r {
                 for e in &g.base().archives {
-                    self.tree_state.tree.insert(i+1,from_g(e,dp));
+                    self.tree_state.tree.insert(i + 1, from_g(e, dp));
                 }
             }
         }
@@ -133,29 +146,31 @@ impl Library {
 }
 impl UITab for Library {
     fn handle_event(&mut self, controller: &Controller, event: Event) -> Result<(), Error> {
-        if let Event::Key(key) = event { match key.code {
-            KeyCode::Down => self.key_down(),
-            KeyCode::Up => self.key_up(),
-            KeyCode::Left => self.key_left(),
-            KeyCode::Right => self.key_right(controller),
-            /*
-            KeyCode::Enter|KeyCode::Char(' ') => self.state.toggle_selected(),
-            KeyCode::Home => {
-                self.state.select_first(&self.items);
-            }
-            KeyCode::End => {
-                self.state.select_last(&self.items);
-            }
-            KeyCode::PageDown => self.state.scroll_down(3),
-            KeyCode::PageUp => self.state.scroll_up(3),
+        if let Event::Key(key) = event {
+            match key.code {
+                KeyCode::Down => self.key_down(),
+                KeyCode::Up => self.key_up(),
+                KeyCode::Left => self.key_left(),
+                KeyCode::Right => self.key_right(controller),
+                /*
+                KeyCode::Enter|KeyCode::Char(' ') => self.state.toggle_selected(),
+                KeyCode::Home => {
+                    self.state.select_first(&self.items);
+                }
+                KeyCode::End => {
+                    self.state.select_last(&self.items);
+                }
+                KeyCode::PageDown => self.state.scroll_down(3),
+                KeyCode::PageUp => self.state.scroll_up(3),
 
-             */
-            _ => ()
-        }} else if let Event::Mouse(m) = event {
+                 */
+                _ => (),
+            }
+        } else if let Event::Mouse(m) = event {
             match m.kind {
                 MouseEventKind::ScrollDown => self.scroll_state.scroll_down(),
                 MouseEventKind::ScrollUp => self.scroll_state.scroll_up(),
-                _ => ()
+                _ => (),
             }
         }
         Ok(())
@@ -163,42 +178,39 @@ impl UITab for Library {
     fn activate(&mut self, controller: &Controller) {
         if self.tree_state.tree.is_empty() {
             for e in &controller.archives().get_top().base().archives {
-                self.tree_state.tree.push(from_g(e,0));
+                self.tree_state.tree.push(from_g(e, 0));
             }
         }
     }
     fn render(&mut self, area: Rect, buf: &mut Buffer) {
         //.highlight_symbol("⮕");
-        let mut scroll_view = ScrollView::new(Size::new(area.width, self.tree_state.tree.len() as u16));
-        self.treeview(scroll_view.buf_mut(),area.height);
+        let mut scroll_view =
+            ScrollView::new(Size::new(area.width, self.tree_state.tree.len() as u16));
+        self.treeview(scroll_view.buf_mut(), area.height);
         scroll_view.render(area, buf, &mut self.scroll_state);
     }
 }
 
-fn from_g(e:&Either<ArchiveGroup,Archive>,depth:u8) -> TreeElement {
+fn from_g(e: &Either<ArchiveGroup, Archive>, depth: u8) -> TreeElement {
     match e {
-        Either::Right(a) => {
-            TreeElement {
-                id:a.id().to_owned(),
-                render:format!("📕 {}",a.id().steps().last().unwrap()).into(),
-                children:None,
-                depth
-            }
+        Either::Right(a) => TreeElement {
+            id: a.id().to_owned(),
+            render: format!("📕 {}", a.id().steps().last().unwrap()).into(),
+            children: None,
+            depth,
         },
-        Either::Left(g) => {
-            TreeElement {
-                id:g.id().to_owned(),
-                render:format!("📚 {}",g.id().steps().last().unwrap()).into(),
-                children:None,
-                depth
-            }
-        }
+        Either::Left(g) => TreeElement {
+            id: g.id().to_owned(),
+            render: format!("📚 {}", g.id().steps().last().unwrap()).into(),
+            children: None,
+            depth,
+        },
     }
 }
 
 struct TreeState {
-    tree:Vec<TreeElement>,
-    active:Option<usize>
+    tree: Vec<TreeElement>,
+    active: Option<usize>,
 }
 
 impl TreeState {
@@ -237,12 +249,12 @@ impl TreeState {
      */
 }
 
-#[derive(PartialEq,Eq)]
+#[derive(PartialEq, Eq)]
 struct TreeElement {
-    id:ArchiveId,
-    render:FinalStr,
-    depth:u8,
-    children:Option<usize>
+    id: ArchiveId,
+    render: FinalStr,
+    depth: u8,
+    children: Option<usize>,
 }
 impl PartialOrd for TreeElement {
     #[inline(always)]

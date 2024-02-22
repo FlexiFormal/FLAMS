@@ -1,71 +1,103 @@
+use crate::backend::archives::{Archive, ArchiveGroup};
+use either::Either;
+use immt_api::archives::{ArchiveGroupT, ArchiveId, ArchiveT};
+use immt_api::formats::FormatStore;
 use std::fmt::Debug;
 use std::path::Path;
-use either::Either;
 use tracing::{event, info, instrument};
-use crate::backend::archives::{Archive, ArchiveGroup};
-use immt_api::formats::FormatStore;
-use immt_api::archives::{ArchiveId,ArchiveGroupT,ArchiveT};
 
 pub struct ArchiveManager {
-    top:ArchiveGroup
+    top: ArchiveGroup,
 }
 
 impl ArchiveManager {
-    pub fn new(mh:&Path,formats:&FormatStore) -> Self {
+    pub fn new(mh: &Path, formats: &FormatStore) -> Self {
         let top = ArchiveGroup::new(ArchiveId::new(""));
-        let mut manager = Self{ top };
-        manager.load(mh,formats);
+        let mut manager = Self { top };
+        manager.load(mh, formats);
         manager
     }
-    pub fn iter(&self) -> impl Iterator<Item=&Archive> {
+    pub fn iter(&self) -> impl Iterator<Item = &Archive> {
         self.top.archives()
     }
-    pub fn par_iter(&self) -> impl rayon::iter::ParallelIterator<Item=&Archive> {
+    pub fn par_iter(&self) -> impl rayon::iter::ParallelIterator<Item = &Archive> {
         self.top.archives_par()
     }
 
-    pub fn get_top(&self) -> &ArchiveGroup { &self.top }
-    pub fn num_archives(&self) -> usize { self.top.archives().count() }
+    pub fn get_top(&self) -> &ArchiveGroup {
+        &self.top
+    }
+    pub fn num_archives(&self) -> usize {
+        self.top.archives().count()
+    }
 
-    pub fn find<Id:for<'a>Into<ArchiveId>>(&self,id:Id) -> Option<Either<&ArchiveGroup,&Archive>> {
+    pub fn get<Id: for<'a> Into<ArchiveId>>(
+        &self,
+        id: Id,
+    ) -> Option<Either<&ArchiveGroup, &Archive>> {
         let id = id.into();
         let steps = id.steps().collect::<Vec<_>>();
         self.find_i(steps)
     }
+    pub fn find<P: AsRef<Path>>(&self, p: P) -> Option<&Archive> {
+        self.top
+            .archives()
+            .find(|a| a.path().as_ref().map(|p| &**p) == Some(p.as_ref()))
+    }
 
-    fn find_i(&self,mut id:Vec<&str>) -> Option<Either<&ArchiveGroup,&Archive>> {
-        macro_rules! id { ($e:expr) => { match $e.as_ref() {
-            Either::Left(g) => g.id(),
-            Either::Right(a) => a.id()
-        }};}
-        if id.is_empty() { return None }
+    fn find_i(&self, mut id: Vec<&str>) -> Option<Either<&ArchiveGroup, &Archive>> {
+        macro_rules! id {
+            ($e:expr) => {
+                match $e.as_ref() {
+                    Either::Left(g) => g.id(),
+                    Either::Right(a) => a.id(),
+                }
+            };
+        }
+        if id.is_empty() {
+            return None;
+        }
         let mut curr = &self.top.base().archives;
         loop {
             let head = id.remove(0);
             if id.is_empty() {
-                return curr.binary_search_by_key(&head, |g| id!(g).last_name()).ok().map(|i|curr[i].as_ref())
+                return curr
+                    .binary_search_by_key(&head, |g| id!(g).last_name())
+                    .ok()
+                    .map(|i| curr[i].as_ref());
             }
             let g = if let Ok(i) = curr.binary_search_by_key(&head, |g| id!(g).last_name()) {
-                if let Either::Left(g) = curr[i].as_ref() {g} else {return None}
-            } else { return None };
+                if let Either::Left(g) = curr[i].as_ref() {
+                    g
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            };
 
             if id.len() == 1 && id.last().unwrap().eq_ignore_ascii_case("meta-inf") {
-                return g.meta().map(Either::Right)
+                return g.meta().map(Either::Right);
             }
             curr = &g.base().archives;
         }
     }
 
-    #[instrument(level = "info",name = "Loading archives", skip(self,formats), fields(found) )]
-    fn load(&mut self, in_path:&Path,formats:&FormatStore) {
+    #[instrument(
+        level = "info",
+        name = "Loading archives",
+        skip(self, formats),
+        fields(found)
+    )]
+    fn load(&mut self, in_path: &Path, formats: &FormatStore) {
         info!("Searching for archives");
-        self.top.base_mut().archives = ArchiveGroupT::load_dir(in_path,formats).into();
+        self.top.base_mut().archives = ArchiveGroupT::load_dir(in_path, formats).into();
         tracing::Span::current().record("found", self.num_archives());
         info!("Done");
     }
 }
 impl Debug for ArchiveManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"ArchiveManager")
+        write!(f, "ArchiveManager")
     }
 }

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use immt_api::formats::building::{Backend, BuildData, BuildResult, TaskStep};
+use immt_api::CloneStr;
 use std::process::Stdio;
 
 #[derive(Copy, Clone)]
@@ -7,7 +8,7 @@ pub struct PdfLaTeX;
 
 impl TaskStep for PdfLaTeX {
     fn run(&self, state: &mut BuildData, backend: &Backend<'_>) -> BuildResult {
-        let file = state.build_file().unwrap();
+        let file = state.build_path.clone().unwrap();
         let out = match std::process::Command::new("pdflatex")
             .args(["-interaction", "nonstopmode", "-halt-on-error"])
             .arg(file.file_stem().unwrap())
@@ -63,7 +64,20 @@ pub struct RusTeX;
 #[async_trait]
 impl TaskStep for RusTeX {
     fn run(&self, state: &mut BuildData, backend: &Backend<'_>) -> BuildResult {
+        if let Some(path) = state.build_path.as_ref() {
+            match super::rustex::run_rustex(path) {
+                Ok(s) => {
+                    state.state.insert("shtml", Box::new(CloneStr::from(s)));
+                    BuildResult::Success
+                }
+                Err(e) => {
+                    println!("");
+                    BuildResult::Err(e.into())
+                }
+            }
+        } else {
+            BuildResult::Err("No build file".into())
+        }
         // Do Something
-        BuildResult::Success
     }
 }

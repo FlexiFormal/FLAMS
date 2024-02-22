@@ -39,11 +39,11 @@ impl RelationalManager {
     }
     #[instrument(level = "info", name = "relational", skip_all)]
     fn load_archives_i(&self, mgr: &ArchiveManager) {
-        use indicatif::ProgressStyle;
+        //use indicatif::ProgressStyle;
         use rayon::iter::ParallelIterator;
-        use tracing_indicatif::span_ext::IndicatifSpanExt;
+        //use tracing_indicatif::span_ext::IndicatifSpanExt;
         let num = mgr.num_archives();
-        let pb = crate::utils::progress::in_progress2("📈 Loading relational...", num, false, "");
+        let pb = crate::utils::progress::in_progress("📈 Loading relational...", num, false, "");
         //.with_length(num as u64).set();
 
         info!("Loading relational for {num} archives...");

@@ -16,6 +16,11 @@ codegen-units = 1
 panic = "abort"
 strip = "symbols"
 
+[profile.dev.package.RusTeX]
+opt-level = 2
+
+[profile.dev.package.tex_engine]
+opt-level = 2
 
 [dev-dependencies]
 

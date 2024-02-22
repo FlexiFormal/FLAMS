@@ -1,5 +1,7 @@
-use crate::archives::ArchiveId;
+use crate::archives::{ArchiveId, ArchiveIdRef};
 use crate::formats::Id;
+use crate::narration::document::Document;
+use crate::uris::{ArchiveURI, ArchiveURIRef, DocumentURI};
 use crate::utils::HMap;
 use crate::{CloneStr, FinalStr};
 use async_trait::async_trait;
@@ -10,30 +12,45 @@ use std::sync::Arc;
 
 pub struct Backend<'a> {
     pub mathhub: &'a Path,
-    pub get_path: Box<dyn Fn(&ArchiveId) -> Option<Arc<Path>> + 'a>,
+    pub get_path:
+        Box<dyn Fn(ArchiveIdRef<'_>) -> (Option<Arc<Path>>, Option<ArchiveURIRef<'a>>) + 'a>,
+    pub find_archive: Box<dyn Fn(&Path) -> Option<ArchiveURI> + 'a>,
 }
 
 impl<'a> Backend<'a> {
-    pub fn get_path(&self, id: &ArchiveId) -> Option<Arc<Path>> {
+    pub fn get_path(&self, id: ArchiveIdRef<'_>) -> (Option<Arc<Path>>, Option<ArchiveURIRef<'a>>) {
         (self.get_path)(id)
+    }
+    pub fn find_archive(&self, path: &Path) -> Option<ArchiveURI> {
+        (self.find_archive)(path)
     }
 }
 
 pub struct BuildData {
-    build_path: Option<Arc<Path>>,
+    pub build_path: Option<Arc<Path>>,
+    pub rel_path: CloneStr,
+    pub archive_path: Option<Arc<Path>>,
+    pub archive_uri: ArchiveURI,
     source: OnceCell<Option<FinalStr>>,
     pub state: HMap<&'static str, Box<dyn Any + Send>>,
+    pub document: Option<(Document, FinalStr)>,
 }
 impl BuildData {
-    pub fn new(path: Option<Arc<Path>>) -> Self {
+    pub fn new(
+        build_path: Option<Arc<Path>>,
+        archive_path: Option<Arc<Path>>,
+        archive_uri: ArchiveURI,
+        rel_path: CloneStr,
+    ) -> Self {
         Self {
-            build_path: path,
+            build_path,
+            archive_path,
+            archive_uri,
+            rel_path,
+            document: None,
             source: OnceCell::new(),
             state: HMap::default(),
         }
-    }
-    pub fn build_file(&self) -> Option<&Path> {
-        self.build_path.as_deref()
     }
     #[cfg(feature = "fs")]
     pub fn source(&self) -> Option<&str> {
@@ -47,10 +64,7 @@ impl BuildData {
 }
 
 pub struct BuildInfo {
-    pub archive_id: ArchiveId,
     pub format: Id,
-    pub rel_path: CloneStr,
-    pub archive_path: Option<Arc<Path>>,
     pub state_data: BuildData,
 }
 impl BuildInfo {
@@ -58,14 +72,14 @@ impl BuildInfo {
     pub fn source(&self) -> Option<&str> {
         self.state_data.source()
     }
-    pub fn path(&self) -> Option<&Path> {
-        self.state_data.build_file()
+    pub fn build_path(&self) -> Option<&Path> {
+        self.state_data.build_path.as_deref()
     }
 }
 
 pub enum BuildResult {
     Err(CloneStr),
-    Success
+    Success,
 }
 
 pub trait TaskStep: Any + Send + Sync {
@@ -76,7 +90,7 @@ pub trait TaskStep: Any + Send + Sync {
 pub enum Dependency {
     Physical {
         id: &'static str,
-        archive: ArchiveId,
+        archive: ArchiveURI,
         filepath: CloneStr,
         strong: bool,
     },

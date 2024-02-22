@@ -1,7 +1,9 @@
-use immt_system::utils::parse::ParseSource;
-use immt_system::utils::sourcerefs::{SourcePos, SourceRange};
-use crate::quickparse::latex::{EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult};
+use crate::quickparse::latex::{
+    EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult,
+};
 use crate::quickparse::tokenizer::Mode;
+use immt_api::utils::sourcerefs::{SourcePos, SourceRange};
+use immt_system::utils::parse::ParseSource;
 
 #[macro_export]
 macro_rules! csrule {
@@ -76,24 +78,28 @@ simple!(inline_verbatim,m,p => {
 });
 
 pub enum ArgType {
-    Normal,Optional
+    Normal,
+    Optional,
 }
 
-pub fn skip_args<'a,
-    Pa:ParseSource<'a>,
-    T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
->(args:&[ArgType],mut m:Macro<'a,Pa::Str,Pa::Pos,T>,p:&mut LaTeXParser<'a,Pa,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> {
+pub fn skip_args<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>>(
+    args: &[ArgType],
+    mut m: Macro<'a, Pa::Str, Pa::Pos, T>,
+    p: &mut LaTeXParser<'a, Pa, T>,
+) -> MacroResult<'a, Pa::Str, Pa::Pos, T> {
     for a in args {
         match a {
             ArgType::Normal => p.skip_arg(&mut m),
-            ArgType::Optional => {p.skip_opt(&mut m);}
+            ArgType::Optional => {
+                p.skip_opt(&mut m);
+            }
         }
     }
     MacroResult::Simple(m)
 }
 
-const N : ArgType = ArgType::Normal;
-const O : ArgType = ArgType::Optional;
+const N: ArgType = ArgType::Normal;
+const O: ArgType = ArgType::Optional;
 
 simple!(begingroup,m,p => { p.open_group() });
 simple!(endgroup,m,p => { p.close_group() });
@@ -142,12 +148,12 @@ macro_rules! switch_mode {
     }
 }
 
-switch_mode!(hbox,Mode::Text);
-switch_mode!(vbox,Mode::Text);
-switch_mode!(fbox,Mode::Text);
-switch_mode!(text,Mode::Text);
-switch_mode!(texttt,Mode::Text);
-switch_mode!(textrm,Mode::Text);
+switch_mode!(hbox, Mode::Text);
+switch_mode!(vbox, Mode::Text);
+switch_mode!(fbox, Mode::Text);
+switch_mode!(text, Mode::Text);
+switch_mode!(texttt, Mode::Text);
+switch_mode!(textrm, Mode::Text);
 simple!(ensuremath,m,p => {
     if matches!(p.tokenizer.mode,Mode::Math{..}) {
         p.read_argument(&mut m);

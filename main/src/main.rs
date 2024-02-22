@@ -24,7 +24,7 @@ async fn main() {
 }
 
 use clap::{Parser, Subcommand};
-use immt_system::utils::progress::{ProgressBar2, ProgressLayer};
+use immt_system::utils::progress::{ProgressBar, ProgressLayer};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -119,7 +119,7 @@ fn get_mathhub() -> PathBuf {
 
 #[instrument(level = "info", name = "test one", skip_all)]
 fn test_progress() {
-    let pb = immt_system::utils::progress::in_progress2("Test progress", 10, false, "Loading...");
+    let pb = immt_system::utils::progress::in_progress("Test progress", 10, false, "Loading...");
     let span = tracing::Span::current();
     std::thread::spawn(move || {
         let _span = span.enter();
@@ -131,8 +131,8 @@ fn test_progress() {
 }
 
 #[instrument(level = "info", name = "test two", skip_all)]
-fn test_progress2(millis: u64, outer: Option<ProgressBar2>) {
-    let pb = immt_system::utils::progress::in_progress2("Test progress 2", 100, true, "Loading...");
+fn test_progress2(millis: u64, outer: Option<ProgressBar>) {
+    let pb = immt_system::utils::progress::in_progress("Test progress 2", 100, true, "Loading...");
     let span = tracing::Span::current();
     std::thread::spawn(move || {
         let _span = span.enter();
