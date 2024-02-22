@@ -5,38 +5,75 @@ use std::fmt::Display;
 
 // SERDE HAS URL ENCODING!
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub enum MMTUri {
     Dom(DomURI),
+    /// `<`[`DomURI`]`>?a=<`[`ArchiveId`]`>`
     Archive(ArchiveURI),
+    /// `<`[`ArchiveURI`]`>&D&`...
+    Narrative(NarrativeURI),
+    /// `<`[`ArchiveURI`]`>&C&`...
+    Content(ContentURI),
 }
-impl MMTUri {
-    pub fn as_ref(&self) -> MMTUriRef<'_> {
-        match self {
-            MMTUri::Dom(d) => MMTUriRef::Dom(d.as_ref()),
-            MMTUri::Archive(a) => MMTUriRef::Archive(a.as_ref()),
-        }
+
+impl From<DomURI> for MMTUri {
+    fn from(uri: DomURI) -> Self {
+        MMTUri::Dom(uri)
     }
 }
-#[derive(Clone, Copy, Hash, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "bincode", derive(bincode::Encode))]
-pub enum MMTUriRef<'a> {
-    Dom(DomURIRef<'a>),
-    Archive(ArchiveURIRef<'a>),
+impl From<ArchiveURI> for MMTUri {
+    fn from(uri: ArchiveURI) -> Self {
+        MMTUri::Archive(uri)
+    }
 }
-impl<'a> MMTUriRef<'a> {
-    pub fn to_owned(&self) -> MMTUri {
-        match self {
-            MMTUriRef::Dom(d) => MMTUri::Dom(d.to_owned()),
-            MMTUriRef::Archive(a) => MMTUri::Archive(a.to_owned()),
-        }
+impl From<NarrativeURI> for MMTUri {
+    fn from(uri: NarrativeURI) -> Self {
+        MMTUri::Narrative(uri)
+    }
+}
+impl From<ContentURI> for MMTUri {
+    fn from(uri: ContentURI) -> Self {
+        MMTUri::Content(uri)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+pub enum NarrativeURI {
+    /// `<`[`ArchiveURI`]`>&D&f=<path>&n=<name>`...
+    Doc(DocumentURI),
+}
+
+impl From<DocumentURI> for NarrativeURI {
+    fn from(uri: DocumentURI) -> Self {
+        NarrativeURI::Doc(uri)
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+pub enum ContentURI {
+    /// `<`[`ArchiveURI`]`>&C&f=<path>&m=<name>`...
+    Module(ModuleURI),
+    /// `<`[`ModuleURI`]`>&n=<name>`...
+    Symbol(SymbolURI),
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+pub struct ModuleURI;
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+pub struct SymbolURI;
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct DomURI(CloneStr);
@@ -151,8 +188,8 @@ impl<'a> Display for ArchiveURIRef<'a> {
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "bincode", derive(bincode::Encode))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct DocumentURI {
     inner: CloneStr,
     archive_index: u8,
