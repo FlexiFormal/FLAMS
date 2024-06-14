@@ -1,64 +1,77 @@
-#![recursion_limit = "256"]
-
 use std::path::PathBuf;
-use std::string::ToString;
-//use std::rc::Rc;
-use std::sync::Arc;
+use lazy_static::lazy_static;
+pub static API_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
-pub type CloneStr = Arc<str>;
-pub type FinalStr = Box<str>;
-pub type HTMLStr = Arc<str>;
-
-pub type CloneSeq<A> = Arc<[A]>;
-pub type FinalSeq<A> = Box<[A]>;
-
-//#[cfg(debug_assertions)]
-//pub type Str = String;
-//#[cfg(not(debug_assertions))]
-//pub type Str = Arc<str>;
-
-//#[cfg(debug_assertions)]
-//pub type Seq<A> = Vec<A>;
-//#[cfg(not(debug_assertions))]
-//pub type Seq<A> = Arc<[A]>;
-
-pub mod ontology {
-    pub mod rdf;
+pub mod backend {
+    pub mod archives;
+    pub mod manager;
+    #[cfg(feature="oxigraph")]
+    pub mod relational;
 }
-
-pub mod archives;
-pub mod formats;
-pub mod source_files;
-pub mod uris;
-pub mod narration {
-    pub mod document;
+pub mod extensions;
+pub mod controller;
+pub mod building {
+    pub mod targets;
+    pub mod buildqueue;
 }
-
 pub mod utils {
-    pub mod circular_buffer;
-    pub mod iter;
-    pub mod parsing;
-    pub mod sourcerefs;
+    use lazy_static::lazy_static;
+    use immt_core::utils::triomphe::Arc;
 
-    pub type HMap<A, B> = ahash::HashMap<A, B>;
-    pub type HSet<A> = ahash::HashSet<A>;
+    pub mod asyncs;
+    pub mod circular_buffer;
+    
+    lazy_static!(
+        pub static ref EMPTY_ARCSTR: Arc<str> = Arc::from("");
+    );
+    
+    pub fn time<A,F:FnOnce() -> A>(f:F,s:&str) -> A {
+        let start = std::time::Instant::now();
+        let ret = f();
+        let dur = start.elapsed();
+        tracing::info!("{s} took {:?}", dur);
+        ret
+    }
 }
 
-#[cfg(feature = "fs")]
-pub fn mathhub() -> PathBuf {
+pub mod core { pub use immt_core::*; }
+
+#[cfg(feature = "rayon")]
+pub mod par {
+    pub use spliter::ParallelSpliterator;
+    pub use rayon::iter::{IntoParallelIterator,ParallelIterator};
+}
+
+lazy_static! {
+    pub static ref MATHHUB_PATHS: Box<[PathBuf]> = mathhubs().into();
+}
+
+fn mathhubs() -> Vec<PathBuf> {
     if let Ok(f) = std::env::var("MATHHUB") {
-        return PathBuf::from(f);
+        return f.split(',').map(|s| PathBuf::from(s.trim())).collect()
     }
     if let Some(d) = simple_home_dir::home_dir() {
-        let p = d.join(".stex").join("mathhub.path");
+        let p = d.join(".mathhub").join("mathhub.path");
         if let Ok(f) = std::fs::read_to_string(p) {
-            return PathBuf::from(f);
+            return f.split('\n').map(|s| PathBuf::from(s.trim())).collect()
         }
-        return d.join("MathHub");
+        return vec![d.join("MathHub")];
     }
     panic!(
         "No MathHub directory found and default ~/MathHub not accessible!\n\
-    Please set the MATHHUB environment variable or create a file ~/.stex/mathhub.path containing \
+    Please set the MATHHUB environment variable or create a file ~/.mathhub/mathhub.path containing \
     the path to the MathHub directory."
     )
+}
+
+#[cfg(test)]
+pub mod tests {
+    pub use rstest::{fixture,rstest};
+    pub use tracing::{info,warn,error};
+
+    #[fixture]
+    pub fn setup() {
+        let _ = tracing_subscriber::fmt().with_max_level(tracing::Level::INFO).try_init();
+    }
 }
