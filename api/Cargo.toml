@@ -17,7 +17,7 @@ tracing-subscriber = "0.3"
 [features]
 rayon = ["dep:rayon","dep:spliter"]
 serde = ["immt-core/serde","dep:serde","dep:bincode"]
-async = ["immt-core/async"]
+async = ["immt-core/async","dep:futures"]
 tokio = ["dep:tokio","async"]
 oxigraph = ["dep:oxigraph"]
 
@@ -31,6 +31,7 @@ tracing = "0.1"
 rayon = { version="1.10",optional = true }
 spliter = {version="0.1",optional = true}
 tokio = { version = "1", features = ["fs","io-util","sync","test-util","macros","rt"], optional = true }
+futures = {version = "0.3", optional = true }
 paste = "1.0"
 #async-generic = "1.0"
 #cfg-if = "1.0"

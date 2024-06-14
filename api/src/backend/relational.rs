@@ -7,18 +7,10 @@ pub struct RelationalManager {
     store: oxigraph::store::Store
 }
 impl RelationalManager {
-    pub fn add_quads<R,F:FnOnce(&mut dyn FnMut(Quad)) -> R>(&self,f:F) -> R {
+    pub fn add_quads(&self,iter:impl Iterator<Item=Quad>) {
         let loader = self.store.bulk_loader();
-        f(&mut |q| { let _ = loader.load_quads(std::iter::once(q)); })
+        let _ = loader.load_quads(iter);
     }
-    /*
-    #[cfg(feature="async")]
-    pub async fn add_quads_async<R,Fu:std::future::Future<Output=R>,F:FnOnce(&'static mut dyn FnMut(Quad)) -> Fu>(&self,f:F) -> R {
-        let mut loader = self.store.bulk_loader();
-        f(move |q| { let _ = loader.load_quads(std::iter::once(q)); }).await
-    }
-
-     */
 
     #[instrument(level = "info", name = "relational", target="relational", skip_all)]
     pub fn load_archives(&self,archives:&ArchiveManager) {

@@ -8,6 +8,7 @@ use crate::building::targets::SourceFormat;
 use crate::core::uris::archives::{ArchiveId, ArchiveURIRef};
 use crate::core::utils::VecMap;
 use crate::utils::asyncs::ChangeSender;
+use immt_core::building::buildstate::CumulativeState;
 
 pub trait Storage:std::fmt::Debug {
     fn spec(&self) -> StorageSpecRef<'_>;
@@ -38,7 +39,8 @@ pub trait Storage:std::fmt::Debug {
 pub struct MathArchive {
     spec:MathArchiveSpec,
     #[serde(skip)]
-    source:Option<Vec<SourceDirEntry>>
+    source:Option<Vec<SourceDirEntry>>,
+    state:CumulativeState
 }
 impl MathArchive {
     pub fn source_files(&self) -> Option<&[SourceDirEntry]> { self.source.as_deref() }
@@ -46,7 +48,7 @@ impl MathArchive {
     immt_core::asyncs!{!pub fn update_sources(&mut self, formats:&[SourceFormat], on_change:&ChangeSender<FileChange>) {
         let path = self.path().join(".immt").join("ls_f.db");
         let mut dir =  if path.exists() {
-            SourceDir::parse(&path).unwrap_or_else(|_| vec![])
+            switch!((SourceDir::parse(&path))(SourceDir::parse_async(&path))).unwrap_or_else(|_| vec![])
         } else { switch!(
             (std::fs::create_dir_all(self.path().join(".immt")))
             (tokio::fs::create_dir_all(self.path().join(".immt")))
@@ -56,11 +58,13 @@ impl MathArchive {
             let formats = formats.iter().flat_map(|f| 
                 f.file_extensions.iter().filter(|_| self.formats().contains(&f.id)).map(|e| (*e,f.id))
             ).collect::<Vec<_>>();
-            if switch!(
+            let (b,state) = switch!(
                 (SourceDir::update(&source,&mut dir,&formats,&self.spec.ignore_source,|c| on_change.send(c)))
-                (SourceDir::update2_async(&source,&mut dir,&formats,&self.spec.ignore_source,|c| on_change.send(c)))
-            ) {
-                Dir::write_to(&dir,&path);
+                (SourceDir::update_async(&source,&mut dir,&formats,&self.spec.ignore_source,|c| on_change.send(c)))
+            );
+            self.state = state;
+            if b {
+                let _ = switch!((Dir::write_to(&dir,&path))(Dir::write_to_async(&dir,&path)));
             }
         }
         self.source = Some(dir)
@@ -97,7 +101,7 @@ impl MathArchive {
     pub fn path(&self) -> &Path { &self.spec.path }
     
     pub fn new_from(spec:MathArchiveSpec) -> Self {
-        Self { spec,source:None }
+        Self { spec,source:None,state:CumulativeState::default() }
     }
 }
 impl Storage for MathArchive {

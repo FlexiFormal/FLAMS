@@ -33,6 +33,14 @@ pub mod utils {
         tracing::info!("{s} took {:?}", dur);
         ret
     }
+    #[cfg(feature="tokio")]
+    pub async fn time_async<A>(f:impl std::future::Future<Output=A>,s:&str) -> A {
+        let start = std::time::Instant::now();
+        let ret = f.await;
+        let dur = start.elapsed();
+        tracing::info!("{s} took {:?}", dur);
+        ret
+    }
 }
 
 pub mod core { pub use immt_core::*; }
