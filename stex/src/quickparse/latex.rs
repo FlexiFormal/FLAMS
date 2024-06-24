@@ -2,13 +2,13 @@ pub mod rules;
 
 use crate::quickparse::tokenizer::TeXTokenizer;
 use crate::quickparse::tokens::TeXToken;
-use immt_api::utils::iter::VecMap;
-use immt_api::utils::sourcerefs::{SourcePos, SourceRange};
-use immt_api::utils::HMap;
-use immt_system::utils::parse::{ParseSource, StringOrStr};
+use immt_api::core::utils::sourcerefs::{SourcePos, SourceRange};
+use immt_api::core::utils::parse::{ParseSource, StringOrStr};
 use std::collections::hash_map::Entry;
 use std::convert::Into;
 use std::marker::PhantomData;
+use tex_engine::utils::HMap;
+use immt_api::core::utils::VecMap;
 
 pub trait FromLaTeXToken<'a, S: StringOrStr<'a>, P: SourcePos>: Sized {
     fn from_comment(r: SourceRange<P>) -> Option<Self>;
@@ -427,15 +427,15 @@ impl<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>> LaTeXPars
                     match self.read_name(&mut end) {
                         Some(n) if n == name => {
                             env.end = Some(end);
-                            match close {
+                            return match close {
                                 Some(close) => {
                                     let ret = close(env, self);
                                     self.close_group();
-                                    return ret;
+                                    ret
                                 }
                                 None => {
                                     self.close_group();
-                                    return EnvironmentResult::Simple(env);
+                                    EnvironmentResult::Simple(env)
                                 }
                             }
                         }

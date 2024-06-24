@@ -1,0 +1,72 @@
+[workspace]
+members = ["api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm"]
+resolver = "2"
+exclude = ["web/graphs","test-plugin","tests"]
+
+[profile.release]
+opt-level = 2
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# Defines a size-optimized profile for the WASM bundle in release mode
+[profile.wasm-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+enum_glob_use = "deny"
+pedantic = "deny"
+nursery = "deny"
+unwrap_used = "deny"
+
+[[workspace.metadata.leptos]]
+# project name
+name = "iMMT"
+bin-package = "immt"
+lib-package = "immt-web"
+#bin-features = ["async"]
+bin-features = ["accounts"]
+lib-features = ["client"]
+lib-default-features = false
+lib-profile-release = "wasm-release"
+bin-default-features = false
+site-root = "target/web"
+output-name = "immt"
+assets-dir = "web/main/assets"
+site-pkg-dir = "pkg"
+style-file = "web/main/style/main.scss"
+browserquery = "defaults"
+lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
+
+
+# search:
+# https://docs.rs/crate/tantivy/latest
+
+# interesting: https://github.com/rodrimati1992/abi_stable_crates
+
+# https://nullderef.com/series/rust-plugins/
+# https://github.com/marioortizmanero/pdk-experiments/tree/master/abi-stable-connectors
+
+# https://fasterthanli.me/articles/so-you-want-to-live-reload-rust
+# https://www.michaelfbryan.com/rust-ffi-guide/dynamic_loading.html
+# https://zicklag.github.io/rust-tutorials/rust-plugins.html
+
+# cglue?
+# https://github.com/h33p/cglue/tree/main/examples
+
+# https://crisal.io/words/2020/02/28/C++-rust-ffi-patterns-1-complex-data-structures.html
+
+
+# nais: https://crates.io/crates/triomphe
+
+
+# prolly not:
+# https://gitlab.com/zack-emmert/abi_trait

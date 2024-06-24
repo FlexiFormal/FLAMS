@@ -1,0 +1,44 @@
+[package]
+name = "immt-tests"
+version = "0.1.0"
+edition = "2021"
+
+#[[bench]]
+#name = "mutex"
+#harness = false
+
+#[[bench]]
+#name = "plugins"
+#harness = false
+
+[[bench]]
+name = "archives"
+harness = false
+
+[dev-dependencies]
+color-eyre = "0.6.2"
+rstest = "0.21.0"
+tracing-subscriber = "0.3"
+criterion = { version="0.5",features = ["async_tokio"] }
+tokio = { version="1.37",features = ["full"] }
+array-init = "2.1"
+triomphe = "0.1"
+
+lazy_static = "1.4"
+parking_lot = "0.12"
+tokio-rayon = "2.1.0"
+
+# maybe / experiments
+string-interner = "0.17.0"
+symbol_table = "0.3.0"
+libloading = "0.8"
+
+[dependencies]
+#immt-core = { path = "../core" }
+immt-api = { path = "../api", features = ["tokio","rayon"] }
+test-plugin = { path = "../test-plugin" }
+tracing = "0.1"
+
+#crossbeam-channel = "0.5"
+#event-listener = "5.2"
+async-broadcast = "0.7"

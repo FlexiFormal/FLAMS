@@ -1,22 +1,10 @@
 [package]
 name = "immt-shtml"
-version = "0.0.1"
-authors = ["Dennis Müller <d.mueller@kwarc.info>"]
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-description = """
-
-"""
+version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["lib"]
-path = "src/lib.rs"
-
-[dev-dependencies]
+[lints]
+workspace = true
 
 [dependencies]
-immt-api = {path = "../api"}
-immt-system = {path = "../system"}
-async-trait = "0.1"
-const_format = "0.2"
+immt-api = { path="../api" }

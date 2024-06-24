@@ -1,0 +1,18 @@
+@import "./components/treeview";
+@import "./components/loglist";
+body {
+	font-family: sans-serif;
+	text-align: center;
+	margin:0;
+	height: 100vh;
+}
+.immt-main {
+	margin:0;
+	height:100vh;
+	width: 100%;
+}
+
+.immt-menu {
+	border-right: 3px double black;
+	min-width: fit-content;
+}

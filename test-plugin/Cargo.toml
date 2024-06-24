@@ -1,0 +1,18 @@
+[package]
+name = "test-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dev-dependencies]
+rstest = "0.21.0"
+tracing-subscriber = "0.3"
+
+[dependencies]
+immt-api = {path="../api"}
+lazy_static = "1.4"
+RusTeX = {path= "../../RusTeXNew/rustex"}
+tex_engine = {path= "../../RusTeXNew/tex_engine"}

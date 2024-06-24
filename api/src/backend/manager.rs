@@ -1,5 +1,7 @@
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
+use std::process::Output;
+use futures::TryFutureExt;
 use tracing::instrument;
 use immt_core::building::formats::ShortId;
 use immt_core::ontology::archives::{ArchiveGroup, MathArchiveSpec, StorageSpec};
@@ -10,7 +12,7 @@ use immt_core::utils::{arrayvec, VecMap};
 use crate::backend::archives::{Archive, MathArchive, Storage};
 use crate::building::targets::SourceFormat;
 use crate::utils::asyncs::{ChangeSender, lock};
-use immt_core::building::buildstate::BuildState;
+use immt_core::building::buildstate::{BuildState, AllStates};
 use immt_core::ontology::rdf::terms::Quad;
 use immt_core::ulo;
 use immt_core::utils::filetree::FileChange;
@@ -25,13 +27,13 @@ pub enum ArchiveChange{
 }
 
 #[derive(Debug)]
-struct ArchiveManagerI {
+pub struct ArchiveTree {
     archives: Vec<Archive>,
     groups: Vec<ArchiveGroup>,
 }
 
 pub struct ArchiveManager{
-    lock:lock::Lock<ArchiveManagerI>,
+    lock:lock::Lock<ArchiveTree>,
     change_sender: ChangeSender<ArchiveChange>,
     filechange_sender: ChangeSender<FileChange>,
 }
@@ -39,7 +41,7 @@ pub struct ArchiveManager{
 impl Default for ArchiveManager {
     fn default() -> Self {
         Self {
-            lock:lock::Lock::new(ArchiveManagerI {
+            lock:lock::Lock::new(ArchiveTree {
                 archives: Vec::new(),
                 groups: Vec::new()
             }),
@@ -50,8 +52,9 @@ impl Default for ArchiveManager {
 }
 
 #[cfg(feature = "tokio")]
+#[derive(Debug)]
 pub struct ArchiveManagerAsync{
-    lock:tokio::sync::RwLock<ArchiveManagerI>,
+    lock:tokio::sync::RwLock<ArchiveTree>,
     change_sender: ChangeSender<ArchiveChange>,
     filechange_sender: ChangeSender<FileChange>,
 }
@@ -59,7 +62,7 @@ pub struct ArchiveManagerAsync{
 impl Default for ArchiveManagerAsync {
     fn default() -> Self {
         Self {
-            lock:tokio::sync::RwLock::new(ArchiveManagerI {
+            lock:tokio::sync::RwLock::new(ArchiveTree {
                 archives: Vec::new(),
                 groups: Vec::new()
             }),
@@ -79,15 +82,15 @@ impl ArchiveManager {
     pub fn load_par(&self, path:&Path, formats:&[SourceFormat]) -> Vec<Quad> {
         self.lock.write(|s| s.load_par(path,formats,&self.filechange_sender,&self.change_sender))
     }
-    pub fn with_tree<R>(&self, f:impl FnOnce(&[ArchiveGroup]) -> R) -> R {
-        self.lock.read(|s| f(s.groups.as_slice()))
+    pub fn with_tree<R>(&self, f:impl FnOnce(&ArchiveTree) -> R) -> R {
+        self.lock.read(|s| f(&*s))
     }
     
     pub fn find<R,S:AsRef<str>>(&self,id:S,f:impl FnOnce(Option<&Archive>) -> R) -> R {
         self.lock.read(|s| {
             let id = id.as_ref();
-            if let Ok(i) = s.archives.binary_search_by_key(&id,|a| a.uri().id().as_str()) {
-                f(Some(&s.archives[i]))
+            if let Some(a) = ArchiveTree::find_i(s.archives.as_slice(), id) {
+                f(Some(a))
             } else {f(None)}
         })
     }
@@ -95,29 +98,53 @@ impl ArchiveManager {
 
 #[cfg(feature = "tokio")]
 impl ArchiveManagerAsync {
-    pub async fn load(&self, path:PathBuf, formats:&'static[SourceFormat]) -> Vec<Quad> {
+    pub async fn load(&self, path:PathBuf, formats:Box<[SourceFormat]>) -> Vec<Quad> {
         let mut lock = self.lock.write().await;
         lock.load_async(path,formats,self.filechange_sender.clone(),&self.change_sender).await
     }
-    pub async fn with_archives<R,F:std::future::Future<Output=R>>(&self,f:impl FnOnce(&[Archive]) -> F) -> R {
+    pub async fn with_archives<R,F:FnOnce(&[Archive]) -> R>(&self,f:F) -> R {
         let mut lock = self.lock.read().await;
-        f(lock.archives()).await
+        f(lock.archives())
     }
-    pub async fn with_tree<R,F:std::future::Future<Output=R>>(&self, f:impl FnOnce(&[ArchiveGroup]) -> F) -> R {
-        let mut lock = self.lock.read().await;
-        f(lock.groups.as_slice()).await
+    pub async fn with_tree<R,F:FnOnce(&ArchiveTree) -> R>(&self, f:F) -> R {
+        let lock = self.lock.read().await;
+        f(&*lock)
     }
 
-    pub async fn find<R,S:AsRef<str>,F:std::future::Future<Output=R>>(&self,id:S,f:impl FnOnce(Option<&Archive>) -> F) -> R {
+    pub async fn find<R,S:AsRef<str>,F:FnOnce(Option<&Archive>) -> R>(&self,id:S,f:F) -> R {
         let mut lock = self.lock.read().await;
         let id = id.as_ref();
-        if let Ok(i) = lock.archives.binary_search_by_key(&id,|a| a.uri().id().as_str()) {
-            f(Some(&lock.archives[i])).await
-        } else {f(None).await}
+        if let Some(a) = ArchiveTree::find_i(lock.archives.as_slice(), id) {
+            f(Some(a))
+        } else {f(None)}
     }
 }
 
-impl ArchiveManagerI {
+impl ArchiveTree {
+    pub fn archives(&self) -> &[Archive] { &self.archives }
+    pub fn groups(&self) -> &[ArchiveGroup] { &self.groups }
+    pub fn find_archive(&self,id:&ArchiveId) -> Option<&Archive> {
+        Self::find_i(self.archives.as_slice(), id.as_str())
+    }
+    pub fn find_group_or_archive(&self,prefix:impl AsRef<str>) -> Option<&ArchiveGroup> {
+        let sr = prefix.as_ref();
+        let mut ls = self.groups.as_slice();
+        let mut ret = None;
+        for step in sr.split('/') {
+            let i = ls.binary_search_by_key(&step,|v| v.id().last_name())
+                .ok()?;
+            let elem = &ls[i];
+            ret = Some(elem);
+            ls = match elem {
+                ArchiveGroup::Group { children, .. } => children.as_slice(),
+                ArchiveGroup::Archive(..) => &[]
+            }
+        }
+        ret
+    }
+    fn find_i<'a>(archives:&'a [Archive], id:&str) -> Option<&'a Archive> {
+        archives.binary_search_by_key(&id,|a| a.uri().id().as_str()).ok().map(|i| &archives[i])
+    }
     #[instrument(level = "info",
     target = "archives",
     name = "Loading archives",
@@ -134,10 +161,15 @@ impl ArchiveManagerI {
         }) {
             a.update_sources(formats, fsender);
         }
+        for g in &mut self.groups {
+            g.update(&|id| Self::find_i(self.archives.as_slice(), id.as_str()).and_then(|a|
+                if let Archive::Physical(ma) = a {
+                    Some(ma.state())
+                } else {None }
+            ));
+        }
         quads
     }
-    
-    fn archives(&self) -> &[Archive] { &self.archives }
 
     #[cfg(feature = "rayon")]
     #[instrument(level = "info",
@@ -152,26 +184,32 @@ impl ArchiveManagerI {
         tracing::info!(target:"archives","Searching for archives");
         let span = tracing::Span::current();
         
-        let news = ArchiveIterator::new_in_span(path,formats,Some(&span)).par_split().into_par_iter().collect::<Vec<_>>();
-        let (changed,new,deleted,quads) = self.do_specs(news.into_iter(),asender);
+        let news = ArchiveIterator::new_in_span(path,formats,Some(&span)).par_split().into_par_iter()
+            .map(|a| {
+                let mut a = MathArchive::new_from(a);
+                a.update_sources(formats,&fsender);
+                a
+            }).collect::<Vec<_>>();
+        let (changed,new,deleted,quads) = self.do_specs_ii(news,asender);
         tracing::info!(target:"archives","Done; {new} new, {changed} changed, {deleted} deleted");
-        crate::utils::time(||
-        self.archives.par_iter_mut().filter_map(|a| match a {
-            Archive::Physical(a) => Some(a),
-            _ => None
-        }).for_each(|a| { a.update_sources(formats,fsender); }),
-                           "Updating sources"
-        );
+
+        for g in &mut self.groups {
+            g.update(&|id| Self::find_i(self.archives.as_slice(), id.as_str()).and_then(|a|
+                if let Archive::Physical(ma) = a {
+                    Some(ma.state())
+                } else {None }
+            ));
+        }
         quads
     }
 
     #[cfg(feature = "tokio")]
-    fn do_dir_i(path:PathBuf, currp:String,formats: &'static [SourceFormat],fsender:ChangeSender<FileChange>) -> futures::future::BoxFuture<'static,Vec<MathArchive>> { use futures::future::{BoxFuture, FutureExt};async move {
+    async fn async_dir(path:PathBuf, currp:String) -> Result<(PathBuf,String),Vec<(PathBuf, String)>> {
         let mut curr = match tokio::fs::read_dir(&path).await {
             Ok(rd) => rd,
             _ => {
                 tracing::warn!(target:"archives","Could not read directory {}", path.display());
-                return Vec::new()
+                return Err(Vec::new())
             }
         };
         let mut stack = Vec::new();
@@ -184,34 +222,21 @@ impl ArchiveManagerI {
                 if d.file_name().to_str().map_or(true, |s| s.starts_with('.')) { continue }
                 let path = d.path();
                 if d.file_name().eq_ignore_ascii_case("meta-inf") {
-                    match get_manifest_async(&path,&currp).await {
-                        Some(Ok(m)) => {
-                            let mut m = MathArchive::new_from(m);
-                            m.update_sources_async(formats,&fsender).await;
-                            return vec![m]
+                    match find_manifest_async(&path,&currp).await {
+                        Some(path) => {
+                            let currp = currp.clone();
+                            return Ok((path,currp))
                         },
-                        Some(_) => return vec![],
                         _ => ()
                     }
                 }
                 let name = d.file_name();
                 let name = name.to_str().unwrap();
-                stack.push(Self::do_dir_i(
-                    path,
-                    if currp.is_empty() {name.to_string()} else {format!("{}/{}", currp, name)},
-                    formats,
-                    fsender.clone()
-                ));
+                stack.push((path, if currp.is_empty() {name.to_string()} else {format!("{}/{}", currp, name)}));
             }
         }
-        let mut js = tokio::task::JoinSet::new();
-        for f in stack { js.spawn(f); }
-        let mut ret = Vec::new();
-        while let Some(a) = js.join_next().await {
-            if let Ok(a) = a {ret.extend(a)}
-        }
-        ret
-    }.boxed()}
+        Err(stack)
+    }
 
     #[cfg(feature = "tokio")]
     #[instrument(level = "info",
@@ -220,32 +245,63 @@ impl ArchiveManagerI {
         fields(path = %path.display()),
         skip_all
     )]
-    async fn load_async(&mut self, path:PathBuf, formats:&'static[SourceFormat],fsender:ChangeSender<FileChange>, asender:&ChangeSender<ArchiveChange>) -> Vec<Quad> {
+    async fn load_async(&mut self, path:PathBuf, formats:Box<[SourceFormat]>,fsender:ChangeSender<FileChange>, asender:&ChangeSender<ArchiveChange>) -> Vec<Quad> {
         tracing::info!(target:"archives","Searching for archives");
 
-        let ret = Self::do_dir_i(path, String::new(),formats,fsender).await;
+        //let ret = Self::do_dir_i(path, String::new(),formats,fsender).await;
+        let mut js = tokio::task::JoinSet::new();
+        let mut ret
+            = Vec::new();
+
+        fn do_dir(path:PathBuf,currp:String) -> impl std::future::Future<Output=Result<Result<(PathBuf,String),Vec<(PathBuf,String)>>,Option<MathArchive>>> {
+            let span = tracing::Span::current();
+            async move {
+                let _span = span.enter();
+                Ok(ArchiveTree::async_dir(path, currp).await)
+            }
+        }
+        fn do_manifest(formats:&Box<[SourceFormat]>,fsender:&ChangeSender<FileChange>,p:PathBuf,s:String) -> impl std::future::Future<Output=Result<Result<(PathBuf,String),Vec<(PathBuf,String)>>,Option<MathArchive>>> {
+            let span = tracing::Span::current();
+            let formats = formats.clone();
+            let fsender = fsender.clone();
+            async move {
+                let _span = span.enter();
+                if let Ok(m) = do_manifest_async(&p,&s).await {
+                    let mut m = MathArchive::new_from(m);
+                    m.update_sources_async(&formats, &fsender).await;
+                    Err(Some(m))
+                } else {Err(None)}
+            }
+        }
+        let f = do_dir(path, String::new());
+        js.spawn(f);
+        while let Some(Ok(r)) = js.join_next().await {
+            match r {
+                Ok(Ok((p,s))) => {
+                    let f = do_manifest(&formats,&fsender,p,s);
+                    js.spawn(f);
+                }
+                Ok(Err(v)) => for (path,currp) in v {
+                        let f = do_dir(path, currp);
+                        js.spawn(f);
+                }
+                Err(Some(m)) => ret.push(m),
+                Err(_) => ()
+            }
+        }
+        assert!(js.is_empty());
+        drop(js);
 
         let (changed,new,deleted,quads) = self.do_specs_ii(ret,asender);
 
-
+        for g in &mut self.groups {
+            g.update(&|id| Self::find_i(self.archives.as_slice(), id.as_str()).and_then(|a|
+                if let Archive::Physical(ma) = a {
+                    Some(ma.state())
+                } else {None }
+            ));
+        }
         tracing::info!(target:"archives","Done; {new} new, {changed} changed, {deleted} deleted");
-        /*
-        crate::utils::time_async(async {
-            let mut js = tokio::task::JoinSet::new();
-            for mut a in std::mem::take(&mut self.archives) {
-                if let Archive::Physical(mut a) = a {
-                    let sender = fsender.clone();
-                    js.spawn(async move { a.update_sources_async(formats,&sender).await; a});
-                } else {
-                    self.archives.push(a);
-                }
-            }
-            while let Some(a) = js.join_next().await {
-                if let Ok(a) = a {self.archives.push(Archive::Physical(a))}
-            }
-        },"Updating sources").await;
-
-         */
         quads
     }
 
@@ -311,6 +367,7 @@ impl ArchiveManagerI {
                 Err(i) => {
                     let uri = spec.storage.uri.clone();
                     let ma = Archive::Physical(MathArchive::new_from(spec));
+                    todo!("state");
                     self.add_archive(uri.as_ref(),sender,&mut ret);
                     self.archives.insert(i,ma);
                     new += 1;
@@ -373,7 +430,7 @@ impl ArchiveManagerI {
             match curr.binary_search_by(|t| t.id().steps().last().unwrap().cmp(step)) {
                 Ok(i) => {
                     match &mut curr[i] {
-                        ArchiveGroup::Group{has_meta,id,..} if steps.len() == 1 && is_meta => {
+                        ArchiveGroup::Group{has_meta,id,state,..} if steps.len() == 1 && is_meta => {
                             *has_meta = true;
                             quads.push(ulo!(>(format!("immt://archive-groups#{}",id)) CONTAINS (uri.to_iri()) Q));
                             return
@@ -403,7 +460,8 @@ impl ArchiveManagerI {
                     }
                     let group = ArchiveGroup::Group {
                         id: ArchiveId::new(joined.clone()),
-                        has_meta, children:Vec::new()
+                        has_meta, children:Vec::new(),
+                        state: AllStates::default()
                     };
                     sender.send(ArchiveChange::NewGroup(group.id().clone()));
                     curr.insert(i, group);
@@ -458,7 +516,7 @@ immt_core::asyncs!{fn next_dir
     }
 }}
 
-immt_core::asyncs!{fn get_manifest(metainf: &Path,id:&str) -> Option<Result<MathArchiveSpec, ()>> {
+immt_core::asyncs!{fn find_manifest(metainf: &Path,id:&str) -> Option<PathBuf> {
     tracing::trace!("Checking for manifest");
     match read_dir!(metainf) {
         Ok(mut rd) => {
@@ -477,7 +535,7 @@ immt_core::asyncs!{fn get_manifest(metainf: &Path,id:&str) -> Option<Result<Math
                 if !path.is_file() {
                     continue;
                 }
-                return Some(switch!((do_manifest(&path,id))(do_manifest_async(&path,id))));
+                return Some(path);
             }
             tracing::trace!("not found");
             None
@@ -580,17 +638,19 @@ immt_core::asyncs!{fn next
         if md.is_dir() {
             if d.file_name().to_str().map_or(true, |s| s.starts_with('.')) { continue }
             else if d.file_name().eq_ignore_ascii_case("meta-inf") {
-                match switch!((get_manifest(&path,currp))(get_manifest_async(&path,currp))) {
-                    Some(Ok(m)) => {
-                        stack.pop();
-                        if !switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) {
-                            *curr = None;
+                match switch!((find_manifest(&path,currp))(find_manifest_async(&path,currp))) {
+                    Some(path) => match switch!((do_manifest(&path,currp))(do_manifest_async(&path,currp))) {
+                        Ok(m) => {
+                            stack.pop();
+                            if !switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) {
+                                *curr = None;
+                            }
+                            return Some(m)
                         }
-                        return Some(m)
-                    }
-                    Some(_) => {
-                        stack.pop();
-                        if switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) { continue } else { return None }
+                        _ => {
+                            stack.pop();
+                            if switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) { continue } else { return None }
+                        }
                     }
                     _ => ()
                 }
@@ -722,7 +782,7 @@ mod tests {
         let mut mgr = super::ArchiveManagerAsync::default();
         let relman = RelationalManager::default();
         crate::utils::time_async(
-            async {relman.add_quads(mgr.load(Path::new("/home/jazzpirate/work/MathHub").to_owned(), &STEX).await.into_iter())},
+            async {relman.add_quads(mgr.load(Path::new("/home/jazzpirate/work/MathHub").to_owned(), STEX.into()).await.into_iter())},
             "Loading archives in parallel"
         ).await;
     }

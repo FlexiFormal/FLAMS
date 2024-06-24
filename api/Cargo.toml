@@ -14,11 +14,14 @@ rustc_version = "0.4"
 rstest = "0.21.0"
 tracing-subscriber = "0.3"
 
+[lints]
+workspace = true
+
 [features]
 rayon = ["dep:rayon","dep:spliter"]
 serde = ["immt-core/serde","dep:serde","dep:bincode"]
 async = ["immt-core/async","dep:futures"]
-tokio = ["dep:tokio","async"]
+tokio = ["dep:tokio","async","dep:oxrdfio"]
 oxigraph = ["dep:oxigraph"]
 
 [dependencies]
@@ -40,3 +43,4 @@ paste = "1.0"
 async-broadcast = "0.7"
 parking_lot = "0.12"
 oxigraph = { version = "0.4.0-alpha.7", optional = true }
+oxrdfio = { version = "0.1.0-alpha.6", optional = true, features = ["async-tokio"] }

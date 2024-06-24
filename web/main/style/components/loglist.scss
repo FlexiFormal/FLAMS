@@ -1,0 +1,50 @@
+.immt-log-list {
+  width: fit-content;
+}
+.immt-log-elem {
+  text-align: left;
+}
+.immt-log-elem details {
+  display: inline-block;
+}
+
+.immt-log-error {
+  color: red;
+}
+.immt-log-warn {
+  color: #833c00 ;
+}
+.immt-log-info {
+  color: #836400;
+}
+.immt-log-debug {
+  color: #006b83;
+}
+.immt-log-trace {
+  color: white;
+}
+.immt-spinner-inline {
+  display:inline-block;
+  vertical-align:middle;
+  transform-origin: center;
+  transform: scale(0.5);
+}
+
+.immt-log-frame {
+  font-family: monospace;
+  overflow-y: scroll;
+  height: 70%;
+  text-align: left;
+  width: 100%;
+  background-color: #292929;
+}
+
+.immt-warn-frame {
+  font-family: monospace;
+  overflow-y: scroll;
+  height: calc(30% - 2px);
+  border-top: 2px solid;
+  text-align: left;
+  width: 100%;
+  background-color: black;
+}

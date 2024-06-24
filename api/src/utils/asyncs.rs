@@ -1,14 +1,22 @@
+use std::future::Future;
+
 pub fn background<F:FnOnce() + Send + 'static>(f:F) {
+    let f = in_span(|| f());
+    rayon::spawn(f);
+}
+
+pub fn in_span<F:FnOnce() -> R,R>(f:F) -> impl FnOnce() -> R {
     let span = tracing::Span::current();
-    rayon::spawn(move || {
+    move || {
         let _span = span.enter();
         f()
-    });
+    }
 }
+
 
 #[derive(Debug)]
 pub struct ChangeListener<T:Clone>{
-    inner: async_broadcast::Receiver<T>,
+    pub inner: async_broadcast::Receiver<T>,
 }
 impl<T:Clone> ChangeListener<T> {
     pub fn get(&mut self) -> Option<T> {

@@ -16,6 +16,8 @@ pub mod building {
     pub mod buildqueue;
 }
 pub mod utils {
+    use std::ffi::OsStr;
+    use std::path::Path;
     use lazy_static::lazy_static;
     use immt_core::utils::triomphe::Arc;
 
@@ -40,6 +42,25 @@ pub mod utils {
         let dur = start.elapsed();
         tracing::info!("{s} took {:?}", dur);
         ret
+    }
+    pub fn run_command<'a,A:AsRef<OsStr>,S:AsRef<OsStr>,
+        Env:Iterator<Item=(S,S)>,
+        Args:Iterator<Item=A>
+    >(cmd:&str,args:Args,in_path:&Path,mut with_envs:Env) -> Result<std::process::Output,()> {
+        let mut proc = std::process::Command::new(cmd);
+        let parent = if let Some(p) = in_path.parent() {p} else {return Err(())};
+        let mut process = proc
+            .args(args)
+            .current_dir(parent);
+        for (k,v) in with_envs {
+            process = process.env(k,v);
+        }
+        process = process.env("IMMT_ADMIN_PWD","NOPE");
+        match process.stdout(std::process::Stdio::piped()).spawn() {
+            Ok(c) => c.wait_with_output().map_err(|_|()),
+            Err(_) => Err(()),
+        }
+
     }
 }
 

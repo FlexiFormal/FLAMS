@@ -1,11 +1,13 @@
 use std::any::Any;
 use immt_core::building::formats::ShortId;
 use crate::building::targets::SourceFormat;
-use crate::controller::Controller;
+use crate::controller::{Controller};
 
-pub trait MMTExtension:Send+Sync {
+pub trait MMTExtension:Send+Sync+std::fmt::Debug {
     fn name(&self) -> ShortId;
     fn on_plugin_load(&self,_controller:&dyn Controller) {}
+    #[cfg(feature = "tokio")]
+    fn on_plugin_load_async(&self,_controller:&dyn crate::controller::ControllerAsync) {}
     
     fn test(&self, controller:&mut dyn Controller) -> bool;
     fn test2(&self, controller:&mut dyn Controller) -> bool;

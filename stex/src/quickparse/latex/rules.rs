@@ -2,228 +2,359 @@ use crate::quickparse::latex::{
     EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult,
 };
 use crate::quickparse::tokenizer::Mode;
-use immt_api::utils::sourcerefs::{SourcePos, SourceRange};
-use immt_system::utils::parse::ParseSource;
+use immt_api::core::utils::sourcerefs::{SourcePos, SourceRange};
+use immt_api::core::utils::parse::ParseSource;
 
-#[macro_export]
-macro_rules! csrule {
-    ($name:ident,$m:ident,$p:ident => $c:block) => {
-        #[allow(unused_mut,non_snake_case)]
-        pub fn $name<'a,
-            Pa:ParseSource<'a>,
-            T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >(mut $m:Macro<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> $c
-    };
-}
+pub fn read_verbatim_char<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>>
+    (mac:&mut Macro<'a,Pa::Str,Pa::Pos,T>,p:&mut LaTeXParser<'a,Pa,T>,end:char) {
 
-#[macro_export]
-macro_rules! simple {
-    ($name:ident,$m:ident,$p:ident => $c:block) => {
-        csrule!($name,$m,$p => {
-            $c;
-            MacroResult::Simple($m)
-        });
+    let tstart = p.curr_pos().clone();
+    let t = p.tokenizer.reader.read_until(|c| c == end);
+    if let Some(text) = T::from_text(SourceRange{start:tstart,end:p.curr_pos().clone()},t) {
+        mac.args.push(text);
     }
-}
-
-csrule!(begin, r#macro, parser => {
-    match parser.read_name(&mut r#macro) {
-        None => {
-            parser.tokenizer.problem("Expected { after \\begin");
-            MacroResult::Simple(r#macro)
-        }
-        Some(s) => {
-            match parser.environment(r#macro,s) {
-                EnvironmentResult::Success(e) => MacroResult::Success(e),
-                EnvironmentResult::Other(v) => MacroResult::Other(v),
-                EnvironmentResult::Simple(e) => match T::from_environment(e) {
-                    Some(t) => MacroResult::Success(t),
-                    None => MacroResult::Other(vec!())
-                }
-            }
-        }
-    }
-});
-
-csrule!(end, r#macro, parser => {
-    match parser.read_name(&mut r#macro) {
-        None => {
-            parser.tokenizer.problem("Expected { after \\end");
-        }
-        Some(s) => {
-            parser.tokenizer.problem(format!("environment {} not open",s.as_ref()));
-        }
-    }
-    MacroResult::Simple(r#macro)
-});
-
-simple!(inline_verbatim,m,p => {
-    p.skip_opt(&mut m);
-    if let Some(h) = p.tokenizer.reader.pop_head() {
-        let tstart = p.curr_pos().clone();
-        let t = p.tokenizer.reader.read_until(|c| c == h);
-        if let Some(text) = T::from_text(SourceRange{start:tstart,end:p.curr_pos().clone()},t) {
-            m.args.push(text);
-        }
-        if let Some(h2) = p.tokenizer.reader.pop_head() {
-            if h2 != h {
-                p.tokenizer.problem("Expected end of verbatim");
-            }
-        } else {
+    if let Some(h2) = p.tokenizer.reader.pop_head() {
+        if h2 != end {
             p.tokenizer.problem("Expected end of verbatim");
         }
     } else {
-        p.tokenizer.problem("Expected character");
+        p.tokenizer.problem("Expected end of verbatim");
     }
-});
-
-pub enum ArgType {
-    Normal,
-    Optional,
 }
 
-pub fn skip_args<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>>(
-    args: &[ArgType],
-    mut m: Macro<'a, Pa::Str, Pa::Pos, T>,
-    p: &mut LaTeXParser<'a, Pa, T>,
-) -> MacroResult<'a, Pa::Str, Pa::Pos, T> {
-    for a in args {
-        match a {
-            ArgType::Normal => p.skip_arg(&mut m),
-            ArgType::Optional => {
-                p.skip_opt(&mut m);
-            }
+pub fn read_verbatim_str<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>>
+(env:&mut Environment<'a,Pa::Str,Pa::Pos,T>,p:&mut LaTeXParser<'a,Pa,T>,end:&str) {
+    let tstart = p.curr_pos().clone();
+    let t = p.tokenizer.reader.read_until_str(end);
+    if let Some(text) = T::from_text(SourceRange{start:tstart,end:p.curr_pos().clone()},t) {
+        env.args.push(text);
+    }
+}
+
+#[macro_export]
+macro_rules! texrules {
+    ($name:ident <= $(($($rl:tt)*))*) => {
+        $(
+            $crate::tex!($($rl)*)
+        )*
+        paste!{
+            pub fn [<$name _macros>]<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>>() ->
+            [(Pa::Str,MacroRule<'a,Pa,T>);texrules!( $( ($($rl)*) )* )] {[
+                todo!()
+            ]}
         }
-    }
-    MacroResult::Simple(m)
-}
-
-const N: ArgType = ArgType::Normal;
-const O: ArgType = ArgType::Optional;
-
-simple!(begingroup,m,p => { p.open_group() });
-simple!(endgroup,m,p => { p.close_group() });
-simple!(makeatletter,m,p => { p.add_letters("@") });
-simple!(makeatother,m,p => { p.remove_letters("@") });
-simple!(ExplSyntaxOn,m,p => { p.add_letters(":_") });
-simple!(ExplSyntaxOff,m,p => { p.remove_letters(":_") });
-csrule!(lstinline,m,p => {inline_verbatim(m,p)});
-csrule!(verb,m,p => {inline_verbatim(m,p)});
-csrule!(stexcodeinline,m,p => {inline_verbatim(m,p)});
-csrule!(newcommand,m,p => {skip_args(&[N,O,O,N],m,p)});
-csrule!(providecommand,m,p => {skip_args(&[N,O,O,N],m,p)});
-csrule!(renewcommand,m,p => {skip_args(&[N,O,O,N],m,p)});
-csrule!(newenvironment,m,p => {skip_args(&[N,O,O,N,N],m,p)});
-csrule!(provideenvironment,m,p => {skip_args(&[N,O,O,N,N],m,p)});
-csrule!(renewenvironment,m,p => {skip_args(&[N,O,O,N,N],m,p)});
-csrule!(NewDocumentCommand,m,p => {skip_args(&[N,N,N],m,p)});
-csrule!(DeclareDocumentCommand,m,p => {skip_args(&[N,N,N],m,p)});
-csrule!(DeclareRobustCommand,m,p => {skip_args(&[N,N],m,p)});
-csrule!(NewDocumentEnvironment,m,p => {skip_args(&[N,N,N,N],m,p)});
-csrule!(DeclareDocumentEnvironment,m,p => {skip_args(&[N,N,N,N],m,p)});
-csrule!(r#ref,m,p => {skip_args(&[N],m,p)});
-csrule!(label,m,p => {skip_args(&[N],m,p)});
-csrule!(cite,m,p => {skip_args(&[N],m,p)});
-csrule!(includegraphics,m,p => {skip_args(&[O,N],m,p)});
-csrule!(url,m,p => {skip_args(&[O,N],m,p)});
-simple!(lstdefinelanguage,m,p => {
-    p.skip_arg(&mut m);
-    if p.skip_opt(&mut m) {
-        p.skip_arg(&mut m);
-    }
-    p.skip_arg(&mut m);
-});
-
-#[macro_export]
-macro_rules! switch_mode {
-    ($i:ident,$m:expr) => {
-        simple!($i,m,p => {
-            let mode = p.tokenizer.mode;
-            p.open_group();
-            p.tokenizer.mode = $m;
-            p.read_argument(&mut m);
-            p.tokenizer.mode = mode;
-            p.close_group();
-        });
+    };
+    (@count ) => (0usize);
+    (@count ($($i:tt)*) $($r:tt)* ) => {
+        (1usize + texrules!(@count $($r)*))
     }
 }
 
-switch_mode!(hbox, Mode::Text);
-switch_mode!(vbox, Mode::Text);
-switch_mode!(fbox, Mode::Text);
-switch_mode!(text, Mode::Text);
-switch_mode!(texttt, Mode::Text);
-switch_mode!(textrm, Mode::Text);
-simple!(ensuremath,m,p => {
-    if matches!(p.tokenizer.mode,Mode::Math{..}) {
-        p.read_argument(&mut m);
-    } else {
-        p.tokenizer.open_math(false);
-        p.read_argument(&mut m);
-        p.tokenizer.close_math();
-    }
-});
-simple!(scalebox,m,p => {
-    let mode = p.tokenizer.mode;
-    p.open_group();
-    p.skip_arg(&mut m);
-    p.read_argument(&mut m);
-    p.tokenizer.mode = mode;
-    p.close_group();
-});
-
-use super::Environment;
-
 #[macro_export]
-macro_rules! envrule {
-    ($name:ident,$e:ident,$p:ident => $open:block $close:block) => {paste::paste!(
-        #[allow(unused_mut,non_snake_case)]
+macro_rules! tex {
+    ($p:ident => @begin{$name:ident}$( ($($args:tt)* ) )? {$($start:tt)*} $($end:tt)*) => {paste::paste!(
+        #[allow(unused,unused_mut,non_snake_case)]
         pub fn [<$name _open>]<'a,
             Pa:ParseSource<'a>,
             T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >($e:&mut Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) $open
-        #[allow(unused_mut,non_snake_case)]
+        >($name:&mut Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) {
+            $( tex!{@envargs $p:$name $($args)* } )?
+            $($start)*
+        }
+        #[allow(unused,unused_mut,non_snake_case)]
         pub fn [<$name _close>]<'a,
             Pa:ParseSource<'a>,
             T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >(mut $e:Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T> $close
+        >(mut $name:Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T> {
+            tex!{@end $name $($end)*}
+        }
     );};
-}
-
-envrule!(document,e,p => {} {
-    let start = p.curr_pos().clone();
-    let rest = p.tokenizer.reader.read_until_str("this string should never occur FOOBARBAZ BLA BLA asdk<ösndkf.k<asfb.mdv <sdasdjn");
-    EnvironmentResult::Simple(e)
-});
-
-macro_rules! simple_env {
-    ($name:ident,$e:ident,$p:ident => $open:block) => {
-        envrule!($name,$e,$p => {
-            $open;
-        } {
-            EnvironmentResult::Simple($e)
-        });
+    (<l=$l:lifetime,Str=$str:ty,Pa=$pa:ty,Pos=$pos:ty,T=$t:ty> $p:ident => @begin{$name:ident}$( ($($args:tt)* ) )? {$($start:tt)*} $($end:tt)*) => {paste::paste!(
+        #[allow(unused,unused_mut,non_snake_case)]
+        pub fn [<$name _open>]<$l>($name:&mut Environment<$l,$str,$pos,$t>,$p:&mut LaTeXParser<$l,$pa,$t>) {
+            $( tex!{@envargs $p:$name $($args)* } )?
+            $($start)*
+        }
+        #[allow(unused,unused_mut,non_snake_case)]
+        pub fn [<$name _close>]<$l>(mut $name:Environment<$l,$str,$pos,$t>,$p:&mut LaTeXParser<$l,$pa,$t>) -> EnvironmentResult<$l,$str,$pos,$t> {
+            tex!{@end $name $($end)*}
+        }
+    );};
+    (@end $name:ident $b:block !) => {
+        $b
+        EnvironmentResult::Simple($name)
     };
+    (@end $name:ident !) => {
+        EnvironmentResult::Simple($name)
+    };
+    (@end $name:ident $b:block) => {$b};
+
+    (<l=$l:lifetime,Str=$str:ty,Pa=$pa:ty,Pos=$pos:ty,T=$t:ty> $p:ident => $name:ident $($args:tt)*) => {
+        #[allow(unused_mut,non_snake_case)]
+        pub fn $name<$l>
+        (mut $name:Macro<$l,$str,$pos,$t>,$p:&mut LaTeXParser<$l,$pa,$t>) -> MacroResult<$l,$str,$pos,$t> {
+            tex!{@args $p:$name$($args)*}
+        }
+    };
+    ($p:ident => $name:ident$($args:tt)*) => {
+        #[allow(unused_mut,non_snake_case)]
+        pub fn $name<'a, Pa:ParseSource<'a>, T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
+        >(mut $name:Macro<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> {
+            tex!{@args $p:$name$($args)*}
+        }
+    };
+
+
+    (@envargs $p:ident:$name:ident{$arg:ident:name}$($args:tt)*) => {
+        let $arg = if let Some(n) = $p.read_name(&mut $name.begin) { n } else {
+            $p.tokenizer.problem(concat!("Expected { after \\",stringify!($name)));
+            return;
+        };
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident{$arg:ident:T}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        $p.open_group();
+        $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
+        let $arg = $p.read_argument(&mut $name.begin);
+        $p.tokenizer.mode = mode;
+        $p.close_group();
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident{_:T}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        $p.open_group();
+        $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
+        $p.read_argument(&mut $name.begin);
+        $p.tokenizer.mode = mode;
+        $p.close_group();
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident{$arg:ident:M}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        let $arg = if matches!($p.tokenizer.mode,$crate::quickparse::tokenizer::Mode::Math{..}) {
+            $p.read_argument(&mut $name.begin);
+        } else {
+            $p.tokenizer.open_math(false);
+            let r = $p.read_argument(&mut $name.begin);
+            $p.tokenizer.close_math();
+            r
+        }
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident{_:M}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        if matches!($p.tokenizer.mode,$crate::quickparse::tokenizer::Mode::Math{..}) {
+            $p.read_argument(&mut $name.begin);
+        } else {
+            $p.tokenizer.open_math(false);
+            $p.read_argument(&mut $name.begin);
+            $p.tokenizer.close_math();
+        }
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident{_}$($args:tt)*) => {
+        $p.skip_arg(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident[_?$opt:ident]$($args:tt)*) => {
+        let $opt = $p.skip_opt(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident[_]$($args:tt)*) => {
+        $p.skip_opt(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident[$opt:ident:str]$($args:tt)*) => {
+        let $opt = $p.read_opt_str(&mut $name.begin).into_name();
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident[$opt:ident]$($args:tt)*) => {
+        let $opt = $p.read_opt_str(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident V:C($c:expr) $($args:tt)*) => {
+        $crate::quickparse::latex::rules::read_verbatim_char(&mut $name.begin,$p,$c);
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident V) => {
+        $crate::quickparse::latex::rules::read_verbatim_str($name,$p,concat!("\\end{",stringify!($name),"}"));
+    };
+    (@envargs $p:ident:$name:ident($c:literal?$t:ident)$($args:tt)*) => {
+        let $t = $p.tokenizer.reader.starts_with($c) && {
+            $p.tokenizer.reader.pop_head();true
+        };
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident($t:ident)$($args:tt)*) => {
+        if let Some($t) = $p.tokenizer.reader.pop_head() {
+            tex!{@envargs $p:$name $($args)*}
+        } else {
+            $p.tokenizer.problem("Expected character");
+        }
+    };
+    (@envargs $p:ident:$name:ident => $b:block) => {$b};
+    (@envargs $p:ident:$name:ident) => {};
+
+
+
+
+    (@args $p:ident:$name:ident{$arg:ident:name}$($args:tt)*) => {
+        let $arg = if let Some(n) = $p.read_name(&mut $name) { n } else {
+            $p.tokenizer.problem(concat!("Expected { after \\",stringify!($name)));
+            return MacroResult::Simple($name);
+        };
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident{$arg:ident:T}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        $p.open_group();
+        $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
+        let $arg = $p.read_argument(&mut $name);
+        $p.tokenizer.mode = mode;
+        $p.close_group();
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident{_:T}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        $p.open_group();
+        $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
+        $p.read_argument(&mut $name);
+        $p.tokenizer.mode = mode;
+        $p.close_group();
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident{$arg:ident:M}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        let $arg = if matches!($p.tokenizer.mode,$crate::quickparse::tokenizer::Mode::Math{..}) {
+            $p.read_argument(&mut $name);
+        } else {
+            $p.tokenizer.open_math(false);
+            let r = $p.read_argument(&mut $name);
+            $p.tokenizer.close_math();
+            r
+        }
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident{_:M}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        if matches!($p.tokenizer.mode,$crate::quickparse::tokenizer::Mode::Math{..}) {
+            $p.read_argument(&mut $name);
+        } else {
+            $p.tokenizer.open_math(false);
+            $p.read_argument(&mut $name);
+            $p.tokenizer.close_math();
+        }
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident{_}$($args:tt)*) => {
+        $p.skip_arg(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident[_?$opt:ident]$($args:tt)*) => {
+        let $opt = $p.skip_opt(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident[_]$($args:tt)*) => {
+        $p.skip_opt(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident[$opt:ident:str]$($args:tt)*) => {
+        let $opt = $p.read_opt_str(&mut $name).into_name();
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident[$opt:ident]$($args:tt)*) => {
+        let $opt = $p.read_opt_str(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident V:C($c:expr) $($args:tt)*) => {
+        $crate::quickparse::latex::rules::read_verbatim_char(&mut $name,$p,$c);
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident($c:literal?$t:ident)$($args:tt)*) => {
+        let $t = $p.tokenizer.reader.starts_with($c) && {
+            $p.tokenizer.reader.pop_head();true
+        };
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident($t:ident)$($args:tt)*) => {
+        if let Some($t) = $p.tokenizer.reader.pop_head() {
+            tex!{@args $p:$name $($args)*}
+        } else {
+            $p.tokenizer.problem("Expected character");
+            MacroResult::Simple($name)
+        }
+    };
+    (@args $p:ident:$name:ident !) => {
+        MacroResult::Simple($name)
+    };
+    (@args $p:ident:$name:ident => $b:block !) => {
+        $b;MacroResult::Simple($name)
+    };
+    (@args $p:ident:$name:ident => $b:block) => {$b};
 }
 
-simple_env!(verbatim,e,p => {
-    let start = p.curr_pos().clone();
-    let s = p.tokenizer.reader.read_until_str("\\end{verbatim}");
-    if let Some(t) = T::from_text(SourceRange{start,end:p.curr_pos().clone()},s) {
-        e.children.push(t)
+
+tex!(p => begin{n:name} => {
+    match p.environment(begin,n) {
+        EnvironmentResult::Success(e) => MacroResult::Success(e),
+        EnvironmentResult::Other(v) => MacroResult::Other(v),
+        EnvironmentResult::Simple(e) => match T::from_environment(e) {
+            Some(t) => MacroResult::Success(t),
+            None => MacroResult::Other(vec!())
+        }
     }
 });
-simple_env!(lstlisting,e,p => {
-    let start = p.curr_pos().clone();
-    let s = p.tokenizer.reader.read_until_str("\\end{lstlisting}");
-    if let Some(t) = T::from_text(SourceRange{start,end:p.curr_pos().clone()},s) {
-        e.children.push(t)
-    }
-});
-simple_env!(stexcode,e,p => {
-    let start = p.curr_pos().clone();
-    let s = p.tokenizer.reader.read_until_str("\\end{stexcode}");
-    if let Some(t) = T::from_text(SourceRange{start,end:p.curr_pos().clone()},s) {
-        e.children.push(t)
-    }
-});
+
+tex!(p => end{n:name} => {
+    p.tokenizer.problem(format!("environment {} not open",n.as_ref()));
+}!);
+
+tex!(p => lstinline[_](c)V:C(c)!);
+tex!(p => verb[_](c)V:C(c)!);
+tex!(p => stexcodeinline[_](c)V:C(c)!);
+tex!(p => begingroup => { p.open_group() }!);
+tex!(p => endgroup => { p.close_group() }!);
+tex!(p => makeatletter => { p.add_letters("@") }!);
+tex!(p => makeatother => { p.remove_letters("@") }!);
+tex!(p => ExplSyntaxOn => { p.add_letters(":_") }!);
+tex!(p => ExplSyntaxOff => { p.remove_letters(":_") }!);
+tex!(p => lstdefinelanguage{_}[_?o]{_} => {
+    if o {p.skip_arg(&mut lstdefinelanguage);}
+}!);
+tex!(p => r#ref{_}!);
+tex!(p => label{_}!);
+tex!(p => cite{_}!);
+tex!(p => includegraphics[_]{_}!);
+tex!(p => url[_]{_}!);
+
+tex!(p => newcommand{_}[_][_]{_}!);
+tex!(p => providecommand{_}[_][_]{_}!);
+tex!(p => renewcommand{_}[_][_]{_}!);
+tex!(p => NewDocumentCommand{_}{_}{_}!);
+tex!(p => DeclareDocumentCommand{_}{_}{_}!);
+tex!(p => DeclareRobustCommand{_}{_}{_}!);
+tex!(p => newenvironment{_}[_][_]{_}{_}!);
+tex!(p => renewenvironment{_}[_][_]{_}{_}!);
+tex!(p => provideenvironment{_}[_][_]{_}{_}!);
+tex!(p => NewDocumentEnvironment{_}{_}{_}{_}!);
+tex!(p => DeclareDocumentEnvironment{_}{_}{_}{_}!);
+
+tex!(p => hbox{_:T}!);
+tex!(p => vbox{_:T}!);
+tex!(p => fbox{_:T}!);
+tex!(p => text{_:T}!);
+tex!(p => texttt{_:T}!);
+tex!(p => textrm{_:T}!);
+tex!(p => ensuremath{_:M}!);
+tex!(p => scalebox{_}{_:T}!);
+
+use super::Environment;
+
+tex!(p => @begin{document} {}{
+    let _start = p.curr_pos().clone();
+    let _rest = p.tokenizer.reader.read_until_str("this string should never occur FOOBARBAZ BLA BLA asdk<ösndkf.k<asfb.mdv <sdasdjn");
+}!);
+tex!(p => @begin{verbatim}(V) {}{}!);
+tex!(p => @begin{lstlisting}(V) {}{}!);
+tex!(p => @begin{stexcode}(V) {}{}!);

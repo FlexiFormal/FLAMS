@@ -2,11 +2,11 @@ use crate::quickparse::latex::{
     EnvCloseRule, EnvOpenRule, Environment, EnvironmentResult, EnvironmentRule, FromLaTeXToken,
     LaTeXParser, Macro, MacroResult, MacroRule,
 };
-use immt_api::archives::ArchiveId;
-use immt_api::narration::document::Language;
-use immt_api::utils::sourcerefs::SourceRange;
-use immt_system::utils::parse::{ParseSource, ParseStr};
+use immt_api::core::utils::sourcerefs::SourceRange;
+use immt_api::core::utils::parse::{ParseSource, ParseStr};
 use std::path::Path;
+use immt_api::core::narration::Language;
+use crate::tex;
 
 pub(crate) enum DepToken<'a> {
     ImportModule {
@@ -53,6 +53,7 @@ pub(crate) fn get_deps<'a>(source: &'a str, path: &'a Path) -> Vec<STeXDependenc
         Some(path),
         LaTeXParser::default_rules().into_iter().chain(vec![
             ("importmodule", importmodule as MacroRule<'a, _, _>),
+            ("setmetatheory", setmetatheory as MacroRule<'a, _, _>),
             ("usemodule", usemodule as MacroRule<'a, _, _>),
             ("inputref", inputref as MacroRule<'a, _, _>),
         ]),
@@ -64,16 +65,12 @@ pub(crate) fn get_deps<'a>(source: &'a str, path: &'a Path) -> Vec<STeXDependenc
             ),
         )]),
     );
-    let mut deps = Vec::new();
-    let mut dep_parser = DepParser {
+    let dep_parser = DepParser {
         parser,
         stack: Vec::new(),
         curr: None,
     };
-    while let Some(dep) = dep_parser.next() {
-        deps.push(dep);
-    }
-    deps
+    dep_parser.collect()
 }
 
 impl<'a> Iterator for DepParser<'a> {
@@ -163,69 +160,41 @@ impl<'a> FromLaTeXToken<'a, &'a str, ()> for DepToken<'a> {
     }
 }
 
-pub fn importmodule<'a>(
-    mut m: Macro<'a, &'a str, (), DepToken<'a>>,
-    p: &mut LaTeXParser<'a, ParseStr<'a, ()>, DepToken<'a>>,
-) -> MacroResult<'a, &'a str, (), DepToken<'a>> {
-    let archive = p.read_opt_str(&mut m).into_name();
-    match p.read_name(&mut m) {
-        None => {
-            p.tokenizer.problem("Expected { after \\importmodule");
-            MacroResult::Simple(m)
-        }
-        Some(module) => MacroResult::Success(DepToken::ImportModule { archive, module }),
+tex!(<l='a,Str=&'a str,Pa=ParseStr<'a,()>,Pos=(),T=DepToken<'a>>
+    p => importmodule[archive:str]{module:name} => {
+        MacroResult::Success(DepToken::ImportModule { archive, module })
     }
-}
+);
+tex!(<l='a,Str=&'a str,Pa=ParseStr<'a,()>,Pos=(),T=DepToken<'a>>
+    p => setmetatheory[archive:str]{module:name} => {
+        MacroResult::Success(DepToken::ImportModule { archive, module })
+    }
+);
+tex!(<l='a,Str=&'a str,Pa=ParseStr<'a,()>,Pos=(),T=DepToken<'a>>
+    p => usemodule[archive:str]{module:name} => {
+        MacroResult::Success(DepToken::UseModule { archive, module })
+    }
+);
+tex!(<l='a,Str=&'a str,Pa=ParseStr<'a,()>,Pos=(),T=DepToken<'a>>
+    p => inputref('*'?_s)[archive:str]{filepath:name} => {
+        MacroResult::Success(DepToken::Inputref { archive, filepath })
+    }
+);
 
-pub fn usemodule<'a>(
-    mut m: Macro<'a, &'a str, (), DepToken<'a>>,
-    p: &mut LaTeXParser<'a, ParseStr<'a, ()>, DepToken<'a>>,
-) -> MacroResult<'a, &'a str, (), DepToken<'a>> {
-    let archive = p.read_opt_str(&mut m).into_name();
-    match p.read_name(&mut m) {
-        None => {
-            p.tokenizer.problem("Expected { after \\importmodule");
-            MacroResult::Simple(m)
-        }
-        Some(module) => MacroResult::Success(DepToken::UseModule { archive, module }),
-    }
-}
-
-pub fn inputref<'a>(
-    mut m: Macro<'a, &'a str, (), DepToken<'a>>,
-    p: &mut LaTeXParser<'a, ParseStr<'a, ()>, DepToken<'a>>,
-) -> MacroResult<'a, &'a str, (), DepToken<'a>> {
-    if p.tokenizer.reader.starts_with('*') {
-        p.tokenizer.reader.pop_head();
-    }
-    let archive = p.read_opt_str(&mut m).into_name();
-    match p.read_name(&mut m) {
-        None => {
-            p.tokenizer.problem("Expected { after \\inputref");
-            MacroResult::Simple(m)
-        }
-        Some(filepath) => MacroResult::Success(DepToken::Inputref { archive, filepath }),
-    }
-}
-
-pub fn smodule_open<'a>(
-    env: &mut Environment<'a, &'a str, (), DepToken<'a>>,
-    p: &mut LaTeXParser<'a, ParseStr<'a, ()>, DepToken<'a>>,
-) {
-    let opt = p.read_opt_str(&mut env.begin);
-    let name = p.read_name(&mut env.begin);
-    match opt.as_keyvals().get(&"sig") {
-        Some(v) => {
+tex!(<l='a,Str=&'a str,Pa=ParseStr<'a,()>,Pos=(),T=DepToken<'a>>
+    p => @begin{smodule}([opt]{name:name}){
+        if let Some(v) = opt.as_keyvals().get(&"sig") {
             if let Ok(l) = (*v).try_into() {
-                env.children.push(DepToken::Signature(l))
+                smodule.children.push(DepToken::Signature(l))
             }
         }
-        _ => (),
-    }
-}
-pub fn smodule_close<'a>(
-    mut env: Environment<'a, &'a str, (), DepToken<'a>>,
-    p: &mut LaTeXParser<'a, ParseStr<'a, ()>, DepToken<'a>>,
-) -> EnvironmentResult<'a, &'a str, (), DepToken<'a>> {
-    EnvironmentResult::Simple(env)
-}
+        match opt.as_keyvals().get(&"meta").copied() {
+            None => smodule.children.push(DepToken::ImportModule {
+                archive: Some("sTeX/meta-inf"),
+                module: "Metatheory",
+            }),
+            Some(""|"{}") => (),
+            Some(o) => todo!("Metatheory: {o}")
+        }
+    }{}!
+);

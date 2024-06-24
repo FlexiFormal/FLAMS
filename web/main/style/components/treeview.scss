@@ -1,0 +1,104 @@
+.immt-treeview {
+  width: fit-content;
+  --immt-treeview-spacing : 1.5rem;
+  --immt-treeview-radius  : 10px;
+  padding-inline-start: 0;
+}
+
+.immt-treeview-inner {
+  margin-left  : calc(var(--immt-treeview-radius) - var(--immt-treeview-spacing));
+  padding-left : 0;
+  padding-inline-start: 0;
+  width: fit-content;
+  .immt-treeview-li {
+    border-left : 2px solid #ddd;
+  }
+  .immt-treeview-li:last-child {
+    border-color : transparent;
+  }
+  .immt-treeview-li::before{
+    content      : '';
+    display      : block;
+    position     : absolute;
+    top          : calc(var(--immt-treeview-spacing) / -2);
+    left         : -2px;
+    width        : calc(var(--immt-treeview-spacing) + 2px);
+    height       : calc(var(--immt-treeview-spacing) + 1px);
+    border       : solid #ddd;
+    border-width : 0 0 2px 2px;
+  }
+}
+.immt-treeview-li {
+  display      : block;
+  position     : relative;
+  padding-left : calc(2 * var(--immt-treeview-spacing) - var(--immt-treeview-radius) - 2px);
+  text-align: left;
+}
+.immt-treeview-summary{
+  display : block;
+  cursor  : pointer;
+}
+
+.immt-treeview-summary::marker,
+.immt-treeview-summary::-webkit-details-marker{
+  display : none;
+}
+
+.immt-treeview-summary:focus{
+  outline : none;
+}
+
+.immt-treeview-summary:focus-visible{
+  outline : 1px dotted #000;
+}
+/*.immt-treeview-li::after {
+  content       : '';
+  display       : block;
+  position      : absolute;
+  top           : calc(var(--immt-treeview-spacing) / 2 - var(--immt-treeview-radius));
+  left          : calc(var(--immt-treeview-spacing) - var(--immt-treeview-radius) - 1px);
+  width         : calc(2 * var(--immt-treeview-radius));
+  height        : calc(2 * var(--immt-treeview-radius));
+  border-radius : 50%;
+  background    : #ddd;
+}*/
+.immt-treeview-group::before {
+  content: '📚 ';
+}
+.immt-treeview-archive::before {
+  content: '📕 ';
+}
+.immt-treeview-directory-closed::before {
+  content: '📁 ';
+}
+.immt-treeview-directory-open::before {
+  content: '📂 ';
+}
+.immt-treeview-file-new::before, .immt-treeview-file-stale::before, .immt-treeview-file-deleted::before, .immt-treeview-file-up-to-date::before {
+  content: '📄 ';
+}
+
+.immt-treeview-file-new { 
+  color: #836400;
+  ::after { content: ' (new)'; }
+}
+.immt-treeview-file-stale { 
+  color: #833c00;
+  ::after { content: ' (changed)'; }
+}
+.immt-treeview-file-deleted {
+  color: #830000;
+  text-decoration: line-through;
+  ::after { content: ' (deleted)'; }
+}
+.immt-treeview-file-up-to-date {
+    color: #008300;
+}
+
+.immt-treeview-file-card {
+  text-align: left;
+}
+
+.immt-treeview-left-margin {
+  margin-left: 20px;
+}

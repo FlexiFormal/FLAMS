@@ -1,38 +1,9 @@
 use crate::quickparse::tokens::TeXToken;
-use immt_api::utils::sourcerefs::SourceRange;
-use immt_system::utils::parse::ParseSource;
-use immt_system::utils::parse::StringOrStr;
+use immt_api::core::utils::sourcerefs::SourceRange;
+use immt_api::core::utils::parse::ParseSource;
+use immt_api::core::utils::parse::StringOrStr;
 use std::path::Path;
 use tracing::warn;
-/*
-pub trait TokenizerGroup<'a>:Sized {
-    fn new<Pa:ParseSource<'a>,Pr:ProblemHandler>(tokenizer:&mut TeXTokenizer<'a,Pa,Pr,Self>) -> Self;
-    fn close<Pa:ParseSource<'a>,Pr:ProblemHandler>(self,tokenizer:&mut TeXTokenizer<'a,Pa,Pr,Self>);
-    fn letter_change(&mut self,old:&str);
-}
-
-pub struct LetterGroup {
-    previous_letters:Option<String>
-}
-impl<'a> TokenizerGroup<'a> for LetterGroup {
-    #[inline]
-    fn new<Pa:ParseSource<'a>,Pr:ProblemHandler>(_:&mut TeXTokenizer<'a,Pa,Pr,Self>) -> Self {
-        LetterGroup {previous_letters:None}
-    }
-    #[inline]
-    fn close<Pa:ParseSource<'a>,Pr:ProblemHandler>(self, tokenizer: &mut TeXTokenizer<'a,Pa, Pr, Self>) {
-        if let Some(l) = self.previous_letters {
-            tokenizer.letters = l
-        }
-    }
-    fn letter_change(&mut self, old: &str) {
-        if self.previous_letters.is_none() {
-            self.previous_letters = Some(old.to_string());
-        }
-    }
-}
-
- */
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Mode {

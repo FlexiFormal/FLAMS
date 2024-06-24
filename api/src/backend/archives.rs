@@ -8,7 +8,7 @@ use crate::building::targets::SourceFormat;
 use crate::core::uris::archives::{ArchiveId, ArchiveURIRef};
 use crate::core::utils::VecMap;
 use crate::utils::asyncs::ChangeSender;
-use immt_core::building::buildstate::CumulativeState;
+use immt_core::building::buildstate::AllStates;
 
 pub trait Storage:std::fmt::Debug {
     fn spec(&self) -> StorageSpecRef<'_>;
@@ -40,7 +40,7 @@ pub struct MathArchive {
     spec:MathArchiveSpec,
     #[serde(skip)]
     source:Option<Vec<SourceDirEntry>>,
-    state:CumulativeState
+    state: AllStates
 }
 impl MathArchive {
     pub fn source_files(&self) -> Option<&[SourceDirEntry]> { self.source.as_deref() }
@@ -50,8 +50,8 @@ impl MathArchive {
         let mut dir =  if path.exists() {
             switch!((SourceDir::parse(&path))(SourceDir::parse_async(&path))).unwrap_or_else(|_| vec![])
         } else { switch!(
-            (std::fs::create_dir_all(self.path().join(".immt")))
-            (tokio::fs::create_dir_all(self.path().join(".immt")))
+            (std::fs::create_dir_all(path.parent().unwrap()))
+            (tokio::fs::create_dir_all(path.parent().unwrap()))
         ); vec![] };
         let source = self.path().join("source");
         if source.is_dir() {
@@ -101,8 +101,9 @@ impl MathArchive {
     pub fn path(&self) -> &Path { &self.spec.path }
     
     pub fn new_from(spec:MathArchiveSpec) -> Self {
-        Self { spec,source:None,state:CumulativeState::default() }
+        Self { spec,source:None,state: AllStates::default() }
     }
+    pub fn state(&self) -> &AllStates { &self.state }
 }
 impl Storage for MathArchive {
     #[inline]
