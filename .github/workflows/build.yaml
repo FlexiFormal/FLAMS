@@ -44,12 +44,12 @@ jobs:
           name: windows
           path: out
   mac_x86:
-    runs-on: macos-latest
+    runs-on: macos-14-large
     environment: production
     steps:
       - uses: actions/checkout@v4
       - name: rustups
-        run: rustup target add x86_64-apple-darwin && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-apple-darwin && rustup toolchain remove aarch64-apple-darwin && rustup component add rust-src --toolchain nightly-x86_64-apple-darwin && rustup default nightly-x86_64-apple-darwin #&& rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
+        run: rustup target add x86_64-apple-darwin && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-apple-darwin && rustup component add rust-src --toolchain nightly-x86_64-apple-darwin && rustup default nightly-x86_64-apple-darwin #&& rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
