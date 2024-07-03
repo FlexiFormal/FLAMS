@@ -15,7 +15,7 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
-        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build features=client --release
+        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
       - name: main
         run: cargo leptos build --release
       - name: bundle
@@ -34,7 +34,7 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
-        run: cd web\graphs && CARGO_TARGET_DIR=..\..\target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build features=client --release
+        run: cd web\graphs && CARGO_TARGET_DIR=..\..\target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
       - name: main
         run: cargo leptos build --release
       - name: bundle
@@ -53,7 +53,7 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
-        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build features=client --release
+        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
       - name: main
         run: cargo leptos build --release
       - name: bundle
@@ -72,7 +72,7 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
-        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build features=client --release
+        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
       - name: main
         run: cargo leptos build --release
       - name: bundle
