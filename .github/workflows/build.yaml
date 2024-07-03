@@ -53,9 +53,9 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
-        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
+        run: cd web/graphs && CARGO_BUILD_TARGET=x86_64-apple-darwin CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
       - name: main
-        run: cargo leptos build --release
+        run: CARGO_BUILD_TARGET=x86_64-apple-darwin cargo leptos build --release
       - name: bundle
         run: mkdir bin && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
       - uses: actions/upload-artifact@v4
@@ -72,9 +72,9 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
-        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
+        run: cd web/graphs && CARGO_BUILD_TARGET=aarch64-apple-darwin CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
       - name: main
-        run: cargo leptos build --release
+        run: CARGO_BUILD_TARGET=aarch64-apple-darwin cargo leptos build --release
       - name: bundle
         run: mkdir bin && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
       - uses: actions/upload-artifact@v4
