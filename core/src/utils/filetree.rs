@@ -2,7 +2,7 @@ use std::fs::Metadata;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use crate::building::buildstate::{BuildState, AllStates};
-use crate::building::formats::ShortId;
+use crate::building::formats::{ShortId, SourceFormatId};
 use crate::utils::ignore_regex::IgnoreSource;
 
 pub trait FileLike<Data> {
@@ -13,7 +13,7 @@ pub trait FileLike<Data> {
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 pub struct SourceFile {
     pub relative_path: String,
-    pub format: ShortId,
+    pub format: SourceFormatId,
     pub build_state: BuildState
 }
 
@@ -138,7 +138,7 @@ impl SourceDir {
     }
 
     crate::asyncs!{fn do_file(path:PathBuf, current:&mut StackItem, md:Metadata, changed:&mut bool,
-               from_ext:impl Fn(&str) -> Option<ShortId>,
+               from_ext:impl Fn(&str) -> Option<SourceFormatId>,
                mut on_change:impl FnMut(FileChange) + Copy) {
         let filename = path.file_name().unwrap().to_str().unwrap();
         let rel_path:String = if current.rel_path.is_empty() {filename.into()} else {format!("{}/{}",current.rel_path,filename).into() };
@@ -192,7 +192,7 @@ impl SourceDir {
         }
     }}
 
-    crate::asyncs!{!pub fn update<[O:FnMut(FileChange) + Copy]>(path:&Path, old_ref:&mut Vec<SourceDirEntry>, exts:&[(&str, ShortId)], ignore:&IgnoreSource, mut on_change:O) -> (bool,AllStates) {
+    crate::asyncs!{!pub fn update<[O:FnMut(FileChange) + Copy]>(path:&Path, old_ref:&mut Vec<SourceDirEntry>, exts:&[(&str, SourceFormatId)], ignore:&IgnoreSource, mut on_change:O) -> (bool,AllStates) {
         let mut top_state: AllStates = Default::default();
         if ignore.ignores(path) {
             tracing::trace!("Ignoring {} because of {}",path.display(),ignore);
@@ -335,8 +335,35 @@ struct StackItem {
     stack: Vec<StackItem>
 }
 
+pub struct DirIter<'a,D,F:FileLike<D>> {
+    current: std::slice::Iter<'a,FSEntry<D,F>>,
+    stack: Vec<std::slice::Iter<'a,FSEntry<D,F>>>
+}
+impl<'a,D,F:FileLike<D>> Iterator for DirIter<'a,D,F> {
+    type Item = &'a FSEntry<D,F>;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(c) = self.current.next() {
+                match c {
+                    FSEntry::Dir(d) => self.stack.push(d.children.iter()),
+                    _ => {}
+                }
+                return Some(c)
+            } else {
+                if let Some(mut s) = self.stack.pop() {
+                    self.current = s;
+                } else {
+                    return None
+                }
+            }
+        }
+    }
+
+}
+
 pub trait DirLike<D,F:FileLike<D>> {
     fn find_entry<S:AsRef<str>>(&self,s:S) -> Option<&FSEntry<D,F>>;
+    fn dir_iter<'a>(&'a self) -> DirIter<'a,D,F>;
 }
 impl<'a,D,F:FileLike<D>> DirLike<D,F> for &'a [FSEntry<D,F>] {
     fn find_entry<S:AsRef<str>>(&self,s:S) -> Option<&FSEntry<D,F>> {
@@ -354,5 +381,9 @@ impl<'a,D,F:FileLike<D>> DirLike<D,F> for &'a [FSEntry<D,F>] {
             }
         }
         ret
+    }
+
+    fn dir_iter<'b>(&'b self) -> DirIter<'b,D,F> {
+        DirIter { current: self.iter(), stack: Vec::new() }
     }
 }

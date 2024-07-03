@@ -1,6 +1,6 @@
 [package]
 name = "immt-api"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [lib]
@@ -25,7 +25,7 @@ tokio = ["dep:tokio","async","dep:oxrdfio"]
 oxigraph = ["dep:oxigraph"]
 
 [dependencies]
-immt-core = {path="../core"}
+immt-core = {workspace=true}
 simple-home-dir = "0.3"
 lazy_static = "1.4"
 serde = { version = "1", features = ["derive"], optional = true }

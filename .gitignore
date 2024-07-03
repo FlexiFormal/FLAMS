@@ -5,3 +5,6 @@ reedline-repl-rs
 reedline
 tracing-indicatif
 app/**
+leptos/**
+settings.toml
+config/**

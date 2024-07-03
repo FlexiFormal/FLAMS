@@ -40,9 +40,22 @@ pub fn hydrate() {
 
 #[cfg(feature = "server")]
 pub mod server {
+    use std::future::IntoFuture;
     use std::time::Duration;
-    use argon2::PasswordHasher;
-    use immt_controller::MainController;
+    use axum::error_handling::HandleErrorLayer;
+    use axum::{Extension, extract};
+    use axum::response::IntoResponse;
+    use http::Request;
+    use leptos::{LeptosOptions, provide_context};
+    use leptos_axum::generate_route_list;
+    use tower::ServiceExt;
+    use tower_http::services::ServeDir;
+    use tower_sessions::Expiry;
+    use tracing::Instrument;
+    use immt_controller::{controller, MainController};
+    use crate::accounts::AccountManager;
+    use immt_controller::ControllerTrait;
+    /*
     macro_rules! files {
         (@file $name:ident:$path:literal => $local:literal) => {
             #[actix_web::get($path)]
@@ -67,6 +80,8 @@ pub mod server {
         favicon:"favicon.ico",
         immt_bg:"pkg/immt_bg.wasm" => "pkg/immt.wasm"
     ];
+
+     */
 
 
     /** Endpoints:
@@ -95,58 +110,120 @@ pub mod server {
 
     lazy_static::lazy_static!{
         pub(crate) static ref ADMIN_PWD: Option<String> = {
-            let mut pwd = std::env::var("IMMT_ADMIN_PWD").ok()?;
-            #[cfg(feature="accounts")]
-            {
-                use argon2::{Argon2,password_hash::{SaltString,rand_core::OsRng}};
-                pwd = Argon2::default().hash_password(pwd.as_bytes(), &SaltString::generate(&mut OsRng)).unwrap().to_string();
-            }
+            let mut pwd = controller().settings().admin_pwd.as_ref()?.to_string();
+            use argon2::{Argon2,PasswordHasher,password_hash::{SaltString,rand_core::OsRng}};
+            pwd = Argon2::default().hash_password(pwd.as_bytes(), &SaltString::generate(&mut OsRng)).unwrap().to_string();
             Some(pwd)
         };
     }
 
-    pub async fn run_server<S: AsRef<str> + std::fmt::Display>(ip: S, port: u16, site_root: &str) -> std::io::Result<()> {
-        use actix_files::Files;
-        use actix_web::*;
+    async fn server_fn_handle(
+        auth_session: axum_login::AuthSession<AccountManager>,
+        extract::State(state): extract::State<AppState>,
+        request:http::Request<axum::body::Body>
+    ) -> impl IntoResponse {
+        leptos_axum::handle_server_fns_with_context(move || {
+            provide_context(auth_session.clone());
+            provide_context(state.leptos_options.clone());
+            provide_context(state.db.clone())
+        },request).in_current_span().await
+    }
+    async fn file_and_error_handler(
+        extract::State(state): extract::State<AppState>,
+        request:http::Request<axum::body::Body>
+    ) -> axum::response::Response {
+        async fn get_static_file(request:http::Request<axum::body::Body>,root:&str) -> Result<http::Response<axum::body::Body>,(http::StatusCode,String)> {
+            //println!("Here: {:?}, {root}",request.uri().path());
+            match ServeDir::new(root).precompressed_gzip().precompressed_br().oneshot(request).in_current_span().await {
+                Ok(res) => Ok(res.into_response()),
+                Err(e) => Err((http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string()))
+            }
+        }
+        let root = &state.leptos_options.site_root;
+        let (parts,body) = request.into_parts();
+        let mut static_parts = parts.clone();
+        static_parts.headers.clear();
+        if let Some(encodings) = parts.headers.get("accept-encoding") {
+            static_parts.headers.insert("accept-encoding",encodings.clone());
+        }
+        let result = get_static_file(http::Request::from_parts(static_parts,axum::body::Body::empty()),root).in_current_span().await.unwrap();
+        if result.status() == http::StatusCode::OK {
+            result
+        } else {
+            let handler = leptos_axum::render_app_to_stream(state.leptos_options.clone(),crate::home::MainNew);
+            handler(Request::from_parts(parts,body)).in_current_span().await.into_response()
+        }
+    }
+
+    #[tracing::instrument(skip_all,target="server")]
+    pub async fn run_server(site_root: &str) -> std::io::Result<()> {
         use leptos::*;
-        use leptos_actix::{generate_route_list, LeptosRoutes};
-        use crate::utils::ws::WS;
+        use immt_web_orm::MigratorTrait;
+        use leptos_axum::*;
+        use axum::*;
+        use axum_login::AuthManagerLayerBuilder;
+        use crate::utils::WebSocket;
+        use tracing::Instrument;
 
         let Main = crate::home::MainNew;
 
         std::env::set_var("LEPTOS_OUTPUT_NAME", "immt");
-        let secure = std::env::var("IMMT_HTTPS_ONLY").is_ok_and(|s| s.eq_ignore_ascii_case("true"));
 
-        let mut leptos_options = get_configuration(None).await.unwrap().leptos_options;
-        leptos_options.site_addr = std::net::SocketAddr::new(ip.as_ref().parse().unwrap(), port);
+        let ip = controller().settings().ip.clone();
+        let port = controller().settings().port;
+
+        let mut leptos_options = get_configuration(None).in_current_span().await.unwrap().leptos_options;
+        let site_addr = std::net::SocketAddr::new(ip, port);
         leptos_options.site_root = site_root.to_string();
         leptos_options.output_name = "immt".to_string();
+        leptos_options.site_addr = site_addr;
 
-        #[cfg(feature="accounts")]
-        let (db,redis,secret_key) = {
-            use immt_web_orm::MigratorTrait;
-            let db = sea_orm::Database::connect(format!("sqlite:{}/users.sqlite?mode=rwc", MainController::config_dir().expect("Config directory not found").display()))
-                .await
-                .expect("Failed to connect to user database");
-            immt_web_orm::Migrator::up(&db, None).await.expect("Failed to migrate database");
+        let db = sea_orm::Database::connect(format!("sqlite:{}?mode=rwc", controller().settings().database.display()))
+            .in_current_span().await
+            .expect("Failed to connect to user database");
+        immt_web_orm::Migrator::up(&db, None).in_current_span().await.expect("Failed to migrate database");
 
-/*
-            match tokio::process::Command::new("redis-server").args(["--port","6380"]).spawn().is_ok() {
-                true => {
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    println!("Started Redis.")
-                }
-                false => panic!("Failed to start Redist Server"),
-            };
+        let span = tracing::Span::current();
 
- */
+        let routes = generate_route_list(Main);
+        let session_store = tower_sessions::MemoryStore::default();//tower_sessions_sqlx_store::SqliteStore::new(db.)
+        let session_layer = tower_sessions::SessionManagerLayer::new(session_store)
+            .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::seconds(60 * 60 * 24 * 7)));
+        let auth_service = tower::ServiceBuilder::new()
+            .layer(HandleErrorLayer::new(|_| async {http::StatusCode::BAD_REQUEST}))
+            .layer(AuthManagerLayerBuilder::new(AccountManager(db.clone()),session_layer).build());
 
-            (db,
-             crate::utils::PseudoRedis::default(),//actix_session::storage::RedisSessionStore::new("redis://127.0.0.1:6380").await.unwrap(),
-             cookie::Key::from(b"w<aiwhi3i<wu h<avwiailuwr<laasfknQ$))$(/Z$kljsdfkjbdgkjysd r<ar wrvvwi<qwu3")//cookie::Key::generate()
-            )
-        };
+        #[derive(Clone)]
+        struct MySpan(tracing::Span);
+        impl<A> tower_http::trace::MakeSpan<A> for MySpan {
+            fn make_span(&mut self, r: &http::Request<A>) -> tracing::Span {
+                let _e = self.0.enter();
+                tower_http::trace::DefaultMakeSpan::default().make_span(r)
+            }
+        }
 
+        let app = axum::Router::<AppState>::new()
+            .route("/dashboard/log/ws",axum::routing::get(crate::components::logging::LogSocket::ws_handler))
+            .route("/api/*fn_name", axum::routing::get(server_fn_handle).post(server_fn_handle))
+            .leptos_routes_with_handler(routes,axum::routing::get(move |
+                auth_session: axum_login::AuthSession<AccountManager>,
+                extract::State(state): extract::State<AppState>,
+                request:http::Request<axum::body::Body>| { async move {
+                let handler = leptos_axum::render_app_to_stream_with_context(state.leptos_options.clone(),move || {
+                    provide_context(auth_session.clone());
+                    provide_context(state.db.clone())
+                },Main);
+                handler(request).in_current_span().await.into_response()
+            }.in_current_span()}))
+            .fallback(file_and_error_handler)
+            .layer(auth_service)
+            .layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(MySpan(span)));
+        let app : Router<()> = app.with_state(AppState {leptos_options,db});
+        axum::serve(tokio::net::TcpListener::bind(&site_addr).in_current_span().await.expect("Failed to initialize TCP listener"),
+                    app.into_make_service_with_connect_info::<std::net::SocketAddr>()
+        ).into_future().in_current_span().await
+
+        /*
         HttpServer::new(move || {
             let site_root = &leptos_options.site_root;
             let routes = generate_route_list(Main);
@@ -184,5 +261,18 @@ pub mod server {
             .bind(format!("{}:{}", ip, port))?
             .run()
             .await
+
+         */
+    }
+
+    #[derive(Clone)]
+    pub(crate) struct AppState {
+        pub leptos_options:LeptosOptions,
+        pub db: sea_orm::DatabaseConnection
+    }
+    impl axum::extract::FromRef<AppState> for LeptosOptions {
+        fn from_ref(input: &AppState) -> Self {
+            input.leptos_options.clone()
+        }
     }
 }

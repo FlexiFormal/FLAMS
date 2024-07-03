@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use immt_controller::BaseControllerAsync;
 #[cfg(not(feature="async"))]
 use immt_controller::BaseController;
-use clap::{Parser, Subcommand};
 
 /*
 fn main() {
@@ -18,124 +17,32 @@ fn main() {
 */
 #[tokio::main]
 async fn main() {
-    //copy();
     dotenv::dotenv().ok();
-/*
-    let metrics = tokio::runtime::Handle::current().metrics();
-
-    println!("Runtime is using {} workers, {} blocking threads, {} of which are idle",
-             metrics.num_workers(),
-        metrics.num_blocking_threads(),
-        metrics.num_idle_blocking_threads()
-    );*/
     #[cfg(feature="async")]
     println!("Async controller");
     #[cfg(not(feature="async"))]
     println!("Sync controller");
 
-    let cli = Cli::parse();
+    let settings = immt::settings::get(immt::cli::Cli::get());
+
     #[cfg(feature="async")]
-    let ctrl = match cli.mathhubs {
-        None =>  BaseControllerAsync::new(cli.debug,immt_api::MATHHUB_PATHS.iter().map(|s| s.as_path())).await,
-        Some(s) => BaseControllerAsync::new(cli.debug,s.split(',').map(Path::new)).await
-    };
+    let ctrl = BaseControllerAsync::new(settings).await;
     #[cfg(not(feature="async"))]
-        let ctrl = match cli.mathhubs {
-        None =>  BaseController::new(cli.debug,immt_api::MATHHUB_PATHS.iter().map(|s| s.as_path())),
-        Some(s) => BaseController::new(cli.debug,s.split(',').map(Path::new))
-    };
-    let server = match (cli.ip,cli.port) {
-        (Some(addr),Some(port)) => {
-            Some((addr,port))
-        },
-        (_,Some(port)) => {
-            Some(("127.0.0.1".to_string(),port))
-        },
-        (Some(ip),_) => {
-            Some((ip,8080))
-        },
-        _ => None
-    };
-    let tui = async {
-        /*if cli.tui {
-            todo!()
-        }*/
-    };
+    let ctrl = BaseController::new(settings);
     let server = async {
-        if let Some((ip,port)) = server {
-            #[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
             let basepath = "target/web";
-            #[cfg(not(debug_assertions))]
+        #[cfg(not(debug_assertions))]
             let _basepath = std::env::current_exe().unwrap().parent().unwrap().join("web");
-            #[cfg(not(debug_assertions))]
+        #[cfg(not(debug_assertions))]
             let basepath = _basepath.to_str().unwrap();
-            immt_web::server::run_server(ip,port,basepath).await.unwrap()
-        } else {
-            let ip = "127.0.0.1";
-            let port = 3000;
-            #[cfg(debug_assertions)]
-                let basepath = "../target/web";
-            #[cfg(not(debug_assertions))]
-                let _basepath = std::env::current_exe().unwrap().parent().unwrap().join("web");
-            #[cfg(not(debug_assertions))]
-                let basepath = _basepath.to_str().unwrap();
-            immt_web::server::run_server(ip,port,basepath).await.unwrap()
-        }
-    };
-    let gui = async {
-        /*if !cli.gui_off {
-            todo!()
-        }*/
+        immt_web::server::run_server(basepath).await.unwrap()
     };
     tokio::select!{
-        _ = async move {tokio::join!(tui,server,gui)} => (),
+        _ = server => (),
         _ = tokio::signal::ctrl_c() => std::process::exit(0)
     }
-        /*,async move {loop {
-            let metrics = tokio::runtime::Handle::current().metrics();
-            println!("Runtime is using {} workers, {} blocking threads, {} of which are idle. Tasks: {}",
-                     metrics.num_workers(),
-                metrics.num_blocking_threads(),
-                metrics.num_idle_blocking_threads(),
-                metrics.active_tasks_count()
-            );
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        }}*/
 
-}
-
-
-#[derive(Parser)]
-#[command(propagate_version = true, version, about, long_about = Some(
-"iMᴍᴛ - Generic knowledge management system for flexiformal knowledge\n\
---------------------------------------------------------------------\n\
-See the \u{1b}]8;;https://github.com/UniFormal/MMT\u{1b}\\documentation\u{1b}]8;;\u{1b}\\ for details"
-))]
-struct Cli {
-    /// a comma-separated list of MathHub paths (if not given, the default paths are used
-    /// as determined by the MATHHUB system variable or ~/.mathhub/mathhub.path)
-    #[arg(short, long)]
-    mathhubs: Option<String>,
-
-    /// whether to enable debug logging
-    #[arg(short, long)]
-    debug:bool,
-
-    /// turn off the GUI
-    #[arg(short,long)]
-    gui_off:bool,
-
-    /// whether to start the TUI
-    #[arg(short,long)]
-    tui:bool,
-
-    /// Network port to use for the server
-    #[arg(long,value_parser = clap::value_parser!(u16).range(1..))]
-    port: Option<u16>,
-
-    /// Network address to use for the server
-    #[arg(long)]
-    ip: Option<String>,
 }
 
 

@@ -1,10 +1,10 @@
 [package]
 name = "immt-shtml"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [lints]
 workspace = true
 
 [dependencies]
-immt-api = { path="../api" }
+immt-api = { workspace=true }

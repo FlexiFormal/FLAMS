@@ -1,8 +1,9 @@
 use std::path::Path;
 fn main() {
-/*
+    /*
     println!("cargo::rerun-if-changed=../graphs");
     std::process::Command::new("trunk")
+        .env("CARGO_TARGET_DIR","../../target")
         .env("RUSTFLAGS","--cfg=web_sys_unstable_apis")
         .current_dir("../graphs")
         .args(vec!("build","--features=client","--release")).status().expect("trunk build failed!");
@@ -39,5 +40,5 @@ fn main() {
     html = replaces.iter().fold(html,|html,(from,to)| html.replace(from,to));
     std::fs::write(target.join("immt-graphs.js"),js).unwrap();
     std::fs::write(target.join("index.html"),html).unwrap();
-*/
+    */
 }

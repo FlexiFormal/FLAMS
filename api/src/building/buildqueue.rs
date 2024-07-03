@@ -2,71 +2,128 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicU16;
 use futures::stream::StreamFuture;
 use futures::StreamExt;
+use immt_core::building::formats::{BuildJobSpec, FormatOrTarget};
+use immt_core::prelude::DirLike;
+use immt_core::uris::archives::ArchiveId;
+use immt_core::utils::filetree::{FileLike, SourceDirEntry};
 use immt_core::utils::triomphe::Arc;
+use crate::backend::archives::Archive;
+use crate::backend::manager::ArchiveTree;
 use crate::building::targets::{BuildDataFormat, BuildTarget, SourceFormat};
+use crate::controller::{Controller, ControllerAsync};
 use crate::utils::asyncs::{ChangeListener, ChangeSender};
+use crate::utils::settings::SettingsChange;
 
 #[derive(Debug)]
-struct QueuedTask();
+struct QueuedTask{
+
+}
 
 #[derive(Debug)]
 struct Queue {
     queue: VecDeque<QueuedTask>,
 }
+
+#[cfg(feature = "tokio")]
+type Lock<A> = tokio::sync::RwLock<A>;
+#[cfg(not(feature = "tokio"))]
+type Lock<A> = parking_lot::RwLock<A>;
+
+
 #[derive(Debug)]
 struct BuildQueueI {
-    source_formats:Box<[SourceFormat]>,
-    build_data_formats: Box<[BuildDataFormat]>,
-    build_targets: Box<[BuildTarget]>,
-    inner: Vec<Queue>,
+    inner: Lock<Vec<Queue>>,
     #[cfg(feature = "tokio")]
-    num_threads:Arc<(AtomicU16,tokio::sync::Semaphore)>,
+    num_threads:tokio::sync::Semaphore,
     #[cfg(feature = "tokio")]
-    listener:ChangeSender<u16>
+    new_jobs:ChangeSender<BuildJobSpec>
 }
-#[derive(Debug)]
-pub struct BuildQueue(BuildQueueI);
-impl BuildQueue {
-    pub fn new(source_formats:Box<[SourceFormat]>,build_data_formats: Box<[BuildDataFormat]>,build_targets: Box<[BuildTarget]>) -> Self {
-        #[cfg(feature="tokio")]
-        let num_threads = tokio::runtime::Handle::current().metrics().num_workers() / 2;
-        let ret = Self(BuildQueueI {
-            source_formats,
-            build_data_formats,
-            build_targets,
-            inner: Vec::new(),
-            #[cfg(feature="tokio")]
-            num_threads: Arc::new((AtomicU16::new(num_threads as u16),tokio::sync::Semaphore::new(num_threads))),
-            #[cfg(feature = "tokio")]
-            listener:ChangeSender::new(8)
-        });
-        let listener = ret.0.listener.listener();
-        let threads = ret.0.num_threads.clone();
-        #[cfg(feature = "tokio")]
-        {
-            tokio::spawn(async move {
-                loop {
-                    let listener = listener.inner.clone().into_future();
-                    if let Some(i) = listener.await.0 {
-                        let old = match threads.0.fetch_update(std::sync::atomic::Ordering::Relaxed,std::sync::atomic::Ordering::Relaxed,|_| Some(i)) {
-                            Ok(i) | Err(i) => i
-                        };
-                        if old < i {
-                            threads.1.add_permits(i as usize - old as usize);
-                        } else if old > i {
-                            threads.1.forget_permits(old as usize - i as usize);
-                        }
-                    }
-                }
-            });
+impl BuildQueueI {
+    #[cfg(feature = "tokio")]
+    async fn do_spec<Ctrl:ControllerAsync+'static>(&self,spec:BuildJobSpec,ctrl:&Ctrl) {
+        match spec {
+            BuildJobSpec::Group {..} => todo!(),
+            BuildJobSpec::Archive {id,target,stale_only} => {
+                ctrl.archives().with_tree(|tree| self.enqueue_archive(id,target,!stale_only,tree)).await
+            }
+            BuildJobSpec::Path {..} => todo!(),
         }
-        ret
-    }
-    pub fn formats(&self) -> &[SourceFormat] {
-        &self.0.source_formats
     }
 
-    pub fn num_threads(&self) -> u16 {
-        self.0.num_threads.0.load(std::sync::atomic::Ordering::Relaxed)
+    fn enqueue_archive(&self,id:ArchiveId,target:FormatOrTarget,all:bool,tree:&ArchiveTree) {
+        let format = match target {
+            FormatOrTarget::Format(f) => f,
+            FormatOrTarget::Target(_) => {
+                todo!()
+            }
+        };
+        match tree.find_archive(&id) {
+            Some(Archive::Physical(ma)) => {
+                let files = ma.source_files().map(|sd| {
+                    sd.dir_iter().filter_map(|fd| {
+                        if let SourceDirEntry::File(f) = fd {
+                            if f.format == format {
+                                if all { Some(f.relative_path().to_string().into_boxed_str()) }
+                                else { todo!() }
+                            } else { None }
+                        } else {None}
+                    }).collect()
+                }).unwrap_or(Vec::new());
+                println!("files: {:?}",files);
+                println!("={}",files.len());
+            }
+            None => (),
+            _ => todo!()
+        }
+    }
+    #[cfg(not(feature = "tokio"))]
+    fn do_spec<Ctrl:Controller>(&self,spec:BuildJobSpec,ctrl:Ctrl) {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct BuildQueue(Arc<BuildQueueI>);
+impl BuildQueue {
+
+    #[cfg(feature = "tokio")]
+    pub fn run_async<Ctrl:ControllerAsync+'static>(&self,ctrl:Ctrl) {
+        let inner = self.0.clone();
+        tokio::spawn(async move {
+            loop {
+                let num_threads = ctrl.settings().num_threads.listener().inner;
+                let new_jobs = inner.new_jobs.listener().inner;
+                tokio::select! {
+                    (Some(SettingsChange{old,new}),_) = num_threads.into_future() => {
+                        if old < new {
+                            inner.num_threads.add_permits(new as usize - old as usize);
+                        } else if old > new {
+                            inner.num_threads.forget_permits(old as usize - new as usize);
+                        }
+                    },
+                    (Some(job),_) = new_jobs.into_future() => {
+                        inner.do_spec(job,&ctrl).await
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn enqueue(&self,job:BuildJobSpec) {
+        #[cfg(feature = "tokio")]
+        {self.0.new_jobs.send(job)}
+        #[cfg(not(feature = "tokio"))]
+        {todo!()}
+    }
+
+    pub fn run<Ctrl:Controller>(&self,ctrl:Ctrl) {}
+    pub fn new() -> Self {
+        Self(Arc::new(BuildQueueI {
+            inner: Lock::new(Vec::new()),
+            #[cfg(feature="tokio")]
+            num_threads:tokio::sync::Semaphore::new(0),
+            #[cfg(feature="tokio")]
+            new_jobs:ChangeSender::new(64)
+        }))
     }
 }

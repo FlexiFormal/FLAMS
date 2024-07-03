@@ -1,5 +1,9 @@
 @import "./components/treeview";
 @import "./components/loglist";
+@import "./thaw/menu-group";
+@import "./thaw/menu-item";
+@import "./thaw/badge";
+@import "./thaw/modal";
 body {
 	font-family: sans-serif;
 	text-align: center;

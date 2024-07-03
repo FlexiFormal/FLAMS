@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use lazy_static::lazy_static;
 pub static API_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
@@ -23,10 +23,8 @@ pub mod utils {
 
     pub mod asyncs;
     pub mod circular_buffer;
-    
-    lazy_static!(
-        pub static ref EMPTY_ARCSTR: Arc<str> = Arc::from("");
-    );
+    pub mod settings;
+
     
     pub fn time<A,F:FnOnce() -> A>(f:F,s:&str) -> A {
         let start = std::time::Instant::now();
@@ -74,7 +72,13 @@ pub mod par {
 
 lazy_static! {
     pub static ref MATHHUB_PATHS: Box<[PathBuf]> = mathhubs().into();
+    static ref CONFIG_DIR: Option<PathBuf> = {
+        simple_home_dir::home_dir().map(|d| d.join(".immt"))
+    };
 }
+
+pub fn config_dir() -> Option<&'static Path> { CONFIG_DIR.as_ref().map(|a| a.as_path())}
+pub fn exe_dir() -> Option<PathBuf> { std::env::current_exe().ok().map(|p| p.parent().map(|p| p.to_path_buf())).flatten() }
 
 fn mathhubs() -> Vec<PathBuf> {
     if let Ok(f) = std::env::var("MATHHUB") {

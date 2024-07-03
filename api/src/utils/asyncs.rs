@@ -29,6 +29,9 @@ impl<T:Clone> ChangeListener<T> {
             }
         }
     }
+    pub async fn read(&mut self) -> Option<T> {
+        self.inner.recv().await.ok()
+    }
 }
 impl<T:Clone> Clone for ChangeListener<T> {
     fn clone(&self) -> Self {
@@ -69,6 +72,7 @@ impl<T:Clone> ChangeSender<T> {
 pub mod lock {
     use std::ops::Deref;
 
+    #[derive(Debug)]
     pub struct Lock<T> {
         sync_lock: parking_lot::RwLock<T>,
         //async_lock: tokio::sync::RwLock<()>,

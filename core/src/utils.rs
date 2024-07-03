@@ -13,6 +13,8 @@ pub mod parse;
 pub mod logs;
 pub mod time;
 pub mod asyncs;
+pub mod settings;
+
 #[derive(Clone,Hash,Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VecMap<K, V>(Vec<(K, V)>);

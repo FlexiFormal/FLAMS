@@ -1,6 +1,6 @@
 [package]
 name = "immt"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 description = "iMᴍᴛ - Generic knowledge management system for flexiformal knowledge"
 
@@ -13,16 +13,18 @@ workspace = true
 
 [features]
 async = ["immt-web/async","immt-controller/async"]
-accounts = ["async","immt-web/accounts"]
+#accounts = ["async","immt-web/accounts"]
 
 [dependencies]
 
 # Utils
-tokio = { version="1.38",features = ["full","rt"] }
+tokio = { version="1.38",features = ["full","rt","rt-multi-thread"] }
 parking_lot = "0.12"
 rayon = "1.10"
 clap = { version="4.5",features=["derive"] }
 dotenv = "0.15"
+serde = { version="1",features=["derive"] }
+toml = "0.8"
 
 # backtrace-on-stack-overflow = "0.3"
 
@@ -31,11 +33,11 @@ dotenv = "0.15"
 #oxigraph = "0.4.0-alpha.7"
 
 # iMMT
-immt-api = { path="../api",features=["rayon","serde","tokio","oxigraph"] }
-immt-core = { path="../core",features=["serde","async"] }
-immt-stex = { path="../stex" }
-immt-controller = { path="../controller" }
-immt-web = { path= "../web/main", features=["server"] }
+immt-api = { workspace=true,features=["rayon","serde","tokio","oxigraph"] }
+immt-core = { workspace=true,features=["serde","async"] }
+immt-stex = { workspace=true }
+immt-controller = { workspace=true }
+immt-web = { workspace=true, features=["server"] }
 
 # Logging
 tracing = "0.1"

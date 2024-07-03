@@ -1,7 +1,7 @@
 [workspace]
 members = ["api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm"]
 resolver = "2"
-exclude = ["web/graphs","test-plugin","tests"]
+exclude = ["web/graphs","test-plugin","tests","leptos","thaw"]
 
 [profile.release]
 opt-level = 2
@@ -27,13 +27,22 @@ pedantic = "deny"
 nursery = "deny"
 unwrap_used = "deny"
 
+[workspace.dependencies]
+immt-core = { path = "core",version="0.0.1" }
+immt-api = { path = "api",version="0.0.1" }
+immt-controller = { path = "controller",version="0.0.1" }
+immt-shtml = { path = "shtml",version="0.0.1" }
+immt-stex = { path = "stex",version="0.0.1" }
+immt-web = { path = "web/main",version="0.0.1" }
+immt-web-orm = { path = "web/orm",version="0.0.1" }
+
 [[workspace.metadata.leptos]]
 # project name
 name = "iMMT"
 bin-package = "immt"
 lib-package = "immt-web"
 #bin-features = ["async"]
-bin-features = ["accounts"]
+bin-features = ["async"]
 lib-features = ["client"]
 lib-default-features = false
 lib-profile-release = "wasm-release"
@@ -49,6 +58,13 @@ lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_
 
 # search:
 # https://docs.rs/crate/tantivy/latest
+
+#dbs:
+# https://github.com/async-graphql/async-graphql?tab=readme-ov-file
+# https://github.com/surrealdb/surrealdb/pull/3797
+# https://github.com/graphql-rust/juniper
+# https://docs.rs/tokio-rusqlite
+# https://bonsaidb.io/
 
 # interesting: https://github.com/rodrimati1992/abi_stable_crates
 

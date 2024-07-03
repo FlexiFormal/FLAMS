@@ -1,5 +1,5 @@
 use std::path::Path;
-use crate::building::formats::ShortId;
+use crate::building::formats::{ShortId, SourceFormatId};
 use crate::uris::archives::{ArchiveId, ArchiveURI, ArchiveURIRef};
 use crate::utils::VecMap;
 use crate::utils::arrayvec;
@@ -12,7 +12,7 @@ pub struct StorageSpec {
     pub uri: ArchiveURI,
     pub is_meta:bool,
     pub attributes: VecMap<Box<str>,Box<str>>,
-    pub formats: arrayvec::ArrayVec<ShortId,8>
+    pub formats: arrayvec::ArrayVec<SourceFormatId,8>
 }
 impl StorageSpec {
     #[inline]
@@ -36,7 +36,7 @@ impl StorageSpec {
 pub struct StorageSpecRef<'a> {
     pub uri: ArchiveURIRef<'a>,
     pub attributes: &'a VecMap<Box<str>,Box<str>>,
-    pub formats: &'a [ShortId]
+    pub formats: &'a [SourceFormatId]
 }
 
 #[derive(Debug, Clone)]

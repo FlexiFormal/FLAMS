@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::path::Path;
-use immt_core::building::formats::ShortId;
+use immt_core::building::formats::{ShortId, SourceFormatId};
 use immt_core::ontology::archives::{MathArchiveSpec, MathArchiveSpecRef, StorageSpecRef};
 use immt_core::utils::filetree::{Dir, FileChange, SourceDir, SourceDirEntry};
 use immt_core::utils::triomphe::Arc;
@@ -29,7 +29,7 @@ pub trait Storage:std::fmt::Debug {
         self.spec().attributes
     }
     #[inline]
-    fn formats(&self) -> &[ShortId] {
+    fn formats(&self) -> &[SourceFormatId] {
         self.spec().formats
     }
 }
@@ -43,7 +43,7 @@ pub struct MathArchive {
     state: AllStates
 }
 impl MathArchive {
-    pub fn source_files(&self) -> Option<&[SourceDirEntry]> { self.source.as_deref() }
+    pub fn source_files<'a>(&'a self) -> Option<&'a [SourceDirEntry]> { self.source.as_deref() }
 
     immt_core::asyncs!{!pub fn update_sources(&mut self, formats:&[SourceFormat], on_change:&ChangeSender<FileChange>) {
         let path = self.path().join(".immt").join("ls_f.db");

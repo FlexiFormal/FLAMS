@@ -1,5 +1,7 @@
-cd bin
-rm -rf *
+rm -rf bin
+mkdir bin
+cd web/graphs
+CARGO_TARGET_DIR=../../target
 #cd ../ui
 #cargo build --release --no-default-features --features=client --target wasm32-unknown-unknown
 #cargo leptos build --release

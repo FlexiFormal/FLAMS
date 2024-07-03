@@ -1,6 +1,6 @@
 [package]
 name = "immt-web"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [lib]
@@ -15,42 +15,62 @@ tokio = { version="1.38",features = ["full"], optional=true }
 serde = { version="1",features = ["derive"] }
 chrono = "0.4"
 lazy_static = { version="1.4",optional=true }
+async-trait = "0.1"
+tracing = { version="0.1",optional=true }
 
-gloo-timers = { version="0.3",optional = false }
+#gloo-timers = { version="0.3",optional = false }
 wasm-bindgen-futures = { version="0.4",optional = false }
 
 # leptos
-actix-files = { version = "0.6", optional = true }
-actix-web = { version = "4", optional = true, features = ["macros"] }
-actix-web-actors = { version= "4",optional = true }
-actix = {version="0.13",optional=true}
+#actix-files = { version = "0.6", optional = true }
+#actix-web = { version = "4", optional = true, features = ["macros"] }
+#actix-web-actors = { version= "4",optional = true }
+#actix = {version="0.13",optional=true}
 console_error_panic_hook = "0.1"
 leptos = { version = "0.6", features=["experimental-islands"] }
+#leptos = { git = "https://github.com/leptos-rs/leptos.git", rev="73a9797ef9e5f61b8baa92e726fb18983e22cbbd", features=["experimental-islands","nightly"] }
 leptos_meta = { version = "0.6" }
-leptos_actix = { version = "0.6", optional = true, features=["experimental-islands"] }
+#leptos_meta = { git = "https://github.com/leptos-rs/leptos.git", rev="73a9797ef9e5f61b8baa92e726fb18983e22cbbd", features=["nightly"] }
+#leptos_actix = { version = "0.6", optional = true, features=["experimental-islands"] }
 leptos_router = { version = "0.6" }
+#leptos_router = { git = "https://github.com/leptos-rs/leptos.git", rev="73a9797ef9e5f61b8baa92e726fb18983e22cbbd", features=["nightly"] }
 wasm-bindgen = "=0.2.92"
 
 # components
 #leptonic = { version = "0.5.0", features = [] }
 thaw = "0.3"
-stylance = "0.5"
+#thaw = {git = "https://github.com/thaw-ui/thaw.git", rev="7685e99c8bc16dc914d18a4959b02fcd4d6c6544"}
+#thaw = {path = "../../thaw/thaw"}
+#stylance = "0.5"
+
+# axum
+axum = {version="0.7",optional=true,features=["ws"]}
+axum-extra = {version= "0.9",optional=true,features=["typed-header"]}
+leptos_axum = {version="0.6",optional=true,features = ["experimental-islands"]}
+#leptos_axum = { git = "https://github.com/leptos-rs/leptos.git", rev="73a9797ef9e5f61b8baa92e726fb18983e22cbbd", optional=true,features=["experimental-islands"] }
+tower={version="0.4",optional=true}
+tower-http={version="0.5",features=["fs","trace"],optional=true}
+http="1"
+axum-login = { version="0.15",optional=true }
+tower-sessions = { version="0.12",optional=true,features=["tower-sessions-memory-store"] }
+tower-sessions-sqlx-store = { version="0.12",optional=true,features = ["sqlite"] }
 
 #immt
-immt-api = { path="../../api",features=["rayon","serde","tokio","oxigraph"],optional=true }
-immt-core = { path="../../core",features=["serde"] }
-immt-controller = { path = "../../controller", optional = true }
+immt-api = { workspace=true,features=["rayon","serde","tokio","oxigraph"],optional=true }
+immt-core = { workspace=true,features=["serde"] }
+immt-controller = { workspace=true, optional = true }
 immt-graphs = { path = "../graphs" }
+immt-web-orm = {workspace=true, optional=true}
 
 #experiments
 sea-orm = {version="0.12",optional=true, features=["sqlx-sqlite","macros","with-json","with-chrono","with-uuid"]}
 sqlx = {version="0.7",optional=true, features=["sqlite","runtime-tokio-rustls","macros"]}
 libsqlite3-sys = { version="0", optional=true, features = ["bundled"] }
-immt-web-orm = {path= "../orm", optional=true}
-actix-session = { version="0.9",optional=true,features = ["redis", "redis-rs-session"] }
-actix-identity = { version="0.7",optional=true }
-anyhow = { version="1",optional=true }
-md5 = {version="0.7",optional=true}
+
+#actix-session = { version="0.9",optional=true,features = ["redis", "redis-rs-session"] }
+#actix-identity = { version="0.7",optional=true }
+#anyhow = { version="1",optional=true }
+#md5 = {version="0.7",optional=true}
 argon2 = { version="0.5",optional = true }
 
 [features]
@@ -64,23 +84,21 @@ client = [
   "leptos_meta/hydrate",
   "leptos_router/hydrate",
   #"leptonic/hydrate"
-  "thaw/hydrate",
+  "thaw/hydrate"
 ]
-accounts = ["server",
-  "dep:sea-orm",
-  "dep:sqlx",
-  "dep:libsqlite3-sys",
-  "dep:immt-web-orm",
-  "dep:actix-session",
-  "dep:anyhow",
-  "dep:md5",
-  "dep:actix-identity",
-  "dep:argon2"
-]
+#accounts = ["server",
+#  "dep:actix-session",
+#  "dep:anyhow",
+#  "dep:md5",
+#  "dep:actix-identity",
+#  "dep:argon2"
+#]
 server = [
-  "dep:actix-files",
-  "dep:actix-web",
-  "dep:leptos_actix",
+  #"dep:actix-files",
+  #"dep:actix-web",
+  #"dep:leptos_actix",
+  #"dep:actix-web-actors",
+  #"dep:actix",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
@@ -88,10 +106,24 @@ server = [
   "dep:immt-api",
   "dep:tokio",
   "thaw/ssr",
-  "dep:actix-web-actors",
-  "dep:actix",
   #"leptonic/ssr"
-  "dep:lazy_static"
+  "dep:lazy_static",
+  "dep:tracing",
+
+  "dep:sea-orm",
+  "dep:sqlx",
+  "dep:libsqlite3-sys",
+  "dep:immt-web-orm",
+
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:leptos_axum",
+  "dep:tower",
+  "dep:tower-http",
+  "dep:axum-login",
+  "dep:tower-sessions",
+  "dep:tower-sessions-sqlx-store",
+  "dep:argon2"
 ]
 async = ["server","immt-controller/async"]
 

@@ -1,6 +1,6 @@
 [package]
 name = "immt-controller"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [lints]
@@ -22,10 +22,10 @@ tokio = "1.38"
 lazy_static = "1.4"
 
 # iMMT
-immt-api = { path="../api",features=["rayon","serde","tokio","oxigraph"] }
-immt-core = { path="../core",features=["serde"] }
-immt-shtml = { path="../shtml" }
-immt-stex = { path="../stex" }
+immt-api = { workspace=true,features=["rayon","serde","tokio","oxigraph"] }
+immt-core = { workspace=true,features=["serde"] }
+immt-shtml = { workspace=true }
+immt-stex = {workspace=true }
 
 # Logging
 tracing = "0.1"

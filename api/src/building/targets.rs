@@ -1,17 +1,22 @@
+#![feature(const_trait_impl)]
 use std::any::Any;
 use std::cell::OnceCell;
 use std::path::{Path, PathBuf};
 use parking_lot::RwLock;
-use immt_core::building::formats::ShortId;
+use immt_core::building::formats::{BuildTargetId, ShortId, SourceFormatId};
 use immt_core::content::Module;
 use immt_core::narration::Document;
-use immt_core::uris::archives::ArchiveURI;
+use immt_core::short_id;
+use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::triomphe::Arc;
 use immt_core::utils::VecMap;
+use crate::extensions::ExtensionId;
+
+short_id!(+BuildFormatId);
 
 #[derive(Copy,Clone,Debug)]
 pub struct BuildDataFormat {
-    pub id:ShortId,
+    pub id:BuildFormatId,
     pub description: &'static str,
     pub file_extensions: &'static [&'static str],
 }
@@ -19,19 +24,19 @@ pub struct BuildDataFormat {
 #[cfg(feature="serde")]
 #[derive(serde::Serialize,serde::Deserialize,Debug,Clone)]
 pub struct BuildDataFormatOwned {
-    pub id:ShortId,
+    pub id:BuildFormatId,
     pub description: String,
     pub file_extensions: Vec<String>,
 }
 
 impl BuildDataFormat {
-    pub const CONTENT_OMDOC : BuildDataFormat = BuildDataFormat {id:ShortId::new("comdoc"),file_extensions:&[],
+    pub const CONTENT_OMDOC : BuildDataFormat = BuildDataFormat {id:BuildFormatId::new(ShortId::new_unchecked("comdoc")),file_extensions:&[],
         description: "(Flexi-)formal representation of knowledge corresponding to the (flexi)formal fragment of the OMDoc ontology"
     };
-    pub const NARRATIVE_OMDOC: BuildDataFormat = BuildDataFormat {id:ShortId::new("nomdoc"),file_extensions:&[],
+    pub const NARRATIVE_OMDOC: BuildDataFormat = BuildDataFormat {id:BuildFormatId::new(ShortId::new_unchecked("nomdoc")),file_extensions:&[],
         description: "Informal representation of the narrative structure of some document corresponding to the narrative fragment of the OMDoc ontology"
     };
-    pub const PDF : BuildDataFormat = BuildDataFormat {id:ShortId::new("pdf"),file_extensions:&["pdf"],
+    pub const PDF : BuildDataFormat = BuildDataFormat {id:BuildFormatId::new(ShortId::new_unchecked("pdf")),file_extensions:&["pdf"],
         description: "PDF"
     };
 
@@ -47,20 +52,20 @@ impl BuildDataFormat {
 
 #[derive(Copy,Clone,Debug)]
 pub struct BuildTarget {
-    pub id: ShortId,
+    pub id: BuildTargetId,
     pub description: &'static str,
     pub requires: &'static [BuildDataFormat],
     pub produces: &'static [BuildDataFormat],
-    pub extension: Option<ShortId>
+    pub extension: Option<ExtensionId>
 }
 
 #[cfg(feature="serde")]
 #[derive(serde::Serialize,serde::Deserialize,Debug,Clone)]
 pub struct BuildTargetOwned {
-    pub id:ShortId,
+    pub id:BuildTargetId,
     pub description: String,
-    pub requires: Vec<ShortId>,
-    pub produces: Vec<ShortId>,
+    pub requires: Vec<BuildFormatId>,
+    pub produces: Vec<BuildFormatId>,
 }
 
 impl BuildTarget {
@@ -73,7 +78,7 @@ impl BuildTarget {
             produces:self.produces.iter().map(|f| f.id).collect()
         }
     }
-    pub const CHECK: BuildTarget = BuildTarget {id:ShortId::CHECK,
+    pub const CHECK: BuildTarget = BuildTarget {id:BuildTargetId::new(ShortId::CHECK),
         requires:&[BuildDataFormat::CONTENT_OMDOC,BuildDataFormat::NARRATIVE_OMDOC],
         produces:&[BuildDataFormat::CONTENT_OMDOC,BuildDataFormat::NARRATIVE_OMDOC],
         description: "Type check OMDoc content",
@@ -81,13 +86,14 @@ impl BuildTarget {
     };
 }
 
+
 #[derive(Copy,Clone,Debug)]
 pub struct SourceFormat {
-    pub id: ShortId,
+    pub id: SourceFormatId,
     pub file_extensions: &'static [&'static str],
     pub description: &'static str,
     pub targets:&'static [BuildTarget],
-    pub extension: Option<ShortId>
+    pub extension: Option<ExtensionId>
 }
 
 impl SourceFormat {
@@ -106,36 +112,26 @@ impl SourceFormat {
 #[cfg(feature="serde")]
 #[derive(serde::Serialize,serde::Deserialize,Debug,Clone)]
 pub struct SourceFormatOwned {
-    pub id:ShortId,
+    pub id:SourceFormatId,
     pub file_extensions: Vec<String>,
     pub description: String,
-    pub targets: Vec<ShortId>,
+    pub targets: Vec<BuildTargetId>,
 }
 
 struct BuildData {
     path: Option<PathBuf>,
     rel_path: Box<str>,
-    archive: ArchiveURI,
+    archive: ArchiveId,
     source: OnceCell<Option<Box<str>>>,
     data: RwLock<VecMap<&'static str, Box<dyn Any>>>,
     document: Option<(Document,Box<str>)>,
     modules: Vec<Module>,
-    format: ShortId
+    format: BuildFormatId
 }
+
+
 pub struct BuildJob(Arc<BuildData>);
 impl BuildJob {
-    pub fn new(path:&Path, archive:ArchiveURI, rel_path:&str, format: ShortId) -> Self {
-        Self(Arc::new(BuildData {
-            path: Some(path.to_owned()),
-            rel_path: rel_path.into(),
-            archive,
-            source: OnceCell::new(),
-            data: RwLock::new(VecMap::default()),
-            document: None,
-            modules: Vec::new(),
-            format
-        }))
-    }
     pub fn source(&self) -> Option<&str> {
         self.0.source
             .get_or_init(|| match &self.0.path {
@@ -153,7 +149,7 @@ impl BuildJob {
 pub enum Dependency {
     Physical {
         id: ShortId,
-        archive: ArchiveURI,
+        archive: ArchiveId,
         filepath: Arc<str>,
         strong: bool,
     },

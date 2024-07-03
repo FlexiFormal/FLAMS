@@ -1,5 +1,5 @@
 use std::path::Path;
-use crate::building::formats::ShortId;
+use crate::building::formats::{ShortId, SourceFormatId};
 use crate::utils::filetree::FileChange;
 use crate::utils::VecMap;
 
@@ -23,10 +23,10 @@ pub struct TargetState {
 #[derive(Debug,Clone,PartialEq,Eq,Hash,Default)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 pub struct AllStates {
-    pub(crate) map:VecMap<ShortId,TargetState>
+    pub(crate) map:VecMap<SourceFormatId,TargetState>
 }
 impl AllStates {
-    pub fn targets(&self) -> impl Iterator<Item = (ShortId,&TargetState)> {
+    pub fn targets(&self) -> impl Iterator<Item = (SourceFormatId,&TargetState)> {
         self.map.iter().map(|(k,v)| (*k,v))
     }
     pub fn summary(&self) -> TargetState {
@@ -46,7 +46,7 @@ impl AllStates {
         }
         ret
     }
-    pub fn merge(&mut self, s: &BuildState,target:ShortId) {
+    pub fn merge(&mut self, s: &BuildState,target:SourceFormatId) {
         let target = self.map.get_or_insert_mut(target, || TargetState::default());
         match s {
             BuildState::Deleted => {},

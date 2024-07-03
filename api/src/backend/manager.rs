@@ -2,8 +2,8 @@ use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use futures::TryFutureExt;
-use tracing::instrument;
-use immt_core::building::formats::ShortId;
+use tracing::{instrument, Instrument};
+use immt_core::building::formats::{ShortId, SourceFormatId};
 use immt_core::ontology::archives::{ArchiveGroup, MathArchiveSpec, StorageSpec};
 use immt_core::uris::archives::{ArchiveId, ArchiveURI, ArchiveURIRef};
 use immt_core::uris::base::BaseURI;
@@ -32,6 +32,7 @@ pub struct ArchiveTree {
     groups: Vec<ArchiveGroup>,
 }
 
+#[derive(Debug)]
 pub struct ArchiveManager{
     lock:lock::Lock<ArchiveTree>,
     change_sender: ChangeSender<ArchiveChange>,
@@ -254,24 +255,20 @@ impl ArchiveTree {
             = Vec::new();
 
         fn do_dir(path:PathBuf,currp:String) -> impl std::future::Future<Output=Result<Result<(PathBuf,String),Vec<(PathBuf,String)>>,Option<MathArchive>>> {
-            let span = tracing::Span::current();
             async move {
-                let _span = span.enter();
-                Ok(ArchiveTree::async_dir(path, currp).await)
-            }
+                Ok(ArchiveTree::async_dir(path, currp).in_current_span().await)
+            }.in_current_span()
         }
         fn do_manifest(formats:&Box<[SourceFormat]>,fsender:&ChangeSender<FileChange>,p:PathBuf,s:String) -> impl std::future::Future<Output=Result<Result<(PathBuf,String),Vec<(PathBuf,String)>>,Option<MathArchive>>> {
-            let span = tracing::Span::current();
             let formats = formats.clone();
             let fsender = fsender.clone();
             async move {
-                let _span = span.enter();
-                if let Ok(m) = do_manifest_async(&p,&s).await {
+                if let Ok(m) = do_manifest_async(&p,&s).in_current_span().await {
                     let mut m = MathArchive::new_from(m);
                     m.update_sources_async(&formats, &fsender).await;
                     Err(Some(m))
                 } else {Err(None)}
-            }
+            }.in_current_span()
         }
         let f = do_dir(path, String::new());
         js.spawn(f);
@@ -571,7 +568,7 @@ immt_core::asyncs!{fn do_manifest(path: &Path,id:&str) -> Result<MathArchiveSpec
                 tracing::warn!(target:"archives","Archive {v}'s id does not match its location ({id})");
                 return Err(())
             }
-            "format" => { formats = v.split(',').flat_map(ShortId::try_from).collect() }
+            "format" => { formats = v.split(',').flat_map(|s| ShortId::try_from(s).map(|s| SourceFormatId::new(s))).collect() }
             "url-base" => { dom_uri = v.into() }
             "dependencies" => {
                 for d in v.split(',') {
@@ -639,7 +636,7 @@ immt_core::asyncs!{fn next
             if d.file_name().to_str().map_or(true, |s| s.starts_with('.')) { continue }
             else if d.file_name().eq_ignore_ascii_case("meta-inf") {
                 match switch!((find_manifest(&path,currp))(find_manifest_async(&path,currp))) {
-                    Some(path) => match switch!((do_manifest(&path,currp))(do_manifest_async(&path,currp))) {
+                    Some(path) => match switch!((do_manifest(&path,currp))(do_manifest_async(&path,currp).in_current_span())) {
                         Ok(m) => {
                             stack.pop();
                             if !switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) {
@@ -724,7 +721,7 @@ impl spliter::Spliterator for ArchiveIterator<'_> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use immt_core::building::formats::ShortId;
+    use immt_core::building::formats::{ShortId, SourceFormatId};
     use crate::backend::manager::ArchiveIterator;
     use crate::backend::relational::RelationalManager;
     use crate::building::targets::SourceFormat;
@@ -768,7 +765,7 @@ mod tests {
 */
 
     static STEX : [SourceFormat;1] = [SourceFormat{
-        id:ShortId::new("stex"),
+        id:SourceFormatId::new(ShortId::new_unchecked("stex")),
         file_extensions:&["tex","ltx"],
         description:"",
         targets:&[],
@@ -786,5 +783,4 @@ mod tests {
             "Loading archives in parallel"
         ).await;
     }
-
 }

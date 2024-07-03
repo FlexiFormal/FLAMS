@@ -1,5 +1,6 @@
 use leptos::*;
 use immt_graphs::Graph;
+use crate::utils::errors::IMMTError;
 
 #[server(
     prefix="/api",
@@ -7,7 +8,7 @@ use immt_graphs::Graph;
     input=server_fn::codec::GetUrl,
     output=server_fn::codec::Json
 )]
-pub async fn get_graph(name:String) -> Result<Graph,ServerFnError<String>> {
+pub async fn get_graph(name:String) -> Result<Graph,ServerFnError<IMMTError>> {
     let mut graph = Graph::default();
     let a = graph.add_node(name);
     let b = graph.add_node("B");

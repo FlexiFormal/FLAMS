@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 pub mod entities;
 
 mod m20220101_000001_create_table;
+//mod m20240725_081500_logins;
 
 pub struct Migrator;
 

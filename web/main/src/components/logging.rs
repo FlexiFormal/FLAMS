@@ -1,4 +1,5 @@
 //stylance::import_crate_style!(loglist,"style/components/loglist.scss");
+
 #[allow(non_upper_case_globals)]
 mod css {
     pub const immt_log_frame: &str = "immt-log-frame";
@@ -14,24 +15,17 @@ mod css {
 }
 use css::*;
 
-use crate::{console_log, socket};
+use crate::{console_log};
 use std::time::Duration;
+use async_trait::async_trait;
 use leptos::*;
 use immt_core::utils::logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem};
 use immt_core::utils::time::Timestamp;
 use immt_core::utils::VecMap;
 use crate::accounts::LoginState;
+use crate::utils::errors::IMMTError;
+use crate::utils::WebSocket;
 
-#[server(
-    prefix="/api/log",
-    endpoint="full",
-    input=server_fn::codec::GetUrl,
-    output=server_fn::codec::Json
-)]
-pub async fn full_log() -> Result<LogTree,ServerFnError<String>> {
-    full_log_i().await
-        .map_err(|_| ServerFnError::ServerError("".to_string()))
-}
 #[cfg(feature="server")]
 //#[tracing::instrument(level="debug",skip_all,target="server","loading log file")]
 async fn full_log_i() -> Result<LogTree,()> {
@@ -64,48 +58,43 @@ pub enum Log {
 }
 type Frames = VecMap<String,(NodeRef<html::Ul>,NodeRef<html::Span>,Timestamp)>;
 
-socket!(LogViewer<(),Log> @ "/log/ws" => {
-    last_ping: std::time::Instant,
+pub(crate) struct LogSocket {
+    #[cfg(feature="server")]
     listener: immt_api::utils::asyncs::ChangeListener<LogFileLine<String>>,
-    #[cfg(feature="accounts")]
-    identity:Option<LoginState>
-}{
-    fn new(now: std::time::Instant,r:&actix_web::HttpRequest) -> Self {
-        #[cfg(feature="accounts")]
-        use crate::accounts::ToID;
-        use immt_controller::{Controller,ControllerTrait,controller};
-        let listener = controller().log_listener();
-        Self {last_ping: now, listener,
-            #[cfg(feature="accounts")]
-            identity: actix_identity::IdentityExt::get_identity(r).ok().map(|i| i.into_login_state()).flatten()
-        }
-    }
-    fn last_ping(&mut self) -> &mut std::time::Instant {
-        &mut self.last_ping
-    }
-    fn every(&mut self,_:bool, _: &mut Self::Context) -> Option<Log> {
-        if let Some(n) = self.listener.get() {
-            Some(Log::Update(n))
+    #[cfg(feature="client")]
+    socket: leptos::web_sys::WebSocket
+}
+#[async_trait]
+impl WebSocket<(),Log> for LogSocket {
+    #[cfg(feature="server")]
+    async fn new(account:LoginState,db:sea_orm::DatabaseConnection) -> Option<Self> {
+        if account == LoginState::Admin {
+            let listener = immt_controller::controller().log_listener();
+            Some(Self {listener})
         } else {None}
     }
-    fn on_start(&mut self, ctx: &mut Self::Context) {
-        use actix::prelude::*;
-        #[cfg(feature="accounts")]
-        {
-            if self.identity != Some(LoginState::Admin) {
-                actix_web_actors::ws::WebsocketContext::stop(ctx);
-                return
-            }
-        }
-        use actix::{ContextFutureSpawner, WrapFuture,ActorFutureExt};
-        let _ = full_log().into_actor(self).map(|r,_,ctx| {
-            ctx.text(serde_json::to_string(&Log::Initial(r.unwrap())).unwrap());
-        }).spawn(ctx);
+    #[cfg(feature="client")]
+    fn new(ws: leptos::web_sys::WebSocket) -> Self { Self{socket:ws} }
+    #[cfg(feature="server")]
+    async fn next(&mut self) -> Option<Log> {
+        self.listener.read().await.and_then(|m| Some(Log::Update(m)))
     }
-});
+    #[cfg(feature="server")]
+    async fn handle_message(&mut self,msg:()) -> Option<Log> {None}
+    #[cfg(feature="server")]
+    async fn on_start(&mut self,socket:&mut axum::extract::ws::WebSocket) {
+        if let Ok(init) = full_log_i().await {
+            let _ = socket.send(axum::extract::ws::Message::Text(
+                serde_json::to_string(&Log::Initial(init)).unwrap()
+            )).await;
+        }
+    }
+    #[cfg(feature="client")]
+    fn socket(&mut self) -> &mut leptos::web_sys::WebSocket {&mut self.socket }
+}
 
 #[component]
-pub fn FullLog() -> impl IntoView { template!{<TopLog/>} }
+pub fn FullLog() -> impl IntoView { view!{<TopLog/>} }
 
 struct LogState {
     log_frame:NodeRef<html::Ul>,
@@ -115,23 +104,32 @@ struct LogState {
 }
 #[island]
 fn TopLog() -> impl IntoView {
-    use crate::utils::ws::WS;
+    use crate::utils::WebSocket;
     use thaw::Spinner;
+
+    let (signal_read,signal_write) = create_signal(false);
+
     let log_frame = create_node_ref::<html::Ul>();
     let warn_frame = create_node_ref::<html::Ul>();
     let (spinner_a,spinner_b) = (create_node_ref::<html::Div>(),create_node_ref::<html::Div>());
-    let mut state = LogState {
-        log_frame,
-        warn_frame,
-        spinners: (spinner_a,spinner_b),
-        frames: Frames::default(),
-    };
-    LogViewer::run(move |l| {
+
+    let res = create_effect(move |_| {
+        let _ = signal_read.get();
+        let mut state = LogState {
+            log_frame,
+            warn_frame,
+            spinners: (spinner_a,spinner_b),
+            frames: Frames::default(),
+        };
         #[cfg(feature="client")]
-        {client::ws(&mut state,l);}
-        None
+        let _ = LogSocket::start(move |msg| {
+            client::ws(&mut state,msg);
+            None
+        });
     });
-    template!{
+
+
+    view!{
         <div class=immt_log_frame><div node_ref=spinner_a><Spinner/></div>
             <ul node_ref=log_frame/>
         </div>

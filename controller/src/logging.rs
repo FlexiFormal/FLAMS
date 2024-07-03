@@ -1,6 +1,6 @@
 use std::fmt;
 use std::fmt::{Display, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use chrono::Local;
 use parking_lot::RwLock;
 use tracing::Id;
@@ -16,13 +16,12 @@ use immt_core::utils::VecMap;
 use crate::BaseController;
 
 
-pub(crate) fn tracing(level: tracing::Level,rotation: tracing_appender::rolling::Rotation) -> LogStore {
+pub(crate) fn tracing(logdir:&Path,level: tracing::Level,rotation: tracing_appender::rolling::Rotation) -> LogStore {
     use tracing::level_filters::LevelFilter;
     use tracing_subscriber::fmt::writer::MakeWriterExt;
     use tracing_subscriber::layer::SubscriberExt;
 
     let filename = Local::now().format("%Y-%m-%d-%H.%M.%S.log").to_string();
-    let logdir = get_logdir();
     let path = logdir.join(&filename);
 
     let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
@@ -61,7 +60,7 @@ pub(crate) fn tracing(level: tracing::Level,rotation: tracing_appender::rolling:
     tracing::subscriber::set_global_default(subscriber).unwrap();
     logger
 }
-
+/*
 fn get_logdir() -> PathBuf {
     if let Ok(f) = std::env::var("IMMT_LOGDIR") {
         let path = PathBuf::from(f);
@@ -88,6 +87,8 @@ fn get_logdir() -> PathBuf {
     }
     panic!("Failed to initialize log directory!");
 }
+
+ */
 
 #[derive(Debug)]
 struct LogStoreI {

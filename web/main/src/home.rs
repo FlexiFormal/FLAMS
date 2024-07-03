@@ -4,7 +4,8 @@ use leptos_meta::*;
 use leptos_router::*;
 use crate::components::*;
 use thaw::*;
-use crate::accounts::{WithAccount, LoginState};
+use crate::accounts::{LoginState, WithAccount, WithAccountClient};
+use crate::components::mathhub_tree::ArchivesTop;
 use crate::console_log;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]
@@ -39,7 +40,7 @@ impl std::fmt::Display for Page {
 
 }
 
-
+/*
 #[derive(Copy,Clone)]
 pub struct PathSignal{pub read:ReadSignal<Page>,pub write:WriteSignal<Page>}
 #[cfg(feature = "server")]
@@ -175,28 +176,9 @@ fn LeftMenu(page:Page) -> impl IntoView {
     }
 }
 
-#[component]
-//fn HomePage<Ctrl:immt_api::controller::Controller+Clone+Send+'static>(#[prop(optional)] _ty: PhantomData<Ctrl>) -> impl IntoView {
-fn HomePage() -> impl IntoView {
-    //let ctrl = crate::get_controller::<Ctrl>();
-    //println!("Wuuhuu! \\o/");
-    view! {"Henlo"}
-}
 
-/// 404 - Not Found
-#[component]
-fn NotFound() -> impl IntoView {
-    #[cfg(feature = "server")]
-    {
-        let resp = expect_context::<leptos_actix::ResponseOptions>();
-        resp.set_status(actix_web::http::StatusCode::NOT_FOUND);
-    }
 
-    view! {
-        <h3>"Not Found"</h3>
-    }
-}
-
+*/*/
 
 // --------------------------------------------------
 
@@ -220,7 +202,7 @@ pub fn MainNew() -> impl IntoView {
                 <Route path="" view=|| view!(<MainPage page=Page::Home/>)/>
                 <Route path="*any" view=|| view!(<MainPage page=Page::NotFound/>)/>
             </Route>
-            <Route path="/*any" view=NotFound/>
+            //<Route path="/*any" view=NotFound/>
         </Routes></Router>
     }
 }
@@ -271,20 +253,30 @@ fn LoginForm() -> impl IntoView {
 #[component]
 fn MainPage(page:Page) -> impl IntoView {
     let login = expect_context::<ReadSignal<LoginState>>();
+    let mymain = move || view!(<main class="immt-main">{match page {
+        Page::Home => view!{<HomePage/>},
+        Page::MathHub => view!{<ArchivesTop/>},
+        Page::Graphs => view!{<GraphTest/>},
+        Page::Log => view!{<FullLog/>},
+        Page::Queue => view!{<Queue/>},
+        Page::Settings => view!{<Settings/>},
+        _ => view!(<NotFound/>).into_view()
+        //Page::Login => view!{<LoginPage/>}
+    }}</main>);
     view!{<Layout has_sider=true content_style="width:100%">
         <LayoutSider class="immt-menu" content_class="immt-menu">
             <Menu value=page.to_string()>
                 <a href="/"><MenuItem key="home" label="Home"/></a>
-                <a href="/mathhub"><MenuItem key="mathhub" label="MathHub"/></a>
-                {console_log!("Loginstate: {:?}",login.get());match login.get() {
+                <a href="/dashboard/mathhub"><MenuItem key="mathhub" label="MathHub"/></a>
+                {match login.get() {
                     LoginState::Admin | LoginState::NoAccounts => view!{
-                        <a href="/graphs"><MenuItem key="graphs" label="Graphs"/></a>
-                        <a href="/log"><MenuItem key="log" label="Logs"/></a>
-                        <a href="/settings"><MenuItem key="settings" label="Settings"/></a>
-                        <a href="/queue"><MenuItem key="queue" label="Queue"/></a>
+                        <a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a>
+                        <a href="/dashboard/log"><MenuItem key="log" label="Logs"/></a>
+                        <a href="/dashboard/settings"><MenuItem key="settings" label="Settings"/></a>
+                        <a href="/dashboard/queue"><MenuItem key="queue" label="Queue"/></a>
                     },
                     LoginState::User(..) => view!{
-                        <a href="/graphs"><MenuItem key="graphs" label="Graphs"/></a><span/>
+                        <a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a><span/>
                     },
                     LoginState::None | LoginState::Loading => view!(<span/><span/>)
                 }}
@@ -296,15 +288,28 @@ fn MainPage(page:Page) -> impl IntoView {
                 </Space>
             </Card> */
         </LayoutSider>
-        <main class="immt-main">{match page {
-            Page::Home => view!{<HomePage/>},
-            Page::MathHub => view!{<ArchiveOrGroups/>},
-            Page::Graphs => view!{<GraphTest/>},
-            Page::Log => view!{<FullLog/>},
-            Page::Queue => view!{<Queue/>},
-            Page::Settings => view!{<Settings/>},
-            _ => view!(<NotFound/>).into_view()
-            //Page::Login => view!{<LoginPage/>}
-        }}</main>
+        <WithAccountClient user=login.get()>{mymain()}</WithAccountClient>
     </Layout>}
+}
+
+#[component]
+//fn HomePage<Ctrl:immt_api::controller::Controller+Clone+Send+'static>(#[prop(optional)] _ty: PhantomData<Ctrl>) -> impl IntoView {
+fn HomePage() -> impl IntoView {
+    //let ctrl = crate::get_controller::<Ctrl>();
+    //println!("Wuuhuu! \\o/");
+    view! {"Henlo"}
+}
+
+/// 404 - Not Found
+#[component]
+fn NotFound() -> impl IntoView {
+    #[cfg(feature = "server")]
+    {
+        let resp = expect_context::<leptos_axum::ResponseOptions>();
+        resp.set_status(http::StatusCode::NOT_FOUND);
+    }
+
+    view! {
+        <h3>"Not Found"</h3>
+    }
 }

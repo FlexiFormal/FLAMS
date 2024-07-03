@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::ops::Div;
+use std::str::FromStr;
 use triomphe::Arc;
 use crate::uris::base::BaseURI;
 use crate::ontology::rdf::terms::NamedNode;
@@ -25,6 +26,12 @@ impl ArchiveId {
     pub fn new<S: Into<Arc<str>>>(s: S) -> Self { Self(Name(s.into())) }
     pub fn is_meta(&self) -> bool {
         self.last_name().eq_ignore_ascii_case("meta-inf")
+    }
+}
+impl FromStr for ArchiveId {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Name(s.into())))
     }
 }
 impl<S: AsRef<str>,I:IntoIterator<Item=S>> From<I> for ArchiveId {

@@ -18,36 +18,34 @@ use crate::logging::LogStore;
 
 pub mod logging;
 
+#[derive(Debug)]
 struct ControllerI {
     log: LogStore,
     relational: RelationalManager,
     archives: ArchiveManager,
     extensions:Box<[Box<dyn MMTExtension>]>,
     format_extensions:Box<[u8]>,
-    queue:BuildQueue
+    queue:BuildQueue,
+    settings: Settings
 }
 
-lazy_static::lazy_static! {
-    static ref CONFIG_DIR: Option<PathBuf> = {
-        simple_home_dir::home_dir().map(|d| d.join(".immt"))
-    };
-}
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct BaseController(Arc<ControllerI>);
 impl BaseController {
 
     #[instrument(level = "info",
         target = "controller",
         name = "Booting",
-        skip(mathhubs,debug)
+        skip(settings)
     )]
     #[cfg(not(feature="async"))]
-    pub fn new<'a,Mhs:Iterator<Item=&'a Path>>(debug:bool,mathhubs:Mhs) -> Self {
+    pub fn new(settings: SettingsSpec) -> Self {
         assert!(CONTROLLER.get().is_none());
+        let settings: Settings = settings.into();
 
-        let log = logging::tracing(
-            if debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
+        let log = logging::tracing(&settings.log_dir,
+            if settings.debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
             tracing_appender::rolling::Rotation::NEVER
         );
         let extensions = Self::load_extensions();
@@ -68,13 +66,13 @@ impl BaseController {
                 }
             }
         }
-        let queue = BuildQueue::new(source_formats.into(),build_data_formats.into(),build_targets.into());
+        let queue = BuildQueue::new();
 
         let relational = RelationalManager::default();
         let archives = ArchiveManager::default();
 
         let ctrl = ControllerI { log, relational, extensions, archives,queue,
-            format_extensions:format_extensions.into()
+            format_extensions:format_extensions.into(), settings
         };
         let ctrl = Self(Arc::new(ctrl));
 
@@ -84,12 +82,13 @@ impl BaseController {
                 ext.on_plugin_load(&ctrl)
             }
         });
-        for p in mathhubs {
-            ctrl.0.relational.add_quads(ctrl.0.archives.load_par(p, ctrl.0.queue.formats()).into_iter())
+        for p in &ctrl.0.settings.mathhubs {
+            ctrl.0.relational.add_quads(ctrl.0.archives.load_par(p, source_formats.as_slice()).into_iter())
         }
+        ctrl.0.queue.run(ctrl.clone());
         let ret = ctrl.clone();
         background(move || { ctrl.load_relational() });
-        CONTROLLER.set(ret.clone()).unwrap();
+        CONTROLLER.set(ret.clone()).expect("Controller already set");
         ret
     }
 
@@ -119,15 +118,13 @@ impl BaseController {
          */
     }
 
-    pub fn config_dir() -> Option<&'static Path> { CONFIG_DIR.as_ref().map(|a| a.as_path())}
-
     fn load_extensions() -> Box<[Box<dyn MMTExtension>]> {
         use immt_stex::STeXExtension;
         let mut target: Vec<Box<dyn MMTExtension>> = vec![
             Box::new(SHTMLExtension {}),
             Box::new(STeXExtension {}),
         ];
-        if let Some(d) = Self::config_dir() {
+        if let Some(d) = immt_api::config_dir() {
             let path = d.join("plugins");
             Self::do_dir(path,&mut target)
         }
@@ -150,7 +147,7 @@ impl BaseController {
 #[cfg(not(feature="async"))]
 impl Default for BaseController {
     fn default() -> Self {
-        Self::new(cfg!(debug_assertions),immt_api::MATHHUB_PATHS.iter().map(|p| p.deref()))
+        Self::new(SettingsSpec::default())
     }
 }
 
@@ -159,6 +156,7 @@ impl Controller for BaseController {
     fn archives(&self) -> &ArchiveManager { &self.0.archives }
     fn log_file(&self) -> &Path { self.0.log.log_file() }
     fn build_queue(&self) -> &BuildQueue { &self.0.queue }
+    fn settings(&self) -> &Settings { &self.0.settings }
 }
 
 #[cfg(not(feature="async"))]
@@ -170,6 +168,8 @@ pub type MainController = BaseControllerAsync;
 pub use Controller as ControllerTrait;
 #[cfg(feature="async")]
 pub use ControllerAsync as ControllerTrait;
+use immt_api::utils::settings::{Settings};
+use immt_core::utils::settings::SettingsSpec;
 
 
 static CONTROLLER: std::sync::OnceLock<MainController> = std::sync::OnceLock::new();
@@ -186,7 +186,8 @@ struct ControllerIAsync {
     archives: ArchiveManagerAsync, //RwLock<ArchiveManager>,
     extensions:Box<[Box<dyn MMTExtension>]>,
     format_extensions:Box<[u8]>,
-    queue:BuildQueue
+    queue:BuildQueue,
+    settings: Settings
 }
 
 #[cfg(feature="async")]
@@ -195,17 +196,17 @@ pub struct BaseControllerAsync(Arc<ControllerIAsync>);
 
 #[cfg(feature="async")]
 impl BaseControllerAsync {
-    pub fn config_dir() -> Option<&'static Path> { BaseController::config_dir() }
 
     #[instrument(level = "info",
         target = "controller",
         name = "Booting",
-        skip(mathhubs,debug)
+        skip(settings)
     )]
-    pub async fn new<'a,Mhs:Iterator<Item=&'a Path>>(debug:bool,mathhubs:Mhs) -> Self {
+    pub async fn new(settings: SettingsSpec) -> Self {
         assert!(CONTROLLER.get().is_none());
-        let log = logging::tracing(
-            if debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
+        let settings: Settings = settings.into();
+        let log = logging::tracing(&settings.log_dir,
+            if settings.debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
             tracing_appender::rolling::Rotation::NEVER
         );
         let extensions = BaseController::load_extensions();
@@ -226,13 +227,13 @@ impl BaseControllerAsync {
                 }
             }
         }
-        let queue = BuildQueue::new(source_formats.into(),build_data_formats.into(),build_targets.into());
+        let queue = BuildQueue::new();
 
         let relational = RelationalManager::default();
         let archives = ArchiveManagerAsync::default();
 
         let ctrl = ControllerIAsync { log, relational, extensions, archives,queue,
-            format_extensions:format_extensions.into()
+            format_extensions:format_extensions.into(),settings
         };
         let ctrl = Self(Arc::new(ctrl));
 
@@ -242,18 +243,20 @@ impl BaseControllerAsync {
                 ext.on_plugin_load_async(&ctrl)
             }
         });
-        for p in mathhubs {
-            let formats = ctrl.0.queue.formats().into();
+        for p in &ctrl.0.settings.mathhubs {
+            let formats = source_formats.clone().into();
             ctrl.0.relational.add_quads(ctrl.0.archives.load(p.to_owned(), formats).await.into_iter())
         }
+        ctrl.0.queue.run_async(ctrl.clone());
         let ret = ctrl.clone();
         tokio::spawn(async move {ctrl.load_relational().await});
         CONTROLLER.set(ret.clone()).expect("Controller already set");
         ret
     }
 
+
     pub async fn default() -> Self {
-        Self::new(cfg!(debug_assertions),immt_api::MATHHUB_PATHS.iter().map(|p| p.deref())).await
+        Self::new(SettingsSpec::default()).await
     }
 
     async fn load_relational(&self) {
@@ -269,6 +272,7 @@ impl ControllerAsync for BaseControllerAsync {
     fn archives(&self) -> &ArchiveManagerAsync { &self.0.archives }
     fn log_file(&self) -> &Path { self.0.log.log_file() }
     fn build_queue(&self) -> &BuildQueue { &self.0.queue }
+    fn settings(&self) -> &Settings { &self.0.settings }
 }
 
 

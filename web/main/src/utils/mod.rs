@@ -1,5 +1,143 @@
+pub(crate) mod errors;
+
 use std::future::Future;
+use async_trait::async_trait;
 use leptos::*;
+use crate::accounts::LoginState;
+use crate::console_log;
+
+#[cfg(feature="client")]
+pub fn target() -> &'static str { "web" }
+#[cfg(feature="server")]
+pub fn target() -> &'static str { "native" }
+
+#[async_trait]
+pub(crate) trait WebSocket<
+    ClientMsg:Serializable+serde::Serialize+for<'a>serde::Deserialize<'a>+Send,
+    ServerMsg:Serializable+serde::Serialize+for<'a>serde::Deserialize<'a>+Send
+>:Sized+'static {
+    const TIMEOUT: f32 = 10.0;
+    #[cfg(feature="server")]
+    async fn ws_handler(
+        auth_session: axum_login::AuthSession<crate::accounts::AccountManager>,
+        axum::extract::State(state): axum::extract::State<crate::server::AppState>,
+        ws:axum::extract::WebSocketUpgrade,
+        // do I even need this?
+        agent:Option<axum_extra::TypedHeader<axum_extra::headers::UserAgent>>
+    ) -> axum::response::Response where Self:Send {
+        let login = crate::accounts::login_status_with_session(Some(&auth_session),|| Some(state.db.clone())).await;
+        println!("Login status: {login:?}");
+        let login = login.unwrap_or(LoginState::None);
+        if let Some(conn) = Self::new(login,state.db).await {
+            ws.on_upgrade(move |socket| conn.on_upgrade(socket))
+        } else {
+            let mut res = axum::response::Response::new(axum::body::Body::empty());
+            *(res.status_mut()) = http::StatusCode::UNAUTHORIZED;
+            res
+        }
+    }
+    #[cfg(feature="server")]
+    async fn on_upgrade(mut self,mut socket:axum::extract::ws::WebSocket) where Self:Send {
+        if !socket.send(axum::extract::ws::Message::Ping(vec!())).await.is_ok() {
+            return
+        }
+        let timeout = std::time::Duration::from_secs_f32(Self::TIMEOUT);
+        self.on_start(&mut socket).await;
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(timeout) => if !socket.send(axum::extract::ws::Message::Ping(vec!())).await.is_ok() {
+                    return
+                },
+                msg = self.next() => if let Some(msg) = msg {
+                    if let Ok(msg) = leptos::serde_json::to_string(&msg) {
+                        if !socket.send(axum::extract::ws::Message::Text(msg)).await.is_ok() {
+                            return
+                        }
+                    }
+                } else {return},
+                o = socket.recv() => match o {
+                    None => break,
+                    Some(msg) => match msg {
+                        Ok(axum::extract::ws::Message::Ping(_)) => {
+                            if !socket.send(axum::extract::ws::Message::Pong(vec!())).await.is_ok() {
+                                break
+                            }
+                        },
+                        Ok(axum::extract::ws::Message::Text(msg)) => {
+                            if let Ok(msg) = leptos::serde_json::from_str(&msg) {
+                                if let Some(reply) = self.handle_message(msg).await {
+                                    if let Ok(reply) = leptos::serde_json::to_string(&reply) {
+                                        if !socket.send(axum::extract::ws::Message::Text(reply)).await.is_ok() {
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        _ => ()
+                    },
+                },
+            }
+        }
+    }
+
+    /*#[cfg(feature="server")]
+    fn start(mut handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static) -> Self {
+        unreachable!()
+    }*/
+
+    #[cfg(feature="client")]
+    fn start(mut handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static) -> Self {
+        use wasm_bindgen::prelude::Closure;
+        use wasm_bindgen::JsCast;
+        console_log!("HERE!");
+        let ws = leptos::web_sys::WebSocket::new("/dashboard/log/ws").unwrap();
+        let mut ws2 = ws.clone();
+        let mut slf = Self::new(ws);
+
+        let callback = Closure::<dyn FnMut(_)>::new(move |event: leptos::web_sys::MessageEvent| {
+            let data = event.data().as_string().unwrap();
+            if data == "ping" {
+                ws2.send_with_str("pong").unwrap();
+            } else {
+                let ret = serde_json::from_str::<ServerMsg>(&data).unwrap();
+                if let Some(a) = handle(ret) {
+                    ws2.send_with_str(&serde_json::to_string(&a).unwrap()).unwrap();
+                }
+            }
+        });
+        slf.socket().set_onmessage(Some(callback.as_ref().unchecked_ref()));
+        callback.forget();
+        slf
+    }
+    #[cfg(feature="server")]
+    async fn on_start(&mut self,socket:&mut axum::extract::ws::WebSocket) {}
+    #[cfg(feature="server")]
+    async fn new(account:LoginState,db:sea_orm::DatabaseConnection) -> Option<Self>;
+    #[cfg(feature="client")]
+    fn new(ws: leptos::web_sys::WebSocket) -> Self;
+    #[cfg(feature="server")]
+    async fn next(&mut self) -> Option<ServerMsg>;
+    #[cfg(feature="server")]
+    async fn handle_message(&mut self,msg:ClientMsg) -> Option<ServerMsg>;
+    #[cfg(feature="client")]
+    fn socket(&mut self) -> &mut leptos::web_sys::WebSocket;
+    #[cfg(feature="client")]
+    fn send(&mut self,msg:&ClientMsg) {
+        self.socket().send_with_str(&serde_json::to_string(msg).unwrap()).unwrap();
+    }
+}
+
+#[macro_export]
+macro_rules! socket {
+    ($ident:ident<$tpC:ty> => {$($struc:tt)*} {$($server:tt)*}) => {
+        #[cfg(feature="server")]
+        socket!(@server $ident;$tpS;$tpC;{$($struc)*};$($server)*);
+        #[cfg(feature="client")]
+        socket!(@client $ident;$tpS;$tpC;$path);
+    };
+}
+/*
 pub(crate) fn callback<F:Future<Output=()> + 'static>(millis:u32,f:impl Fn() -> F + 'static + Clone) -> Effect<gloo_timers::callback::Interval> {
     create_effect(move |_| {
         let f = f.clone();
@@ -9,10 +147,6 @@ pub(crate) fn callback<F:Future<Output=()> + 'static>(millis:u32,f:impl Fn() -> 
     })
 }
 
-#[cfg(feature="client")]
-pub fn target() -> &'static str { "web" }
-#[cfg(feature="server")]
-pub fn target() -> &'static str { "native" }
 
 pub(crate) fn if_logged_in_client<R>(yes:impl FnOnce() -> R,no:impl FnOnce() -> R) -> R {
     let login = expect_context::<RwSignal<LoginState>>();
@@ -268,3 +402,5 @@ pub mod client {
         }
     }
 }
+
+ */
