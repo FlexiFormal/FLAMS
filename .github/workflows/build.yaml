@@ -36,7 +36,7 @@ jobs:
       - name: graphs
         run: cd web\graphs && echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" >> $env:GITHUB_ENV && echo "CARGO_TARGET_DIR=..\..\target" >> $env:GITHUB_ENV && echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" >> $env:GITHUB_ENV && trunk build --features=client --release
       - name: main
-        run: echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" >> $env:GITHUB_ENV && cargo leptos build --release
+        run: echo "CARGO_TARGET_DIR=target" >> $env:GITHUB_ENV && echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" >> $env:GITHUB_ENV && cargo leptos build --release
       - name: bundle
         run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
       - uses: actions/upload-artifact@v4
