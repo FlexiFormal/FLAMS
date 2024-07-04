@@ -34,11 +34,11 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: envvars1
-        run: echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "CARGO_TARGET_DIR=..\..\target" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        run: echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: graphs
-        run: cd web\graphs && trunk build --features=client --release
+        run: cd web\graphs && trunk build --features=client --release && Move-Item -Path target -Destination ..\..\target && cd ..\..
       - name: envvars2
-        run: echo "CARGO_TARGET_DIR=.\target" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        run:  echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: main
         run: cargo leptos build --release
       - name: bundle
