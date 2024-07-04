@@ -34,34 +34,34 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: graphs
-        run: cd web\graphs && export CARGO_BUILD_TARGET=x86_64-pc-windows-msvc && export CARGO_TARGET_DIR=..\..\target && export RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
+        run: cd web\graphs && $env:CARGO_BUILD_TARGET="x86_64-pc-windows-msvc" && $env:CARGO_TARGET_DIR="..\..\target" && $env:RUSTFLAGS="--cfg=web_sys_unstable_apis" && trunk build --features=client --release
       - name: main
-        run: export CARGO_BUILD_TARGET=x86_64-pc-windows-msvc && cargo leptos build --release
+        run: $env:CARGO_BUILD_TARGET="x86_64-pc-windows-msvc" && cargo leptos build --release
       - name: bundle
         run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: out
-  mac_x86:
-    runs-on: macos-14-large
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-      - name: rustups
-        run: rustup target add x86_64-apple-darwin && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-apple-darwin && rustup component add rust-src --toolchain nightly-x86_64-apple-darwin && rustup default nightly-x86_64-apple-darwin #&& rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
-      - name: cargo
-        run: cargo install cargo-leptos && cargo install --locked trunk
-      - name: graphs
-        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
-      - name: main
-        run: cargo leptos build --release
-      - name: bundle
-        run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mac_x86
-          path: out
+#  mac_x86:
+#    runs-on: macos-14-large
+#    environment: production
+#    steps:
+#      - uses: actions/checkout@v4
+#      - name: rustups
+#        run: rustup target add x86_64-apple-darwin && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-apple-darwin && rustup component add rust-src --toolchain nightly-x86_64-apple-darwin && rustup default nightly-x86_64-apple-darwin #&& rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
+#      - name: cargo
+#        run: cargo install cargo-leptos && cargo install --locked trunk
+#      - name: graphs
+#        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
+#      - name: main
+#        run: cargo leptos build --release
+#      - name: bundle
+#        run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
+#      - uses: actions/upload-artifact@v4
+#        with:
+#          name: mac_x86
+#          path: out
   mac_aarch64:
     runs-on: macos-latest
     environment: production
