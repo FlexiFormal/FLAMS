@@ -17,6 +17,7 @@ chrono = "0.4"
 lazy_static = { version="1.4",optional=true }
 async-trait = "0.1"
 tracing = { version="0.1",optional=true }
+serde_json = { version="1",features = ["unbounded_depth"] }
 
 #gloo-timers = { version="0.3",optional = false }
 wasm-bindgen-futures = { version="0.4",optional = false }

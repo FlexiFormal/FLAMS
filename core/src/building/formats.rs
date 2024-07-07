@@ -35,8 +35,15 @@ macro_rules! short_id {
     }
 }
 
-#[derive(Copy, Clone, Debug,PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ShortId([u8;8]);
+impl std::fmt::Debug for ShortId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let str = std::str::from_utf8(&self.0[0..self.len() as usize])
+            .map_err(|_| std::fmt::Error)?;
+        f.write_str(str)
+    }
+}
 impl ShortId {
     pub const CHECK: ShortId = ShortId::new_unchecked("check");
     pub const fn new_unchecked(id: &str) -> Self {

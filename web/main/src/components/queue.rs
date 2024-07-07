@@ -36,7 +36,10 @@ pub async fn enqueue(archive:Option<String>,group:Option<String>,target:SourceFo
                 }
             };
             let controller = controller();
-            controller.build_queue().enqueue(spec);
+            #[cfg(feature="async")]
+            {controller.build_queue().enqueue(spec,controller).await}
+            #[cfg(not(feature="async"))]
+            {controller.build_queue().enqueue(spec,controller)}
             Ok(())
         },
         _ => Err(IMMTError::AccessForbidden.into())

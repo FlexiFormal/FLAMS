@@ -8,7 +8,7 @@ use immt_api::backend::relational::RelationalManager;
 use immt_api::building::buildqueue::BuildQueue;
 use immt_api::building::targets::{BuildDataFormat, BuildTarget, SourceFormat};
 pub use immt_api::controller::{Controller, ControllerAsync};
-use immt_api::extensions::{FormatExtension, MMTExtension};
+use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
 use immt_api::utils::asyncs::{background, ChangeListener};
 use immt_core::ontology::rdf::terms::NamedNode;
 use immt_core::utils::logs::LogFileLine;
@@ -23,8 +23,8 @@ struct ControllerI {
     log: LogStore,
     relational: RelationalManager,
     archives: ArchiveManager,
-    extensions:Box<[Box<dyn MMTExtension>]>,
-    format_extensions:Box<[u8]>,
+    extensions:HMap<ExtensionId,Box<dyn MMTExtension>>,
+    format_extensions:HMap<SourceFormatId,SourceFormat>,
     queue:BuildQueue,
     settings: Settings
 }
@@ -48,13 +48,17 @@ impl BaseController {
             if settings.debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
             tracing_appender::rolling::Rotation::NEVER
         );
-        let extensions = Self::load_extensions();
-        let mut format_extensions = Vec::new();
-        let source_formats = extensions.iter().enumerate().filter_map(|(i,e)| e.as_formats().map(|e| (i,e))).flat_map(|(i,e)| {
-            format_extensions.push(i as u8);
-            e.formats()
-        }).collect::<Vec<_>>();
-        let mut build_targets:Vec<_> = source_formats.iter().flat_map(|i| i.targets).copied().collect();
+        let mut extensions = HMap::default();
+        let mut format_extensions = HMap::default();
+        for e in BaseController::load_extensions() {
+            if let Some(e) = e.as_formats() {
+                for f in e.formats() {
+                    format_extensions.insert(f.id, f);
+                }
+            };
+            extensions.insert(e.name(),e);
+        }
+        let mut build_targets:Vec<_> = format_extensions.iter().flat_map(|(_,i)| i.targets).copied().collect();
         build_targets.insert(0,BuildTarget::CHECK);
         let mut build_data_formats = vec![
             BuildDataFormat::PDF
@@ -77,15 +81,15 @@ impl BaseController {
         let ctrl = Self(Arc::new(ctrl));
 
         tracing::info_span!(target:"controller","Loading extensions").in_scope(|| {
-            for ext in ctrl.0.extensions.iter() {
+            for (_,ext) in ctrl.0.extensions.iter() {
                 tracing::info!(target:"controller","Loading {}",ext.name());
                 ext.on_plugin_load(&ctrl)
             }
         });
+        let source_formats = ctrl.0.format_extensions.values().cloned().collect::<Vec<_>>();
         for p in &ctrl.0.settings.mathhubs {
             ctrl.0.relational.add_quads(ctrl.0.archives.load_par(p, source_formats.as_slice()).into_iter())
         }
-        ctrl.0.queue.run(ctrl.clone());
         let ret = ctrl.clone();
         background(move || { ctrl.load_relational() });
         CONTROLLER.set(ret.clone()).expect("Controller already set");
@@ -157,6 +161,12 @@ impl Controller for BaseController {
     fn log_file(&self) -> &Path { self.0.log.log_file() }
     fn build_queue(&self) -> &BuildQueue { &self.0.queue }
     fn settings(&self) -> &Settings { &self.0.settings }
+    fn get_format(&self, id:SourceFormatId) -> Option<&SourceFormat> {
+        self.0.format_extensions.get(&id)
+    }
+    fn get_extension(&self, id: ExtensionId) -> Option<&dyn MMTExtension> {
+        self.0.extensions.get(&id).map(|b| &**b)
+    }
 }
 
 #[cfg(not(feature="async"))]
@@ -168,7 +178,9 @@ pub type MainController = BaseControllerAsync;
 pub use Controller as ControllerTrait;
 #[cfg(feature="async")]
 pub use ControllerAsync as ControllerTrait;
+use immt_api::HMap;
 use immt_api::utils::settings::{Settings};
+use immt_core::building::formats::SourceFormatId;
 use immt_core::utils::settings::SettingsSpec;
 
 
@@ -184,8 +196,8 @@ struct ControllerIAsync {
     log: LogStore,
     relational: RelationalManager,
     archives: ArchiveManagerAsync, //RwLock<ArchiveManager>,
-    extensions:Box<[Box<dyn MMTExtension>]>,
-    format_extensions:Box<[u8]>,
+    extensions:HMap<ExtensionId,Box<dyn MMTExtension>>,
+    format_extensions:HMap<SourceFormatId,SourceFormat>,
     queue:BuildQueue,
     settings: Settings
 }
@@ -209,13 +221,17 @@ impl BaseControllerAsync {
             if settings.debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
             tracing_appender::rolling::Rotation::NEVER
         );
-        let extensions = BaseController::load_extensions();
-        let mut format_extensions = Vec::new();
-        let source_formats = extensions.iter().enumerate().filter_map(|(i,e)| e.as_formats().map(|e| (i,e))).flat_map(|(i,e)| {
-            format_extensions.push(i as u8);
-            e.formats()
-        }).collect::<Vec<_>>();
-        let mut build_targets:Vec<_> = source_formats.iter().flat_map(|i| i.targets).copied().collect();
+        let mut extensions = HMap::default();
+        let mut format_extensions = HMap::default();
+        for e in BaseController::load_extensions() {
+            if let Some(e) = e.as_formats() {
+                for f in e.formats() {
+                    format_extensions.insert(f.id, f);
+                }
+            };
+            extensions.insert(e.name(),e);
+        }
+        let mut build_targets:Vec<_> = format_extensions.iter().flat_map(|(_,i)| i.targets).copied().collect();
         build_targets.insert(0,BuildTarget::CHECK);
         let mut build_data_formats = vec![
             BuildDataFormat::PDF
@@ -233,21 +249,20 @@ impl BaseControllerAsync {
         let archives = ArchiveManagerAsync::default();
 
         let ctrl = ControllerIAsync { log, relational, extensions, archives,queue,
-            format_extensions:format_extensions.into(),settings
+            format_extensions,settings
         };
         let ctrl = Self(Arc::new(ctrl));
 
         tracing::info_span!(target:"controller","Loading extensions").in_scope(|| {
-            for ext in ctrl.0.extensions.iter() {
+            for (_,ext) in ctrl.0.extensions.iter() {
                 tracing::info!(target:"controller","Loading {}",ext.name());
                 ext.on_plugin_load_async(&ctrl)
             }
         });
         for p in &ctrl.0.settings.mathhubs {
-            let formats = source_formats.clone().into();
+            let formats = ctrl.0.format_extensions.values().cloned().collect::<Vec<_>>().into();
             ctrl.0.relational.add_quads(ctrl.0.archives.load(p.to_owned(), formats).await.into_iter())
         }
-        ctrl.0.queue.run_async(ctrl.clone());
         let ret = ctrl.clone();
         tokio::spawn(async move {ctrl.load_relational().await});
         CONTROLLER.set(ret.clone()).expect("Controller already set");
@@ -273,6 +288,12 @@ impl ControllerAsync for BaseControllerAsync {
     fn log_file(&self) -> &Path { self.0.log.log_file() }
     fn build_queue(&self) -> &BuildQueue { &self.0.queue }
     fn settings(&self) -> &Settings { &self.0.settings }
+    fn get_format(&self, id:SourceFormatId) -> Option<&SourceFormat> {
+        self.0.format_extensions.get(&id)
+    }
+    fn get_extension(&self, id: ExtensionId) -> Option<&dyn MMTExtension> {
+        self.0.extensions.get(&id).map(|b| &**b)
+    }
 }
 
 

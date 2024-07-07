@@ -3,6 +3,8 @@ use lazy_static::lazy_static;
 pub static API_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
+pub mod async_trait { pub use async_trait::*; }
+
 pub mod backend {
     pub mod archives;
     pub mod manager;
@@ -14,6 +16,7 @@ pub mod controller;
 pub mod building {
     pub mod targets;
     pub mod buildqueue;
+    pub mod queue;
 }
 pub mod utils {
     use std::ffi::OsStr;
@@ -69,6 +72,8 @@ pub mod par {
     pub use spliter::ParallelSpliterator;
     pub use rayon::iter::{IntoParallelIterator,ParallelIterator};
 }
+
+pub type HMap<A,B> = ahash::HashMap<A,B>;
 
 lazy_static! {
     pub static ref MATHHUB_PATHS: Box<[PathBuf]> = mathhubs().into();

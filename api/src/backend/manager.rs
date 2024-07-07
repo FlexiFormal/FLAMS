@@ -1,4 +1,5 @@
 use std::io::BufRead;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use futures::TryFutureExt;
@@ -80,13 +81,20 @@ impl ArchiveManager {
     pub fn with_archives<R,F:FnOnce(&[Archive]) -> R>(&self,f:F) -> R {
         self.lock.read(|s| f(s.archives()) )
     }
+    pub fn get_archives(&self) -> impl Deref<Target=[Archive]> + '_ {
+        parking_lot::RwLockReadGuard::map(self.lock.returnable(),|t| t.archives())
+    }
     pub fn load_par(&self, path:&Path, formats:&[SourceFormat]) -> Vec<Quad> {
         self.lock.write(|s| s.load_par(path,formats,&self.filechange_sender,&self.change_sender))
     }
     pub fn with_tree<R>(&self, f:impl FnOnce(&ArchiveTree) -> R) -> R {
         self.lock.read(|s| f(&*s))
     }
-    
+
+    pub fn get_tree(&self) -> impl Deref<Target=ArchiveTree> + '_ {
+        self.lock.returnable()
+    }
+
     pub fn find<R,S:AsRef<str>>(&self,id:S,f:impl FnOnce(Option<&Archive>) -> R) -> R {
         self.lock.read(|s| {
             let id = id.as_ref();
@@ -103,13 +111,19 @@ impl ArchiveManagerAsync {
         let mut lock = self.lock.write().await;
         lock.load_async(path,formats,self.filechange_sender.clone(),&self.change_sender).await
     }
-    pub async fn with_archives<R,F:FnOnce(&[Archive]) -> R>(&self,f:F) -> R {
+    pub async fn with_archives<R>(&self,f:impl FnOnce(&[Archive]) -> R) -> R {
         let mut lock = self.lock.read().await;
         f(lock.archives())
     }
-    pub async fn with_tree<R,F:FnOnce(&ArchiveTree) -> R>(&self, f:F) -> R {
+    pub async fn get_archives(&self) -> impl Deref<Target=[Archive]> + '_ {
+        tokio::sync::RwLockReadGuard::map(self.lock.read().await,|t| t.archives())
+    }
+    pub async fn with_tree<R>(&self, f:impl FnOnce(&ArchiveTree) -> R) -> R {
         let lock = self.lock.read().await;
         f(&*lock)
+    }
+    pub async fn get_tree(&self) -> impl Deref<Target=ArchiveTree> + '_ {
+        self.lock.read().await
     }
 
     pub async fn find<R,S:AsRef<str>,F:FnOnce(Option<&Archive>) -> R>(&self,id:S,f:F) -> R {

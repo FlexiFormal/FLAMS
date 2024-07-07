@@ -85,6 +85,9 @@ pub mod lock {
             let lock = self.sync_lock.read();
             f(ReadLock{lock,orig:&self.sync_lock})
         }
+        pub fn returnable(&self) -> parking_lot::RwLockReadGuard<T> {
+            self.sync_lock.read()
+        }
         pub fn write<R,F:FnOnce(&mut T) -> R>(&self,f:F) -> R {
             let mut lock = self.sync_lock.write();
             f(&mut lock)

@@ -1,8 +1,7 @@
-use std::any::Any;
-use immt_core::building::formats::ShortId;
 use immt_core::short_id;
 use crate::building::targets::SourceFormat;
-use crate::controller::{Controller};
+use crate::controller::{Controller, ControllerAsync};
+use crate::building::queue::BuildTask;
 
 short_id!(+ExtensionId);
 
@@ -17,9 +16,12 @@ pub trait MMTExtension:Send+Sync+std::fmt::Debug {
     fn as_formats(&self) -> Option<&dyn FormatExtension> { None }
 }
 
+#[async_trait::async_trait]
 pub trait FormatExtension:MMTExtension {
     fn formats(&self) -> Vec<SourceFormat>;
     fn sandbox(&self, controller:&mut dyn Controller) -> Box<dyn MMTExtension>;
+    async fn get_deps_async(&self, controller:&dyn ControllerAsync,task:&BuildTask);
+    fn get_deps(&self,controller:&dyn Controller, task:&BuildTask);
 }
 
 #[derive(Copy, Clone)]

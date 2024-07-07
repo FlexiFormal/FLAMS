@@ -1,129 +1,105 @@
-use std::collections::VecDeque;
-use std::sync::atomic::AtomicU16;
-use futures::stream::StreamFuture;
-use futures::StreamExt;
 use immt_core::building::formats::{BuildJobSpec, FormatOrTarget};
 use immt_core::prelude::DirLike;
 use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::filetree::{FileLike, SourceDirEntry};
 use immt_core::utils::triomphe::Arc;
-use crate::backend::archives::Archive;
-use crate::backend::manager::ArchiveTree;
-use crate::building::targets::{BuildDataFormat, BuildTarget, SourceFormat};
+use crate::backend::archives::{Archive, Storage};
 use crate::controller::{Controller, ControllerAsync};
-use crate::utils::asyncs::{ChangeListener, ChangeSender};
-use crate::utils::settings::SettingsChange;
 
-#[derive(Debug)]
-struct QueuedTask{
 
-}
 
-#[derive(Debug)]
-struct Queue {
-    queue: VecDeque<QueuedTask>,
-}
-
-#[cfg(feature = "tokio")]
+#[cfg(feature = "async")]
 type Lock<A> = tokio::sync::RwLock<A>;
-#[cfg(not(feature = "tokio"))]
+#[cfg(not(feature = "async"))]
 type Lock<A> = parking_lot::RwLock<A>;
 
+use super::queue::{Queue, TaskRef, TaskSpec};
 
 #[derive(Debug)]
 struct BuildQueueI {
     inner: Lock<Vec<Queue>>,
-    #[cfg(feature = "tokio")]
-    num_threads:tokio::sync::Semaphore,
-    #[cfg(feature = "tokio")]
-    new_jobs:ChangeSender<BuildJobSpec>
+    #[cfg(feature = "async")]
+    num_threads:Arc<tokio::sync::Semaphore>,
 }
 impl BuildQueueI {
-    #[cfg(feature = "tokio")]
-    async fn do_spec<Ctrl:ControllerAsync+'static>(&self,spec:BuildJobSpec,ctrl:&Ctrl) {
-        match spec {
-            BuildJobSpec::Group {..} => todo!(),
-            BuildJobSpec::Archive {id,target,stale_only} => {
-                ctrl.archives().with_tree(|tree| self.enqueue_archive(id,target,!stale_only,tree)).await
+    immt_core::asyncs!{ALT fn do_spec
+        <@s[Ctrl:Controller+'static]>
+        <@a[Ctrl:ControllerAsync+Clone+'static]>
+        (@s &self,spec:BuildJobSpec,ctrl:&Ctrl)
+        (@a &self,spec:BuildJobSpec,ctrl:&Ctrl)
+        {
+            match spec {
+                BuildJobSpec::Group {..} => todo!(),
+                BuildJobSpec::Archive {id,target,stale_only} => {
+                    wait!(self.enqueue_archive(id,target,!stale_only,ctrl));
+                }
+                BuildJobSpec::Path {..} => todo!(),
             }
-            BuildJobSpec::Path {..} => todo!(),
         }
     }
 
-    fn enqueue_archive(&self,id:ArchiveId,target:FormatOrTarget,all:bool,tree:&ArchiveTree) {
+    immt_core::asyncs!{ALT fn enqueue_archive
+        <@s[Ctrl:Controller+'static]>
+        <@a[Ctrl:ControllerAsync+Clone+'static]>
+        (@s &self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl)
+        (@a &self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
         let format = match target {
             FormatOrTarget::Format(f) => f,
             FormatOrTarget::Target(_) => {
                 todo!()
             }
         };
+        let tree = wait!(ctrl.archives().get_tree());
+        let mut queue = wait!(self.inner.write());
+        let q = if queue.is_empty() {
+            queue.push(Queue::new("global".into()));
+            queue.last_mut().unwrap()
+        } else {
+            queue.last_mut().unwrap()
+            // TODO
+        };
+
         match tree.find_archive(&id) {
             Some(Archive::Physical(ma)) => {
-                let files = ma.source_files().map(|sd| {
-                    sd.dir_iter().filter_map(|fd| {
+                if let Some(sd) = ma.source_files() {
+                    let files = sd.dir_iter().filter_map(|fd| {
                         if let SourceDirEntry::File(f) = fd {
                             if f.format == format {
-                                if all { Some(f.relative_path().to_string().into_boxed_str()) }
+                                if all { Some(f.relative_path()) }
                                 else { todo!() }
                             } else { None }
                         } else {None}
-                    }).collect()
-                }).unwrap_or(Vec::new());
-                println!("files: {:?}",files);
-                println!("={}",files.len());
+                    }).map(|rp| TaskSpec {
+                        archive: ma.uri(),base_path: ma.path(),rel_path: rp,target});
+                    wait!(q.enqueue(files,ctrl));
+                }
             }
             None => (),
             _ => todo!()
         }
-    }
-    #[cfg(not(feature = "tokio"))]
-    fn do_spec<Ctrl:Controller>(&self,spec:BuildJobSpec,ctrl:Ctrl) {
-        todo!()
-    }
+    }}
 }
 
 #[derive(Debug)]
 pub struct BuildQueue(Arc<BuildQueueI>);
 impl BuildQueue {
 
-    #[cfg(feature = "tokio")]
-    pub fn run_async<Ctrl:ControllerAsync+'static>(&self,ctrl:Ctrl) {
-        let inner = self.0.clone();
-        tokio::spawn(async move {
-            loop {
-                let num_threads = ctrl.settings().num_threads.listener().inner;
-                let new_jobs = inner.new_jobs.listener().inner;
-                tokio::select! {
-                    (Some(SettingsChange{old,new}),_) = num_threads.into_future() => {
-                        if old < new {
-                            inner.num_threads.add_permits(new as usize - old as usize);
-                        } else if old > new {
-                            inner.num_threads.forget_permits(old as usize - new as usize);
-                        }
-                    },
-                    (Some(job),_) = new_jobs.into_future() => {
-                        inner.do_spec(job,&ctrl).await
-                    }
-                }
-            }
-        });
-    }
+    immt_core::asyncs!{ALT !pub fn enqueue
+        <@s[Ctrl:Controller+'static]>
+        <@a[Ctrl:ControllerAsync+Clone+'static]>
+        (@s &self,job:BuildJobSpec,ctrl:&Ctrl)
+        (@a &self,job:BuildJobSpec,ctrl:&Ctrl){
+        switch!{
+            (todo!())
+            (self.0.do_spec(job,ctrl))
+        }
+    }}
 
-    pub fn enqueue(&self,job:BuildJobSpec) {
-        #[cfg(feature = "tokio")]
-        {self.0.new_jobs.send(job)}
-        #[cfg(not(feature = "tokio"))]
-        {todo!()}
-    }
-
-    pub fn run<Ctrl:Controller>(&self,ctrl:Ctrl) {}
     pub fn new() -> Self {
         Self(Arc::new(BuildQueueI {
             inner: Lock::new(Vec::new()),
-            #[cfg(feature="tokio")]
-            num_threads:tokio::sync::Semaphore::new(0),
-            #[cfg(feature="tokio")]
-            new_jobs:ChangeSender::new(64)
+            #[cfg(feature="async")]
+            num_threads:Arc::new(tokio::sync::Semaphore::new(0)),
         }))
     }
 }

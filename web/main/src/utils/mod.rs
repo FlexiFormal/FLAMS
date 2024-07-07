@@ -14,7 +14,7 @@ pub fn target() -> &'static str { "native" }
 #[async_trait]
 pub(crate) trait WebSocket<
     ClientMsg:Serializable+serde::Serialize+for<'a>serde::Deserialize<'a>+Send,
-    ServerMsg:Serializable+serde::Serialize+for<'a>serde::Deserialize<'a>+Send
+    ServerMsg:Serializable+serde::Serialize+std::fmt::Debug+for<'a>serde::Deserialize<'a>+Send
 >:Sized+'static {
     const TIMEOUT: f32 = 10.0;
     #[cfg(feature="server")]
@@ -90,7 +90,6 @@ pub(crate) trait WebSocket<
     fn start(mut handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static) -> Self {
         use wasm_bindgen::prelude::Closure;
         use wasm_bindgen::JsCast;
-        console_log!("HERE!");
         let ws = leptos::web_sys::WebSocket::new("/dashboard/log/ws").unwrap();
         let mut ws2 = ws.clone();
         let mut slf = Self::new(ws);
@@ -100,7 +99,16 @@ pub(crate) trait WebSocket<
             if data == "ping" {
                 ws2.send_with_str("pong").unwrap();
             } else {
-                let ret = serde_json::from_str::<ServerMsg>(&data).unwrap();
+                let mut deserializer = serde_json::Deserializer::from_str(&data);
+                deserializer.disable_recursion_limit();
+                let value = ServerMsg::deserialize(&mut deserializer);
+                let ret = match value {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        console_log!("Error: {e}");
+                        panic!("Fooo");
+                    }
+                };
                 if let Some(a) = handle(ret) {
                     ws2.send_with_str(&serde_json::to_string(&a).unwrap()).unwrap();
                 }

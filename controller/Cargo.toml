@@ -7,7 +7,7 @@ edition = "2021"
 workspace = true
 
 [features]
-async=[]
+async=["immt-api/async"]
 
 [dependencies]
 

@@ -1,5 +1,5 @@
-use std::path::Path;
-use crate::building::formats::{ShortId, SourceFormatId};
+use std::path::{Path, PathBuf};
+use crate::building::formats::SourceFormatId;
 use crate::uris::archives::{ArchiveId, ArchiveURI, ArchiveURIRef};
 use crate::utils::VecMap;
 use crate::utils::arrayvec;
@@ -40,12 +40,73 @@ pub struct StorageSpecRef<'a> {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
 pub struct MathArchiveSpec {
     pub storage: StorageSpec,
     pub ignore_source: IgnoreSource,
-    pub path: Box<Path>
+    pub path: std::sync::Arc<Path>
 }
+
+#[cfg(feature="serde")]
+impl serde::Serialize for MathArchiveSpec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("MathArchiveSpec",3)?;
+        state.serialize_field("storage",&self.storage)?;
+        state.serialize_field("ignore",&self.ignore_source)?;
+        state.serialize_field("path",&*self.path)?;
+        state.end()
+    }
+}
+
+#[cfg(feature="serde")]
+impl<'de> serde::Deserialize<'de> for MathArchiveSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = MathArchiveSpec;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct MathArchiveSpec")
+            }
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: serde::de::MapAccess<'de> {
+                let mut storage = None;
+                let mut ignore_source = None;
+                let mut path = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        "storage" => {
+                            if storage.is_some() {
+                                return Err(serde::de::Error::duplicate_field("storage"));
+                            }
+                            storage = Some(map.next_value()?);
+                        }
+                        "ignore" => {
+                            if ignore_source.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ignore_source"));
+                            }
+                            ignore_source = Some(map.next_value()?);
+                        }
+                        "path" => {
+                            if path.is_some() {
+                                return Err(serde::de::Error::duplicate_field("path"));
+                            }
+                            let pb : PathBuf = map.next_value()?;
+                            path = Some(pb.into());
+                        }
+                        _ => {
+                            return Err(serde::de::Error::unknown_field(key, &["storage","ignore_source","path"]));
+                        }
+                    }
+                }
+                let storage = storage.ok_or_else(|| serde::de::Error::missing_field("storage"))?;
+                let ignore_source = ignore_source.ok_or_else(|| serde::de::Error::missing_field("ignore_source"))?;
+                let path = path.ok_or_else(|| serde::de::Error::missing_field("path"))?;
+                Ok(MathArchiveSpec { storage, ignore_source, path })
+            }
+        }
+        deserializer.deserialize_struct("MathArchiveSpec", &["storage","ignore_source","path"], Visitor)
+    }
+}
+
 impl MathArchiveSpec {
     pub fn as_ref(&self) -> MathArchiveSpecRef<'_> {
         MathArchiveSpecRef {

@@ -117,9 +117,9 @@ pub struct SourceFormatOwned {
     pub description: String,
     pub targets: Vec<BuildTargetId>,
 }
-
-struct BuildData {
-    path: Option<PathBuf>,
+/*
+struct BuildDataI {
+    path: PathBuf,
     rel_path: Box<str>,
     archive: ArchiveId,
     source: OnceCell<Option<Box<str>>>,
@@ -130,7 +130,7 @@ struct BuildData {
 }
 
 
-pub struct BuildJob(Arc<BuildData>);
+pub struct BuildJob(Arc<BuildDataI>);
 impl BuildJob {
     pub fn source(&self) -> Option<&str> {
         self.0.source
@@ -155,3 +155,5 @@ pub enum Dependency {
     },
     Logical, // TODO
 }
+
+ */

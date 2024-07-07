@@ -1,13 +1,19 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, OnceLock};
+use immt_api::async_trait::async_trait;
+use immt_api::backend::archives::{Archive, Storage};
+use immt_api::backend::manager::ArchiveTree;
+use immt_api::building::queue::{BuildTask, Dependency, TaskRef};
 use immt_api::building::targets::{BuildDataFormat, BuildFormatId, BuildTarget, SourceFormat};
 use immt_api::controller::{Controller, ControllerAsync};
 use immt_api::core::building::formats::{BuildTargetId, ShortId, SourceFormatId};
+use immt_api::core::uris::archives::ArchiveId;
 use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
 use immt_api::utils::asyncs::{background, in_span};
 use immt_api::utils::run_command;
 use immt_shtml::{SHTML_FORMAT, SHTML_OMDOC};
+use crate::dependencies::STeXDependency;
 use crate::rustex::RusTeX;
 
 mod rustex;
@@ -71,9 +77,89 @@ impl MMTExtension for STeXExtension {
     fn test2(&self, _controller: &mut dyn Controller) -> bool { true }
     fn as_formats(&self) -> Option<&dyn FormatExtension> { Some(self) }
 }
+#[async_trait]
 impl FormatExtension for STeXExtension {
     fn formats(&self) -> Vec<SourceFormat> { vec![STEX] }
     fn sandbox(&self, _controller: &mut dyn Controller) -> Box<dyn MMTExtension> {
+        todo!()
+    }
+    async fn get_deps_async(&self, ctrl:&dyn ControllerAsync,task: &BuildTask) {
+        let source = tokio::fs::read_to_string(task.path()).await;
+        if let Ok(source) = source {
+            for d in dependencies::get_deps(&source,task.path()) {
+                match d {
+                    STeXDependency::ImportModule { archive, module} | STeXDependency::UseModule { archive, module} => {
+                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
+                        if let Some(rel_path) = ctrl.archives().with_tree(|tree|
+                            to_file_path(task.path(),&archive,module,tree)
+                        ).await {
+                            let mut rf = TaskRef {
+                                archive,rel_path,
+                                target: PDFLATEX_FIRST.id
+                            };
+                            //tracing::debug!("Adding dependency: {:?}", rf);
+                            if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                                step.push_dependency(Dependency::Physical {
+                                    strict:false,
+                                    task:rf.clone()
+                                }).await
+                            }
+                            if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
+                                rf.target = BuildTarget::CHECK.id;
+                                step.push_dependency(Dependency::Physical {
+                                    strict:true,
+                                    task:rf
+                                }).await
+                            }
+                        }
+                    }
+                    STeXDependency::Inputref { archive, filepath } => {
+                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
+                        let rel_path = to_file_path_ref(filepath);
+                        let rf = TaskRef {
+                            archive,rel_path,
+                            target: PDFLATEX_FIRST.id
+                        };
+                        //tracing::debug!("Adding dependency: {:?}", rf);
+                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                            step.push_dependency(Dependency::Physical {
+                                strict:false, task:rf
+                            }).await
+                        }
+                    },
+                    STeXDependency::Signature(lang) => {
+                        let archive = task.archive().id().clone();
+                        let rel_path = task.rel_path()
+                            .rsplit_once('.')
+                            .and_then(|(a, _)| {
+                                a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
+                            })
+                            .unwrap().into();
+                        let mut rf = TaskRef {
+                            archive,rel_path,
+                            target: PDFLATEX_FIRST.id
+                        };
+                        //tracing::debug!("Adding dependency: {:?}", rf);
+                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                            step.push_dependency(Dependency::Physical {
+                                strict:false,
+                                task:rf.clone()
+                            }).await
+                        }
+                        if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
+                            rf.target = BuildTarget::CHECK.id;
+                            step.push_dependency(Dependency::Physical {
+                                strict:true,
+                                task:rf
+                            }).await
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+    fn get_deps(&self, controller: &dyn Controller, task: &BuildTask) {
         todo!()
     }
 }
@@ -103,4 +189,74 @@ pub(crate) fn pdflatex<I:Iterator<Item=(String,String)>>(path:&Path,mut envs:I) 
         }
     }
     Ok(())
+}
+
+fn to_file_path(
+    current: &Path,
+    id: &ArchiveId,
+    module: &str,
+    tree:&ArchiveTree,
+) -> Option<Box<str>> {
+    let lang = if current.extension().and_then(|s| s.to_str()) == Some("tex") {
+        match current.file_stem().and_then(|s| s.to_str()) {
+            Some(s) if s.ends_with(".ru") => "ru",
+            Some(s) if s.ends_with(".de") => "de",
+            Some(s) if s.ends_with(".fr") => "fr",
+            // TODO etc
+            _ => "en",
+        }
+    } else {
+        "en"
+    };
+    if let Some(Archive::Physical(a)) = tree.find_archive(id) {
+        let archive_path = a.path();
+        let (path, module) = module.split_once('?')?;
+        let p = PathBuf::from(format!(
+            "{}/source/{path}/{module}.{lang}.tex",
+            archive_path.display()
+        ));
+        if p.exists() {
+            return Some(format!("{path}/{module}.{lang}.tex").into())
+        }
+        let p = PathBuf::from(format!(
+            "{}/source/{path}/{module}.en.tex",
+            archive_path.display()
+        ));
+        if p.exists() {
+            return Some(format!("{path}/{module}.en.tex").into());
+        }
+        let p = PathBuf::from(format!(
+            "{}/source/{path}/{module}.tex",
+            archive_path.display()
+        ));
+        if p.exists() {
+            return Some(format!("{path}/{module}.tex").into())
+        }
+        let p = PathBuf::from(format!(
+            "{}/source/{path}.{lang}.tex",
+            archive_path.display()
+        ));
+        if p.exists() {
+            return Some(format!("{path}.{lang}.tex").into())
+        }
+        let p = PathBuf::from(format!("{}/source/{path}.en.tex", archive_path.display()));
+        if p.exists() {
+            return Some(format!("{path}.en.tex").into())
+        }
+        let p = PathBuf::from(format!("{}/source/{path}.tex", archive_path.display()));
+        if p.exists() {
+            return Some(format!("{path}.tex").into())
+        }
+    }
+    None
+}
+
+fn to_file_path_ref(
+    path: &str,
+) -> Box<str> {
+    if path.ends_with(".tex") {
+        path.into()
+    } else {
+        format!("{path}.tex").into()
+    }
 }

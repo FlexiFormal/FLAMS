@@ -47,7 +47,7 @@ pub(crate) struct DepParser<'a> {
     curr: Option<std::vec::IntoIter<DepToken<'a>>>,
 }
 
-pub(crate) fn get_deps<'a>(source: &'a str, path: &'a Path) -> Vec<STeXDependency<'a>> {
+pub(crate) fn get_deps<'a>(source: &'a str, path: &'a Path) -> impl Iterator<Item = STeXDependency<'a>> {
     let parser = LaTeXParser::with_rules(
         ParseStr::new(source),
         Some(path),
@@ -65,12 +65,11 @@ pub(crate) fn get_deps<'a>(source: &'a str, path: &'a Path) -> Vec<STeXDependenc
             ),
         )]),
     );
-    let dep_parser = DepParser {
+    DepParser {
         parser,
         stack: Vec::new(),
         curr: None,
-    };
-    dep_parser.collect()
+    }
 }
 
 impl<'a> Iterator for DepParser<'a> {
