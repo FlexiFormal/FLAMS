@@ -66,6 +66,7 @@ pub(crate) struct LogSocket {
 }
 #[async_trait]
 impl WebSocket<(),Log> for LogSocket {
+    const SERVER_ENDPOINT: &'static str = "/dashboard/log/ws";
     #[cfg(feature="server")]
     async fn new(account:LoginState,db:sea_orm::DatabaseConnection) -> Option<Self> {
         if account == LoginState::Admin {
@@ -195,9 +196,9 @@ mod client {
         match line {
             LogFileLine::Message {message,timestamp,target,level,args,span} => {
                 if level >= LogLevel::WARN {
-                    warn_frame.append_child(template!(<li><LogLine timestamp=timestamp.clone() message=message.clone() target=target.clone() level args=args.clone() /></li>).dyn_ref().unwrap()).unwrap();
+                    warn_frame.append_child(view!(<li><LogLine timestamp=timestamp.clone() message=message.clone() target=target.clone() level args=args.clone() /></li>).dyn_ref().unwrap()).unwrap();
                 }
-                let line = template!(<li><LogLine timestamp message target level args /></li>);
+                let line = view!(<li><LogLine timestamp message target level args /></li>);
                 if span.is_none() {
                     log_frame.append_child(line.dyn_ref().unwrap()).unwrap();
                 } else if let Some((frame,_,_)) = state.frames.get(&span.unwrap()) {
@@ -209,7 +210,7 @@ mod client {
                 let children = create_node_ref::<html::Ul>();
                 let span_ref = create_node_ref::<html::Span>();
                 let sr = span_ref.clone();
-                let line = template! {
+                let line = view! {
                     <li class=immt_log_elem><details>
                         <summary><LogLine timestamp message=name target level args spinner=true span_ref/></summary>
                         <ul node_ref=children/>

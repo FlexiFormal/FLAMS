@@ -258,7 +258,7 @@ fn MainPage(page:Page) -> impl IntoView {
         Page::MathHub => view!{<ArchivesTop/>},
         Page::Graphs => view!{<GraphTest/>},
         Page::Log => view!{<FullLog/>},
-        Page::Queue => view!{<Queue/>},
+        Page::Queue => view!{<QueuesTop/>},
         Page::Settings => view!{<Settings/>},
         _ => view!(<NotFound/>).into_view()
         //Page::Login => view!{<LoginPage/>}

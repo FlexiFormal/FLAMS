@@ -1,7 +1,7 @@
 [workspace]
 members = ["api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm"]
 resolver = "2"
-exclude = ["web/graphs","test-plugin","tests","leptos","thaw"]
+exclude = ["web/graphs","test-plugin","tests"]
 
 [profile.release]
 opt-level = 2
@@ -41,8 +41,7 @@ immt-web-orm = { path = "web/orm",version="0.0.1" }
 name = "iMMT"
 bin-package = "immt"
 lib-package = "immt-web"
-#bin-features = ["async"]
-bin-features = ["async"]
+bin-features = ["server"]
 lib-features = ["client"]
 lib-default-features = false
 lib-profile-release = "wasm-release"

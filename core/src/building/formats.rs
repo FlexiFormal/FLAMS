@@ -125,6 +125,14 @@ pub enum FormatOrTarget {
     Format(SourceFormatId),
     Target(BuildTargetId)
 }
+impl std::fmt::Display for FormatOrTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            FormatOrTarget::Format(fmt) => fmt.fmt(f),
+            FormatOrTarget::Target(t) => t.fmt(f)
+        }
+    }
+}
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize,serde::Deserialize))]

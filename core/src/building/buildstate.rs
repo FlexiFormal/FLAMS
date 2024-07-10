@@ -1,5 +1,6 @@
 use std::path::Path;
-use crate::building::formats::{ShortId, SourceFormatId};
+use crate::building::formats::{FormatOrTarget, ShortId, SourceFormatId};
+use crate::uris::archives::ArchiveId;
 use crate::utils::filetree::FileChange;
 use crate::utils::VecMap;
 
@@ -123,4 +124,24 @@ impl BuildState {
             }
         }
     }}
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct QueueEntry {
+    pub archive:ArchiveId,
+    pub rel_path:String,
+    pub target:FormatOrTarget
+}
+impl QueueEntry {
+    pub fn id(&self) -> String {
+        md5::compute(format!("({},{},{})", self.archive,self.rel_path, self.target)).0.iter().map(|b| format!("{:02x}", b)).collect()
+    }
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
+pub enum QueueMessage {
+    Ls{id:String,entries:Vec<QueueEntry>},
+    Start {id:String,queue:Vec<QueueEntry>,blocked:Vec<QueueEntry>,failed:Vec<QueueEntry>,done:Vec<QueueEntry>}
 }

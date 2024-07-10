@@ -57,7 +57,7 @@ tower-sessions = { version="0.12",optional=true,features=["tower-sessions-memory
 tower-sessions-sqlx-store = { version="0.12",optional=true,features = ["sqlite"] }
 
 #immt
-immt-api = { workspace=true,features=["rayon","serde","tokio","oxigraph"],optional=true }
+immt-api = { workspace=true,features=["oxigraph"],optional=true }
 immt-core = { workspace=true,features=["serde"] }
 immt-controller = { workspace=true, optional = true }
 immt-graphs = { path = "../graphs" }
@@ -126,15 +126,14 @@ server = [
   "dep:tower-sessions-sqlx-store",
   "dep:argon2"
 ]
-async = ["server","immt-controller/async"]
 
-[profile.wasm-release]
-inherits = "release"
-opt-level = 'z'
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = "symbols"
+#[profile.wasm-release]
+#inherits = "release"
+#opt-level = 'z'
+#lto = true
+#codegen-units = 1
+#panic = "abort"
+#strip = "symbols"
 
 #[package.metadata.leptonic]
 #style-dir = "style"

@@ -8,7 +8,7 @@ pub enum IMMTError {
     InvalidCredentials,
     ImplementationError,
     AccessForbidden,
-    InvalidArgument(&'static str)
+    InvalidArgument(String)
 }
 impl Display for IMMTError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -30,7 +30,7 @@ impl FromStr for IMMTError {
             "InvalidCredentials" => Ok(InvalidCredentials),
             "ImplementationError" => Ok(ImplementationError),
             "AccessForbidden" => Ok(AccessForbidden),
-            "InvalidArgument" => Ok(InvalidArgument("")),
+            "InvalidArgument" => Ok(InvalidArgument(String::new())),
             _ => Err(())
         }
     }

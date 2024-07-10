@@ -2,7 +2,7 @@ use std::future::Future;
 
 pub fn background<F:FnOnce() + Send + 'static>(f:F) {
     let f = in_span(|| f());
-    rayon::spawn(f);
+    tokio::task::spawn_blocking(f);
 }
 
 pub fn in_span<F:FnOnce() -> R,R>(f:F) -> impl FnOnce() -> R {

@@ -17,6 +17,7 @@ pub(crate) trait WebSocket<
     ServerMsg:Serializable+serde::Serialize+std::fmt::Debug+for<'a>serde::Deserialize<'a>+Send
 >:Sized+'static {
     const TIMEOUT: f32 = 10.0;
+    const SERVER_ENDPOINT:&'static str;
     #[cfg(feature="server")]
     async fn ws_handler(
         auth_session: axum_login::AuthSession<crate::accounts::AccountManager>,
@@ -26,7 +27,7 @@ pub(crate) trait WebSocket<
         agent:Option<axum_extra::TypedHeader<axum_extra::headers::UserAgent>>
     ) -> axum::response::Response where Self:Send {
         let login = crate::accounts::login_status_with_session(Some(&auth_session),|| Some(state.db.clone())).await;
-        println!("Login status: {login:?}");
+        //println!("Login status: {login:?}");
         let login = login.unwrap_or(LoginState::None);
         if let Some(conn) = Self::new(login,state.db).await {
             ws.on_upgrade(move |socket| conn.on_upgrade(socket))
@@ -86,16 +87,24 @@ pub(crate) trait WebSocket<
         unreachable!()
     }*/
 
+    fn force_start(handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static+Clone) {
+        let (signal_read,_signal_write) = create_signal(false);
+        let _res = create_effect(move |_| {
+            let _ = signal_read.get();
+            #[cfg(feature="client")]
+            let _ = Self::start(handle.clone());
+        });
+    }
+
     #[cfg(feature="client")]
     fn start(mut handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static) -> Self {
         use wasm_bindgen::prelude::Closure;
         use wasm_bindgen::JsCast;
-        let ws = leptos::web_sys::WebSocket::new("/dashboard/log/ws").unwrap();
+        let ws = leptos::web_sys::WebSocket::new(Self::SERVER_ENDPOINT).unwrap();
         let mut ws2 = ws.clone();
-        let mut slf = Self::new(ws);
-
         let callback = Closure::<dyn FnMut(_)>::new(move |event: leptos::web_sys::MessageEvent| {
             let data = event.data().as_string().unwrap();
+            //console_log!("Here: {data}");
             if data == "ping" {
                 ws2.send_with_str("pong").unwrap();
             } else {
@@ -106,7 +115,8 @@ pub(crate) trait WebSocket<
                     Ok(msg) => msg,
                     Err(e) => {
                         console_log!("Error: {e}");
-                        panic!("Fooo");
+                        return
+                        //panic!("Fooo");
                     }
                 };
                 if let Some(a) = handle(ret) {
@@ -114,9 +124,9 @@ pub(crate) trait WebSocket<
                 }
             }
         });
-        slf.socket().set_onmessage(Some(callback.as_ref().unchecked_ref()));
+        ws.set_onmessage(Some(callback.as_ref().unchecked_ref()));
         callback.forget();
-        slf
+        Self::new(ws)
     }
     #[cfg(feature="server")]
     async fn on_start(&mut self,socket:&mut axum::extract::ws::WebSocket) {}

@@ -6,7 +6,7 @@ use immt_api::backend::archives::{Archive, Storage};
 use immt_api::backend::manager::ArchiveTree;
 use immt_api::building::queue::{BuildTask, Dependency, TaskRef};
 use immt_api::building::targets::{BuildDataFormat, BuildFormatId, BuildTarget, SourceFormat};
-use immt_api::controller::{Controller, ControllerAsync};
+use immt_api::controller::Controller;
 use immt_api::core::building::formats::{BuildTargetId, ShortId, SourceFormatId};
 use immt_api::core::uris::archives::ArchiveId;
 use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
@@ -68,10 +68,10 @@ impl MMTExtension for STeXExtension {
     fn on_plugin_load(&self, _controller: &dyn Controller) {
         background(|| RusTeX::initialize());
     }
-    fn on_plugin_load_async(&self,_controller:&dyn ControllerAsync) {
+    /*fn on_plugin_load_async(&self,_controller:&dyn ControllerAsync) {
         let f = in_span(|| RusTeX::initialize());
         tokio::task::spawn_blocking(f);
-    }
+    }*/
     fn name(&self) -> ExtensionId { ExtensionId::new(ID) }
     fn test(&self, _controller: &mut dyn Controller) -> bool { true }
     fn test2(&self, _controller: &mut dyn Controller) -> bool { true }
@@ -83,8 +83,8 @@ impl FormatExtension for STeXExtension {
     fn sandbox(&self, _controller: &mut dyn Controller) -> Box<dyn MMTExtension> {
         todo!()
     }
-    async fn get_deps_async(&self, ctrl:&dyn ControllerAsync,task: &BuildTask) {
-        let source = tokio::fs::read_to_string(task.path()).await;
+    fn get_deps(&self, ctrl:&dyn Controller,task: &BuildTask) {
+        let source = std::fs::read_to_string(task.path());
         if let Ok(source) = source {
             for d in dependencies::get_deps(&source,task.path()) {
                 match d {
@@ -92,7 +92,7 @@ impl FormatExtension for STeXExtension {
                         let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
                         if let Some(rel_path) = ctrl.archives().with_tree(|tree|
                             to_file_path(task.path(),&archive,module,tree)
-                        ).await {
+                        ) {
                             let mut rf = TaskRef {
                                 archive,rel_path,
                                 target: PDFLATEX_FIRST.id
@@ -102,14 +102,14 @@ impl FormatExtension for STeXExtension {
                                 step.push_dependency(Dependency::Physical {
                                     strict:false,
                                     task:rf.clone()
-                                }).await
+                                })
                             }
                             if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
                                 rf.target = BuildTarget::CHECK.id;
                                 step.push_dependency(Dependency::Physical {
                                     strict:true,
                                     task:rf
-                                }).await
+                                })
                             }
                         }
                     }
@@ -124,7 +124,7 @@ impl FormatExtension for STeXExtension {
                         if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
                             step.push_dependency(Dependency::Physical {
                                 strict:false, task:rf
-                            }).await
+                            })
                         }
                     },
                     STeXDependency::Signature(lang) => {
@@ -144,14 +144,14 @@ impl FormatExtension for STeXExtension {
                             step.push_dependency(Dependency::Physical {
                                 strict:false,
                                 task:rf.clone()
-                            }).await
+                            })
                         }
                         if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
                             rf.target = BuildTarget::CHECK.id;
                             step.push_dependency(Dependency::Physical {
                                 strict:true,
                                 task:rf
-                            }).await
+                            })
                         }
                     }
                 }
@@ -159,9 +159,84 @@ impl FormatExtension for STeXExtension {
 
         }
     }
-    fn get_deps(&self, controller: &dyn Controller, task: &BuildTask) {
-        todo!()
+    /*
+    fn get_deps(&self, ctrl: &dyn Controller, task: &BuildTask) {
+        let source = std::fs::read_to_string(task.path());
+        if let Ok(source) = source {
+            for d in dependencies::get_deps(&source,task.path()) {
+                match d {
+                    STeXDependency::ImportModule { archive, module} | STeXDependency::UseModule { archive, module} => {
+                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
+                        if let Some(rel_path) = ctrl.archives().with_tree(|tree|
+                            to_file_path(task.path(),&archive,module,tree)
+                        ) {
+                            let mut rf = TaskRef {
+                                archive,rel_path,
+                                target: PDFLATEX_FIRST.id
+                            };
+                            //tracing::debug!("Adding dependency: {:?}", rf);
+                            if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                                step.push_dependency(Dependency::Physical {
+                                    strict:false,
+                                    task:rf.clone()
+                                })
+                            }
+                            if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
+                                rf.target = BuildTarget::CHECK.id;
+                                step.push_dependency(Dependency::Physical {
+                                    strict:true,
+                                    task:rf
+                                })
+                            }
+                        }
+                    }
+                    STeXDependency::Inputref { archive, filepath } => {
+                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
+                        let rel_path = to_file_path_ref(filepath);
+                        let rf = TaskRef {
+                            archive,rel_path,
+                            target: PDFLATEX_FIRST.id
+                        };
+                        //tracing::debug!("Adding dependency: {:?}", rf);
+                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                            step.push_dependency(Dependency::Physical {
+                                strict:false, task:rf
+                            })
+                        }
+                    },
+                    STeXDependency::Signature(lang) => {
+                        let archive = task.archive().id().clone();
+                        let rel_path = task.rel_path()
+                            .rsplit_once('.')
+                            .and_then(|(a, _)| {
+                                a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
+                            })
+                            .unwrap().into();
+                        let mut rf = TaskRef {
+                            archive,rel_path,
+                            target: PDFLATEX_FIRST.id
+                        };
+                        //tracing::debug!("Adding dependency: {:?}", rf);
+                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                            step.push_dependency(Dependency::Physical {
+                                strict:false,
+                                task:rf.clone()
+                            })
+                        }
+                        if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
+                            rf.target = BuildTarget::CHECK.id;
+                            step.push_dependency(Dependency::Physical {
+                                strict:true,
+                                task:rf
+                            })
+                        }
+                    }
+                }
+            }
+        }
     }
+
+     */
 }
 
 pub(crate) fn pdflatex<I:Iterator<Item=(String,String)>>(path:&Path,mut envs:I) -> Result<(),()> {

@@ -18,25 +18,21 @@ tracing-subscriber = "0.3"
 workspace = true
 
 [features]
-rayon = ["dep:rayon","dep:spliter"]
-serde = ["immt-core/serde","dep:serde","dep:bincode"]
-async = ["immt-core/async","dep:futures"]
-tokio = ["dep:tokio","async","dep:oxrdfio"]
 oxigraph = ["dep:oxigraph"]
 
 [dependencies]
-immt-core = {workspace=true}
+immt-core = {workspace=true,features=["serde","async","rayon"]}
 
 ahash = "0.8"
 simple-home-dir = "0.3"
 lazy_static = "1.4"
-serde = { version = "1", features = ["derive"], optional = true }
-bincode = { version="2.0.0-rc.3",features = ["derive","serde"],optional=true }
+serde = { version = "1", features = ["derive"] }
+bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 tracing = "0.1"
-rayon = { version="1.10",optional = true }
-spliter = {version="0.1",optional = true}
-tokio = { version = "1", features = ["fs","io-util","sync","test-util","macros","rt"], optional = true }
-futures = {version = "0.3", optional = true }
+rayon = { version="1.10" }
+spliter = {version="0.1"}
+tokio = { version = "1", features = ["fs","io-util","sync","test-util","macros","rt"] }
+futures = {version = "0.3" }
 paste = "1.0"
 async-trait = "0.1"
 #async-generic = "1.0"
@@ -46,4 +42,4 @@ async-trait = "0.1"
 async-broadcast = "0.7"
 parking_lot = "0.12"
 oxigraph = { version = "0.4.0-alpha.7", optional = true }
-oxrdfio = { version = "0.1.0-alpha.6", optional = true, features = ["async-tokio"] }
+oxrdfio = { version = "0.1.0-alpha.6", features = ["async-tokio"] }

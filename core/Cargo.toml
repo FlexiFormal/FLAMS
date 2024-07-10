@@ -19,6 +19,7 @@ path = "src/lib.rs"
 [features]
 serde = ["dep:serde","url/serde","arrayvec/serde","dep:bincode"]
 async = ["dep:tokio"]
+rayon = ["dep:rayon","dep:spliter"]
 
 [dev-dependencies]
 rstest = "0.21.0"
@@ -33,6 +34,8 @@ paste = "1"
 tracing = "0.1"
 md5 = "0.7"
 chrono = "0.4"
+rayon = { version="1.10", optional=true }
+spliter = {version="0.1", optional=true}
 
 arrayvec = "0.7"
 

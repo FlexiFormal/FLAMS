@@ -15,6 +15,7 @@ pub struct SettingsField<T:Clone> {
     sender: ChangeSender<SettingsChange<T>>
 }
 impl<T:Clone> SettingsField<T> {
+    pub fn get(&self) -> &T { &self.value}
     pub fn listener(&self) -> ChangeListener<SettingsChange<T>> {
         self.sender.listener()
     }

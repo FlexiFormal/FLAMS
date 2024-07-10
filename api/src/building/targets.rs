@@ -12,7 +12,7 @@ use immt_core::utils::triomphe::Arc;
 use immt_core::utils::VecMap;
 use crate::extensions::ExtensionId;
 
-short_id!(+BuildFormatId);
+short_id!(?BuildFormatId);
 
 #[derive(Copy,Clone,Debug)]
 pub struct BuildDataFormat {

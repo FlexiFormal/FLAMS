@@ -7,7 +7,7 @@ pub mod settings;
 pub use mathhub_tree::ArchiveOrGroups;
 pub use graph_viewer::GraphTest;
 pub use logging::FullLog;
-pub use queue::Queue;
+pub use queue::QueuesTop;
 pub use settings::Settings;
 
 use std::future::Future;

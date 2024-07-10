@@ -9,15 +9,15 @@ use crate::accounts::{if_logged_in, LoginState};
 mod server {
     use immt_api::backend::archives::Archive;
     use immt_core::ontology::archives::ArchiveGroup as AGroup;
-    use immt_controller::{MainController,ControllerTrait,controller};
+    use immt_controller::{BaseController,ControllerTrait,controller};
     use super::{ArchiveOrGroup, DirOrFile};
     use immt_core::building::buildstate::AllStates;
     use immt_core::prelude::*;
     use immt_core::uris::archives::ArchiveId;
     use immt_core::utils::filetree::{SourceDir, SourceDirEntry, SourceFile};
 
-    #[cfg(feature="async")]
-    pub async fn get_archive_children(prefix:Option<&str>) -> Option<Vec<ArchiveOrGroup>> {
+    //#[cfg(feature="async")]
+    pub fn get_archive_children(prefix:Option<&str>) -> Option<Vec<ArchiveOrGroup>> {
         controller().archives().with_tree(|toptree| {
             let (tree,has_meta) = match prefix {
                 Some(prefix) => match toptree.find_group_or_archive(prefix)? {
@@ -44,8 +44,9 @@ mod server {
                 } else {AllStates::default()}));
             }
             Some(children)
-        }).await
+        })
     }
+    /*
     #[cfg(not(feature="async"))]
     pub fn get_archive_children(prefix:Option<&str>) -> Option<Vec<ArchiveOrGroup>> {
         controller().archives().with_tree(|toptree| {
@@ -71,8 +72,9 @@ mod server {
         })
     }
 
-    #[cfg(feature="async")]
-    pub async fn get_dir_children(archive:&str,path:Option<&str>) -> Option<Vec<DirOrFile>> {
+     */
+
+    pub fn get_dir_children(archive:&str,path:Option<&str>) -> Option<Vec<DirOrFile>> {
         controller().archives().find(archive,|a| {
             if let Archive::Physical(ma) = a? {
                 let sf = ma.source_files()?;
@@ -88,8 +90,9 @@ mod server {
                     SourceDirEntry::Dir( SourceDir{relative_path,data,..}) => DirOrFile::Dir(relative_path.to_string(),data.clone())
                 }).collect())
             } else { None }
-        }).await
+        })
     }
+    /*
     #[cfg(not(feature="async"))]
     pub fn get_dir_children(archive:&str,path:Option<&str>) -> Option<Vec<DirOrFile>> {
         controller().archives().find(archive,|a| {
@@ -109,6 +112,8 @@ mod server {
             } else { None }
         })
     }
+
+     */
 }
 
 
@@ -119,12 +124,6 @@ mod server {
     output=server_fn::codec::Json
 )]
 pub async fn get_archives(prefix:Option<String>) -> Result<Vec<ArchiveOrGroup>,ServerFnError<String>> {
-    #[cfg(feature="async")]
-    match server::get_archive_children(prefix.as_deref()).await {
-        Some(v) => Ok(v),
-        _ => Err(ServerFnError::WrappedServerError(format!("No archive {} found!",prefix.unwrap())))
-    }
-    #[cfg(not(feature="async"))]
     match server::get_archive_children(prefix.as_deref()) {
         Some(v) => Ok(v),
         _ => Err(ServerFnError::WrappedServerError(format!("No archive {} found!",prefix.unwrap())))
@@ -138,12 +137,6 @@ pub async fn get_archives(prefix:Option<String>) -> Result<Vec<ArchiveOrGroup>,S
     output=server_fn::codec::Json
 )]
 pub async fn get_files_in(archive:String,prefix:Option<String>) -> Result<Vec<DirOrFile>,ServerFnError<String>> {
-    #[cfg(feature="async")]
-    match server::get_dir_children(archive.as_str(),prefix.as_deref()).await {
-        Some(v) => Ok(v),
-        _ => Err(ServerFnError::WrappedServerError(format!("No archive {} found!",prefix.unwrap())))
-    }
-    #[cfg(not(feature="async"))]
     match server::get_dir_children(archive.as_str(),prefix.as_deref()) {
         Some(v) => Ok(v),
         _ => Err(ServerFnError::WrappedServerError(format!("No archive {} found!",prefix.unwrap())))
@@ -200,7 +193,7 @@ pub fn ArchivesTop() -> impl IntoView {
 #[island]
 pub fn ArchiveOrGroups(path:String) -> impl IntoView {
     use thaw::*;
-    console_log!("Loading archive/group {path}");
+    //console_log!("Loading archive/group {path}");
     let pathcl = path.clone();
     let resource = create_local_resource(move || Some(path.clone()), get_archives);
     move || view!{
@@ -370,13 +363,13 @@ fn GroupModal(id:String) -> impl IntoView {
 #[island]
 fn ArchiveModal(id:String, state: AllStates) -> impl IntoView {
     use thaw::*;
-    console_log!("ArchiveModal: {:?}",state);
+    //console_log!("ArchiveModal: {:?}",state);
     let targets = state.targets().map(|(i,_)| i).collect::<Vec<_>>();
     let onclicktgt = *targets.first().unwrap();
     let target_str = targets.iter().map(|t| t.to_string()).collect::<String>();
     let onclickid = id.clone();
     let act = create_action(move |b| {
-        console_log!("building [{onclickid}]: {onclicktgt} ({})",*b);
+        //console_log!("building [{onclickid}]: {onclicktgt} ({})",*b);
         enqueue(Some(onclickid.clone()),None,onclicktgt.clone(),None,*b)
     });
     view!{

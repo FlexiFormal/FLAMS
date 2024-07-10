@@ -1,7 +1,7 @@
 use immt_api::async_trait::async_trait;
 use immt_api::building::queue::BuildTask;
 use immt_api::building::targets::{BuildDataFormat, BuildFormatId, BuildTarget, SourceFormat};
-use immt_api::controller::{Controller, ControllerAsync};
+use immt_api::controller::Controller;
 use immt_api::core::building::formats::{BuildTargetId, ShortId, SourceFormatId};
 use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
 
@@ -47,9 +47,6 @@ impl FormatExtension for SHTMLExtension {
         todo!()
     }
 
-    async fn get_deps_async(&self, ctrl:&dyn ControllerAsync,task: &BuildTask) {
-        todo!()
-    }
     fn get_deps(&self, controller: &dyn Controller, task: &BuildTask) {
         todo!()
     }

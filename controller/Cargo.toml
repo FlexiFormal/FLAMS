@@ -6,9 +6,6 @@ edition = "2021"
 [lints]
 workspace = true
 
-[features]
-async=["immt-api/async"]
-
 [dependencies]
 
 # Utils
@@ -22,7 +19,7 @@ tokio = "1.38"
 lazy_static = "1.4"
 
 # iMMT
-immt-api = { workspace=true,features=["rayon","serde","tokio","oxigraph"] }
+immt-api = { workspace=true,features=["oxigraph"] }
 immt-core = { workspace=true,features=["serde"] }
 immt-shtml = { workspace=true }
 immt-stex = {workspace=true }

@@ -1,8 +1,5 @@
 use std::path::{Path, PathBuf};
 
-#[cfg(feature="async")]
-use immt_controller::BaseControllerAsync;
-#[cfg(not(feature="async"))]
 use immt_controller::BaseController;
 
 /*
@@ -17,17 +14,8 @@ fn main() {
 */
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().ok();
-    #[cfg(feature="async")]
-    println!("Async controller");
-    #[cfg(not(feature="async"))]
-    println!("Sync controller");
-
     let settings = immt::settings::get(immt::cli::Cli::get());
 
-    #[cfg(feature="async")]
-    let ctrl = BaseControllerAsync::new(settings).await;
-    #[cfg(not(feature="async"))]
     let ctrl = BaseController::new(settings);
     let server = async {
         #[cfg(debug_assertions)]

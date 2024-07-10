@@ -38,7 +38,7 @@ pub trait Storage:std::fmt::Debug {
 #[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
 pub struct MathArchive {
     spec:MathArchiveSpec,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde",serde(skip))]
     source:Option<Vec<SourceDirEntry>>,
     state: AllStates
 }

@@ -1,16 +1,13 @@
 use immt_core::short_id;
 use crate::building::targets::SourceFormat;
-use crate::controller::{Controller, ControllerAsync};
+use crate::controller::{Controller};
 use crate::building::queue::BuildTask;
 
-short_id!(+ExtensionId);
+short_id!(?ExtensionId);
 
 pub trait MMTExtension:Send+Sync+std::fmt::Debug {
     fn name(&self) -> ExtensionId;
     fn on_plugin_load(&self,_controller:&dyn Controller) {}
-    #[cfg(feature = "tokio")]
-    fn on_plugin_load_async(&self,_controller:&dyn crate::controller::ControllerAsync) {}
-    
     fn test(&self, controller:&mut dyn Controller) -> bool;
     fn test2(&self, controller:&mut dyn Controller) -> bool;
     fn as_formats(&self) -> Option<&dyn FormatExtension> { None }
@@ -20,7 +17,6 @@ pub trait MMTExtension:Send+Sync+std::fmt::Debug {
 pub trait FormatExtension:MMTExtension {
     fn formats(&self) -> Vec<SourceFormat>;
     fn sandbox(&self, controller:&mut dyn Controller) -> Box<dyn MMTExtension>;
-    async fn get_deps_async(&self, controller:&dyn ControllerAsync,task:&BuildTask);
     fn get_deps(&self,controller:&dyn Controller, task:&BuildTask);
 }
 

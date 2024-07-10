@@ -65,8 +65,11 @@ pub(crate) async fn login_status_with_session(
     use crate::server::ADMIN_PWD;
     use sea_orm::prelude::*;
     use leptos::leptos_dom::tracing::Instrument;
+    if ADMIN_PWD.is_none() { return Some(LoginState::Admin)}
     let identity = session.map(|s| s.user.as_ref().map(|u| u.id())).flatten();
     if let Some(user) = identity { return Some(user) }
+    else { Some(LoginState::None) }
+    /*
     let db = db()?;
     let users = immt_web_orm::entities::prelude::User::find().all(&db).in_current_span().await;
     if ADMIN_PWD.is_none() && match users {
@@ -75,7 +78,7 @@ pub(crate) async fn login_status_with_session(
     } {
         Some(LoginState::Admin)
     }
-    else { Some(LoginState::None) }
+    else { Some(LoginState::None) }*/
 }
 
 #[server(prefix="/api/users",endpoint="login_status")]

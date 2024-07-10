@@ -339,6 +339,20 @@ pub struct DirIter<'a,D,F:FileLike<D>> {
     current: std::slice::Iter<'a,FSEntry<D,F>>,
     stack: Vec<std::slice::Iter<'a,FSEntry<D,F>>>
 }
+#[cfg(feature="rayon")]
+impl<'a,D,F:FileLike<D>> spliter::Spliterator for DirIter<'a,D,F> {
+    fn split(&mut self) -> Option<Self> {
+        if self.stack.len() < 2 {return None}
+        let split = self.stack.len() / 2;
+        let mut new_stack = self.stack.split_off(split);
+        let mut new_curr = new_stack.pop().unwrap();
+        Some(DirIter {
+            current: new_curr,
+            stack: new_stack
+        })
+    }
+}
+
 impl<'a,D,F:FileLike<D>> Iterator for DirIter<'a,D,F> {
     type Item = &'a FSEntry<D,F>;
     fn next(&mut self) -> Option<Self::Item> {
@@ -358,7 +372,6 @@ impl<'a,D,F:FileLike<D>> Iterator for DirIter<'a,D,F> {
             }
         }
     }
-
 }
 
 pub trait DirLike<D,F:FileLike<D>> {

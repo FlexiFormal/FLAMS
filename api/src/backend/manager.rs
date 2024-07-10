@@ -53,27 +53,6 @@ impl Default for ArchiveManager {
     }
 }
 
-#[cfg(feature = "tokio")]
-#[derive(Debug)]
-pub struct ArchiveManagerAsync{
-    lock:tokio::sync::RwLock<ArchiveTree>,
-    change_sender: ChangeSender<ArchiveChange>,
-    filechange_sender: ChangeSender<FileChange>,
-}
-#[cfg(feature = "tokio")]
-impl Default for ArchiveManagerAsync {
-    fn default() -> Self {
-        Self {
-            lock:tokio::sync::RwLock::new(ArchiveTree {
-                archives: Vec::new(),
-                groups: Vec::new()
-            }),
-            change_sender: ChangeSender::new(256),
-            filechange_sender: ChangeSender::new(256),
-        }
-    }
-}
-
 impl ArchiveManager {
     pub fn load(&self, path:&Path, formats:&[SourceFormat]) -> Vec<Quad> {
         self.lock.write(|s| s.load(path,formats,&self.filechange_sender,&self.change_sender))
@@ -83,9 +62,6 @@ impl ArchiveManager {
     }
     pub fn get_archives(&self) -> impl Deref<Target=[Archive]> + '_ {
         parking_lot::RwLockReadGuard::map(self.lock.returnable(),|t| t.archives())
-    }
-    pub fn load_par(&self, path:&Path, formats:&[SourceFormat]) -> Vec<Quad> {
-        self.lock.write(|s| s.load_par(path,formats,&self.filechange_sender,&self.change_sender))
     }
     pub fn with_tree<R>(&self, f:impl FnOnce(&ArchiveTree) -> R) -> R {
         self.lock.read(|s| f(&*s))
@@ -102,36 +78,6 @@ impl ArchiveManager {
                 f(Some(a))
             } else {f(None)}
         })
-    }
-}
-
-#[cfg(feature = "tokio")]
-impl ArchiveManagerAsync {
-    pub async fn load(&self, path:PathBuf, formats:Box<[SourceFormat]>) -> Vec<Quad> {
-        let mut lock = self.lock.write().await;
-        lock.load_async(path,formats,self.filechange_sender.clone(),&self.change_sender).await
-    }
-    pub async fn with_archives<R>(&self,f:impl FnOnce(&[Archive]) -> R) -> R {
-        let mut lock = self.lock.read().await;
-        f(lock.archives())
-    }
-    pub async fn get_archives(&self) -> impl Deref<Target=[Archive]> + '_ {
-        tokio::sync::RwLockReadGuard::map(self.lock.read().await,|t| t.archives())
-    }
-    pub async fn with_tree<R>(&self, f:impl FnOnce(&ArchiveTree) -> R) -> R {
-        let lock = self.lock.read().await;
-        f(&*lock)
-    }
-    pub async fn get_tree(&self) -> impl Deref<Target=ArchiveTree> + '_ {
-        self.lock.read().await
-    }
-
-    pub async fn find<R,S:AsRef<str>,F:FnOnce(Option<&Archive>) -> R>(&self,id:S,f:F) -> R {
-        let mut lock = self.lock.read().await;
-        let id = id.as_ref();
-        if let Some(a) = ArchiveTree::find_i(lock.archives.as_slice(), id) {
-            f(Some(a))
-        } else {f(None)}
     }
 }
 
@@ -160,40 +106,15 @@ impl ArchiveTree {
     fn find_i<'a>(archives:&'a [Archive], id:&str) -> Option<&'a Archive> {
         archives.binary_search_by_key(&id,|a| a.uri().id().as_str()).ok().map(|i| &archives[i])
     }
-    #[instrument(level = "info",
-    target = "archives",
-    name = "Loading archives",
-    fields(path = %path.display()),
-    skip_all
-    )]
-    fn load(&mut self, path:&Path, formats:&[SourceFormat], fsender:&ChangeSender<FileChange>, asender:&ChangeSender<ArchiveChange>) -> Vec<Quad> {
-        tracing::info!(target:"archives","Searching for archives");
-        let (changed,new,deleted,quads) = self.do_specs(ArchiveIterator::new(path,formats),asender);
-        tracing::info!(target:"archives","Done; {new} new, {changed} changed, {deleted} deleted");
-        for a in self.archives.iter_mut().filter_map(|a| match a {
-            Archive::Physical(a) => Some(a),
-            _ => None
-        }) {
-            a.update_sources(formats, fsender);
-        }
-        for g in &mut self.groups {
-            g.update(&|id| Self::find_i(self.archives.as_slice(), id.as_str()).and_then(|a|
-                if let Archive::Physical(ma) = a {
-                    Some(ma.state())
-                } else {None }
-            ));
-        }
-        quads
-    }
 
-    #[cfg(feature = "rayon")]
+
     #[instrument(level = "info",
     target = "archives",
     name = "Loading archives",
     fields(path = %path.display()),
     skip_all
     )]
-    fn load_par(&mut self, path:&Path, formats:&[SourceFormat],fsender:&ChangeSender<FileChange>, asender:&ChangeSender<ArchiveChange>) -> Vec<Quad> {
+    fn load(&mut self, path:&Path, formats:&[SourceFormat],fsender:&ChangeSender<FileChange>, asender:&ChangeSender<ArchiveChange>) -> Vec<Quad> {
         use spliter::ParallelSpliterator;
         use rayon::iter::*;
         tracing::info!(target:"archives","Searching for archives");
@@ -205,7 +126,7 @@ impl ArchiveTree {
                 a.update_sources(formats,&fsender);
                 a
             }).collect::<Vec<_>>();
-        let (changed,new,deleted,quads) = self.do_specs_ii(news,asender);
+        let (changed,new,deleted,quads) = self.do_specs(news,asender);
         tracing::info!(target:"archives","Done; {new} new, {changed} changed, {deleted} deleted");
 
         for g in &mut self.groups {
@@ -218,105 +139,7 @@ impl ArchiveTree {
         quads
     }
 
-    #[cfg(feature = "tokio")]
-    async fn async_dir(path:PathBuf, currp:String) -> Result<(PathBuf,String),Vec<(PathBuf, String)>> {
-        let mut curr = match tokio::fs::read_dir(&path).await {
-            Ok(rd) => rd,
-            _ => {
-                tracing::warn!(target:"archives","Could not read directory {}", path.display());
-                return Err(Vec::new())
-            }
-        };
-        let mut stack = Vec::new();
-        while let Ok(Some(d)) = curr.next_entry().await {
-            let md = match d.metadata().await {
-                Ok(md) => md,
-                _ => continue
-            };
-            if md.is_dir() {
-                if d.file_name().to_str().map_or(true, |s| s.starts_with('.')) { continue }
-                let path = d.path();
-                if d.file_name().eq_ignore_ascii_case("meta-inf") {
-                    match find_manifest_async(&path,&currp).await {
-                        Some(path) => {
-                            let currp = currp.clone();
-                            return Ok((path,currp))
-                        },
-                        _ => ()
-                    }
-                }
-                let name = d.file_name();
-                let name = name.to_str().unwrap();
-                stack.push((path, if currp.is_empty() {name.to_string()} else {format!("{}/{}", currp, name)}));
-            }
-        }
-        Err(stack)
-    }
-
-    #[cfg(feature = "tokio")]
-    #[instrument(level = "info",
-        target = "archives",
-        name = "Loading archives",
-        fields(path = %path.display()),
-        skip_all
-    )]
-    async fn load_async(&mut self, path:PathBuf, formats:Box<[SourceFormat]>,fsender:ChangeSender<FileChange>, asender:&ChangeSender<ArchiveChange>) -> Vec<Quad> {
-        tracing::info!(target:"archives","Searching for archives");
-
-        //let ret = Self::do_dir_i(path, String::new(),formats,fsender).await;
-        let mut js = tokio::task::JoinSet::new();
-        let mut ret
-            = Vec::new();
-
-        fn do_dir(path:PathBuf,currp:String) -> impl std::future::Future<Output=Result<Result<(PathBuf,String),Vec<(PathBuf,String)>>,Option<MathArchive>>> {
-            async move {
-                Ok(ArchiveTree::async_dir(path, currp).in_current_span().await)
-            }.in_current_span()
-        }
-        fn do_manifest(formats:&Box<[SourceFormat]>,fsender:&ChangeSender<FileChange>,p:PathBuf,s:String) -> impl std::future::Future<Output=Result<Result<(PathBuf,String),Vec<(PathBuf,String)>>,Option<MathArchive>>> {
-            let formats = formats.clone();
-            let fsender = fsender.clone();
-            async move {
-                if let Ok(m) = do_manifest_async(&p,&s).in_current_span().await {
-                    let mut m = MathArchive::new_from(m);
-                    m.update_sources_async(&formats, &fsender).await;
-                    Err(Some(m))
-                } else {Err(None)}
-            }.in_current_span()
-        }
-        let f = do_dir(path, String::new());
-        js.spawn(f);
-        while let Some(Ok(r)) = js.join_next().await {
-            match r {
-                Ok(Ok((p,s))) => {
-                    let f = do_manifest(&formats,&fsender,p,s);
-                    js.spawn(f);
-                }
-                Ok(Err(v)) => for (path,currp) in v {
-                        let f = do_dir(path, currp);
-                        js.spawn(f);
-                }
-                Err(Some(m)) => ret.push(m),
-                Err(_) => ()
-            }
-        }
-        assert!(js.is_empty());
-        drop(js);
-
-        let (changed,new,deleted,quads) = self.do_specs_ii(ret,asender);
-
-        for g in &mut self.groups {
-            g.update(&|id| Self::find_i(self.archives.as_slice(), id.as_str()).and_then(|a|
-                if let Archive::Physical(ma) = a {
-                    Some(ma.state())
-                } else {None }
-            ));
-        }
-        tracing::info!(target:"archives","Done; {new} new, {changed} changed, {deleted} deleted");
-        quads
-    }
-
-    fn do_specs_ii(&mut self,iter:Vec<MathArchive>,sender:&ChangeSender<ArchiveChange>) -> (usize,usize,usize,Vec<Quad>) {
+    fn do_specs(&mut self,iter:Vec<MathArchive>,sender:&ChangeSender<ArchiveChange>) -> (usize,usize,usize,Vec<Quad>) {
         let mut old : Vec<_> = self.archives.iter().filter_map(|a| match a {
             Archive::Physical(a) => Some(a.uri().to_owned()),
             _ => None
@@ -355,44 +178,6 @@ impl ArchiveTree {
         (changed,new,deleted,ret)
     }
 
-    fn do_specs<F:Iterator<Item=MathArchiveSpec>>(&mut self,iter:F,sender:&ChangeSender<ArchiveChange>) -> (usize,usize,usize,Vec<Quad>) {
-        let mut old : Vec<_> = self.archives.iter().map(|a| a.uri().to_owned()).collect();
-        let mut changed = 0; let mut new = 0;
-        let mut ret = vec!();
-        for spec in iter {
-            match self.archives.binary_search_by(|a| a.uri().id().cmp(spec.storage.uri.id())) {
-                Ok(i) => match &self.archives[i] {
-                    Archive::Physical(orig) => {
-                        if orig.archive_spec() == spec.as_ref() {
-                            old.retain(|a| a.id() != orig.id());
-                            continue
-                        }
-                        let uri = spec.storage.uri.clone();
-                        let ma = Archive::Physical(MathArchive::new_from(spec));
-                        self.archives[i] = ma;
-                        changed += 1;
-                        sender.send(ArchiveChange::Update(uri));
-                    }
-                    _ => unreachable!()
-                }
-                Err(i) => {
-                    let uri = spec.storage.uri.clone();
-                    let ma = Archive::Physical(MathArchive::new_from(spec));
-                    todo!("state");
-                    self.add_archive(uri.as_ref(),sender,&mut ret);
-                    self.archives.insert(i,ma);
-                    new += 1;
-                    sender.send(ArchiveChange::New(uri));
-                }
-            }
-        }
-        let deleted = old.len();
-        for o in old {
-            self.delete_archive(o.id());
-            sender.send(ArchiveChange::Deleted(o));
-        }
-        (changed,new,deleted,ret)
-    }
 
     fn delete_archive(&mut self,id:&ArchiveId) {
         Self::delete_archive_i(&mut self.groups,id);
@@ -500,16 +285,14 @@ struct ArchiveIterator<'a> {
     in_span:Option<&'a tracing::Span>
 }
 
-immt_core::asyncs!{fn next_dir
-    (@s stack: &mut Vec<Vec<(PathBuf,String)>>,curr:&mut Option<std::fs::ReadDir>,currp:&mut String)
-    (@a stack: &mut Vec<Vec<(PathBuf,String)>>,curr:&mut Option<tokio::fs::ReadDir>,currp:&mut String) -> bool {
+fn next_dir(stack: &mut Vec<Vec<(PathBuf,String)>>,curr:&mut Option<std::fs::ReadDir>,currp:&mut String) -> bool {
     loop {
         match stack.last_mut() {
             None => return false,
             Some(s) => {
                 match s.pop() {
                     Some((e,s)) => {
-                        *curr = match read_dir!(&e) {
+                        *curr = match e.read_dir() {
                             Ok(rd) => Some(rd),
                             _ => {
                                 tracing::warn!(target:"archives","Could not read directory {}", e.display());
@@ -525,13 +308,13 @@ immt_core::asyncs!{fn next_dir
             }
         }
     }
-}}
+}
 
-immt_core::asyncs!{fn find_manifest(metainf: &Path,id:&str) -> Option<PathBuf> {
+fn find_manifest(metainf: &Path,id:&str) -> Option<PathBuf> {
     tracing::trace!("Checking for manifest");
-    match read_dir!(metainf) {
+    match metainf.read_dir() {
         Ok(mut rd) => {
-            while let Some(d) = next_file!(rd) {
+            while let Some(d) = rd.next() {
                 let d = match d {
                     Err(_) => {
                         tracing::warn!(target:"archives","Could not read directory {}", metainf.display());
@@ -556,11 +339,13 @@ immt_core::asyncs!{fn find_manifest(metainf: &Path,id:&str) -> Option<PathBuf> {
             None
         }
     }
-}}
+}
 
-immt_core::asyncs!{fn do_manifest(path: &Path,id:&str) -> Result<MathArchiveSpec, ()> {
+fn do_manifest(path: &Path,id:&str) -> Result<MathArchiveSpec, ()> {
     let top_dir = path.parent().unwrap().parent().unwrap();
-    read_lines!(lines <- path);
+
+    let reader = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+    let mut lines = reader.lines();
 
     let mut formats = arrayvec::ArrayVec::new();
     let mut dom_uri: String = String::new();
@@ -568,7 +353,7 @@ immt_core::asyncs!{fn do_manifest(path: &Path,id:&str) -> Result<MathArchiveSpec
     let mut ignores = IgnoreSource::default();
     let mut attrs: VecMap<Box<str>,Box<str>> = VecMap::default();
     loop {
-        let line = match next_line!(lines) {
+        let line = match lines.next() {
             Some(Err(_)) => continue,
             Some(Ok(l)) => l,
             _ => break
@@ -624,22 +409,19 @@ immt_core::asyncs!{fn do_manifest(path: &Path,id:&str) -> Result<MathArchiveSpec
         path: top_dir.into(),
     };
     Ok(spec)
-}}
+}
 
-immt_core::asyncs!{fn next
-    (@s curr:&mut Option<std::fs::ReadDir>,stack: &mut Vec<Vec<(PathBuf,String)>>,currp:&mut String)
-    (@a curr:&mut Option<tokio::fs::ReadDir>,stack: &mut Vec<Vec<(PathBuf,String)>>,currp:&mut String)
-    -> Option<MathArchiveSpec> {
+fn next(curr:&mut Option<std::fs::ReadDir>,stack: &mut Vec<Vec<(PathBuf,String)>>,currp:&mut String) -> Option<MathArchiveSpec> {
     loop {
         let d = match match curr.as_mut() {
                 None => None,
-                Some(d) => next_file!(d)
+                Some(d) => d.next()
             } {
-            None => if switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) { continue } else { return None },
+            None => if next_dir(stack,curr,currp) { continue } else { return None },
             Some(Ok(d)) => d,
             _ => continue
         };
-        let md = match wait!(d.metadata()) {
+        let md = match d.metadata() {
             Ok(md) => md,
             _ => continue
         };
@@ -649,18 +431,18 @@ immt_core::asyncs!{fn next
         if md.is_dir() {
             if d.file_name().to_str().map_or(true, |s| s.starts_with('.')) { continue }
             else if d.file_name().eq_ignore_ascii_case("meta-inf") {
-                match switch!((find_manifest(&path,currp))(find_manifest_async(&path,currp))) {
-                    Some(path) => match switch!((do_manifest(&path,currp))(do_manifest_async(&path,currp).in_current_span())) {
+                match find_manifest(&path,currp) {
+                    Some(path) => match do_manifest(&path,currp) {
                         Ok(m) => {
                             stack.pop();
-                            if !switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) {
+                            if !next_dir(stack,curr,currp) {
                                 *curr = None;
                             }
                             return Some(m)
                         }
                         _ => {
                             stack.pop();
-                            if switch!((next_dir(stack,curr,currp))(next_dir_async(stack,curr,currp))) { continue } else { return None }
+                            if next_dir(stack,curr,currp) { continue } else { return None }
                         }
                     }
                     _ => ()
@@ -672,7 +454,7 @@ immt_core::asyncs!{fn next
             stack.last_mut().unwrap().push((path, ins))
         }
     }
-}}
+}
 
 impl<'a> ArchiveIterator<'a> {
     
@@ -706,8 +488,6 @@ impl Iterator for ArchiveIterator<'_> {
     }
 }
 
-
-#[cfg(feature = "rayon")]
 impl spliter::Spliterator for ArchiveIterator<'_> {
     fn split(&mut self) -> Option<Self> {
         if self.stack.len() < 2 || self.stack[0].len() < 2 { return None; }
@@ -759,24 +539,16 @@ mod tests {
         );
     }
 */
-/*
-    #[cfg(feature = "rayon")]
+
     #[rstest]
     fn manager_par(setup:()) {
-        let stex = SourceFormat{
-            id:ShortId::new("stex"),
-            file_extensions:&["tex","ltx"],
-            description:"",
-            targets:&[],
-            extension:None
-        };
         let mut mgr = ArchiveManager::default();
         let relman = RelationalManager::default();
-        crate::utils::time(|| relman.add_quads(mgr.load_par(Path::new("/home/jazzpirate/work/MathHub"), &[stex]).into_iter()),
+        crate::utils::time(|| relman.add_quads(mgr.load_par(Path::new("/home/jazzpirate/work/MathHub"), &STEX).into_iter()),
             "Loading archives in parallel"
         );
     }
-*/
+
 
     static STEX : [SourceFormat;1] = [SourceFormat{
         id:SourceFormatId::new(ShortId::new_unchecked("stex")),
@@ -785,7 +557,7 @@ mod tests {
         targets:&[],
         extension:None
     }];
-
+/*
     #[cfg(feature = "tokio")]
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
@@ -797,4 +569,6 @@ mod tests {
             "Loading archives in parallel"
         ).await;
     }
+
+ */
 }

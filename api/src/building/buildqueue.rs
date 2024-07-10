@@ -1,58 +1,61 @@
+use std::ops::Deref;
+use std::path::PathBuf;
+use immt_core::building::buildstate::QueueMessage;
 use immt_core::building::formats::{BuildJobSpec, FormatOrTarget};
 use immt_core::prelude::DirLike;
 use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::filetree::{FileLike, SourceDirEntry};
 use immt_core::utils::triomphe::Arc;
 use crate::backend::archives::{Archive, Storage};
-use crate::controller::{Controller, ControllerAsync};
-
-
-
-#[cfg(feature = "async")]
-type Lock<A> = tokio::sync::RwLock<A>;
-#[cfg(not(feature = "async"))]
-type Lock<A> = parking_lot::RwLock<A>;
+use crate::controller::Controller;
+use crate::utils::asyncs::{ChangeListener, ChangeSender};
+use crate::utils::settings::Settings;
 
 use super::queue::{Queue, TaskRef, TaskSpec};
 
 #[derive(Debug)]
+pub(crate) enum Semaphore {
+    Stepwise {
+        sender: tokio::sync::watch::Sender<bool>,
+        recv: tokio::sync::watch::Receiver<bool>,
+        last:Option<PathBuf>
+    },
+    Counting {
+        inner: tokio::sync::Semaphore,
+        num: tokio::sync::RwLock<u8>,
+    }
+}
+
+#[derive(Debug)]
 struct BuildQueueI {
-    inner: Lock<Vec<Queue>>,
-    #[cfg(feature = "async")]
-    num_threads:Arc<tokio::sync::Semaphore>,
+    inner: parking_lot::RwLock<Vec<Queue>>,
+    change:ChangeSender<QueueMessage>,
+    num_threads:Arc<Semaphore>,
 }
 impl BuildQueueI {
-    immt_core::asyncs!{ALT fn do_spec
-        <@s[Ctrl:Controller+'static]>
-        <@a[Ctrl:ControllerAsync+Clone+'static]>
-        (@s &self,spec:BuildJobSpec,ctrl:&Ctrl)
-        (@a &self,spec:BuildJobSpec,ctrl:&Ctrl)
-        {
-            match spec {
-                BuildJobSpec::Group {..} => todo!(),
-                BuildJobSpec::Archive {id,target,stale_only} => {
-                    wait!(self.enqueue_archive(id,target,!stale_only,ctrl));
-                }
-                BuildJobSpec::Path {..} => todo!(),
+   fn do_spec<Ctrl:Controller+'static>(&self,spec:BuildJobSpec,ctrl:&Ctrl) {
+        match spec {
+            BuildJobSpec::Group {..} => todo!(),
+            BuildJobSpec::Archive {id,target,stale_only} => {
+                self.enqueue_archive(id,target,!stale_only,ctrl);
             }
+            BuildJobSpec::Path {..} => todo!(),
         }
-    }
+   }
 
-    immt_core::asyncs!{ALT fn enqueue_archive
-        <@s[Ctrl:Controller+'static]>
-        <@a[Ctrl:ControllerAsync+Clone+'static]>
-        (@s &self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl)
-        (@a &self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
+    fn enqueue_archive<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
+        use spliter::ParallelSpliterator;
+        use rayon::iter::*;
         let format = match target {
             FormatOrTarget::Format(f) => f,
             FormatOrTarget::Target(_) => {
                 todo!()
             }
         };
-        let tree = wait!(ctrl.archives().get_tree());
-        let mut queue = wait!(self.inner.write());
+        let tree = ctrl.archives().get_tree();
+        let mut queue = self.inner.write();
         let q = if queue.is_empty() {
-            queue.push(Queue::new("global".into()));
+            queue.push(Queue::new("global".into(),self.change.clone()));
             queue.last_mut().unwrap()
         } else {
             queue.last_mut().unwrap()
@@ -62,7 +65,7 @@ impl BuildQueueI {
         match tree.find_archive(&id) {
             Some(Archive::Physical(ma)) => {
                 if let Some(sd) = ma.source_files() {
-                    let files = sd.dir_iter().filter_map(|fd| {
+                    let files = sd.dir_iter().par_split().into_par_iter().filter_map(|fd| {
                         if let SourceDirEntry::File(f) = fd {
                             if f.format == format {
                                 if all { Some(f.relative_path()) }
@@ -71,35 +74,51 @@ impl BuildQueueI {
                         } else {None}
                     }).map(|rp| TaskSpec {
                         archive: ma.uri(),base_path: ma.path(),rel_path: rp,target});
-                    wait!(q.enqueue(files,ctrl));
+                    q.enqueue(files,ctrl);
                 }
             }
             None => (),
             _ => todo!()
         }
-    }}
+    }
 }
 
 #[derive(Debug)]
 pub struct BuildQueue(Arc<BuildQueueI>);
 impl BuildQueue {
 
-    immt_core::asyncs!{ALT !pub fn enqueue
-        <@s[Ctrl:Controller+'static]>
-        <@a[Ctrl:ControllerAsync+Clone+'static]>
-        (@s &self,job:BuildJobSpec,ctrl:&Ctrl)
-        (@a &self,job:BuildJobSpec,ctrl:&Ctrl){
-        switch!{
-            (todo!())
-            (self.0.do_spec(job,ctrl))
-        }
-    }}
+    pub fn enqueue<Ctrl:Controller+'static>(&self,job:BuildJobSpec,ctrl:&Ctrl) {
+        self.0.do_spec(job,ctrl)
+    }
 
-    pub fn new() -> Self {
+    pub fn queues(&self) -> impl Deref<Target=Vec<Queue>> + '_ {
+        self.0.inner.read()
+    }
+
+    pub fn new(settings:&Settings) -> Self {
         Self(Arc::new(BuildQueueI {
-            inner: Lock::new(Vec::new()),
-            #[cfg(feature="async")]
-            num_threads:Arc::new(tokio::sync::Semaphore::new(0)),
+            inner: parking_lot::RwLock::new(Vec::new()),
+            change:ChangeSender::new(64),
+            num_threads:Arc::new(match settings.num_threads.get()  {
+                0 => {
+                    let (sender,recv) = tokio::sync::watch::channel(false);
+                    Semaphore::Stepwise { sender,recv,last:None }
+                },
+                i => Semaphore::Counting {
+                    inner: tokio::sync::Semaphore::new(*i as usize),
+                    num: tokio::sync::RwLock::new(*i),
+                }
+            }),
         }))
+    }
+
+    pub fn start(&self,id:&str) {
+        if let Some(q) = self.0.inner.read().iter().find(|q| q.id() == id) {
+            q.run(self.0.num_threads.clone())
+        }
+    }
+
+    pub fn listener(&self) -> ChangeListener<QueueMessage> {
+        self.0.change.listener()
     }
 }

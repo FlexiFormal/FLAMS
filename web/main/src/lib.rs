@@ -52,7 +52,7 @@ pub mod server {
     use tower_http::services::ServeDir;
     use tower_sessions::Expiry;
     use tracing::Instrument;
-    use immt_controller::{controller, MainController};
+    use immt_controller::{controller, BaseController};
     use crate::accounts::AccountManager;
     use immt_controller::ControllerTrait;
     /*
@@ -167,7 +167,7 @@ pub mod server {
 
         let Main = crate::home::MainNew;
 
-        std::env::set_var("LEPTOS_OUTPUT_NAME", "immt");
+        //std::env::set_var("LEPTOS_OUTPUT_NAME", "immt");
 
         let ip = controller().settings().ip.clone();
         let port = controller().settings().port;
@@ -203,6 +203,7 @@ pub mod server {
         }
 
         let app = axum::Router::<AppState>::new()
+            .route("/dashboard/queue/ws",axum::routing::get(crate::components::queue::QueueSocket::ws_handler))
             .route("/dashboard/log/ws",axum::routing::get(crate::components::logging::LogSocket::ws_handler))
             .route("/api/*fn_name", axum::routing::get(server_fn_handle).post(server_fn_handle))
             .leptos_routes_with_handler(routes,axum::routing::get(move |

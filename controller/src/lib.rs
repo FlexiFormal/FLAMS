@@ -3,11 +3,11 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 use tracing::instrument;
-use immt_api::backend::manager::{ArchiveManager, ArchiveManagerAsync};
+use immt_api::backend::manager::{ArchiveManager};
 use immt_api::backend::relational::RelationalManager;
 use immt_api::building::buildqueue::BuildQueue;
 use immt_api::building::targets::{BuildDataFormat, BuildTarget, SourceFormat};
-pub use immt_api::controller::{Controller, ControllerAsync};
+pub use immt_api::controller::{Controller};
 use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
 use immt_api::utils::asyncs::{background, ChangeListener};
 use immt_core::ontology::rdf::terms::NamedNode;
@@ -39,7 +39,6 @@ impl BaseController {
         name = "Booting",
         skip(settings)
     )]
-    #[cfg(not(feature="async"))]
     pub fn new(settings: SettingsSpec) -> Self {
         assert!(CONTROLLER.get().is_none());
         let settings: Settings = settings.into();
@@ -70,7 +69,7 @@ impl BaseController {
                 }
             }
         }
-        let queue = BuildQueue::new();
+        let queue = BuildQueue::new(&settings);
 
         let relational = RelationalManager::default();
         let archives = ArchiveManager::default();
@@ -88,7 +87,7 @@ impl BaseController {
         });
         let source_formats = ctrl.0.format_extensions.values().cloned().collect::<Vec<_>>();
         for p in &ctrl.0.settings.mathhubs {
-            ctrl.0.relational.add_quads(ctrl.0.archives.load_par(p, source_formats.as_slice()).into_iter())
+            ctrl.0.relational.add_quads(ctrl.0.archives.load(p, source_formats.as_slice()).into_iter())
         }
         let ret = ctrl.clone();
         background(move || { ctrl.load_relational() });
@@ -169,134 +168,19 @@ impl Controller for BaseController {
     }
 }
 
-#[cfg(not(feature="async"))]
-pub type MainController = BaseController;
-#[cfg(feature="async")]
-pub type MainController = BaseControllerAsync;
 
-#[cfg(not(feature="async"))]
 pub use Controller as ControllerTrait;
-#[cfg(feature="async")]
-pub use ControllerAsync as ControllerTrait;
 use immt_api::HMap;
 use immt_api::utils::settings::{Settings};
 use immt_core::building::formats::SourceFormatId;
 use immt_core::utils::settings::SettingsSpec;
 
 
-static CONTROLLER: std::sync::OnceLock<MainController> = std::sync::OnceLock::new();
+static CONTROLLER: std::sync::OnceLock<BaseController> = std::sync::OnceLock::new();
 
-pub fn controller() -> &'static MainController {
+pub fn controller() -> &'static BaseController {
     CONTROLLER.get().expect("Controller not set")
 }
-
-#[cfg(feature="async")]
-#[derive(Debug)]
-struct ControllerIAsync {
-    log: LogStore,
-    relational: RelationalManager,
-    archives: ArchiveManagerAsync, //RwLock<ArchiveManager>,
-    extensions:HMap<ExtensionId,Box<dyn MMTExtension>>,
-    format_extensions:HMap<SourceFormatId,SourceFormat>,
-    queue:BuildQueue,
-    settings: Settings
-}
-
-#[cfg(feature="async")]
-#[derive(Clone,Debug)]
-pub struct BaseControllerAsync(Arc<ControllerIAsync>);
-
-#[cfg(feature="async")]
-impl BaseControllerAsync {
-
-    #[instrument(level = "info",
-        target = "controller",
-        name = "Booting",
-        skip(settings)
-    )]
-    pub async fn new(settings: SettingsSpec) -> Self {
-        assert!(CONTROLLER.get().is_none());
-        let settings: Settings = settings.into();
-        let log = logging::tracing(&settings.log_dir,
-            if settings.debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
-            tracing_appender::rolling::Rotation::NEVER
-        );
-        let mut extensions = HMap::default();
-        let mut format_extensions = HMap::default();
-        for e in BaseController::load_extensions() {
-            if let Some(e) = e.as_formats() {
-                for f in e.formats() {
-                    format_extensions.insert(f.id, f);
-                }
-            };
-            extensions.insert(e.name(),e);
-        }
-        let mut build_targets:Vec<_> = format_extensions.iter().flat_map(|(_,i)| i.targets).copied().collect();
-        build_targets.insert(0,BuildTarget::CHECK);
-        let mut build_data_formats = vec![
-            BuildDataFormat::PDF
-        ];
-        for t in &build_targets {
-            for c in t.requires.iter().chain(t.produces.iter()) {
-                if !build_data_formats.iter().any(|b| b.id == c.id) {
-                    build_data_formats.push(c.clone())
-                }
-            }
-        }
-        let queue = BuildQueue::new();
-
-        let relational = RelationalManager::default();
-        let archives = ArchiveManagerAsync::default();
-
-        let ctrl = ControllerIAsync { log, relational, extensions, archives,queue,
-            format_extensions,settings
-        };
-        let ctrl = Self(Arc::new(ctrl));
-
-        tracing::info_span!(target:"controller","Loading extensions").in_scope(|| {
-            for (_,ext) in ctrl.0.extensions.iter() {
-                tracing::info!(target:"controller","Loading {}",ext.name());
-                ext.on_plugin_load_async(&ctrl)
-            }
-        });
-        for p in &ctrl.0.settings.mathhubs {
-            let formats = ctrl.0.format_extensions.values().cloned().collect::<Vec<_>>().into();
-            ctrl.0.relational.add_quads(ctrl.0.archives.load(p.to_owned(), formats).await.into_iter())
-        }
-        let ret = ctrl.clone();
-        tokio::spawn(async move {ctrl.load_relational().await});
-        CONTROLLER.set(ret.clone()).expect("Controller already set");
-        ret
-    }
-
-
-    pub async fn default() -> Self {
-        Self::new(SettingsSpec::default()).await
-    }
-
-    async fn load_relational(&self) {
-        self.0.relational.load_archives_async(&self.0.archives).await
-    }
-    pub fn log_listener(&self) -> ChangeListener<LogFileLine<String>> {
-        self.0.log.listener()
-    }
-}
-
-#[cfg(feature="async")]
-impl ControllerAsync for BaseControllerAsync {
-    fn archives(&self) -> &ArchiveManagerAsync { &self.0.archives }
-    fn log_file(&self) -> &Path { self.0.log.log_file() }
-    fn build_queue(&self) -> &BuildQueue { &self.0.queue }
-    fn settings(&self) -> &Settings { &self.0.settings }
-    fn get_format(&self, id:SourceFormatId) -> Option<&SourceFormat> {
-        self.0.format_extensions.get(&id)
-    }
-    fn get_extension(&self, id: ExtensionId) -> Option<&dyn MMTExtension> {
-        self.0.extensions.get(&id).map(|b| &**b)
-    }
-}
-
-
 
 #[test]
 fn test() {
