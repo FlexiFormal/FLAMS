@@ -46,33 +46,6 @@ mod server {
             Some(children)
         })
     }
-    /*
-    #[cfg(not(feature="async"))]
-    pub fn get_archive_children(prefix:Option<&str>) -> Option<Vec<ArchiveOrGroup>> {
-        controller().archives().with_tree(|toptree| {
-            let (tree,has_meta) = match prefix {
-                Some(prefix) => match toptree.find_group_or_archive(prefix)? {
-                    AGroup::Group{children,has_meta,..} => (children.as_slice(),*has_meta),
-                    _ => return None
-                },
-                None => (toptree.groups(),false)
-            };
-            let mut children = tree.iter().filter_map(|v| match v {
-                AGroup::Archive(id) => {
-                    if let Some(Archive::Physical(ma)) = toptree.find_archive(id) {
-                        Some(ArchiveOrGroup::Archive(id.to_string(), ma.state().clone()))
-                    } else {None}
-                },
-                AGroup::Group{id,state,..} => Some(ArchiveOrGroup::Group(id.to_string(),state.clone()))
-            }).collect::<Vec<_>>();
-            if has_meta {
-                children.insert(0,ArchiveOrGroup::Archive(format!("{}/meta-inf",prefix.unwrap()), AllStates::default()));
-            }
-            Some(children)
-        })
-    }
-
-     */
 
     pub fn get_dir_children(archive:&str,path:Option<&str>) -> Option<Vec<DirOrFile>> {
         controller().archives().find(archive,|a| {
@@ -92,28 +65,6 @@ mod server {
             } else { None }
         })
     }
-    /*
-    #[cfg(not(feature="async"))]
-    pub fn get_dir_children(archive:&str,path:Option<&str>) -> Option<Vec<DirOrFile>> {
-        controller().archives().find(archive,|a| {
-            if let Archive::Physical(ma) = a? {
-                let sf = ma.source_files()?;
-                let dir = match path {
-                    Some(path) => match sf.find_entry(path)? {
-                        SourceDirEntry::Dir(d) => d.children.as_slice(),
-                        _ => return None
-                    },
-                    None => ma.source_files()?
-                };
-                Some(dir.iter().map(|v| match v {
-                    SourceDirEntry::File(f) => DirOrFile::File(f.clone()),
-                    SourceDirEntry::Dir( SourceDir{relative_path,data,..}) => DirOrFile::Dir(relative_path.to_string(),data.clone())
-                }).collect())
-            } else { None }
-        })
-    }
-
-     */
 }
 
 
@@ -233,11 +184,12 @@ fn ArchiveGroup(id:String, state: AllStates) -> impl IntoView {
     let (clicked,click) = create_signal(false);
     let i = id.clone();
     let i2 = id.clone();
-    let state = state.summary();
+    let fullstate = state;
+    let state = fullstate.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| {set_expanded.update(|b| *b = !*b)}>
             <span class=immt_treeview_group>{i2.split('/').last().unwrap().to_string()}</span>
-            <Modal show=(clicked,click)><GroupModal id=i/></Modal>
+            <Modal show=(clicked,click)><GroupModal id=i state=fullstate/></Modal>
             <span on:click=move |_| {click.set(true)} style="cursor: help;">" 🛈"</span>
             <span class=immt_treeview_left_margin/>
             {move || badge(state.new,state.stale.0)}
@@ -320,7 +272,9 @@ fn Directory(archive:String, path:String, state: AllStates) -> impl IntoView {
 
 #[island]
 fn SourceFile(archive:String,file:SourceFile) -> impl IntoView {
-    use thaw::Modal;
+    use thaw::{Modal,Drawer,DrawerPlacement};
+    let show = create_rw_signal(false);
+
     let mut name = format!("{} [{}]",file.relative_path.split('/').last().unwrap(),file.format);
     let cls = match file.build_state {
         BuildState::UpToDate {last_built,..} => {
@@ -336,24 +290,46 @@ fn SourceFile(archive:String,file:SourceFile) -> impl IntoView {
     };
     let (clicked,click) = create_signal(false);
     view!{
-        <span class=cls>{name}</span>
+        <span class=cls on:click=move |_| show.set(true)>{name.clone()}</span>
+        <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right>
+            "Hello"
+        </Drawer>
         <Modal show=(clicked,click)><FileModal archive file/></Modal>
         <span on:click=move |_| {click.set(true)} style="cursor: help;">" 🛈"</span>
     }
 }
 
 #[island]
-fn GroupModal(id:String) -> impl IntoView {
+fn GroupModal(id:String,state:AllStates) -> impl IntoView {
     use thaw::*;
+    let targets = state.targets().map(|(i,_)| i).collect::<Vec<_>>();
+    let onclicktgt = *targets.first().unwrap();
+    let target_str = targets.iter().map(|t| t.to_string()).collect::<String>();
+    let onclickid = id.clone();
+    let act = create_action(move |b| {
+        //console_log!("building [{onclickid}]: {onclicktgt} ({})",*b);
+        enqueue(None,Some(onclickid.clone()),onclicktgt.clone(),None,*b)
+    });
     view!{
         <div class="immt-treeview-file-card"><Card title=id>
-            <CardHeaderExtra slot><Tag>"TODO"</Tag></CardHeaderExtra>
+            <CardHeaderExtra slot><Tag>{target_str}</Tag></CardHeaderExtra>
+            {if_logged_in(
+                move || {
+                    view!{<span>
+                    <button on:click=move |_| act.dispatch(false)>"build all stale/new"</button>
+                    <button on:click=move |_| act.dispatch(true)>"force build all"</button>
+                    </span>}
+                },
+                || view!{<span/>}
+            )}
             <Table>
                 <thead>
                     <tr><td>"Build Target"</td><td>"Last Built"</td></tr>
                 </thead>
                 <tbody>
-                    <tr><td><b>"Last Built"</b></td><td>"TODO"</td></tr>
+                    <For each=move || targets.clone() key=|t| t.to_string() children=move |t|
+                        view!{<tr><td>{t.to_string()}</td><td>"TODO"</td></tr>}
+                    />
                 </tbody>
             </Table>
         </Card></div>

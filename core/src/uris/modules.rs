@@ -9,6 +9,14 @@ pub struct ModuleURI {
     path: Name,
     name: Name
 }
+impl ModuleURI {
+    pub fn new<S1:Into<Name>,S2:Into<Name>>(archive:ArchiveURI,path:S1,name:S2) -> Self {
+        Self { archive, path:path.into(), name:name.into() }
+    }
+    pub fn name(&self) -> &str {
+        &*self.name.0
+    }
+}
 impl Display for ModuleURI {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

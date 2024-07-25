@@ -46,7 +46,7 @@ pub fn Settings() -> impl IntoView {
             </tbody></Table>
             <h3>"Build Queue"</h3>
             <Table><thead/><tbody>
-                <tr><td><b>"Threads:"</b></td><td>{settings.build_queue.num_threads}</td></tr>
+                <tr><td><b>"Threads:"</b></td><td>{settings.buildqueue.num_threads}</td></tr>
             </tbody></Table>
             }
         }</Await>

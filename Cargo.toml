@@ -19,7 +19,7 @@ codegen-units = 1
 panic = "abort"
 
 [workspace.lints.rust]
-unsafe_code = "deny"
+#unsafe_code = "deny"
 
 [workspace.lints.clippy]
 enum_glob_use = "deny"
@@ -35,6 +35,10 @@ immt-shtml = { path = "shtml",version="0.0.1" }
 immt-stex = { path = "stex",version="0.0.1" }
 immt-web = { path = "web/main",version="0.0.1" }
 immt-web-orm = { path = "web/orm",version="0.0.1" }
+#RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
+RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
+#tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
+tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
 
 [[workspace.metadata.leptos]]
 # project name

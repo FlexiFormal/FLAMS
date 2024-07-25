@@ -541,10 +541,11 @@ mod tests {
 */
 
     #[rstest]
-    fn manager_par(setup:()) {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn manager_par(setup:()) {
         let mut mgr = ArchiveManager::default();
         let relman = RelationalManager::default();
-        crate::utils::time(|| relman.add_quads(mgr.load_par(Path::new("/home/jazzpirate/work/MathHub"), &STEX).into_iter()),
+        crate::utils::time(|| relman.add_quads(mgr.load(Path::new("/home/jazzpirate/work/MathHub"), &STEX).into_iter()),
             "Loading archives in parallel"
         );
     }

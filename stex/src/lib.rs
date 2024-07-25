@@ -4,8 +4,8 @@ use std::sync::{Arc, OnceLock};
 use immt_api::async_trait::async_trait;
 use immt_api::backend::archives::{Archive, Storage};
 use immt_api::backend::manager::ArchiveTree;
-use immt_api::building::queue::{BuildTask, Dependency, TaskRef};
 use immt_api::building::targets::{BuildDataFormat, BuildFormatId, BuildTarget, SourceFormat};
+use immt_api::building::tasks::BuildTask;
 use immt_api::controller::Controller;
 use immt_api::core::building::formats::{BuildTargetId, ShortId, SourceFormatId};
 use immt_api::core::uris::archives::ArchiveId;
@@ -19,6 +19,7 @@ use crate::rustex::RusTeX;
 mod rustex;
 mod quickparse;
 mod dependencies;
+mod utils;
 
 /*
 immt_api::export_plugin!(register);
@@ -73,8 +74,6 @@ impl MMTExtension for STeXExtension {
         tokio::task::spawn_blocking(f);
     }*/
     fn name(&self) -> ExtensionId { ExtensionId::new(ID) }
-    fn test(&self, _controller: &mut dyn Controller) -> bool { true }
-    fn test2(&self, _controller: &mut dyn Controller) -> bool { true }
     fn as_formats(&self) -> Option<&dyn FormatExtension> { Some(self) }
 }
 #[async_trait]
@@ -84,164 +83,70 @@ impl FormatExtension for STeXExtension {
         todo!()
     }
     fn get_deps(&self, ctrl:&dyn Controller,task: &BuildTask) {
-        let source = std::fs::read_to_string(task.path());
-        if let Ok(source) = source {
-            for d in dependencies::get_deps(&source,task.path()) {
-                match d {
-                    STeXDependency::ImportModule { archive, module} | STeXDependency::UseModule { archive, module} => {
-                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
-                        if let Some(rel_path) = ctrl.archives().with_tree(|tree|
-                            to_file_path(task.path(),&archive,module,tree)
-                        ) {
-                            let mut rf = TaskRef {
-                                archive,rel_path,
-                                target: PDFLATEX_FIRST.id
-                            };
-                            //tracing::debug!("Adding dependency: {:?}", rf);
-                            if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
-                                step.push_dependency(Dependency::Physical {
-                                    strict:false,
-                                    task:rf.clone()
-                                })
-                            }
-                            if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
-                                rf.target = BuildTarget::CHECK.id;
-                                step.push_dependency(Dependency::Physical {
-                                    strict:true,
-                                    task:rf
-                                })
-                            }
+        dependencies::get_deps(ctrl,task)
+    }
+    fn build(&self, ctrl:&dyn Controller,task: &BuildTask, target: BuildTargetId, index: u8) -> bool {
+        match target {
+            s if s == PDFLATEX_FIRST.id => {
+                let ret = pdflatex_and_bib(task.path(),[("STEX_WRITESMS","true")].into_iter()).is_ok();
+                if let Some(step) = task.find_step(target) {
+                    step.set_log_path(ret, ctrl, task, &task.path().with_extension("log"));
+                    step.set_artifact_path(ctrl, task, BuildDataFormat::PDF ,&task.path().with_extension("pdf"));
+                }
+                return ret
+            }
+            s if s == PDFLATEX_ONLY.id => {
+                let ret = pdflatex(task.path(),[("STEX_USESMS","true")].into_iter()).is_ok();
+                if let Some(step) = task.find_step(target) {
+                    step.set_log_path(ret, ctrl, task, &task.path().with_extension("log"));
+                    step.set_artifact_path(ctrl, task, BuildDataFormat::PDF ,&task.path().with_extension("pdf"));
+                }
+                return ret
+            }
+            s if s == RUSTEX.id => {
+                return match RusTeX::get().run_with_envs(task.path(), false, [("STEX_USESMS".to_string(), "true".to_string())].into_iter()) {
+                    Ok(s) => {
+                        if let Some(step) = task.find_step(target) {
+                            step.set_artifact_str(ctrl, task, SHTML_FORMAT ,&s);
                         }
-                    }
-                    STeXDependency::Inputref { archive, filepath } => {
-                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
-                        let rel_path = to_file_path_ref(filepath);
-                        let rf = TaskRef {
-                            archive,rel_path,
-                            target: PDFLATEX_FIRST.id
-                        };
-                        //tracing::debug!("Adding dependency: {:?}", rf);
-                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
-                            step.push_dependency(Dependency::Physical {
-                                strict:false, task:rf
-                            })
-                        }
+                        true
                     },
-                    STeXDependency::Signature(lang) => {
-                        let archive = task.archive().id().clone();
-                        let rel_path = task.rel_path()
-                            .rsplit_once('.')
-                            .and_then(|(a, _)| {
-                                a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
-                            })
-                            .unwrap().into();
-                        let mut rf = TaskRef {
-                            archive,rel_path,
-                            target: PDFLATEX_FIRST.id
-                        };
-                        //tracing::debug!("Adding dependency: {:?}", rf);
-                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
-                            step.push_dependency(Dependency::Physical {
-                                strict:false,
-                                task:rf.clone()
-                            })
-                        }
-                        if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
-                            rf.target = BuildTarget::CHECK.id;
-                            step.push_dependency(Dependency::Physical {
-                                strict:true,
-                                task:rf
-                            })
-                        }
+                    Err(s) => {
+                        tracing::error!("RusTeX failed: {} ({})", s,task.path().display());
+                        false
                     }
                 }
-            }
-
+            },
+            _ => unreachable!()
         }
     }
-    /*
-    fn get_deps(&self, ctrl: &dyn Controller, task: &BuildTask) {
-        let source = std::fs::read_to_string(task.path());
-        if let Ok(source) = source {
-            for d in dependencies::get_deps(&source,task.path()) {
-                match d {
-                    STeXDependency::ImportModule { archive, module} | STeXDependency::UseModule { archive, module} => {
-                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
-                        if let Some(rel_path) = ctrl.archives().with_tree(|tree|
-                            to_file_path(task.path(),&archive,module,tree)
-                        ) {
-                            let mut rf = TaskRef {
-                                archive,rel_path,
-                                target: PDFLATEX_FIRST.id
-                            };
-                            //tracing::debug!("Adding dependency: {:?}", rf);
-                            if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
-                                step.push_dependency(Dependency::Physical {
-                                    strict:false,
-                                    task:rf.clone()
-                                })
-                            }
-                            if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
-                                rf.target = BuildTarget::CHECK.id;
-                                step.push_dependency(Dependency::Physical {
-                                    strict:true,
-                                    task:rf
-                                })
-                            }
-                        }
-                    }
-                    STeXDependency::Inputref { archive, filepath } => {
-                        let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
-                        let rel_path = to_file_path_ref(filepath);
-                        let rf = TaskRef {
-                            archive,rel_path,
-                            target: PDFLATEX_FIRST.id
-                        };
-                        //tracing::debug!("Adding dependency: {:?}", rf);
-                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
-                            step.push_dependency(Dependency::Physical {
-                                strict:false, task:rf
-                            })
-                        }
-                    },
-                    STeXDependency::Signature(lang) => {
-                        let archive = task.archive().id().clone();
-                        let rel_path = task.rel_path()
-                            .rsplit_once('.')
-                            .and_then(|(a, _)| {
-                                a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
-                            })
-                            .unwrap().into();
-                        let mut rf = TaskRef {
-                            archive,rel_path,
-                            target: PDFLATEX_FIRST.id
-                        };
-                        //tracing::debug!("Adding dependency: {:?}", rf);
-                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
-                            step.push_dependency(Dependency::Physical {
-                                strict:false,
-                                task:rf.clone()
-                            })
-                        }
-                        if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
-                            rf.target = BuildTarget::CHECK.id;
-                            step.push_dependency(Dependency::Physical {
-                                strict:true,
-                                task:rf
-                            })
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-     */
 }
 
-pub(crate) fn pdflatex<I:Iterator<Item=(String,String)>>(path:&Path,mut envs:I) -> Result<(),()> {
-    let parent = if let Some(p) = path.parent() {p} else {return Err(())};
-    let stem = if let Some(s) = path.file_stem() {s} else {return Err(())};
+fn pdflatex_and_bib<S:AsRef<std::ffi::OsStr>,I:Iterator<Item=(S,S)>>(path:&Path,mut envs:I) -> Result<(),()> {
+    pdflatex(path,envs)?;
+    let stem = if let Some(s) = path.file_stem() {s} else {
+        return Err(())
+    };
+    let parent = if let Some(p) = path.parent() {p} else {
+        return Err(())
+    };
+    let bib = path.with_extension("bcf");
+    if bib.exists() {
+        let _ = run_command("biber", [stem.to_str().unwrap()].into_iter(), parent, std::iter::empty::<(String,String)>());
+    } else {
+        let _ = run_command("bibtex", [stem.to_str().unwrap()].into_iter(), parent, std::iter::empty::<(String,String)>());
+    }
+    Ok(())
+}
+
+fn pdflatex<S:AsRef<std::ffi::OsStr>,I:Iterator<Item=(S,S)>>(path:&Path,mut envs:I) -> Result<(),()> {
+    let parent = if let Some(p) = path.parent() {p} else {
+        return Err(())
+    };
+    let stem = if let Some(s) = path.file_stem() {s} else {
+        return Err(())
+    };
+    tracing::info!("Running: pdflatex {} in {}", stem.to_str().unwrap(), parent.display());
     let out = run_command(
         "pdflatex",
         ["-interaction", "nonstopmode", "-halt-on-error", stem.to_str().unwrap()].into_iter(),
@@ -254,77 +159,12 @@ pub(crate) fn pdflatex<I:Iterator<Item=(String,String)>>(path:&Path,mut envs:I) 
             .find("Fatal error")
             .map(|i| &out[i..])
             .unwrap_or("unknown error");
+        tracing::error!("pdflatex failed: {} ({})", err,path.display());
         return Err(())
-    } else {
-        let bib = path.with_extension("bcf");
-        if bib.exists() {
-            let _ = run_command("biber", [stem.to_str().unwrap()].into_iter(), parent, std::iter::empty::<(String,String)>());
-        } else {
-            let _ = run_command("bibtex", [stem.to_str().unwrap()].into_iter(), parent, std::iter::empty::<(String,String)>());
-        }
     }
     Ok(())
 }
 
-fn to_file_path(
-    current: &Path,
-    id: &ArchiveId,
-    module: &str,
-    tree:&ArchiveTree,
-) -> Option<Box<str>> {
-    let lang = if current.extension().and_then(|s| s.to_str()) == Some("tex") {
-        match current.file_stem().and_then(|s| s.to_str()) {
-            Some(s) if s.ends_with(".ru") => "ru",
-            Some(s) if s.ends_with(".de") => "de",
-            Some(s) if s.ends_with(".fr") => "fr",
-            // TODO etc
-            _ => "en",
-        }
-    } else {
-        "en"
-    };
-    if let Some(Archive::Physical(a)) = tree.find_archive(id) {
-        let archive_path = a.path();
-        let (path, module) = module.split_once('?')?;
-        let p = PathBuf::from(format!(
-            "{}/source/{path}/{module}.{lang}.tex",
-            archive_path.display()
-        ));
-        if p.exists() {
-            return Some(format!("{path}/{module}.{lang}.tex").into())
-        }
-        let p = PathBuf::from(format!(
-            "{}/source/{path}/{module}.en.tex",
-            archive_path.display()
-        ));
-        if p.exists() {
-            return Some(format!("{path}/{module}.en.tex").into());
-        }
-        let p = PathBuf::from(format!(
-            "{}/source/{path}/{module}.tex",
-            archive_path.display()
-        ));
-        if p.exists() {
-            return Some(format!("{path}/{module}.tex").into())
-        }
-        let p = PathBuf::from(format!(
-            "{}/source/{path}.{lang}.tex",
-            archive_path.display()
-        ));
-        if p.exists() {
-            return Some(format!("{path}.{lang}.tex").into())
-        }
-        let p = PathBuf::from(format!("{}/source/{path}.en.tex", archive_path.display()));
-        if p.exists() {
-            return Some(format!("{path}.en.tex").into())
-        }
-        let p = PathBuf::from(format!("{}/source/{path}.tex", archive_path.display()));
-        if p.exists() {
-            return Some(format!("{path}.tex").into())
-        }
-    }
-    None
-}
 
 fn to_file_path_ref(
     path: &str,

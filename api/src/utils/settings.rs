@@ -34,7 +34,7 @@ pub struct Settings {
 }
 impl Settings {
     pub fn as_spec(&self) -> SettingsSpec {
-        SettingsSpec {
+        let spec = SettingsSpec {
             mathhubs: self.mathhubs.iter().map(|p| p.to_path_buf()).collect(),
             debug: Some(self.debug),
             log_dir: Some(self.log_dir.clone()),
@@ -44,10 +44,11 @@ impl Settings {
                 admin_pwd: self.admin_pwd.as_ref().map(|s| s.to_string()),
                 database: Some(self.database.clone())
             },
-            build_queue: BuildQueueSettings {
+            buildqueue: BuildQueueSettings {
                 num_threads: Some(self.num_threads.value)
             }
-        }
+        };
+        spec
     }
 }
 impl From<SettingsSpec> for Settings {
@@ -63,11 +64,8 @@ impl From<SettingsSpec> for Settings {
             admin_pwd: spec.server.admin_pwd.map(|s| s.into_boxed_str()),
             database: spec.server.database.unwrap_or_else(|| crate::config_dir().expect("could not determine config directory").join("users.sqlite")),
             num_threads: SettingsField {
-                value: if let Some(u) = spec.build_queue.num_threads {u} else {
-                    #[cfg(feature="tokio")]
-                    {(tokio::runtime::Handle::current().metrics().num_workers() / 2) as u8}
-                    #[cfg(not(feature="tokio"))]
-                    {1}
+                value: if let Some(u) = spec.buildqueue.num_threads {u} else {
+                    (tokio::runtime::Handle::current().metrics().num_workers() / 2) as u8
                 },
                 sender: ChangeSender::new(8)
             }

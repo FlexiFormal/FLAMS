@@ -14,12 +14,20 @@ fn main() {
 */
 #[tokio::main]
 async fn main() {
+    let _ce = color_eyre::install();
     let settings = immt::settings::get(immt::cli::Cli::get());
 
     let ctrl = BaseController::new(settings);
     let server = async {
         #[cfg(debug_assertions)]
-            let basepath = "target/web";
+        let basepath = {
+            if std::env::var("LEPTOS_OUTPUT_NAME").is_err() {
+                unsafe{std::env::set_var("LEPTOS_OUTPUT_NAME", "immt")};
+                "target/web"
+            } else {
+                "target/web"
+            }
+        };
         #[cfg(not(debug_assertions))]
             let _basepath = std::env::current_exe().unwrap().parent().unwrap().join("web");
         #[cfg(not(debug_assertions))]

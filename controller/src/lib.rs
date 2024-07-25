@@ -124,6 +124,7 @@ impl BaseController {
     fn load_extensions() -> Box<[Box<dyn MMTExtension>]> {
         use immt_stex::STeXExtension;
         let mut target: Vec<Box<dyn MMTExtension>> = vec![
+            Box::new(CheckExtension {}),
             Box::new(SHTMLExtension {}),
             Box::new(STeXExtension {}),
         ];
@@ -163,6 +164,9 @@ impl Controller for BaseController {
     fn get_format(&self, id:SourceFormatId) -> Option<&SourceFormat> {
         self.0.format_extensions.get(&id)
     }
+    fn get_target(&self, id: BuildTargetId) -> Option<&BuildTarget> {
+        self.0.format_extensions.values().find_map(|fmt| fmt.targets.iter().find(|tg| tg.id == id))
+    }
     fn get_extension(&self, id: ExtensionId) -> Option<&dyn MMTExtension> {
         self.0.extensions.get(&id).map(|b| &**b)
     }
@@ -170,9 +174,10 @@ impl Controller for BaseController {
 
 
 pub use Controller as ControllerTrait;
+use immt_api::checking::CheckExtension;
 use immt_api::HMap;
 use immt_api::utils::settings::{Settings};
-use immt_core::building::formats::SourceFormatId;
+use immt_core::building::formats::{BuildTargetId, SourceFormatId};
 use immt_core::utils::settings::SettingsSpec;
 
 
@@ -182,7 +187,10 @@ pub fn controller() -> &'static BaseController {
     CONTROLLER.get().expect("Controller not set")
 }
 
+/*
 #[test]
 fn test() {
     let ctrl = BaseController::default();
 }
+
+ */

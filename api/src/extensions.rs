@@ -1,15 +1,14 @@
+use immt_core::building::formats::BuildTargetId;
 use immt_core::short_id;
 use crate::building::targets::SourceFormat;
+use crate::building::tasks::BuildTask;
 use crate::controller::{Controller};
-use crate::building::queue::BuildTask;
 
 short_id!(?ExtensionId);
 
 pub trait MMTExtension:Send+Sync+std::fmt::Debug {
     fn name(&self) -> ExtensionId;
     fn on_plugin_load(&self,_controller:&dyn Controller) {}
-    fn test(&self, controller:&mut dyn Controller) -> bool;
-    fn test2(&self, controller:&mut dyn Controller) -> bool;
     fn as_formats(&self) -> Option<&dyn FormatExtension> { None }
 }
 
@@ -18,6 +17,7 @@ pub trait FormatExtension:MMTExtension {
     fn formats(&self) -> Vec<SourceFormat>;
     fn sandbox(&self, controller:&mut dyn Controller) -> Box<dyn MMTExtension>;
     fn get_deps(&self,controller:&dyn Controller, task:&BuildTask);
+    fn build(&self,ctrl:&dyn Controller,task:&BuildTask,target:BuildTargetId,index:u8) -> bool;
 }
 
 #[derive(Copy, Clone)]

@@ -17,7 +17,7 @@ pub mod settings;
 
 #[derive(Clone,Hash,Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct VecMap<K, V>(Vec<(K, V)>);
+pub struct VecMap<K, V>(pub Vec<(K, V)>);
 
 impl<K,V,K2,V2> PartialEq<VecMap<K2,V2>> for VecMap<K,V> where K: PartialEq<K2>, V: PartialEq<V2> {
     fn eq(&self, other: &VecMap<K2,V2>) -> bool {
@@ -51,6 +51,9 @@ impl<K, V> VecMap<K, V> {
     pub fn get_mut<E:?Sized>(&mut self, key: &E) -> Option<&mut V> where for <'a> &'a E: PartialEq<&'a K>  {
         self.0.iter_mut().find(|(k, _)| key == k).map(|(_, v)| v)
     }
+    pub fn get_mut_index(&mut self, i:usize) -> Option<&mut (K,V)>  {
+        self.0.get_mut(i)
+    }
     pub fn get_or_insert_mut(&mut self, key: K, value: impl FnOnce() -> V) -> &mut V where K:PartialEq {
         let ret = match self.0.iter().enumerate().find(|(_, (k,_))| k == &key) {
             Some((i, _)) => i,
@@ -70,6 +73,9 @@ impl<K, V> VecMap<K, V> {
     pub fn remove<E:?Sized>(&mut self,key:&E) -> Option<V> where for <'a> &'a E: PartialEq<&'a K> {
         let index = self.0.iter().position(|(k, _)| key == k)?;
         Some(self.0.remove(index).1)
+    }
+    pub fn remove_index(&mut self,i:usize) -> (K,V) {
+        self.0.remove(i)
     }
 
     #[inline]

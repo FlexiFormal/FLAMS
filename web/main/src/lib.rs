@@ -6,6 +6,7 @@ pub mod components;
 mod home;
 mod utils;
 pub mod accounts;
+pub mod shtml;
 
 #[cfg(feature = "client")]
 pub mod client {
@@ -132,7 +133,11 @@ pub mod server {
         extract::State(state): extract::State<AppState>,
         request:http::Request<axum::body::Body>
     ) -> axum::response::Response {
-        async fn get_static_file(request:http::Request<axum::body::Body>,root:&str) -> Result<http::Response<axum::body::Body>,(http::StatusCode,String)> {
+        async fn get_static_file(mut request:http::Request<axum::body::Body>,root:&str) -> Result<http::Response<axum::body::Body>,(http::StatusCode,String)> {
+            if request.uri().path().ends_with("immt_bg.wasm") {
+                // change to "immt.wasm"
+                *request.uri_mut() = http::Uri::builder().path_and_query("/pkg/immt.wasm").build().unwrap();
+            }
             //println!("Here: {:?}, {root}",request.uri().path());
             match ServeDir::new(root).precompressed_gzip().precompressed_br().oneshot(request).in_current_span().await {
                 Ok(res) => Ok(res.into_response()),
@@ -166,8 +171,6 @@ pub mod server {
         use tracing::Instrument;
 
         let Main = crate::home::MainNew;
-
-        //std::env::set_var("LEPTOS_OUTPUT_NAME", "immt");
 
         let ip = controller().settings().ip.clone();
         let port = controller().settings().port;

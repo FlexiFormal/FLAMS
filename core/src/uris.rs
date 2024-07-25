@@ -12,10 +12,21 @@ pub mod modules;
 pub mod symbols;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) struct Name(pub(crate) Arc<str>);
+pub struct Name(pub(crate) Arc<str>);
 impl Display for Name {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
+    }
+}
+impl<S:Into<Arc<str>>> From<S> for Name {
+    fn from(s: S) -> Self {
+        Name(s.into())
+    }
+}
+
+impl Into<String> for &Name {
+    fn into(self) -> String {
+        self.0.as_ref().into()
     }
 }
 
@@ -114,7 +125,26 @@ impl Display for MMTURIRef<'_> {
 }
 
 #[derive(Clone,Debug,Hash,PartialEq,Eq)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ContentURI {
     Module(modules::ModuleURI),
     Symbol(symbols::SymbolURI),
+}
+impl From<modules::ModuleURI> for ContentURI {
+    fn from(value: modules::ModuleURI) -> Self {
+        Self::Module(value)
+    }
+}
+impl From<symbols::SymbolURI> for ContentURI {
+    fn from(value: symbols::SymbolURI) -> Self {
+        Self::Symbol(value)
+    }
+}
+impl Display for ContentURI {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContentURI::Module(m) => Display::fmt(m,f),
+            ContentURI::Symbol(s) => Display::fmt(s,f),
+        }
+    }
 }

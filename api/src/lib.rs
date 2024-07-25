@@ -13,10 +13,13 @@ pub mod backend {
 }
 pub mod extensions;
 pub mod controller;
+pub mod checking;
+
 pub mod building {
     pub mod targets;
     pub mod buildqueue;
     pub mod queue;
+    pub mod tasks;
 }
 pub mod utils {
     use std::ffi::OsStr;
@@ -36,30 +39,27 @@ pub mod utils {
         tracing::info!("{s} took {:?}", dur);
         ret
     }
-    #[cfg(feature="tokio")]
-    pub async fn time_async<A>(f:impl std::future::Future<Output=A>,s:&str) -> A {
-        let start = std::time::Instant::now();
-        let ret = f.await;
-        let dur = start.elapsed();
-        tracing::info!("{s} took {:?}", dur);
-        ret
-    }
     pub fn run_command<'a,A:AsRef<OsStr>,S:AsRef<OsStr>,
         Env:Iterator<Item=(S,S)>,
         Args:Iterator<Item=A>
     >(cmd:&str,args:Args,in_path:&Path,mut with_envs:Env) -> Result<std::process::Output,()> {
         let mut proc = std::process::Command::new(cmd);
-        let parent = if let Some(p) = in_path.parent() {p} else {return Err(())};
         let mut process = proc
             .args(args)
-            .current_dir(parent);
+            .current_dir(in_path)
+            .env("IMMT_ADMIN_PWD","NOPE");
         for (k,v) in with_envs {
             process = process.env(k,v);
         }
-        process = process.env("IMMT_ADMIN_PWD","NOPE");
         match process.stdout(std::process::Stdio::piped()).spawn() {
-            Ok(c) => c.wait_with_output().map_err(|_|()),
-            Err(_) => Err(()),
+            Ok(c) => c.wait_with_output().map_err(|e|{
+                tracing::error!("Error executing command {cmd}: {e}");
+                ()
+            }),
+            Err(e) => {
+                tracing::error!("Error executing command {cmd}: {e}");
+                Err(())
+            },
         }
 
     }

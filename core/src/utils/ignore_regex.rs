@@ -44,7 +44,7 @@ impl IgnoreSource {
         let p = source_path.display(); //path.to_str().unwrap().replace('/',r"\/");
         #[cfg(target_os = "windows")]
             let p = p.to_string().replace('\\', PATH_SEPARATOR);
-        let s = format!("{}{}({})", p, PATH_SEPARATOR, s);
+        let s = format!("{}({})?({})", p, PATH_SEPARATOR, s);
         Self(regex::Regex::new(&s).ok())
     }
     pub fn ignores(&self, p: &Path) -> bool {
@@ -80,5 +80,26 @@ mod serde_impl {
                 },
             ))
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::*;
+    use rstest::*;
+    use super::*;
+
+    #[rstest]
+    fn ignore_test(setup: ()) {
+        let source = Path::new("/home/jazzpirate/work/MathHub/sTeX/Documentation/source");
+        let ignore = IgnoreSource::new("*/code/*|*/tikz/*|*/tutorial/solution/*", source);
+        tracing::info!("Ignore: {ignore}");
+
+        let path = Path::new("/home/jazzpirate/work/MathHub/sTeX/Documentation/source/tutorial/solution/preamble.tex");
+
+        assert!(ignore.ignores(path));
+        let path = Path::new("/home/jazzpirate/work/MathHub/sTeX/Documentation/source/tutorial/math/assertions.en.tex");
+        assert!(!ignore.ignores(path))
     }
 }

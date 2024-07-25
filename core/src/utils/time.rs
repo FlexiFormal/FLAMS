@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::num::{NonZeroU64};
+use std::ops::Mul;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -13,7 +14,7 @@ impl Timestamp {
     pub fn since_now(&self) -> Delta {
         let t = self.0.get() as i64;
         let n = chrono::Utc::now().timestamp_millis();
-        Delta(NonZeroU64::new((n - t) as u64).unwrap())
+        Delta(NonZeroU64::new((n - t) as u64).unwrap_or(NonZeroU64::new(1).unwrap()))
     }
     pub fn since(&self,o:Timestamp) -> Delta {
         let o = o.0.get() as i64;
@@ -42,6 +43,28 @@ impl Display for Timestamp {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Delta(NonZeroU64);
+impl Delta {
+    pub fn new() -> Self {
+        Self(NonZeroU64::new(1).unwrap())
+    }
+    pub fn update_average(&mut self,scale:f64,new:Delta) {
+        let old = self.0.get() as f64;
+        if old == 1.0 {
+            self.0 = new.0;
+            return;
+        }
+        let new = new.0.get() as f64;
+        let t = (scale * old + (1.0 - scale) * new) as u64;
+        self.0 = NonZeroU64::new(t).unwrap();
+    }
+}
+impl Mul<f64> for Delta {
+    type Output = Delta;
+    fn mul(self, rhs: f64) -> Self::Output {
+        let t = (self.0.get() as f64 * rhs) as u64;
+        Delta(NonZeroU64::new(t).unwrap_or(NonZeroU64::new(1).unwrap()))
+    }
+}
 impl Display for Delta {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let duration = chrono::Duration::milliseconds(self.0.get() as i64);

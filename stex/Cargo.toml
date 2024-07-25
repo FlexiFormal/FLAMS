@@ -7,8 +7,8 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}#{path= "../../RusTeXNew/rustex",features = ["multithreaded"]}
-tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}#{path= "../../RusTeXNew/tex_engine",features = ["multithreaded"]}
+RusTeX = {workspace=true}
+tex_engine = {workspace=true}
 
 immt-api = { workspace=true }
 immt-shtml = { workspace=true }

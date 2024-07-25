@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use immt_core::building::formats::{ShortId, SourceFormatId};
 use immt_core::ontology::archives::{MathArchiveSpec, MathArchiveSpecRef, StorageSpecRef};
 use immt_core::utils::filetree::{Dir, FileChange, SourceDir, SourceDirEntry};
@@ -39,36 +39,32 @@ pub trait Storage:std::fmt::Debug {
 pub struct MathArchive {
     spec:MathArchiveSpec,
     #[cfg_attr(feature = "serde",serde(skip))]
-    source:Option<Vec<SourceDirEntry>>,
+    pub source:Option<Vec<SourceDirEntry>>,
     state: AllStates
 }
 impl MathArchive {
-    pub fn source_files<'a>(&'a self) -> Option<&'a [SourceDirEntry]> { self.source.as_deref() }
 
-    immt_core::asyncs!{!pub fn update_sources(&mut self, formats:&[SourceFormat], on_change:&ChangeSender<FileChange>) {
-        let path = self.path().join(".immt").join("ls_f.db");
+    pub fn out_dir(&self) -> PathBuf { self.path().join(".immt") }
+    pub fn source_files(&self) -> Option<&[SourceDirEntry]> { self.source.as_deref() }
+
+    pub fn update_sources(&mut self, formats:&[SourceFormat], on_change:&ChangeSender<FileChange>) {
+        let path = self.out_dir().join("ls_f.db");
         let mut dir =  if path.exists() {
-            switch!((SourceDir::parse(&path))(SourceDir::parse_async(&path))).unwrap_or_else(|_| vec![])
-        } else { switch!(
-            (std::fs::create_dir_all(path.parent().unwrap()))
-            (tokio::fs::create_dir_all(path.parent().unwrap()))
-        ); vec![] };
+            SourceDir::parse(&path).unwrap_or_else(|_| vec![])
+        } else { let _ = std::fs::create_dir_all(path.parent().unwrap()); vec![] };
         let source = self.path().join("source");
         if source.is_dir() {
             let formats = formats.iter().flat_map(|f| 
                 f.file_extensions.iter().filter(|_| self.formats().contains(&f.id)).map(|e| (*e,f.id))
             ).collect::<Vec<_>>();
-            let (b,state) = switch!(
-                (SourceDir::update(&source,&mut dir,&formats,&self.spec.ignore_source,|c| on_change.send(c)))
-                (SourceDir::update_async(&source,&mut dir,&formats,&self.spec.ignore_source,|c| on_change.send(c)))
-            );
+            let (b,state) = SourceDir::update(&source,&mut dir,&formats,&self.spec.ignore_source,|c| on_change.send(c));
             self.state = state;
             if b {
-                let _ = switch!((Dir::write_to(&dir,&path))(Dir::write_to_async(&dir,&path)));
+                let _ = Dir::write_to(&dir,&path);
             }
         }
         self.source = Some(dir)
-    }}
+    }
 }
 
 impl std::hash::Hash for MathArchive {

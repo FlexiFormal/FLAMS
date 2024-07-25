@@ -5,8 +5,13 @@ use crate::quickparse::latex::{
 use immt_api::core::utils::sourcerefs::SourceRange;
 use immt_api::core::utils::parse::{ParseSource, ParseStr};
 use std::path::Path;
+use immt_api::building::targets::BuildTarget;
+use immt_api::building::tasks::{BuildTask, Dependency, TaskRef};
+use immt_api::controller::Controller;
 use immt_api::core::narration::Language;
-use crate::tex;
+use immt_api::core::uris::archives::ArchiveId;
+use crate::{dependencies, PDFLATEX_FIRST, tex, to_file_path_ref};
+use crate::utils::file_path_from_archive;
 
 pub(crate) enum DepToken<'a> {
     ImportModule {
@@ -21,11 +26,28 @@ pub(crate) enum DepToken<'a> {
         archive: Option<&'a str>,
         filepath: &'a str,
     },
+    YieldModule(&'a str),
     Vec(Vec<DepToken<'a>>),
     Signature(Language),
 }
 
 pub(crate) enum STeXDependency<'a> {
+    ImportModule {
+        archive: Option<&'a str>,
+        module: &'a str,
+    },
+    UseModule {
+        archive: Option<&'a str>,
+        module: &'a str,
+    },
+    Inputref {
+        archive: Option<&'a str>,
+        filepath: &'a str,
+    },
+    YieldModule(&'a str),
+    Signature(Language),
+}
+pub(crate) enum STeXDep<'a> {
     ImportModule {
         archive: Option<&'a str>,
         module: &'a str,
@@ -47,7 +69,7 @@ pub(crate) struct DepParser<'a> {
     curr: Option<std::vec::IntoIter<DepToken<'a>>>,
 }
 
-pub(crate) fn get_deps<'a>(source: &'a str, path: &'a Path) -> impl Iterator<Item = STeXDependency<'a>> {
+fn parse_deps<'a>(source: &'a str, path: &'a Path) -> impl Iterator<Item = STeXDependency<'a>> {
     let parser = LaTeXParser::with_rules(
         ParseStr::new(source),
         Some(path),
@@ -85,6 +107,7 @@ impl<'a> Iterator for DepParser<'a> {
                         DepToken::UseModule { archive, module } => {
                             return Some(STeXDependency::UseModule { archive, module })
                         }
+                        DepToken::YieldModule(name) => return Some(STeXDependency::YieldModule(name)),
                         DepToken::Signature(lang) => return Some(STeXDependency::Signature(lang)),
                         DepToken::Inputref {
                             archive,
@@ -115,6 +138,9 @@ impl<'a> Iterator for DepParser<'a> {
                     }
                     Some(DepToken::Signature(lang)) => {
                         return Some(STeXDependency::Signature(lang))
+                    }
+                    Some(DepToken::YieldModule(name)) => {
+                        return Some(STeXDependency::YieldModule(name))
                     }
                     Some(DepToken::Inputref {
                         archive,
@@ -187,6 +213,7 @@ tex!(<l='a,Str=&'a str,Pa=ParseStr<'a,()>,Pos=(),T=DepToken<'a>>
                 smodule.children.push(DepToken::Signature(l))
             }
         }
+        smodule.children.push(DepToken::YieldModule(name));
         match opt.as_keyvals().get(&"meta").copied() {
             None => smodule.children.push(DepToken::ImportModule {
                 archive: Some("sTeX/meta-inf"),
@@ -197,3 +224,95 @@ tex!(<l='a,Str=&'a str,Pa=ParseStr<'a,()>,Pos=(),T=DepToken<'a>>
         }
     }{}!
 );
+
+
+pub(crate) fn get_deps(ctrl:&dyn Controller,task: &BuildTask) {
+    let source = std::fs::read_to_string(task.path());
+    if let Ok(source) = source {
+        let mut deps = Vec::new();
+        let mut yields = Vec::new();
+        for d in parse_deps(&source,task.path()) { match d {
+            STeXDependency::ImportModule {archive,module} => deps.push(STeXDep::ImportModule {archive,module}),
+            STeXDependency::UseModule {archive,module} => deps.push(STeXDep::UseModule {archive,module}),
+            STeXDependency::Inputref {archive,filepath} => deps.push(STeXDep::Inputref {archive,filepath}),
+            STeXDependency::Signature(lang) => deps.push(STeXDep::Signature(lang)),
+            STeXDependency::YieldModule(name) => yields.push(name),
+        }};
+        for d in deps {
+            match d {
+                STeXDep::ImportModule { archive, module} | STeXDep::UseModule { archive, module} => {
+                    let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
+                    if let Some(rel_path) = ctrl.archives().with_tree(|tree|
+                        file_path_from_archive(task.path(),&archive,module,tree,yields.as_slice())
+                    ) {
+                        if &archive == task.archive().id() && rel_path.as_ref() == task.rel_path() {
+                            continue
+                        }
+                        let mut rf = TaskRef {
+                            archive,rel_path,
+                            target: PDFLATEX_FIRST.id
+                        };
+                        //tracing::debug!("Adding dependency: {:?}", rf);
+                        if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                            step.push_dependency(Dependency::Physical {
+                                strict:false,
+                                task:rf.clone()
+                            })
+                        }
+                        if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
+                            rf.target = BuildTarget::CHECK.id;
+                            step.push_dependency(Dependency::Physical {
+                                strict:true,
+                                task:rf
+                            })
+                        }
+                    }
+                }
+                STeXDep::Inputref { archive, filepath } => {
+                    let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
+                    let rel_path = to_file_path_ref(filepath);
+                    if &archive == task.archive().id() && rel_path.as_ref() == task.rel_path() {
+                        continue
+                    }
+                    let rf = TaskRef {
+                        archive,rel_path,
+                        target: PDFLATEX_FIRST.id
+                    };
+                    //tracing::debug!("Adding dependency: {:?}", rf);
+                    if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                        step.push_dependency(Dependency::Physical {
+                            strict:false, task:rf
+                        })
+                    }
+                },
+                STeXDep::Signature(lang) => {
+                    let archive = task.archive().id().clone();
+                    let rel_path = task.rel_path()
+                        .rsplit_once('.')
+                        .and_then(|(a, _)| {
+                            a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
+                        })
+                        .unwrap().into();
+                    let mut rf = TaskRef {
+                        archive,rel_path,
+                        target: PDFLATEX_FIRST.id
+                    };
+                    //tracing::debug!("Adding dependency: {:?}", rf);
+                    if let Some(step) = task.find_step(PDFLATEX_FIRST.id) {
+                        step.push_dependency(Dependency::Physical {
+                            strict:false,
+                            task:rf.clone()
+                        })
+                    }
+                    if let Some(step) = task.find_step(BuildTarget::CHECK.id) {
+                        rf.target = BuildTarget::CHECK.id;
+                        step.push_dependency(Dependency::Physical {
+                            strict:true,
+                            task:rf
+                        })
+                    }
+                }
+            }
+        }
+    }
+}

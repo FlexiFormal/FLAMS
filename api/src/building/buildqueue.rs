@@ -1,5 +1,6 @@
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU8;
 use immt_core::building::buildstate::QueueMessage;
 use immt_core::building::formats::{BuildJobSpec, FormatOrTarget};
 use immt_core::prelude::DirLike;
@@ -7,13 +8,14 @@ use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::filetree::{FileLike, SourceDirEntry};
 use immt_core::utils::triomphe::Arc;
 use crate::backend::archives::{Archive, Storage};
+use crate::building::queue::Queue;
+use crate::building::tasks::TaskSpec;
 use crate::controller::Controller;
 use crate::utils::asyncs::{ChangeListener, ChangeSender};
 use crate::utils::settings::Settings;
 
-use super::queue::{Queue, TaskRef, TaskSpec};
 
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub(crate) enum Semaphore {
     Stepwise {
         sender: tokio::sync::watch::Sender<bool>,
@@ -21,8 +23,8 @@ pub(crate) enum Semaphore {
         last:Option<PathBuf>
     },
     Counting {
-        inner: tokio::sync::Semaphore,
-        num: tokio::sync::RwLock<u8>,
+        inner: std::sync::Arc<tokio::sync::Semaphore>,
+        num: Arc<parking_lot::RwLock<u8>>,
     }
 }
 
@@ -30,12 +32,14 @@ pub(crate) enum Semaphore {
 struct BuildQueueI {
     inner: parking_lot::RwLock<Vec<Queue>>,
     change:ChangeSender<QueueMessage>,
-    num_threads:Arc<Semaphore>,
+    num_threads:Semaphore,
 }
 impl BuildQueueI {
    fn do_spec<Ctrl:Controller+'static>(&self,spec:BuildJobSpec,ctrl:&Ctrl) {
         match spec {
-            BuildJobSpec::Group {..} => todo!(),
+            BuildJobSpec::Group {id,target,stale_only} => {
+                self.enqueue_group(id,target,!stale_only,ctrl)
+            },
             BuildJobSpec::Archive {id,target,stale_only} => {
                 self.enqueue_archive(id,target,!stale_only,ctrl);
             }
@@ -81,6 +85,48 @@ impl BuildQueueI {
             _ => todo!()
         }
     }
+
+    fn enqueue_group<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
+        use spliter::ParallelSpliterator;
+        use rayon::iter::*;
+        let format = match target {
+            FormatOrTarget::Format(f) => f,
+            FormatOrTarget::Target(_) => {
+                todo!()
+            }
+        };
+        let tree = ctrl.archives().get_tree();
+        let mut queue = self.inner.write();
+        let q = if queue.is_empty() {
+            queue.push(Queue::new("global".into(),self.change.clone()));
+            queue.last_mut().unwrap()
+        } else {
+            queue.last_mut().unwrap()
+            // TODO
+        };
+
+        let files = tree.archives().par_iter().filter_map(|a|
+            if a.id().as_str().starts_with(id.as_str()) {
+                match a {
+                    Archive::Physical(ma) => {
+                        ma.source.as_ref().map(|sd| {
+                            sd.dir_iter().par_split().into_par_iter().filter_map(|fd| {
+                                if let SourceDirEntry::File(f) = fd {
+                                    if f.format == format {
+                                        if all { Some(f.relative_path()) }
+                                        else { todo!() }
+                                    } else { None }
+                                } else {None}
+                            }).map(|rp| TaskSpec {
+                                archive: ma.uri(),base_path: ma.path(),rel_path: rp,target})
+                        })
+                    },
+                    _ => None
+                }
+            } else {None}
+        ).flatten();
+        q.enqueue(files,ctrl);
+    }
 }
 
 #[derive(Debug)]
@@ -99,22 +145,24 @@ impl BuildQueue {
         Self(Arc::new(BuildQueueI {
             inner: parking_lot::RwLock::new(Vec::new()),
             change:ChangeSender::new(64),
-            num_threads:Arc::new(match settings.num_threads.get()  {
+            num_threads:match settings.num_threads.get() {
                 0 => {
                     let (sender,recv) = tokio::sync::watch::channel(false);
                     Semaphore::Stepwise { sender,recv,last:None }
                 },
-                i => Semaphore::Counting {
-                    inner: tokio::sync::Semaphore::new(*i as usize),
-                    num: tokio::sync::RwLock::new(*i),
+                i => {
+                    Semaphore::Counting {
+                        inner: std::sync::Arc::new(tokio::sync::Semaphore::new(*i as usize)),
+                        num: Arc::new(parking_lot::RwLock::new(*i)),
+                    }
                 }
-            }),
+            },
         }))
     }
 
-    pub fn start(&self,id:&str) {
+    pub fn start<Ctrl:Controller+Clone+'static>(&self,id:&str,ctrl:Ctrl) {
         if let Some(q) = self.0.inner.read().iter().find(|q| q.id() == id) {
-            q.run(self.0.num_threads.clone())
+            q.run(&self.0.num_threads,ctrl)
         }
     }
 

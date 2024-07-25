@@ -78,6 +78,9 @@ pub struct ArchiveURI {
     archive: ArchiveId,
 }
 impl ArchiveURI {
+    pub fn new(dom: BaseURI, archive: ArchiveId) -> Self {
+        Self { dom, archive }
+    }
     #[inline]
     pub fn dom(&self) -> &BaseURI {
         &self.dom

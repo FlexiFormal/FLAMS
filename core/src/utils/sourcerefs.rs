@@ -19,6 +19,7 @@ impl SourcePos for () {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Default)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ByteOffset {
     pub offset:usize
 }
@@ -54,6 +55,7 @@ impl SourcePos for ByteOffset {
 
 
 #[derive(Clone,Copy,PartialEq,Eq)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SourceOffsetLineCol {
     pub line:NonZeroUsize,
     pub col:NonZeroUsize,
@@ -128,7 +130,8 @@ impl<A:SourcePos,B:SourcePos> SourcePos for (A,B) {
     }
 }
 
-#[derive(Clone,Copy,PartialEq,Eq)]
+#[derive(Clone,Copy,PartialEq,Eq,Default)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SourceRange<P:SourcePos> {
     pub start:P,
     pub end:P

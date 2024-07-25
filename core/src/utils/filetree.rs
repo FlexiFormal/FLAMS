@@ -23,7 +23,7 @@ impl FileLike<AllStates> for SourceFile {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 pub enum FSEntry<D,F:FileLike<D>> {
     Dir(Dir<D,F>),
@@ -39,7 +39,7 @@ impl<D,F:FileLike<D>> FSEntry<D,F> {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 pub struct Dir<D,F:FileLike<D>> {
     pub relative_path: String,
@@ -391,6 +391,29 @@ impl<'a,D,F:FileLike<D>> DirLike<D,F> for &'a [FSEntry<D,F>] {
             ls = match elem {
                 FSEntry::Dir(Dir { children, .. }) => children.as_slice(),
                 _ => &[]
+            }
+        }
+        ret
+    }
+
+    fn dir_iter<'b>(&'b self) -> DirIter<'b,D,F> {
+        DirIter { current: self.iter(), stack: Vec::new() }
+    }
+}
+
+impl<'a,D,F:FileLike<D>> DirLike<D,F> for Vec<FSEntry<D,F>> {
+    fn find_entry<S:AsRef<str>>(&self,s:S) -> Option<&FSEntry<D,F>> {
+        let _s = s.as_ref();
+        let mut ls = self;
+        let mut ret = None;
+        let mut curr = None;
+        for step in _s.split('/') {
+            if curr.is_none() { curr = Some(step.to_string())} else { curr = Some(format!("{}/{}",curr.as_deref().unwrap(),step)) }
+            let elem = ls.iter().find(|e| e.relative_path() == curr.as_deref().unwrap())?;
+            ret = Some(elem);
+            ls = match elem {
+                FSEntry::Dir(Dir { children, .. }) => children,
+                _ => return ret
             }
         }
         ret

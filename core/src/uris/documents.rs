@@ -9,6 +9,11 @@ pub struct DocumentURI {
     path: Name,
     name: Name
 }
+impl DocumentURI {
+    pub fn new<S1:Into<Name>,S2:Into<Name>>(archive: ArchiveURI, path: S1, name: S2) -> Self {
+        Self { archive, path:path.into(), name:name.into() }
+    }
+}
 impl Display for DocumentURI {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

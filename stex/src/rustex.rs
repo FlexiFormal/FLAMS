@@ -123,18 +123,23 @@ impl EngineBase {
 
 pub struct RusTeX(parking_lot::RwLock<EngineBase>);
 impl RusTeX {
-    pub fn initialize() { EngineBase::get(|_| ()); }
-    pub fn run(&self,file:&Path) -> Result<String,String> {
-        self.run_with_envs(file,std::iter::once(("IMMT_ADMIN_PWD".to_string(),"NOPE".to_string())))
+    pub fn get() -> Self {
+        Self(ENGINE_BASE.lock().as_ref().unwrap().clone().into())
     }
-    pub fn run_with_envs<I:IntoIterator<Item=(String,String)>>(&self,file:&Path,envs:I) -> Result<String,String> {
+    pub fn initialize() { EngineBase::get(|_| ()); }
+    pub fn run(&self,file:&Path,memorize:bool) -> Result<String,String> {
+        self.run_with_envs(file,memorize,std::iter::once(("IMMT_ADMIN_PWD".to_string(),"NOPE".to_string())))
+    }
+    pub fn run_with_envs<I:IntoIterator<Item=(String,String)>>(&self,file:&Path,memorize:bool,envs:I) -> Result<String,String> {
         let mut engine = self.0.read().clone().into_engine(envs);
         let res = engine.run(file.to_str().unwrap(), false);
         if let Some(e) = res.error {
             Err(e.to_string())
         } else {
-            let mut base = self.0.write();
-            give_back(engine,&mut base);
+            if memorize {
+                let mut base = self.0.write();
+                give_back(engine, &mut base);
+            }
             Ok(res.out)
         }
     }

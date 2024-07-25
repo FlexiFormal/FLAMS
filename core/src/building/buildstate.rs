@@ -2,6 +2,7 @@ use std::path::Path;
 use crate::building::formats::{FormatOrTarget, ShortId, SourceFormatId};
 use crate::uris::archives::ArchiveId;
 use crate::utils::filetree::FileChange;
+use crate::utils::time::Delta;
 use crate::utils::VecMap;
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
@@ -131,7 +132,13 @@ impl BuildState {
 pub struct QueueEntry {
     pub archive:ArchiveId,
     pub rel_path:String,
-    pub target:FormatOrTarget
+    pub target:FormatOrTarget,
+    pub step:(u8,u8)
+}
+impl PartialEq for QueueEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.archive == other.archive && self.rel_path == other.rel_path && self.target == other.target
+    }
 }
 impl QueueEntry {
     pub fn id(&self) -> String {
@@ -142,6 +149,10 @@ impl QueueEntry {
 #[derive(Debug,Clone)]
 #[cfg_attr(feature = "serde",derive(serde::Serialize,serde::Deserialize))]
 pub enum QueueMessage {
-    Ls{id:String,entries:Vec<QueueEntry>},
-    Start {id:String,queue:Vec<QueueEntry>,blocked:Vec<QueueEntry>,failed:Vec<QueueEntry>,done:Vec<QueueEntry>}
+    Idle {id:String,entries:Vec<QueueEntry>},
+    Started {id:String,queue:Vec<QueueEntry>,blocked:Vec<QueueEntry>,failed:Vec<QueueEntry>,done:Vec<QueueEntry>,eta:Delta},
+    TaskStarted{id:String,entry:QueueEntry,eta:Delta},
+    TaskDoneRequeued{id:String,entry:QueueEntry,index:usize,eta:Delta},
+    TaskDoneFinished{id:String,entry:QueueEntry,eta:Delta},
+    TaskFailed{id:String,entry:QueueEntry,eta:Delta}
 }

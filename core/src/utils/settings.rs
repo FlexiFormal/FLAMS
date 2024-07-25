@@ -12,7 +12,7 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde",serde(default))]
     pub log_dir:Option<PathBuf>,
     #[cfg_attr(feature = "serde",serde(default))]
-    pub build_queue:BuildQueueSettings
+    pub buildqueue:BuildQueueSettings
 }
 
 #[derive(Debug,Default,Clone)]

@@ -56,7 +56,8 @@ pub(crate) fn tracing(logdir:&Path,level: tracing::Level,rotation: tracing_appen
                 //.map_fmt_fields(|f| )
             ,
         )
-        .with(logger.clone().with_filter(LevelFilter::from(level)));
+        .with(logger.clone().with_filter(LevelFilter::from(level)))
+        .with(tracing_error::ErrorLayer::default());
     tracing::subscriber::set_global_default(subscriber).unwrap();
     logger
 }
