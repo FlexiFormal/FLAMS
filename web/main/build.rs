@@ -3,7 +3,7 @@ fn main() {
     if let Some(s) = std::env::var("IMMT_BUILD_GRAPHS").ok() {
         if s.eq_ignore_ascii_case("true") {} else { return }
     } else { return }
-    println!("cargo::rerun-if-changed=../graphs");
+    //println!("cargo::rerun-if-changed=../graphs");
     std::process::Command::new("trunk")
         .env("CARGO_TARGET_DIR","../../target")
         .env("RUSTFLAGS","--cfg=web_sys_unstable_apis")

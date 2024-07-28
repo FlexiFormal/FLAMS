@@ -172,7 +172,7 @@ fn pdflatex<S:AsRef<std::ffi::OsStr>,I:Iterator<Item=(S,S)>>(path:&Path,mut envs
         envs
     )?;
     if !out.status.success() {
-        let out = std::str::from_utf8(out.stdout.as_slice()).unwrap();
+        let out = String::from_utf8_lossy(out.stdout.as_slice());
         let err = out
             .find("Fatal error")
             .map(|i| &out[i..])
