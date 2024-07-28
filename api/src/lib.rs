@@ -67,13 +67,7 @@ pub mod utils {
 
 pub mod core { pub use immt_core::*; }
 
-#[cfg(feature = "rayon")]
-pub mod par {
-    pub use spliter::ParallelSpliterator;
-    pub use rayon::iter::{IntoParallelIterator,ParallelIterator};
-}
-
-pub type HMap<A,B> = ahash::HashMap<A,B>;
+pub type HMap<A,B> = rustc_hash::FxHashMap<A,B>;
 
 lazy_static! {
     pub static ref MATHHUB_PATHS: Box<[PathBuf]> = mathhubs().into();

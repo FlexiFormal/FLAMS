@@ -1,15 +1,6 @@
 use std::str::FromStr;
-use immt_api::core::content::{ArgSpec, ArgType, ArrayVec, Constant, ContentElement, Module, Notation, Term, TermOrList, VarOrSym};
-use immt_api::core::narration::{DocumentElement, DocumentModule, Language, LogicalParagraph, Section, SectionLevel, StatementKind};
+use immt_api::core::content::{ArgType, ArrayVec, Term, TermOrList, VarOrSym};
 use immt_api::core::uris::ContentURI;
-use immt_api::core::uris::documents::DocumentURI;
-use immt_api::core::uris::modules::ModuleURI;
-use immt_api::core::uris::symbols::SymbolURI;
-use immt_api::core::utils::sourcerefs::{ByteOffset, SourceRange};
-use immt_api::core::utils::parse::ParseSource;
-use immt_api::core::utils::VecMap;
-//use crate::parsing::OpenNode;
-use crate::parsing::parser::HTMLParser;
 
 #[derive(Debug)]
 pub(crate) enum Arg {
@@ -27,11 +18,14 @@ impl Arg {
 impl FromStr for Arg {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        //println!("HERE: {s}");
         if s.len() == 1 {s.parse().map(Self::Ib).map_err(|_| ())}
-        else if s.len() == 2 {
+        else if s.len() > 1 {
             let f = if s.as_bytes()[0] > 47 {s.as_bytes()[0] - 48} else { return Err(())};
-            let s = if s.as_bytes()[1] > 47 {s.as_bytes()[1] - 48} else { return Err(())};
-            Ok(Self::AB(f,s))
+            let s = if let Ok(s) = (&s[1..]).parse() {s} else { return Err(())};
+            let r = Self::AB(f,s);
+            //println!(" = {r:?}");
+            Ok(r)
         } else {Err(())}
     }
 }
@@ -61,20 +55,23 @@ pub(crate) enum OpenTerm {
 }
 impl OpenTerm {
     pub fn close(self) -> Term {
+        //println!("  - Closing term {self:?}");
         match self {
             Self::Symref {uri,..} => Term::OMS(uri),
             Self::OMV {name,..} => Term::OMV(name),
             Self::OMA { head: uri,args,..} => Term::OMA {
                 head:uri,args:args.into_iter().map(|e| {
                     if let Some(e) = e {e} else {
-                        todo!()
+                        println!("Waaah!");
+                        (TermOrList::Term(Term::OMV("MISSING".to_string())),ArgType::Normal)
                     }
                 }).collect()
             },
             Self::OMBIND { head: uri,args,..} => Term::OMBIND {
                 head:uri,args:args.into_iter().map(|e| {
                     if let Some(e) = e {e} else {
-                        todo!()
+                        println!("Waaah!");
+                        (TermOrList::Term(Term::OMV("MISSING".to_string())),ArgType::Normal)
                     }
                 }).collect()
             },

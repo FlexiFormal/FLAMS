@@ -8,9 +8,9 @@ fn main() {
         .env("CARGO_TARGET_DIR","../../target")
         .env("RUSTFLAGS","--cfg=web_sys_unstable_apis")
         .current_dir("../graphs")
-        .args(vec!("build","--features=client","--release")).status().expect("trunk build failed!");
+        .args(vec!["build","--features=client","--release"]).status().expect("trunk build failed!");
     let target = Path::new("assets").join("graphs");
-    std::fs::create_dir_all(&target).unwrap();
+    let _ = std::fs::create_dir_all(&target);
     let mut replaces = vec![
         ("manifest.json".to_string(),"graph_viewer/manifest.json"),
         ("sw.js".to_string(),"graph_viewer/sw.js"),
@@ -18,7 +18,7 @@ fn main() {
     ];
     let mut js = String::new();
     let mut html = String::new();
-    for entry in std::fs::read_dir(Path::new("../graphs/dist")).unwrap().into_iter() {
+    for entry in std::fs::read_dir(Path::new("../graphs/dist")).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         let mut file_name = path.file_name().unwrap().to_str().unwrap();

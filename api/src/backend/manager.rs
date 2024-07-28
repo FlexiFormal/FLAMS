@@ -14,6 +14,7 @@ use crate::backend::archives::{Archive, MathArchive, Storage};
 use crate::building::targets::SourceFormat;
 use crate::utils::asyncs::{ChangeSender, lock};
 use immt_core::building::buildstate::{BuildState, AllStates};
+use immt_core::narration::{CSS, Document, HTMLDocSpec};
 use immt_core::ontology::rdf::terms::Quad;
 use immt_core::ulo;
 use immt_core::utils::filetree::FileChange;
@@ -78,6 +79,42 @@ impl ArchiveManager {
                 f(Some(a))
             } else {f(None)}
         })
+    }
+
+    pub fn get_document<S:AsRef<str>,P:AsRef<str>>(&self,id:S,rel_path:P) -> Option<Document> {
+        self.find(id, |a| match a {
+            Some(Archive::Physical(ma)) => {
+                let p = ma.out_dir().join(rel_path.as_ref()).join("index.nomd");
+                if p.exists() {
+                    HTMLDocSpec::get_doc(&p)
+                } else { None }
+            }
+            _ => None
+        })
+    }
+
+    pub async fn get_document_async<S:AsRef<str>,P:AsRef<str>>(&self,id:S,rel_path:P) -> Option<Document> {
+        let p = self.find(id, |a| match a {
+            Some(Archive::Physical(ma)) => {
+                Some(ma.out_dir().join(rel_path.as_ref()).join("index.nomd"))
+            }
+            _ => None
+        })?;
+        if p.exists() {
+            HTMLDocSpec::get_doc_async(&p).await
+        } else { None }
+    }
+
+    pub async fn get_html_async<S:AsRef<str>,P:AsRef<str>>(&self,id:S,rel_path:P) -> Option<(Vec<CSS>,String)> {
+        let p = self.find(id, |a| match a {
+            Some(Archive::Physical(ma)) => {
+                Some(ma.out_dir().join(rel_path.as_ref()).join("index.nomd"))
+            }
+            _ => None
+        })?;
+        if p.exists() {
+            HTMLDocSpec::get_css_and_body_async(&p).await
+        } else { None }
     }
 }
 

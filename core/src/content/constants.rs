@@ -53,6 +53,7 @@ impl FromStr for ArgSpec {
         let mut ret = ArrayVec::new();
         for c in s.bytes() {
             ret.push(match c {
+                b'0' => return Ok(ArgSpec(ArrayVec::new())),
                 b'i' => ArgType::Normal,
                 b'a' => ArgType::Sequence,
                 b'b' => ArgType::Binding,

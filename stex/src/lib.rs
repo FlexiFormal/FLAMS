@@ -88,6 +88,7 @@ impl FormatExtension for STeXExtension {
     fn build(&self, ctrl:&dyn Controller,task: &BuildTask, target: BuildTargetId, index: u8) -> bool {
         match target {
             s if s == PDFLATEX_FIRST.id => {
+                clean(task.path());
                 let ret = pdflatex_and_bib(task.path(),[("STEX_WRITESMS","true")].into_iter()).is_ok();
                 if let Some(step) = task.find_step(target) {
                     step.set_log_path(ret, ctrl, task, &task.path().with_extension("log"));
@@ -104,7 +105,7 @@ impl FormatExtension for STeXExtension {
                 return ret
             }
             s if s == RUSTEX.id => {
-                return match RusTeX::get().run_with_envs(task.path(), false, [("STEX_USESMS".to_string(), "true".to_string())].into_iter()) {
+                let ret = match RusTeX::get().run_with_envs(task.path(), false, [("STEX_USESMS".to_string(), "true".to_string())].into_iter()) {
                     Ok(s) => {
                         if let Some(step) = task.find_step(target) {
                             step.set_artifact_str(ctrl, task, SHTML_FORMAT ,&s);
@@ -115,10 +116,27 @@ impl FormatExtension for STeXExtension {
                         tracing::error!("RusTeX failed: {} ({})", s,task.path().display());
                         false
                     }
-                }
+                };
+                clean(task.path());
+                return ret
             },
             _ => unreachable!()
         }
+    }
+}
+
+fn clean(path:&Path) {
+    const EXTENSIONS: &[&str] = &["aux", "log", "bbl", "toc", "upa", "upb", "blg", "out", "idx", "ilg", "ind","mw","nav","snm","vrb","sms","sms2","hd","glo","bcf","blg","fdb_latexmk","fls","sref","run.xml","synctex.gz"];
+    for ext in EXTENSIONS {
+        let p = path.with_extension(ext);
+        if p.exists() {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+    // remove "x-blx.bib"
+    let p = path.with_file_name(path.file_stem().unwrap().to_str().unwrap().to_string() + "-blx.bib");
+    if p.exists() {
+        let _ = std::fs::remove_file(p);
     }
 }
 

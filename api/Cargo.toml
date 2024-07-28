@@ -23,7 +23,7 @@ oxigraph = ["dep:oxigraph"]
 [dependencies]
 immt-core = {workspace=true,features=["serde","async","rayon"]}
 
-ahash = "0.8"
+rustc-hash = "2"
 simple-home-dir = "0.3"
 lazy_static = "1.4"
 serde = { version = "1", features = ["derive"] }

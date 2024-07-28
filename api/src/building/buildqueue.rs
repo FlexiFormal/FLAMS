@@ -43,9 +43,61 @@ impl BuildQueueI {
             BuildJobSpec::Archive {id,target,stale_only} => {
                 self.enqueue_archive(id,target,!stale_only,ctrl);
             }
-            BuildJobSpec::Path {..} => todo!(),
+            BuildJobSpec::Path {id, rel_path, target,
+                stale_only} =>
+            self.enqueue_path(id,target,&rel_path,!stale_only,ctrl),
         }
    }
+
+    fn enqueue_path<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,rel_path:&str,all:bool,ctrl:&Ctrl) {
+        use spliter::ParallelSpliterator;
+        use rayon::iter::*;
+        let format = match target {
+            FormatOrTarget::Format(f) => f,
+            FormatOrTarget::Target(_) => {
+                todo!()
+            }
+        };
+        let tree = ctrl.archives().get_tree();
+        let mut queue = self.inner.write();
+        let q = if queue.is_empty() {
+            queue.push(Queue::new("global".into(),self.change.clone()));
+            queue.last_mut().unwrap()
+        } else {
+            queue.last_mut().unwrap()
+            // TODO
+        };
+
+        match tree.find_archive(&id) {
+            Some(Archive::Physical(ma)) => {
+                if let Some(sd) = ma.source_files() {
+                    if let Some(dirorfile) = sd.find_entry(rel_path) {
+                         match dirorfile {
+                            SourceDirEntry::File(f) => {
+                                let spec = TaskSpec {
+                                    archive: ma.uri(),base_path: ma.path(),rel_path: rel_path.into(),target};
+                                q.enqueue(std::iter::once(spec).par_bridge().into_par_iter(),ctrl);
+                            },
+                            SourceDirEntry::Dir(d) => {
+                                let files = d.children.dir_iter().par_split().into_par_iter().filter_map(|fd| {
+                                    if let SourceDirEntry::File(f) = fd {
+                                        if f.format == format {
+                                            if all { Some(f.relative_path()) }
+                                            else { todo!() }
+                                        } else { None }
+                                    } else {None}
+                                }).map(|rp| TaskSpec {
+                                    archive: ma.uri(),base_path: ma.path(),rel_path: rp,target});
+                                q.enqueue(files,ctrl);
+                            }
+                        }
+                    }
+                }
+            }
+            None => (),
+            _ => todo!()
+        }
+    }
 
     fn enqueue_archive<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
         use spliter::ParallelSpliterator;

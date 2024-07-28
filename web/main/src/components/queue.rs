@@ -18,7 +18,7 @@ use crate::utils::WebSocket;
     input=server_fn::codec::GetUrl,
     output=server_fn::codec::Json
 )]
-pub async fn enqueue(archive:Option<String>,group:Option<String>,target:SourceFormatId,path:Option<String>,all:bool) -> Result<(),ServerFnError<IMMTError>> {
+pub async fn enqueue(archive:Option<ArchiveId>,group:Option<ArchiveId>,target:SourceFormatId,path:Option<String>,all:bool) -> Result<(),ServerFnError<IMMTError>> {
     use immt_controller::{controller,ControllerTrait};
     match login_status().await? {
         LoginState::Admin => {
@@ -27,16 +27,13 @@ pub async fn enqueue(archive:Option<String>,group:Option<String>,target:SourceFo
                 (None,Some(_),Some(_)) | (None,None,_) => {
                     return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into()))
                 },
-                (Some(a),_,Some(p)) => {
-                    let id : ArchiveId = a.parse().map_err(|_| IMMTError::InvalidArgument("archive".to_string()))?;
+                (Some(id),_,Some(p)) => {
                     BuildJobSpec::Path {id,rel_path:p.into(),target:FormatOrTarget::Format(target),stale_only:!all}
                 },
-                (Some(a),_,_) => {
-                    let id : ArchiveId = a.parse().map_err(|_| IMMTError::InvalidArgument("archive".to_string()))?;
+                (Some(id),_,_) => {
                     BuildJobSpec::Archive {id,target:FormatOrTarget::Format(target),stale_only:!all}
                 },
-                (_,Some(a),_) => {
-                    let id : ArchiveId = a.parse().map_err(|_| IMMTError::InvalidArgument("group".to_string()))?;
+                (_,Some(id),_) => {
                     BuildJobSpec::Group {id,target:FormatOrTarget::Format(target),stale_only:!all}
                 }
             };

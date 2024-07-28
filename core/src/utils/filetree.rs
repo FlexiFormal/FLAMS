@@ -9,7 +9,7 @@ pub trait FileLike<Data> {
     fn relative_path(&self) -> &str;
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 pub struct SourceFile {
     pub relative_path: String,

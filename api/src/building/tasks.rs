@@ -33,6 +33,7 @@ impl BuildStep {
         data.requires.push(dependency);
     }
     pub fn set_narrative(&self, ctrl:&dyn Controller, task:&BuildTask,doc:HTMLDocSpec) {
+        //println!("{}",doc.doc);
         ctrl.archives().with_archives(|a|
             if let Some(ma) = a.iter().find_map(|a| match a {
                 Archive::Physical(ma) if ma.id() == task.archive().id() => Some(ma),
@@ -41,9 +42,7 @@ impl BuildStep {
                 let p = task.rel_path().split('/').fold(ma.out_dir(),|p,s| p.join(s));
                 let _ = std::fs::create_dir_all(&p);
                 let out = p.join("index.nomd");
-                if let Ok(mut f) = std::fs::File::create(out) {
-                    let _ = bincode::serde::encode_into_std_write(doc,&mut f,bincode::config::standard());
-                } else {todo!()}
+                doc.write(&out);
             });
     }
     pub fn set_content(&self, ctrl:&dyn Controller, task:&BuildTask,mods:Vec<Module>) {

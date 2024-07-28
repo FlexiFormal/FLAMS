@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::cmp::PartialEq;
 use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
@@ -68,6 +69,7 @@ struct QueueI {
 
 #[derive(Debug,Clone)]
 pub struct Queue(triomphe::Arc<QueueI>);
+
 
 impl Queue {
     pub fn id(&self) -> &str { &self.0.id }
@@ -202,7 +204,7 @@ impl Queue {
         let span = tracing::info_span!(target:"buildqueue","Sorting");
         let _span = span.enter();
         let tasks = self.0.tasks.read();
-        let mut tasks = tasks.values().flatten().cloned().collect::<Vec<_>>();
+        let mut tasks = tasks.values().flatten().filter(|t| &*t.0.status.lock() != &TaskState::Done).cloned().collect::<Vec<_>>();
         let mut inner = self.0.inner.write();
         let QueueInner {ref mut blocked, ref mut done, ref mut queue,..} = *inner;
         let mut weak = true;

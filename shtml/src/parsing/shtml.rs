@@ -6,7 +6,7 @@ use kuchikiki::NodeRef;
 use immt_api::backend::archives::{Archive, Storage};
 use immt_api::backend::manager::ArchiveManager;
 use immt_api::core::content::{ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Notation, Term, TermOrList, VarOrSym};
-use immt_api::core::narration::{DocumentElement, DocumentMathStructure, DocumentModule, DocumentReference, Language, LogicalParagraph, Problem, Proof, Section, SectionLevel, StatementKind};
+use immt_api::core::narration::{DocumentElement, DocumentMathStructure, DocumentModule, DocumentReference, Language, LogicalParagraph, Problem, Section, SectionLevel, StatementKind};
 use immt_api::core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_api::core::uris::base::BaseURI;
 use immt_api::core::uris::documents::DocumentURI;
@@ -87,17 +87,17 @@ impl<'a> HTMLParser<'a> {
 macro_rules! tags {
     (@open $i:ident $parser:ident +) => { $i += 1 };
     (@open $i:ident $parser:ident PAR:$k:ident) => { {
-        let fors = get!("shtml:fors",s =>
+        let fors = get!(!"shtml:fors",s =>
             s.split(",").map(|s| {
                 if let Some(uri) = get_sym_uri(s.trim(),$parser.backend) {uri} else {
                     todo!()
                 }
             }).collect()
         ).unwrap_or_default();
-        let inline = get!("shtml:inline",c => c.eq_ignore_ascii_case("true")).unwrap_or(false);
-        let styles:Vec<String> = get!("shtml:styles",s => s.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
+        let inline = get!(!"shtml:inline",c => c.eq_ignore_ascii_case("true")).unwrap_or(false);
+        let styles:Vec<String> = get!(!"shtml:styles",s => s.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
         let id = get!(ID);
-        add!(- OpenElem::LogicalParagraph {
+        add!(OpenElem::LogicalParagraph {
             id,styles,inline,fors,children:Vec::new(),title:None,kind:StatementKind::$k,
             terms:VecMap::new()
         })
@@ -106,7 +106,7 @@ macro_rules! tags {
     (@close !) => { true };
     (@close $($close:tt)*) => { {$($close)*} };
     ($v:ident,$node:ident,$slf:ident,$attrs:ident,$i:ident,$rest:ident,
-        $($tag:ident$(($($n:ident:$t:ty),+))? = $shtml:literal : $weight:literal {$($open:tt)*} => {$($close:tt)*} ;)*
+        $($tag:ident$(($($n:ident:$t:ty),+))? = $shtml:literal : $weight:literal {$($open:tt)*} => {$($close:tt)*} $(=> {$on_open:expr})? ;)*
     ) => {
         #[derive(Debug,Copy,Clone)]
         enum SHTMLTag {
@@ -136,12 +136,7 @@ macro_rules! tags {
                     (@common $e:expr) => {
                         {
                             let r = $e;
-                            match &r {
-                                OpenElem::TopLevelTerm(_) | OpenElem::Conclusion{..} | OpenElem::Type{..} | OpenElem::Definiens{..} | OpenElem::Rule {..} => $slf.in_term = true,
-                                OpenElem::Notation {..} | OpenElem::VarNotation {..} => $slf.in_notation = true,
-                                _ => ()
-                            }
-                            //println!("Adding {:?}",r);
+                            //println!(" - Adding {:?}",r);
                             r
                         }
                     };
@@ -194,8 +189,8 @@ macro_rules! tags {
                         }
                         break
                     };
-                    //println!("Here: {k:?}");
                     let $v = a.value.as_ref();
+                    //println!("Here: {k:?} = {}",$v);
                     match k {
                         $( SHTMLTag::$tag => tags!(@open $i $slf $($open)* ) ),*
                     }
@@ -204,6 +199,7 @@ macro_rules! tags {
             /// returns whether to keep the node (or delete it)
             pub(crate) fn close(&mut self,$node:&NodeWithSource,elem:OpenElem, $rest:&mut OpenElems) -> bool {
                 let mut $slf = self;
+                //println!(" - Closing {elem:?}");
                 match elem {
                     OpenElem::LogicalParagraph {inline,kind,fors,styles,children,title,id,terms} => {
                         $slf.add_doc($node,DocumentElement::Paragraph(LogicalParagraph {
@@ -213,6 +209,7 @@ macro_rules! tags {
                         true
                     }
                     OpenElem::VarNotation {name,id,precedence,argprecs,inner} => {
+                        $slf.in_notation = false;
                         $slf.add_doc($node,DocumentElement::VarNotation {
                             name,id,precedence,argprecs,inner:None
                         });
@@ -227,6 +224,7 @@ macro_rules! tags {
                         true
                     }
                     OpenElem::TopLevelTerm(t) => {
+                        $slf.in_term = false;
                         $slf.add_doc($node,DocumentElement::TopTerm(t.close()));
                         true
                     }
@@ -273,6 +271,21 @@ macro_rules! tags {
             $(
                 $tag$({$($n:$t),+})?
             ),*
+        }
+        impl OpenElem {
+            pub(crate) fn on_add(&mut self,$slf:&mut HTMLParser) {
+                let $node = self;
+                match $node {
+                    OpenElem::TopLevelTerm(..) => {
+                        $slf.in_term = true;
+                    }
+                    OpenElem::VarNotation{..} => {
+                        $slf.in_notation = true;
+                    }
+                    $( OpenElem::$tag$({$($n),+})? => {$( $on_open = true )?} )*
+                    _ => ()
+                }
+            }
         }
     }
 }
@@ -350,7 +363,7 @@ tags!{v,node,parser,attrs,i,rest,
             uri, elements: content_children,macroname
         };
         parser.add_content(node,ContentElement::MathStructure(m));
-        false
+        true
     };
 
     Section(level:SectionLevel,title:Option<(String,SourceRange<ByteOffset>)>,children:Vec<DocumentElement>,id:String) = "shtml:section" : 10 {
@@ -505,7 +518,7 @@ tags!{v,node,parser,attrs,i,rest,
         let role = get!("shtml:role",s => s.split(',').map(|s| s.trim().to_string()).collect());
         let assoctype = get!("shtml:assoctype",s => s.trim().parse().ok()).flatten();
         let arity = get!("shtml:args",s =>
-            if let Ok(a) = s.parse() { a } else { todo!()}).unwrap_or_default();
+            if let Ok(a) = s.parse() { a } else { todo!("args {s}")}).unwrap_or_default();
         let reordering = get!("shtml:reoderargs",s => s.to_string());
         let macroname = get!("shtml:macroname",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
         add!(- OpenElem::Symdecl { uri, arity, macroname, role,tp:None,df:None, assoctype, reordering });
@@ -587,18 +600,20 @@ tags!{v,node,parser,attrs,i,rest,
             }
         })
     } => {
+        parser.in_notation = false;
         parser.add_content(node,ContentElement::Notation(Notation {
             uri,id,precedence,argprecs,range:node.data.borrow().range
         }));
         false
-    };
+    } => { parser.in_notation };
 
     Definiendum(uri:SymbolURI) = "shtml:definiendum": 40 {
-        let uri = if let Some(uri) = get_sym_uri(v,parser.backend) {uri} else {
-            todo!();
-        };
-        attrs.get_mut(i).unwrap().value = uri.to_string().into();
-        add!(OpenElem::Definiendum { uri })
+        if let Some(uri) = get_sym_uri(v,parser.backend) {
+            attrs.get_mut(i).unwrap().value = uri.to_string().into();
+            add!(OpenElem::Definiendum { uri })
+        } else {
+            i += 1
+        }
     } => {
         iterate!(@F node(uri:&SymbolURI=&uri),
             e => if let OpenElem::LogicalParagraph { fors,kind,styles, .. } = e {
@@ -623,14 +638,16 @@ tags!{v,node,parser,attrs,i,rest,
             };
             todo!()
         );
+        parser.in_term = false;
         true
-    };
+    } => { parser.in_term };
 
-    Conclusion(uri:SymbolURI) = "shtml:conclusion": 50 {
+    Conclusion(uri:SymbolURI,in_term:bool) = "shtml:conclusion": 50 {
         let uri = if let Some(uri) = get_sym_uri(v,parser.backend) {uri} else {
             todo!();
         };
-        add!(- OpenElem::Conclusion{uri})
+        let it = parser.in_term;
+        add!(- OpenElem::Conclusion{uri,in_term:it})
     } => {
         let t = node.as_term(Some(rest));
         iterate!(@F node(uri:SymbolURI=uri,t:Term=t),
@@ -639,13 +656,15 @@ tags!{v,node,parser,attrs,i,rest,
             };
             todo!()
         );
+        parser.in_term = in_term;
         true
-    };
-    Definiens(uri:Option<SymbolURI>) = "shtml:definiens": 50 {
+    } => { parser.in_term };
+    Definiens(uri:Option<SymbolURI>,in_term:bool) = "shtml:definiens": 50 {
         let uri = if !v.is_empty() {if let Some(uri) = get_sym_uri(v,parser.backend) {Some(uri)} else {
             todo!();
         }} else {None};
-        add!(- OpenElem::Definiens{uri})
+        let it = parser.in_term;
+        add!(- OpenElem::Definiens{uri,in_term:it})
     } => {
         let t = node.as_term(Some(rest));
         iterate!(@F node(uri:Option<SymbolURI>=uri,t:Term=t),
@@ -663,14 +682,15 @@ tags!{v,node,parser,attrs,i,rest,
             };
             println!("TODO: Definiens is fishy")
         );
+        parser.in_term = in_term;
         true
-    };
+    } => { parser.in_term };
     Rule(id:String,args:ArrayVec<Option<(Term,ArgType)>,9>) = "shtml:rule": 50 { // TODO
         let id = v.to_string();
         add!(- OpenElem::Rule {
             id,args:ArrayVec::new()
         })
-    } => {false};
+    } => {parser.in_term = false;false} => { parser.in_term };
 
     Term(tm:OpenTerm) = "shtml:term": 100 {
         if parser.in_notation {
@@ -684,7 +704,8 @@ tags!{v,node,parser,attrs,i,rest,
                 if let Some(uri) = get_sym_uri(s,parser.backend) {VarOrSym::S(uri.into())}
                 else if let Some(uri) = get_mod_uri(s,parser.backend) {VarOrSym::S(uri.into())}
                 else if !s.contains('?') {VarOrSym::V(s.to_string())} else {
-                    todo!("HERE: {s}")
+                    println!("HERE: {s}");
+                    VarOrSym::V("ERROR".to_string())
                 }
             ).unwrap_or_else(|| {
                 todo!()
@@ -759,6 +780,7 @@ tags!{v,node,parser,attrs,i,rest,
         }
     } => {
         let t = node.as_term(Some(rest));
+        //println!("  = {t:?}");
         for e in rest.iter_mut() {
             if let OpenElem::Term{tm:OpenTerm::OMA{args,..}|OpenTerm::OMBIND{args,..}}
             | OpenElem::TopLevelTerm(OpenTerm::OMA{args,..}|OpenTerm::OMBIND{args,..})= e {
@@ -779,10 +801,15 @@ tags!{v,node,parser,attrs,i,rest,
         iterate!(@F node(s:&HTMLParser=parser,t:Term=t,arg:Arg=arg,mode:ArgType=mode),
             e => if let OpenElem::Term{tm:OpenTerm::OMA{args,..}|OpenTerm::OMBIND{args,..}}
             | OpenElem::TopLevelTerm(OpenTerm::OMA{args,..}|OpenTerm::OMBIND{args,..})= e {
-                let ext = (args.len()..arg.index() as usize).map(|_| None);
-                args.extend(ext);
+                let len = args.len();
+                if arg.index() as usize > len {
+                    //println!("HERE: {arg:?}");
+                    args.extend((len..arg.index() as usize).map(|_| None));
+                }
                 match *args.get_mut((arg.index() - 1) as usize).unwrap() {
                     Some((TermOrList::List(ref mut ls),_)) => ls.push(t),
+                    ref mut o@None if matches!(arg,Arg::AB(..)) =>
+                        *o = Some((TermOrList::List(vec![t]),mode)),
                     ref mut o => *o = Some((TermOrList::Term(t),mode))
                 }
                 return
@@ -790,11 +817,11 @@ tags!{v,node,parser,attrs,i,rest,
                 let ext = (args.len()..arg.index() as usize).map(|_| None);
                 args.extend(ext);
                 *args.get_mut((arg.index() - 1) as usize).unwrap() = Some((t,mode));
+                // sequences
                 return
             };
             {
                 println!("OOOOOF\n\n{}",s.document.node.to_string());
-                todo!()
             }
         );
         true
@@ -893,6 +920,9 @@ tags!{v,node,parser,attrs,i,rest,
 
 
     // --- TODO -------------
+    SRef = "shtml:sref" : 249 {+} => {!};
+    SRefIn = "shtml:srefin" : 249 {+} => {!};
+    Framenumber = "shtml:framenumber" : 249 {+} => {!};
     SkipSection = "shtml:skipsection": 40 {+} => {!};
     Answerclass = "shtml:answerclass": 40 {+} => {!};
     AnswerclassPts = "shtml:answerclass-pts": 40 {+} => {!};
@@ -904,84 +934,34 @@ tags!{v,node,parser,attrs,i,rest,
     ProblemMCCSolution = "shtml:mcc-solution": 40 {+} => {!};
     ProblemSCC = "shtml:scc": 40 {+} => {!};
     ProblemSCCSolution = "shtml:scc-solution": 40 {+} => {!};
-    ReturnType = "shtml:returntype": 50 { // TODO
-        println!("TODO: returntype");
-        add!(- OpenElem::Type)
-    } => {!};
-    ArgTypes = "shtml:argtypes": 50 { // TODO
-        println!("TODO: argtypes");
-        i += 1;
-    } => {!};
-    PrecoditionDimension = "shtml:preconditiondimension": 250 {
-        println!("precondition dimension={v}");
-        i += 1;
-    } => {!};
-    PrecoditionSymbol = "shtml:preconditionsymbol": 250 {
-        println!("precondition symbol={v}");
-        i += 1;
-    } => {!};
-    ObjectiveDimension = "shtml:objectivedimension": 250 {
-        println!("objective dimension={v}");
-        i += 1;
-    } => {!};
-    ObjectiveSymbol = "shtml:objectivesymbol": 250 {
-        println!("objective symbol={v}");
-        i += 1;
-    } => {!};
-    Fillinsol = "shtml:fillinsol": 250 {
-        println!("fillinsol={v}");
-        i += 1;
-    } => {!};
-    FillinsolCase = "shtml:fillin-case": 250 {
-        println!("fillin-case={v}");
-        i += 1;
-    } => {!};
-    FillinsolValue = "shtml:fillin-value": 250 {
-        println!("fillin-case-value={v}");
-        i += 1;
-    } => {!};
-    FillinsolVerdict = "shtml:fillin-verdict": 250 {
-        println!("fillin-case-verdict={v}");
-        i += 1;
-    } => {!};
-    Subproblem = "shtml:subproblem": 250 {
-        println!("subproblem={v}");
-        i += 1;
-    } => {!};
-    Morphism = "shtml:feature-morphism": 250 {
-        println!("feature-morphism={v}");
-        i += 1;
-    } => {!};
-    MorphismDomain = "shtml:domain": 250 {
-        println!("domain={v}");
-        i += 1;
-    } => {!};
-    MorphismTotal = "shtml:total": 250 {
-        println!("total={v}");
-        i += 1;
-    } => {!};
-    Rename = "shtml:rename": 250 {
-        println!("rename={v}");
-        i += 1;
-    } => {!};
-    RenameTo = "shtml:to": 250 {
-        println!("to={v}");
-        i += 1;
-    } => {!};
+    ReturnType = "shtml:returntype": 50 {+} => {!};
+    ArgTypes = "shtml:argtypes": 50 {+} => {!};
+    PrecoditionDimension = "shtml:preconditiondimension": 250 {+} => {!};
+    PrecoditionSymbol = "shtml:preconditionsymbol": 250 {+} => {!};
+    ObjectiveDimension = "shtml:objectivedimension": 250 {+} => {!};
+    ObjectiveSymbol = "shtml:objectivesymbol": 250 {+} => {!};
+    Fillinsol = "shtml:fillinsol": 250 {+} => {!};
+    FillinsolCase = "shtml:fillin-case": 250 {+} => {!};
+    FillinsolValue = "shtml:fillin-value": 250 {+} => {!};
+    FillinsolVerdict = "shtml:fillin-verdict": 250 {+} => {!};
+    Subproblem = "shtml:subproblem": 250 {+} => {!};
+    Morphism = "shtml:feature-morphism": 250 {+} => {!};
+    MorphismDomain = "shtml:domain": 250 {+} => {!};
+    MorphismTotal = "shtml:total": 250 {+} => {!};
+    Rename = "shtml:rename": 250 {+} => {!};
+    RenameTo = "shtml:to": 250 {+} => {!};
+    AssignMorphismFrom = "shtml:assignmorphismfrom": 250 {+} => {!};
+    AssignMorphismTo = "shtml:assignmorphismto": 250 {+} => {!};
     Assign(tm:Option<Term>) = "shtml:assign": 250 {
-        println!("assign={v}");
         add!(- OpenElem::Assign {tm:None})
     } => {!};
-    IfInputref = "shtml:ifinputref": 250 {
-        println!("ifinputref={v}");
-        i += 1;
-    } => {!};
+    IfInputref = "shtml:ifinputref": 250 {+} => {!};
     // --- TODO -------------
 
 
 
 
-    Invisible = "shtml:visible": 254 {add!(- OpenElem::Invisible)} => {false};
+    Invisible = "shtml:visible": 254 {add!(- OpenElem::Invisible)} => {parser.in_term || parser.in_notation};
     Problempoints(pts:f32) = "shtml:problempoints": 254 {
         let pts = v.parse().ok().unwrap_or_else(|| {
             todo!()
@@ -1041,6 +1021,7 @@ tags!{v,node,parser,attrs,i,rest,
         true
     };
     ProofMethod = "shtml:proofmethod": 254 {+} => {!};
+    ProofSketch = "shtml:proofsketch": 254 {+} => {!};
     ProofTerm = "shtml:proofterm": 254 {+} => {!};
     ProofBody = "shtml:proofbody": 254 {+} => {!};
     ProofAssumption = "shtml:spfassumption": 254 {+} => {!};
@@ -1105,10 +1086,16 @@ lazy_static::lazy_static! {
 }
 
 fn split(archives:&[Archive],p:&str) -> Option<(ArchiveURI,usize)> {
-    if p == META {
+    if p.starts_with(META) {
         return Some((META_URI.clone(),29))
     } else if p == URTHEORIES {
         return Some((UR_URI.clone(),31))
+    } else if p == "http://mathhub.info/my/archive" {
+        return Some((ArchiveURI::new(BaseURI::new("http://mathhub.info").unwrap(),ArchiveId::new("my/archive")),30))
+    } else if p == "http://kwarc.info/Papers/stex-mmt/paper" {
+        return Some((ArchiveURI::new(BaseURI::new("https://stexmmt.mathhub.info/:sTeX").unwrap(),ArchiveId::new("Papers/22-CICM-Injecting-Formal-Mathematics")),34))
+    } else if p == "http://kwarc.info/Papers/tug/paper" {
+        return Some((ArchiveURI::new(BaseURI::new("https://stexmmt.mathhub.info/:sTeX").unwrap(),ArchiveId::new("Papers/22-TUG-sTeX")),34))
     }
     if p.starts_with(MATHHUB) {
         let mut p = &p[MATHHUB.len()..];
@@ -1150,7 +1137,10 @@ fn split_old(archives:&[Archive],p:&str,len:usize) -> Option<(ArchiveURI,usize)>
 fn get_doc_uri(s: &str,archives:&ArchiveManager) -> Option<DocumentURI> {
     let (mut p,m) = s.rsplit_once('/')?;
     let (a,l) = split(&archives.get_archives(),p)?;
-    let path = if l < p.len() {&p[l..]} else {""};
+    let mut path = if l < p.len() {&p[l..]} else {""};
+    if path.starts_with('/') {
+        path = &path[1..];
+    }
     Some(DocumentURI::new(a,path,m))
 }
 
@@ -1160,12 +1150,21 @@ fn get_mod_uri(s: &str,archives:&ArchiveManager) -> Option<ModuleURI> {
         p = &p[..p.len()-1];
     }
     let (a,l) = split(&archives.get_archives(),p)?;
-    let path = if l < p.len() {&p[l..]} else {""};
+    let mut path = if l < p.len() {&p[l..]} else {""};
+    if path.starts_with('/') {
+        path = &path[1..];
+    }
     Some(ModuleURI::new(a,path,m))
 }
 
 fn get_sym_uri(s: &str,archives:&ArchiveManager) -> Option<SymbolURI> {
-    let (m,s) = s.rsplit_once('?')?;
+    let (m,s) = match s.split_once('[') {
+        Some((m,_)) => {
+            let (m,_) = m.rsplit_once('?')?;
+            (m,&s[m.len()..])
+        }
+        None => s.rsplit_once('?')?
+    };
     let m = get_mod_uri(m,archives)?;
     Some(SymbolURI::new(m,s))
 }
@@ -1175,278 +1174,3 @@ fn replace_id(s:&str) -> String {
         id.into()
     } else { s.into() }
 }
-
-/*
-use std::borrow::Cow;
-use std::str::FromStr;
-use immt_api::backend::archives::{Archive, Storage};
-use immt_api::backend::manager::ArchiveManager;
-use immt_api::core::content::{ArgSpec, ArgType, ArrayVec};
-use immt_api::core::narration::{DocumentElement, DocumentReference, Language};
-use immt_api::core::uris::archives::{ArchiveId, ArchiveURI};
-use immt_api::core::uris::base::BaseURI;
-use immt_api::core::uris::documents::DocumentURI;
-use immt_api::core::uris::modules::ModuleURI;
-use immt_api::core::uris::symbols::SymbolURI;
-use crate::parsing::OpenNode;
-use crate::parsing::parser::HTMLParser;
-use immt_api::core::utils::parse::{ParseStr,ParseSource};
-use immt_api::core::utils::sourcerefs::{ByteOffset, SourceRange};
-use immt_api::core::utils::VecMap;
-use crate::docs::OpenDocElem;
-
-impl<'a> HTMLParser<'a> {
-
-    fn attr<R>(&self,attrs:&mut VecMap<&'a str,Cow<'a,str>>,key:&str,mut map:impl FnMut(&str) -> R) -> Option<R> {
-        if self.strip { attrs.remove(&key).map(|s| map(&s)) } else { attrs.get(&key).map(|s| map(s)) }
-    }
-    pub(crate) fn do_shtml(&mut self, mut node: OpenNode<'a>) {
-        for (i, (k, v)) in node.attributes.0.iter().enumerate() {
-            match *k {
-                "shtml:sectionlevel" => {
-                    let tagstr = node.tag.as_closing_str();
-                    self.reader.read_until_str(tagstr);
-                    self.reader.skip(tagstr.len());
-                    self.reset_off();
-                    self.get_doc_container()
-                        .push(DocumentElement::SetSectionLevel(
-                            u8::from_str(v).unwrap().try_into().ok().unwrap(), // TODO no unwrap
-                        ));
-                    return;
-                }
-                "shtml:inputref" => {
-                    let uri = if let Some(uri) = get_doc_uri(v,self.backend) {uri} else {
-                        todo!();
-                        self.open_nodes.push(node);
-                        return;
-                    };
-                    let tagstr = node.tag.as_closing_str();
-                    self.reader.read_until_str(tagstr);
-                    self.reader.skip(tagstr.len());
-                    self.reset_off();
-                    let start = node.start;
-                    let str = format!("<span shtml:inputref=\"{}\"></span>", uri);
-                    let end = ByteOffset { offset: start.offset + str.len(), };
-                    self.out.push_str(&str);
-                    let inputref = DocumentElement::InputRef(DocumentReference {
-                        id: {
-                            let r = format!("ID_{}", self.inputref_id).into();
-                            self.inputref_id += 1;
-                            r
-                        },
-                        target: uri,
-                        range: SourceRange { start, end },
-                    });
-                    self.get_doc_container().push(inputref);
-                    self.reset_off();
-                    return;
-                }
-                "shtml:doctitle" => {
-                    let tagstr = node.tag.as_closing_str();
-                    let title = self.reader.read_until_str(tagstr);
-                    self.reader.skip(tagstr.len());
-                    self.reset_off();
-                    self.title = Some(title.into());
-                    return;
-                }
-                "shtml:section" => {
-                    let level = u8::from_str(v).unwrap().try_into().ok().unwrap(); // TODO no unwrap
-                    if self.strip {node.attributes.remove_index(i);}
-                    node.element = Some(OpenDocElem::Section {
-                        level, title: None, children: Vec::new(),
-                    });
-                    self.out.push_str(&node.to_string());
-                    self.open_nodes.push(node);
-                    self.reset_off();
-                    return;
-                }
-                "shtml:definition" | "shtml:paragraph" | "shtml:assertion" => {
-                    let k = *k;
-                    if self.strip {node.attributes.remove_index(i);}
-                    let fors: Vec<SymbolURI> = self.attr(&mut node.attributes,"shtml:styles",|s| s.split(',').map(|s|
-                        if let Some(uri) = get_sym_uri(s.trim(),self.backend) {uri} else {
-                            todo!()
-                        }
-                    ).collect()).unwrap_or_default();
-                    let inline = self.attr(&mut node.attributes,"shtml:inline",|c| c.eq_ignore_ascii_case("true")).unwrap_or(false);
-                    let styles:Vec<String> = self.attr(&mut node.attributes,"shtml:styles",|s| s.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
-                    let id = self.attr(&mut node.attributes,"shtml:id",|s| replace_id(s)).unwrap_or_else(|| {
-                        let r = format!("ID_{}", self.paragraph_id);
-                        self.paragraph_id += 1;
-                        r
-                    });
-
-                    let (kind,definition_like) = match k {
-                        "shtml:definition" => ("definition",true),
-                        "shtml:paragraph" => ("paragraph",styles.iter().any(|s| s == "symdoc")),
-                        "shtml:assertion" => ("assertion",false),
-                        _ => unreachable!(),
-                    };
-                    node.element = Some(OpenDocElem::Paragraph {
-                        id, styles, inline, fors, children: Vec::new(),title:None,kind,definition_like
-                    });
-                    self.out.push_str(&node.to_string());
-                    self.open_nodes.push(node);
-                    self.reset_off();
-                    return;
-                }
-
-                "shtml:sectiontitle" => {
-                    if self.strip {node.attributes.remove_index(i);}
-                    node.element = Some(OpenDocElem::SectionTitle {
-                        children: Vec::new(),
-                    });
-                    self.out.push_str(&node.to_string());
-                    self.open_nodes.push(node);
-                    self.reset_off();
-                    return;
-                }
-                "shtml:statementtitle" => {
-                    if self.strip {node.attributes.remove_index(i);}
-                    node.element = Some(OpenDocElem::StatementTitle {
-                        children: Vec::new(),
-                    });
-                    self.out.push_str(&node.to_string());
-                    self.open_nodes.push(node);
-                    self.reset_off();
-                    return;
-                }
-                "shtml:definiendum" => {
-                    let uri = if let Some(uri) = get_sym_uri(v,self.backend) {uri} else {
-                        todo!();
-                        self.open_nodes.push(node);
-                        return;
-                    };
-                    node.attributes.insert("shtml:definiendum",uri.to_string().into());
-                    node.element = Some(OpenDocElem::Definiendum { uri });
-                    //node.add_class("shtml-definiendum");
-                    self.out.push_str(&node.to_string());
-                    self.reset_off();
-                    self.open_nodes.push(node);
-                    return;
-                }
-
-
-
-
-                "shtml:theory" => {
-                    let uri = if let Some(uri) = get_mod_uri(v,self.backend) {uri} else {
-                        todo!("HERE: {v}");
-                        self.open_nodes.push(node);
-                        return;
-                    };
-                    if self.strip {node.attributes.remove_index(i);}
-                    let meta = self.attr(&mut node.attributes,"shtml:metatheory",|s|
-                        if let Some(m) = get_mod_uri(s,self.backend) {m} else {
-                            todo!("HERE: {s}");
-                        });
-                    let language = self.attr(&mut node.attributes,"shtml:language",|s|
-                        if s.is_empty() {self.language} else {if let Ok(l) = s.try_into() {l} else {
-                            todo!("HERE: {s}")
-                        }}
-                    );
-                    let signature: Option<Language> = self.attr(&mut node.attributes,"shtml:signature",|s|
-                        if s.is_empty() {None} else {if let Ok(l) = s.try_into() {Some(l)} else {
-                            todo!("HERE: {s}")
-                        }}
-                    ).flatten();
-
-                    node.element = Some(OpenDocElem::Module {
-                        meta,language,signature,uri,content_children:Vec::new(),narrative_children:Vec::new()
-                    });
-                    self.out.push_str(&node.to_string());
-                    self.open_nodes.push(node);
-                    self.reset_off();
-                    return;
-                }
-                "shtml:visible" => {
-                    node.element = Some(OpenDocElem::Invisible);
-                    if self.strip {node.attributes.remove_index(i);return self.do_shtml(node);}
-                }
-                "shtml:import" => {
-                    let uri = if let Some(uri) = get_mod_uri(v,self.backend) {uri} else {
-                        todo!();
-                        self.open_nodes.push(node);
-                        return;
-                    };
-                    if self.strip {node.attributes.remove_index(i);}
-                    node.element = Some(OpenDocElem::Importmodule(uri));
-                    self.open_nodes.push(node);
-                    return;
-                }
-                "shtml:symdecl" => {
-                    let uri = if let Some(uri) = get_sym_uri(v,self.backend) {uri} else {
-                        todo!();
-                        self.open_nodes.push(node);
-                        return;
-                    };
-                    if self.strip {node.attributes.remove_index(i);}
-                    let arity = self.attr(&mut node.attributes,"shtml:args",|s|
-                        if let Ok(a) = s.parse() { a } else { todo!()}).unwrap_or_default();
-                    let macroname = self.attr(&mut node.attributes,"shtml:macroname",|s| if s.is_empty() {None} else {Some(s.to_string())}).flatten();
-                    node.element = Some(OpenDocElem::Constant { uri, arity, macroname });
-                    self.open_nodes.push(node);
-                    return;
-                }
-                "shtml:notation" => {
-                    let uri = if let Some(uri) = get_sym_uri(v,self.backend) {uri} else {
-                        todo!();
-                        self.open_nodes.push(node);
-                        return;
-                    };
-                    let fragment = self.attr(&mut node.attributes,"shtml:notationfragment",|s| if s.is_empty() {None} else {Some(s.to_string())}).flatten();
-                    let prec = self.attr(&mut node.attributes,"shtml:precedence",|s| s.parse().ok()).flatten();
-                    let argprecs: ArrayVec<_,9> = self.attr(&mut node.attributes,"shtml:argprecs",|s| s.split(',').map(|s| s.trim().parse().unwrap_or(0)).collect()).unwrap_or_default();
-                    //let argprecs = node.attributes.remove(&"shtml:argprecs").map(|s| s.split(',').map(|s| s.trim().parse().unwrap_or(0)).collect());
-                    let notation = OpenDocElem::Notation {
-                        uri, id:fragment, precedence:prec.unwrap_or(0), argprecs,inner:None
-                    };
-                    node.element = Some(notation);
-                    self.open_nodes.push(node);
-                    return;
-                }
-                "shtml:term" if v == "OMID" => {
-                    let notation = self.attr(&mut node.attributes,"shtml:notationid",|s| if s.is_empty() {None} else {Some(s.to_string())}).flatten();
-                    let head = self.attr(&mut node.attributes,"shtml:head",|s|
-                        if let Some(uri) = get_sym_uri(s,self.backend) {uri} else {
-                            todo!("HERE: {s}")
-                        }
-                    ).unwrap_or_else(|| {
-                        todo!()
-                    });
-                    *node.attributes.get_mut(&"shtml:head").unwrap() = head.to_string().into();
-                    if self.in_term {
-                        todo!()
-                    } else {
-                        node.element = Some(OpenDocElem::Symref { uri: head, notation });
-                        self.out.push_str(&node.to_string());
-                        self.reset_off();
-                        self.open_nodes.push(node);
-                    }
-                    return;
-                }
-                "shtml:comp" | "shtml:varcomp" | "shtml:maincomp" if !v.is_empty() => {
-                    if self.strip {
-                        node.attributes.get_mut_index(i).unwrap().1 = "".into();
-                        return self.do_shtml(node);
-                    }
-                }
-                "shtml:comp" | "shtml:varcomp" | "shtml:maincomp" => (),
-                "shtml:notationid" | "shtml:head" if node.attributes.iter().any(|(k,_)| *k == "shtml:term") => (),
-                "shtml:language" | "shtml:metatheory" | "shtml:signature"
-                if node.attributes.iter().any(|(k, _)| *k == "shtml:theory") => (),
-                "shtml:args" | "shtml:macroname" if node.attributes.iter().any(|(k, _)| *k == "shtml:symdecl") => (),
-                "shtml:argprecs" | "shtml:notationfragment" | "shtml:precedence" if node.attributes.iter().any(|(k, _)| *k == "shtml:notation") => (),
-                "shtml:styles" | "shtml:inline" | "shtml:fors" | "shtml:id" => (),
-                _ if k.starts_with("shtml:") => {
-                    let k = *k; let v = v.as_ref();
-                    todo!("{k} = {v}");
-                }
-                _ => (),
-            }
-        }
-        self.out.push_str(&node.to_string());
-        self.open_nodes.push(node);
-    }
-}
- */

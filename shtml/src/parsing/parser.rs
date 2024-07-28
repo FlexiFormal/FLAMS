@@ -8,7 +8,7 @@ use html5ever::tokenizer::*;
 use html5ever::interface::{ElementFlags, NextParserState, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::StrTendril;
 use immt_api::core::content::{ArrayVec, InformalChild, Module, Term};
-use immt_api::core::narration::{Document, DocumentElement, HTMLDocSpec, Language};
+use immt_api::core::narration::{CSS, Document, DocumentElement, HTMLDocSpec, Language};
 use immt_api::core::uris::documents::DocumentURI;
 use kuchikiki::NodeRef;
 use tendril::{SliceExt, TendrilSink};
@@ -31,8 +31,7 @@ pub(crate) struct NodeData {
 #[derive(Clone,Debug)]
 pub struct NodeWithSource {
     pub(crate) node:NodeRef,
-    pub(crate) data:std::rc::Rc<std::cell::RefCell<NodeData>>,
-    count:usize
+    pub(crate) data:std::rc::Rc<std::cell::RefCell<NodeData>>
 }
 impl PartialEq for NodeWithSource {
     fn eq(&self, other: &Self) -> bool {
@@ -47,7 +46,7 @@ impl NodeWithSource {
         drop(d);
         for c in c { c.kill() }
     }
-    fn new(node:NodeRef,len:usize,elem:OpenElems,count:usize) -> Self {
+    fn new(node:NodeRef,len:usize,elem:OpenElems) -> Self {
         NodeWithSource {
             node,
             data:std::rc::Rc::new(std::cell::RefCell::new(NodeData {
@@ -55,7 +54,7 @@ impl NodeWithSource {
                 parent:None,
                 children: Vec::new(),
                 elem,closed:false
-            })),count
+            }))
         }
     }
     fn end(&self) -> usize {
@@ -101,7 +100,7 @@ impl NodeWithSource {
         }
     }
     pub(crate) fn as_term(&self,rest:Option<&mut OpenElems>) -> Term {
-        //println!("HERE: {}",self.node.to_string());
+        //println!("Term: {}",self.node.to_string());
         if let Some(rest) = rest {for (i,e) in rest.iter().enumerate() {
             //println!("  - {e:?}");
             match e {
@@ -113,62 +112,89 @@ impl NodeWithSource {
                 }
                 _ => ()
         }}}
-        let elem = self.node.as_element().unwrap();
-        let tag = elem.name.local.to_string();
-        let attrs : VecMap<String,String> = elem.attributes.borrow().map.iter().map(|(k,v)| {
-            (k.local.to_string(),v.value.clone())
-        }).collect();
-        let mut terms = Vec::new();
-        let mut children = Vec::new();
-        let _dt = self.data.borrow();
-        let mut nws = _dt.children.iter();
+        let mut data = self.data.borrow_mut();
+        for (i,e) in data.elem.iter().enumerate() {
+            //println!("  - {e:?}");
+            match e {
+                OpenElem::Term{tm:OpenTerm::Complex(None)} => (),
+                OpenElem::Term{..} => {
+                    if let OpenElem::Term{tm} = data.elem.remove(i) {
+                        return tm.close()
+                    } else {unreachable!()}
+                }
+                _ => ()
+            }}
+        drop(data);
+        if let Some(elem) = self.node.as_element() {
+            let data = self.data.borrow();
+            if data.children.len() == 1 {
+                let c = data.children.first().unwrap();
+                return c.as_term(None)
+            }
 
-        for c in self.node.children() {
-            if let Some(t) = c.as_text() {
-                let t = t.borrow().to_string();
-                let t = t.trim();
-                if t.is_empty() { continue }
-                children.push(InformalChild::Text(t.to_string()))
-            } else if let Some(_) = c.as_element() {
-                let c = nws.next().unwrap();
-                let mut rest = { c.data.borrow_mut().elem.take() };
-                match c.as_term(Some(&mut rest)) {
-                    Term::Informal { tag, attributes, children: mut chs, terms: tms } => {
-                        let l = terms.len() as u8;
-                        terms.extend(tms);
-                        for c in chs.iter_mut() {
-                            if let Some(mut iter) = c.iter_mut() {
-                                for c in iter {
-                                    if let InformalChild::Term(ref mut u) = c {
-                                        *u += l
+            let tag = elem.name.local.to_string();
+            let attrs: VecMap<String, String> = elem.attributes.borrow().map.iter().map(|(k, v)| {
+                (k.local.to_string(), v.value.clone())
+            }).collect();
+            let mut terms = Vec::new();
+            let mut children = Vec::new();
+            let mut nws = data.children.iter();
+
+            for c in self.node.children() {
+                if let Some(_) = c.as_comment() {
+                    nws.next();
+                    // ignore
+                } else if let Some(t) = c.as_text() {
+                    let t = t.borrow().to_string();
+                    let t = t.trim();
+                    if t.is_empty() { continue }
+                    children.push(InformalChild::Text(t.to_string()))
+                } else if let Some(_) = c.as_element() {
+                    let nc = nws.next().unwrap();
+                    assert_eq!(nc.node, c);
+                    let mut rest = { nc.data.borrow_mut().elem.take() };
+                    match nc.as_term(Some(&mut rest)) {
+                        Term::Informal { tag, attributes, children: mut chs, terms: tms } => {
+                            let l = terms.len() as u8;
+                            terms.extend(tms);
+                            for c in chs.iter_mut() {
+                                if let Some(mut iter) = c.iter_mut() {
+                                    for c in iter {
+                                        if let InformalChild::Term(ref mut u) = c {
+                                            *u += l
+                                        }
                                     }
                                 }
                             }
+                            children.push(InformalChild::Node {
+                                tag,
+                                attributes,
+                                children: chs
+                            })
+                        },
+                        t => {
+                            let l = terms.len() as u8;
+                            terms.push(t);
+                            children.push(InformalChild::Term(l))
                         }
-                        children.push(InformalChild::Node {
-                            tag,
-                            attributes,
-                            children: chs
-                        })
-                    },
-                    t => {
-                        let l = terms.len() as u8;
-                        terms.push(t);
-                        children.push(InformalChild::Term(l))
                     }
+                } else {
+                    unreachable!("??? {c:?}")
                 }
-            } else {
-                unreachable!()
             }
+
+            assert!(nws.next().is_none());
+
+            let tm = Term::Informal {
+                tag,attributes:attrs,children,terms
+            };
+            //println!("Here: {tm:?}");
+            tm
+        } else if let Some(_) = self.node.as_comment() {
+            Term::OMV("ERROR".to_string())
+        } else {
+            todo!("Unknown term node {}",self.node.to_string())
         }
-
-        assert!(nws.next().is_none());
-
-        let tm = Term::Informal {
-            tag,attributes:attrs,children,terms
-        };
-        //println!("Here: {tm:?}");
-        tm
 
 
 
@@ -205,10 +231,8 @@ pub struct HTMLParser<'a> {
     pub(crate) id_counter: usize,
     pub(crate) language: Language,
     refs: String,
-    counter:usize,
-    head:Option<NodeWithSource>,
-    body:Option<NodeWithSource>
-    // This should really be an HMap, but NodeRef doesn't implement Hash
+    body:Option<NodeWithSource>,
+    css:Vec<CSS>
 }
 impl HTMLParser<'_> {
     pub(crate) fn store_string(&mut self,s:&str) -> SourceRange<ByteOffset> {
@@ -225,9 +249,6 @@ impl HTMLParser<'_> {
     }
     fn kill(&mut self) {
         self.document.kill();
-        if let Some(h) = self.head.take() {
-            h.kill()
-        }
         if let Some(b) = self.body.take() {
             b.kill()
         }
@@ -258,7 +279,7 @@ macro_rules! sanity_check {
 
 impl<'a> HTMLParser<'a> {
     pub fn new(input: &'a str, path: &'a Path, uri: DocumentURI, backend:&'a ArchiveManager,strip:bool) -> Self {
-        let doc = NodeWithSource::new(NodeRef::new_document(),0,ArrayVec::default(),0);
+        let doc = NodeWithSource::new(NodeRef::new_document(),0,ArrayVec::default());
         HTMLParser {
             backend,
             refs:String::new(),
@@ -269,9 +290,7 @@ impl<'a> HTMLParser<'a> {
             id_counter:0,
             notations:Vec::new(),elems:Vec::new(),title:String::new(),
             language:Language::from_file(path),
-            head:None,
-            counter:1,
-            body:None
+            body:None,css:Vec::new()
         }
     }
     pub fn run(mut self) -> (HTMLDocSpec, Vec<Module>) {
@@ -279,9 +298,6 @@ impl<'a> HTMLParser<'a> {
         let mut p = parse_document(self, ParseOpts::default())
             .from_utf8();
         p.one(doc.as_bytes().to_tendril())
-    }
-    fn count(&mut self) -> usize {
-        self.counter += 1;self.counter -1
     }
 
     fn delete(&self,node:&NodeWithSource) {
@@ -335,12 +351,15 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
     #[inline]
     fn finish(mut self) -> Self::Output {
-        let head = self.head.as_ref().unwrap_or_else(|| {
+        let bdnode = self.body.as_ref().unwrap_or_else(|| {
             todo!()
-        }).data.borrow().range;
-        let body = self.body.as_ref().unwrap_or_else(|| {
-            todo!()
-        }).data.borrow().range;
+        }).data.borrow();
+        let start = bdnode.children.first().map(|c| c.data.borrow().range.start.offset).unwrap_or_else(||
+            bdnode.range.start.offset
+        );
+        let end = bdnode.range.end.offset - "</body>".len();
+        drop(bdnode);
+        let body = SourceRange { start: ByteOffset { offset: start }, end: ByteOffset { offset: end } };
         let html = self.document.node.to_string();
         self.kill();
         let spec = HTMLDocSpec {
@@ -350,8 +369,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
                 title:self.title,
                 elements:self.elems
             },
-            head,body,html,
-            notations:self.notations
+            body,html,refs:self.refs,css:self.css
         };
         (spec,self.modules)
     }
@@ -407,21 +425,21 @@ impl<'a> TreeSink for HTMLParser<'a> {
                 }),
             );
         let len = node.to_string().len();
-        NodeWithSource::new(node,len,elem,self.count())
+        NodeWithSource::new(node,len,elem)
     }
 
     #[inline]
     fn create_comment(&mut self, text: StrTendril) -> Self::Handle {
         let elem = NodeRef::new_comment(text);
         let len = elem.to_string().len();
-        NodeWithSource::new(elem,len,ArrayVec::default(),self.count())
+        NodeWithSource::new(elem,len,ArrayVec::default())
     }
 
     #[inline]
     fn create_pi(&mut self, target: StrTendril, data: StrTendril) -> Self::Handle {
         let elem = NodeRef::new_processing_instruction(target,data);
         let len = elem.to_string().len();
-        NodeWithSource::new(elem,len,ArrayVec::default(),self.count())
+        NodeWithSource::new(elem,len,ArrayVec::default())
     }
 
     #[inline]
@@ -441,10 +459,11 @@ impl<'a> TreeSink for HTMLParser<'a> {
         let len = match child {
             NodeOrText::AppendNode(node) => {
                 if let Some(e) = node.node.as_element() {
-                    if e.name.local.as_ref() == "head" {
-                        self.head = Some(node.clone())
-                    } else if e.name.local.as_ref() == "body" {
+                    if e.name.local.as_ref() == "body" {
                         self.body = Some(node.clone())
+                    }
+                    for e in &mut node.data.borrow_mut().elem {
+                        e.on_add(self);
                     }
                 }
                 sanity_check!(self,node.data.borrow().range.start.offset == 0);
@@ -508,7 +527,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
 
     fn pop(&mut self, node: &Self::Handle) {
-        if {node.data.borrow().closed} { return }
+        if node.data.borrow().closed { return }
         let pops = {node.data.borrow().children.iter().filter(|c|
             !c.data.borrow().closed
         ).cloned().collect::<ArrayVec<_,2>>()};
@@ -525,271 +544,33 @@ impl<'a> TreeSink for HTMLParser<'a> {
         while !elem.is_empty() {
             let h = elem.drain(..1).next().unwrap();
             //println!("Closing {h:?}");
-            match &h {
-                OpenElem::TopLevelTerm(_) | OpenElem::Conclusion{..}| OpenElem::Type{..} | OpenElem::Definiens{..} | OpenElem::Rule {..}
-                    => self.in_term = false,
-                OpenElem::Notation {..} | OpenElem::VarNotation {..} => self.in_notation = false,
-                _ => ()
-            }
-
             if !self.close(node,h,&mut elem) && self.strip { delete = true }
         }
-        if delete { self.delete(node) }
-        node.data.borrow_mut().closed = true
-    }
-}
-
-
-/*
-use std::borrow::Cow;
-use std::path::Path;
-use immt_api::backend::manager::ArchiveManager;
-use immt_api::core::content::Module;
-use immt_api::core::narration::{CSS, Document, DocumentElement, Language};
-use immt_api::core::uris::documents::DocumentURI;
-use immt_api::core::utils::parse::{ParseStr,ParseSource};
-use immt_api::core::utils::sourcerefs::{ByteOffset, SourceRange};
-use immt_api::core::utils::VecMap;
-use crate::parsing::{OpenNode, Tag};
-
-pub struct HTMLParser<'a> {
-    pub(crate) backend:&'a ArchiveManager,
-    pub(crate) reader: ParseStr<'a, ByteOffset>,
-    pub(crate) out: String,
-    pub(crate) open_nodes: Vec<OpenNode<'a>>,
-    pub(crate) in_body: bool,
-    pub(crate) doc: DocumentURI,
-    pub(crate) css: Vec<CSS>,
-    pub(crate) elements: Vec<DocumentElement>,
-    pub(crate) title: Option<String>,
-    pub(crate) section_id: usize,
-    pub(crate) inputref_id: usize,
-    pub(crate) paragraph_id: usize,
-    pub(crate) language: Language,
-    pub(crate) modules:Vec<Module>,
-    pub(crate) in_term:bool,
-    pub(crate) strip:bool
-}
-
-impl<'a> HTMLParser<'a> {
-    pub fn new(input: &'a str, path: &Path, uri: DocumentURI, backend:&'a ArchiveManager,strip:bool) -> Self {
-        let stem = path.file_stem().unwrap().to_str().unwrap();
-        let language = if stem.ends_with(".en") {
-            Language::English
-        } else if stem.ends_with(".de") {
-            Language::German
-        } else if stem.ends_with(".fr") {
-            Language::French
-        } else {
-            Language::English
-        };
-        HTMLParser {
-            reader: ParseStr::new(input),
-            out: String::with_capacity(input.len()),
-            open_nodes: Vec::new(),
-            in_body: false,
-            doc: uri,
-            css: Vec::new(),
-            elements: Vec::new(),
-            modules: Vec::new(),
-            title: None,
-            section_id: 0,
-            inputref_id: 0,
-            paragraph_id: 0,
-            in_term:false,
-            language,backend,
-            strip
+        if delete {
+            //println!("Deleting {}",node.node.to_string());
+            self.delete(node)
         }
-    }
-    pub(crate) fn reset_off(&mut self) {
-        self.reader.trim_start();
-        self.reader.offset().offset = self.out.len();
-    }
-    fn get(&self, range: SourceRange<ByteOffset>) -> &str {
-        self.out.get(range.start.offset..range.end.offset).unwrap()
-    }
-    pub fn run(mut self) -> (String, Document, Vec<Module>) {
-        self.reader.trim_start();
-        self.reader.offset().offset = 0;
-        if self.reader.starts_with_str("<!DOCTYPE") {
-            let dt = self.reader.read_until(|c| c == '>');
-            //self.out.push_str(dt);
-            //self.out.push_str(">\n");
-            self.reader.pop_head();
-            self.reset_off();
-        }
-        if self.reader.rest().contains("<head") {
-            self.do_head();
-        }
-        self.do_body();
-        let doc = Document {
-            uri: self.doc,
-            title: self.title.unwrap_or_else(|| "Untitled".into()),
-            css: self.css.into(),
-            elements: self.elements.into(),
-            language: self.language,
-        };
-        (self.out, doc, self.modules)
-    }
+        node.data.borrow_mut().closed = true;
 
-    fn is_shtml(node: &OpenNode) -> bool {
-        node.attributes.iter().any(|(k, _)| k.starts_with("shtml:"))
-    }
-
-    fn do_body(&mut self) {
-        self.reader.read_until_str("<body");
-        let mut body = self.read_open_node();
-        body.tag = Tag::Div;
-        self.out.push_str(&body.to_string());
-        while !self.reader.starts_with_str("</body>") {
-            match self.next_node() {
-                Some(n) if !n.tag.allowed_in_body() => todo!("{:?}", n),
-                Some(n) if Self::is_shtml(&n) =>
-                    self.do_shtml(n),
-                Some(n) if n.tag == Tag::Img => {
-                    todo!("Image encoding");
-                    /*
-                    let src = n.attributes.get(&"src").unwrap(); // TODO no unwrap here
-                    if let Some((a,d,s)) = self.backend.find_archive(Path::new(src.as_ref())) {
-                        //self.out.push_str(&format!("<img src=\"/img?a={}&path={d}/{s}\"",urlencoding::encode(&a.to_string())));
-                        for (k,v) in n.attributes.iter() {
-                            if *k != "src" { self.out.push_str(&format!(" {k}=\"{v}\"")); }
-                        }
-                        self.out.push('>');
-                        self.reset_off();
-                    } else {
-                        todo!()
+        let data = node.data.borrow();
+        match data.parent.as_ref().and_then(|n| n.node.as_element()) {
+            Some(p) if p.name.local.as_ref() == "head" => {
+                if let Some(n) = node.node.as_element() {
+                    if n.name.local.as_ref() == "link" &&
+                        n.attributes.borrow().map.iter().any(|(k,v)| k.local.as_ref() == "rel" && v.value == "stylesheet") {
+                        let href = n.attributes.borrow().map.iter().find(|(k,_)| k.local.as_ref() == "href").unwrap().1.value.clone();
+                        self.css.push(CSS::Link(replace_css(href)));
                     }
-
-                     */
-                }
-                Some(n) => {
-                    self.out.push_str(n.str);
-                    self.open_nodes.push(n);
-                }
-                None if self.reader.starts_with_str("</") => self.close_node(),
-                None => todo!(),
-            }
-            self.skip_until_node();
-        }
-        if self.reader.starts_with_str("</body>") {
-            self.reader.skip(7);
-            self.out.push_str("</div>");
-        } else {
-            todo!()
-        }
-    }
-
-    pub(crate) fn get_doc_container(&mut self) -> &mut Vec<DocumentElement> {
-        for e in self.open_nodes.iter_mut().rev() {
-            if let Some(element) = &mut e.element {
-                if let Some(children) = element.doc_children() {
-                    return children;
                 }
             }
-        }
-        &mut self.elements
-    }
-
-    fn do_head(&mut self) {
-        self.reader.read_until_str("<head");
-        //self.out.push_str(self.reader.read_until_str("<head"));
-        self.read_open_node();
-        //self.out.push_str(head.str);
-        // self.open_nodes.push(node);
-        while !self.reader.starts_with_str("</head>") {
-            self.reader.read_until(|c| c == '<');
-            match self.next_node() {
-                Some(node)
-                if node.tag == Tag::Link
-                    && node.attributes.get(&"rel").is_some_and(|s| s == "stylesheet")
-                    && node.attributes.get(&"href").is_some() =>
-                    {
-                        let href = node.attributes.get(&"href").unwrap();
-                        self.css.push(CSS::Link(href.as_ref().into()));
-                        //self.out.push_str(node.str);
-                    }
-                Some(node) if node.tag.auto_closes() => {
-                    //self.out.push_str(node.str);
-                }
-                Some(node) if node.tag == Tag::Title => self.skip_node(node),
-                Some(node) => {
-                    //self.out.push_str(node.str);
-                    self.open_nodes.push(node);
-                }
-                None => break,
-            }
-        }
-        if self.reader.starts_with_str("</head>") {
-            self.reader.skip(7);
-            //self.out.push_str("</head>");
-            self.reset_off();
-        } else {
-            todo!()
-        }
-    }
-
-    fn close_node(&mut self) {
-        let r = self.reader.read_until_inclusive(|c| c == '>');
-        let tag = Tag::from_str(&r[2..r.len() - 1]);
-        if let Some(mut node) = self.open_nodes.pop() {
-            if node.tag != tag {
-                todo!()
-            }
-            self.out.push_str(r);
-            if let Some(e) = std::mem::take(&mut node.element) {
-                if let Some(ret) = e.close(self, node) {
-                    self.get_doc_container().push(ret);
-                }
-            }
-        } else {
-            todo!()
-        }
-    }
-
-    fn skip_node(&mut self, open_node: OpenNode) {
-        self.reader.read_until_str(open_node.tag.as_closing_str());
-        self.reader.skip(open_node.tag.as_closing_str().len());
-        self.reset_off();
-    }
-
-    fn next_node(&mut self) -> Option<OpenNode<'a>> {
-        self.skip_until_node();
-        if self.reader.starts_with_str("</") {
-            None
-        } else {
-            Some(self.read_open_node())
-        }
-    }
-    fn skip_until_node(&mut self) {
-        self.out.push_str(self.reader.read_until_str("<"));
-    }
-
-    fn read_open_node(&mut self) -> OpenNode<'a> {
-        let start = *self.reader.curr_pos();
-        let ret = self.reader.read_until_inclusive(|c| c == '>');
-        let mut rest = &ret[1..ret.len() - 1];
-        let (tag, r) = rest.split_once(' ').unwrap_or((rest, ""));
-        rest = r;
-        let tag = Tag::from_str(tag);
-        let mut attributes: VecMap<&'a str,Cow<'a, str>> = VecMap::default();
-        while rest.contains('=') {
-            let (n, r) = rest.split_once('=').unwrap();
-            rest = r;
-            let delim = rest.chars().next().unwrap();
-            rest = &rest[1..];
-            let (v, r) = rest.split_once(delim).unwrap();
-            rest = r;
-            attributes.insert(n.trim(), v.into());
-        }
-        OpenNode {
-            tag,
-            attributes,
-            start,
-            str: ret,
-            element: None,
+            _ => ()
         }
     }
 }
 
- */
+fn replace_css(s:String) -> String {
+    match s.as_str() {
+        "file:///home/jazzpirate/work/Software/sTeX/RusTeXNew/rustex/src/resources/rustex.css" => "/rustex.css".to_string(),
+        _ => s
+    }
+}

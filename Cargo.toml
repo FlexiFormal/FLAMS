@@ -58,6 +58,11 @@ style-file = "web/main/style/main.scss"
 browserquery = "defaults"
 lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
 
+# utils:
+# https://docs.rs/memchr/2.7.4/memchr/ <- fast string search
+# https://docs.rs/smallvec/latest/smallvec/
+# https://docs.rs/arrayvec/latest/arrayvec/
+# https://crates.io/crates/flume channels?
 
 # search:
 # https://docs.rs/crate/tantivy/latest
