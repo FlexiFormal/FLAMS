@@ -976,7 +976,7 @@ tags!{v,node,parser,attrs,i,rest,
             e => if let OpenElem::Problem {points,..} = e {
                 *points = Some(pts);return
             };
-            todo!()
+            println!("TODO: problempoints without a problem")
         );
         true
     };
@@ -997,7 +997,7 @@ tags!{v,node,parser,attrs,i,rest,
             if let OpenElem::Problem {ref mut hint,..} = e {
                 *hint = Some(rf);return
             };
-            todo!()
+            println!("TODO: hint without a problem")
         );
         node.kill();
         true
@@ -1008,7 +1008,7 @@ tags!{v,node,parser,attrs,i,rest,
             if let OpenElem::Problem {ref mut note,..} = e {
                 *note = Some(rf);return
             };
-            todo!()
+            println!("TODO: note without a problem")
         );
         node.kill();
         true
@@ -1019,7 +1019,7 @@ tags!{v,node,parser,attrs,i,rest,
             if let OpenElem::Problem {ref mut gnote,..} = e {
                 *gnote = Some(rf);return
             };
-            todo!()
+            println!("TODO: gnote without a problem")
         );
         node.kill();
         true
