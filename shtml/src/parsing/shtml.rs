@@ -923,6 +923,8 @@ tags!{v,node,parser,attrs,i,rest,
     SRef = "shtml:sref" : 249 {+} => {!};
     SRefIn = "shtml:srefin" : 249 {+} => {!};
     Framenumber = "shtml:framenumber" : 249 {+} => {!};
+    Slideshow = "shtml:slideshow" : 249 {+} => {!};
+    SlideshowSlide = "shtml:slideshow-slide" : 249 {+} => {!};
     SkipSection = "shtml:skipsection": 40 {+} => {!};
     Answerclass = "shtml:answerclass": 40 {+} => {!};
     AnswerclassPts = "shtml:answerclass-pts": 40 {+} => {!};
