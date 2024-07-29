@@ -984,7 +984,7 @@ tags!{v,node,parser,attrs,i,rest,
             if let OpenElem::Problem {ref mut solution,..} = e {
                 *solution = Some(rf);return
             };
-            todo!()
+            println!("TODO: solution without a problem")
         );
         node.kill();
         true
