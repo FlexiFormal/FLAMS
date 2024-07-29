@@ -872,7 +872,7 @@ tags!{v,node,parser,attrs,i,rest,
 
     Importmodule(uri:ModuleURI) = "shtml:import": 150 {
         let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
-            todo!();
+            todo!("HERE: {v}");
         };
         add!(-OpenElem::Importmodule{uri})
     } => {
@@ -881,7 +881,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
     Usemodule(uri:ModuleURI) = "shtml:usemodule": 150 {
         let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
-            todo!();
+            todo!("HERE: {v}");
         };
         add!(-OpenElem::Usemodule{uri})
     } => {
@@ -891,7 +891,7 @@ tags!{v,node,parser,attrs,i,rest,
 
     InputRef(id:String,target:DocumentURI) = "shtml:inputref": 160 {
         let uri = if let Some(uri) = get_doc_uri(v,parser.backend) {uri} else {
-            todo!();
+            todo!("HERE: {v}");
         };
         add!(-OpenElem::InputRef {
             id: get!(ID),
@@ -942,6 +942,7 @@ tags!{v,node,parser,attrs,i,rest,
     ObjectiveSymbol = "shtml:objectivesymbol": 250 {+} => {!};
     Fillinsol = "shtml:fillinsol": 250 {+} => {!};
     FillinsolCase = "shtml:fillin-case": 250 {+} => {!};
+    FillinsolCaseValue = "shtml:fillin-case-value": 250 {+} => {!};
     FillinsolValue = "shtml:fillin-value": 250 {+} => {!};
     FillinsolVerdict = "shtml:fillin-verdict": 250 {+} => {!};
     Subproblem = "shtml:subproblem": 250 {+} => {!};
