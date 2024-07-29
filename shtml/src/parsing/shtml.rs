@@ -943,6 +943,7 @@ tags!{v,node,parser,attrs,i,rest,
     Fillinsol = "shtml:fillinsol": 250 {+} => {!};
     FillinsolCase = "shtml:fillin-case": 250 {+} => {!};
     FillinsolCaseValue = "shtml:fillin-case-value": 250 {+} => {!};
+    FillinsolCaseVerdict = "shtml:fillin-case-verdict": 250 {+} => {!};
     FillinsolValue = "shtml:fillin-value": 250 {+} => {!};
     FillinsolVerdict = "shtml:fillin-verdict": 250 {+} => {!};
     Subproblem = "shtml:subproblem": 250 {+} => {!};

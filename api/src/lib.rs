@@ -51,7 +51,10 @@ pub mod utils {
         for (k,v) in with_envs {
             process = process.env(k,v);
         }
-        match process.stdout(std::process::Stdio::piped()).spawn() {
+        match process
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn() {
             Ok(c) => c.wait_with_output().map_err(|e|{
                 tracing::error!("Error executing command {cmd}: {e}");
                 ()
