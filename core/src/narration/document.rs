@@ -309,7 +309,8 @@ pub struct Problem {
     pub hint:Option<SourceRange<ByteOffset>>,
     pub note:Option<SourceRange<ByteOffset>>,
     pub gnote:Option<SourceRange<ByteOffset>>,
-    pub title:Option<(String,SourceRange<ByteOffset>)>
+    pub title:Option<(String,SourceRange<ByteOffset>)>,
+    pub children:Vec<DocumentElement>
 }
 
 impl NestedDisplay for Problem {

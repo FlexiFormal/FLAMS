@@ -462,9 +462,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
                     if e.name.local.as_ref() == "body" {
                         self.body = Some(node.clone())
                     }
-                    for e in &mut node.data.borrow_mut().elem {
-                        e.on_add(self);
-                    }
+                    node.data.borrow_mut().elem.retain(|e| e.on_add(self))
                 }
                 sanity_check!(self,node.data.borrow().range.start.offset == 0);
                 let len = node.end();

@@ -2,7 +2,6 @@ use html5ever::Attribute;
 use crate::docs::{Arg, OpenTerm};
 use crate::parsing::parser::{HTMLParser, NodeWithSource, OpenElems};
 use std::str::FromStr;
-use kuchikiki::NodeRef;
 use immt_api::backend::archives::{Archive, Storage};
 use immt_api::backend::manager::ArchiveManager;
 use immt_api::core::content::{ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Notation, Term, TermOrList, VarOrSym};
@@ -41,15 +40,9 @@ macro_rules! iterate {
 impl<'a> HTMLParser<'a> {
 
     fn add_doc(&mut self,node:&NodeWithSource,elem:DocumentElement) {
-        use OpenElem::*;
         iterate!(node,
-            e => match e {
-                Section {ref mut children,..} => return children.push(elem),
-                SectionTitle {ref mut children,..} => return children.push(elem),
-                LogicalParagraph {ref mut children,..} => return children.push(elem),
-                Module {ref mut narrative_children,..} => return narrative_children.push(elem),
-                MathStructure {ref mut narrative_children,..} => return narrative_children.push(elem),
-                _ => ()
+            e => if let Some(c) = e.narration() {
+                c.push(elem);return
             };
             p => self.add_doc(p,elem);
             self.elems.push(elem)
@@ -57,18 +50,13 @@ impl<'a> HTMLParser<'a> {
     }
 
     fn add_content(&mut self,node:&NodeWithSource,elem:ContentElement) {
-        use OpenElem::*;
-        if let Some(p) = &node.data.borrow().parent {
-            let mut pd = p.data.borrow_mut();
-            for e in pd.elem.iter_mut().rev() {match e {
-                Module {content_children,..} |
-                MathStructure {content_children,..} => return content_children.push(elem),
-                _ => ()
-            }}
-            drop(pd);self.add_content(p, elem)
-        } else {
-            todo!()
-        }
+        iterate!(node,
+            e => if let Some(c) = e.content() {
+                c.push(elem);return
+            };
+            p => self.add_content(p,elem);
+            tracing::error!("No content container for {elem:?}")
+        )
     }
 
     pub(crate) fn do_shtml(&mut self, attrs: &mut Vec<Attribute>) -> OpenElems {
@@ -106,7 +94,16 @@ macro_rules! tags {
     (@close !) => { true };
     (@close $($close:tt)*) => { {$($close)*} };
     ($v:ident,$node:ident,$slf:ident,$attrs:ident,$i:ident,$rest:ident,
-        $($tag:ident$(($($n:ident:$t:ty),+))? = $shtml:literal : $weight:literal {$($open:tt)*} => {$($close:tt)*} $(=> {$on_open:expr})? ;)*
+        $(
+            $tag:ident$(($($n:ident:$t:ty),+))?
+            = $shtml:literal
+            : $weight:literal
+            $(,cont=$cont:ident)?
+            $(,narr=$narr:ident)?
+            {$($open:tt)*}
+            $(, then {$($on_open:tt)*})?
+            => {$($close:tt)*}
+        ;)*
     ) => {
         #[derive(Debug,Copy,Clone)]
         enum SHTMLTag {
@@ -129,9 +126,10 @@ macro_rules! tags {
             }
         }
         impl<'a> HTMLParser<'a> {
+            #[allow(unused_variables)]
             fn parse_shtml(&mut self,$attrs:&mut Vec<Attribute>,ret:&mut OpenElems) {
                 let mut $i = 0;
-                let mut $slf = self;
+                let $slf = self;
                 macro_rules! add {
                     (@common $e:expr) => {
                         {
@@ -197,8 +195,9 @@ macro_rules! tags {
                 }
             }
             /// returns whether to keep the node (or delete it)
+            #[allow(unused_variables)]
             pub(crate) fn close(&mut self,$node:&NodeWithSource,elem:OpenElem, $rest:&mut OpenElems) -> bool {
-                let mut $slf = self;
+                let $slf = self;
                 //println!(" - Closing {elem:?}");
                 match elem {
                     OpenElem::LogicalParagraph {inline,kind,fors,styles,children,title,id,terms} => {
@@ -231,11 +230,7 @@ macro_rules! tags {
                     OpenElem::NotationArg { arg, mode } => {
                         $node.data.borrow_mut().elem.push(OpenElem::NotationArg { arg, mode });true
                     }
-                    $(OpenElem::$tag$({$($n),+})? => tags!(@close $($close)* ) ),*,
-                    _ => {
-                        //println!("{elem:?}");
-                        todo!("{elem:?}")
-                    }
+                    $(OpenElem::$tag$({$($n),+})? => tags!(@close $($close)* ) ),*
                 }
             }
         }
@@ -273,7 +268,32 @@ macro_rules! tags {
             ),*
         }
         impl OpenElem {
-            pub(crate) fn on_add(&mut self,$slf:&mut HTMLParser) {
+            #[allow(unused_variables)]
+            fn content(&mut self) -> Option<&mut Vec<ContentElement>> {
+                match self {$(
+                    OpenElem::$tag$({$($n),+})? => (
+                        $( return Some($cont) )?
+                    ),
+                    )*
+                    _ => ()
+                }
+                None
+            }
+            #[allow(unused_variables)]
+            fn narration(&mut self) -> Option<&mut Vec<DocumentElement>> {
+                match self {
+                    Self::LogicalParagraph{children,..} => return Some(children),
+                    $(
+                    OpenElem::$tag$({$($n),+})? => (
+                        $( return Some($narr) )?
+                    ),
+                    )*
+                    _ => ()
+                }
+                None
+            }
+            #[allow(unused_variables)]
+            pub(crate) fn on_add(&mut self,$slf:&mut HTMLParser) -> bool {
                 let $node = self;
                 match $node {
                     OpenElem::TopLevelTerm(..) => {
@@ -282,9 +302,10 @@ macro_rules! tags {
                     OpenElem::VarNotation{..} => {
                         $slf.in_notation = true;
                     }
-                    $( OpenElem::$tag$({$($n),+})? => {$( $on_open = true )?} )*
+                    $( OpenElem::$tag$({$($n),+})? => {$( return {$($on_open)*} )?} )*
                     _ => ()
                 }
+                true
             }
         }
     }
@@ -298,7 +319,7 @@ tags!{v,node,parser,attrs,i,rest,
         signature:Option<Language>,
         content_children: Vec<ContentElement>,
         narrative_children: Vec<DocumentElement>
-    ) = "shtml:theory" : 0 {
+    ) = "shtml:theory" : 0, cont=content_children, narr=narrative_children {
         let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
             todo!("HERE: {v}");
         };
@@ -344,7 +365,7 @@ tags!{v,node,parser,attrs,i,rest,
         content_children: Vec<ContentElement>,
         narrative_children: Vec<DocumentElement>,
         macroname:Option<String>
-    ) = "shtml:feature-structure" : 0 {
+    ) = "shtml:feature-structure" : 0, cont=content_children, narr=narrative_children {
         let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
             todo!("HERE: {v}");
         };
@@ -366,7 +387,12 @@ tags!{v,node,parser,attrs,i,rest,
         true
     };
 
-    Section(level:SectionLevel,title:Option<(String,SourceRange<ByteOffset>)>,children:Vec<DocumentElement>,id:String) = "shtml:section" : 10 {
+    Section(
+        level:SectionLevel,
+        title:Option<(String,SourceRange<ByteOffset>)>,
+        children:Vec<DocumentElement>
+        ,id:String
+    ) = "shtml:section" : 10, narr=children {
         if let Some(level) = u8::from_str(v).ok().map(|u| u.try_into().ok()).flatten() {
             let id = get!(ID);
             add!(-OpenElem::Section {
@@ -392,12 +418,13 @@ tags!{v,node,parser,attrs,i,rest,
         autogradable:bool,
         language:Language,
         points:Option<f32>,
+        children:Vec<DocumentElement>,
         title:Option<(String,SourceRange<ByteOffset>)>,
         solution:Option<SourceRange<ByteOffset>>,
         hint:Option<SourceRange<ByteOffset>>,
         note:Option<SourceRange<ByteOffset>>,
         gnote:Option<SourceRange<ByteOffset>>
-    ) = "shtml:problem": 10 {
+    ) = "shtml:problem": 10, narr=children {
         let autogradable = get!(!"shtml:autogradable",c => c.eq_ignore_ascii_case("true")).unwrap_or(false);
         let language = get!("shtml:language",s =>
             if s.is_empty() {parser.language} else {if let Ok(l) = s.try_into() {l} else {
@@ -407,11 +434,11 @@ tags!{v,node,parser,attrs,i,rest,
         let points = get!("shtml:problempoints",s => s.parse().ok()).flatten();
         let id = get!(ID);
         add!(OpenElem::Problem {
-            id,autogradable,language,points,solution:None,hint:None,note:None,gnote:None,title:None
+            id,autogradable,language,points,solution:None,hint:None,note:None,gnote:None,title:None,children:Vec::new()
         })
     } => {
         parser.add_doc(node,DocumentElement::Problem(Problem {
-            id,autogradable,language,points,solution,hint,note,gnote,title
+            id,autogradable,language,points,solution,hint,note,gnote,title,children
         }));
         true
     };
@@ -427,7 +454,7 @@ tags!{v,node,parser,attrs,i,rest,
         parser.title = title;
         false
     };
-    SectionTitle(children:Vec<DocumentElement>) = "shtml:sectiontitle": 20 {
+    SectionTitle(children:Vec<DocumentElement>) = "shtml:sectiontitle": 20, narr=children {
         add!(-OpenElem::SectionTitle {children:Vec::new()})
     } => {
         let title = node.node.children().filter_map(|e|
@@ -445,7 +472,7 @@ tags!{v,node,parser,attrs,i,rest,
         );
         true
     };
-    StatementTitle(children:Vec<DocumentElement>) = "shtml:statementtitle": 20 {
+    StatementTitle(children:Vec<DocumentElement>) = "shtml:statementtitle": 20, narr=children {
         add!(-OpenElem::StatementTitle {children:Vec::new()})
     } => {
         // TODO add document children?
@@ -464,7 +491,7 @@ tags!{v,node,parser,attrs,i,rest,
         );
         true
     };
-    ProofTitle(children:Vec<DocumentElement>) = "shtml:prooftitle": 20 {
+    ProofTitle(children:Vec<DocumentElement>) = "shtml:prooftitle": 20, narr=children {
         add!(-OpenElem::ProofTitle {children:Vec::new()})
     } => {
         // TODO add document children?
@@ -483,7 +510,7 @@ tags!{v,node,parser,attrs,i,rest,
         );
         true
     };
-    ProblemTitle(children:Vec<DocumentElement>) = "shtml:problemtitle": 20 {
+    ProblemTitle(children:Vec<DocumentElement>) = "shtml:problemtitle": 20, narr=children {
         add!(-OpenElem::ProblemTitle {children:Vec::new()})
     } => {
         // TODO add document children?
@@ -599,13 +626,13 @@ tags!{v,node,parser,attrs,i,rest,
                 name, id, precedence:prec.unwrap_or(0), argprecs,inner:None
             }
         })
-    } => {
+    }, then { parser.in_notation = true;true } => {
         parser.in_notation = false;
         parser.add_content(node,ContentElement::Notation(Notation {
             uri,id,precedence,argprecs,range:node.data.borrow().range
         }));
         false
-    } => { parser.in_notation };
+    };
 
     Definiendum(uri:SymbolURI) = "shtml:definiendum": 40 {
         if let Some(uri) = get_sym_uri(v,parser.backend) {
@@ -630,7 +657,7 @@ tags!{v,node,parser,attrs,i,rest,
 
     Type = "shtml:type": 50 {
         add!(- OpenElem::Type)
-    } => {
+    }, then { parser.in_term = true;true } => {
         let t = node.as_term(Some(rest));
         iterate!(@F node(t:Term=t),
             e => if let OpenElem::Symdecl {tp,..} | OpenElem::VarDef {tp,..} = e {
@@ -640,7 +667,7 @@ tags!{v,node,parser,attrs,i,rest,
         );
         parser.in_term = false;
         true
-    } => { parser.in_term };
+    };
 
     Conclusion(uri:SymbolURI,in_term:bool) = "shtml:conclusion": 50 {
         let uri = if let Some(uri) = get_sym_uri(v,parser.backend) {uri} else {
@@ -648,7 +675,7 @@ tags!{v,node,parser,attrs,i,rest,
         };
         let it = parser.in_term;
         add!(- OpenElem::Conclusion{uri,in_term:it})
-    } => {
+    }, then { parser.in_term = true;true } => {
         let t = node.as_term(Some(rest));
         iterate!(@F node(uri:SymbolURI=uri,t:Term=t),
             e => if let OpenElem::LogicalParagraph {kind:StatementKind::Assertion,terms,..} = e {
@@ -658,14 +685,14 @@ tags!{v,node,parser,attrs,i,rest,
         );
         parser.in_term = in_term;
         true
-    } => { parser.in_term };
+    };
     Definiens(uri:Option<SymbolURI>,in_term:bool) = "shtml:definiens": 50 {
         let uri = if !v.is_empty() {if let Some(uri) = get_sym_uri(v,parser.backend) {Some(uri)} else {
             todo!();
         }} else {None};
         let it = parser.in_term;
         add!(- OpenElem::Definiens{uri,in_term:it})
-    } => {
+    }, then { parser.in_term = true; true } => {
         let t = node.as_term(Some(rest));
         iterate!(@F node(uri:Option<SymbolURI>=uri,t:Term=t),
             e => {
@@ -677,28 +704,44 @@ tags!{v,node,parser,attrs,i,rest,
                 }
                 if let OpenElem::Assign {tm} = e {
                     *tm = Some(t);return
-                    return
                 }
             };
             println!("TODO: Definiens is fishy")
         );
         parser.in_term = in_term;
         true
-    } => { parser.in_term };
+    };
     Rule(id:String,args:ArrayVec<Option<(Term,ArgType)>,9>) = "shtml:rule": 50 { // TODO
         let id = v.to_string();
         add!(- OpenElem::Rule {
             id,args:ArrayVec::new()
         })
-    } => {parser.in_term = false;false} => { parser.in_term };
+    }, then { parser.in_term = true;true } => {parser.in_term = false;false};
+
+    ArgSep = "shtml:argsep": 60 {
+        let _ = get!("shtml:term",_e => ());
+        let _ = get!("shtml:head",_e => ());
+        let _ = get!("shtml:notationid",_e => ());
+        let _ = get!("shtml:visible",_e => ());
+        add!(-OpenElem::ArgSep)
+    } => {!};
+
+    NotationComp = "shtml:notationcomp": 60 {
+        let _ = get!("shtml:term",_e => ());
+        let _ = get!("shtml:head",_e => ());
+        let _ = get!("shtml:notationid",_e => ());
+        let _ = get!("shtml:visible",_e => ());
+        add!(-OpenElem::NotationComp)
+    } => {!};
+    NotationOpComp = "shtml:notationopcomp": 60 {
+        let _ = get!("shtml:term",_e => ());
+        let _ = get!("shtml:head",_e => ());
+        let _ = get!("shtml:notationid",_e => ());
+        let _ = get!("shtml:visible",_e => ());
+        add!(-OpenElem::NotationOpComp)
+    } => {!};
 
     Term(tm:OpenTerm) = "shtml:term": 100 {
-        if parser.in_notation {
-            let _ = get!("shtml:term",_e => ());
-            let _ = get!("shtml:head",_e => ());
-            let _ = get!("shtml:notationid",_e => ());
-            if !parser.strip { i+= 1}
-        } else {
             let notation = get!(!"shtml:notationid",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
             let head = get!(!"shtml:head",s =>
                 if let Some(uri) = get_sym_uri(s,parser.backend) {VarOrSym::S(uri.into())}
@@ -727,57 +770,49 @@ tags!{v,node,parser,attrs,i,rest,
 
             attrs.iter_mut().find(|a| a.name.local.as_ref() == "shtml:head").unwrap()
                 .value = head.to_string().into();
-            let term = match (tk,head,parser.in_term) {
-                (TMK::OMID,VarOrSym::S(uri),true) => OpenElem::Term{tm:OpenTerm::Symref {uri,notation}},
-                (TMK::OMID,VarOrSym::S(uri),_) => OpenElem::Symref { uri, notation },
-                (TMK::OMV|TMK::OMID,VarOrSym::V(name),true) => OpenElem::Term{tm:OpenTerm::OMV {name,notation}},
-                (TMK::OMV|TMK::OMID,VarOrSym::V(name),_) => OpenElem::Varref { name, notation },
-                (TMK::OMV|TMK::OML,VarOrSym::V(name),true) => OpenElem::Term{tm:OpenTerm::OML {name}},
-                (TMK::OMA,head,true) => OpenElem::Term{tm:OpenTerm::OMA {head,notation,args:ArrayVec::new()}},
-                (TMK::OMA,head,_) => OpenElem::TopLevelTerm(OpenTerm::OMA {head,notation,args:ArrayVec::new()}),
-                (TMK::OMB,head,true) => OpenElem::Term{tm:OpenTerm::OMBIND {head,notation,args:ArrayVec::new()}},
-                (TMK::OMB,head,_) => OpenElem::TopLevelTerm(OpenTerm::OMBIND {head,notation,args:ArrayVec::new()}),
-                (TMK::Complex,_,true) => OpenElem::Term{tm:OpenTerm::Complex(None)},
-                (TMK::Complex,_,_) => OpenElem::TopLevelTerm(OpenTerm::Complex(None)),
-                (t,h,b) => {
-                    println!("TODO: Term is fishy: {t:?} {h} ({b})");
-                    if b { OpenElem::Term{tm:OpenTerm::OMV{name:"TODO".to_string(),notation:None}} }
-                    else { OpenElem::TopLevelTerm(OpenTerm::OMV{name:"TODO".to_string(),notation:None}) }
+            let term = match (tk,head) {
+                (TMK::OMID,VarOrSym::S(uri)) => OpenElem::Term{tm:OpenTerm::Symref {uri,notation}},
+                //(TMK::OMID,VarOrSym::S(uri),_) => OpenElem::Symref { uri, notation },
+                (TMK::OMV|TMK::OMID,VarOrSym::V(name)) => OpenElem::Term{tm:OpenTerm::OMV {name,notation}},
+                //(TMK::OMV|TMK::OMID,VarOrSym::V(name),_) => OpenElem::Varref { name, notation },
+                (TMK::OML,VarOrSym::V(name)) => OpenElem::Term{tm:OpenTerm::OML {name}},
+                (TMK::OMA,head) => OpenElem::Term{tm:OpenTerm::OMA {head,notation,args:ArrayVec::new()}},
+                //(TMK::OMA,head,_) => OpenElem::TopLevelTerm(OpenTerm::OMA {head,notation,args:ArrayVec::new()}),
+                (TMK::OMB,head) => OpenElem::Term{tm:OpenTerm::OMBIND {head,notation,args:ArrayVec::new()}},
+                //(TMK::OMB,head,_) => OpenElem::TopLevelTerm(OpenTerm::OMBIND {head,notation,args:ArrayVec::new()}),
+                (TMK::Complex,_) => OpenElem::Term{tm:OpenTerm::Complex(None)},
+                //(TMK::Complex,_,_) => OpenElem::TopLevelTerm(OpenTerm::Complex(None)),
+                (t,h) => {
+                    println!("TODO: Term is fishy: {t:?} {h}");
+                    OpenElem::Term{tm:OpenTerm::OMV{name:"TODO".to_string(),notation:None}}
                 }
             };
             add!(term)
+    },then{ if parser.in_notation {false} else {
+        if !parser.in_term {
+            parser.in_term = true;
+            *node = OpenElem::TopLevelTerm(std::mem::replace(tm,OpenTerm::OMV {name:"".to_string(),notation:None}));
         }
-    } => {
+        true
+    } } => {
         node.data.borrow_mut().elem.push(OpenElem::Term{tm});true
     };
 
     Arg(arg:crate::docs::Arg, mode:ArgType) = "shtml:arg": 110 {
+        let arg = get!(!"shtml:arg",s => s.parse().ok()).flatten().unwrap_or_else(|| {
+            println!("{attrs:?}\n{parser:?}");
+            todo!("{attrs:?}")
+        });
+        let mode = get!(!"shtml:argmode",s => s.parse().ok()).flatten().unwrap_or_else(|| {
+            println!("{attrs:?}\n{parser:?}");
+            todo!("{attrs:?}")
+        });
+        add!(OpenElem::Arg{arg,mode})
+    }, then {
         if parser.in_notation {
-            let arg = get!(!"shtml:arg",s => s.parse().ok()).flatten().unwrap_or_else(|| {
-                println!("{attrs:?}\n{parser:?}");
-                todo!("{attrs:?}")
-            });
-            let mode = get!(!"shtml:argmode",s => s.parse().ok()).flatten().unwrap_or_else(|| {
-                println!("{attrs:?}\n{parser:?}");
-                todo!("{attrs:?}")
-            });
-            /*
-            let num = get!(!"shtml:argnum",s => u8::from_str(s).ok()).flatten().unwrap_or_else(|| {
-                println!("{attrs:?}\n{parser:?}");
-                todo!("{attrs:?}")
-            });*/
-            add!(OpenElem::NotationArg{arg,mode})
-        } else {
-            let arg = get!(!"shtml:arg",s => s.parse().ok()).flatten().unwrap_or_else(|| {
-                println!("{attrs:?}\n{parser:?}");
-                todo!("{attrs:?}")
-            });
-            let mode = get!(!"shtml:argmode",s => s.parse().ok()).flatten().unwrap_or_else(|| {
-                println!("{attrs:?}\n{parser:?}");
-                todo!("{attrs:?}")
-            });
-            add!(OpenElem::Arg{arg,mode})
+            *node = OpenElem::NotationArg{arg:std::mem::replace(arg,Arg::Ib(0)),mode:*mode};
         }
+        true
     } => {
         let t = node.as_term(Some(rest));
         //println!("  = {t:?}");
@@ -846,29 +881,6 @@ tags!{v,node,parser,attrs,i,rest,
         );
         true
     };
-
-    ArgSep = "shtml:argsep": 120 {
-        let _ = get!("shtml:term",_e => ());
-        let _ = get!("shtml:head",_e => ());
-        let _ = get!("shtml:notationid",_e => ());
-        let _ = get!("shtml:visible",_e => ());
-        add!(-OpenElem::ArgSep)
-    } => {!};
-
-    NotationComp = "shtml:notationcomp": 130 {
-        let _ = get!("shtml:term",_e => ());
-        let _ = get!("shtml:head",_e => ());
-        let _ = get!("shtml:notationid",_e => ());
-        let _ = get!("shtml:visible",_e => ());
-        add!(-OpenElem::NotationComp)
-    } => {!};
-    NotationOpComp = "shtml:notationopcomp": 130 {
-        let _ = get!("shtml:term",_e => ());
-        let _ = get!("shtml:head",_e => ());
-        let _ = get!("shtml:notationid",_e => ());
-        let _ = get!("shtml:visible",_e => ());
-        add!(-OpenElem::NotationOpComp)
-    } => {!};
 
     Importmodule(uri:ModuleURI) = "shtml:import": 150 {
         let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
@@ -1127,10 +1139,9 @@ fn split_old(archives:&[Archive],p:&str,len:usize) -> Option<(ArchiveURI,usize)>
     archives.iter().find_map(|a| {
         if p.starts_with(a.id().as_str()) {
             let mut l = a.id().as_str().len();
-            let mut np = &p[l..];
-            if let Some(s) = np.strip_prefix('/') {
+            let np = &p[l..];
+            if np.starts_with('/') {
                 l += 1;
-                np = s;
             }
             Some((a.uri().to_owned(),len + l))
         } else { None }
@@ -1139,7 +1150,7 @@ fn split_old(archives:&[Archive],p:&str,len:usize) -> Option<(ArchiveURI,usize)>
 
 
 fn get_doc_uri(s: &str,archives:&ArchiveManager) -> Option<DocumentURI> {
-    let (mut p,m) = s.rsplit_once('/')?;
+    let (p,m) = s.rsplit_once('/')?;
     let (a,l) = split(&archives.get_archives(),p)?;
     let mut path = if l < p.len() {&p[l..]} else {""};
     if path.starts_with('/') {
