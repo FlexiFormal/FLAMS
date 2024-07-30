@@ -4,8 +4,8 @@ use crate::parsing::parser::{HTMLParser, NodeWithSource, OpenElems};
 use std::str::FromStr;
 use immt_api::backend::archives::{Archive, Storage};
 use immt_api::backend::manager::ArchiveManager;
-use immt_api::core::content::{ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Notation, Term, TermOrList, VarOrSym};
-use immt_api::core::narration::{DocumentElement, DocumentMathStructure, DocumentModule, DocumentReference, Language, LogicalParagraph, Problem, Section, SectionLevel, StatementKind};
+use immt_api::core::content::{ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Notation, NotationRef, Term, TermOrList, VarOrSym};
+use immt_api::core::narration::{DocumentElement, DocumentMathStructure, DocumentModule, DocumentReference, Language, LogicalParagraph, NarrativeRef, Problem, Section, SectionLevel, StatementKind, Title};
 use immt_api::core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_api::core::uris::base::BaseURI;
 use immt_api::core::uris::documents::DocumentURI;
@@ -16,8 +16,8 @@ use immt_api::core::utils::VecMap;
 use immt_api::core::uris::ContentURI;
 
 macro_rules! iterate {
-    ($node:expr,$e:ident => $f:expr;$p:ident => $cont:expr;$or:expr) => {
-        if let Some($p) = &$node.data.borrow().parent {
+    ($n:expr,$e:ident => $f:expr;$p:ident => $cont:expr;$or:expr) => {
+        if let Some($p) = &$n.data.borrow().parent {
             let mut data = $p.data.borrow_mut();
             for $e in data.elem.iter_mut().rev() { $f }
             drop(data); return $cont
@@ -25,15 +25,15 @@ macro_rules! iterate {
             $or
         }
     };
-    (@F $node:ident $(($($i:ident:$t:ty=$d:expr),+))?,$e:ident => $f:expr;$or:expr) => {
-        fn iter(node:&NodeWithSource$(,$($i:$t),*)?) {
-            iterate!(node,
+    (@F $n:ident $(($($i:ident:$t:ty=$d:expr),+))?,$e:ident => $f:expr;$or:expr) => {
+        fn iter($n:&NodeWithSource$(,$($i:$t),*)?) {
+            iterate!($n,
                 $e => $f;
                 p => iter(p$(,$($i),*)?);
                 $or
             )
         }
-        iter($node$(,$($d),*)?)
+        iter($n$(,$($d),*)?)
     };
 }
 
@@ -207,11 +207,18 @@ macro_rules! tags {
                         }));
                         true
                     }
-                    OpenElem::VarNotation {name,id,precedence,argprecs,inner} => {
+                    OpenElem::VarNotation {name,id,precedence,argprecs,comp,op} => {
                         $slf.in_notation = false;
-                        $slf.add_doc($node,DocumentElement::VarNotation {
-                            name,id,precedence,argprecs,inner:None
-                        });
+                        if let Some(n) = comp {
+                            let nt = n.node.to_string();
+                            println!("\nNOTATION:\n{nt}\n");
+                            let nt = $slf.store_resource(&Notation {
+                                precedence,argprecs,nt,op:op.map(|n| n.node.to_string())
+                            });
+                            $slf.add_doc($node,DocumentElement::VarNotation {
+                                name,id,range:nt
+                            });
+                        }
                         false
                     }
                     OpenElem::Symref { uri,notation} => {
@@ -250,7 +257,8 @@ macro_rules! tags {
                 id:String,
                 precedence:isize,
                 argprecs:ArrayVec<isize,9>,
-                inner:Option<String>
+                comp:Option<NodeWithSource>,
+                op:Option<NodeWithSource>
             },
             NotationArg { arg:Arg, mode:ArgType },
             LogicalParagraph {
@@ -259,7 +267,7 @@ macro_rules! tags {
                 fors:Vec<SymbolURI>,
                 styles:Vec<String>,
                 children:Vec<DocumentElement>,
-                title: Option<(String, SourceRange<ByteOffset>)>,
+                title: Option<Title>,
                 id:String,
                 terms:VecMap<SymbolURI,Term>
             },
@@ -389,7 +397,7 @@ tags!{v,node,parser,attrs,i,rest,
 
     Section(
         level:SectionLevel,
-        title:Option<(String,SourceRange<ByteOffset>)>,
+        title:Option<Title>,
         children:Vec<DocumentElement>
         ,id:String
     ) = "shtml:section" : 10, narr=children {
@@ -411,19 +419,19 @@ tags!{v,node,parser,attrs,i,rest,
     Paragraph = "shtml:paragraph": 10 {PAR: Paragraph} => {!};
     Assertion = "shtml:assertion": 10 {PAR: Assertion} => {!};
     Example = "shtml:example": 10 {PAR: Example} => {!};
-    Proof = "shtml:proof": 10 {PAR: Proof} => {!};
-    SubProof = "shtml:subproof": 10 {PAR: SubProof} => {!};
+    Proof = "shtml:proof": 10 {PAR: Proof} => {!}; // TODO
+    SubProof = "shtml:subproof": 10 {PAR: SubProof} => {!}; // TODO
     Problem(
         id:String,
         autogradable:bool,
         language:Language,
         points:Option<f32>,
         children:Vec<DocumentElement>,
-        title:Option<(String,SourceRange<ByteOffset>)>,
-        solution:Option<SourceRange<ByteOffset>>,
-        hint:Option<SourceRange<ByteOffset>>,
-        note:Option<SourceRange<ByteOffset>>,
-        gnote:Option<SourceRange<ByteOffset>>
+        title:Option<Title>,
+        solution:Option<NarrativeRef<String>>,
+        hint:Option<NarrativeRef<String>>,
+        note:Option<NarrativeRef<String>>,
+        gnote:Option<NarrativeRef<String>>
     ) = "shtml:problem": 10, narr=children {
         let autogradable = get!(!"shtml:autogradable",c => c.eq_ignore_ascii_case("true")).unwrap_or(false);
         let language = get!("shtml:language",s =>
@@ -443,30 +451,21 @@ tags!{v,node,parser,attrs,i,rest,
         true
     };
 
-    Doctitle = "shtml:doctitle" : 20 {add!(-OpenElem::Doctitle)} => {
-        let title = node.node.children().filter_map(|e|
-            if let Some(e) = e.as_text() {
-                Some(e.borrow().clone())
-            } else if e.as_element().is_some() {
-                Some(e.to_string())
-            } else { None }
-        ).collect();
-        parser.title = title;
+    Doctitle(children:Vec<DocumentElement>) = "shtml:doctitle" : 20 {add!(-OpenElem::Doctitle{children:Vec::new()})} => {
+        parser.title = Some(Title {
+            children,range:node.data.borrow().range
+        });
         false
     };
     SectionTitle(children:Vec<DocumentElement>) = "shtml:sectiontitle": 20, narr=children {
         add!(-OpenElem::SectionTitle {children:Vec::new()})
     } => {
-        let title = node.node.children().filter_map(|e|
-            if let Some(e) = e.as_text() {
-                Some(e.borrow().clone())
-            } else if e.as_element().is_some() {
-                Some(e.to_string())
-            } else { None }
-        ).collect();
-        iterate!(@F node(ttl:String=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        let title = Title {
+            children,range:node.data.borrow().range
+        };
+        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::Section { title, .. } = e {
-                *title = Some((ttl, range));return
+                *title = Some(ttl);return
             };
             todo!()
         );
@@ -475,17 +474,12 @@ tags!{v,node,parser,attrs,i,rest,
     StatementTitle(children:Vec<DocumentElement>) = "shtml:statementtitle": 20, narr=children {
         add!(-OpenElem::StatementTitle {children:Vec::new()})
     } => {
-        // TODO add document children?
-        let title = node.node.children().filter_map(|e|
-            if let Some(e) = e.as_text() {
-                Some(e.borrow().clone())
-            } else if e.as_element().is_some() {
-                Some(e.to_string())
-            } else { None }
-        ).collect();
-        iterate!(@F node(ttl:String=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        let title = Title {
+            children,range:node.data.borrow().range
+        };
+        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::LogicalParagraph { title, .. } = e {
-                *title = Some((ttl, range)); return
+                *title = Some(ttl); return
             };
             todo!()
         );
@@ -494,17 +488,12 @@ tags!{v,node,parser,attrs,i,rest,
     ProofTitle(children:Vec<DocumentElement>) = "shtml:prooftitle": 20, narr=children {
         add!(-OpenElem::ProofTitle {children:Vec::new()})
     } => {
-        // TODO add document children?
-        let title = node.node.children().filter_map(|e|
-            if let Some(e) = e.as_text() {
-                Some(e.borrow().clone())
-            } else if e.as_element().is_some() {
-                Some(e.to_string())
-            } else { None }
-        ).collect();
-        iterate!(@F node(ttl:String=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        let title = Title {
+            children,range:node.data.borrow().range
+        };
+        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::LogicalParagraph { title,kind:StatementKind::Proof, .. } = e {
-                *title = Some((ttl, range)); return
+                *title = Some(ttl); return
             };
             todo!()
         );
@@ -513,17 +502,12 @@ tags!{v,node,parser,attrs,i,rest,
     ProblemTitle(children:Vec<DocumentElement>) = "shtml:problemtitle": 20, narr=children {
         add!(-OpenElem::ProblemTitle {children:Vec::new()})
     } => {
-        // TODO add document children?
-        let title = node.node.children().filter_map(|e|
-            if let Some(e) = e.as_text() {
-                Some(e.borrow().clone())
-            } else if e.as_element().is_some() {
-                Some(e.to_string())
-            } else { None }
-        ).collect();
-        iterate!(@F node(ttl:String=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        let title = Title {
+            children,range:node.data.borrow().range
+        };
+        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::Problem { title, .. } = e {
-                *title = Some((ttl, range)); return
+                *title = Some(ttl); return
             };
             todo!()
         );
@@ -551,8 +535,9 @@ tags!{v,node,parser,attrs,i,rest,
         add!(- OpenElem::Symdecl { uri, arity, macroname, role,tp:None,df:None, assoctype, reordering });
     } => {
         parser.add_content(node,ContentElement::Constant(Constant {
-            uri,arity,macroname,role,tp,df,assoctype,reordering
+            uri:uri.clone(),arity,macroname,role,tp,df,assoctype,reordering
         }));
+        parser.add_doc(node,DocumentElement::ConstantDecl(uri));
         false
     };
     VarDef(name:String,
@@ -593,11 +578,13 @@ tags!{v,node,parser,attrs,i,rest,
         let macroname = get!("shtml:macroname",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
         add!(-OpenElem::VarDef { name, arity, macroname,role,tp:None,df:None,is_sequence:true,assoctype,reordering,bind });
     } => {!};
+
     Notation(uri:SymbolURI,
         id:String,
         precedence:isize,
         argprecs:ArrayVec<isize,9>,
-        inner:Option<String>
+        comp:Option<NodeWithSource>,
+        op:Option<NodeWithSource>
     ) = "shtml:notation":30 {
         let uri = if let Some(uri) = get_sym_uri(v,parser.backend) {Ok(uri.into())}
         else if !v.contains('?') {
@@ -620,18 +607,70 @@ tags!{v,node,parser,attrs,i,rest,
         });
         add!(- match uri {
             Ok(uri) => OpenElem::Notation {
-                uri:uri, id, precedence:prec.unwrap_or(0), argprecs,inner:None
+                uri:uri, id, precedence:prec.unwrap_or(0), argprecs,comp:None,op:None
             },
             Err(name) => OpenElem::VarNotation {
-                name, id, precedence:prec.unwrap_or(0), argprecs,inner:None
+                name, id, precedence:prec.unwrap_or(0), argprecs,comp:None,op:None
             }
         })
     }, then { parser.in_notation = true;true } => {
         parser.in_notation = false;
-        parser.add_content(node,ContentElement::Notation(Notation {
-            uri,id,precedence,argprecs,range:node.data.borrow().range
-        }));
+        if let Some(n) = comp {
+            let nt = n.node.to_string();
+            let nt = parser.store_resource(&Notation {
+                precedence,argprecs,nt,op:op.map(|n| n.node.to_string())
+            });
+            parser.add_content(node,ContentElement::Notation(NotationRef {
+                uri,id,range:nt
+            }));
+        }
         false
+    };
+
+    NotationComp = "shtml:notationcomp": 60 {
+        let _ = get!("shtml:term",_e => ());
+        let _ = get!("shtml:head",_e => ());
+        let _ = get!("shtml:notationid",_e => ());
+        let _ = get!("shtml:visible",_e => ());
+        add!(-OpenElem::NotationComp)
+    } => {
+        fn get_node(node:&NodeWithSource) -> NodeWithSource {
+            println!("get: {}",node.node.to_string());
+            match node.node.as_element().map(|e| e.name.local.as_ref()) {
+                Some(p) if (p == "math"|| p == "mrow" || p == "span") && node.data.borrow().children.len() ==1 =>
+                    get_node(&node.data.borrow().children[0]),
+                _ => node.clone()
+            }
+        }
+        let not = get_node(node);
+        iterate!(@F node(n:NodeWithSource=not), e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
+            *comp = Some(n);return
+        };
+            println!("TODO: Not in notation...?")
+        );
+        true
+    };
+    NotationOpComp = "shtml:notationopcomp": 60 {
+        let _ = get!("shtml:term",_e => ());
+        let _ = get!("shtml:head",_e => ());
+        let _ = get!("shtml:notationid",_e => ());
+        let _ = get!("shtml:visible",_e => ());
+        add!(-OpenElem::NotationOpComp)
+    } => {
+        fn get_node(node:&NodeWithSource) -> NodeWithSource {
+            match node.node.as_element().map(|e| e.name.local.as_ref()) {
+                Some(p) if (p == "math"|| p == "mrow") && node.data.borrow().children.len() ==1 =>
+                    get_node(&node.data.borrow().children[0]),
+                _ => node.clone()
+            }
+        }
+        let not = get_node(node);
+        iterate!(@F node(n:NodeWithSource=not), e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
+            *comp = Some(n);return
+        };
+            todo!("Not in notation...?")
+        );
+        true
     };
 
     Definiendum(uri:SymbolURI) = "shtml:definiendum": 40 {
@@ -724,21 +763,6 @@ tags!{v,node,parser,attrs,i,rest,
         let _ = get!("shtml:notationid",_e => ());
         let _ = get!("shtml:visible",_e => ());
         add!(-OpenElem::ArgSep)
-    } => {!};
-
-    NotationComp = "shtml:notationcomp": 60 {
-        let _ = get!("shtml:term",_e => ());
-        let _ = get!("shtml:head",_e => ());
-        let _ = get!("shtml:notationid",_e => ());
-        let _ = get!("shtml:visible",_e => ());
-        add!(-OpenElem::NotationComp)
-    } => {!};
-    NotationOpComp = "shtml:notationopcomp": 60 {
-        let _ = get!("shtml:term",_e => ());
-        let _ = get!("shtml:head",_e => ());
-        let _ = get!("shtml:notationid",_e => ());
-        let _ = get!("shtml:visible",_e => ());
-        add!(-OpenElem::NotationOpComp)
     } => {!};
 
     Term(tm:OpenTerm) = "shtml:term": 100 {
@@ -977,7 +1001,7 @@ tags!{v,node,parser,attrs,i,rest,
 
 
 
-    Invisible = "shtml:visible": 254 {add!(- OpenElem::Invisible)} => {parser.in_term || parser.in_notation};
+    Invisible = "shtml:visible": 254 {add!(- OpenElem::Invisible)} => {parser.in_term};
     Problempoints(pts:f32) = "shtml:problempoints": 254 {
         let pts = v.parse().ok().unwrap_or_else(|| {
             todo!()
@@ -994,7 +1018,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
     Solution = "shtml:solution": 254 {add!(- OpenElem::Solution)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:SourceRange<ByteOffset>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
             if let OpenElem::Problem {ref mut solution,..} = e {
                 *solution = Some(rf);return
             };
@@ -1005,7 +1029,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
     ProblemHint = "shtml:problemhint": 254 {add!(- OpenElem::ProblemHint)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:SourceRange<ByteOffset>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
             if let OpenElem::Problem {ref mut hint,..} = e {
                 *hint = Some(rf);return
             };
@@ -1016,7 +1040,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
     ProblemNote = "shtml:problemnote": 254 {add!(- OpenElem::ProblemNote)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:SourceRange<ByteOffset>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
             if let OpenElem::Problem {ref mut note,..} = e {
                 *note = Some(rf);return
             };
@@ -1027,7 +1051,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
     ProblemGradingNote = "shtml:problemgnote": 254 {add!(- OpenElem::ProblemGradingNote)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:SourceRange<ByteOffset>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
             if let OpenElem::Problem {ref mut gnote,..} = e {
                 *gnote = Some(rf);return
             };

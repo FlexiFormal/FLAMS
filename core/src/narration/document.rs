@@ -2,9 +2,10 @@ use crate::utils::sourcerefs::{ByteOffset, SourceRange};
 use crate::uris::documents::DocumentURI;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, SeekFrom, Write};
+use std::marker::PhantomData;
 use std::path::Path;
 use arrayvec::ArrayVec;
-use crate::content::{ArgSpec, AssocType, Term};
+use crate::content::{ArgSpec, AssocType, Notation, Term};
 use crate::uris::ContentURI;
 use crate::uris::modules::ModuleURI;
 use crate::uris::symbols::SymbolURI;
@@ -12,10 +13,17 @@ use crate::utils::{NestedDisplay, NestingFormatter, VecMap};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Title {
+    pub range: SourceRange<ByteOffset>,
+    pub children: Vec<DocumentElement>,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Document {
     pub language: Language,
     pub uri: DocumentURI,
-    pub title: String,
+    pub title: Option<Title>,
     pub elements: Vec<DocumentElement>,
 }
 impl NestedDisplay for Document {
@@ -46,12 +54,11 @@ pub enum DocumentElement {
     Module(DocumentModule),
     MathStructure(DocumentMathStructure),
     InputRef(DocumentReference),
+    ConstantDecl(SymbolURI),
     VarNotation {
         name:String,
         id:String,
-        precedence:isize,
-        argprecs:ArrayVec<isize,9>,
-        inner:Option<String>
+        range:NarrativeRef<Notation>
     },
     VarDef {
         name:String,
@@ -99,6 +106,7 @@ impl NestedDisplay for DocumentElement {
             VarNotation { name, id, .. } => {
                 write!(f.inner(),"Variable notation {} for {}",id,name)
             },
+            ConstantDecl(uri) => write!(f.inner(),"Constant declaration {}",uri),
             VarDef { name, .. } => {
                 write!(f.inner(),"Variable {}",name)
             },
@@ -125,15 +133,15 @@ pub struct Section {
     pub range: SourceRange<ByteOffset>,
     pub id: String,
     pub level: SectionLevel,
-    pub title: Option<(String, SourceRange<ByteOffset>)>,
+    pub title: Option<Title>,
     pub children: Vec<DocumentElement>,
 }
 impl NestedDisplay for Section {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
         write!(f.inner(),"Section {}",self.id)?;
-        if let Some((title,_)) = &self.title {
-            write!(f.inner(),": {title}")?;
+        if let Some(Title{range,..}) = &self.title {
+            write!(f.inner(),": {range:?}")?;
         }
         f.nest(|f| {
             for e in &self.children {
@@ -257,7 +265,7 @@ pub struct LogicalParagraph {
     pub kind:StatementKind,
     pub id: String,
     pub inline:bool,
-    pub title: Option<(String, SourceRange<ByteOffset>)>,
+    pub title: Option<Title>,
     pub fors: Vec<ContentURI>,
     pub range: SourceRange<ByteOffset>,
     pub styles:Vec<String>,
@@ -273,8 +281,8 @@ impl NestedDisplay for LogicalParagraph {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
         write!(f.inner(),"{} {}",self.kind,self.id)?;
-        if let Some((title,_)) = &self.title {
-            write!(f.inner(),": {title}")?;
+        if let Some(Title{range,..}) = &self.title {
+            write!(f.inner(),": {range:?}")?;
         }
         if !self.fors.is_empty() {
             write!(f.inner()," for ")?;
@@ -305,11 +313,11 @@ pub struct Problem {
     pub autogradable:bool,
     pub language:Language,
     pub points:Option<f32>,
-    pub solution:Option<SourceRange<ByteOffset>>,
-    pub hint:Option<SourceRange<ByteOffset>>,
-    pub note:Option<SourceRange<ByteOffset>>,
-    pub gnote:Option<SourceRange<ByteOffset>>,
-    pub title:Option<(String,SourceRange<ByteOffset>)>,
+    pub solution:Option<NarrativeRef<String>>,
+    pub hint:Option<NarrativeRef<String>>,
+    pub note:Option<NarrativeRef<String>>,
+    pub gnote:Option<NarrativeRef<String>>,
+    pub title:Option<Title>,
     pub children:Vec<DocumentElement>
 }
 
@@ -317,8 +325,8 @@ impl NestedDisplay for Problem {
     fn fmt_nested<'a>(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
         write!(f.inner(),"Problem {}",self.id)?;
-        if let Some((title,_)) = &self.title {
-            write!(f.inner(),": {title}")?;
+        if let Some(Title{range,..}) = &self.title {
+            write!(f.inner(),": {range:?}")?;
         }
         Ok(())
     }
@@ -451,14 +459,28 @@ pub enum CSS {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+//#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HTMLDocSpec {
     pub doc:Document,
     pub html:String,
     pub css: Vec<CSS>,
     pub body:SourceRange<ByteOffset>,
-    pub refs:String
+    pub refs:Vec<u8>
 }
+
+#[derive(Debug,Clone,Copy)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NarrativeRef<T> {
+    start:usize,
+    end:usize,
+    phantom_data: PhantomData<T>
+}
+impl<T> NarrativeRef<T> {
+    pub fn new(start:usize,end:usize) -> Self {
+        Self {start,end,phantom_data:PhantomData}
+    }
+}
+
 impl HTMLDocSpec {
     pub fn get_doc(file:&Path) -> Option<Document> {
         use std::io::Seek;
@@ -483,30 +505,32 @@ impl HTMLDocSpec {
         file.read_exact(&mut buffer).await.ok()?;
         bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok().map(|(d,_)| d)
     }
-    pub fn get_resource(file:&Path,range:SourceRange<ByteOffset>) -> Option<String> {
+    #[cfg(feature="serde")]
+    pub fn get_resource<T:for<'a> serde::Deserialize<'a>>(file:&Path,rf:NarrativeRef<T>) -> Option<T> {
         use std::io::Seek;
         let mut file = std::fs::File::open(file).ok()?;
         let mut refs = [0u8,0,0,0];
         file.read_exact(&mut refs).ok()?;
         let refs = u32::from_le_bytes(refs) as i64;
-        file.seek(SeekFrom::Current(4i64*4 + refs + range.start.offset as i64)).ok()?;
-        let mut buffer = vec![0; range.end.offset - range.start.offset];
+        file.seek(SeekFrom::Current(4i64*4 + refs + rf.start as i64)).ok()?;
+        let mut buffer = vec![0; rf.end - rf.start];
         file.read_exact(&mut buffer).ok()?;
-        String::from_utf8(buffer).ok()
+        bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok().map(|(p,_)| p)
     }
 
-    #[cfg(feature = "async")]
-    pub async fn get_resource_async(file:&Path,range:SourceRange<ByteOffset>) -> Option<String> {
+    #[cfg(all(feature = "async",feature="serde"))]
+    pub async fn get_resource_async<T:for<'a> serde::Deserialize<'a>>(file:&Path,rf:NarrativeRef<T>) -> Option<T> {
         use tokio::io::{AsyncReadExt,AsyncSeekExt};
         let mut file = tokio::fs::File::open(file).await.ok()?;
         let mut refs = [0u8,0,0,0];
         file.read_exact(&mut refs).await.ok()?;
         let refs = u32::from_le_bytes(refs) as i64;
-        file.seek(SeekFrom::Current(4i64*4 + refs + range.start.offset as i64)).await.ok()?;
-        let mut buffer = vec![0; range.end.offset - range.start.offset];
+        file.seek(SeekFrom::Current(4i64*4 + refs + rf.start as i64)).await.ok()?;
+        let mut buffer = vec![0; rf.end - rf.start];
         file.read_exact(&mut buffer).await.ok()?;
-        String::from_utf8(buffer).ok()
+        bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok().map(|(p,_)| p)
     }
+    #[cfg(feature="serde")]
     pub fn get_css_and_body(file:&Path) -> Option<(Vec<CSS>,String)> {
         use std::io::Seek;
         let mut file = std::fs::File::open(file).ok()?;
@@ -529,7 +553,7 @@ impl HTMLDocSpec {
         file.read_exact(&mut html).ok()?;
         String::from_utf8(html).ok().map(|html| (css,html))
     }
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async",feature="serde"))]
     pub async fn get_css_and_body_async(file:&Path) -> Option<(Vec<CSS>,String)> {
         use tokio::io::{AsyncReadExt,AsyncSeekExt};
         let mut file = tokio::fs::File::open(file).await.ok()?;
@@ -552,6 +576,7 @@ impl HTMLDocSpec {
         file.read_exact(&mut html).await.ok()?;
         String::from_utf8(html).ok().map(|html| (css,html))
     }
+    #[cfg(feature="serde")]
     pub fn write(self,p:&Path) {
         let mut file = std::fs::File::create(p).unwrap();
         if let Ok(doc) = bincode::serde::encode_to_vec(&self.doc,bincode::config::standard()) {
@@ -572,7 +597,7 @@ impl HTMLDocSpec {
 
 
                 file.write_all(doc.as_slice()).unwrap();
-                file.write_all(self.refs.as_bytes()).unwrap();
+                file.write_all(&self.refs).unwrap();
                 file.write_all(css.as_slice()).unwrap();
                 file.write_all(self.html.as_bytes()).unwrap();
             } else {

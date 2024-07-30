@@ -13,8 +13,7 @@ impl MigratorTrait for Migrator {
     }
 }
 
-use sea_orm::*;
-//use sea_orm::*;
+use sea_orm::{EnumIter,DeriveActiveEnum};
 #[derive(Iden, EnumIter,DeriveActiveEnum,Clone,Debug,PartialEq,Eq)]
 #[sea_orm(rs_type="u8",db_type="Integer")]
 pub enum Rights {

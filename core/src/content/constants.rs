@@ -1,6 +1,7 @@
 use std::str::FromStr;
 pub use arrayvec::ArrayVec;
 use crate::content::Term;
+use crate::narration::NarrativeRef;
 use crate::uris::symbols::SymbolURI;
 use crate::utils::sourcerefs::{ByteOffset, SourceRange};
 
@@ -85,10 +86,17 @@ impl FromStr for ArgType {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Notation {
+pub struct NotationRef {
     pub uri:SymbolURI,
     pub id:String,
+    pub range:NarrativeRef<Notation>
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Notation {
     pub precedence:isize,
     pub argprecs:ArrayVec<isize,9>,
-    pub range:SourceRange<ByteOffset>
+    pub nt:String,
+    pub op:Option<String>
 }

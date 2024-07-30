@@ -26,6 +26,6 @@ pub enum ContentElement {
     NestedModule(Module),
     Import(ModuleURI),
     Constant(super::constants::Constant),
-    Notation(super::constants::Notation),
+    Notation(super::constants::NotationRef),
     MathStructure(MathStructure)
 }

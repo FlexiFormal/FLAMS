@@ -8,7 +8,7 @@ use html5ever::tokenizer::*;
 use html5ever::interface::{ElementFlags, NextParserState, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::StrTendril;
 use immt_api::core::content::{ArrayVec, InformalChild, Module, Term};
-use immt_api::core::narration::{CSS, Document, DocumentElement, HTMLDocSpec, Language};
+use immt_api::core::narration::{CSS, Document, DocumentElement, HTMLDocSpec, Language, NarrativeRef, Title};
 use immt_api::core::uris::documents::DocumentURI;
 use kuchikiki::NodeRef;
 use tendril::{SliceExt, TendrilSink};
@@ -227,25 +227,38 @@ pub struct HTMLParser<'a> {
     pub(crate) in_term:bool,
     pub(crate) in_notation:bool,
     pub(crate) modules:Vec<Module>,
-    pub(crate) title:String,
+    pub(crate) title:Option<Title>,
     pub(crate) id_counter: usize,
     pub(crate) language: Language,
-    refs: String,
+    refs: Vec<u8>,
     body:Option<NodeWithSource>,
     css:Vec<CSS>
 }
 impl HTMLParser<'_> {
+    /*
     pub(crate) fn store_string(&mut self,s:&str) -> SourceRange<ByteOffset> {
         let off = self.refs.len();
         let end = off + s.len();
         self.refs.push_str(s);
         SourceRange { start: ByteOffset { offset: off }, end: ByteOffset { offset: end } }
     }
-    pub(crate) fn store_node(&mut self,n:&NodeWithSource) -> SourceRange<ByteOffset> {
+
+     */
+    pub(crate) fn store_resource<T:serde::Serialize>(&mut self,t:&T) -> NarrativeRef<T> {
         let off = self.refs.len();
-        let end = off + n.len();
-        self.refs.push_str(&n.node.to_string());
-        SourceRange { start: ByteOffset { offset: off }, end: ByteOffset { offset: end } }
+        struct VecWriter<'a>(&'a mut Vec<u8>);
+        impl bincode::enc::write::Writer for VecWriter<'_> {
+            fn write(&mut self, bytes: &[u8]) -> Result<(), bincode::error::EncodeError> {
+                self.0.extend_from_slice(bytes);
+                Ok(())
+            }
+        }
+        bincode::serde::encode_into_writer(t,VecWriter(&mut self.refs),bincode::config::standard()).unwrap();
+        let end = self.refs.len();
+        NarrativeRef::new(off,end)
+    }
+    pub(crate) fn store_node(&mut self,n:&NodeWithSource) -> NarrativeRef<String> {
+        self.store_resource(&n.node.to_string())
     }
     fn kill(&mut self) {
         self.document.kill();
@@ -282,13 +295,13 @@ impl<'a> HTMLParser<'a> {
         let doc = NodeWithSource::new(NodeRef::new_document(),0,ArrayVec::default());
         HTMLParser {
             backend,
-            refs:String::new(),
+            refs:Vec::new(),
             input,strip,path,uri,
             document:doc.into(),
             modules:Vec::new(),
             in_term:false,in_notation:false,
             id_counter:0,
-            notations:Vec::new(),elems:Vec::new(),title:String::new(),
+            notations:Vec::new(),elems:Vec::new(),title:None,
             language:Language::from_file(path),
             body:None,css:Vec::new()
         }
@@ -376,7 +389,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
     #[inline]
     fn parse_error(&mut self, msg: Cow<'static, str>) {
-        todo!()
+        tracing::error!("{msg}")
     }
 
     #[inline]
