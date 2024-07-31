@@ -8,7 +8,7 @@ CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk  bui
 #cd ../main
 #cargo build --release --features=async
 cd ../..
-cargo leptos build --release
+LEPTOS_WASM_OPT_VERSION=version_118 cargo leptos build --release
 cp target/release/immt bin/immt
 cp -r target/web bin/web
 #uglifyjs --compress --mangle --output bin/web/pkg/immt.min.js -- bin/web/pkg/immt.js

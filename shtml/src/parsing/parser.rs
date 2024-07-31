@@ -7,7 +7,7 @@ use immt_api::backend::manager::ArchiveManager;
 use html5ever::tokenizer::*;
 use html5ever::interface::{ElementFlags, NextParserState, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::StrTendril;
-use immt_api::core::content::{ArrayVec, InformalChild, Module, Term};
+use immt_api::core::content::{ArrayVec, InformalChild, Module, Notation, NotationComponent, Term};
 use immt_api::core::narration::{CSS, Document, DocumentElement, HTMLDocSpec, Language, NarrativeRef, Title};
 use immt_api::core::uris::documents::DocumentURI;
 use kuchikiki::NodeRef;
@@ -97,6 +97,75 @@ impl NodeWithSource {
             let n = NodeRef::new_text(text);
             let l = n.to_string().len();
             self.node.append(n);l
+        }
+    }
+    pub(crate) fn as_notation(&self,op:Option<Self>,precedence:isize,argprecs:ArrayVec<isize,9>) -> Notation {
+        use std::fmt::Write;
+        if let Some(n) = self.node.as_element() {
+            let (is_text,nl) = match n.name.local.as_ref() {
+                s@ ("span"|"div") => (true,s.len() + 1),
+                s => (false,s.len() + 1)
+            };
+            let attribute_index = nl as u8;
+            // TODO de-recursify
+            fn rec(node:&NodeWithSource,ret:&mut Vec<NotationComponent>,currstr:&mut String) {
+                let data = node.data.borrow();
+                for e in data.elem.iter() { match e {
+                    OpenElem::NotationArg { arg,mode} => {
+                        if !currstr.is_empty() {
+                            ret.push(NotationComponent::S(std::mem::take(currstr)));
+                        }
+                        ret.push(NotationComponent::Arg(*arg,*mode));
+                        return
+                    }
+                    _ => ()
+                }}
+
+                if let Some(elem) = node.node.as_element() {
+                    write!(currstr,"<{}",elem.name.local.as_ref()).unwrap();
+                    for (k,v) in elem.attributes.borrow().map.iter() {
+                        write!(currstr," {}=\"{}\"",k.local.as_ref(),v.value).unwrap();
+                    }
+                    currstr.push('>');
+                    let mut nws = data.children.iter();
+                    for c in node.node.children() {
+                        if let Some(_) = c.as_comment() {
+                            nws.next();
+                            // ignore
+                        } else if let Some(t) = c.as_text() {
+                            currstr.push_str(&**t.borrow());
+                        } else if let Some(_) = c.as_element() {
+                            let nc = nws.next().unwrap();
+                            assert_eq!(nc.node, c);
+                            rec(nc,ret,currstr)
+                        } else {
+                            unreachable!("??? {c:?}")
+                        }
+                    }
+                    write!(currstr,"</{}>",elem.name.local.as_ref()).unwrap();
+                    assert!(nws.next().is_none());
+                } else if let Some(_) = node.node.as_comment() {
+                    // ignore
+                }  else if let Some(t) = node.node.as_text() {
+                    currstr.push_str(&**t.borrow())
+                }  else {
+                    todo!("Unknown notation node {}",node.node.to_string())
+                }
+
+            }
+            let mut ret = Vec::new();
+            let mut str = String::new();
+            rec(self,&mut ret,&mut str);
+            if !str.is_empty() {
+                ret.push(NotationComponent::S(str))
+            }
+            //println!("HERE: {ret:?}");
+            Notation {precedence,attribute_index,argprecs,nt:ret,op:op.map(|o| o.node.to_string()),is_text}
+        } else {
+            let mut ret = "<span>".to_string();
+            ret.push_str(&self.node.to_string());
+            ret.push_str("</span>");
+            Notation {precedence,attribute_index:5,argprecs,nt:vec![NotationComponent::S(ret)],op:op.map(|o| o.node.to_string()),is_text:true}
         }
     }
     pub(crate) fn as_term(&self,rest:Option<&mut OpenElems>) -> Term {
@@ -195,23 +264,6 @@ impl NodeWithSource {
         } else {
             todo!("Unknown term node {}",self.node.to_string())
         }
-
-
-
-        /*
-        if self.data.borrow().children.is_empty() {
-            if self.node.children().count() == 1 {
-                if let Some(s) = self.node.children().last().unwrap().as_text() {
-                    let s = s.borrow().to_string();
-                    if s.chars().count() == 1 { // TODO: number literals
-                        return Term::OMV(s.chars().next().unwrap().to_string())
-                    }
-                }
-            }
-        }
-        todo!()
-
-         */
     }
 }
 

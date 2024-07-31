@@ -84,6 +84,36 @@ impl FromStr for ArgType {
     }
 }
 
+
+#[derive(Debug,Clone,Copy)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Arg {
+    Ib(u8),
+    AB(u8,u8)
+}
+impl Arg {
+    pub fn index(&self) -> u8 {
+        match self {
+            Arg::Ib(i) => *i,
+            Arg::AB(i, _) => *i
+        }
+    }
+}
+impl FromStr for Arg {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        //println!("HERE: {s}");
+        if s.len() == 1 {s.parse().map(Self::Ib).map_err(|_| ())}
+        else if s.len() > 1 {
+            let f = if s.as_bytes()[0] > 47 {s.as_bytes()[0] - 48} else { return Err(())};
+            let s = if let Ok(s) = (&s[1..]).parse() {s} else { return Err(())};
+            let r = Self::AB(f,s);
+            //println!(" = {r:?}");
+            Ok(r)
+        } else {Err(())}
+    }
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NotationRef {
@@ -95,8 +125,17 @@ pub struct NotationRef {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Notation {
+    pub is_text:bool,
     pub precedence:isize,
+    pub attribute_index:u8,
     pub argprecs:ArrayVec<isize,9>,
-    pub nt:String,
+    pub nt:Vec<NotationComponent>,
     pub op:Option<String>
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum NotationComponent {
+    S(String),
+    Arg(Arg,ArgType)
 }

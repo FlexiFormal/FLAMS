@@ -58,7 +58,7 @@ pub enum DocumentElement {
     VarNotation {
         name:String,
         id:String,
-        range:NarrativeRef<Notation>
+        notation:NarrativeRef<Notation>
     },
     VarDef {
         name:String,

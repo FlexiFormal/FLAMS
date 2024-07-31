@@ -1,10 +1,10 @@
 use html5ever::Attribute;
-use crate::docs::{Arg, OpenTerm};
+use crate::docs::{OpenTerm};
 use crate::parsing::parser::{HTMLParser, NodeWithSource, OpenElems};
 use std::str::FromStr;
 use immt_api::backend::archives::{Archive, Storage};
 use immt_api::backend::manager::ArchiveManager;
-use immt_api::core::content::{ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Notation, NotationRef, Term, TermOrList, VarOrSym};
+use immt_api::core::content::{Arg, ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Notation, NotationRef, Term, TermOrList, VarOrSym};
 use immt_api::core::narration::{DocumentElement, DocumentMathStructure, DocumentModule, DocumentReference, Language, LogicalParagraph, NarrativeRef, Problem, Section, SectionLevel, StatementKind, Title};
 use immt_api::core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_api::core::uris::base::BaseURI;
@@ -210,13 +210,10 @@ macro_rules! tags {
                     OpenElem::VarNotation {name,id,precedence,argprecs,comp,op} => {
                         $slf.in_notation = false;
                         if let Some(n) = comp {
-                            let nt = n.node.to_string();
-                            println!("\nNOTATION:\n{nt}\n");
-                            let nt = $slf.store_resource(&Notation {
-                                precedence,argprecs,nt,op:op.map(|n| n.node.to_string())
-                            });
+                            let nt = n.as_notation(op,precedence,argprecs);
+                            let nt = $slf.store_resource(&nt);
                             $slf.add_doc($node,DocumentElement::VarNotation {
-                                name,id,range:nt
+                                name,id,notation:nt
                             });
                         }
                         false
@@ -616,10 +613,8 @@ tags!{v,node,parser,attrs,i,rest,
     }, then { parser.in_notation = true;true } => {
         parser.in_notation = false;
         if let Some(n) = comp {
-            let nt = n.node.to_string();
-            let nt = parser.store_resource(&Notation {
-                precedence,argprecs,nt,op:op.map(|n| n.node.to_string())
-            });
+            let nt = n.as_notation(op,precedence,argprecs);
+            let nt = parser.store_resource(&nt);
             parser.add_content(node,ContentElement::Notation(NotationRef {
                 uri,id,range:nt
             }));
@@ -635,7 +630,6 @@ tags!{v,node,parser,attrs,i,rest,
         add!(-OpenElem::NotationComp)
     } => {
         fn get_node(node:&NodeWithSource) -> NodeWithSource {
-            println!("get: {}",node.node.to_string());
             match node.node.as_element().map(|e| e.name.local.as_ref()) {
                 Some(p) if (p == "math"|| p == "mrow" || p == "span") && node.data.borrow().children.len() ==1 =>
                     get_node(&node.data.borrow().children[0]),
@@ -763,7 +757,20 @@ tags!{v,node,parser,attrs,i,rest,
         let _ = get!("shtml:notationid",_e => ());
         let _ = get!("shtml:visible",_e => ());
         add!(-OpenElem::ArgSep)
-    } => {!};
+    } => {
+        //println!("HERE SEP: {}",node.node.to_string());
+        true
+    };
+    ArgMap = "shtml:argmap": 60 {
+        let _ = get!("shtml:term",_e => ());
+        let _ = get!("shtml:head",_e => ());
+        let _ = get!("shtml:notationid",_e => ());
+        let _ = get!("shtml:visible",_e => ());
+        add!(-OpenElem::ArgMap)
+    } => {
+        //println!("HERE MAP: {}",node.node.to_string());
+        true
+    };
 
     Term(tm:OpenTerm) = "shtml:term": 100 {
             let notation = get!(!"shtml:notationid",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
@@ -822,7 +829,7 @@ tags!{v,node,parser,attrs,i,rest,
         node.data.borrow_mut().elem.push(OpenElem::Term{tm});true
     };
 
-    Arg(arg:crate::docs::Arg, mode:ArgType) = "shtml:arg": 110 {
+    Arg(arg:Arg, mode:ArgType) = "shtml:arg": 110 {
         let arg = get!(!"shtml:arg",s => s.parse().ok()).flatten().unwrap_or_else(|| {
             println!("{attrs:?}\n{parser:?}");
             todo!("{attrs:?}")
