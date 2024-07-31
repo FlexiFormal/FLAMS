@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use triomphe::Arc;
-use crate::uris::archives::{ArchiveURI, ArchiveURIRef};
+use crate::uris::archives::ArchiveURI;
 use crate::uris::base::BaseURI;
 use crate::ontology::rdf::terms::NamedNode;
 
@@ -11,36 +11,54 @@ pub mod documents;
 pub mod modules;
 pub mod symbols;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Name(pub(crate) Arc<str>);
-impl Display for Name {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
+lazy_static::lazy_static! {
+    static ref NAMES:Arc<lasso::ThreadedRodeo<lasso::Spur,rustc_hash::FxBuildHasher>> = Arc::new(lasso::ThreadedRodeo::with_hasher(rustc_hash::FxBuildHasher::default()));
+    static ref EMPTY_NAME:lasso::Spur = NAMES.get_or_intern("");
+}
+
+#[derive(Clone, Copy,Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Name(lasso::Spur);
+impl Name {
+    #[inline]
+    pub fn new(s: impl AsRef<str>) -> Self {
+        Self(NAMES.get_or_intern(s))
+    }
+    #[inline]
+    pub fn empty() -> Self {
+        Self(*EMPTY_NAME)
     }
 }
-impl<S:Into<Arc<str>>> From<S> for Name {
-    fn from(s: S) -> Self {
-        Name(s.into())
+impl Display for Name {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.as_ref(), f)
+    }
+}
+impl From<&str> for Name {
+    #[inline]
+    fn from(s: &str) -> Self {
+        Self::new(s)
+    }
+}
+impl AsRef<str> for Name {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        NAMES.resolve(&self.0)
     }
 }
 
-impl Into<String> for &Name {
-    fn into(self) -> String {
-        self.0.as_ref().into()
-    }
-}
 
 #[cfg(feature = "serde")]
 mod serde_impl {
     impl serde::Serialize for super::Name {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            serializer.serialize_str(&self.0)
+            serializer.serialize_str(self.as_ref())
         }
     }
     impl<'de> serde::Deserialize<'de> for super::Name {
         fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             let s = String::deserialize(deserializer)?;
-            Ok(Self(s.into()))
+            Ok(Self::new(s))
         }
     }
 }
@@ -62,15 +80,18 @@ pub enum MMTURI {
     Base(BaseURI),
     Archive(ArchiveURI),
 }
+/*
 impl URITrait for MMTURI {
-    type Ref<'u> = MMTURIRef<'u>;
+    type Ref<'u> = Self;
     fn to_iri(&self) -> NamedNode {
         match self {
-            MMTURI::Base(b) => b.to_iri(),
+            MMTURI::Base(b) => b.to_iri().into_owned(),
             MMTURI::Archive(a) => a.to_iri(),
         }
     }
 }
+
+ */
 impl Display for MMTURI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -79,6 +100,7 @@ impl Display for MMTURI {
         }
     }
 }
+/*
 impl PartialEq<MMTURIRef<'_>> for MMTURI {
     fn eq(&self, other: &MMTURIRef<'_>) -> bool {
         match (self,other) {
@@ -98,13 +120,13 @@ impl PartialEq<MMTURI> for MMTURIRef<'_> {
 #[derive(Copy,Clone, Debug, Hash, PartialEq, Eq)]
 pub enum MMTURIRef<'u> {
     Base(&'u BaseURI),
-    Archive(ArchiveURIRef<'u>),
+    Archive(ArchiveURI),
 }
 impl<'u> URIRefTrait<'u> for MMTURIRef<'u> {
     type Owned = MMTURI;
     fn to_iri(&self) -> NamedNode {
         match self {
-            MMTURIRef::Base(b) => b.to_iri(),
+            MMTURIRef::Base(b) => b.to_iri().into_owned(),
             MMTURIRef::Archive(a) => a.to_iri(),
         }
     }
@@ -123,6 +145,8 @@ impl Display for MMTURIRef<'_> {
         }
     }
 }
+
+ */
 
 #[derive(Clone,Debug,Hash,PartialEq,Eq)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]

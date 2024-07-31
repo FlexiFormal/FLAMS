@@ -7,7 +7,7 @@ use immt_api::backend::manager::ArchiveManager;
 use html5ever::tokenizer::*;
 use html5ever::interface::{ElementFlags, NextParserState, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::StrTendril;
-use immt_api::core::content::{ArrayVec, InformalChild, Module, Notation, NotationComponent, Term};
+use immt_api::core::content::{ArgType, ArrayVec, InformalChild, Module, Notation, NotationComponent, Term};
 use immt_api::core::narration::{CSS, Document, DocumentElement, HTMLDocSpec, Language, NarrativeRef, Title};
 use immt_api::core::uris::documents::DocumentURI;
 use kuchikiki::NodeRef;
@@ -118,6 +118,104 @@ impl NodeWithSource {
                         ret.push(NotationComponent::Arg(*arg,*mode));
                         return
                     }
+                    OpenElem::ArgSep => {
+                        if !currstr.is_empty() {
+                            ret.push(NotationComponent::S(std::mem::take(currstr)));
+                        }
+                        let mut sep = String::new();
+                        let mut insep = false;
+                        let mut index = 0;
+                        let mut tp = ArgType::Sequence;
+                        for c in &data.children {
+                            if insep {
+                                sep.push_str(&c.node.to_string());continue
+                            }
+                            let idata = c.data.borrow();
+                            for e in &idata.elem {
+                                match e {
+                                    OpenElem::NotationArg { arg,mode} => {
+                                        insep = true;
+                                        index = arg.index();
+                                        tp = *mode;
+                                        break
+                                    }
+                                    _ => ()
+                                }
+                            }
+                        }
+                        ret.push(NotationComponent::ArgSep{index,tp,sep});
+                        return
+                    }
+                    OpenElem::ArgMap => {
+                        if !currstr.is_empty() {
+                            ret.push(NotationComponent::S(std::mem::take(currstr)));
+                        }
+                        let mut pre = String::new();
+                        let mut post = String::new();
+                        let mut sep = String::new();
+                        let mut inpost = false;
+                        let mut index = 0;
+                        let mut tp = ArgType::Sequence;
+                        fn irec(node:&NodeWithSource,pre:&mut String,post:&mut String,inpost:&mut bool,index:&mut u8,tp:&mut ArgType) {
+                            if *inpost { post.push_str(&node.node.to_string()); return }
+                            let data = node.data.borrow();
+                            for e in data.elem.iter() { match e {
+                                OpenElem::NotationArg {arg,mode} => {
+                                    *index = arg.index();
+                                    *tp = *mode;
+                                    *inpost = true;
+                                    return
+                                }
+                                _ => ()
+                            }}
+                            if let Some(elem) = node.node.as_element() {
+                                write!(pre,"<{}",elem.name.local.as_ref()).unwrap();
+                                for (k,v) in elem.attributes.borrow().map.iter() {
+                                    write!(pre," {}=\"{}\"",k.local.as_ref(),v.value).unwrap();
+                                }
+                                pre.push('>');
+                                let mut nws = data.children.iter();
+                                for c in node.node.children() {
+                                    if let Some(_) = c.as_comment() {
+                                        nws.next();
+                                        // ignore
+                                    } else if let Some(t) = c.as_text() {
+                                        if *inpost {post.push_str(&**t.borrow())} else {pre.push_str(&**t.borrow())}
+                                    } else if let Some(_) = c.as_element() {
+                                        let nc = nws.next().unwrap();
+                                        assert_eq!(nc.node, c);
+                                        irec(nc,pre,post,inpost,index,tp)
+                                    } else {
+                                        unreachable!("??? {c:?}")
+                                    }
+                                }
+                                write!(if *inpost {post} else {pre},"</{}>",elem.name.local.as_ref()).unwrap();
+                                assert!(nws.next().is_none());
+                            } else if let Some(_) = node.node.as_comment() {
+                                // ignore
+                            }  else if let Some(t) = node.node.as_text() {
+                                pre.push_str(&**t.borrow())
+                            }  else {
+                                todo!("Unknown notation node {}",node.node.to_string())
+                            }
+                        }
+                        'L: for c in &data.children {
+                            let idata = c.data.borrow();
+                            for e in &idata.elem {
+                                match e {
+                                    OpenElem::ArgMapSep => {
+                                        sep = c.node.to_string();
+                                        break 'L
+                                    }
+                                    _ => ()
+                                }
+                            }
+                            irec(c,&mut pre,&mut post,&mut inpost,&mut index,&mut tp)
+                        }
+                        //println!("MAP:\n - {pre}\n  - {post}\n  - {sep}");
+                        ret.push(NotationComponent::ArgMap{index,pre,post,sep});
+                        return
+                    }
                     _ => ()
                 }}
 
@@ -151,7 +249,6 @@ impl NodeWithSource {
                 }  else {
                     todo!("Unknown notation node {}",node.node.to_string())
                 }
-
             }
             let mut ret = Vec::new();
             let mut str = String::new();
@@ -159,7 +256,7 @@ impl NodeWithSource {
             if !str.is_empty() {
                 ret.push(NotationComponent::S(str))
             }
-            //println!("HERE: {ret:?}");
+            //println!("HERE NOTATION: {ret:?}");
             Notation {precedence,attribute_index,argprecs,nt:ret,op:op.map(|o| o.node.to_string()),is_text}
         } else {
             let mut ret = "<span>".to_string();

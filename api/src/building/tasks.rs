@@ -5,7 +5,7 @@ use immt_core::building::buildstate::QueueEntry;
 use immt_core::building::formats::{BuildTargetId, FormatOrTarget};
 use immt_core::content::Module;
 use immt_core::narration::{Document, HTMLDocSpec};
-use immt_core::uris::archives::{ArchiveId, ArchiveURI, ArchiveURIRef};
+use immt_core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_core::uris::modules::ModuleURI;
 use immt_core::utils::triomphe;
 use crate::backend::archives::{Archive, Storage};
@@ -54,7 +54,7 @@ impl BuildStep {
                 let p = task.rel_path().split('/').fold(ma.out_dir(),|p,s| p.join(s));
                 let _ = std::fs::create_dir_all(&p);
                 for m in mods {
-                    let out = p.join(m.uri.name()).with_extension("comd");
+                    let out = p.join(m.uri.name().as_ref()).with_extension("comd");
                     if let Ok(mut f) = std::fs::File::create(out) {
                         let _ = bincode::serde::encode_into_std_write(m,&mut f,bincode::config::standard());
                     } else {todo!()}
@@ -166,8 +166,8 @@ impl BuildTask {
             step:(self.0.next.lock().unwrap_or(self.0.steps.len() as u8 - 1),self.0.steps.len() as u8)
         }
     }
-    pub fn archive(&self) -> ArchiveURIRef {
-        self.0.archive.as_ref()
+    pub fn archive(&self) -> ArchiveURI {
+        self.0.archive
     }
     pub fn rel_path(&self) -> &str {
         &self.0.rel_path
@@ -219,7 +219,7 @@ pub struct TaskRef {
 
 #[derive(Copy,Clone)]
 pub(crate) struct TaskSpec<'a> {
-    pub archive: ArchiveURIRef<'a>,
+    pub archive: ArchiveURI,
     pub base_path: &'a Path,
     pub rel_path: &'a str,
     pub target:FormatOrTarget

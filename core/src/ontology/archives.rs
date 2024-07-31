@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use crate::building::formats::SourceFormatId;
-use crate::uris::archives::{ArchiveId, ArchiveURI, ArchiveURIRef};
+use crate::uris::archives::{ArchiveId, ArchiveURI};
 use crate::utils::VecMap;
 use crate::utils::arrayvec;
 use crate::utils::ignore_regex::IgnoreSource;
@@ -16,15 +16,15 @@ pub struct StorageSpec {
 }
 impl StorageSpec {
     #[inline]
-    pub fn id(&self) -> &ArchiveId { self.uri.id() }
+    pub fn id(&self) -> ArchiveId { self.uri.id() }
     #[inline]
-    pub fn parents(&self) -> std::str::Split<'_,char> {
+    pub fn parents(&self) -> std::str::Split<'static,char> {
         self.uri.id().steps()
     }
     #[inline]
     pub fn as_ref(&self) -> StorageSpecRef<'_> {
         StorageSpecRef {
-            uri: self.uri.as_ref(),
+            uri: self.uri,
             attributes: &self.attributes,
             formats: &self.formats
         }
@@ -34,7 +34,7 @@ impl StorageSpec {
 #[derive(Copy,Debug, Clone,PartialEq,Eq)]
 #[cfg_attr(feature = "serde",derive(serde::Serialize))]
 pub struct StorageSpecRef<'a> {
-    pub uri: ArchiveURIRef<'a>,
+    pub uri: ArchiveURI,
     pub attributes: &'a VecMap<Box<str>,Box<str>>,
     pub formats: &'a [SourceFormatId]
 }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use tracing::{Instrument, instrument};
 use immt_core::building::buildstate::{QueueEntry, QueueMessage};
 use immt_core::building::formats::{BuildTargetId, FormatOrTarget, SourceFormatId};
-use immt_core::uris::archives::{ArchiveId, ArchiveURI, ArchiveURIRef};
+use immt_core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_core::uris::modules::ModuleURI;
 use immt_core::utils::time::{Delta, Timestamp};
 use immt_core::utils::triomphe;
@@ -166,7 +166,7 @@ impl Queue {
             for dep in data.requires.iter_mut() {
                 match dep {
                     Dependency::Physical { task:ref deptask, ref strict} => {
-                        if &deptask.archive == task.0.archive.id() && deptask.rel_path == task.0.rel_path {
+                        if deptask.archive == task.0.archive.id() && deptask.rel_path == task.0.rel_path {
                             continue
                             // TODO check for more
                         }

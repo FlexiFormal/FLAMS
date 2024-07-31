@@ -5,8 +5,10 @@ use std::io::{Read, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::Path;
 use arrayvec::ArrayVec;
+use oxrdf::Quad;
 use crate::content::{ArgSpec, AssocType, Notation, Term};
-use crate::uris::ContentURI;
+use crate::ulo;
+use crate::uris::{ContentURI, Name};
 use crate::uris::modules::ModuleURI;
 use crate::uris::symbols::SymbolURI;
 use crate::utils::{NestedDisplay, NestingFormatter, VecMap};
@@ -25,6 +27,63 @@ pub struct Document {
     pub uri: DocumentURI,
     pub title: Option<Title>,
     pub elements: Vec<DocumentElement>,
+}
+
+struct TripleIterator<'a> {
+    current: Option<std::slice::Iter<'a,DocumentElement>>,
+    stack:Vec<(std::slice::Iter<'a,DocumentElement>,crate::ontology::rdf::terms::NamedNode)>,
+    buf: Vec<Quad>,
+    doc: &'a Document,
+    doc_iri: crate::ontology::rdf::terms::NamedNode,
+    curr_iri: crate::ontology::rdf::terms::NamedNode
+}
+impl<'a> Iterator for TripleIterator<'a> {
+    type Item = Quad;
+    fn next(&mut self) -> Option<Self::Item> {
+        use crate::ontology::rdf::ontologies::*;
+        if let Some(q) = self.buf.pop() { return Some(q) }
+        match &mut self.current {
+            None => {
+                self.current = Some(self.doc.elements.iter());
+                self.buf.push(
+                    ulo!((self.doc_iri.clone()) (dc::LANGUAGE) = (self.doc.language.to_string()) IN self.doc_iri.clone())
+                );
+                Some(ulo!( (self.doc_iri.clone()) : DOCUMENT IN self.doc_iri.clone()))
+            }
+            Some(it) => loop {
+                // TODO derecursify
+                if let Some(next) = it.next() {
+                    match next {
+                        DocumentElement::SetSectionLevel(..) => (),
+                        DocumentElement::Section(section) => {
+
+                        }
+                        _ => todo!()
+                    }
+                } else {
+                    if let Some((next,iri)) = self.stack.pop() {
+                        self.current = Some(next);
+                        self.curr_iri = iri;
+                        return self.next()
+                    } else {
+                        return None
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Document {
+    pub fn triples(&self) -> Vec<Quad> {
+        use crate::ontology::rdf::ontologies::*;
+        let doc = self.uri.to_iri();
+        let mut ret = vec![
+            ulo!( (doc.clone()) : FILE IN doc.clone()),
+            ulo!((doc.clone()) (dc::LANGUAGE) = (self.language.to_string()) IN doc.clone())
+        ];
+        todo!()
+    }
 }
 impl NestedDisplay for Document {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
@@ -162,7 +221,7 @@ impl Display for Section {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentModule {
     pub range: SourceRange<ByteOffset>,
-    pub name: String,
+    pub name: Name,
     pub children: Vec<DocumentElement>,
 }
 

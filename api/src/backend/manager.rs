@@ -6,7 +6,7 @@ use futures::TryFutureExt;
 use tracing::{instrument, Instrument};
 use immt_core::building::formats::{ShortId, SourceFormatId};
 use immt_core::ontology::archives::{ArchiveGroup, MathArchiveSpec, StorageSpec};
-use immt_core::uris::archives::{ArchiveId, ArchiveURI, ArchiveURIRef};
+use immt_core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_core::uris::base::BaseURI;
 use immt_core::utils::ignore_regex::IgnoreSource;
 use immt_core::utils::{arrayvec, VecMap};
@@ -184,7 +184,7 @@ impl ArchiveTree {
         let mut changed = 0; let mut new = 0;
         let mut ret = vec!();
         for spec in iter {
-            match self.archives.binary_search_by(|a| a.uri().id().cmp(spec.id())) {
+            match self.archives.binary_search_by(|a| a.uri().id().cmp(&spec.id())) {
                 Ok(i) => match &self.archives[i] {
                     Archive::Physical(orig) => {
                         if orig.archive_spec() == spec.archive_spec() {
@@ -200,7 +200,7 @@ impl ArchiveTree {
                 }
                 Err(i) => {
                     let uri = spec.uri().to_owned();
-                    self.add_archive(uri.as_ref(),sender,&mut ret);
+                    self.add_archive(uri,sender,&mut ret);
                     self.archives.insert(i,Archive::Physical(spec));
                     new += 1;
                     sender.send(ArchiveChange::New(uri));
@@ -216,11 +216,11 @@ impl ArchiveTree {
     }
 
 
-    fn delete_archive(&mut self,id:&ArchiveId) {
+    fn delete_archive(&mut self,id:ArchiveId) {
         Self::delete_archive_i(&mut self.groups,id);
         // TODO delete from relational
     }
-    fn delete_archive_i(groups: &mut Vec<ArchiveGroup>, id:&ArchiveId) {
+    fn delete_archive_i(groups: &mut Vec<ArchiveGroup>, id:ArchiveId) {
         if id.is_empty() { return }
         let is_meta = id.is_meta();
         let mut steps: Vec<_> = id.steps().rev().collect();
@@ -229,7 +229,7 @@ impl ArchiveTree {
             let step = steps.pop().unwrap();
             match curr.binary_search_by(|t| t.id().steps().last().unwrap().cmp(step)) {
                 Ok(i) => {
-                    if let ArchiveGroup::Archive(ref a) = curr[i] {
+                    if let ArchiveGroup::Archive(a) = curr[i] {
                         if steps.is_empty() && a == id {
                             curr.remove(i);
                             return
@@ -248,7 +248,7 @@ impl ArchiveTree {
             }
         }
     }
-    fn add_archive(&mut self,uri:ArchiveURIRef<'_>,sender:&ChangeSender<ArchiveChange>,quads:&mut Vec<Quad>) {
+    fn add_archive(&mut self,uri:ArchiveURI,sender:&ChangeSender<ArchiveChange>,quads:&mut Vec<Quad>) {
         quads.push(ulo!((uri.to_iri()) : LIBRARY Q));
         let id = uri.id();
         if id.is_empty() { return }

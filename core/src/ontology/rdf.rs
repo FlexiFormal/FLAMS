@@ -51,6 +51,16 @@ macro_rules! ulo {
     (($sub:expr) $tp:ident ($obj:expr)) => {
         ulo!(@TRIPLE $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
     };
+    (($sub:expr) ($tp:expr) = ($obj:expr) IN $graph:expr) => {
+        $crate::ontology::rdf::terms::Quad {
+            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+            predicate: $tp.into(),
+            object: $crate::ontology::rdf::terms::Term::Literal(
+                $crate::ontology::rdf::terms::Literal::new_simple_literal($obj)
+            ),
+            graph_name: $crate::ontology::rdf::terms::GraphName::NamedNode($graph)
+        }
+    };
     
     
     
@@ -258,6 +268,7 @@ pub mod ontologies {
 
     dict! { dc = "http://purl.org/dc/elements/1.1":
         + RIGHTS = "rights";
+        + LANGUAGE = "language";
     }
 
     dict! { owl = "http://www.w3.org/2002/07/owl":
@@ -283,6 +294,7 @@ pub mod ontologies {
         CLASS PHYSICAL = "physical" @ "An organizational unit for the physical organization of \
             mathematical knowledge into documents or document collections.";
         CLASS FILE = "file" <: PHYSICAL @ "A document in a file system.";
+        CLASS DOCUMENT = "document" <: PHYSICAL @ "A document; typically corresponding to a file.";
         CLASS FOLDER = "folder" <: PHYSICAL @ "A grouping of files and other folder, i.e. above the document level.";
         CLASS LIBRARY = "library" <: PHYSICAL @ "A grouping of mathematical documents. Usually in the \
             form of a repository.";

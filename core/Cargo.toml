@@ -17,7 +17,7 @@ crate-type = ["lib"]
 path = "src/lib.rs"
 
 [features]
-serde = ["dep:serde","url/serde","arrayvec/serde","dep:bincode"]
+serde = ["dep:serde","url/serde","arrayvec/serde","dep:bincode"]#,"smallvec/serde"]
 async = ["dep:tokio"]
 rayon = ["dep:rayon","dep:spliter"]
 
@@ -36,6 +36,10 @@ md5 = "0.7"
 chrono = "0.4"
 rayon = { version="1.10", optional=true }
 spliter = {version="0.1", optional=true}
+lazy_static = "1.5"
+lasso = {version="0.7",features=["multi-threaded","inline-more","ahasher"]}
+rustc-hash="2"
+#smallvec = { version="1.13",features=["union","const_generics","const_new","specialization"] }
 
 arrayvec = "0.7"
 

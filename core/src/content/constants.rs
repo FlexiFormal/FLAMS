@@ -137,5 +137,16 @@ pub struct Notation {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NotationComponent {
     S(String),
-    Arg(Arg,ArgType)
+    Arg(Arg,ArgType),
+    ArgSep{
+        index:u8,
+        tp:ArgType,
+        sep:String
+    },
+    ArgMap {
+        index:u8,
+        pre:String,
+        post:String,
+        sep:String
+    }
 }

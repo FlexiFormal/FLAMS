@@ -5,19 +5,20 @@ use immt_core::ontology::archives::{MathArchiveSpec, MathArchiveSpecRef, Storage
 use immt_core::utils::filetree::{Dir, FileChange, SourceDir, SourceDirEntry};
 use immt_core::utils::triomphe::Arc;
 use crate::building::targets::SourceFormat;
-use crate::core::uris::archives::{ArchiveId, ArchiveURIRef};
+use crate::core::uris::archives::{ArchiveId};
 use crate::core::utils::VecMap;
 use crate::utils::asyncs::ChangeSender;
 use immt_core::building::buildstate::AllStates;
+use immt_core::uris::archives::ArchiveURI;
 
 pub trait Storage:std::fmt::Debug {
     fn spec(&self) -> StorageSpecRef<'_>;
     #[inline]
-    fn uri(&self) -> ArchiveURIRef<'_> { self.spec().uri }
+    fn uri(&self) -> ArchiveURI { self.spec().uri }
     #[inline]
-    fn id(&self) -> &ArchiveId { self.uri().id() }
+    fn id(&self) -> ArchiveId { self.uri().id() }
     #[inline]
-    fn parents(&self) -> std::str::Split<'_,char> {
+    fn parents(&self) -> std::str::Split<'static,char> {
         self.uri().id().steps()
     }
     #[inline]
@@ -81,12 +82,12 @@ impl Eq for MathArchive {}
 
 impl PartialOrd<Self> for MathArchive {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.id().cmp(other.id()))
+        Some(self.id().cmp(&other.id()))
     }
 }
 impl Ord for MathArchive {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.id().cmp(other.id())
+        self.id().cmp(&other.id())
     }
 }
 
@@ -139,11 +140,11 @@ impl Eq for Archive {}
 
 impl PartialOrd<Self> for Archive {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.id().cmp(other.id()))
+        Some(self.id().cmp(&other.id()))
     }
 }
 impl Ord for Archive {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.id().cmp(other.id())
+        self.id().cmp(&other.id())
     }
 }

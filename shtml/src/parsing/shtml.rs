@@ -347,7 +347,7 @@ tags!{v,node,parser,attrs,i,rest,
         })
     } => {
         let dm = DocumentElement::Module(DocumentModule {
-            name: uri.name().into(),
+            name: uri.name(),
             range: node.data.borrow().range,
             children: narrative_children,
         });
@@ -380,7 +380,7 @@ tags!{v,node,parser,attrs,i,rest,
         })
     } => {
         let dm = DocumentElement::MathStructure(DocumentMathStructure {
-            name: uri.name().split('/').last().unwrap().into(),
+            name: uri.name().as_ref().split('/').last().unwrap().into(),
             range: node.data.borrow().range,
             children: narrative_children,
         });
@@ -638,6 +638,7 @@ tags!{v,node,parser,attrs,i,rest,
         }
         let not = get_node(node);
         iterate!(@F node(n:NodeWithSource=not), e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
+            //println!("Setting notation comp {}",n.node.to_string());
             *comp = Some(n);return
         };
             println!("TODO: Not in notation...?")
@@ -659,8 +660,9 @@ tags!{v,node,parser,attrs,i,rest,
             }
         }
         let not = get_node(node);
-        iterate!(@F node(n:NodeWithSource=not), e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
-            *comp = Some(n);return
+        iterate!(@F node(n:NodeWithSource=not), e => if let OpenElem::Notation{op,..}|OpenElem::VarNotation{op,..} = e {
+            //println!("Setting op notation comp {}",n.node.to_string());
+            *op = Some(n);return
         };
             todo!("Not in notation...?")
         );
@@ -758,6 +760,7 @@ tags!{v,node,parser,attrs,i,rest,
         let _ = get!("shtml:visible",_e => ());
         add!(-OpenElem::ArgSep)
     } => {
+        node.data.borrow_mut().elem.push(OpenElem::ArgSep);
         //println!("HERE SEP: {}",node.node.to_string());
         true
     };
@@ -768,7 +771,15 @@ tags!{v,node,parser,attrs,i,rest,
         let _ = get!("shtml:visible",_e => ());
         add!(-OpenElem::ArgMap)
     } => {
+        node.data.borrow_mut().elem.push(OpenElem::ArgMap);
         //println!("HERE MAP: {}",node.node.to_string());
+        true
+    };
+    ArgMapSep = "shtml:argmap-sep": 60 {
+        add!(-OpenElem::ArgMapSep)
+    } => {
+        node.data.borrow_mut().elem.push(OpenElem::ArgMapSep);
+        //println!("HERE MAP-SEP: {}",node.node.to_string());
         true
     };
 
@@ -1127,8 +1138,8 @@ const META: &str = "http://mathhub.info/sTeX/meta";
 const URTHEORIES: &str = "http://cds.omdoc.org/urtheories";
 
 lazy_static::lazy_static! {
-    static ref META_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked(MATHHUB).unwrap(),ArchiveId::new("sTeX/meta-inf"));
-    static ref UR_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://cds.omdoc.org").unwrap(),ArchiveId::new("MMT/urtheories"));
+    static ref META_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked(MATHHUB),ArchiveId::new("sTeX/meta-inf"));
+    static ref UR_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://cds.omdoc.org"),ArchiveId::new("MMT/urtheories"));
 
 }
 
