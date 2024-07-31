@@ -68,7 +68,7 @@ impl BuildQueueI {
             // TODO
         };
 
-        match tree.find_archive(&id) {
+        match tree.find_archive(id) {
             Some(Archive::Physical(ma)) => {
                 if let Some(sd) = ma.source_files() {
                     if let Some(dirorfile) = sd.find_entry(rel_path) {
@@ -118,7 +118,7 @@ impl BuildQueueI {
             // TODO
         };
 
-        match tree.find_archive(&id) {
+        match tree.find_archive(id) {
             Some(Archive::Physical(ma)) => {
                 if let Some(sd) = ma.source_files() {
                     let files = sd.dir_iter().par_split().into_par_iter().filter_map(|fd| {

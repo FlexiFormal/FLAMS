@@ -72,16 +72,15 @@ impl ArchiveManager {
         self.lock.returnable()
     }
 
-    pub fn find<R,S:AsRef<str>>(&self,id:S,f:impl FnOnce(Option<&Archive>) -> R) -> R {
+    pub fn find<R>(&self,id:ArchiveId,f:impl FnOnce(Option<&Archive>) -> R) -> R {
         self.lock.read(|s| {
-            let id = id.as_ref();
             if let Some(a) = ArchiveTree::find_i(s.archives.as_slice(), id) {
                 f(Some(a))
             } else {f(None)}
         })
     }
 
-    pub fn get_document<S:AsRef<str>,P:AsRef<str>>(&self,id:S,rel_path:P) -> Option<Document> {
+    pub fn get_document(&self,id:ArchiveId,rel_path:impl AsRef<str>) -> Option<Document> {
         self.find(id, |a| match a {
             Some(Archive::Physical(ma)) => {
                 let p = ma.out_dir().join(rel_path.as_ref()).join("index.nomd");
@@ -93,7 +92,7 @@ impl ArchiveManager {
         })
     }
 
-    pub async fn get_document_async<S:AsRef<str>,P:AsRef<str>>(&self,id:S,rel_path:P) -> Option<Document> {
+    pub async fn get_document_async(&self,id:ArchiveId,rel_path:impl AsRef<str>) -> Option<Document> {
         let p = self.find(id, |a| match a {
             Some(Archive::Physical(ma)) => {
                 Some(ma.out_dir().join(rel_path.as_ref()).join("index.nomd"))
@@ -105,7 +104,7 @@ impl ArchiveManager {
         } else { None }
     }
 
-    pub async fn get_html_async<S:AsRef<str>,P:AsRef<str>>(&self,id:S,rel_path:P) -> Option<(Vec<CSS>,String)> {
+    pub async fn get_html_async(&self,id:ArchiveId,rel_path:impl AsRef<str>) -> Option<(Vec<CSS>,String)> {
         let p = self.find(id, |a| match a {
             Some(Archive::Physical(ma)) => {
                 Some(ma.out_dir().join(rel_path.as_ref()).join("index.nomd"))
@@ -121,17 +120,17 @@ impl ArchiveManager {
 impl ArchiveTree {
     pub fn archives(&self) -> &[Archive] { &self.archives }
     pub fn groups(&self) -> &[ArchiveGroup] { &self.groups }
-    pub fn find_archive(&self,id:&ArchiveId) -> Option<&Archive> {
-        Self::find_i(self.archives.as_slice(), id.as_str())
+    pub fn find_archive(&self,id:ArchiveId) -> Option<&Archive> {
+        Self::find_i(self.archives.as_slice(), id)
     }
-    pub fn find_group_or_archive(&self,prefix:impl AsRef<str>) -> Option<&ArchiveGroup> {
-        let sr = prefix.as_ref();
+    pub fn find_group_or_archive(&self,prefix:ArchiveId) -> Option<&ArchiveGroup> {
         let mut ls = self.groups.as_slice();
         let mut ret = None;
-        for step in sr.split('/') {
+        for step in prefix.steps() {
             let i = ls.binary_search_by_key(&step,|v| v.id().last_name())
                 .ok()?;
             let elem = &ls[i];
+            //println!("Here: {elem:?}");
             ret = Some(elem);
             ls = match elem {
                 ArchiveGroup::Group { children, .. } => children.as_slice(),
@@ -140,8 +139,9 @@ impl ArchiveTree {
         }
         ret
     }
-    fn find_i<'a>(archives:&'a [Archive], id:&str) -> Option<&'a Archive> {
-        archives.binary_search_by_key(&id,|a| a.uri().id().as_str()).ok().map(|i| &archives[i])
+    fn find_i<'a>(archives:&'a [Archive], id:ArchiveId) -> Option<&'a Archive> {
+        archives.iter().find(|a| a.id() == id)
+        //archives.binary_search_by_key(&id.as_str(),|a| a.uri().id().as_str()).ok().map(|i| &archives[i])
     }
 
 
@@ -167,7 +167,7 @@ impl ArchiveTree {
         tracing::info!(target:"archives","Done; {new} new, {changed} changed, {deleted} deleted");
 
         for g in &mut self.groups {
-            g.update(&|id| Self::find_i(self.archives.as_slice(), id.as_str()).and_then(|a|
+            g.update(&|id| Self::find_i(self.archives.as_slice(), id).and_then(|a|
                 if let Archive::Physical(ma) = a {
                     Some(ma.state())
                 } else {None }

@@ -145,18 +145,18 @@ pub enum ArchiveGroup {
 }
 static DEFAULT: AllStates = AllStates {map:VecMap::new() };
 impl ArchiveGroup {
-    pub const fn id(&self) -> &ArchiveId {
+    pub const fn id(&self) -> ArchiveId {
         match self {
-            Self::Archive(id) | Self::Group { id, .. } => id
+            Self::Archive(id) | Self::Group { id, .. } => *id
         }
     }
-    pub fn state<F: Fn(&ArchiveId) -> Option<&AllStates>>(&self, get:&F) -> &AllStates {
+    pub fn state<'a,F: Fn(ArchiveId) -> Option<&'a AllStates>>(&'a self, get:&'a F) -> &'a AllStates {
         match self {
             Self::Group { state, .. } => state,
-            Self::Archive(id) => get(id).unwrap_or(&DEFAULT)
+            Self::Archive(id) => get(*id).unwrap_or(&DEFAULT)
         }
     }
-    pub fn update<'a, F: Fn(&ArchiveId) -> Option<&'a AllStates>>(&mut self, get:&'a F) {
+    pub fn update<'a, F: Fn(ArchiveId) -> Option<&'a AllStates>>(&mut self, get:&'a F) {
         match self {
             Self::Group { children, state, .. } => {
                 *state = AllStates::default();
@@ -164,7 +164,7 @@ impl ArchiveGroup {
                     c.update(get);
                     match c {
                         Self::Group { state:s, .. } => state.merge_cum(s),
-                        Self::Archive(id) => match get(id){
+                        Self::Archive(id) => match get(*id){
                             Some(s) => state.merge_cum(s),
                             None => {}
                         }

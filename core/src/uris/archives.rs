@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::num::NonZeroU16;
 use std::ops::Div;
 use std::str::FromStr;
 use triomphe::Arc;
@@ -12,6 +13,11 @@ lazy_static::lazy_static! {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArchiveId(lasso::MiniSpur);
+impl ArchiveId {
+    pub fn num(self) -> NonZeroU16 {
+        self.0.into_inner()
+    }
+}
 
 #[cfg(feature = "serde")]
 impl serde::Serialize for ArchiveId {
@@ -23,13 +29,16 @@ impl serde::Serialize for ArchiveId {
 impl<'de> serde::Deserialize<'de> for ArchiveId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        Ok(Self::new(s))
+        let r = Self::new(&s);
+        Ok(r)
     }
 }
 
 impl ArchiveId {
     #[inline]
-    pub fn as_str(&self) -> &'static str { IDS.resolve(&self.0) }
+    pub fn as_str(&self) -> &'static str {
+        IDS.resolve(&self.0)
+    }
     #[inline]
     pub fn is_empty(&self) -> bool { self.as_str().is_empty() }
     pub fn last_name(&self) -> &'static str {
@@ -41,7 +50,10 @@ impl ArchiveId {
         self.as_str().split('/')
     }
     #[inline]
-    pub fn new(s: impl AsRef<str>) -> Self { Self(IDS.get_or_intern(s)) }
+    pub fn new(s: impl AsRef<str>) -> Self {
+        let r = IDS.get_or_intern(s.as_ref());
+        Self(r)
+    }
     pub fn is_meta(&self) -> bool {
         self.last_name().eq_ignore_ascii_case("meta-inf")
     }
@@ -49,7 +61,8 @@ impl ArchiveId {
 impl FromStr for ArchiveId {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(s))
+        let r = Self::new(s);
+        Ok(r)
     }
 }
 impl<S: AsRef<str>,I:IntoIterator<Item=S>> From<I> for ArchiveId {
@@ -60,7 +73,8 @@ impl<S: AsRef<str>,I:IntoIterator<Item=S>> From<I> for ArchiveId {
             inner.push('/');
         }
         inner.pop();
-        Self::new(&inner)
+        let r = Self::new(&inner);
+        r
     }
 }
 impl Display for ArchiveId {

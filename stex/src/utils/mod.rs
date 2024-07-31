@@ -5,7 +5,7 @@ use immt_api::core::uris::archives::ArchiveId;
 
 pub(crate) fn file_path_from_archive(
     current: &Path,
-    id:&ArchiveId,
+    id:ArchiveId,
     module:&str,
     tree:&ArchiveTree,
     yields:&[&str]

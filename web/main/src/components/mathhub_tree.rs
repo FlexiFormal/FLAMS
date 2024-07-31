@@ -19,7 +19,7 @@ mod server {
     use immt_core::utils::filetree::{SourceDir, SourceDirEntry, SourceFile};
 
     //#[cfg(feature="async")]
-    pub fn get_archive_children(prefix:Option<&str>) -> Option<Vec<ArchiveOrGroup>> {
+    pub fn get_archive_children(prefix:Option<ArchiveId>) -> Option<Vec<ArchiveOrGroup>> {
         controller().archives().with_tree(|toptree| {
             let (tree,has_meta) = match prefix {
                 Some(prefix) => match toptree.find_group_or_archive(prefix)? {
@@ -30,7 +30,7 @@ mod server {
             };
             let mut children = tree.iter().filter_map(|v| match v {
                 AGroup::Archive(id) => {
-                    if let Some(Archive::Physical(ma)) = toptree.find_archive(id) {
+                    if let Some(Archive::Physical(ma)) = toptree.find_archive(*id) {
                         Some(ArchiveOrGroup::Archive(id.clone(), ma.state().clone()))
                     } else {None}
                 },
@@ -39,9 +39,7 @@ mod server {
             if has_meta {
                 let name = format!("{}/meta-inf",prefix.unwrap());
                 let id = ArchiveId::new(name.as_str());
-                children.insert(0,ArchiveOrGroup::Archive(id.clone(), if let Some(Archive::Physical(ma)) = toptree.find_archive(
-                    &id
-                ) {
+                children.insert(0,ArchiveOrGroup::Archive(id.clone(), if let Some(Archive::Physical(ma)) = toptree.find_archive(id) {
                     ma.state().clone()
                 } else {AllStates::default()}));
             }
@@ -49,7 +47,7 @@ mod server {
         })
     }
 
-    pub fn get_dir_children(archive:&str,path:Option<&str>) -> Option<Vec<DirOrFile>> {
+    pub fn get_dir_children(archive:ArchiveId,path:Option<&str>) -> Option<Vec<DirOrFile>> {
         controller().archives().find(archive,|a| {
             if let Archive::Physical(ma) = a? {
                 let sf = ma.source_files()?;
@@ -77,7 +75,7 @@ mod server {
     output=server_fn::codec::Json
 )]
 pub async fn get_archives(prefix:Option<ArchiveId>) -> Result<Vec<ArchiveOrGroup>,ServerFnError<String>> {
-    match server::get_archive_children(prefix.as_ref().map(|a| a.as_str())) {
+    match server::get_archive_children(prefix) {
         Some(v) => Ok(v),
         _ => Err(ServerFnError::WrappedServerError(format!("No archive {} found!",prefix.unwrap())))
     }
@@ -90,7 +88,7 @@ pub async fn get_archives(prefix:Option<ArchiveId>) -> Result<Vec<ArchiveOrGroup
     output=server_fn::codec::Json
 )]
 pub async fn get_files_in(archive:ArchiveId,prefix:Option<String>) -> Result<Vec<DirOrFile>,ServerFnError<String>> {
-    match server::get_dir_children(archive.as_str(),prefix.as_deref()) {
+    match server::get_dir_children(archive,prefix.as_deref()) {
         Some(v) => Ok(v),
         _ => Err(ServerFnError::WrappedServerError(format!("No archive {} found!",prefix.unwrap())))
     }
@@ -104,7 +102,7 @@ pub async fn get_files_in(archive:ArchiveId,prefix:Option<String>) -> Result<Vec
 )]
 pub async fn get_doc(archive:ArchiveId,rel_path:String) -> Result<Document,ServerFnError<String>> {
     use immt_api::controller::Controller;
-    immt_controller::controller().archives().get_document_async(archive.as_str(),rel_path).await
+    immt_controller::controller().archives().get_document_async(archive,rel_path).await
         .ok_or_else(|| ServerFnError::WrappedServerError("Document not found!".to_string()))
 }
 #[server(
@@ -115,7 +113,7 @@ pub async fn get_doc(archive:ArchiveId,rel_path:String) -> Result<Document,Serve
 )]
 pub async fn get_html_body(archive:ArchiveId,rel_path:String) -> Result<(Vec<CSS>,String),ServerFnError<String>> {
     use immt_api::controller::Controller;
-    immt_controller::controller().archives().get_html_async(archive.as_str(),rel_path).await
+    immt_controller::controller().archives().get_html_async(archive,rel_path).await
         .ok_or_else(|| ServerFnError::WrappedServerError("Document not found!".to_string()))
 }
 
@@ -210,6 +208,7 @@ fn ArchiveGroup(id:ArchiveId, state: AllStates) -> impl IntoView {
     let i = id.clone();
     let i2 = id.clone();
     let fullstate = state;
+    //console_log!("{}={}",id.num(),id);
     let state = fullstate.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| {set_expanded.update(|b| *b = !*b)}>
@@ -233,6 +232,7 @@ fn Archive(id:ArchiveId, state: AllStates) -> impl IntoView {
     let (clicked,click) = create_signal(false);
     let i = id.clone();
     let i2 = id.clone();
+    //console_log!("{}={}",id.num(),id);
     let s = state.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| set_expanded.update(|b| *b = !*b)>
@@ -256,6 +256,7 @@ fn DirOrFiles(archive:ArchiveId, #[prop(optional)] path:String, inner:bool) -> i
     let cls = if inner { immt_treeview_inner } else { immt_treeview };
     let path = if path.is_empty() {None} else {Some(path)};
     let a = archive.clone();
+    //console_log!("{}={}",archive.num(),archive);
     view!{<ul class=cls>{crate::components::with_spinner(
         move || (a.clone(),path.clone()),
         |(a,p)| get_files_in(a,p),
