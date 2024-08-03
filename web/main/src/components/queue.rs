@@ -335,18 +335,18 @@ pub fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
     use thaw::*;
     let RunningQueue {running,queue,blocked,failed, finished,eta } = queue;
     move || view!{<Space>
-        <Space align=SpaceAlign::Start><Layout>
+        <Space align=SpaceAlign::Start><Layout style="text-align:left;">
             <div>"ETA: "{move || eta.get().to_string()}</div>
             <h3 id="running">Running</h3>
-            <ul><For each=move || running.get() key=|e| e.id() children=|e| e.as_view()/></ul>
+            <ol><For each=move || running.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="queued">Queued</h3>
-            <ul><For each=move || queue.get() key=|e| e.id() children=|e| e.as_view()/></ul>
+            <ol reversed><For each=move || queue.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="blocked">Blocked</h3>
-            <ul><For each=move || blocked.get() key=|e| e.id() children=|e| e.as_view()/></ul>
+            <ol reversed><For each=move || blocked.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="failed">Failed</h3>
-            <ul><For each=move || failed.get() key=|e| e.id() children=|e| e.as_view()/></ul>
+            <ol reversed><For each=move || failed.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="finished">Finished</h3>
-            <ul><For each=move || finished.get() key=|e| e.id() children=|e| e.as_view()/></ul>
+            <ol reversed><For each=move || finished.get() key=|e| e.id() children=|e| e.as_view()/></ol>
         </Layout></Space>
         <Space align=SpaceAlign::End><div style="position:absolute;"><Anchor>
             <AnchorLink title="Running" href="#running"/>
