@@ -52,7 +52,7 @@ impl SymbolURI {
     }
     #[inline]
     pub fn to_iri(&self) -> NamedNode {
-        NamedNode::new(self.to_string().replace(' ',"%20")).unwrap()
+        NamedNode::new(self.to_string().replace(' ',"%20").replace('\\',"%5C")).unwrap()
     }
     #[inline]
     pub fn name(&self) -> Name { self.name }
