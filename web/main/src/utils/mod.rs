@@ -1,15 +1,10 @@
 pub(crate) mod errors;
 
-use std::future::Future;
+//use std::future::Future;
 use async_trait::async_trait;
 use leptos::*;
-use crate::accounts::LoginState;
 use crate::console_log;
 
-#[cfg(feature="client")]
-pub fn target() -> &'static str { "web" }
-#[cfg(feature="server")]
-pub fn target() -> &'static str { "native" }
 
 #[async_trait]
 pub(crate) trait WebSocket<
@@ -28,7 +23,7 @@ pub(crate) trait WebSocket<
     ) -> axum::response::Response where Self:Send {
         let login = crate::accounts::login_status_with_session(Some(&auth_session),|| Some(state.db.clone())).await;
         //println!("Login status: {login:?}");
-        let login = login.unwrap_or(LoginState::None);
+        let login = login.unwrap_or(crate::accounts::LoginState::None);
         if let Some(conn) = Self::new(login,state.db).await {
             ws.on_upgrade(move |socket| conn.on_upgrade(socket))
         } else {
@@ -87,6 +82,7 @@ pub(crate) trait WebSocket<
         unreachable!()
     }*/
 
+    #[allow(unused_variables)]
     fn force_start(handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static+Clone) {
         let (signal_read,_signal_write) = create_signal(false);
         let _res = create_effect(move |_| {
@@ -101,7 +97,7 @@ pub(crate) trait WebSocket<
         use wasm_bindgen::prelude::Closure;
         use wasm_bindgen::JsCast;
         let ws = leptos::web_sys::WebSocket::new(Self::SERVER_ENDPOINT).unwrap();
-        let mut ws2 = ws.clone();
+        let ws2 = ws.clone();
         let callback = Closure::<dyn FnMut(_)>::new(move |event: leptos::web_sys::MessageEvent| {
             let data = event.data().as_string().unwrap();
             //console_log!("Here: {data}");
@@ -129,9 +125,9 @@ pub(crate) trait WebSocket<
         Self::new(ws)
     }
     #[cfg(feature="server")]
-    async fn on_start(&mut self,socket:&mut axum::extract::ws::WebSocket) {}
+    async fn on_start(&mut self,_socket:&mut axum::extract::ws::WebSocket) {}
     #[cfg(feature="server")]
-    async fn new(account:LoginState,db:sea_orm::DatabaseConnection) -> Option<Self>;
+    async fn new(account:crate::accounts::LoginState,db:sea_orm::DatabaseConnection) -> Option<Self>;
     #[cfg(feature="client")]
     fn new(ws: leptos::web_sys::WebSocket) -> Self;
     #[cfg(feature="server")]

@@ -15,28 +15,24 @@ mod css {
 }
 use css::*;
 
-use crate::{console_log};
-use std::time::Duration;
 use async_trait::async_trait;
 use leptos::*;
 use immt_core::utils::logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem};
 use immt_core::utils::time::Timestamp;
 use immt_core::utils::VecMap;
-use crate::accounts::LoginState;
-use crate::utils::errors::IMMTError;
 use crate::utils::WebSocket;
 
 #[cfg(feature="server")]
 //#[tracing::instrument(level="debug",skip_all,target="server","loading log file")]
 async fn full_log_i() -> Result<LogTree,()> {
-    use immt_controller::{Controller,ControllerTrait,controller};
+    use immt_controller::{Controller,controller};
     use tokio::io::AsyncBufReadExt;
 
     // tokio::time::sleep(Duration::from_secs_f32(5.0)).await;
 
     let path = controller().log_file();
 
-    let reader = tokio::io::BufReader::new(tokio::fs::File::open(path).await.map_err(|e| ())?);
+    let reader = tokio::io::BufReader::new(tokio::fs::File::open(path).await.map_err(|_| ())?);
     let mut lines = reader.lines();
     let mut parsed = Vec::new();
     while let Ok(Some(line)) = lines.next_line().await {
@@ -68,8 +64,8 @@ pub(crate) struct LogSocket {
 impl WebSocket<(),Log> for LogSocket {
     const SERVER_ENDPOINT: &'static str = "/dashboard/log/ws";
     #[cfg(feature="server")]
-    async fn new(account:LoginState,db:sea_orm::DatabaseConnection) -> Option<Self> {
-        if account == LoginState::Admin {
+    async fn new(account:crate::accounts::LoginState,_db:sea_orm::DatabaseConnection) -> Option<Self> {
+        if account == crate::accounts::LoginState::Admin {
             let listener = immt_controller::controller().log_listener();
             Some(Self {listener})
         } else {None}
@@ -81,7 +77,7 @@ impl WebSocket<(),Log> for LogSocket {
         self.listener.read().await.and_then(|m| Some(Log::Update(m)))
     }
     #[cfg(feature="server")]
-    async fn handle_message(&mut self,msg:()) -> Option<Log> {None}
+    async fn handle_message(&mut self,_msg:()) -> Option<Log> {None}
     #[cfg(feature="server")]
     async fn on_start(&mut self,socket:&mut axum::extract::ws::WebSocket) {
         if let Ok(init) = full_log_i().await {
@@ -105,37 +101,40 @@ struct LogState {
 }
 #[island]
 fn TopLog() -> impl IntoView {
-    use crate::utils::WebSocket;
+    //use crate::utils::WebSocket;
     use thaw::Spinner;
 
-    let (signal_read,signal_write) = create_signal(false);
+    let (signal_read,_signal_write) = create_signal(false);
 
-    let log_frame = create_node_ref::<html::Ul>();
-    let warn_frame = create_node_ref::<html::Ul>();
-    let (spinner_a,spinner_b) = (create_node_ref::<html::Div>(),create_node_ref::<html::Div>());
+    let _log_frame = create_node_ref::<html::Ul>();
+    let _warn_frame = create_node_ref::<html::Ul>();
+    let (_spinner_a,_spinner_b) = (create_node_ref::<html::Div>(),create_node_ref::<html::Div>());
 
-    let res = create_effect(move |_| {
+    let _res = create_effect(move |_| {
         let _ = signal_read.get();
-        let mut state = LogState {
-            log_frame,
-            warn_frame,
-            spinners: (spinner_a,spinner_b),
-            frames: Frames::default(),
-        };
         #[cfg(feature="client")]
-        let _ = LogSocket::start(move |msg| {
-            client::ws(&mut state,msg);
-            None
-        });
+        {
+            let mut state = LogState {
+                log_frame:_log_frame,
+                warn_frame:_warn_frame,
+                spinners: (_spinner_a, _spinner_b),
+                frames: Frames::default(),
+            };
+
+            let _ = LogSocket::start(move |msg| {
+                client::ws(&mut state, msg);
+                None
+            });
+        }
     });
 
 
     view!{
-        <div class=immt_log_frame><div node_ref=spinner_a><Spinner/></div>
-            <ul node_ref=log_frame/>
+        <div class=immt_log_frame><div node_ref=_spinner_a><Spinner/></div>
+            <ul node_ref=_log_frame/>
         </div>
-        <div class=immt_warn_frame><div node_ref=spinner_b><Spinner/></div>
-            <ul node_ref=warn_frame/>
+        <div class=immt_warn_frame><div node_ref=_spinner_b><Spinner/></div>
+            <ul node_ref=_warn_frame/>
         </div>
     }
 }
@@ -224,8 +223,8 @@ mod client {
                 }
                 state.frames.insert(id, (children,sr,timestamp));
             }
-            LogFileLine::SpanClose {id,timestamp,parent} => {
-                if let Some((frame,span,started)) = state.frames.remove(&id) {
+            LogFileLine::SpanClose {id,timestamp,..} => {
+                if let Some((_,span,started)) = state.frames.remove(&id) {
                     let span = span.get_untracked().unwrap();
                     let message = format!("{} (finished after {})",span.text_content().unwrap(),timestamp.since(started));
                     span.set_text_content(Some(&message));
@@ -252,14 +251,14 @@ fn LogLine(message:String,timestamp:Timestamp,target:Option<String>,level:LogLev
         }
         str.push(')');
     }
-    let span_ref = span_ref.unwrap_or(NodeRef::default());
+    let _span_ref = span_ref.unwrap_or(NodeRef::default());
     if spinner {
-        template! {<span class=cls node_ref=span_ref>
+        view! {<span class=cls node_ref=_span_ref>
             <span class=immt_spinner_inline>
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
         </span>}
-    } else {template! {<span class=cls node_ref=span_ref>{str}</span>}}
+    } else {view! {<span class=cls node_ref=_span_ref>{str}</span>}}
 }
 
 fn class_from_level(lvl:LogLevel) -> &'static str {

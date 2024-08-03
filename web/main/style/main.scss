@@ -5,7 +5,8 @@
 @import "./thaw/badge";
 @import "./thaw/modal";
 @import "./thaw/tabs";
-/*@import "./thaw/drawer";*/
+@import "./thaw/layout";
+@import "./thaw/card";
 
 body {
 	font-family: sans-serif;
@@ -22,4 +23,5 @@ body {
 .immt-menu {
 	border-right: 3px double black;
 	min-width: fit-content;
+	height: 100%;
 }

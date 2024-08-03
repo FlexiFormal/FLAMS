@@ -1,12 +1,11 @@
 use leptos::*;
-use leptos::server_fn::ServerFn;
+//use leptos::server_fn::ServerFn;
 use leptos_meta::*;
 use leptos_router::*;
 use crate::components::*;
 use thaw::*;
 use crate::accounts::{LoginState, WithAccount, WithAccountClient};
 use crate::components::mathhub_tree::ArchivesTop;
-use crate::console_log;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]
 pub enum Page {
@@ -41,14 +40,27 @@ impl std::fmt::Display for Page {
 }
 
 #[component]
-pub fn MainNew() -> impl IntoView {
+pub fn Main() -> impl IntoView {
     provide_meta_context();
     view! {
         <Title text="iMᴍᴛ"/>
-        <Router><Routes>
+        <Router>{
+            let params = use_query_map();
+            let has_a_param = create_memo(move |_| params.with(|p| p.get("a").is_some() || p.get("uri").is_some()));
+            view!{<Routes>
+            <Route path="/" view=move || if has_a_param.get() {
+                    view! { <content::SomeUri/> }
+                } else {
+                    view! { <Redirect path="/dashboard"/> }
+                }
+            />
+        /*
+            <Route path="/:a" view=|| view!(<content::SomeUri/>)/>
             <Route path="/" view=move || view!{
                 <Redirect path="/dashboard" /> // TODO
             }/>
+
+         */
             <Route path="/dashboard" view=Dashboard>
                 // id=leptos means cargo-leptos will hot-reload this stylesheet
                 <Stylesheet id="leptos" href="/pkg/immt.css"/>
@@ -61,7 +73,7 @@ pub fn MainNew() -> impl IntoView {
                 <Route path="*any" view=|| view!(<MainPage page=Page::NotFound/>)/>
             </Route>
             //<Route path="/*any" view=NotFound/>
-        </Routes></Router>
+        </Routes>}}</Router>
     }
 }
 
@@ -72,14 +84,16 @@ fn Dashboard() -> impl IntoView {
     provide_context(theme);
     view!{
         <WithAccount><Show when=move || {expect_context::<ReadSignal<LoginState>>().get() != LoginState::Loading}>
-            <ThemeProvider theme><GlobalStyle/><Layout content_style="width:100%">
-                <LayoutHeader style="background-color: #0078ffaa;">
+            <ThemeProvider theme><GlobalStyle/><Layout position=LayoutPosition::Absolute>
+                <LayoutHeader style="background-color: #0078ffaa;height:67px;">
                     <Grid cols=3>
                         <GridItem offset=1><h2>"iMᴍᴛ"</h2></GridItem>
                         <GridItem><Space justify=SpaceJustify::End><UserField/></Space></GridItem>
                     </Grid>
                 </LayoutHeader>
-                <Layout style="padding: 20px;"><Outlet/></Layout>
+                <Layout style="padding: 20px;top:67px" position=LayoutPosition::Absolute>
+                    <Outlet/>
+                </Layout>
             </Layout></ThemeProvider>
         </Show></WithAccount>
     }
@@ -121,7 +135,7 @@ fn MainPage(page:Page) -> impl IntoView {
         _ => view!(<NotFound/>).into_view()
         //Page::Login => view!{<LoginPage/>}
     }}</main>);
-    view!{<Layout has_sider=true content_style="width:100%">
+    view!{<Layout has_sider=true style="height:100%" content_style="height:100%">
         <LayoutSider class="immt-menu" content_class="immt-menu">
             <Menu value=page.to_string()>
                 <a href="/"><MenuItem key="home" label="Home"/></a>
@@ -146,7 +160,7 @@ fn MainPage(page:Page) -> impl IntoView {
                 </Space>
             </Card> */
         </LayoutSider>
-        <WithAccountClient user=login.get()>{mymain()}</WithAccountClient>
+        <Layout><WithAccountClient user=login.get()>{mymain()}</WithAccountClient></Layout>
     </Layout>}
 }
 

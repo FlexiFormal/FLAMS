@@ -3,6 +3,7 @@ pub mod graph_viewer;
 pub mod logging;
 pub mod queue;
 pub mod settings;
+pub mod content;
 
 pub use mathhub_tree::ArchiveOrGroups;
 pub use graph_viewer::GraphTest;
@@ -15,6 +16,21 @@ use leptos::*;
 use leptos::error::*;
 
 use thaw::{Spinner, SpinnerSize};
+
+#[component]
+fn Collapsible(#[prop(optional, into)] header: View,children:ChildrenFn,#[prop(optional, into)] expanded:bool) -> impl IntoView {
+    use thaw::*;
+    let (expanded, set_expanded) = create_signal(expanded);
+    view!(<details>
+        <summary on:click=move |_| {set_expanded.update(|b| *b=!*b)}>
+            <Icon icon=icondata::AiRightOutlined class="thaw-collapse-item-arrow"/>
+        </summary>
+        <div>{move || {
+            if expanded.get() {Some(children.clone())} else {None}
+        }}</div>
+        </details>)
+}
+
 
 pub fn with_spinner<S, T, E, Fu,A:Clone+'static,V:IntoView + 'static>(
     source: impl Fn() -> S + 'static,

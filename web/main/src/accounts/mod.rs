@@ -1,5 +1,8 @@
 use std::fmt::Display;
 use leptos::*;
+#[cfg(feature="server")]
+pub(crate) use server::*;
+use crate::utils::errors::IMMTError;
 
 
 #[inline(always)]
@@ -59,7 +62,7 @@ pub fn WithAccountClient(children:Children,user:LoginState) -> impl IntoView {
 #[cfg(feature="server")]
 pub(crate) async fn login_status_with_session(
     session:Option<&axum_login::AuthSession<AccountManager>>,
-    db:impl FnOnce() -> Option<sea_orm::DatabaseConnection>
+    _db:impl FnOnce() -> Option<sea_orm::DatabaseConnection>
 ) -> Option<LoginState> {
     use axum_login::AuthUser;
     use crate::server::ADMIN_PWD;
@@ -163,10 +166,6 @@ pub(crate) mod server {
         }
     }
 }
-#[cfg(feature="server")]
-pub(crate) use server::*;
-use crate::console_log;
-use crate::utils::errors::{IMMTError, ServerError, ServerResult};
 
 #[derive(serde::Serialize,serde::Deserialize,Clone,Debug,PartialEq,Eq)]
 pub struct UserLogin {

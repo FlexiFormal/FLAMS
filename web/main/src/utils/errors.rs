@@ -11,7 +11,6 @@ pub enum IMMTError {
 }
 impl Display for IMMTError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use IMMTError::*;
         match self {
             IMMTError::InvalidCredentials => write!(f,"User does not exist or password is incorrect"),
             IMMTError::ImplementationError => write!(f,"An error occurred in the server implementation"),

@@ -67,13 +67,13 @@ pub struct LogTree {
     pub open_span_paths:VecMap<String,Vec<usize>>
 }
 impl LogTree {
-    fn find<'a>(id:&str,target:&'a mut Vec<LogTreeElem>) -> Option<&'a mut LogTreeElem> {
+    /*fn find<'a>(id:&str,target:&'a mut Vec<LogTreeElem>) -> Option<&'a mut LogTreeElem> {
         target.iter_mut().rfind(|e| match e {
             LogTreeElem::Span(LogSpan { id:eid,.. }) =>
                 id == eid,
             LogTreeElem::Message { .. } => false
         })
-    }
+    }*/
     fn merge(&mut self,line:LogTreeElem, parent:Option<String>) {
         let mut path = Vec::new();
         let p = if let Some(p) = parent.map(|p| self.open_span_paths.get(&p)).flatten() {

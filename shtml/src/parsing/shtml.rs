@@ -13,7 +13,7 @@ use immt_api::core::uris::modules::ModuleURI;
 use immt_api::core::uris::symbols::SymbolURI;
 use immt_api::core::utils::sourcerefs::{ByteOffset, SourceRange};
 use immt_api::core::utils::VecMap;
-use immt_api::core::uris::ContentURI;
+use immt_api::core::uris::{ContentURI, Name};
 
 macro_rules! iterate {
     ($n:expr,$e:ident => $f:expr;$p:ident => $cont:expr;$or:expr) => {
@@ -77,7 +77,7 @@ macro_rules! tags {
     (@open $i:ident $parser:ident PAR:$k:ident) => { {
         let fors = get!(!"shtml:fors",s =>
             s.split(",").map(|s| {
-                if let Some(uri) = get_sym_uri(s.trim(),$parser.backend) {uri} else {
+                if let Some(uri) = get_sym_uri(s.trim(),$parser.backend,$parser.language) {uri} else {
                     todo!()
                 }
             }).collect()
@@ -151,8 +151,8 @@ macro_rules! tags {
                 }
                 macro_rules! get {
                     (ID) => {
-                        if let Some(id) = get!("shtml:id",s => s.to_string()) {id} else {
-                            let id = format!("ID_{}", $slf.id_counter);
+                        if let Some(id) = get!("shtml:id",s => Name::new(s)) {id} else {
+                            let id = Name::new(&format!("ID_{}", $slf.id_counter));
                             $slf.id_counter += 1;
                             id
                         }
@@ -243,15 +243,15 @@ macro_rules! tags {
             TopLevelTerm(OpenTerm),
             Symref {
                 uri:ContentURI,
-                notation:Option<String>,
+                notation:Option<Name>,
             },
             Varref {
-                name:String,
-                notation:Option<String>,
+                name:Name,
+                notation:Option<Name>,
             },
             VarNotation {
-                name:String,
-                id:String,
+                name:Name,
+                id:Name,
                 precedence:isize,
                 argprecs:ArrayVec<isize,9>,
                 comp:Option<NodeWithSource>,
@@ -265,7 +265,7 @@ macro_rules! tags {
                 styles:Vec<String>,
                 children:Vec<DocumentElement>,
                 title: Option<Title>,
-                id:String,
+                id:Name,
                 terms:VecMap<SymbolURI,Term>
             },
             $(
@@ -320,23 +320,23 @@ tags!{v,node,parser,attrs,i,rest,
     Module(
         uri:ModuleURI,
         meta:Option<ModuleURI>,
-        language:Option<Language>,
+        language:Language,
         signature:Option<Language>,
         content_children: Vec<ContentElement>,
         narrative_children: Vec<DocumentElement>
     ) = "shtml:theory" : 0, cont=content_children, narr=narrative_children {
-        let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
+        let uri = if let Some(uri) = get_mod_uri(v,parser.backend,parser.language) {uri} else {
             todo!("HERE: {v}");
         };
-        let meta = get!("shtml:metatheory",s =>
-            if let Some(m) = get_mod_uri(s,parser.backend) {m} else {
-                todo!("HERE: {s}");
-            });
         let language = get!("shtml:language",s =>
             if s.is_empty() {parser.language} else {if let Ok(l) = s.try_into() {l} else {
                 todo!("HERE: {s}")
             }}
-        );
+        ).unwrap_or(parser.language);
+        let meta = get!("shtml:metatheory",s =>
+            if let Some(m) = get_mod_uri(s,parser.backend,language) {m} else {
+                todo!("HERE: {s}");
+            });
         let signature: Option<Language> = get!("shtml:signature",s =>
             if s.is_empty() {None} else {if let Ok(l) = s.try_into() {Some(l)} else {
                 todo!("HERE: {s}")
@@ -353,7 +353,7 @@ tags!{v,node,parser,attrs,i,rest,
         });
         parser.add_doc(node,dm);
         let m = Module {
-            uri, meta, language, signature, elements: content_children,
+            uri, meta, signature, elements: content_children,
         };
         iterate!(@F node(s:&mut HTMLParser=parser,m:Module=m),
             e => if let OpenElem::Module {content_children,..} |
@@ -371,7 +371,7 @@ tags!{v,node,parser,attrs,i,rest,
         narrative_children: Vec<DocumentElement>,
         macroname:Option<String>
     ) = "shtml:feature-structure" : 0, cont=content_children, narr=narrative_children {
-        let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
+        let uri = if let Some(uri) = get_mod_uri(v,parser.backend,parser.language) {uri} else {
             todo!("HERE: {v}");
         };
         let macroname = get!("shtml:macroname",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
@@ -396,7 +396,7 @@ tags!{v,node,parser,attrs,i,rest,
         level:SectionLevel,
         title:Option<Title>,
         children:Vec<DocumentElement>
-        ,id:String
+        ,id:Name
     ) = "shtml:section" : 10, narr=children {
         if let Some(level) = u8::from_str(v).ok().map(|u| u.try_into().ok()).flatten() {
             let id = get!(ID);
@@ -419,7 +419,7 @@ tags!{v,node,parser,attrs,i,rest,
     Proof = "shtml:proof": 10 {PAR: Proof} => {!}; // TODO
     SubProof = "shtml:subproof": 10 {PAR: SubProof} => {!}; // TODO
     Problem(
-        id:String,
+        id:Name,
         autogradable:bool,
         language:Language,
         points:Option<f32>,
@@ -520,7 +520,7 @@ tags!{v,node,parser,attrs,i,rest,
         assoctype : Option<AssocType>,
         reordering: Option<String>
     ) = "shtml:symdecl":30 {
-        let uri = if let Some(uri) = get_sym_uri(v,parser.backend) {uri} else {
+        let uri = if let Some(uri) = get_sym_uri(v,parser.backend,parser.language) {uri} else {
             todo!();
         };
         let role = get!("shtml:role",s => s.split(',').map(|s| s.trim().to_string()).collect());
@@ -537,7 +537,7 @@ tags!{v,node,parser,attrs,i,rest,
         parser.add_doc(node,DocumentElement::ConstantDecl(uri));
         false
     };
-    VarDef(name:String,
+    VarDef(name:Name,
         arity:ArgSpec,
         macroname:Option<String>,
         role:Option<Vec<String>>,
@@ -548,7 +548,7 @@ tags!{v,node,parser,attrs,i,rest,
         reordering: Option<String>,
         bind:bool
     ) = "shtml:vardef":30 {
-        let name = v.to_string();
+        let name = Name::new(v);
         let role = get!("shtml:role",s => s.split(',').map(|s| s.trim().to_string()).collect());
         let arity = get!("shtml:args",s =>
             if let Ok(a) = s.parse() { a } else { todo!()}).unwrap_or_default();
@@ -565,7 +565,7 @@ tags!{v,node,parser,attrs,i,rest,
         false
     };
     VarSeq = "shtml:varseq":30 {
-        let name = v.to_string();
+        let name = Name::new(v);
         let role = get!("shtml:role",s => s.split(',').map(|s| s.trim().to_string()).collect());
         let arity = get!("shtml:args",s =>
             if let Ok(a) = s.parse() { a } else { todo!()}).unwrap_or_default();
@@ -577,34 +577,34 @@ tags!{v,node,parser,attrs,i,rest,
     } => {!};
 
     Notation(uri:SymbolURI,
-        id:String,
+        id:Name,
         precedence:isize,
         argprecs:ArrayVec<isize,9>,
         comp:Option<NodeWithSource>,
         op:Option<NodeWithSource>
     ) = "shtml:notation":30 {
-        let uri = if let Some(uri) = get_sym_uri(v,parser.backend) {Ok(uri.into())}
+        let uri = if let Some(uri) = get_sym_uri(v,parser.backend,parser.language) {Ok(uri.into())}
         else if !v.contains('?') {
-            Err(v.to_string())
+            Err(Name::new(v))
         } else {
             //println!("Wut: {v}");
             todo!("Wut: {v}");
         };
         let fragment = get!("shtml:notationfragment",s =>
-            if s.is_empty() {None} else {Some(s.to_string())}
+            if s.is_empty() {None} else {Some(Name::new(s))}
         ).flatten();
         let prec = get!("shtml:precedence",s => s.parse().ok()).flatten();
         let argprecs: ArrayVec<_,9> = get!("shtml:argprecs",s =>
             s.split(',').map(|s| s.trim().parse().unwrap_or(0)).collect()
         ).unwrap_or_default();
         let id = fragment.unwrap_or_else(|| {
-            let r = format!("ID_{}",parser.id_counter);
+            let r = Name::new(&format!("ID_{}",parser.id_counter));
             parser.id_counter += 1;
             r
         });
         add!(- match uri {
             Ok(uri) => OpenElem::Notation {
-                uri:uri, id, precedence:prec.unwrap_or(0), argprecs,comp:None,op:None
+                uri, id, precedence:prec.unwrap_or(0), argprecs,comp:None,op:None
             },
             Err(name) => OpenElem::VarNotation {
                 name, id, precedence:prec.unwrap_or(0), argprecs,comp:None,op:None
@@ -670,7 +670,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
 
     Definiendum(uri:SymbolURI) = "shtml:definiendum": 40 {
-        if let Some(uri) = get_sym_uri(v,parser.backend) {
+        if let Some(uri) = get_sym_uri(v,parser.backend,parser.language) {
             attrs.get_mut(i).unwrap().value = uri.to_string().into();
             add!(OpenElem::Definiendum { uri })
         } else {
@@ -705,7 +705,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
 
     Conclusion(uri:SymbolURI,in_term:bool) = "shtml:conclusion": 50 {
-        let uri = if let Some(uri) = get_sym_uri(v,parser.backend) {uri} else {
+        let uri = if let Some(uri) = get_sym_uri(v,parser.backend,parser.language) {uri} else {
             todo!();
         };
         let it = parser.in_term;
@@ -722,7 +722,7 @@ tags!{v,node,parser,attrs,i,rest,
         true
     };
     Definiens(uri:Option<SymbolURI>,in_term:bool) = "shtml:definiens": 50 {
-        let uri = if !v.is_empty() {if let Some(uri) = get_sym_uri(v,parser.backend) {Some(uri)} else {
+        let uri = if !v.is_empty() {if let Some(uri) = get_sym_uri(v,parser.backend,parser.language) {Some(uri)} else {
             todo!();
         }} else {None};
         let it = parser.in_term;
@@ -786,8 +786,8 @@ tags!{v,node,parser,attrs,i,rest,
     Term(tm:OpenTerm) = "shtml:term": 100 {
             let notation = get!(!"shtml:notationid",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
             let head = get!(!"shtml:head",s =>
-                if let Some(uri) = get_sym_uri(s,parser.backend) {VarOrSym::S(uri.into())}
-                else if let Some(uri) = get_mod_uri(s,parser.backend) {VarOrSym::S(uri.into())}
+                if let Some(uri) = get_sym_uri(s,parser.backend,parser.language) {VarOrSym::S(uri.into())}
+                else if let Some(uri) = get_mod_uri(s,parser.backend,parser.language) {VarOrSym::S(uri.into())}
                 else if !s.contains('?') {VarOrSym::V(s.to_string())} else {
                     println!("HERE: {s}");
                     VarOrSym::V("ERROR".to_string())
@@ -925,7 +925,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
 
     Importmodule(uri:ModuleURI) = "shtml:import": 150 {
-        let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
+        let uri = if let Some(uri) = get_mod_uri(v,parser.backend,parser.language) {uri} else {
             todo!("HERE: {v}");
         };
         add!(-OpenElem::Importmodule{uri})
@@ -934,7 +934,7 @@ tags!{v,node,parser,attrs,i,rest,
         false
     };
     Usemodule(uri:ModuleURI) = "shtml:usemodule": 150 {
-        let uri = if let Some(uri) = get_mod_uri(v,parser.backend) {uri} else {
+        let uri = if let Some(uri) = get_mod_uri(v,parser.backend,parser.language) {uri} else {
             todo!("HERE: {v}");
         };
         add!(-OpenElem::Usemodule{uri})
@@ -943,7 +943,7 @@ tags!{v,node,parser,attrs,i,rest,
         false
     };
 
-    InputRef(id:String,target:DocumentURI) = "shtml:inputref": 160 {
+    InputRef(id:Name,target:DocumentURI) = "shtml:inputref": 160 {
         let uri = if let Some(uri) = get_doc_uri(v,parser.backend) {uri} else {
             todo!("HERE: {v}");
         };
@@ -1192,16 +1192,18 @@ fn split_old(archives:&[Archive],p:&str,len:usize) -> Option<(ArchiveURI,usize)>
 
 
 fn get_doc_uri(s: &str,archives:&ArchiveManager) -> Option<DocumentURI> {
-    let (p,m) = s.rsplit_once('/')?;
+    let (p,mut m) = s.rsplit_once('/')?;
     let (a,l) = split(&archives.get_archives(),p)?;
     let mut path = if l < p.len() {&p[l..]} else {""};
     if path.starts_with('/') {
         path = &path[1..];
     }
-    Some(DocumentURI::new(a,path,m))
+    let lang = Language::from_rel_path(m);
+    m = m.strip_suffix(&format!(".{}",lang.to_string())).unwrap_or(m);
+    Some(DocumentURI::new(a,if path.is_empty() {None} else {Some(path)},m,lang))
 }
 
-fn get_mod_uri(s: &str,archives:&ArchiveManager) -> Option<ModuleURI> {
+fn get_mod_uri(s: &str,archives:&ArchiveManager,lang:Language) -> Option<ModuleURI> {
     let (mut p,m) = s.rsplit_once('?')?;
     if p.bytes().last() == Some(b'/') {
         p = &p[..p.len()-1];
@@ -1211,18 +1213,23 @@ fn get_mod_uri(s: &str,archives:&ArchiveManager) -> Option<ModuleURI> {
     if path.starts_with('/') {
         path = &path[1..];
     }
-    Some(ModuleURI::new(a,path,m))
+    let path = if path.is_empty() {None} else {Some(path)};
+    Some(ModuleURI::new(a,path,m,lang))
 }
 
-fn get_sym_uri(s: &str,archives:&ArchiveManager) -> Option<SymbolURI> {
+fn get_sym_uri(s: &str,archives:&ArchiveManager,lang:Language) -> Option<SymbolURI> {
     let (m,s) = match s.split_once('[') {
-        Some((m,_)) => {
+        Some((m,s)) => {
             let (m,_) = m.rsplit_once('?')?;
-            (m,&s[m.len()..])
+            let (a,b) = s.rsplit_once(']')?;
+            let am = get_mod_uri(a,archives,lang)?;
+            let n = am.name() / b;
+            let m = get_mod_uri(m,archives,lang)?;
+            return Some(SymbolURI::new(m,n))
         }
         None => s.rsplit_once('?')?
     };
-    let m = get_mod_uri(m,archives)?;
+    let m = get_mod_uri(m,archives,lang)?;
     Some(SymbolURI::new(m,s))
 }
 

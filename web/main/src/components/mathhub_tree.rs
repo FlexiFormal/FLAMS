@@ -1,11 +1,8 @@
 use leptos::*;
-use leptos_meta::{Script, Style, Stylesheet};
 use immt_core::building::buildstate::{BuildState, AllStates};
-use immt_core::narration::{CSS, Document};
-use immt_core::uris::archives::{ArchiveId, ArchiveURI};
+use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::filetree::SourceFile;
-use crate::console_log;
-use crate::accounts::{if_logged_in, LoginState};
+use crate::accounts::if_logged_in;
 
 #[cfg(feature = "server")]
 mod server {
@@ -94,28 +91,6 @@ pub async fn get_files_in(archive:ArchiveId,prefix:Option<String>) -> Result<Vec
     }
 }
 
-#[server(
-    prefix="/api/backend",
-    endpoint="doc_file",
-    input=server_fn::codec::GetUrl,
-    output=server_fn::codec::Json
-)]
-pub async fn get_doc(archive:ArchiveId,rel_path:String) -> Result<Document,ServerFnError<String>> {
-    use immt_api::controller::Controller;
-    immt_controller::controller().archives().get_document_async(archive,rel_path).await
-        .ok_or_else(|| ServerFnError::WrappedServerError("Document not found!".to_string()))
-}
-#[server(
-    prefix="/api/backend",
-    endpoint="html_body",
-    input=server_fn::codec::GetUrl,
-    output=server_fn::codec::Json
-)]
-pub async fn get_html_body(archive:ArchiveId,rel_path:String) -> Result<(Vec<CSS>,String),ServerFnError<String>> {
-    use immt_api::controller::Controller;
-    immt_controller::controller().archives().get_html_async(archive,rel_path).await
-        .ok_or_else(|| ServerFnError::WrappedServerError("Document not found!".to_string()))
-}
 
 #[derive(Clone,Debug,serde::Serialize, serde::Deserialize)]
 pub enum ArchiveOrGroup {
@@ -147,11 +122,11 @@ mod treeview {
     pub const immt_treeview_left_margin: &str = "immt-treeview-left-margin";
 }
 use treeview::*;
+use crate::components::content::SHtmlIFrame;
 use crate::components::queue::enqueue;
 
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
-    use thaw::*;
     view!(
         <Await future = || get_archives(None) let:archives blocking=true><ul class=immt_treeview>{match archives {
                 Ok(archives) => archives.into_iter().map(|a| match a{
@@ -168,7 +143,7 @@ pub fn ArchivesTop() -> impl IntoView {
 pub fn ArchiveOrGroups(path:ArchiveId) -> impl IntoView {
     use thaw::*;
     //console_log!("Loading archive/group {path}");
-    let pathcl = path.clone();
+    //let pathcl = path.clone();
     let resource = create_local_resource(move || Some(path.clone()), get_archives);
     move || view!{
         <Suspense fallback=|| view!(<Spinner size=SpinnerSize::Tiny/>)>
@@ -193,16 +168,12 @@ fn badge(new:u32,stale:u32) -> impl IntoView {
             </Badge></Badge>
         </div>);
     if_logged_in(f,|| view!(<div/>))
-    //f
-    /*view!{
-        <IfLoggedIn>{f}</IfLoggedIn>
-    }*/
 }
 
 
 #[island]
 fn ArchiveGroup(id:ArchiveId, state: AllStates) -> impl IntoView {
-    use thaw::Modal;
+    use thaw::*;
     let (expanded, set_expanded) = create_signal(false);
     let (clicked,click) = create_signal(false);
     let i = id.clone();
@@ -212,7 +183,7 @@ fn ArchiveGroup(id:ArchiveId, state: AllStates) -> impl IntoView {
     let state = fullstate.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| {set_expanded.update(|b| *b = !*b)}>
-            <span class=immt_treeview_group>{i2.as_str().split('/').last().unwrap().to_string()}</span>
+            <span><Icon icon=icondata::IoLibrary/>" "{i2.as_str().split('/').last().unwrap().to_string()}</span>
             <Modal show=(clicked,click)><GroupModal id=i state=fullstate/></Modal>
             <span on:click=move |_| {click.set(true)} style="cursor: help;">" 🛈"</span>
             <span class=immt_treeview_left_margin/>
@@ -227,7 +198,7 @@ fn ArchiveGroup(id:ArchiveId, state: AllStates) -> impl IntoView {
 
 #[island]
 fn Archive(id:ArchiveId, state: AllStates) -> impl IntoView {
-    use thaw::Modal;
+    use thaw::*;
     let (expanded, set_expanded) = create_signal(false);
     let (clicked,click) = create_signal(false);
     let i = id.clone();
@@ -236,7 +207,7 @@ fn Archive(id:ArchiveId, state: AllStates) -> impl IntoView {
     let s = state.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| set_expanded.update(|b| *b = !*b)>
-            <span class=immt_treeview_archive>
+            <span><Icon icon=icondata::BiBookSolid/>" "
                 {id.as_str().split('/').last().unwrap().to_string()}
             </span>
             <Modal show=(clicked,click)><ArchiveModal id=i state=state/></Modal>
@@ -271,7 +242,7 @@ fn DirOrFiles(archive:ArchiveId, #[prop(optional)] path:String, inner:bool) -> i
 
 #[island]
 fn Directory(archive:ArchiveId, path:String, state: AllStates) -> impl IntoView {
-    use thaw::Modal;
+    use thaw::*;
     let (expanded, set_expanded) = create_signal(false);
     let on_click = move |_| set_expanded.update(|b| *b = !*b);
     let (clicked,click) = create_signal(false);
@@ -282,7 +253,7 @@ fn Directory(archive:ArchiveId, path:String, state: AllStates) -> impl IntoView 
     let state = fullstate.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=on_click>
-            <span class=move || {if expanded.get() {immt_treeview_directory_open} else {immt_treeview_directory_closed}}>
+            <span><Icon icon=icondata::OcFileDirectoryLg/>" "
                 {path.split('/').last().unwrap().to_string()}
             </span>
             <Modal show=(clicked,click)><DirectoryModal archive=a path=p state=fullstate/></Modal>
@@ -299,7 +270,7 @@ fn Directory(archive:ArchiveId, path:String, state: AllStates) -> impl IntoView 
 
 #[island]
 fn SourceFile(archive:ArchiveId,file:SourceFile) -> impl IntoView {
-    use thaw::{Modal,Drawer,DrawerPlacement,Spinner};
+    use thaw::*;
     let show = create_rw_signal(false);
 
     let mut name = format!("{} [{}]",file.relative_path.split('/').last().unwrap(),file.format);
@@ -316,31 +287,12 @@ fn SourceFile(archive:ArchiveId,file:SourceFile) -> impl IntoView {
         BuildState::New => immt_treeview_file_new
     };
     let (clicked,click) = create_signal(false);
-    let a = archive.clone();
     let p = file.relative_path.clone();
     view!{
-        <span class=cls on:click=move |_| show.set(true)>{name.clone()}</span>
+        <span class=cls on:click=move |_| show.set(true)><Icon icon=icondata::BsFileText/>" "{name.clone()}</span>
         <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right width="70%">{
             move || if show.get() {
-                leptos_meta::provide_meta_context();
-                let a = a.clone();
-                let p = p.clone();
-                let res = create_resource(|| (),move |_| get_html_body(a.clone(),p.clone()));
-                view!{
-                    <Suspense fallback=|| view!(<Spinner/>)>{
-                        if let Some(Ok((css,html))) = res.get() {
-                            view!(<For each=move || css.clone().into_iter().enumerate() key=|(u,_)| u.to_string()
-                                children = move |(_,css)| match css {
-                                    CSS::Link(href) => view!(<Stylesheet href/>),
-                                    CSS::Inline(content) => view!(<Style>{content}</Style>)
-                                }
-                                />
-                                <Script src="/shtml.js"/>
-                                <div inner_html=html />
-                            ).into_view()
-                        } else {view!(<span/>).into_view()}
-                    }</Suspense>
-                }
+                view!(<SHtmlIFrame archive path=p.clone() ht="calc(100vh - 110px)".to_string()/>)
             } else {view!(<span/>).into_view()}
         }</Drawer>
         <Modal show=(clicked,click)><FileModal archive file/></Modal>
@@ -421,107 +373,16 @@ fn EntryModal(id:ArchiveId,state:AllStates,tp:ModalType) -> impl IntoView {
 #[island]
 fn GroupModal(id:ArchiveId,state:AllStates) -> impl IntoView {
     move || view!(<EntryModal id=id.clone() state=state.clone() tp=ModalType::Group/>)
-    /*
-    use thaw::*;
-    let targets = state.targets().map(|(i,_)| i).collect::<Vec<_>>();
-    let onclicktgt = *targets.first().unwrap();
-    let target_str = targets.iter().map(|t| t.to_string()).collect::<String>();
-    let onclickid = id.clone();
-    let act = create_action(move |b| {
-        //console_log!("building [{onclickid}]: {onclicktgt} ({})",*b);
-        enqueue(None,Some(onclickid.clone()),onclicktgt.clone(),None,*b)
-    });
-    view!{
-        <div class="immt-treeview-file-card"><Card title=id.to_string()>
-            <CardHeaderExtra slot><Tag>{target_str}</Tag></CardHeaderExtra>
-            {if_logged_in(
-                move || {
-                    view!{<span>
-                    <button on:click=move |_| act.dispatch(false)>"build all stale/new"</button>
-                    <button on:click=move |_| act.dispatch(true)>"force build all"</button>
-                    </span>}
-                },
-                || view!{<span/>}
-            )}
-            <Table>
-                <thead>
-                    <tr><td>"Build Target"</td><td>"Last Built"</td></tr>
-                </thead>
-                <tbody>
-                    <For each=move || targets.clone() key=|t| t.to_string() children=move |t|
-                        view!{<tr><td>{t.to_string()}</td><td>"TODO"</td></tr>}
-                    />
-                </tbody>
-            </Table>
-        </Card></div>
-    }
-
-     */
 }
 
 #[island]
 fn ArchiveModal(id:ArchiveId, state: AllStates) -> impl IntoView {
     move || view!(<EntryModal id=id.clone() state=state.clone() tp=ModalType::Archive/>)
-    /*
-    use thaw::*;
-    //console_log!("ArchiveModal: {:?}",state);
-    let targets = state.targets().map(|(i,_)| i).collect::<Vec<_>>();
-    let onclicktgt = *targets.first().unwrap();
-    let target_str = targets.iter().map(|t| t.to_string()).collect::<String>();
-    let onclickid = id.clone();
-    let act = create_action(move |b| {
-        //console_log!("building [{onclickid}]: {onclicktgt} ({})",*b);
-        enqueue(Some(onclickid.clone()),None,onclicktgt.clone(),None,*b)
-    });
-    view!{
-        <div class="immt-treeview-file-card"><Card title=id.to_string()>
-            <CardHeaderExtra slot><Tag>{target_str}</Tag></CardHeaderExtra>
-            {if_logged_in(
-                move || {
-                    view!{<span>
-                    <button on:click=move |_| act.dispatch(false)>"build all stale/new"</button>
-                    <button on:click=move |_| act.dispatch(true)>"force build all"</button>
-                    </span>}
-                },
-                || view!{<span/>}
-            )}
-            <Table>
-                <thead>
-                    <tr><td>"Build Target"</td><td>"Last Built"</td></tr>
-                </thead>
-                <tbody>
-                    <For each=move || targets.clone() key=|t| t.to_string() children=move |t|
-                        view!{<tr><td>{t.to_string()}</td><td>"TODO"</td></tr>}
-                    />
-                </tbody>
-            </Table>
-        </Card></div>
-    }
-
-     */
 }
 
 #[island]
 fn DirectoryModal(archive:ArchiveId,path:String,state:AllStates) -> impl IntoView {
     move || view!(<EntryModal id=archive.clone() state=state.clone() tp=ModalType::Directory(path.clone())/>)
-    /*
-    use thaw::*;
-    let title = format!("[{}]/{}",archive,path);
-    view!{
-        <div class="immt-treeview-file-card"><Card title>
-            <CardHeaderExtra slot><Tag>"TODO"</Tag></CardHeaderExtra>
-            <Table>
-                <thead>
-                    <tr><td>"Build Target"</td><td>"Last Built"</td></tr>
-                </thead>
-                <tbody>
-                    <tr><td><b>"Last Built"</b></td><td>"TODO"</td></tr>
-                </tbody>
-            </Table>
-        </Card></div>
-    }
-
-     */
 }
 
 #[island]
@@ -529,31 +390,4 @@ fn FileModal(archive:ArchiveId,file:SourceFile) -> impl IntoView {
     let mut state = AllStates::default();
     state.merge(&file.build_state,file.format);
     view!(<EntryModal id=archive.clone() state tp=ModalType::File(file.clone())/>)
-    /*
-    use thaw::*;
-    let title = format!("[{}]/{}",archive,file.relative_path);
-    let format = file.format.to_string();
-    view!{//<Space vertical=true>
-        <div class="immt-treeview-file-card"><Card title>
-            <CardHeaderExtra slot><Tag>{format}</Tag></CardHeaderExtra>
-            <Table>
-                <thead>
-                    <tr><td>"Build Target"</td><td>"Last Built"</td></tr>
-                </thead>
-                <tbody>
-                    <tr><td><b>"Last Built"</b></td><td>{
-                        match file.build_state {
-                            BuildState::UpToDate {last_built,..} => view!(<Tag variant=TagVariant::Success>"Up to date ("{last_built.to_string()}")"</Tag>),
-                            BuildState::Stale {last_built,..} => view!(<Tag variant=TagVariant::Warning>"Changed ("{last_built.to_string()}")"</Tag>),
-                            BuildState::Deleted =>view!(<Tag variant=TagVariant::Error>"Deleted"</Tag>),
-                            BuildState::New =>view!(<Tag>"New"</Tag>)
-                        }
-                    }</td></tr>
-                </tbody>
-            </Table>
-            /*<CardFooter slot>"footer"</CardFooter>*/
-        </Card></div>
-    /*</Space>*/}
-
-     */
 }

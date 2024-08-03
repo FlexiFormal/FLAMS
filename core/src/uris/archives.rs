@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use std::num::NonZeroU16;
-use std::ops::Div;
+use std::ops::{BitAnd, Div};
 use std::str::FromStr;
 use triomphe::Arc;
 use crate::uris::base::BaseURI;
@@ -84,6 +84,14 @@ impl Display for ArchiveId {
     }
 }
 
+impl BitAnd<ArchiveId> for BaseURI {
+    type Output = ArchiveURI;
+    fn bitand(self, rhs: ArchiveId) -> Self::Output {
+        ArchiveURI { base: self, archive: rhs }
+    }
+}
+
+/*
 impl<'a> Div<&'a ArchiveId> for &'a BaseURI {
     type Output = ArchiveURI;
     fn div(self, rhs: &'a ArchiveId) -> Self::Output {
@@ -103,23 +111,25 @@ impl<S:Into<ArchiveId>> Div<S> for &BaseURI {
     }
 }
 
+ */
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ArchiveURI {
     base: BaseURI,
     archive: ArchiveId,
 }
 impl FromStr for ArchiveURI {
-    type Err = ();
+    type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split('?');
-        let base = parts.next().ok_or(())?;
-        let archive = parts.next().ok_or(())?;
+        let base = parts.next().ok_or("Not a valid archive URI")?;
+        let archive = parts.next().ok_or("Not a valid archive URI")?;
         if !archive.starts_with("a=") {
-            return Err(());
+            return Err("Not a valid archive URI");
         }
         let archive = ArchiveId::new(&archive[2..]);
         Ok(ArchiveURI {
-            base: BaseURI::new(base).map_err(|_| ())?,
+            base: BaseURI::new(base).map_err(|_| "Not a valid URI")?,
             archive,
         })
     }
@@ -136,17 +146,7 @@ impl serde::Serialize for ArchiveURI {
 impl<'d> serde::Deserialize<'d> for ArchiveURI {
     fn deserialize<D: serde::Deserializer<'d>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        let mut parts = s.split('?');
-        let base = parts.next().ok_or_else(|| serde::de::Error::custom("No base"))?;
-        let archive = parts.next().ok_or_else(|| serde::de::Error::custom("No archive"))?;
-        if !archive.starts_with("a=") {
-            return Err(serde::de::Error::custom("No archive"));
-        }
-        let archive = ArchiveId::new(&archive[2..]);
-        Ok(ArchiveURI {
-            base: BaseURI::new(base).map_err(serde::de::Error::custom)?,
-            archive,
-        })
+        Self::from_str(&s).map_err(|_| serde::de::Error::custom("Invalid ArchiveURI"))
     }
 }
 
@@ -163,7 +163,7 @@ impl ArchiveURI {
         self.archive
     }
     pub fn to_iri(&self) -> NamedNode {
-        NamedNode::new(format!("{}?a={}", self.base(), self.id())).unwrap()
+        NamedNode::new(format!("{}?a={}", self.base(), self.id()).replace(' ',"%20")).unwrap()
     }
 }
 impl Display for ArchiveURI {
@@ -171,50 +171,10 @@ impl Display for ArchiveURI {
         write!(f, "{}?a={}", self.base, self.archive)
     }
 }
-/*
-#[derive(Clone, Copy, Hash, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub struct ArchiveURIRef<'a> {
-    dom: BaseURI,
-    archive: &'a ArchiveId,
-}
-impl<'a> ArchiveURIRef<'a> {
-    #[inline]
-    pub fn base(&self) -> BaseURI {
-        self.dom
-    }
-    #[inline]
-    pub fn id(&self) -> &'a ArchiveId {
-        self.archive
-    }
-    pub fn to_owned(&self) -> ArchiveURI {
-        ArchiveURI {
-            dom: self.dom.clone(),
-            archive: self.archive.clone(),
-        }
-    }
-    pub fn to_iri(&self) -> NamedNode {
-        NamedNode::new(format!("{}?a={}", self.base(), self.id())).unwrap()
-    }
-}
-impl<'a> Display for ArchiveURIRef<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}?a={}", self.dom, self.archive)
-    }
-}
 
-impl PartialEq<ArchiveURI> for ArchiveURIRef<'_> {
-    fn eq(&self, other: &ArchiveURI) -> bool {
-        self.dom == other.dom && self.archive == &other.archive
-    }
-}
-impl<'a> PartialEq<ArchiveURIRef<'a>> for ArchiveURI {
-    fn eq(&self, other: &ArchiveURIRef<'a>) -> bool {
-        self.dom == other.dom && &self.archive == other.archive
-    }
-}
 
- */
+
+
 
 #[cfg(test)]
 mod tests {

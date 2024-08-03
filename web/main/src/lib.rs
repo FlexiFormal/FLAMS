@@ -1,5 +1,4 @@
 use leptos::*;
-use leptos_router::*;
 
 //pub mod test;
 pub mod components;
@@ -32,6 +31,7 @@ macro_rules! console_log {
 
 
 #[cfg(feature = "client")]
+#[allow(unused_imports)]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
     use home::*;
@@ -155,7 +155,7 @@ pub mod server {
         if result.status() == http::StatusCode::OK {
             result
         } else {
-            let handler = leptos_axum::render_app_to_stream(state.leptos_options.clone(),crate::home::MainNew);
+            let handler = leptos_axum::render_app_to_stream(state.leptos_options.clone(),crate::home::Main);
             handler(Request::from_parts(parts,body)).in_current_span().await.into_response()
         }
     }
@@ -170,7 +170,6 @@ pub mod server {
         use crate::utils::WebSocket;
         use tracing::Instrument;
 
-        let Main = crate::home::MainNew;
 
         let ip = controller().settings().ip.clone();
         let port = controller().settings().port;
@@ -188,7 +187,7 @@ pub mod server {
 
         let span = tracing::Span::current();
 
-        let routes = generate_route_list(Main);
+        let routes = generate_route_list(crate::home::Main);
         let session_store = tower_sessions::MemoryStore::default();//tower_sessions_sqlx_store::SqliteStore::new(db.)
         let session_layer = tower_sessions::SessionManagerLayer::new(session_store)
             .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::seconds(60 * 60 * 24 * 7)));
@@ -209,6 +208,8 @@ pub mod server {
             .route("/dashboard/queue/ws",axum::routing::get(crate::components::queue::QueueSocket::ws_handler))
             .route("/dashboard/log/ws",axum::routing::get(crate::components::logging::LogSocket::ws_handler))
             .route("/api/*fn_name", axum::routing::get(server_fn_handle).post(server_fn_handle))
+            .route("/content/html",axum::routing::get(crate::components::content::server::get_html).post(crate::components::content::server::get_html))
+            .route("/content/*fn_name", axum::routing::get(server_fn_handle).post(server_fn_handle))
             .leptos_routes_with_handler(routes,axum::routing::get(move |
                 auth_session: axum_login::AuthSession<AccountManager>,
                 extract::State(state): extract::State<AppState>,
@@ -216,7 +217,7 @@ pub mod server {
                 let handler = leptos_axum::render_app_to_stream_with_context(state.leptos_options.clone(),move || {
                     provide_context(auth_session.clone());
                     provide_context(state.db.clone())
-                },Main);
+                },crate::home::Main);
                 handler(request).in_current_span().await.into_response()
             }.in_current_span()}))
             .fallback(file_and_error_handler)

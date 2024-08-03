@@ -220,7 +220,7 @@ impl SourceDir {
         let mut pstack = Vec::new();
         let from_ext = |s:&str| exts.iter().find(|(e,_)| *e == s).map(|(_,f)| *f);
         'top:loop {
-            let d = match next_file!(curr) {
+            match next_file!(curr) {
                 Some(Ok(d)) => {
                     let path = d.path();
                     if ignore.ignores(&path) {
@@ -364,7 +364,7 @@ impl<'a,D,F:FileLike<D>> Iterator for DirIter<'a,D,F> {
                 }
                 return Some(c)
             } else {
-                if let Some(mut s) = self.stack.pop() {
+                if let Some(s) = self.stack.pop() {
                     self.current = s;
                 } else {
                     return None

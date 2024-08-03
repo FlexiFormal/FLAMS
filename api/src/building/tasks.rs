@@ -1,11 +1,13 @@
 use std::any::Any;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
+use oxigraph::model::Triple;
 use immt_core::building::buildstate::QueueEntry;
 use immt_core::building::formats::{BuildTargetId, FormatOrTarget};
 use immt_core::content::Module;
 use immt_core::narration::{Document, HTMLDocSpec};
 use immt_core::uris::archives::{ArchiveId, ArchiveURI};
+use immt_core::uris::documents::DocumentURI;
 use immt_core::uris::modules::ModuleURI;
 use immt_core::utils::triomphe;
 use crate::backend::archives::{Archive, Storage};
@@ -27,10 +29,86 @@ pub struct BuildStep {
     pub(super)target:BuildTargetId,
     pub(super)data:parking_lot::RwLock<StepData>
 }
+
+pub struct BuildStepResult<'a> {
+    path:PathBuf,data:&'a parking_lot::RwLock<StepData>,target:BuildTargetId,ctrl:&'a dyn Controller
+}
+impl BuildStepResult<'_> {
+
+    pub fn set_relational(&self,doc:&HTMLDocSpec, mods:&[Module]) {
+        let iter = doc.doc.triples().chain(mods.iter().flat_map(|m| m.triples(doc.doc.uri)));
+        let iter2 = iter.clone().map(|t| Triple::from(t));
+        self.ctrl.relations().add_quads(iter);
+        let out = self.path.join("index.ttl");
+        self.ctrl.relations().export(iter2,&out,doc.doc.uri);
+    }
+    pub fn set_narrative(&self, doc:HTMLDocSpec) {
+        let out = self.path.join("index.nomd");
+        doc.write(&out);
+    }
+    pub fn set_content(&self, mods:Vec<Module>) {
+        if let Some(path) = self.path.parent() {
+            let path = path.join(".modules");
+            let _ = std::fs::create_dir(&path);
+            for m in mods {
+                let out = path.join(m.uri.name().as_ref()).with_extension("comd");
+                if let Ok(mut f) = std::fs::File::create(out) {
+                    let _ = bincode::serde::encode_into_std_write(m,&mut f,bincode::config::standard());
+                } else {
+                    todo!()
+                }
+            }
+        }
+    }
+    pub fn set_artifact_str(&self, format: BuildDataFormat, s:&str) {
+        let ext = if let Some(e) = format.file_extensions.first() {
+            *e
+        } else {return };
+        let out = self.path.join("index").with_extension(ext);
+        std::fs::write(out,s.as_bytes()).unwrap();
+    }
+    pub fn set_artifact_path(&self,format: BuildDataFormat, path:&Path) {
+        let ext = if let Some(e) = format.file_extensions.first() {
+            *e
+        } else { return };
+        let out = self.path.join("index").with_extension(ext);
+        let _ = std::fs::rename(path, out);
+    }
+    pub fn set_log_str(&self, success:bool, s:String) {
+        let out = self.path.join(self.target.to_string()).with_extension("log");
+        std::fs::write(out,s.as_bytes()).unwrap();
+        let mut data = self.data.write();
+        data.done = Some(success);
+    }
+    pub fn set_log_path(&self, success:bool, path:&Path) {
+        let out = self.path.join(self.target.to_string()).with_extension("log");
+        let _ = std::fs::rename(path,out);
+        let mut data = self.data.write();
+        data.done = Some(success);
+    }
+}
+
 impl BuildStep {
+    pub fn result<'a>(&'a self,ctrl:&'a dyn Controller,task:&BuildTask) -> Option<BuildStepResult> {
+        ctrl.archives().with_archives(|a|
+            if let Some(ma) = a.iter().find_map(|a| match a {
+                Archive::Physical(ma) if ma.id() == task.archive().id() => Some(ma),
+                _ => None
+            }) {
+                let path = task.rel_path().split('/').fold(ma.out_dir(),|p,s| p.join(s));
+                let _ = std::fs::create_dir_all(&path);
+                Some(path)
+            } else {None}
+        ).map(|path| BuildStepResult { path,data:&self.data,target:self.target,ctrl })
+    }
     pub fn push_dependency(&self,dependency: Dependency) {
         let mut data = self.data.write();
         data.requires.push(dependency);
+    }
+    /*
+    pub fn set_relational(&self,ctrl:&dyn Controller, task:&BuildTask,doc:&HTMLDocSpec, mods:&[Module]) {
+        let iter = doc.doc.triples().chain(mods.iter().flat_map(|m| m.triples(doc.doc.uri)));
+        ctrl.relations().add_quads(iter);
     }
     pub fn set_narrative(&self, ctrl:&dyn Controller, task:&BuildTask,doc:HTMLDocSpec) {
         //println!("{}",doc.doc);
@@ -46,6 +124,7 @@ impl BuildStep {
             });
     }
     pub fn set_content(&self, ctrl:&dyn Controller, task:&BuildTask,mods:Vec<Module>) {
+        // TODO export relations somewhere
         ctrl.archives().with_archives(|a|
             if let Some(ma) = a.iter().find_map(|a| match a {
                 Archive::Physical(ma) if ma.id() == task.archive().id() => Some(ma),
@@ -123,6 +202,8 @@ impl BuildStep {
         let mut data = self.data.write();
         data.done = Some(success);
     }
+
+     */
 }
 
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]

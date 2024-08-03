@@ -14,9 +14,10 @@ use crate::backend::archives::{Archive, MathArchive, Storage};
 use crate::building::targets::SourceFormat;
 use crate::utils::asyncs::{ChangeSender, lock};
 use immt_core::building::buildstate::{BuildState, AllStates};
-use immt_core::narration::{CSS, Document, HTMLDocSpec};
+use immt_core::narration::{CSS, Document, DocumentReader, DocumentData, HTMLDocSpec};
 use immt_core::ontology::rdf::terms::Quad;
 use immt_core::ulo;
+use immt_core::uris::DocumentURI;
 use immt_core::utils::filetree::FileChange;
 use immt_core::utils::triomphe::Arc;
 
@@ -102,6 +103,90 @@ impl ArchiveManager {
         if p.exists() {
             HTMLDocSpec::get_doc_async(&p).await
         } else { None }
+    }
+
+    fn find_file(&self,uri:DocumentURI) -> Option<PathBuf> {
+        let p = self.find(uri.archive().id(), |a| match a {
+            Some(Archive::Physical(ma)) => Some(match uri.path() {
+                None => ma.out_dir(),
+                Some(p) => ma.out_dir().join(p.as_ref())
+            }),
+            _ => None
+        })?;
+        let _name = uri.name();
+        let name = _name.as_ref();
+        for d in std::fs::read_dir(p).ok()? {
+            let dir = if let Ok(d) = d { d } else {continue};
+            let m = if let Ok(d) = dir.metadata() { d } else {continue};
+            if !m.is_dir() {continue}
+            let _name = dir.file_name();
+            let d = if let Some(d) = _name.to_str() { d } else {continue};
+            if !d.starts_with(name) {continue}
+            let rest = &d[name.len()..];
+            if !rest.is_empty() && !rest.starts_with('.') { continue }
+            let rest = &rest[1..];
+            if rest.contains('.') {
+                let lang : &'static str = uri.language().into();
+                if !rest.starts_with(lang) { continue }
+            }
+            let p = dir.path().join("index.nomd");
+            if p.exists() {
+                return Some(p)
+            }
+        }
+        None
+    }
+
+    async fn find_file_async(&self,uri:DocumentURI) -> Option<PathBuf> {
+        let p = self.find(uri.archive().id(), |a| match a {
+            Some(Archive::Physical(ma)) => Some(match uri.path() {
+                None => ma.out_dir(),
+                Some(p) => ma.out_dir().join(p.as_ref())
+            }),
+            _ => None
+        })?;
+        let mut dir = tokio::fs::read_dir(p).await.ok()?;
+        let _name = uri.name();
+        let name = _name.as_ref();
+        while let Ok(Some(dir)) = dir.next_entry().await  {
+            let m = if let Ok(d) = dir.metadata().await { d } else {continue};
+            if !m.is_dir() {continue}
+            let _name = dir.file_name();
+            let d = if let Some(d) = _name.to_str() { d } else {continue};
+            if !d.starts_with(name) {continue}
+            let rest = &d[name.len()..];
+            if !rest.is_empty() && !rest.starts_with('.') { continue }
+            let rest = &rest[1..];
+            if rest.contains('.') {
+                let lang : &'static str = uri.language().into();
+                if !rest.starts_with(lang) { continue }
+            }
+            let p = dir.path().join("index.nomd");
+            if p.exists() {
+                return Some(p)
+            }
+        }
+        None
+    }
+
+    pub fn get_document_from_uri(&self,uri:DocumentURI) -> Option<Document> {
+        self.find_file(uri).map(|p| HTMLDocSpec::get_doc(&p)).flatten()
+    }
+
+    pub async fn get_document_from_uri_async(&self,uri:DocumentURI) -> Option<Document> {
+        if let Some(p) = self.find_file_async(uri).await {
+            return HTMLDocSpec::get_doc_async(&p).await
+        } else {None}
+    }
+
+    pub fn get_document_reader(&self,uri:DocumentURI) -> Option<DocumentReader> {
+        self.find_file(uri).map(|p| HTMLDocSpec::reader(&p)).flatten()
+    }
+
+    pub async fn get_document_data_async(&self, uri:DocumentURI) -> Option<DocumentData> {
+        if let Some(p) = self.find_file_async(uri).await {
+            return HTMLDocSpec::reader_async(&p).await
+        } else {None}
     }
 
     pub async fn get_html_async(&self,id:ArchiveId,rel_path:impl AsRef<str>) -> Option<(Vec<CSS>,String)> {
@@ -437,7 +522,7 @@ fn do_manifest(path: &Path,id:&str) -> Result<MathArchiveSpec, ()> {
     dependencies.retain(|d: &ArchiveId| !d.is_empty() && d.as_str() != id.as_str());
     let spec = MathArchiveSpec {
         storage: StorageSpec {
-            uri: dom_uri / id,
+            uri: dom_uri & id,
             is_meta,
             attributes: attrs,
             formats,

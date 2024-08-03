@@ -1,14 +1,10 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
 use leptos::*;
 use immt_core::building::buildstate::{QueueEntry, QueueMessage};
-use immt_core::building::formats::{BuildJobSpec, FormatOrTarget, SourceFormatId};
+use immt_core::building::formats::SourceFormatId;
 use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::time::Delta;
 use immt_core::utils::VecMap;
-use crate::accounts::{if_logged_in, login_status, LoginState};
-use crate::components::logging::Log;
-use crate::console_log;
 use crate::utils::errors::IMMTError;
 use crate::utils::WebSocket;
 
@@ -20,6 +16,8 @@ use crate::utils::WebSocket;
 )]
 pub async fn enqueue(archive:Option<ArchiveId>,group:Option<ArchiveId>,target:SourceFormatId,path:Option<String>,all:bool) -> Result<(),ServerFnError<IMMTError>> {
     use immt_controller::{controller,ControllerTrait};
+    use crate::accounts::{if_logged_in, login_status, LoginState};
+    use immt_core::building::formats::*;
     match login_status().await? {
         LoginState::Admin => {
             //println!("building [{group:?}][{archive:?}]/{path:?}: {target} ({all})");
@@ -53,6 +51,7 @@ pub async fn enqueue(archive:Option<ArchiveId>,group:Option<ArchiveId>,target:So
 )]
 pub async fn get_queues() -> Result<Vec<String>,ServerFnError<IMMTError>> {
     use immt_controller::{controller,ControllerTrait};
+    use crate::accounts::{login_status, LoginState};
     match login_status().await? {
         LoginState::Admin => {
             Ok(controller().build_queue().queues()
@@ -70,6 +69,7 @@ pub async fn get_queues() -> Result<Vec<String>,ServerFnError<IMMTError>> {
 )]
 pub async fn run(id:String) -> Result<(),ServerFnError<IMMTError>> {
     use immt_controller::{controller,ControllerTrait};
+    use crate::accounts::{login_status, LoginState};
     //println!("Running queue {id}");
     match login_status().await? {
         LoginState::Admin => {
@@ -91,9 +91,9 @@ pub(crate) struct QueueSocket {
 impl WebSocket<(),QueueMessage> for QueueSocket {
     const SERVER_ENDPOINT: &'static str = "/dashboard/queue/ws";
     #[cfg(feature="server")]
-    async fn new(account:LoginState,db:sea_orm::DatabaseConnection) -> Option<Self> {
+    async fn new(account:crate::accounts::LoginState,_db:sea_orm::DatabaseConnection) -> Option<Self> {
         use immt_api::controller::Controller;
-        if account == LoginState::Admin {
+        if account == crate::accounts::LoginState::Admin {
             let listener = immt_controller::controller().build_queue().listener();
             Some(Self {listener})
         } else {None}
@@ -105,7 +105,7 @@ impl WebSocket<(),QueueMessage> for QueueSocket {
         self.listener.read().await
     }
     #[cfg(feature="server")]
-    async fn handle_message(&mut self,msg:()) -> Option<QueueMessage> {None}
+    async fn handle_message(&mut self,_msg:()) -> Option<QueueMessage> {None}
     #[cfg(feature="server")]
     async fn on_start(&mut self,socket:&mut axum::extract::ws::WebSocket) {
         use immt_controller::{controller,ControllerTrait};
@@ -241,10 +241,10 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                 if let Some(q) = queues.queues.get_untracked().get(&id) {
                     if let QueueData::Running(r) = q.get_untracked() {
                         if let Some((i,_)) = r.queue.get_untracked().iter().enumerate()
-                            .find(|(i,e)| e.0 == entry) {
+                            .find(|(_,e)| e.0 == entry) {
                             r.queue.update(|v| {v.remove(i);})
                         } else if let Some((i,_)) = r.blocked.get_untracked().iter().enumerate()
-                            .find(|(i,e)| e.0 == entry) {
+                            .find(|(_,e)| e.0 == entry) {
                             r.blocked.update(|v| {v.remove(i);})
                         };
                         r.running.update(|v| v.push(Entry(entry)));
@@ -256,7 +256,7 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                 if let Some(q) = queues.queues.get_untracked().get(&id) {
                     if let QueueData::Running(r) = q.get_untracked() {
                         if let Some((i,_)) = r.running.get_untracked().iter().enumerate()
-                            .find(|(i,e)| e.0 == entry) {
+                            .find(|(_,e)| e.0 == entry) {
                             r.running.update(|v| {v.remove(i);})
                         }
                         r.queue.update(|v| v.insert(index,Entry(entry)));
@@ -268,7 +268,7 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                 if let Some(q) = queues.queues.get_untracked().get(&id) {
                     if let QueueData::Running(r) = q.get_untracked() {
                         if let Some((i, _)) = r.running.get_untracked().iter().enumerate()
-                            .find(|(i, e)| e.0 == entry) {
+                            .find(|(_, e)| e.0 == entry) {
                             r.running.update(|v| { v.remove(i); })
                         }
                         r.finished.update(|v| v.push(Entry(entry)));
@@ -280,7 +280,7 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                 if let Some(q) = queues.queues.get_untracked().get(&id) {
                     if let QueueData::Running(r) = q.get_untracked() {
                         if let Some((i, _)) = r.running.get_untracked().iter().enumerate()
-                            .find(|(i, e)| e.0 == entry) {
+                            .find(|(_, e)| e.0 == entry) {
                             r.running.update(|v| { v.remove(i); })
                         }
                         r.failed.update(|v| v.push(Entry(entry)));
@@ -331,9 +331,8 @@ fn IdleQueue(id:String, ls:RwSignal<Vec<Entry>>) -> impl IntoView {
     }
 }
 
-pub fn RunningQueue(id:String, queue:RunningQueue) -> impl IntoView {
+pub fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
     use thaw::*;
-    use leptos_meta::Stylesheet;
     let RunningQueue {running,queue,blocked,failed, finished,eta } = queue;
     move || view!{<Space>
         <Space align=SpaceAlign::Start><Layout>

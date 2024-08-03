@@ -62,7 +62,7 @@
   border-radius : 50%;
   background    : #ddd;
 }*/
-.immt-treeview-group::before {
+/*.immt-treeview-group::before {
   content: '📚 ';
 }
 .immt-treeview-archive::before {
@@ -76,7 +76,7 @@
 }
 .immt-treeview-file-new::before, .immt-treeview-file-stale::before, .immt-treeview-file-deleted::before, .immt-treeview-file-up-to-date::before {
   content: '📄 ';
-}
+}*/
 
 .immt-treeview-file-new { 
   color: #836400;

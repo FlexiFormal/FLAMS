@@ -1,36 +1,104 @@
 use std::fmt::Display;
+use std::ops::{BitAnd, Div};
+use std::str::FromStr;
+use oxrdf::NamedNode;
+use crate::narration::Language;
 use crate::uris::archives::{ArchiveURI};
 use crate::uris::Name;
+use crate::uris::symbols::SymbolURI;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy,Debug, PartialEq, Eq, Hash)]
 pub struct ModuleURI {
     archive: ArchiveURI,
-    path: Name,
-    name: Name
+    path: Option<Name>,
+    name: Name,
+    language:Language
 }
+
+impl Div<Name> for ModuleURI {
+    type Output = Self;
+    fn div(self, rhs: Name) -> Self::Output {
+        let newname = Name::new(self.name.as_ref().to_string() + "/" + rhs.as_ref());
+        Self::new(self.archive, self.path, newname,self.language)
+    }
+}
+
+impl BitAnd<Name> for ModuleURI {
+    type Output = SymbolURI;
+    fn bitand(self, rhs: Name) -> Self::Output {
+        SymbolURI::new(self,rhs)
+    }
+}
+
+impl FromStr for ModuleURI {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut f = s.split('&');
+        let archive = f.next().ok_or_else(|| "No archive")?;
+        let archive : ArchiveURI = archive.parse().map_err(|_| "Invalid archive")?;
+        let maybe_path = f.next().ok_or_else(|| "No name")?;
+        if maybe_path.starts_with("p=") {
+            let path = &maybe_path[2..];
+            let path = if path.is_empty() {None} else {Some(Name::new(path))};
+            let name = f.next().ok_or_else(|| "No name")?;
+            if !name.starts_with("m=") {
+                return Err("Invalid name");
+            }
+            let lang = match f.next() {
+                Some(s) if s.starts_with("l=") => Language::try_from(&s[2..]).map_err(|_| "Invalid language")?,
+                Some(_) => return Err("Too many '?'-parts"),
+                _ => Language::English
+            };
+            let name = Name::new(&name[2..]);
+            Ok(Self::new(archive, path, name,lang))
+        } else {
+            if !maybe_path.starts_with("m=") {
+                return Err("Invalid name");
+            }
+            let lang = match f.next() {
+                Some(s) if s.starts_with("l=") => Language::try_from(&s[2..]).map_err(|_| "Invalid language")?,
+                Some(_) => return Err("Too many '?'-parts"),
+                _ => Language::English
+            };
+            let name = Name::new(&maybe_path[2..]);
+            Ok(Self::new(archive, None::<&str>, name,lang))
+        }
+    }
+}
+
+#[cfg(feature="serde")]
+impl serde::Serialize for ModuleURI {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+#[cfg(feature="serde")]
+impl<'de> serde::Deserialize<'de> for ModuleURI {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(|s| serde::de::Error::custom(s))
+    }
+}
+
 impl ModuleURI {
-    pub fn new<S1:Into<Name>,S2:Into<Name>>(archive:ArchiveURI,path:S1,name:S2) -> Self {
-        Self { archive, path:path.into(), name:name.into() }
+    pub fn new(archive:ArchiveURI,path:Option<impl Into<Name>>,name:impl Into<Name>,lang:Language) -> Self {
+        Self { archive, path:path.map(|p| p.into()), name:name.into(), language:lang }
     }
     pub fn name(&self) -> Name {
         self.name
     }
+    pub fn to_iri(&self) -> NamedNode {
+        NamedNode::new(self.to_string().replace(' ',"%20")).unwrap()
+    }
+    #[inline]
+    pub fn language(&self) -> Language { self.language }
 }
 impl Display for ModuleURI {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.path.as_ref().is_empty() {
-            write!(f, "{}?{}", self.archive, self.name)
-        } else {
-            write!(f, "{}/{}?{}", self.archive, self.path, self.name)
+        match self.path {
+            None => write!(f, "{}&m={}&l={}", self.archive, self.name,self.language),
+            Some(p) => write!(f, "{}&p={}&m={}&l={}", self.archive, p, self.name,self.language)
         }
     }
-}
-#[derive(Clone, Copy, Hash, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub struct ModuleURIRef<'a> {
-    archive: ArchiveURI,
-    path: &'a Name,
-    name: &'a Name
 }

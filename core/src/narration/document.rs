@@ -1,11 +1,11 @@
 use crate::utils::sourcerefs::{ByteOffset, SourceRange};
-use crate::uris::documents::DocumentURI;
+use crate::uris::documents::{DocumentURI, NarrativeURI};
 use std::fmt::{Display, Formatter};
 use std::io::{Read, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::Path;
 use arrayvec::ArrayVec;
-use oxrdf::Quad;
+use oxrdf::{NamedNodeRef, Quad};
 use crate::content::{ArgSpec, AssocType, Notation, Term};
 use crate::ulo;
 use crate::uris::{ContentURI, Name};
@@ -23,16 +23,40 @@ pub struct Title {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Document {
-    pub language: Language,
     pub uri: DocumentURI,
     pub title: Option<Title>,
     pub elements: Vec<DocumentElement>,
 }
+impl Document {
+    pub fn triples(&self) -> impl Iterator<Item=Quad> + Clone + '_ {
+        TripleIterator {
+            current: None,
+            stack: Vec::new(),
+            buf: Vec::new(),
+            uri: self.uri.into(),
+            content_uri: None,
+            doc: self,
+            doc_iri: self.uri.to_iri(),
+            curr_iri: self.uri.to_iri()
+        }
+    }
+}
 
+#[derive(Clone)]
+struct Stack<'a> {
+    iter: std::slice::Iter<'a,DocumentElement>,
+    iri: crate::ontology::rdf::terms::NamedNode,
+    narr: NarrativeURI,
+    content: Option<ModuleURI>
+}
+
+#[derive(Clone)]
 struct TripleIterator<'a> {
     current: Option<std::slice::Iter<'a,DocumentElement>>,
-    stack:Vec<(std::slice::Iter<'a,DocumentElement>,crate::ontology::rdf::terms::NamedNode)>,
+    stack:Vec<Stack<'a>>,
     buf: Vec<Quad>,
+    uri:NarrativeURI,
+    content_uri: Option<ModuleURI>,
     doc: &'a Document,
     doc_iri: crate::ontology::rdf::terms::NamedNode,
     curr_iri: crate::ontology::rdf::terms::NamedNode
@@ -46,24 +70,158 @@ impl<'a> Iterator for TripleIterator<'a> {
             None => {
                 self.current = Some(self.doc.elements.iter());
                 self.buf.push(
-                    ulo!((self.doc_iri.clone()) (dc::LANGUAGE) = (self.doc.language.to_string()) IN self.doc_iri.clone())
+                    ulo!((self.doc_iri.clone()) (dc::LANGUAGE) = (self.doc.uri.language().to_string()) IN self.doc_iri.clone())
                 );
                 Some(ulo!( (self.doc_iri.clone()) : DOCUMENT IN self.doc_iri.clone()))
             }
             Some(it) => loop {
-                // TODO derecursify
+                macro_rules! next{
+                    ($iter:expr,$iri:expr,$nuri:expr,$curi:expr) => {
+                        let next = $iter;
+                        let next = std::mem::replace(&mut self.current,Some(next)).unwrap();
+                        let iri = std::mem::replace(&mut self.curr_iri,$iri);
+                        let uri = std::mem::replace(&mut self.uri,$nuri);
+                        let curi = std::mem::replace(&mut self.content_uri,Some($curi));
+                        self.stack.push(Stack{iter:next,iri,narr:uri,content:curi});
+                    };
+                    ($iter:expr,$iri:expr,$nuri:expr) => {
+                        let next = $iter;
+                        let next = std::mem::replace(&mut self.current,Some(next)).unwrap();
+                        let iri = std::mem::replace(&mut self.curr_iri,$iri);
+                        let uri = std::mem::replace(&mut self.uri,$nuri);
+                        self.stack.push(Stack{iter:next,iri,narr:uri,content:self.content_uri});
+                    }
+                }
+                // TODO derecursify, maybe use arrayvec
                 if let Some(next) = it.next() {
                     match next {
-                        DocumentElement::SetSectionLevel(..) => (),
+                        // TODO: terms maybe
+                        DocumentElement::SetSectionLevel(..) | DocumentElement::VarNotation{..} | DocumentElement::VarDef{..} | DocumentElement::Definiendum {..} | DocumentElement::Symref {..} | DocumentElement::Varref{..}| DocumentElement::TopTerm{..} => (),
                         DocumentElement::Section(section) => {
-
+                            let next_uri = self.uri / section.id;
+                            let next_iri = next_uri.to_iri();
+                            self.buf.push(
+                                ulo!((next_iri.clone()) : SECTION IN self.doc_iri.clone())
+                            );
+                            self.buf.push(
+                                ulo!((next_iri.clone()) (dc::LANGUAGE) = (self.doc.uri.language().to_string()) IN self.doc_iri.clone())
+                            );
+                            let ret = ulo!((self.curr_iri.clone()) CONTAINS (next_iri.clone()) IN self.doc_iri.clone());
+                            if !section.children.is_empty() {
+                                next!(section.children.iter(),next_iri,next_uri);
+                            }
+                            return Some(ret)
                         }
-                        _ => todo!()
+                        DocumentElement::Paragraph(p) => {
+                            let next_uri = self.uri / p.id;
+                            let next_iri = next_uri.to_iri();
+                            let tp = p.kind.rdf_type().into_owned();
+                            let ret = ulo!((next_iri.clone()) : >(tp) IN self.doc_iri.clone());
+                            self.buf.push(
+                                ulo!((self.curr_iri.clone()) CONTAINS (next_iri.clone()) IN self.doc_iri.clone())
+                            );
+                            self.buf.push(
+                                ulo!((next_iri.clone()) (dc::LANGUAGE) = (self.doc.uri.language().to_string()) IN self.doc_iri.clone())
+                            );
+                            match p.kind {
+                                StatementKind::Example => for u in &p.fors {
+                                    self.buf.push(
+                                        ulo!((next_iri.clone()) EXAMPLE_FOR (u.to_iri()) IN self.doc_iri.clone())
+                                    );
+                                },
+                                StatementKind::Proof | StatementKind::SubProof => for u in &p.fors {
+                                    self.buf.push(
+                                        ulo!((next_iri.clone()) JUSTIFIES (u.to_iri()) IN self.doc_iri.clone())
+                                    );
+                                },
+                                _ => for u in &p.fors {
+                                    self.buf.push(
+                                        ulo!((next_iri.clone()) DEFINES (u.to_iri()) IN self.doc_iri.clone())
+                                    );
+                                },
+                            }
+                            if !p.children.is_empty() {
+                                next!(p.children.iter(),next_iri,next_uri);
+                            }
+                            return Some(ret)
+                        }
+                        DocumentElement::Module(m) => {
+                            let next_uri = self.uri;
+                            let curi = match self.content_uri {
+                                Some(c) => c / m.name,
+                                _ => self.doc.uri * m.name
+                            };
+                            let next_iri = self.curr_iri.clone();
+                            self.buf.push(
+                                ulo!((self.curr_iri.clone()) CONTAINS (curi.to_iri()) IN self.doc_iri.clone())
+                            );
+                            self.buf.push(
+                                ulo!((curi.to_iri()) (dc::LANGUAGE) = (self.doc.uri.language().to_string()) IN self.doc_iri.clone())
+                            );
+                            let ret =
+                                ulo!((curi.to_iri()) : THEORY IN self.doc_iri.clone());
+                            if !m.children.is_empty() {
+                                next!(m.children.iter(),next_iri,next_uri,curi);
+                            }
+                            return Some(ret)
+                        }
+                        DocumentElement::MathStructure(m) => {
+                            let next_uri = self.uri;
+                            let curi = match self.content_uri {
+                                Some(c) => c / m.name,
+                                _ => self.doc.uri * m.name
+                            };
+                            let next_iri = self.curr_iri.clone();
+                            self.buf.push(
+                                ulo!((self.curr_iri.clone()) CONTAINS (curi.to_iri()) IN self.doc_iri.clone())
+                            );
+                            self.buf.push(
+                                ulo!((curi.to_iri()) (dc::LANGUAGE) = (self.doc.uri.language().to_string()) IN self.doc_iri.clone())
+                            );
+                            let ret =
+                                ulo!((curi.to_iri()) : STRUCTURE IN self.doc_iri.clone());
+                            if !m.children.is_empty() {
+                                next!(m.children.iter(),next_iri,next_uri,curi);
+                            }
+                            return Some(ret)
+                        }
+                        DocumentElement::InputRef(drf) => {
+                            return Some(ulo!((self.curr_iri.clone()) !(dc::HAS_PART) (drf.target.to_iri()) IN self.doc_iri.clone() ))
+                        }
+                        DocumentElement::ConstantDecl(_uri) => (), /*{
+                            if let Some(cu) = self.content_uri {
+                                self.buf.push(
+                                    ulo!((uri.to_iri()) : DECLARATION IN self.doc_iri.clone())
+                                );
+                                return Some(ulo!((cu.to_iri()) CONTAINS (uri.to_iri()) IN self.doc_iri.clone()))
+                            }
+                        }*/
+                        DocumentElement::UseModule(m) => {
+                            return Some(ulo!((self.curr_iri.clone()) !(dc::REQUIRES) (m.to_iri()) IN self.doc_iri.clone()))
+                        }
+
+                        DocumentElement::Problem(p) => {
+                            let next_uri = self.uri / p.id;
+                            let next_iri = next_uri.to_iri();
+                            let ret = ulo!((next_iri.clone()) : PROBLEM IN self.doc_iri.clone());
+                            self.buf.push(
+                                ulo!((self.curr_iri.clone()) CONTAINS (next_iri.clone()) IN self.doc_iri.clone())
+                            );
+                            self.buf.push(
+                                ulo!((next_iri.clone()) (dc::LANGUAGE) = (p.language.to_string()) IN self.doc_iri.clone())
+                            );
+                            if !p.children.is_empty() {
+                                next!(p.children.iter(),next_iri,next_uri);
+                            }
+                            return Some(ret)
+                        }
                     }
                 } else {
-                    if let Some((next,iri)) = self.stack.pop() {
-                        self.current = Some(next);
+                    if let Some(Stack{iter,iri,narr,content}) = self.stack.pop() {
+                        self.current = Some(iter);
                         self.curr_iri = iri;
+                        self.uri = narr;
+                        self.content_uri = content;
                         return self.next()
                     } else {
                         return None
@@ -74,17 +232,6 @@ impl<'a> Iterator for TripleIterator<'a> {
     }
 }
 
-impl Document {
-    pub fn triples(&self) -> Vec<Quad> {
-        use crate::ontology::rdf::ontologies::*;
-        let doc = self.uri.to_iri();
-        let mut ret = vec![
-            ulo!( (doc.clone()) : FILE IN doc.clone()),
-            ulo!((doc.clone()) (dc::LANGUAGE) = (self.language.to_string()) IN doc.clone())
-        ];
-        todo!()
-    }
-}
 impl NestedDisplay for Document {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
@@ -115,12 +262,12 @@ pub enum DocumentElement {
     InputRef(DocumentReference),
     ConstantDecl(SymbolURI),
     VarNotation {
-        name:String,
-        id:String,
+        name:Name,
+        id:Name,
         notation:NarrativeRef<Notation>
     },
     VarDef {
-        name:String,
+        name:Name,
         arity:ArgSpec,
         macroname:Option<String>,
         range:SourceRange<ByteOffset>,
@@ -139,12 +286,12 @@ pub enum DocumentElement {
     Symref {
         uri:ContentURI,
         range: SourceRange<ByteOffset>,
-        notation:Option<String>,
+        notation:Option<Name>,
     },
     Varref {
-        name:String,
+        name:Name,
         range: SourceRange<ByteOffset>,
-        notation:Option<String>,
+        notation:Option<Name>,
     },
     TopTerm(Term),
     UseModule(ModuleURI),
@@ -190,7 +337,7 @@ impl Display for DocumentElement {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Section {
     pub range: SourceRange<ByteOffset>,
-    pub id: String,
+    pub id: Name,
     pub level: SectionLevel,
     pub title: Option<Title>,
     pub children: Vec<DocumentElement>,
@@ -248,7 +395,7 @@ impl Display for DocumentModule {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentMathStructure {
     pub range: SourceRange<ByteOffset>,
-    pub name: String,
+    pub name: Name,
     pub children: Vec<DocumentElement>,
 }
 impl NestedDisplay for DocumentMathStructure {
@@ -274,7 +421,7 @@ impl Display for DocumentMathStructure {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentReference {
     pub range: SourceRange<ByteOffset>,
-    pub id: String,
+    pub id: Name,
     pub target: DocumentURI,
 }
 
@@ -316,13 +463,25 @@ impl StatementKind {
             _ => styles.iter().any(|s| s == "symdoc" || s == "decl")
         }
     }
+    pub fn rdf_type(&self) -> NamedNodeRef {
+        use crate::ontology::rdf::ontologies::*;
+        match self {
+            StatementKind::Definition => ulo2::DEFINITION,
+            StatementKind::Assertion => ulo2::PROPOSITION,
+            StatementKind::Paragraph => ulo2::PARA,
+            StatementKind::Proof => ulo2::PROOF,
+            StatementKind::SubProof => ulo2::SUBPROOF,
+            StatementKind::Example => ulo2::EXAMPLE
+        }
+
+    }
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LogicalParagraph {
     pub kind:StatementKind,
-    pub id: String,
+    pub id: Name,
     pub inline:bool,
     pub title: Option<Title>,
     pub fors: Vec<ContentURI>,
@@ -368,7 +527,7 @@ impl Display for LogicalParagraph {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Problem {
-    pub id:String,
+    pub id:Name,
     pub autogradable:bool,
     pub language:Language,
     pub points:Option<f32>,
@@ -454,19 +613,29 @@ pub enum Language {
     Slovenian
 }
 impl Language {
+    #[inline]
+    fn check(s:impl AsRef<str>) -> Language {
+        let s = s.as_ref();
+        if s.ends_with(".en") { Language::English }
+        else if s.ends_with(".de") {Language::German}
+        else if s.ends_with(".fr") {Language::French}
+        else if s.ends_with(".ro") {Language::Romanian}
+        else if s.ends_with(".ar") {Language::Arabic}
+        else if s.ends_with(".bg") {Language::Bulgarian}
+        else if s.ends_with(".ru") {Language::Russian}
+        else if s.ends_with(".fi") {Language::Finnish}
+        else if s.ends_with(".tr") {Language::Turkish}
+        else if s.ends_with(".sl") {Language::Slovenian}
+        else {Language::English}
+    }
+    pub fn from_rel_path(s:impl AsRef<str>) -> Language {
+        let mut s = s.as_ref();
+        s = s.strip_suffix(".tex").unwrap_or(s);
+        Self::check(s)
+    }
     pub fn from_file(path:&Path) -> Language {
         if let Some(stem) = path.file_stem().map(|s| s.to_str()).flatten() {
-            if stem.ends_with(".en") { Language::English }
-            else if stem.ends_with(".de") {Language::German}
-            else if stem.ends_with(".fr") {Language::French}
-            else if stem.ends_with(".ro") {Language::Romanian}
-            else if stem.ends_with(".ar") {Language::Arabic}
-            else if stem.ends_with(".bg") {Language::Bulgarian}
-            else if stem.ends_with(".ru") {Language::Russian}
-            else if stem.ends_with(".fi") {Language::Finnish}
-            else if stem.ends_with(".tr") {Language::Turkish}
-            else if stem.ends_with(".sl") {Language::Slovenian}
-            else {Language::English}
+            Self::check(stem)
         } else { Language::English }
     }
 }
@@ -539,8 +708,74 @@ impl<T> NarrativeRef<T> {
         Self {start,end,phantom_data:PhantomData}
     }
 }
+#[derive(Copy,Clone,Debug,PartialEq,Eq)]
+enum DocumentReaderState {
+    Start,DocRead,RefsRead,CssRead,Finished
+}
+pub struct DocumentReader {
+    file:std::fs::File,
+    state:DocumentReaderState,
+    refs_start:u32,css_start:u32,html_start:u32,body_start:u32,body_len:u32,
+    refs:Option<Box<[u8]>>,
+    css:Option<Box<str>>,
+    html:Option<Box<str>>,
+    document:Option<Document>
+}
+
+#[cfg(feature = "async")]
+pub struct DocumentData {
+    body_start:u32,body_len:u32,
+    refs:Box<[u8]>,
+    css:Box<[CSS]>,
+    html:Box<str>,
+    document:Document
+}
 
 impl HTMLDocSpec {
+    pub fn reader(file:&Path) -> Option<DocumentReader> {
+        let mut file = std::fs::File::open(file).ok()?;
+        let mut buf = [0u8;20];
+        file.read_exact(&mut buf).ok()?;
+        let refs_start = u32::from_le_bytes([buf[0],buf[1],buf[2],buf[3]]);
+        let css_start = u32::from_le_bytes([buf[4],buf[5],buf[6],buf[7]]);
+        let html_start = u32::from_le_bytes([buf[8],buf[9],buf[10],buf[11]]);
+        let body_start = u32::from_le_bytes([buf[12],buf[13],buf[14],buf[15]]);
+        let body_len = u32::from_le_bytes([buf[16],buf[17],buf[18],buf[19]]);
+        Some(DocumentReader {
+            file,refs_start,css_start,html_start,body_start,body_len,
+            refs:None,
+            css:None,html:None,state:DocumentReaderState::Start,document:None
+        })
+    }
+    #[cfg(feature = "async")]
+    pub async fn reader_async(file:&Path) -> Option<DocumentData> {
+        use tokio::io::AsyncReadExt;
+        let mut file = tokio::fs::File::open(file).await.ok()?;
+        let mut buf = [0u8;20];
+        file.read_exact(&mut buf).await.ok()?;
+        let refs_start = u32::from_le_bytes([buf[0],buf[1],buf[2],buf[3]]);
+        let css_start = u32::from_le_bytes([buf[4],buf[5],buf[6],buf[7]]);
+        let html_start = u32::from_le_bytes([buf[8],buf[9],buf[10],buf[11]]);
+        let body_start = u32::from_le_bytes([buf[12],buf[13],buf[14],buf[15]]);
+        let body_len = u32::from_le_bytes([buf[16],buf[17],buf[18],buf[19]]);
+
+        let mut buffer = vec![0; refs_start as usize];
+        file.read_exact(&mut buffer).await.ok()?;
+        let document = bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok()?.0;
+        let mut buffer = vec![0;(css_start - refs_start) as usize];
+        file.read_exact(&mut buffer).await.ok()?;
+        let refs = buffer.into();
+        let mut buffer = vec![0;(html_start - css_start) as usize];
+        file.read_exact(&mut buffer).await.ok()?;
+        let css = bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok()?.0;
+        let mut html = String::new();
+        let _ = file.read_to_string(&mut html).await;
+        let html = html.into();
+
+        Some(DocumentData {
+            body_start,body_len, refs, css, html, document
+        })
+    }
     pub fn get_doc(file:&Path) -> Option<Document> {
         use std::io::Seek;
         let mut file = std::fs::File::open(file).ok()?;

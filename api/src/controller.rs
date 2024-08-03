@@ -1,10 +1,12 @@
 use immt_core::building::formats::{BuildTargetId, SourceFormatId};
 use crate::backend::manager::{ArchiveManager};
+use crate::backend::relational::RelationalManager;
 use crate::building::targets::{BuildTarget, SourceFormat};
 use crate::extensions::{ExtensionId, MMTExtension};
 use crate::utils::settings::Settings;
 
 pub trait Controller:Send+Sync {
+    fn relations(&self) -> &RelationalManager;
     fn archives(&self) -> &ArchiveManager;
     fn log_file(&self) -> &std::path::Path;
     fn build_queue(&self) -> &crate::building::buildqueue::BuildQueue;

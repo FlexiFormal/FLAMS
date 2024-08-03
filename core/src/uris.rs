@@ -1,9 +1,15 @@
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
+use std::ops::Div;
+use std::str::FromStr;
 use triomphe::Arc;
-use crate::uris::archives::ArchiveURI;
-use crate::uris::base::BaseURI;
+use crate::narration::Language;
+pub use crate::uris::archives::ArchiveURI;
+pub use crate::uris::base::BaseURI;
 use crate::ontology::rdf::terms::NamedNode;
+pub use crate::uris::documents::{DocumentURI, NarrativeURI, NarrDeclURI};
+pub use crate::uris::modules::ModuleURI;
+pub use crate::uris::symbols::SymbolURI;
 
 pub mod base;
 pub mod archives;
@@ -17,15 +23,19 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Clone, Copy,Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SafeURI<A>{pub get:A}
+impl From<Name> for SafeURI<Name> {
+    fn from(value: Name) -> Self {
+        Self{get:value}
+    }
+}
+
+#[derive(Clone, Copy,Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Name(lasso::Spur);
 impl Name {
     #[inline]
     pub fn new(s: impl AsRef<str>) -> Self {
         Self(NAMES.get_or_intern(s))
-    }
-    #[inline]
-    pub fn empty() -> Self {
-        Self(*EMPTY_NAME)
     }
 }
 impl Display for Name {
@@ -47,113 +57,38 @@ impl AsRef<str> for Name {
     }
 }
 
-
-#[cfg(feature = "serde")]
-mod serde_impl {
-    impl serde::Serialize for super::Name {
-        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            serializer.serialize_str(self.as_ref())
-        }
-    }
-    impl<'de> serde::Deserialize<'de> for super::Name {
-        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let s = String::deserialize(deserializer)?;
-            Ok(Self::new(s))
-        }
+impl<A:Into<Name>> Div<A> for Name {
+    type Output = Self;
+    fn div(self, rhs: A) -> Self::Output {
+        let rhs = rhs.into();
+        Self::new(self.as_ref().to_string() + "/" + rhs.as_ref())
     }
 }
 
-pub(crate) trait URITrait:Debug+Display+Clone+Eq+Hash+PartialEq {
-    type Ref<'u>: URIRefTrait<'u,Owned=Self>;
-    fn to_iri(&self) -> NamedNode;
-}
-
-pub(crate) trait URIRefTrait<'u>:Debug+Display+Clone+Copy+Eq+Hash+PartialEq
-    where Self:PartialEq<Self::Owned> {
-    type Owned: URITrait<Ref<'u>=Self>+PartialEq<Self>;
-    fn to_iri(&self) -> NamedNode;
-    fn to_owned(&self) -> Self::Owned;
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum MMTURI {
-    Base(BaseURI),
-    Archive(ArchiveURI),
-}
-/*
-impl URITrait for MMTURI {
-    type Ref<'u> = Self;
-    fn to_iri(&self) -> NamedNode {
-        match self {
-            MMTURI::Base(b) => b.to_iri().into_owned(),
-            MMTURI::Archive(a) => a.to_iri(),
-        }
-    }
-}
-
- */
-impl Display for MMTURI {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MMTURI::Base(b) => Display::fmt(b,f),
-            MMTURI::Archive(a) => Display::fmt(a,f),
-        }
-    }
-}
-/*
-impl PartialEq<MMTURIRef<'_>> for MMTURI {
-    fn eq(&self, other: &MMTURIRef<'_>) -> bool {
-        match (self,other) {
-            (MMTURI::Base(a),MMTURIRef::Base(b)) => a == *b,
-            (MMTURI::Archive(a), MMTURIRef::Archive(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-impl PartialEq<MMTURI> for MMTURIRef<'_> {
-    #[inline]
-    fn eq(&self, other: &MMTURI) -> bool {
-        other == self
-    }
-}
-
-#[derive(Copy,Clone, Debug, Hash, PartialEq, Eq)]
-pub enum MMTURIRef<'u> {
-    Base(&'u BaseURI),
-    Archive(ArchiveURI),
-}
-impl<'u> URIRefTrait<'u> for MMTURIRef<'u> {
-    type Owned = MMTURI;
-    fn to_iri(&self) -> NamedNode {
-        match self {
-            MMTURIRef::Base(b) => b.to_iri().into_owned(),
-            MMTURIRef::Archive(a) => a.to_iri(),
-        }
-    }
-    fn to_owned(&self) -> MMTURI {
-        match *self {
-            MMTURIRef::Base(b) => MMTURI::Base(b.clone()),
-            MMTURIRef::Archive(a) => MMTURI::Archive(a.to_owned()),
-        }
-    }
-}
-impl Display for MMTURIRef<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MMTURIRef::Base(b) => Display::fmt(b,f),
-            MMTURIRef::Archive(a) => Display::fmt(a,f),
-        }
-    }
-}
-
- */
-
-#[derive(Clone,Debug,Hash,PartialEq,Eq)]
-#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone,Copy,Debug,Hash,PartialEq,Eq)]
 pub enum ContentURI {
-    Module(modules::ModuleURI),
-    Symbol(symbols::SymbolURI),
+    Module(ModuleURI),
+    Symbol(SymbolURI),
 }
+impl FromStr for ContentURI {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.contains("&c=") {
+            SymbolURI::from_str(s).map(ContentURI::Symbol)
+        } else {
+            ModuleURI::from_str(s).map(ContentURI::Module)
+        }
+    }
+}
+impl ContentURI {
+    pub fn to_iri(&self) -> NamedNode {
+        match self {
+            ContentURI::Module(m) => m.to_iri(),
+            ContentURI::Symbol(s) => s.to_iri(),
+        }
+    }
+}
+
 impl From<modules::ModuleURI> for ContentURI {
     fn from(value: modules::ModuleURI) -> Self {
         Self::Module(value)
@@ -170,5 +105,137 @@ impl Display for ContentURI {
             ContentURI::Module(m) => Display::fmt(m,f),
             ContentURI::Symbol(s) => Display::fmt(s,f),
         }
+    }
+}
+
+#[derive(Clone,Copy,Debug,Hash,PartialEq,Eq)]
+pub enum MMTUri {
+    Archive(ArchiveURI),
+    Narrative(NarrativeURI),
+    Content(ContentURI),
+}
+impl FromStr for MMTUri {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.contains("&d=") {
+            NarrativeURI::from_str(s).map(MMTUri::Narrative)
+        } else if s.contains("&m=") {
+            ContentURI::from_str(s).map(MMTUri::Content)
+        } else {
+            ArchiveURI::from_str(s).map(MMTUri::Archive)
+        }
+    }
+}
+impl Display for MMTUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MMTUri::Archive(a) => Display::fmt(a,f),
+            MMTUri::Narrative(n) => Display::fmt(n,f),
+            MMTUri::Content(c) => Display::fmt(c,f),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::*;
+    impl serde::Serialize for Name {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.serialize_str(self.as_ref())
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for Name {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let s = String::deserialize(deserializer)?;
+            Ok(Self::new(s))
+        }
+    }
+    impl<A:serde::Serialize> serde::Serialize for SafeURI<A> {
+        #[inline]
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            self.get.serialize(serializer)
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for SafeURI<Name> {
+        #[inline]
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let s = String::deserialize(deserializer)?;
+            if let Some(n) = super::NAMES.get(&s) {
+                Ok(Self{get:super::Name(n)})
+            } else {
+                Err(serde::de::Error::custom("Unknown URI-Name"))
+            }
+        }
+    }
+
+    impl serde::Serialize for ContentURI {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.collect_str(self)
+        }
+    }
+
+    impl<'de> serde::Deserialize<'de> for ContentURI {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let s = String::deserialize(deserializer)?;
+            if s.contains("&c=") {
+                Ok(ContentURI::Symbol(s.parse().map_err(serde::de::Error::custom)?))
+            } else {
+                Ok(ContentURI::Module(s.parse().map_err(serde::de::Error::custom)?))
+            }
+        }
+    }
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PathURI {
+    archive: ArchiveURI,
+    path: Option<Name>,
+    language:Option<Language>
+}
+impl PathURI {
+    #[inline]
+    pub fn archive(&self) -> ArchiveURI { self.archive}
+    #[inline]
+    pub fn path(&self) -> Option<Name> { self.path }
+    #[inline]
+    pub fn language(&self) -> Option<Language> { self.language }
+    pub fn to_iri(&self) -> NamedNode {
+        NamedNode::new(self.to_string().replace(' ',"%20")).unwrap()
+    }
+    pub fn new(archive: ArchiveURI, path: Option<impl Into<Name>>,lang:Option<Language>) -> Self {
+        Self { archive, path:path.map(|n| n.into()), language: lang }
+    }
+}
+impl Display for PathURI {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (self.path,self.language) {
+            (Some(p),Some(l)) => write!(f, "{}&p={}&l={}", self.archive, p,l),
+            (Some(p),None) => write!(f, "{}&p={}", self.archive, p),
+            (None,Some(l)) => write!(f, "{}&l={}", self.archive, l),
+            _ => Display::fmt(&self.archive,f)
+        }
+    }
+}
+impl FromStr for PathURI {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!()
+    }
+}
+
+#[cfg(feature="serde")]
+impl serde::Serialize for PathURI {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+#[cfg(feature="serde")]
+impl<'de> serde::Deserialize<'de> for PathURI {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(|s| serde::de::Error::custom(s))
     }
 }

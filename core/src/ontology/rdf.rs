@@ -22,10 +22,15 @@ macro_rules! ulo {
     (>($sub:expr) : $tp:ident IN $graph:expr) => {
         ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) : $tp IN $graph)
     };
+    (($sub:expr) : >($tp:expr) IN $graph:expr) => {
+        ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $tp; $graph)
+    };
     (($sub:expr) : $tp:ident IN $graph:expr) => {
         ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $graph)
     };
-    
+    (($sub:expr) !($tp:expr) ($obj:expr) IN $graph:expr) => {
+        ulo!(@QUAD_IN $sub; $tp.into_owned(); $obj; $graph)
+    };
     
     (>($sub:expr) $tp:ident >($obj:expr) Q) => {
         ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()) Q)
@@ -38,6 +43,9 @@ macro_rules! ulo {
     };
     (($sub:expr) $tp:ident ($obj:expr) Q) => {
         ulo!(@QUAD $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
+    };
+    (($sub:expr) $tp:ident ($obj:expr) IN $graph:expr) => {
+        ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj; $graph)
     };
     (>($sub:expr) $tp:ident >($obj:expr)) => {
         ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()))
@@ -269,6 +277,8 @@ pub mod ontologies {
     dict! { dc = "http://purl.org/dc/elements/1.1":
         + RIGHTS = "rights";
         + LANGUAGE = "language";
+        + HAS_PART = "hasPart";
+        + REQUIRES = "requires";
     }
 
     dict! { owl = "http://www.w3.org/2002/07/owl":
@@ -307,7 +317,10 @@ pub mod ontologies {
         CLASS DEFINITION = "definition" <: PARA @ "A logical paragraph that defines a new concept.";
         CLASS EXAMPLE = "example" <: PARA @ "A logical paragraph that introduces a mathematical example.";
         CLASS PROOF = "proof" <: PARA @ "A logical paragraph that serves as a justification of a proposition.";
+        CLASS SUBPROOF = "subproof" <: PARA @ "A logical paragraph that serves as a justification of an\
+         intermediate proposition within a proof.";
         CLASS PROPOSITION = "proposition" <: PARA @ "A statement of a mathematical object or some relation between some." ;
+        CLASS PROBLEM = "problem" <: PARA @ "A logical paragraph posing a problem/question/exercise for the reader.";
 
         // -----------------------------------------------------------------------------
 
@@ -319,8 +332,12 @@ pub mod ontologies {
         CLASS THEORY = "theory" <: LOGICAL @ "A semantically meaningful block of declarations that can \
             be referred to globally. Examples include MMT theories, Mizar articles, Isabelle locales \
             and Coq sections.";
+        CLASS STRUCTURE = "structure" <: LOGICAL @ "A semantically meaningful block of declarations that can \
+            be instantiated by providing definientia for all (undefined) declarations.";
         CLASS DECLARATION = "declaration" <: LOGICAL @ "Declarations are named objects. They can also \
             have a type and a definiens.";
+        CLASS NOTATION = "notation" <: LOGICAL @ "A way of representing (an application of) a symbol\
+            for parsing or presentation.";
         CLASS STATEMENT = "statement" <: DECLARATION = AXIOM u THEOREM @ "Statements are declarations of \
             objects that can in principle have proofs.";
         CLASS AXIOM = "axiom" <: STATEMENT @ "Logically (using the Curry-Howard isomorphism), an axiom \
@@ -339,6 +356,9 @@ pub mod ontologies {
             evaluates to true/false when applied to enough arguments.";
         CLASS RULE = "rule" <: STATEMENT @  "Rules are statements that can be used for computation, \
             e.g. theorems that can be used for simplification.";
+
+        OBJPROP IMPORTS = "imports" (LOGICAL => LOGICAL);
+        { IMPORTS <super::rdf::TYPE> <super::owl::TRANSITIVE_PROPERTY>};
 
         // -----------------------------------------------------------------------------
 
@@ -369,6 +389,8 @@ pub mod ontologies {
         OBJPROP INDUCTIVE_ON = "inductive-on" <: INTER_STATEMENT;
         OBJPROP JUSTIFIES = "justifies" <: INTER_STATEMENT;
         { JUSTIFIES <super::rdfs::DOMAIN> <PROOF>};
+        OBJPROP NOTATION_FOR = "notation-for" <: INTER_STATEMENT;
+        { NOTATION_FOR <super::rdfs::DOMAIN> <NOTATION>};
 
         // -----------------------------------------------------------------------------
 

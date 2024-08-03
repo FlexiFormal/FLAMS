@@ -41,6 +41,7 @@ wasm-bindgen = "=0.2.92"
 # components
 #leptonic = { version = "0.5.0", features = [] }
 thaw = "0.3"
+icondata = "0.4"
 #thaw = {git = "https://github.com/thaw-ui/thaw.git", rev="7685e99c8bc16dc914d18a4959b02fcd4d6c6544"}
 #thaw = {path = "../../thaw/thaw"}
 #stylance = "0.5"

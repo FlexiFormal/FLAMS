@@ -91,16 +91,20 @@ impl FormatExtension for STeXExtension {
                 clean(task.path());
                 let ret = pdflatex_and_bib(task.path(),[("STEX_WRITESMS","true")].into_iter()).is_ok();
                 if let Some(step) = task.find_step(target) {
-                    step.set_log_path(ret, ctrl, task, &task.path().with_extension("log"));
-                    step.set_artifact_path(ctrl, task, BuildDataFormat::PDF ,&task.path().with_extension("pdf"));
+                    if let Some(res) = step.result(ctrl,task) {
+                        res.set_log_path(ret, &task.path().with_extension("log"));
+                        res.set_artifact_path(BuildDataFormat::PDF ,&task.path().with_extension("pdf"));
+                    }
                 }
                 return ret
             }
             s if s == PDFLATEX_ONLY.id => {
                 let ret = pdflatex(task.path(),[("STEX_USESMS","true")].into_iter()).is_ok();
                 if let Some(step) = task.find_step(target) {
-                    step.set_log_path(ret, ctrl, task, &task.path().with_extension("log"));
-                    step.set_artifact_path(ctrl, task, BuildDataFormat::PDF ,&task.path().with_extension("pdf"));
+                    if let Some(res) = step.result(ctrl,task) {
+                        res.set_log_path(ret, &task.path().with_extension("log"));
+                        res.set_artifact_path(BuildDataFormat::PDF ,&task.path().with_extension("pdf"));
+                    }
                 }
                 return ret
             }
@@ -108,7 +112,9 @@ impl FormatExtension for STeXExtension {
                 let ret = match RusTeX::get().run_with_envs(task.path(), false, [("STEX_USESMS".to_string(), "true".to_string())].into_iter()) {
                     Ok(s) => {
                         if let Some(step) = task.find_step(target) {
-                            step.set_artifact_str(ctrl, task, SHTML_FORMAT ,&s);
+                            if let Some(res) = step.result(ctrl,task) {
+                                res.set_artifact_str(SHTML_FORMAT ,&s);
+                            }
                         }
                         true
                     },

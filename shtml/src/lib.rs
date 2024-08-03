@@ -7,6 +7,7 @@ use immt_api::building::targets::{BuildDataFormat, BuildFormatId, BuildTarget, S
 use immt_api::building::tasks::BuildTask;
 use immt_api::controller::Controller;
 use immt_api::core::building::formats::{BuildTargetId, ShortId, SourceFormatId};
+use immt_api::core::narration::Language;
 use immt_api::core::uris::documents::DocumentURI;
 use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
 use crate::parsing::parser::HTMLParser;
@@ -67,11 +68,19 @@ impl FormatExtension for SHTMLExtension {
                     })
                 }) {
                     let s = std::fs::read_to_string(path).unwrap();
-                    let (path,name) = task.rel_path().rsplit_once('/').unwrap_or(("",task.rel_path()));
-                    let (spec,mods) = HTMLParser::new(&s,task.path(),DocumentURI::new(task.archive().to_owned(),path,name),ctrl.archives(),true).run();
+                    let (path,mut name) = task.rel_path().rsplit_once('/').unwrap_or(("",task.rel_path()));
+                    name = name.rsplit_once('.').unwrap().0;
+                    let lang = Language::from_rel_path(name);
+                    name = name.strip_suffix(&format!(".{}",lang.to_string())).unwrap_or(name);
+                    let (spec,mods) = HTMLParser::new(&s,task.path(),
+                                                      DocumentURI::new(task.archive().to_owned(),if path.is_empty() {None} else {Some(path)},name,lang),
+                                                      ctrl.archives(),true).run();
                     if let Some(step) = task.find_step(target) {
-                        step.set_narrative(ctrl,task, spec);
-                        step.set_content(ctrl,task,mods);
+                        if let Some(res) = step.result(ctrl,task) {
+                            res.set_relational(&spec,mods.as_slice());
+                            res.set_narrative(spec);
+                            res.set_content(mods);
+                        }
                     }
                 } else { return false }
             },

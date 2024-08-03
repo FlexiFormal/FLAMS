@@ -157,6 +157,7 @@ impl Default for BaseController {
 
 
 impl Controller for BaseController {
+    fn relations(&self) -> &RelationalManager { &self.0.relational }
     fn archives(&self) -> &ArchiveManager { &self.0.archives }
     fn log_file(&self) -> &Path { self.0.log.log_file() }
     fn build_queue(&self) -> &BuildQueue { &self.0.queue }

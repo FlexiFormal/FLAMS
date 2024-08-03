@@ -2,6 +2,7 @@ use std::str::FromStr;
 pub use arrayvec::ArrayVec;
 use crate::content::Term;
 use crate::narration::NarrativeRef;
+use crate::uris::Name;
 use crate::uris::symbols::SymbolURI;
 use crate::utils::sourcerefs::{ByteOffset, SourceRange};
 
@@ -118,7 +119,7 @@ impl FromStr for Arg {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NotationRef {
     pub uri:SymbolURI,
-    pub id:String,
+    pub id:Name,
     pub range:NarrativeRef<Notation>
 }
 

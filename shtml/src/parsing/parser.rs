@@ -526,7 +526,6 @@ impl<'a> TreeSink for HTMLParser<'a> {
         self.kill();
         let spec = HTMLDocSpec {
             doc:Document {
-                language:self.language,
                 uri:self.uri,
                 title:self.title,
                 elements:self.elems
