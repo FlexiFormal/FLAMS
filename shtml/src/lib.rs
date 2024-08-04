@@ -72,8 +72,9 @@ impl FormatExtension for SHTMLExtension {
                     name = name.rsplit_once('.').unwrap().0;
                     let lang = Language::from_rel_path(name);
                     name = name.strip_suffix(&format!(".{}",lang.to_string())).unwrap_or(name);
+                    let uri = DocumentURI::new(task.archive().to_owned(),if path.is_empty() {None} else {Some(path)},name,lang);
                     let (spec,mods) = HTMLParser::new(&s,task.path(),
-                                                      DocumentURI::new(task.archive().to_owned(),if path.is_empty() {None} else {Some(path)},name,lang),
+                                                      uri,
                                                       ctrl.archives(),true).run();
                     if let Some(step) = task.find_step(target) {
                         if let Some(res) = step.result(ctrl,task) {

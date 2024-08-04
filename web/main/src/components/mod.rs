@@ -23,7 +23,7 @@ fn Collapsible(#[prop(optional, into)] header: View,children:ChildrenFn,#[prop(o
     let (expanded, set_expanded) = create_signal(expanded);
     view!(<details>
         <summary on:click=move |_| {set_expanded.update(|b| *b=!*b)}>
-            <Icon icon=icondata::AiRightOutlined class="thaw-collapse-item-arrow"/>
+            <Icon icon=icondata_ai::AiRightOutlined class="thaw-collapse-item-arrow"/>
         </summary>
         <div>{move || {
             if expanded.get() {Some(children.clone())} else {None}

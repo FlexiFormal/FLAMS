@@ -183,7 +183,7 @@ fn ArchiveGroup(id:ArchiveId, state: AllStates) -> impl IntoView {
     let state = fullstate.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| {set_expanded.update(|b| *b = !*b)}>
-            <span><Icon icon=icondata::IoLibrary/>" "{i2.as_str().split('/').last().unwrap().to_string()}</span>
+            <span><Icon icon=icondata_bi::BiLibraryRegular/>" "{i2.as_str().split('/').last().unwrap().to_string()}</span>
             <Modal show=(clicked,click)><GroupModal id=i state=fullstate/></Modal>
             <span on:click=move |_| {click.set(true)} style="cursor: help;">" 🛈"</span>
             <span class=immt_treeview_left_margin/>
@@ -207,7 +207,7 @@ fn Archive(id:ArchiveId, state: AllStates) -> impl IntoView {
     let s = state.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| set_expanded.update(|b| *b = !*b)>
-            <span><Icon icon=icondata::BiBookSolid/>" "
+            <span><Icon icon=icondata_bi::BiBookSolid/>" "
                 {id.as_str().split('/').last().unwrap().to_string()}
             </span>
             <Modal show=(clicked,click)><ArchiveModal id=i state=state/></Modal>
@@ -253,7 +253,7 @@ fn Directory(archive:ArchiveId, path:String, state: AllStates) -> impl IntoView 
     let state = fullstate.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=on_click>
-            <span><Icon icon=icondata::OcFileDirectoryLg/>" "
+            <span><Icon icon=icondata_bi::BiFolderRegular/>" "
                 {path.split('/').last().unwrap().to_string()}
             </span>
             <Modal show=(clicked,click)><DirectoryModal archive=a path=p state=fullstate/></Modal>
@@ -289,7 +289,7 @@ fn SourceFile(archive:ArchiveId,file:SourceFile) -> impl IntoView {
     let (clicked,click) = create_signal(false);
     let p = file.relative_path.clone();
     view!{
-        <span class=cls on:click=move |_| show.set(true)><Icon icon=icondata::BsFileText/>" "{name.clone()}</span>
+        <span class=cls on:click=move |_| show.set(true)><Icon icon=icondata_bi::BiFileRegular/>" "{name.clone()}</span>
         <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right width="70%">{
             move || if show.get() {
                 view!(<SHtmlIFrame archive path=p.clone() ht="calc(100vh - 110px)".to_string()/>)

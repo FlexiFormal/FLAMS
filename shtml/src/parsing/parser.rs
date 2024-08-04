@@ -265,7 +265,7 @@ impl NodeWithSource {
             Notation {precedence,attribute_index:5,argprecs,nt:vec![NotationComponent::S(ret)],op:op.map(|o| o.node.to_string()),is_text:true}
         }
     }
-    pub(crate) fn as_term(&self,rest:Option<&mut OpenElems>) -> Term {
+    pub(crate) fn as_term(&self,rest:Option<&mut OpenElems>,parser:&HTMLParser) -> Term {
         //println!("Term: {}",self.node.to_string());
         if let Some(rest) = rest {for (i,e) in rest.iter().enumerate() {
             //println!("  - {e:?}");
@@ -273,7 +273,7 @@ impl NodeWithSource {
                 OpenElem::Term{tm:OpenTerm::Complex(None)} => (),
                 OpenElem::Term{..} => {
                     if let OpenElem::Term{tm} = rest.remove(i) {
-                        return tm.close()
+                        return tm.close(parser)
                     } else {unreachable!()}
                 }
                 _ => ()
@@ -285,7 +285,7 @@ impl NodeWithSource {
                 OpenElem::Term{tm:OpenTerm::Complex(None)} => (),
                 OpenElem::Term{..} => {
                     if let OpenElem::Term{tm} = data.elem.remove(i) {
-                        return tm.close()
+                        return tm.close(parser)
                     } else {unreachable!()}
                 }
                 _ => ()
@@ -295,7 +295,7 @@ impl NodeWithSource {
             let data = self.data.borrow();
             if data.children.len() == 1 {
                 let c = data.children.first().unwrap();
-                return c.as_term(None)
+                return c.as_term(None,parser)
             }
 
             let tag = elem.name.local.to_string();
@@ -319,7 +319,7 @@ impl NodeWithSource {
                     let nc = nws.next().unwrap();
                     assert_eq!(nc.node, c);
                     let mut rest = { nc.data.borrow_mut().elem.take() };
-                    match nc.as_term(Some(&mut rest)) {
+                    match nc.as_term(Some(&mut rest),parser) {
                         Term::Informal { tag, attributes, children: mut chs, terms: tms } => {
                             let l = terms.len() as u8;
                             terms.extend(tms);
@@ -372,7 +372,7 @@ pub struct HTMLParser<'a> {
     notations:Vec<String>,
     pub(crate) strip:bool,
     path:&'a Path,
-    uri:DocumentURI,
+    pub(crate) uri:DocumentURI,
     pub(crate) in_term:bool,
     pub(crate) in_notation:bool,
     pub(crate) modules:Vec<Module>,

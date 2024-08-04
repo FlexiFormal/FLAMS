@@ -18,6 +18,23 @@ lto = true
 codegen-units = 1
 panic = "abort"
 
+[profile.wasm-dev]
+inherits = "release"
+opt-level = 2
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 256
+rpath = false
+
+[workspace.metadata.wasm-pack.profile.dev.wasm-bindgen]
+debug-js-glue = true
+demangle-name-section = true
+dwarf-debug-info = true
+
 [workspace.lints.rust]
 #unsafe_code = "deny"
 
@@ -49,6 +66,7 @@ bin-features = ["server"]
 lib-features = ["client"]
 lib-default-features = false
 lib-profile-release = "wasm-release"
+lib-profile-dev = "wasm-dev"
 bin-default-features = false
 site-root = "target/web"
 output-name = "immt"

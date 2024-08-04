@@ -228,7 +228,7 @@ macro_rules! tags {
                     }
                     OpenElem::TopLevelTerm(t) => {
                         $slf.in_term = false;
-                        $slf.add_doc($node,DocumentElement::TopTerm(t.close()));
+                        $slf.add_doc($node,DocumentElement::TopTerm(t.close($slf)));
                         true
                     }
                     OpenElem::NotationArg { arg, mode } => {
@@ -637,11 +637,11 @@ tags!{v,node,parser,attrs,i,rest,
             }
         }
         let not = get_node(node);
-        iterate!(@F node(n:NodeWithSource=not), e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
+        iterate!(@F node(n:NodeWithSource=not,parser:&HTMLParser=parser), e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
             //println!("Setting notation comp {}",n.node.to_string());
             *comp = Some(n);return
         };
-            println!("TODO: Not in notation...?")
+            println!("TODO: Not in notation...? ({})",parser.uri)
         );
         true
     };
@@ -693,7 +693,7 @@ tags!{v,node,parser,attrs,i,rest,
     Type = "shtml:type": 50 {
         add!(- OpenElem::Type)
     }, then { parser.in_term = true;true } => {
-        let t = node.as_term(Some(rest));
+        let t = node.as_term(Some(rest),parser);
         iterate!(@F node(t:Term=t),
             e => if let OpenElem::Symdecl {tp,..} | OpenElem::VarDef {tp,..} = e {
                 *tp = Some(t);return
@@ -711,7 +711,7 @@ tags!{v,node,parser,attrs,i,rest,
         let it = parser.in_term;
         add!(- OpenElem::Conclusion{uri,in_term:it})
     }, then { parser.in_term = true;true } => {
-        let t = node.as_term(Some(rest));
+        let t = node.as_term(Some(rest),parser);
         iterate!(@F node(uri:SymbolURI=uri,t:Term=t),
             e => if let OpenElem::LogicalParagraph {kind:StatementKind::Assertion,terms,..} = e {
                 terms.insert(uri,t);return
@@ -728,8 +728,8 @@ tags!{v,node,parser,attrs,i,rest,
         let it = parser.in_term;
         add!(- OpenElem::Definiens{uri,in_term:it})
     }, then { parser.in_term = true; true } => {
-        let t = node.as_term(Some(rest));
-        iterate!(@F node(uri:Option<SymbolURI>=uri,t:Term=t),
+        let t = node.as_term(Some(rest),parser);
+        iterate!(@F node(uri:Option<SymbolURI>=uri,t:Term=t,parser:&HTMLParser=parser),
             e => {
                 if let OpenElem::LogicalParagraph {terms,..} = e {
                     if let Some(uri) = uri {terms.insert(uri,t);return}
@@ -741,7 +741,7 @@ tags!{v,node,parser,attrs,i,rest,
                     *tm = Some(t);return
                 }
             };
-            println!("TODO: Definiens is fishy")
+            println!("TODO: Definiens is fishy ({})",parser.uri)
         );
         parser.in_term = in_term;
         true
@@ -789,7 +789,7 @@ tags!{v,node,parser,attrs,i,rest,
                 if let Some(uri) = get_sym_uri(s,parser.backend,parser.language) {VarOrSym::S(uri.into())}
                 else if let Some(uri) = get_mod_uri(s,parser.backend,parser.language) {VarOrSym::S(uri.into())}
                 else if !s.contains('?') {VarOrSym::V(s.to_string())} else {
-                    println!("HERE: {s}");
+                    println!("Fishy: {s} ({})",parser.uri);
                     VarOrSym::V("ERROR".to_string())
                 }
             ).unwrap_or_else(|| {
@@ -825,7 +825,7 @@ tags!{v,node,parser,attrs,i,rest,
                 (TMK::Complex,_) => OpenElem::Term{tm:OpenTerm::Complex(None)},
                 //(TMK::Complex,_,_) => OpenElem::TopLevelTerm(OpenTerm::Complex(None)),
                 (t,h) => {
-                    println!("TODO: Term is fishy: {t:?} {h}");
+                    println!("TODO: Term is fishy: {t:?} {h} ({})",parser.uri);
                     OpenElem::Term{tm:OpenTerm::OMV{name:"TODO".to_string(),notation:None}}
                 }
             };
@@ -842,11 +842,11 @@ tags!{v,node,parser,attrs,i,rest,
 
     Arg(arg:Arg, mode:ArgType) = "shtml:arg": 110 {
         let arg = get!(!"shtml:arg",s => s.parse().ok()).flatten().unwrap_or_else(|| {
-            println!("{attrs:?}\n{parser:?}");
+            println!("{attrs:?}\n{parser:?} ({})",parser.uri);
             todo!("{attrs:?}")
         });
         let mode = get!(!"shtml:argmode",s => s.parse().ok()).flatten().unwrap_or_else(|| {
-            println!("{attrs:?}\n{parser:?}");
+            println!("{attrs:?}\n{parser:?} ({})",parser.uri);
             todo!("{attrs:?}")
         });
         add!(OpenElem::Arg{arg,mode})
@@ -856,7 +856,7 @@ tags!{v,node,parser,attrs,i,rest,
         }
         true
     } => {
-        let t = node.as_term(Some(rest));
+        let t = node.as_term(Some(rest),parser);
         //println!("  = {t:?}");
         for e in rest.iter_mut() {
             if let OpenElem::Term{tm:OpenTerm::OMA{args,..}|OpenTerm::OMBIND{args,..}}
@@ -898,7 +898,7 @@ tags!{v,node,parser,attrs,i,rest,
                 return
             };
             {
-                println!("OOOOOF\n\n{}",s.document.node.to_string());
+                println!("OOOOOF\n\n{}\n({})",s.document.node.to_string(),s.uri);
             }
         );
         true
@@ -907,19 +907,19 @@ tags!{v,node,parser,attrs,i,rest,
     HeadTerm = "shtml:headterm": 115 {
         add!(OpenElem::HeadTerm)
     } => {
-        let t = node.as_term(Some(rest));
+        let t = node.as_term(Some(rest),parser);
         for e in rest.iter_mut() {
             if let OpenElem::Term {tm:OpenTerm::Complex(n)} | OpenElem::TopLevelTerm(OpenTerm::Complex(n)) = e {
                 *n=Some(t);return true
             }
         }
-        iterate!(@F node(t:Term=t),
+        iterate!(@F node(t:Term=t,parser:&HTMLParser=parser),
             e => {
                 if let OpenElem::Term {tm:OpenTerm::Complex(n)} | OpenElem::TopLevelTerm(OpenTerm::Complex(n)) = e {
                     *n=Some(t);return
                 }
             };
-            println!("TODO: Something is fishy here")
+            println!("TODO: Something is fishy here ({})",parser.uri)
         );
         true
     };
@@ -1026,54 +1026,54 @@ tags!{v,node,parser,attrs,i,rest,
         });
         add!(- OpenElem::Problempoints{pts})
     } => {
-        iterate!(@F node(pts:f32=pts),
+        iterate!(@F node(pts:f32=pts,parser:&HTMLParser=parser),
             e => if let OpenElem::Problem {points,..} = e {
                 *points = Some(pts);return
             };
-            println!("TODO: problempoints without a problem")
+            println!("TODO: problempoints without a problem ({})",parser.uri)
         );
         true
     };
     Solution = "shtml:solution": 254 {add!(- OpenElem::Solution)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut solution,..} = e {
                 *solution = Some(rf);return
             };
-            println!("TODO: solution without a problem")
+            println!("TODO: solution without a problem ({})",parser.uri)
         );
         node.kill();
         true
     };
     ProblemHint = "shtml:problemhint": 254 {add!(- OpenElem::ProblemHint)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut hint,..} = e {
                 *hint = Some(rf);return
             };
-            println!("TODO: hint without a problem")
+            println!("TODO: hint without a problem ({})",parser.uri)
         );
         node.kill();
         true
     };
     ProblemNote = "shtml:problemnote": 254 {add!(- OpenElem::ProblemNote)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut note,..} = e {
                 *note = Some(rf);return
             };
-            println!("TODO: note without a problem")
+            println!("TODO: note without a problem ({})",parser.uri)
         );
         node.kill();
         true
     };
     ProblemGradingNote = "shtml:problemgnote": 254 {add!(- OpenElem::ProblemGradingNote)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf),e =>
+        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut gnote,..} = e {
                 *gnote = Some(rf);return
             };
-            println!("TODO: gnote without a problem")
+            println!("TODO: gnote without a problem ({})",parser.uri)
         );
         node.kill();
         true

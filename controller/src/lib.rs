@@ -148,7 +148,6 @@ impl BaseController {
     }
 }
 
-#[cfg(not(feature="async"))]
 impl Default for BaseController {
     fn default() -> Self {
         Self::new(SettingsSpec::default())

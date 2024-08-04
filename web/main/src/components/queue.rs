@@ -338,15 +338,15 @@ pub fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
         <Space align=SpaceAlign::Start><Layout style="text-align:left;">
             <div>"ETA: "{move || eta.get().to_string()}</div>
             <h3 id="running">Running</h3>
-            <ol><For each=move || running.get() key=|e| e.id() children=|e| e.as_view()/></ol>
+            <ol style="margin-left:30px"><For each=move || running.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="queued">Queued</h3>
-            <ol reversed><For each=move || queue.get() key=|e| e.id() children=|e| e.as_view()/></ol>
+            <ol reversed style="margin-left:30px"><For each=move || queue.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="blocked">Blocked</h3>
-            <ol reversed><For each=move || blocked.get() key=|e| e.id() children=|e| e.as_view()/></ol>
+            <ol reversed style="margin-left:30px"><For each=move || blocked.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="failed">Failed</h3>
-            <ol reversed><For each=move || failed.get() key=|e| e.id() children=|e| e.as_view()/></ol>
+            <ol reversed style="margin-left:30px"><For each=move || failed.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="finished">Finished</h3>
-            <ol reversed><For each=move || finished.get() key=|e| e.id() children=|e| e.as_view()/></ol>
+            <ol reversed style="margin-left:30px"><For each=move || finished.get() key=|e| e.id() children=|e| e.as_view()/></ol>
         </Layout></Space>
         <Space align=SpaceAlign::End><div style="position:absolute;"><Anchor>
             <AnchorLink title="Running" href="#running"/>
