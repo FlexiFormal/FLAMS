@@ -189,10 +189,10 @@ impl ArchiveManager {
         } else {None}
     }
 
-    pub async fn get_html_async(&self,id:ArchiveId,rel_path:impl AsRef<str>) -> Option<(Vec<CSS>,String)> {
-        let p = self.find(id, |a| match a {
+    pub async fn get_html_async(&self,uri:DocumentURI) -> Option<(Vec<CSS>,String)> {
+        let p = self.find(uri.archive().id(), |a| match a {
             Some(Archive::Physical(ma)) => {
-                Some(ma.out_dir().join(rel_path.as_ref()).join("index.nomd"))
+                ma.doc_dir(uri.path(),uri.language(),uri.name()).map(|p| p.join("index.nomd"))
             }
             _ => None
         })?;
@@ -314,8 +314,8 @@ impl ArchiveTree {
             let step = steps.pop().unwrap();
             match curr.binary_search_by(|t| t.id().steps().last().unwrap().cmp(step)) {
                 Ok(i) => {
-                    if let ArchiveGroup::Archive(a) = curr[i] {
-                        if steps.is_empty() && a == id {
+                    if let ArchiveGroup::Archive(uri) = curr[i] {
+                        if steps.is_empty() && uri.id() == id {
                             curr.remove(i);
                             return
                         }
@@ -363,7 +363,7 @@ impl ArchiveTree {
                     }
                 }
                 Err(i) if steps.is_empty() => {
-                    curr.insert(i, ArchiveGroup::Archive(id.clone())); // TODO: add quad
+                    curr.insert(i, ArchiveGroup::Archive(uri)); // TODO: add quad
                     if let Some(gr) = &currgroup {
                         quads.push(ulo!(>(gr) CONTAINS (uri.to_iri()) Q));
                     }

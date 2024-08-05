@@ -34,7 +34,34 @@ jobs:
       - name: envvars1
         run: echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "IMMT_BUILD_GRAPHS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: main
-        run: cargo leptos build --release
+        run: |
+          $output = & cargo leptos build --release 2>&1
+          $output | Out-File -FilePath build_output.log
+          
+          Write-Host "Build command output:"
+          Get-Content build_output.log
+  
+          Write-Host "Checking for executable..."
+          if (Test-Path "target\release\immt.exe") {
+            Write-Host "Executable found: target\release\immt.exe"
+          } else {
+            Write-Host "Executable not found. Contents of target\release:"
+            Get-ChildItem -Path "target\release" -Force
+          }
+  
+          Write-Host "Cargo leptos version:"
+          cargo leptos --version
+  
+          Write-Host "Rust version:"
+          rustc --version
+  
+          Write-Host "Cargo version:"
+          cargo --version
+  
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Build failed. Please check the logs above for more details."
+            exit 1
+          }
       - name: bundle
         run: md out && Move-Item -Path target\release\immt.exe -Destination out\immt.exe &&  Move-Item -Path target\web -Destination out\web && Move-Item -Path main\resources\settings.toml -Destination out\settings.toml
       - uses: actions/upload-artifact@v4

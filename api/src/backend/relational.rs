@@ -2,15 +2,198 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
-use oxigraph::io::GraphFormat;
 use oxigraph::sparql::{Query, QueryResults};
 use oxrdfio::RdfFormat;
 use tracing::instrument;
 use immt_core::narration::Language;
-use immt_core::ontology::rdf::terms::{NamedNode, Quad, Term, Triple};
+use immt_core::ontology::rdf::terms::{NamedNode, Quad, Subject, Term, Triple};
 use immt_core::uris::{DocumentURI, PathURI};
 use crate::backend::archives::{Archive, Storage};
 use crate::backend::manager::ArchiveManager;
+
+pub struct QueryResult(QueryResults);
+impl QueryResult {
+    pub fn resolve(self) -> ResolvedQueryResult {
+        match self.0 {
+            QueryResults::Boolean(b) => ResolvedQueryResult::Bool(b),
+            QueryResults::Solutions(solutions) => {
+                let solutions: Vec<Solution> = solutions
+                    .filter_map(|s| s.ok().map(|solution| {
+                        Solution {
+                            bindings: solution
+                                .into_iter()
+                                .map(|(var, term)| (var.to_string(), SerializableTerm::from(term)))
+                                .collect(),
+                        }
+                    }))
+                    .collect();
+                ResolvedQueryResult::Solutions(solutions)
+            }
+            QueryResults::Graph(triples) => {
+                let triples: Vec<SerializableTriple> = triples
+                    .filter_map(|t| t.ok().map(|triple| SerializableTriple {
+                        subject: SerializableTerm::from(triple.subject),
+                        predicate: SerializableTerm::from(triple.predicate),
+                        object: SerializableTerm::from(triple.object),
+                    }))
+                    .collect();
+                ResolvedQueryResult::Graph(triples)
+            }
+        }
+    }
+}
+impl AsRef<QueryResults> for QueryResult {
+    fn as_ref(&self) -> &QueryResults {
+        &self.0
+    }
+}
+impl AsMut<QueryResults> for QueryResult {
+    fn as_mut(&mut self) -> &mut QueryResults { &mut self.0 }
+}
+impl From<QueryResults> for QueryResult {
+    fn from(q: QueryResults) -> Self { Self(q) }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize,Clone)]
+pub enum ResolvedQueryResult {
+    Bool(bool),
+    Solutions(Vec<Solution>),
+    Graph(Vec<SerializableTriple>)
+}
+impl ResolvedQueryResult {
+    pub fn results(&self) -> usize {
+        match self {
+            ResolvedQueryResult::Bool(_) => 0,
+            ResolvedQueryResult::Solutions(solutions) => solutions.len(),
+            ResolvedQueryResult::Graph(triples) => triples.len(),
+        }
+    }
+}
+#[derive(Debug, serde::Serialize, serde::Deserialize,Clone)]
+pub struct SerializableTriple {
+    subject: SerializableTerm,
+    predicate: SerializableTerm,
+    object: SerializableTerm,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize,Clone)]
+pub enum SerializableTerm {
+    NamedNode(String),
+    BlankNode(String),
+    Literal(String, Option<String>, String),
+    Triple(String,String,String)
+}
+impl From<Subject> for SerializableTerm {
+    fn from(subject: Subject) -> Self {
+        match subject {
+            Subject::NamedNode(nn) => SerializableTerm::NamedNode(nn.into_string()),
+            Subject::BlankNode(bn) => SerializableTerm::BlankNode(bn.into_string()),
+            Subject::Triple(t) => SerializableTerm::Triple(
+                t.subject.to_string(),
+                t.predicate.to_string(),
+                t.object.to_string()
+            )
+        }
+    }
+}
+
+impl From<NamedNode> for SerializableTerm {
+    fn from(nn: NamedNode) -> Self {
+        SerializableTerm::NamedNode(nn.into_string())
+    }
+}
+impl From<&NamedNode> for SerializableTerm {
+    fn from(nn: &NamedNode) -> Self {
+        SerializableTerm::NamedNode(nn.to_string())
+    }
+}
+
+impl From<Term> for SerializableTerm {
+    fn from(term: Term) -> Self {
+        match term {
+            Term::NamedNode(nn) => nn.into(),
+            Term::BlankNode(bn) => SerializableTerm::BlankNode(bn.into_string()),
+            Term::Literal(l) => SerializableTerm::Literal(
+                l.value().to_string(),
+                l.language().map(|lang| lang.to_string()),
+                l.datatype().to_string(),
+            ),
+            Term::Triple(t) => SerializableTerm::Triple(
+                t.subject.to_string(),
+                t.predicate.to_string(),
+                t.object.to_string(),
+            ),
+        }
+    }
+}
+
+impl From<&Term> for SerializableTerm {
+    fn from(term: &Term) -> Self {
+        match term {
+            Term::NamedNode(nn) => nn.into(),
+            Term::BlankNode(bn) => SerializableTerm::BlankNode(bn.to_string()),
+            Term::Literal(l) => SerializableTerm::Literal(
+                l.value().to_string(),
+                l.language().map(|lang| lang.to_string()),
+                l.datatype().to_string(),
+            ),
+            Term::Triple(t) => SerializableTerm::Triple(
+                t.subject.to_string(),
+                t.predicate.to_string(),
+                t.object.to_string(),
+            ),
+        }
+    }
+}
+
+
+impl std::fmt::Display for SerializableTerm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SerializableTerm::NamedNode(iri) => write!(f, "<{}>", iri),
+            SerializableTerm::BlankNode(id) => write!(f, "_:{}", id),
+            SerializableTerm::Literal(value, lang, datatype) => {
+                write!(f, "\"{}\"", value)?;
+                if let Some(lang) = lang {
+                    write!(f, "@{}", lang)?;
+                }
+                write!(f, "^^<{}>", datatype)
+            }
+            SerializableTerm::Triple(s,p,o) => write!(f, "{} {} {}", s,p,o)
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize,Clone)]
+pub struct Solution {
+    bindings: Vec<(String, SerializableTerm)>,
+}
+
+impl std::fmt::Display for ResolvedQueryResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedQueryResult::Bool(b) => write!(f, "Boolean result: {}", b),
+            ResolvedQueryResult::Solutions(solutions) => {
+                writeln!(f, "Solutions:")?;
+                for (i, solution) in solutions.iter().enumerate() {
+                    writeln!(f, "  Solution {}:", i + 1)?;
+                    for (var, term) in &solution.bindings {
+                        writeln!(f, "    {}: {}", var, term)?;
+                    }
+                }
+                Ok(())
+            }
+            ResolvedQueryResult::Graph(triples) => {
+                writeln!(f, "Graph:")?;
+                for triple in triples {
+                    writeln!(f, "  {} {} {}", triple.subject, triple.predicate, triple.object)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 
 
 pub struct RelationalManager {
@@ -33,6 +216,7 @@ impl RelationalManager {
             let ns = PathURI::new(uri.archive(),uri.path(),None).to_string().replace(' ',"%20");
             let mut writer = oxigraph::io::RdfSerializer::from_format(RdfFormat::Turtle)
                 .with_prefix("ns", ns).unwrap()
+                .with_prefix("rdf","http://www.w3.org/1999/02/22-rdf-syntax-ns").unwrap()
                 .with_prefix("ulo","http://mathhub.info/ulo").unwrap()
                 .with_prefix("dc","http://purl.org/dc/elements/1.1").unwrap()
                 .serialize_to_write(writer);
@@ -43,20 +227,16 @@ impl RelationalManager {
         }
     }
 
-    pub fn query(&self,s:impl AsRef<str>) -> Option<BTreeSet<NamedNode>> {
-        let mut query:Query = s.as_ref().try_into().ok()?;
+    pub fn query(&self,s:impl AsRef<str>) -> Option<QueryResult> {
+        let mut query_str = String::from(r#"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX dc: <http://purl.org/dc/elements/1.1#>
+            PREFIX ulo: <http://mathhub.info/ulo#>
+        "#);
+        query_str.push_str(s.as_ref());
+        let mut query:Query = query_str.as_str().try_into().ok()?;
         query.dataset_mut().set_default_graph_as_union();
-        let res = self.store.query(query).ok()?;
-        if let QueryResults::Solutions(sol) = res {
-            Some(sol.into_iter().filter_map(|r|
-                r.ok().map(|r| match r.get(0) {
-                    Some(Term::NamedNode(n)) => Some(n.clone()),
-                    _ => None
-                }).flatten()
-            ).collect::<BTreeSet<_>>())
-        } else {
-            None
-        }
+        self.store.query(query).ok().map(|i| i.into())
     }
 
 

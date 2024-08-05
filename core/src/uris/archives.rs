@@ -159,7 +159,7 @@ impl ArchiveURI {
         self.base
     }
     #[inline]
-    pub fn id(&self) -> ArchiveId {
+    pub const fn id(&self) -> ArchiveId {
         self.archive
     }
     pub fn to_iri(&self) -> NamedNode {

@@ -1,0 +1,119 @@
+.thaw-button {
+  height: var(--thaw-height);
+  padding: var(--thaw-padding);
+  font-size: var(--thaw-font-size);
+  background-color: var(--thaw-background-color);
+  color: var(--thaw-font-color);
+  border: 1px solid var(--thaw-border-color);
+  border-radius: 5px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.thaw-button:hover:not(.thaw-button--disabled, .thaw-button--outlined) {
+  border-color: var(--thaw-border-color-hover);
+  background-color: var(--thaw-background-color-hover);
+  cursor: pointer;
+
+  transition: all 0.3s;
+}
+
+.thaw-button--block {
+  display: flex;
+  width: 100%;
+}
+
+.thaw-button--disabled:not(.thaw-button--text, .thaw-button--link) {
+  border-color: var(--thaw-border-color-disabled);
+  background-color: var(--thaw-background-color-disabled);
+}
+
+.thaw-button.thaw-button--disabled {
+  color: var(--thaw-font-color-disabled);
+  cursor: not-allowed;
+}
+
+.thaw-button:active:not(.thaw-button--disabled) {
+  transition: all 0.3s;
+  border-color: var(--thaw-border-color-hover);
+  background-color: var(--thaw-background-color-active);
+}
+
+.thaw-button--outlined {
+  background-color: transparent;
+  color: inherit;
+  transition: all 0.3s;
+}
+
+.thaw-button--outlined:hover:not(.thaw-button--disabled) {
+  cursor: pointer;
+  color: var(--thaw-font-color-hover);
+  border-color: var(--thaw-border-color-hover);
+}
+
+.thaw-button--text,
+.thaw-button--link {
+  border: none;
+}
+
+.thaw-button--link {
+  background-color: transparent;
+  color: inherit;
+  height: auto;
+  padding: inherit;
+}
+.thaw-button--text:hover:not(.thaw-button--disabled),
+.thaw-button--link:hover:not(.thaw-button--disabled) {
+  color: var(--thaw-font-color-hover);
+}
+
+.thaw-button--round {
+  border-radius: var(--thaw-height);
+}
+
+.thaw-button--circle:not(.thaw-button--link) {
+  width: var(--thaw-height);
+  padding: 0;
+  border-radius: var(--thaw-height);
+}
+
+@keyframes thawLoadingCircle {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.thaw-button .thaw-wave {
+  pointer-events: none;
+  animation-iteration-count: 1;
+  animation-duration: 0.6s;
+  animation-timing-function: cubic-bezier(0, 0, 0.2, 1),
+  cubic-bezier(0, 0, 0.2, 1);
+}
+
+.thaw-button .thaw-wave.thaw-wave--active {
+  opacity: 0;
+  z-index: 1;
+  animation-name: thawButtonWaveSpread, thawButtonWaveOpacity;
+}
+
+@keyframes thawButtonWaveSpread {
+  from {
+    box-shadow: 0 0 0.5px 0 var(--thaw-ripple-color);
+  }
+  to {
+    box-shadow: 0 0 0.5px 6px var(--thaw-ripple-color);
+  }
+}
+
+@keyframes thawButtonWaveOpacity {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 0;
+  }
+}

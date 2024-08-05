@@ -1,12 +1,13 @@
 use leptos::*;
 use immt_core::building::buildstate::{BuildState, AllStates};
 use immt_core::uris::archives::ArchiveId;
+use immt_core::uris::ArchiveURI;
 use immt_core::utils::filetree::SourceFile;
 use crate::accounts::if_logged_in;
 
 #[cfg(feature = "server")]
 mod server {
-    use immt_api::backend::archives::Archive;
+    use immt_api::backend::archives::{Archive, Storage};
     use immt_core::ontology::archives::ArchiveGroup as AGroup;
     use immt_controller::{BaseController,ControllerTrait,controller};
     use super::{ArchiveOrGroup, DirOrFile};
@@ -26,17 +27,16 @@ mod server {
                 None => (toptree.groups(),false)
             };
             let mut children = tree.iter().filter_map(|v| match v {
-                AGroup::Archive(id) => {
-                    if let Some(Archive::Physical(ma)) = toptree.find_archive(*id) {
-                        Some(ArchiveOrGroup::Archive(id.clone(), ma.state().clone()))
+                AGroup::Archive(uri) => {
+                    if let Some(Archive::Physical(ma)) = toptree.find_archive(uri.id()) {
+                        Some(ArchiveOrGroup::Archive(*uri, ma.state().clone()))
                     } else {None}
                 },
                 AGroup::Group{id,state,..} => Some(ArchiveOrGroup::Group(id.clone(),state.clone()))
             }).collect::<Vec<_>>();
             if has_meta {
-                let name = format!("{}/meta-inf",prefix.unwrap());
-                let id = ArchiveId::new(name.as_str());
-                children.insert(0,ArchiveOrGroup::Archive(id.clone(), if let Some(Archive::Physical(ma)) = toptree.find_archive(id) {
+                let uri = toptree.find_archive(ArchiveId::new(&format!("{}/meta-inf",prefix.unwrap())))?.uri();
+                children.insert(0,ArchiveOrGroup::Archive(uri, if let Some(Archive::Physical(ma)) = toptree.find_archive(uri.id()) {
                     ma.state().clone()
                 } else {AllStates::default()}));
             }
@@ -94,7 +94,7 @@ pub async fn get_files_in(archive:ArchiveId,prefix:Option<String>) -> Result<Vec
 
 #[derive(Clone,Debug,serde::Serialize, serde::Deserialize)]
 pub enum ArchiveOrGroup {
-    Archive(ArchiveId, AllStates),
+    Archive(ArchiveURI, AllStates),
     Group(ArchiveId, AllStates)
 }
 
@@ -122,7 +122,7 @@ mod treeview {
     pub const immt_treeview_left_margin: &str = "immt-treeview-left-margin";
 }
 use treeview::*;
-use crate::components::content::SHtmlIFrame;
+use crate::components::content::{SHtmlComponent,Document};
 use crate::components::queue::enqueue;
 
 #[component]
@@ -130,7 +130,7 @@ pub fn ArchivesTop() -> impl IntoView {
     view!(
         <Await future = || get_archives(None) let:archives blocking=true><ul class=immt_treeview>{match archives {
                 Ok(archives) => archives.into_iter().map(|a| match a{
-                    ArchiveOrGroup::Archive(id,state) => view!{<li class=immt_treeview_li><Archive id=id.clone() state=state.clone()/></li>},
+                    ArchiveOrGroup::Archive(uri,state) => view!{<li class=immt_treeview_li><Archive uri=*uri state=state.clone()/></li>},
                     ArchiveOrGroup::Group(id,state) => view!{<li class=immt_treeview_li><ArchiveGroup id=id.clone() state=state.clone()/></li>}
                 }).collect::<Vec<_>>(),
                 _ => Vec::new()
@@ -150,7 +150,7 @@ pub fn ArchiveOrGroups(path:ArchiveId) -> impl IntoView {
         <ul class=immt_treeview_inner>{
             match resource.get() {
                 Some(Ok(archives)) => {archives.into_iter().map(|a| match a{
-                    ArchiveOrGroup::Archive(id,state) => view!{<li class=immt_treeview_li><Archive id state/></li>},
+                    ArchiveOrGroup::Archive(uri,state) => view!{<li class=immt_treeview_li><Archive uri=uri state/></li>},
                     ArchiveOrGroup::Group(id,state) => view!{<li class=immt_treeview_li><ArchiveGroup id state/></li>}
                 }).collect::<Vec<_>>()},
                 _ => Vec::new()
@@ -197,40 +197,37 @@ fn ArchiveGroup(id:ArchiveId, state: AllStates) -> impl IntoView {
 }
 
 #[island]
-fn Archive(id:ArchiveId, state: AllStates) -> impl IntoView {
+fn Archive(uri:ArchiveURI, state: AllStates) -> impl IntoView {
     use thaw::*;
     let (expanded, set_expanded) = create_signal(false);
     let (clicked,click) = create_signal(false);
-    let i = id.clone();
-    let i2 = id.clone();
     //console_log!("{}={}",id.num(),id);
     let s = state.summary();
     view!{<details>
         <summary class=immt_treeview_summary on:click=move |_| set_expanded.update(|b| *b = !*b)>
             <span><Icon icon=icondata_bi::BiBookSolid/>" "
-                {id.as_str().split('/').last().unwrap().to_string()}
+                {uri.id().as_str().split('/').last().unwrap().to_string()}
             </span>
-            <Modal show=(clicked,click)><ArchiveModal id=i state=state/></Modal>
+            <Modal show=(clicked,click)><ArchiveModal id=uri.id() state=state/></Modal>
             <span on:click=move |_| {click.set(true)} style="cursor: help;">" 🛈"</span>
             <span class=immt_treeview_left_margin/>
             {badge(s.new,s.stale.0)}
         </summary>
         {move || if expanded.get() {
-            Some(view!{<DirOrFiles archive=i2.clone() inner=true/>})
+            Some(view!{<DirOrFiles archive=uri inner=true/>})
             } else { None }
         }
     </details>}
 }
 
 #[island]
-fn DirOrFiles(archive:ArchiveId, #[prop(optional)] path:String, inner:bool) -> impl IntoView {
+fn DirOrFiles(archive:ArchiveURI, #[prop(optional)] path:String, inner:bool) -> impl IntoView {
     let cls = if inner { immt_treeview_inner } else { immt_treeview };
     let path = if path.is_empty() {None} else {Some(path)};
-    let a = archive.clone();
     //console_log!("{}={}",archive.num(),archive);
     view!{<ul class=cls>{crate::components::with_spinner(
-        move || (a.clone(),path.clone()),
-        |(a,p)| get_files_in(a,p),
+        move || path.clone(),
+        move |p| get_files_in(archive.id(),p),
         archive,move |archive,archives| {
         archives.into_iter().map(|a| match a{
             DirOrFile::File(file) => view!{<li class=immt_treeview_li><SourceFile archive=archive.clone() file/></li>},
@@ -241,12 +238,11 @@ fn DirOrFiles(archive:ArchiveId, #[prop(optional)] path:String, inner:bool) -> i
 
 
 #[island]
-fn Directory(archive:ArchiveId, path:String, state: AllStates) -> impl IntoView {
+fn Directory(archive:ArchiveURI, path:String, state: AllStates) -> impl IntoView {
     use thaw::*;
     let (expanded, set_expanded) = create_signal(false);
     let on_click = move |_| set_expanded.update(|b| *b = !*b);
     let (clicked,click) = create_signal(false);
-    let a = archive.clone();
     let p = path.clone();
     let p2 = path.clone();
     let fullstate = state;
@@ -256,7 +252,7 @@ fn Directory(archive:ArchiveId, path:String, state: AllStates) -> impl IntoView 
             <span><Icon icon=icondata_bi::BiFolderRegular/>" "
                 {path.split('/').last().unwrap().to_string()}
             </span>
-            <Modal show=(clicked,click)><DirectoryModal archive=a path=p state=fullstate/></Modal>
+            <Modal show=(clicked,click)><DirectoryModal archive=archive.id() path=p state=fullstate/></Modal>
             <span on:click=move |_| {click.set(true)} style="cursor: help;">" 🛈"</span>
             <span class=immt_treeview_left_margin/>
             {badge(state.new,state.stale.0)}
@@ -269,8 +265,9 @@ fn Directory(archive:ArchiveId, path:String, state: AllStates) -> impl IntoView 
 }
 
 #[island]
-fn SourceFile(archive:ArchiveId,file:SourceFile) -> impl IntoView {
+fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
     use thaw::*;
+    use crate::components::IFrame;
     let show = create_rw_signal(false);
 
     let mut name = format!("{} [{}]",file.relative_path.split('/').last().unwrap(),file.format);
@@ -292,10 +289,10 @@ fn SourceFile(archive:ArchiveId,file:SourceFile) -> impl IntoView {
         <span class=cls on:click=move |_| show.set(true)><Icon icon=icondata_bi::BiFileRegular/>" "{name.clone()}</span>
         <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right width="70%">{
             move || if show.get() {
-                view!(<SHtmlIFrame archive path=p.clone() ht="calc(100vh - 110px)".to_string()/>)
+                view!(<IFrame src=format!("?a={}&rp={}",archive.id(),p) ht="calc(100vh - 110px)".to_string()/>)
             } else {view!(<span/>).into_view()}
         }</Drawer>
-        <Modal show=(clicked,click)><FileModal archive file/></Modal>
+        <Modal show=(clicked,click)><FileModal archive=archive.id() file/></Modal>
         <span on:click=move |_| {click.set(true)} style="cursor: help;">" 🛈"</span>
     }
 }

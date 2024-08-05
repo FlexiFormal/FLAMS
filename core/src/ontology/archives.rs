@@ -135,7 +135,7 @@ impl PartialEq for MathArchiveSpecRef<'_> {
 
 #[derive(Debug)]
 pub enum ArchiveGroup {
-    Archive(ArchiveId),
+    Archive(ArchiveURI),
     Group {
         id: ArchiveId,
         has_meta: bool,
@@ -147,13 +147,14 @@ static DEFAULT: AllStates = AllStates {map:VecMap::new() };
 impl ArchiveGroup {
     pub const fn id(&self) -> ArchiveId {
         match self {
-            Self::Archive(id) | Self::Group { id, .. } => *id
+             Self::Group { id, .. } => *id,
+            Self::Archive(uri) => uri.id()
         }
     }
     pub fn state<'a,F: Fn(ArchiveId) -> Option<&'a AllStates>>(&'a self, get:&'a F) -> &'a AllStates {
         match self {
             Self::Group { state, .. } => state,
-            Self::Archive(id) => get(*id).unwrap_or(&DEFAULT)
+            Self::Archive(uri) => get(uri.id()).unwrap_or(&DEFAULT)
         }
     }
     pub fn update<'a, F: Fn(ArchiveId) -> Option<&'a AllStates>>(&mut self, get:&'a F) {
@@ -164,7 +165,7 @@ impl ArchiveGroup {
                     c.update(get);
                     match c {
                         Self::Group { state:s, .. } => state.merge_cum(s),
-                        Self::Archive(id) => match get(*id){
+                        Self::Archive(uri) => match get(uri.id()){
                             Some(s) => state.merge_cum(s),
                             None => {}
                         }

@@ -4,7 +4,7 @@ use std::ops::Div;
 use std::str::FromStr;
 use triomphe::Arc;
 use crate::narration::Language;
-pub use crate::uris::archives::ArchiveURI;
+pub use crate::uris::archives::{ArchiveURI,ArchiveId};
 pub use crate::uris::base::BaseURI;
 use crate::ontology::rdf::terms::NamedNode;
 pub use crate::uris::documents::{DocumentURI, NarrativeURI, NarrDeclURI};
@@ -114,6 +114,21 @@ pub enum MMTUri {
     Narrative(NarrativeURI),
     Content(ContentURI),
 }
+impl From<ArchiveURI> for MMTUri {
+    fn from(value: ArchiveURI) -> Self {
+        Self::Archive(value)
+    }
+}
+impl<A:Into<NarrativeURI>> From<A> for MMTUri {
+    fn from(value: A) -> Self {
+        Self::Narrative(value.into())
+    }
+}
+impl From<ContentURI> for MMTUri {
+    fn from(value: ContentURI) -> Self {
+        Self::Content(value)
+    }
+}
 impl FromStr for MMTUri {
     type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -148,6 +163,17 @@ mod serde_impl {
         fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             let s = String::deserialize(deserializer)?;
             Ok(Self::new(s))
+        }
+    }
+    impl serde::Serialize for MMTUri {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.collect_str(self)
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for MMTUri {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let s = String::deserialize(deserializer)?;
+            s.parse().map_err(|s| serde::de::Error::custom(s))
         }
     }
     impl<A:serde::Serialize> serde::Serialize for SafeURI<A> {

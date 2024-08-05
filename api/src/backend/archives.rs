@@ -9,7 +9,9 @@ use crate::core::uris::archives::{ArchiveId};
 use crate::core::utils::VecMap;
 use crate::utils::asyncs::ChangeSender;
 use immt_core::building::buildstate::AllStates;
+use immt_core::narration::Language;
 use immt_core::uris::archives::ArchiveURI;
+use immt_core::uris::Name;
 
 pub trait Storage:std::fmt::Debug {
     fn spec(&self) -> StorageSpecRef<'_>;
@@ -46,6 +48,27 @@ pub struct MathArchive {
 impl MathArchive {
 
     pub fn out_dir(&self) -> PathBuf { self.path().join(".immt") }
+    pub fn doc_dir(&self,path:Option<Name>,lang:Language,name:Name) -> Option<PathBuf> {
+        let mut p = self.out_dir();
+        if let Some(n) = path { p = p.join(n.as_ref()) }
+        let name = name.as_ref();
+        for d in std::fs::read_dir(&p).ok()? {
+            let d = if let Ok(d) = d {d} else {continue};
+            let f = d.file_name();
+            let f = if let Some(f) = f.to_str() {f} else {continue};
+            let f = if let Some(f) = f.strip_prefix(name) {f} else {continue};
+            if f.is_empty() { return Some(d.path()) }
+            if f.as_bytes()[0] != b'.' {continue}
+            let f = &f[1..];
+            let lstr:&'static str = lang.into();
+            if f.contains('.') {
+                if f.starts_with(lstr) {
+                    return Some(d.path())
+                }
+            } else {return Some(d.path())}
+        }
+        None
+    }
     pub fn source_files(&self) -> Option<&[SourceDirEntry]> { self.source.as_deref() }
 
     pub fn update_sources(&mut self, formats:&[SourceFormat], on_change:&ChangeSender<FileChange>) {

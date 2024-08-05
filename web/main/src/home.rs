@@ -16,7 +16,8 @@ pub enum Page {
     NotFound,
     Queue,
     Settings,
-    Login
+    Login,
+    Query
 }
 impl Page {
     pub fn key(self) -> &'static str {
@@ -28,6 +29,7 @@ impl Page {
             Page::Login => "login",
             Page::Queue => "queue",
             Page::Settings => "settings",
+            Page::Query => "query",
             Page::NotFound => "notfound"
         }
     }
@@ -69,6 +71,7 @@ pub fn Main() -> impl IntoView {
                 <Route path="log" view=|| view!(<MainPage page=Page::Log/>)/>
                 <Route path="queue" view=|| view!(<MainPage page=Page::Queue/>)/>
                 <Route path="settings" view=|| view!(<MainPage page=Page::Settings/>)/>
+                <Route path="query" view=|| view!(<MainPage page=Page::Query/>)/>
                 <Route path="" view=|| view!(<MainPage page=Page::Home/>)/>
                 <Route path="*any" view=|| view!(<MainPage page=Page::NotFound/>)/>
             </Route>
@@ -131,6 +134,7 @@ fn MainPage(page:Page) -> impl IntoView {
         Page::Graphs => view!{<GraphTest/>},
         Page::Log => view!{<FullLog/>},
         Page::Queue => view!{<QueuesTop/>},
+        Page::Query => view!{<Query/>},
         Page::Settings => view!{<Settings/>},
         _ => view!(<NotFound/>).into_view()
         //Page::Login => view!{<LoginPage/>}
@@ -146,6 +150,7 @@ fn MainPage(page:Page) -> impl IntoView {
                         <a href="/dashboard/log"><MenuItem key="log" label="Logs"/></a>
                         <a href="/dashboard/settings"><MenuItem key="settings" label="Settings"/></a>
                         <a href="/dashboard/queue"><MenuItem key="queue" label="Queue"/></a>
+                        <a href="/dashboard/query"><MenuItem key="query" label="Queries"/></a>
                     },
                     LoginState::User(..) => view!{
                         <a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a><span/>

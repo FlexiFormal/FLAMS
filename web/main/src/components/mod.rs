@@ -4,12 +4,14 @@ pub mod logging;
 pub mod queue;
 pub mod settings;
 pub mod content;
+pub mod query;
 
 pub use mathhub_tree::ArchiveOrGroups;
 pub use graph_viewer::GraphTest;
 pub use logging::FullLog;
 pub use queue::QueuesTop;
 pub use settings::Settings;
+pub use query::Query;
 
 use std::future::Future;
 use leptos::*;
@@ -29,6 +31,15 @@ fn Collapsible(#[prop(optional, into)] header: View,children:ChildrenFn,#[prop(o
             if expanded.get() {Some(children.clone())} else {None}
         }}</div>
         </details>)
+}
+
+#[component]
+pub(crate) fn IFrame(src:String,#[prop(optional)] ht:String) -> impl IntoView {
+    view!(<iframe src=format!("/{src}") style=if ht.is_empty() {
+        "width:100%;border: 0;".to_string()
+    } else {
+        format!("width:100%;height:{ht};border: 0;")
+    }></iframe>)
 }
 
 
