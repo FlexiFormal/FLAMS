@@ -351,7 +351,7 @@ leptos_uri!{DOC @opt
 {pub(crate)} fn Document() -> {impl IntoView} = uri {
     use thaw::*;
     if let Some(uri) = uri {
-    let res = create_resource(|| (),move |_| leptos_uri!(@uri DOC get_html_inner => uri.into()));
+    let res = create_blocking_resource(|| (),move |_| leptos_uri!(@uri DOC get_html_inner => uri.into()));
     Some(view!{
         <Suspense fallback=|| view!(<Spinner/>)>{
             if let Some(Ok((css,html))) = res.get() {
@@ -415,15 +415,14 @@ leptos_uri!{
 #[component]
 fn CSSHTML(css:Vec<CSS>,html:String) -> impl IntoView {
     use leptos_meta::{Stylesheet,Style,Script};
-    leptos_meta::provide_meta_context();
     view!(<For each=move || css.clone().into_iter().enumerate() key=|(u,_)| u.to_string()
-        children = move |(_,css)| match css {
+        children = move |(u,css)| match css {
             CSS::Link(href) => view!(<Stylesheet href/>),
             CSS::Inline(content) => view!(<Style>{content}</Style>)
         }
         />
         <Script src="/shtml.js"/>
-        <div style="text-align:left;" inner_html=html />
+        <div style="text-align:left;" inner_html=html/>
     )
 }
 
