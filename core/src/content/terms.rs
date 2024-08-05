@@ -34,14 +34,16 @@ pub enum Term {
     OMS(ContentURI),
     OMA {
         head:VarOrSym,
+        head_term:Option<Box<Term>>,
         args:Vec<(TermOrList,ArgType)>
     },
     OMBIND {
         head:VarOrSym,
+        head_term:Option<Box<Term>>,
         args:Vec<(TermOrList,ArgType)>
     },
     OMV(String),
-    OML(String),
+    OML(String,Option<Box<Term>>),
     Informal {
         tag:String,
         attributes:VecMap<String,String>,
@@ -53,7 +55,7 @@ impl Debug for Term {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::OMS(p) => Debug::fmt(p,f),
-            Self::OMA{head,args} => {
+            Self::OMA{head,args,head_term} => {
                 f.write_char('(')?;
                 Debug::fmt(head,f)?;
                 for (t,a) in args {
@@ -64,7 +66,7 @@ impl Debug for Term {
                 }
                 f.write_char(')')
             },
-            Self::OMBIND {head,args} => {
+            Self::OMBIND {head,args,head_term} => {
                 f.write_char('{')?;
                 Debug::fmt(head,f)?;
                 for (t,a) in args {
@@ -81,7 +83,7 @@ impl Debug for Term {
                 f.write_str(name)?;
                 f.write_char(')')
             }
-            Self::OML(name) => {
+            Self::OML(name,_) => {
                 f.write_char('L')?;
                 f.write_char('(')?;
                 f.write_str(name)?;

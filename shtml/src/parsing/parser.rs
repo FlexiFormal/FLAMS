@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::cmp::PartialEq;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::path::Path;
 use html5ever::{Attribute, ExpandedName, parse_document, ParseOpts, QualName};
 use immt_api::backend::manager::ArchiveManager;
@@ -18,6 +18,18 @@ use crate::docs::OpenTerm;
 use crate::parsing::shtml::OpenElem;
 
 pub(crate) type OpenElems = ArrayVec<OpenElem,8>;
+
+macro_rules! sanity_check {
+    ($s:expr,$a:expr) => {
+        ()//if !$a { brk($s) }
+    }
+}
+macro_rules! debug_check {
+    ($($t:tt)*) => {
+        ()//println!($($t)*)
+    }
+}
+
 
 #[derive(Debug)]
 pub(crate) struct NodeData {
@@ -416,12 +428,7 @@ impl HTMLParser<'_> {
         }
     }
 }
-/*
-impl Drop for HTMLParser<'_> {
-    fn drop(&mut self) {
-        self.kill()
-    }
-}*/
+
 impl std::fmt::Debug for HTMLParser<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut s = f.debug_struct("HTMLParser");
@@ -431,13 +438,6 @@ impl std::fmt::Debug for HTMLParser<'_> {
         s.finish()
     }
 }
-
-macro_rules! sanity_check {
-    ($s:expr,$a:expr) => {
-        ()//if !$a { brk($s) }
-    }
-}
-
 
 impl<'a> HTMLParser<'a> {
     pub fn new(input: &'a str, path: &'a Path, uri: DocumentURI, backend:&'a ArchiveManager,strip:bool) -> Self {
@@ -483,19 +483,6 @@ impl<'a> HTMLParser<'a> {
     }
 
 }
-/*
-struct Tokenizer<'a> {
-    inner:html5ever::tokenizer::Tokenizer<HTMLParser<'a>>
-}
-
-impl TokenSink for Tokenizer {
-    type Handle = ();
-    fn process_token(&mut self, token: Token, line_number: u64) -> TokenSinkResult<Self::Handle> {
-        todo!()
-    }
-}
-
- */
 
 fn is_html(attrs:&Vec<Attribute>) -> bool {
     attrs.iter().any(|a| a.name.local.starts_with("shtml:"))
@@ -505,6 +492,26 @@ fn is_html(attrs:&Vec<Attribute>) -> bool {
 fn brk(s:&HTMLParser) {
     println!("Document offset mismatch!\n\n{}",s.document.node.to_string());
     todo!("Document offset mismatch!")
+}
+
+struct Print<'a,A>(&'a A);
+impl Display for Print<'_,QualName> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}",self.0.local)
+    }
+}
+impl Display for Print<'_,Vec<Attribute>> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for a in self.0.iter() {
+            write!(f," {}=\"{}\"",a.name.local,a.value)?
+        }
+        Ok(())
+    }
+}
+impl Display for Print<'_,NodeWithSource> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}",self.0.node.to_string().replace('\n',""))
+    }
 }
 
 impl<'a> TreeSink for HTMLParser<'a> {
@@ -568,6 +575,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
     #[inline]
     fn create_element(&mut self, name: QualName, mut attrs: Vec<Attribute>, _flags: ElementFlags) -> Self::Handle {
+        debug_check!("Creating element <{} {}/>",Print(&name),Print(&attrs));
         let elem = if is_html(&attrs) {
             self.do_shtml(&mut attrs)
         } else { ArrayVec::default() };
@@ -619,6 +627,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
         }
         let len = match child {
             NodeOrText::AppendNode(node) => {
+                debug_check!("\nAppending {}\n   to {}\n",Print(&node),Print(parent));
                 if let Some(e) = node.node.as_element() {
                     if e.name.local.as_ref() == "body" {
                         self.body = Some(node.clone())
@@ -693,6 +702,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
         for e in pops {
             self.pop(&e)
         }
+        debug_check!("Closing {}",Print(node));
         let mut d = node.data.borrow_mut();
         let mut elem = d.elem.take();drop(d);
         elem.reverse();

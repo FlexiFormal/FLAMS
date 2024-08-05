@@ -16,7 +16,21 @@ use immt_api::core::utils::VecMap;
 use immt_api::core::uris::{ContentURI, Name};
 
 macro_rules! iterate {
-    ($n:expr,$e:ident => $f:expr;$p:ident => $cont:expr;$or:expr) => {
+    ($n:ident $(($($i:ident:$t:ty=$d:expr),+))? $(-> $rest:ident)?, $e:ident => $f:expr;$or:expr) => {
+        $($( let $i : $t = $d; )*)?
+        $(
+            for $e in $rest.iter_mut() { $f }
+        )?
+        fn iter($n:&NodeWithSource$(,$($i:$t),*)?) -> bool {
+            iterate!(@I $n,
+                $e => $f;
+                p => iter(p$(,$($i),*)?);
+                {$or;false}
+            )
+        }
+        iter($n$(,$($i),*)?)
+    };
+    (@I $n:expr,$e:ident => $f:expr;$p:ident => $cont:expr;$or:expr) => {
         if let Some($p) = &$n.data.borrow().parent {
             let mut data = $p.data.borrow_mut();
             for $e in data.elem.iter_mut().rev() { $f }
@@ -25,22 +39,12 @@ macro_rules! iterate {
             $or
         }
     };
-    (@F $n:ident $(($($i:ident:$t:ty=$d:expr),+))?,$e:ident => $f:expr;$or:expr) => {
-        fn iter($n:&NodeWithSource$(,$($i:$t),*)?) {
-            iterate!($n,
-                $e => $f;
-                p => iter(p$(,$($i),*)?);
-                $or
-            )
-        }
-        iter($n$(,$($d),*)?)
-    };
 }
 
 impl<'a> HTMLParser<'a> {
 
     fn add_doc(&mut self,node:&NodeWithSource,elem:DocumentElement) {
-        iterate!(node,
+        iterate!(@I node,
             e => if let Some(c) = e.narration() {
                 c.push(elem);return
             };
@@ -50,7 +54,7 @@ impl<'a> HTMLParser<'a> {
     }
 
     fn add_content(&mut self,node:&NodeWithSource,elem:ContentElement) {
-        iterate!(node,
+        iterate!(@I node,
             e => if let Some(c) = e.content() {
                 c.push(elem);return
             };
@@ -355,10 +359,10 @@ tags!{v,node,parser,attrs,i,rest,
         let m = Module {
             uri, meta, signature, elements: content_children,
         };
-        iterate!(@F node(s:&mut HTMLParser=parser,m:Module=m),
+        iterate!(node(s:&mut HTMLParser=parser,m:Module=m),
             e => if let OpenElem::Module {content_children,..} |
             OpenElem::MathStructure {content_children,..} = e {
-                content_children.push(ContentElement::NestedModule(m));return
+                content_children.push(ContentElement::NestedModule(m));return true
             };
             s.modules.push(m)
         );
@@ -460,9 +464,9 @@ tags!{v,node,parser,attrs,i,rest,
         let title = Title {
             children,range:node.data.borrow().range
         };
-        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        iterate!(node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::Section { title, .. } = e {
-                *title = Some(ttl);return
+                *title = Some(ttl);return true
             };
             todo!()
         );
@@ -474,9 +478,9 @@ tags!{v,node,parser,attrs,i,rest,
         let title = Title {
             children,range:node.data.borrow().range
         };
-        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        iterate!(node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::LogicalParagraph { title, .. } = e {
-                *title = Some(ttl); return
+                *title = Some(ttl); return true
             };
             todo!()
         );
@@ -488,9 +492,9 @@ tags!{v,node,parser,attrs,i,rest,
         let title = Title {
             children,range:node.data.borrow().range
         };
-        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        iterate!(node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::LogicalParagraph { title,kind:StatementKind::Proof, .. } = e {
-                *title = Some(ttl); return
+                *title = Some(ttl); return true
             };
             todo!()
         );
@@ -502,9 +506,9 @@ tags!{v,node,parser,attrs,i,rest,
         let title = Title {
             children,range:node.data.borrow().range
         };
-        iterate!(@F node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
+        iterate!(node(ttl:Title=title,range:SourceRange<ByteOffset>=node.data.borrow().range),
             e => if let OpenElem::Problem { title, .. } = e {
-                *title = Some(ttl); return
+                *title = Some(ttl); return true
             };
             todo!()
         );
@@ -637,9 +641,15 @@ tags!{v,node,parser,attrs,i,rest,
             }
         }
         let not = get_node(node);
-        iterate!(@F node(n:NodeWithSource=not,parser:&HTMLParser=parser), e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
+        /*for e in rest.iter_mut() {
+            if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
+                *comp = Some(not);return true
+            }
+        }*/
+        iterate!(node(n:NodeWithSource=not,parser:&HTMLParser=parser) -> rest,
+            e => if let OpenElem::Notation{comp,..}|OpenElem::VarNotation{comp,..} = e {
             //println!("Setting notation comp {}",n.node.to_string());
-            *comp = Some(n);return
+            *comp = Some(n);return true
         };
             println!("TODO: Not in notation...? ({})",parser.uri)
         );
@@ -660,9 +670,15 @@ tags!{v,node,parser,attrs,i,rest,
             }
         }
         let not = get_node(node);
-        iterate!(@F node(n:NodeWithSource=not), e => if let OpenElem::Notation{op,..}|OpenElem::VarNotation{op,..} = e {
+        /*for e in rest.iter_mut() {
+            if let OpenElem::Notation{op,..}|OpenElem::VarNotation{op,..} = e {
+                *op = Some(not);return true
+            }
+        }*/
+        iterate!(node(n:NodeWithSource=not) -> rest,
+            e => if let OpenElem::Notation{op,..}|OpenElem::VarNotation{op,..} = e {
             //println!("Setting op notation comp {}",n.node.to_string());
-            *op = Some(n);return
+            *op = Some(n);return true
         };
             todo!("Not in notation...?")
         );
@@ -677,16 +693,16 @@ tags!{v,node,parser,attrs,i,rest,
             i += 1
         }
     } => {
-        iterate!(@F node(uri:&SymbolURI=&uri),
+        iterate!(node(uri:&SymbolURI=&uri),
             e => if let OpenElem::LogicalParagraph { fors,kind,styles, .. } = e {
                 if kind.is_definition_like(styles) {
                     if !fors.contains(uri) { fors.push(uri.clone()) }
-                    return
+                    return true
                 }
             };
             todo!()
         );
-        parser.add_doc(node, DocumentElement::Definiendum {uri, range:node.data.borrow().range });
+        parser.add_doc(node, DocumentElement::Definiendum {uri:*uri, range:node.data.borrow().range });
         true
     };
 
@@ -694,9 +710,9 @@ tags!{v,node,parser,attrs,i,rest,
         add!(- OpenElem::Type)
     }, then { parser.in_term = true;true } => {
         let t = node.as_term(Some(rest),parser);
-        iterate!(@F node(t:Term=t),
+        iterate!(node(t:Term=t,parser:&mut HTMLParser=parser) -> rest,
             e => if let OpenElem::Symdecl {tp,..} | OpenElem::VarDef {tp,..} = e {
-                *tp = Some(t);return
+                *tp = Some(t);parser.in_term = false;return true
             };
             todo!()
         );
@@ -712,9 +728,9 @@ tags!{v,node,parser,attrs,i,rest,
         add!(- OpenElem::Conclusion{uri,in_term:it})
     }, then { parser.in_term = true;true } => {
         let t = node.as_term(Some(rest),parser);
-        iterate!(@F node(uri:SymbolURI=uri,t:Term=t),
+        iterate!(node(uri:SymbolURI=uri,t:Term=t,parser:&mut HTMLParser=parser,in_term:bool=in_term) -> rest,
             e => if let OpenElem::LogicalParagraph {kind:StatementKind::Assertion,terms,..} = e {
-                terms.insert(uri,t);return
+                terms.insert(uri,t);parser.in_term = in_term;return true
             };
             todo!()
         );
@@ -726,19 +742,22 @@ tags!{v,node,parser,attrs,i,rest,
             todo!();
         }} else {None};
         let it = parser.in_term;
-        add!(- OpenElem::Definiens{uri,in_term:it})
+        add!(OpenElem::Definiens{uri,in_term:it})
     }, then { parser.in_term = true; true } => {
         let t = node.as_term(Some(rest),parser);
-        iterate!(@F node(uri:Option<SymbolURI>=uri,t:Term=t,parser:&HTMLParser=parser),
+        iterate!(node(uri:Option<SymbolURI>=uri,t:Term=t,parser:&mut HTMLParser=parser,in_term:bool=in_term) -> rest,
             e => {
                 if let OpenElem::LogicalParagraph {terms,..} = e {
-                    if let Some(uri) = uri {terms.insert(uri,t);return}
+                    if let Some(uri) = uri {terms.insert(uri,t);parser.in_term = in_term;return true}
                 }
                 if let OpenElem::Symdecl {df,..} | OpenElem::VarDef {df,..} = e {
-                    *df = Some(t);return
+                    *df = Some(t);parser.in_term = in_term;return true
                 }
                 if let OpenElem::Assign {tm} = e {
-                    *tm = Some(t);return
+                    *tm = Some(t);parser.in_term = in_term;return true
+                }
+                if let OpenElem::Term{tm:OpenTerm::OML{df,..}}|OpenElem::TopLevelTerm(OpenTerm::OML{df,..}) = e{
+                    *df = Some(t);parser.in_term = in_term;return true
                 }
             };
             println!("TODO: Definiens is fishy ({})",parser.uri)
@@ -817,10 +836,10 @@ tags!{v,node,parser,attrs,i,rest,
                 //(TMK::OMID,VarOrSym::S(uri),_) => OpenElem::Symref { uri, notation },
                 (TMK::OMV|TMK::OMID,VarOrSym::V(name)) => OpenElem::Term{tm:OpenTerm::OMV {name,notation}},
                 //(TMK::OMV|TMK::OMID,VarOrSym::V(name),_) => OpenElem::Varref { name, notation },
-                (TMK::OML,VarOrSym::V(name)) => OpenElem::Term{tm:OpenTerm::OML {name}},
-                (TMK::OMA,head) => OpenElem::Term{tm:OpenTerm::OMA {head,notation,args:ArrayVec::new()}},
+                (TMK::OML,VarOrSym::V(name)) => OpenElem::Term{tm:OpenTerm::OML {name,df:None}},
+                (TMK::OMA,head) => OpenElem::Term{tm:OpenTerm::OMA {head,notation,head_term:None,args:ArrayVec::new()}},
                 //(TMK::OMA,head,_) => OpenElem::TopLevelTerm(OpenTerm::OMA {head,notation,args:ArrayVec::new()}),
-                (TMK::OMB,head) => OpenElem::Term{tm:OpenTerm::OMBIND {head,notation,args:ArrayVec::new()}},
+                (TMK::OMB,head) => OpenElem::Term{tm:OpenTerm::OMBIND {head,notation,head_term:None,args:ArrayVec::new()}},
                 //(TMK::OMB,head,_) => OpenElem::TopLevelTerm(OpenTerm::OMBIND {head,notation,args:ArrayVec::new()}),
                 (TMK::Complex,_) => OpenElem::Term{tm:OpenTerm::Complex(None)},
                 //(TMK::Complex,_,_) => OpenElem::TopLevelTerm(OpenTerm::Complex(None)),
@@ -875,7 +894,7 @@ tags!{v,node,parser,attrs,i,rest,
                 return true
             };
         }
-        iterate!(@F node(s:&HTMLParser=parser,t:Term=t,arg:Arg=arg,mode:ArgType=mode),
+        iterate!(node(s:&HTMLParser=parser,t:Term=t,arg:Arg=arg,mode:ArgType=mode),
             e => if let OpenElem::Term{tm:OpenTerm::OMA{args,..}|OpenTerm::OMBIND{args,..}}
             | OpenElem::TopLevelTerm(OpenTerm::OMA{args,..}|OpenTerm::OMBIND{args,..})= e {
                 let len = args.len();
@@ -889,13 +908,13 @@ tags!{v,node,parser,attrs,i,rest,
                         *o = Some((TermOrList::List(vec![t]),mode)),
                     ref mut o => *o = Some((TermOrList::Term(t),mode))
                 }
-                return
+                return true
             } else if let OpenElem::Rule{args,..} = e {
                 let ext = (args.len()..arg.index() as usize).map(|_| None);
                 args.extend(ext);
                 *args.get_mut((arg.index() - 1) as usize).unwrap() = Some((t,mode));
                 // sequences
-                return
+                return true
             };
             {
                 println!("OOOOOF\n\n{}\n({})",s.document.node.to_string(),s.uri);
@@ -908,15 +927,16 @@ tags!{v,node,parser,attrs,i,rest,
         add!(OpenElem::HeadTerm)
     } => {
         let t = node.as_term(Some(rest),parser);
-        for e in rest.iter_mut() {
+        /*for e in rest.iter_mut() {
             if let OpenElem::Term {tm:OpenTerm::Complex(n)} | OpenElem::TopLevelTerm(OpenTerm::Complex(n)) = e {
                 *n=Some(t);return true
             }
-        }
-        iterate!(@F node(t:Term=t,parser:&HTMLParser=parser),
+        }*/
+        iterate!(node(t:Term=t,parser:&HTMLParser=parser) -> rest,
             e => {
-                if let OpenElem::Term {tm:OpenTerm::Complex(n)} | OpenElem::TopLevelTerm(OpenTerm::Complex(n)) = e {
-                    *n=Some(t);return
+                if let OpenElem::Term {tm:OpenTerm::Complex(n)|OpenTerm::OMA{head_term:n,..}|OpenTerm::OMBIND {head_term:n,..}} |
+                    OpenElem::TopLevelTerm(OpenTerm::Complex(n)|OpenTerm::OMA{head_term:n,..}|OpenTerm::OMBIND {head_term:n,..}) = e {
+                    *n=Some(t);return true
                 }
             };
             println!("TODO: Something is fishy here ({})",parser.uri)
@@ -1026,9 +1046,9 @@ tags!{v,node,parser,attrs,i,rest,
         });
         add!(- OpenElem::Problempoints{pts})
     } => {
-        iterate!(@F node(pts:f32=pts,parser:&HTMLParser=parser),
+        iterate!(node(pts:f32=pts,parser:&HTMLParser=parser),
             e => if let OpenElem::Problem {points,..} = e {
-                *points = Some(pts);return
+                *points = Some(pts);return true
             };
             println!("TODO: problempoints without a problem ({})",parser.uri)
         );
@@ -1036,9 +1056,9 @@ tags!{v,node,parser,attrs,i,rest,
     };
     Solution = "shtml:solution": 254 {add!(- OpenElem::Solution)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
+        iterate!(node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut solution,..} = e {
-                *solution = Some(rf);return
+                *solution = Some(rf);return true
             };
             println!("TODO: solution without a problem ({})",parser.uri)
         );
@@ -1047,9 +1067,9 @@ tags!{v,node,parser,attrs,i,rest,
     };
     ProblemHint = "shtml:problemhint": 254 {add!(- OpenElem::ProblemHint)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
+        iterate!(node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut hint,..} = e {
-                *hint = Some(rf);return
+                *hint = Some(rf);return true
             };
             println!("TODO: hint without a problem ({})",parser.uri)
         );
@@ -1058,9 +1078,9 @@ tags!{v,node,parser,attrs,i,rest,
     };
     ProblemNote = "shtml:problemnote": 254 {add!(- OpenElem::ProblemNote)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
+        iterate!(node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut note,..} = e {
-                *note = Some(rf);return
+                *note = Some(rf);return true
             };
             println!("TODO: note without a problem ({})",parser.uri)
         );
@@ -1069,9 +1089,9 @@ tags!{v,node,parser,attrs,i,rest,
     };
     ProblemGradingNote = "shtml:problemgnote": 254 {add!(- OpenElem::ProblemGradingNote)} => {
         let rf = parser.store_node(node);
-        iterate!(@F node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
+        iterate!(node(rf:NarrativeRef<String>=rf,parser:&HTMLParser=parser),e =>
             if let OpenElem::Problem {ref mut gnote,..} = e {
-                *gnote = Some(rf);return
+                *gnote = Some(rf);return true
             };
             println!("TODO: gnote without a problem ({})",parser.uri)
         );
