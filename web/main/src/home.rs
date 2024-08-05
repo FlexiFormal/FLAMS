@@ -144,13 +144,13 @@ fn MainPage(page:Page) -> impl IntoView {
             <Menu value=page.to_string()>
                 <a href="/"><MenuItem key="home" label="Home"/></a>
                 <a href="/dashboard/mathhub"><MenuItem key="mathhub" label="MathHub"/></a>
+                <a href="/dashboard/query"><MenuItem key="query" label="Queries"/></a>
                 {match login.get() {
                     LoginState::Admin | LoginState::NoAccounts => view!{
                         <a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a>
                         <a href="/dashboard/log"><MenuItem key="log" label="Logs"/></a>
                         <a href="/dashboard/settings"><MenuItem key="settings" label="Settings"/></a>
                         <a href="/dashboard/queue"><MenuItem key="queue" label="Queue"/></a>
-                        <a href="/dashboard/query"><MenuItem key="query" label="Queries"/></a>
                     },
                     LoginState::User(..) => view!{
                         <a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a><span/>

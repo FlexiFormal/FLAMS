@@ -64,7 +64,7 @@ fn QueryIsland() -> impl IntoView {
     });
     view!{
         <ActionForm action>
-            <textarea value=QUERY.to_string() name="q" style="width:100%;height:200px;">{QUERY.to_string()}</textarea>
+            <textarea value=QUERY.to_string() name="q" style="width:calc(100% - 10px);height:200px;">{QUERY.to_string()}</textarea>
             <input type="submit" value="Query"/>
         </ActionForm>
         <div _ref=rf style="text-align:left;white-space:pre">

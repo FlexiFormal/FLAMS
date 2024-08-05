@@ -38,6 +38,15 @@ jobs:
         continue-on-error: true
       - name: List target/release contents
         run: Get-ChildItem -Path "target\release" -Force
+      - name: Check file system state
+        shell: pwsh
+        run: |
+          Write-Host "Contents of target directory:" &&
+          Get-ChildItem -Path "target" -Recurse | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize &&
+          Write-Host "Searching for .exe files:" &&
+          Get-ChildItem -Path "target" -Recurse -Filter "*.exe" | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize &&
+          Write-Host "Contents of target/release directory:" &&
+          Get-ChildItem -Path "target/release" -Force | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize
       - name: Check for executable
         run: |
           if (Test-Path "target\release\immt.exe") {
