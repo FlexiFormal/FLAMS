@@ -32,29 +32,14 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos && cargo install --locked trunk
       - name: envvars1
-        run: echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "IMMT_BUILD_GRAPHS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        run: echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "IMMT_BUILD_GRAPHS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: windows fix
+        run: cargo build --release --bin=immt --no-default-features --features=server
+      - name: windows fix 2
+        run: Move-Item -Path target\x86_64-pc-windows-msvc\release\immt.exe -Destination target\release\immt.exe
+        continue-on-error: true
       - name: main
         run: cargo leptos build --release
-        continue-on-error: true
-      - name: List target/release contents
-        run: Get-ChildItem -Path "target\release" -Force
-      - name: Check file system state
-        shell: pwsh
-        run: |
-          Write-Host "Contents of target directory:" &&
-          Get-ChildItem -Path "target" -Recurse | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize &&
-          Write-Host "Searching for .exe files:" &&
-          Get-ChildItem -Path "target" -Recurse -Filter "*.exe" | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize &&
-          Write-Host "Contents of target/release directory:" &&
-          Get-ChildItem -Path "target/release" -Force | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize
-      - name: Check for executable
-        run: |
-          if (Test-Path "target\release\immt.exe") {
-            Write-Host "Executable found: target\release\immt.exe"
-          } else {
-            Write-Host "Executable not found."
-            exit 1
-          }
       - name: bundle
         run: md out && Move-Item -Path target\release\immt.exe -Destination out\immt.exe &&  Move-Item -Path target\web -Destination out\web && Move-Item -Path main\resources\settings.toml -Destination out\settings.toml
       - uses: actions/upload-artifact@v4

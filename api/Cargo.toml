@@ -25,11 +25,11 @@ immt-core = {workspace=true,features=["serde","async","rayon"]}
 
 rustc-hash = "2"
 simple-home-dir = "0.3"
-lazy_static = "1.4"
+lazy_static = "1"
 serde = { version = "1", features = ["derive"] }
 bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 tracing = "0.1"
-rayon = { version="1.10" }
+rayon = "1"
 spliter = {version="0.1"}
 tokio = { version = "1", features = ["fs","io-util","sync","test-util","macros","rt"] }
 futures = {version = "0.3" }
