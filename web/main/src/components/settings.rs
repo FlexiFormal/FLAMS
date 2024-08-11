@@ -29,8 +29,8 @@ pub fn Settings() -> impl IntoView {
     use thaw::*;
     view!(
         <Await future = || get_settings() let:settings blocking=true>{
-            let (settings,mem) = settings.clone().unwrap();
-            view!{
+            if let Ok((settings,mem)) = settings.clone() {
+            Some(view!{
                 <div style="text-align:left;">
                 <Table><thead/><tbody>
                     <tr><td><h2>"Status"</h2></td><td/></tr>
@@ -47,7 +47,7 @@ pub fn Settings() -> impl IntoView {
                             <tr><td><b>"Threads:"</b></td><td>{settings.buildqueue.num_threads}</td></tr>
                 </tbody></Table>
                 </div>
-            }
+            })} else {None}
         }</Await>
     )
 }
