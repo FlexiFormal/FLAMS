@@ -13,7 +13,7 @@ pub async fn query_api(q:String) -> Result<String,ServerFnError<String>> {
     use immt_controller::{controller,ControllerTrait,Controller};
     let r = tokio::task::spawn_blocking(move || {
         let controller = controller();
-        let res = controller.relations().query(&q);
+        let res = controller.backend().relations().query_str(&q);
         res.map(|r| {
             let res = r.resolve();
             res

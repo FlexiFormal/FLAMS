@@ -171,30 +171,3 @@ impl Display for ArchiveURI {
         write!(f, "{}?a={}", self.base, self.archive)
     }
 }
-
-
-
-
-
-#[cfg(test)]
-mod tests {
-    use crate::tests::*;
-    use crate::uris::base::BaseURI;
-
-    #[rstest]
-    fn archive_uris(setup:()) {
-        let dom = BaseURI::new("http://mathhub.info/:sTeX").unwrap();
-        let id = super::ArchiveId::new("test/general");
-        let borrowed = &dom / &id;
-        info!("Borrowed: {borrowed}");
-        let owned = dom.clone() / borrowed.id().clone();
-        info!("Owned: {owned}");
-        assert_eq!(borrowed, owned);
-        info!("Scheme: {}, host: {}, authority: {}, path: {}",
-            dom.scheme(),
-            dom.host().unwrap_or(""),
-            dom.authority(),
-            dom.path()
-        );
-    }
-}

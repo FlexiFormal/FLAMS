@@ -63,7 +63,7 @@ tower-sessions-sqlx-store = { version="0.12",optional=true,features = ["sqlite"]
 immt-api = { workspace=true,features=["oxigraph"],optional=true }
 immt-core = { workspace=true,features=["serde"] }
 immt-controller = { workspace=true, optional = true }
-immt-graphs = { path = "../graphs" }
+#immt-graphs = { path = "../graphs" }
 immt-web-orm = {workspace=true, optional=true}
 
 #experiments

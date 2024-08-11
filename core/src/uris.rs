@@ -87,6 +87,12 @@ impl ContentURI {
             ContentURI::Symbol(s) => s.to_iri(),
         }
     }
+    pub fn name(&self) -> Name {
+        match self {
+            ContentURI::Module(m) => m.name(),
+            ContentURI::Symbol(s) => s.name(),
+        }
+    }
 }
 
 impl From<modules::ModuleURI> for ContentURI {

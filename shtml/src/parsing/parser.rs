@@ -7,11 +7,15 @@ use immt_api::backend::manager::ArchiveManager;
 use html5ever::tokenizer::*;
 use html5ever::interface::{ElementFlags, NextParserState, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::StrTendril;
-use immt_api::core::content::{ArgType, ArrayVec, InformalChild, Module, Notation, NotationComponent, Term};
-use immt_api::core::narration::{CSS, Document, DocumentElement, HTMLDocSpec, Language, NarrativeRef, Title};
+use immt_api::core::content::{ArgType, ArrayVec, ContentElement, InformalChild, Module, Notation, NotationComponent, Term, VarNameOrURI};
+use immt_api::core::narration::{CSS, Document, DocumentElement, FullDocument, Language, NarrativeRef, Title};
 use immt_api::core::uris::documents::DocumentURI;
-use kuchikiki::NodeRef;
+use kuchikiki::{ElementData, NodeRef};
 use tendril::{SliceExt, TendrilSink};
+use immt_api::backend::Backend;
+use immt_api::core::ontology::rdf::terms::Quad;
+use immt_api::core::ulo;
+use immt_api::core::uris::{ModuleURI, Name, NarrativeURI, NarrDeclURI, SymbolURI};
 use immt_api::core::utils::sourcerefs::{ByteOffset, SourceRange};
 use immt_api::core::utils::VecMap;
 use crate::docs::OpenTerm;
@@ -111,30 +115,59 @@ impl NodeWithSource {
             self.node.append(n);l
         }
     }
-    pub(crate) fn as_notation(&self,op:Option<Self>,precedence:isize,argprecs:ArrayVec<isize,9>) -> Notation {
+    pub(crate) fn as_notation(&self,id:Name,op:Option<Self>,precedence:isize,argprecs:ArrayVec<isize,9>) -> Notation {
         use std::fmt::Write;
+        fn get_is_text_and_offset(e:&ElementData) -> (bool,u8) {
+            match e.name.local.as_ref() {
+                s@ ("span"|"div") => (true,s.len() as u8 + 1),
+                s => (false,s.len() as u8 + 1)
+            }
+        }
+        let op = op.map(|e|
+            if let Some(n) = e.node.as_element() {
+                let (is_text,attribute_index) = get_is_text_and_offset(n);
+                let s = e.node.to_string();
+                (s,attribute_index,is_text)
+            } else {
+                todo!()
+            }
+        );
+        //println!("HERE! {}",self.node.to_string());
         if let Some(n) = self.node.as_element() {
-            let (is_text,nl) = match n.name.local.as_ref() {
-                s@ ("span"|"div") => (true,s.len() + 1),
-                s => (false,s.len() + 1)
-            };
-            let attribute_index = nl as u8;
+            let (is_text,attribute_index) = get_is_text_and_offset(n);
             // TODO de-recursify
-            fn rec(node:&NodeWithSource,ret:&mut Vec<NotationComponent>,currstr:&mut String) {
+            fn rec(node:&NodeWithSource,ret:&mut Vec<NotationComponent>,currstr:&mut String) -> (u8,ArgType) {
+                let elems = { node.data.borrow_mut().elem.take() };
                 let data = node.data.borrow();
-                for e in data.elem.iter() { match e {
+                let mut index = 0;
+                let mut tp = ArgType::Normal;
+                for e in elems.into_iter() { match e {
                     OpenElem::NotationArg { arg,mode} => {
                         if !currstr.is_empty() {
                             ret.push(NotationComponent::S(std::mem::take(currstr)));
                         }
-                        ret.push(NotationComponent::Arg(*arg,*mode));
-                        return
+                        index = arg.index();
+                        ret.push(NotationComponent::Arg(arg,mode));
+                        return (arg.index(),mode)
                     }
                     OpenElem::ArgSep => {
                         if !currstr.is_empty() {
                             ret.push(NotationComponent::S(std::mem::take(currstr)));
                         }
                         let mut sep = String::new();
+                        let mut nret = Vec::new();
+                        let mut idx = 0;
+                        let mut tp = ArgType::Sequence;
+                        for c in &data.children {
+                            let (r,t) = rec(c,&mut nret,&mut sep);
+                            if r != 0 {
+                                idx = r; tp = t;
+                            }
+                        }
+                        if !sep.is_empty() {
+                            nret.push(NotationComponent::S(sep));
+                        }
+                        /*
                         let mut insep = false;
                         let mut index = 0;
                         let mut tp = ArgType::Sequence;
@@ -155,13 +188,31 @@ impl NodeWithSource {
                                 }
                             }
                         }
-                        ret.push(NotationComponent::ArgSep{index,tp,sep});
-                        return
+
+                         */
+                        ret.push(NotationComponent::ArgSep{index:idx,tp,sep:nret});
+                        return (index,tp)
                     }
                     OpenElem::ArgMap => {
                         if !currstr.is_empty() {
                             ret.push(NotationComponent::S(std::mem::take(currstr)));
                         }
+
+                        let mut sep = String::new();
+                        let mut nret = Vec::new();
+                        let mut idx = 0;
+                        let mut tp = ArgType::Sequence;
+                        for c in &data.children {
+                            let (r,t) = rec(c,&mut nret,&mut sep);
+                            if r != 0 {
+                                idx = r; tp = t;
+                            }
+                        }
+                        if !sep.is_empty() {
+                            nret.push(NotationComponent::S(sep));
+                        }
+
+                        /*
                         let mut pre = String::new();
                         let mut post = String::new();
                         let mut sep = String::new();
@@ -225,8 +276,10 @@ impl NodeWithSource {
                             irec(c,&mut pre,&mut post,&mut inpost,&mut index,&mut tp)
                         }
                         //println!("MAP:\n - {pre}\n  - {post}\n  - {sep}");
-                        ret.push(NotationComponent::ArgMap{index,pre,post,sep});
-                        return
+
+                         */
+                        ret.push(NotationComponent::ArgMap{index:idx,segments:nret});
+                        return (index,tp)
                     }
                     _ => ()
                 }}
@@ -247,7 +300,7 @@ impl NodeWithSource {
                         } else if let Some(_) = c.as_element() {
                             let nc = nws.next().unwrap();
                             assert_eq!(nc.node, c);
-                            rec(nc,ret,currstr)
+                            /*(index,tp) =*/ rec(nc,ret,currstr);
                         } else {
                             unreachable!("??? {c:?}")
                         }
@@ -261,6 +314,7 @@ impl NodeWithSource {
                 }  else {
                     todo!("Unknown notation node {}",node.node.to_string())
                 }
+                (index,tp)
             }
             let mut ret = Vec::new();
             let mut str = String::new();
@@ -269,15 +323,15 @@ impl NodeWithSource {
                 ret.push(NotationComponent::S(str))
             }
             //println!("HERE NOTATION: {ret:?}");
-            Notation {precedence,attribute_index,argprecs,nt:ret,op:op.map(|o| o.node.to_string()),is_text}
+            Notation {id,precedence,attribute_index,argprecs,nt:ret,op,is_text}
         } else {
             let mut ret = "<span>".to_string();
             ret.push_str(&self.node.to_string());
             ret.push_str("</span>");
-            Notation {precedence,attribute_index:5,argprecs,nt:vec![NotationComponent::S(ret)],op:op.map(|o| o.node.to_string()),is_text:true}
+            Notation {id,precedence,attribute_index:5,argprecs,nt:vec![NotationComponent::S(ret)],op,is_text:true}
         }
     }
-    pub(crate) fn as_term(&self,rest:Option<&mut OpenElems>,parser:&HTMLParser) -> Term {
+    pub(crate) fn as_term(&self,rest:Option<&mut OpenElems>,parser:&mut HTMLParser) -> Term {
         //println!("Term: {}",self.node.to_string());
         if let Some(rest) = rest {for (i,e) in rest.iter().enumerate() {
             //println!("  - {e:?}");
@@ -362,6 +416,15 @@ impl NodeWithSource {
             }
 
             assert!(nws.next().is_none());
+            if tag == "mi" && children.len() == 1 {
+                match children.first() {
+                    Some(InformalChild::Text(s)) if s.chars().count() == 1 => {
+                        let name = parser.resolve_variable(Name::new(s));
+                        return Term::OMV(name)
+                    }
+                    _ => ()
+                }
+            }
 
             let tm = Term::Informal {
                 tag,attributes:attrs,children,terms
@@ -369,42 +432,66 @@ impl NodeWithSource {
             //println!("Here: {tm:?}");
             tm
         } else if let Some(_) = self.node.as_comment() {
-            Term::OMV("ERROR".to_string())
+            Term::OMV(VarNameOrURI::Name(Name::new("ERROR")))
         } else {
             todo!("Unknown term node {}",self.node.to_string())
         }
     }
 }
 
+pub(crate) struct Narr {
+    pub(crate) uri: NarrativeURI,
+    pub(crate) children:Vec<DocumentElement>,
+    pub(crate) iri:immt_api::core::ontology::rdf::terms::NamedNode,
+    pub(crate) vars:Vec<(NarrDeclURI,bool)>
+}
+impl Narr {
+    pub fn new(uri:NarrativeURI) -> Self {
+        let iri = uri.to_iri();
+        Self {
+            uri,children:Vec::new(),iri,vars:Vec::new()
+        }
+    }
+}
+
+pub(crate) struct Content {
+    pub(crate) uri: ModuleURI,
+    pub(crate) children:Vec<ContentElement>,
+    pub(crate) iri:immt_api::core::ontology::rdf::terms::NamedNode
+}
+impl Content {
+    pub fn new(uri:ModuleURI) -> Self {
+        let iri = uri.to_iri();
+        Self {
+            uri,
+            children: Vec::new(),
+            iri
+        }
+    }
+
+}
+
 pub struct HTMLParser<'a> {
-    pub(crate) backend:&'a ArchiveManager,
+    pub(crate) narratives:Vec<Narr>,
+    pub(crate) contents:Vec<Content>,
+    pub(crate) backend:&'a Backend,
     input:&'a str,
     pub(crate) document:NodeWithSource,
     pub(crate) elems:Vec<DocumentElement>,
     notations:Vec<String>,
     pub(crate) strip:bool,
     path:&'a Path,
-    pub(crate) uri:DocumentURI,
     pub(crate) in_term:bool,
     pub(crate) in_notation:bool,
     pub(crate) modules:Vec<Module>,
     pub(crate) title:Option<Title>,
     pub(crate) id_counter: usize,
-    pub(crate) language: Language,
     refs: Vec<u8>,
     body:Option<NodeWithSource>,
-    css:Vec<CSS>
+    css:Vec<CSS>,
+    pub(crate) triples:Vec<Quad>,
 }
 impl HTMLParser<'_> {
-    /*
-    pub(crate) fn store_string(&mut self,s:&str) -> SourceRange<ByteOffset> {
-        let off = self.refs.len();
-        let end = off + s.len();
-        self.refs.push_str(s);
-        SourceRange { start: ByteOffset { offset: off }, end: ByteOffset { offset: end } }
-    }
-
-     */
     pub(crate) fn store_resource<T:serde::Serialize>(&mut self,t:&T) -> NarrativeRef<T> {
         let off = self.refs.len();
         struct VecWriter<'a>(&'a mut Vec<u8>);
@@ -416,7 +503,7 @@ impl HTMLParser<'_> {
         }
         bincode::serde::encode_into_writer(t,VecWriter(&mut self.refs),bincode::config::standard()).unwrap();
         let end = self.refs.len();
-        NarrativeRef::new(off,end)
+        NarrativeRef::new(off,end,self.narratives.first().unwrap().uri.doc())
     }
     pub(crate) fn store_node(&mut self,n:&NodeWithSource) -> NarrativeRef<String> {
         self.store_resource(&n.node.to_string())
@@ -440,22 +527,30 @@ impl std::fmt::Debug for HTMLParser<'_> {
 }
 
 impl<'a> HTMLParser<'a> {
-    pub fn new(input: &'a str, path: &'a Path, uri: DocumentURI, backend:&'a ArchiveManager,strip:bool) -> Self {
+    pub fn new(input: &'a str, path: &'a Path, uri: DocumentURI, backend:&'a Backend,strip:bool) -> Self {
+        use immt_api::core::ontology::rdf::ontologies::*;
         let doc = NodeWithSource::new(NodeRef::new_document(),0,ArrayVec::default());
+        let iri = uri.to_iri();
+        let triples = vec![
+            ulo!((iri.clone()) (dc::LANGUAGE) = (uri.language().to_string()) IN iri.clone()),
+            ulo!( (iri.clone()) : DOCUMENT IN iri.clone())
+        ];
         HTMLParser {
             backend,
             refs:Vec::new(),
-            input,strip,path,uri,
+            input,strip,path,narratives:vec![Narr {
+                iri, uri:uri.into(), children: Vec::new(),vars:Vec::new()
+            }],
+            contents:Vec::new(),
             document:doc.into(),
             modules:Vec::new(),
             in_term:false,in_notation:false,
             id_counter:0,
             notations:Vec::new(),elems:Vec::new(),title:None,
-            language:Language::from_file(path),
-            body:None,css:Vec::new()
+            body:None,css:Vec::new(),triples
         }
     }
-    pub fn run(mut self) -> (HTMLDocSpec, Vec<Module>) {
+    pub fn run(mut self) -> FullDocument {
         let doc = self.input;
         let mut p = parse_document(self, ParseOpts::default())
             .from_utf8();
@@ -484,7 +579,7 @@ impl<'a> HTMLParser<'a> {
 
 }
 
-fn is_html(attrs:&Vec<Attribute>) -> bool {
+fn is_shtml(attrs:&Vec<Attribute>) -> bool {
     attrs.iter().any(|a| a.name.local.starts_with("shtml:"))
 }
 
@@ -516,7 +611,7 @@ impl Display for Print<'_,NodeWithSource> {
 
 impl<'a> TreeSink for HTMLParser<'a> {
     type Handle = NodeWithSource;
-    type Output = (HTMLDocSpec,Vec<Module>);
+    type Output = FullDocument;
 
     #[inline]
     fn finish(mut self) -> Self::Output {
@@ -530,16 +625,21 @@ impl<'a> TreeSink for HTMLParser<'a> {
         drop(bdnode);
         let body = SourceRange { start: ByteOffset { offset: start }, end: ByteOffset { offset: end } };
         let html = self.document.node.to_string();
+        let Some(Narr {
+            uri:NarrativeURI::Doc(uri),
+            children,..
+        }) = self.narratives.pop() else { unreachable!() };
         self.kill();
-        let spec = HTMLDocSpec {
+        let spec = FullDocument {
             doc:Document {
-                uri:self.uri,
+                uri,
                 title:self.title,
-                elements:self.elems
+                elements:children
             },
-            body,html,refs:self.refs,css:self.css
+            body,html,refs:self.refs,css:self.css,triples:self.triples,
+            modules:self.modules
         };
-        (spec,self.modules)
+        spec
     }
 
     #[inline]
@@ -576,7 +676,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
     #[inline]
     fn create_element(&mut self, name: QualName, mut attrs: Vec<Attribute>, _flags: ElementFlags) -> Self::Handle {
         debug_check!("Creating element <{} {}/>",Print(&name),Print(&attrs));
-        let elem = if is_html(&attrs) {
+        let elem = if is_shtml(&attrs) {
             self.do_shtml(&mut attrs)
         } else { ArrayVec::default() };
         let node = NodeRef::new_element(

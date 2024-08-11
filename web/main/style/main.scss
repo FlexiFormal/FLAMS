@@ -12,7 +12,6 @@
 
 body {
 	font-family: sans-serif;
-	text-align: center;
 	margin:0;
 	height: 100vh;
 }
@@ -26,4 +25,16 @@ body {
 	border-right: 3px double black;
 	min-width: fit-content;
 	height: 100%;
+}
+
+.immt-small-card > .thaw-card__header {
+	padding: 10px;
+}
+
+.immt-small-card > .thaw-card__content {
+	padding: 0 10px 10px;
+}
+
+.immt-small-card > .thaw-card__header + .thaw-card__content, .thaw-card__footer {
+	padding: 0 10px 10px;
 }

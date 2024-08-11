@@ -18,7 +18,7 @@ mod server {
 
     //#[cfg(feature="async")]
     pub fn get_archive_children(prefix:Option<ArchiveId>) -> Option<Vec<ArchiveOrGroup>> {
-        controller().archives().with_tree(|toptree| {
+        controller().backend().archive_manager().with_tree(|toptree| {
             let (tree,has_meta) = match prefix {
                 Some(prefix) => match toptree.find_group_or_archive(prefix)? {
                     AGroup::Group{children,has_meta,..} => (children.as_slice(),*has_meta),
@@ -45,7 +45,7 @@ mod server {
     }
 
     pub fn get_dir_children(archive:ArchiveId,path:Option<&str>) -> Option<Vec<DirOrFile>> {
-        controller().archives().find(archive,|a| {
+        controller().backend().get_archive(archive,|a| {
             if let Archive::Physical(ma) = a? {
                 let sf = ma.source_files()?;
                 let dir = match path {

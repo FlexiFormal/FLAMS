@@ -56,6 +56,8 @@ impl SymbolURI {
     }
     #[inline]
     pub fn name(&self) -> Name { self.name }
+    #[inline]
+    pub fn module(&self) -> ModuleURI { self.module }
 }
 impl Display for SymbolURI {
     #[inline]

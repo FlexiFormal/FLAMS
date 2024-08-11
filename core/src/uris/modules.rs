@@ -81,17 +81,21 @@ impl<'de> serde::Deserialize<'de> for ModuleURI {
 }
 
 impl ModuleURI {
+    #[inline]
     pub fn new(archive:ArchiveURI,path:Option<impl Into<Name>>,name:impl Into<Name>,lang:Language) -> Self {
         Self { archive, path:path.map(|p| p.into()), name:name.into(), language:lang }
     }
-    pub fn name(&self) -> Name {
-        self.name
-    }
+    #[inline]
+    pub fn name(&self) -> Name { self.name }
     pub fn to_iri(&self) -> NamedNode {
         NamedNode::new(self.to_string().replace(' ',"%20")).unwrap()
     }
     #[inline]
     pub fn language(&self) -> Language { self.language }
+    #[inline]
+    pub fn archive(&self) -> ArchiveURI { self.archive }
+    #[inline]
+    pub fn path(&self) -> Option<Name> { self.path }
 }
 impl Display for ModuleURI {
     #[inline]

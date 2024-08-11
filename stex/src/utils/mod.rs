@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use immt_api::backend::archives::Archive;
+use immt_api::backend::Backend;
 use immt_api::backend::manager::ArchiveTree;
 use immt_api::core::uris::archives::ArchiveId;
 
@@ -7,7 +8,7 @@ pub(crate) fn file_path_from_archive(
     current: &Path,
     id:ArchiveId,
     module:&str,
-    tree:&ArchiveTree,
+    backend:&Backend,
     yields:&[&str]
 ) -> Option<Box<str>> {
     let lang = if current.extension().and_then(|s| s.to_str()) == Some("tex") {
@@ -21,7 +22,7 @@ pub(crate) fn file_path_from_archive(
     } else {
         "en"
     };
-    if let Some(Archive::Physical(a)) = tree.find_archive(id) {
+    backend.get_archive(id,|a| if let Some(Archive::Physical(a)) = a {
         let archive_path = a.path();
         let (path, mut module) = if let Some((a,b)) = module.split_once('?') {
             (a,b)
@@ -66,6 +67,6 @@ pub(crate) fn file_path_from_archive(
         if yields.contains(&module) {
             return None
         }
-    }
-    None
+        None
+    } else {None})
 }

@@ -1,3 +1,4 @@
+/*
 use leptos::*;
 use immt_graphs::Graph;
 use crate::utils::errors::IMMTError;
@@ -35,3 +36,5 @@ pub fn GraphViewer(name:String) -> impl IntoView {
         <iframe src={format!("/graph_viewer/index.html?{name}")}></iframe>
     }
 }
+
+ */

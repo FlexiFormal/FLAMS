@@ -11,7 +11,7 @@ use crate::components::mathhub_tree::ArchivesTop;
 pub enum Page {
     Home,
     MathHub,
-    Graphs,
+    //Graphs,
     Log,
     NotFound,
     Queue,
@@ -24,7 +24,7 @@ impl Page {
         match self {
             Page::Home => "home",
             Page::MathHub => "mathhub",
-            Page::Graphs => "graphs",
+            //Page::Graphs => "graphs",
             Page::Log => "log",
             Page::Login => "login",
             Page::Queue => "queue",
@@ -67,7 +67,7 @@ pub fn Main() -> impl IntoView {
                 // id=leptos means cargo-leptos will hot-reload this stylesheet
                 <Stylesheet id="leptos" href="/pkg/immt.css"/>
                 <Route path="mathhub" view=|| view!(<MainPage page=Page::MathHub/>)/>
-                <Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
+                //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
                 <Route path="log" view=|| view!(<MainPage page=Page::Log/>)/>
                 <Route path="queue" view=|| view!(<MainPage page=Page::Queue/>)/>
                 <Route path="settings" view=|| view!(<MainPage page=Page::Settings/>)/>
@@ -88,7 +88,7 @@ fn Dashboard() -> impl IntoView {
     view!{
         <WithAccount><Show when=move || {expect_context::<ReadSignal<LoginState>>().get() != LoginState::Loading}>
             <ThemeProvider theme><GlobalStyle/><Layout position=LayoutPosition::Absolute>
-                <LayoutHeader style="background-color: #0078ffaa;height:67px;">
+                <LayoutHeader style="background-color: #0078ffaa;height:67px;text-align:center;">
                     <Grid cols=3>
                         <GridItem offset=1><h2>"iMᴍᴛ"</h2></GridItem>
                         <GridItem><Space justify=SpaceJustify::End><UserField/></Space></GridItem>
@@ -131,7 +131,7 @@ fn MainPage(page:Page) -> impl IntoView {
     let mymain = move || view!(<main class="immt-main">{match page {
         Page::Home => view!{<HomePage/>},
         Page::MathHub => view!{<ArchivesTop/>},
-        Page::Graphs => view!{<GraphTest/>},
+        //Page::Graphs => view!{<GraphTest/>},
         Page::Log => view!{<FullLog/>},
         Page::Queue => view!{<QueuesTop/>},
         Page::Query => view!{<Query/>},
@@ -147,13 +147,13 @@ fn MainPage(page:Page) -> impl IntoView {
                 <a href="/dashboard/query"><MenuItem key="query" label="Queries"/></a>
                 {match login.get() {
                     LoginState::Admin | LoginState::NoAccounts => view!{
-                        <a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a>
+                        //<a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a>
                         <a href="/dashboard/log"><MenuItem key="log" label="Logs"/></a>
                         <a href="/dashboard/settings"><MenuItem key="settings" label="Settings"/></a>
                         <a href="/dashboard/queue"><MenuItem key="queue" label="Queue"/></a>
                     },
                     LoginState::User(..) => view!{
-                        <a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a><span/>
+                        <span/><span/>//<a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a><span/>
                     },
                     LoginState::None | LoginState::Loading => view!(<span/><span/>)
                 }}

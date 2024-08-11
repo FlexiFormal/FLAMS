@@ -7,7 +7,7 @@ pub mod content;
 pub mod query;
 
 pub use mathhub_tree::ArchiveOrGroups;
-pub use graph_viewer::GraphTest;
+//pub use graph_viewer::GraphTest;
 pub use logging::FullLog;
 pub use queue::QueuesTop;
 pub use settings::Settings;

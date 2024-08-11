@@ -3,6 +3,7 @@ use crate::narration::{DocumentElement, Language};
 use crate::ulo;
 use crate::uris::documents::{DocumentURI, NarrativeURI};
 use crate::uris::modules::ModuleURI;
+use crate::uris::Name;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
@@ -13,6 +14,54 @@ pub struct Module {
     pub elements: Vec<ContentElement>,
 }
 impl Module {
+    fn get_inner<'a>(name:&[&str],elems:&'a [ContentElement]) -> Option<&'a ContentElement> {
+        if name.is_empty() { return None }
+        let first = name[0];
+        let rest = &name[1..];
+        for e in elems.iter() { match e {
+            ContentElement::NestedModule(m) => {
+                let name = m.uri.name();
+                let mut n = name.as_ref();
+                if let Some((_,b)) = n.rsplit_once('/') {
+                    n = b
+                };
+                if n == first {
+                    return if rest.is_empty() { Some(e) } else {
+                        Module::get_inner(rest, &m.elements)
+                    }
+                }
+            }
+            ContentElement::Import(_) => (),
+            ContentElement::Constant(c) => {
+                if c.uri.name().as_ref() == first {
+                    return if rest.is_empty() { Some(e) } else { None }
+                }
+            }
+            ContentElement::Notation(n) => {
+                if n.uri.name().as_ref() == first {
+                    return if rest.is_empty() { Some(e) } else { None }
+                }
+            }
+            ContentElement::MathStructure(m) => {
+                let name = m.uri.name();
+                let mut n = name.as_ref();
+                if let Some((_,b)) = n.rsplit_once('/') {
+                    n = b
+                };
+                if n == first {
+                    return if rest.is_empty() { Some(e) } else {
+                        Module::get_inner(rest, &m.elements)
+                    }
+                }
+            }
+        }}
+        None
+    }
+    pub fn get(&self,name:Name) -> Option<&ContentElement> {
+        let name = name.as_ref();
+        let name = name.split('/').collect::<Vec<_>>();
+        Module::get_inner(&name,&self.elements)
+    }
     pub fn triples(&self,in_doc:DocumentURI) -> impl Iterator<Item=Quad> + '_ + Clone {
         TripleIterator{
             current: None,
@@ -108,12 +157,12 @@ impl<'a> Iterator for TripleIterator<'a> {
                             ))
                         }
                         ContentElement::Notation(c) => {
-                            let uri = self.uri & c.id;
+                            let uri =c.uri;
                             self.buf.push(
                                 ulo!((uri.to_iri()) : NOTATION IN self.doc_iri.clone())
                             );
                             self.buf.push(
-                                ulo!((uri.to_iri()) NOTATION_FOR (c.uri.to_iri()) IN self.doc_iri.clone())
+                                ulo!((uri.to_iri()) NOTATION_FOR (c.symbol.to_iri()) IN self.doc_iri.clone())
                             );
                             return Some(ulo!(
                                 (self.curr_iri.clone()) DECLARES (uri.to_iri()) IN self.doc_iri.clone()

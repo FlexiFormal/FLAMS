@@ -30,6 +30,23 @@ pub mod narration {
     pub use document::*;
 }
 
+#[derive(Debug, Clone)]
+pub enum SemanticElement {
+    Content(content::ContentElement),
+    Narration(narration::DocumentElement)
+}
+impl From<content::ContentElement> for SemanticElement {
+    fn from(e: content::ContentElement) -> Self {
+        SemanticElement::Content(e)
+    }
+}
+impl From<narration::DocumentElement> for SemanticElement {
+    fn from(e: narration::DocumentElement) -> Self {
+        SemanticElement::Narration(e)
+    }
+}
+
+
 #[cfg(test)]
 pub mod tests {
     pub use rstest::{fixture,rstest};

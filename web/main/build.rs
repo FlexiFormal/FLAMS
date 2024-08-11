@@ -1,4 +1,5 @@
 fn main() {
+    /*
     if let Some(s) = std::env::var("IMMT_BUILD_GRAPHS").ok() {
         if s.eq_ignore_ascii_case("true") {} else { return }
     } else { return }
@@ -55,4 +56,6 @@ fn main() {
     html = replaces.iter().fold(html,|html,(from,to)| html.replace(from,to));
     std::fs::write(target.join("immt-graphs.js"),js).unwrap();
     std::fs::write(target.join("index.html"),html).unwrap();
+
+     */
 }

@@ -75,6 +75,13 @@ site-pkg-dir = "pkg"
 style-file = "web/main/style/main.scss"
 browserquery = "defaults"
 lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
+
+# dafuq:
+# https://higherorderco.com/
+# https://github.com/HigherOrderCO/kind
+# https://cse.sc.edu/~pfu/document/papers/rta-tlca.pdf
+
+
 # utils:
 # https://crates.io/crates/lol_html <- HTML parsing/rewriting
 # https://docs.rs/memchr/2.7.4/memchr/ <- fast string search

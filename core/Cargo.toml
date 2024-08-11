@@ -37,7 +37,7 @@ chrono = "0.4"
 rayon = { version="1", optional=true }
 spliter = {version="0.1", optional=true}
 lazy_static = "1"
-lasso = {version="0.7",features=["multi-threaded","inline-more","ahasher"]}
+lasso = {version="0.7",features=["multi-threaded","inline-more"]}
 rustc-hash="2"
 #smallvec = { version="1.13",features=["union","const_generics","const_new","specialization"] }
 

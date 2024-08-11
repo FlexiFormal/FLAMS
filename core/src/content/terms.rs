@@ -1,6 +1,6 @@
-use std::fmt::{Debug, Formatter, Write};
-use crate::content::ArgType;
-use crate::uris::ContentURI;
+use std::fmt::{Debug, Display, Formatter, Write};
+use crate::content::{ArgType, Notation};
+use crate::uris::{ContentURI, Name, NarrDeclURI};
 use crate::uris::symbols::SymbolURI;
 use crate::utils::VecMap;
 
@@ -27,6 +27,28 @@ impl Debug for TermOrList {
     }
 }
 
+#[derive(Clone,Debug)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum VarNameOrURI {
+    Name(Name),
+    URI(NarrDeclURI)
+}
+impl Display for VarNameOrURI {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Name(n) => Display::fmt(n,f),
+            Self::URI(u) => Display::fmt(u,f)
+        }
+    }
+}
+impl VarNameOrURI {
+    pub fn name(&self) -> Name {
+        match self {
+            Self::Name(n) => *n,
+            Self::URI(u) => u.name()
+        }
+    }
+}
 
 #[derive(Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
@@ -42,8 +64,8 @@ pub enum Term {
         head_term:Option<Box<Term>>,
         args:Vec<(TermOrList,ArgType)>
     },
-    OMV(String),
-    OML(String,Option<Box<Term>>),
+    OMV(VarNameOrURI),
+    OML{name:Name,df:Option<Box<Term>>},
     Informal {
         tag:String,
         attributes:VecMap<String,String>,
@@ -80,13 +102,13 @@ impl Debug for Term {
             Self::OMV(name) => {
                 f.write_char('V')?;
                 f.write_char('(')?;
-                f.write_str(name)?;
+                f.write_str(name.name().as_ref())?;
                 f.write_char(')')
             }
-            Self::OML(name,_) => {
+            Self::OML{name,..} => {
                 f.write_char('L')?;
                 f.write_char('(')?;
-                f.write_str(name)?;
+                f.write_str(name.as_ref())?;
                 f.write_char(')')
             }
             Self::Informal {tag,attributes,children,terms} => {
@@ -115,6 +137,108 @@ impl Debug for Term {
                 f.write_char(']')
             }
         }
+    }
+}
+impl Term {
+    pub fn display<I:Iterator<Item=Notation>,F:(Fn(SymbolURI) -> I)+Copy>(&self,notations:F) -> TermDisplay<'_,I,F> {
+        TermDisplay { term: self, notations }
+    }
+}
+
+pub struct TermDisplay<'a,I,F> where F:(Fn(SymbolURI) -> I)+Copy,I:Iterator<Item=Notation> {
+    term:&'a Term,
+    notations:F
+}
+impl<'a,I,F> TermDisplay<'a,I,F> where F:(Fn(SymbolURI) -> I)+Copy,I:Iterator<Item=Notation> {
+    fn with_prec(term:&Term,notations:&F,f:&mut Formatter<'_>,prec:isize) -> std::fmt::Result {
+        match term {
+            Term::OMS(ContentURI::Symbol(s)) => {
+                for n in (notations)(*s) {
+                    if let Some(r) = n.apply_op(*s,f) {
+                        return r
+                    }
+                }
+                f.write_str("<mrow><mtext>TODO: OMS</mtext></mrow>")
+            },
+            Term::OMS(_) =>
+                f.write_str("<mrow><mtext>TODO: OMMOD</mtext></mrow>"),
+            Term::OMV(name) => {
+                f.write_str("<mi>")?;
+                f.write_str(name.name().as_ref())?;
+                f.write_str("</mi>")
+            },
+            Term::OML{name,..} => {
+                f.write_str("<mtext>")?;
+                f.write_str(name.as_ref())?;
+                f.write_str("</mtext>")
+            }
+            Term::OMA{head:VarOrSym::S(ContentURI::Symbol(s)),head_term:None,args}|Term::OMBIND{head:VarOrSym::S(ContentURI::Symbol(s)),head_term:None,args}
+            => {
+                for n in (notations)(*s) {
+                    if let Some(r) = n.apply(*s,f,args,prec,|t,f,p| Self::with_prec(t,notations,f,p)) {
+                        return r
+                    }
+                }
+                f.write_str("<mrow><mtext>TODO: OMA</mtext></mrow>")
+            }
+            Term::OMA{head,head_term,args}|Term::OMBIND{head,head_term,args}
+            => f.write_str("<mrow><mtext>TODO: OMA</mtext></mrow>"),
+            Term::Informal {tag,attributes,children,terms} => {
+                f.write_char('<')?;
+                f.write_str(tag)?;
+                f.write_str(" style=\"color:red;\"")?;
+                for (k,v) in attributes.iter() {
+                    f.write_char(' ')?;
+                    f.write_str(k)?;
+                    f.write_char('=')?;
+                    f.write_char('"')?;
+                    f.write_str(v)?;
+                    f.write_char('"')?;
+                }
+                f.write_char('>')?;
+                fn do_children<I:Iterator<Item=Notation>,F:(Fn(SymbolURI) -> I)+Copy>(children:&[InformalChild],terms:&[Term],notations:&F,f:&mut Formatter<'_>) -> std::fmt::Result {
+                    for c in children {match c {
+                        InformalChild::Text(s) => f.write_str(s)?,
+                        InformalChild::Term(n) => {
+                            f.write_str("<mrow style=\"color:initial\">")?;
+                            TermDisplay::with_prec(&terms[*n as usize], notations, f, 0)?;
+                            f.write_str("</mrow>")?;
+                        }
+                        InformalChild::Node {tag,attributes,children} => {
+                            f.write_char('<')?;
+                            f.write_str(tag)?;
+                            for (k,v) in attributes.iter() {
+                                f.write_char(' ')?;
+                                f.write_str(k)?;
+                                f.write_char('=')?;
+                                f.write_char('"')?;
+                                f.write_str(v)?;
+                                f.write_char('"')?;
+                            }
+                            f.write_char('>')?;
+                            do_children(children,terms,notations,f)?;
+                            f.write_str("</")?;
+                            f.write_str(tag)?;
+                            f.write_char('>')?;
+                        }
+                    }}
+                    Ok(())
+                }
+                do_children(children,terms,notations,f)?;
+                f.write_str("</")?;
+                f.write_str(tag)?;
+                f.write_char('>')
+            }
+        }
+    }
+    fn do_fmt(&self,f:&mut Formatter<'_>) -> std::fmt::Result {
+        Self::with_prec(self.term,&self.notations,f,0)
+    }
+}
+impl<I:Iterator<Item=Notation>,F:(Fn(SymbolURI) -> I)+Copy> Display for TermDisplay<'_,I,F> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.do_fmt(f)
     }
 }
 
@@ -231,7 +355,7 @@ impl<'a> Iterator for InformalIterMut<'a> {
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum VarOrSym {
-    V(String),
+    V(VarNameOrURI),
     S(ContentURI)
 }
 impl std::fmt::Display for VarOrSym {

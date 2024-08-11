@@ -21,8 +21,7 @@ pub mod logging;
 #[derive(Debug)]
 struct ControllerI {
     log: LogStore,
-    relational: RelationalManager,
-    archives: ArchiveManager,
+    backend:Backend,
     extensions:HMap<ExtensionId,Box<dyn MMTExtension>>,
     format_extensions:HMap<SourceFormatId,SourceFormat>,
     queue:BuildQueue,
@@ -73,8 +72,9 @@ impl BaseController {
 
         let relational = RelationalManager::default();
         let archives = ArchiveManager::default();
+        let backend = Backend::default();
 
-        let ctrl = ControllerI { log, relational, extensions, archives,queue,
+        let ctrl = ControllerI { log, extensions, backend,queue,
             format_extensions:format_extensions.into(), settings
         };
         let ctrl = Self(Arc::new(ctrl));
@@ -87,7 +87,7 @@ impl BaseController {
         });
         let source_formats = ctrl.0.format_extensions.values().cloned().collect::<Vec<_>>();
         for p in &ctrl.0.settings.mathhubs {
-            ctrl.0.relational.add_quads(ctrl.0.archives.load(p, source_formats.as_slice()).into_iter())
+            ctrl.0.backend.relations().add_quads(ctrl.0.backend.archive_manager().load(p, source_formats.as_slice()).into_iter())
         }
         let ret = ctrl.clone();
         background(move || { ctrl.load_relational() });
@@ -141,7 +141,7 @@ impl BaseController {
     }
 
     fn load_relational(&self) {
-        self.0.relational.load_archives(&self.0.archives)
+        self.0.backend.relations().load_archives(&self.0.backend.all_archives())
     }
     pub fn log_listener(&self) -> ChangeListener<LogFileLine<String>> {
         self.0.log.listener()
@@ -156,17 +156,25 @@ impl Default for BaseController {
 
 
 impl Controller for BaseController {
-    fn relations(&self) -> &RelationalManager { &self.0.relational }
-    fn archives(&self) -> &ArchiveManager { &self.0.archives }
+    #[inline]
+    fn backend(&self) -> &Backend {
+        &self.0.backend
+    }
+    #[inline]
     fn log_file(&self) -> &Path { self.0.log.log_file() }
+    #[inline]
     fn build_queue(&self) -> &BuildQueue { &self.0.queue }
+    #[inline]
     fn settings(&self) -> &Settings { &self.0.settings }
+    #[inline]
     fn get_format(&self, id:SourceFormatId) -> Option<&SourceFormat> {
         self.0.format_extensions.get(&id)
     }
+    #[inline]
     fn get_target(&self, id: BuildTargetId) -> Option<&BuildTarget> {
         self.0.format_extensions.values().find_map(|fmt| fmt.targets.iter().find(|tg| tg.id == id))
     }
+    #[inline]
     fn get_extension(&self, id: ExtensionId) -> Option<&dyn MMTExtension> {
         self.0.extensions.get(&id).map(|b| &**b)
     }
@@ -174,6 +182,7 @@ impl Controller for BaseController {
 
 
 pub use Controller as ControllerTrait;
+use immt_api::backend::Backend;
 use immt_api::checking::CheckExtension;
 use immt_api::HMap;
 use immt_api::utils::settings::{Settings};
@@ -183,6 +192,7 @@ use immt_core::utils::settings::SettingsSpec;
 
 static CONTROLLER: std::sync::OnceLock<BaseController> = std::sync::OnceLock::new();
 
+#[inline]
 pub fn controller() -> &'static BaseController {
     CONTROLLER.get().expect("Controller not set")
 }

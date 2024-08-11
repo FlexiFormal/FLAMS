@@ -5,7 +5,7 @@ use oxigraph::model::Triple;
 use immt_core::building::buildstate::QueueEntry;
 use immt_core::building::formats::{BuildTargetId, FormatOrTarget};
 use immt_core::content::Module;
-use immt_core::narration::{Document, HTMLDocSpec};
+use immt_core::narration::{Document, FullDocument};
 use immt_core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_core::uris::documents::DocumentURI;
 use immt_core::uris::modules::ModuleURI;
@@ -35,23 +35,30 @@ pub struct BuildStepResult<'a> {
 }
 impl BuildStepResult<'_> {
 
-    pub fn set_relational(&self,doc:&HTMLDocSpec, mods:&[Module]) {
-        let iter = doc.doc.triples().chain(mods.iter().flat_map(|m| m.triples(doc.doc.uri)));
-        let iter2 = iter.clone().map(|t| Triple::from(t));
-        self.ctrl.relations().add_quads(iter);
-        let out = self.path.join("index.ttl");
-        self.ctrl.relations().export(iter2,&out,doc.doc.uri);
-    }
-    pub fn set_narrative(&self, doc:HTMLDocSpec) {
+    pub fn set_document(&self, mut doc: FullDocument) {
+        doc.check(|_| (), |_| ());
+        self.set_content(&doc.modules);
+        self.set_relational(&doc);
         let out = self.path.join("index.nomd");
         doc.write(&out);
     }
-    pub fn set_content(&self, mods:Vec<Module>) {
+    fn set_relational(&self, doc:&FullDocument) {
+        self.ctrl.backend().relations().add_quads(doc.triples.iter().cloned());
+        let out = self.path.join("index.ttl");
+        self.ctrl.backend().relations().export(doc.triples.iter().map(|q| Triple {
+            subject: q.subject.clone(),
+            predicate: q.predicate.clone(),
+            object: q.object.clone()
+        }),&out,doc.doc.uri);
+    }
+    fn set_content(&self, mods:&[Module]) {
         if let Some(path) = self.path.parent() {
             let path = path.join(".modules");
             let _ = std::fs::create_dir(&path);
             for m in mods {
-                let out = path.join(m.uri.name().as_ref()).with_extension("comd");
+                let dir = path.join(m.uri.name().as_ref());
+                let _ = std::fs::create_dir(&dir);
+                let out = dir.join::<&'static str>(m.uri.language().into()).with_extension("comd");
                 if let Ok(mut f) = std::fs::File::create(out) {
                     let _ = bincode::serde::encode_into_std_write(m,&mut f,bincode::config::standard());
                 } else {
@@ -90,11 +97,8 @@ impl BuildStepResult<'_> {
 
 impl BuildStep {
     pub fn result<'a>(&'a self,ctrl:&'a dyn Controller,task:&BuildTask) -> Option<BuildStepResult> {
-        ctrl.archives().with_archives(|a|
-            if let Some(ma) = a.iter().find_map(|a| match a {
-                Archive::Physical(ma) if ma.id() == task.archive().id() => Some(ma),
-                _ => None
-            }) {
+        ctrl.backend().get_archive(task.archive().id(),|a|
+            if let Some(Archive::Physical(ma)) = a {
                 let path = task.rel_path().split('/').fold(ma.out_dir(),|p,s| p.join(s));
                 let _ = std::fs::create_dir_all(&path);
                 Some(path)

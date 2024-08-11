@@ -5,7 +5,6 @@ pub mod components;
 mod home;
 mod utils;
 pub mod accounts;
-pub mod shtml;
 
 #[cfg(feature = "client")]
 pub mod client {

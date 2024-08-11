@@ -58,29 +58,26 @@ impl FormatExtension for SHTMLExtension {
     fn build(&self, ctrl:&dyn Controller,task: &BuildTask, target: BuildTargetId, index: u8) -> bool {
         match target {
             s if s == SHTML_OMDOC.id => {
-                if let Some(path) = ctrl.archives().with_archives(|ars| {
-                    ars.iter().find_map(|a| match a {
-                        Archive::Physical(ma) if ma.id() == task.archive().id() => {
-                            let p = task.rel_path().split('/').fold(ma.out_dir(), |p, c| p.join(c)).join("index.html");
-                            if p.exists() { Some(p) } else { None }
-                        },
-                        _ => None
-                    })
-                }) {
+                if let Some(path) = ctrl.backend().get_archive(task.archive().id(),|a|
+                    if let Some(Archive::Physical(ma)) = a {
+                        let p = task.rel_path().split('/').fold(ma.out_dir(), |p, c| p.join(c)).join("index.html");
+                        if p.exists() { Some(p) } else { None }
+                    } else {None}
+                ) {
                     let s = std::fs::read_to_string(path).unwrap();
                     let (path,mut name) = task.rel_path().rsplit_once('/').unwrap_or(("",task.rel_path()));
                     name = name.rsplit_once('.').unwrap().0;
                     let lang = Language::from_rel_path(name);
                     name = name.strip_suffix(&format!(".{}",lang.to_string())).unwrap_or(name);
                     let uri = DocumentURI::new(task.archive().to_owned(),if path.is_empty() {None} else {Some(path)},name,lang);
-                    let (spec,mods) = HTMLParser::new(&s,task.path(),
+                    let spec = HTMLParser::new(&s,task.path(),
                                                       uri,
-                                                      ctrl.archives(),true).run();
+                                                      ctrl.backend(),true).run();
                     if let Some(step) = task.find_step(target) {
                         if let Some(res) = step.result(ctrl,task) {
-                            res.set_relational(&spec,mods.as_slice());
-                            res.set_narrative(spec);
-                            res.set_content(mods);
+                            //res.set_relational(&spec,mods.as_slice());
+                            res.set_document(spec);
+                            //res.set_content(mods);
                         }
                     }
                 } else { return false }

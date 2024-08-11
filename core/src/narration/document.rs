@@ -4,11 +4,12 @@ use std::fmt::{Display, Formatter};
 use std::io::{Read, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::Path;
+use std::str::FromStr;
 use arrayvec::ArrayVec;
-use oxrdf::{NamedNodeRef, Quad};
-use crate::content::{ArgSpec, AssocType, Notation, Term};
-use crate::ulo;
-use crate::uris::{ContentURI, Name};
+use oxrdf::{BlankNode, NamedNodeRef, Quad};
+use crate::content::{ArgSpec, AssocType, ContentElement, Module, Notation, Term, VarNameOrURI};
+use crate::{SemanticElement, ulo};
+use crate::uris::{ContentURI, Name, NarrDeclURI};
 use crate::uris::modules::ModuleURI;
 use crate::uris::symbols::SymbolURI;
 use crate::utils::{NestedDisplay, NestingFormatter, VecMap};
@@ -16,8 +17,7 @@ use crate::utils::{NestedDisplay, NestingFormatter, VecMap};
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Title {
-    pub range: SourceRange<ByteOffset>,
-    pub children: Vec<DocumentElement>,
+    pub range: SourceRange<ByteOffset>
 }
 
 #[derive(Debug, Clone)]
@@ -98,7 +98,7 @@ impl<'a> Iterator for TripleIterator<'a> {
                         // TODO: terms maybe
                         DocumentElement::SetSectionLevel(..) | DocumentElement::VarNotation{..} | DocumentElement::VarDef{..} | DocumentElement::Definiendum {..} | DocumentElement::Symref {..} | DocumentElement::Varref{..}| DocumentElement::TopTerm{..} => (),
                         DocumentElement::Section(section) => {
-                            let next_uri = self.uri / section.id;
+                            let next_uri = section.uri;
                             let next_iri = next_uri.to_iri();
                             self.buf.push(
                                 ulo!((next_iri.clone()) : SECTION IN self.doc_iri.clone())
@@ -108,12 +108,12 @@ impl<'a> Iterator for TripleIterator<'a> {
                             );
                             let ret = ulo!((self.curr_iri.clone()) CONTAINS (next_iri.clone()) IN self.doc_iri.clone());
                             if !section.children.is_empty() {
-                                next!(section.children.iter(),next_iri,next_uri);
+                                next!(section.children.iter(),next_iri,next_uri.into());
                             }
                             return Some(ret)
                         }
                         DocumentElement::Paragraph(p) => {
-                            let next_uri = self.uri / p.id;
+                            let next_uri = p.uri;
                             let next_iri = next_uri.to_iri();
                             let tp = p.kind.rdf_type().into_owned();
                             let ret = ulo!((next_iri.clone()) : >(tp) IN self.doc_iri.clone());
@@ -141,17 +141,21 @@ impl<'a> Iterator for TripleIterator<'a> {
                                 },
                             }
                             if !p.children.is_empty() {
-                                next!(p.children.iter(),next_iri,next_uri);
+                                next!(p.children.iter(),next_iri,next_uri.into());
                             }
                             return Some(ret)
                         }
                         DocumentElement::Module(m) => {
+                            let next_uri = m.uri;
+                            let curi = m.module_uri;
+                            /*
                             let next_uri = self.uri;
                             let curi = match self.content_uri {
                                 Some(c) => c / m.name,
                                 _ => self.doc.uri * m.name
                             };
-                            let next_iri = self.curr_iri.clone();
+                             */
+                            let next_iri = next_uri.to_iri();
                             self.buf.push(
                                 ulo!((self.curr_iri.clone()) CONTAINS (curi.to_iri()) IN self.doc_iri.clone())
                             );
@@ -161,16 +165,21 @@ impl<'a> Iterator for TripleIterator<'a> {
                             let ret =
                                 ulo!((curi.to_iri()) : THEORY IN self.doc_iri.clone());
                             if !m.children.is_empty() {
-                                next!(m.children.iter(),next_iri,next_uri,curi);
+                                next!(m.children.iter(),next_iri,next_uri.into(),curi);
                             }
                             return Some(ret)
                         }
                         DocumentElement::MathStructure(m) => {
+                            let next_uri = m.uri;
+                            let curi = m.module_uri;
+                            /*
                             let next_uri = self.uri;
                             let curi = match self.content_uri {
                                 Some(c) => c / m.name,
                                 _ => self.doc.uri * m.name
                             };
+
+                             */
                             let next_iri = self.curr_iri.clone();
                             self.buf.push(
                                 ulo!((self.curr_iri.clone()) CONTAINS (curi.to_iri()) IN self.doc_iri.clone())
@@ -181,37 +190,54 @@ impl<'a> Iterator for TripleIterator<'a> {
                             let ret =
                                 ulo!((curi.to_iri()) : STRUCTURE IN self.doc_iri.clone());
                             if !m.children.is_empty() {
-                                next!(m.children.iter(),next_iri,next_uri,curi);
+                                next!(m.children.iter(),next_iri,next_uri.into(),curi);
                             }
                             return Some(ret)
                         }
                         DocumentElement::InputRef(drf) => {
                             return Some(ulo!((self.curr_iri.clone()) !(dc::HAS_PART) (drf.target.to_iri()) IN self.doc_iri.clone() ))
                         }
-                        DocumentElement::ConstantDecl(_uri) => (), /*{
-                            if let Some(cu) = self.content_uri {
-                                self.buf.push(
-                                    ulo!((uri.to_iri()) : DECLARATION IN self.doc_iri.clone())
-                                );
-                                return Some(ulo!((cu.to_iri()) CONTAINS (uri.to_iri()) IN self.doc_iri.clone()))
-                            }
-                        }*/
+                        DocumentElement::ConstantDecl(_uri) => (),
                         DocumentElement::UseModule(m) => {
                             return Some(ulo!((self.curr_iri.clone()) !(dc::REQUIRES) (m.to_iri()) IN self.doc_iri.clone()))
                         }
 
                         DocumentElement::Problem(p) => {
-                            let next_uri = self.uri / p.id;
+                            let next_uri = p.uri;
                             let next_iri = next_uri.to_iri();
                             let ret = ulo!((next_iri.clone()) : PROBLEM IN self.doc_iri.clone());
                             self.buf.push(
                                 ulo!((self.curr_iri.clone()) CONTAINS (next_iri.clone()) IN self.doc_iri.clone())
                             );
-                            self.buf.push(
+                            /*self.buf.push(
                                 ulo!((next_iri.clone()) (dc::LANGUAGE) = (p.language.to_string()) IN self.doc_iri.clone())
-                            );
+                            );*/
+                            for (d,s) in &p.preconditions {
+                                let n = BlankNode::default();
+                                self.buf.push(
+                                    ulo!((next_iri.clone()) PRECONDITION >>(crate::ontology::rdf::terms::Term::BlankNode(n.clone())) IN self.doc_iri.clone())
+                                );
+                                self.buf.push(
+                                    ulo!(>>(crate::ontology::rdf::terms::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()) IN self.doc_iri.clone())
+                                );
+                                self.buf.push(
+                                    ulo!(>>(crate::ontology::rdf::terms::Subject::BlankNode(n)) POSYMBOL (s.to_iri()) IN self.doc_iri.clone())
+                                );
+                            }
+                            for (d,s) in &p.objectives {
+                                let n = BlankNode::default();
+                                self.buf.push(
+                                    ulo!((next_iri.clone()) OBJECTIVE >>(crate::ontology::rdf::terms::Term::BlankNode(n.clone())) IN self.doc_iri.clone())
+                                );
+                                self.buf.push(
+                                    ulo!(>>(crate::ontology::rdf::terms::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()) IN self.doc_iri.clone())
+                                );
+                                self.buf.push(
+                                    ulo!(>>(crate::ontology::rdf::terms::Subject::BlankNode(n)) POSYMBOL (s.to_iri()) IN self.doc_iri.clone())
+                                );
+                            }
                             if !p.children.is_empty() {
-                                next!(p.children.iter(),next_iri,next_uri);
+                                next!(p.children.iter(),next_iri,next_uri.into());
                             }
                             return Some(ret)
                         }
@@ -262,12 +288,12 @@ pub enum DocumentElement {
     InputRef(DocumentReference),
     ConstantDecl(SymbolURI),
     VarNotation {
-        name:Name,
+        name:VarNameOrURI,
         id:Name,
         notation:NarrativeRef<Notation>
     },
     VarDef {
-        name:Name,
+        uri:NarrDeclURI,
         arity:ArgSpec,
         macroname:Option<String>,
         range:SourceRange<ByteOffset>,
@@ -289,7 +315,7 @@ pub enum DocumentElement {
         notation:Option<Name>,
     },
     Varref {
-        name:Name,
+        name:VarNameOrURI,
         range: SourceRange<ByteOffset>,
         notation:Option<Name>,
     },
@@ -313,7 +339,7 @@ impl NestedDisplay for DocumentElement {
                 write!(f.inner(),"Variable notation {} for {}",id,name)
             },
             ConstantDecl(uri) => write!(f.inner(),"Constant declaration {}",uri),
-            VarDef { name, .. } => {
+            VarDef { uri: name, .. } => {
                 write!(f.inner(),"Variable {}",name)
             },
             Definiendum { uri, .. } => write!(f.inner(),"Definiendum {}",uri),
@@ -322,7 +348,7 @@ impl NestedDisplay for DocumentElement {
             TopTerm(t) => write!(f.inner(),"Top term {t:?}"),
             UseModule(m) => write!(f.inner(),"Use module {}",m),
             Paragraph(p) => p.fmt_nested(f),
-            Problem(p) => write!(f.inner(),"Problem {}",p.id)
+            Problem(p) => write!(f.inner(),"Problem {}",p.uri)
         }
     }
 }
@@ -337,7 +363,7 @@ impl Display for DocumentElement {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Section {
     pub range: SourceRange<ByteOffset>,
-    pub id: Name,
+    pub uri: NarrDeclURI,
     pub level: SectionLevel,
     pub title: Option<Title>,
     pub children: Vec<DocumentElement>,
@@ -345,7 +371,7 @@ pub struct Section {
 impl NestedDisplay for Section {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
-        write!(f.inner(),"Section {}",self.id)?;
+        write!(f.inner(),"Section {}",self.uri)?;
         if let Some(Title{range,..}) = &self.title {
             write!(f.inner(),": {range:?}")?;
         }
@@ -368,14 +394,15 @@ impl Display for Section {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentModule {
     pub range: SourceRange<ByteOffset>,
-    pub name: Name,
+    pub module_uri: ModuleURI,
+    pub uri: NarrDeclURI,
     pub children: Vec<DocumentElement>,
 }
 
 impl NestedDisplay for DocumentModule {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
-        write!(f.inner(),"Module {}",self.name)?;
+        write!(f.inner(),"Module {}",self.uri.name())?;
         f.nest(|f| {
             for e in &self.children {
                 f.next()?;e.fmt_nested(f)?;
@@ -395,13 +422,14 @@ impl Display for DocumentModule {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentMathStructure {
     pub range: SourceRange<ByteOffset>,
-    pub name: Name,
+    pub module_uri: ModuleURI,
+    pub uri:NarrDeclURI,
     pub children: Vec<DocumentElement>,
 }
 impl NestedDisplay for DocumentMathStructure {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
-        write!(f.inner(),"Structure {}",self.name)?;
+        write!(f.inner(),"Structure {}",self.uri.name())?;
         f.nest(|f| {
             for e in &self.children {
                 f.next()?;e.fmt_nested(f)?;
@@ -425,7 +453,7 @@ pub struct DocumentReference {
     pub target: DocumentURI,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq,Eq)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum StatementKind {
@@ -481,7 +509,7 @@ impl StatementKind {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LogicalParagraph {
     pub kind:StatementKind,
-    pub id: Name,
+    pub uri: NarrDeclURI,
     pub inline:bool,
     pub title: Option<Title>,
     pub fors: Vec<ContentURI>,
@@ -498,7 +526,7 @@ impl LogicalParagraph {
 impl NestedDisplay for LogicalParagraph {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
-        write!(f.inner(),"{} {}",self.kind,self.id)?;
+        write!(f.inner(),"{} {}",self.kind,self.uri)?;
         if let Some(Title{range,..}) = &self.title {
             write!(f.inner(),": {range:?}")?;
         }
@@ -524,25 +552,77 @@ impl Display for LogicalParagraph {
     }
 }
 
+#[derive(Debug, Clone,Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum CognitiveDimension {
+    Remember,
+    Understand,
+    Apply,
+    Analyze,
+    Evaluate,
+    Create
+}
+impl CognitiveDimension {
+    pub fn to_iri(&self) -> NamedNodeRef {
+        match self {
+            CognitiveDimension::Remember => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#remember"),
+            CognitiveDimension::Understand => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#understand"),
+            CognitiveDimension::Apply => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#apply"),
+            CognitiveDimension::Analyze => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#analyze"),
+            CognitiveDimension::Evaluate => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#evaluate"),
+            CognitiveDimension::Create => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#create")
+        }
+    }
+}
+impl Display for CognitiveDimension {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use CognitiveDimension::*;
+        write!(f,"{}",match self {
+            Remember => "remember",
+            Understand => "understand",
+            Apply => "apply",
+            Analyze => "analyze",
+            Evaluate => "evaluate",
+            Create => "create"
+        })
+    }
+}
+impl FromStr for CognitiveDimension {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "remember" => CognitiveDimension::Remember,
+            "understand" => CognitiveDimension::Understand,
+            "apply" => CognitiveDimension::Apply,
+            "analyze"|"analyse" => CognitiveDimension::Analyze,
+            "evaluate" => CognitiveDimension::Evaluate,
+            "create" => CognitiveDimension::Create,
+            _ => return Err(())
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Problem {
-    pub id:Name,
+    pub sub:bool,
+    pub uri:NarrDeclURI,
     pub autogradable:bool,
-    pub language:Language,
     pub points:Option<f32>,
-    pub solution:Option<NarrativeRef<String>>,
-    pub hint:Option<NarrativeRef<String>>,
-    pub note:Option<NarrativeRef<String>>,
-    pub gnote:Option<NarrativeRef<String>>,
+    pub solutions:Vec<NarrativeRef<String>>,
+    pub hints:Vec<NarrativeRef<String>>,
+    pub notes:Vec<NarrativeRef<String>>,
+    pub gnotes:Vec<NarrativeRef<String>>,
     pub title:Option<Title>,
-    pub children:Vec<DocumentElement>
+    pub children:Vec<DocumentElement>,
+    pub preconditions:Vec<(CognitiveDimension,SymbolURI)>,
+    pub objectives:Vec<(CognitiveDimension,SymbolURI)>
 }
 
 impl NestedDisplay for Problem {
     fn fmt_nested<'a>(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
-        write!(f.inner(),"Problem {}",self.id)?;
+        write!(f.inner(),"Problem {}",self.uri)?;
         if let Some(Title{range,..}) = &self.title {
             write!(f.inner(),": {range:?}")?;
         }
@@ -688,24 +768,33 @@ pub enum CSS {
 
 #[derive(Debug)]
 //#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct HTMLDocSpec {
+pub struct FullDocument {
     pub doc:Document,
     pub html:String,
     pub css: Vec<CSS>,
     pub body:SourceRange<ByteOffset>,
-    pub refs:Vec<u8>
+    pub refs:Vec<u8>,
+    pub modules : Vec<Module>,
+    pub triples: Vec<Quad>
 }
 
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NarrativeRef<T> {
-    start:usize,
-    end:usize,
+    pub start:usize,
+    pub end:usize,
+    pub in_doc:DocumentURI,
     phantom_data: PhantomData<T>
 }
+impl<T> Clone for NarrativeRef<T> {
+    fn clone(&self) -> Self {
+        Self {start:self.start,end:self.end,in_doc:self.in_doc,phantom_data:PhantomData}
+    }
+}
+impl<T> Copy for NarrativeRef<T> {}
 impl<T> NarrativeRef<T> {
-    pub fn new(start:usize,end:usize) -> Self {
-        Self {start,end,phantom_data:PhantomData}
+    pub fn new(start:usize,end:usize,in_doc:DocumentURI) -> Self {
+        Self {start,end,in_doc,phantom_data:PhantomData}
     }
 }
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
@@ -731,7 +820,7 @@ pub struct DocumentData {
     document:Document
 }
 
-impl HTMLDocSpec {
+impl FullDocument {
     pub fn reader(file:&Path) -> Option<DocumentReader> {
         let mut file = std::fs::File::open(file).ok()?;
         let mut buf = [0u8;20];
@@ -900,5 +989,13 @@ impl HTMLDocSpec {
         } else {
             todo!()
         }
+    }
+
+    pub fn check(&mut self,mut initial:impl FnMut(&mut SemanticElement),mut close:impl FnMut(&mut SemanticElement)) {
+        /*let mut curr = &mut self.doc;
+        let mut content = None;
+        let mut _empty = Vec::new();
+        let mut ls = &mut _empty;
+        let mut stack = Vec::new();*/
     }
 }

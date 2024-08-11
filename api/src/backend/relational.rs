@@ -2,17 +2,31 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
+use std::str::FromStr;
 use oxigraph::sparql::{Query, QueryResults};
 use oxrdfio::RdfFormat;
 use tracing::instrument;
 use immt_core::narration::Language;
 use immt_core::ontology::rdf::terms::{NamedNode, Quad, Subject, Term, Triple};
-use immt_core::uris::{DocumentURI, PathURI};
+use immt_core::uris::{DocumentURI, PathURI, SymbolURI};
 use crate::backend::archives::{Archive, Storage};
 use crate::backend::manager::ArchiveManager;
 
 pub struct QueryResult(QueryResults);
 impl QueryResult {
+    pub fn symbol_iter(self) -> impl Iterator<Item=SymbolURI> {
+        let r = match self.0 {
+            QueryResults::Solutions(sols) => Some(sols.flat_map(|s|
+                s.ok().into_iter().flat_map(|s|
+                    if let Some(Some(Term::NamedNode(nn))) = s.values().first() {
+                        SymbolURI::from_str(nn.as_str()).ok()
+                    } else { None }
+                )
+            )),
+            _ => None
+        };
+        r.into_iter().flatten()
+    }
     pub fn resolve(self) -> ResolvedQueryResult {
         match self.0 {
             QueryResults::Boolean(b) => ResolvedQueryResult::Bool(b),
@@ -206,6 +220,10 @@ impl Debug for RelationalManager {
     }
 }
 impl RelationalManager {
+    #[inline]
+    pub fn num_relations(&self) -> usize {
+        self.store.len().unwrap_or_default()
+    }
     pub fn add_quads(&self,iter:impl Iterator<Item=Quad>) {
         let loader = self.store.bulk_loader();
         let _ = loader.load_quads(iter);
@@ -227,7 +245,7 @@ impl RelationalManager {
         }
     }
 
-    pub fn query(&self,s:impl AsRef<str>) -> Option<QueryResult> {
+    pub fn query_str(&self, s:impl AsRef<str>) -> Option<QueryResult> {
         let mut query_str = String::from(r#"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
             PREFIX dc: <http://purl.org/dc/elements/1.1#>
@@ -238,43 +256,45 @@ impl RelationalManager {
         query.dataset_mut().set_default_graph_as_union();
         self.store.query(query).ok().map(|i| i.into())
     }
+    pub fn query(&self, mut q:Query) -> Option<QueryResult> {
+        q.dataset_mut().set_default_graph_as_union();
+        self.store.query(q).ok().map(|i| i.into())
+    }
 
 
     #[instrument(level = "info", name = "relational", target="relational", skip_all)]
-    pub fn load_archives(&self,archives:&ArchiveManager) {
+    pub fn load_archives(&self,archives:&[Archive]) {
         use rayon::prelude::*;
-        archives.with_archives(|archives| {
-            tracing::info!(target:"relational","Loading relational for {} archives...",archives.len());
-            let old = self.store.len().unwrap();
-            archives.par_iter().filter_map(|a| match a {
-                Archive::Physical(a) => Some(a),
-                _ => None
-            }).for_each(|a| {
-                let out = a.out_dir();
-                if out.exists() && out.is_dir() {
-                    let loader = self.store.bulk_loader();
-                    for e in walkdir::WalkDir::new(&out)
-                        .into_iter()
-                        .filter_map(Result::ok)
-                        .filter(|entry| entry.file_name() == "index.ttl") {
-                        let parent = e.path().parent().unwrap();
-                        let parentname = parent.file_name().unwrap().to_str().unwrap();
-                        let parentname =parentname.rsplit_once('.').map(|(s,_)| s ).unwrap_or(parentname);
-                        let language = Language::from_rel_path(parentname);
-                        let parentname = parentname.strip_suffix(&format!(".{}",language.to_string())).unwrap_or(parentname);
-                        let pathstr = parent.parent().unwrap().to_str().unwrap().strip_prefix(out.to_str().unwrap()).unwrap();
-                        let pathstr = if pathstr.is_empty() {None} else {Some(pathstr)};
-                        let doc = DocumentURI::new(a.uri(),pathstr,parentname,language);
-                        let graph = doc.to_iri();
-                        let reader = oxigraph::io::RdfParser::from_format(RdfFormat::Turtle).with_default_graph(graph);
-                        let file = std::fs::File::open(e.path()).expect("Failed to open file");
-                        let buf = BufReader::new(file);
-                        let _ = loader.load_quads(reader.parse_read(buf).filter_map(|q| q.ok()));
-                    }
+        tracing::info!(target:"relational","Loading relational for {} archives...",archives.len());
+        let old = self.store.len().unwrap();
+        archives.par_iter().filter_map(|a| match a {
+            Archive::Physical(a) => Some(a),
+            _ => None
+        }).for_each(|a| {
+            let out = a.out_dir();
+            if out.exists() && out.is_dir() {
+                let loader = self.store.bulk_loader();
+                for e in walkdir::WalkDir::new(&out)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                    .filter(|entry| entry.file_name() == "index.ttl") {
+                    let parent = e.path().parent().unwrap();
+                    let parentname = parent.file_name().unwrap().to_str().unwrap();
+                    let parentname =parentname.rsplit_once('.').map(|(s,_)| s ).unwrap_or(parentname);
+                    let language = Language::from_rel_path(parentname);
+                    let parentname = parentname.strip_suffix(&format!(".{}",language.to_string())).unwrap_or(parentname);
+                    let pathstr = parent.parent().unwrap().to_str().unwrap().strip_prefix(out.to_str().unwrap()).unwrap();
+                    let pathstr = if pathstr.is_empty() {None} else {Some(pathstr)};
+                    let doc = DocumentURI::new(a.uri(),pathstr,parentname,language);
+                    let graph = doc.to_iri();
+                    let reader = oxigraph::io::RdfParser::from_format(RdfFormat::Turtle).with_default_graph(graph);
+                    let file = std::fs::File::open(e.path()).expect("Failed to open file");
+                    let buf = BufReader::new(file);
+                    let _ = loader.load_quads(reader.parse_read(buf).filter_map(|q| q.ok()));
                 }
-            });
-            tracing::info!(target:"relational","Loaded {} relations", self.store.len().unwrap() - old);
+            }
         });
+        tracing::info!(target:"relational","Loaded {} relations", self.store.len().unwrap() - old);
     }
 }
 impl Default for RelationalManager {

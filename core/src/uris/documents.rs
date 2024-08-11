@@ -98,12 +98,15 @@ pub struct NarrDeclURI {
     name: Name
 }
 impl NarrDeclURI {
+    #[inline]
     pub fn to_iri(&self) -> NamedNode {
         NamedNode::new(self.to_string().replace(' ',"%20")).unwrap()
     }
     pub fn new(doc: DocumentURI, name: impl Into<Name>) -> Self {
         Self { doc, name:name.into() }
     }
+    #[inline]
+    pub fn name(&self) -> Name { self.name }
 }
 impl Display for NarrDeclURI {
     #[inline]
@@ -174,6 +177,18 @@ impl NarrativeURI {
             NarrativeURI::Decl(d) => d.to_iri()
         }
     }
+    pub fn doc(&self) -> DocumentURI {
+        match self {
+            NarrativeURI::Doc(d) => *d,
+            NarrativeURI::Decl(d) => d.doc
+        }
+    }
+    pub fn language(&self) -> Language {
+        match self {
+            NarrativeURI::Doc(d) => d.language,
+            NarrativeURI::Decl(d) => d.doc.language
+        }
+    }
 }
 impl Display for NarrativeURI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -222,20 +237,12 @@ impl<'de> serde::Deserialize<'de> for NarrativeURI {
 }
 
 impl Div<Name> for NarrativeURI {
-    type Output = NarrativeURI;
+    type Output = NarrDeclURI;
     fn div(self, rhs: Name) -> Self::Output {
         match self {
-            NarrativeURI::Doc(d) => NarrativeURI::Decl(
-                NarrDeclURI::new(d, rhs)
-            ),
-            NarrativeURI::Decl(d) => NarrativeURI::Decl(
-                NarrDeclURI::new(d.doc, Name::new(&format!("{}/{rhs}",d.name)))
-            ),
+            NarrativeURI::Doc(d) => NarrDeclURI::new(d, rhs),
+            NarrativeURI::Decl(d) =>
+                NarrDeclURI::new(d.doc, Name::new(&format!("{}/{rhs}",d.name))),
         }
-    }
-}
-impl DivAssign<Name> for NarrativeURI {
-    fn div_assign(&mut self, rhs: Name) {
-        *self = self.div(rhs)
     }
 }

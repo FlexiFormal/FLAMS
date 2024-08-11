@@ -5,12 +5,7 @@ pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
 pub mod async_trait { pub use async_trait::*; }
 
-pub mod backend {
-    pub mod archives;
-    pub mod manager;
-    #[cfg(feature="oxigraph")]
-    pub mod relational;
-}
+pub mod backend;
 pub mod extensions;
 pub mod controller;
 pub mod checking;

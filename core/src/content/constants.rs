@@ -1,8 +1,9 @@
+use std::fmt::Write;
 use std::str::FromStr;
 pub use arrayvec::ArrayVec;
-use crate::content::Term;
+use crate::content::{Term, TermOrList};
 use crate::narration::NarrativeRef;
-use crate::uris::Name;
+use crate::uris::{Name, NarrDeclURI};
 use crate::uris::symbols::SymbolURI;
 use crate::utils::sourcerefs::{ByteOffset, SourceRange};
 
@@ -118,8 +119,8 @@ impl FromStr for Arg {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NotationRef {
+    pub symbol:SymbolURI,
     pub uri:SymbolURI,
-    pub id:Name,
     pub range:NarrativeRef<Notation>
 }
 
@@ -129,9 +130,132 @@ pub struct Notation {
     pub is_text:bool,
     pub precedence:isize,
     pub attribute_index:u8,
+    pub id:Name,
     pub argprecs:ArrayVec<isize,9>,
     pub nt:Vec<NotationComponent>,
-    pub op:Option<String>
+    pub op:Option<(String,u8,bool)>
+}
+impl Notation {
+    fn first_str(&self,idx:u8,sym:SymbolURI,s:&str,f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        let start = &s[0..idx as usize];
+        let end = &s[idx as usize..];
+        f.write_str(start)?;
+        f.write_str(" shtml:term=\"OMID\" shtml:head=\"")?;
+        std::fmt::Display::fmt(&sym,f)?;
+        f.write_str("\" shtml:notationid=\"")?;
+        f.write_str(self.id.as_ref())?;
+        f.write_char('\"')?;
+        f.write_str(end)
+    }
+    #[inline]
+    pub fn apply_op(&self,sym:SymbolURI,f:&mut std::fmt::Formatter<'_>) -> Option<std::fmt::Result> {
+        if let Some((op,idx,is_text)) = &self.op {
+            if *is_text {
+                let _ = f.write_str("<mtext>");
+            }
+            let r = self.first_str(*idx,sym,op,f);
+            if *is_text {
+                let _ = f.write_str("</mtext>");
+            }
+            return Some(r)
+        }
+        if self.argprecs.is_empty() && self.nt.len() == 1 {
+            return self.nt.iter().next().and_then(|s| match s {
+                NotationComponent::S(s) => {
+                    if self.is_text {
+                        let _ = f.write_str("<mtext>");
+                    }
+                    let r = self.first_str(self.attribute_index,sym,s,f);
+                    if self.is_text {
+                        let _ = f.write_str("</mtext>");
+                    }
+                    Some(r)
+                },
+                // should never happen:
+                _ => None
+            })
+        }
+        None
+    }
+    fn do_comp<'f>(&self,e:&NotationComponent,f:&mut std::fmt::Formatter<'f>,args:&[(TermOrList,ArgType)],cont:impl (Fn(&Term,&mut std::fmt::Formatter<'f>,isize) -> std::fmt::Result) + Copy) -> std::fmt::Result {
+        match e {
+            NotationComponent::S(s) => {
+                f.write_str(s)
+            },
+            NotationComponent::Arg(a,ArgType::Normal|ArgType::Binding) => {
+                if let Some((TermOrList::Term(t),ArgType::Normal)) = args.get(a.index() as usize - 1) {
+                    let np = self.argprecs.get(a.index() as usize).copied().unwrap_or(0);
+                    cont(t,f,np)
+                } else {
+                    println!("waah: {:?}",args.get(a.index() as usize - 1));
+                    return Err(std::fmt::Error::default())
+                }
+            },
+            NotationComponent::Arg(a,ArgType::Sequence|ArgType::BindingSequence) => {
+                if let Some((TermOrList::List(ts),ArgType::Sequence|ArgType::BindingSequence)) = args.get(a.index() as usize - 1) {
+                    let np = self.argprecs.get(a.index() as usize - 1).copied().unwrap_or(0);
+                    let mut tms = ts.iter();
+                    if let Some(h) = tms.next() {
+                        cont(h,f,np)?;
+                    }
+                    for t in tms {
+                        f.write_str("<mo>,</mo>")?;
+                        cont(t,f,np)?
+                    }
+                    Ok(())
+                } else {
+                    println!("waah: {:?}",args.get(a.index() as usize - 1));
+                    return Err(std::fmt::Error::default())
+                }
+            }
+            NotationComponent::ArgSep {index,tp:ArgType::Sequence|ArgType::BindingSequence,sep} => {
+                if let Some((TermOrList::List(ts),ArgType::Sequence|ArgType::BindingSequence)) = args.get(*index as usize - 1) {
+                    let np = self.argprecs.get(*index as usize - 1).copied().unwrap_or(0);
+                    let mut tms = ts.iter();
+                    if let Some(h) = tms.next() {
+                        cont(h,f,np)?;
+                    }
+                    for t in tms {
+                        for e in sep {
+                            if let NotationComponent::Arg(i,_) = e {
+                                if i.index() == *index {continue}
+                            }
+                            self.do_comp(e, f, args, cont)?;
+                        }
+                        cont(t,f,np)?
+                    }
+                    Ok(())
+                } else {
+                    println!("waah sep: {:?}",args.get(*index as usize - 1));
+                    return Err(std::fmt::Error::default())
+                }
+            }
+            NotationComponent::ArgSep{index,tp,..} => {
+                println!("wut sep: {index}, {tp:?}");
+                return Err(std::fmt::Error::default())
+            }
+            NotationComponent::ArgMap {..} => {
+                println!("ArgMap");
+                return Err(std::fmt::Error::default())
+            }
+        }
+    }
+    #[inline]
+    pub fn apply<'f>(&self,sym:SymbolURI,f:&mut std::fmt::Formatter<'f>,args:&[(TermOrList,ArgType)],prec:isize,cont:impl Fn(&Term,&mut std::fmt::Formatter<'f>,isize) -> std::fmt::Result) -> Option<std::fmt::Result> {
+        //println!("Trying {sym}({args:?})\n  = {self:?}");
+        let mut comps = self.nt.iter();
+        if let Some(NotationComponent::S(s)) = comps.next() {
+            self.first_str(self.attribute_index,sym,s,f).ok()?;
+        } else {
+            println!("wut");
+            return None
+        }
+        for e in comps {
+            self.do_comp(e,f,args,&cont).ok()?;
+        }
+        //println!("Success!");
+        Some(Ok(()))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -142,12 +266,10 @@ pub enum NotationComponent {
     ArgSep{
         index:u8,
         tp:ArgType,
-        sep:String
+        sep:Vec<NotationComponent>
     },
     ArgMap {
         index:u8,
-        pre:String,
-        post:String,
-        sep:String
+        segments:Vec<NotationComponent>,
     }
 }

@@ -58,7 +58,6 @@ impl BuildQueueI {
                 todo!()
             }
         };
-        let tree = ctrl.archives().get_tree();
         let mut queue = self.inner.write();
         let q = if queue.is_empty() {
             queue.push(Queue::new("global".into(),self.change.clone()));
@@ -68,7 +67,7 @@ impl BuildQueueI {
             // TODO
         };
 
-        match tree.find_archive(id) {
+        ctrl.backend().get_archive(id,|a| match a {
             Some(Archive::Physical(ma)) => {
                 if let Some(sd) = ma.source_files() {
                     if let Some(dirorfile) = sd.find_entry(rel_path) {
@@ -96,7 +95,7 @@ impl BuildQueueI {
             }
             None => (),
             _ => todo!()
-        }
+        })
     }
 
     fn enqueue_archive<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
@@ -108,7 +107,6 @@ impl BuildQueueI {
                 todo!()
             }
         };
-        let tree = ctrl.archives().get_tree();
         let mut queue = self.inner.write();
         let q = if queue.is_empty() {
             queue.push(Queue::new("global".into(),self.change.clone()));
@@ -118,7 +116,7 @@ impl BuildQueueI {
             // TODO
         };
 
-        match tree.find_archive(id) {
+       ctrl.backend().get_archive(id,|a| match a {
             Some(Archive::Physical(ma)) => {
                 if let Some(sd) = ma.source_files() {
                     let files = sd.dir_iter().par_split().into_par_iter().filter_map(|fd| {
@@ -135,7 +133,7 @@ impl BuildQueueI {
             }
             None => (),
             _ => todo!()
-        }
+        })
     }
 
     fn enqueue_group<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
@@ -147,7 +145,6 @@ impl BuildQueueI {
                 todo!()
             }
         };
-        let tree = ctrl.archives().get_tree();
         let mut queue = self.inner.write();
         let q = if queue.is_empty() {
             queue.push(Queue::new("global".into(),self.change.clone()));
@@ -156,8 +153,8 @@ impl BuildQueueI {
             queue.last_mut().unwrap()
             // TODO
         };
-
-        let files = tree.archives().par_iter().filter_map(|a|
+        let ars = ctrl.backend().all_archives();
+        let files = ars.par_iter().filter_map(|a|
             if a.id().as_str().starts_with(id.as_str()) {
                 match a {
                     Archive::Physical(ma) => {

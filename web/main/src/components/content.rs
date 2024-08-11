@@ -113,7 +113,7 @@ pub(crate) mod server {
     use leptos::*;
     use leptos_router::ParamsMap;
     use immt_core::content::Term;
-    use immt_core::uris::{MMTUri, Name, NarrativeURI, ModuleURI, DocumentURI, ArchiveURI};
+    use immt_core::uris::{MMTUri, Name, NarrativeURI, ModuleURI, DocumentURI, ArchiveURI, ContentURI};
     use immt_core::narration::{CSS, DocumentElement, Language};
     use immt_core::uris::archives::ArchiveId;
     trait MapLike {
@@ -139,7 +139,7 @@ pub(crate) mod server {
             if d.is_some() {return None}
             if e.is_some() {return None}
             let controller = controller();
-            let a = controller.archives().find(a,|a| a.map(|a| a.uri()))?;
+            let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
             let m = ModuleURI::new(a,p,m, l.unwrap_or(Language::English));
             Some(MMTUri::Content(match c {
                 Some(n) => immt_core::uris::ContentURI::Symbol(immt_core::uris::symbols::SymbolURI::new(m,n)),
@@ -149,7 +149,7 @@ pub(crate) mod server {
             if m.is_some() {return None}
             if c.is_some() {return None}
             let controller = controller();
-            let a = controller.archives().find(a,|a| a.map(|a| a.uri()))?;
+            let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
             let d = DocumentURI::new(a,p,d, l.unwrap_or(Language::English));
             Some(MMTUri::Narrative(match e {
                 Some(n) => NarrativeURI::Decl(immt_core::uris::NarrDeclURI::new(d,n)),
@@ -159,7 +159,7 @@ pub(crate) mod server {
             if e.is_some() {return None}
             if c.is_some() {return None}
             let controller = controller();
-            let a = controller.archives().find(a,|a| a.map(|a| a.uri()))?;
+            let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
             Some(MMTUri::Archive(a))
         }
     }
@@ -169,7 +169,7 @@ pub(crate) mod server {
         use immt_controller::{ControllerTrait,controller};
         use immt_api::backend::archives::Storage;
         let controller = controller();
-        let a = controller.archives().find(a,|a| a.map(|a| a.uri()))?;
+        let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
         let d = DocumentURI::new(a,p,d,l);
         Some(d)
     }
@@ -229,7 +229,7 @@ pub(crate) mod server {
                 Ok(())
             }
         }
-        if let Some((css,s)) = immt_controller::controller().archives().get_html_async(uri).await {
+        if let Some((css,s)) = immt_controller::controller().backend().get_html_async(uri).await {
             let s = format!("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>SHTML</title>\n  <script src=\"/shtml.js\"></script>{}\n</head>\n<body>\n{}\n</body>",
                             CSSWrap(css),s
             );
@@ -239,46 +239,85 @@ pub(crate) mod server {
         }
     }
 
+    fn do_uri(uri:ContentURI) -> String {
+        format!(
+            "<span shtml:term=\"OMID\" shtml:maincomp shtml:head=\"{uri}\">{}</span>",uri.name()
+        )
+    }
+
     pub(super) fn do_doc_elem(e:&DocumentElement,in_structure:bool) -> impl IntoView {
+        use immt_api::controller::Controller;
         use thaw::*;
         match e {
             DocumentElement::SetSectionLevel(_) | DocumentElement::Definiendum{..} => None,
             DocumentElement::Module(m) => {
-                let v = m.children.iter().map(|e| do_doc_elem(e,false)).collect::<Vec<_>>();
+                let mut imports = Vec::new();
+                let v = m.children.iter().filter_map(|e|
+                    if let DocumentElement::UseModule(uri) = e {
+                        imports.push(*uri);
+                        None
+                    } else {
+                        do_doc_elem(e, false)
+                    }
+                ).collect::<Vec<_>>();
+                let name = m.uri.name();
                 Some(view!{
-                    <Card title=format!("Module {}",m.name)>{v}</Card>
+                    <Card title=format!("Module {}",name)>
+                        <CardHeader slot>"Module "<span style="font-family:monospace">{name.to_string()}</span></CardHeader>
+                        <CardHeaderExtra slot><span style="font-weight:normal;">
+                            {if !imports.is_empty() {view!{
+                                "Imports "
+                                <span style="font-family:monospace;">{imports.into_iter().map(|u| view!(<span inner_html=do_uri(u.into())/>", ")).collect::<Vec<_>>()}</span>
+                            }} else {view!(<span/><span/>)}}</span>
+                        </CardHeaderExtra>
+                        {v}
+                    </Card>
                 }.into_view())
             },
             DocumentElement::MathStructure(m) => {
                 let v = m.children.iter().map(|e| do_doc_elem(e,true)).collect::<Vec<_>>();
                 Some(view!{
-                    <Card title=format!("Structure {}",m.name)>{v}</Card>
+                    <Card title=format!("Structure {}",m.uri.name())>{v}</Card>
                 }.into_view())
             },
             DocumentElement::Paragraph(p) => {
+                let ctrl = immt_controller::controller();
+                let b = ctrl.backend();
                 let v = p.children.iter().map(|e| do_doc_elem(e,in_structure)).collect::<Vec<_>>();
                 let fors = p.fors.iter().map(|u|
-                    view!(<pre>{u.to_string()}</pre><br/>)).collect::<Vec<_>>();
+                    view!(<span inner_html=do_uri(*u)/>", ")).collect::<Vec<_>>();
                 let tms = p.terms.iter().map(|(_,u)|
-                    view!(<pre>{do_term(u)}</pre><br/>)).collect::<Vec<_>>();
-                Some(view!{
-                    <Card title=format!("{}",p.kind)><span>{fors}{tms}</span>{v}</Card>
-                }.into_view())
+                    view!(<span>{format!("{u:?} = ")}</span><math><mrow inner_html=u.display(|s| b.get_notations(s)).to_string()/></math><br/>)).collect::<Vec<_>>();
+                Some(view!{<Card title=format!("{}",p.kind)>
+                    <CardHeaderExtra slot><span style="font-weight:normal;">
+                        {if !fors.is_empty() {"Introduces "} else {""}}
+                        <span style="font-family:monospace;">{fors}</span>
+                    </span></CardHeaderExtra>
+                    <span>{tms}</span>
+                    {v}
+                </Card>}.into_view())
             }
             DocumentElement::ConstantDecl(c) if in_structure =>
-                Some(view!{<Card title=format!("Field {}",c.name())><span/></Card>}),
-            DocumentElement::ConstantDecl(c) =>
-                Some(view!{<Card title=format!("Constant {}",c.name())><span/></Card>}),
+                Some(view!{<Card class="immt-small-card" title=format!("Field {}",c.name())><span/></Card>}),
+            DocumentElement::ConstantDecl(c) => {
+                let c = *c;
+                Some(view! {<Card class="immt-small-card">
+                    <CardHeader slot>"Symbol "<span style="font-family:monospace"
+                    inner_html=do_uri(c.into())></span></CardHeader>
+                        ""
+                    </Card>})
+            }
             DocumentElement::TopTerm(t) => {
-                let s = do_term(t);
-                Some(view!{<Card title="Expression">{s}</Card>}.into_view())
+                let ctrl = immt_controller::controller();
+                let b = ctrl.backend();
+                let s = t.display(|s| b.get_notations(s)).to_string();
+                Some(view!{<Card class="immt-small-card" title="Expression">
+                    <CardHeader slot>"Expression "<math><mrow inner_html=s/></math></CardHeader>
+                    ""
+                </Card>}.into_view())
             }
             _ => Some(view!(<div>{format!("TODO: {e:?}")}</div>).into_view())
         }
-    }
-    pub(super) fn do_term(t:&Term) -> impl IntoView {
-
-        view!(<div>"TODO: Term"</div>)
     }
 }
 
@@ -294,7 +333,7 @@ leptos_uri!{DOC
     let uri = if let Some(d) = uri {
         d
     } else {return Err(ServerFnError::WrappedServerError("Invalid URI".to_string())) };
-    immt_controller::controller().archives().get_html_async(uri).await
+    immt_controller::controller().backend().get_html_async(uri).await
         .ok_or_else(|| ServerFnError::WrappedServerError("Document not found!".to_string()))
 }}
 
@@ -324,7 +363,7 @@ fn DocumentOMDoc(uri:immt_core::uris::DocumentURI) -> impl IntoView {
     #[cfg(feature="server")]
     {
         use immt_api::controller::Controller;
-        let res = create_resource(|| (),move |_| immt_controller::controller().archives().get_document_from_uri_async(uri));
+        let res = create_resource(|| (),move |_| immt_controller::controller().backend().get_document_async(uri));
         return view!{<Suspense>{move || {
             match res.get() {
                 Some(Some(d)) => view!{

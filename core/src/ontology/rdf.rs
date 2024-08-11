@@ -1,7 +1,7 @@
 pub mod terms {
     pub use oxrdf::{
         NamedNodeRef, NamedNode, Quad, QuadRef, Triple, TripleRef, Term, TermRef,
-        Subject, SubjectRef,Literal,LiteralRef,GraphNameRef,GraphName
+        Subject, SubjectRef,Literal,LiteralRef,GraphNameRef,GraphName,BlankNode
     };
 }
 
@@ -12,6 +12,9 @@ macro_rules! ulo {
     };
     (($sub:expr) : $tp:ident) => {
         ulo!(@TRIPLE $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned())
+    };
+    (($sub:expr) : ($tp:expr)) => {
+        ulo!(@TRIPLE $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $tp)
     };
     (>($sub:expr) : $tp:ident Q) => {
         ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) : $tp Q)
@@ -31,6 +34,9 @@ macro_rules! ulo {
     (($sub:expr) !($tp:expr) ($obj:expr) IN $graph:expr) => {
         ulo!(@QUAD_IN $sub; $tp.into_owned(); $obj; $graph)
     };
+    (($sub:expr) !($tp:expr) ($obj:expr)) => {
+        ulo!(@TRIPLE $sub; $tp.into_owned(); $obj)
+    };
     
     (>($sub:expr) $tp:ident >($obj:expr) Q) => {
         ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()) Q)
@@ -46,6 +52,18 @@ macro_rules! ulo {
     };
     (($sub:expr) $tp:ident ($obj:expr) IN $graph:expr) => {
         ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj; $graph)
+    };
+    (($sub:expr) $tp:ident >>($obj:expr) IN $graph:expr) => {
+        ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); >>$obj; $graph)
+    };
+    (($sub:expr) $tp:ident >>($obj:expr)) => {
+        ulo!(@TRIPLE $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); >>$obj)
+    };
+    (>>($sub:expr) $tp:ident ($obj:expr) IN $graph:expr) => {
+        ulo!(@QUAD_IN >>$sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj; $graph)
+    };
+    (>>($sub:expr) $tp:ident ($obj:expr)) => {
+        ulo!(@TRIPLE >>$sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
     };
     (>($sub:expr) $tp:ident >($obj:expr)) => {
         ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()))
@@ -71,8 +89,21 @@ macro_rules! ulo {
     };
     
     
-    
-    
+
+    (@TRIPLE >>$sub:expr; $pred:expr; $obj:expr) => {
+        $crate::ontology::rdf::terms::Triple {
+            subject: $sub,
+            predicate: $pred,
+            object: $crate::ontology::rdf::terms::Term::NamedNode($obj)
+        }
+    };
+    (@TRIPLE $sub:expr; $pred:expr; >>$obj:expr) => {
+        $crate::ontology::rdf::terms::Triple {
+            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+            predicate: $pred,
+            object: $obj
+        }
+    };
     (@TRIPLE $sub:expr; $pred:expr; $obj:expr) => {
         $crate::ontology::rdf::terms::Triple {
             subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
@@ -86,6 +117,22 @@ macro_rules! ulo {
             predicate: $pred,
             object: $crate::ontology::rdf::terms::Term::NamedNode($obj),
             graph_name: $crate::ontology::rdf::terms::GraphName::DefaultGraph
+        }
+    };
+    (@QUAD_IN $sub:expr; $pred:expr; >>$obj:expr; $graph:expr) => {
+        $crate::ontology::rdf::terms::Quad {
+            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+            predicate: $pred,
+            object: $obj,
+            graph_name: $crate::ontology::rdf::terms::GraphName::NamedNode($graph)
+        }
+    };
+    (@QUAD_IN >>$sub:expr; $pred:expr; $obj:expr; $graph:expr) => {
+        $crate::ontology::rdf::terms::Quad {
+            subject: $sub,
+            predicate: $pred,
+            object: $crate::ontology::rdf::terms::Term::NamedNode($obj),
+            graph_name: $crate::ontology::rdf::terms::GraphName::NamedNode($graph)
         }
     };
     (@QUAD_IN $sub:expr; $pred:expr; $obj:expr; $graph:expr) => {
@@ -248,9 +295,9 @@ pub mod ontologies {
         ) => {
             pub mod $name {
                 use super::super::terms::*;
-                pub static NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
+                pub const NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
                 $(
-                    pub static $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
+                    pub const $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
                 )*
 
                 pub static QUADS :&[QuadRef;count!($( $($quad)*; )*)] = &[$( $($quad)* ),*];
@@ -262,9 +309,9 @@ pub mod ontologies {
         ) => {
             pub mod $name {
                 use super::super::terms::*;
-                pub static NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
+                pub const NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
                 $(
-                    pub static $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
+                    pub const $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
                 )*
 
                 pub static QUADS :&[QuadRef;count!($($sub;)*)] = &[$(QuadRef{
@@ -321,6 +368,8 @@ pub mod ontologies {
          intermediate proposition within a proof.";
         CLASS PROPOSITION = "proposition" <: PARA @ "A statement of a mathematical object or some relation between some." ;
         CLASS PROBLEM = "problem" <: PARA @ "A logical paragraph posing a problem/question/exercise for the reader.";
+        CLASS SUBPROBLEM = "subproblem" <: PARA @ "A logical paragraph posing a subexercise in some problem/question/exercise for the reader.";
+
 
         // -----------------------------------------------------------------------------
 
@@ -381,16 +430,23 @@ pub mod ontologies {
 
         OBJPROP INTER_STATEMENT = "inter-statement";
         OBJPROP CONSTRUCTS = "constructs" <: INTER_STATEMENT @ "S is a constructor for an inductive type or predicate O";
+
         OBJPROP EXAMPLE_FOR = "example-for" <: INTER_STATEMENT !COUNTER_EXAMPLE_FOR;
         OBJPROP COUNTER_EXAMPLE_FOR = "counter-example-for" <: INTER_STATEMENT !EXAMPLE_FOR;
-
         OBJPROP DEFINES = "defines" <: INTER_STATEMENT (DEFINITION => FUNCTION) @ "A definition defines various objects.";
+
         OBJPROP GENERATED_BY = "generated-by" <: INTER_STATEMENT (FUNCTION => FUNCTION);
         OBJPROP INDUCTIVE_ON = "inductive-on" <: INTER_STATEMENT;
         OBJPROP JUSTIFIES = "justifies" <: INTER_STATEMENT;
         { JUSTIFIES <super::rdfs::DOMAIN> <PROOF>};
         OBJPROP NOTATION_FOR = "notation-for" <: INTER_STATEMENT;
         { NOTATION_FOR <super::rdfs::DOMAIN> <NOTATION>};
+
+        OBJPROP PRECONDITION = "precondition";
+        OBJPROP OBJECTIVE = "objective";
+
+        OBJPROP COGDIM = "cognitive-dimension";
+        OBJPROP POSYMBOL = "po-symbol";
 
         // -----------------------------------------------------------------------------
 

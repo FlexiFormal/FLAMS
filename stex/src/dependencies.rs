@@ -242,9 +242,7 @@ pub(crate) fn get_deps(ctrl:&dyn Controller,task: &BuildTask) {
             match d {
                 STeXDep::ImportModule { archive, module} | STeXDep::UseModule { archive, module} => {
                     let archive = archive.map(|s| ArchiveId::new(s)).unwrap_or(task.archive().id().clone());
-                    if let Some(rel_path) = ctrl.archives().with_tree(|tree|
-                        file_path_from_archive(task.path(),archive,module,tree,yields.as_slice())
-                    ) {
+                    if let Some(rel_path) = file_path_from_archive(task.path(),archive,module,ctrl.backend(),yields.as_slice()) {
                         if archive == task.archive().id() && rel_path.as_ref() == task.rel_path() {
                             continue
                         }
