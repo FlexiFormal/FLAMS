@@ -113,8 +113,8 @@ pub(crate) mod server {
     use leptos::*;
     use leptos_router::ParamsMap;
     use immt_core::content::Term;
-    use immt_core::uris::{MMTUri, Name, NarrativeURI, ModuleURI, DocumentURI, ArchiveURI, ContentURI};
-    use immt_core::narration::{CSS, DocumentElement, Language};
+    use immt_core::uris::{MMTUri, Name, NarrativeURI, ModuleURI, DocumentURI, ArchiveURI, ContentURI, NarrDeclURI};
+    use immt_core::narration::{CSS, Document, DocumentElement, Language};
     use immt_core::uris::archives::ArchiveId;
     trait MapLike {
         fn get(&self, key: &str) -> Option<&str>;
@@ -244,12 +244,42 @@ pub(crate) mod server {
             "<span shtml:term=\"OMID\" shtml:maincomp shtml:head=\"{uri}\">{}</span>",uri.name()
         )
     }
+    fn do_var_uri(uri:NarrDeclURI) -> String {
+        format!(
+            "<span shtml:term=\"OMV\" shtml:varcomp shtml:head=\"{uri}\">{}</span>",uri.name().as_ref().split('/').last().unwrap_or(uri.name().as_ref())
+        )
+    }
+
+    pub(super) fn do_doc(d:Document) -> impl IntoView {
+        use thaw::*;
+        let mut imports = Vec::new();
+        let v = d.elements.iter().filter_map(|e|
+            if let DocumentElement::UseModule(uri) = e {
+                imports.push(*uri);
+                None
+            } else {
+                Some(do_doc_elem(e, false).into_view())
+            }
+        ).collect::<Vec<_>>();
+        view!{
+            <h2>
+                "["{d.uri.archive().id().to_string()}"]"
+                {d.uri.path().map(|p| format!("/{p}/"))}
+                {d.uri.name().to_string()}
+            </h2>
+            <div style="text-align:left;"><Space vertical=true>{
+                if !imports.is_empty() {view!{
+                    "Uses "
+                    <span style="font-family:monospace;">{imports.into_iter().map(|u| view!(<span inner_html=do_uri(u.into())/>", ")).collect::<Vec<_>>()}</span>
+                }} else {view!(<span/><span/>)}}
+            {v}</Space></div>
+        }
+    }
 
     pub(super) fn do_doc_elem(e:&DocumentElement,in_structure:bool) -> impl IntoView {
         use immt_api::controller::Controller;
         use thaw::*;
         match e {
-            DocumentElement::SetSectionLevel(_) | DocumentElement::Definiendum{..} => None,
             DocumentElement::Module(m) => {
                 let mut imports = Vec::new();
                 let v = m.children.iter().filter_map(|e|
@@ -266,7 +296,7 @@ pub(crate) mod server {
                         <CardHeader slot>"Module "<span style="font-family:monospace">{name.to_string()}</span></CardHeader>
                         <CardHeaderExtra slot><span style="font-weight:normal;">
                             {if !imports.is_empty() {view!{
-                                "Imports "
+                                "Uses "
                                 <span style="font-family:monospace;">{imports.into_iter().map(|u| view!(<span inner_html=do_uri(u.into())/>", ")).collect::<Vec<_>>()}</span>
                             }} else {view!(<span/><span/>)}}</span>
                         </CardHeaderExtra>
@@ -306,6 +336,13 @@ pub(crate) mod server {
                     inner_html=do_uri(c.into())></span></CardHeader>
                         ""
                     </Card>})
+            }DocumentElement::VarDef{uri,..} => {
+                let c = *uri;
+                Some(view! {<Card class="immt-small-card">
+                    <CardHeader slot>"Variable "<span style="font-family:monospace"
+                    inner_html=do_var_uri(c)></span></CardHeader>
+                        ""
+                    </Card>})
             }
             DocumentElement::TopTerm(t) => {
                 let ctrl = immt_controller::controller();
@@ -316,6 +353,9 @@ pub(crate) mod server {
                     ""
                 </Card>}.into_view())
             }
+            DocumentElement::UseModule(_) | DocumentElement::VarNotation {..} |
+            DocumentElement::Symref {..} | DocumentElement::Varref {..} |
+            DocumentElement::SetSectionLevel(_) | DocumentElement::Definiendum{..} => None,
             _ => Some(view!(<div>{format!("TODO: {e:?}")}</div>).into_view())
         }
     }
@@ -366,16 +406,7 @@ fn DocumentOMDoc(uri:immt_core::uris::DocumentURI) -> impl IntoView {
         let res = create_resource(|| (),move |_| immt_controller::controller().backend().get_document_async(uri));
         return view!{<Suspense>{move || {
             match res.get() {
-                Some(Some(d)) => view!{
-                    <h2>
-                        "["{uri.archive().id().to_string()}"]"
-                        {uri.path().map(|p| format!("/{p}/"))}
-                        {uri.name().to_string()}
-                    </h2>
-                    <div style="text-align:left;"><Space vertical=true>{
-                        d.elements.iter().map(|e| server::do_doc_elem(e,false)).collect::<Vec<_>>()
-                    }</Space></div>
-                }.into_view(),
+                Some(Some(d)) => server::do_doc(d).into_view(),
                 _ => view!(<span>"Document not found"</span>).into_view(),
             }
         }}</Suspense>}

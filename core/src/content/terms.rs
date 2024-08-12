@@ -179,10 +179,14 @@ impl<'a,I,F> TermDisplay<'a,I,F> where F:(Fn(SymbolURI) -> I)+Copy,I:Iterator<It
                         return r
                     }
                 }
+                println!("Here 1: {s}");
                 f.write_str("<mrow><mtext>TODO: OMA</mtext></mrow>")
             }
             Term::OMA{head,head_term,args}|Term::OMBIND{head,head_term,args}
-            => f.write_str("<mrow><mtext>TODO: OMA</mtext></mrow>"),
+            => {
+                println!("Here 1: {head}");
+                f.write_str("<mrow><mtext>TODO: OMA</mtext></mrow>")
+            },
             Term::Informal {tag,attributes,children,terms} => {
                 f.write_char('<')?;
                 f.write_str(tag)?;

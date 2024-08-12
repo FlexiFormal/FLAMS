@@ -37,7 +37,7 @@ impl BuildStepResult<'_> {
 
     pub fn set_document(&self, mut doc: FullDocument) {
         doc.check(|_| (), |_| ());
-        self.set_content(&doc.modules);
+        self.set_content(&doc.modules,doc.doc.uri);
         self.set_relational(&doc);
         let out = self.path.join("index.nomd");
         doc.write(&out);
@@ -51,17 +51,22 @@ impl BuildStepResult<'_> {
             object: q.object.clone()
         }),&out,doc.doc.uri);
     }
-    fn set_content(&self, mods:&[Module]) {
+    fn set_content(&self, mods:&[Module],doc:DocumentURI) {
         if let Some(path) = self.path.parent() {
-            let path = path.join(".modules");
-            let _ = std::fs::create_dir(&path);
+            let path = if mods.len() == 1 && mods[0].uri.name() == doc.name() {
+                path.join(".modules")
+            } else {
+                path.join(doc.name().as_ref()).join(".modules")
+            };
+            let _ = std::fs::create_dir_all(&path);
             for m in mods {
                 let dir = path.join(m.uri.name().as_ref());
                 let _ = std::fs::create_dir(&dir);
                 let out = dir.join::<&'static str>(m.uri.language().into()).with_extension("comd");
-                if let Ok(mut f) = std::fs::File::create(out) {
+                if let Ok(mut f) = std::fs::File::create(&out) {
                     let _ = bincode::serde::encode_into_std_write(m,&mut f,bincode::config::standard());
                 } else {
+                    println!("{}",out.display());
                     todo!()
                 }
             }

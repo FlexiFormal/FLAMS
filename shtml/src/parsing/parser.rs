@@ -533,7 +533,8 @@ impl<'a> HTMLParser<'a> {
         let iri = uri.to_iri();
         let triples = vec![
             ulo!((iri.clone()) (dc::LANGUAGE) = (uri.language().to_string()) IN iri.clone()),
-            ulo!( (iri.clone()) : DOCUMENT IN iri.clone())
+            ulo!( (iri.clone()) : DOCUMENT IN iri.clone()),
+            ulo!((uri.archive().to_iri()) CONTAINS (iri.clone()) IN iri.clone())
         ];
         HTMLParser {
             backend,

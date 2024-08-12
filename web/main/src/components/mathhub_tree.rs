@@ -287,7 +287,11 @@ fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
     let p = file.relative_path.clone();
     view!{
         <span class=cls on:click=move |_| show.set(true)><Icon icon=icondata_bi::BiFileRegular/>" "{name.clone()}</span>
-        <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right width="70%">{
+        <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right width="70%">
+            <DrawerHeader>
+                <DrawerHeaderTitle></DrawerHeaderTitle>
+            </DrawerHeader>
+        {
             move || if show.get() {
                 view!(<IFrame src=format!("?a={}&rp={}",archive.id(),p) ht="calc(100vh - 110px)".to_string()/>)
             } else {view!(<span/>).into_view()}

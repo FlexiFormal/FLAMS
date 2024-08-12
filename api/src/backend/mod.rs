@@ -100,7 +100,7 @@ impl Backend  {
             if !d.starts_with(name) {continue}
             let rest = &d[name.len()..];
             if !rest.is_empty() && !rest.starts_with('.') { continue }
-            let rest = &rest[1..];
+            let rest = rest.strip_prefix('.').unwrap_or(rest);
             if rest.contains('.') {
                 let lang : &'static str = uri.language().into();
                 if !rest.starts_with(lang) { continue }
@@ -132,7 +132,7 @@ impl Backend  {
             if !d.starts_with(name) {continue}
             let rest = &d[name.len()..];
             if !rest.is_empty() && !rest.starts_with('.') { continue }
-            let rest = &rest[1..];
+            let rest = rest.strip_prefix('.').unwrap_or(rest);
             if rest.contains('.') {
                 let lang : &'static str = uri.language().into();
                 if !rest.starts_with(lang) { continue }
@@ -146,12 +146,7 @@ impl Backend  {
     }
 
     pub async fn get_html_async(&self,uri:DocumentURI) -> Option<(Vec<CSS>,String)> {
-        let p = self.get_archive(uri.archive().id(), |a| match a {
-            Some(Archive::Physical(ma)) => {
-                ma.doc_dir(uri.path(),uri.language(),uri.name()).map(|p| p.join("index.nomd"))
-            }
-            _ => None
-        })?;
+        let p = self.find_file_async(uri).await?;
         if p.exists() {
             FullDocument::get_css_and_body_async(&p).await
         } else { None }

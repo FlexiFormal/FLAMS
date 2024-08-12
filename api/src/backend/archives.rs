@@ -48,6 +48,7 @@ pub struct MathArchive {
 impl MathArchive {
 
     pub fn out_dir(&self) -> PathBuf { self.path().join(".immt") }
+    /*
     pub fn doc_dir(&self,path:Option<Name>,lang:Language,name:Name) -> Option<PathBuf> {
         let mut p = self.out_dir();
         if let Some(n) = path { p = p.join(n.as_ref()) }
@@ -69,6 +70,8 @@ impl MathArchive {
         }
         None
     }
+
+     */
     pub fn source_files(&self) -> Option<&[SourceDirEntry]> { self.source.as_deref() }
 
     pub fn update_sources(&mut self, formats:&[SourceFormat], on_change:&ChangeSender<FileChange>) {
