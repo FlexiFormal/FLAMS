@@ -383,6 +383,8 @@ pub mod ontologies {
             and Coq sections.";
         CLASS STRUCTURE = "structure" <: LOGICAL @ "A semantically meaningful block of declarations that can \
             be instantiated by providing definientia for all (undefined) declarations.";
+        CLASS MORPHISM = "morphism" <: LOGICAL @ "A semantically meaningful block of declarations that map \
+            map declarations in the domain to expressions over the containing module";
         CLASS DECLARATION = "declaration" <: LOGICAL @ "Declarations are named objects. They can also \
             have a type and a definiens.";
         CLASS NOTATION = "notation" <: LOGICAL @ "A way of representing (an application of) a symbol\

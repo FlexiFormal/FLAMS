@@ -1,4 +1,6 @@
 use std::fmt::{Debug, Display, Formatter, Write};
+use std::str::FromStr;
+use lazy_static::lazy_static;
 use crate::content::{ArgType, Notation};
 use crate::uris::{ContentURI, Name, NarrDeclURI};
 use crate::uris::symbols::SymbolURI;
@@ -50,10 +52,15 @@ impl VarNameOrURI {
     }
 }
 
+lazy_static! {
+    pub static ref FIELD_PROJECTION : SymbolURI = SymbolURI::from_str("http://mathhub.info/:sTeX?a=sTeX/meta-inf&m=Metatheory&l=en&c=record field").unwrap();
+    pub static ref OF_TYPE : SymbolURI = SymbolURI::from_str("http://mathhub.info/:sTeX?a=sTeX/meta-inf&m=Metatheory&l=en&c=of type").unwrap();
+}
+
 #[derive(Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Term {
-    OMS(ContentURI),
+    OMID(ContentURI),
     OMA {
         head:VarOrSym,
         head_term:Option<Box<Term>>,
@@ -63,6 +70,11 @@ pub enum Term {
         head:VarOrSym,
         head_term:Option<Box<Term>>,
         args:Vec<(TermOrList,ArgType)>
+    },
+    Field {
+        record:Box<Term>,
+        record_type:Option<SymbolURI>,
+        key:VarOrSym
     },
     OMV(VarNameOrURI),
     OML{name:Name,df:Option<Box<Term>>},
@@ -76,15 +88,14 @@ pub enum Term {
 impl Debug for Term {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::OMS(p) => Debug::fmt(p,f),
+            Self::OMID(p) => Debug::fmt(p, f),
             Self::OMA{head,args,head_term} => {
-                f.write_char('(')?;
                 Debug::fmt(head,f)?;
+                f.write_char('(')?;
                 for (t,a) in args {
                     f.write_char(' ')?;
                     Debug::fmt(t,f)?;
                     f.write_char(' ')?;
-                    Debug::fmt(a,f)?;
                 }
                 f.write_char(')')
             },
@@ -109,6 +120,13 @@ impl Debug for Term {
                 f.write_char('L')?;
                 f.write_char('(')?;
                 f.write_str(name.as_ref())?;
+                f.write_char(')')
+            }
+            Self::Field {record,key,..} => {
+                f.write_char('(')?;
+                Debug::fmt(record, f)?;
+                f.write_char('.')?;
+                Debug::fmt(key, f)?;
                 f.write_char(')')
             }
             Self::Informal {tag,attributes,children,terms} => {
@@ -145,6 +163,38 @@ impl Term {
     }
 }
 
+#[macro_export]
+macro_rules! OMS {
+    ($s:pat) => { $crate::content::Term::OMID(ContentURI::Symbol($s)) };
+}
+#[macro_export]
+macro_rules! OMMOD {
+    ($s:pat) => { $crate::content::Term::OMID($crate::uris::ContentURI::Module($s)) };
+}
+
+
+#[macro_export]
+macro_rules! OMA {
+    (S $s:pat,$i:ident) => {
+        $crate::content::Term::OMA{head:$crate::content::VarOrSym::S($crate::uris::ContentURI::Symbol($s)),args:$i,..}
+    };
+    ($s:pat,$i:ident) => {
+        $crate::content::Term::OMA{head:$s,args:$i,..}|
+        $crate::content::Term::OMA{head_term:$s,args:$i,..}
+    };
+}
+
+#[macro_export]
+macro_rules! OMB {
+    (S $s:pat,$i:ident) => {
+        $crate::content::Term::OMBIND{head:VarOrSym::S(ContentURI::Symbol($s)),args:$i,..}
+    };
+    ($s:pat,$i:ident) => {
+        $crate::content::Term::OMBIND{head:$s,args:$i,..}|
+        $crate::content::Term::OMBIND{head_term:$s,args:$i,..}
+    };
+}
+
 pub struct TermDisplay<'a,I,F> where F:(Fn(SymbolURI) -> I)+Copy,I:Iterator<Item=Notation> {
     term:&'a Term,
     notations:F
@@ -152,15 +202,29 @@ pub struct TermDisplay<'a,I,F> where F:(Fn(SymbolURI) -> I)+Copy,I:Iterator<Item
 impl<'a,I,F> TermDisplay<'a,I,F> where F:(Fn(SymbolURI) -> I)+Copy,I:Iterator<Item=Notation> {
     fn with_prec(term:&Term,notations:&F,f:&mut Formatter<'_>,prec:isize) -> std::fmt::Result {
         match term {
-            Term::OMS(ContentURI::Symbol(s)) => {
+            OMS!(s) => {
                 for n in (notations)(*s) {
                     if let Some(r) = n.apply_op(*s,f) {
                         return r
                     }
                 }
-                f.write_str("<mrow><mtext>TODO: OMS</mtext></mrow>")
+                //println!("Here 1: {s}");
+                write!(f,"<mi shtml:term=\"OMID\" shtml:head=\"{}\" shtml:maincomp>{}</mi>",s,s.name().as_ref())
             },
-            Term::OMS(_) =>
+            Term::Field{record,key:VarOrSym::S(ContentURI::Symbol(s)),..} => {
+                for n in (notations)(*s) {
+                    if let Some(r) = n.apply_op_this(&*record,*s,f,|t,f,p| Self::with_prec(t,notations,f,p)) {
+                        return r
+                    }
+                }
+                println!("Here: {record:?}\n  @ {s}");
+                f.write_str("<mrow><mtext>TODO: Field</mtext></mrow>")
+            },
+            Term::Field{record,key,..} => {
+                println!("Here: {record:?}\n  = {key}");
+                f.write_str("<mrow><mtext>TODO: Field</mtext></mrow>")
+            },
+            Term::OMID(_) =>
                 f.write_str("<mrow><mtext>TODO: OMMOD</mtext></mrow>"),
             Term::OMV(name) => {
                 f.write_str("<mi>")?;
@@ -172,19 +236,18 @@ impl<'a,I,F> TermDisplay<'a,I,F> where F:(Fn(SymbolURI) -> I)+Copy,I:Iterator<It
                 f.write_str(name.as_ref())?;
                 f.write_str("</mtext>")
             }
-            Term::OMA{head:VarOrSym::S(ContentURI::Symbol(s)),head_term:None,args}|Term::OMBIND{head:VarOrSym::S(ContentURI::Symbol(s)),head_term:None,args}
-            => {
+            OMA!(S s,args)|OMB!(S s,args) => {
                 for n in (notations)(*s) {
-                    if let Some(r) = n.apply(*s,f,args,prec,|t,f,p| Self::with_prec(t,notations,f,p)) {
+                    if let Some(r) = n.apply(None,"OMA",*s,f,args,prec,|t,f,p| Self::with_prec(t,notations,f,p)) {
                         return r
                     }
                 }
-                println!("Here 1: {s}");
+                //println!("Here 1: {s}");
                 f.write_str("<mrow><mtext>TODO: OMA</mtext></mrow>")
             }
             Term::OMA{head,head_term,args}|Term::OMBIND{head,head_term,args}
             => {
-                println!("Here 1: {head}");
+                //println!("Here 1: {head}");
                 f.write_str("<mrow><mtext>TODO: OMA</mtext></mrow>")
             },
             Term::Informal {tag,attributes,children,terms} => {

@@ -306,8 +306,20 @@ pub(crate) mod server {
             },
             DocumentElement::MathStructure(m) => {
                 let v = m.children.iter().map(|e| do_doc_elem(e,true)).collect::<Vec<_>>();
+                let name = m.uri.name().as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(m.uri.name().as_ref()).to_string();
                 Some(view!{
-                    <Card title=format!("Structure {}",m.uri.name())>{v}</Card>
+                    <Card title=format!("Structure {name}")>{v}</Card>
+                }.into_view())
+            },
+            DocumentElement::Morphism(m) => {
+                let v = m.children.iter().map(|e| do_doc_elem(e,true)).collect::<Vec<_>>();
+                let name = m.uri.name().as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(m.uri.name().as_ref()).to_string();
+                let domain = m.domain;
+                Some(view!{
+                    <Card title=format!("Morphism {name}")>
+                        <CardHeader slot>"Morphism "{name}": "<span style="font-family:monospace"
+                        inner_html=do_uri(domain.into())></span></CardHeader>{v}
+                    </Card>
                 }.into_view())
             },
             DocumentElement::Paragraph(p) => {
@@ -317,7 +329,7 @@ pub(crate) mod server {
                 let fors = p.fors.iter().map(|u|
                     view!(<span inner_html=do_uri(*u)/>", ")).collect::<Vec<_>>();
                 let tms = p.terms.iter().map(|(_,u)|
-                    view!(<span>{format!("{u:?} = ")}</span><math><mrow inner_html=u.display(|s| b.get_notations(s)).to_string()/></math><br/>)).collect::<Vec<_>>();
+                    view!(<math><mrow inner_html=u.display(|s| b.get_notations(s)).to_string()/></math><br/>)).collect::<Vec<_>>();
                 Some(view!{<Card title=format!("{}",p.kind)>
                     <CardHeaderExtra slot><span style="font-weight:normal;">
                         {if !fors.is_empty() {"Introduces "} else {""}}
@@ -389,7 +401,7 @@ pub(crate) fn SomeUri() -> impl IntoView {
             let uri = params.with(|p| from_params(p));
             uri.map(|uri| match uri {
                 MMTUri::Narrative(NarrativeURI::Doc(d)) => view!(<Document uri=d/>),
-                _ => todo!()
+                _ => todo!("{uri}")
             })
         }
     }

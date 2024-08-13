@@ -5,9 +5,9 @@ use std::str::FromStr;
 use immt_api::backend::archives::{Archive, Storage};
 use immt_api::backend::Backend;
 use immt_api::backend::manager::ArchiveManager;
-use immt_api::core::content::{Arg, ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Notation, NotationRef, Term, TermOrList, VarNameOrURI, VarOrSym};
-use immt_api::core::narration::{CognitiveDimension, DocumentElement, DocumentMathStructure, DocumentModule, DocumentReference, Language, LogicalParagraph, NarrativeRef, Problem, Section, SectionLevel, StatementKind, Title};
-use immt_api::core::ontology::rdf::ontologies::dc;
+use immt_api::core::content::{Arg, ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Morphism, Notation, NotationRef, Term, TermOrList, VarNameOrURI, VarOrSym};
+use immt_api::core::narration::{CognitiveDimension, DocumentElement, DocumentMathStructure, DocumentModule, DocumentMorphism, DocumentReference, Language, LogicalParagraph, NarrativeRef, Problem, Section, SectionLevel, StatementKind, Title};
+use immt_api::core::ontology::rdf::ontologies::{dc, rdfs};
 use immt_api::core::ontology::rdf::terms::{GraphName, NamedNode, Quad, Triple};
 use immt_api::core::ulo;
 use immt_api::core::uris::archives::{ArchiveId, ArchiveURI};
@@ -439,8 +439,11 @@ tags!{v,node,parser,attrs,i,rest,
         let uri = if let Some(uri) = get_mod_uri(v,parser.backend,parser.uri().language()) {uri} else {
             todo!("HERE: {v}");
         };
+        //println!("Here structure: {uri}");
         let macroname = get!("shtml:macroname",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
-        parser.narratives.push(Narr::new((parser.uri() / uri.name()).into()));
+        let name = uri.name();
+        let name = Name::new(name.as_ref().rsplit_once('/').map(|(_,b)| b).unwrap_or(name.as_ref()));
+        parser.narratives.push(Narr::new((parser.uri() / name).into()));
         parser.contents.push(Content::new(uri));
         add!(-OpenElem::MathStructure {
             macroname
@@ -471,6 +474,49 @@ tags!{v,node,parser,attrs,i,rest,
         true
     };
 
+    Morphism(domain:ModuleURI,total:bool) = "shtml:feature-morphism": 250 {
+        let uri = if let Some(uri) = get_mod_uri(v,parser.backend,parser.uri().language()) {uri} else {
+            todo!("HERE: {v}");
+        };
+        let domain = get!("shtml:domain",s => if let Some(d) = get_mod_uri(s,parser.backend,parser.uri().language()) {d} else {
+            todo!("HERE: {s}");
+        }).unwrap_or_else(|| todo!("HERE: Domain missing"));
+        let total = get!("shtml:total",s => s.eq_ignore_ascii_case("true")).unwrap_or(false);
+        let name = uri.name();
+        let name = Name::new(name.as_ref().rsplit_once('/').map(|(_,b)| b).unwrap_or(name.as_ref()));
+        parser.narratives.push(Narr::new((parser.uri() / name).into()));
+        parser.contents.push(Content::new(uri));
+        add!(-OpenElem::Morphism{domain,total})
+    } => {
+        let Some(Narr {children:narrative_children,uri:NarrativeURI::Decl(narr_uri),..}) = parser.narratives.pop() else {unreachable!()};
+        let Some(Content {children:content_children,uri:module_uri,iri}) = parser.contents.pop() else {unreachable!()};
+        parser.add_triple(
+            ulo!((parser.iri()) CONTAINS (iri.clone()))
+        );
+        parser.add_triple(ulo!((iri.clone()) : MORPHISM));
+        parser.add_triple(ulo!((iri) !(rdfs::DOMAIN) (domain.to_iri()) ));
+        let dm = DocumentElement::Morphism(DocumentMorphism {
+            uri:narr_uri,content_uri:module_uri,
+            range: node.data.borrow().range,
+            children: narrative_children,total,domain
+        });
+        parser.add_doc(dm);
+        let c = Morphism {
+            uri:module_uri, domain, total, elements: content_children
+        };
+        parser.add_content(ContentElement::Morphism(c));
+        true
+    };
+    MorphismDomain = "shtml:domain": 250 {+} => {!};
+    MorphismTotal = "shtml:total": 250 {+} => {!};
+    Rename = "shtml:rename": 250 {+} => {!};
+    RenameTo = "shtml:to": 250 {+} => {!};
+    AssignMorphismFrom = "shtml:assignmorphismfrom": 250 {+} => {!};
+    AssignMorphismTo = "shtml:assignmorphismto": 250 {+} => {!};
+    Assign(tm:Option<Term>) = "shtml:assign": 250 {
+        add!(- OpenElem::Assign {tm:None})
+    } => {!};
+
     Section(
         level:SectionLevel,
         title:Option<Title>
@@ -486,6 +532,9 @@ tags!{v,node,parser,attrs,i,rest,
         }
     } => {
         let Some(Narr {children,uri:NarrativeURI::Decl(uri),iri,..}) = parser.narratives.pop() else {unreachable!()};
+        parser.add_triple(
+            ulo!((parser.iri()) CONTAINS (iri.clone()))
+        );
         parser.add_triple(ulo!((iri) : SECTION));
         parser.add_doc(DocumentElement::Section(Section {
             level,title,children,range:node.data.borrow().range,uri
@@ -682,6 +731,7 @@ tags!{v,node,parser,attrs,i,rest,
         let uri = if let Some(uri) = get_sym_uri(v,parser.backend,parser.uri().language()) {uri} else {
             todo!();
         };
+        //println!("Here symbol: {uri}");
         let role = get!("shtml:role",s => s.split(',').map(|s| s.trim().to_string()).collect());
         let assoctype = get!("shtml:assoctype",s => s.trim().parse().ok()).flatten();
         let arity = get!("shtml:args",s =>
@@ -775,9 +825,12 @@ tags!{v,node,parser,attrs,i,rest,
             r
         });
         add!(- match symbol {
-            Ok(symbol) => OpenElem::Notation {
-                symbol, uri:parser.content_uri() & id, precedence:prec.unwrap_or(0), argprecs,comp:None,op:None
-            },
+            Ok(symbol) => {
+                //println!("Here notation: {symbol}");
+                OpenElem::Notation {
+                    symbol, uri:parser.content_uri() & id, precedence:prec.unwrap_or(0), argprecs,comp:None,op:None
+                }
+            }
             Err(name) => {
                 let name = parser.resolve_variable(name);
                 OpenElem::VarNotation {
@@ -1003,7 +1056,7 @@ tags!{v,node,parser,attrs,i,rest,
                 (TMK::OML,VarOrSym::V(VarNameOrURI::Name(name))) => OpenElem::Term{tm:OpenTerm::OML {name,df:None}},
                 (TMK::OMA,head) => OpenElem::Term{tm:OpenTerm::OMA {head,notation,head_term:None,args:ArrayVec::new()}},
                 (TMK::OMB,head) => OpenElem::Term{tm:OpenTerm::OMBIND {head,notation,head_term:None,args:ArrayVec::new()}},
-                (TMK::Complex,_) => OpenElem::Term{tm:OpenTerm::Complex(None)},
+                (TMK::Complex,head) => OpenElem::Term{tm:OpenTerm::Complex(head,None)},
                 (t,h) => {
                     println!("TODO: Term is fishy: {t:?} {h} ({})",parser.uri());
                     OpenElem::Term{tm:OpenTerm::OMV{name:VarNameOrURI::Name(Name::new("TODO")),notation:None}}
@@ -1094,8 +1147,8 @@ tags!{v,node,parser,attrs,i,rest,
         let t = node.as_term(Some(rest),parser);
         iterate!(node(t:Term=t,parser:&HTMLParser=parser) -> rest,
             e => {
-                if let OpenElem::Term {tm:OpenTerm::Complex(n)|OpenTerm::OMA{head_term:n,..}|OpenTerm::OMBIND {head_term:n,..}} |
-                    OpenElem::TopLevelTerm(OpenTerm::Complex(n)|OpenTerm::OMA{head_term:n,..}|OpenTerm::OMBIND {head_term:n,..}) = e {
+                if let OpenElem::Term {tm:OpenTerm::Complex(_,n)|OpenTerm::OMA{head_term:n,..}|OpenTerm::OMBIND {head_term:n,..}} |
+                    OpenElem::TopLevelTerm(OpenTerm::Complex(_,n)|OpenTerm::OMA{head_term:n,..}|OpenTerm::OMBIND {head_term:n,..}) = e {
                     *n=Some(t);return true
                 }
             };
@@ -1229,16 +1282,6 @@ tags!{v,node,parser,attrs,i,rest,
     FillinsolCaseVerdict = "shtml:fillin-case-verdict": 250 {+} => {!};
     FillinsolValue = "shtml:fillin-value": 250 {+} => {!};
     FillinsolVerdict = "shtml:fillin-verdict": 250 {+} => {!};
-    Morphism = "shtml:feature-morphism": 250 {+} => {!};
-    MorphismDomain = "shtml:domain": 250 {+} => {!};
-    MorphismTotal = "shtml:total": 250 {+} => {!};
-    Rename = "shtml:rename": 250 {+} => {!};
-    RenameTo = "shtml:to": 250 {+} => {!};
-    AssignMorphismFrom = "shtml:assignmorphismfrom": 250 {+} => {!};
-    AssignMorphismTo = "shtml:assignmorphismto": 250 {+} => {!};
-    Assign(tm:Option<Term>) = "shtml:assign": 250 {
-        add!(- OpenElem::Assign {tm:None})
-    } => {!};
     IfInputref = "shtml:ifinputref": 250 {+} => {!};
     // --- TODO -------------
 
@@ -1319,7 +1362,9 @@ tags!{v,node,parser,attrs,i,rest,
             attrs.get_mut(i).unwrap().value = "".into()
         }
         i += 1;
-    } => {!};
+    } => {
+        node.data.borrow_mut().elem.push(OpenElem::Maincomp);true
+    };
     ProofMethod = "shtml:proofmethod": 254 {+} => {!};
     ProofSketch = "shtml:proofsketch": 254 {+} => {!};
     ProofTerm = "shtml:proofterm": 254 {+} => {!};
@@ -1362,7 +1407,7 @@ const META: &str = "http://mathhub.info/sTeX/meta";
 const URTHEORIES: &str = "http://cds.omdoc.org/urtheories";
 
 lazy_static::lazy_static! {
-    static ref META_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked(MATHHUB),ArchiveId::new("sTeX/meta-inf"));
+    static ref META_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://mathhub.info/:sTeX"),ArchiveId::new("sTeX/meta-inf"));
     static ref UR_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://cds.omdoc.org"),ArchiveId::new("MMT/urtheories"));
 
 }
@@ -1428,7 +1473,8 @@ fn get_doc_uri(s: &str,archives:&Backend) -> Option<DocumentURI> {
 }
 
 fn get_mod_uri(s: &str,archives:&Backend,lang:Language) -> Option<ModuleURI> {
-    let (mut p,m) = s.rsplit_once('?')?;
+    let (mut p,mut m) = s.rsplit_once('?')?;
+    m = m.strip_suffix("-module").unwrap_or(m);
     if p.bytes().last() == Some(b'/') {
         p = &p[..p.len()-1];
     }

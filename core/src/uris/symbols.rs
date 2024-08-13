@@ -56,6 +56,8 @@ impl SymbolURI {
             .replace(' ',"%20")
             .replace('\\',"%5C")
             .replace('^',"%5E")
+            .replace('[',"%5B")
+            .replace(']',"%5D")
         ).unwrap()
     }
     #[inline]

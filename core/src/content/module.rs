@@ -7,6 +7,39 @@ use crate::uris::Name;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ModuleLike {
+    Module(Module),
+    Structure(MathStructure)
+}
+impl ModuleLike {
+    pub fn uri(&self) -> &ModuleURI {
+        match self {
+            ModuleLike::Module(m) => &m.uri,
+            ModuleLike::Structure(m) => &m.uri
+        }
+    }
+    pub fn elements(&self) -> &[ContentElement] {
+        match self {
+            ModuleLike::Module(m) => &m.elements,
+            ModuleLike::Structure(m) => &m.elements
+        }
+    }
+    pub fn take_elements(self) -> Vec<ContentElement> {
+        match self {
+            ModuleLike::Module(m) => m.elements,
+            ModuleLike::Structure(m) => m.elements
+        }
+    }
+    pub fn get(&self,name:Name) -> Option<&ContentElement> {
+        match self {
+            ModuleLike::Module(m) => m.get(name),
+            ModuleLike::Structure(m) => m.get(name)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Module {
     pub uri:ModuleURI,
     pub meta:Option<ModuleURI>,
@@ -20,6 +53,18 @@ impl Module {
         let rest = &name[1..];
         for e in elems.iter() { match e {
             ContentElement::NestedModule(m) => {
+                let name = m.uri.name();
+                let mut n = name.as_ref();
+                if let Some((_,b)) = n.rsplit_once('/') {
+                    n = b
+                };
+                if n == first {
+                    return if rest.is_empty() { Some(e) } else {
+                        Module::get_inner(rest, &m.elements)
+                    }
+                }
+            }
+            ContentElement::Morphism(m) => {
                 let name = m.uri.name();
                 let mut n = name.as_ref();
                 if let Some((_,b)) = n.rsplit_once('/') {
@@ -62,6 +107,7 @@ impl Module {
         let name = name.split('/').collect::<Vec<_>>();
         Module::get_inner(&name,&self.elements)
     }
+    /*
     pub fn triples(&self,in_doc:DocumentURI) -> impl Iterator<Item=Quad> + '_ + Clone {
         TripleIterator{
             current: None,
@@ -73,8 +119,10 @@ impl Module {
             doc_iri: in_doc.to_iri()
         }
     }
-}
 
+     */
+}
+/*
 #[derive(Clone)]
 struct Stack<'a> {
     iter: std::slice::Iter<'a,ContentElement>,
@@ -125,6 +173,18 @@ impl<'a> Iterator for TripleIterator<'a> {
                                 ulo!((next_iri.clone()) (dc::LANGUAGE) = (m.uri.language().to_string()) IN self.doc_iri.clone())
                             );
                             let ret = ulo!( (next_iri.clone()) : THEORY IN self.doc_iri.clone());
+                            if !m.elements.is_empty() {
+                                next!(m.elements.iter(),next_iri,next_uri);
+                            }
+                            return Some(ret)
+                        }
+                        ContentElement::Morphism(m) => {
+                            let next_uri = m.uri;
+                            let next_iri = next_uri.to_iri();
+                            self.buf.push(
+                                ulo!((next_iri.clone()) (dc::LANGUAGE) = (m.uri.language().to_string()) IN self.doc_iri.clone())
+                            );
+                            let ret = ulo!( (next_iri.clone()) : MORPHISM IN self.doc_iri.clone());
                             if !m.elements.is_empty() {
                                 next!(m.elements.iter(),next_iri,next_uri);
                             }
@@ -186,12 +246,86 @@ impl<'a> Iterator for TripleIterator<'a> {
     }
 }
 
+ */
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MathStructure {
     pub uri:ModuleURI,
     pub elements: Vec<ContentElement>,
     pub macroname:Option<String>
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Morphism {
+    pub uri:ModuleURI,
+    pub domain:ModuleURI,
+    pub total:bool,
+    pub elements: Vec<ContentElement>,
+}
+
+impl MathStructure {
+    fn get_inner<'a>(name:&[&str],elems:&'a [ContentElement]) -> Option<&'a ContentElement> {
+        if name.is_empty() { return None }
+        let first = name[0];
+        let rest = &name[1..];
+        for e in elems.iter() { match e {
+            ContentElement::NestedModule(m) => {
+                let name = m.uri.name();
+                let mut n = name.as_ref();
+                if let Some((_,b)) = n.rsplit_once('/') {
+                    n = b
+                };
+                if n == first {
+                    return if rest.is_empty() { Some(e) } else {
+                        Module::get_inner(rest, &m.elements)
+                    }
+                }
+            }
+            ContentElement::Morphism(m) => {
+                let name = m.uri.name();
+                let mut n = name.as_ref();
+                if let Some((_,b)) = n.rsplit_once('/') {
+                    n = b
+                };
+                if n == first {
+                    return if rest.is_empty() { Some(e) } else {
+                        Module::get_inner(rest, &m.elements)
+                    }
+                }
+            }
+            ContentElement::Import(_) => (),
+            ContentElement::Constant(c) => {
+                if c.uri.name().as_ref() == first {
+                    return if rest.is_empty() { Some(e) } else { None }
+                }
+            }
+            ContentElement::Notation(n) => {
+                if n.uri.name().as_ref() == first {
+                    return if rest.is_empty() { Some(e) } else { None }
+                }
+            }
+            ContentElement::MathStructure(m) => {
+                let name = m.uri.name();
+                let mut n = name.as_ref();
+                if let Some((_,b)) = n.rsplit_once('/') {
+                    n = b
+                };
+                if n == first {
+                    return if rest.is_empty() { Some(e) } else {
+                        Module::get_inner(rest, &m.elements)
+                    }
+                }
+            }
+        }}
+        None
+    }
+    pub fn get(&self,name:Name) -> Option<&ContentElement> {
+        let name = name.as_ref();
+        let name = name.split('/').collect::<Vec<_>>();
+        Module::get_inner(&name,&self.elements)
+    }
 }
 
 
@@ -202,5 +336,6 @@ pub enum ContentElement {
     Import(ModuleURI),
     Constant(super::constants::Constant),
     Notation(super::constants::NotationRef),
-    MathStructure(MathStructure)
+    MathStructure(MathStructure),
+    Morphism(Morphism)
 }

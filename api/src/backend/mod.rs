@@ -1,7 +1,7 @@
 use std::io::BufReader;
 use std::ops::Deref;
 use std::path::PathBuf;
-use immt_core::content::{ContentElement, Module, Notation};
+use immt_core::content::{ContentElement, Module, ModuleLike, Notation};
 use immt_core::narration::{CSS, Document, FullDocument, NarrativeRef};
 use immt_core::ontology::rdf::terms::{NamedNodeRef, Quad};
 use immt_core::uris::{ArchiveId, DocumentURI, ModuleURI, SymbolURI};
@@ -162,18 +162,36 @@ impl Backend  {
         self.find_file(uri).map(|p| FullDocument::get_doc(&p)).flatten()
     }
 
-    pub fn get_module(&self,uri:ModuleURI) -> Option<Module> {
+    pub fn get_module(&self,uri:ModuleURI) -> Option<ModuleLike> {
+        let name = uri.name();
+        let mut names = name.as_ref().split('/').rev().collect::<Vec<_>>();
+        let first = names.pop()?;
         let p = self.get_archive(uri.archive().id(), |a| match a {
             Some(Archive::Physical(ma)) => Some(match uri.path() {
                 None => ma.out_dir(),
                 Some(p) => ma.out_dir().join(p.as_ref())
             }),
             _ => None
-        })?.join(".modules").join(uri.name().as_ref()).join::<&'static str>(uri.language().into()).with_extension("comd");
+        })?.join(".modules").join(first).join::<&'static str>(uri.language().into()).with_extension("comd");
         if p.exists() {
-            bincode::serde::decode_from_std_read(&mut BufReader::new(std::fs::File::open(p).ok()?),
+            let top: Module = bincode::serde::decode_from_std_read(&mut BufReader::new(std::fs::File::open(p).ok()?),
                                                  bincode::config::standard()
-            ).ok()
+            ).ok()?;
+            if first.len() == 1 {
+                return Some(ModuleLike::Module(top))
+            } else {
+                let mut ret = ModuleLike::Module(top);
+                for n in names.into_iter().rev() {
+                    ret = ret.take_elements().into_iter().find_map(|e| {
+                        match e {
+                            ContentElement::NestedModule(m) if m.uri.name().as_ref().split('/').last() == Some(n) => Some(ModuleLike::Module(m)),
+                            ContentElement::MathStructure(s) if s.uri.name().as_ref().split('/').last() == Some(n) => Some(ModuleLike::Structure(s)),
+                            _ => None
+                        }
+                    })?;
+                }
+                Some(ret)
+            }
         } else { None }
 
     }

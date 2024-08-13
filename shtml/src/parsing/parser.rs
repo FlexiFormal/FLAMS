@@ -150,6 +150,13 @@ impl NodeWithSource {
                         ret.push(NotationComponent::Arg(arg,mode));
                         return (arg.index(),mode)
                     }
+                    OpenElem::Maincomp => {
+                        if !currstr.is_empty() {
+                            ret.push(NotationComponent::S(std::mem::take(currstr)));
+                        }
+                        ret.push(NotationComponent::MainComp(node.node.to_string()));
+                        return (index,tp)
+                    }
                     OpenElem::ArgSep => {
                         if !currstr.is_empty() {
                             ret.push(NotationComponent::S(std::mem::take(currstr)));
@@ -336,7 +343,7 @@ impl NodeWithSource {
         if let Some(rest) = rest {for (i,e) in rest.iter().enumerate() {
             //println!("  - {e:?}");
             match e {
-                OpenElem::Term{tm:OpenTerm::Complex(None)} => (),
+                OpenElem::Term{tm:OpenTerm::Complex(_,None)} => (),
                 OpenElem::Term{..} => {
                     if let OpenElem::Term{tm} = rest.remove(i) {
                         return tm.close(parser)
@@ -348,7 +355,7 @@ impl NodeWithSource {
         for (i,e) in data.elem.iter().enumerate() {
             //println!("  - {e:?}");
             match e {
-                OpenElem::Term{tm:OpenTerm::Complex(None)} => (),
+                OpenElem::Term{tm:OpenTerm::Complex(_,None)} => (),
                 OpenElem::Term{..} => {
                     if let OpenElem::Term{tm} = data.elem.remove(i) {
                         return tm.close(parser)

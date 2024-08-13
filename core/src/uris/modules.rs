@@ -88,7 +88,13 @@ impl ModuleURI {
     #[inline]
     pub fn name(&self) -> Name { self.name }
     pub fn to_iri(&self) -> NamedNode {
-        NamedNode::new(self.to_string().replace(' ',"%20")).unwrap()
+        NamedNode::new(self.to_string()
+            .replace(' ',"%20")
+            .replace('\\',"%5C")
+            .replace('^',"%5E")
+            .replace('[',"%5B")
+            .replace(']',"%5D")
+        ).unwrap()
     }
     #[inline]
     pub fn language(&self) -> Language { self.language }

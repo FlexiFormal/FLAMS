@@ -136,24 +136,18 @@ pub struct Notation {
     pub op:Option<(String,u8,bool)>
 }
 impl Notation {
-    fn first_str(&self,idx:u8,sym:SymbolURI,s:&str,f:&mut std::fmt::Formatter) -> std::fmt::Result {
+    fn first_str(&self,tmtp:&'static str,idx:u8,sym:SymbolURI,s:&str,f:&mut std::fmt::Formatter) -> std::fmt::Result {
         let start = &s[0..idx as usize];
         let end = &s[idx as usize..];
-        f.write_str(start)?;
-        f.write_str(" shtml:term=\"OMID\" shtml:head=\"")?;
-        std::fmt::Display::fmt(&sym,f)?;
-        f.write_str("\" shtml:notationid=\"")?;
-        f.write_str(self.id.as_ref())?;
-        f.write_char('\"')?;
-        f.write_str(end)
+        write!(f,"{start} shtml:term=\"{tmtp}\" shtml:head=\"{sym}\" shtml:notationid=\"{}\"{end}",self.id.as_ref())
     }
-    #[inline]
+
     pub fn apply_op(&self,sym:SymbolURI,f:&mut std::fmt::Formatter<'_>) -> Option<std::fmt::Result> {
         if let Some((op,idx,is_text)) = &self.op {
             if *is_text {
                 let _ = f.write_str("<mtext>");
             }
-            let r = self.first_str(*idx,sym,op,f);
+            let r = self.first_str("OMID",*idx,sym,op,f);
             if *is_text {
                 let _ = f.write_str("</mtext>");
             }
@@ -165,7 +159,7 @@ impl Notation {
                     if self.is_text {
                         let _ = f.write_str("<mtext>");
                     }
-                    let r = self.first_str(self.attribute_index,sym,s,f);
+                    let r = self.first_str("OMID",self.attribute_index,sym,s,f);
                     if self.is_text {
                         let _ = f.write_str("</mtext>");
                     }
@@ -177,11 +171,29 @@ impl Notation {
         }
         None
     }
-    fn do_comp<'f>(&self,e:&NotationComponent,f:&mut std::fmt::Formatter<'f>,args:&[(TermOrList,ArgType)],cont:impl (Fn(&Term,&mut std::fmt::Formatter<'f>,isize) -> std::fmt::Result) + Copy) -> std::fmt::Result {
+    pub fn apply_op_this<'f>(&self,this:&Term,sym:SymbolURI,f:&mut std::fmt::Formatter<'f>,cont:impl (Fn(&Term,&mut std::fmt::Formatter<'f>,isize) -> std::fmt::Result) + Copy) -> Option<std::fmt::Result> {
+        //println!("Trying {self:?}");
+        let _ = write!(f,"<msub><mrow>");
+        self.apply_op(sym,f).map(|r| {
+            f.write_str("</mrow>")?;
+            cont(this,f,0)?;
+            f.write_str("</msub>")?;
+            r
+        })
+    }
+    fn do_comp<'f>(&self,this:Option<&Term>,e:&NotationComponent,f:&mut std::fmt::Formatter<'f>,args:&[(TermOrList,ArgType)],cont:impl (Fn(&Term,&mut std::fmt::Formatter<'f>,isize) -> std::fmt::Result) + Copy) -> std::fmt::Result {
         match e {
             NotationComponent::S(s) => {
                 f.write_str(s)
             },
+            NotationComponent::MainComp(s) => match this {
+                None => f.write_str(s),
+                Some(t) => {
+                    write!(f,"<msub><mrow>{s}</mrow>")?;
+                    cont(t,f,0)?;
+                    f.write_str("</msub>")
+                }
+            }
             NotationComponent::Arg(a,ArgType::Normal|ArgType::Binding) => {
                 if let Some((TermOrList::Term(t),ArgType::Normal)) = args.get(a.index() as usize - 1) {
                     let np = self.argprecs.get(a.index() as usize).copied().unwrap_or(0);
@@ -220,7 +232,7 @@ impl Notation {
                             if let NotationComponent::Arg(i,_) = e {
                                 if i.index() == *index {continue}
                             }
-                            self.do_comp(e, f, args, cont)?;
+                            self.do_comp(this,e, f, args, cont)?;
                         }
                         cont(t,f,np)?
                     }
@@ -241,17 +253,17 @@ impl Notation {
         }
     }
     #[inline]
-    pub fn apply<'f>(&self,sym:SymbolURI,f:&mut std::fmt::Formatter<'f>,args:&[(TermOrList,ArgType)],prec:isize,cont:impl Fn(&Term,&mut std::fmt::Formatter<'f>,isize) -> std::fmt::Result) -> Option<std::fmt::Result> {
+    pub fn apply<'f>(&self,this:Option<&Term>,tpstr:&'static str,sym:SymbolURI,f:&mut std::fmt::Formatter<'f>,args:&[(TermOrList,ArgType)],prec:isize,cont:impl Fn(&Term,&mut std::fmt::Formatter<'f>,isize) -> std::fmt::Result) -> Option<std::fmt::Result> {
         //println!("Trying {sym}({args:?})\n  = {self:?}");
         let mut comps = self.nt.iter();
         if let Some(NotationComponent::S(s)) = comps.next() {
-            self.first_str(self.attribute_index,sym,s,f).ok()?;
+            self.first_str(tpstr,self.attribute_index,sym,s,f).ok()?;
         } else {
             println!("wut");
             return None
         }
         for e in comps {
-            self.do_comp(e,f,args,&cont).ok()?;
+            self.do_comp(this,e,f,args,&cont).ok()?;
         }
         //println!("Success!");
         Some(Ok(()))
@@ -271,5 +283,6 @@ pub enum NotationComponent {
     ArgMap {
         index:u8,
         segments:Vec<NotationComponent>,
-    }
+    },
+    MainComp(String)
 }

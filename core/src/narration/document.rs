@@ -28,6 +28,7 @@ pub struct Document {
     pub elements: Vec<DocumentElement>,
 }
 impl Document {
+    /*
     pub fn triples(&self) -> impl Iterator<Item=Quad> + Clone + '_ {
         TripleIterator {
             current: None,
@@ -40,8 +41,10 @@ impl Document {
             curr_iri: self.uri.to_iri()
         }
     }
-}
 
+     */
+}
+/*
 #[derive(Clone)]
 struct Stack<'a> {
     iter: std::slice::Iter<'a,DocumentElement>,
@@ -258,6 +261,8 @@ impl<'a> Iterator for TripleIterator<'a> {
     }
 }
 
+ */
+
 impl NestedDisplay for Document {
     fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
         use std::fmt::Write;
@@ -284,6 +289,7 @@ pub enum DocumentElement {
     SetSectionLevel(SectionLevel),
     Section(Section),
     Module(DocumentModule),
+    Morphism(DocumentMorphism),
     MathStructure(DocumentMathStructure),
     InputRef(DocumentReference),
     ConstantDecl(SymbolURI),
@@ -334,6 +340,7 @@ impl NestedDisplay for DocumentElement {
             Section(s) => s.fmt_nested(f),
             Module(m) => m.fmt_nested(f),
             MathStructure(m) => m.fmt_nested(f),
+            Morphism(d) => d.fmt_nested(f),
             InputRef(r) => write!(f.inner(),"Input reference {}: {}",r.id,r.target),
             VarNotation { name, id, .. } => {
                 write!(f.inner(),"Variable notation {} for {}",id,name)
@@ -417,6 +424,37 @@ impl Display for DocumentModule {
         self.in_display(f)
     }
 }
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DocumentMorphism {
+    pub range: SourceRange<ByteOffset>,
+    pub domain: ModuleURI,
+    pub total:bool,
+    pub uri: NarrDeclURI,
+    pub content_uri:ModuleURI,
+    pub children: Vec<DocumentElement>,
+}
+
+impl NestedDisplay for DocumentMorphism {
+    fn fmt_nested(&self, f: &mut NestingFormatter) -> std::fmt::Result {
+        use std::fmt::Write;
+        write!(f.inner(),"Morphism {}: {}",self.uri.name(),self.domain)?;
+        f.nest(|f| {
+            for e in &self.children {
+                f.next()?;e.fmt_nested(f)?;
+            }
+            Ok(())
+        })
+    }
+}
+impl Display for DocumentMorphism {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.in_display(f)
+    }
+}
+
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]

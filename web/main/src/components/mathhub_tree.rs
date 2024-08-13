@@ -288,9 +288,9 @@ fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
     view!{
         <span class=cls on:click=move |_| show.set(true)><Icon icon=icondata_bi::BiFileRegular/>" "{name.clone()}</span>
         <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right width="70%">
-            <DrawerHeader>
+            /*<DrawerHeader>
                 <DrawerHeaderTitle></DrawerHeaderTitle>
-            </DrawerHeader>
+            </DrawerHeader>*/
         {
             move || if show.get() {
                 view!(<IFrame src=format!("?a={}&rp={}",archive.id(),p) ht="calc(100vh - 110px)".to_string()/>)

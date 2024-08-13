@@ -100,7 +100,13 @@ pub struct NarrDeclURI {
 impl NarrDeclURI {
     #[inline]
     pub fn to_iri(&self) -> NamedNode {
-        NamedNode::new(self.to_string().replace(' ',"%20")).unwrap()
+        NamedNode::new(self.to_string()
+            .replace(' ',"%20")
+            .replace('\\',"%5C")
+            .replace('^',"%5E")
+            .replace('[',"%5B")
+            .replace(']',"%5D")
+        ).unwrap()
     }
     pub fn new(doc: DocumentURI, name: impl Into<Name>) -> Self {
         Self { doc, name:name.into() }

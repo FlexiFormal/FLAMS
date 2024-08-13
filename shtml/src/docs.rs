@@ -1,6 +1,6 @@
 use std::str::FromStr;
-use immt_api::core::content::{ArgType, ArrayVec, Term, TermOrList, VarNameOrURI, VarOrSym};
-use immt_api::core::ulo;
+use immt_api::core::content::{ArgType, ArrayVec, FIELD_PROJECTION, OF_TYPE, Term, TermOrList, VarNameOrURI, VarOrSym};
+use immt_api::core::{OMA, OMS,ulo};
 use immt_api::core::uris::{ContentURI, Name};
 use crate::parsing::parser::HTMLParser;
 
@@ -27,7 +27,7 @@ pub(crate) enum OpenTerm {
         notation:Option<Name>,
         args:ArrayVec<Option<(TermOrList,ArgType)>,9>
     },
-    Complex(Option<Term>),
+    Complex(VarOrSym,Option<Term>),
 }
 impl OpenTerm {
     pub fn close(self,parser:&mut HTMLParser) -> Term {
@@ -35,16 +35,68 @@ impl OpenTerm {
         match self {
             Self::Symref {uri,..} => {
                 parser.add_triple(ulo!((parser.iri()) CROSSREFS (uri.to_iri())));
-                Term::OMS(uri)
+                Term::OMID(uri)
             },
             Self::OMV {name:VarNameOrURI::Name(name),..} => {
                 let name = parser.resolve_variable(name);
                 Term::OMV(name)
             }
             Self::OMV {name:name@VarNameOrURI::URI(_),..} => Term::OMV(name),
-            Self::OMA { head: uri,args,head_term,..} => {
+            Self::OMA { head: uri,mut args,head_term,..} => {
                 if let VarOrSym::S(uri) = uri {
                     parser.add_triple(ulo!((parser.iri()) CROSSREFS (uri.to_iri())));
+                }
+                match uri {
+                    VarOrSym::S(ContentURI::Symbol(s)) if s == *FIELD_PROJECTION && args.len() == 2 => {
+                        match (args.get(0),args.get(1)) {
+                            (Some(Some((TermOrList::Term(record),_))),Some(Some((TermOrList::Term(Term::OML{name,..}),_)))) => {
+                                //println!("Record: {record:?}");
+                                return match record {
+                                    /*
+                                    Term::OMA { head,args,head_term} => {
+                                        if let VarOrSym::S(ContentURI::Symbol(ot)) = head {
+                                            if ot == &*OF_TYPE {
+                                                if matches!(args[..],[_,_]) {
+                                                    if let [(TermOrList::Term(record),_),(TermOrList::Term(OMS!(record_type)),_)] = &args[..] {
+                                                        println!("matches!");
+                                                        let [(TermOrList::Term(record), _), (TermOrList::Term(OMS!(record_type)), _)] = &args[..] else { unreachable!() };
+                                                        Term::Field { record: record.clone().into(), key: VarOrSym::V(VarNameOrURI::Name(*name)), record_type: Some(*record_type) }
+                                                    } else {
+                                                        println!("args don't match");
+                                                        Term::Field { record: record.clone().into(), key: VarOrSym::V(VarNameOrURI::Name(*name)), record_type: None }
+                                                    }
+                                                } else {
+                                                    println!("args aren't 2");
+                                                    Term::Field { record: record.clone().into(), key: VarOrSym::V(VarNameOrURI::Name(*name)), record_type: None }
+                                                }
+                                            } else {
+                                                println!("head isn't 'of type'");
+                                                Term::Field { record: record.clone().into(), key: VarOrSym::V(VarNameOrURI::Name(*name)), record_type: None }
+                                            }
+                                        } else {
+                                            println!("head doesn't match");
+                                            Term::Field { record: record.clone().into(), key: VarOrSym::V(VarNameOrURI::Name(*name)), record_type: None }
+                                        }
+                                    }
+                                     */
+                                    Term::OMA { head: VarOrSym::S(ContentURI::Symbol(ot)), args, head_term: None }
+                                    if ot == &*OF_TYPE && matches!(args[..],[(TermOrList::Term(_),_),(TermOrList::Term(OMS!(_)),_)]) => {
+                                        let [(TermOrList::Term(record), _), (TermOrList::Term(OMS!(record_type)), _)] = &args[..] else { unreachable!() };
+                                        // TODO this clone should be unnecessary
+                                        Term::Field { record: record.clone().into(), key: VarOrSym::V(VarNameOrURI::Name(*name)), record_type: Some(*record_type) }
+                                    }
+                                    _ => {
+                                        // TODO this clone should be unnecessary
+                                        let t = Term::Field { record: record.clone().into(), key: VarOrSym::V(VarNameOrURI::Name(*name)), record_type: None };
+                                        println!("Doesn't match: {t:?}");
+                                        t
+                                    }
+                                }
+                            },
+                            _ => ()
+                        }
+                    }
+                    _ => ()
                 }
                 Term::OMA {
                     head:uri,args:args.into_iter().map(|e| {
@@ -71,7 +123,16 @@ impl OpenTerm {
                 }
             },
             Self::OML {name,df} => Term::OML{name,df:df.map(Box::new)},
-            Self::Complex(Some(t)) => t,
+            Self::Complex(head,Some(t)) => {
+                if let Term::Field {record,key,record_type} = t {
+                    if let VarOrSym::S(ContentURI::Symbol(s)) = head {
+                        Term::Field {record,key:VarOrSym::S(s.into()),record_type}
+                    } else {
+                        Term::Field {record,key,record_type}
+                    }
+                } else { t }
+
+            }
             _ => {
                 todo!()
             }
