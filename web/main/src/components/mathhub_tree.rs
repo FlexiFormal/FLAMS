@@ -122,7 +122,6 @@ mod treeview {
     pub const immt_treeview_left_margin: &str = "immt-treeview-left-margin";
 }
 use treeview::*;
-use crate::components::content::{SHtmlComponent,Document};
 use crate::components::queue::enqueue;
 
 #[component]
@@ -287,10 +286,19 @@ fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
     let p = file.relative_path.clone();
     view!{
         <span class=cls on:click=move |_| show.set(true)><Icon icon=icondata_bi::BiFileRegular/>" "{name.clone()}</span>
-        <Drawer title=format!("[{archive}]/{}",file.relative_path) show placement=DrawerPlacement::Right width="70%">
+        <Drawer /*title=format!("[{archive}]/{}",file.relative_path)*/ show placement=DrawerPlacement::Right width="70%">
             /*<DrawerHeader>
                 <DrawerHeaderTitle></DrawerHeaderTitle>
             </DrawerHeader>*/
+            //<Divider>
+                <div style="text-align:center;width:100%"><b>
+                    <a href=format!("/?a={}&rp={p}",archive.id())>{
+                        format!("[{}]/{}",archive.id(),&p)
+                    }</a>
+                </b></div>
+                <Divider/>
+            //</Divider>
+
         {
             move || if show.get() {
                 view!(<IFrame src=format!("?a={}&rp={}",archive.id(),p) ht="calc(100vh - 110px)".to_string()/>)

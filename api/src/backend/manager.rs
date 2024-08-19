@@ -14,7 +14,7 @@ use crate::backend::archives::{Archive, MathArchive, Storage};
 use crate::building::targets::SourceFormat;
 use crate::utils::asyncs::{ChangeSender, lock};
 use immt_core::building::buildstate::{BuildState, AllStates};
-use immt_core::narration::{CSS, Document, DocumentReader, DocumentData, FullDocument};
+use immt_core::narration::{CSS, Document};
 use immt_core::ontology::rdf::terms::Quad;
 use immt_core::ulo;
 use immt_core::uris::DocumentURI;

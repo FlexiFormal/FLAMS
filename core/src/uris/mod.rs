@@ -22,6 +22,7 @@ lazy_static::lazy_static! {
     static ref EMPTY_NAME:lasso::Spur = NAMES.get_or_intern("");
 }
 
+/*
 #[derive(Clone, Copy,Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SafeURI<A>{pub get:A}
 impl From<Name> for SafeURI<Name> {
@@ -29,6 +30,8 @@ impl From<Name> for SafeURI<Name> {
         Self{get:value}
     }
 }
+
+ */
 
 #[derive(Clone, Copy,Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Name(lasso::Spur);
@@ -115,44 +118,89 @@ impl Display for ContentURI {
 }
 
 #[derive(Clone,Copy,Debug,Hash,PartialEq,Eq)]
-pub enum MMTUri {
+pub enum URI {
     Archive(ArchiveURI),
     Narrative(NarrativeURI),
     Content(ContentURI),
 }
-impl From<ArchiveURI> for MMTUri {
+impl From<ArchiveURI> for URI {
     fn from(value: ArchiveURI) -> Self {
         Self::Archive(value)
     }
 }
-impl<A:Into<NarrativeURI>> From<A> for MMTUri {
+impl<A:Into<NarrativeURI>> From<A> for URI {
     fn from(value: A) -> Self {
         Self::Narrative(value.into())
     }
 }
-impl From<ContentURI> for MMTUri {
+impl From<ContentURI> for URI {
     fn from(value: ContentURI) -> Self {
         Self::Content(value)
     }
 }
-impl FromStr for MMTUri {
+impl FromStr for URI {
     type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.contains("&d=") {
-            NarrativeURI::from_str(s).map(MMTUri::Narrative)
+            NarrativeURI::from_str(s).map(URI::Narrative)
         } else if s.contains("&m=") {
-            ContentURI::from_str(s).map(MMTUri::Content)
+            ContentURI::from_str(s).map(URI::Content)
         } else {
-            ArchiveURI::from_str(s).map(MMTUri::Archive)
+            ArchiveURI::from_str(s).map(URI::Archive)
         }
     }
 }
-impl Display for MMTUri {
+impl Display for URI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MMTUri::Archive(a) => Display::fmt(a,f),
-            MMTUri::Narrative(n) => Display::fmt(n,f),
-            MMTUri::Content(c) => Display::fmt(c,f),
+            URI::Archive(a) => Display::fmt(a, f),
+            URI::Narrative(n) => Display::fmt(n, f),
+            URI::Content(c) => Display::fmt(c, f),
+        }
+    }
+}
+
+
+#[derive(Clone,Copy,Debug,Hash,PartialEq,Eq)]
+pub enum NamedURI {
+    Narrative(NarrativeURI),
+    Content(ContentURI),
+}
+impl NamedURI {
+    pub fn name(&self) -> Name {
+        match self {
+            NamedURI::Narrative(n) => n.name(),
+            NamedURI::Content(c) => c.name(),
+        }
+    }
+}
+impl<A:Into<NarrativeURI>> From<A> for NamedURI {
+    fn from(value: A) -> Self {
+        Self::Narrative(value.into())
+    }
+}
+impl From<ContentURI> for NamedURI {
+    fn from(value: ContentURI) -> Self {
+        Self::Content(value)
+    }
+}
+impl FromStr for NamedURI {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.contains("&d=") {
+            NarrativeURI::from_str(s).map(NamedURI::Narrative)
+        } else if s.contains("&m=") {
+            ContentURI::from_str(s).map(NamedURI::Content)
+        } else {
+            Err("Missing name")
+        }
+    }
+}
+impl Display for NamedURI {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NamedURI::Narrative(n) => Display::fmt(n, f),
+            NamedURI::Content(c) => Display::fmt(c, f),
         }
     }
 }
@@ -171,17 +219,29 @@ mod serde_impl {
             Ok(Self::new(s))
         }
     }
-    impl serde::Serialize for MMTUri {
+    impl serde::Serialize for URI {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             serializer.collect_str(self)
         }
     }
-    impl<'de> serde::Deserialize<'de> for MMTUri {
+    impl<'de> serde::Deserialize<'de> for URI {
         fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             let s = String::deserialize(deserializer)?;
             s.parse().map_err(|s| serde::de::Error::custom(s))
         }
     }
+    impl serde::Serialize for NamedURI {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.collect_str(self)
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for NamedURI {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let s = String::deserialize(deserializer)?;
+            s.parse().map_err(|s| serde::de::Error::custom(s))
+        }
+    }
+    /*
     impl<A:serde::Serialize> serde::Serialize for SafeURI<A> {
         #[inline]
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -199,6 +259,8 @@ mod serde_impl {
             }
         }
     }
+    
+     */
 
     impl serde::Serialize for ContentURI {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

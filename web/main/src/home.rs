@@ -50,12 +50,18 @@ pub fn Main() -> impl IntoView {
             let params = use_query_map();
             let has_a_param = create_memo(move |_| params.with(|p| p.get("a").is_some() || p.get("uri").is_some()));
             view!{<Routes>
-            <Route path="/" view=move || if has_a_param.get() {
-                    view! { <content::SomeUri/> }
+            <Route ssr=SsrMode::PartiallyBlocked path="/" view=move || if has_a_param.get() {
+                    view! { <content::URITop/> }
                 } else {
                     view! { <Redirect path="/dashboard"/> }
                 }
             />
+            /*<Route ssr=SsrMode::PartiallyBlocked path="/omdoc" view=move || if has_a_param.get() {
+                    view! { <content::OMDocTop/> }
+                } else {
+                    view! { <Redirect path="/dashboard"/> }
+                }
+            />*/
         /*
             <Route path="/:a" view=|| view!(<content::SomeUri/>)/>
             <Route path="/" view=move || view!{

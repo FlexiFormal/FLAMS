@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::ops::{BitAnd, Div};
+use std::ops::{BitAnd, Div, Neg, Not};
 use std::str::FromStr;
 use oxrdf::NamedNode;
 use crate::narration::Language;
@@ -103,6 +103,17 @@ impl ModuleURI {
     #[inline]
     pub fn path(&self) -> Option<Name> { self.path }
 }
+
+impl Not for ModuleURI {
+    type Output = Self;
+    fn not(self) -> Self::Output {
+        let name = self.name.as_ref().split('/').next().unwrap();
+        if name == self.name.as_ref() { self} else {
+            Self::new(self.archive, self.path, Name::new(name),self.language)
+        }
+    }
+}
+
 impl Display for ModuleURI {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

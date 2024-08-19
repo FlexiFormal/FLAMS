@@ -6,25 +6,10 @@ mod home;
 mod utils;
 pub mod accounts;
 
-#[cfg(feature = "client")]
-pub mod client {
-    use wasm_bindgen::prelude::*;
-    #[wasm_bindgen]
-    extern "C" {
-        // Use `js_namespace` here to bind `console.log(..)` instead of just
-        // `log(..)`
-        #[wasm_bindgen(js_namespace = console)]
-        pub fn log(s: &str);
-    }
-}
-
 #[macro_export]
 macro_rules! console_log {
     ($($t:tt)*) => (
-        #[cfg(feature = "client")]
-        {$crate::client::log(&format_args!($($t)*).to_string());}
-        #[cfg(feature = "server")]
-        {println!($($t)*);}
+        leptos::logging::log!($($t)*);
     )
 }
 
@@ -132,6 +117,7 @@ pub mod server {
         extract::State(state): extract::State<AppState>,
         request:http::Request<axum::body::Body>
     ) -> axum::response::Response {
+        use tower::util::ServiceExt;
         async fn get_static_file(mut request:http::Request<axum::body::Body>,root:&str) -> Result<http::Response<axum::body::Body>,(http::StatusCode,String)> {
             if request.uri().path().ends_with("immt_bg.wasm") {
                 // change to "immt.wasm"
@@ -207,8 +193,9 @@ pub mod server {
             .route("/dashboard/queue/ws",axum::routing::get(crate::components::queue::QueueSocket::ws_handler))
             .route("/dashboard/log/ws",axum::routing::get(crate::components::logging::LogSocket::ws_handler))
             .route("/api/*fn_name", axum::routing::get(server_fn_handle).post(server_fn_handle))
-            .route("/content/html",axum::routing::get(crate::components::content::server::get_html).post(crate::components::content::server::get_html))
-            .route("/content/*fn_name", axum::routing::get(server_fn_handle).post(server_fn_handle))
+            .route("/fragment", axum::routing::get(server_fn_handle).post(server_fn_handle))
+            //.route("/content/html",axum::routing::get(crate::components::content::server::get_html).post(crate::components::content::server::get_html))
+            //.route("/content/*fn_name", axum::routing::get(server_fn_handle).post(server_fn_handle))
             .leptos_routes_with_handler(routes,axum::routing::get(move |
                 auth_session: axum_login::AuthSession<AccountManager>,
                 extract::State(state): extract::State<AppState>,

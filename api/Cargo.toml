@@ -45,3 +45,4 @@ walkdir = "2.5"
 oxigraph = { version = "0.4.0-alpha.7", optional = true }
 spargebra = "0.3.0-alpha.5"
 oxrdfio = { version = "0.1.0-alpha.6", features = ["async-tokio"] }
+async-scoped = { version="0.9",features = ["use-tokio"] }

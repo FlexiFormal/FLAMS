@@ -7,39 +7,6 @@ use crate::uris::Name;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ModuleLike {
-    Module(Module),
-    Structure(MathStructure)
-}
-impl ModuleLike {
-    pub fn uri(&self) -> &ModuleURI {
-        match self {
-            ModuleLike::Module(m) => &m.uri,
-            ModuleLike::Structure(m) => &m.uri
-        }
-    }
-    pub fn elements(&self) -> &[ContentElement] {
-        match self {
-            ModuleLike::Module(m) => &m.elements,
-            ModuleLike::Structure(m) => &m.elements
-        }
-    }
-    pub fn take_elements(self) -> Vec<ContentElement> {
-        match self {
-            ModuleLike::Module(m) => m.elements,
-            ModuleLike::Structure(m) => m.elements
-        }
-    }
-    pub fn get(&self,name:Name) -> Option<&ContentElement> {
-        match self {
-            ModuleLike::Module(m) => m.get(name),
-            ModuleLike::Structure(m) => m.get(name)
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Module {
     pub uri:ModuleURI,
     pub meta:Option<ModuleURI>,

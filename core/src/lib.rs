@@ -21,9 +21,11 @@ pub mod content {
     mod constants;
     mod module;
     mod terms;
+    mod notations;
     pub use constants::*;
     pub use module::*;
     pub use terms::*;
+    pub use notations::*;
 }
 pub mod narration {
     mod document;

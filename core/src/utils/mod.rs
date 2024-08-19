@@ -22,7 +22,7 @@ pub struct VecMap<K, V>(pub Vec<(K, V)>);
 impl<K,V,K2,V2> PartialEq<VecMap<K2,V2>> for VecMap<K,V> where K: PartialEq<K2>, V: PartialEq<V2> {
     fn eq(&self, other: &VecMap<K2,V2>) -> bool {
         self.0.len() == other.0.len() &&
-            self.iter().zip(other.iter()).all(|((k1, v1), (k2, v2))| 
+            self.iter().zip(other.iter()).all(|((k1, v1), (k2, v2))|
                 k1 == k2 && v1 == v2
             )
     }

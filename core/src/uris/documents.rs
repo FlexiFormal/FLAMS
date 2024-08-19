@@ -113,6 +113,8 @@ impl NarrDeclURI {
     }
     #[inline]
     pub fn name(&self) -> Name { self.name }
+    #[inline]
+    pub fn doc(&self) -> DocumentURI { self.doc }
 }
 impl Display for NarrDeclURI {
     #[inline]
@@ -177,6 +179,12 @@ pub enum NarrativeURI {
     Decl(NarrDeclURI)
 }
 impl NarrativeURI {
+    pub fn name(&self) -> Name {
+        match self {
+            NarrativeURI::Doc(d) => d.name,
+            NarrativeURI::Decl(d) => d.name
+        }
+    }
     pub fn to_iri(&self) -> NamedNode {
         match self {
             NarrativeURI::Doc(d) => d.to_iri(),

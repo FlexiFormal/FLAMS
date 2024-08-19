@@ -8,24 +8,35 @@ use oxrdfio::RdfFormat;
 use tracing::instrument;
 use immt_core::narration::Language;
 use immt_core::ontology::rdf::terms::{NamedNode, Quad, Subject, Term, Triple};
-use immt_core::uris::{DocumentURI, PathURI, SymbolURI};
+use immt_core::uris::{DocumentURI, NarrDeclURI, PathURI, SymbolURI};
 use crate::backend::archives::{Archive, Storage};
 use crate::backend::manager::ArchiveManager;
 
 pub struct QueryResult(QueryResults);
 impl QueryResult {
-    pub fn symbol_iter(self) -> impl Iterator<Item=SymbolURI> {
-        let r = match self.0 {
+    pub fn symbol_iter(self) -> Option<impl Iterator<Item=SymbolURI>> {
+        match self.0 {
             QueryResults::Solutions(sols) => Some(sols.flat_map(|s|
-                s.ok().into_iter().flat_map(|s|
+                s.ok().map(|s| {
                     if let Some(Some(Term::NamedNode(nn))) = s.values().first() {
                         SymbolURI::from_str(nn.as_str()).ok()
                     } else { None }
-                )
+                }).flatten()
             )),
             _ => None
-        };
-        r.into_iter().flatten()
+        }
+    }
+    pub fn doc_elem_iter(self) -> Option<impl Iterator<Item=NarrDeclURI>> {
+        match self.0 {
+            QueryResults::Solutions(sols) => Some(sols.flat_map(|s|
+                s.ok().map(|s| {
+                    if let Some(Some(Term::NamedNode(nn))) = s.values().first() {
+                        NarrDeclURI::from_str(nn.as_str()).ok()
+                    } else { None }
+                }).flatten()
+            )),
+            _ => None
+        }
     }
     pub fn resolve(self) -> ResolvedQueryResult {
         match self.0 {

@@ -42,11 +42,14 @@ impl OpenTerm {
                 Term::OMV(name)
             }
             Self::OMV {name:name@VarNameOrURI::URI(_),..} => Term::OMV(name),
-            Self::OMA { head: uri,mut args,head_term,..} => {
+            Self::OMA { head: mut uri,mut args,head_term,..} => {
                 if let VarOrSym::S(uri) = uri {
                     parser.add_triple(ulo!((parser.iri()) CROSSREFS (uri.to_iri())));
                 }
                 match uri {
+                    VarOrSym::V(VarNameOrURI::Name(n)) => {
+                        uri = VarOrSym::V(parser.resolve_variable(n));
+                    }
                     VarOrSym::S(ContentURI::Symbol(s)) if s == *FIELD_PROJECTION && args.len() == 2 => {
                         match (args.get(0),args.get(1)) {
                             (Some(Some((TermOrList::Term(record),_))),Some(Some((TermOrList::Term(Term::OML{name,..}),_)))) => {
@@ -108,9 +111,12 @@ impl OpenTerm {
                     head_term:head_term.map(Box::new)
                 }
             },
-            Self::OMBIND { head: uri,args,head_term,..} => {
+            Self::OMBIND { head: mut uri,args,head_term,..} => {
                 if let VarOrSym::S(uri) = uri {
                     parser.add_triple(ulo!((parser.iri()) CROSSREFS (uri.to_iri())));
+                }
+                if let VarOrSym::V(VarNameOrURI::Name(n)) = uri {
+                    uri = VarOrSym::V(parser.resolve_variable(n));
                 }
                 Term::OMBIND {
                     head:uri,args:args.into_iter().map(|e| {

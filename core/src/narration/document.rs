@@ -1,9 +1,9 @@
 use crate::utils::sourcerefs::{ByteOffset, SourceRange};
 use crate::uris::documents::{DocumentURI, NarrativeURI};
 use std::fmt::{Display, Formatter};
-use std::io::{Read, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use arrayvec::ArrayVec;
 use oxrdf::{BlankNode, NamedNodeRef, Quad};
@@ -24,10 +24,98 @@ pub struct Title {
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Document {
     pub uri: DocumentURI,
-    pub title: Option<Title>,
+    pub title: Option<Box<str>>,
     pub elements: Vec<DocumentElement>,
 }
+
+pub struct ElemIter<'a> {
+    iter: std::slice::Iter<'a,DocumentElement>,
+    stack:Vec<std::slice::Iter<'a,DocumentElement>>
+}
+impl<'a> Iterator for ElemIter<'a> {
+    type Item = &'a DocumentElement;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(e) = self.iter.next() {
+                match e {
+                    DocumentElement::Section(s) => {
+                        self.stack.push(std::mem::replace(&mut self.iter, s.children.iter()));
+                    },
+                    DocumentElement::Module(m) => {
+                        self.stack.push(std::mem::replace(&mut self.iter, m.children.iter()));
+                    },
+                    DocumentElement::MathStructure(m) => {
+                        self.stack.push(std::mem::replace(&mut self.iter, m.children.iter()));
+                    },
+                    DocumentElement::Paragraph(p) => {
+                        self.stack.push(std::mem::replace(&mut self.iter, p.children.iter()));
+                    },
+                    DocumentElement::Problem(p) => {
+                        self.stack.push(std::mem::replace(&mut self.iter, p.children.iter()));
+                    },
+                    _ => ()
+                }
+                return Some(e)
+            } else {
+                if let Some(iter) = self.stack.pop() {
+                    self.iter = iter;
+                } else {
+                    return None
+                }
+            }
+        }
+    }
+}
+
 impl Document {
+    pub fn iter(&self) -> ElemIter {
+        ElemIter {
+            iter: self.elements.iter(),
+            stack: Vec::new()
+        }
+    }
+    pub fn get(&self,name:Name) -> Option<&DocumentElement> {
+        let name = name.as_ref();
+        let mut names = name.split('/');
+        let mut curr = &self.elements;
+        let mut ret = None;
+        'top: while let Some(name) = names.next() {
+            for e in curr {match e {
+                DocumentElement::Section(s) if s.uri.name().as_ref().split('/').last() == Some(name)
+                    => {
+                    ret = Some(e);
+                    curr = &s.children;
+                    continue 'top
+                },
+                DocumentElement::Module(m)if m.uri.name().as_ref().split('/').last() == Some(name)
+                    => {
+                    ret = Some(e);
+                    curr = &m.children;
+                    continue 'top
+                },
+                DocumentElement::MathStructure(m)if m.uri.name().as_ref().split('/').last() == Some(name)
+                    => {
+                    ret = Some(e);
+                    curr = &m.children;
+                    continue 'top
+                },
+                DocumentElement::Paragraph(p) if p.uri.name().as_ref().split('/').last() == Some(name)
+                    => {
+                    ret = Some(e);
+                    curr = &p.children;
+                    continue 'top
+                },
+                DocumentElement::Problem(p) if p.uri.name().as_ref().split('/').last() == Some(name)
+                    => {
+                    ret = Some(e);
+                    curr = &p.children;
+                    continue 'top
+                },
+                _ => ret = None
+            }}
+        }
+        ret
+    }
     /*
     pub fn triples(&self) -> impl Iterator<Item=Quad> + Clone + '_ {
         TripleIterator {
@@ -327,6 +415,7 @@ pub enum DocumentElement {
     },
     TopTerm(Term),
     UseModule(ModuleURI),
+    ImportModule(ModuleURI),
     Paragraph(LogicalParagraph),
     Problem(Problem)
 }
@@ -354,6 +443,7 @@ impl NestedDisplay for DocumentElement {
             Varref { name, .. } => write!(f.inner(),"Variable reference {}",name),
             TopTerm(t) => write!(f.inner(),"Top term {t:?}"),
             UseModule(m) => write!(f.inner(),"Use module {}",m),
+            ImportModule(m) => write!(f.inner(),"Import module {}",m),
             Paragraph(p) => p.fmt_nested(f),
             Problem(p) => write!(f.inner(),"Problem {}",p.uri)
         }
@@ -491,7 +581,7 @@ pub struct DocumentReference {
     pub target: DocumentURI,
 }
 
-#[derive(Debug, Clone,PartialEq,Eq)]
+#[derive(Debug, Copy,Clone,PartialEq,Eq)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum StatementKind {
@@ -800,8 +890,8 @@ impl TryFrom<&str> for Language {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CSS {
-    Link(String),
-    Inline(String),
+    Link(Box<str>),
+    Inline(Box<str>),
 }
 
 #[derive(Debug)]
@@ -835,6 +925,7 @@ impl<T> NarrativeRef<T> {
         Self {start,end,in_doc,phantom_data:PhantomData}
     }
 }
+/*
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 enum DocumentReaderState {
     Start,DocRead,RefsRead,CssRead,Finished
@@ -857,10 +948,32 @@ pub struct DocumentData {
     html:Box<str>,
     document:Document
 }
+*/
 
-impl FullDocument {
-    pub fn reader(file:&Path) -> Option<DocumentReader> {
-        let mut file = std::fs::File::open(file).ok()?;
+#[derive(Debug)]
+struct DocDataI {
+    path:Box<Path>,
+    doc:Document,
+    refs_offset:u32,
+    css_offset:u32,
+    html_offset:u32,
+    body_offset:u32,
+    body_len:u32
+}
+#[derive(Debug,Clone)]
+pub struct DocData(triomphe::Arc<DocDataI>);
+
+impl DocData {
+    #[inline]
+    pub fn iter(&self) -> ElemIter {
+        self.0.doc.iter()
+    }
+    #[inline]
+    pub fn strong_count(&self) -> usize {
+        triomphe::Arc::strong_count(&self.0)
+    }
+    pub fn get(path:PathBuf) -> Option<DocData> {
+        let mut file = std::fs::File::open(&path).ok()?;
         let mut buf = [0u8;20];
         file.read_exact(&mut buf).ok()?;
         let refs_start = u32::from_le_bytes([buf[0],buf[1],buf[2],buf[3]]);
@@ -868,16 +981,19 @@ impl FullDocument {
         let html_start = u32::from_le_bytes([buf[8],buf[9],buf[10],buf[11]]);
         let body_start = u32::from_le_bytes([buf[12],buf[13],buf[14],buf[15]]);
         let body_len = u32::from_le_bytes([buf[16],buf[17],buf[18],buf[19]]);
-        Some(DocumentReader {
-            file,refs_start,css_start,html_start,body_start,body_len,
-            refs:None,
-            css:None,html:None,state:DocumentReaderState::Start,document:None
-        })
+
+        let mut buffer = vec![0; refs_start as usize];
+        file.read_exact(&mut buffer).ok()?;
+        let document = bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok()?.0;
+        Some(Self(triomphe::Arc::new(DocDataI {
+            doc:document,path:path.into(),refs_offset:refs_start + 20,css_offset:css_start + 20,
+            html_offset: html_start + 20,body_offset:body_start+20,body_len
+        })))
     }
     #[cfg(feature = "async")]
-    pub async fn reader_async(file:&Path) -> Option<DocumentData> {
+    pub async fn get_async(path:PathBuf) -> Option<DocData> {
         use tokio::io::AsyncReadExt;
-        let mut file = tokio::fs::File::open(file).await.ok()?;
+        let mut file = tokio::fs::File::open(&path).await.ok()?;
         let mut buf = [0u8;20];
         file.read_exact(&mut buf).await.ok()?;
         let refs_start = u32::from_le_bytes([buf[0],buf[1],buf[2],buf[3]]);
@@ -886,23 +1002,193 @@ impl FullDocument {
         let body_start = u32::from_le_bytes([buf[12],buf[13],buf[14],buf[15]]);
         let body_len = u32::from_le_bytes([buf[16],buf[17],buf[18],buf[19]]);
 
+        let refs_offset = 20 + refs_start;
+        let css_offset = css_start + 20;
+
         let mut buffer = vec![0; refs_start as usize];
         file.read_exact(&mut buffer).await.ok()?;
         let document = bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok()?.0;
-        let mut buffer = vec![0;(css_start - refs_start) as usize];
-        file.read_exact(&mut buffer).await.ok()?;
-        let refs = buffer.into();
-        let mut buffer = vec![0;(html_start - css_start) as usize];
-        file.read_exact(&mut buffer).await.ok()?;
-        let css = bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok()?.0;
-        let mut html = String::new();
-        let _ = file.read_to_string(&mut html).await;
-        let html = html.into();
-
-        Some(DocumentData {
-            body_start,body_len, refs, css, html, document
-        })
+        Some(Self(triomphe::Arc::new(DocDataI {
+            doc:document,path:path.into(),refs_offset,css_offset,
+            html_offset: html_start + 20,body_offset:body_start+20,body_len
+        })))
     }
+
+    #[inline]
+    fn read(&self,start:usize,end:Option<usize>) -> Option<(Vec<u8>,std::fs::File)> {
+        use std::io::Seek;
+        let mut file = std::fs::File::open(&self.0.path).ok()?;
+        file.seek(SeekFrom::Start(start as u64)).ok()?;
+        if let Some(end) = end {
+            let mut buf = vec![0;end-start];
+            file.read_exact(&mut buf).ok()?;
+            Some((buf,file))
+        } else {
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf).ok()?;
+            Some((buf,file))
+        }
+    }
+    #[cfg(feature = "async")]
+    #[inline]
+    async fn read_async(&self,start:usize,end:Option<usize>) -> Option<(Vec<u8>,tokio::fs::File)> {
+        use tokio::io::{AsyncReadExt,AsyncSeekExt};
+        let mut file = tokio::fs::File::open(&self.0.path).await.ok()?;
+        file.seek(SeekFrom::Start(start as u64)).await.ok()?;
+        if let Some(end) = end {
+            let mut buf = vec![0;end-start];
+            file.read_exact(&mut buf).await.ok()?;
+            Some((buf,file))
+        } else {
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf).await.ok()?;
+            Some((buf,file))
+        }
+    }
+
+    #[inline]
+    fn read_bincode<T:for<'a> serde::Deserialize<'a>>(f:&mut std::fs::File,len:usize) -> Option<T> {
+        let mut buf = vec![0;len];
+        f.read_exact(&mut buf).ok()?;
+        bincode::serde::decode_from_slice(&buf,bincode::config::standard()).ok().map(|(r,_)| r)
+    }
+
+    #[cfg(feature = "async")]
+    #[inline]
+    async fn read_bincode_async<T:for<'a> serde::Deserialize<'a>>(f:&mut tokio::fs::File,len:usize) -> Option<T> {
+        use tokio::io::AsyncReadExt;
+        let mut buf = vec![0;len];
+        f.read_exact(&mut buf).await.ok()?;
+        bincode::serde::decode_from_slice(&buf,bincode::config::standard()).ok().map(|(r,_)| r)
+    }
+
+    #[inline]
+    fn read_str(f:&mut std::fs::File,len:usize) -> Option<String> {
+        let mut buf = vec![0;len];
+        f.read_exact(&mut buf).ok()?;
+        std::str::from_utf8(&buf).ok().map(|s| s.into())
+    }
+
+    #[cfg(feature = "async")]
+    #[inline]
+    async fn read_str_async(f:&mut tokio::fs::File,len:usize) -> Option<String> {
+        use tokio::io::AsyncReadExt;
+        let mut buf = vec![0;len];
+        f.read_exact(&mut buf).await.ok()?;
+        std::str::from_utf8(&buf).ok().map(|s| s.into())
+    }
+
+    #[inline]
+    pub fn read_css_and(&self) -> Option<(Box<[CSS]>,std::fs::File)> {
+        let (css,mut file) = self.read(self.0.css_offset as usize,Some(self.0.html_offset as usize))?;
+        let css = bincode::serde::decode_from_slice(&css,bincode::config::standard()).ok()?.0;
+        Some((css,file))
+    }
+
+    #[cfg(feature = "async")]
+    #[inline]
+    pub async fn read_css_and_async(&self) -> Option<(Box<[CSS]>,tokio::fs::File)> {
+        let (css,mut file) = self.read_async(self.0.css_offset as usize,Some(self.0.html_offset as usize)).await?;
+        let css = bincode::serde::decode_from_slice(&css,bincode::config::standard()).ok()?.0;
+        Some((css,file))
+    }
+
+    pub fn read_css_and_body(&self) -> Option<(Box<[CSS]>,Box<str>)> {
+        use std::io::Seek;
+        let (css,mut file) = self.read_css_and()?;
+        file.seek(SeekFrom::Start(self.0.body_offset as u64)).ok()?;
+        let body = Self::read_str(&mut file,self.0.body_len as usize)?;
+        Some((css,body.into()))
+    }
+    #[cfg(feature = "async")]
+    pub async fn read_css_and_body_async(&self) -> Option<(Box<[CSS]>,Box<str>)> {
+        use tokio::io::AsyncSeekExt;
+        let (css,mut file) = self.read_css_and_async().await?;
+        file.seek(SeekFrom::Start(self.0.body_offset as u64)).await.ok()?;
+        let body = Self::read_str_async(&mut file,self.0.body_len as usize).await?;
+        Some((css,body.into()))
+    }
+    pub fn read_snippet(&self, range:SourceRange<ByteOffset>) -> Option<(Box<[CSS]>,Box<str>)> {
+        use std::io::Seek;
+        let (css,mut file) = self.read_css_and()?;
+        file.seek(SeekFrom::Start(self.0.html_offset as u64 + range.start.offset as u64)).ok()?;
+        let snippet = Self::read_str(&mut file,range.end.offset - range.start.offset)?;
+        Some((css,snippet.into()))
+    }
+    #[cfg(feature = "async")]
+    pub async fn read_snippet_async(&self, range:SourceRange<ByteOffset>) -> Option<(Box<[CSS]>,Box<str>)> {
+        use tokio::io::AsyncSeekExt;
+        let (css,mut file) = self.read_css_and_async().await?;
+        file.seek(SeekFrom::Start(self.0.html_offset as u64 + range.start.offset as u64)).await.ok()?;
+        let snippet = Self::read_str_async(&mut file,range.end.offset - range.start.offset).await?;
+        Some((css,snippet.into()))
+    }
+
+
+    pub fn read_resource<T:for<'a> serde::Deserialize<'a>>(&self, rf:NarrativeRef<T>) -> Option<T> {
+        let (buffer,_) = self.read(self.0.refs_offset as usize + rf.start,Some(self.0.refs_offset as usize + rf.end))?;
+        bincode::serde::decode_from_slice(&buffer,bincode::config::standard()).ok().map(|(r,_)| r)
+    }
+/*
+    pub fn as_doc(s:triomphe::Arc<Self>) -> DocRef {
+        let rf = &s.doc as *const Document;
+        DocRef {data:s,elem:rf}
+    }
+
+ */
+    pub fn into_elem<E,F:Fn(&DocumentElement) -> Option<&E>>(self,name:Name,get:F) -> Option<DocElemRef<E>> {
+        let elem = self.as_ref().get(name).and_then(get)? as *const E;
+        Some(DocElemRef {data:self,elem})
+    }
+}
+
+impl AsRef<Document> for DocData {
+    #[inline]
+    fn as_ref(&self) -> &Document {
+        &self.0.doc
+    }
+}
+
+
+#[derive(Clone)]
+pub struct DocElemRef<E> {
+    data:DocData,
+    elem: *const E
+}
+impl<E> PartialEq for DocElemRef<E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.elem == other.elem
+    }
+}
+impl<E> AsRef<E> for DocElemRef<E> {
+    fn as_ref(&self) -> &E {
+        // safe, because data holds an Arc to the DocData this comes from,
+        // and no inner mutability is employed that might move the
+        // element
+        unsafe{self.elem.as_ref().unwrap()}
+    }
+}
+
+impl<E> DocElemRef<E> {
+    #[inline]
+    pub fn doc(&self) -> &DocData {
+        &self.data
+    }
+    #[inline]
+    pub fn take(self) -> DocData {
+        self.data
+    }
+    #[inline]
+    pub fn get(&self) -> &E {
+        // safe, because data holds an Arc to the Document this comes from,
+        // and no inner mutability is employed that might move the
+        // element
+        unsafe{self.elem.as_ref().unwrap()}
+    }
+}
+
+
+impl FullDocument {
     pub fn get_doc(file:&Path) -> Option<Document> {
         use std::io::Seek;
         let mut file = std::fs::File::open(file).ok()?;
@@ -975,7 +1261,7 @@ impl FullDocument {
         String::from_utf8(html).ok().map(|html| (css,html))
     }
     #[cfg(all(feature = "async",feature="serde"))]
-    pub async fn get_css_and_body_async(file:&Path) -> Option<(Vec<CSS>,String)> {
+    pub async fn get_css_and_body_async(file:&Path) -> Option<(Box<[CSS]>,Box<str>)> {
         use tokio::io::{AsyncReadExt,AsyncSeekExt};
         let mut file = tokio::fs::File::open(file).await.ok()?;
         file.seek(SeekFrom::Start(4)).await.ok()?;
@@ -995,7 +1281,7 @@ impl FullDocument {
         file.seek(SeekFrom::Current(body_start as i64 - html as i64)).await.ok()?;
         let mut html = vec![0; body_len];
         file.read_exact(&mut html).await.ok()?;
-        String::from_utf8(html).ok().map(|html| (css,html))
+        String::from_utf8(html).ok().map(|html| (css,html.into()))
     }
     #[cfg(feature="serde")]
     pub fn write(self,p:&Path) {

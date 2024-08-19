@@ -92,9 +92,9 @@ impl<'a> HTMLParser<'a> {
     #[inline]
     pub(crate) fn resolve_variable(&self,name:Name) -> VarNameOrURI {
         match self.narratives.iter().rev().flat_map(|n| n.vars.iter().rev().map(|(uri,_)| uri))
-            .find(|uri| uri.name() == name) {
-                Some(v) => VarNameOrURI::URI(*v),
-                _ => VarNameOrURI::Name(name)
+            .find(|uri| {uri.name().as_ref().split('/').last() == Some(name.as_ref())}) {
+                Some(v) => {VarNameOrURI::URI(*v)},
+                _ => {VarNameOrURI::Name(name)}
         }
     }
 
@@ -333,33 +333,6 @@ macro_rules! tags {
             ),*
         }
         impl OpenElem {
-            /*
-            #[allow(unused_variables)]
-            fn content(&mut self) -> Option<&mut Vec<ContentElement>> {
-                match self {$(
-                    OpenElem::$tag$({$($n),+})? => (
-                        $( return Some($cont) )?
-                    ),
-                    )*
-                    _ => ()
-                }
-                None
-            }
-            #[allow(unused_variables)]
-            fn narration(&mut self) -> Option<&mut Vec<DocumentElement>> {
-                match self {
-                    Self::LogicalParagraph{children,..} => return Some(children),
-                    $(
-                    OpenElem::$tag$({$($n),+})? => (
-                        $( return Some($narr) )?
-                    ),
-                    )*
-                    _ => ()
-                }
-                None
-            }
-
-             */
             #[allow(unused_variables)]
             pub(crate) fn on_add(&mut self,$slf:&mut HTMLParser) -> bool {
                 let $node = self;
@@ -656,10 +629,14 @@ tags!{v,node,parser,attrs,i,rest,
         true
     };
 
-    Doctitle = "shtml:doctitle" : 20 {add!(-OpenElem::Doctitle)} => {
-        parser.title = Some(Title {
-            range:node.data.borrow().range
-        });
+    Doctitle = "shtml:doctitle" : 20 {
+        add!(-OpenElem::Doctitle)
+    } => {
+        let mut ttl = String::new();
+        for c in node.node.children() {
+            ttl.push_str(&c.to_string())
+        }
+        parser.title = Some(ttl.into());
         false
     };
     SectionTitle = "shtml:sectiontitle": 20 {
@@ -721,8 +698,8 @@ tags!{v,node,parser,attrs,i,rest,
 
     Symdecl(uri:SymbolURI,
         arity:ArgSpec,
-        macroname:Option<String>,
-        role:Option<Vec<String>>,
+        macroname:Option<Name>,
+        role:Option<Vec<Name>>,
         tp:Option<Term>,
         df:Option<Term>,
         assoctype : Option<AssocType>,
@@ -732,12 +709,12 @@ tags!{v,node,parser,attrs,i,rest,
             todo!();
         };
         //println!("Here symbol: {uri}");
-        let role = get!("shtml:role",s => s.split(',').map(|s| s.trim().to_string()).collect());
+        let role = get!("shtml:role",s => s.split(',').map(|s| s.trim().into()).collect::<Vec<_>>().into());
         let assoctype = get!("shtml:assoctype",s => s.trim().parse().ok()).flatten();
         let arity = get!("shtml:args",s =>
             if let Ok(a) = s.parse() { a } else { todo!("args {s}")}).unwrap_or_default();
-        let reordering = get!("shtml:reoderargs",s => s.to_string());
-        let macroname = get!("shtml:macroname",s => if s.is_empty() {None} else {Some(s.to_string())}).flatten();
+        let reordering = get!("shtml:reoderargs",s => s.into());
+        let macroname = get!("shtml:macroname",s => if s.is_empty() {None} else {Some(Name::new(s))}).flatten();
 
         add!(- OpenElem::Symdecl { uri, arity, macroname, role,tp:None,df:None, assoctype, reordering });
     } => {
@@ -1165,6 +1142,7 @@ tags!{v,node,parser,attrs,i,rest,
     } => {
         parser.add_triple(ulo!((parser.content_iri()) IMPORTS (uri.to_iri())));
         parser.add_content(ContentElement::Import(uri));
+        parser.add_doc(DocumentElement::ImportModule(uri));
         false
     };
     Usemodule(uri:ModuleURI) = "shtml:usemodule": 150 {
@@ -1182,7 +1160,10 @@ tags!{v,node,parser,attrs,i,rest,
         let uri = if let Some(uri) = get_doc_uri(v,parser.backend) {uri} else {
             todo!("HERE: {v}");
         };
-        add!(-OpenElem::InputRef {
+        attrs.iter_mut().find(|a| a.name.local.as_ref() == "shtml:inputref").unwrap()
+            .value = uri.to_string().into();
+        let _ = get!("shtml:visible",_e => ());
+        add!(OpenElem::InputRef {
             id: get!(ID),
             target: uri,
         })
@@ -1350,13 +1331,17 @@ tags!{v,node,parser,attrs,i,rest,
             attrs.get_mut(i).unwrap().value = "".into()
         }
         i += 1;
-    } => {!};
+    } => {
+        node.data.borrow_mut().elem.push(OpenElem::Comp);true
+    };
     Varcomp = "shtml:varcomp": 254 {
         if !v.is_empty() && parser.strip {
             attrs.get_mut(i).unwrap().value = "".into()
         }
         i += 1;
-    } => {!};
+    } => {
+        node.data.borrow_mut().elem.push(OpenElem::Comp);true
+    };
     Maincomp = "shtml:maincomp": 254 {
         if !v.is_empty() && parser.strip {
             attrs.get_mut(i).unwrap().value = "".into()

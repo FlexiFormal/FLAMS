@@ -29,6 +29,7 @@ tracing-subscriber = "0.3"
 oxrdf = "0.2.0-alpha.5"
 url = { version="2.5" }
 triomphe = "0.1"
+parking_lot = "0.12"
 regex = "1.10"
 paste = "1"
 tracing = "0.1"
@@ -49,3 +50,4 @@ tokio = { version="1", features = ["full"], optional=true }
 # serialization
 serde = { version = "1", features = ["derive"],optional = true }
 bincode = { version="2.0.0-rc.3",features = ["derive","serde"],optional=true }
+smallvec = { version="2.0.0-alpha.7",features = ["specialization"] }

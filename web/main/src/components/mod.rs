@@ -18,7 +18,21 @@ use leptos::*;
 use leptos::error::*;
 
 use thaw::{Spinner, SpinnerSize};
+/*
+#[island]
+pub(crate) fn LazyCollapsible(#[prop(optional)] collapsible_header:CollapsibleHeader) -> impl IntoView {
+    view!("todo")
+}
 
+
+#[slot]
+pub(crate) struct CollapsibleHeader {
+    children: Children,
+}
+
+ */
+
+/*
 #[component]
 fn Collapsible(#[prop(optional, into)] header: View,children:ChildrenFn,#[prop(optional, into)] expanded:bool) -> impl IntoView {
     use thaw::*;
@@ -33,8 +47,10 @@ fn Collapsible(#[prop(optional, into)] header: View,children:ChildrenFn,#[prop(o
         </details>)
 }
 
+ */
+
 #[component]
-pub(crate) fn IFrame(src:String,#[prop(optional)] ht:String) -> impl IntoView {
+pub(crate) fn IFrame(src:String,#[prop(optional,into)] ht:String) -> impl IntoView {
     view!(<iframe src=format!("/{src}") style=if ht.is_empty() {
         "width:100%;border: 0;".to_string()
     } else {
