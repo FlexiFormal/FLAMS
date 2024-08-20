@@ -1,17 +1,16 @@
 use std::fmt::Display;
-use leptos::*;
+use leptos::prelude::*;
 #[cfg(feature="server")]
 pub(crate) use server::*;
 use crate::utils::errors::IMMTError;
+use leptos::context::Provider;
 
 
 #[inline(always)]
 pub fn if_logged_in<R>(yes:impl FnOnce() -> R,no: impl FnOnce() -> R) -> R {
     use crate::accounts::LoginState;
-    use leptos::use_context;
-    let signal = use_context::<LoginState>();
-    match signal {
-        Some(LoginState::Admin | LoginState::User(_) | LoginState::NoAccounts) => yes(),
+    match get_account() {
+        LoginState::Admin | LoginState::User(_) | LoginState::NoAccounts => yes(),
         _ => no()
     }
 }
@@ -32,31 +31,46 @@ impl Display for LoginState {
     }
 }
 
+pub fn get_account() -> LoginState {
+    #[cfg(feature="server")]
+    {expect_context::<ReadSignal<LoginState>>().get_untracked()}
+    #[cfg(feature="client")]
+    {
+        let r = use_context::<LoginState>();
+        r.unwrap_or_else(|| {
+            crate::console_log!("No user found!");
+            panic!("No user found!")
+        })
+    }
+}
+
+#[cfg(feature="server")]
 #[component(transparent)]
 pub(crate) fn WithAccount(children:ChildrenFn) -> impl IntoView {
     use thaw::*;
-    use leptos::leptos_dom::tracing::Instrument;
-    let user_update = create_rw_signal(true);
-    let (user,writer) = create_signal(LoginState::Loading);
-    let resource = create_resource(move || user_update.get(), move |_| async move {
-        login_status().in_current_span().await.unwrap_or_else(|_| LoginState::None)
-    });
+    use tracing::Instrument;
+    let resource = Resource::new_blocking(|| (),|_| login_status());
+    let (user,user_set) = signal(LoginState::Loading);
     provide_context(user);
     view!{
-        <Suspense fallback=|| view!(<Spinner/>)>{
-            if let Some(login) = resource.get() {
-                //console_log!("User login state: {:?}",login);
-                writer.set(login.clone());
-            }
-            //move || view!(<WithAccountClient user = login>{children()}</WithAccountClient>)
-            children()
+        <Suspense fallback=|| view!(<Spinner size=SpinnerSize::Tiny/>)>{
+            if let std::option::Option::Some(Ok(user)) = resource.get() {
+                let children = children.clone();
+                user_set.set(user.clone());
+                Some(view!{
+                    <WithAccountClient user=user>
+                        {children()}
+                    </WithAccountClient>
+                })
+            } else {None}
         }</Suspense>
     }
 }
 
 #[island]
-pub fn WithAccountClient(children:Children,user:LoginState) -> impl IntoView {
-    view!(<Provider value=user>{children()}</Provider>)
+pub(crate) fn WithAccountClient(children:Children,user:LoginState) -> impl IntoView {
+    provide_context(user);
+    view!{ {children()} }
 }
 
 #[cfg(feature="server")]
@@ -67,13 +81,14 @@ pub(crate) async fn login_status_with_session(
     use axum_login::AuthUser;
     use crate::server::ADMIN_PWD;
     use sea_orm::prelude::*;
-    use leptos::leptos_dom::tracing::Instrument;
+    use tracing::Instrument;
+
     if ADMIN_PWD.is_none() { return Some(LoginState::Admin)}
-    let identity = session.map(|s| s.user.as_ref().map(|u| u.id())).flatten();
-    if let Some(user) = identity { return Some(user) }
-    else { Some(LoginState::None) }
+    let identity = session.and_then(|session| session.user.as_ref().map(|u| u.id()));
+    identity.or_else(|| Some(LoginState::None))
     /*
-    let db = db()?;
+    let state: axum::extract::State<crate::server::AppState> = expect_context();
+    let db = &state.db;
     let users = immt_web_orm::entities::prelude::User::find().all(&db).in_current_span().await;
     if ADMIN_PWD.is_none() && match users {
         Ok(users) => users.is_empty(),
@@ -84,9 +99,10 @@ pub(crate) async fn login_status_with_session(
     else { Some(LoginState::None) }*/
 }
 
-#[server(prefix="/api/users",endpoint="login_status")]
+#[cfg(feature="server")]
+#[inline]
 pub async fn login_status() -> Result<LoginState,ServerFnError<IMMTError>> {
-    use leptos::leptos_dom::tracing::Instrument;
+    use tracing::Instrument;
     login_status_with_session(
         use_context::<axum_login::AuthSession<AccountManager>>().as_ref(),
         || use_context::<sea_orm::DatabaseConnection>()
@@ -96,7 +112,7 @@ pub async fn login_status() -> Result<LoginState,ServerFnError<IMMTError>> {
 #[server(Login,prefix="/api/users",endpoint="login")]//, input=server_fn::codec::Cbor)]
 pub async fn login(username:String,password:String) -> Result<(),ServerFnError<IMMTError>> {
     use leptos_axum::redirect;
-    use leptos::leptos_dom::tracing::Instrument;
+    use tracing::Instrument;
     redirect("/dashboard");
     let mut session = use_context::<axum_login::AuthSession<AccountManager>>().unwrap();
     match session.authenticate((username,password)).in_current_span().await.map_err(|_| IMMTError::ImplementationError)? {
@@ -127,7 +143,6 @@ pub(crate) mod server {
     }
 
     use async_trait::async_trait;
-    use leptos::use_context;
     use tracing::Instrument;
     use crate::utils::errors::IMMTError;
 

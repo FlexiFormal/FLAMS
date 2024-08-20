@@ -2,14 +2,14 @@ pub(crate) mod errors;
 
 //use std::future::Future;
 use async_trait::async_trait;
-use leptos::*;
+use leptos::prelude::*;
 use crate::console_log;
 
 
 #[async_trait]
 pub(crate) trait WebSocket<
-    ClientMsg:Serializable+serde::Serialize+for<'a>serde::Deserialize<'a>+Send,
-    ServerMsg:Serializable+serde::Serialize+std::fmt::Debug+for<'a>serde::Deserialize<'a>+Send
+    ClientMsg:serde::Serialize+for<'a>serde::Deserialize<'a>+Send,
+    ServerMsg:serde::Serialize+std::fmt::Debug+for<'a>serde::Deserialize<'a>+Send
 >:Sized+'static {
     const TIMEOUT: f32 = 10.0;
     const SERVER_ENDPOINT:&'static str;
@@ -84,8 +84,8 @@ pub(crate) trait WebSocket<
 
     #[allow(unused_variables)]
     fn force_start(handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static+Clone) {
-        let (signal_read,_signal_write) = create_signal(false);
-        let _res = create_effect(move |_| {
+        let (signal_read,_signal_write) = signal(false);
+        let _res = Effect::new(move |_| {
             let _ = signal_read.get();
             #[cfg(feature="client")]
             let _ = Self::start(handle.clone());

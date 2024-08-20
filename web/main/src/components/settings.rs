@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 use immt_core::utils::settings::SettingsSpec;
 use crate::accounts::if_logged_in;
 
@@ -26,11 +26,12 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize),ServerFnError> {
 
 #[component]
 pub fn Settings() -> impl IntoView {
-    use thaw::*;
+    use thaw::Table;
+    let resource = Resource::new(|| (),|_| get_settings());
     view!(
-        <Await future = || get_settings() let:settings blocking=true>{
-            if let Ok((settings,mem)) = settings.clone() {
-            Some(view!{
+        <Suspense fallback=|| view!(<thaw::Spinner/>)>{
+            if let Some(Ok((settings,mem))) = resource.get() {
+                Some(view!{
                 <div style="text-align:left;">
                 <Table><thead/><tbody>
                     <tr><td><h2>"Status"</h2></td><td/></tr>
@@ -47,12 +48,8 @@ pub fn Settings() -> impl IntoView {
                             <tr><td><b>"Threads:"</b></td><td>{settings.buildqueue.num_threads}</td></tr>
                 </tbody></Table>
                 </div>
-            })} else {None}
-        }</Await>
+            })
+            } else {None}
+        }</Suspense>
     )
-}
-
-#[island]
-fn Test(children:Children) -> impl IntoView {
-    if_logged_in(|| children(),|| view!{<div>"Please log in to view this content"</div><span/>})
 }

@@ -49,34 +49,9 @@
 }
 
 .immt-treeview-summary:focus-visible{
-  outline : 1px dotted #000;
+  outline : var(--strokeWidthThin) dotted var(--colorNeutralForeground1);
 }
-/*.immt-treeview-li::after {
-  content       : '';
-  display       : block;
-  position      : absolute;
-  top           : calc(var(--immt-treeview-spacing) / 2 - var(--immt-treeview-radius));
-  left          : calc(var(--immt-treeview-spacing) - var(--immt-treeview-radius) - 1px);
-  width         : calc(2 * var(--immt-treeview-radius));
-  height        : calc(2 * var(--immt-treeview-radius));
-  border-radius : 50%;
-  background    : #ddd;
-}*/
-/*.immt-treeview-group::before {
-  content: '📚 ';
-}
-.immt-treeview-archive::before {
-  content: '📕 ';
-}
-.immt-treeview-directory-closed::before {
-  content: '📁 ';
-}
-.immt-treeview-directory-open::before {
-  content: '📂 ';
-}
-.immt-treeview-file-new::before, .immt-treeview-file-stale::before, .immt-treeview-file-deleted::before, .immt-treeview-file-up-to-date::before {
-  content: '📄 ';
-}*/
+
 
 .immt-treeview-file-new { 
   color: #836400;

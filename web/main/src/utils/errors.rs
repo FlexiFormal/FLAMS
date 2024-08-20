@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use std::str::FromStr;
-use leptos::ServerFnError;
+use leptos::server_fn::ServerFnError;
 
 #[derive(Debug,serde::Serialize,serde::Deserialize,Clone,PartialEq,Eq)]
 pub enum IMMTError {

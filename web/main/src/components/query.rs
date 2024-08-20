@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 
 #[server(QueryApi,
     prefix="/api",
@@ -33,7 +33,6 @@ pub async fn query_api(q:String) -> Result<String,ServerFnError<String>> {
 
 #[component]
 pub fn Query() -> impl IntoView {
-    use thaw::*;
     view! {
         <div>
             <h1>Query</h1>
@@ -50,13 +49,12 @@ const QUERY:&str = r#"SELECT ?x ?y WHERE {
 
 #[island]
 fn QueryIsland() -> impl IntoView {
-    use thaw::*;
-    use leptos_router::ActionForm;
+    use leptos::form::ActionForm;
     use leptos::html::Div;
 
-    let action = create_server_action::<QueryApi>();
-    let rf = create_node_ref::<Div>();
-    let result = create_memo(move |_| {
+    let action = ServerAction::<QueryApi>::new();
+    let rf = NodeRef::<Div>::new();
+    let result = Memo::new(move |_| {
         action.value().get().map(|result| match result {
             Ok(r) => r,
             _ => "Error".to_string()
@@ -64,10 +62,10 @@ fn QueryIsland() -> impl IntoView {
     });
     view!{
         <ActionForm action>
-            <textarea value=QUERY.to_string() name="q" style="width:calc(100% - 10px);height:200px;">{QUERY.to_string()}</textarea>
+            <textarea name="q" style="width:calc(100% - 10px);height:200px;">{QUERY.to_string()}</textarea>
             <input type="submit" value="Query"/>
         </ActionForm>
-        <div _ref=rf style="text-align:left;white-space:pre">
+        <div node_ref=rf style="text-align:left;white-space:pre">
             {move || result.get().unwrap_or_default()}
         </div>
     }

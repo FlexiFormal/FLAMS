@@ -1,7 +1,7 @@
 [workspace]
 members = ["api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm"]
 resolver = "2"
-exclude = ["web/graphs","test-plugin","tests"]
+exclude = ["web/graphs","test-plugin","tests","thaw"]
 
 [profile.release]
 opt-level = 2
@@ -19,7 +19,7 @@ codegen-units = 1
 panic = "abort"
 
 [profile.wasm-dev]
-inherits = "release"
+inherits = "dev"
 opt-level = 2
 debug = true
 debug-assertions = true
@@ -74,7 +74,7 @@ assets-dir = "web/main/assets"
 site-pkg-dir = "pkg"
 style-file = "web/main/style/main.scss"
 browserquery = "defaults"
-lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
+lib-cargo-args = ["--target","wasm32-unknown-unknown"]#,"-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
 
 # dafuq:
 # https://higherorderco.com/

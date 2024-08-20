@@ -9,7 +9,7 @@ pub mod accounts;
 #[macro_export]
 macro_rules! console_log {
     ($($t:tt)*) => (
-        leptos::logging::log!($($t)*);
+        leptos::logging::log!($($t)*)
     )
 }
 
@@ -20,7 +20,8 @@ macro_rules! console_log {
 pub fn hydrate() {
     use home::*;
     console_error_panic_hook::set_once();
-    leptos_dom::HydrationCtx::stop_hydrating();
+    leptos::mount::hydrate_islands();
+    //leptos::leptos_dom::HydrationCtx::stop_hydrating();
 }
 
 #[cfg(feature = "server")]
@@ -31,7 +32,7 @@ pub mod server {
     use axum::{Extension, extract};
     use axum::response::IntoResponse;
     use http::Request;
-    use leptos::{LeptosOptions, provide_context};
+    use leptos::prelude::*;
     use leptos_axum::generate_route_list;
     use tower::ServiceExt;
     use tower_http::services::ServeDir;
@@ -140,7 +141,7 @@ pub mod server {
         if result.status() == http::StatusCode::OK {
             result
         } else {
-            let handler = leptos_axum::render_app_to_stream(state.leptos_options.clone(),crate::home::Main);
+            let handler = leptos_axum::render_app_to_stream(/*state.leptos_options.clone(),*/crate::home::Main);
             handler(Request::from_parts(parts,body)).in_current_span().await.into_response()
         }
     }
@@ -159,7 +160,7 @@ pub mod server {
         let ip = controller().settings().ip.clone();
         let port = controller().settings().port;
 
-        let mut leptos_options = get_configuration(None).in_current_span().await.unwrap().leptos_options;
+        let mut leptos_options = get_configuration(None).unwrap().leptos_options;
         let site_addr = std::net::SocketAddr::new(ip, port);
         leptos_options.site_root = site_root.to_string();
         leptos_options.output_name = "immt".to_string();
@@ -200,13 +201,13 @@ pub mod server {
                 auth_session: axum_login::AuthSession<AccountManager>,
                 extract::State(state): extract::State<AppState>,
                 request:http::Request<axum::body::Body>| { async move {
-                let handler = leptos_axum::render_app_to_stream_with_context(state.leptos_options.clone(),move || {
+                let handler = leptos_axum::render_app_to_stream_with_context(/*state.leptos_options.clone(),*/move || {
                     provide_context(auth_session.clone());
                     provide_context(state.db.clone())
-                },crate::home::Main);
+                },move || crate::home::shell(state.leptos_options.clone()));
                 handler(request).in_current_span().await.into_response()
             }.in_current_span()}))
-            .fallback(file_and_error_handler)
+            .fallback(self::file_and_error_handler)
             .layer(auth_service)
             .layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(MySpan(span)));
         let app : Router<()> = app.with_state(AppState {leptos_options,db});

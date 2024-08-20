@@ -1,25 +1,22 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::rc::Rc;
-use leptos::*;
-use leptos_meta::provide_meta_context;
+use leptos::prelude::*;
 use immt_core::content::ArgSpec;
-use immt_core::uris::archives::ArchiveId;
 use immt_core::narration::{CSS, StatementKind};
-use immt_core::uris::{ContentURI, DocumentURI, URI, ModuleURI, NamedURI, NarrativeURI, NarrDeclURI, SymbolURI, Name};
+use immt_core::uris::{ContentURI, DocumentURI, ModuleURI, NarrDeclURI, SymbolURI, Name};
+#[cfg(feature="server")]
+use immt_core::{uris::{URI,NarrativeURI},narration::DocumentElement};
 
 #[cfg(feature="server")]
 mod uris {
-    use leptos_router::ParamsMap;
+    use leptos_router::params::ParamsMap;
     use immt_core::narration::Language;
     use immt_core::uris::{ArchiveId, ContentURI, URI, ModuleURI, Name, DocumentURI, NarrativeURI, NarrDeclURI};
 
-    trait MapLike {
+    pub(crate) trait MapLike {
         fn get(&self, key: &str) -> Option<&str>;
     }
     impl MapLike for ParamsMap {
         fn get(&self,key:&str) -> Option<&str> {
-            self.get(key).map(|s| s.as_str())
+            self.get_str(key)
         }
     }
     impl MapLike for std::collections::HashMap<String,String> {
@@ -238,9 +235,11 @@ uri!{
 
 
 mod fragments {
-    use immt_core::narration::{CSS, DocumentElement};
+    use immt_core::narration::CSS;
     use immt_core::uris::{DocumentURI, NarrDeclURI, SymbolURI};
-    use leptos::*;
+    use leptos::prelude::*;
+    #[cfg(feature = "server")]
+    use immt_core::narration::DocumentElement;
     #[server(
         prefix="/api/fragments",
         endpoint="document",
@@ -286,10 +285,9 @@ mod fragments {
 }
 
 pub mod omdoc {
-    use leptos::*;
+    use leptos::prelude::*;
     use immt_core::narration::StatementKind;
     use immt_core::uris::{ContentURI, DocumentURI, ModuleURI, NamedURI, NarrDeclURI, SymbolURI};
-    use immt_core::utils::parse::StringOrStr;
     use crate::components::content::{HTMLConstant, HTMLDocElem, HTMLDocument};
 
     #[server(
@@ -337,12 +335,12 @@ pub mod omdoc {
 
     #[island]
     pub fn OMDocDocumentURI(uri:DocumentURI) -> impl IntoView {
-        let resource = create_resource(|| (),move |_| omdoc_document(uri));
+        let resource = Resource::new(|| (),move |_| omdoc_document(uri));
         view!{
             <Suspense fallback=|| view!(<thaw::Spinner/>)>{
                 if let Some(Ok(doc)) = resource.get() {
-                    Some(view!{<OMDocDocument doc/>}.into_view())
-                } else {Some(view!(<span>"Document not found"</span>).into_view())}
+                    Some(view!{<OMDocDocument doc/>}.into_any())
+                } else {Some(view!(<span>"Document not found"</span>).into_any())}
             }</Suspense>
         }
     }
@@ -362,12 +360,12 @@ pub mod omdoc {
 
     #[island]
     pub fn OMDocConstantURI(uri:SymbolURI) -> impl IntoView {
-        let resource = create_resource(|| (),move |_| omdoc_constant(uri));
+        let resource = Resource::new(|| (),move |_| omdoc_constant(uri));
         view!{
             <Suspense fallback=|| view!(<thaw::Spinner/>)>{move || {
                 if let Some(Ok(c)) = resource.get() {
-                    view!{<OMDocConstant c/>}.into_view()
-                } else {view!(<span>"Symbol not found"</span>).into_view()}
+                    view!{<OMDocConstant c/>}.into_any()
+                } else {view!(<span>"Symbol not found"</span>).into_any()}
             }}</Suspense>
         }
     }
@@ -385,7 +383,7 @@ pub mod omdoc {
             {c.macro_name.map(|s| {
                 view!(<div style="font-family:monospace;position:absolute;top:0;right:0;">"\\"{s.to_string()}{
                     c.arity.into_iter().enumerate().map(|(i,a)| match a {
-                        ArgType::Normal => view!("{"{ARGS.chars().nth(i).unwrap()}"}").into_view(),
+                        ArgType::Normal => view!("{"{ARGS.chars().nth(i).unwrap()}"}").into_any(),
                         ArgType::Sequence => view!("{"
                             <math><mrow><msub>
                                 <mi>{ARGS.chars().nth(i).unwrap()}</mi>
@@ -396,8 +394,8 @@ pub mod omdoc {
                                 <mi>{ARGS.chars().nth(i).unwrap()}</mi>
                                 <mi>"n"</mi>
                             </msub></mrow></math>
-                            "}").into_view(),
-                        ArgType::Binding => view!("{"{VARS.chars().nth(i).unwrap()}"}").into_view(),
+                            "}").into_any(),
+                        ArgType::Binding => view!("{"{VARS.chars().nth(i).unwrap()}"}").into_any(),
                         ArgType::BindingSequence => view!("{"
                             <math><mrow><msub>
                                 <mi>{VARS.chars().nth(i).unwrap()}</mi>
@@ -408,7 +406,7 @@ pub mod omdoc {
                                 <mi>{VARS.chars().nth(i).unwrap()}</mi>
                                 <mi>"n"</mi>
                             </msub></mrow></math>
-                            "}").into_view()
+                            "}").into_any()
                     }).collect::<Vec<_>>()
                 }</div>)
             })}
@@ -432,29 +430,28 @@ pub mod omdoc {
     #[inline]
     fn omdoc_doc_elems(children:Vec<HTMLDocElem>,in_structure:bool) -> impl IntoView {
         children.into_iter().map(|e| match e {
-            HTMLDocElem::InputRef(uri) => view!(<OMDocInputref uri/>).into_view(),
+            HTMLDocElem::InputRef(uri) => view!(<OMDocInputref uri/>).into_any(),
             HTMLDocElem::Section {uri,title_html,children,uses}
-                => view!(<OMDocSection title_html elems=children uri uses in_structure/>).into_view(),
+                => view!(<OMDocSection title_html elems=children uri uses in_structure/>).into_any(),
             HTMLDocElem::Module {uri,children,uses, imports }
-                => view!(<OMDocDocumentModule elems=children uri uses imports/>).into_view(),
+                => view!(<OMDocDocumentModule elems=children uri uses imports/>).into_any(),
             HTMLDocElem::Structure {uri,children,uses,imports}
-                => view!(<OMDocDocumentStructure elems=children uri uses imports/>).into_view(),
+                => view!(<OMDocDocumentStructure elems=children uri uses imports/>).into_any(),
             HTMLDocElem::Morphism {uri,domain,children,total}
-                => view!(<OMDocDocumentMorphism elems=children uri domain total/>).into_view(),
+                => view!(<OMDocDocumentMorphism elems=children uri domain total/>).into_any(),
             HTMLDocElem::Paragraph {uri,kind,uses,children,fors,terms_html}
-                => view!(<OMDocParagraph kind uri fors terms_html uses elems=children />).into_view(),
+                => view!(<OMDocParagraph kind uri fors terms_html uses elems=children />).into_any(),
             HTMLDocElem::Constant(uri)
-                => view!(<OMDocDocumentConstant uri in_structure/>).into_view(),
+                => view!(<OMDocDocumentConstant uri in_structure/>).into_any(),
             HTMLDocElem::Var {uri,tp,df}
-                => view!(<OMDocVariable uri tp df/>).into_view(),
+                => view!(<OMDocVariable uri tp df/>).into_any(),
             HTMLDocElem::Term(t)
-                => view!(<div>"Term "<math><mrow inner_html=t/></math></div>).into_view()
+                => view!(<div>"Term "<math><mrow inner_html=t/></math></div>).into_any()
         }).collect_view()
     }
 
     #[component]
     pub fn OMDocVariable(uri:NarrDeclURI,tp:Option<String>,df:Option<String>) -> impl IntoView {
-        use thaw::*;
         view!{
             <div>
                 <b>"Variable "{super::var_shtml(uri)}</b>
@@ -467,7 +464,7 @@ pub mod omdoc {
     pub fn OMDocInputref(uri:DocumentURI) -> impl IntoView {
         use thaw::*;
         let name = uri.name();
-        let (expanded, set_expanded) = create_signal(false);
+        let (expanded, set_expanded) = signal(false);
         view!{<details>
             <summary on:click=move |_| set_expanded.update(|b| *b=!*b)>
                 <b>"Document "<LinkedName uri=uri.into()/></b>
@@ -481,7 +478,7 @@ pub mod omdoc {
     pub fn OMDocDocumentConstant(uri:SymbolURI,in_structure:bool) -> impl IntoView {
         use thaw::*;
         let name = uri.name();
-        let (expanded, set_expanded) = create_signal(false);
+        let (expanded, set_expanded) = signal(false);
         view!{<details>
             <summary on:click=move |_| set_expanded.update(|b| *b=!*b)>
                 <b>{if in_structure {"Field "} else {"Symbol "}}{super::sym_shtml(uri.into())}</b>
@@ -496,7 +493,7 @@ pub mod omdoc {
     pub fn OMDocParagraph(kind:StatementKind,uri:NarrDeclURI,fors:Vec<ContentURI>,terms_html:Vec<(SymbolURI,String)>,uses:Vec<ModuleURI>,elems:Vec<HTMLDocElem>) -> impl IntoView {
         use thaw::*;
         let name = uri.name();
-        let (expanded, set_expanded) = create_signal(false);
+        let (expanded, set_expanded) = signal(false);
         fn do_name(uri:ContentURI,terms:&Vec<(SymbolURI,String)>) -> impl IntoView {
             view!{
                 {super::sym_shtml(uri)}
@@ -510,20 +507,20 @@ pub mod omdoc {
         }
         view!{
             <Card>
-                <CardHeader slot>
+                <CardHeader>
                     {kind.to_string()}" "<LinkedName uri=uri.into()/>
+                    <CardHeaderDescription slot>
+                        {do_uses("Uses",uses)}<br/>
+                        {if fors.is_empty() {None} else {
+                            let mut iter = fors.iter();
+                            Some(view!{<div>
+                                "introduces "{do_name(*iter.next().unwrap(),&terms_html)}
+                                {iter.map(|u| view!(", "{do_name(*u,&terms_html)})).collect::<Vec<_>>()}
+                            </div>})
+                        }}
+                    </CardHeaderDescription>
                 </CardHeader>
                 //<div><b>{kind.to_string()}" "<LinkedName uri=uri.into()/></b></div>
-                <CardHeaderExtra slot>
-                    {do_uses("Uses",uses)}<br/>
-                    {if fors.is_empty() {None} else {
-                        let mut iter = fors.iter();
-                        Some(view!{<div>
-                            "introduces "{do_name(*iter.next().unwrap(),&terms_html)}
-                            {iter.map(|u| view!(", "{do_name(*u,&terms_html)})).collect::<Vec<_>>()}
-                        </div>})
-                    }}
-                </CardHeaderExtra>
                 { omdoc_doc_elems(elems,false) }
                 <details>
                 <summary on:click=move |_| set_expanded.update(|b| *b=!*b)>
@@ -531,12 +528,12 @@ pub mod omdoc {
                 </summary>
                 <Card>{move || {
                     if expanded.get() {
-                        let resource = create_resource(|| (),move |_| super::fragments::paragraph(uri));
+                        let resource = Resource::new(|| (),move |_| super::fragments::paragraph(uri));
                         Some(view!(<Suspense fallback=|| view!(<thaw::Spinner/>)>{
                             if let Some(Ok(re)) = resource.get() {
                             // TODO: CSS
-                                Some(view!{<div inner_html=re.1.to_string()/>}.into_view())
-                            } else {Some(view!(<span>"Paragraph not found"</span>).into_view())}
+                                Some(view!{<div inner_html=re.1.to_string()/>}.into_any())
+                            } else {Some("Paragraph not found".into_any())}
                         }</Suspense>))
                     } else {None}
                 }}</Card>
@@ -550,11 +547,12 @@ pub mod omdoc {
         use thaw::*;
         view!{
             <Card>
-                <CardHeader slot><UriHover uri=uri.into()>
+                <CardHeader><UriHover uri=uri.into()>
                     <b>" - "</b><span inner_html=title_html/>
-                </UriHover></CardHeader>
-                <CardHeaderExtra slot>{do_uses("Uses",uses)}</CardHeaderExtra>
-                { omdoc_doc_elems(elems,false) }
+                </UriHover>
+                <CardHeaderDescription slot>{do_uses("Uses",uses)}</CardHeaderDescription>
+                </CardHeader>
+                { omdoc_doc_elems(elems,in_structure) }
             </Card>
         }
     }
@@ -562,14 +560,11 @@ pub mod omdoc {
     #[component]
     pub fn OMDocDocumentModule(uri:ModuleURI, elems:Vec<HTMLDocElem>, uses:Vec<ModuleURI>, imports:Vec<ModuleURI>) -> impl IntoView {
         use thaw::*;
-        let name = uri.name();
-        let name = name.as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(name.as_ref());
-        let name = name.to_string();
         view!{
             <Card>
-                <CardHeader slot>"Module "<LinkedName uri=NamedURI::Content(uri.into())/>
+                <CardHeader>"Module "<LinkedName uri=NamedURI::Content(uri.into())/>
+                <CardHeaderDescription slot>{do_uses("Uses",uses)}<br/>{do_uses("Imports",imports)}</CardHeaderDescription>
                 </CardHeader>
-                <CardHeaderExtra slot>{do_uses("Uses",uses)}<br/>{do_uses("Imports",imports)}</CardHeaderExtra>
                 { omdoc_doc_elems(elems,false) }
             </Card>
         }
@@ -578,14 +573,11 @@ pub mod omdoc {
     #[component]
     pub fn OMDocDocumentStructure(uri:ModuleURI, elems:Vec<HTMLDocElem>, uses:Vec<ModuleURI>, imports:Vec<ModuleURI>) -> impl IntoView {
         use thaw::*;
-        let name = uri.name();
-        let name = name.as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(name.as_ref());
-        let name = name.to_string();
         view!{
             <Card>
-                <CardHeader slot>"Structure "<LinkedName uri=NamedURI::Content(uri.into())/>
+                <CardHeader>"Structure "<LinkedName uri=NamedURI::Content(uri.into())/>
+                <CardHeaderDescription slot>{do_uses("Uses",uses)}<br/>{do_uses("Imports",imports)}</CardHeaderDescription>
                 </CardHeader>
-                <CardHeaderExtra slot>{do_uses("Uses",uses)}<br/>{do_uses("Imports",imports)}</CardHeaderExtra>
                 { omdoc_doc_elems(elems,true) }
             </Card>
         }
@@ -621,7 +613,6 @@ pub mod omdoc {
 
     #[component]
     fn LinkedName(uri: NamedURI) -> impl IntoView {
-        use thaw::*;
         let name = uri.name();
         let name = name.as_ref();
         let name = name.rsplit_once('/').map(|(_,n)| n).unwrap_or(name);
@@ -651,13 +642,13 @@ pub(crate) fn URITop() -> impl IntoView {
     {
         use leptos_router::*;
         use immt_core::uris::*;
-        let params = use_query_map();
+        let params = leptos_router::hooks::use_query_map();
         move || {
             let uri = params.with(|p| uris::from_params(p));
             uri.map(|uri| {
                 match uri {
-                    URI::Narrative(NarrativeURI::Doc(d)) => view!(<Document uri=d/>).into_view(),
-                    _ => view!("TODO: "{uri.to_string()}).into_view()
+                    URI::Narrative(NarrativeURI::Doc(d)) => view!(<Document uri=d/>).into_any(),
+                    _ => view!("TODO: "{uri.to_string()}).into_any()
                 }
             })
         }
@@ -670,7 +661,7 @@ pub(crate) fn URITop() -> impl IntoView {
 fn Document(uri:DocumentURI) -> impl IntoView {
     #[cfg(feature="server")]
     {
-        let res = create_blocking_resource(|| (), move |_| fragments::document(uri));
+        let res = Resource::new_blocking(|| (), move |_| fragments::document(uri));
         view! {
             <Suspense fallback=|| view!(<thaw::Spinner/>)>
                 <Show
@@ -692,12 +683,13 @@ fn Document(uri:DocumentURI) -> impl IntoView {
 #[island]
 fn OMDocDocumentDrawer(uri:DocumentURI) -> impl IntoView {
     use thaw::*;
-    let show = create_rw_signal(false);
+    let open = RwSignal::new(false);
     view!(
-        <Button on_click=move |_| show.set(true) style="position:absolute;top:0;right:0;">OMDoc</Button>
-        <Drawer show placement=DrawerPlacement::Right mount=DrawerMount::None width="80%" height="100%">
-        {move || if show.get() { Some(view!(<omdoc::OMDocDocumentURI uri/>)) } else {None}}
-    </Drawer>)
+        <div style="position:absolute;top:0;right:0;"><Button on_click=move |_| open.set(true)>OMDoc</Button></div>
+        <OverlayDrawer open position=DrawerPosition::Right size=DrawerSize::Large>
+            {move || if open.get() { Some(view!(<omdoc::OMDocDocumentURI uri/>)) } else {None}}
+        </OverlayDrawer>
+    )
 }
 
 #[component]
@@ -705,8 +697,8 @@ fn CSSHTML(css:Vec<CSS>,html:String) -> impl IntoView {
     use leptos_meta::{Stylesheet,Style,Script};
     view!(<For each=move || css.clone().into_iter().enumerate() key=|(u,_)| u.to_string()
         children = move |(u,css)| match css {
-            CSS::Link(href) => view!(<Stylesheet href/>),
-            CSS::Inline(content) => view!(<Style>{content.to_string()}</Style>)
+            CSS::Link(href) => view!(<Stylesheet href/>).into_any(),
+            CSS::Inline(content) => view!(<Style>{content.to_string()}</Style>).into_any()
         }
         />
         <Script src="/shtml.js"/>
@@ -719,7 +711,13 @@ fn sym_shtml(uri:ContentURI) -> impl IntoView {
     let name = name.as_ref();
     let name = name.rsplit_once('/').map(|(_,n)| n).unwrap_or(name);
     let name = name.to_string();
-    view!(<span shtml:term="OMID" shtml:maincomp="" shtml:head={uri.to_string()} style="font-family:monospace">{name.clone()}</span>)
+    leptos::html::span()
+        .attr("shtml:term","OMID")
+        .attr("shtml:maincomp","")
+        .attr("shtml:head",uri.to_string())
+        .attr("style","font-family:monospace")
+        .inner_html(name)
+    //view!(<span (shtml:term)="OMID" (shtml:maincomp)="" (shtml:head)={uri.to_string()} style="font-family:monospace">{name.clone()}</span>)
     /*format!(
         "<span shtml:term=\"OMID\" shtml:maincomp shtml:head=\"{uri}\">{}</span>",uri.name()
     )*/
@@ -729,7 +727,13 @@ fn var_shtml(uri:NarrDeclURI) -> impl IntoView {
     let name = name.as_ref();
     let name = name.rsplit_once('/').map(|(_,n)| n).unwrap_or(name);
     let name = name.to_string();
-    view!(<span shtml:term="OMV" shtml:varcomp="" shtml:head={uri.to_string()} style="font-family:monospace">{name.clone()}</span>)
+    leptos::html::span()
+        .attr("shtml:term","OMV")
+        .attr("shtml:maincomp","")
+        .attr("shtml:head",uri.to_string())
+        .attr("style","font-family:monospace")
+        .inner_html(name)
+    //view!(<span shtml:term="OMV" shtml:varcomp="" shtml:head={uri.to_string()} style="font-family:monospace">{name.clone()}</span>)
     /*format!(
         "<span shtml:term=\"OMID\" shtml:maincomp shtml:head=\"{uri}\">{}</span>",uri.name()
     )*/

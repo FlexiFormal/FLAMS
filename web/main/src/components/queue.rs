@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-use leptos::*;
+use leptos::html::HtmlElement;
+use leptos::prelude::*;
+use wasm_bindgen::__rt::IntoJsResult;
 use immt_core::building::buildstate::{QueueEntry, QueueMessage};
 use immt_core::building::formats::SourceFormatId;
 use immt_core::uris::archives::ArchiveId;
@@ -83,7 +85,7 @@ pub async fn run(id:String) -> Result<(),ServerFnError<IMMTError>> {
 
 pub(crate) struct QueueSocket {
     #[cfg(feature="client")]
-    socket: web_sys::WebSocket,
+    socket: leptos::web_sys::WebSocket,
     #[cfg(feature="server")]
     listener: immt_api::utils::asyncs::ChangeListener<QueueMessage>
 }
@@ -137,13 +139,18 @@ impl WebSocket<(),QueueMessage> for QueueSocket {
 
 #[component]
 pub fn QueuesTop() -> impl IntoView {
-    view!{<Await future = || get_queues() let:queues blocking=true>{
-        match queues {
-            Ok(q) if q.is_empty() => view!(<div>"No running queues"</div>).into_view(),
-            Ok(q) => view!(<QueueTabs queues=q.clone()/>).into_view(),
-            _ => view!(<div>"Error"</div>).into_view()
-        }
-    }</Await> }
+    let resource = Resource::new(|| (),|_| get_queues());
+    view!{
+        <Suspense fallback=|| view!(<thaw::Spinner/>)>{
+            if let Some(queues) = resource.get() {
+                match queues {
+                    Ok(q) if q.is_empty() => view!(<div>"No running queues"</div>).into_any(),
+                    Ok(q) => view!(<QueueTabs queues=q.clone()/>).into_any(),
+                    _ => view!(<div>"Error"</div>).into_any()
+                }
+            } else {view!(<span>"Error"</span>).into_any()}
+        }</Suspense>
+    }
 }
 /*
 #[derive(Clone)]
@@ -175,8 +182,8 @@ struct AllQueues {
 impl AllQueues {
     fn new(ids:Vec<String>) -> Self {
         let selected = ids.first().cloned().unwrap_or("".to_string());
-        let queues = ids.into_iter().map(|id| (id,create_rw_signal(QueueData::Empty))).collect();
-        Self {selected:create_rw_signal(selected.clone()),queues:RwSignal::new(queues)}
+        let queues = ids.into_iter().map(|id| (id,RwSignal::new(QueueData::Empty))).collect();
+        Self {selected:RwSignal::new(selected.clone()),queues:RwSignal::new(queues)}
     }
 }
 
@@ -205,9 +212,10 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
     use wasm_bindgen::JsCast;
     let queues = AllQueues::new(queues);
     let qc = queues.clone();
-    let show = create_rw_signal(false);
-    let div_ref = create_node_ref::<html::Div>();
+    let show = RwSignal::new(false);
+    let div_ref = NodeRef::<leptos::html::Div>::new();
     let refcl= div_ref.clone();
+    /*
 
     QueueSocket::force_start(move |msg| {
         let queues = &qc;
@@ -217,7 +225,7 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                 queues.queues.update(|v| {
                     match v.get_mut(&id) {
                         Some(s) => s.set(idle),
-                        None => v.insert(id.clone(),create_rw_signal(idle))
+                        None => v.insert(id.clone(),RwSignal::new(idle))
                     }
                 })
             }
@@ -233,7 +241,7 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                     });
                     match v.get_mut(&id) {
                         Some(s) => s.set(q),
-                        None => v.insert(id.clone(),create_rw_signal(q))
+                        None => v.insert(id.clone(),RwSignal::new(q))
                     }
                 })
             }
@@ -293,49 +301,59 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
             show.set(true);
             let q = queues.clone();
             refcl.get_untracked().unwrap().replace_children_with_node_1(
-                view!(<div><Tabs value=q.selected>
+                &view!(<div><TabList selected_value=q.selected>
                     <For each=move || q.queues.clone().get() key=|e| e.0.clone() children=move |e| view!(
-                        <Tab key=&e.0 label=e.0.clone()>{QueueTop(e.0,e.1)}</Tab>
+                        <Tab value=&e.0>{e.0}{QueueTop(e.0,e.1)}</Tab>
                     )/>
-                </Tabs></div>).dyn_ref().unwrap()
+                </TabList></div>).into_inner().dyn_ref().into()
             )
         }
         None
     });
+
+     */
     view!(<div node_ref=div_ref />)
 }
 
 fn QueueTop(id:String,ls:RwSignal<QueueData>) -> impl IntoView {
-    move || match ls.get() {
+    match ls.get() {
         QueueData::Idle(v) => {
-            IdleQueue(id.clone(),v).into_view()
+            IdleQueue(id.clone(),v).into_any()
         },
         QueueData::Running(r) => {
-            RunningQueue(id.clone(),r).into_view()
+            RunningQueue(id.clone(),r).into_any()
         }
-        _ => view!(<div>"Other"</div>).into_view()
+        _ => view!(<div>"Other"</div>).into_any()
     }
 }
 
 // #[island]
 fn IdleQueue(id:String, ls:RwSignal<Vec<Entry>>) -> impl IntoView {
     use thaw::*;
-    let act = create_action(move |_| run(id.clone()));
+    let act = Action::<(),Result<(),ServerFnError<IMMTError>>>::new(move |_| run(id.clone()));
     view!{
-        <Space justify=SpaceJustify::End>{move ||
-            view!(<Button on_click=move |_| act.dispatch(())>"Run"</Button>)
-        }</Space>
+        //<Space justify=SpaceJustify::End>
+            <Button on_click=move |_| {act.dispatch(());}>"Run"</Button>
+        //</Space>
         <ul>
           <For each=move || ls.get() key=|e| e.id() children=|e| e.as_view()/>
         </ul>
     }
 }
 
-pub fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
+fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
     use thaw::*;
-    let RunningQueue {running,queue,blocked,failed, finished,eta } = queue;
-    move || view!{<Space>
-        <Space align=SpaceAlign::Start><Layout style="text-align:left;">
+    let RunningQueue {
+        running,
+        queue,
+        blocked,
+        failed,
+        finished,
+        eta
+    } = queue;
+    view!{//<Space>
+        //<Space align=SpaceAlign::Start>
+        <Layout content_style="text-align:left;">
             <div>"ETA: "{move || eta.get().to_string()}</div>
             <h3 id="running">Running</h3>
             <ol style="margin-left:30px"><For each=move || running.get() key=|e| e.id() children=|e| e.as_view()/></ol>
@@ -347,13 +365,15 @@ pub fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
             <ol reversed style="margin-left:30px"><For each=move || failed.get() key=|e| e.id() children=|e| e.as_view()/></ol>
             <h3 id="finished">Finished</h3>
             <ol reversed style="margin-left:30px"><For each=move || finished.get() key=|e| e.id() children=|e| e.as_view()/></ol>
-        </Layout></Space>
-        <Space align=SpaceAlign::End><div style="position:absolute;"><Anchor>
+        </Layout>//</Space>
+        //<Space align=SpaceAlign::End>
+        <div style="position:absolute;"><Anchor>
             <AnchorLink title="Running" href="#running"/>
             <AnchorLink title="Queued" href="#queued"/>
             <AnchorLink title="Blocked" href="#blocked"/>
             <AnchorLink title="Failed" href="#failed"/>
             <AnchorLink title="Finished" href="#finished"/>
-        </Anchor></div></Space>
-    </Space>}
+        </Anchor></div>//</Space>
+    //</Space>
+    }
 }

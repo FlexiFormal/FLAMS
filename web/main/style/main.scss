@@ -1,16 +1,52 @@
-@import "./components/treeview";
+/*
+@import "./thaw/icon";
 @import "./components/loglist";
 @import "./thaw/menu-group";
 @import "./thaw/menu-item";
-@import "./thaw/badge";
 @import "./thaw/modal";
 @import "./thaw/tabs";
-@import "./thaw/layout";
 @import "./thaw/card";
 @import "./thaw/drawer";
 @import "./thaw/button";
 @import "./thaw/popover";
+*/
+@import "./thaw/theming";
+@import "./thaw/layout";
+@import "./thaw/divider";
+@import "./thaw/nav";
+@import "./thaw/badge";
 
+@import "./components/treeview";
+
+.immt-main {
+    height:calc(100vh - 67px);
+    top:67px!important;
+}
+
+.immt-header {
+    width:100vw;
+    height: 67px;
+    text-align: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    .thaw-grid-item {
+      align-content: center;
+    }
+}
+
+.immt-menu {
+    border-right: var(--strokeWidthThickest) double var(--colorNeutralStroke1);
+    min-width: fit-content;
+    height: 100%;
+}
+
+.immt-menu-inner {
+    width:120px;
+}
+
+/*
 
 body {
 	font-family: sans-serif;
@@ -23,11 +59,6 @@ body {
 	width: 100%;
 }
 
-.immt-menu {
-	border-right: 3px double black;
-	min-width: fit-content;
-	height: 100%;
-}
 
 .immt-small-card > .thaw-card__header {
 	padding: 10px;
@@ -40,3 +71,4 @@ body {
 .immt-small-card > .thaw-card__header + .thaw-card__content, .thaw-card__footer {
 	padding: 0 10px 10px;
 }
+ */

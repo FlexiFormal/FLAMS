@@ -13,41 +13,60 @@ pub use queue::QueuesTop;
 pub use settings::Settings;
 pub use query::Query;
 
-use std::future::Future;
-use leptos::*;
-use leptos::error::*;
+use leptos::prelude::*;
+use thaw::{BadgeAppearance,BadgeSize,BadgeColor};
 
-use thaw::{Spinner, SpinnerSize};
-/*
-#[island]
-pub(crate) fn LazyCollapsible(#[prop(optional)] collapsible_header:CollapsibleHeader) -> impl IntoView {
-    view!("todo")
+
+pub(crate) fn icon(icon:icondata_core::Icon) -> impl IntoView {
+    icon_with_options(icon,Some("18px"),Some("18px"),None,None)
 }
 
-
-#[slot]
-pub(crate) struct CollapsibleHeader {
-    children: Children,
+pub(crate) fn icon_with_options(icon:icondata_core::Icon,width:Option<&str>,height:Option<&str>,style:Option<&str>,class:Option<&str>) -> impl IntoView {
+    let style = match (style,icon.style) {
+        (Some(a),Some(b)) => format!("{b} {}",a),
+        (Some(a),None) => a.to_string(),
+        (None,Some(b)) => b.to_string(),
+        (None,None) => "vertical-align:sub;".to_string(),
+    };
+    view! {
+        <div style="display:inline-block;margin:auto">
+        <svg
+            x=icon.x y=icon.y style=style
+            width=width.map(|w| w.to_string()) height=height.map(|w| w.to_string())
+            viewBox=icon.view_box.map(|view_box| view_box.to_string())
+            stroke-linecap=icon.stroke_linecap.map(|a| a.to_string())
+            stroke-linejoin=icon.stroke_linejoin.map(|a| a.to_string())
+            stroke-width=icon.stroke_width.map(|a| a.to_string())
+            stroke=icon.stroke.map(|a| a.to_string())
+            fill=icon.fill.unwrap_or("currentColor").to_string()
+            inner_html=icon.data.to_string()
+        ></svg></div>
+    }
 }
 
- */
-
-/*
 #[component]
-fn Collapsible(#[prop(optional, into)] header: View,children:ChildrenFn,#[prop(optional, into)] expanded:bool) -> impl IntoView {
-    use thaw::*;
-    let (expanded, set_expanded) = create_signal(expanded);
-    view!(<details>
-        <summary on:click=move |_| {set_expanded.update(|b| *b=!*b)}>
-            <Icon icon=icondata_ai::AiRightOutlined class="thaw-collapse-item-arrow"/>
-        </summary>
-        <div>{move || {
-            if expanded.get() {Some(children.clone())} else {None}
-        }}</div>
-        </details>)
+pub(crate) fn Badge(
+    #[prop(optional,into)] appearance:Option<BadgeAppearance>,
+    #[prop(optional,into)] size:Option<BadgeSize>,
+    #[prop(optional,into)] color:Option<BadgeColor>,
+    children: Children
+) -> impl IntoView {
+    use leptos::either::Either;
+    let mut classes = "thaw-badge".to_string();
+    if let Some(a) = appearance {
+        classes.push_str(&format!(" thaw-badge--{}",a.as_str()));
+    }
+    if let Some(s) = size {
+        classes.push_str(&format!(" thaw-badge--{}",s.as_str()));
+    }
+    if let Some(c) = color {
+        classes.push_str(&format!(" thaw-badge--{}",c.as_str()));
+    }
+    view! {
+        <div class=classes>{children()}</div>
+    }
 }
 
- */
 
 #[component]
 pub(crate) fn IFrame(src:String,#[prop(optional,into)] ht:String) -> impl IntoView {
@@ -56,44 +75,4 @@ pub(crate) fn IFrame(src:String,#[prop(optional,into)] ht:String) -> impl IntoVi
     } else {
         format!("width:100%;height:{ht};border: 0;")
     }></iframe>)
-}
-
-
-pub fn with_spinner<S, T, E, Fu,A:Clone+'static,V:IntoView + 'static>(
-    source: impl Fn() -> S + 'static,
-    fetcher: impl Fn(S) -> Fu + 'static,
-    args: A,
-    then: impl (Fn(A,T) -> V) + Copy + 'static
-) -> impl IntoView
-    where
-        S: PartialEq + Clone + 'static,
-        E: Clone + Serializable + serde::Serialize + for<'a> serde::Deserialize<'a> + 'static + std::fmt::Debug,
-        T: Serializable + Clone + 'static + serde::Serialize + for<'a> serde::Deserialize<'a> + std::fmt::Debug,
-        Fu: Future<Output = Result<T,ServerFnError<E>>> + 'static,
-{
-    let resource = create_resource(source, fetcher);
-    template! {<Suspense fallback=|| template! {<Spinner size=SpinnerSize::Tiny/>}>{
-            let res = resource.get();
-            let args = args.clone();
-            template!{<ErrorBoundary fallback=|_| {template! {<p>"Something went wrong"</p>}}>{
-                res.map(move |x| x.ok().map(|t| then(args,t)) )
-            }</ErrorBoundary>}
-        }</Suspense>}
-}
-
-pub fn with_spinner_simple<E,T,Fu,V:IntoView + 'static>(
-    fut: impl Fn() -> Fu + 'static,
-    then: impl (Fn(T) -> V) + Copy + 'static
-) -> impl IntoView where
-    E: Clone + Serializable + serde::Serialize + for<'a> serde::Deserialize<'a> + 'static + std::fmt::Debug,
-    T: Serializable + Clone + 'static + serde::Serialize + for<'a> serde::Deserialize<'a> + std::fmt::Debug,
-    Fu:Future<Output = Result<T,E>> + 'static
-    {
-    let resource = create_resource(|| (),move |_| fut());
-    template! {<Suspense fallback=|| template! {<Spinner size=SpinnerSize::Tiny/>}>{
-        let res = resource.get();
-        template!{<ErrorBoundary fallback=|_| {template! {<p>"Something went wrong"</p>}}>{
-            res.map(move |x| x.ok().map(|t| then(t)) )
-        }</ErrorBoundary>}
-    }</Suspense>}
 }

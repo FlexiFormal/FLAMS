@@ -3,6 +3,7 @@
 }
 
 .thaw-layout--absolute-positioned {
+  background-color: inherit;
   position: absolute;
   top: 0;
   right: 0;
@@ -15,12 +16,12 @@
 > .thaw-scrollbar__container {
   display: flex;
 }
-
 .thaw-layout-sider {
   position: relative;
   min-width: 240px;
   overflow: auto;
 }
+
 .thaw-scrollbar {
   overflow: hidden;
   position: relative;
@@ -74,17 +75,25 @@
   height: var(--thaw-scrollbar-size);
 }
 
-.thaw-scrollabr__thumb {
+.thaw-scrollbar__thumb {
   position: absolute;
   pointer-events: all;
 
   width: 100%;
   height: 100%;
   border-radius: var(--thaw-scrollbar-size);
-  background-color: var(--thaw-scrollbar-background-color);
+  background-color: color-mix(
+                  in srgb,
+                  var(--colorNeutralBackgroundInverted) 32%,
+                  transparent
+  );
   transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.thaw-scrollabr__thumb:hover {
-  background-color: var(--thaw-scrollbar-background-color-hover);
+.thaw-scrollbar__thumb:hover {
+  background-color: color-mix(
+                  in srgb,
+                  var(--colorNeutralBackgroundInverted) 42%,
+                  transparent
+  );
 }

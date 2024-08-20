@@ -16,10 +16,11 @@ mod css {
 use css::*;
 
 use async_trait::async_trait;
-use leptos::*;
+use leptos::{prelude::*,html};
 use immt_core::utils::logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem};
 use immt_core::utils::time::Timestamp;
 use immt_core::utils::VecMap;
+use leptos::html::HtmlElement;
 use crate::utils::WebSocket;
 
 #[cfg(feature="server")]
@@ -104,13 +105,13 @@ fn TopLog() -> impl IntoView {
     //use crate::utils::WebSocket;
     use thaw::Spinner;
 
-    let (signal_read,_signal_write) = create_signal(false);
+    let (signal_read,_signal_write) = signal(false);
 
-    let _log_frame = create_node_ref::<html::Ul>();
-    let _warn_frame = create_node_ref::<html::Ul>();
-    let (_spinner_a,_spinner_b) = (create_node_ref::<html::Div>(),create_node_ref::<html::Div>());
+    let _log_frame = NodeRef::<html::Ul>::new();
+    let _warn_frame = NodeRef::<html::Ul>::new();
+    let (_spinner_a,_spinner_b) = (NodeRef::<html::Div>::new(),NodeRef::<html::Div>::new());
 
-    let _res = create_effect(move |_| {
+    let _res = Effect::new(move |_| {
         let _ = signal_read.get();
         #[cfg(feature="client")]
         {
@@ -152,29 +153,30 @@ mod client {
         }
     }
     fn populate(state:&mut LogState,tree:LogTree) {
-        fn do_tree_elems(children:Vec<LogTreeElem>,elem:&HtmlElement<html::Ul>,warn_frame:&HtmlElement<html::Ul>,frames:&mut Frames) {
+        /*
+        fn do_tree_elems(children:Vec<LogTreeElem>,elem:&HtmlUListElement,warn_frame:&HtmlUListElement,frames:&mut Frames) {
             for c in children {
                 match c {
                     LogTreeElem::Message(LogMessage {message,timestamp,target,level,args}) => {
                         if level >= LogLevel::WARN {
-                            warn_frame.append_child(template!(<li><LogLine timestamp message=message.clone() target=target.clone() level args=args.clone() /></li>).dyn_ref().unwrap()).unwrap();
+                            warn_frame.append_child(view!(<li><LogLine timestamp message=message.clone() target=target.clone() level args=args.clone() /></li>).into_inner().dyn_ref().unwrap()).unwrap();
                         }
-                        elem.append_child(template!(<li><LogLine timestamp message target level args /></li>).dyn_ref().unwrap()).unwrap();
+                        elem.append_child(view!(<li><LogLine timestamp message target level args /></li>).into_inner().dyn_ref().unwrap()).unwrap();
                     }
                     LogTreeElem::Span(LogSpan {id,name,timestamp,target,level,args,children,closed}) => {
                         let message = if let Some(closed) = closed {
                             format!("{} (finished after {})",name,closed.since(timestamp))
                         } else {name};
-                        let nchildren = create_node_ref::<html::Ul>();
-                        let span_ref = create_node_ref::<html::Span>();
+                        let nchildren = NodeRef::<html::Ul>::new();
+                        let span_ref = NodeRef::<html::Span>::new();
                         let sr = span_ref.clone();
-                        let line = template!{
+                        let line = view!{
                                     <li class=immt_log_elem><details>
                                         <summary><LogLine timestamp message target level args spinner=closed.is_none() span_ref=sr/></summary>
                                         <ul node_ref=nchildren/>
                                     </details></li>
                                 };
-                        elem.append_child(line.dyn_ref().unwrap()).unwrap();
+                        elem.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
                         if closed.is_none() { frames.insert(id,(nchildren,span_ref,timestamp)) }
                         let nchildren = nchildren.get_untracked().unwrap();
                         do_tree_elems(children,&nchildren,&warn_frame,frames);
@@ -188,26 +190,29 @@ mod client {
 
         if let Some(n) = state.spinners.0.get_untracked() { n.remove(); }
         if let Some(n) = state.spinners.1.get_untracked() { n.remove(); }
+
+         */
     }
     fn update(state:&mut LogState,line:LogFileLine<String>) {
+        /*
         let Some(log_frame) = state.log_frame.get_untracked() else {return};
         let Some(warn_frame) = state.warn_frame.get_untracked() else {return};
         match line {
             LogFileLine::Message {message,timestamp,target,level,args,span} => {
                 if level >= LogLevel::WARN {
-                    warn_frame.append_child(view!(<li><LogLine timestamp=timestamp.clone() message=message.clone() target=target.clone() level args=args.clone() /></li>).dyn_ref().unwrap()).unwrap();
+                    warn_frame.append_child(view!(<li><LogLine timestamp=timestamp.clone() message=message.clone() target=target.clone() level args=args.clone() /></li>).into_inner().dyn_ref().unwrap()).unwrap();
                 }
                 let line = view!(<li><LogLine timestamp message target level args /></li>);
                 if span.is_none() {
-                    log_frame.append_child(line.dyn_ref().unwrap()).unwrap();
+                    log_frame.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
                 } else if let Some((frame,_,_)) = state.frames.get(&span.unwrap()) {
                     let children = frame.get_untracked().unwrap();
-                    children.append_child(line.dyn_ref().unwrap()).unwrap();
+                    children.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
                 }
             }
             LogFileLine::SpanOpen {id,name,timestamp,target,level,args,parent} => {
-                let children = create_node_ref::<html::Ul>();
-                let span_ref = create_node_ref::<html::Span>();
+                let children = NodeRef::<html::Ul>::new();
+                let span_ref = NodeRef::<html::Span>::new();
                 let sr = span_ref.clone();
                 let line = view! {
                     <li class=immt_log_elem><details>
@@ -216,10 +221,10 @@ mod client {
                     </details></li>
                 };
                 if parent.is_none() {
-                    log_frame.append_child(line.dyn_ref().unwrap()).unwrap();
+                    log_frame.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
                 } else if let Some((frame,_,_)) = state.frames.get(&parent.unwrap()) {
                     let children = frame.get_untracked().unwrap();
-                    children.append_child(line.dyn_ref().unwrap()).unwrap();
+                    children.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
                 }
                 state.frames.insert(id, (children,sr,timestamp));
             }
@@ -231,6 +236,8 @@ mod client {
                 }
             }
         }
+
+         */
     }
 }
 
@@ -253,12 +260,12 @@ fn LogLine(message:String,timestamp:Timestamp,target:Option<String>,level:LogLev
     }
     let _span_ref = span_ref.unwrap_or(NodeRef::default());
     if spinner {
-        view! {<span class=cls node_ref=_span_ref>
+        view!(<span class=cls node_ref=_span_ref>
             <span class=immt_spinner_inline>
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
-        </span>}
-    } else {view! {<span class=cls node_ref=_span_ref>{str}</span>}}
+        </span>).into_any()
+    } else {view!(<span class=cls node_ref=_span_ref>{str}</span>).into_any()}
 }
 
 fn class_from_level(lvl:LogLevel) -> &'static str {
