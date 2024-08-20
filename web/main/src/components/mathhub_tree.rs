@@ -107,49 +107,47 @@ pub enum DirOrFile {
 
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
-    let resource = Resource::new_blocking(|| (),|_| get_archives(None));
-    view!(
-        <h2>MathHub</h2>
-        <Suspense fallback=|| view!(<thaw::Spinner/>)><ul class="immt-treeview">{
-            if let Some(Ok(archives)) = resource.get() {
+    crate::components::wait_blocking(||get_archives(None),|archives| if let Ok(archives) = archives {
+        view!(
+            <h2>"MathHub"</h2>
+            <ul class="immt-treeview">{
                 archives.into_iter().map(|a| match a{
                     ArchiveOrGroup::Archive(uri,state) => view!(<Archive uri state/>).into_any(),
                     ArchiveOrGroup::Group(id,state) => view!(<ArchiveGroup id state/>).into_any()
                 }).collect::<Vec<_>>()
-            } else {Vec::new()}
-        }</ul></Suspense>
-    )
+            }</ul>
+        ).into_any()
+    } else {"".into_any()})
 }
 
 
 #[island]
 pub fn ArchiveOrGroups(path:ArchiveId) -> impl IntoView {
-    use thaw::*;
-    let resource = Resource::new(move || Some(path.clone()), get_archives);
-    view!{
-        <Suspense fallback=|| view!(<Spinner size=SpinnerSize::Tiny/>)>
-        <ul class="immt-treeview-inner">{move || {
-            match resource.get() {
-                Some(Ok(archives)) => {archives.into_iter().map(|a| match a{
-                    ArchiveOrGroup::Archive(uri,state) => view!(<Archive uri=uri state/>).into_any(),
+    crate::components::wait(move ||get_archives(Some(path)),|archives| if let Ok(archives) = archives {
+        view!(
+            <ul class="immt-treeview-inner">{
+                archives.into_iter().map(|a| match a{
+                    ArchiveOrGroup::Archive(uri,state) => view!(<Archive uri state/>).into_any(),
                     ArchiveOrGroup::Group(id,state) => view!(<ArchiveGroup id state/>).into_any()
-                }).collect::<Vec<_>>()},
-                _ => Vec::new()
-            }
-        }}</ul>
-        </Suspense>
-    }
+                }).collect::<Vec<_>>()
+            }</ul>
+        ).into_any()
+    } else {"".into_any()})
 }
 
-pub(crate) fn badge(new:u32,stale:u32) -> impl IntoView {
-    use thaw::{BadgeAppearance,BadgeColor};
-    use crate::components::Badge;
-    let new = if new == 0 { None } else { Some(new) };
-    let stale = if stale == 0 { None } else { Some(stale) };
-    if_logged_in(|| Some(view!(
-        {new.map(|new| view!(" "<Badge appearance=BadgeAppearance::Outline color=BadgeColor::Success>{new}</Badge>))}
-        {stale.map(|stale| view!(" "<Badge appearance=BadgeAppearance::Outline color=BadgeColor::Warning>{stale}</Badge>))}
-    )) ,|| None)
+#[island]
+fn DirOrFiles(archive:ArchiveURI, #[prop(optional)] path:String) -> impl IntoView {
+    let path = if path.is_empty() {None} else {Some(path)};
+    crate::components::wait(move ||get_files_in(archive.id(),path.clone()),move |dirs| if let Ok(dirs) = dirs {
+        view!(
+            <ul class="immt-treeview-inner">{
+                dirs.into_iter().map(|a| match a{
+                    DirOrFile::File(file) => view!(<SourceFile archive file/>).into_any(),
+                    DirOrFile::Dir(path,state) => view!(<Directory archive path state/>).into_any()
+                }).collect::<Vec<_>>()
+            }</ul>
+        ).into_any()
+    } else {"".into_any()})
 }
 
 macro_rules! item {
@@ -190,62 +188,25 @@ fn Archive(uri:ArchiveURI, state: AllStates) -> impl IntoView {
         {view!(<span>{icon(icondata_bi::BiBookSolid)}" "{uri.id().as_str().split('/').last().unwrap().to_string()}</span>)}
         modal={view!(<ArchiveModal id=uri.id() state/>)}
         badges={badge(summary.new,summary.stale.0)}
-        => {view!(<DirOrFiles archive=uri inner=true/>)}
+        => {view!(<DirOrFiles archive=uri/>)}
     )
 }
 
 #[island]
-fn DirOrFiles(archive:ArchiveURI, #[prop(optional)] path:String, inner:bool) -> impl IntoView {
-    view!("TODO")
-    /*
-    let cls = if inner { "immt-treeview-inner" } else { "immt-treeview" };
-    let path = if path.is_empty() {None} else {Some(path)};
-    //console_log!("{}={}",archive.num(),archive);
-    view!{<ul class=cls>{crate::components::with_spinner(
-        move || path.clone(),
-        move |p| get_files_in(archive.id(),p),
-        archive,move |archive,archives| {
-        archives.into_iter().map(|a| match a{
-            DirOrFile::File(file) => view!(<li class="immt-treeview-li"><SourceFile archive=archive.clone() file/></li>).into_any(),
-            DirOrFile::Dir(path,state) => view!(<li class="immt-treeview-li"><Directory archive=archive.clone() path state/></li>).into_any()
-        }).collect::<Vec<_>>()
-    })}</ul>}*/
-}
-
-
-#[island]
 fn Directory(archive:ArchiveURI, path:String, state: AllStates) -> impl IntoView {
-    use thaw::*;
-    let (expanded, set_expanded) = signal(false);
-    let on_click = move |_| set_expanded.update(|b| *b = !*b);
-    let clicked = RwSignal::new(false);
-    let p = path.clone();
-    let p2 = path.clone();
-    let fullstate = state;
-    let state = fullstate.summary();
-    view!{<details>
-        <summary class="immt-treeview-summary" on:click=on_click>
-            <span><Icon icon=icondata_bi::BiFolderRegular/>" "
-                {path.split('/').last().unwrap().to_string()}
-            </span>
-            <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
-                <DirectoryModal archive=archive.id() path=p state=fullstate/>
-            </DialogContent></DialogBody></DialogSurface></Dialog>
-            <span on:click=move |_| {clicked.set(true)} style="cursor: help;">" 🛈"</span>
-            <span class="immt-treeview-left-margin"/>
-            {badge(state.new,state.stale.0)}
-        </summary>
-        {move || if expanded.get() {
-            Some(view!{<DirOrFiles archive=archive.clone() path=p2.clone() inner=true/>})
-            } else { None }
-        }
-    </details>}
+    let summary = state.summary();
+    item!(
+        {view!(<span>{icon(icondata_bi::BiFolderRegular)}" "{path.split('/').last().unwrap().to_string()}</span>)}
+        modal={view!(<DirectoryModal archive=archive.id() path state/>)}
+        badges={badge(summary.new,summary.stale.0)}
+        => {view!(<DirOrFiles archive path=path.clone()/>)}
+    )
 }
 
 #[island]
 fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
     use thaw::*;
-    use crate::components::IFrame;
+    use crate::components::{IFrame,icon};
     let open = RwSignal::new(false);
 
     let mut name = format!("{} [{}]",file.relative_path.split('/').last().unwrap(),file.format);
@@ -263,8 +224,27 @@ fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
     };
     let clicked = RwSignal::new(false);
     let p = file.relative_path.clone();
-    view!{
-        <span class=cls on:click=move |_| open.set(true)><Icon icon=icondata_bi::BiFileRegular/>" "{name.clone()}</span>
+    view!{<li class="immt-treeview-li">
+        <span class=cls on:click=move |_| open.set(true)>
+            {icon(icondata_bi::BiFileRegular)}" "{name.clone()}
+        </span>
+        {crate::components::drawer(open,
+            Some(view!(<a href=format!("/?a={}&rp={p}",archive.id()) target="_blank"><button class="thaw-breadcrumb-button">{
+                format!("[{}]/{}",archive.id(),&p)
+            }</button></a>)),
+            move || view!{
+            /*<div style="text-align:center;width:100%"><b>
+                <a href=format!("/?a={}&rp={p}",archive.id())>{
+                    format!("[{}]/{}",archive.id(),&p)
+                }</a>
+            </b></div>
+            <Divider/>*/
+            {let p = p.clone();move || if open.get() {
+                //view!("Here!").into_any()
+                view!(<IFrame src=format!("?a={}&rp={}",archive.id(),p.clone()) ht="calc(100vh - 110px)".to_string()/>).into_any()
+            } else {"".into_any()} }
+        })}
+        /*
         <OverlayDrawer /*title=format!("[{archive}]/{}",file.relative_path)*/ open position=DrawerPosition::Right size=DrawerSize::Full>
             /*<DrawerHeader>
                 <DrawerHeaderTitle></DrawerHeaderTitle>
@@ -281,13 +261,15 @@ fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
         {
             move || if open.get() {
                 view!(<IFrame src=format!("?a={}&rp={}",archive.id(),p) ht="calc(100vh - 110px)".to_string()/>).into_any()
-            } else {view!(<span/>).into_any()}
+            } else {"".into_any()}
         }</OverlayDrawer>
-        <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
+         */
+        /*<Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
             <FileModal archive=archive.id() file/>
-        </DialogContent></DialogBody></DialogSurface></Dialog>
-        <span on:click=move |_| {clicked.set(true)} style="cursor: help;">" 🛈"</span>
-    }
+        </DialogContent></DialogBody></DialogSurface></Dialog>*/
+        " "<span on:click=move |_| {clicked.set(true)} style="cursor: help;">{icon(icondata_ai::AiInfoCircleOutlined)}</span>
+        //<span on:click=move |_| {clicked.set(true)} style="cursor: help;">" 🛈"</span>
+    </li>}
 }
 
 #[derive(Clone,PartialEq,Eq,serde::Serialize,serde::Deserialize)]
@@ -383,4 +365,15 @@ fn FileModal(archive:ArchiveId,file:SourceFile) -> impl IntoView {
     let mut state = AllStates::default();
     state.merge(&file.build_state,file.format);
     view!(<EntryModal id=archive.clone() state tp=ModalType::File(file.clone())/>)
+}
+
+pub(crate) fn badge(new:u32,stale:u32) -> impl IntoView {
+    use thaw::{BadgeAppearance,BadgeColor};
+    use crate::components::Badge;
+    let new = if new == 0 { None } else { Some(new) };
+    let stale = if stale == 0 { None } else { Some(stale) };
+    if_logged_in(|| Some(view!(
+        {new.map(|new| view!(" "<Badge appearance=BadgeAppearance::Outline color=BadgeColor::Success>{new}</Badge>))}
+        {stale.map(|stale| view!(" "<Badge appearance=BadgeAppearance::Outline color=BadgeColor::Warning>{stale}</Badge>))}
+    )) ,|| None)
 }

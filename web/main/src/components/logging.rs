@@ -1,20 +1,3 @@
-//stylance::import_crate_style!(loglist,"style/components/loglist.scss");
-
-#[allow(non_upper_case_globals)]
-mod css {
-    pub const immt_log_frame: &str = "immt-log-frame";
-    pub const immt_warn_frame: &str = "immt-warn-frame";
-    pub const immt_log_list: &str = "immt-log-list";
-    pub const immt_log_elem: &str = "immt-log-elem";
-    pub const immt_spinner_inline: &str = "immt-spinner-inline";
-    pub const immt_log_error: &str = "immt-log-error";
-    pub const immt_log_warn: &str = "immt-log-warn";
-    pub const immt_log_info: &str = "immt-log-info";
-    pub const immt_log_debug: &str = "immt-log-debug";
-    pub const immt_log_trace: &str = "immt-log-trace";
-}
-use css::*;
-
 use async_trait::async_trait;
 use leptos::{prelude::*,html};
 use immt_core::utils::logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem};
@@ -53,7 +36,40 @@ pub enum Log {
     Initial(LogTree),
     Update(LogFileLine<String>),
 }
-type Frames = VecMap<String,(NodeRef<html::Ul>,NodeRef<html::Span>,Timestamp)>;
+
+#[derive(Debug,Copy,Clone,serde::Serialize,serde::Deserialize)]
+struct LogSignals {
+    top:RwSignal<Vec<LogEntrySignal>>,
+    open_span_paths:RwSignal<VecMap<String,Vec<usize>>>,
+    warnings:RwSignal<Vec<(String,LogMessage)>>
+}
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+enum LogEntrySignal {
+    Simple(String,LogMessage),
+    Span(String,SpanSignal)
+}
+impl LogEntrySignal {
+    fn id(&self) -> &str {
+        match self {
+            LogEntrySignal::Simple(id,_) => id,
+            LogEntrySignal::Span(id,_) => id
+        }
+    }
+}
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+enum SpanMessage {
+    Open{ name:String, timestamp:Timestamp},
+    Closed(String)
+}
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+struct SpanSignal {
+    pub message:RwSignal<SpanMessage>,
+    pub target:Option<String>,
+    pub level:LogLevel,
+    pub args:VecMap<String, String>,
+    pub children:RwSignal<Vec<LogEntrySignal>>
+}
 
 pub(crate) struct LogSocket {
     #[cfg(feature="server")]
@@ -92,16 +108,50 @@ impl WebSocket<(),Log> for LogSocket {
 }
 
 #[component]
-pub fn FullLog() -> impl IntoView { view!{<TopLog/>} }
+pub fn FullLog() -> impl IntoView {
+    crate::accounts::if_logged_in(
+        || view!(<TopLog/>).into_any(),
+        || view!(<div>"You must be logged in to see the logs"</div>).into_any()
+    )
 
-struct LogState {
-    log_frame:NodeRef<html::Ul>,
-    warn_frame:NodeRef<html::Ul>,
-    spinners: (NodeRef<html::Div>,NodeRef<html::Div>),
-    frames:Frames,
 }
+
 #[island]
 fn TopLog() -> impl IntoView {
+    use thaw::Spinner;
+    let signals = LogSignals {
+        top: RwSignal::new(Vec::new()),
+        open_span_paths: RwSignal::new(VecMap::new()),
+        warnings: RwSignal::new(Vec::new())
+    };
+    Effect::new(move |_| {
+        #[cfg(feature="client")]
+        {
+            let _ = LogSocket::start(move |msg| {
+                client::ws(signals, msg);
+                None
+            });
+        }
+    });
+    view!{
+        <div class="immt-log-frame">{ move || {
+            if signals.top.with(|v| v.is_empty()) {
+                view!(<div class="immt-spinner-frame"><Spinner/></div>).into_any()
+            } else {view!{<ul>
+                {do_ls(signals.top)}
+            </ul>}.into_any()}
+        }}</div>
+        <div class="immt-warn-frame">{ move || {
+            if signals.top.get().is_empty() {
+                view!(<div class="immt-spinner-frame"><Spinner/></div>).into_any()
+            } else {view!{<ul>
+                <For each=move || signals.warnings.get() key=|e| e.0.clone() children=move |e| view!(
+                    <li><LogLine e=e.1/></li>
+                )/>
+            </ul>}.into_any()}
+        }}</div>
+    }
+    /*
     //use crate::utils::WebSocket;
     use thaw::Spinner;
 
@@ -131,13 +181,15 @@ fn TopLog() -> impl IntoView {
 
 
     view!{
-        <div class=immt_log_frame><div node_ref=_spinner_a><Spinner/></div>
+        <div class="immt-log-frame"><div node_ref=_spinner_a><Spinner/></div>
             <ul node_ref=_log_frame/>
         </div>
-        <div class=immt_warn_frame><div node_ref=_spinner_b><Spinner/></div>
+        <div class="immt-warn-frame"><div node_ref=_spinner_b><Spinner/></div>
             <ul node_ref=_warn_frame/>
         </div>
     }
+
+     */
 }
 
 #[cfg(feature="client")]
@@ -145,15 +197,165 @@ mod client {
     use leptos::*;
     use wasm_bindgen::JsCast;
     use super::*;
+    pub(crate) fn ws(signals:LogSignals,l:Log) {
+        match l {
+            Log::Initial(tree) => populate(signals,tree),
+            Log::Update(up) => update(signals,up)
+        }
+    }
+    fn populate(signals:LogSignals,tree:LogTree) {
+        crate::console_log!("Here!");
+        signals.open_span_paths.update_untracked(|v| *v = tree.open_span_paths);
+        fn add(signal:&mut Vec<LogEntrySignal>,warnings:RwSignal<Vec<(String,LogMessage)>>,e:LogTreeElem) {
+            let id = e.id();
+            match e {
+                LogTreeElem::Message(LogMessage {message,timestamp,target,level,args}) => {
+                    if level >= LogLevel::WARN {
+                        warnings.update(|v| v.push(
+                            (id.clone(),LogMessage {message:message.clone(),timestamp:timestamp.clone(),target:target.clone(),level,args:args.clone()})
+                        ));
+                    }
+                    signal.push(LogEntrySignal::Simple(id,LogMessage {message,timestamp,target,level,args}));
+                }
+                LogTreeElem::Span(LogSpan {name,timestamp,target,level,args,children,closed}) => {
+                    let message = RwSignal::new(if let Some(closed) = closed {
+                        SpanMessage::Closed(format!("{} (finished after {})",name,closed.since(timestamp)))
+                    } else {SpanMessage::Open{name,timestamp}});
+                    let mut nchildren = Vec::new();
+                    for c in children {
+                        add(&mut nchildren,warnings,c);
+                    }
+                    let e = SpanSignal {
+                        message,
+                        target,level,args,children:RwSignal::new(nchildren)
+                    };
+                    signal.push(LogEntrySignal::Span(id,e));
+                }
+            }
+        }
+        signals.top.update(|v|
+            for e in tree.children {
+                add(v,signals.warnings,e)
+            }
+        )
+    }
+    fn update(signals:LogSignals,update:LogFileLine<String>) {
+        match update {
+            LogFileLine::Message {message,timestamp,target,level,args,span} => {
+                let id = LogFileLine::id_from(&message,&args);
+                if level >= LogLevel::WARN {
+                    signals.warnings.update(|v| v.push((id.clone(), LogMessage { message: message.clone(), timestamp: timestamp.clone(), target: target.clone(), level: level, args: args.clone() })));
+                }
+                signals.open_span_paths.update_untracked(move |spans| {
+                    let mut curr = signals.top;
+                    match span.and_then(|id| spans.get(&id)) {
+                        Some(v) => {
+                            for i in v.iter() {
+                                match curr.get_untracked().get(*i) {
+                                    Some(LogEntrySignal::Span(_,s)) => curr = s.children,
+                                    _ => break
+                                }
+                            }
+                        },
+                        None => (),
+                    }
+                    curr.update(|v| v.push(LogEntrySignal::Simple(id, LogMessage { message, timestamp, target, level, args })));
+                })
+            }
+            LogFileLine::SpanOpen {name,timestamp,target,level,args,parent} => {
+                signals.open_span_paths.update_untracked(move |spans| {
+                    let id = LogFileLine::id_from(&name,&args);
+                    let mut curr = signals.top;
+                    let mut nums = Vec::new();
+                    match parent.and_then(|id| spans.get(&id)) {
+                        Some(v) => {
+                            nums = v.clone();
+                            for i in v.iter() {
+                                match curr.get_untracked().get(*i) {
+                                    Some(LogEntrySignal::Span(_, s)) => curr = s.children,
+                                    _ => break
+                                }
+                            }
+                        },
+                        None => (),
+                    }
+                    curr.update(|parent| {
+                        nums.push(parent.len());
+                        parent.push(LogEntrySignal::Span(id, SpanSignal {
+                            message: RwSignal::new(SpanMessage::Open { name, timestamp }),
+                            target, level, args, children: RwSignal::new(Vec::new())
+                        }));
+                    })
+                });
+            }
+            LogFileLine::SpanClose {id,timestamp,..} => {
+                signals.open_span_paths.update_untracked(move |spans| {
+                    if let Some(path) = spans.remove(&id) {
+                        fn get(mut iter:std::vec::IntoIter<usize>,ret:&mut Option<(String,RwSignal<SpanMessage>)>,curr:RwSignal<Vec<LogEntrySignal>>) {
+                            if let Some(i) = iter.next() {
+                                match curr.get_untracked().get(i) {
+                                    Some(LogEntrySignal::Span(id,s)) => {
+                                        *ret = Some((id.clone(),s.message));
+                                        get(iter,ret,s.children)
+                                    },
+                                    _ => *ret = None
+                                }
+                            }
+                        }
+                        let mut ret = None;
+                        get(path.into_iter(),&mut ret,signals.top);
+                        if let Some((oid,message)) = ret {
+                            if oid == id {
+                                if let SpanMessage::Open { name, timestamp: old } = message.get_untracked() {
+                                    message.set(SpanMessage::Closed(format!("{} (finished after {})", name, timestamp.since(old))));
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        /*
+        let Some(log_frame) = state.log_frame.get_untracked() else {return};
+        let Some(warn_frame) = state.warn_frame.get_untracked() else {return};
+        match line {
+            LogFileLine::SpanOpen {id,name,timestamp,target,level,args,parent} => {
+                let children = NodeRef::<html::Ul>::new();
+                let span_ref = NodeRef::<html::Span>::new();
+                let sr = span_ref.clone();
+                let line = view! {
+                    <li class=immt_log_elem><details>
+                        <summary><LogLine timestamp message=name target level args spinner=true span_ref/></summary>
+                        <ul node_ref=children/>
+                    </details></li>
+                };
+                if parent.is_none() {
+                    log_frame.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
+                } else if let Some((frame,_,_)) = state.frames.get(&parent.unwrap()) {
+                    let children = frame.get_untracked().unwrap();
+                    children.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
+                }
+                state.frames.insert(id, (children,sr,timestamp));
+            }
+            LogFileLine::SpanClose {id,timestamp,..} => {
+                if let Some((_,span,started)) = state.frames.remove(&id) {
+                    let span = span.get_untracked().unwrap();
+                    let message = format!("{} (finished after {})",span.text_content().unwrap(),timestamp.since(started));
+                    span.set_text_content(Some(&message));
+                }
+            }
+        }
+         */
+    }
 
+    /*
     pub(crate) fn ws(state:&mut LogState,l:Log) {
         match l {
-            Log::Initial(tree) => populate(state,tree),
-            Log::Update(up) => update(state,up)
+            Log::Initial(tree) => (),//populate(state,tree),
+            Log::Update(up) => ()//update(state,up)
         }
     }
     fn populate(state:&mut LogState,tree:LogTree) {
-        /*
         fn do_tree_elems(children:Vec<LogTreeElem>,elem:&HtmlUListElement,warn_frame:&HtmlUListElement,frames:&mut Frames) {
             for c in children {
                 match c {
@@ -190,63 +392,65 @@ mod client {
 
         if let Some(n) = state.spinners.0.get_untracked() { n.remove(); }
         if let Some(n) = state.spinners.1.get_untracked() { n.remove(); }
-
-         */
     }
     fn update(state:&mut LogState,line:LogFileLine<String>) {
-        /*
-        let Some(log_frame) = state.log_frame.get_untracked() else {return};
-        let Some(warn_frame) = state.warn_frame.get_untracked() else {return};
-        match line {
-            LogFileLine::Message {message,timestamp,target,level,args,span} => {
-                if level >= LogLevel::WARN {
-                    warn_frame.append_child(view!(<li><LogLine timestamp=timestamp.clone() message=message.clone() target=target.clone() level args=args.clone() /></li>).into_inner().dyn_ref().unwrap()).unwrap();
-                }
-                let line = view!(<li><LogLine timestamp message target level args /></li>);
-                if span.is_none() {
-                    log_frame.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
-                } else if let Some((frame,_,_)) = state.frames.get(&span.unwrap()) {
-                    let children = frame.get_untracked().unwrap();
-                    children.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
-                }
-            }
-            LogFileLine::SpanOpen {id,name,timestamp,target,level,args,parent} => {
-                let children = NodeRef::<html::Ul>::new();
-                let span_ref = NodeRef::<html::Span>::new();
-                let sr = span_ref.clone();
-                let line = view! {
-                    <li class=immt_log_elem><details>
-                        <summary><LogLine timestamp message=name target level args spinner=true span_ref/></summary>
-                        <ul node_ref=children/>
-                    </details></li>
-                };
-                if parent.is_none() {
-                    log_frame.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
-                } else if let Some((frame,_,_)) = state.frames.get(&parent.unwrap()) {
-                    let children = frame.get_untracked().unwrap();
-                    children.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
-                }
-                state.frames.insert(id, (children,sr,timestamp));
-            }
-            LogFileLine::SpanClose {id,timestamp,..} => {
-                if let Some((_,span,started)) = state.frames.remove(&id) {
-                    let span = span.get_untracked().unwrap();
-                    let message = format!("{} (finished after {})",span.text_content().unwrap(),timestamp.since(started));
-                    span.set_text_content(Some(&message));
-                }
-            }
-        }
 
-         */
     }
+
+     */
+}
+
+fn do_ls(v:RwSignal<Vec<LogEntrySignal>>) -> impl IntoView {
+    view!{
+        <For each=move || v.get() key=|e| e.id().to_string() children=|e| view!{
+            <li class="immt-log-elem">{match e {
+                LogEntrySignal::Simple(_,e) => view!(<LogLine e/>).into_any(),
+                LogEntrySignal::Span(_,e) => do_span(e).into_any()
+            }}</li>
+        }/>
+        /*<For each=move || q.queues.clone().get() key=|e| e.0.clone() children=move |e| view!(
+            <Tab value=&e.0>{e.0}{QueueTop(e.0,e.1)}</Tab>
+        )/>
+        <For each=move || signals.warnings.get() key=|e| e.0.clone() children=move |e| view!(
+            <li><LogLine e=e.1/></li>
+        )/>
+        */
+    }
+}
+fn do_span(s:SpanSignal) -> impl IntoView {
+    let children = s.children;
+    view!{<details>
+        <summary>{move || {let s = s.clone(); match s.message.get() {
+            SpanMessage::Open {name,timestamp} => view!(<LogLineHelper message=name timestamp target=s.target level=s.level args=s.args spinner=true/>),
+            SpanMessage::Closed(message) => view!(<LogLineHelper message target=s.target level=s.level args=s.args spinner=false />)
+        }}}</summary>
+        <ul>{move || do_ls(children)}</ul>
+    </details>}
 }
 
 #[component]
-fn LogLine(message:String,timestamp:Timestamp,target:Option<String>,level:LogLevel,args:VecMap<String,String>,#[prop(optional)] spinner:bool,#[prop(optional)] span_ref:Option<NodeRef<html::Span>>) -> impl IntoView {
+fn LogLine(e:LogMessage) -> impl IntoView {
+    let LogMessage {message,timestamp,target,level,args} = e;
+    view!(<LogLineHelper message timestamp target level args/>)
+}
+
+#[component]
+fn LogLineHelper(
+    message:String,
+    #[prop(optional)] timestamp:Option<Timestamp>,
+    target:Option<String>,
+    level:LogLevel,
+    args:VecMap<String,String>,
+    #[prop(optional)] spinner:bool,
+) -> impl IntoView {
     use thaw::{Spinner, SpinnerSize};
     use std::fmt::Write;
     let cls = class_from_level(level);
-    let mut str = format!("{} <{}> ",timestamp,level);
+    let mut str = if let Some(timestamp) = timestamp {
+        format!("{timestamp} <{level}> ")
+    } else {
+        format!("<{level}> ")
+    };
     if let Some(target) = target {
         write!(str,"[{}] ",target).unwrap();
     }
@@ -258,22 +462,21 @@ fn LogLine(message:String,timestamp:Timestamp,target:Option<String>,level:LogLev
         }
         str.push(')');
     }
-    let _span_ref = span_ref.unwrap_or(NodeRef::default());
     if spinner {
-        view!(<span class=cls node_ref=_span_ref>
-            <span class=immt_spinner_inline>
+        view!(<span class=cls>
+            <span class="immt-spinner-inline">
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
         </span>).into_any()
-    } else {view!(<span class=cls node_ref=_span_ref>{str}</span>).into_any()}
+    } else {view!(<span class=cls>{str}</span>).into_any()}
 }
 
 fn class_from_level(lvl:LogLevel) -> &'static str {
     match lvl {
-        LogLevel::ERROR => immt_log_error,
-        LogLevel::WARN => immt_log_warn,
-        LogLevel::INFO => immt_log_info,
-        LogLevel::DEBUG => immt_log_debug,
-        LogLevel::TRACE => immt_log_trace,
+        LogLevel::ERROR => "immt-log-error",
+        LogLevel::WARN => "immt-log-warn",
+        LogLevel::INFO => "immt-log-info",
+        LogLevel::DEBUG => "immt-log-debug",
+        LogLevel::TRACE => "immt-log-trace",
     }
 }

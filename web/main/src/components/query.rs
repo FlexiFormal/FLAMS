@@ -62,10 +62,12 @@ fn QueryIsland() -> impl IntoView {
     });
     view!{
         <ActionForm action>
-            <textarea name="q" style="width:calc(100% - 10px);height:200px;">{QUERY.to_string()}</textarea>
-            <input type="submit" value="Query"/>
+            <span class="thaw-textarea thaw-textarea--resize-both" style="width:calc(100% - 10px);height:200px;">
+                <textarea name="q" class="thaw-textarea__textarea">{QUERY.to_string()}</textarea>
+            </span>
+            <br/><input type="submit" value="Query"/>
         </ActionForm>
-        <div node_ref=rf style="text-align:left;white-space:pre">
+        <div node_ref=rf style="text-align:left;margin:10px;font-family:monospace;white-space:pre;border:var(--strokeWidthThickest) solid var(--colorNeutralStroke1)">
             {move || result.get().unwrap_or_default()}
         </div>
     }

@@ -169,7 +169,7 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
         let mut visitor = StringVisitor::default();
         md.record(&mut visitor);
         let args: VecMap<String, String> = visitor.0.into_iter().map(|(a,b)| (a.into(),b.into())).collect();
-        let id = md5::compute(format!("({},{:?})", name, args)).0.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+        let id =  LogFileLine::id_from(&name,&args);
         self.open_span(thisid,&id,md.parent());
         self.0.notifier.lazy_send(move || {
             let target: Option<String> = {
@@ -181,7 +181,6 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
             else {md.parent().cloned().or_else(|| ctx.current_span().id().cloned())};
             let parent = parent.map(|id| self.parents::<S>(&id).pop()).flatten();
             LogFileLine::SpanOpen {
-                id,
                 name,
                 timestamp,
                 target,

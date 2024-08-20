@@ -11,6 +11,14 @@ pub enum LogTreeElem {
     Message(LogMessage)
 }
 impl LogTreeElem {
+    pub fn id(&self) -> String {
+        match self {
+            LogTreeElem::Span(LogSpan { name,args,.. }) =>
+                LogFileLine::id_from(name,args),
+            LogTreeElem::Message(LogMessage { message,args,.. }) =>
+                LogFileLine::id_from(message,args)
+        }
+    }
     pub fn timestamp(&self) -> Timestamp {
         match self {
             LogTreeElem::Span(LogSpan {timestamp,..}) => *timestamp,
@@ -55,7 +63,6 @@ pub struct LogSpan {
     pub target:Option<String>,
     pub level:LogLevel,
     pub args:VecMap<String, String>,
-    pub id: String,
     pub children:Vec<LogTreeElem>,
     pub closed:Option<Timestamp>
 }
@@ -89,9 +96,9 @@ impl LogTree {
         } else {
             &mut self.children
         };
-        if let LogTreeElem::Span(LogSpan { id,.. }) = &line {
+        if let LogTreeElem::Span(LogSpan { .. }) = &line {
             path.push(p.len());
-            self.open_span_paths.insert(id.clone(),path);
+            self.open_span_paths.insert(line.id(),path);
         }
         p.push(line)
     }
@@ -111,10 +118,10 @@ impl LogTree {
     }
     fn add_line<S:ToString+PartialEq<String>>(&mut self,line:LogFileLine<S>) {
         match line {
-            LogFileLine::SpanOpen { id,name, timestamp, target, level, args, parent } => {
+            LogFileLine::SpanOpen { name, timestamp, target, level, args, parent } => {
                 let span = LogSpan {
                     name: name.to_string(),
-                    id, timestamp,
+                    timestamp,
                     target: target.map(|s| s.to_string()),
                     level,
                     args: args.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
@@ -133,7 +140,7 @@ impl LogTree {
                 };
                 self.merge(LogTreeElem::Message(message), span);
             }
-            LogFileLine::SpanClose { id, timestamp, .. } => {
+            LogFileLine::SpanClose { timestamp,id, .. } => {
                 self.close(&id,timestamp);
             }
         }
@@ -153,7 +160,6 @@ impl<S:ToString+PartialEq<String>,I:IntoIterator<Item = LogFileLine<S>>> From<I>
 #[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
 pub enum LogFileLine<S> {
     SpanOpen {
-        id:String,
         name:S,
         timestamp:Timestamp,
         target:Option<S>,
@@ -174,6 +180,23 @@ pub enum LogFileLine<S> {
         args:VecMap<S, S>,
         span: Option<String>
     },
+}
+impl<S:AsRef<str> + std::fmt::Debug> LogFileLine<S> {
+
+    pub fn id_from(msg:&str,args:&VecMap<S,S>) -> String {
+        md5::compute(format!("({},{:?})",msg,args)).0.iter().map(|b| format!("{:02x}",b)).collect::<String>()
+    }
+    pub fn id(&self) -> String {
+        match self {
+            LogFileLine::SpanOpen { name, args, .. } => {
+                Self::id_from(name.as_ref(),args)
+            }
+            LogFileLine::SpanClose { id, .. } => id.clone(),
+            LogFileLine::Message { message, args, .. } => {
+                Self::id_from(message.as_ref(),args)
+            }
+        }
+    }
 }
 
 impl<'a> LogFileLine<&'a str> {
@@ -252,9 +275,8 @@ impl<'a> LogFileLine<&'a str> {
         if !parser.drop_prefix("}") {return None}
         if message == "new" {
             let (name,args) = span?;
-            let id = md5::compute(format!("({},{:?})",name,args)).0.iter().map(|b| format!("{:02x}",b)).collect::<String>();
             Some(LogFileLine::SpanOpen {
-                id,name,
+                name,
                 timestamp,
                 target,
                 level,
@@ -263,7 +285,7 @@ impl<'a> LogFileLine<&'a str> {
             })
         } else if message == "close" {
             let (name,args) = span?;
-            let id = md5::compute(format!("({},{:?})",name,args)).0.iter().map(|b| format!("{:02x}",b)).collect::<String>();
+            let id = LogFileLine::id_from(name,&args);
             Some(LogFileLine::SpanClose {
                 id,
                 timestamp,
@@ -282,8 +304,8 @@ impl<'a> LogFileLine<&'a str> {
     }
     pub fn to_owned(self) -> LogFileLine<String> {
         match self {
-            LogFileLine::SpanOpen { id,name, timestamp, target, level, args, parent } => LogFileLine::SpanOpen {
-                name: name.into(),id,
+            LogFileLine::SpanOpen { name, timestamp, target, level, args, parent } => LogFileLine::SpanOpen {
+                name: name.into(),
                 timestamp,
                 target: target.map(|s| s.into()),
                 level,

@@ -5,7 +5,10 @@ pub mod queue;
 pub mod settings;
 pub mod content;
 pub mod query;
+mod thaws;
+pub use thaws::*;
 
+use std::future::Future;
 pub use mathhub_tree::ArchiveOrGroups;
 //pub use graph_viewer::GraphTest;
 pub use logging::FullLog;
@@ -44,29 +47,35 @@ pub(crate) fn icon_with_options(icon:icondata_core::Icon,width:Option<&str>,heig
     }
 }
 
-#[component]
-pub(crate) fn Badge(
-    #[prop(optional,into)] appearance:Option<BadgeAppearance>,
-    #[prop(optional,into)] size:Option<BadgeSize>,
-    #[prop(optional,into)] color:Option<BadgeColor>,
-    children: Children
-) -> impl IntoView {
-    use leptos::either::Either;
-    let mut classes = "thaw-badge".to_string();
-    if let Some(a) = appearance {
-        classes.push_str(&format!(" thaw-badge--{}",a.as_str()));
-    }
-    if let Some(s) = size {
-        classes.push_str(&format!(" thaw-badge--{}",s.as_str()));
-    }
-    if let Some(c) = color {
-        classes.push_str(&format!(" thaw-badge--{}",c.as_str()));
-    }
-    view! {
-        <div class=classes>{children()}</div>
+pub(crate) fn wait_blocking<T,Fut,V:IntoView + 'static>(
+                        fetcher: impl Fn() -> Fut + Send + Sync + 'static,
+                          f: impl (FnMut(T) -> V) + Clone + Send + 'static
+) -> impl IntoView
+    where
+        T: Send + Sync + Clone + serde::Serialize + for<'de>serde::Deserialize<'de> + 'static,
+        Fut: Future<Output = T> + Send + 'static {
+    let resource = Resource::new_blocking(|| (),move |_| fetcher());
+    view!{
+        <Suspense fallback= || view!(<thaw::Spinner/>)>{move || {
+            resource.get().map(f.clone())
+        }}</Suspense>
     }
 }
 
+pub(crate) fn wait<T,Fut,V:IntoView + 'static>(
+    fetcher: impl Fn() -> Fut + Send + Sync + 'static,
+    f: impl (FnMut(T) -> V) + Clone + Send + 'static
+) -> impl IntoView
+    where
+        T: Send + Sync + Clone + serde::Serialize + for<'de>serde::Deserialize<'de> + 'static,
+        Fut: Future<Output = T> + Send + 'static {
+    let resource = Resource::new(|| (),move |_| fetcher());
+    view!{
+        <Suspense fallback= || view!(<thaw::Spinner/>)>{move || {
+            resource.get().map(f.clone())
+        }}</Suspense>
+    }
+}
 
 #[component]
 pub(crate) fn IFrame(src:String,#[prop(optional,into)] ht:String) -> impl IntoView {

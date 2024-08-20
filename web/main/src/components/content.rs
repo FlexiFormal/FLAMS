@@ -335,6 +335,12 @@ pub mod omdoc {
 
     #[island]
     pub fn OMDocDocumentURI(uri:DocumentURI) -> impl IntoView {
+        crate::components::wait(move || omdoc_document(uri),|doc| {
+            if let Ok(doc) = doc { view!(<OMDocDocument doc/>).into_any() } else {
+                view!(<span>"Document not found"</span>).into_any()
+            }
+        })
+            /*
         let resource = Resource::new(|| (),move |_| omdoc_document(uri));
         view!{
             <Suspense fallback=|| view!(<thaw::Spinner/>)>{
@@ -343,6 +349,7 @@ pub mod omdoc {
                 } else {Some(view!(<span>"Document not found"</span>).into_any())}
             }</Suspense>
         }
+             */
     }
 
     #[component]
@@ -642,25 +649,44 @@ pub(crate) fn URITop() -> impl IntoView {
     {
         use leptos_router::*;
         use immt_core::uris::*;
+        use thaw::{ConfigProvider,Theme};
+        use crate::home::Themer;
+        use leptos_meta::Stylesheet;
         let params = leptos_router::hooks::use_query_map();
-        move || {
-            let uri = params.with(|p| uris::from_params(p));
-            uri.map(|uri| {
-                match uri {
-                    URI::Narrative(NarrativeURI::Doc(d)) => view!(<Document uri=d/>).into_any(),
-                    _ => view!("TODO: "{uri.to_string()}).into_any()
-                }
-            })
+        view!{
+            // id=leptos means cargo-leptos will hot-reload this stylesheet
+            <Stylesheet id="leptos" href="/pkg/immt.css"/>
+            <ConfigProvider theme=RwSignal::new(Theme::dark())><Themer>
+            {
+                let uri = params.with(|p| uris::from_params(p));
+                uri.map(|uri| {
+                    match uri {
+                        URI::Narrative(NarrativeURI::Doc(d)) => view!(<Document uri=d/>).into_any(),
+                        _ => view!("TODO: "{uri.to_string()}).into_any()
+                    }
+                })
+            }
+            </Themer></ConfigProvider>
         }
     }
     #[cfg(feature="client")]
-    view!(<div/>)
+    ""
 }
 
 #[component]
 fn Document(uri:DocumentURI) -> impl IntoView {
     #[cfg(feature="server")]
     {
+        crate::components::wait_blocking(move || fragments::document(uri),
+            move |res| match res {
+                Ok((css,html)) => view!(
+                    <OMDocDocumentDrawer uri/>
+                    <CSSHTML css=css.into() html=html.into()/>
+                ).into_any(),
+                Err(_) => view!(<span>"Document not found"</span>).into_any()
+            }
+        )
+        /*
         let res = Resource::new_blocking(|| (), move |_| fragments::document(uri));
         view! {
             <Suspense fallback=|| view!(<thaw::Spinner/>)>
@@ -669,26 +695,31 @@ fn Document(uri:DocumentURI) -> impl IntoView {
                     fallback=|| view!(<span>"Document not found"</span>)
                 >
                 <OMDocDocumentDrawer uri/>
-                {
+                { move || {
                     let Some(Ok((css,html))) = res.get() else {unreachable!()};
                     view!(<CSSHTML css=css.into() html=html.into()/>)
-                }</Show>
+                }}</Show>
             </Suspense>
         }
+
+         */
     }
     #[cfg(feature="client")]
-    view!(<div/>)
+    ""
 }
 
 #[island]
 fn OMDocDocumentDrawer(uri:DocumentURI) -> impl IntoView {
     use thaw::*;
+    use crate::components::drawer;
+    use omdoc::OMDocDocumentURI;
     let open = RwSignal::new(false);
     view!(
-        <div style="position:absolute;top:0;right:0;"><Button on_click=move |_| open.set(true)>OMDoc</Button></div>
-        <OverlayDrawer open position=DrawerPosition::Right size=DrawerSize::Large>
+        <div style="position:fixed;top:5px;right:5px;"><Button appearance=ButtonAppearance::Primary on_click=move |_| open.set(true)>OMDoc</Button></div>
+        {drawer(open,Option::<&'static str>::None,move || if open.get() {Some(view!(<OMDocDocumentURI uri/>))} else {None} )}
+        /*<OverlayDrawer open position=DrawerPosition::Right size=DrawerSize::Large>
             {move || if open.get() { Some(view!(<omdoc::OMDocDocumentURI uri/>)) } else {None}}
-        </OverlayDrawer>
+        </OverlayDrawer>*/
     )
 }
 

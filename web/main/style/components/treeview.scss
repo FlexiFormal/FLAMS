@@ -1,7 +1,7 @@
 .immt-treeview {
   width: fit-content;
   --immt-treeview-spacing : 1.5rem;
-  --immt-treeview-radius  : 10px;
+  --immt-treeview-radius  : 32px;
   padding-inline-start: 0;
 }
 
@@ -20,10 +20,10 @@
     content      : '';
     display      : block;
     position     : absolute;
-    top          : calc(var(--immt-treeview-spacing) / -2);
+    top          : calc((var(--immt-treeview-spacing) / -2) + 6px);
     left         : -2px;
-    width        : calc(var(--immt-treeview-spacing) + 2px);
-    height       : calc(var(--immt-treeview-spacing) + 1px);
+    width        : calc(var(--immt-treeview-spacing) - 12px);
+    height       : calc(var(--immt-treeview-spacing) - 9px);
     border       : solid #ddd;
     border-width : 0 0 2px 2px;
   }
@@ -33,6 +33,7 @@
   position     : relative;
   padding-left : calc(2 * var(--immt-treeview-spacing) - var(--immt-treeview-radius) - 2px);
   text-align: left;
+  margin: 5px 0 5px 0;
 }
 .immt-treeview-summary{
   display : block;

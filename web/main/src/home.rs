@@ -155,7 +155,7 @@ fn LoginForm() -> impl IntoView {
 
 #[component]
 fn MainPage(page:Page) -> impl IntoView {
-    let do_main = move || view!(<main>{match page {
+    let do_main = move || view!(<main style="height:100%">{match page {
         Page::Home => view!{<HomePage/>}.into_any(),
         Page::MathHub => view!{<ArchivesTop/>}.into_any(),
         //Page::Graphs => view!{<GraphTest/>},
@@ -168,16 +168,25 @@ fn MainPage(page:Page) -> impl IntoView {
     }}</main>);
 
     view!{<ConfigProvider theme=RwSignal::new(Theme::dark())>
-        <Layout position=LayoutPosition::Absolute>
+        <Themer><span class="thaw-config-provider"><Layout position=LayoutPosition::Absolute>
             <LayoutHeader class="immt-header"><Header/></LayoutHeader>
             <Layout position=LayoutPosition::Absolute class="immt-main" content_style="height:100%" has_sider=true>
                 <LayoutSider class="immt-menu" content_style="width:100%;height:100%">
                     <SideMenu page/>
                 </LayoutSider>
-                <div style="width:100%;padding-left:5px;height:calc(100vh - 67px)">{do_main()}</div>
+                <Layout>
+                    <div style="width:calc(100% - 10px);padding-left:5px;height:calc(100vh - 67px)">{do_main()}</div>
+                </Layout>
             </Layout>
-        </Layout>
+        </Layout></span></Themer>
     </ConfigProvider>}
+}
+
+#[island]
+pub(crate) fn Themer(children:Children) -> impl IntoView {
+    view!(<ConfigProvider theme=RwSignal::new(Theme::dark())>
+        {children()}
+    </ConfigProvider>)
 }
 
 #[component]

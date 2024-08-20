@@ -49,6 +49,23 @@ pub fn get_account() -> LoginState {
 pub(crate) fn WithAccount(children:ChildrenFn) -> impl IntoView {
     use thaw::*;
     use tracing::Instrument;
+    let (user,user_set) = signal(LoginState::Loading);
+    provide_context(user);
+    crate::components::wait_blocking(|| login_status().in_current_span(),move |res|
+        if let Ok(user) = res {
+            let children = children.clone();
+            user_set.set(user.clone());
+            Some(view!{
+                <WithAccountClient user=user>
+                    {children()}
+                </WithAccountClient>
+            })
+        } else {
+            println!("Wut!");
+            None
+        }
+    )
+    /*
     let resource = Resource::new_blocking(|| (),|_| login_status());
     let (user,user_set) = signal(LoginState::Loading);
     provide_context(user);
@@ -65,6 +82,8 @@ pub(crate) fn WithAccount(children:ChildrenFn) -> impl IntoView {
             } else {None}
         }</Suspense>
     }
+
+     */
 }
 
 #[island]

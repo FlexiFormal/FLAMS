@@ -1,22 +1,23 @@
 /*
 @import "./thaw/icon";
-@import "./components/loglist";
 @import "./thaw/menu-group";
 @import "./thaw/menu-item";
 @import "./thaw/modal";
 @import "./thaw/tabs";
 @import "./thaw/card";
-@import "./thaw/drawer";
-@import "./thaw/button";
 @import "./thaw/popover";
-*/
 @import "./thaw/theming";
+*/
 @import "./thaw/layout";
 @import "./thaw/divider";
 @import "./thaw/nav";
 @import "./thaw/badge";
+@import "./thaw/drawer";
+@import "./thaw/button";
+@import "./thaw/textarea";
 
 @import "./components/treeview";
+@import "./components/loglist";
 
 .immt-main {
     height:calc(100vh - 67px);
@@ -46,6 +47,8 @@
     width:120px;
 }
 
+body { margin: 0}
+
 /*
 
 body {
@@ -72,3 +75,36 @@ body {
 	padding: 0 10px 10px;
 }
  */
+
+.thaw-breadcrumb-button {
+    align-items: center;
+    box-sizing: border-box;
+    display: inline-flex;
+    justify-content: center;
+    text-decoration-line: none;
+    vertical-align: middle;
+    margin: 0px;
+    overflow: hidden;
+    border: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
+    font-family: var(--fontFamilyBase);
+    outline-style: none;
+    border-radius: var(--borderRadiusMedium);
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
+    transition-duration: var(--durationFaster);
+    transition-property: background, border, color;
+    transition-timing-function: var(--curveEasyEase);
+    flex-wrap: nowrap;
+    min-width: unset;
+    height: 32px;
+    color: var(--colorNeutralForeground2);
+    background-color: var(--colorSubtleBackground);
+    border-color: transparent;
+    font-weight: var(--fontWeightRegular);
+    padding: var(--spacingHorizontalSNudge);
+}
+.thaw-breadcrumb-button:hover {
+    color: var(--colorNeutralForeground2Hover);
+    background-color: var(--colorSubtleBackgroundHover);
+    cursor: pointer;
+}
