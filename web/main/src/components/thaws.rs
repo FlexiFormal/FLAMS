@@ -20,6 +20,7 @@ pub(crate) fn Badge(
     if let Some(c) = color {
         classes.push_str(&format!(" thaw-badge--{}",c.as_str()));
     }
+    classes.push_str(" immt-inline-badge");
     view! {
         <div class=classes>{children()}</div>
     }

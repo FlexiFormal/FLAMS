@@ -21,7 +21,7 @@ use thaw::{BadgeAppearance,BadgeSize,BadgeColor};
 
 
 pub(crate) fn icon(icon:icondata_core::Icon) -> impl IntoView {
-    icon_with_options(icon,Some("18px"),Some("18px"),None,None)
+    icon_with_options(icon,Some("1em"),Some("1em"),None,None)
 }
 
 pub(crate) fn icon_with_options(icon:icondata_core::Icon,width:Option<&str>,height:Option<&str>,style:Option<&str>,class:Option<&str>) -> impl IntoView {
