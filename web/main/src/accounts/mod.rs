@@ -7,9 +7,9 @@ use leptos::context::Provider;
 
 
 #[inline(always)]
-pub fn if_logged_in<R>(yes:impl FnOnce() -> R,no: impl FnOnce() -> R) -> R {
+pub fn if_logged_in<R>(mut yes:impl (FnMut() -> R)+Clone+'static,mut no: impl (FnMut() -> R)+Clone+'static) -> impl FnMut() -> R {
     use crate::accounts::LoginState;
-    match get_account() {
+    move || match get_account() {
         LoginState::Admin | LoginState::User(_) | LoginState::NoAccounts => yes(),
         _ => no()
     }
@@ -30,67 +30,57 @@ impl Display for LoginState {
         }
     }
 }
-
+#[inline(always)]
 pub fn get_account() -> LoginState {
-    #[cfg(feature="server")]
-    {expect_context::<ReadSignal<LoginState>>().get_untracked()}
-    #[cfg(feature="client")]
+    //#[cfg(feature="server")]
+    {expect_context::<RwSignal<LoginState>>().get()}
+    /*#[cfg(feature="client")]
     {
         let r = use_context::<LoginState>();
         r.unwrap_or_else(|| {
             crate::console_log!("No user found!");
             panic!("No user found!")
         })
-    }
+    }*/
 }
 
-#[cfg(feature="server")]
+macro_rules! fut {
+    ($e:expr) => {{
+        #[cfg(feature="server")]
+        {
+            use tracing::Instrument;
+            $e.in_current_span()
+        }
+        #[cfg(feature="client")]
+        { $e }
+    }}
+}
+
+//#[cfg(feature="server")]
 #[component(transparent)]
 pub(crate) fn WithAccount(children:ChildrenFn) -> impl IntoView {
     use thaw::*;
-    use tracing::Instrument;
-    let (user,user_set) = signal(LoginState::Loading);
+    let user = RwSignal::new(LoginState::Loading);
     provide_context(user);
-    crate::components::wait_blocking(|| login_status().in_current_span(),move |res|
-        if let Ok(user) = res {
+    crate::components::wait_blocking(|| fut!(login_status()),move |res|
+        if let Ok(u) = res {
             let children = children.clone();
-            user_set.set(user.clone());
-            Some(view!{
-                <WithAccountClient user=user>
-                    {children()}
-                </WithAccountClient>
-            })
+            user.set(u);
+            Some(children())
         } else {
             println!("Wut!");
             None
         }
     )
-    /*
-    let resource = Resource::new_blocking(|| (),|_| login_status());
-    let (user,user_set) = signal(LoginState::Loading);
-    provide_context(user);
-    view!{
-        <Suspense fallback=|| view!(<Spinner size=SpinnerSize::Tiny/>)>{
-            if let std::option::Option::Some(Ok(user)) = resource.get() {
-                let children = children.clone();
-                user_set.set(user.clone());
-                Some(view!{
-                    <WithAccountClient user=user>
-                        {children()}
-                    </WithAccountClient>
-                })
-            } else {None}
-        }</Suspense>
-    }
-
-     */
 }
-
+/*
 #[island]
 pub(crate) fn WithAccountClient(children:Children,user:LoginState) -> impl IntoView {
     provide_context(user);
     view!{ {children()} }
 }
+
+ */
 
 #[cfg(feature="server")]
 pub(crate) async fn login_status_with_session(
@@ -118,7 +108,7 @@ pub(crate) async fn login_status_with_session(
     else { Some(LoginState::None) }*/
 }
 
-#[cfg(feature="server")]
+#[server(prefix="/api/users",endpoint="login_status")]
 #[inline]
 pub async fn login_status() -> Result<LoginState,ServerFnError<IMMTError>> {
     use tracing::Instrument;
@@ -128,16 +118,16 @@ pub async fn login_status() -> Result<LoginState,ServerFnError<IMMTError>> {
     ).in_current_span().await.ok_or(IMMTError::ImplementationError.into())
 }
 
-#[server(Login,prefix="/api/users",endpoint="login")]//, input=server_fn::codec::Cbor)]
-pub async fn login(username:String,password:String) -> Result<(),ServerFnError<IMMTError>> {
+#[server(prefix="/api/users",endpoint="login")]//, input=server_fn::codec::Cbor)]
+pub async fn login(username:String,password:String) -> Result<LoginState,ServerFnError<IMMTError>> {
     use leptos_axum::redirect;
     use tracing::Instrument;
-    redirect("/dashboard");
+    //redirect("/dashboard");
     let mut session = use_context::<axum_login::AuthSession<AccountManager>>().unwrap();
     match session.authenticate((username,password)).in_current_span().await.map_err(|_| IMMTError::ImplementationError)? {
         Some(u) => {
             session.login(&u).in_current_span().await.map_err(|_| IMMTError::InvalidCredentials)?;
-            Ok(())
+            Ok(u)
         },
         None => return Err(IMMTError::InvalidCredentials.into())
     }

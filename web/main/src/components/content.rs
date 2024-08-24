@@ -11,7 +11,7 @@ mod uris {
     use immt_core::narration::Language;
     use immt_core::uris::{ArchiveId, ContentURI, URI, ModuleURI, Name, DocumentURI, NarrativeURI, NarrDeclURI};
 
-    pub(crate) trait MapLike {
+    pub(crate) trait MapLike:std::fmt::Debug {
         fn get(&self, key: &str) -> Option<&str>;
     }
     impl MapLike for ParamsMap {
@@ -88,7 +88,6 @@ mod uris {
         return get_doc_uri(a,p,l.unwrap_or(Language::English),n)
     }
 
-    #[inline]
     pub(crate) fn from_params(p:&impl MapLike) -> Option<URI> {
         if let Some(uri) = p.get("uri") {
             return uri.parse().ok()
@@ -286,9 +285,11 @@ mod fragments {
 
 pub mod omdoc {
     use leptos::prelude::*;
+    use immt_core::content::ArgSpec;
     use immt_core::narration::StatementKind;
-    use immt_core::uris::{ContentURI, DocumentURI, ModuleURI, NamedURI, NarrDeclURI, SymbolURI};
+    use immt_core::uris::{ContentURI, DocumentURI, ModuleURI, Name, NamedURI, NarrDeclURI, SymbolURI};
     use crate::components::content::{HTMLConstant, HTMLDocElem, HTMLDocument};
+    use crate::css;
 
     #[server(
         prefix="/api/omdoc",
@@ -303,6 +304,7 @@ pub mod omdoc {
         Ok(doc.into())
     }
 
+
     #[server(
         prefix="/api/omdoc",
         endpoint="constant",
@@ -313,9 +315,8 @@ pub mod omdoc {
         use immt_api::controller::Controller;
         use immt_core::content::ContentElement;
         let backend = immt_controller::controller().backend();
-        let m = backend.get_module_async(uri.module()).await.ok_or_else(|| ServerFnError::WrappedServerError("Module not found!".to_string()))?;
-        let c = m.get(uri.name()).ok_or_else(|| ServerFnError::WrappedServerError("Constant not found!".to_string()))?;
-        let ContentElement::Constant(c) = c else {return Err(ServerFnError::WrappedServerError("Not a constant".to_string()))};
+        let c = backend.get_constant_async(uri).await.ok_or_else(|| ServerFnError::WrappedServerError("Constant not found!".to_string()))?;
+        let c = c.as_ref();
         let tp_html = c.tp.as_ref().map(|t| backend.display_term(t).to_string());
         let df_html = c.df.as_ref().map(|t| backend.display_term(t).to_string());
         let notations = backend.get_notations(uri).map(|(m,not)| {
@@ -333,105 +334,121 @@ pub mod omdoc {
         Ok(super::HTMLConstant{uri:c.uri,tp_html,df_html,arity:c.arity.clone(),macro_name,notations})
     }
 
-    #[island]
+    #[component]
     pub fn OMDocDocumentURI(uri:DocumentURI) -> impl IntoView {
         crate::components::wait(move || omdoc_document(uri),|doc| {
             if let Ok(doc) = doc { view!(<OMDocDocument doc/>).into_any() } else {
                 view!(<span>"Document not found"</span>).into_any()
             }
         })
-            /*
-        let resource = Resource::new(|| (),move |_| omdoc_document(uri));
-        view!{
-            <Suspense fallback=|| view!(<thaw::Spinner/>)>{
-                if let Some(Ok(doc)) = resource.get() {
-                    Some(view!{<OMDocDocument doc/>}.into_any())
-                } else {Some(view!(<span>"Document not found"</span>).into_any())}
-            }</Suspense>
-        }
-             */
     }
 
     #[component]
     pub fn OMDocDocument(doc:HTMLDocument) -> impl IntoView {
+        //use thaw::*;
+        use crate::components::*;
         let uses = do_uses("Uses",doc.uses);
         let title = doc.title;
         let children = doc.children;
         view!{
-            <h2 inner_html=title/>
-            <div style="text-align:left;"><thaw::Space vertical=true>{uses}{
-                omdoc_doc_elems(children,false)
-            }</thaw::Space></div>
+            <Block>
+                <WHeader slot><h2 inner_html=title/></WHeader>
+                <HeaderAux slot>{uses}</HeaderAux>
+                {omdoc_doc_elems(children,false)}
+            </Block>
         }
     }
 
-    #[island]
+    #[component]
     pub fn OMDocConstantURI(uri:SymbolURI) -> impl IntoView {
-        let resource = Resource::new(|| (),move |_| omdoc_constant(uri));
-        view!{
-            <Suspense fallback=|| view!(<thaw::Spinner/>)>{move || {
-                if let Some(Ok(c)) = resource.get() {
-                    view!{<OMDocConstant c/>}.into_any()
-                } else {view!(<span>"Symbol not found"</span>).into_any()}
-            }}</Suspense>
-        }
+        crate::components::wait(move || omdoc_constant(uri),|c| {
+            if let Ok(c) = c {
+                view!{
+                    "TODOOOO" // TODO
+                    <OMDocConstantInner c/>
+                }.into_any()
+            } else {
+                view!(<span>"Symbol not found"</span>).into_any()
+            }
+        })
+    }
+
+    #[component]
+    pub fn OMDocConstantInnerURI(uri:SymbolURI) -> impl IntoView {
+        crate::components::wait(move || omdoc_constant(uri),|c|
+            if let Ok(c) = c { view!(<OMDocConstantInner c/>).into_any() } else {
+                view!(<span>"Symbol not found"</span>).into_any()
+            }
+        )
     }
 
     const ARGS : &'static str = "abcdefghijk";
     const VARS : &'static str = "xyzvwrstu";
 
-    #[component]
-    pub fn OMDocConstant(c:HTMLConstant) -> impl IntoView {
+    fn macroname(macro_name:Name,arity:ArgSpec) -> impl IntoView {
+        use thaw::{Text,TextTag,Caption1};
         use immt_core::content::ArgType;
-        view!{<div style="position:relative">
-            {super::sym_shtml(c.uri.into())}
-            {c.tp_html.map(|s| view!(" : "<math><mrow inner_html=s/></math><br/>))}
-            {c.df_html.map(|s| view!(" := "<math><mrow inner_html=s/></math><br/>))}
-            {c.macro_name.map(|s| {
-                view!(<div style="font-family:monospace;position:absolute;top:0;right:0;">"\\"{s.to_string()}{
-                    c.arity.into_iter().enumerate().map(|(i,a)| match a {
-                        ArgType::Normal => view!("{"{ARGS.chars().nth(i).unwrap()}"}").into_any(),
-                        ArgType::Sequence => view!("{"
-                            <math><mrow><msub>
-                                <mi>{ARGS.chars().nth(i).unwrap()}</mi>
-                                <mn>"1"</mn>
-                            </msub></mrow></math>
-                            ",...,"
-                            <math><mrow><msub>
-                                <mi>{ARGS.chars().nth(i).unwrap()}</mi>
-                                <mi>"n"</mi>
-                            </msub></mrow></math>
-                            "}").into_any(),
-                        ArgType::Binding => view!("{"{VARS.chars().nth(i).unwrap()}"}").into_any(),
-                        ArgType::BindingSequence => view!("{"
-                            <math><mrow><msub>
-                                <mi>{VARS.chars().nth(i).unwrap()}</mi>
-                                <mn>"1"</mn>
-                            </msub></mrow></math>
-                            ",...,"
-                            <math><mrow><msub>
-                                <mi>{VARS.chars().nth(i).unwrap()}</mi>
-                                <mi>"n"</mi>
-                            </msub></mrow></math>
-                            "}").into_any()
-                    }).collect::<Vec<_>>()
-                }</div>)
-            })}
+        view!{<div><Caption1>"Macro: "</Caption1> <Text tag=TextTag::Code>"\\"{macro_name.to_string()}{
+            arity.into_iter().enumerate().map(|(i,a)| match a {
+                ArgType::Normal => view!("{"{ARGS.chars().nth(i).unwrap()}"}").into_any(),
+                ArgType::Sequence => view!("{"
+                    <math><mrow><msub>
+                        <mi>{ARGS.chars().nth(i).unwrap()}</mi>
+                        <mn>"1"</mn>
+                    </msub></mrow></math>
+                    ",...,"
+                    <math><mrow><msub>
+                        <mi>{ARGS.chars().nth(i).unwrap()}</mi>
+                        <mi>"n"</mi>
+                    </msub></mrow></math>
+                    "}").into_any(),
+                ArgType::Binding => view!("{"{VARS.chars().nth(i).unwrap()}"}").into_any(),
+                ArgType::BindingSequence => view!("{"
+                    <math><mrow><msub>
+                        <mi>{VARS.chars().nth(i).unwrap()}</mi>
+                        <mn>"1"</mn>
+                    </msub></mrow></math>
+                    ",...,"
+                    <math><mrow><msub>
+                        <mi>{VARS.chars().nth(i).unwrap()}</mi>
+                        <mi>"n"</mi>
+                    </msub></mrow></math>
+                    "}").into_any()
+            }).collect::<Vec<_>>()
+        }</Text></div>}
+    }
+
+    #[component]
+    pub fn OMDocConstantInner(c:HTMLConstant) -> impl IntoView {
+        use immt_core::content::ArgType;
+        use crate::components::Block;
+        use thaw::*;
+        css!(notation_table = ".immt-notation-table { width:max-content; td,th {text-align:center;padding-left:20px;padding-right:20px} }");
+        view!{<Block>
+            {c.df_html.map(|s| view!(" := "{super::do_term(s)}))}
+            {c.macro_name.map(|s| macroname(s,c.arity))}
             {if c.notations.is_empty() {None} else {Some(
-                view!(<div><b>"Notations"</b></div><table>
-                    <thead><tr><th>"application"</th><th>"operator"</th><th>"id"</th><th>"in module"</th></tr></thead>
-                    <tbody>{
-                    c.notations.into_iter().map(|(m,n,full,op)| {view!{
-                        <tr>
-                            <td>{full.map(|s| view!(<math><mrow inner_html=s/></math>))}</td>
-                            <td>{op.map(|s| view!(<math><mrow inner_html=s/></math>))}</td>
-                            <td>{n.to_string()}</td>
-                            <td><LinkedName uri=NamedURI::Content(m.into())/></td>
-                        </tr>
-                    }}).collect::<Vec<_>>()
-                }</tbody></table>)
+                view!(<Caption1>"Notations:"</Caption1>
+                    <div style="margin-left:30px"><Table class="immt-notation-table">
+                    <TableHeader><TableRow>
+                        <TableCell>"id"</TableCell>
+                        <TableCell>"application"</TableCell>
+                        <TableCell>"operator"</TableCell>
+                        <TableCell>"in module"</TableCell>
+                    </TableRow></TableHeader>
+                    <TableBody>{
+                        c.notations.into_iter().map(|(m,n,full,op)| {view!{
+                            <TableRow>
+                                <TableCell>{n.to_string()}</TableCell>
+                                <TableCell>{full.map(|s| view!(<math><mrow inner_html=s/></math>))}</TableCell>
+                                <TableCell>{op.map(|s| view!(<math><mrow inner_html=s/></math>))}</TableCell>
+                                <TableCell><LinkedName uri=NamedURI::Content(m.into())/></TableCell>
+                            </TableRow>
+                        }}).collect_view()
+                    }</TableBody>
+                </Table></div>)
             )}}
-        </div>}
+        </Block>}
     }
 
     #[inline]
@@ -448,12 +465,12 @@ pub mod omdoc {
                 => view!(<OMDocDocumentMorphism elems=children uri domain total/>).into_any(),
             HTMLDocElem::Paragraph {uri,kind,uses,children,fors,terms_html}
                 => view!(<OMDocParagraph kind uri fors terms_html uses elems=children />).into_any(),
-            HTMLDocElem::Constant(uri)
-                => view!(<OMDocDocumentConstant uri in_structure/>).into_any(),
+            HTMLDocElem::Constant{uri,tp}
+                => view!(<OMDocDocumentConstant uri tp in_structure/>).into_any(),
             HTMLDocElem::Var {uri,tp,df}
                 => view!(<OMDocVariable uri tp df/>).into_any(),
             HTMLDocElem::Term(t)
-                => view!(<div>"Term "<math><mrow inner_html=t/></math></div>).into_any()
+                => view!(<div>"Term "{super::do_term(t)}</div>).into_any()
         }).collect_view()
     }
 
@@ -462,43 +479,45 @@ pub mod omdoc {
         view!{
             <div>
                 <b>"Variable "{super::var_shtml(uri)}</b>
-                {tp.map(|s| view!(" : "<math><mrow inner_html=s/></math>))}
-                {df.map(|s| view!(" := "<math><mrow inner_html=s/></math>))}
+                {tp.map(|s| view!(" : "{super::do_term(s)}))}
+                {df.map(|s| view!(" := "{super::do_term(s)}))}
             </div>
         }
     }
-    #[island]
+    #[component]
     pub fn OMDocInputref(uri:DocumentURI) -> impl IntoView {
         use thaw::*;
+        use crate::components::*;
         let name = uri.name();
-        let (expanded, set_expanded) = signal(false);
-        view!{<details>
-            <summary on:click=move |_| set_expanded.update(|b| *b=!*b)>
-                <b>"Document "<LinkedName uri=uri.into()/></b>
-            </summary>
-            <Card>{move || {
-                if expanded.get() {Some(view!(<OMDocDocumentURI uri/>))} else {None}
-            }}</Card>
-        </details>}
+        view!{<Collapsible lazy=true>
+            <WHeader slot>
+                <Caption1Strong>"Document\u{00a0}"<LinkedName uri=uri.into()/></Caption1Strong>
+            </WHeader>
+            <OMDocDocumentURI uri/>
+        </Collapsible>}
     }
-    #[island]
-    pub fn OMDocDocumentConstant(uri:SymbolURI,in_structure:bool) -> impl IntoView {
+    #[component]
+    pub fn OMDocDocumentConstant(uri:SymbolURI,tp:Option<String>,in_structure:bool) -> impl IntoView {
         use thaw::*;
+        use crate::components::*;
         let name = uri.name();
-        let (expanded, set_expanded) = signal(false);
-        view!{<details>
-            <summary on:click=move |_| set_expanded.update(|b| *b=!*b)>
-                <b>{if in_structure {"Field "} else {"Symbol "}}{super::sym_shtml(uri.into())}</b>
-            </summary>
-            <Card>{move || {
-                if expanded.get() {Some(view!(<OMDocConstantURI uri/>))} else {None}
-            }}</Card>
-        </details>}
+        view! {<div style="margin-left:15px">
+            <h4 style="margin:0;display:inline-block">
+                {if in_structure {"Field "} else {"Symbol "}}
+                {super::sym_shtml(uri.into())}
+            </h4>
+            {tp.map(|s| view!(" : "{super::do_term(s)}))}
+            <div style="margin-left:20px"><Collapsible lazy=true>
+                <WHeader slot><Caption1>"More Info"</Caption1></WHeader>
+                <OMDocConstantInnerURI uri/>
+            </Collapsible></div>
+        </div>}
     }
 
-    #[island]
+    #[component]
     pub fn OMDocParagraph(kind:StatementKind,uri:NarrDeclURI,fors:Vec<ContentURI>,terms_html:Vec<(SymbolURI,String)>,uses:Vec<ModuleURI>,elems:Vec<HTMLDocElem>) -> impl IntoView {
         use thaw::*;
+        use crate::components::*;
         let name = uri.name();
         let (expanded, set_expanded) = signal(false);
         fn do_name(uri:ContentURI,terms:&Vec<(SymbolURI,String)>) -> impl IntoView {
@@ -506,87 +525,91 @@ pub mod omdoc {
                 {super::sym_shtml(uri)}
                 {match uri {
                     ContentURI::Symbol(s) => if let Some((_,t)) = terms.iter().find(|(s2,_)| *s2 == s) {
-                        Some(view!(" as "<math><mrow inner_html=t.clone()/></math>))
+                        Some(view!(" as "{super::do_term(t.clone())}))
                     } else {None},
                     _ => None
                 }}
             }
         }
         view!{
-            <Card>
-                <CardHeader>
-                    {kind.to_string()}" "<LinkedName uri=uri.into()/>
-                    <CardHeaderDescription slot>
-                        {do_uses("Uses",uses)}<br/>
-                        {if fors.is_empty() {None} else {
-                            let mut iter = fors.iter();
-                            Some(view!{<div>
-                                "introduces "{do_name(*iter.next().unwrap(),&terms_html)}
-                                {iter.map(|u| view!(", "{do_name(*u,&terms_html)})).collect::<Vec<_>>()}
-                            </div>})
-                        }}
-                    </CardHeaderDescription>
-                </CardHeader>
-                //<div><b>{kind.to_string()}" "<LinkedName uri=uri.into()/></b></div>
+            <Block>
+                <WHeader slot><h4 style="margin:0">
+                    {kind.to_string() + "\u{00a0}"}
+                    <LinkedName uri=uri.into()/>
+                </h4></WHeader>
+                <HeaderAux slot>{do_uses("Uses",uses)}</HeaderAux>
+                <HeaderAux2 slot>{if fors.is_empty() {None} else {
+                    let mut iter = fors.into_iter();
+                    Some(view!{<Text>
+                        "introduces\u{00a0}"{do_name(iter.next().unwrap(),&terms_html)}
+                        {iter.map(|u| view!(", "{do_name(u,&terms_html)})).collect_view()}
+                    </Text>})
+                }}</HeaderAux2>
+                <Separator slot>"Elements"</Separator>
                 { omdoc_doc_elems(elems,false) }
-                <details>
-                <summary on:click=move |_| set_expanded.update(|b| *b=!*b)>
-                    "Text"
-                </summary>
-                <Card>{move || {
-                    if expanded.get() {
-                        let resource = Resource::new(|| (),move |_| super::fragments::paragraph(uri));
-                        Some(view!(<Suspense fallback=|| view!(<thaw::Spinner/>)>{
-                            if let Some(Ok(re)) = resource.get() {
-                            // TODO: CSS
-                                Some(view!{<div inner_html=re.1.to_string()/>}.into_any())
-                            } else {Some("Paragraph not found".into_any())}
-                        }</Suspense>))
-                    } else {None}
-                }}</Card>
-            </details>
-            </Card>
+                <Footer slot><Collapsible lazy=true>
+                    <WHeader slot><Caption1>"Show"</Caption1></WHeader>
+                    {
+                        crate::components::wait(
+                            move || super::fragments::paragraph(uri),
+                            move |re| if let Ok(re) = re {
+                                view!{<Block><div inner_html=re.1.to_string()/></Block>}.into_any()
+                            } else {
+                                view!{"Paragraph not found"}.into_any()
+                            }
+                        )
+                    }
+                </Collapsible></Footer>
+            </Block>
         }
     }
 
     #[component]
     pub fn OMDocSection(uri:NarrDeclURI,title_html:String,elems:Vec<HTMLDocElem>,uses:Vec<ModuleURI>,in_structure:bool) -> impl IntoView {
         use thaw::*;
+        use crate::components::*;
         view!{
-            <Card>
-                <CardHeader><UriHover uri=uri.into()>
-                    <b>" - "</b><span inner_html=title_html/>
-                </UriHover>
-                <CardHeaderDescription slot>{do_uses("Uses",uses)}</CardHeaderDescription>
-                </CardHeader>
+            <Block>
+                <WHeader slot><h3 style="margin:0">
+                    <UriHover uri=uri.into()><span inner_html=title_html/></UriHover>
+                </h3></WHeader>
+                <HeaderAux slot>{do_uses("Uses",uses)}</HeaderAux>
                 { omdoc_doc_elems(elems,in_structure) }
-            </Card>
+            </Block>
         }
     }
 
     #[component]
     pub fn OMDocDocumentModule(uri:ModuleURI, elems:Vec<HTMLDocElem>, uses:Vec<ModuleURI>, imports:Vec<ModuleURI>) -> impl IntoView {
         use thaw::*;
+        use crate::components::*;
         view!{
-            <Card>
-                <CardHeader>"Module "<LinkedName uri=NamedURI::Content(uri.into())/>
-                <CardHeaderDescription slot>{do_uses("Uses",uses)}<br/>{do_uses("Imports",imports)}</CardHeaderDescription>
-                </CardHeader>
+            <Block>
+                <WHeader slot>
+                    <h3 style="margin:0;">
+                        "Module\u{00a0}"<LinkedName uri=NamedURI::Content(uri.into())/>
+                    </h3>
+                </WHeader>
+                <HeaderAux slot>{do_uses("Uses",uses)}</HeaderAux>
+                <HeaderAux2 slot>{do_uses("Imports",imports)}</HeaderAux2>
                 { omdoc_doc_elems(elems,false) }
-            </Card>
+            </Block>
         }
     }
 
     #[component]
     pub fn OMDocDocumentStructure(uri:ModuleURI, elems:Vec<HTMLDocElem>, uses:Vec<ModuleURI>, imports:Vec<ModuleURI>) -> impl IntoView {
         use thaw::*;
+        use crate::components::*;
         view!{
-            <Card>
-                <CardHeader>"Structure "<LinkedName uri=NamedURI::Content(uri.into())/>
-                <CardHeaderDescription slot>{do_uses("Uses",uses)}<br/>{do_uses("Imports",imports)}</CardHeaderDescription>
-                </CardHeader>
+            <Block>
+                <WHeader slot>
+                    <h4 style="margin:0">"Structure "<LinkedName uri=NamedURI::Content(uri.into())/></h4>
+                </WHeader>
+                <HeaderAux slot>{do_uses("Uses",uses)}</HeaderAux>
+                <HeaderAux2 slot>{do_uses("Imports",imports)}</HeaderAux2>
                 { omdoc_doc_elems(elems,true) }
-            </Card>
+            </Block>
         }
     }
 
@@ -624,17 +647,22 @@ pub mod omdoc {
         let name = name.as_ref();
         let name = name.rsplit_once('/').map(|(_,n)| n).unwrap_or(name);
         let name = name.to_string();
-        view!(<UriHover uri><span style="font-family:monospace">{name}</span></UriHover>)
+        view!(<UriHover uri>{name}</UriHover>)
     }
 
     #[component]
     fn UriHover(uri: NamedURI,children:Children) -> impl IntoView {
         use thaw::*;
+        crate::components::inject_css("immt-omdoc-link",r#"
+            .immt-omdoc-link { color: var(--colorCompoundBrandForeground1);}
+            .immt-omdoc-link:hover {color: var(--colorCompoundBrandForeground1Hover);}
+            .immt-omdoc-link-popover {z-index:10;}
+        "#);
         view!(
-            <Popover><PopoverTrigger slot>
-              <a style="color:blue" href=format!("/?uri={}",urlencoding::encode(&uri.to_string()))>{
+            <Popover class="immt-omdoc-link-popover" appearance=PopoverAppearance::Brand><PopoverTrigger slot class="immt-omdoc-link">
+               <a href=format!("/?uri={}",urlencoding::encode(&uri.to_string()))>{
                 children()
-        }</a>
+               }</a>
             </PopoverTrigger>{uri.to_string()}
             </Popover>
         )
@@ -645,96 +673,94 @@ pub mod omdoc {
 
 #[component]
 pub(crate) fn URITop() -> impl IntoView {
-    #[cfg(feature="server")]
-    {
-        use leptos_router::*;
-        use immt_core::uris::*;
-        use thaw::{ConfigProvider,Theme};
-        use crate::home::Themer;
-        use leptos_meta::Stylesheet;
-        let params = leptos_router::hooks::use_query_map();
-        view!{
-            // id=leptos means cargo-leptos will hot-reload this stylesheet
-            <Stylesheet id="leptos" href="/pkg/immt.css"/>
-            <ConfigProvider theme=RwSignal::new(Theme::dark())><Themer>
-            {
-                let uri = params.with(|p| uris::from_params(p));
-                uri.map(|uri| {
-                    match uri {
-                        URI::Narrative(NarrativeURI::Doc(d)) => view!(<Document uri=d/>).into_any(),
-                        _ => view!("TODO: "{uri.to_string()}).into_any()
-                    }
-                })
-            }
-            </Themer></ConfigProvider>
+    use leptos_router::*;
+    use immt_core::uris::*;
+    use thaw::*;
+    use leptos_meta::Stylesheet;
+    use crate::components::Themer;
+    view!{
+        // id=leptos means cargo-leptos will hot-reload this stylesheet
+        <Stylesheet id="leptos" href="/pkg/immt.css"/>
+        <Themer>
+        {
+            // Ugly hack to get client/server isomorphism
+            // TODO try a signal
+            crate::components::wait_blocking(move || async move {
+                #[cfg(feature="server")]
+                {leptos_router::hooks::use_query_map().with(|p| uris::from_params(p))}
+                #[cfg(feature="client")]
+                {Option::<URI>::None}
+            },|uri| view!{
+            <Show when=move || uri.is_some() fallback=|| view!(<span>"No Document"</span>)>
+            <Layout position=LayoutPosition::Absolute>{
+                match uri.unwrap() {
+                    URI::Narrative(NarrativeURI::Doc(d)) => view!(<Document uri=d/>).into_any(),
+                    uri => view!(<span>"TODO: "{uri.to_string()}</span>).into_any()
+                }
+            }</Layout></Show>
+        })
         }
+        </Themer>
     }
-    #[cfg(feature="client")]
-    ""
 }
 
 #[component]
 fn Document(uri:DocumentURI) -> impl IntoView {
-    #[cfg(feature="server")]
-    {
-        crate::components::wait_blocking(move || fragments::document(uri),
-            move |res| match res {
-                Ok((css,html)) => view!(
+    crate::components::wait(
+        move || fragments::document(uri),
+        move |doc| {let ok=doc.is_ok(); view!{
+            <Show when=move || ok fallback=|| view!(<span>"Document not found"</span>)>{
+                let Ok((css,html)) = doc.clone() else {unreachable!()};
+                view!(
                     <OMDocDocumentDrawer uri/>
                     <CSSHTML css=css.into() html=html.into()/>
-                ).into_any(),
-                Err(_) => view!(<span>"Document not found"</span>).into_any()
-            }
-        )
-        /*
-        let res = Resource::new_blocking(|| (), move |_| fragments::document(uri));
-        view! {
-            <Suspense fallback=|| view!(<thaw::Spinner/>)>
-                <Show
-                    when=move || res.with(|s| s.as_ref().map(|s| s.is_ok()) == Some(true))
-                    fallback=|| view!(<span>"Document not found"</span>)
-                >
-                <OMDocDocumentDrawer uri/>
-                { move || {
-                    let Some(Ok((css,html))) = res.get() else {unreachable!()};
-                    view!(<CSSHTML css=css.into() html=html.into()/>)
-                }}</Show>
-            </Suspense>
-        }
-
-         */
-    }
-    #[cfg(feature="client")]
-    ""
+                )
+            }</Show>
+        }}
+    )
 }
 
-#[island]
+#[component]
 fn OMDocDocumentDrawer(uri:DocumentURI) -> impl IntoView {
     use thaw::*;
-    use crate::components::drawer;
+    use crate::components::{WideDrawer,Trigger,WHeader};
     use omdoc::OMDocDocumentURI;
-    let open = RwSignal::new(false);
-    view!(
-        <div style="position:fixed;top:5px;right:5px;"><Button appearance=ButtonAppearance::Primary on_click=move |_| open.set(true)>OMDoc</Button></div>
-        {drawer(open,Option::<&'static str>::None,move || if open.get() {Some(view!(<OMDocDocumentURI uri/>))} else {None} )}
-        /*<OverlayDrawer open position=DrawerPosition::Right size=DrawerSize::Large>
-            {move || if open.get() { Some(view!(<omdoc::OMDocDocumentURI uri/>)) } else {None}}
-        </OverlayDrawer>*/
-    )
+    view!{<WideDrawer lazy=true>
+        <Trigger slot><div style="position:fixed;top:5px;right:5px;">
+            <Button appearance=ButtonAppearance::Primary>OMDoc</Button>
+        </div></Trigger>
+        <omdoc::OMDocDocumentURI uri/>
+    </WideDrawer>}
 }
 
 #[component]
 fn CSSHTML(css:Vec<CSS>,html:String) -> impl IntoView {
     use leptos_meta::{Stylesheet,Style,Script};
-    view!(<For each=move || css.clone().into_iter().enumerate() key=|(u,_)| u.to_string()
-        children = move |(u,css)| match css {
-            CSS::Link(href) => view!(<Stylesheet href/>).into_any(),
-            CSS::Inline(content) => view!(<Style>{content.to_string()}</Style>).into_any()
+    for c in css {
+        match c {
+            CSS::Link(href) => {
+                //let _ = view!(<Stylesheet href=href/>);
+                let id = immt_core::utils::hashstr(&href);
+                crate::components::inject_stylesheet(id,href);
+
+            },
+            CSS::Inline(content) => {
+                //let _ = view!(<Style>{content.to_string()}</Style>);
+                let id = immt_core::utils::hashstr(&content);
+                crate::components::inject_css_string(id,content);
+            }
         }
-        />
-        <Script src="/shtml.js"/>
+    }
+    //let _ = view!(<Script src="/shtml.js"/>);
+    crate::components::inject_script("shtml","/shtml.js");
+    view!(
         <div style="text-align:left;" inner_html=html/>
     )
+}
+
+fn do_term(s:String) -> impl IntoView {
+    use thaw::*;
+    view!(<Text tag=TextTag::Code><math><mrow inner_html=s/></math></Text>)
 }
 
 fn sym_shtml(uri:ContentURI) -> impl IntoView {
@@ -746,12 +772,7 @@ fn sym_shtml(uri:ContentURI) -> impl IntoView {
         .attr("shtml:term","OMID")
         .attr("shtml:maincomp","")
         .attr("shtml:head",uri.to_string())
-        .attr("style","font-family:monospace")
         .inner_html(name)
-    //view!(<span (shtml:term)="OMID" (shtml:maincomp)="" (shtml:head)={uri.to_string()} style="font-family:monospace">{name.clone()}</span>)
-    /*format!(
-        "<span shtml:term=\"OMID\" shtml:maincomp shtml:head=\"{uri}\">{}</span>",uri.name()
-    )*/
 }
 fn var_shtml(uri:NarrDeclURI) -> impl IntoView {
     let name = uri.name();
@@ -762,594 +783,9 @@ fn var_shtml(uri:NarrDeclURI) -> impl IntoView {
         .attr("shtml:term","OMV")
         .attr("shtml:maincomp","")
         .attr("shtml:head",uri.to_string())
-        .attr("style","font-family:monospace")
         .inner_html(name)
-    //view!(<span shtml:term="OMV" shtml:varcomp="" shtml:head={uri.to_string()} style="font-family:monospace">{name.clone()}</span>)
-    /*format!(
-        "<span shtml:term=\"OMID\" shtml:maincomp shtml:head=\"{uri}\">{}</span>",uri.name()
-    )*/
 }
 
-/*
-uri!{DOC @opt
-#[component]
-{pub(crate)} fn Document() -> {impl IntoView} = uri {
-    use thaw::*;
-    if let Some(uri) = uri {
-    let res = create_blocking_resource(|| (),move |_| uri!(@uri DOC get_document_inner => uri.into()));
-    Some(view!{
-        <Suspense fallback=|| view!(<Spinner/>)>{
-            if let Some(Ok((css,html))) = res.get() {
-                Some(view!(<Layout style="height:100vh" content_style="height:100%">
-                    //<OMDocDrawer><DocumentOMDoc uri/></OMDocDrawer>
-                    //<OMDocDrawerURI uri=uri.into()/>
-                    //<OMDocDrawerLink link=format!("./omdoc?uri={}",urlencoding::encode(&uri.to_string()))/>
-                    <CSSHTML css html/>
-                </Layout>))
-            } else {None}
-        }</Suspense>
-    })} else {None}
-}}
-*/
-
-/*
-
-#[component]
-pub(crate) fn OMDocTop() -> impl IntoView {
-    #[cfg(feature="server")]
-    {
-        use leptos_router::*;
-        use server::*;
-        use immt_core::uris::*;
-        let params = use_query_map();
-        move || {
-            let uri = params.with(|p| from_params(p));
-            uri.map(|uri| {
-                match uri {
-                    MMTUri::Narrative(NarrativeURI::Doc(d)) => view!(<DocumentOMDoc uri=d/>).into_view(),
-                    _ => view!("TODO: "{uri.to_string()}).into_view()
-                }
-            })
-        }
-    }
-    #[cfg(feature="client")]
-    view!(<div/>)
-}
-
-
-#[component]
-fn DocumentOMDoc(uri:immt_core::uris::DocumentURI) -> impl IntoView {
-    use thaw::*;
-    #[cfg(feature="server")]
-    {
-        use immt_controller::Controller;
-        let res = create_blocking_resource(|| (),move |_| async move {
-            immt_controller::controller().backend().get_document_async(uri).await.map(server::DDWrap)
-            //doc.map(|doc| leptos::ssr::render_to_string(|| server::omdoc_document(doc)))
-            //doc.map(|d| server::omdoc_document(d))
-        });
-        return view!{<Suspense>{
-            match res.get() {
-                Some(Some(d)) => {
-                    server::omdoc_document(d.0).into_view()
-                    //view!(<span inner_html=d/>).into_view()//d.into_view(),
-                }
-                _ => view!(<span>"Document not found"</span>).into_view(),
-            }
-        }</Suspense>}
-    }
-    #[cfg(feature="client")]
-    view!(<div/>)
-}
-
-
-#[island]
-fn OMDocDrawerLink(link:String) -> impl IntoView {
-    use thaw::*;
-    let show = create_rw_signal(false);
-    view!(
-        <Button on_click=move |_| show.set(true) style="position:absolute;top:0;right:0;">OMDoc</Button>
-        <Drawer show placement=DrawerPlacement::Right mount=DrawerMount::None width="80%" height="100%">
-        {move || {
-            if show.get() {
-                view!(<crate::components::IFrame src=link.clone() ht="100%"/>).into_view()
-            } else {view!(<div/>).into_view()}
-        }}
-    </Drawer>)
-}
-
-#[island]
-fn OMDocDrawer(children: Children) -> impl IntoView {
-    use thaw::*;
-    let show = create_rw_signal(false);
-    view!(
-        <Button on_click=move |_| show.set(true) style="position:absolute;top:0;right:0;">OMDoc</Button>
-        <Drawer show placement=DrawerPlacement::Right mount=DrawerMount::None width="80%">
-        {children()}
-    </Drawer>)
-}
-/*
-#[island]
-fn OMDocDrawerURI(uri:MMTUri) -> impl IntoView {
-    use thaw::*;
-    let show = create_rw_signal(false);
-    view!(
-        <Button on_click=move |_| show.set(true) style="position:absolute;top:0;right:0;">OMDoc</Button>
-        <Drawer show placement=DrawerPlacement::Right mount=DrawerMount::None width="80%">
-        {move || {
-            if show.get() {
-                let resource = create_resource(|| (),move |_| leptos_uri!(@uri get_omdoc_inner => uri));
-                view!{
-                    <Suspense fallback=|| view!(<Spinner/>)>{
-                        if let Some(Ok(s)) = resource.get() {
-                            Some(view!(<div inner_html=s/>))
-                        } else {None}
-                    }</Suspense>
-                }.into_view()
-            } else {view!(<div/>).into_view()}
-        }}
-    </Drawer>)
-}
-
- */
-
-#[cfg(feature="server")]
-pub(crate) mod server {
-    use leptos::*;
-    use leptos_router::ParamsMap;
-    use serde::Serializer;
-    use immt_api::controller::Controller;
-    use immt_core::content::Term;
-    use immt_core::uris::{MMTUri, Name, NarrativeURI, ModuleURI, DocumentURI, ArchiveURI, ContentURI, NarrDeclURI, SymbolURI, NamedURI};
-    use immt_core::narration::{CSS, DocData, Document, DocumentElement, DocumentModule, DocumentReference, Language, Section};
-    use immt_core::uris::archives::ArchiveId;
-/*
-    pub(crate) async fn document_html(axum::extract::Query(params) : axum::extract::Query<std::collections::HashMap<String,String>>) -> axum::response::Html<String> {
-        use immt_api::controller::Controller;
-        const FAIL: &str = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>SHTML</title>\n</head>\n<body>\nDocument not found\n</body>";
-        struct CSSWrap(Vec<CSS>);
-        let uri = if let Some(MMTUri::Narrative(NarrativeURI::Doc(d))) = from_params(&params) {d} else {return axum::response::Html(FAIL.to_string())};
-        impl std::fmt::Display for CSSWrap{
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                for css in &self.0 {
-                    match css {
-                        CSS::Link(href) => write!(f,"\n  <link rel=\"stylesheet\" href=\"{}\"/>",href),
-                        CSS::Inline(content) => write!(f,"\n  <style>\n{}\n  </style>",content)
-                    }?;
-                }
-                Ok(())
-            }
-        }
-        if let Some((css,s)) = immt_controller::controller().backend().get_html_async(uri).await {
-            let s = format!("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>SHTML</title>\n  <script src=\"/shtml.js\"></script>{}\n</head>\n<body>\n{}\n</body>",
-                            CSSWrap(css),s
-            );
-            axum::response::Html(s)
-        } else {
-            axum::response::Html(FAIL.to_string())
-        }
-    }
-
- */
-
-    pub(super) fn omdoc_document(dd:DocData) -> impl IntoView {
-        use thaw::*;
-        let d = dd.as_ref();
-        let (uses,_,children) = doc_elems(&d.elements,&dd);
-        let ttl = d.title.clone().unwrap_or_else(||
-            if let Some(p) = d.uri.path() {
-                format!("[{}/{p}/{}]",d.uri.archive().id(),d.uri.name())
-            } else {
-                format!("[{}]{}", d.uri.archive().id(),d.uri.name())
-            }.into()
-        );
-        view!{
-            <h2 inner_html=ttl.to_string()/>
-            <div style="text-align:left;"><Space vertical=true>
-            {uses}{children}</Space></div>
-        }
-    }
-
-    pub(super) fn omdoc_doc_elem(e:&DocumentElement,in_structure:bool,top:&DocData) -> impl IntoView + Clone {
-        use immt_api::controller::Controller;
-        use thaw::*;
-        match e {
-            DocumentElement::InputRef(dr) => Some(omdoc_inputref(dr)).into_view(),
-            DocumentElement::Section(s) => Some(omdoc_section(s,top)).into_view(),
-            DocumentElement::Module(m) => Some(omdoc_doc_module(m,top)).into_view(),
-            DocumentElement::MathStructure(m) => {
-                let v = m.children.iter().map(|e| omdoc_doc_elem(e,true,top)).collect::<Vec<_>>();
-                let name = m.uri.name().as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(m.uri.name().as_ref()).to_string();
-                let uri = m.module_uri;
-                Some(move || view!{
-                    <Card clone:v>
-                        <CardHeader slot>"Structure "<super::LinkedName uri=NamedURI::Content(uri.into())/></CardHeader>""
-                    {v}
-                    </Card>
-                }).into_view()
-            },
-            DocumentElement::Morphism(m) => {
-                let v = m.children.iter().map(|e| omdoc_doc_elem(e,true,top)).collect::<Vec<_>>();
-                let name = m.uri.name().as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(m.uri.name().as_ref()).to_string();
-                let domain = m.domain;
-                Some(move || view!{
-                    <Card title=format!("Morphism {name}") clone:v clone:name>
-                        <CardHeader slot clone:name>"Morphism "{name}": "<super::LinkedName uri=NamedURI::Content(domain.into())/></CardHeader>{v}
-                    </Card>
-                }).into_view()
-            },
-            DocumentElement::Paragraph(p) => {
-                let ctrl = immt_controller::controller();
-                let b = ctrl.backend();
-                let v = p.children.iter().map(|e| omdoc_doc_elem(e,in_structure,top)).collect::<Vec<_>>();
-                let fors = p.fors.iter().map(|u|
-                    view!({sym_shtml(*u)}", ")).collect::<Vec<_>>();
-                let tms = p.terms.iter().map(|(_,u)|
-                    view!(<math><mrow inner_html=u.display(|s| b.get_notations(s)).to_string()/></math><br/>)).collect::<Vec<_>>();
-                let kind = p.kind;
-                Some(move || view!{<Card title=kind.to_string() clone:fors clone:tms clone:v>
-                    <CardHeaderExtra slot clone:fors><span style="font-weight:normal;">
-                        {if !fors.is_empty() {"Introduces "} else {""}}
-                        <span style="font-family:monospace;">{fors}</span>
-                    </span></CardHeaderExtra>
-                    <span>{tms}</span>
-                    {v}
-                </Card>}).into_view()
-            }
-            DocumentElement::ConstantDecl(c) if in_structure => {
-                let c = *c;
-                Some(move || view! {<Card class="immt-small-card" title=format!("Field {}",c.name())><span/></Card>}).into_view()
-            }
-            DocumentElement::ConstantDecl(c) => {
-                let c = *c;
-                Some(move || view! {<Card class="immt-small-card">
-                    <CardHeader slot>"Symbol "{sym_shtml(c.into())}</CardHeader>
-                        ""
-                    </Card>}).into_view()
-            }DocumentElement::VarDef{uri,..} => {
-                let c = *uri;
-                Some(move || view! {<Card class="immt-small-card">
-                    <CardHeader slot>"Variable "{var_shtml(c)}</CardHeader>
-                        ""
-                    </Card>}).into_view()
-            }
-            DocumentElement::TopTerm(t) => {
-                let ctrl = immt_controller::controller();
-                let b = ctrl.backend();
-                let s = t.display(|s| b.get_notations(s)).to_string();
-                Some(move || view!{<Card class="immt-small-card" title="Expression" clone:s>
-                    <CardHeader slot clone:s>"Expression "<math><mrow inner_html=s/></math></CardHeader>
-                    ""
-                </Card>}).into_view()
-            }
-            DocumentElement::UseModule(_) | DocumentElement::ImportModule(_) | DocumentElement::VarNotation {..} |
-            DocumentElement::Symref {..} | DocumentElement::Varref {..} |
-            DocumentElement::SetSectionLevel(_) | DocumentElement::Definiendum{..} => None::<String>.into_view(),
-            _ => {
-                let e = e.to_string();
-                Some(move || view!(<div>{format!("TODO: {e}")}</div>)).into_view()
-            }
-        }
-    }
-
-    pub(super) fn omdoc_inputref(dr:&DocumentReference) -> impl IntoView {
-        let uri = dr.target;
-        move || view!{<super::OmDocInputref uri/>}
-    }
-
-    pub(super) fn omdoc_section(s:&Section,top:&DocData) -> impl IntoView {
-        use thaw::*;
-        use super::UriHover;
-
-        let ttl = s.title.as_ref().map(|t| top.get_title(t)).flatten().unwrap_or_else(|| {
-            let name = s.uri.name();
-            let name = name.as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(name.as_ref());
-            format!("<span style=\"font-family:monospace\">{name}</span>").into()
-        });
-
-        let (uses,_,v) = doc_elems(&s.children,top);
-        let uri = s.uri;
-        let ttl = ttl.to_string();
-        move || view!{
-            <Card clone:ttl clone:uses clone:v>
-                <CardHeader slot clone:ttl><UriHover uri=uri.into()>
-                    <span inner_html=ttl/>
-                </UriHover></CardHeader>
-                <CardHeaderExtra slot clone:uses>{uses}</CardHeaderExtra>
-                {v}
-            </Card>
-        }
-    }
-    pub(super) fn omdoc_doc_module(m:&DocumentModule,top:&DocData) -> impl IntoView {
-        use thaw::*;
-        use super::UriHover;
-        let (uses,imports,v) = doc_elems(&m.children,top);
-        let name = m.uri.name();
-        let name = name.as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(name.as_ref());
-        let name = name.to_string();
-        let uri = m.uri;
-        move || view!{
-            <Card title=format!("Module {}",name) clone:name clone:uses clone:imports clone:v>
-                <CardHeader slot clone:name><UriHover uri=uri.into()>
-                    "Module "<span style="font-family:monospace">{name}</span>
-                </UriHover></CardHeader>
-                <CardHeaderExtra slot clone:uses clone:imports>{uses}<br/>{imports}</CardHeaderExtra>
-                {v}
-            </Card>
-        }
-    }
-
-    fn doc_elems(elems:&Vec<DocumentElement>,top:&DocData) -> (Option<impl IntoView + Clone>,Option<impl IntoView + Clone>,impl IntoView + Clone) {
-        let mut uses = Vec::new();
-        let mut imports = Vec::new();
-        let v = elems.iter().filter_map(|e|
-            if let DocumentElement::UseModule(uri) = e {
-                uses.push(*uri);
-                None
-            } else if let DocumentElement::ImportModule(uri) = e {
-                imports.push(*uri);
-                None
-            } else {
-                Some(omdoc_doc_elem(e, false,top))
-            }
-        ).collect::<Vec<_>>();
-        (if uses.is_empty() {None} else {
-            Some(move || view!{
-                <div>"Uses "
-                <span>{uses.iter().map(|u| view!(<super::LinkedName uri=NamedURI::Content((*u).into())/>", ")).collect::<Vec<_>>()}</span>
-                </div>
-            })
-        },if imports.is_empty() {None} else {
-            Some(move || view!{
-                <div>"Imports "
-                <span>{imports.iter().map(|u| view!(<super::LinkedName uri=NamedURI::Content((*u).into())/>", ")).collect::<Vec<_>>()}</span>
-                </div>
-            })
-        },move || v.clone())
-    }
-
-    fn var_shtml(uri:NarrDeclURI) -> impl IntoView {
-        let name = uri.name();
-        let name = name.as_ref();
-        let name = name.rsplit_once('/').map(|(_,n)| n).unwrap_or(name);
-        let name = name.to_string();
-        move || view!(<span shtml:term="OMV" shtml:varcomp="" shtml:head={uri.to_string()} style="font-family:monospace">{name.clone()}</span>)
-        /*format!(
-            "<span shtml:term=\"OMV\" shtml:varcomp shtml:head=\"{uri}\">{}</span>",uri.name().as_ref().split('/').last().unwrap_or(uri.name().as_ref())
-        )*/
-    }
-
-    // URI parsing --------------------------------------------------------
-    trait MapLike {
-        fn get(&self, key: &str) -> Option<&str>;
-    }
-    impl MapLike for ParamsMap {
-        fn get(&self,key:&str) -> Option<&str> {
-            self.get(key).map(|s| s.as_str())
-        }
-    }
-    impl MapLike for std::collections::HashMap<String,String> {
-        fn get(&self,key:&str) -> Option<&str> {
-            self.get(key).map(|s| s.as_str())
-        }
-    }
-
-    pub(crate) fn get_uri(a:ArchiveId,p:Option<Name>,l:Option<Language>,d:Option<Name>,e:Option<Name>,m:Option<Name>,c:Option<Name>) -> Option<immt_core::uris::MMTUri> {
-        use immt_controller::{ControllerTrait,controller};
-        use immt_api::backend::archives::Storage;
-
-        if let Some(m) = m {
-            if d.is_some() {return None}
-            if e.is_some() {return None}
-            let controller = controller();
-            let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
-            let m = ModuleURI::new(a,p,m, l.unwrap_or(Language::English));
-            Some(MMTUri::Content(match c {
-                Some(n) => ContentURI::Symbol(immt_core::uris::symbols::SymbolURI::new(m,n)),
-                None => ContentURI::Module(m)
-            }))
-        } else if let Some(d) = d {
-            if m.is_some() {return None}
-            if c.is_some() {return None}
-            let controller = controller();
-            let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
-            let d = DocumentURI::new(a,p,d, l.unwrap_or(Language::English));
-            Some(MMTUri::Narrative(match e {
-                Some(n) => NarrativeURI::Decl(NarrDeclURI::new(d,n)),
-                None => NarrativeURI::Doc(d)
-            }))
-        } else {
-            if e.is_some() {return None}
-            if c.is_some() {return None}
-            let controller = controller();
-            let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
-            Some(MMTUri::Archive(a))
-        }
-    }
-
-
-    pub(crate) fn get_doc_uri(a:ArchiveId,p:Option<Name>,l:Language,d:Name) -> Option<DocumentURI> {
-        use immt_controller::{ControllerTrait,controller};
-        use immt_api::backend::archives::Storage;
-        let controller = controller();
-        let a = controller.backend().get_archive(a,|a| a.map(|a| a.uri()))?;
-        let d = DocumentURI::new(a,p,d,l);
-        Some(d)
-    }
-
-    pub(crate) fn from_archive_relpath(a:ArchiveId,rp:&str) -> Option<DocumentURI> {
-        let (p,n) = if let Some((p,n)) = rp.rsplit_once('/') {
-            (Some(Name::new(p)),n)
-        } else {
-            (None,rp)
-        };
-        let (n,l) = if let Some((n,l)) = n.rsplit_once('.') {
-            if let Some(l) = Language::try_from(l).ok() {
-                (Name::new(n),Some(l))
-            } else if let Some((n,l)) = n.rsplit_once('.') {
-                (Name::new(n),Language::try_from(l).ok())
-            } else {
-                (Name::new(n),None)
-            }
-        } else {
-            (Name::new(n),None)
-        };
-        return get_doc_uri(a,p,l.unwrap_or(Language::English),n)
-    }
-
-    #[inline]
-    pub(crate) fn from_params(p:&impl MapLike) -> Option<MMTUri> {
-        if let Some(uri) = p.get("uri") {
-            return uri.parse().ok()
-        }
-        let a = ArchiveId::new(p.get("a")?);
-        if let Some(rp) = p.get("rp") {
-            return from_archive_relpath(a,rp).map(|r| r.into())
-        }
-        let l = p.get("l").map(|s| Language::try_from(s.as_ref()).ok()).flatten();
-        let d = p.get("d").map(Name::new);
-        let e = p.get("e").map(Name::new);
-        let m = p.get("m").map(Name::new);
-        let c = p.get("c").map(Name::new);
-        let p = p.get("p").map(Name::new);
-        get_uri(a,p,l,d,e,m,c)
-    }
-
-    #[derive(Clone)]
-    pub(crate) struct DDWrap(pub DocData);
-    impl serde::Serialize for DDWrap {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-            serializer.serialize_str(&self.0.as_ref().uri.to_string())
-        }
-    }
-    impl<'de> serde::Deserialize<'de> for DDWrap {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
-            let s = DocumentURI::deserialize(deserializer)?;
-            immt_controller::controller().backend().get_document(s).map(|d| DDWrap(d)).ok_or_else(|| serde::de::Error::custom("Failed"))
-        }
-    }
-}
-
-#[island]
-fn LinkedName(uri: NamedURI) -> impl IntoView {
-    use thaw::*;
-    let name = uri.name();
-    let name = name.as_ref();
-    let name = name.rsplit_once('/').map(|(_,n)| n).unwrap_or(name);
-    let name = name.to_string();
-    view!(<UriHover uri><span style="font-family:monospace">{name}</span></UriHover>)
-}
-
-#[island]
-fn UriHover(uri: NamedURI,children:Children) -> impl IntoView {
-    use thaw::*;
-    view!(
-            <Popover><PopoverTrigger slot>
-              <a style="color:blue" href=format!("/?uri={}",urlencoding::encode(&uri.to_string()))>{
-                children()
-        }</a>
-            </PopoverTrigger>{uri.to_string()}
-            </Popover>
-        )
-}
-
-/*
-leptos_uri! {
-#[server(
-    prefix="/html",
-    endpoint="omdoc",
-    input=server_fn::codec::GetUrl,
-    output=server_fn::codec::Json
-)]
-{pub async} fn get_omdoc_inner() -> {Result<String,ServerFnError<String>>} = uri {
-    use immt_api::controller::Controller;
-    crate::console_log!("Here!");
-        provide_meta_context();
-    let uri = if let Some(d) = uri {
-        d
-    } else {return Err(ServerFnError::WrappedServerError("Invalid URI".to_string())) };
-    match uri {
-        MMTUri::Narrative(NarrativeURI::Doc(d)) => {
-            let doc = immt_controller::controller().backend().get_document_async(d).await;
-            if let Some(doc) = doc {
-                Ok(ssr::render_to_string(move || server::omdoc_document(doc)).to_string())
-            } else {
-                return Err(ServerFnError::WrappedServerError("Document not found!".to_string()))
-            }
-        }
-        MMTUri::Narrative(NarrativeURI::Decl(d)) => todo!(),
-        _ => return Err(ServerFnError::WrappedServerError("TODO".to_string()))
-    }
-}}
-*/
-
-
-
-
-#[island]
-pub fn OmDocInputref(uri:DocumentURI) -> impl IntoView {
-    use thaw::*;
-    let name = uri.name();
-    let (expanded, set_expanded) = create_signal(false);
-    move || view!{<details>
-        <summary on:click=move |_| {crate::console_log!("Updating"); set_expanded.update(|b| *b=!*b)}>
-            "Document "<LinkedName uri=uri.into()/>
-        </summary>
-        <div>{move || {
-            if expanded.get() {crate::console_log!("Wuuuh!");Some("TODO")} else {None}
-        }}</div>
-    </details>}
-}
-
-/*
-leptos_uri!{
-    #[component]
-    {pub(crate)} fn SHtmlIFrame(#[prop(optional)] ht:String) -> {impl IntoView} = uri {
-        uri.map(|uri| {
-            view!(<iframe src=format!("/content/html?uri={}",uri)
-                style=if ht.is_empty() {
-                    "width:100%;border: 0;".to_string()
-                } else {
-                    format!("width:100%;height:{ht};border: 0;")
-                }
-            ></iframe>).into_view()
-        })
-    }
-}
-
- */
-
-/*leptos_uri!{
-    #[component]
-    {pub(crate)} fn SHtmlIFrame(#[prop(optional)] ht:String) -> {impl IntoView} = uri {
-        uri.map(|uri| {
-            view!(<iframe src=format!("/{uri}")
-                style=if ht.is_empty() {
-                    "width:100%;border: 0;".to_string()
-                } else {
-                    format!("width:100%;height:{ht};border: 0;")
-                }
-            ></iframe>).into_view()
-        })
-    }
-}*/
-
-/*
-#[component]
-pub(crate) fn SHtmlComponent(archive:ArchiveId,path:String) -> impl IntoView {
-    use thaw::*;
-    let res = create_resource(|| (),move |_| leptos_uri!(@ap DOC get_document_inner => archive,path.clone()));
-    view!{
-        <Suspense fallback=|| view!(<Spinner/>)>{
-            if let Some(Ok((css,html))) = res.get() {
-                view!(<CSSHTML css html/>).into_view()
-            } else {view!(<span/>).into_view()}
-        }</Suspense>
-    }
-}
-
- */
-*/
 
 #[derive(Clone,serde::Serialize,serde::Deserialize)]
 pub struct HTMLConstant {
@@ -1424,7 +860,10 @@ pub enum HTMLDocElem {
         children:Vec<HTMLDocElem>,
         uses:Vec<ModuleURI>
     },
-    Constant(SymbolURI),
+    Constant{
+        uri:SymbolURI,
+        tp:Option<String>
+    },
     Var {
         uri:NarrDeclURI,
         tp:Option<String>,
@@ -1450,7 +889,7 @@ impl HTMLDocElem {
                 let title_html = s.title.as_ref().map(|t| top.read_snippet(t.range).map(|s| s.1.to_string())).flatten().unwrap_or_else(|| {
                     let name = s.uri.name();
                     let name = name.as_ref().rsplit_once('/').map(|(_,n)| n).unwrap_or(name.as_ref());
-                    format!("<span style=\"font-family:monospace\">{name}</span>")
+                    {name.to_string()}
                 });
                 ret.push(HTMLDocElem::Section{uri:s.uri,title_html,children,uses})
             }
@@ -1480,7 +919,10 @@ impl HTMLDocElem {
                 let uri = p.uri;
                 ret.push(HTMLDocElem::Paragraph{uri,kind,fors,terms_html,children,uses})
             }
-            DocumentElement::ConstantDecl(s) => ret.push(HTMLDocElem::Constant(*s)),
+            DocumentElement::ConstantDecl(s) => ret.push(HTMLDocElem::Constant {
+                uri:*s,
+                tp:backend.get_constant(*s).map(|c| c.as_ref().tp.as_ref().map(|t| backend.display_term(t).to_string())).flatten()
+            }),
             DocumentElement::VarDef{uri,tp,df,..} => {
                 let uri = *uri;
                 let tp = tp.as_ref().map(|t| backend.display_term(t).to_string());

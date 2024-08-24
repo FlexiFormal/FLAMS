@@ -92,9 +92,11 @@ impl Queue {
         name = "Queueing tasks",
         skip_all
     )]
-    pub(crate) fn enqueue<'a,Ctrl:Controller+'static,I:rayon::iter::ParallelIterator<Item=TaskSpec<'a>>>(&self,mut tasks:I,ctrl:&Ctrl) {
+    pub(crate) fn enqueue<'a,Ctrl:Controller+'static,I:rayon::iter::ParallelIterator<Item=TaskSpec<'a>>>(&self,tasks:I,ctrl:&Ctrl) -> usize {
         use rayon::prelude::*;
         let span = tracing::Span::current();
+        let counto = std::sync::atomic::AtomicUsize::new(0);
+        let count = &counto;
         tasks.for_each(move |t| {
             let _span = span.enter();
             let mut taskmap = self.0.tasks.write();
@@ -103,12 +105,14 @@ impl Queue {
                 Entry::Occupied(mut e) if !e.get().iter().any(|e| e.0.format == t.target) => {
                     if let Some(task) = BuildTask::new(t,ctrl) {
                         e.get_mut().push(task.clone());
+                        count.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
                         Some(task)
                     } else {None}
                 }
                 Entry::Vacant(e) => {
                     if let Some(task) = BuildTask::new(t,ctrl) {
                         e.insert(vec![task.clone()]);
+                        count.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
                         Some(task)
                     } else { None }
                 }
@@ -120,7 +124,8 @@ impl Queue {
                     self.get_deps(ctrl,fmt,task);
                 }
             }
-        })
+        });
+        counto.into_inner()
     }
 
     fn get_deps<Ctrl:Controller+'static>(&self,ctrl:&Ctrl, fmt:SourceFormatId, task:BuildTask) {

@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use crate::css;
 
 #[server(QueryApi,
     prefix="/api",
@@ -33,6 +34,7 @@ pub async fn query_api(q:String) -> Result<String,ServerFnError<String>> {
 
 #[component]
 pub fn Query() -> impl IntoView {
+    css!(queries in "query.css");
     view! {
         <div>
             <h1>Query</h1>
@@ -47,7 +49,7 @@ const QUERY:&str = r#"SELECT ?x ?y WHERE {
   ?y ulo:notation-for ?x.
 }"#;
 
-#[island]
+#[component]
 fn QueryIsland() -> impl IntoView {
     use leptos::form::ActionForm;
     use leptos::html::Div;
@@ -62,8 +64,8 @@ fn QueryIsland() -> impl IntoView {
     });
     view!{
         <ActionForm action>
-            <span class="thaw-textarea thaw-textarea--resize-both" style="width:calc(100% - 10px);height:200px;">
-                <textarea name="q" class="thaw-textarea__textarea">{QUERY.to_string()}</textarea>
+            <span class="immt-query-container">
+                <textarea name="q" class="immt-query-inner">{QUERY.to_string()}</textarea>
             </span>
             <br/><input type="submit" value="Query"/>
         </ActionForm>

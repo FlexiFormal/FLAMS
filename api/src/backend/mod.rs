@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use oxigraph::model::Variable;
 use spargebra::term::{NamedNodePattern, TermPattern, TriplePattern};
 use tokio::io::AsyncReadExt;
-use immt_core::content::{ContentElement, MathStructure, Module, Notation, OF_TYPE, Term, TermDisplay, VarNameOrURI};
+use immt_core::content::{ContentElement, ContentElemRef, MathStructure, Module, ModuleLike, Notation, OF_TYPE, Term, TermDisplay, VarNameOrURI};
 use immt_core::narration::{CSS, DocData, DocElemRef, DocumentElement, FullDocument, LogicalParagraph, NarrativeRef};
 use immt_core::ontology::rdf::ontologies::{rdf, ulo2};
 use immt_core::uris::{ArchiveId, DocumentURI, ModuleURI, Name, SymbolURI};
@@ -210,7 +210,7 @@ impl Backend  {
                     d.into_elem(s.name(),|d| match d {
                         DocumentElement::Paragraph(p) => Some(p),
                         _ => None
-                    })
+                    }).ok()
                 })
             }))
         ).flatten()
@@ -363,20 +363,6 @@ impl Backend  {
     }
 
     #[inline]
-    pub async fn get_module_async(&self,uri:ModuleURI) -> Option<ModuleLike> {
-        let top_uri = !uri;
-        {
-            if let Some(m) = self.cache.lock().modules.get(&top_uri) {
-                return Self::find_in_module(m.clone(),uri.name())
-            }
-        }
-        let m = BackendCache::load_module_async(top_uri,&self.archive_manager).await?;
-        let m = Arc::new(m);
-        self.cache.lock().modules.insert(top_uri,m.clone());
-        Self::find_in_module(m,uri.name())
-    }
-
-    #[inline]
     fn find_in_module(m:Arc<Module>,name:Name) -> Option<ModuleLike> {
         let mut names = name.as_ref().split('/');
         let _ = names.next();
@@ -403,41 +389,36 @@ impl Backend  {
         }
     }
 
+    #[inline]
+    pub async fn get_module_async(&self,uri:ModuleURI) -> Option<ModuleLike> {
+        let top_uri = !uri;
+        {
+            if let Some(m) = self.cache.lock().modules.get(&top_uri) {
+                return Self::find_in_module(m.clone(),uri.name())
+            }
+        }
+        let m = BackendCache::load_module_async(top_uri,&self.archive_manager).await?;
+        let m = Arc::new(m);
+        self.cache.lock().modules.insert(top_uri,m.clone());
+        Self::find_in_module(m,uri.name())
+    }
 
     #[inline]
     pub fn get_module(&self,uri:ModuleURI) -> Option<ModuleLike> {
         let nuri = !uri;
         self.cache.lock().get_module(&self.archive_manager,nuri).and_then(|m| Self::find_in_module(m,uri.name()))
     }
-}
 
-
-#[derive(Debug, Clone)]
-pub enum ModuleLike {
-    Module(Arc<Module>),
-    NestedModule(Arc<Module>,*const Module),
-    Structure(Arc<Module>,*const MathStructure)
-}
-impl ModuleLike {
-    pub fn uri(&self) -> &ModuleURI {
-        match self {
-            ModuleLike::Module(m) => &m.uri,
-            ModuleLike::Structure(_,c) => unsafe{&c.as_ref().unwrap().uri}
-            ModuleLike::NestedModule(_,c) => unsafe{&c.as_ref().unwrap().uri}
-        }
+    pub async fn get_constant_async(&self,uri:SymbolURI) -> Option<ContentElemRef<immt_core::content::Constant>> {
+        let m = self.get_module_async(uri.module()).await?;
+        m.into_elem(uri.name(),|ce| {
+            if let ContentElement::Constant(c) = ce {Some(c)} else {None}
+        }).ok()
     }
-    pub fn elements(&self) -> &[ContentElement] {
-        match self {
-            ModuleLike::Module(m) => &m.elements,
-            ModuleLike::Structure(_,c) => unsafe{&c.as_ref().unwrap().elements}
-            ModuleLike::NestedModule(_,c) => unsafe{&c.as_ref().unwrap().elements}
-        }
-    }
-    pub fn get(&self,name:Name) -> Option<&ContentElement> {
-        match self {
-            ModuleLike::Module(m) => m.get(name),
-            ModuleLike::Structure(_,c) => unsafe{c.as_ref().unwrap().get(name)}
-            ModuleLike::NestedModule(_,c) => unsafe{c.as_ref().unwrap().get(name)}
-        }
+    pub fn get_constant(&self,uri:SymbolURI) -> Option<ContentElemRef<immt_core::content::Constant>> {
+        let m = self.get_module(uri.module())?;
+        m.into_elem(uri.name(),|ce| {
+            if let ContentElement::Constant(c) = ce {Some(c)} else {None}
+        }).ok()
     }
 }

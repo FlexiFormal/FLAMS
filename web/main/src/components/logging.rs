@@ -4,6 +4,7 @@ use immt_core::utils::logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree
 use immt_core::utils::time::Timestamp;
 use immt_core::utils::VecMap;
 use leptos::html::HtmlElement;
+use crate::css;
 use crate::utils::WebSocket;
 
 #[cfg(feature="server")]
@@ -109,6 +110,7 @@ impl WebSocket<(),Log> for LogSocket {
 
 #[component]
 pub fn FullLog() -> impl IntoView {
+    css!(logging in "logs.css");
     crate::accounts::if_logged_in(
         || view!(<TopLog/>).into_any(),
         || view!(<div>"You must be logged in to see the logs"</div>).into_any()
@@ -118,7 +120,8 @@ pub fn FullLog() -> impl IntoView {
 
 #[island]
 fn TopLog() -> impl IntoView {
-    use thaw::Spinner;
+    use thaw::*;
+    use crate::components::{Tree,Leaf};
     let signals = LogSignals {
         top: RwSignal::new(Vec::new()),
         open_span_paths: RwSignal::new(VecMap::new()),
@@ -137,59 +140,21 @@ fn TopLog() -> impl IntoView {
         <div class="immt-log-frame">{ move || {
             if signals.top.with(|v| v.is_empty()) {
                 view!(<div class="immt-spinner-frame"><Spinner/></div>).into_any()
-            } else {view!{<ul>
+            } else {view!{<Tree>
                 {do_ls(signals.top)}
-            </ul>}.into_any()}
+            </Tree>}.into_any()}
         }}</div>
-        <div class="immt-warn-frame">{ move || {
+        <div class="immt-warn-frame">
+        <Caption1Strong><span style="color:var(--colorPaletteRedForeground1)">"Warnings"</span></Caption1Strong>{ move || {
             if signals.top.get().is_empty() {
                 view!(<div class="immt-spinner-frame"><Spinner/></div>).into_any()
-            } else {view!{<ul>
+            } else {view!{<Tree>
                 <For each=move || signals.warnings.get() key=|e| e.0.clone() children=move |e| view!(
-                    <li><LogLine e=e.1/></li>
+                    <Leaf><LogLine e=e.1/></Leaf>
                 )/>
-            </ul>}.into_any()}
+            </Tree>}.into_any()}
         }}</div>
     }
-    /*
-    //use crate::utils::WebSocket;
-    use thaw::Spinner;
-
-    let (signal_read,_signal_write) = signal(false);
-
-    let _log_frame = NodeRef::<html::Ul>::new();
-    let _warn_frame = NodeRef::<html::Ul>::new();
-    let (_spinner_a,_spinner_b) = (NodeRef::<html::Div>::new(),NodeRef::<html::Div>::new());
-
-    let _res = Effect::new(move |_| {
-        let _ = signal_read.get();
-        #[cfg(feature="client")]
-        {
-            let mut state = LogState {
-                log_frame:_log_frame,
-                warn_frame:_warn_frame,
-                spinners: (_spinner_a, _spinner_b),
-                frames: Frames::default(),
-            };
-
-            let _ = LogSocket::start(move |msg| {
-                client::ws(&mut state, msg);
-                None
-            });
-        }
-    });
-
-
-    view!{
-        <div class="immt-log-frame"><div node_ref=_spinner_a><Spinner/></div>
-            <ul node_ref=_log_frame/>
-        </div>
-        <div class="immt-warn-frame"><div node_ref=_spinner_b><Spinner/></div>
-            <ul node_ref=_warn_frame/>
-        </div>
-    }
-
-     */
 }
 
 #[cfg(feature="client")]
@@ -204,7 +169,6 @@ mod client {
         }
     }
     fn populate(signals:LogSignals,tree:LogTree) {
-        crate::console_log!("Here!");
         signals.open_span_paths.update_untracked(|v| *v = tree.open_span_paths);
         fn add(signal:&mut Vec<LogEntrySignal>,warnings:RwSignal<Vec<(String,LogMessage)>>,e:LogTreeElem) {
             let id = e.id();
@@ -315,117 +279,30 @@ mod client {
                 });
             }
         }
-        /*
-        let Some(log_frame) = state.log_frame.get_untracked() else {return};
-        let Some(warn_frame) = state.warn_frame.get_untracked() else {return};
-        match line {
-            LogFileLine::SpanOpen {id,name,timestamp,target,level,args,parent} => {
-                let children = NodeRef::<html::Ul>::new();
-                let span_ref = NodeRef::<html::Span>::new();
-                let sr = span_ref.clone();
-                let line = view! {
-                    <li class=immt_log_elem><details>
-                        <summary><LogLine timestamp message=name target level args spinner=true span_ref/></summary>
-                        <ul node_ref=children/>
-                    </details></li>
-                };
-                if parent.is_none() {
-                    log_frame.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
-                } else if let Some((frame,_,_)) = state.frames.get(&parent.unwrap()) {
-                    let children = frame.get_untracked().unwrap();
-                    children.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
-                }
-                state.frames.insert(id, (children,sr,timestamp));
-            }
-            LogFileLine::SpanClose {id,timestamp,..} => {
-                if let Some((_,span,started)) = state.frames.remove(&id) {
-                    let span = span.get_untracked().unwrap();
-                    let message = format!("{} (finished after {})",span.text_content().unwrap(),timestamp.since(started));
-                    span.set_text_content(Some(&message));
-                }
-            }
-        }
-         */
     }
-
-    /*
-    pub(crate) fn ws(state:&mut LogState,l:Log) {
-        match l {
-            Log::Initial(tree) => (),//populate(state,tree),
-            Log::Update(up) => ()//update(state,up)
-        }
-    }
-    fn populate(state:&mut LogState,tree:LogTree) {
-        fn do_tree_elems(children:Vec<LogTreeElem>,elem:&HtmlUListElement,warn_frame:&HtmlUListElement,frames:&mut Frames) {
-            for c in children {
-                match c {
-                    LogTreeElem::Message(LogMessage {message,timestamp,target,level,args}) => {
-                        if level >= LogLevel::WARN {
-                            warn_frame.append_child(view!(<li><LogLine timestamp message=message.clone() target=target.clone() level args=args.clone() /></li>).into_inner().dyn_ref().unwrap()).unwrap();
-                        }
-                        elem.append_child(view!(<li><LogLine timestamp message target level args /></li>).into_inner().dyn_ref().unwrap()).unwrap();
-                    }
-                    LogTreeElem::Span(LogSpan {id,name,timestamp,target,level,args,children,closed}) => {
-                        let message = if let Some(closed) = closed {
-                            format!("{} (finished after {})",name,closed.since(timestamp))
-                        } else {name};
-                        let nchildren = NodeRef::<html::Ul>::new();
-                        let span_ref = NodeRef::<html::Span>::new();
-                        let sr = span_ref.clone();
-                        let line = view!{
-                                    <li class=immt_log_elem><details>
-                                        <summary><LogLine timestamp message target level args spinner=closed.is_none() span_ref=sr/></summary>
-                                        <ul node_ref=nchildren/>
-                                    </details></li>
-                                };
-                        elem.append_child(line.into_inner().dyn_ref().unwrap()).unwrap();
-                        if closed.is_none() { frames.insert(id,(nchildren,span_ref,timestamp)) }
-                        let nchildren = nchildren.get_untracked().unwrap();
-                        do_tree_elems(children,&nchildren,&warn_frame,frames);
-                    }
-                }
-            }
-        }
-        let Some(log_frame) = state.log_frame.get_untracked() else {return};
-        let Some(warn_frame) = state.warn_frame.get_untracked() else {return};
-        do_tree_elems(tree.children,&log_frame,&warn_frame,&mut state.frames);
-
-        if let Some(n) = state.spinners.0.get_untracked() { n.remove(); }
-        if let Some(n) = state.spinners.1.get_untracked() { n.remove(); }
-    }
-    fn update(state:&mut LogState,line:LogFileLine<String>) {
-
-    }
-
-     */
 }
 
 fn do_ls(v:RwSignal<Vec<LogEntrySignal>>) -> impl IntoView {
+    use crate::components::Leaf;
     view!{
-        <For each=move || v.get() key=|e| e.id().to_string() children=|e| view!{
-            <li class="immt-log-elem">{match e {
-                LogEntrySignal::Simple(_,e) => view!(<LogLine e/>).into_any(),
+        <For each=move || v.get() key=|e| e.id().to_string() children=|e| {
+            match e {
+                LogEntrySignal::Simple(_,e) => view!(<Leaf><span class="immt-log-elem"><LogLine e/></span></Leaf>).into_any(),
                 LogEntrySignal::Span(_,e) => do_span(e).into_any()
-            }}</li>
+            }
         }/>
-        /*<For each=move || q.queues.clone().get() key=|e| e.0.clone() children=move |e| view!(
-            <Tab value=&e.0>{e.0}{QueueTop(e.0,e.1)}</Tab>
-        )/>
-        <For each=move || signals.warnings.get() key=|e| e.0.clone() children=move |e| view!(
-            <li><LogLine e=e.1/></li>
-        )/>
-        */
     }
 }
 fn do_span(s:SpanSignal) -> impl IntoView {
+    use crate::components::{Subtree,WHeader};
     let children = s.children;
-    view!{<details>
-        <summary>{move || {let s = s.clone(); match s.message.get() {
+    view!{<Subtree>
+        <WHeader slot>{move || {let s = s.clone(); match s.message.get() {
             SpanMessage::Open {name,timestamp} => view!(<LogLineHelper message=name timestamp target=s.target level=s.level args=s.args spinner=true/>),
             SpanMessage::Closed(message) => view!(<LogLineHelper message target=s.target level=s.level args=s.args spinner=false />)
-        }}}</summary>
-        <ul>{move || do_ls(children)}</ul>
-    </details>}
+        }}}</WHeader>
+        {move || do_ls(children)}
+    </Subtree>}
 }
 
 #[component]

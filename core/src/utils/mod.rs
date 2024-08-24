@@ -154,3 +154,9 @@ pub trait NestedDisplay {
         r
     }
 }
+
+pub fn hashstr<A:std::hash::Hash>(a:&A) -> String {
+    use std::hash::BuildHasher;
+    let h = rustc_hash::FxBuildHasher::default().hash_one(a);
+    format!("{:02x}",h)
+}

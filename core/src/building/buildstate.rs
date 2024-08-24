@@ -142,7 +142,7 @@ impl PartialEq for QueueEntry {
 }
 impl QueueEntry {
     pub fn id(&self) -> String {
-        md5::compute(format!("({},{},{})", self.archive,self.rel_path, self.target)).0.iter().map(|b| format!("{:02x}", b)).collect()
+        crate::utils::hashstr(&(&self.archive,&self.rel_path,&self.target))
     }
 }
 

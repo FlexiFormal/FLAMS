@@ -1136,9 +1136,11 @@ impl DocData {
     }
 
  */
-    pub fn into_elem<E,F:Fn(&DocumentElement) -> Option<&E>>(self,name:Name,get:F) -> Option<DocElemRef<E>> {
-        let elem = self.as_ref().get(name).and_then(get)? as *const E;
-        Some(DocElemRef {data:self,elem})
+    pub fn into_elem<E,F:Fn(&DocumentElement) -> Option<&E>>(self,name:Name,get:F) -> Result<DocElemRef<E>,Self> {
+        if let Some(e) = self.as_ref().get(name).and_then(get) {
+            let elem = e as *const E;
+            Ok(DocElemRef {data:self,elem})
+        } else { Err(self) }
     }
 }
 

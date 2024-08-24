@@ -59,8 +59,11 @@ impl<'a,I,J,F,G> TermDisplay<'a,I,J,F,G> where
                 println!("Here: {record:?}\n  = {key}");
                 f.write_str("<mrow><mtext>TODO: Field</mtext></mrow>")
             },
-            Term::OMID(_) =>
-                f.write_str("<mrow><mtext>TODO: OMMOD</mtext></mrow>"),
+            Term::OMID(uri) => {
+                let name = uri.name();
+                let name = name.as_ref();
+                write!(f, "<mi shtml:term=\"OMID\" shtml:head=\"{}\" shtml:maincomp>{}</mi>", name, name.split('/').last().unwrap_or_else(|| name))
+            }
             Term::OMV(s) => {
                 for n in (vars)(*s) {
                     if let Some(r) = n.apply_op("OMV",*s,f) {
@@ -84,7 +87,10 @@ impl<'a,I,J,F,G> TermDisplay<'a,I,J,F,G> where
                     }
                 }
                 //println!("Here 1: {s}");
-                write!(f,"<mrow><mtext>TODO: OMA with no applicable notation ({s})</mtext></mrow>")
+                let name = s.name();
+                let name = name.as_ref();
+                let name = name.split('/').last().unwrap_or_else(|| name);
+                Self::default_notation(name,&format!("shtml:term=\"OMA\" shtml:head=\"{s}\""),f,&args,notations,vars)
             }
             Term::OMA{head:VarOrSym::V(vn),head_term:None,args}|Term::OMBIND{head:VarOrSym::V(vn),head_term:None,args}
             => {
@@ -94,7 +100,10 @@ impl<'a,I,J,F,G> TermDisplay<'a,I,J,F,G> where
                     }
                 }
                 //println!("Here 1: {s}");
-                write!(f,"<mrow><mtext>TODO: OMA with no applicable notation ({vn})</mtext></mrow>")
+                let name = vn.name();
+                let name = name.as_ref();
+                let name = name.split('/').last().unwrap_or_else(|| name);
+                Self::default_notation(name,&format!("shtml:term=\"OMA\" shtml:head=\"{vn}\""),f,&args,notations,vars)
             },
             Term::OMA{head,head_term,args}|Term::OMBIND{head,head_term,args}
             => {
@@ -114,7 +123,7 @@ impl<'a,I,J,F,G> TermDisplay<'a,I,J,F,G> where
                     f.write_char('"')?;
                 }
                 f.write_char('>')?;
-                Self::do_children(children,terms,notations,vars,f)?;
+                Self::do_informal(children, terms, notations, vars, f)?;
                 f.write_str("</")?;
                 f.write_str(tag)?;
                 f.write_char('>')
@@ -122,7 +131,37 @@ impl<'a,I,J,F,G> TermDisplay<'a,I,J,F,G> where
         }
     }
 
-    fn do_children(children:&[InformalChild],terms:&[Term],notations:&F,vars:&G,f:&mut Formatter<'_>) -> std::fmt::Result {
+    fn default_notation(name:&str,attrs:&str,f:&mut Formatter<'_>,args:&[(TermOrList,ArgType)],notations:&F,vars:&G) -> std::fmt::Result {
+        write!(f,"<mrow {}><mi shtml:comp>{name}</mi><mo shtml:comp>(</mo>",attrs)?;
+        let mut args = args.iter();
+        if let Some((n,tp)) = args.next() {
+            Self::default_term_or_list(f,n,*tp,notations,vars)?;
+        }
+        for (n,tp) in args {
+            f.write_str("<mo>,</mo>")?;
+            Self::default_term_or_list(f,n,*tp,notations,vars)?;
+        }
+        f.write_str("<mo shtml:comp>)</mo></mrow>")
+    }
+    fn default_term_or_list(f:&mut Formatter<'_>,t:&TermOrList,_tp:ArgType,notations:&F,vars:&G) -> std::fmt::Result {
+        match t {
+            TermOrList::Term(t) => Self::with_prec(t,notations,vars,f,0),
+            TermOrList::List(ts) => {
+                f.write_str("<mrow><mo shtml:comp>⟨</mo>")?;
+                let mut ts = ts.iter();
+                if let Some(t) = ts.next() {
+                    Self::with_prec(t,notations,vars,f,0)?;
+                }
+                for t in ts {
+                    f.write_str("<mo>,</mo>")?;
+                    Self::with_prec(t,notations,vars,f,0)?;
+                }
+                f.write_str("<mo shtml:comp>⟩</mo></mrow>")
+            }
+        }
+    }
+
+    fn do_informal(children:&[InformalChild], terms:&[Term], notations:&F, vars:&G, f:&mut Formatter<'_>) -> std::fmt::Result {
         for c in children {match c {
             InformalChild::Text(s) => f.write_str(s)?,
             InformalChild::Term(n) => {
@@ -134,18 +173,11 @@ impl<'a,I,J,F,G> TermDisplay<'a,I,J,F,G> where
                 f.write_char('<')?;
                 f.write_str(tag)?;
                 for (k,v) in attributes.iter() {
-                    f.write_char(' ')?;
-                    f.write_str(k)?;
-                    f.write_char('=')?;
-                    f.write_char('"')?;
-                    f.write_str(v)?;
-                    f.write_char('"')?;
+                    write!(f," {k}=\"{v}\"")?;
                 }
                 f.write_char('>')?;
-                Self::do_children(children, terms, notations, vars, f)?;
-                f.write_str("</")?;
-                f.write_str(tag)?;
-                f.write_char('>')?;
+                Self::do_informal(children, terms, notations, vars, f)?;
+                write!(f,"</{tag}>")?;
             }
         }}
         Ok(())

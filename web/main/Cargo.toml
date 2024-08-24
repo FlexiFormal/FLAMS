@@ -20,7 +20,10 @@ tracing = { version="0.1",optional=true }
 serde_json = { version="1",features = ["unbounded_depth"] }
 #miniserde = "0.1.39"
 urlencoding = "2.1"
+const_format = "0.2"
+codee = "0.1.2"
 # uuid = "1.10"
+gloo-storage = { version = "0.3.0",optional=true }
 
 #gloo-timers = { version="0.3",optional = false }
 wasm-bindgen-futures = { version="0.4",optional = false }
@@ -31,20 +34,21 @@ wasm-bindgen-futures = { version="0.4",optional = false }
 #actix-web-actors = { version= "4",optional = true }
 #actix = {version="0.13",optional=true}
 console_error_panic_hook = "0.1"
-#leptos = { version = "0.7.0-beta2", features=["experimental-islands"]}#,"nightly"] }
-leptos = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", features=["experimental-islands","nightly"] }
-#leptos_meta = { version = "0.7.0-beta3"}
-leptos_meta = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git" }
-#leptos_router = { version = "0.7.0-beta2"}#,features = ["nightly"] }
-leptos_router = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", features=["nightly"] }
-#leptos_axum = {version="0.7.0-beta2",optional=true}#,features = ["islands-router"]}
-leptos_axum = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", optional=true}#,features=["islands-router"] }
-#thaw = { version="0.4.0-beta"}#,features=["nightly"] }
+leptos = { version = "0.7.0-beta2", features=["nightly"]}# "experimental-islands"]}#,"nightly"] }
+#leptos = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", features=["nightly"]}#,"experimental-islands"] }
+leptos_meta = { version = "0.7.0-beta3"}
+#leptos_meta = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git" }
+leptos_router = { version = "0.7.0-beta2",features = ["nightly"] }
+#leptos_router = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", features=["nightly"] }
+leptos_axum = {version="0.7.0-beta2",optional=true}#,features = ["islands-router"]}
+#leptos_axum = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", optional=true}#,features=["islands-router"] }
+thaw = { version="0.4.0-beta",features=["nightly"] }
+#leptos-use = { version="0.12.0" }
 #thaw = { git="https://github.com/thaw-ui/thaw",features=["nightly"] }
-thaw = { path="../../thaw/thaw",features=["nightly"] }
+#thaw = { path="../../thaw/thaw",features=["nightly"] }
 
-thaw_utils = { path="../../thaw/thaw_utils",features=["nightly"] }
-thaw_components = { path="../../thaw/thaw_components" }
+#thaw_utils = { path="../../thaw/thaw_utils",features=["nightly"] }
+#thaw_components = { path="../../thaw/thaw_components" }
 
 #leptos_actix = { version = "0.6", optional = true, features=["experimental-islands"] }
 wasm-bindgen = "=0.2.93"
@@ -55,7 +59,7 @@ wasm-bindgen = "=0.2.93"
 icondata_bi = "0"
 icondata_ai = "0"
 #stylance = "0.5"
-icondata_core = "0"
+#icondata_core = "0"
 
 # axum
 axum = {version="0.7",optional=true,features=["ws"]}
@@ -92,13 +96,14 @@ csr = [
   #"leptos_meta/csr"
 ]
 client = [
+  "gloo-storage",
   "leptos/hydrate",
   #"leptos_meta/hydrate",
   #"leptos_router/hydrate",
   #"leptonic/hydrate"
   "thaw/hydrate",
-  "thaw_utils/hydrate",
-  "thaw_components/hydrate",
+  #"thaw_utils/hydrate",
+  #"thaw_components/hydrate",
 ]
 #accounts = ["server",
 #  "dep:actix-session",
@@ -116,12 +121,13 @@ server = [
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
+  #"leptos-use/ssr",
   "dep:immt-controller",
   "dep:immt-api",
   "dep:tokio",
   "thaw/ssr",
-  "thaw_utils/ssr",
-  "thaw_components/ssr",
+  #"thaw_utils/ssr",
+  #"thaw_components/ssr",
   #"leptonic/ssr"
   "dep:lazy_static",
   "dep:tracing",

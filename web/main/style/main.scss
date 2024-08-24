@@ -1,23 +1,7 @@
 /*
-@import "./thaw/icon";
-@import "./thaw/menu-group";
-@import "./thaw/menu-item";
-@import "./thaw/modal";
-@import "./thaw/tabs";
-@import "./thaw/card";
-@import "./thaw/popover";
-@import "./thaw/theming";
-*/
-@import "./thaw/layout";
-@import "./thaw/divider";
-@import "./thaw/nav";
-@import "./thaw/badge";
-@import "./thaw/drawer";
-@import "./thaw/button";
-@import "./thaw/textarea";
-
 @import "./components/treeview";
 @import "./components/loglist";
+*/
 
 .immt-main {
     height:calc(100vh - 67px);
@@ -80,7 +64,7 @@ body {
 .immt-small-card > .thaw-card__header + .thaw-card__content, .thaw-card__footer {
 	padding: 0 10px 10px;
 }
- */
+
 
 .thaw-breadcrumb-button {
     align-items: center;
@@ -114,3 +98,4 @@ body {
     background-color: var(--colorSubtleBackgroundHover);
     cursor: pointer;
 }
+ */

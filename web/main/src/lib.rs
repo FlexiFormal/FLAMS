@@ -20,8 +20,9 @@ macro_rules! console_log {
 pub fn hydrate() {
     use home::*;
     console_error_panic_hook::set_once();
-    leptos::mount::hydrate_islands();
+    //leptos::mount::hydrate_islands();
     //leptos::leptos_dom::HydrationCtx::stop_hydrating();
+    leptos::mount::hydrate_body(home::Main);
 }
 
 #[cfg(feature = "server")]
@@ -31,7 +32,7 @@ pub mod server {
     use axum::error_handling::HandleErrorLayer;
     use axum::{Extension, extract};
     use axum::response::IntoResponse;
-    use http::Request;
+    use http::{Request, Uri};
     use leptos::prelude::*;
     use leptos_axum::generate_route_list;
     use tower::ServiceExt;
@@ -41,33 +42,6 @@ pub mod server {
     use immt_controller::{controller, BaseController};
     use crate::accounts::AccountManager;
     use immt_controller::ControllerTrait;
-    /*
-    macro_rules! files {
-        (@file $name:ident:$path:literal => $local:literal) => {
-            #[actix_web::get($path)]
-            async fn $name(
-                leptos_options: actix_web::web::Data<leptos::LeptosOptions>,
-            ) -> actix_web::Result<actix_files::NamedFile> {
-                let leptos_options = leptos_options.into_inner();
-                let site_root = &leptos_options.site_root;
-                Ok(actix_files::NamedFile::open(format!(
-                    "{site_root}/{}",$local
-                ))?)
-            }
-        };
-        (@file $name:ident:$path:literal) => { files!(@file $name:$path => $path); };
-        ($($name:ident:$path:literal$(=> $local:literal)?),*) => {
-            $( files!(@file $name:$path$(=> $local)?); )*
-            macro_rules! with_files { ($app:expr) => { $app$(.service($name))* }; }
-        }
-    }
-
-    files![
-        favicon:"favicon.ico",
-        immt_bg:"pkg/immt_bg.wasm" => "pkg/immt.wasm"
-    ];
-
-     */
 
 
     /** Endpoints:
@@ -115,10 +89,17 @@ pub mod server {
         },request).in_current_span().await
     }
     async fn file_and_error_handler(
+        mut uri:Uri,
         extract::State(state): extract::State<AppState>,
-        request:http::Request<axum::body::Body>
+        request:Request<axum::body::Body>
     ) -> axum::response::Response {
-        use tower::util::ServiceExt;
+        let r = leptos_axum::file_and_error_handler(crate::home::shell);
+        if uri.path().ends_with("immt_bg.wasm") {
+            // change to "immt.wasm"
+            uri = Uri::builder().path_and_query("/pkg/immt.wasm").build().unwrap();
+        }
+        r(uri,extract::State(state),request).in_current_span().await
+        /*
         async fn get_static_file(mut request:http::Request<axum::body::Body>,root:&str) -> Result<http::Response<axum::body::Body>,(http::StatusCode,String)> {
             if request.uri().path().ends_with("immt_bg.wasm") {
                 // change to "immt.wasm"
@@ -144,6 +125,8 @@ pub mod server {
             let handler = leptos_axum::render_app_to_stream(/*state.leptos_options.clone(),*/crate::home::Main);
             handler(Request::from_parts(parts,body)).in_current_span().await.into_response()
         }
+
+         */
     }
 
     #[tracing::instrument(skip_all,target="server")]

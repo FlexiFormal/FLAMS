@@ -27,12 +27,9 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize),ServerFnError> {
 #[component]
 pub fn Settings() -> impl IntoView {
     use thaw::Table;
-    let resource = Resource::new(|| (),|_| get_settings());
-    view!(
-        <Suspense fallback=|| view!(<thaw::Spinner/>)>{
-            if let Some(Ok((settings,mem))) = resource.get() {
-                Some(view!{
-                <div style="text-align:left;">
+    crate::components::wait(|| get_settings(),|s| {
+        if let Ok((settings,mem)) = s {
+            Some(view!{
                 <Table><thead/><tbody>
                     <tr><td><h2>"Status"</h2></td><td/></tr>
                         <tr><td><b>"Relations"</b></td><td>{mem.to_string()}</td></tr>
@@ -47,9 +44,7 @@ pub fn Settings() -> impl IntoView {
                         <tr><td><h3>"Build Queue"</h3></td><td/></tr>
                             <tr><td><b>"Threads:"</b></td><td>{settings.buildqueue.num_threads}</td></tr>
                 </tbody></Table>
-                </div>
             })
-            } else {None}
-        }</Suspense>
-    )
+        } else {None}
+    })
 }

@@ -7,6 +7,7 @@ use immt_core::building::formats::SourceFormatId;
 use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::time::Delta;
 use immt_core::utils::VecMap;
+use crate::css;
 use crate::utils::errors::IMMTError;
 use crate::utils::WebSocket;
 
@@ -16,7 +17,7 @@ use crate::utils::WebSocket;
     input=server_fn::codec::GetUrl,
     output=server_fn::codec::Json
 )]
-pub async fn enqueue(archive:Option<ArchiveId>,group:Option<ArchiveId>,target:SourceFormatId,path:Option<String>,all:bool) -> Result<(),ServerFnError<IMMTError>> {
+pub async fn enqueue(archive:Option<ArchiveId>,group:Option<ArchiveId>,target:SourceFormatId,path:Option<String>,all:bool) -> Result<usize,ServerFnError<IMMTError>> {
     use immt_controller::{controller,ControllerTrait};
     use crate::accounts::{if_logged_in, login_status, LoginState};
     use immt_core::building::formats::*;
@@ -38,8 +39,7 @@ pub async fn enqueue(archive:Option<ArchiveId>,group:Option<ArchiveId>,target:So
                 }
             };
             let controller = controller();
-            {controller.build_queue().enqueue(spec,controller)}
-            Ok(())
+            controller.build_queue().enqueue(spec,controller).map_err(|_| IMMTError::ImplementationError.into())
         },
         _ => Err(IMMTError::AccessForbidden.into())
     }
@@ -139,18 +139,13 @@ impl WebSocket<(),QueueMessage> for QueueSocket {
 
 #[component]
 pub fn QueuesTop() -> impl IntoView {
-    let resource = Resource::new(|| (),|_| get_queues());
-    view!{
-        <Suspense fallback=|| view!(<thaw::Spinner/>)>{
-            if let Some(queues) = resource.get() {
-                match queues {
-                    Ok(q) if q.is_empty() => view!(<div>"No running queues"</div>).into_any(),
-                    Ok(q) => view!(<QueueTabs queues=q.clone()/>).into_any(),
-                    _ => view!(<div>"Error"</div>).into_any()
-                }
-            } else {view!(<span>"Error"</span>).into_any()}
-        }</Suspense>
-    }
+    crate::components::wait(|| get_queues(),|queues| {
+        match queues {
+            Ok(q) if q.is_empty() => view!(<div>"No running queues"</div>).into_any(),
+            Ok(q) => view!(<QueueTabs queues=q/>).into_any(),
+            _ => view!(<div>"Error"</div>).into_any()
+        }
+    })
 }
 /*
 #[derive(Clone)]
@@ -174,16 +169,19 @@ impl Entry {
     fn id(&self) -> String { self.0.id() }
 }
 
-#[derive(Clone)]
+#[derive(Clone,Copy)]
 struct AllQueues {
+    show:RwSignal<bool>,
     selected:RwSignal<String>,
+    queue_names:RwSignal<Vec<String>>,
     queues:RwSignal<VecMap<String,RwSignal<QueueData>>>
 }
 impl AllQueues {
     fn new(ids:Vec<String>) -> Self {
         let selected = ids.first().cloned().unwrap_or("".to_string());
+        let queue_names = RwSignal::new(ids.clone());
         let queues = ids.into_iter().map(|id| (id,RwSignal::new(QueueData::Empty))).collect();
-        Self {selected:RwSignal::new(selected.clone()),queues:RwSignal::new(queues)}
+        Self {show:RwSignal::new(false),selected:RwSignal::new(selected.clone()),queues:RwSignal::new(queues),queue_names}
     }
 }
 
@@ -196,7 +194,7 @@ enum QueueData {
 impl QueueData {
 }
 
-#[derive(Clone,serde::Serialize,serde::Deserialize)]
+#[derive(Clone,Copy,serde::Serialize,serde::Deserialize)]
 struct RunningQueue {
     running:RwSignal<Vec<Entry>>,
     queue:RwSignal<Vec<Entry>>,
@@ -206,22 +204,17 @@ struct RunningQueue {
     eta:RwSignal<Delta>
 }
 
-#[island]
+#[component]
 fn QueueTabs(queues:Vec<String>) -> impl IntoView {
     use thaw::*;
     use wasm_bindgen::JsCast;
     let queues = AllQueues::new(queues);
-    let qc = queues.clone();
-    let show = RwSignal::new(false);
-    let div_ref = NodeRef::<leptos::html::Div>::new();
-    let refcl= div_ref.clone();
-    /*
-
+    provide_context(queues);
     QueueSocket::force_start(move |msg| {
-        let queues = &qc;
         match msg {
             QueueMessage::Idle {id,entries} => {
                 let idle = QueueData::Idle(RwSignal::new(entries.into_iter().map(|e| Entry(e)).collect()));
+                queues.queue_names.update(|v| v.push(id.clone()));
                 queues.queues.update(|v| {
                     match v.get_mut(&id) {
                         Some(s) => s.set(idle),
@@ -239,9 +232,12 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                         finished:RwSignal::new(done.into_iter().map(|e| Entry(e)).collect()),
                         eta:RwSignal::new(eta)
                     });
-                    match v.get_mut(&id) {
+                    match v.get(&id) {
                         Some(s) => s.set(q),
-                        None => v.insert(id.clone(),RwSignal::new(q))
+                        None => {
+                            v.insert(id.clone(),RwSignal::new(q));
+                            queues.queue_names.update(|v| v.push(id));
+                        }
                     }
                 })
             }
@@ -297,47 +293,58 @@ fn QueueTabs(queues:Vec<String>) -> impl IntoView {
                 }
             }
         }
-        if !show.get_untracked() {
-            show.set(true);
-            let q = queues.clone();
-            refcl.get_untracked().unwrap().replace_children_with_node_1(
-                &view!(<div><TabList selected_value=q.selected>
-                    <For each=move || q.queues.clone().get() key=|e| e.0.clone() children=move |e| view!(
-                        <Tab value=&e.0>{e.0}{QueueTop(e.0,e.1)}</Tab>
-                    )/>
-                </TabList></div>).into_inner().dyn_ref().into()
-            )
+        if !queues.show.get_untracked() {
+            queues.show.set(true);
         }
         None
     });
+    view!(<Queues/>)
+}
 
-     */
-    view!(<div node_ref=div_ref />)
+#[component]
+fn Queues() -> impl IntoView {
+    use thaw::*;
+    css!(fullscreen = ".immt-fullscreen { width:100%; height:calc(100% - 44px - 21px) }");
+    let queues = expect_context::<AllQueues>();
+    view! {<Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>
+        <TabList selected_value=queues.selected>
+            <For each=move || queues.queues.get() key=|e| e.0.clone() children=move |e| view!(
+                <Tab value=&e.0>{e.0.clone()}</Tab>
+            )/>
+        </TabList>
+        <div style="margin:10px"><Divider/></div>
+        //<div style="width:100%;height:100%;position:absolute">
+        <Layout class="immt-fullscreen" /*position=LayoutPosition::Absolute*/>{move || {
+            let curr = queues.selected.get();
+            let ls = *queues.queues.get_untracked().get(&curr).unwrap();
+            QueueTop(curr,ls)
+        }}</Layout>
+        //</div>
+    </Show>}
 }
 
 fn QueueTop(id:String,ls:RwSignal<QueueData>) -> impl IntoView {
     match ls.get() {
         QueueData::Idle(v) => {
-            IdleQueue(id.clone(),v).into_any()
+            IdleQueue(id,v).into_any()
         },
         QueueData::Running(r) => {
-            RunningQueue(id.clone(),r).into_any()
+            RunningQueue(id,r).into_any()
         }
         _ => view!(<div>"Other"</div>).into_any()
     }
 }
 
-// #[island]
 fn IdleQueue(id:String, ls:RwSignal<Vec<Entry>>) -> impl IntoView {
     use thaw::*;
     let act = Action::<(),Result<(),ServerFnError<IMMTError>>>::new(move |_| run(id.clone()));
     view!{
-        //<Space justify=SpaceJustify::End>
+        <div style="width:100%"><div style="position:fixed;right:20px">
             <Button on_click=move |_| {act.dispatch(());}>"Run"</Button>
-        //</Space>
-        <ul>
+        </div></div>
+        <ol reversed>
           <For each=move || ls.get() key=|e| e.id() children=|e| e.as_view()/>
-        </ul>
+        </ol>
     }
 }
 
@@ -353,6 +360,13 @@ fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
     } = queue;
     view!{//<Space>
         //<Space align=SpaceAlign::Start>
+        <div style="position:fixed;right:20px;z-index:5"><Anchor>
+            <AnchorLink title="Running" href="#running"/>
+            <AnchorLink title="Queued" href="#queued"/>
+            <AnchorLink title="Blocked" href="#blocked"/>
+            <AnchorLink title="Failed" href="#failed"/>
+            <AnchorLink title="Finished" href="#finished"/>
+        </Anchor></div>
         <Layout content_style="text-align:left;">
             <div>"ETA: "{move || eta.get().to_string()}</div>
             <h3 id="running">Running</h3>
@@ -366,14 +380,7 @@ fn RunningQueue(_id:String, queue:RunningQueue) -> impl IntoView {
             <h3 id="finished">Finished</h3>
             <ol reversed style="margin-left:30px"><For each=move || finished.get() key=|e| e.id() children=|e| e.as_view()/></ol>
         </Layout>//</Space>
-        //<Space align=SpaceAlign::End>
-        <div style="position:absolute;"><Anchor>
-            <AnchorLink title="Running" href="#running"/>
-            <AnchorLink title="Queued" href="#queued"/>
-            <AnchorLink title="Blocked" href="#blocked"/>
-            <AnchorLink title="Failed" href="#failed"/>
-            <AnchorLink title="Finished" href="#finished"/>
-        </Anchor></div>//</Space>
+        //<Space align=SpaceAlign::End>//</Space>
     //</Space>
     }
 }

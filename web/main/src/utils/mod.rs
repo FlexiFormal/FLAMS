@@ -45,7 +45,7 @@ pub(crate) trait WebSocket<
                     return
                 },
                 msg = self.next() => if let Some(msg) = msg {
-                    if let Ok(msg) = leptos::serde_json::to_string(&msg) {
+                    if let Ok(msg) = serde_json::to_string(&msg) {
                         if !socket.send(axum::extract::ws::Message::Text(msg)).await.is_ok() {
                             return
                         }
@@ -60,9 +60,9 @@ pub(crate) trait WebSocket<
                             }
                         },
                         Ok(axum::extract::ws::Message::Text(msg)) => {
-                            if let Ok(msg) = leptos::serde_json::from_str(&msg) {
+                            if let Ok(msg) = serde_json::from_str(&msg) {
                                 if let Some(reply) = self.handle_message(msg).await {
-                                    if let Ok(reply) = leptos::serde_json::to_string(&reply) {
+                                    if let Ok(reply) = serde_json::to_string(&reply) {
                                         if !socket.send(axum::extract::ws::Message::Text(reply)).await.is_ok() {
                                             break
                                         }

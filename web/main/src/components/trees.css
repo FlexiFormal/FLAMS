@@ -1,0 +1,102 @@
+.immt-treeview {
+    width: fit-content;
+    --immt-treeview-spacing : 1.25em;
+    --immt-treeview-radius  : 1.5em;
+    padding-inline-start: 0;
+    .immt-treeview {
+        margin-left  : calc(var(--immt-treeview-radius) - var(--immt-treeview-spacing));
+        padding-left : 0;
+        .immt-treeview-li {
+            border-left : 2px solid var(--colorNeutralStrokeAccessible);
+        }
+        .immt-treeview-li:last-child {
+            border-color : transparent;
+        }
+        .immt-treeview-li::before{
+            content      : '';
+            display      : block;
+            position     : absolute;
+            top          : calc((var(--immt-treeview-spacing) / -2) + 0.2em);
+            left         : -2px;
+            width        : calc(var(--immt-treeview-spacing) - 0.5em);
+            height       : calc(var(--immt-treeview-spacing) - 0.2em);
+            border       : solid var(--colorNeutralStrokeAccessible);
+            border-width : 0 0 2px 2px;
+        }
+    }
+}
+
+.immt-treeview-inner {
+    margin-left  : calc(var(--immt-treeview-radius) - var(--immt-treeview-spacing));
+    padding-left : 0;
+    padding-inline-start: 0;
+    width: fit-content;
+    .immt-treeview-li {
+        border-left : 2px solid var(--colorNeutralStrokeAccessible);
+    }
+    .immt-treeview-li:last-child {
+        border-color : transparent;
+    }
+    .immt-treeview-li::before{
+        content      : '';
+        display      : block;
+        position     : absolute;
+        top          : calc(var(--immt-treeview-spacing) / -2);
+        left         : -2px;
+        width        : calc(var(--immt-treeview-spacing) - 0.5em);
+        height       : var(--immt-treeview-spacing);
+        border       : solid var(--colorNeutralStrokeAccessible);
+        border-width : 0 0 2px 2px;
+    }
+}
+.immt-treeview-li {
+    display      : block;
+    position     : relative;
+    padding-left : calc(2 * var(--immt-treeview-spacing) - var(--immt-treeview-radius));
+    text-align: left;
+    padding-top: 0.1em;
+    padding-bottom: 0.1em;
+}
+.immt-treeview-summary{
+    display : block;
+    cursor  : pointer;
+}
+
+.immt-treeview-summary::marker,
+.immt-treeview-summary::-webkit-details-marker{
+    display : none;
+}
+
+.immt-treeview-summary:focus{
+    outline : none;
+}
+
+.immt-treeview-summary:focus-visible{
+    outline : var(--strokeWidthThin) dotted var(--colorNeutralForeground1);
+}
+
+
+.immt-treeview-file-new {
+    color: var(--colorPaletteYellowForeground1);
+    ::after { content: ' (new)'; }
+}
+.immt-treeview-file-stale {
+    color: var(--colorStatusWarningForeground3);
+    ::after { content: ' (changed)'; }
+}
+.immt-treeview-file-deleted {
+    color: var(--colorStatusDangerForeground1);
+    text-decoration: line-through;
+    ::after { content: ' (deleted)'; }
+}
+.immt-treeview-file-up-to-date {
+    color: var(--colorStatusSuccessForeground1);
+}
+
+.immt-treeview-file-card {
+    text-align: left;
+}
+
+.immt-treeview-left-margin {
+    margin-left: 20px;
+}

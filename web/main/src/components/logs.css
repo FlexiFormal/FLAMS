@@ -1,0 +1,53 @@
+.immt-log-list {
+    width: fit-content;
+}
+.immt-log-elem {
+    text-align: left;
+}
+.immt-log-elem details {
+    display: inline-block;
+}
+
+.immt-log-error {
+    color: var(--colorStatusDangerForeground1);
+}
+.immt-log-warn {
+    color: var(--colorStatusWarningForeground3) ;
+}
+.immt-log-info {
+    color: var(--colorPaletteYellowForeground1);
+}
+.immt-log-debug {
+    color: var(--colorBrandForeground1);
+}
+.immt-log-trace {
+    color: var(--colorNeutralStencil1);
+}
+.immt-spinner-inline {
+    display:inline-block;
+    vertical-align:middle;
+    transform-origin: center;
+    transform: scale(0.5);
+}
+
+.immt-log-frame {
+    font-family: monospace;
+    overflow-y: scroll;
+    height: 68%;
+    text-align: left;
+    width: calc(100% - 10px);
+    padding:5px;
+    background-color: var(--colorNeutralBackground3);
+}
+
+.immt-warn-frame {
+    font-family: monospace;
+    overflow-y: scroll;
+    margin-top: auto;
+    height: calc(29% - 2px);
+    border-top: 2px solid;
+    padding:3px;
+    text-align: left;
+    width: calc(100% - 6px);
+    background-color: var(--colorNeutralBackground6);
+}

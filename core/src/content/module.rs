@@ -1,4 +1,5 @@
 use oxrdf::Quad;
+use triomphe::Arc;
 use crate::narration::{DocumentElement, Language};
 use crate::ulo;
 use crate::uris::documents::{DocumentURI, NarrativeURI};
@@ -305,4 +306,86 @@ pub enum ContentElement {
     Notation(super::constants::NotationRef),
     MathStructure(MathStructure),
     Morphism(Morphism)
+}
+
+
+#[derive(Debug, Clone)]
+pub enum ModuleLike {
+    Module(Arc<Module>),
+    NestedModule(Arc<Module>,*const Module),
+    Structure(Arc<Module>,*const MathStructure)
+}
+impl ModuleLike {
+    pub fn uri(&self) -> &ModuleURI {
+        match self {
+            ModuleLike::Module(m) => &m.uri,
+            ModuleLike::Structure(_,c) => unsafe{&c.as_ref().unwrap().uri}
+            ModuleLike::NestedModule(_,c) => unsafe{&c.as_ref().unwrap().uri}
+        }
+    }
+    pub fn elements(&self) -> &[ContentElement] {
+        match self {
+            ModuleLike::Module(m) => &m.elements,
+            ModuleLike::Structure(_,c) => unsafe{&c.as_ref().unwrap().elements}
+            ModuleLike::NestedModule(_,c) => unsafe{&c.as_ref().unwrap().elements}
+        }
+    }
+    pub fn get(&self,name:Name) -> Option<&ContentElement> {
+        match self {
+            ModuleLike::Module(m) => m.get(name),
+            ModuleLike::Structure(_,c) => unsafe{c.as_ref().unwrap().get(name)}
+            ModuleLike::NestedModule(_,c) => unsafe{c.as_ref().unwrap().get(name)}
+        }
+    }
+
+    pub fn into_elem<E,F:Fn(&ContentElement) -> Option<&E>>(self,name:Name,get:F) -> Result<ContentElemRef<E>,Self> {
+        if let Some(e) = self.get(name).and_then(get) {
+            let elem = e as *const E;
+            Ok(ContentElemRef {module:self.module(),elem})
+        } else { Err(self) }
+    }
+    fn module(self) -> Arc<Module> {
+        match self {
+            ModuleLike::Module(m) => m,
+            ModuleLike::Structure(m,_) => m,
+            ModuleLike::NestedModule(m,_) => m
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ContentElemRef<E> {
+    module:triomphe::Arc<Module>,
+    elem: *const E
+}
+impl<E> PartialEq for ContentElemRef<E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.elem == other.elem
+    }
+}
+impl<E> AsRef<E> for ContentElemRef<E> {
+    fn as_ref(&self) -> &E {
+        // safe, because data holds an Arc to the DocData this comes from,
+        // and no inner mutability is employed that might move the
+        // element
+        unsafe{self.elem.as_ref().unwrap()}
+    }
+}
+
+impl<E> ContentElemRef<E> {
+    #[inline]
+    pub fn module(&self) -> &Module {
+        &self.module
+    }
+    #[inline]
+    pub fn take(self) -> triomphe::Arc<Module> {
+        self.module
+    }
+    #[inline]
+    pub fn get(&self) -> &E {
+        // safe, because data holds an Arc to the Document this comes from,
+        // and no inner mutability is employed that might move the
+        // element
+        unsafe{self.elem.as_ref().unwrap()}
+    }
 }

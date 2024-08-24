@@ -35,13 +35,13 @@ struct BuildQueueI {
     num_threads:Semaphore,
 }
 impl BuildQueueI {
-   fn do_spec<Ctrl:Controller+'static>(&self,spec:BuildJobSpec,ctrl:&Ctrl) {
+   fn do_spec<Ctrl:Controller+'static>(&self,spec:BuildJobSpec,ctrl:&Ctrl) -> Result<usize,()> {
         match spec {
             BuildJobSpec::Group {id,target,stale_only} => {
                 self.enqueue_group(id,target,!stale_only,ctrl)
             },
             BuildJobSpec::Archive {id,target,stale_only} => {
-                self.enqueue_archive(id,target,!stale_only,ctrl);
+                self.enqueue_archive(id,target,!stale_only,ctrl)
             }
             BuildJobSpec::Path {id, rel_path, target,
                 stale_only} =>
@@ -49,7 +49,7 @@ impl BuildQueueI {
         }
    }
 
-    fn enqueue_path<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,rel_path:&str,all:bool,ctrl:&Ctrl) {
+    fn enqueue_path<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,rel_path:&str,all:bool,ctrl:&Ctrl) -> Result<usize,()> {
         use spliter::ParallelSpliterator;
         use rayon::iter::*;
         let format = match target {
@@ -75,7 +75,7 @@ impl BuildQueueI {
                             SourceDirEntry::File(f) => {
                                 let spec = TaskSpec {
                                     archive: ma.uri(),base_path: ma.path(),rel_path: rel_path.into(),target};
-                                q.enqueue(std::iter::once(spec).par_bridge().into_par_iter(),ctrl);
+                                Ok(q.enqueue(std::iter::once(spec).par_bridge().into_par_iter(),ctrl))
                             },
                             SourceDirEntry::Dir(d) => {
                                 let files = d.children.dir_iter().par_split().into_par_iter().filter_map(|fd| {
@@ -87,18 +87,18 @@ impl BuildQueueI {
                                     } else {None}
                                 }).map(|rp| TaskSpec {
                                     archive: ma.uri(),base_path: ma.path(),rel_path: rp,target});
-                                q.enqueue(files,ctrl);
+                                Ok(q.enqueue(files,ctrl))
                             }
                         }
-                    }
-                }
+                    } else {Err(())}
+                } else {Err(())}
             }
-            None => (),
+            None => Err(()),
             _ => todo!()
         })
     }
 
-    fn enqueue_archive<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
+    fn enqueue_archive<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) -> Result<usize,()> {
         use spliter::ParallelSpliterator;
         use rayon::iter::*;
         let format = match target {
@@ -128,15 +128,15 @@ impl BuildQueueI {
                         } else {None}
                     }).map(|rp| TaskSpec {
                         archive: ma.uri(),base_path: ma.path(),rel_path: rp,target});
-                    q.enqueue(files,ctrl);
-                }
+                    Ok(q.enqueue(files,ctrl))
+                } else {Err(())}
             }
-            None => (),
+            None => Err(()),
             _ => todo!()
         })
     }
 
-    fn enqueue_group<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) {
+    fn enqueue_group<Ctrl:Controller+'static>(&self,id:ArchiveId,target:FormatOrTarget,all:bool,ctrl:&Ctrl) -> Result<usize,()> {
         use spliter::ParallelSpliterator;
         use rayon::iter::*;
         let format = match target {
@@ -174,7 +174,7 @@ impl BuildQueueI {
                 }
             } else {None}
         ).flatten();
-        q.enqueue(files,ctrl);
+        Ok(q.enqueue(files,ctrl))
     }
 }
 
@@ -182,7 +182,7 @@ impl BuildQueueI {
 pub struct BuildQueue(Arc<BuildQueueI>);
 impl BuildQueue {
 
-    pub fn enqueue<Ctrl:Controller+'static>(&self,job:BuildJobSpec,ctrl:&Ctrl) {
+    pub fn enqueue<Ctrl:Controller+'static>(&self,job:BuildJobSpec,ctrl:&Ctrl) -> Result<usize,()> {
         self.0.do_spec(job,ctrl)
     }
 
