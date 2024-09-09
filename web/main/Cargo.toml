@@ -34,15 +34,18 @@ wasm-bindgen-futures = { version="0.4",optional = false }
 #actix-web-actors = { version= "4",optional = true }
 #actix = {version="0.13",optional=true}
 console_error_panic_hook = "0.1"
-leptos = { version = "0.7.0-beta2", features=["nightly"]}# "experimental-islands"]}#,"nightly"] }
+leptos = { version = "=0.7.0-beta4", features=["nightly"]}# "experimental-islands"]}#,"nightly"] }
 #leptos = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", features=["nightly"]}#,"experimental-islands"] }
-leptos_meta = { version = "0.7.0-beta3"}
+leptos_meta = { version = "=0.7.0-beta4"}
 #leptos_meta = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git" }
-leptos_router = { version = "0.7.0-beta2",features = ["nightly"] }
+leptos_router = { version = "=0.7.0-beta4",features = ["nightly"] }
 #leptos_router = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", features=["nightly"] }
-leptos_axum = {version="0.7.0-beta2",optional=true}#,features = ["islands-router"]}
+leptos_axum = {version="=0.7.0-beta4",optional=true}#,features = ["islands-router"]}
 #leptos_axum = { version="0.7.0-beta2",git = "https://github.com/leptos-rs/leptos.git", optional=true}#,features=["islands-router"] }
-thaw = { version="0.4.0-beta",features=["nightly"] }
+thaw = { version="=0.4.0-beta2",features=["nightly"] }
+
+reactive_graph = { version="=0.1.0-beta4",optional=true }
+
 #leptos-use = { version="0.12.0" }
 #thaw = { git="https://github.com/thaw-ui/thaw",features=["nightly"] }
 #thaw = { path="../../thaw/thaw",features=["nightly"] }
