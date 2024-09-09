@@ -71,7 +71,10 @@ impl<'a> HTMLParser<'a> {
     }
     #[inline]
     fn content_iri(&self) -> NamedNode {
-        self.contents.last().unwrap_or_else(|| todo!("wut") ).iri.clone()
+        self.contents.last().unwrap_or_else(|| {
+            println!("HERE: {}",self.document.node.to_string());
+            todo!("wut")
+        }).iri.clone()
     }
     #[inline]
     fn add_doc(&mut self,e:DocumentElement) {
@@ -1140,6 +1143,7 @@ tags!{v,node,parser,attrs,i,rest,
         };
         add!(-OpenElem::Importmodule{uri})
     } => {
+        //println!("Here: {uri}");
         parser.add_triple(ulo!((parser.content_iri()) IMPORTS (uri.to_iri())));
         parser.add_content(ContentElement::Import(uri));
         parser.add_doc(DocumentElement::ImportModule(uri));

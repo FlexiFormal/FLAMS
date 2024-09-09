@@ -224,7 +224,7 @@ fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
         BuildState::New => "immt-treeview-file-new"
     };
     let clicked = RwSignal::new(false);
-    let path = file.relative_path;
+    let path = file.relative_path.clone();
     let pathh = path.clone();
     view!{<Leaf>
         <WideDrawer lazy=true>
@@ -241,13 +241,11 @@ fn SourceFile(archive:ArchiveURI,file:SourceFile) -> impl IntoView {
             </WHeader>
             <IFrame src=format!("?a={}&rp={path}",archive.id()) ht="calc(100vh - 110px)".to_string()/>
         </WideDrawer>
-        //<FileDrawer open archive=archive.id() path/>
-        /*<Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
+        <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
             <FileModal archive=archive.id() file/>
-        </DialogContent></DialogBody></DialogSurface></Dialog>*/
+        </DialogContent></DialogBody></DialogSurface></Dialog>
         " "<span on:click=move |_| {clicked.set(true)} style="cursor: help;">
             <Icon icon=icondata_ai::AiInfoCircleOutlined/>
-            //{icon(icondata_ai::AiInfoCircleOutlined)}
         </span>
     </Leaf>}
 }

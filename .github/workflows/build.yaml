@@ -15,7 +15,7 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos #&& cargo install --locked trunk
       - name: main
-        run: cargo leptos build --release
+        run: LEPTOS_WASM_OPT_VERSION=version_119 LEPTOS_SASS_VERSION=1.71.0 cargo leptos build --release
       - name: bundle
         run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
       - uses: actions/upload-artifact@v4
@@ -32,7 +32,7 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos # && cargo install --locked trunk
       - name: envvars1
-        run: echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "IMMT_BUILD_GRAPHS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        run: echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "LEPTOS_WASM_OPT_VERSION=version_119" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "LEPTOS_SASS_VERSION=1.71.0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "IMMT_BUILD_GRAPHS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: windows fix
         run: cargo build --release --bin=immt --no-default-features --features=server
       - name: windows fix 2
@@ -75,7 +75,7 @@ jobs:
       - name: cargo
         run: cargo install cargo-leptos # && cargo install --locked trunk
       - name: main
-        run: cargo leptos build --release
+        run: LEPTOS_WASM_OPT_VERSION=version_119 LEPTOS_SASS_VERSION=1.71.0 cargo leptos build --release
       - name: bundle
         run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
       - uses: actions/upload-artifact@v4

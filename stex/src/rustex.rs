@@ -13,11 +13,13 @@ mod rustex {
     pub use tex_engine::{engine::utils::memory::MemoryManager, tex::tokens::CompactToken};
     pub use tracing::{debug, error, info, info_span, instrument, trace, warn};
     pub use RusTeX::engine::{Extension, RusTeXEngine, Types,RusTeXEngineT};
-    pub use RusTeX::output::{OutputCont, RusTeXOutput};
-    pub use RusTeX::stomach::RusTeXStomach;
-    pub use RusTeX::{fonts::Fontsystem, state::RusTeXState};
-    pub use RusTeX::files::RusTeXFileSystem;
-    pub use RusTeX::commands::{register_primitives_preinit,register_primitives_postinit};
+    pub use RusTeX::engine::output::{OutputCont, RusTeXOutput};
+    pub use RusTeX::engine::stomach::RusTeXStomach;
+    pub use RusTeX::engine::{fonts::Fontsystem, state::RusTeXState};
+    pub use RusTeX::engine::files::RusTeXFileSystem;
+    pub use RusTeX::engine::commands::{register_primitives_preinit,register_primitives_postinit};
+    pub type RTSettings = RusTeX::engine::Settings;
+    pub use RusTeX::ImageOptions;
 }
 use rustex::*;
 
@@ -132,7 +134,13 @@ impl RusTeX {
     }
     pub fn run_with_envs<I:IntoIterator<Item=(String,String)>>(&self,file:&Path,memorize:bool,envs:I) -> Result<String,String> {
         let mut engine = self.0.read().clone().into_engine(envs);
-        let res = engine.run(file.to_str().unwrap(), false);
+        let settings = RTSettings {
+            verbose:false,
+            sourcerefs:false,
+            log:true,
+            image_options:ImageOptions::AsIs
+        };
+        let res = engine.run(file.to_str().unwrap(), settings);
         if let Some(e) = res.error {
             Err(e.to_string())
         } else {
@@ -140,7 +148,7 @@ impl RusTeX {
                 let mut base = self.0.write();
                 give_back(engine, &mut base);
             }
-            Ok(res.out)
+            Ok(res.to_string())
         }
     }
 }

@@ -569,6 +569,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
     #[inline]
     fn parse_error(&mut self, msg: Cow<'static, str>) {
+        //println!("Parse Error: {msg}\n {}",self.document.node.to_string());
         tracing::error!("{msg}")
     }
 
@@ -579,7 +580,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
     #[inline]
     fn set_quirks_mode(&mut self, mode: QuirksMode) {
-        let le = self.document.node.to_string().len();
+        //let le = self.document.node.to_string().len();
         self.document.node
             .as_document()
             .unwrap()
@@ -674,7 +675,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
     }
 
     #[inline]
-    fn append_before_sibling(&mut self, sibling: &Self::Handle, new_node: NodeOrText<Self::Handle>) {
+    fn append_before_sibling(&mut self, sibling: &Self::Handle, child: NodeOrText<Self::Handle>) {
         todo!()
     }
 
@@ -715,7 +716,12 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
     #[inline]
     fn append_based_on_parent_node(&mut self, element: &Self::Handle, prev_element: &Self::Handle, child: NodeOrText<Self::Handle>) {
-        todo!()
+        // TODO maybe
+        if element.node.parent().is_some() {
+            self.append_before_sibling(element, child)
+        } else {
+            self.append(prev_element, child)
+        }
     }
 
 
