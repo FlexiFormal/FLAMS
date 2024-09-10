@@ -8,13 +8,13 @@ pub trait SourcePos:Clone+Default+Debug {
     fn update_str_maybe_newline(&mut self, s:&str);
 }
 impl SourcePos for () {
-    #[inline(always)]
+    #[inline]
     fn update(&mut self,_:char) {}
-    #[inline(always)]
+    #[inline]
     fn update_newline(&mut self,_:bool) {}
-    #[inline(always)]
+    #[inline]
     fn update_str_no_newline(&mut self, _:&str) {}
-    #[inline(always)]
+    #[inline]
     fn update_str_maybe_newline(&mut self, _: &str) {}
 }
 
@@ -29,27 +29,27 @@ impl Display for ByteOffset {
     }
 }
 impl Debug for ByteOffset {
-    #[inline(always)]
+    #[inline]
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result {
         <Self as Display>::fmt(self,f)
     }
 }
 impl SourcePos for ByteOffset {
-    #[inline(always)]
+    #[inline]
     fn update(&mut self,c:char) {
         self.offset += c.len_utf8();
     }
-    #[inline(always)]
+    #[inline]
     fn update_newline(&mut self,rn:bool) {
         self.offset += if rn { 2 } else { 1 };
     }
-    #[inline(always)]
+    #[inline]
     fn update_str_no_newline(&mut self, s: &str) {
         self.offset += s.len();
     }
-    #[inline(always)]
+    #[inline]
     fn update_str_maybe_newline(&mut self, s: &str) {
-        self.update_str_no_newline(s)
+        self.update_str_no_newline(s);
     }
 }
 
@@ -62,7 +62,10 @@ pub struct SourceOffsetLineCol {
 }
 impl Default for SourceOffsetLineCol {
     fn default() -> Self {
-        Self { line:NonZeroUsize::new(1).unwrap(), col:NonZeroUsize::new(1).unwrap() }
+        Self {
+            line:NonZeroUsize::new(1).unwrap_or_else(|| unreachable!()),
+            col:NonZeroUsize::new(1).unwrap_or_else(|| unreachable!())
+        }
     }
 }
 impl Display for SourceOffsetLineCol {
@@ -71,35 +74,35 @@ impl Display for SourceOffsetLineCol {
     }
 }
 impl Debug for SourceOffsetLineCol {
-    #[inline(always)]
+    #[inline]
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result {
         <Self as Display>::fmt(self,f)
     }
 }
 
 impl SourcePos for SourceOffsetLineCol {
-    #[inline(always)]
+    #[inline]
     fn update(&mut self,_:char) {
-        self.col = self.col.saturating_add(1)
+        self.col = self.col.saturating_add(1);
     }
-    #[inline(always)]
+    #[inline]
     fn update_newline(&mut self,_:bool) {
         self.line = self.line.saturating_add(1);
-        self.col = NonZeroUsize::new(1).unwrap();
+        self.col = NonZeroUsize::new(1).unwrap_or_else(|| unreachable!());
     }
-    #[inline(always)]
+    #[inline]
     fn update_str_no_newline(&mut self, s: &str) {
         self.col = self.col.saturating_add(s.chars().count());
     }
 
     fn update_str_maybe_newline(&mut self, s: &str) {
         let s = s.split("\r\n")
-            .flat_map(|s| s.split(|c| c == '\n'|| c == '\r'));
+            .flat_map(|s| s.split(['\n','\r']));
         let mut had_newline = false;
         for l in s {
             if had_newline {
                 self.line = self.line.saturating_add(1);
-                self.col = NonZeroUsize::new(1).unwrap();
+                self.col = NonZeroUsize::new(1).unwrap_or_else(|| unreachable!());
             }
             self.col = self.col.saturating_add(l.chars().count());
             had_newline = true;
@@ -108,22 +111,22 @@ impl SourcePos for SourceOffsetLineCol {
 }
 
 impl<A:SourcePos,B:SourcePos> SourcePos for (A,B) {
-    #[inline(always)]
+    #[inline]
     fn update(&mut self,c:char) {
         self.0.update(c);
         self.1.update(c);
     }
-    #[inline(always)]
+    #[inline]
     fn update_newline(&mut self,rn:bool) {
         self.0.update_newline(rn);
         self.1.update_newline(rn);
     }
-    #[inline(always)]
+    #[inline]
     fn update_str_no_newline(&mut self, s: &str) {
         self.0.update_str_no_newline(s);
         self.1.update_str_no_newline(s);
     }
-    #[inline(always)]
+    #[inline]
     fn update_str_maybe_newline(&mut self, s: &str) {
         self.0.update_str_maybe_newline(s);
         self.1.update_str_maybe_newline(s);
@@ -142,7 +145,7 @@ impl Display for SourceRange<ByteOffset> {
     }
 }
 impl Debug for SourceRange<ByteOffset> {
-    #[inline(always)]
+    #[inline]
     fn fmt(&self,f:&mut std::fmt::Formatter) -> std::fmt::Result {
         <Self as Display>::fmt(self,f)
     }

@@ -16,8 +16,7 @@ use immt_api::backend::Backend;
 use immt_api::core::ontology::rdf::terms::Quad;
 use immt_api::core::ulo;
 use immt_api::core::uris::{ModuleURI, Name, NarrativeURI, NarrDeclURI, SymbolURI};
-use immt_api::core::utils::sourcerefs::{ByteOffset, SourceRange};
-use immt_api::core::utils::VecMap;
+use immt_utils::{prelude::*,sourcerefs::{ByteOffset, SourceRange}};
 use crate::docs::OpenTerm;
 use crate::parsing::shtml::OpenElem;
 
@@ -569,7 +568,7 @@ impl<'a> TreeSink for HTMLParser<'a> {
 
     #[inline]
     fn parse_error(&mut self, msg: Cow<'static, str>) {
-        //println!("Parse Error: {msg}\n {}",self.document.node.to_string());
+        println!("Parse Error: {msg} (in {})",self.path.display());
         tracing::error!("{msg}")
     }
 

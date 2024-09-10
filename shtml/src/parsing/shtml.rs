@@ -15,8 +15,7 @@ use immt_api::core::uris::base::BaseURI;
 use immt_api::core::uris::documents::DocumentURI;
 use immt_api::core::uris::modules::ModuleURI;
 use immt_api::core::uris::symbols::SymbolURI;
-use immt_api::core::utils::sourcerefs::{ByteOffset, SourceRange};
-use immt_api::core::utils::VecMap;
+use immt_utils::{prelude::*,sourcerefs::{ByteOffset, SourceRange}};
 use immt_api::core::uris::{ContentURI, Name, NarrativeURI, NarrDeclURI};
 
 macro_rules! iterate {

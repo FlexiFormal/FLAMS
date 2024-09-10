@@ -10,15 +10,12 @@ use immt_core::building::buildstate::{QueueEntry, QueueMessage};
 use immt_core::building::formats::{BuildTargetId, FormatOrTarget, SourceFormatId};
 use immt_core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_core::uris::modules::ModuleURI;
-use immt_core::utils::time::{Delta, Timestamp};
-use immt_core::utils::triomphe;
-use immt_core::utils::triomphe::Arc;
+use immt_utils::{time::{Delta, Timestamp},prelude::{*,triomphe::Arc}};
 use crate::backend::archives::{Archive, Storage};
 use crate::building::targets::{BuildDataFormat, BuildFormatId};
 use crate::building::tasks::{BuildTask, Dependency, TaskRef, TaskSpec, TaskState};
 use crate::controller::Controller;
 use crate::extensions::FormatExtension;
-use crate::HMap;
 use crate::utils::asyncs::ChangeSender;
 
 #[derive(Default,Debug)]
@@ -38,13 +35,13 @@ impl Timer {
     fn update(&mut self,dones:u8) {
         let dur = self.last.unwrap().since_now();
         self.last = Some(Timestamp::now());
-        let avg = self.average.get_or_insert_with(|| Delta::new());
+        let avg = self.average.get_or_insert_with(|| Delta::default());
         avg.update_average(self.done as f64 / (self.done as f64 + dones as f64),dur);
         self.steps -= dones as usize;
         self.done += dones as usize;
     }
     fn eta(&self) -> Delta {
-        self.average.map(|a| a * (self.steps as f64)).unwrap_or(Delta::new())
+        self.average.map(|a| a * (self.steps as f64)).unwrap_or(Delta::default())
     }
 }
 
@@ -68,7 +65,7 @@ struct QueueI {
 }
 
 #[derive(Debug,Clone)]
-pub struct Queue(triomphe::Arc<QueueI>);
+pub struct Queue(Arc<QueueI>);
 
 
 impl Queue {

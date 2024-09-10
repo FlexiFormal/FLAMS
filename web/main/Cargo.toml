@@ -75,6 +75,7 @@ tower-sessions = { version="0.12",optional=true,features=["tower-sessions-memory
 tower-sessions-sqlx-store = { version="0.12",optional=true,features = ["sqlite"] }
 
 #immt
+immt-utils = { workspace=true,features = ["serde"] }
 immt-api = { workspace=true,features=["oxigraph"],optional=true }
 immt-core = { workspace=true,features=["serde"] }
 immt-controller = { workspace=true, optional = true }

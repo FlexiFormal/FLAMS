@@ -105,7 +105,7 @@ impl EngineBase {
         name = "Initializing RusTeX engine"
     )]
     fn initialize() -> Self {
-        let mut engine = DefaultEngine::<Types>::new();
+        let mut engine = DefaultEngine::<Types>::default();
         engine.aux.outputs = RusTeXOutput::Cont(Box::new(TracingOutput));
         register_primitives_preinit(&mut engine);
         match engine.initialize_pdflatex() {

@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::num::NonZeroU16;
 use std::ops::{BitAnd, Div};
 use std::str::FromStr;
-use triomphe::Arc;
+use immt_utils::prelude::triomphe::Arc;
 use crate::uris::base::BaseURI;
 use crate::ontology::rdf::terms::NamedNode;
 use crate::uris::Name;

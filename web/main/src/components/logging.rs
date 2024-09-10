@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use leptos::{prelude::*,html};
 use immt_core::utils::logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem};
-use immt_core::utils::time::Timestamp;
-use immt_core::utils::VecMap;
+use immt_utils::{time::Timestamp,prelude::*};
 use leptos::html::HtmlElement;
 use crate::css;
 use crate::utils::WebSocket;

@@ -1,0 +1,13 @@
+[package]
+name = "immt-ontology"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+rdf = ["dep:oxrdf"]
+
+[dependencies]
+oxrdf = {workspace=true,optional=true}
+
+[lints]
+workspace = true

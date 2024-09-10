@@ -10,6 +10,7 @@ workspace = true
 RusTeX = {workspace=true}
 tex_engine = {workspace=true}
 
+immt-utils = {workspace=true}
 immt-api = { workspace=true }
 immt-shtml = { workspace=true }
 

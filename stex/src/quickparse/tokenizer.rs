@@ -1,7 +1,5 @@
 use crate::quickparse::tokens::TeXToken;
-use immt_api::core::utils::sourcerefs::SourceRange;
-use immt_api::core::utils::parse::ParseSource;
-use immt_api::core::utils::parse::StringOrStr;
+use immt_utils::{sourcerefs::SourceRange,parsing::{ParseSource,StringOrStr}};
 use std::path::Path;
 use tracing::warn;
 

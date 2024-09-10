@@ -2,8 +2,7 @@ use std::path::Path;
 use crate::building::formats::{FormatOrTarget, ShortId, SourceFormatId};
 use crate::uris::archives::ArchiveId;
 use crate::utils::filetree::FileChange;
-use crate::utils::time::Delta;
-use crate::utils::VecMap;
+use immt_utils::{time::Delta,prelude::*};
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]

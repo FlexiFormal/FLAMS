@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::ops::Div;
 use std::str::FromStr;
-use triomphe::Arc;
+use immt_utils::prelude::triomphe::Arc;
 use crate::narration::Language;
 pub use crate::uris::archives::{ArchiveURI,ArchiveId};
 pub use crate::uris::base::BaseURI;

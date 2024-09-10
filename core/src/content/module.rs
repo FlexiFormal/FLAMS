@@ -1,5 +1,5 @@
 use oxrdf::Quad;
-use triomphe::Arc;
+use immt_utils::prelude::triomphe::Arc;
 use crate::narration::{DocumentElement, Language};
 use crate::ulo;
 use crate::uris::documents::{DocumentURI, NarrativeURI};
@@ -355,7 +355,7 @@ impl ModuleLike {
 
 #[derive(Clone)]
 pub struct ContentElemRef<E> {
-    module:triomphe::Arc<Module>,
+    module:Arc<Module>,
     elem: *const E
 }
 impl<E> PartialEq for ContentElemRef<E> {
@@ -378,7 +378,7 @@ impl<E> ContentElemRef<E> {
         &self.module
     }
     #[inline]
-    pub fn take(self) -> triomphe::Arc<Module> {
+    pub fn take(self) -> Arc<Module> {
         self.module
     }
     #[inline]

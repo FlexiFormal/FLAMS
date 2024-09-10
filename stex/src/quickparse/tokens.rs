@@ -1,4 +1,4 @@
-use immt_api::core::utils::sourcerefs::{SourcePos, SourceRange};
+use immt_utils::sourcerefs::{SourcePos, SourceRange};
 
 pub enum TeXToken<P: SourcePos, S> {
     Comment(SourceRange<P>),

@@ -7,9 +7,11 @@ edition = "2021"
 workspace = true
 
 [dependencies]
+immt-api = { workspace=true }
+immt-utils = { workspace=true }
+
 const_format = "0.2"
 lazy_static = "1"
-immt-api = { workspace=true }
 kuchikiki = "0.8.2"
 html5ever = "0.26.0" # needs to match kuchikiki precisely, for some reason
 tendril = "0"

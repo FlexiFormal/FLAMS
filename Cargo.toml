@@ -1,5 +1,5 @@
 [workspace]
-members = ["api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm"]
+members = ["api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm", "00clean/utils", "00clean/ontology"]
 resolver = "2"
 exclude = ["web/graphs","test-plugin","tests","thaw"]
 
@@ -45,6 +45,9 @@ nursery = "deny"
 unwrap_used = "deny"
 
 [workspace.dependencies]
+# immt
+immt-utils = { path = "00clean/utils",version="0.0.1" }
+immt-ontology = { path = "00clean/ontology",version="0.0.1" }
 immt-core = { path = "core",version="0.0.1" }
 immt-api = { path = "api",version="0.0.1" }
 immt-controller = { path = "controller",version="0.0.1" }
@@ -52,6 +55,17 @@ immt-shtml = { path = "shtml",version="0.0.1" }
 immt-stex = { path = "stex",version="0.0.1" }
 immt-web = { path = "web/main",version="0.0.1" }
 immt-web-orm = { path = "web/orm",version="0.0.1" }
+
+# utils
+triomphe = "0.1"
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+rustc-hash = "2"
+chrono = "0.4"
+
+oxrdf = "0.2.0-rc.1"
+
+
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
 #RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}

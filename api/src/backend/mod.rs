@@ -8,12 +8,10 @@ use immt_core::content::{ContentElement, ContentElemRef, MathStructure, Module, 
 use immt_core::narration::{CSS, DocData, DocElemRef, DocumentElement, FullDocument, LogicalParagraph, NarrativeRef};
 use immt_core::ontology::rdf::ontologies::{rdf, ulo2};
 use immt_core::uris::{ArchiveId, DocumentURI, ModuleURI, Name, SymbolURI};
-use immt_core::utils::triomphe;
 use crate::backend::archives::Archive;
 use crate::backend::manager::ArchiveManager;
 use crate::backend::relational::RelationalManager;
-use crate::HMap;
-use triomphe::Arc;
+use immt_utils::prelude::{*,triomphe::Arc};
 
 pub mod archives;
 pub mod manager;

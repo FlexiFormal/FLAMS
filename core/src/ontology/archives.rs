@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use crate::building::formats::SourceFormatId;
 use crate::uris::archives::{ArchiveId, ArchiveURI};
-use crate::utils::VecMap;
+use immt_utils::prelude::*;
 use crate::utils::arrayvec;
 use crate::utils::ignore_regex::IgnoreSource;
 use crate::building::buildstate::AllStates;

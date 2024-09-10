@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use crate::content::{ArgType, Notation, TermDisplay};
 use crate::uris::{ContentURI, Name, NarrDeclURI};
 use crate::uris::symbols::SymbolURI;
-use crate::utils::VecMap;
+use immt_utils::prelude::*;
 
 #[derive(Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]

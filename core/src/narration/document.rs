@@ -1,4 +1,3 @@
-use crate::utils::sourcerefs::{ByteOffset, SourceRange};
 use crate::uris::documents::{DocumentURI, NarrativeURI};
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -12,7 +11,8 @@ use crate::{SemanticElement, ulo};
 use crate::uris::{ContentURI, Name, NarrDeclURI};
 use crate::uris::modules::ModuleURI;
 use crate::uris::symbols::SymbolURI;
-use crate::utils::{NestedDisplay, NestingFormatter, VecMap};
+use immt_utils::{prelude::*,sourcerefs::{ByteOffset, SourceRange}};
+use crate::utils::{NestedDisplay, NestingFormatter};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]

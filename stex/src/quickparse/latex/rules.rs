@@ -2,8 +2,7 @@ use crate::quickparse::latex::{
     EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult,
 };
 use crate::quickparse::tokenizer::Mode;
-use immt_api::core::utils::sourcerefs::{SourcePos, SourceRange};
-use immt_api::core::utils::parse::ParseSource;
+use immt_utils::{sourcerefs::{SourcePos, SourceRange},parsing::ParseSource};
 
 pub fn read_verbatim_char<'a,Pa:ParseSource<'a>,T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>>
     (mac:&mut Macro<'a,Pa::Str,Pa::Pos,T>,p:&mut LaTeXParser<'a,Pa,T>,end:char) {

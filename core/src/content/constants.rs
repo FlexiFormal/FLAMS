@@ -6,7 +6,7 @@ use crate::content::{Notation, Term, TermOrList};
 use crate::narration::NarrativeRef;
 use crate::uris::{Name, NarrDeclURI};
 use crate::uris::symbols::SymbolURI;
-use crate::utils::sourcerefs::{ByteOffset, SourceRange};
+use immt_utils::sourcerefs::{ByteOffset, SourceRange};
 
 #[derive(Debug, Copy,Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]

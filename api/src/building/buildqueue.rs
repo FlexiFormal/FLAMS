@@ -6,7 +6,7 @@ use immt_core::building::formats::{BuildJobSpec, FormatOrTarget};
 use immt_core::prelude::DirLike;
 use immt_core::uris::archives::ArchiveId;
 use immt_core::utils::filetree::{FileLike, SourceDirEntry};
-use immt_core::utils::triomphe::Arc;
+use immt_utils::prelude::triomphe::Arc;
 use crate::backend::archives::{Archive, Storage};
 use crate::building::queue::Queue;
 use crate::building::tasks::TaskSpec;

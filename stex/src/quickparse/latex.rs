@@ -2,13 +2,11 @@ pub mod rules;
 
 use crate::quickparse::tokenizer::TeXTokenizer;
 use crate::quickparse::tokens::TeXToken;
-use immt_api::core::utils::sourcerefs::{SourcePos, SourceRange};
-use immt_api::core::utils::parse::{ParseSource, StringOrStr};
+use immt_utils::{sourcerefs::{SourcePos, SourceRange},parsing::{ParseSource, StringOrStr},prelude::*};
 use std::collections::hash_map::Entry;
 use std::convert::Into;
 use std::marker::PhantomData;
 use tex_engine::utils::HMap;
-use immt_api::core::utils::VecMap;
 
 pub trait FromLaTeXToken<'a, S: StringOrStr<'a>, P: SourcePos>: Sized {
     fn from_comment(r: SourceRange<P>) -> Option<Self>;

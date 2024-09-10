@@ -20,7 +20,7 @@ pub mod utils {
     use std::ffi::OsStr;
     use std::path::Path;
     use lazy_static::lazy_static;
-    use immt_core::utils::triomphe::Arc;
+    use immt_utils::prelude::triomphe::Arc;
 
     pub mod asyncs;
     pub mod circular_buffer;
@@ -65,7 +65,6 @@ pub mod utils {
 
 pub mod core { pub use immt_core::*; }
 
-pub type HMap<A,B> = rustc_hash::FxHashMap<A,B>;
 
 lazy_static! {
     pub static ref MATHHUB_PATHS: Box<[PathBuf]> = mathhubs().into();

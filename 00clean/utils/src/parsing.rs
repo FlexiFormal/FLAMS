@@ -1,17 +1,13 @@
-use crate::utils::sourcerefs::{ByteOffset, SourcePos};
+use crate::sourcerefs::{ByteOffset, SourcePos};
 use std::fmt::{Debug, Display};
 use std::io::Read;
 
-pub trait StringOrStr<'a>:
-AsRef<str>
-+ From<&'a str>
-+ Debug
-+ Display
-+ Eq
-+ std::hash::Hash
-+ Clone
-+ for<'b> PartialEq<&'b str>
+pub trait StringOrStr<'a>: AsRef<str> + From<&'a str> + Debug + Display + Eq + std::hash::Hash
++ Clone + for<'b> PartialEq<&'b str>
 {
+    /// # Errors
+    ///
+    /// Will return `Err` if self does not start with prefix.
     fn strip_prefix(self, s: &str) -> Result<Self, Self>;
     fn split_noparens<const OPEN: char, const CLOSE: char>(
         &'a self,
@@ -21,7 +17,7 @@ AsRef<str>
 impl<'a> StringOrStr<'a> for &'a str {
     fn strip_prefix(self, s: &str) -> Result<Self, Self> {
         str::strip_prefix(self, s)
-            .map(|s| s.trim_start())
+            .map(str::trim_start)
             .ok_or(self)
     }
     fn split_noparens<const OPEN: char, const CLOSE: char>(
@@ -45,6 +41,7 @@ impl<'a> StringOrStr<'a> for &'a str {
     }
 }
 impl<'a> StringOrStr<'a> for String {
+    #[allow(clippy::option_if_let_else)]
     fn strip_prefix(self, s: &str) -> Result<Self, Self> {
         match str::strip_prefix(&self, s) {
             Some(s) => Ok(s.trim_start().to_string()),
@@ -113,7 +110,7 @@ impl<R: Read, P: SourcePos> ParseReader<R, P> {
 impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> {
     type Pos = P;
     type Str = String;
-    #[inline(always)]
+    #[inline]
     fn curr_pos(&self) -> &P {
         &self.pos
     }
@@ -155,7 +152,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
         self.pos.update_str_no_newline(&s);
         let pos = self.pos.clone();
         if let Some(rn) = rn {
-            self.pos.update_newline(rn)
+            self.pos.update_newline(rn);
         }
         (s, pos)
     }
@@ -186,12 +183,10 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
         }
     }
     fn starts_with(&mut self, c: char) -> bool {
-        if let Some(c2) = self.get_char() {
+        self.get_char().map_or(false, |c2| {
             self.push_char(c2);
             c2 == c
-        } else {
-            false
-        }
+        })
     }
     fn read_while(&mut self, mut pred: impl FnMut(char) -> bool) -> Self::Str {
         let mut ret = String::new();
@@ -237,9 +232,8 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
         ret
     }
     fn peek_head(&mut self) -> Option<char> {
-        self.get_char().map(|c| {
-            self.push_char(c);
-            c
+        self.get_char().inspect(|c| {
+            self.push_char(*c);
         })
     }
     fn read_n(&mut self, i: usize) -> Self::Str {
@@ -255,15 +249,11 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
     }
     fn read_until_str(&mut self, s: &str) -> Self::Str {
         let mut ret = String::new();
-        loop {
-            if let Some(c) = self.pop_head() {
-                ret.push(c);
-            } else {
-                break;
-            }
+        while let Some(c) = self.pop_head() {
+            ret.push(c);
             if ret.ends_with(s) {
                 for _ in 0..s.len() {
-                    self.push_char(ret.pop().unwrap());
+                    self.push_char(ret.pop().unwrap_or_else(|| unreachable!()));
                 }
                 return ret;
             }
@@ -330,20 +320,19 @@ pub struct ParseStr<'a, P: SourcePos> {
     pos: P,
 }
 impl<'a, P: SourcePos> ParseStr<'a, P> {
+    #[must_use]
     pub fn new(input: &'a str) -> Self {
         Self {
             input,
             pos: P::default(),
         }
     }
-    #[inline(always)]
+    #[inline]
     pub fn starts_with_str(&self, s: &str) -> bool {
         self.input.starts_with(s)
     }
-    #[inline(always)]
-    pub fn rest(&self) -> &'a str {
-        self.input
-    }
+    #[inline]
+    pub const fn rest(&self) -> &'a str { self.input }
 
     pub fn read_until_inclusive(&mut self, pred: impl FnMut(char) -> bool) -> &'a str {
         let i = self.input.find(pred).unwrap_or(self.input.len());
@@ -380,7 +369,7 @@ impl<'a, P: SourcePos> ParseStr<'a, P> {
     }
 }
 impl<'a> ParseStr<'a, ByteOffset> {
-    #[inline(always)]
+    #[inline]
     pub fn offset(&mut self) -> &mut ByteOffset {
         &mut self.pos
     }
@@ -389,7 +378,7 @@ impl<'a> ParseStr<'a, ByteOffset> {
 impl<'a, P: SourcePos + 'a> ParseSource<'a> for ParseStr<'a, P> {
     type Pos = P;
     type Str = &'a str;
-    #[inline(always)]
+    #[inline]
     fn curr_pos(&self) -> &P {
         &self.pos
     }
@@ -403,12 +392,11 @@ impl<'a, P: SourcePos + 'a> ParseSource<'a> for ParseStr<'a, P> {
                 if self.input.chars().nth(1) == Some('\n') {
                     self.input = &self.input[2..];
                     self.pos.update_newline(true);
-                    Some('\n')
                 } else {
                     self.input = &self.input[1..];
                     self.pos.update_newline(false);
-                    Some('\n')
                 }
+                Some('\n')
             } else {
                 self.pos.update(c);
                 self.input = &self.input[c.len_utf8()..];

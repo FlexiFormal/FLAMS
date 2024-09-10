@@ -12,9 +12,17 @@ use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
 use immt_api::utils::asyncs::{background, ChangeListener};
 use immt_core::ontology::rdf::terms::NamedNode;
 use immt_core::utils::logs::LogFileLine;
-use immt_core::utils::triomphe::Arc;
+use immt_utils::prelude::triomphe::Arc;
 use immt_shtml::SHTMLExtension;
 use crate::logging::LogStore;
+
+pub use Controller as ControllerTrait;
+use immt_api::backend::Backend;
+use immt_api::checking::CheckExtension;
+use immt_api::utils::settings::{Settings};
+use immt_core::building::formats::{BuildTargetId, SourceFormatId};
+use immt_core::utils::settings::SettingsSpec;
+use immt_utils::prelude::HMap;
 
 pub mod logging;
 
@@ -179,15 +187,6 @@ impl Controller for BaseController {
         self.0.extensions.get(&id).map(|b| &**b)
     }
 }
-
-
-pub use Controller as ControllerTrait;
-use immt_api::backend::Backend;
-use immt_api::checking::CheckExtension;
-use immt_api::HMap;
-use immt_api::utils::settings::{Settings};
-use immt_core::building::formats::{BuildTargetId, SourceFormatId};
-use immt_core::utils::settings::SettingsSpec;
 
 
 static CONTROLLER: std::sync::OnceLock<BaseController> = std::sync::OnceLock::new();

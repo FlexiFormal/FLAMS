@@ -2,8 +2,7 @@ use crate::quickparse::latex::{
     EnvCloseRule, EnvOpenRule, Environment, EnvironmentResult, EnvironmentRule, FromLaTeXToken,
     LaTeXParser, Macro, MacroResult, MacroRule,
 };
-use immt_api::core::utils::sourcerefs::SourceRange;
-use immt_api::core::utils::parse::{ParseSource, ParseStr};
+use immt_utils::{sourcerefs::SourceRange,parsing::{ParseSource, ParseStr}};
 use std::path::Path;
 use immt_api::building::targets::BuildTarget;
 use immt_api::building::tasks::{BuildTask, Dependency, TaskRef};

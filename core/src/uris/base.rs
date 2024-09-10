@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use triomphe::Arc;
+use immt_utils::prelude::triomphe::Arc;
 pub use url::ParseError;
 use crate::ontology::rdf::terms::NamedNode;
 
