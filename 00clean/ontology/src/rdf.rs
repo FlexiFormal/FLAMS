@@ -4,141 +4,139 @@ pub use oxrdf::{
 };
 
 #[macro_export]
-macro_rules! ulo {
+macro_rules! rdft {
     (> ($sub:expr) : $tp:ident) => {
-        ulo!(($crate::rdf::NamedNode::new($sub).unwrap()) : $tp)
+        rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) : $tp)
     };
     (($sub:expr) : $tp:ident) => {
-        ulo!(@TRIPLE $sub; $crate::rdf::ontologies::rdf::TYPE.into_owned(); $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned())
+        rdft!(@TRIPLE $sub; $crate::rdf::ontologies::rdf::TYPE.into_owned(); $crate::rdf::ontologies::ulo2::$tp.into_owned())
     };
     (($sub:expr) : ($tp:expr)) => {
-        ulo!(@TRIPLE $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $tp)
+        rdft!(@TRIPLE $sub; $crate::rdf::ontologies::rdf::TYPE.into_owned(); $tp)
     };
     (>($sub:expr) : $tp:ident Q) => {
-        ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) : $tp Q)
+        rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) : $tp Q)
     };
     (($sub:expr) : $tp:ident Q) => {
-        ulo!(@QUAD $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned())
+        rdft!(@QUAD $sub; $crate::rdf::ontologies::rdf::TYPE.into_owned(); $crate::rdf::ontologies::ulo2::$tp.into_owned())
     };
     (>($sub:expr) : $tp:ident IN $graph:expr) => {
-        ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) : $tp IN $graph)
+        rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) : $tp IN $graph)
     };
     (($sub:expr) : >($tp:expr) IN $graph:expr) => {
-        ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $tp; $graph)
+        rdft!(@QUAD_IN $sub; $crate::rdf::ontologies::rdf::TYPE.into_owned(); $tp; $graph)
     };
     (($sub:expr) : $tp:ident IN $graph:expr) => {
-        ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::rdf::TYPE.into_owned(); $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $graph)
+        rdft!(@QUAD_IN $sub; $crate::rdf::ontologies::rdf::TYPE.into_owned(); $crate::rdf::ontologies::ulo2::$tp.into_owned(); $graph)
     };
     (($sub:expr) !($tp:expr) ($obj:expr) IN $graph:expr) => {
-        ulo!(@QUAD_IN $sub; $tp.into_owned(); $obj; $graph)
+        rdft!(@QUAD_IN $sub; $tp.into_owned(); $obj; $graph)
     };
     (($sub:expr) !($tp:expr) ($obj:expr)) => {
-        ulo!(@TRIPLE $sub; $tp.into_owned(); $obj)
+        rdft!(@TRIPLE $sub; $tp.into_owned(); $obj)
     };
     
     (>($sub:expr) $tp:ident >($obj:expr) Q) => {
-        ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()) Q)
+        rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) $tp ($crate::rdf::NamedNode::new($obj).unwrap()) Q)
     };
     (($sub:expr) $tp:ident >($obj:expr) Q) => {
-        ulo!(($sub) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()) Q)
+        rdft!(($sub) $tp ($crate::rdf::NamedNode::new($obj).unwrap()) Q)
     };
     (>($sub:expr) $tp:ident ($obj:expr) Q) => {
-        ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($obj) Q)
+        rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) $tp ($obj) Q)
     };
     (($sub:expr) $tp:ident ($obj:expr) Q) => {
-        ulo!(@QUAD $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
+        rdft!(@QUAD $sub; $crate::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
     };
     (($sub:expr) $tp:ident ($obj:expr) IN $graph:expr) => {
-        ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj; $graph)
+        rdft!(@QUAD_IN $sub; $crate::rdf::ontologies::ulo2::$tp.into_owned(); $obj; $graph)
     };
     (($sub:expr) $tp:ident >>($obj:expr) IN $graph:expr) => {
-        ulo!(@QUAD_IN $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); >>$obj; $graph)
+        rdft!(@QUAD_IN $sub; $crate::rdf::ontologies::ulo2::$tp.into_owned(); >>$obj; $graph)
     };
     (($sub:expr) $tp:ident >>($obj:expr)) => {
-        ulo!(@TRIPLE $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); >>$obj)
+        rdft!(@TRIPLE $sub; $crate::rdf::ontologies::ulo2::$tp.into_owned(); >>$obj)
     };
     (>>($sub:expr) $tp:ident ($obj:expr) IN $graph:expr) => {
-        ulo!(@QUAD_IN >>$sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj; $graph)
+        rdft!(@QUAD_IN >>$sub; $crate::rdf::ontologies::ulo2::$tp.into_owned(); $obj; $graph)
     };
     (>>($sub:expr) $tp:ident ($obj:expr)) => {
-        ulo!(@TRIPLE >>$sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
+        rdft!(@TRIPLE >>$sub; $crate::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
     };
     (>($sub:expr) $tp:ident >($obj:expr)) => {
-        ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()))
+        rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) $tp ($crate::rdf::NamedNode::new($obj).unwrap()))
     };
     (($sub:expr) $tp:ident >($obj:expr)) => {
-        ulo!(($sub) $tp ($crate::ontology::rdf::terms::NamedNode::new($obj).unwrap()))
+        rdft!(($sub) $tp ($crate::rdf::NamedNode::new($obj).unwrap()))
     };
     (>($sub:expr) $tp:ident ($obj:expr)) => {
-        ulo!(($crate::ontology::rdf::terms::NamedNode::new($sub).unwrap()) $tp ($obj))
+        rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) $tp ($obj))
     };
     (($sub:expr) $tp:ident ($obj:expr)) => {
-        ulo!(@TRIPLE $sub; $crate::ontology::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
+        rdft!(@TRIPLE $sub; $crate::rdf::ontologies::ulo2::$tp.into_owned(); $obj)
     };
     (($sub:expr) ($tp:expr) = ($obj:expr) IN $graph:expr) => {
-        $crate::ontology::rdf::terms::Quad {
-            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+        $crate::rdf::Quad {
+            subject: $crate::rdf::Subject::NamedNode($sub),
             predicate: $tp.into(),
-            object: $crate::ontology::rdf::terms::Term::Literal(
-                $crate::ontology::rdf::terms::Literal::new_simple_literal($obj)
+            object: $crate::rdf::Term::Literal(
+                $crate::rdf::Literal::new_simple_literal($obj)
             ),
-            graph_name: $crate::ontology::rdf::terms::GraphName::NamedNode($graph)
+            graph_name: $crate::rdf::GraphName::NamedNode($graph)
         }
     };
-    
-    
 
     (@TRIPLE >>$sub:expr; $pred:expr; $obj:expr) => {
-        $crate::ontology::rdf::terms::Triple {
+        $crate::rdf::Triple {
             subject: $sub,
             predicate: $pred,
-            object: $crate::ontology::rdf::terms::Term::NamedNode($obj)
+            object: $crate::rdf::Term::NamedNode($obj)
         }
     };
     (@TRIPLE $sub:expr; $pred:expr; >>$obj:expr) => {
-        $crate::ontology::rdf::terms::Triple {
-            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+        $crate::rdf::Triple {
+            subject: $crate::rdf::Subject::NamedNode($sub),
             predicate: $pred,
             object: $obj
         }
     };
     (@TRIPLE $sub:expr; $pred:expr; $obj:expr) => {
-        $crate::ontology::rdf::terms::Triple {
-            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+        $crate::rdf::Triple {
+            subject: $crate::rdf::Subject::NamedNode($sub),
             predicate: $pred,
-            object: $crate::ontology::rdf::terms::Term::NamedNode($obj)
+            object: $crate::rdf::Term::NamedNode($obj)
         }
     };
     (@QUAD $sub:expr; $pred:expr; $obj:expr) => {
-        $crate::ontology::rdf::terms::Quad {
-            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+        $crate::rdf::Quad {
+            subject: $crate::rdf::Subject::NamedNode($sub),
             predicate: $pred,
-            object: $crate::ontology::rdf::terms::Term::NamedNode($obj),
-            graph_name: $crate::ontology::rdf::terms::GraphName::DefaultGraph
+            object: $crate::rdf::Term::NamedNode($obj),
+            graph_name: $crate::rdf::GraphName::DefaultGraph
         }
     };
     (@QUAD_IN $sub:expr; $pred:expr; >>$obj:expr; $graph:expr) => {
-        $crate::ontology::rdf::terms::Quad {
-            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+        $crate::rdf::Quad {
+            subject: $crate::rdf::Subject::NamedNode($sub),
             predicate: $pred,
             object: $obj,
-            graph_name: $crate::ontology::rdf::terms::GraphName::NamedNode($graph)
+            graph_name: $crate::rdf::GraphName::NamedNode($graph)
         }
     };
     (@QUAD_IN >>$sub:expr; $pred:expr; $obj:expr; $graph:expr) => {
-        $crate::ontology::rdf::terms::Quad {
+        $crate::rdf::Quad {
             subject: $sub,
             predicate: $pred,
-            object: $crate::ontology::rdf::terms::Term::NamedNode($obj),
-            graph_name: $crate::ontology::rdf::terms::GraphName::NamedNode($graph)
+            object: $crate::rdf::Term::NamedNode($obj),
+            graph_name: $crate::rdf::GraphName::NamedNode($graph)
         }
     };
     (@QUAD_IN $sub:expr; $pred:expr; $obj:expr; $graph:expr) => {
-        $crate::ontology::rdf::terms::Quad {
-            subject: $crate::ontology::rdf::terms::Subject::NamedNode($sub),
+        $crate::rdf::Quad {
+            subject: $crate::rdf::Subject::NamedNode($sub),
             predicate: $pred,
-            object: $crate::ontology::rdf::terms::Term::NamedNode($obj),
-            graph_name: $crate::ontology::rdf::terms::GraphName::NamedNode($graph)
+            object: $crate::rdf::Term::NamedNode($obj),
+            graph_name: $crate::rdf::GraphName::NamedNode($graph)
         }
     };
 }

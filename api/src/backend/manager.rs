@@ -9,17 +9,17 @@ use immt_core::ontology::archives::{ArchiveGroup, MathArchiveSpec, StorageSpec};
 use immt_core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_core::uris::base::BaseURI;
 use immt_core::utils::ignore_regex::IgnoreSource;
-use immt_utils::prelude::{*,triomphe::Arc};
+use immt_utils::{prelude::*,triomphe::Arc};
 use immt_core::utils::arrayvec;
 use crate::backend::archives::{Archive, MathArchive, Storage};
 use crate::building::targets::SourceFormat;
 use crate::utils::asyncs::{ChangeSender, lock};
 use immt_core::building::buildstate::{BuildState, AllStates};
 use immt_core::narration::{CSS, Document};
-use immt_core::ontology::rdf::terms::Quad;
-use immt_core::ulo;
+use immt_ontology::rdf::Quad;
 use immt_core::uris::DocumentURI;
 use immt_core::utils::filetree::FileChange;
+use immt_ontology::rdft;
 
 #[derive(Clone,Debug)]
 pub enum ArchiveChange{
@@ -215,7 +215,7 @@ impl ArchiveTree {
         }
     }
     fn add_archive(&mut self,uri:ArchiveURI,sender:&ChangeSender<ArchiveChange>,quads:&mut Vec<Quad>) {
-        quads.push(ulo!((uri.to_iri()) : LIBRARY Q));
+        quads.push(rdft!((uri.to_iri()) : LIBRARY Q));
         let id = uri.id();
         if id.is_empty() { return }
         let is_meta = id.is_meta();
@@ -231,7 +231,7 @@ impl ArchiveTree {
                     match &mut curr[i] {
                         ArchiveGroup::Group{has_meta,id,state,..} if steps.len() == 1 && is_meta => {
                             *has_meta = true;
-                            quads.push(ulo!(>(format!("immt://archive-groups#{}",id)) CONTAINS (uri.to_iri()) Q));
+                            quads.push(rdft!(>(format!("immt://archive-groups#{}",id)) CONTAINS (uri.to_iri()) Q));
                             return
                         }
                         ArchiveGroup::Group{children,id,..} => {
@@ -246,16 +246,16 @@ impl ArchiveTree {
                 Err(i) if steps.is_empty() => {
                     curr.insert(i, ArchiveGroup::Archive(uri)); // TODO: add quad
                     if let Some(gr) = &currgroup {
-                        quads.push(ulo!(>(gr) CONTAINS (uri.to_iri()) Q));
+                        quads.push(rdft!(>(gr) CONTAINS (uri.to_iri()) Q));
                     }
                     return
                 }
                 Err(i) => {
                     let has_meta = steps.len() == 1 && is_meta;
                     let joined:Arc<str> = currsteps.join("/").into();
-                    quads.push(ulo!(>(format!("immt://archive-groups#{}",&joined)) : LIBRARY_GROUP Q));
+                    quads.push(rdft!(>(format!("immt://archive-groups#{}",&joined)) : LIBRARY_GROUP Q));
                     if let Some(gr) = &currgroup {
-                        quads.push(ulo!(>(gr) CONTAINS >(format!("immt://archive-groups#{}",&joined)) Q));
+                        quads.push(rdft!(>(gr) CONTAINS >(format!("immt://archive-groups#{}",&joined)) Q));
                     }
                     let group = ArchiveGroup::Group {
                         id: ArchiveId::new(joined.clone()),
@@ -265,7 +265,7 @@ impl ArchiveTree {
                     sender.send(ArchiveChange::NewGroup(group.id().clone()));
                     curr.insert(i, group);
                     if has_meta {
-                        quads.push(ulo!(>(format!("immt://archive-groups#{}",&joined)) CONTAINS (uri.to_iri()) Q));
+                        quads.push(rdft!(>(format!("immt://archive-groups#{}",&joined)) CONTAINS (uri.to_iri()) Q));
                         return
                     }
                     currgroup = Some(format!("immt://archive-groups#{}", joined));

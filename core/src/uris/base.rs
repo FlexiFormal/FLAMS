@@ -1,7 +1,7 @@
 use std::fmt::Display;
-use immt_utils::prelude::triomphe::Arc;
+use immt_utils::triomphe::Arc;
 pub use url::ParseError;
-use crate::ontology::rdf::terms::NamedNode;
+use immt_ontology::rdf::NamedNode;
 
 lazy_static::lazy_static! {
     static ref URIS:Arc<lasso::ThreadedRodeo<lasso::MicroSpur,rustc_hash::FxBuildHasher>> = Arc::new(lasso::ThreadedRodeo::with_hasher(rustc_hash::FxBuildHasher::default()));

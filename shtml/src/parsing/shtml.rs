@@ -7,9 +7,8 @@ use immt_api::backend::Backend;
 use immt_api::backend::manager::ArchiveManager;
 use immt_api::core::content::{Arg, ArgSpec, ArgType, ArrayVec, AssocType, Constant, ContentElement, MathStructure, Module, Morphism, Notation, NotationRef, Term, TermOrList, VarNameOrURI, VarOrSym};
 use immt_api::core::narration::{CognitiveDimension, DocumentElement, DocumentMathStructure, DocumentModule, DocumentMorphism, DocumentReference, Language, LogicalParagraph, NarrativeRef, Problem, Section, SectionLevel, StatementKind, Title};
-use immt_api::core::ontology::rdf::ontologies::{dc, rdfs};
-use immt_api::core::ontology::rdf::terms::{GraphName, NamedNode, Quad, Triple};
-use immt_api::core::ulo;
+use immt_ontology::rdf::ontologies::{dc, rdfs};
+use immt_ontology::rdf::{GraphName, NamedNode, Quad, Triple};
 use immt_api::core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_api::core::uris::base::BaseURI;
 use immt_api::core::uris::documents::DocumentURI;
@@ -17,6 +16,7 @@ use immt_api::core::uris::modules::ModuleURI;
 use immt_api::core::uris::symbols::SymbolURI;
 use immt_utils::{prelude::*,sourcerefs::{ByteOffset, SourceRange}};
 use immt_api::core::uris::{ContentURI, Name, NarrativeURI, NarrDeclURI};
+use immt_ontology::rdft;
 
 macro_rules! iterate {
     ($n:ident $(($($i:ident:$t:ty=$d:expr),+))? $(-> $rest:ident)?, $e:ident => $f:expr;$or:expr) => {
@@ -252,16 +252,16 @@ macro_rules! tags {
                         let iri = uri.to_iri();
                         if kind.is_definition_like(&styles) {
                             for s in fors.iter() {
-                                $slf.add_triple(ulo!((iri.clone()) DEFINES (s.to_iri())));
+                                $slf.add_triple(rdft!((iri.clone()) DEFINES (s.to_iri())));
                             }
                         } else if kind == StatementKind::Example {
                             for s in fors.iter() {
-                                $slf.add_triple(ulo!((iri.clone()) EXAMPLE_FOR (s.to_iri())));
+                                $slf.add_triple(rdft!((iri.clone()) EXAMPLE_FOR (s.to_iri())));
                             }
                         }
-                        $slf.add_triple(ulo!(($slf.iri()) CONTAINS (iri.clone())));
+                        $slf.add_triple(rdft!(($slf.iri()) CONTAINS (iri.clone())));
                         let tp = kind.rdf_type();
-                        $slf.add_triple(ulo!((iri) : (tp.into_owned())));
+                        $slf.add_triple(rdft!((iri) : (tp.into_owned())));
                         $slf.add_doc(DocumentElement::Paragraph(LogicalParagraph {
                             uri,styles,inline,fors:fors.into_iter().map(|u| u.into()).collect(),children,title,kind,
                             range: $node.data.borrow().range,terms
@@ -280,7 +280,7 @@ macro_rules! tags {
                         false
                     }
                     OpenElem::Symref { uri,notation} => {
-                        $slf.add_triple(ulo!(($slf.iri()) CROSSREFS (uri.to_iri())));
+                        $slf.add_triple(rdft!(($slf.iri()) CROSSREFS (uri.to_iri())));
                         $slf.add_doc(DocumentElement::Symref {uri,notation,range:$node.data.borrow().range});
                         true
                     }
@@ -386,10 +386,10 @@ tags!{v,node,parser,attrs,i,rest,
         let Some(Narr {children:narrative_children,uri:NarrativeURI::Decl(narr_uri),..}) = parser.narratives.pop() else {unreachable!()};
         let Some(Content {children:content_children,uri:module_uri,iri}) = parser.contents.pop() else {unreachable!()};
         parser.add_triple(
-            ulo!((parser.iri()) CONTAINS (iri.clone()))
+            rdft!((parser.iri()) CONTAINS (iri.clone()))
         );
         parser.add_triple(
-            ulo!((iri) : THEORY)
+            rdft!((iri) : THEORY)
         );
         let dm = DocumentElement::Module(DocumentModule {
             uri:narr_uri,module_uri,
@@ -427,10 +427,10 @@ tags!{v,node,parser,attrs,i,rest,
         let Some(Narr {children:narrative_children,uri:NarrativeURI::Decl(narr_uri),..}) = parser.narratives.pop() else {unreachable!()};
         let Some(Content {children:content_children,uri:module_uri,iri}) = parser.contents.pop() else {unreachable!()};
         parser.add_triple(
-            ulo!((parser.iri()) CONTAINS (iri.clone()))
+            rdft!((parser.iri()) CONTAINS (iri.clone()))
         );
         parser.add_triple(
-            ulo!((iri) : STRUCTURE)
+            rdft!((iri) : STRUCTURE)
         );
         let dm = DocumentElement::MathStructure(DocumentMathStructure {
             uri:narr_uri,module_uri,
@@ -466,10 +466,10 @@ tags!{v,node,parser,attrs,i,rest,
         let Some(Narr {children:narrative_children,uri:NarrativeURI::Decl(narr_uri),..}) = parser.narratives.pop() else {unreachable!()};
         let Some(Content {children:content_children,uri:module_uri,iri}) = parser.contents.pop() else {unreachable!()};
         parser.add_triple(
-            ulo!((parser.iri()) CONTAINS (iri.clone()))
+            rdft!((parser.iri()) CONTAINS (iri.clone()))
         );
-        parser.add_triple(ulo!((iri.clone()) : MORPHISM));
-        parser.add_triple(ulo!((iri) !(rdfs::DOMAIN) (domain.to_iri()) ));
+        parser.add_triple(rdft!((iri.clone()) : MORPHISM));
+        parser.add_triple(rdft!((iri) !(rdfs::DOMAIN) (domain.to_iri()) ));
         let dm = DocumentElement::Morphism(DocumentMorphism {
             uri:narr_uri,content_uri:module_uri,
             range: node.data.borrow().range,
@@ -508,9 +508,9 @@ tags!{v,node,parser,attrs,i,rest,
     } => {
         let Some(Narr {children,uri:NarrativeURI::Decl(uri),iri,..}) = parser.narratives.pop() else {unreachable!()};
         parser.add_triple(
-            ulo!((parser.iri()) CONTAINS (iri.clone()))
+            rdft!((parser.iri()) CONTAINS (iri.clone()))
         );
-        parser.add_triple(ulo!((iri) : SECTION));
+        parser.add_triple(rdft!((iri) : SECTION));
         parser.add_doc(DocumentElement::Section(Section {
             level,title,children,range:node.data.borrow().range,uri
         }));
@@ -543,30 +543,30 @@ tags!{v,node,parser,attrs,i,rest,
         })
     } => {
         let Some(Narr {children,uri:NarrativeURI::Decl(uri),iri,..}) = parser.narratives.pop() else {unreachable!()};
-        parser.add_triple(ulo!((parser.iri()) CONTAINS (iri.clone())));
-        parser.add_triple(ulo!((iri.clone()) : PROBLEM));
+        parser.add_triple(rdft!((parser.iri()) CONTAINS (iri.clone())));
+        parser.add_triple(rdft!((iri.clone()) : PROBLEM));
         for (d,s) in &preconditions {
-            let n = immt_api::core::ontology::rdf::terms::BlankNode::default();
+            let n = immt_ontology::rdf::BlankNode::default();
             parser.add_triple(
-                ulo!((iri.clone()) PRECONDITION >>(immt_api::core::ontology::rdf::terms::Term::BlankNode(n.clone())))
+                rdft!((iri.clone()) PRECONDITION >>(immt_ontology::rdf::Term::BlankNode(n.clone())))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
             );
         }
         for (d,s) in &objectives {
-            let n = immt_api::core::ontology::rdf::terms::BlankNode::default();
+            let n = immt_ontology::rdf::BlankNode::default();
             parser.add_triple(
-                ulo!((iri.clone()) OBJECTIVE >>(immt_api::core::ontology::rdf::terms::Term::BlankNode(n.clone())))
+                rdft!((iri.clone()) OBJECTIVE >>(immt_ontology::rdf::Term::BlankNode(n.clone())))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
             );
         }
         parser.add_doc(DocumentElement::Problem(Problem {
@@ -598,30 +598,30 @@ tags!{v,node,parser,attrs,i,rest,
         })
     } => {
         let Some(Narr {children,uri:NarrativeURI::Decl(uri),iri,..}) = parser.narratives.pop() else {unreachable!()};
-        parser.add_triple(ulo!((parser.iri()) CONTAINS (iri.clone())));
-        parser.add_triple(ulo!((iri.clone()) : SUBPROBLEM));
+        parser.add_triple(rdft!((parser.iri()) CONTAINS (iri.clone())));
+        parser.add_triple(rdft!((iri.clone()) : SUBPROBLEM));
         for (d,s) in &preconditions {
-            let n = immt_api::core::ontology::rdf::terms::BlankNode::default();
+            let n = immt_ontology::rdf::BlankNode::default();
             parser.add_triple(
-                ulo!((iri.clone()) PRECONDITION >>(immt_api::core::ontology::rdf::terms::Term::BlankNode(n.clone())))
+                rdft!((iri.clone()) PRECONDITION >>(immt_ontology::rdf::Term::BlankNode(n.clone())))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
             );
         }
         for (d,s) in &objectives {
-            let n = immt_api::core::ontology::rdf::terms::BlankNode::default();
+            let n = immt_ontology::rdf::BlankNode::default();
             parser.add_triple(
-                ulo!((iri.clone()) OBJECTIVE >>(immt_api::core::ontology::rdf::terms::Term::BlankNode(n.clone())))
+                rdft!((iri.clone()) OBJECTIVE >>(immt_ontology::rdf::Term::BlankNode(n.clone())))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) COGDIM (d.to_iri().into_owned()))
             );
             parser.add_triple(
-                ulo!(>>(immt_api::core::ontology::rdf::terms::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
+                rdft!(>>(immt_ontology::rdf::Subject::BlankNode(n.clone())) POSYMBOL (s.to_iri()))
             );
         }
         parser.add_doc(DocumentElement::Problem(Problem {
@@ -722,10 +722,10 @@ tags!{v,node,parser,attrs,i,rest,
     } => {
         let iri = uri.to_iri();
         parser.add_triple(
-            ulo!((parser.content_iri()) DECLARES (iri.clone()))
+            rdft!((parser.content_iri()) DECLARES (iri.clone()))
         );
         parser.add_triple(
-            ulo!((iri) : DECLARATION)
+            rdft!((iri) : DECLARATION)
         );
         parser.add_content(ContentElement::Constant(Constant {
             uri:uri.clone(),arity,macroname,role,tp,df,assoctype,reordering
@@ -821,13 +821,13 @@ tags!{v,node,parser,attrs,i,rest,
         parser.in_notation = false;
         let iri = uri.to_iri();
         parser.add_triple(
-            ulo!((parser.content_iri()) DECLARES (iri.clone()))
+            rdft!((parser.content_iri()) DECLARES (iri.clone()))
         );
         parser.add_triple(
-            ulo!((iri.clone()) NOTATION_FOR (symbol.to_iri()))
+            rdft!((iri.clone()) NOTATION_FOR (symbol.to_iri()))
         );
         parser.add_triple(
-            ulo!((iri) : NOTATION)
+            rdft!((iri) : NOTATION)
         );
         if let Some(n) = comp {
             let nt = n.as_notation(uri.name(),op,precedence,argprecs);
@@ -871,8 +871,10 @@ tags!{v,node,parser,attrs,i,rest,
     } => {
         fn get_node(node:&NodeWithSource) -> NodeWithSource {
             match node.node.as_element().map(|e| e.name.local.as_ref()) {
-                Some(p) if (p == "math"|| p == "mrow") && node.data.borrow().children.len() ==1 =>
-                    get_node(&node.data.borrow().children[0]),
+                Some(p) if (p == "math"|| p == "mrow") && node.data.borrow().children.len() ==1
+                && node.data.borrow().children.first().unwrap().node.as_element().is_some() => {
+                    get_node(&node.data.borrow().children[0])
+                }
                 _ => node.clone()
             }
         }
@@ -1143,7 +1145,7 @@ tags!{v,node,parser,attrs,i,rest,
         add!(-OpenElem::Importmodule{uri})
     } => {
         //println!("Here: {uri}");
-        parser.add_triple(ulo!((parser.content_iri()) IMPORTS (uri.to_iri())));
+        parser.add_triple(rdft!((parser.content_iri()) IMPORTS (uri.to_iri())));
         parser.add_content(ContentElement::Import(uri));
         parser.add_doc(DocumentElement::ImportModule(uri));
         false
@@ -1154,7 +1156,7 @@ tags!{v,node,parser,attrs,i,rest,
         };
         add!(-OpenElem::Usemodule{uri})
     } => {
-        parser.add_triple(ulo!((parser.iri()) !(dc::REQUIRES) (uri.to_iri())));
+        parser.add_triple(rdft!((parser.iri()) !(dc::REQUIRES) (uri.to_iri())));
         parser.add_doc(DocumentElement::UseModule(uri));
         false
     };
@@ -1172,7 +1174,7 @@ tags!{v,node,parser,attrs,i,rest,
         })
     } => {
         let range = {node.data.borrow().range};
-        parser.add_triple(ulo!((parser.iri()) !(dc::HAS_PART) (target.to_iri())));
+        parser.add_triple(rdft!((parser.iri()) !(dc::HAS_PART) (target.to_iri())));
         parser.add_doc(DocumentElement::InputRef(DocumentReference {
             id,target,range
         }));true

@@ -10,9 +10,9 @@ use immt_api::building::targets::{BuildDataFormat, BuildTarget, SourceFormat};
 pub use immt_api::controller::{Controller};
 use immt_api::extensions::{ExtensionId, FormatExtension, MMTExtension};
 use immt_api::utils::asyncs::{background, ChangeListener};
-use immt_core::ontology::rdf::terms::NamedNode;
+use immt_ontology::rdf::NamedNode;
 use immt_core::utils::logs::LogFileLine;
-use immt_utils::prelude::triomphe::Arc;
+use immt_utils::triomphe::Arc;
 use immt_shtml::SHTMLExtension;
 use crate::logging::LogStore;
 

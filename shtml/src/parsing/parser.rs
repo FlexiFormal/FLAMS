@@ -13,9 +13,9 @@ use immt_api::core::uris::documents::DocumentURI;
 use kuchikiki::{ElementData, NodeRef};
 use tendril::{SliceExt, TendrilSink};
 use immt_api::backend::Backend;
-use immt_api::core::ontology::rdf::terms::Quad;
-use immt_api::core::ulo;
+use immt_ontology::rdf::Quad;
 use immt_api::core::uris::{ModuleURI, Name, NarrativeURI, NarrDeclURI, SymbolURI};
+use immt_ontology::rdft;
 use immt_utils::{prelude::*,sourcerefs::{ByteOffset, SourceRange}};
 use crate::docs::OpenTerm;
 use crate::parsing::shtml::OpenElem;
@@ -128,6 +128,7 @@ impl NodeWithSource {
                 let s = e.node.to_string();
                 (s,attribute_index,is_text)
             } else {
+                println!("HERE! {}",e.node.to_string());
                 todo!()
             }
         );
@@ -365,7 +366,7 @@ impl NodeWithSource {
 pub(crate) struct Narr {
     pub(crate) uri: NarrativeURI,
     pub(crate) children:Vec<DocumentElement>,
-    pub(crate) iri:immt_api::core::ontology::rdf::terms::NamedNode,
+    pub(crate) iri:immt_ontology::rdf::NamedNode,
     pub(crate) vars:Vec<(NarrDeclURI,bool)>
 }
 impl Narr {
@@ -380,7 +381,7 @@ impl Narr {
 pub(crate) struct Content {
     pub(crate) uri: ModuleURI,
     pub(crate) children:Vec<ContentElement>,
-    pub(crate) iri:immt_api::core::ontology::rdf::terms::NamedNode
+    pub(crate) iri:immt_ontology::rdf::NamedNode
 }
 impl Content {
     pub fn new(uri:ModuleURI) -> Self {
@@ -451,13 +452,13 @@ impl std::fmt::Debug for HTMLParser<'_> {
 
 impl<'a> HTMLParser<'a> {
     pub fn new(input: &'a str, path: &'a Path, uri: DocumentURI, backend:&'a Backend,strip:bool) -> Self {
-        use immt_api::core::ontology::rdf::ontologies::*;
+        use immt_ontology::rdf::ontologies::*;
         let doc = NodeWithSource::new(NodeRef::new_document(),0,ArrayVec::default());
         let iri = uri.to_iri();
         let triples = vec![
-            ulo!((iri.clone()) (dc::LANGUAGE) = (uri.language().to_string()) IN iri.clone()),
-            ulo!( (iri.clone()) : DOCUMENT IN iri.clone()),
-            ulo!((uri.archive().to_iri()) CONTAINS (iri.clone()) IN iri.clone())
+            rdft!((iri.clone()) (dc::LANGUAGE) = (uri.language().to_string()) IN iri.clone()),
+            rdft!( (iri.clone()) : DOCUMENT IN iri.clone()),
+            rdft!((uri.archive().to_iri()) CONTAINS (iri.clone()) IN iri.clone())
         ];
         HTMLParser {
             backend,

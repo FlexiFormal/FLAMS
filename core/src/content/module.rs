@@ -1,7 +1,6 @@
-use oxrdf::Quad;
-use immt_utils::prelude::triomphe::Arc;
+use immt_ontology::rdf::Quad;
+use immt_utils::triomphe::Arc;
 use crate::narration::{DocumentElement, Language};
-use crate::ulo;
 use crate::uris::documents::{DocumentURI, NarrativeURI};
 use crate::uris::modules::ModuleURI;
 use crate::uris::Name;

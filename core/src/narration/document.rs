@@ -5,13 +5,13 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use arrayvec::ArrayVec;
-use oxrdf::{BlankNode, NamedNodeRef, Quad};
+use immt_ontology::rdf::{BlankNode, NamedNodeRef, Quad};
 use crate::content::{ArgSpec, AssocType, ContentElement, Module, Notation, Term, VarNameOrURI};
-use crate::{SemanticElement, ulo};
+use crate::{SemanticElement};
 use crate::uris::{ContentURI, Name, NarrDeclURI};
 use crate::uris::modules::ModuleURI;
 use crate::uris::symbols::SymbolURI;
-use immt_utils::{prelude::*,sourcerefs::{ByteOffset, SourceRange}};
+use immt_utils::{prelude::*,triomphe,sourcerefs::{ByteOffset, SourceRange}};
 use crate::utils::{NestedDisplay, NestingFormatter};
 
 #[derive(Debug, Clone)]
@@ -620,7 +620,7 @@ impl StatementKind {
         }
     }
     pub fn rdf_type(&self) -> NamedNodeRef {
-        use crate::ontology::rdf::ontologies::*;
+        use immt_ontology::rdf::ontologies::*;
         match self {
             StatementKind::Definition => ulo2::DEFINITION,
             StatementKind::Assertion => ulo2::PROPOSITION,

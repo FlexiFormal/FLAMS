@@ -9,7 +9,7 @@ use immt_core::narration::{Document, FullDocument};
 use immt_core::uris::archives::{ArchiveId, ArchiveURI};
 use immt_core::uris::documents::DocumentURI;
 use immt_core::uris::modules::ModuleURI;
-use immt_utils::prelude::triomphe;
+use immt_utils::triomphe;
 use crate::backend::archives::{Archive, Storage};
 use crate::building::targets::BuildDataFormat;
 use crate::controller::Controller;

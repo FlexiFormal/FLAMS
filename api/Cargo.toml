@@ -23,6 +23,7 @@ oxigraph = ["dep:oxigraph"]
 [dependencies]
 immt-utils = {workspace=true,features=["serde"]}
 immt-core = {workspace=true,features=["serde","async","rayon"]}
+immt-ontology = {workspace=true,features=["rdf"]}
 
 simple-home-dir = "0.3"
 lazy_static = "1"

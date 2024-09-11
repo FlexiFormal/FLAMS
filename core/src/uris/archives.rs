@@ -2,9 +2,9 @@ use std::fmt::Display;
 use std::num::NonZeroU16;
 use std::ops::{BitAnd, Div};
 use std::str::FromStr;
-use immt_utils::prelude::triomphe::Arc;
+use immt_utils::triomphe::Arc;
 use crate::uris::base::BaseURI;
-use crate::ontology::rdf::terms::NamedNode;
+use immt_ontology::rdf::NamedNode;
 use crate::uris::Name;
 
 lazy_static::lazy_static! {

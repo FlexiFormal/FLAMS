@@ -1,7 +1,6 @@
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
-use oxrdf::NamedNode;
-use crate::uris::archives::ArchiveURI;
+use immt_ontology::rdf::NamedNode;
 use crate::uris::modules::{ModuleURI};
 use crate::uris::Name;
 

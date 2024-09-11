@@ -6,12 +6,12 @@ use spargebra::term::{NamedNodePattern, TermPattern, TriplePattern};
 use tokio::io::AsyncReadExt;
 use immt_core::content::{ContentElement, ContentElemRef, MathStructure, Module, ModuleLike, Notation, OF_TYPE, Term, TermDisplay, VarNameOrURI};
 use immt_core::narration::{CSS, DocData, DocElemRef, DocumentElement, FullDocument, LogicalParagraph, NarrativeRef};
-use immt_core::ontology::rdf::ontologies::{rdf, ulo2};
+use immt_ontology::rdf::ontologies::{rdf, ulo2};
 use immt_core::uris::{ArchiveId, DocumentURI, ModuleURI, Name, SymbolURI};
 use crate::backend::archives::Archive;
 use crate::backend::manager::ArchiveManager;
 use crate::backend::relational::RelationalManager;
-use immt_utils::prelude::{*,triomphe::Arc};
+use immt_utils::{triomphe::Arc,prelude::*};
 
 pub mod archives;
 pub mod manager;
@@ -214,7 +214,7 @@ impl Backend  {
         ).flatten()
     }
     pub fn get_notations(&self,sym:SymbolURI) -> impl Iterator<Item=(ModuleURI,Notation)> + '_ {
-        use immt_core::ontology::rdf::ontologies::*;
+        use immt_ontology::rdf::ontologies::*;
         use spargebra::term::*;
         //println!("Notations for {sym}");
         let s = sym.to_iri();

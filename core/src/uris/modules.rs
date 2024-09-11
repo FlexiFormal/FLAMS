@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::ops::{BitAnd, Div, Neg, Not};
 use std::str::FromStr;
-use oxrdf::NamedNode;
+use immt_ontology::rdf::NamedNode;
 use crate::narration::Language;
 use crate::uris::archives::{ArchiveURI};
 use crate::uris::Name;

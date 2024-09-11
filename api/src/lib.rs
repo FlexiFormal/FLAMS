@@ -20,7 +20,7 @@ pub mod utils {
     use std::ffi::OsStr;
     use std::path::Path;
     use lazy_static::lazy_static;
-    use immt_utils::prelude::triomphe::Arc;
+    use immt_utils::triomphe::Arc;
 
     pub mod asyncs;
     pub mod circular_buffer;

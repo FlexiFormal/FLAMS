@@ -7,7 +7,7 @@ use oxigraph::sparql::{Query, QueryResults};
 use oxrdfio::RdfFormat;
 use tracing::instrument;
 use immt_core::narration::Language;
-use immt_core::ontology::rdf::terms::{NamedNode, Quad, Subject, Term, Triple};
+use immt_ontology::rdf::{NamedNode, Quad, Subject, Term, Triple};
 use immt_core::uris::{DocumentURI, NarrDeclURI, PathURI, SymbolURI};
 use crate::backend::archives::{Archive, Storage};
 use crate::backend::manager::ArchiveManager;
@@ -311,7 +311,7 @@ impl RelationalManager {
 impl Default for RelationalManager {
     fn default() -> Self {
         let store = oxigraph::store::Store::new().unwrap();
-        store.bulk_loader().load_quads(immt_core::ontology::rdf::ontologies::ulo2::QUADS.iter().copied())
+        store.bulk_loader().load_quads(immt_ontology::rdf::ontologies::ulo2::QUADS.iter().copied())
             .unwrap();
         Self { store }
     }

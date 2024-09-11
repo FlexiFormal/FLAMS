@@ -1,7 +1,8 @@
 use std::str::FromStr;
 use immt_api::core::content::{ArgType, ArrayVec, FIELD_PROJECTION, OF_TYPE, Term, TermOrList, VarNameOrURI, VarOrSym};
-use immt_api::core::{OMA, OMS,ulo};
+use immt_api::core::{OMA, OMS};
 use immt_api::core::uris::{ContentURI, Name};
+use immt_ontology::rdft;
 use crate::parsing::parser::HTMLParser;
 
 #[derive(Debug)]
@@ -34,7 +35,7 @@ impl OpenTerm {
         //println!("  - Closing term {self:?}");
         match self {
             Self::Symref {uri,..} => {
-                parser.add_triple(ulo!((parser.iri()) CROSSREFS (uri.to_iri())));
+                parser.add_triple(rdft!((parser.iri()) CROSSREFS (uri.to_iri())));
                 Term::OMID(uri)
             },
             Self::OMV {name:VarNameOrURI::Name(name),..} => {
@@ -44,7 +45,7 @@ impl OpenTerm {
             Self::OMV {name:name@VarNameOrURI::URI(_),..} => Term::OMV(name),
             Self::OMA { head: mut uri,mut args,head_term,..} => {
                 if let VarOrSym::S(uri) = uri {
-                    parser.add_triple(ulo!((parser.iri()) CROSSREFS (uri.to_iri())));
+                    parser.add_triple(rdft!((parser.iri()) CROSSREFS (uri.to_iri())));
                 }
                 match uri {
                     VarOrSym::V(VarNameOrURI::Name(n)) => {
@@ -113,7 +114,7 @@ impl OpenTerm {
             },
             Self::OMBIND { head: mut uri,args,head_term,..} => {
                 if let VarOrSym::S(uri) = uri {
-                    parser.add_triple(ulo!((parser.iri()) CROSSREFS (uri.to_iri())));
+                    parser.add_triple(rdft!((parser.iri()) CROSSREFS (uri.to_iri())));
                 }
                 if let VarOrSym::V(VarNameOrURI::Name(n)) = uri {
                     uri = VarOrSym::V(parser.resolve_variable(n));

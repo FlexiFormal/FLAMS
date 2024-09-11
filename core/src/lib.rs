@@ -1,10 +1,7 @@
-#![recursion_limit = "256"]
-
 pub mod prelude {
     pub use crate::utils::filetree::{DirLike};
 }
 pub mod ontology {
-    pub mod rdf;
     pub mod archives;
 }
 

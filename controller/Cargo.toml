@@ -23,6 +23,7 @@ tracing-error = "0.2"
 immt-api = { workspace=true,features=["oxigraph"] }
 immt-core = { workspace=true,features=["serde"] }
 immt-utils = { workspace=true,features=["serde"] }
+immt-ontology = { workspace=true,features=["rdf"] }
 immt-shtml = { workspace=true }
 immt-stex = {workspace=true }
 
