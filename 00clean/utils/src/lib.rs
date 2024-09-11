@@ -11,5 +11,5 @@ pub mod prelude {
     pub use super::vecmap::{VecMap,VecSet};
     pub type HMap<K,V> = rustc_hash::FxHashMap<K,V>;
     pub type HSet<V> = rustc_hash::FxHashSet<V>;
-    //pub use crate::treelike::TreeLike;
+    pub use crate::treelike::*;
 }
