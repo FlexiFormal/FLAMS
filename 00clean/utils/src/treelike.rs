@@ -12,6 +12,9 @@ pub trait TreeLike{
     fn dfs(&self) -> DFSIter<Self::Child> {
         self.children().dfs()
     }
+    fn dfs_with_close<S,OnClose:FnMut(S)>(&self,close:OnClose) -> DFSIterWithState<Self::Child,S,OnClose> {
+        self.children().dfs_with_close(close)
+    }
     fn bfs(&self) -> BFSIter<Self::Child> {
         self.children().bfs()
     }
@@ -21,6 +24,13 @@ pub trait TreeChildIter<'a,Child:TreeChild<RefIter<'a>=Self>+'a> where Self:Size
         DFSIter {
             stack: Vec::new(),
             current: self
+        }
+    }
+    fn dfs_with_close<S,OnClose:FnMut(S)>(self,close:OnClose) -> DFSIterWithState<'a,Child,S,OnClose> {
+        DFSIterWithState {
+            stack: Vec::new(),
+            current: (DFSIterStateSetter(std::rc::Rc::new(std::cell::RefCell::new(None))),self),
+            close
         }
     }
     fn bfs(self) -> BFSIter<'a,Child> {
@@ -45,7 +55,6 @@ impl<'a,T: TreeChild> DFSIter<'a,T> {
             Some(c)
         } else {None}
     }
-
 }
 impl<'a,T:TreeChild+'a> Iterator for DFSIter<'a,T> {
     type Item = T::Item<'a>;
@@ -59,6 +68,50 @@ impl<'a,T:TreeChild+'a> Iterator for DFSIter<'a,T> {
         })
     }
 }
+
+
+pub struct DFSIterStateSetter<S>(std::rc::Rc<std::cell::RefCell<Option<S>>>);
+impl<S> DFSIterStateSetter<S> {
+    pub fn set(self,s:S) {
+        self.0.borrow_mut().replace(s);
+    }
+    fn new() -> (Self,Self) {
+        let i = std::rc::Rc::new(std::cell::RefCell::new(None));
+        (Self(i.clone()),Self(i))
+    }
+}
+pub struct DFSIterWithState<'a,T:TreeChild+'a,S,OnCLose:FnMut(S)> {
+    stack: Vec<(DFSIterStateSetter<S>,T::RefIter<'a>)>,
+    current: (DFSIterStateSetter<S>,T::RefIter<'a>),
+    close:OnCLose
+}
+impl<'a,T:TreeChild+'a,S,OnCLose:FnMut(S)> DFSIterWithState<'a,T,S,OnCLose> {
+    fn i_next(&mut self) -> Option<<Self as Iterator>::Item> {
+        if let Some(c) = self.current.1.next() {
+            let (r,s) = DFSIterStateSetter::new();
+            if let Some(children) = T::children(&c) {
+                self.stack.push(std::mem::replace(&mut self.current,(r,children)));
+            }
+            Some((c,s))
+        } else {None}
+    }
+}
+
+impl<'a,T:TreeChild+'a,S,OnCLose:FnMut(S)> Iterator for DFSIterWithState<'a,T,S,OnCLose> {
+    type Item = (T::Item<'a>,DFSIterStateSetter<S>);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.i_next().or_else(|| {
+            while let Some(next) = self.stack.pop() {
+                let (old,_) = std::mem::replace(&mut self.current,next);
+                if let Some(s) = old.0.take() { (self.close)(s); }
+                if let Some(c) = self.i_next() { return Some(c); }
+            }
+            None
+        })
+    }
+}
+
+
 pub struct BFSIter<'a,T:TreeChild+'a> {
     stack: VecDeque<T::RefIter<'a>>,
     current: T::RefIter<'a>
