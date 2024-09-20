@@ -4,6 +4,29 @@ pub use oxrdf::{
 };
 
 #[macro_export]
+macro_rules! triple {
+    (<($sub:expr)> $($tt:tt)*) => {
+        triple!(@PRED $crate::rdf::Subject::NamedNode($sub); $($tt)*)
+    };
+
+    (@PRED $sub:expr;ulo:$pred:ident $($tt:tt)*) => {
+        triple!(@OBJ $sub;$crate::rdf::ontologies::ulo2::$pred.into_owned(); $($tt)*)
+    };
+
+    (@OBJ $sub:expr;$pred:expr; <($obj:expr)> $($tt:tt)*) => {
+        triple!(@MAYBEQUAD $sub;$pred;$crate::rdf::Term::NamedNode($obj); $($tt)*)
+    };
+
+    (@MAYBEQUAD $sub:expr;$pred:expr;$obj:expr;) => {
+        $crate::rdf::Triple {
+            subject: $sub,
+            predicate: $pred,
+            object: $obj
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! rdft {
     (> ($sub:expr) : $tp:ident) => {
         rdft!(($crate::rdf::NamedNode::new($sub).unwrap()) : $tp)

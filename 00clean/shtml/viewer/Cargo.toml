@@ -1,0 +1,24 @@
+[package]
+name = "shtml-viewer"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+shtml-viewer-components = {workspace=true,features = ["csr"]}
+immt-web-utils = {workspace=true,features=["csr"]}
+leptos-dyn-dom = {workspace=true,features = ["csr"]}
+leptos = {workspace=true,features = ["nightly","csr"]}
+#reactive_graph = {workspace=true}
+wee_alloc = {workspace=true}
+wasm-bindgen = {workspace=true}
+console_error_panic_hook = {workspace=true}
+thaw = {workspace=true}
+tracing-wasm = {workspace=true}
+tracing = {workspace=true,features=["release_max_level_info"]}
+
+
+[lints]
+workspace = true

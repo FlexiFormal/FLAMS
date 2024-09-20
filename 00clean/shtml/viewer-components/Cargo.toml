@@ -1,0 +1,30 @@
+[package]
+name = "shtml-viewer-components"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+rdf = ["immt-ontology/rdf","shtml-extraction/rdf"]
+csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
+hydrate= ["leptos-dyn-dom/hydrate","leptos/hydrate"]
+ssr = ["leptos/ssr","rdf"]
+
+[dependencies]
+leptos-dyn-dom = {workspace=true}
+leptos = {workspace=true,features = ["nightly"]}
+thaw = {workspace=true}
+shtml-extraction = {workspace=true}
+immt-ontology = {workspace=true}
+immt-utils = {workspace=true,features=["serde"]}
+smallvec = {workspace=true}
+tracing = {workspace=true}
+lazy_static = {workspace=true}
+immt-web-utils = {workspace=true}
+urlencoding = {workspace=true}
+send_wrapper = {workspace=true}
+
+# csr
+reqwasm = {workspace=true,optional=true}
+
+[lints]
+workspace = true

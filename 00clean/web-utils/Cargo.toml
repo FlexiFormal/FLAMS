@@ -1,0 +1,22 @@
+[package]
+name = "immt-web-utils"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+csr = ["leptos/csr", "thaw/csr"]
+ssr = ["leptos/ssr", "thaw/ssr"]
+hydrate = ["leptos/hydrate", "thaw/hydrate"]
+
+[dependencies]
+leptos-dyn-dom = {workspace=true}
+leptos = {workspace=true,features = ["nightly"]}
+leptos_meta = {workspace=true}
+thaw = {workspace=true}
+thaw_utils = {workspace=true}
+thaw_components = {workspace=true}
+immt-utils = {workspace=true}
+
+
+[lints]
+workspace = true

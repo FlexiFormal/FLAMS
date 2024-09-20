@@ -27,7 +27,7 @@ tracing-subscriber = "0.3"
 
 [dependencies]
 immt-utils = {workspace=true}
-immt-ontology = {workspace=true, features = ["rdf"]}
+immt-ontology = {workspace=true, features = ["rdf","serde"]}
 
 url = { version="2.5" }
 regex = "1.10"

@@ -1,5 +1,5 @@
 use html5ever::Attribute;
-use crate::docs::{OpenTerm};
+use crate::docs::OpenTerm;
 use crate::parsing::parser::{Content, HTMLParser, Narr, NodeWithSource, OpenElems};
 use std::str::FromStr;
 use immt_api::backend::archives::{Archive, Storage};
@@ -450,7 +450,7 @@ tags!{v,node,parser,attrs,i,rest,
     };
 
     Morphism(domain:ModuleURI,total:bool) = "shtml:feature-morphism": 250 {
-        let uri = if let Some(uri) = get_mod_uri(v,parser.backend,parser.uri().language()) {uri} else {
+        let uri = if let Some(uri) = get_sym_uri_as_mod(v,parser.backend,parser.uri().language()) {uri} else {
             todo!("HERE: {v}");
         };
         let domain = get!("shtml:domain",s => if let Some(d) = get_mod_uri(s,parser.backend,parser.uri().language()) {d} else {
@@ -1451,6 +1451,7 @@ fn split_old(archives:&[Archive],p:&str,len:usize) -> Option<(ArchiveURI,usize)>
 
 
 fn get_doc_uri(s: &str,archives:&Backend) -> Option<DocumentURI> {
+    let s = s.strip_suffix(".tex").unwrap_or(s);
     let (p,mut m) = s.rsplit_once('/')?;
     let (a,l) = split(&archives.all_archives(),p)?;
     let mut path = if l < p.len() {&p[l..]} else {""};
@@ -1491,6 +1492,21 @@ fn get_sym_uri(s: &str,archives:&Backend,lang:Language) -> Option<SymbolURI> {
     };
     let m = get_mod_uri(m,archives,lang)?;
     Some(SymbolURI::new(m,s))
+}
+fn get_sym_uri_as_mod(s: &str,archives:&Backend,lang:Language) -> Option<ModuleURI> {
+    let (m,s) = match s.split_once('[') {
+        Some((m,s)) => {
+            let (m,_) = m.rsplit_once('?')?;
+            let (a,b) = s.rsplit_once(']')?;
+            let am = get_mod_uri(a,archives,lang)?;
+            let n = am.name() / b;
+            let m = get_mod_uri(m,archives,lang)?;
+            return Some(m/n)
+        }
+        None => s.rsplit_once('?')?
+    };
+    let m = get_mod_uri(m,archives,lang)?;
+    Some(m / Name::new(s))
 }
 
 fn replace_id(s:&str) -> String {

@@ -1,7 +1,12 @@
 [workspace]
-members = ["api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm", "00clean/utils", "00clean/ontology"]
+members = [
+  "api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm", 
+  "00clean/utils", "00clean/ontology", "00clean/shtml/viewer", "00clean/shtml/viewer-components", "00clean/web-utils", "00clean/shtml/extraction"
+  ]
 resolver = "2"
-exclude = ["web/graphs","test-plugin","tests","thaw"]
+exclude = ["web/graphs","test-plugin","tests","thaw",
+  #"api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm"
+]
 
 [profile.release]
 opt-level = 2
@@ -48,6 +53,11 @@ unwrap_used = "deny"
 # immt
 immt-utils = { path = "00clean/utils",version="0.0.1" }
 immt-ontology = { path = "00clean/ontology",version="0.0.1" }
+immt-web-utils = { path = "00clean/web-utils",version="0.0.1" }
+# shtml-viewer = { path = "00clean/shtml/viewer",version="0.0.1" }
+shtml-extraction = { path = "00clean/shtml/extraction",version="0.0.1" }
+shtml-viewer-components = { path = "00clean/shtml/viewer-components",version="0.0.1" }
+
 immt-core = { path = "core",version="0.0.1" }
 immt-api = { path = "api",version="0.0.1" }
 immt-controller = { path = "controller",version="0.0.1" }
@@ -62,10 +72,35 @@ parking_lot = "0.12"
 serde = { version = "1", features = ["derive"] }
 rustc-hash = "2"
 chrono = "0.4"
-
 oxrdf = "0.2.0-rc.1"
+smallvec = { version="2.0.0-alpha.7",features = ["specialization"] }
+lazy_static = "1.5"
+url = "2"
+either = "1"
+const_format = "0.2"
+paste = "1"
+tracing = "0.1"
+urlencoding = "2.1"
+send_wrapper = "0.6.0"
 
+# leptos
+leptos = { version = "0.7.0-beta5", features=["nightly"]}
+leptos_axum = "0.7.0-beta5"
+leptos_meta= "0.7.0-beta5"
+leptos_router = { version = "0.7.0-beta5", features=["nightly"]}
+thaw = { version="0.4.0-beta3",features=["nightly"] }
+thaw_components = "0.2.0-beta3"
+thaw_utils = "0.1.0-beta3"
 
+# wasm
+tracing-wasm = "0.2"
+wasm-bindgen = "0.2"
+wee_alloc = "*"
+console_error_panic_hook = "0.1.7"
+reqwasm = "0.5"
+
+leptos-dyn-dom = { path="../leptos_dyn_dom"}
+#leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
 #RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
@@ -127,9 +162,6 @@ lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_
 # https://github.com/h33p/cglue/tree/main/examples
 
 # https://crisal.io/words/2020/02/28/C++-rust-ffi-patterns-1-complex-data-structures.html
-
-
-# nais: https://crates.io/crates/triomphe
 
 
 # prolly not:

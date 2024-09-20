@@ -23,7 +23,8 @@
 
 .immt-menu {
     border-right: var(--strokeWidthThickest) double var(--colorNeutralStroke1);
-    min-width: fit-content;
+    min-width: 120px !important;
+    width:120px;
     height: 100%;
 }
 

@@ -12,6 +12,7 @@ parking_lot = {workspace=true}
 serde = {workspace=true,optional=true}
 rustc-hash = {workspace=true}
 chrono = {workspace=true}
+smallvec={workspace=true}
 
 [lints]
 workspace = true

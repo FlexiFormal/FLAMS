@@ -1,0 +1,19 @@
+[package]
+name = "shtml-extraction"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+rdf = ["immt-ontology/rdf"]
+
+[dependencies]
+smallvec = {workspace=true}
+immt-ontology = {workspace=true}
+const_format = {workspace=true}
+paste = {workspace=true}
+tracing = {workspace=true}
+lazy_static = {workspace=true}
+either = {workspace=true}
+
+[lints]
+workspace = true

@@ -5,9 +5,20 @@ edition = "2021"
 
 [features]
 rdf = ["dep:oxrdf"]
+serde = ["dep:serde","immt-utils/serde"]
 
 [dependencies]
 oxrdf = {workspace=true,optional=true}
+immt-utils = {workspace=true}
+lazy_static = {workspace=true}
+triomphe = {workspace=true}
+parking_lot = {workspace=true}
+smallvec = {workspace=true}
+serde = {workspace=true,optional=true}
+url = {workspace=true}
+either = {workspace=true}
+const_format = {workspace=true}
+paste = {workspace=true}
 
 [lints]
 workspace = true

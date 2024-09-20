@@ -191,6 +191,10 @@ pub mod server {
                 handler(request).in_current_span().await.into_response()
             }.in_current_span()}))
             .fallback(self::file_and_error_handler)
+            .layer(tower_http::cors::CorsLayer::new()
+                .allow_methods([http::Method::GET, http::Method::POST])
+                .allow_origin(tower_http::cors::Any)
+            )
             .layer(auth_service)
             .layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(MySpan(span)));
         let app : Router<()> = app.with_state(AppState {leptos_options,db});
