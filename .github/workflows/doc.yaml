@@ -25,10 +25,10 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
       - name: rustups
-        run: rustup update && rustup target add x86_64-unknown-linux-gnu && rustup toolchain install nightly-x86_64-unknown-linux-gnu
+        run: rustup update && rustup target add x86_64-unknown-linux-gnu && rustup toolchain install nightly-x86_64-unknown-linux-gnu && cargo install make
       # Runs a single command using the runners shell
       - name: docs
-        run: cargo doc --workspace --no-deps --features=ssr --release --document-private-items
+        run: cargo make db && cargo make doc
       - name: Remove lock file
         run: rm target/doc/.lock
       - name: Upload Docs
