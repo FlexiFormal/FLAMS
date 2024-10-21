@@ -292,7 +292,7 @@ impl SourceDir {
                 unreachable!("{relative_path} does not start with {topstr}???")
             };
             #[cfg(target_os = "windows")]
-            let relative_path = relative_path.replace(PATH_SEPARATOR, "/");
+            let relative_path: Arc<str> = relative_path.replace(PATH_SEPARATOR, "/").to_string().into();
             #[cfg(not(target_os = "windows"))]
             let relative_path: Arc<str> = relative_path.to_string().into();
             let states = FileState::from(top, &metadata, &relative_path, *format);
