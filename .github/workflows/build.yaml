@@ -86,4 +86,57 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mac_aarch64
-          path: out
+          path: bin
+  release:
+    needs: [linux,windows,mac_aarch64]
+    runs-on: ubuntu-20.04
+    environment: production
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v2
+        with:
+          name: linux
+          path: ./linux
+      - uses: actions/download-artifact@v2
+        with:
+          name: windows
+          path: ./windows
+      - uses: actions/download-artifact@v2
+        with:
+          name: mac_aarch64
+          path: ./mac
+      - uses: vimtor/action-zip@v1
+        with:
+          files: linux/
+          dest: linux.zip
+      - uses: vimtor/action-zip@v1
+        with:
+          files: windows/
+          dest: windows.zip
+      - uses: vimtor/action-zip@v1
+        with:
+          files: mac/
+          dest: mac.zip
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: main
+          files: |
+            ./linux.zip
+            ./windows.zip
+            ./mac.zip
+  deploy-docs:
+    needs: linux
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4 
