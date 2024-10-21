@@ -93,15 +93,15 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: linux
           path: ./linux
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: windows
           path: ./windows
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: mac_aarch64
           path: ./mac
