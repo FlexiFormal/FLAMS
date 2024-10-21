@@ -22,6 +22,7 @@ impl Language {
     pub const SEPARATOR: char = 'l';
     #[inline]
     fn check(s: &str) -> Self {
+        if s.len() < 3 { return Self::default()}
         match &s[s.len() - 3..] {
             ".en" => Self::English,
             ".de" => Self::German,
