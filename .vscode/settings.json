@@ -1,0 +1,9 @@
+{
+  "rust-analyzer.runnables.extraEnv": {
+    "DATABASE_URL":"sqlite:./main/migrations/users.sqlite?mode=rwc"
+  },
+  "rust-analyzer.cargo.features": [
+    "ssr" //"hydrate"//
+  ], // "all"
+  "search.useIgnoreFiles": false 
+}

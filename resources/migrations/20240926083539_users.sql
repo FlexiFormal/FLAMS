@@ -1,0 +1,7 @@
+-- Add migration script here
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  username VARCHAR(255) UNIQUE NOT NULL,
+  pass_hash VARCHAR(255) NOT NULL,
+  salt VARCHAR(255) NOT NULL
+);

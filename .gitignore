@@ -4,7 +4,13 @@ oxigraph
 reedline-repl-rs
 reedline
 tracing-indicatif
-app/**
-leptos/**
-config/**
+/bin/**
+/old/**
 /settings.toml
+/resources/migrations/users.sqlite
+/resources/assets/shtml*
+/.idea
+/.sqlx
+/.vscode/launch.json
+/source/shtml/viewer/ts
+/source/shtml/viewer/pkg

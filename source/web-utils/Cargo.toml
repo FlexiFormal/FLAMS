@@ -1,0 +1,29 @@
+[package]
+name = "immt-web-utils"
+version = "0.0.1"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[features]
+csr = ["leptos/csr", "thaw/csr"]
+ssr = ["leptos/ssr", "thaw/ssr"]
+hydrate = ["leptos/hydrate", "thaw/hydrate","dep:gloo-storage"]
+
+[dependencies]
+leptos-dyn-dom = {workspace=true}
+leptos = {workspace=true,features = ["nightly"]}
+leptos_meta = {workspace=true}
+thaw = {workspace=true}
+thaw_utils = {workspace=true}
+thaw_components = {workspace=true}
+immt-utils = {workspace=true,features=["serde"]}
+serde = {workspace=true}
+gloo-storage = {workspace=true,optional=true}
+
+
+
+tachys = {version="=0.1.0-beta5"}
+reactive_graph = {version="=0.1.0-beta5"}
+leptos_macro = {version="=0.7.0-beta5"}

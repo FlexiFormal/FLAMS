@@ -1,0 +1,32 @@
+[package]
+name = "immt-utils"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+serde = ["dep:serde"]
+rayon = ["dep:rayon","dep:spliter"]
+async = ["dep:async-broadcast"]
+tokio = ["dep:tokio"]
+
+[dev-dependencies]
+tracing-subscriber = {workspace=true}
+
+[dependencies]
+triomphe = {workspace=true}
+parking_lot = {workspace=true}
+rustc-hash = {workspace=true}
+chrono = {workspace=true}
+smallvec={workspace=true}
+tracing={workspace=true}
+inventory = {workspace=true}
+paste = {workspace=true}
+
+async-broadcast={workspace=true,optional=true}
+rayon={workspace=true,optional=true}
+spliter={workspace=true,optional=true}
+serde = {workspace=true,optional=true}
+tokio = {workspace=true,optional=true,features=["io-util"]}
+
+[lints]
+workspace = true

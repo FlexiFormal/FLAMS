@@ -1,0 +1,117 @@
+[package]
+name = "immt"
+version = "0.0.1"
+edition = "2021"
+description = "iMᴍᴛ - Generic knowledge management system for flexiformal knowledge"
+
+[lib]
+crate-type = ["cdylib","rlib"]
+
+#[[bin]]
+#name = "immt"
+
+[features]
+ssr = [
+  "dep:immt-system", 
+  "dep:immt-stex",
+  "dep:immt-shtml",
+  "dep:tokio", 
+  "dep:toml", 
+  "dep:color-eyre", 
+  "dep:clap",
+  "dep:sqlx",
+  "dep:libsqlite3-sys",
+  "leptos/ssr",
+  "leptos_meta/ssr",
+  "leptos_router/ssr",
+  "dep:leptos_axum",
+  "thaw/ssr",
+  "dep:axum",
+  "dep:axum-macros",
+  "dep:tower",
+  "dep:tower-http",
+  "dep:tower-sessions",
+  "dep:axum-login",
+  "dep:async-trait",
+  "dep:password-hash",
+  "dep:argon2",
+  "dep:http",
+  "immt-web-utils/ssr",
+  "shtml-viewer-components/ssr",
+
+]
+hydrate = [
+  "dep:console_error_panic_hook",
+  "leptos/hydrate",
+  "thaw/hydrate",
+  "dep:wasm-bindgen",
+  "tracing/release_max_level_info",
+  "dep:tracing-wasm",
+  "immt-web-utils/hydrate",
+  "leptos-dyn-dom/hydrate",
+  "shtml-viewer-components/hydrate",
+]
+
+[dev-dependencies]
+#rstest = "0.21"
+#tracing-subscriber = "0.3"
+
+[lints]
+workspace = true
+
+[dependencies]
+
+# common
+leptos = {workspace=true}
+leptos_meta = {workspace=true}
+leptos_router = {workspace=true}
+thaw = {workspace=true}
+serde = {workspace=true}
+serde_json = {workspace=true}
+tracing = {workspace=true}
+immt-web-utils = {workspace=true}
+icondata_bi = {workspace=true}
+icondata_ai = {workspace=true}
+immt-utils = {workspace=true,features=["serde"]}
+immt-ontology = {workspace=true,features=["serde"]}
+either = {workspace = true}
+const-str = {workspace = true}
+shtml-viewer-components = {workspace = true}
+leptos-dyn-dom = {workspace = true}
+
+# ssr
+immt-system = {workspace=true,features=["tokio"],optional=true}
+immt-stex = {workspace=true,optional=true}
+immt-shtml = {workspace=true,optional=true}
+tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}
+toml = {workspace = true,optional=true}
+color-eyre = {workspace = true,optional=true}
+clap = {workspace = true,optional=true}
+leptos_axum = {workspace=true,optional=true}
+
+sqlx = {workspace=true,optional = true}
+libsqlite3-sys = {workspace = true,optional=true}
+
+axum = {workspace=true,optional=true}
+axum-macros = {workspace=true,optional = true}
+tower = {workspace = true,optional = true}
+tower-http = {workspace = true,optional = true}
+tower-sessions = {workspace = true,optional = true}
+axum-login = {workspace = true,optional = true}
+async-trait = {workspace=true,optional=true}
+http = {workspace=true,optional=true}
+
+password-hash = {workspace=true,optional=true}
+argon2 = {workspace=true,optional=true}
+
+#hydrate
+console_error_panic_hook = {workspace = true,optional=true}
+wasm-bindgen = {workspace = true,optional=true}
+tracing-wasm = {workspace = true,optional = true}
+
+
+
+
+tachys = {version="=0.1.0-beta5"}
+reactive_graph = {version="=0.1.0-beta5"}
+leptos_macro = {version="=0.7.0-beta5"}

@@ -11,41 +11,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: rustups
-        run: rustup target add x86_64-unknown-linux-gnu && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-unknown-linux-gnu && rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+        run: rustup update && rustup target add x86_64-unknown-linux-gnu && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-unknown-linux-gnu && rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - name: cargo
-        run: cargo install cargo-leptos #&& cargo install --locked trunk
+        run: cargo install --force cargo-make #&& cargo install --locked trunk
       - name: main
-        run: LEPTOS_WASM_OPT_VERSION=version_119 LEPTOS_SASS_VERSION=1.71.0 cargo leptos build --release
-      - name: bundle
-        run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
-      - uses: actions/upload-artifact@v4
+        run: cargo make
+      - name: ts
+        run: cd source/shtml/viewer && cargo make wasm-pack-ts
+      - name: doc
+        run: cargo make doc
+      - name: Add redirect
+        run: echo '<meta http-equiv="refresh" content="0;url=aoc/index.html">' > target/doc/index.html
+      - name: Remove lock file
+        run: rm target/doc/.lock
+      - name: Upload Docs
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/doc
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: out
+          path: bin
+      - name: Upload Typescript
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts
+          path: source/shtml/viewer/ts
   windows:
     runs-on: windows-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
       - name: rustups
-        run: rustup target add x86_64-pc-windows-msvc && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-pc-windows-msvc && rustup component add rust-src --toolchain nightly-x86_64-pc-windows-msvc && rustup default nightly-x86_64-pc-windows-msvc
+        run: rustup update && rustup target add x86_64-pc-windows-msvc && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-pc-windows-msvc && rustup component add rust-src --toolchain nightly-x86_64-pc-windows-msvc && rustup default nightly-x86_64-pc-windows-msvc
       - name: cargo
-        run: cargo install cargo-leptos # && cargo install --locked trunk
-      - name: envvars1
-        run: echo "RUSTFLAGS=--cfg=web_sys_unstable_apis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "LEPTOS_WASM_OPT_VERSION=version_119" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append && echo "LEPTOS_SASS_VERSION=1.71.0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "CARGO_BUILD_TARGET=x86_64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append # && echo "IMMT_BUILD_GRAPHS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: windows fix
-        run: cargo build --release --bin=immt --no-default-features --features=server
-      - name: windows fix 2
-        run: Move-Item -Path target\x86_64-pc-windows-msvc\release\immt.exe -Destination target\release\immt.exe
-        continue-on-error: true
+        run: cargo install --force cargo-make
       - name: main
-        run: cargo leptos build --release
-      - name: bundle
-        run: md out && Move-Item -Path target\release\immt.exe -Destination out\immt.exe &&  Move-Item -Path target\web -Destination out\web && Move-Item -Path main\resources\settings.toml -Destination out\settings.toml
-      - uses: actions/upload-artifact@v4
+        run: cargo make
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: out
+          path: bin
 #  mac_x86:
 #    runs-on: macos-14-large
 #    environment: production
@@ -71,14 +79,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: rustups
-        run: rustup target add aarch64-apple-darwin && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-aarch64-apple-darwin && rustup component add rust-src --toolchain nightly-aarch64-apple-darwin && rustup default nightly-aarch64-apple-darwin
+        run: rustup update && rustup target add aarch64-apple-darwin && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-aarch64-apple-darwin && rustup component add rust-src --toolchain nightly-aarch64-apple-darwin && rustup default nightly-aarch64-apple-darwin
       - name: cargo
-        run: cargo install cargo-leptos # && cargo install --locked trunk
+        run: cargo install --force cargo-make
       - name: main
-        run: LEPTOS_WASM_OPT_VERSION=version_119 LEPTOS_SASS_VERSION=1.71.0 cargo leptos build --release
-      - name: bundle
-        run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
-      - uses: actions/upload-artifact@v4
+        run: cargo make
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v4
         with:
           name: mac_aarch64
           path: out

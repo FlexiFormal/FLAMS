@@ -1,0 +1,41 @@
+[package]
+name = "shtml-viewer-components"
+version = "0.0.1"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[features]
+inline-js = []
+rdf = ["immt-ontology/rdf","shtml-extraction/rdf"]
+csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
+hydrate= ["inline-js","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
+ssr = ["leptos/ssr","rdf","immt-web-utils/ssr"]
+
+[dependencies]
+leptos-dyn-dom = {workspace=true}
+leptos = {workspace=true,features = ["nightly"]}
+thaw = {workspace=true}
+shtml-extraction = {workspace=true}
+immt-ontology = {workspace=true,features=["serde"]}
+immt-utils = {workspace=true}
+smallvec = {workspace=true}
+tracing = {workspace=true}
+lazy_static = {workspace=true}
+immt-web-utils = {workspace=true}
+urlencoding = {workspace=true}
+send_wrapper = {workspace=true}
+wasm-bindgen = {workspace=true}
+serde = {workspace = true}
+
+# csr
+reqwasm = {workspace=true,optional=true}
+
+
+
+
+
+tachys = {version="=0.1.0-beta5"}
+reactive_graph = {version="=0.1.0-beta5"}
+leptos_macro = {version="=0.7.0-beta5"}

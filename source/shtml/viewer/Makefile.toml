@@ -1,0 +1,69 @@
+[tasks.wasm-pack]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build","--target","no-modules","--out-name","shtml"]
+
+[tasks.wasm-pack-ts]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build","--out-dir","ts","--","--features","ts"]
+
+
+[tasks.wasm-pack-dev]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build","--target","no-modules","--dev"]
+
+
+[tasks.update-js]
+env = { "CARGO_MAKE_RUST_SCRIPT_PROVIDER" = "rust-script" }
+script_runner = "@rust"
+script = '''
+use std::{io::Write, path::PathBuf};
+fn main() {
+    let old_js_file = PathBuf::from(".").join("pkg").join("shtml.js");
+    let js_file = old_js_file.clone(); //PathBuf::from(".").join("pkg").join("shtml.js");
+    let jv = std::fs::read_to_string(&old_js_file).unwrap();
+    std::fs::File::create(js_file).unwrap().write_all(format!(r#"{jv}
+const {{ run, set_server_url }} = wasm_bindgen;
+
+function hasShtmlAttribute(node) {{
+    const attributes = node.attributes;
+    for (let i = 0; i < attributes.length; i++) {{
+        if (attributes[i].name.startsWith('shtml:')) {{
+            return true;
+        }}
+    }}
+    return false;
+}}
+
+var PRIVATE__do_shtml_on_start = () => {{}};
+function shtml_on_start(f) {{
+    let old = PRIVATE__do_shtml_on_start;
+    PRIVATE__do_shtml_on_start = () => {{
+        old();
+        f();
+    }};
+}}
+
+async function shtml_start() {{
+    await wasm_bindgen();
+    PRIVATE__do_shtml_on_start();
+}}
+shtml_start();
+    "#).as_bytes()).unwrap();
+}
+'''
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
+
+[tasks.build]
+dependencies = ["wasm-pack","update-js"]
+
+[tasks.build-dev]
+dependencies = ["wasm-pack-dev","update-js"]
+
+[tasks.default]
+alias = "build"

@@ -1,0 +1,96 @@
+[env]
+DATABASE_URL="sqlite:./resources/migrations/users.sqlite?mode=rwc"
+LEPTOS_WASM_OPT_VERSION="version_119"
+LEPTOS_SASS_VERSION="1.71.0"
+RUSTDOCFLAGS="--enable-index-page -Zunstable-options --generate-link-to-definition"
+
+[tasks.db-create]
+workspace = false
+install_crate = "sqlx-cli"
+command = "cargo"
+args = ["sqlx","database","create"]
+
+[tasks.db-migrate]
+workspace = false
+install_crate = "sqlx-cli"
+command = "cargo"
+args = ["sqlx","migrate","run","--source","resources/migrations"]
+
+[tasks.db-setup]
+workspace = false
+install_crate = "sqlx-cli"
+command = "cargo"
+args = ["sqlx","prepare","--workspace","--","--features=ssr","--package=immt"]
+
+[tasks.db]
+workspace = false
+dependencies = ["db-create","db-migrate","db-setup"]
+
+[tasks.leptos-release]
+workspace = false
+install_crate = "cargo-leptos"
+command = "cargo"
+args = ["leptos","build","--release"]
+
+[tasks.doc]
+workspace = false
+command = "cargo"
+args = ["doc","--workspace","--no-deps","--features=ssr","--release","--document-private-items"]
+
+[tasks.copy-to-bin]
+workspace = false
+script_runner = "@rust"
+script = '''
+use std::path::Path;
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            std::fs::copy(&entry.path(), &dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+fn main() {
+  let _ = std::fs::remove_dir_all(Path::new("./bin"));
+  std::fs::create_dir_all(Path::new("./bin")).unwrap();
+  copy_dir_all(&Path::new("./target/web"),&Path::new("./bin/web")).unwrap();
+  std::fs::copy(Path::new("./resources/settings.toml"),Path::new("./bin/settings.toml")).unwrap();
+  #[cfg(target_os="windows")]
+  {
+    let main_file = Path::new("./target/x86_64-pc-windows-msvc/release/immt.exe");
+    if main_file.exists() {
+      std::fs::copy(main_file,Path::new("./bin/immt.exe")).unwrap();
+    } else {
+      std::fs::copy(Path::new("./target/release/immt.exe"),Path::new("./bin/immt.exe")).unwrap();
+    }
+    return
+  }
+  std::fs::copy(Path::new("./target/release/immt"),Path::new("./bin/immt")).unwrap();
+}
+'''
+
+
+[tasks.build-viewer]
+workspace = false
+cwd = "./source/shtml/viewer"
+command = "cargo"
+args = ["make"]
+
+[tasks.copy-viewer]
+workspace = false
+dependencies = ["build-viewer"]
+script_runner = "@shell"
+script = '''cp ./source/shtml/viewer/pkg/shtml.js ./resources/assets/shtml.js && cp ./source/shtml/viewer/pkg/shtml_bg.wasm ./resources/assets/shtml_bg.wasm'''
+
+[tasks.all-release]
+workspace = false
+dependencies = ["build-viewer","copy-viewer","db","leptos-release","copy-to-bin"]
+
+[tasks.default]
+workspace = false
+alias = "all-release"

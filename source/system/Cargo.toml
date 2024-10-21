@@ -1,0 +1,44 @@
+[package]
+name = "immt-system"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+tokio = ["dep:tokio","immt-utils/tokio","immt-ontology/tokio"]
+
+
+[dev-dependencies]
+tracing-subscriber = {workspace=true}
+
+[dependencies]
+immt-utils = {workspace=true, features=["rayon","async","serde"]}
+immt-ontology = {workspace=true, features = ["rdf","serde"]}
+
+tracing = {workspace=true}
+tracing-subscriber = {workspace=true}
+tracing-appender = {workspace=true}
+tracing-error = {workspace=true}
+
+rayon = {workspace=true}
+spliter={workspace=true}
+walkdir = {workspace=true}
+regex = {workspace=true}
+either = {workspace=true}
+parking_lot = {workspace=true}
+smallvec = {workspace = true}
+const_format = {workspace=true}
+lazy_static = {workspace=true}
+simple-home-dir = {workspace=true}
+tokio = {workspace=true,features=["rt","io-util"],optional=true}
+chrono = {workspace=true}
+
+oxigraph = { workspace=true }
+spargebra = { workspace=true,features=["rdf-star"] }
+sparesults = {workspace=true,features=["rdf-star"]}
+oxrdfio = { workspace=true }
+
+serde = {workspace=true}
+bincode = {workspace=true}
+
+[lints]
+workspace = true

@@ -1,0 +1,26 @@
+[package]
+name = "immt-ontology"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+rdf = ["dep:oxrdf"]
+tokio = ["dep:tokio"]
+serde = ["dep:serde","immt-utils/serde","smallvec/serde"]
+
+[dependencies]
+oxrdf = {workspace=true,optional=true}
+immt-utils = {workspace=true}
+lazy_static = {workspace=true}
+triomphe = {workspace=true}
+parking_lot = {workspace=true}
+smallvec = {workspace=true}
+serde = {workspace=true,optional=true}
+url = {workspace=true}
+either = {workspace=true}
+const_format = {workspace=true}
+paste = {workspace=true}
+tokio = {workspace=true,optional=true,features=["io-util"]}
+
+[lints]
+workspace = true

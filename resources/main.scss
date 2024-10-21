@@ -1,0 +1,50 @@
+/*
+@import "./components/treeview";
+@import "./components/loglist";
+*/
+
+.immt-main {
+    height:calc(100vh - 67px);
+    top:67px!important;
+}
+
+.immt-header {
+    width:100vw;
+    height: 67px;
+    text-align: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    .thaw-grid-item {
+      align-content: center;
+    }
+}
+
+.immt-menu {
+    border-right: var(--strokeWidthThickest) double var(--colorNeutralStroke1);
+    min-width: 120px !important;
+    width:120px;
+    height: 100%;
+}
+
+.immt-menu-inner {
+    width:120px;
+}
+
+body { margin: 0}
+
+.immt-inline-badge {
+    width:1em;
+    height:1em;
+    font-size: smaller;
+}
+
+.immt-user-menu-trigger{
+    width:fit-content;
+    margin-left:auto;
+} 
+.immt-user-menu {
+    position:absolute !important;
+    right:0
+}
