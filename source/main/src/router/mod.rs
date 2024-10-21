@@ -1,10 +1,10 @@
 #![allow(clippy::must_use_candidate)]
 
 mod dashboard;
-pub(crate) mod content;
-mod settings;
-mod backend;
-mod query;
+pub mod content;
+pub mod settings;
+pub mod backend;
+pub mod query;
 pub(crate) mod buildqueue;
 pub(crate) mod logging;
 
