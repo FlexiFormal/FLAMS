@@ -127,9 +127,7 @@ jobs:
           dest: ts.zip
       - uses: vimtor/action-zip@v1
         with:
-          files: |
-            linux/web/shtml.js
-            linux/web/shtml_bg.wasm
+          files: ./linux/web/shtml.js ./linux/web/shtml_bg.wasm
           dest: shtml.zip
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:

@@ -31,7 +31,7 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
   inject_css("shtml-comp", r"
 .shtml-comp {
   /* -webkit-text-stroke: 0.04ex cyan */
-  color:mediumblue;
+  color:dodgerblue;
 }
 .shtml-var-comp {
   color:gray;

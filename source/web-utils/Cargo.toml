@@ -21,6 +21,7 @@ thaw_components = {workspace=true}
 immt-utils = {workspace=true,features=["serde"]}
 serde = {workspace=true}
 gloo-storage = {workspace=true,optional=true}
+send_wrapper = {workspace=true}
 
 
 

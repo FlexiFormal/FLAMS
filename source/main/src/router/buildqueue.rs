@@ -115,15 +115,16 @@ fn idle(id:NonZeroU32,ls:RwSignal<Vec<Entry>>) -> impl IntoView {
 }
 
 fn running(queue:RunningQueue) -> impl IntoView {
-  use thaw::{AnchorLink,Anchor,Layout};
+  use immt_web_utils::components::{AnchorLink,Anchor,Header};
+  use thaw::Layout;
   let RunningQueue {running,queue,blocked,failed,done,eta} = queue;
   view!{
     <div style="position:fixed;right:20px;z-index:5"><Anchor>
-        <AnchorLink title="Running" href="#running"/>
-        <AnchorLink title="Queued" href="#queued"/>
-        <AnchorLink title="Blocked" href="#blocked"/>
-        <AnchorLink title="Failed" href="#failed"/>
-        <AnchorLink title="Finished" href="#finished"/>
+        <AnchorLink href="#running"><Header slot>"Running"</Header></AnchorLink>
+        <AnchorLink href="#queued"><Header slot>"Queued"</Header></AnchorLink>
+        <AnchorLink href="#blocked"><Header slot>"Blocked"</Header></AnchorLink>
+        <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
+        <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
     </Anchor></div>
     <Layout content_style="text-align:left;">
         {eta.into_view()}
