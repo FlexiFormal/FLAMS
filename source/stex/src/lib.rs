@@ -27,7 +27,7 @@ fn pdflatex_first(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   let Either::Left(path) = task.source() else {
     return BuildResult {
       log:Either::Left("Needs a physical file".to_string()),
-      result:Err(())
+      result:Err(Vec::new())
     }
   };
   latex::clean(path);
@@ -44,7 +44,7 @@ fn pdflatex_first(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   } else {
     BuildResult {
       log:Either::Right(log),
-      result:Err(())
+      result:Err(Vec::new())
     }
   }
 }
@@ -59,7 +59,7 @@ fn pdflatex_second(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   let Either::Left(path) = task.source() else {
     return BuildResult {
       log:Either::Left("Needs a physical file".to_string()),
-      result:Err(())
+      result:Err(Vec::new())
     }
   };
   let log = path.with_extension("log");
@@ -75,7 +75,7 @@ fn pdflatex_second(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   } else {
     BuildResult {
       log:Either::Right(log),
-      result:Err(())
+      result:Err(Vec::new())
     }
   }
 }
@@ -91,7 +91,7 @@ fn rustex(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   let Either::Left(path) = task.source() else {
     return BuildResult {
       log:Either::Left("Needs a physical file".to_string()),
-      result:Err(())
+      result:Err(Vec::new())
     }
   };
   let out = path.with_extension("rlog");
@@ -108,11 +108,14 @@ fn rustex(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   match ret {
     Err(_) => BuildResult {
       log:Either::Right(out),
-      result:Err(())
+      result:Err(Vec::new())
     },
-    Ok(s) => BuildResult {
-      log:Either::Right(out),
-      result:Ok(HTMLString::create(s))
+    Ok(s) => {
+      latex::clean(path);
+      BuildResult {
+        log:Either::Right(out),
+        result:Ok(HTMLString::create(s))
+      }
     }
   }
 }

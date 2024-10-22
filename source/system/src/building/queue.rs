@@ -155,7 +155,7 @@ impl Queue {
     let QueueState::Running(ref mut state) = &mut *lock else {unreachable!()};
 
     match result {
-      Err(()) => {
+      Err(_deps) => { // TODO: handle dependencies
         self.0.backend.with_archive(task.archive().archive_id(), |a| {
           let Some(a) = a else {return};
           a.save(task.rel_path(), log, target,None);

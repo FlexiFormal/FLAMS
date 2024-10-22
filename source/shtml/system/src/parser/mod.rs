@@ -139,13 +139,13 @@ impl TreeSink for HTMLParser<'_> {
     if !errors.is_empty() {
       return BuildResult {
         log:Either::Left(errors),
-        result:Err(())
+        result:Err(Vec::new())
       }
     }
     let Ok((uri,elems,modules)) = state.take() else {
       return BuildResult {
         log:Either::Left("Unbalanced sHTML document".to_string()),
-        result:Err(())
+        result:Err(Vec::new())
       }
     };
     

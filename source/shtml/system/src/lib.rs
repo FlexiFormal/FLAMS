@@ -30,7 +30,7 @@ fn extract(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
     let Some(a) = a else {return Err(BuildResult::err())};
     a.load(task.rel_path()).map_err(|e| BuildResult {
       log:Either::Left(format!("Error loading html data for {}/{}",task.archive().archive_id(),task.rel_path())),
-      result:Err(())
+      result:Err(Vec::new())
     })
   });
   let html = match html {

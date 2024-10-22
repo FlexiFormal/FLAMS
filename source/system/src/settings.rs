@@ -1,3 +1,5 @@
+#![allow(clippy::ref_option)]
+
 use std::{
     fmt::Debug,
     path::{Path, PathBuf},
@@ -103,7 +105,6 @@ impl From<SettingsSpec> for Settings {
         }
     }
 }
-
 
 lazy_static! {
     static ref MATHHUB_PATHS: Box<[Box<Path>]> = mathhubs().into();

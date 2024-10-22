@@ -164,7 +164,7 @@ pub enum BuildResultArtifact {
 
 pub struct BuildResult {
     pub log: Either<String,PathBuf>,
-    pub result: Result<BuildResultArtifact,()>
+    pub result: Result<BuildResultArtifact,Vec<Dependency>>
 }
 impl BuildResult {
     #[must_use]
@@ -178,7 +178,7 @@ impl BuildResult {
     pub const fn err() -> Self {
         Self {
             log:Either::Left(String::new()),
-            result:Err(())
+            result:Err(Vec::new())
         }
     }
 }
