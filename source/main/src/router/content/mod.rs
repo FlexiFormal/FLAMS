@@ -24,7 +24,7 @@ pub async fn document(
   p:Option<String>,
   l:Option<Language>,
   d:Option<String>
-) -> Result<(Vec<CSS>, String),ServerFnError<String>> {
+) -> Result<(DocumentURI,Vec<CSS>, String),ServerFnError<String>> {
   let Result::<DocURIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
@@ -35,7 +35,7 @@ pub async fn document(
     return Err("document not found".to_string().into())
   };
   let html = format!("<div{}</div>",doc.strip_prefix("<body").and_then(|s| s.strip_suffix("</body>")).unwrap_or(""));
-  Ok((css,html))
+  Ok((uri,css,html))
 }
 
 #[server(
@@ -122,7 +122,7 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
   use leptos_dyn_dom::DomStringCont;
   let doccl = doc.clone();
   from_server_clone(false,
-    move || doc.clone().into_args(document), |(css,html)| view!{<div>{
+    move || doc.clone().into_args(document), |(uri,css,html)| view!{<div>{
       for css in css { do_css(css); }
       let r = Resource::new(|| (),move |()| doccl.clone().into_args(toc));
       let toc_signal = RwSignal::new(None);
@@ -132,9 +132,11 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
         }
       });
 
-      view!{<SHTMLDocument>
+      let on_load = RwSignal::new(false);
+
+      view!{<SHTMLDocument uri on_load>
         <Toc toc=toc_signal/>
-        <DomStringCont html cont=shtml_viewer_components::iterate/>
+        <DomStringCont html on_load cont=shtml_viewer_components::iterate/>
         </SHTMLDocument>}
     }</div>})
 }

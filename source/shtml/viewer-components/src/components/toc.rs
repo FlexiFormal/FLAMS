@@ -73,7 +73,7 @@ pub fn Toc(toc:RwSignal<Option<(Vec<CSS>,Vec<TOCElem>)>>) -> impl IntoView {
     for css in css { do_css(css); }
     leptos::logging::log!("toc: {toc:?}");
     Some(view!{
-      <div style="position:fixed;right:20px;z-index:5;"><Scrollbar style="max-height: 400px;"><Anchor>{
+      <div style="position:fixed;right:20px;z-index:5;background-color:var(--colorNeutralBackground1);"><Scrollbar style="max-height: 400px;"><Anchor>{
         toc.into_iter().map(TOCElem::into_view).collect_view()
       }</Anchor></Scrollbar></div>
     })

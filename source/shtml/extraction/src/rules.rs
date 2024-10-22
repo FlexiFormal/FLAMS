@@ -262,7 +262,7 @@ pub mod rules {
         pub(crate) fn section<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let lvl = err!(extractor,attrs.get_section_level(Self::Section));
             let id = attrs.get_id(extractor,Cow::Borrowed("section"));
-            let uri = extractor.get_narrative_uri().owned() & &*id;
+            let uri = extractor.get_narrative_uri() & &*id;
             extractor.open_section(uri.clone());
             Some(OpenSHTMLElement::Section { lvl, uri })
         }
@@ -288,7 +288,7 @@ pub mod rules {
 
         fn do_paragraph<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,kind:ParagraphKind) -> Option<OpenSHTMLElement> {
             let id = attrs.get_id(extractor,Cow::Borrowed(kind.as_str()));
-            let uri = extractor.get_narrative_uri().owned() & &*id;
+            let uri = extractor.get_narrative_uri() & &*id;
             let inline = attrs.get_bool(Self::Inline);
             let mut fors = Vec::new();
             if let Some(f) = attrs.get(Self::Fors) {
@@ -320,7 +320,7 @@ pub mod rules {
                 |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
             )).unwrap_or_default();
             let id = attrs.get_id(extractor,Cow::Borrowed("exercise"));
-            let uri = extractor.get_narrative_uri().owned() & &*id;
+            let uri = extractor.get_narrative_uri() & &*id;
             let _ = attrs.take_language(Self::Language);
             let autogradable = attrs.get_bool(Self::Autogradable);
             let points = attrs.get(Self::ProblemPoints)
@@ -371,7 +371,7 @@ pub mod rules {
             let macroname = attrs.get(Self::Macroname).map(|s| Into::<String>::into(s).into_boxed_str());
             let bind = attrs.get_bool(Self::Bind);
             extractor.open_decl();
-            let uri = extractor.get_narrative_uri().owned() & name;
+            let uri = extractor.get_narrative_uri() & name;
             Some(OpenSHTMLElement::Vardecl { uri, arity, macroname, role, assoctype, reordering, bind, is_seq })
         }
 

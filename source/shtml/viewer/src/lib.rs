@@ -24,8 +24,10 @@ pub fn set_server_url(server_url: String) {
 
 #[component]
 fn Main(orig: OriginalNode) -> impl IntoView {
-    view!(<SHTMLDocument>
-        <DomChildrenCont orig cont=shtml_viewer_components::iterate/>
+    leptos_meta::provide_meta_context();
+    let on_load = RwSignal::new(false);
+    view!(<SHTMLDocument on_load>
+        <DomChildrenCont orig on_load cont=shtml_viewer_components::iterate/>
         </SHTMLDocument>
     )
 }

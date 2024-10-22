@@ -5,32 +5,66 @@
 
 mod extractor;
 pub mod components;
+pub mod config;
 
 use components::{inputref::InInputRef, SHTMLComponents};
+use immt_utils::prelude::HMap;
 use leptos::prelude::*;
 use shtml_extraction::prelude::*;
 use leptos::tachys::view::any_view::AnyView;
 use leptos::web_sys::Element;
 use extractor::DOMExtractor;
 use crate::extractor::NodeAttrs;
+use immt_ontology::uris::{DocumentURI, NarrativeURI};
 
-pub mod config;
 
-#[component]
-pub fn SHTMLDocument(#[prop(optional)] server:Option<String>, children: Children) -> impl IntoView {
-    #[cfg(feature="csr")]
-    if let Some(server) = server {
-        config::set_server_url(server);
-    };
+
+#[derive(Debug,Clone)]
+struct IdPrefix(pub String);
+impl IdPrefix {
+    pub fn new_id(self,s:&str) -> String {
+        if self.0.is_empty() {
+            s.to_string()
+        } else {
+            format!("{}/{s}",self.0)
+        }
+    }
+}
+
+
+#[cfg(any(feature="ssr",feature="hydrate"))]
+#[cfg_attr(any(feature="ssr",feature="hydrate"),component)]
+pub fn SHTMLDocument(uri:DocumentURI, children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
+    do_document(uri,children, on_load)
+}
+
+#[cfg(feature="csr")]
+#[cfg_attr(feature="csr",component)]
+pub fn SHTMLDocument(children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
+    let uri = "http://unknown.document?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
+    do_document(uri,children, on_load)
+}
+
+fn do_document(uri:DocumentURI,children:Children, on_load:Option<RwSignal<bool>>) -> impl IntoView {
+    use crate::components::navigation::{Nav,NavElems,URLFragment};
     //let config = config::ServerConfig::clone_static();
     //provide_context(config);
     #[cfg(any(feature="csr",feature="hydrate"))]
     provide_context(RwSignal::new(DOMExtractor::default()));
     provide_context(InInputRef(false));
-    children()
+    provide_context(RwSignal::new(NavElems{ids:HMap::default()}));
+    provide_context(IdPrefix(String::new()));
+    provide_context(URLFragment::new());
+    provide_context(NarrativeURI::Document(uri));
+    let r = children();
+    view! {
+        <Nav on_load/>
+        {r}
+    }
 }
 
-pub static RULES:[SHTMLExtractionRule<DOMExtractor>;22] = [
+pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
+    SHTMLTag::Section.rule(),
     SHTMLTag::Term.rule(),
     SHTMLTag::Arg.rule(),
 

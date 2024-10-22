@@ -27,7 +27,7 @@ pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -
             uri: uri.clone(),
             children: std::mem::take(&mut ret)
           })));
-          prefix = format!("{prefix}/{}",uri.name().last_name());
+          prefix = if prefix.is_empty() {uri.name().last_name().to_string()} else { format!("{prefix}/{}",uri.name().last_name()) };
         }
         DocumentElement::DocumentReference { id, target:Ok(d),.. } => {
           let old = std::mem::replace(&mut curr, d.children().iter());
@@ -36,7 +36,7 @@ pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -
             uri: id.clone(),
             children: std::mem::take(&mut ret)
           })));
-          prefix = format!("{prefix}/{}",id.name().last_name());
+          prefix = if prefix.is_empty() {id.name().last_name().to_string()} else { format!("{prefix}/{}",id.name().last_name()) };
         }
         DocumentElement::Module {  children,.. } |
         DocumentElement::Morphism {children,..} |

@@ -1,6 +1,8 @@
 pub(crate) mod inputref;
+pub(crate) mod sections;
 mod terms;
 mod toc;
+pub(crate) mod navigation;
 pub use inputref::{InputRef,IfInputref};
 pub use terms::*;
 pub use toc::*;
@@ -23,7 +25,8 @@ fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:Origina
   if let Some(next) = elements.iter().nth(skip) {
     tracing::debug!("Doing {next:?} ({:?})",std::thread::current().id());
     match next {
-      OpenSHTMLElement::Inputref { uri, id } => inputref::inputref(uri.clone(), Some(id.as_ref())).into_any(),
+      OpenSHTMLElement::Section { uri,.. } => sections::section(uri.clone(),move || do_components::<MATH>(skip+1,elements,orig)).into_any(),
+      OpenSHTMLElement::Inputref { uri, id } => inputref::inputref(uri.clone(), id).into_any(),
       OpenSHTMLElement::IfInputref(b) => inputref::if_inputref(*b,orig).into_any(),
       OpenSHTMLElement::OpenTerm { term, .. } =>
         terms::do_term::<_,MATH>(term.clone(),move || 

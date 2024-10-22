@@ -1,8 +1,9 @@
 use std::borrow::Cow;
+use immt_ontology::uris::NarrativeURI;
 use immt_utils::{prelude::HMap, vecmap::VecMap};
 use smallvec::SmallVec;
 use shtml_extraction::prelude::{Attributes, SHTMLExtractor};
-use leptos::web_sys::Element;
+use leptos::{prelude::expect_context, web_sys::Element};
 
 #[derive(Default)]
 pub struct DOMExtractor {
@@ -122,8 +123,8 @@ impl SHTMLExtractor for DOMExtractor {
     fn get_content_uri(&self) -> Option<&immt_ontology::uris::ModuleURI> {
         todo!()
     }
-    fn get_narrative_uri(&self) -> immt_ontology::uris::NarrativeURIRef {
-        todo!()
+    fn get_narrative_uri(&self) -> immt_ontology::uris::NarrativeURI {
+        expect_context::<NarrativeURI>()
     }
     fn open_args(&mut self) {}
     fn open_complex_term(&mut self) {}

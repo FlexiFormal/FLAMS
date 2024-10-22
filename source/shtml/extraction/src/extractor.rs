@@ -10,7 +10,7 @@ use immt_ontology::narration::notations::{NotationComponent, OpNotation};
 use immt_ontology::narration::sections::SectionLevel;
 use immt_ontology::narration::variables::Variable;
 use immt_ontology::narration::{LazyDocRef, UncheckedDocumentElement};
-use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURIRef, NarrativeURITrait, SymbolURI};
+use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURIRef, NarrativeURITrait, SymbolURI, URIRefTrait};
 use immt_ontology::{DocumentRange, Resourcable};
 use immt_utils::prelude::HMap;
 use immt_utils::vecmap::VecMap;
@@ -365,12 +365,12 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         (Vec::new(),None)
     }
 
-    fn get_narrative_uri(&self) -> NarrativeURIRef {
+    fn get_narrative_uri(&self) -> NarrativeURI {
         self.state().narrative.iter().rev().find_map(|t| match t {
-            Narrative::Container(uri,_) => Some(uri.as_narrative()),
+            Narrative::Container(uri,_) => Some(uri.as_narrative().owned()),
             Narrative::Paragraph(ParagraphState { uri, .. }) | 
             Narrative::Exercise(ExerciseState { uri,.. }) |
-            Narrative::Section{uri,..} => Some(uri.as_narrative()),
+            Narrative::Section{uri,..} => Some(uri.as_narrative().owned()),
             Narrative::Notation(_) => None
         }).unwrap_or_else(|| unreachable!())
     }
@@ -528,7 +528,7 @@ pub trait SHTMLExtractor {
     #[cfg(feature="rdf")]
     fn add_triples<const N:usize>(&mut self, triples:[immt_ontology::rdf::Triple;N]);
 
-    fn get_narrative_uri(&self) -> NarrativeURIRef;
+    fn get_narrative_uri(&self) -> NarrativeURI;
     fn get_content_uri(&self) -> Option<&ModuleURI>;
 
     #[cfg(feature="rdf")]

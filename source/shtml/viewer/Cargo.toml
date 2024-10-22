@@ -17,7 +17,7 @@ shtml-viewer-components = {workspace=true,features = ["csr"]}
 immt-web-utils = {workspace=true,features=["csr"]}
 leptos-dyn-dom = {workspace=true,features = ["csr"]}
 leptos = {workspace=true,features = ["csr"]}
-#reactive_graph = {workspace=true}
+leptos_meta = {workspace=true}
 wasm-bindgen = {workspace=true}
 console_error_panic_hook = {workspace=true}
 thaw = {workspace=true}

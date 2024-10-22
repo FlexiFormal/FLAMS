@@ -28,6 +28,9 @@ urlencoding = {workspace=true}
 send_wrapper = {workspace=true}
 wasm-bindgen = {workspace=true}
 serde = {workspace = true}
+either = {workspace = true}
+
+web-sys = {workspace = true,features=["ScrollIntoViewOptions","ScrollLogicalPosition"]} 
 
 # csr
 reqwasm = {workspace=true,optional=true}

@@ -187,7 +187,7 @@ impl OpenSHTMLElement {
             }
             Self::OpenTerm { term, is_top:true } => {
                 let term = term.close(extractor);
-                let uri = extractor.get_narrative_uri().owned() & &*extractor.new_id(Cow::Borrowed("term"));
+                let uri = extractor.get_narrative_uri() & &*extractor.new_id(Cow::Borrowed("term"));
                 extractor.set_in_term(false);
                 extractor.add_document_element(UncheckedDocumentElement::TopTerm { uri, term });
             }
@@ -238,7 +238,7 @@ impl OpenSHTMLElement {
 
 
             Self::Inputref { uri, id } => {
-                let top = extractor.get_narrative_uri().owned();
+                let top = extractor.get_narrative_uri();
                 #[cfg(feature="rdf")]
                 if E::RDF {
                     extractor.add_triples([
@@ -593,7 +593,7 @@ impl OpenSHTMLElement {
             extractor.add_error(SHTMLError::NotInNarrative);
             return
         }
-        let uri = extractor.get_narrative_uri().owned() & &*id;
+        let uri = extractor.get_narrative_uri() & &*id;
         let notation = extractor.add_resource(&Notation {
             attribute_index,
             is_text,

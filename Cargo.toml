@@ -141,6 +141,7 @@ wasm-bindgen = "=0.2.93"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
 gloo-storage = "0.3"
+web-sys = { version = "0.3.70" }
 
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
 #leptos-dyn-dom = { path="../leptos_dyn_dom"}
