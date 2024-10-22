@@ -15,7 +15,7 @@ ssr = ["leptos/ssr","rdf","immt-web-utils/ssr"]
 
 [dependencies]
 leptos-dyn-dom = {workspace=true}
-leptos = {workspace=true,features = ["nightly"]}
+leptos = {workspace=true}
 thaw = {workspace=true}
 shtml-extraction = {workspace=true}
 immt-ontology = {workspace=true,features=["serde"]}
@@ -39,3 +39,5 @@ reqwasm = {workspace=true,optional=true}
 tachys = {version="=0.1.0-beta5"}
 reactive_graph = {version="=0.1.0-beta5"}
 leptos_macro = {version="=0.7.0-beta5"}
+hydration_context = {version="=0.2.0-beta5"}
+leptos_config = {version="=0.7.0-beta5"}

@@ -13,7 +13,7 @@ hydrate = ["leptos/hydrate", "thaw/hydrate","dep:gloo-storage"]
 
 [dependencies]
 leptos-dyn-dom = {workspace=true}
-leptos = {workspace=true,features = ["nightly"]}
+leptos = {workspace=true}
 leptos_meta = {workspace=true}
 thaw = {workspace=true}
 thaw_utils = {workspace=true}
@@ -28,3 +28,5 @@ send_wrapper = {workspace=true}
 tachys = {version="=0.1.0-beta5"}
 reactive_graph = {version="=0.1.0-beta5"}
 leptos_macro = {version="=0.7.0-beta5"}
+hydration_context = {version="=0.2.0-beta5"}
+leptos_config = {version="=0.7.0-beta5"}
