@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use immt_ontology::uris::NarrativeURI;
-use immt_utils::{prelude::HMap, vecmap::VecMap};
+use immt_utils::prelude::HMap;
 use smallvec::SmallVec;
 use shtml_extraction::prelude::{Attributes, SHTMLExtractor};
 use leptos::{prelude::expect_context, web_sys::Element};

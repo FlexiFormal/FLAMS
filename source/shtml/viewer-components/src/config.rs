@@ -1,47 +1,62 @@
 
 use immt_ontology::uris::DocumentURI;
 use leptos::prelude::*;
-use std::future::Future;
-use send_wrapper::SendWrapper;
 use immt_utils::CSS;
 
 #[cfg(feature="hydrate")]
 use immt_ontology::{uris::{ArchiveId, URI},languages::Language};
+
+use crate::components::TOCElem;
 
 pub const DEFAULT_SERVER_URL:&str = "https://immt.mathhub.info";
 
 
 // CSR --------------------------------------------------------
 
-#[cfg(feature="csr")]
-pub fn inpuref_url(uri:&str) -> String {
-  format!("{}/content/fragment?uri={}",
-    server_config.server_url.get(),
-    urlencoding::encode(uri)
-  )
-}
 
 #[cfg(feature="csr")]
-pub(crate) struct ServerConfig {
+pub struct ServerConfig {
   pub server_url:RwSignal<String>,
-  pub get_inputref:RwSignal<FutFun<String,Option<(Vec<CSS>,String)>>>
+  //pub get_inputref:RwSignal<FutFun<String,Option<(Vec<CSS>,String)>>>
 }
 
 #[cfg(feature="csr")]
 impl ServerConfig {
-  #[allow(clippy::future_not_send)]
-  #[allow(clippy::similar_names)]
-  pub async fn default_inputref(uri:String) -> Option<(Vec<CSS>,String)> {
-    let url = inpuref_url(&uri);
-    let res = reqwasm::http::Request::get(&url).send().await.ok()?;
-    res.json().await.ok()
-  }
-  pub(crate) async fn inputref(&self,doc:DocumentURI) -> Result<(Vec<CSS>,String),String> {
-    let f = self.get_inputref.get_untracked();
-    f(doc.to_string()).await.map_or_else(
-      || Err("failed to get inputref".to_string()),
-      Ok
+  fn inpuref_url(uri:&str) -> String {
+    format!("{}/content/fragment?uri={}",
+      server_config.server_url.get(),
+      urlencoding::encode(uri)
     )
+  }
+  fn fulldoc_url(uri:&str) -> String {
+    format!("{}/content/document?uri={}",
+      server_config.server_url.get(),
+      urlencoding::encode(uri)
+    )
+  }
+  fn toc_url(uri:&str) -> String {
+    format!("{}/content/toc?uri={}",
+      server_config.server_url.get(),
+      urlencoding::encode(uri)
+    )
+  }
+
+  async fn remote<T:for<'a> serde::Deserialize<'a>>(url:String) -> Result<T,String> {
+    send_wrapper::SendWrapper::new(Box::pin(async move {
+      reqwasm::http::Request::get(&url).send().await.map_err(|e| e.to_string())?
+        .json::<T>().await.map_err(|e| e.to_string())
+    })).await
+  }
+
+  pub async fn inputref(&self,doc:DocumentURI) -> Result<(Vec<CSS>,String),String> {
+    Self::remote(Self::inpuref_url(&doc.to_string())).await
+  }
+
+  pub async fn full_doc(&self,doc:DocumentURI) -> Result<(DocumentURI,Vec<CSS>,String),String> {
+    Self::remote(Self::fulldoc_url(&doc.to_string())).await
+  }
+  pub async fn get_toc(&self,doc:DocumentURI) -> Result<(Vec<CSS>,Vec<TOCElem>),String> {
+    Self::remote(Self::toc_url(&doc.to_string())).await
   }
 }
 
@@ -50,7 +65,7 @@ impl Default for ServerConfig {
   fn default() -> Self {
     Self {
       server_url:RwSignal::new(DEFAULT_SERVER_URL.to_string()),
-      get_inputref:RwSignal::new(fn_into_future(Self::default_inputref))
+      //get_inputref:RwSignal::new(fn_into_future(Self::default_inputref))
     }
   }
 }
@@ -115,9 +130,10 @@ impl ServerConfig {
 // --------------------------------------
 
 lazy_static::lazy_static! {
-  pub(crate) static ref server_config:ServerConfig = ServerConfig::default();
+  pub static ref server_config:ServerConfig = ServerConfig::default();
 }
 
+/*
 type BoxFuture<T> = SendWrapper<std::pin::Pin<Box<dyn Future<Output = T> + 'static>>>;
 
 pub type FutFun<I,O> = std::sync::Arc<dyn Fn(I) -> BoxFuture<O> + Send + Sync>;
@@ -129,3 +145,4 @@ pub fn fn_into_future<I,O,F:Future<Output=O> + 'static>(f: impl Fn(I) -> F +  Se
 pub fn fn_into_future_ref<I:?Sized,O:'static,F:Future<Output=O> + 'static>(f: impl Fn(&I) -> F + 'static + Send + Sync) -> FutFunRef<I,O> {
   std::sync::Arc::new(move |i| SendWrapper::new(Box::pin(f(i))))
 }
+*/

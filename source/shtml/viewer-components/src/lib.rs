@@ -39,8 +39,8 @@ pub fn SHTMLDocument(uri:DocumentURI, children: Children, #[prop(optional)] on_l
 
 #[cfg(feature="csr")]
 #[cfg_attr(feature="csr",component)]
-pub fn SHTMLDocument(children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
-    let uri = "http://unknown.document?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
+pub fn SHTMLDocument(#[prop(optional)] uri:Option<DocumentURI>,children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
+    let uri = uri.unwrap_or_else(|| "http://unknown.document?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!()));
     do_document(uri,children, on_load)
 }
 
@@ -148,4 +148,52 @@ pub fn iterate(e:&Element) -> Option<AnyView<Dom>> {
     }
     #[cfg(not(any(feature="csr",feature="hydrate")))]
     {None}
+}
+
+#[cfg(feature="ts")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen::prelude::wasm_bindgen(typescript_type = "((uri: string) => Element | null)")]
+    pub type SectionContinuation;
+
+    #[wasm_bindgen::prelude::wasm_bindgen(method, structural, js_name = "call")]
+    fn call(this: &SectionContinuation, uri: &str) -> wasm_bindgen::JsValue;
+}
+
+#[cfg(feature="ts")]
+impl SectionContinuation {
+  pub fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+    use wasm_bindgen::JsCast;
+    let uri = uri.to_string();
+    let result = self.call(&uri);
+    if result.is_null() || result.is_undefined() {
+      return Ok(None);
+    }
+    let elem : leptos::web_sys::Element = result.dyn_into()?;
+    Ok(Some(elem))
+  }
+}
+
+#[cfg(not(feature="ts"))]
+pub struct SectionContinuation;
+#[cfg(not(feature="ts"))]
+impl SectionContinuation {
+    pub fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+        Ok(None)
+    }
+}
+
+#[derive(Copy,Clone)]
+pub struct OnSectionBegin(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
+impl OnSectionBegin {
+    fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+        self.0.with_value(|f| f.do_call(uri))
+    }
+}
+#[derive(Copy,Clone)]
+pub struct OnSectionEnd(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
+impl OnSectionEnd {
+    fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+        self.0.with_value(|f| f.do_call(uri))
+    }
 }

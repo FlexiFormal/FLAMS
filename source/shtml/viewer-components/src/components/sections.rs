@@ -9,13 +9,43 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
     ne.ids.insert(id.clone(),SectionOrInputref::Section);
   });
 
+  let rf = NodeRef::new();
+
+  #[cfg(feature="ts")]
+  use crate::{OnSectionBegin, OnSectionEnd};
+
+  #[cfg(feature="ts")]
+  if let Some(bg) = use_context::<OnSectionBegin>() {
+    let uri = uri.clone();
+    let _f = Effect::new(move || if let Some(node) = rf.get() {
+      let node : web_sys::HtmlDivElement = node;
+      if let Ok(Some(e)) = bg.call(&uri) {
+        let _ = node.prepend_with_node_1(&e);
+      }
+    });
+  }
+
+  #[cfg(feature="ts")]
+  if let Some(end) = use_context::<OnSectionEnd>() {
+    let uri = uri.clone();
+    let _f = Effect::new(move || if let Some(node) = rf.get() {
+      let node : web_sys::HtmlDivElement = node;
+      if let Ok(Some(e)) = end.call(&uri) {
+        let _ = node.append_child(&e);
+      }
+    });
+  }
+
+
+  //use_context::<OnSectionBegin>().map(|s|)
+
   view!{
-    <div id=id.clone() style="display:content">
     <Provider value=IdPrefix(id.clone())>
       <Provider value=NarrativeURI::Element(uri)>
-        {children()}
+        <div node_ref=rf id=id.clone() style="display:content">
+          {children()}
+        </div>
       </Provider>
     </Provider>
-    </div>
   }
 }

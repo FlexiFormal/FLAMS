@@ -37,9 +37,6 @@ async fn test() {
   build_result!(foo @ "Some build result");
   build_result!(bar @ "Some other build result");
 
-
-
-
   crate::initialize(TEST_SETTINGS.clone());
 }
 

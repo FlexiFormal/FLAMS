@@ -135,7 +135,9 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
       let on_load = RwSignal::new(false);
 
       view!{<SHTMLDocument uri on_load>
-        <Toc toc=toc_signal/>
+        {move || if on_load.get() {toc_signal.get().map(|(css,toc)|
+          view!(<Toc css toc/>)
+        ) } else {None}}
         <DomStringCont html on_load cont=shtml_viewer_components::iterate/>
         </SHTMLDocument>}
     }</div>})
