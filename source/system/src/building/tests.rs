@@ -2,8 +2,44 @@ use std::{path::PathBuf, str::FromStr};
 
 use immt_utils::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
 
-#[tokio::test]
+use crate::{backend::AnyBackend, building::{BuildTask,BuildResult},build_result, build_target, formats::CHECK, source_format};
+
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test() {
+  fn get_dependencies(backend: &AnyBackend, task: &BuildTask) {}
+
+  fn run_build_target_1(_:&AnyBackend,task:&BuildTask) -> BuildResult {
+    BuildResult::empty()
+  }
+  fn run_build_target_2(_:&AnyBackend,task:&BuildTask) -> BuildResult {
+    BuildResult::empty()
+  }
+
+  source_format!(my_file_format ["ext1","ext2"] 
+    [BUILD_TARGET_1 => BUILD_TARGET_2 => CHECK]
+    @ "Some File Format with extensions .ext1 and .ext2"
+    = get_dependencies
+  );
+
+  build_target!(
+    build_target_1 [] => [FOO]
+    @ "Some Build Target producing a Foo"
+    = run_build_target_1
+  );
+
+  build_target!(
+    build_target_2 [] => [BAR]
+    @ "Some Build Target producing a Bar"
+    = run_build_target_2
+  );
+
+  build_result!(foo @ "Some build result");
+  build_result!(bar @ "Some other build result");
+
+
+
+
   crate::initialize(TEST_SETTINGS.clone());
 }
 
