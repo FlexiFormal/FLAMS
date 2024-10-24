@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 workspace = true
 
 [features]
+ssr = [] # just to make documentation happy
 ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde","dep:immt-ontology"]
 
 [dependencies]

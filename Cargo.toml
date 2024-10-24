@@ -3,7 +3,7 @@ members = [
   #"api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm", 
   "source/main","source/utils", "source/ontology", "source/system", "source/web-utils",
   "source/stex","source/shtml/system",
-  #"source/shtml/viewer", 
+  "source/shtml/viewer", 
   "source/shtml/viewer-components", "source/shtml/extraction",
   ]
 resolver = "2"

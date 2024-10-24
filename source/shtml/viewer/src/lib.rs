@@ -12,7 +12,7 @@ pub fn set_server_url(server_url: String) {
 }
 
 
-#[cfg(not(feature="ts"))]
+#[cfg(all(not(feature="ts"),not(feature="ssr")))]
 #[wasm_bindgen(start)]
 pub fn run() {
     //console_error_panic_hook::set_once();
