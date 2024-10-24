@@ -37,8 +37,8 @@ pub fn SHTMLDocument(uri:DocumentURI, children: Children, #[prop(optional)] on_l
     do_document(uri,children, on_load)
 }
 
-#[cfg(feature="csr")]
-#[cfg_attr(feature="csr",component)]
+#[cfg(all(feature="csr",not(feature="ssr"),not(feature="hydrate")))]
+#[cfg_attr(all(feature="csr",not(feature="ssr"),not(feature="hydrate")),component)]
 pub fn SHTMLDocument(#[prop(optional)] uri:Option<DocumentURI>,children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
     let uri = uri.unwrap_or_else(|| "http://unknown.document?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!()));
     do_document(uri,children, on_load)
@@ -186,14 +186,14 @@ impl SectionContinuation {
 #[derive(Copy,Clone)]
 pub struct OnSectionBegin(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
 impl OnSectionBegin {
-    fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+    pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
         self.0.with_value(|f| f.do_call(uri))
     }
 }
 #[derive(Copy,Clone)]
 pub struct OnSectionEnd(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
 impl OnSectionEnd {
-    fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+    pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
         self.0.with_value(|f| f.do_call(uri))
     }
 }

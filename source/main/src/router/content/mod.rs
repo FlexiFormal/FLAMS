@@ -131,9 +131,7 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
           toc_signal.set(Some((c,t)));
         }
       });
-
       let on_load = RwSignal::new(false);
-
       view!{<SHTMLDocument uri on_load>
         {move || if on_load.get() {toc_signal.get().map(|(css,toc)|
           view!(<Toc css toc/>)

@@ -35,7 +35,7 @@ args = ["leptos","build","--release"]
 [tasks.doc]
 workspace = false
 command = "cargo"
-args = ["doc","--workspace","--no-deps","--features=ssr","--release","--document-private-items"]
+args = ["doc","--workspace","--no-deps","--features=ssr,rdf","--release","--document-private-items"] # 
 
 [tasks.copy-to-bin]
 workspace = false
