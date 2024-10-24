@@ -11,6 +11,9 @@ pub mod queue_manager;
 mod queue;
 mod queueing;
 
+#[cfg(all(test,feature="tokio"))]
+mod tests;
+
 pub use queue::Queue;
 
 #[derive(Debug,Clone,Copy,PartialEq,Eq,serde::Serialize, serde::Deserialize)]
