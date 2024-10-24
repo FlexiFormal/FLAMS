@@ -7,7 +7,7 @@ mod extractor;
 pub mod components;
 pub mod config;
 
-use components::{inputref::InInputRef, SHTMLComponents};
+use components::{inputref::InInputRef, SHTMLComponents, TOC};
 use immt_utils::prelude::HMap;
 use leptos::prelude::*;
 use shtml_extraction::prelude::*;
@@ -16,7 +16,6 @@ use leptos::web_sys::Element;
 use extractor::DOMExtractor;
 use crate::extractor::NodeAttrs;
 use immt_ontology::uris::{DocumentURI, NarrativeURI};
-
 
 
 #[derive(Debug,Clone)]
@@ -95,8 +94,8 @@ pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
     SHTMLTag::Argprecs.rule()
 ];
 
-#[cfg_attr(not(feature="inline-js"),wasm_bindgen::prelude::wasm_bindgen)]
-#[cfg_attr(feature="inline-js",wasm_bindgen::prelude::wasm_bindgen(inline_js = "
+#[cfg_attr(not(feature="ts"),wasm_bindgen::prelude::wasm_bindgen)]
+#[cfg_attr(feature="ts",wasm_bindgen::prelude::wasm_bindgen(inline_js = "
 export function hasShtmlAttribute(node) {
     const attributes = node.attributes;
     for (let i = 0; i < attributes.length; i++) {

@@ -5,6 +5,7 @@ mod binder;
 mod popover;
 mod trees;
 mod drawer;
+mod spinner;
 
 #[cfg(feature="hydrate")]
 mod errors;
@@ -22,6 +23,7 @@ pub use r#await::*;
 pub use trees::*;
 pub use drawer::*;
 pub use anchors::*;
+pub use spinner::*;
 
 
 

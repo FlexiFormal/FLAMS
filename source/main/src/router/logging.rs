@@ -1,7 +1,8 @@
 use immt_utils::{logs::{LogFileLine, LogLevel, LogMessage, LogTree}, time::Timestamp, vecmap::VecMap};
 use immt_web_utils::{inject_css,components::{Tree,Leaf,Subtree,Header}};
 use leptos::prelude::*;
-use thaw::{Spinner,Caption1Strong};
+use thaw::Caption1Strong;
+use immt_web_utils::components::Spinner;
 
 use crate::utils::{needs_login, ws::WebSocket};
 
@@ -103,7 +104,7 @@ fn LogLineHelper(
     args:VecMap<String,String>,
     #[prop(optional)] spinner:bool,
 ) -> impl IntoView {
-    use thaw::{Spinner, SpinnerSize};
+    use immt_web_utils::components::SpinnerSize;
     use std::fmt::Write;
     let cls = class_from_level(level);
     let mut str = timestamp.map_or_else(

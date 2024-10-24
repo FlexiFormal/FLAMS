@@ -31,3 +31,40 @@ fn Main(orig: OriginalNode) -> impl IntoView {
         </SHTMLDocument>
     )
 }
+
+#[cfg(feature="ts")]
+mod ts {
+    use shtml_viewer_components::components::{TOCElem, TOC};
+    use immt_ontology::uris::DocumentURI;
+    use wasm_bindgen::prelude::wasm_bindgen;
+
+    #[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
+    #[tsify(into_wasm_abi, from_wasm_abi)]
+    /// Options for rendering an SHTML document
+    /// uri: the URI of the document (as string)
+    /// toc: if defined, will render a table of contents for the document
+    pub struct ShtmlOptions {
+        #[tsify(type = "string")]
+        pub uri:DocumentURI,
+        pub toc:Option<TOCOptions>
+    }
+
+    #[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
+    #[tsify(into_wasm_abi, from_wasm_abi)]
+    /// Options for rendering a table of contents
+    /// `FromBackend` will retrieve it from the remote backend
+    /// `Predefined(toc)` will render the provided TOC
+    pub enum TOCOptions {
+        FromBackend,
+        Predefined(Vec<TOCElem>)
+    }
+    
+    #[wasm_bindgen]
+    /// render an SHTML document to the provided element
+    pub fn render_document(options:ShtmlOptions,to:leptos::web_sys::HtmlElement) -> Result<(),String> {
+        todo!()
+    }
+}
+
+#[cfg(feature="ts")]
+pub use ts::*;

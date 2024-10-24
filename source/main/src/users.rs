@@ -115,6 +115,7 @@ impl FromStr for LoginError {
 
 #[component]
 pub(crate) fn Login(children:Children) -> impl IntoView {
+    use immt_web_utils::components::Spinner;
     let user = RwSignal::new(LoginState::Loading);
     provide_context(user);
     #[cfg(feature="hydrate")]
@@ -132,7 +133,7 @@ pub(crate) fn Login(children:Children) -> impl IntoView {
     });
 
     view!{
-        {move || res.get().map_or_else(|| Some(view!(<thaw::Spinner/>)),|u| { user.set(u); None}) }
+        {move || res.get().map_or_else(|| Some(view!(<Spinner/>)),|u| { user.set(u); None}) }
         {children()}
     }
 }

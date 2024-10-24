@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 workspace = true
 
 [features]
-ts = ["shtml-viewer-components/inline-js"]
+ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde","dep:immt-ontology"]
 
 [dependencies]
 shtml-viewer-components = {workspace=true,features = ["csr"]}
@@ -23,6 +23,11 @@ console_error_panic_hook = {workspace=true}
 thaw = {workspace=true}
 tracing-wasm = {workspace=true}
 tracing = {workspace=true,features=["release_max_level_info"]}
+
+tsify-next = {workspace=true,optional = true}
+serde = {workspace=true,optional=true}
+immt-ontology = {workspace=true,optional=true}
+
 
 tachys = {version="=0.1.0-beta5"}
 reactive_graph = {version="=0.1.0-beta5"}

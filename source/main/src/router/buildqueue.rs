@@ -70,12 +70,13 @@ pub async fn get_log(archive:ArchiveId,rel_path:String,target:String) -> Result<
 #[component]
 pub fn QueuesTop() -> impl IntoView {
   use thaw::{TabList,Tab,Divider,Layout};
+  use immt_web_utils::components::Spinner;
   from_server_copy(true,get_queues,|v| {
     let queues = AllQueues::new(v);
     QueueSocket::run(queues);
     provide_context(queues);
     inject_css("immt-fullscreen", ".immt-fullscreen { width:100%; height:calc(100% - 44px - 21px) }");
-    view!{<Show when=move || queues.show.get() fallback=|| view!(<thaw::Spinner/>)>
+    view!{<Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>
       <TabList selected_value=queues.selected.get().to_string()>
         <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
           <Tab value=i.to_string()>{

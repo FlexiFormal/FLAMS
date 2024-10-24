@@ -1,22 +1,51 @@
-use immt_ontology::uris::DocumentElementURI;
+use immt_ontology::uris::{DocumentElementURI, DocumentURI};
 use immt_utils::CSS;
 use immt_web_utils::do_css;
 use leptos::prelude::*;
 
+
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[cfg_attr(feature="ts", derive(tsify_next::Tsify))]
+/// A Table of contents; Either:
+/// 1. an already known TOC, consisting of a list of [TOCElem]s, or
+/// 2. the URI of a Document. In that case, the relevant iMMT server
+///   will be requested to obtain the TOC for that document.
+pub enum TOC {
+    Full(Vec<TOCElem>),
+    Get(
+      #[cfg_attr(feature="ts", tsify(type = "string"))]
+      DocumentURI
+    )
+}
+
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[cfg_attr(feature="ts", derive(tsify_next::Tsify))]
+/// An entry in a table of contents. Either:
+/// 1. a section; the title is assumed to be an HTML string, or
+/// 2. an inputref to some other document; the URI is the one for the
+///   inputref itself; not the referenced Document. For the TOC,
+///   which document is inputrefed is actually irrelevant.
 pub enum TOCElem {
+  /// A section; the title is assumed to be an HTML string
   Section{
     title:Option<String>,
+    #[cfg_attr(feature="ts", tsify(type = "string"))]
     uri:DocumentElementURI,
     id:String,
     children:Vec<TOCElem>
   },
+  /// An inputref to some other document; the URI is the one for the
+  /// inputref itself; not the referenced Document. For the TOC,
+  /// which document is inputrefed is actually irrelevant.
   Inputref{
+    #[cfg_attr(feature="ts", tsify(type = "string"))]
     uri:DocumentElementURI,
     id:String,
     children:Vec<TOCElem>
   }
 }
+
 impl TOCElem {
   fn into_view(self) -> impl IntoView {
     use immt_web_utils::components::{AnchorLink,Header};
@@ -37,30 +66,6 @@ impl TOCElem {
         Self::Inputref{children,..} => {
         children.into_iter().map(Self::into_view).collect_view().into_any()
       }
-      /*
-      Self::Section{title:Some(title),id,children,..} if children.is_empty() => {
-        if sub {
-          view!(<NavSubItem value=id><span inner_html=title/></NavSubItem>).into_any()
-        } else {
-          view!(<NavItem value=id><span inner_html=title/></NavItem>).into_any()
-        }
-      }
-      Self::Section{title:None,children,..} |
-        Self::Inputref{children,..} => {
-        children.into_iter().map(|e| e.into_view(sub)).collect_view().into_any()
-      }
-      Self::Section{title:Some(title),id,children,..} => {
-        let cls = if sub {"shtml-toc-nested"} else {""};
-        view!{
-          <span style="--immt-toc-nesting-h:var(--immt-toc-nesting);">
-            <NavCategory value=id>
-              <NavCategoryItem slot class=cls><span inner_html=title/></NavCategoryItem>
-              <div style="--immt-toc-nesting:calc(var(--immt-toc-nesting-h) + 45px);">{children.into_iter().map(|e| e.into_view(true)).collect_view().into_any()}</div>
-            </NavCategory>
-          </span>
-        }.into_any()
-      }
-      */
     }
   }
 }

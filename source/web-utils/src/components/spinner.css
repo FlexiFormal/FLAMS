@@ -1,0 +1,172 @@
+.thaw-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.thaw-spinner__spinner {
+    width: 32px;
+    height: 32px;
+    position: relative;
+    flex-shrink: 0;
+    mask-image: radial-gradient(
+        closest-side,
+        transparent calc(100% - var(--thaw-spinner--stroke-width) - 1px),
+        white calc(100% - var(--thaw-spinner--stroke-width)) calc(100% - 1px),
+        transparent 100%
+    );
+    background-color: #0e4775;
+    color: #479ef5;
+    animation-duration: 1.5s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+    animation-name: thaw-spinner;
+
+    --thaw-spinner--stroke-width: 3px;
+}
+
+.thaw-spinner--extra-tiny > .thaw-spinner__spinner {
+    --thaw-spinner--stroke-width: 2px;
+    width: 16px;
+    height: 16px;
+}
+
+.thaw-spinner--tiny > .thaw-spinner__spinner {
+    --thaw-spinner--stroke-width: 2px;
+    width: 20px;
+    height: 20px;
+}
+
+.thaw-spinner--extra-small > .thaw-spinner__spinner {
+    --thaw-spinner--stroke-width: 2px;
+    width: 24px;
+    height: 24px;
+}
+
+.thaw-spinner--small > .thaw-spinner__spinner {
+    --thaw-spinner--stroke-width: 2px;
+    width: 28px;
+    height: 28px;
+}
+
+.thaw-spinner--medium > .thaw-spinner__spinner {
+    width: 32px;
+    height: 32px;
+}
+
+.thaw-spinner--large > .thaw-spinner__spinner {
+    width: 36px;
+    height: 36px;
+}
+
+.thaw-spinner--extra-large > .thaw-spinner__spinner {
+    width: 40px;
+    height: 40px;
+}
+
+.thaw-spinner--huge > .thaw-spinner__spinner {
+    --thaw-spinner--stroke-width: 4px;
+    width: 44px;
+    height: 44px;
+}
+
+@keyframes thaw-spinner {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.thaw-spinner__spinner-tail {
+    position: absolute;
+    display: block;
+    width: 100%;
+    height: 100%;
+    mask-image: conic-gradient(transparent 105deg, white 105deg);
+    animation-duration: 1.5s;
+    animation-iteration-count: infinite;
+    animation-timing-function: cubic-bezier(0.33,0,0.67,1);
+    animation-name: thaw-spinner-tail;
+}
+
+@keyframes thaw-spinner-tail {
+    0% {
+        transform: rotate(-135deg);
+    }
+    50% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(225deg);
+    }
+}
+
+.thaw-spinner__spinner-tail::before,
+.thaw-spinner__spinner-tail::after {
+    content: "";
+    position: absolute;
+    display: block;
+    width: 100%;
+    height: 100%;
+    animation: inherit;
+    background-image: conic-gradient(currentcolor 135deg, transparent 135deg);
+}
+
+.thaw-spinner__spinner-tail::before {
+    animation-name: thaw-spinner-tail-before;
+}
+
+@keyframes thaw-spinner-tail-before {
+    0% {
+        transform: rotate(0deg);
+    }
+    50% {
+        transform: rotate(105deg);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+.thaw-spinner__spinner-tail::after {
+    animation-name: thaw-spinner-tail-after;
+}
+
+@keyframes thaw-spinner-tail-after {
+    0% {
+        transform: rotate(0deg);
+    }
+    50% {
+        transform: rotate(225deg);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+.thaw-spinner__label {
+    font-family: 'Segoe UI', 'Segoe UI Web (West European)', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 22px;
+    color: #fff;
+}
+
+.thaw-spinner--extra-tiny > .thaw-spinner__label,
+.thaw-spinner--tiny > .thaw-spinner__label,
+.thaw-spinner--extra-small > .thaw-spinner__label,
+.thaw-spinner--small > .thaw-spinner__label {
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.thaw-spinner--huge > .thaw-spinner__label {
+    font-size: 20px;
+    line-height: 28px;
+}

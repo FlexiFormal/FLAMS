@@ -7,10 +7,10 @@ edition = "2021"
 workspace = true
 
 [features]
-inline-js = []
+ts = ["dep:tsify-next"]
 rdf = ["immt-ontology/rdf","shtml-extraction/rdf"]
 csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
-hydrate= ["inline-js","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
+hydrate= ["ts","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
 ssr = ["leptos/ssr","rdf","immt-web-utils/ssr"]
 
 [dependencies]
@@ -34,6 +34,8 @@ web-sys = {workspace = true,features=["ScrollIntoViewOptions","ScrollLogicalPosi
 
 # csr
 reqwasm = {workspace=true,optional=true}
+
+tsify-next = {workspace = true,optional=true}
 
 
 

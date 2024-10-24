@@ -10,6 +10,8 @@ use std::{fmt::Display, future::Future};
 #[cfg(feature="hydrate")]
 use immt_web_utils::components::error_toast;
 
+use immt_web_utils::components::Spinner;
+
 use crate::users::{LoginError, LoginState};
 
 
@@ -23,12 +25,12 @@ pub fn from_server_fnonce<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r
   let res = Resource::new(|| (),move |()| f());
   let go = move || {
     view!(
-      <Suspense fallback = || view!(<thaw::Spinner/>)>{move ||
+      <Suspense fallback = || view!(<Spinner/>)>{move ||
         match res.get() {
           Some(Ok(t)) =>
             wrapped_r.lock().ok().and_then(|mut lock| std::mem::take(&mut *lock).map(|r| r(t))).into_any(),
           Some(Err(e)) => err(e.to_string()).into_any(),
-          None => view!(<thaw::Spinner/>).into_any(),
+          None => view!(<Spinner/>).into_any(),
         }
       }</Suspense>
     ).into_any()
@@ -36,7 +38,7 @@ pub fn from_server_fnonce<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r
   if needs_login {
     let login = expect_context::<RwSignal<LoginState>>();
     (move || {let go = go.clone(); match login.get() {
-      LoginState::Loading => view!(<thaw::Spinner/>).into_any(),
+      LoginState::Loading => view!(<Spinner/>).into_any(),
       LoginState::Admin | LoginState::NoAccounts => go(),
       _ => err(LoginError::NotLoggedIn.to_string()).into_any()
     }}).into_any()
@@ -53,11 +55,11 @@ pub fn from_server_clone<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:
   let res = Resource::new(|| (),move |()| f());
   let go = move || {
     view!(
-      <Suspense fallback = || view!(<thaw::Spinner/>)>{move ||
+      <Suspense fallback = || view!(<Spinner/>)>{move ||
         match res.get() {
           Some(Ok(t)) => (r.clone())(t).into_any(),
           Some(Err(e)) => err(e.to_string()).into_any(),
-          None => view!(<thaw::Spinner/>).into_any(),
+          None => view!(<Spinner/>).into_any(),
         }
       }</Suspense>
     ).into_any()
@@ -65,7 +67,7 @@ pub fn from_server_clone<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:
   if needs_login {
     let login = expect_context::<RwSignal<LoginState>>();
     (move || {let go = go.clone(); match login.get() {
-      LoginState::Loading => view!(<thaw::Spinner/>).into_any(),
+      LoginState::Loading => view!(<Spinner/>).into_any(),
       LoginState::Admin | LoginState::NoAccounts => go(),
       _ => err(LoginError::NotLoggedIn.to_string()).into_any()
     }}).into_any()
@@ -81,11 +83,11 @@ pub fn from_server_copy<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:i
   let res = Resource::new(|| (),move |()| f());
   let go = move || {
     view!(
-      <Suspense fallback = || view!(<thaw::Spinner/>)>{move ||
+      <Suspense fallback = || view!(<Spinner/>)>{move ||
         match res.get() {
           Some(Ok(t)) => r(t).into_any(),
           Some(Err(e)) => err(e.to_string()).into_any(),
-          None => view!(<thaw::Spinner/>).into_any(),
+          None => view!(<Spinner/>).into_any(),
         }
       }</Suspense>
     ).into_any()
@@ -93,7 +95,7 @@ pub fn from_server_copy<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:i
   if needs_login {
     let login = expect_context::<RwSignal<LoginState>>();
     (move || match login.get() {
-      LoginState::Loading => view!(<thaw::Spinner/>).into_any(),
+      LoginState::Loading => view!(<Spinner/>).into_any(),
       LoginState::Admin | LoginState::NoAccounts => go(),
       _ => err(LoginError::NotLoggedIn.to_string()).into_any()
     }).into_any()
@@ -113,7 +115,7 @@ pub fn needs_login<V:IntoView+'static>(mut f:impl FnMut() -> V + Send + 'static)
   let login = expect_context::<RwSignal<LoginState>>();
   move || match login.get() {
     LoginState::Admin | LoginState::NoAccounts => f().into_any(),
-    LoginState::Loading => view!(<thaw::Spinner/>).into_any(),
+    LoginState::Loading => view!(<Spinner/>).into_any(),
     o => {
       leptos::logging::log!("Wut? {o:?}");
       err(LoginError::NotLoggedIn.to_string()).into_any()

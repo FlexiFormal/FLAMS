@@ -104,6 +104,7 @@ fn side_menu(page:Page) -> impl IntoView {
 }
 
 fn user_field() -> impl IntoView {
+    use immt_web_utils::components::{Spinner,SpinnerSize};
     let theme = expect_context::<RwSignal::<thaw::Theme>>();
     let login : RwSignal<LoginState> = expect_context();
     let on_select = move |key: String| match key.as_str() {
@@ -135,7 +136,7 @@ fn user_field() -> impl IntoView {
             LoginState::None => login_form().into_any(),
             LoginState::Admin | LoginState::NoAccounts => view!(<span>"Admin"</span>).into_any(),
             LoginState::User(user) => view!(<span>{user}</span>).into_any(),
-            LoginState::Loading => view!(<thaw::Spinner size=thaw::SpinnerSize::Tiny/>).into_any()
+            LoginState::Loading => view!(<Spinner size=SpinnerSize::Tiny/>).into_any()
         }}
     </Menu>}
 }

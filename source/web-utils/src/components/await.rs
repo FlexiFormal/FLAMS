@@ -1,6 +1,7 @@
 use std::future::Future;
 
 use leptos::prelude::*;
+use crate::components::Spinner;
 
 pub fn wait<
     V: IntoView + 'static,
@@ -14,7 +15,7 @@ pub fn wait<
 ) -> impl IntoView {
     let res = LocalResource::new(future);
     view! {
-      <Suspense fallback = || view!(<thaw::Spinner/>)>{move || {
+      <Suspense fallback = || view!(<Spinner/>)>{move || {
         res.get().and_then(|r| r.take()).map_or_else(
           || view!(<div>{err.clone()}</div>).into_any(),
           |res| children(res).into_any()
@@ -36,7 +37,7 @@ pub fn wait_blocking<
 ) -> impl IntoView {
     let res = Resource::new_blocking(|| (),move |()| future());
     view! {
-      <Suspense fallback = || view!(<thaw::Spinner/>)>{move || {
+      <Suspense fallback = || view!(<Spinner/>)>{move || {
         res.get().and_then(|mut r| r.take()).map_or_else(
           || view!(<div>{err.clone()}</div>).into_any(),
           |res| children(res).into_any()

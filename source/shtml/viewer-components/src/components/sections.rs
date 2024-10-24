@@ -1,8 +1,6 @@
 use immt_ontology::uris::{DocumentElementURI, NarrativeURI};
 use leptos::{prelude::*,context::Provider};
-
 use crate::IdPrefix;
-
 use super::navigation::{NavElems, SectionOrInputref};
 
 pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
