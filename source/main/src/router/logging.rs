@@ -143,8 +143,10 @@ const fn class_from_level(lvl:LogLevel) -> &'static str {
 pub struct LogSocket {
     #[cfg(feature="ssr")]
     listener: immt_utils::change_listener::ChangeListener<LogFileLine<String>>,
-    #[cfg(feature="hydrate")]
-    socket: leptos::web_sys::WebSocket
+    #[cfg(all(feature="hydrate",not(doc)))]
+    socket: leptos::web_sys::WebSocket,
+    #[cfg(all(feature="hydrate",doc))]
+    socket: ()
 }
 
 //#[async_trait]
@@ -185,7 +187,10 @@ impl crate::utils::ws::WebSocketServer<(),Log> for LogSocket {
 #[cfg(feature="hydrate")]
 impl crate::utils::ws::WebSocketClient<(),Log> for LogSocket {
     fn new(ws: leptos::web_sys::WebSocket) -> Self { Self{
+        #[cfg(not(doc))]
         socket:ws,
+        #[cfg(doc)]
+        socket:(),
         #[cfg(feature="ssr")] listener:unreachable!()
     } }
     fn socket(&mut self) -> &mut leptos::web_sys::WebSocket {&mut self.socket }

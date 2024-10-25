@@ -4,6 +4,9 @@ use crate::IdPrefix;
 use super::navigation::{NavElems, SectionOrInputref};
 
 pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+  #[cfg(feature="ts")]
+  use crate::{OnSectionBegin, OnSectionEnd};
+
   let id = expect_context::<IdPrefix>().new_id(uri.name().last_name().as_ref());
   NavElems::update_untracked(|ne| {
     ne.ids.insert(id.clone(),SectionOrInputref::Section);
@@ -11,8 +14,6 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
 
   let rf = NodeRef::new();
 
-  #[cfg(feature="ts")]
-  use crate::{OnSectionBegin, OnSectionEnd};
 
   #[cfg(feature="ts")]
   if let Some(bg) = use_context::<OnSectionBegin>() {
@@ -42,7 +43,7 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
   view!{
     <Provider value=IdPrefix(id.clone())>
       <Provider value=NarrativeURI::Element(uri)>
-        <div node_ref=rf id=id.clone() style="display:content">
+        <div node_ref=rf id=id style="display:content">
           {children()}
         </div>
       </Provider>

@@ -2,6 +2,8 @@
  * 
  * See [endpoints] for public API endpoints
 */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(all(feature = "ssr", feature = "hydrate", not(doc)))]
 compile_error!("features \"ssr\" and \"hydrate\" cannot be enabled at the same time");

@@ -122,7 +122,7 @@ pub(crate) fn Login(children:Children) -> impl IntoView {
     let toaster = thaw::ToasterInjection::expect_context();
     let res = Resource::new_blocking(|| (),move |()| async move {
       #[cfg(feature="ssr")]
-      { LoginState::get() }
+      { return LoginState::get(); }
       #[cfg(feature="hydrate")]
       {
         login_state().await.unwrap_or_else(|e| {

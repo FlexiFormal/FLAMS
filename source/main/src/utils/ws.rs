@@ -178,7 +178,6 @@ pub trait WebSocketServer<
   
 }
 
-#[cfg(feature="ssr")]
 pub trait WebSocket<
     ClientMsg:serde::Serialize+for<'a>serde::Deserialize<'a>+Send,
     ServerMsg:serde::Serialize+std::fmt::Debug+for<'a>serde::Deserialize<'a>+Send
@@ -186,28 +185,18 @@ pub trait WebSocket<
     const TIMEOUT: f32 = 10.0;
     const SERVER_ENDPOINT:&'static str;
 
-    fn force_start(_:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static+Clone,
-      _:impl FnMut(Self) + 'static
-    )
-    where Self:WebSocketServer<ClientMsg,ServerMsg> {
+    #[cfg(feature="ssr")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
+    fn force_start_server() {
         let (signal_read,_) = signal(false);
         let _res = Effect::new(move |_| {
             let _ = signal_read.get();
         });
     }
 
-}
-
-#[cfg(feature="hydrate")]
-pub trait WebSocket<
-    ClientMsg:serde::Serialize+for<'a>serde::Deserialize<'a>+Send,
-    ServerMsg:serde::Serialize+std::fmt::Debug+for<'a>serde::Deserialize<'a>+Send
->:Sized+'static {
-    const TIMEOUT: f32 = 10.0;
-    const SERVER_ENDPOINT:&'static str;
-
-    #[allow(unused_variables)]
-    fn force_start(handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static+Clone,
+    #[cfg(feature="hydrate")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "hydrate")))]
+    fn force_start_client(handle:impl (FnMut(ServerMsg) -> Option<ClientMsg>)+'static+Clone,
       mut on_start:impl FnMut(Self) + 'static
     )
     where Self:WebSocketClient<ClientMsg,ServerMsg> {

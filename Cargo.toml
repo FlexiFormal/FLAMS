@@ -41,6 +41,10 @@ debug-js-glue = true
 demangle-name-section = true
 dwarf-debug-info = true
 
+[workspace.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [workspace.lints.rust]
 #unsafe_code = "deny"
 
@@ -111,10 +115,12 @@ oxrdfio = { version = "0.1"}#, features = ["async-tokio"] }
 
 sqlx = {version="0.8", features=["sqlite","macros","runtime-tokio"]}
 libsqlite3-sys = {version="*",features=["bundled"]}
-
 rstest = "0.23"
-
 html5ever = "0.29.0"
+
+async-lsp = {version="0.2",features=["tokio","async-io"]}
+futures = {version="0.3"}
+
 
 # leptos
 leptos = { version = "=0.7.0-beta5", features=["nightly"]}

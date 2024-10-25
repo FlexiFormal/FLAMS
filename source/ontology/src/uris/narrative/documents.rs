@@ -8,6 +8,10 @@ use const_format::concatcp;
 use std::fmt::Display;
 use std::str::{FromStr, Split};
 
+lazy_static::lazy_static! {
+    static ref NO_DOCUMENT:DocumentURI = "http://unknown.document?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct DocumentURI {
     pub(in crate::uris) path: PathURI,
@@ -16,6 +20,8 @@ pub struct DocumentURI {
 }
 impl DocumentURI {
     pub const SEPARATOR: char = 'd';
+    #[must_use]
+    pub fn no_doc() -> Self { NO_DOCUMENT.clone()}
 }
 impl Display for DocumentURI {
     #[inline]

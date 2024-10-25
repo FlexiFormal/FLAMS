@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 pub mod backend;
 pub mod settings;
 pub mod logging;
@@ -16,13 +18,15 @@ static LOG : std::sync::OnceLock<logging::LogStore> = std::sync::OnceLock::new()
 pub fn initialize(settings: SettingsSpec) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
-    let _ = LOG.get_or_init(|| {
-        logging::tracing(
-            &settings.log_dir,
-            if settings.debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
-            tracing_appender::rolling::Rotation::NEVER
-        )
-    });
+    if settings.lsp != Some(true) {
+        let _ = LOG.get_or_init(|| {
+            logging::tracing(
+                &settings.log_dir,
+                if settings.debug { tracing::Level::DEBUG } else {tracing::Level::INFO},
+                tracing_appender::rolling::Rotation::NEVER
+            )
+        });
+    }
     let backend = GlobalBackend::get().manager();
     let mhs = &*settings.mathhubs;
     for p in mhs {

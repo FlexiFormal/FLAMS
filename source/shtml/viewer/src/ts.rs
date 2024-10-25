@@ -44,6 +44,7 @@ pub enum TOCOptions {
 
 #[wasm_bindgen]
 /// render an SHTML document to the provided element
+/// #### Errors
 pub fn render_document(
   to:leptos::web_sys::HtmlElement,
   document:DocumentOptions,
@@ -92,7 +93,7 @@ pub fn render_document(
         ).into_any()
       }
       DocumentOptions::HtmlString{html,toc} => view!{
-        <SHTMLDocument on_load>
+        <SHTMLDocument on_load uri=DocumentURI::no_doc()>
           {toc.map(|toc| 
             move || if on_load.get() {Some(view!(<Toc css=Vec::new() toc=toc.clone()/>))} else {None}
           )}

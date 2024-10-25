@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 use leptos::prelude::*;
 use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
 use shtml_viewer_components::SHTMLDocument;
@@ -12,10 +14,13 @@ pub fn set_server_url(server_url: String) {
 }
 
 
-#[cfg(all(not(feature="ts"),not(feature="ssr")))]
+#[cfg(any(doc,not(feature="ts")))]
+#[cfg_attr(docsrs, doc(cfg(not(feature = "ts"))))]
 #[wasm_bindgen(start)]
 pub fn run() {
     //console_error_panic_hook::set_once();
+
+    use immt_ontology::uris::DocumentURI;
     #[allow(unused_mut)]
     let mut config = tracing_wasm::WASMLayerConfigBuilder::new();
     //#[cfg(not(debug_assertions))]
@@ -25,7 +30,7 @@ pub fn run() {
     leptos_dyn_dom::hydrate_body(|orig| {
         leptos_meta::provide_meta_context();
         let on_load = RwSignal::new(false);
-        view!(<SHTMLDocument on_load>
+        view!(<SHTMLDocument on_load uri=DocumentURI::no_doc()>
             <DomChildrenCont orig on_load cont=shtml_viewer_components::iterate/>
             </SHTMLDocument>
         )
@@ -34,4 +39,10 @@ pub fn run() {
 }
 
 #[cfg(feature="ts")]
-pub mod ts;
+mod ts;
+#[cfg(feature="ts")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ts")))]
+pub use ts::*;
+
+#[cfg(all(feature="ts",doc))]
+pub use shtml_viewer_components::components::{TOC,TOCElem};

@@ -7,11 +7,16 @@ fn main() {
 
     #[allow(clippy::redundant_pub_crate)]
     async fn run(settings: SettingsSpec) {
+        let lsp = settings.lsp == Some(true);
         let _ce = color_eyre::install();
         immt_system::initialize(settings);
-        tokio::select! {
-          () = immt::server::run() => {},
-          _ = tokio::signal::ctrl_c() => std::process::exit(0)
+        if lsp {
+          
+        } else {
+            tokio::select! {
+              () = immt::server::run() => {},
+              _ = tokio::signal::ctrl_c() => std::process::exit(0)
+            }
         }
     }
 

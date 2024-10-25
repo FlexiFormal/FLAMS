@@ -1,5 +1,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::module_name_repetitions)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 //mod popover;
 
@@ -7,7 +8,7 @@ mod extractor;
 pub mod components;
 pub mod config;
 
-use components::{inputref::InInputRef, SHTMLComponents, TOC};
+use components::{inputref::InInputRef, SHTMLComponents};
 use immt_utils::prelude::HMap;
 use leptos::prelude::*;
 use shtml_extraction::prelude::*;
@@ -30,19 +31,11 @@ impl IdPrefix {
     }
 }
 
-
-#[cfg(any(feature="ssr",feature="hydrate"))]
-#[cfg_attr(any(feature="ssr",feature="hydrate"),component)]
+#[component]
 pub fn SHTMLDocument(uri:DocumentURI, children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
     do_document(uri,children, on_load)
 }
 
-#[cfg(all(feature="csr",not(feature="ssr"),not(feature="hydrate")))]
-#[cfg_attr(all(feature="csr",not(feature="ssr"),not(feature="hydrate")),component)]
-pub fn SHTMLDocument(#[prop(optional)] uri:Option<DocumentURI>,children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
-    let uri = uri.unwrap_or_else(|| "http://unknown.document?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!()));
-    do_document(uri,children, on_load)
-}
 
 fn do_document(uri:DocumentURI,children:Children, on_load:Option<RwSignal<bool>>) -> impl IntoView {
     use crate::components::navigation::{Nav,NavElems,URLFragment};
@@ -162,6 +155,7 @@ extern "C" {
 
 #[cfg(feature="ts")]
 impl SectionContinuation {
+    /// #### Errors
   pub fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
     use wasm_bindgen::JsCast;
     let uri = uri.to_string();
@@ -186,6 +180,7 @@ impl SectionContinuation {
 #[derive(Copy,Clone)]
 pub struct OnSectionBegin(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
 impl OnSectionBegin {
+    /// #### Errors
     pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
         self.0.with_value(|f| f.do_call(uri))
     }
@@ -193,6 +188,7 @@ impl OnSectionBegin {
 #[derive(Copy,Clone)]
 pub struct OnSectionEnd(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
 impl OnSectionEnd {
+    /// #### Errors
     pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
         self.0.with_value(|f| f.do_call(uri))
     }

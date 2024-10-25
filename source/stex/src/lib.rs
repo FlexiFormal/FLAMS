@@ -1,4 +1,5 @@
 #![feature(lazy_type_alias)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod dependencies;
 mod latex;

@@ -11,7 +11,7 @@ workspace = true
 
 [features]
 ssr = [] # just to make documentation happy
-ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde","dep:immt-ontology"]
+ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde"]
 
 [dependencies]
 shtml-viewer-components = {workspace=true,features = ["csr"]}
@@ -27,7 +27,7 @@ tracing = {workspace=true,features=["release_max_level_info"]}
 
 tsify-next = {workspace=true,optional = true}
 serde = {workspace=true,optional=true}
-immt-ontology = {workspace=true,optional=true}
+immt-ontology = {workspace=true}
 
 
 tachys = {version="=0.1.0-beta5"}

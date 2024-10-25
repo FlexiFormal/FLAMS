@@ -19,6 +19,7 @@ pub struct Settings {
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
     pub num_threads: u8,
+    pub lsp:Option<bool>
 }
 impl Debug for Settings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -54,6 +55,7 @@ impl Settings {
             buildqueue: BuildQueueSettings {
                 num_threads: Some(self.num_threads),
             },
+            lsp: self.lsp
         };
         spec
     }
@@ -102,6 +104,7 @@ impl From<SettingsSpec> for Settings {
                     1
                 }
             }),
+            lsp: spec.lsp
         }
     }
 }

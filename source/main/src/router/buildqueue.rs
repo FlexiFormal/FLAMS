@@ -146,9 +146,12 @@ fn running(queue:RunningQueue) -> impl IntoView {
 #[derive(Clone)]
 pub struct QueueSocket {
   #[cfg(feature="ssr")]
+  #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
   listener: Option<immt_utils::change_listener::ChangeListener<immt_system::building::QueueMessage>>,
-  #[cfg(feature="hydrate")]
+  #[cfg(all(not(doc),feature="hydrate"))]
   socket: leptos::web_sys::WebSocket,
+  #[cfg(doc)]
+  socket: (),
   _running:RwSignal<bool>
 }
 impl WebSocket<NonZeroU32,QueueMessage> for QueueSocket {
@@ -156,6 +159,7 @@ impl WebSocket<NonZeroU32,QueueMessage> for QueueSocket {
 }
 
 #[cfg(feature="ssr")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
 #[async_trait::async_trait]
 impl crate::utils::ws::WebSocketServer<NonZeroU32,QueueMessage> for QueueSocket {
     async fn new(account:crate::users::LoginState,_db:crate::server::db::DBBackend) -> Option<Self> {
@@ -192,9 +196,13 @@ impl crate::utils::ws::WebSocketServer<NonZeroU32,QueueMessage> for QueueSocket 
 }
 
 #[cfg(feature="hydrate")]
+#[cfg_attr(docsrs, doc(cfg(feature = "hydrate")))]
 impl crate::utils::ws::WebSocketClient<NonZeroU32,QueueMessage> for QueueSocket {
     fn new(ws: leptos::web_sys::WebSocket) -> Self { Self{
+        #[cfg(not(doc))]
         socket:ws,
+        #[cfg(doc)]
+        socket:(),
         _running:RwSignal::new(false),
         #[cfg(feature="ssr")] listener:unreachable!()
     } }
@@ -207,10 +215,10 @@ impl crate::utils::ws::WebSocketClient<NonZeroU32,QueueMessage> for QueueSocket 
     }
 }
 
-#[cfg(feature="ssr")]
+#[cfg(all(feature="ssr",not(feature="hydrate")))]
 impl QueueSocket {
   fn run(_:AllQueues) {
-    Self::force_start(|_| None,|_| ());
+    Self::force_start_server();
   }
 }
 
@@ -218,7 +226,7 @@ impl QueueSocket {
 impl QueueSocket {
   fn run(queues:AllQueues) {
     use crate::utils::ws::WebSocketClient;
-    Self::force_start(move |msg| {
+    Self::force_start_client(move |msg| {
       let current = queues.selected.get_untracked();
       queues.queues.with_untracked(|queues| {
         let Some(queue) = queues.get(&current) else {

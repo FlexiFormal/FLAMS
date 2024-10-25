@@ -46,6 +46,10 @@ struct Cli {
     /// The number of threads to use for the buildqueue
     #[arg(short, long)]
     pub(crate) threads: Option<u8>,
+
+    /// enter lsp mode
+    #[arg(long)]
+    pub(crate) lsp: Option<bool>,
 }
 impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
     fn from(cli: Cli) -> Self {
@@ -69,6 +73,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
             buildqueue: BuildQueueSettings {
                 num_threads: cli.threads,
             },
+            lsp: cli.lsp
         };
         (cli.config_file, settings)
     }

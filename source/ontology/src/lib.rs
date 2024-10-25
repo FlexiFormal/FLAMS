@@ -1,5 +1,6 @@
 #![recursion_limit = "256"]
 #![feature(box_patterns)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use content::{declarations::DeclarationTrait, ContentReference, ModuleLike};
 use immt_utils::sourcerefs::{ByteOffset, SourceRange};

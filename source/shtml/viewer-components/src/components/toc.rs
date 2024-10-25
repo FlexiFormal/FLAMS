@@ -9,9 +9,9 @@ use leptos::prelude::*;
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 #[cfg_attr(feature="ts", derive(tsify_next::Tsify))]
 /// A Table of contents; Either:
-/// 1. an already known TOC, consisting of a list of [TOCElem]s, or
+/// 1. an already known TOC, consisting of a list of [`TOCElem`]s, or
 /// 2. the URI of a Document. In that case, the relevant iMMT server
-///   will be requested to obtain the TOC for that document.
+///    will be requested to obtain the TOC for that document.
 pub enum TOC {
     Full(Vec<TOCElem>),
     Get(
@@ -26,8 +26,8 @@ pub enum TOC {
 /// An entry in a table of contents. Either:
 /// 1. a section; the title is assumed to be an HTML string, or
 /// 2. an inputref to some other document; the URI is the one for the
-///   inputref itself; not the referenced Document. For the TOC,
-///   which document is inputrefed is actually irrelevant.
+///    inputref itself; not the referenced Document. For the TOC,
+///    which document is inputrefed is actually irrelevant.
 pub enum TOCElem {
   /// A section; the title is assumed to be an HTML string
   Section{
