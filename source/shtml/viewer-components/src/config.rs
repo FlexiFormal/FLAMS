@@ -81,6 +81,7 @@ impl ServerConfig {
     }
 
     /// #### Errors
+    /// #### Panics
     #[allow(unreachable_code)]
     pub async fn inputref(&self,doc:DocumentURI) -> Result<(Vec<CSS>,String),String> {
         #[cfg(feature="csr")]

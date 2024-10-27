@@ -15,7 +15,7 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
     pub buildqueue: BuildQueueSettings,
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub lsp:Option<bool>
+    pub lsp:bool
 }
 impl Add for SettingsSpec {
     type Output = Self;
@@ -30,7 +30,7 @@ impl Add for SettingsSpec {
             server: self.server + rhs.server,
             log_dir: self.log_dir.or(rhs.log_dir),
             buildqueue: self.buildqueue + rhs.buildqueue,
-            lsp:self.lsp.or(rhs.lsp)
+            lsp:self.lsp || rhs.lsp
         }
     }
 }
@@ -40,7 +40,7 @@ impl AddAssign for SettingsSpec {
             self.mathhubs = rhs.mathhubs;
         }
         self.debug = self.debug.or(rhs.debug);
-        self.lsp = self.lsp.or(rhs.lsp);
+        self.lsp = self.lsp || rhs.lsp;
         self.server += rhs.server;
         if self.log_dir.is_none() {
             self.log_dir = rhs.log_dir;
@@ -80,7 +80,7 @@ impl SettingsSpec {
                     .ok()
                     .and_then(|s| s.parse().ok()),
             },
-            lsp:None
+            lsp:false
         }
     }
 }

@@ -16,12 +16,16 @@ jobs:
         run: cargo install --force cargo-make && cargo install wasm-pack #&& cargo install --locked trunk
       - name: main
         run: cargo make
+      - name: vscode extension
+        run: cargo make vscode
       - name: ts
         run: cd source/shtml/viewer && cargo make wasm-pack-ts
       - name: doc
         run: cargo make doc
       - name: Remove lock file
         run: rm target/doc/.lock
+      - name: Set executable
+        run: chmod +x bin/immt
       - name: Upload Docs
         uses: actions/upload-pages-artifact@v3
         with:
@@ -36,6 +40,11 @@ jobs:
         with:
           name: ts
           path: source/shtml/viewer/ts
+      - name: Upload VSCode Extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode
+          path: vscode/immt.vsix
   windows:
     runs-on: windows-latest
     environment: production
@@ -82,6 +91,8 @@ jobs:
         run: cargo install --force cargo-make && cargo install wasm-pack
       - name: main
         run: cargo make
+      - name: Set executable
+        run: chmod +x bin/immt
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -109,6 +120,10 @@ jobs:
         with:
           name: ts
           path: ./ts
+      - uses: actions/download-artifact@v4
+        with:
+          name: vscode
+          path: ./vscode
       - uses: vimtor/action-zip@v1
         with:
           files: linux/
@@ -141,6 +156,7 @@ jobs:
             ./mac.zip
             ./ts.zip
             ./shtml.zip
+            ./vscode/immt.vsix
   deploy-docs:
     needs: linux
     permissions:

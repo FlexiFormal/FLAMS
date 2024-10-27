@@ -1,5 +1,4 @@
 use std::fmt::{Debug, Display};
-use std::num::NonZeroUsize;
 
 pub trait SourcePos: Clone + Default + Debug {
     fn update(&mut self, c: char);
@@ -53,20 +52,13 @@ impl SourcePos for ByteOffset {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq,Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SourceOffsetLineCol {
-    pub line: NonZeroUsize,
-    pub col: NonZeroUsize,
+    pub line: u32,
+    pub col: u32,
 }
-impl Default for SourceOffsetLineCol {
-    fn default() -> Self {
-        Self {
-            line: NonZeroUsize::new(1).unwrap_or_else(|| unreachable!()),
-            col: NonZeroUsize::new(1).unwrap_or_else(|| unreachable!()),
-        }
-    }
-}
+
 impl Display for SourceOffsetLineCol {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "l. {} c. {}", self.line, self.col)
@@ -81,29 +73,33 @@ impl Debug for SourceOffsetLineCol {
 
 impl SourcePos for SourceOffsetLineCol {
     #[inline]
-    fn update(&mut self, _: char) {
-        self.col = self.col.saturating_add(1);
+    #[allow(clippy::cast_possible_truncation)]
+    fn update(&mut self, c: char) {
+        self.col += c.len_utf16() as u32;
     }
     #[inline]
     fn update_newline(&mut self, _: bool) {
-        self.line = self.line.saturating_add(1);
-        self.col = NonZeroUsize::new(1).unwrap_or_else(|| unreachable!());
-    }
-    #[inline]
-    fn update_str_no_newline(&mut self, s: &str) {
-        self.col = self.col.saturating_add(s.chars().count());
+        self.line += 1;
+        self.col = 0;
     }
 
+    #[inline]
+    #[allow(clippy::cast_possible_truncation)]
+    fn update_str_no_newline(&mut self, s: &str) {
+        self.col += s.chars().map(|c| char::len_utf16(c) as u32).sum::<u32>();
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
     fn update_str_maybe_newline(&mut self, s: &str) {
         let s = s.split("\r\n").flat_map(|s| s.split(['\n', '\r']));
-        let mut had_newline = false;
+        let mut first = true;
         for l in s {
-            if had_newline {
-                self.line = self.line.saturating_add(1);
-                self.col = NonZeroUsize::new(1).unwrap_or_else(|| unreachable!());
+            if !first {
+                self.line += 1;
+                self.col = 0;
+                first = false;
             }
-            self.col = self.col.saturating_add(l.chars().count());
-            had_newline = true;
+            self.col += l.chars().map(|c| char::len_utf16(c) as u32).sum::<u32>();
         }
     }
 }

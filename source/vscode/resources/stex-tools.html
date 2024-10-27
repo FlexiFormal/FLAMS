@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    %%HEAD%%
+  </head>
+  <body>
+    <div style="text-align:center">
+      <vscode-button onclick="new_archive()">New sTeX Archive</vscode-button>
+      <vscode-divider role="separator"></vscode-divider>
+      <vscode-button onclick="quickparse_workspace()">Quickparse Workspace</vscode-button>
+    </div>
+    <script>
+      function quickparse_workspace() {
+        vscode.postMessage({
+          command: "quickparse"
+        });
+      }
+      function new_archive() {
+        vscode.postMessage({
+          command: "newarchive"
+        });
+      }
+    </script>
+  </body>
+</html>

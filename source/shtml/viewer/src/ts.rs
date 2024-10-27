@@ -10,11 +10,11 @@ use leptos::prelude::*;
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 /// Options for rendering an SHTML document
-/// - FromBackend: calls the backend for the document
+/// - `FromBackend`: calls the backend for the document
 ///     uri: the URI of the document (as string)
 ///     toc: if defined, will render a table of contents for the document
 // - Prerendered: Take the existent DOM HTMLElement as is
-/// - HtmlString: render the provided HTML String
+/// - `HtmlString`: render the provided HTML String
 ///     html: the HTML String
 ///     toc: if defined, will render a table of contents for the document
 pub enum DocumentOptions {
@@ -41,7 +41,7 @@ pub enum TOCOptions {
 }
 
 
-
+#[allow(clippy::needless_pass_by_value)]
 #[wasm_bindgen]
 /// render an SHTML document to the provided element
 /// #### Errors

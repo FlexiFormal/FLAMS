@@ -130,21 +130,21 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
                 self.pos.update_newline(false);
                 Some('\n')
             }
-            Some('\r') => match self.get_char() {
-                Some('\n') => {
-                    self.pos.update_newline(true);
-                    Some('\n')
+            Some('\r') => { 
+                match self.get_char() {
+                    Some('\n') => {
+                        self.pos.update_newline(true);
+                    }
+                    Some(c) => {
+                        self.pos.update_newline(false);
+                        self.push_char(c);
+                    }
+                    None => {
+                        self.pos.update_newline(false);
+                    }
                 }
-                Some(c) => {
-                    self.pos.update_newline(false);
-                    self.push_char(c);
-                    Some(c)
-                }
-                None => {
-                    self.pos.update_newline(false);
-                    Some('\n')
-                }
-            },
+                Some('\n')
+            }
             Some(c) => {
                 self.pos.update(c);
                 Some(c)

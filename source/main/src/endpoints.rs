@@ -12,10 +12,10 @@
  * | [`/api/backend/build_status`](crate::router::backend::build_status) | `archive=<STRING>`, (optional) `path=<STRING>` | [FileStates](crate::router::backend::FileStates) - the build status of the provided archive, or (if given) the relative path within the provided archive (requires admin login) |
  * | [`/api/backend/query`](crate::router::query::query_api) | `query=<STRING>` | `STRING` - SPARQL query endpoint; returns SPARQL JSON |
  * | **Build Queue** | | |
- * | [`/api/buldqueue/enqueue`](crate::router::backend::enqueue) | `archive=<STRING>`,  `target=<`[FormatOrTarget](crate::router::backend::FormatOrTarget)`>`, (optional) `path=STRING`, (optional) `stale_only=<BOOL>` (default:true) | `usize` - enqueue a new build job. Returns number of jobs queued (requires admin login)|
- * | [`/api/buldqueue/get_queues`](crate::router::buildqueue::get_queues) |  | `Vec<(NonZeroU32,String)>` - return the list of all (waiting or running) build queues as (id,name) pairs (requires admin login)|
- * | [`/api/buldqueue/run`](crate::router::buildqueue::run) | `id=<NonZeroU32>` | runs the build queue with the given id (requires admin login)|
- * | [`/api/buldqueue/log`](crate::router::buildqueue::get_log) | `archive=<STRING>`, `rel_path=<STRING>`, `target=<STRING>` | returns the log of the stated build job (requires admin login)|
+ * | [`/api/buildqueue/enqueue`](crate::router::backend::enqueue) | `archive=<STRING>`,  `target=<`[FormatOrTarget](crate::router::backend::FormatOrTarget)`>`, (optional) `path=STRING`, (optional) `stale_only=<BOOL>` (default:true) | `usize` - enqueue a new build job. Returns number of jobs queued (requires admin login)|
+ * | [`/api/buildqueue/get_queues`](crate::router::buildqueue::get_queues) |  | `Vec<(NonZeroU32,String)>` - return the list of all (waiting or running) build queues as (id,name) pairs (requires admin login)|
+ * | [`/api/buildqueue/run`](crate::router::buildqueue::run) | `id=<NonZeroU32>` | runs the build queue with the given id (requires admin login)|
+ * | [`/api/buildqueue/log`](crate::router::buildqueue::get_log) | `archive=<STRING>`, `rel_path=<STRING>`, `target=<STRING>` | returns the log of the stated build job (requires admin login)|
  * | **Web Sockets** | | |
  * | [`/ws/log`](crate::router::logging::LogSocket) |  |  |
  * | [`/ws/queue`](crate::router::buildqueue::QueueSocket) |  |  |

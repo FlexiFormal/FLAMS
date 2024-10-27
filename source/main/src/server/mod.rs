@@ -1,6 +1,6 @@
 pub mod db;
 pub mod settings;
-mod lsp;
+pub mod lsp;
 
 use std::future::IntoFuture;
 
@@ -24,7 +24,7 @@ use crate::{router::Main, utils::ws::WebSocketServer};
   name = "run",
   skip_all
 )]
-pub async fn run() {
+pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let state = ServerState::new().in_current_span().await;
 
     let session_store = MemoryStore::default();
@@ -70,6 +70,10 @@ pub async fn run() {
                 .make_span_with(SpanLayer(span.clone())),
         );
     let app: Router<()> = app.with_state(state);
+
+    if let Some(channel) = port_channel {
+        channel.send(Some(site_addr.port())).expect("Error sending port address");
+    }
 
     axum::serve(
         tokio::net::TcpListener::bind(&site_addr)

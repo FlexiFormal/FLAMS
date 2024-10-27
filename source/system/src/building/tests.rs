@@ -7,12 +7,12 @@ use crate::{backend::AnyBackend, building::{BuildTask,BuildResult},build_result,
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test() {
-  fn get_dependencies(backend: &AnyBackend, task: &BuildTask) {}
+  const fn get_dependencies(backend: &AnyBackend, task: &BuildTask) {}
 
-  fn run_build_target_1(_:&AnyBackend,task:&BuildTask) -> BuildResult {
+  const fn run_build_target_1(_:&AnyBackend,task:&BuildTask) -> BuildResult {
     BuildResult::empty()
   }
-  fn run_build_target_2(_:&AnyBackend,task:&BuildTask) -> BuildResult {
+  const fn run_build_target_2(_:&AnyBackend,task:&BuildTask) -> BuildResult {
     BuildResult::empty()
   }
 
@@ -43,6 +43,7 @@ async fn test() {
 lazy_static::lazy_static! {
   static ref TEST_SETTINGS : SettingsSpec = SettingsSpec {
     mathhubs:vec![PathBuf::from("/insert/your/path/here/MathHub").into()],
+    lsp:false,
     debug: Some(true),
     // irrelevant, because no server involved anyway
     server: ServerSettings {

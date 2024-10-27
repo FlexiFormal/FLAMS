@@ -6,15 +6,22 @@ fn main() {
     use immt_stex::STEX;
 
     #[allow(clippy::redundant_pub_crate)]
+    #[allow(clippy::future_not_send)]
     async fn run(settings: SettingsSpec) {
-        let lsp = settings.lsp == Some(true);
+      let lsp = settings.lsp;
+      let debug = settings.debug.unwrap_or(false);
         let _ce = color_eyre::install();
         immt_system::initialize(settings);
         if lsp {
-          
+            let (sender,recv) = tokio::sync::watch::channel(None);
+            tokio::select! {
+              () = immt::server::run(Some(sender)) => {},
+              () = immt::server::lsp::lsp(recv) => {},
+              _ = tokio::signal::ctrl_c() => std::process::exit(0)
+            }
         } else {
             tokio::select! {
-              () = immt::server::run() => {},
+              () = immt::server::run(None) => {},
               _ = tokio::signal::ctrl_c() => std::process::exit(0)
             }
         }

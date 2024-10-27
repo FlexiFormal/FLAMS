@@ -12,6 +12,7 @@ static SETTINGS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
 
 pub struct Settings {
     pub mathhubs: Box<[Box<Path>]>,
+    pub mathhubs_is_default:bool,
     pub debug: bool,
     pub log_dir: Box<Path>,
     pub port: u16,
@@ -19,7 +20,7 @@ pub struct Settings {
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
     pub num_threads: u8,
-    pub lsp:Option<bool>
+    pub lsp:bool
 }
 impl Debug for Settings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -63,12 +64,15 @@ impl Settings {
 impl From<SettingsSpec> for Settings {
     #[allow(clippy::cast_possible_truncation)]
     fn from(spec: SettingsSpec) -> Self {
+        let (mathhubs,mathhubs_is_default) = if spec.mathhubs.is_empty() {
+            (MATHHUB_PATHS.clone(),true)
+        } else {
+            let mhs = spec.mathhubs.into_boxed_slice();
+            let is_def = mhs == *MATHHUB_PATHS;
+            (mhs,is_def)
+        };
         Self {
-            mathhubs: if spec.mathhubs.is_empty() {
-                MATHHUB_PATHS.clone()
-            } else {
-                spec.mathhubs.into_boxed_slice()
-            },
+            mathhubs,mathhubs_is_default,
             debug: spec.debug.unwrap_or(cfg!(debug_assertions)),
             log_dir: spec.log_dir.unwrap_or_else(|| {
                 CONFIG_DIR

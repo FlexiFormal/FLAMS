@@ -5,6 +5,7 @@ members = [
   "source/stex","source/shtml/system",
   "source/shtml/viewer", 
   "source/shtml/viewer-components", "source/shtml/extraction",
+  #"source/vscode"
   ]
 resolver = "2"
 exclude = ["old"#"web/graphs","test-plugin","tests","thaw",
@@ -95,6 +96,7 @@ async-trait = "0.1"
 bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 # cfg-if = "1"
 tokio = { version = "1"}#, features = ["fs","io-util","sync","test-util","macros","rt"] }
+tokio-util = { version="0.7", features = ["compat"] }
 
 password-hash = {version="0.5"}
 argon2 = {version="0.5"}
@@ -151,6 +153,7 @@ reqwasm = "0.5"
 gloo-storage = "0.3"
 web-sys = { version = "0.3.70" }
 tsify-next = {version="0.5", features = ["js"]}
+js-sys = "0.3"
 
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
 #leptos-dyn-dom = { path="../leptos_dyn_dom"}

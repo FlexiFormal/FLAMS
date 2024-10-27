@@ -18,7 +18,7 @@ static LOG : std::sync::OnceLock<logging::LogStore> = std::sync::OnceLock::new()
 pub fn initialize(settings: SettingsSpec) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
-    if settings.lsp != Some(true) {
+    if !settings.lsp {
         let _ = LOG.get_or_init(|| {
             logging::tracing(
                 &settings.log_dir,

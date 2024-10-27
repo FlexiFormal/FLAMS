@@ -1,5 +1,6 @@
 Cargo.lock
 **/target/**
+**/node_modules/**
 oxigraph
 reedline-repl-rs
 reedline
@@ -14,3 +15,9 @@ tracing-indicatif
 /.vscode/launch.json
 /source/shtml/viewer/ts
 /source/shtml/viewer/pkg
+/source/vscode/pkg
+/source/vscode/dist
+/source/vscode/node_modules
+/source/vscode/*.vsix
+/source/vscode/package-lock.json
+/source/vscode/**/*.ignore

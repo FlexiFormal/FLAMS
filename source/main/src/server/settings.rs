@@ -49,7 +49,7 @@ struct Cli {
 
     /// enter lsp mode
     #[arg(long)]
-    pub(crate) lsp: Option<bool>,
+    pub(crate) lsp: bool,
 }
 impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
     fn from(cli: Cli) -> Self {

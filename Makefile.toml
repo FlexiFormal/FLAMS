@@ -4,6 +4,7 @@ LEPTOS_WASM_OPT_VERSION="version_119"
 LEPTOS_SASS_VERSION="1.71.0"
 RUSTDOCFLAGS="--enable-index-page -Zunstable-options --generate-link-to-definition --cfg docsrs"
 
+
 [tasks.db-create]
 workspace = false
 install_crate = "sqlx-cli"
@@ -31,12 +32,6 @@ workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
 args = ["leptos","build","--release"]
-
-
-[tasks.doc-ws]
-workspace = false
-command = "cargo"
-args = ["doc","--workspace","--no-deps","--features=ssr,rdf","--release","--document-private-items"]
 
 [tasks.doc]
 workspace = false
@@ -88,6 +83,26 @@ cwd = "./source/shtml/viewer"
 command = "cargo"
 args = ["make"]
 
+[tasks.vscode-npm-install]
+workspace = false
+cwd = "./source/vscode"
+command = "npm"
+args = ["install"]
+
+[tasks.vscode-build]
+workspace = false
+cwd = "./source/vscode"
+command = "npm"
+args = ["run","compile"]
+dependencies = ["vscode-npm-install"]
+
+[tasks.vscode]
+workspace = false
+cwd = "./source/vscode"
+command = "vsce"
+args = ["package","--out","./immt.vsix"]
+dependencies = ["vscode-build"]
+
 [tasks.copy-viewer]
 workspace = false
 dependencies = ["build-viewer"]
@@ -97,6 +112,12 @@ script = '''cp ./source/shtml/viewer/pkg/shtml.js ./resources/assets/shtml.js &&
 [tasks.all-release]
 workspace = false
 dependencies = ["build-viewer","copy-viewer","db","leptos-release","copy-to-bin"]
+
+[tasks.leptos-dev]
+workspace = false
+install_crate = "cargo-leptos"
+command = "cargo"
+args = ["leptos","build"]
 
 [tasks.default]
 workspace = false

@@ -39,7 +39,9 @@ ssr = [
   "immt-web-utils/ssr",
   "shtml-viewer-components/ssr",
   "dep:async-lsp",
-  "dep:futures"
+  "dep:futures",
+  "dep:tracing-subscriber",
+  "dep:tokio-util"
 ]
 hydrate = [
   "dep:console_error_panic_hook",
@@ -107,6 +109,8 @@ argon2 = {workspace=true,optional=true}
 
 async-lsp = {workspace=true,optional=true}
 futures = {workspace=true,optional=true}
+tokio-util = {workspace=true,optional=true}
+tracing-subscriber = {workspace=true,optional=true}
 
 #hydrate
 console_error_panic_hook = {workspace = true,optional=true}
