@@ -14,6 +14,8 @@ jobs:
         run: rustup update && rustup target add x86_64-unknown-linux-gnu && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-unknown-linux-gnu && rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - name: cargo
         run: cargo install --force cargo-make && cargo install wasm-pack #&& cargo install --locked trunk
+      - name: npm
+        run: npm install -g @vscode/vsce 
       - name: main
         run: cargo make
       - name: vscode extension
