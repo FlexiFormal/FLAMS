@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { get_context, IMMTContext } from '../extension';
+import { get_context, get_pre_context, IMMTContext, IMMTPreContext } from '../extension';
 import { CancellationToken } from 'vscode-languageclient';
 import { MathHubTreeProvider } from './mathhub';
 import { IMMTServer } from './immt/server';
@@ -15,36 +15,22 @@ export enum Settings {
   ImmtPath = "immt_path"
 }
 
-export function register_commands() {
-  let context = get_context();
-  if (!context) { throw new Error("context is undefined"); }
-
+export function register_commands(context:IMMTPreContext) {
   //import { greet } from '../../pkg/immt_vscode';
   /*context.register_command(Commands.HelloWorld, () => {
     vscode.window.showInformationMessage(greet("Dude"));
   });*/
 }
 
-export function register_server_commands() {
-  let context = get_context();
-  if (!context) { throw new Error("context is undefined"); }
-  if (!context.server || !context.client) {
-    vscode.window.showErrorMessage("iMMT: Server/Client not running");
-    return;
-  }
+export function register_server_commands(context:IMMTContext) {
 
 	vscode.window.registerWebviewViewProvider("immt-tools",
-    webview("stex-tools")
+    webview(context,"stex-tools")
   );
-	vscode.window.registerTreeDataProvider("immt-mathhub",new MathHubTreeProvider());
+	vscode.window.registerTreeDataProvider("immt-mathhub",new MathHubTreeProvider(context));
 }
 
-export function webview(html_file:string,onMessage?: vscode.Event<any>) : vscode.WebviewViewProvider {
-  let immtcontext = get_context();
-  if (!immtcontext) { throw new Error("context is undefined"); }
-  if (!immtcontext.server || !immtcontext.client) {
-    throw new Error("iMMT: Server/Client not running");
-  }
+export function webview(immtcontext:IMMTContext,html_file:string,onMessage?: vscode.Event<any>) : vscode.WebviewViewProvider {
   return <vscode.WebviewViewProvider> {
     resolveWebviewView(webviewView: vscode.WebviewView, context: vscode.WebviewViewResolveContext, token: CancellationToken): Thenable<void> | void {
       webviewView.webview.options = {

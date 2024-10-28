@@ -9,8 +9,8 @@ import { IMMTServer } from './ts/immt/server';
 export async function activate(context: vscode.ExtensionContext) {
 	//console.log('Congratulations, your extension "immt" is now active!');
 	//act(context);
-	const ctx = new IMMTContext(context);
-	register_commands();
+	const ctx = new IMMTPreContext(context);
+	register_commands(ctx);
 	if (await ctx.versions.isValid()) {
 		launch(ctx);
 	} else {
@@ -19,13 +19,13 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  const context = get_context();
+  const context = get_pre_context();
 	if (context?.client) {
 		context.client.stop();
 	}
 }
 
-export async function launch(context:IMMTContext) {
+export async function launch(context:IMMTPreContext) {
   let versions = context.versions;
   let immt = await versions?.immtversion();
   let stex = await versions?.stexversion();
@@ -51,21 +51,25 @@ export async function launch(context:IMMTContext) {
 	});
 	context.client.onNotification("immt/serverURL",(s:string) => {
 		context.server = new IMMTServer(s);
-    register_server_commands();
+    const ctx = new IMMTContext(context);
+    register_server_commands(ctx);
 	});
   context.client.start();
-
-
 }
 
 
-let _context : IMMTContext | undefined = undefined;
-export function get_context() : IMMTContext | undefined {
+let _context : IMMTContext | IMMTPreContext | undefined = undefined;
+export function get_pre_context() : IMMTContext | IMMTPreContext | undefined {
+  return _context;
+}
+
+export function get_context() : IMMTContext {
+  if (!(_context instanceof IMMTContext)) { throw new Error("context is undefined"); }
   return _context;
 }
 
 
-export class IMMTContext {
+export class IMMTPreContext {
   outputChannel: vscode.OutputChannel;
   vsc: vscode.ExtensionContext;
   versions: Versions = new Versions();
@@ -75,6 +79,29 @@ export class IMMTContext {
   constructor(context: vscode.ExtensionContext) {
 		this.vsc = context;
     this.outputChannel = vscode.window.createOutputChannel('iMMT');
+    _context = this;
+	}
+
+  register_command(name:string,callback: (...args: any[]) => any, thisArg?: any) {
+    const disposable = vscode.commands.registerCommand(name, callback, thisArg);
+    this.vsc.subscriptions.push(disposable);
+  }
+}
+
+export class IMMTContext {
+  outputChannel: vscode.OutputChannel;
+  vsc: vscode.ExtensionContext;
+  versions: Versions;
+  client: language.LanguageClient;
+  server: IMMTServer;
+
+  constructor(ctx:IMMTPreContext) {
+    if (!ctx.client || !ctx.server) { throw new Error("iMMT: Client/Server not initialized"); }
+		this.vsc = ctx.vsc;
+    this.outputChannel = ctx.outputChannel;
+    this.versions = ctx.versions;
+    this.client = ctx.client;
+    this.server = ctx.server;
     _context = this;
 	}
 

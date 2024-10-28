@@ -1,16 +1,16 @@
 import path from "path";
-import { IMMTContext, launch } from "../extension";
+import { IMMTPreContext, launch } from "../extension";
 import { Settings } from "./commands";
 import { add_exe, download, unzip } from "./utils";
 import { REQUIRED_IMMT, REQUIRED_STEX } from "./versions";
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 
-export async function setup(context:IMMTContext): Promise<void> {
+export async function setup(context:IMMTPreContext): Promise<void> {
   await check_immt(context);
 }
 
-async function check_immt(context:IMMTContext) {
+async function check_immt(context:IMMTPreContext) {
   let versions = context.versions;
   if (!versions?.immt_path) {
     await immt_missing(context);
@@ -26,7 +26,7 @@ async function check_immt(context:IMMTContext) {
   }
 }
 
-async function check_stex(context:IMMTContext) {
+async function check_stex(context:IMMTPreContext) {
   let versions = context.versions;
   if (await versions?.hasLatex()) {
     if (await versions?.hasSTeX()) {
@@ -53,7 +53,7 @@ Please update your stex package version.`
   }
 }
 
-async function immt_version_mismatch(context:IMMTContext) {
+async function immt_version_mismatch(context:IMMTPreContext) {
   await immt_problem(
     'iMMT: Version outdated',
     `This version requires at least version ${REQUIRED_IMMT.toString()}. \
@@ -63,7 +63,7 @@ or download it automatically from https://github.com/KWARC/iMMT`,
   );
 }
 
-async function immt_missing(context:IMMTContext) {
+async function immt_missing(context:IMMTPreContext) {
   await immt_problem(
     'iMMT: Path to executable not set',
     `An iMMT executable is required to run iMMT. \
@@ -73,7 +73,7 @@ or download it automatically from https://github.com/KWARC/iMMT`,
   );
 }
 
-async function immt_invalid(context:IMMTContext) {
+async function immt_invalid(context:IMMTPreContext) {
   await immt_problem('iMMT: executable invalid',
     `Your path to the iMMT executable does not point to an iMMT executable. \
 You can either set a different path in the settings, \
@@ -82,7 +82,7 @@ or download it automatically from https://github.com/KWARC/iMMT`,
   );
 }
 
-async function immt_problem(msg:string,long:string,context:IMMTContext) {
+async function immt_problem(msg:string,long:string,context:IMMTPreContext) {
   const SET_PATH = "Set path";
   const DOWNLOAD = "Download";
   const selection = await vscode.window.showInformationMessage(msg, { modal: true,
@@ -103,7 +103,7 @@ async function immt_problem(msg:string,long:string,context:IMMTContext) {
   }
 }
 
-function update_immt(path:string,context:IMMTContext) {
+function update_immt(path:string,context:IMMTPreContext) {
   vscode.workspace.getConfiguration("immt").update(Settings.ImmtPath, path, vscode.ConfigurationTarget.Global)
   .then(() => {
     let versions = context.versions;
@@ -112,7 +112,7 @@ function update_immt(path:string,context:IMMTContext) {
   });
 }
 
-async function download_immt(context:IMMTContext) {
+async function download_immt(context:IMMTPreContext) {
   const dir = await vscode.window.showOpenDialog({
     canSelectFiles: false,
     canSelectFolders: true,
@@ -124,7 +124,7 @@ async function download_immt(context:IMMTContext) {
   }
 }
 
-async function download_from_github(dir:string,context:IMMTContext) {
+async function download_from_github(dir:string,context:IMMTPreContext) {
   vscode.window.withProgress({
     location: vscode.ProgressLocation.Notification,
     title: "Installing iMMT",
