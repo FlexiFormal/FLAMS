@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '>=23.1'
-        run: npm install -g @vscode/vsce 
+      - run: npm install -g @vscode/vsce 
       - name: main
         run: cargo make
       - name: vscode extension
