@@ -27,7 +27,7 @@
           "id": "immt-viewcontainer",
           "title": "sTeX Tools",
           "icon": "img/stex.svg",
-					"when": "immt:enabled"
+					"when": "immt.loaded"
         }
       ]
     },
@@ -38,7 +38,7 @@
 					"name": "Math Archives",
 					"icon": "img/stex.svg",
 					"contextualTitle": "Math Archives",
-					"when": "immt:enabled"
+					"when": "immt.loaded"
 				},
         {
           "id": "immt-tools",
@@ -46,7 +46,7 @@
           "name": "sTeX Tools",
           "icon": "img/stex.svg",
           "contextualTitle": "sTeX Functionality",
-					"when": "immt:enabled"
+					"when": "immt.loaded"
         }
       ]
     },
@@ -96,7 +96,7 @@
   "scripts": {
     "ignore-this": "wasm-pack build --target nodejs",
     "vscode:prepublish": "npm run package",
-    "compile": "webpack",
+    "build": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p . --outDir out",

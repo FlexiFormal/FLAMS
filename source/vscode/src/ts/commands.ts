@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
-import { get_context, get_pre_context, IMMTContext, IMMTPreContext } from '../extension';
+import { IMMTContext, IMMTPreContext } from '../extension';
 import { CancellationToken } from 'vscode-languageclient';
 import { MathHubTreeProvider } from './mathhub';
-import { IMMTServer } from './immt/server';
 
 export enum Commands {
   HelloWorld = "immt.helloWorld",
@@ -23,7 +22,7 @@ export function register_commands(context:IMMTPreContext) {
 }
 
 export function register_server_commands(context:IMMTContext) {
-
+  vscode.commands.executeCommand('setContext', 'immt.loaded', true);
 	vscode.window.registerWebviewViewProvider("immt-tools",
     webview(context,"stex-tools")
   );

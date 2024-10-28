@@ -1,5 +1,4 @@
 
-/*
 export interface Settings {
   mathhubs: string[],
   debug:boolean,
@@ -13,7 +12,7 @@ export interface Settings {
     num_threads:number
   }
 }
-*/
+
 
 export interface BuildState {
   new:number,

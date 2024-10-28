@@ -94,6 +94,7 @@ export class IMMTContext {
   versions: Versions;
   client: language.LanguageClient;
   server: IMMTServer;
+  remote_server: IMMTServer | undefined;
 
   constructor(ctx:IMMTPreContext) {
     if (!ctx.client || !ctx.server) { throw new Error("iMMT: Client/Server not initialized"); }
@@ -102,6 +103,7 @@ export class IMMTContext {
     this.versions = ctx.versions;
     this.client = ctx.client;
     this.server = ctx.server;
+    this.remote_server = new IMMTServer("https://mmt.beta.vollki.kwarc.info");
     _context = this;
 	}
 

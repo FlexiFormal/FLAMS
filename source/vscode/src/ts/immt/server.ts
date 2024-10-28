@@ -10,7 +10,7 @@ export class IMMTServer {
     return this._url;
   }
 
-/* requires login
+  /// requires login
   async api_settings(): Promise<immt.Settings | undefined> {
     const ret = <[immt.Settings,any] | undefined> await this.postRequest("api/settings",{});
     if (ret) {
@@ -18,7 +18,7 @@ export class IMMTServer {
       return settings;
     }
   }
-*/
+
 
   /// sets a cookie, i.e. only makes sense in a client-side context
   async api_login(username:string,password:string): Promise<void> {

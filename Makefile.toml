@@ -93,7 +93,7 @@ args = ["install"]
 workspace = false
 cwd = "./source/vscode"
 command = "npm"
-args = ["run","compile"]
+args = ["run","build"]
 dependencies = ["vscode-npm-install"]
 
 [tasks.vscode]
