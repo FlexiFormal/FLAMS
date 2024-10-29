@@ -240,7 +240,7 @@ impl TreeLike for Term {
         }
     }
 }
-impl<'a> TreeChild<Term> for &'a Term {
+impl TreeChild<Term> for &Term {
     fn children<'b>(&self) -> Option<<Term as TreeLike>::RefIter<'b>>
     where
         Self: 'b,

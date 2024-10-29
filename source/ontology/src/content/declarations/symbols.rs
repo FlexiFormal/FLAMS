@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use crate::{
     content::terms::{ArgMode, Term},
-    uris::{NameStep, SymbolURI},
+    uris::SymbolURI,
 };
 
 use super::{Declaration, DeclarationTrait};

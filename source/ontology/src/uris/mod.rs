@@ -152,8 +152,8 @@ impl<'a, A: URITrait<Ref<'a> = &'a A> + URIWithLanguage> URIWithLanguage for &'a
     }
 }
 
-impl<'a, U: URITrait> sealed::Sealed for &'a U {}
-impl<'a, U: URITrait> URIOrRefTrait for &'a U {
+impl<U: URITrait> sealed::Sealed for &U {}
+impl<U: URITrait> URIOrRefTrait for &U {
     #[inline]
     fn base(&self) -> &BaseURI {
         (*self).base()

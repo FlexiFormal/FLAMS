@@ -101,7 +101,7 @@ impl<'a> From<&'a NarrativeURI> for NarrativeURIRef<'a> {
         }
     }
 }
-impl<'a> URIOrRefTrait for NarrativeURIRef<'a> {
+impl URIOrRefTrait for NarrativeURIRef<'_> {
     #[inline]
     fn base(&self) -> &BaseURI {
         match self {

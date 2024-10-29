@@ -267,7 +267,7 @@ impl<'a> PathURITrait for ArchiveURIRef<'a> {
     }
 }
 
-impl<'a> ArchiveURITrait for ArchiveURIRef<'a> {
+impl ArchiveURITrait for ArchiveURIRef<'_> {
     #[inline]
     fn archive_uri(&self) -> Self {
         *self

@@ -19,12 +19,12 @@ impl NavElems {
     pub fn with_untracked<R>(f:impl FnOnce(&Self) -> R) -> R {
         expect_context::<RwSignal<Self>>().try_with_untracked(f).expect("this should not happen")
     }
-    pub fn update<R>(f:impl FnOnce(&mut Self) -> R) -> R {
+    /*pub fn update<R>(f:impl FnOnce(&mut Self) -> R) -> R {
         expect_context::<RwSignal<Self>>().try_update(f).expect("this should not happen")
     }
     pub fn with<R>(f:impl FnOnce(&Self) -> R) -> R {
         expect_context::<RwSignal<Self>>().with(f)
-    }
+    }*/
     pub fn navigate_to(&self,id:&str) {
         #[cfg(any(feature="csr",feature="hydrate"))]
         {

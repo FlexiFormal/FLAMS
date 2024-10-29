@@ -9,7 +9,6 @@ fn main() {
     #[allow(clippy::future_not_send)]
     async fn run(settings: SettingsSpec) {
       let lsp = settings.lsp;
-      let debug = settings.debug.unwrap_or(false);
         let _ce = color_eyre::install();
         immt_system::initialize(settings);
         if lsp {

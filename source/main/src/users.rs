@@ -122,6 +122,7 @@ pub(crate) fn Login(children:Children) -> impl IntoView {
     let toaster = thaw::ToasterInjection::expect_context();
     let res = Resource::new_blocking(|| (),move |()| async move {
       #[cfg(feature="ssr")]
+      #[allow(clippy::needless_return)]
       { return LoginState::get(); }
       #[cfg(feature="hydrate")]
       {
