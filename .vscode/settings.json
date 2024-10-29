@@ -3,7 +3,7 @@
     "DATABASE_URL":"sqlite:./main/migrations/users.sqlite?mode=rwc"
   },
   "rust-analyzer.cargo.features": [
-    "ts",
+    "ts","ws",
     "ssr" //"hydrate"//
   ], // "all"
   "search.useIgnoreFiles": false 

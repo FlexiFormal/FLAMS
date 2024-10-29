@@ -85,20 +85,20 @@ args = ["make"]
 
 [tasks.vscode-npm-install]
 workspace = false
-cwd = "./source/vscode"
+cwd = "./source/ts/vscode"
 command = "npm"
 args = ["install"]
 
 [tasks.vscode-build]
 workspace = false
-cwd = "./source/vscode"
+cwd = "./source/ts/vscode"
 command = "npm"
 args = ["run","build"]
 dependencies = ["vscode-npm-install"]
 
 [tasks.vscode]
 workspace = false
-cwd = "./source/vscode"
+cwd = "./source/ts/vscode"
 command = "vsce"
 args = ["package","--out","./immt.vsix"]
 dependencies = ["vscode-build"]

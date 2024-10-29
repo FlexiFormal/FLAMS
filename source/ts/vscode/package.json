@@ -7,7 +7,7 @@
   "publisher": "kwarc",
   "repository": {
     "type": "git",
-    "url": "github:slatex/stex-IDE"
+    "url": "github:KWARC/iMMT"
   },
   "categories": [
     "Programming Languages",
@@ -27,26 +27,26 @@
           "id": "immt-viewcontainer",
           "title": "sTeX Tools",
           "icon": "img/stex.svg",
-					"when": "immt.loaded"
+          "when": "immt.loaded"
         }
       ]
     },
     "views": {
       "immt-viewcontainer": [
-				{
-					"id": "immt-mathhub",
-					"name": "Math Archives",
-					"icon": "img/stex.svg",
-					"contextualTitle": "Math Archives",
-					"when": "immt.loaded"
-				},
+        {
+          "id": "immt-mathhub",
+          "name": "Math Archives",
+          "icon": "img/stex.svg",
+          "contextualTitle": "Math Archives",
+          "when": "immt.loaded"
+        },
         {
           "id": "immt-tools",
           "type": "webview",
           "name": "sTeX Tools",
           "icon": "img/stex.svg",
           "contextualTitle": "sTeX Functionality",
-					"when": "immt.loaded"
+          "when": "immt.loaded"
         }
       ]
     },

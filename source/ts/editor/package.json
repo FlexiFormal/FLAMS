@@ -1,0 +1,38 @@
+{
+  "name": "immt-editor",
+  "displayName": "iMᴍᴛ - Generic knowledge management system for flexiformal knowledge",
+  "description": "todo",
+  "version": "0.0.1",
+  "license": "GPL3",
+  "publisher": "kwarc",
+  "repository": {
+    "type": "git",
+    "url": "github:KWARC/iMMT"
+  },
+  "type": "module",
+  "dependencies": {
+    "monaco-editor": "npm:@codingame/monaco-vscode-editor-api@~10.1.1",
+    "monaco-editor-wrapper": "~6.0.0-next.5",
+    "vscode": "npm:@codingame/monaco-vscode-api@~10.1.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12",
+    "@types/vscode": "~1.94.0",
+    "css-loader": "~7.1.2",
+    "http-server": "~14.1.1",
+    "shx": "~0.3.4",
+    "source-map-loader": "~5.0.0",
+    "style-loader": "~4.0.0",
+    "ts-loader": "~9.5.1",
+    "webpack-cli": "~5.1.4"
+  },
+  "scripts": {
+    "verify": "npm install && npm run build && npm run start",
+    "verify:ci": "npm install && npm run build",
+    "clean": "shx rm -fr dist *.tsbuildinfo",
+    "build:msg": "echo Building client-webpack example:",
+    "build": "npm run build:msg && npm run clean && webpack",
+    "start": "http-server ./ --port 8081"
+  }
+}

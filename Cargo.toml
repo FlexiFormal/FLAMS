@@ -2,6 +2,7 @@
 members = [
   #"api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm", 
   "source/main","source/utils", "source/ontology", "source/system", "source/web-utils",
+  "source/lsp",
   "source/stex","source/shtml/system",
   "source/shtml/viewer", 
   "source/shtml/viewer-components", "source/shtml/extraction",
@@ -63,6 +64,7 @@ immt-stex = {path = "source/stex",version="0.0.1"}
 immt-utils = { path = "source/utils",version="0.0.1" }
 immt-ontology = { path = "source/ontology",version="0.0.1" }
 immt-system = { path = "source/system",version="0.0.1" }
+immt-lsp = { path = "source/lsp",version="0.0.1" }
 immt-web-utils = { path = "source/web-utils",version="0.0.1" }
 # shtml-viewer = { path = "shtml/viewer",version="0.0.1" }
 shtml-extraction = { path = "source/shtml/extraction",version="0.0.1" }

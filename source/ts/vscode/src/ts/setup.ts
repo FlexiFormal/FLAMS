@@ -1,5 +1,5 @@
 import path from "path";
-import { IMMTPreContext, launch } from "../extension";
+import { IMMTPreContext, launch_local } from "../extension";
 import { Settings } from "./commands";
 import { add_exe, download, unzip } from "./utils";
 import { REQUIRED_IMMT, REQUIRED_STEX } from "./versions";
@@ -33,7 +33,7 @@ async function check_stex(context:IMMTPreContext) {
       let v = await versions?.stexversion();
       if (v) {
         if (v.newer_than(REQUIRED_STEX)) {
-          launch(context);
+          launch_local(context);
         } else {
           vscode.window.showErrorMessage(`iMMT: Outdated stex package version`, { 
             modal: true,

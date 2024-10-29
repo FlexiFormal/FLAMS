@@ -46,6 +46,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let app = axum::Router::<ServerState>::new()
         .route("/ws/log",axum::routing::get(crate::router::logging::LogSocket::ws_handler))
         .route("/ws/queue",axum::routing::get(crate::router::buildqueue::QueueSocket::ws_handler))
+        .route("/ws/lsp",axum::routing::get(crate::server::lsp::register))
         .route(
             "/api/*fn_name",
             axum::routing::get(server_fn_handle).post(server_fn_handle),

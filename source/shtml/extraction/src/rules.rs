@@ -129,7 +129,7 @@ impl<const L:usize,E:SHTMLExtractor> RuleSet<E> for [SHTMLExtractionRule<E>;L] {
 pub mod rules {
     use immt_ontology::content::declarations::symbols::{ArgSpec, AssocType};
     use immt_ontology::narration::paragraphs::ParagraphKind;
-    use immt_ontology::uris::{Name, URIRefTrait};
+    use immt_ontology::uris::Name;
     use smallvec::SmallVec;
     use crate::errors::SHTMLError;
     use crate::open::OpenSHTMLElement;

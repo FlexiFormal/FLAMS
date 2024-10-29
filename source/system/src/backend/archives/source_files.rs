@@ -63,7 +63,7 @@ pub struct SourceFile {
     pub format_state: FileState
 }
 
-impl<'c> TreeChild<SourceEntry> for &'c SourceEntry {
+impl TreeChild<SourceEntry> for &SourceEntry {
     fn children<'a>(&self) -> Option<<SourceEntry as TreeLike>::RefIter<'a>>
     where
         Self: 'a,
@@ -82,7 +82,7 @@ impl TreeLike for SourceEntry {
     }
 }
 
-impl<'c> TreeChild<SourceDir> for &'c SourceEntry {
+impl TreeChild<SourceDir> for &SourceEntry {
     fn children<'a>(&self) -> Option<<SourceEntry as TreeLike>::RefIter<'a>>
     where
         Self: 'a,

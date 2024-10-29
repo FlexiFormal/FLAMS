@@ -1,0 +1,22 @@
+[package]
+name = "immt-lsp"
+version = "0.0.1"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[features]
+ws = ["dep:axum","dep:parking_lot","dep:serde_json"]
+
+[dependencies]
+immt-system = {workspace=true,features=["tokio"]}
+tracing={workspace=true}
+async-lsp = {workspace=true}
+futures = {workspace=true}
+tower = {workspace = true}
+tokio = {workspace=true}
+
+axum = {workspace=true,optional=true}
+parking_lot = {workspace=true,optional=true}
+serde_json = {workspace=true,optional=true}

@@ -5,18 +5,23 @@ import { setup } from './ts/setup';
 import { Versions } from './ts/versions';
 import * as language from 'vscode-languageclient/node';
 import { IMMTServer } from './ts/immt/server';
+//import * as ws from 'ws';
 
 export async function activate(context: vscode.ExtensionContext) {
-	//console.log('Congratulations, your extension "immt" is now active!');
-	//act(context);
+  await local(context);
+  //await remote(context);
+}
+
+async function local(context: vscode.ExtensionContext) {
 	const ctx = new IMMTPreContext(context);
 	register_commands(ctx);
 	if (await ctx.versions.isValid()) {
-		launch(ctx);
+		launch_local(ctx);
 	} else {
 		setup(ctx);
 	}
 }
+
 
 export function deactivate() {
   const context = get_pre_context();
@@ -25,7 +30,7 @@ export function deactivate() {
 	}
 }
 
-export async function launch(context:IMMTPreContext) {
+export async function launch_local(context:IMMTPreContext) {
   let versions = context.versions;
   let immt = await versions?.immtversion();
   let stex = await versions?.stexversion();
@@ -57,6 +62,44 @@ export async function launch(context:IMMTPreContext) {
   context.client.start();
 }
 
+/*
+async function remote(context: vscode.ExtensionContext) {
+	const ctx = new IMMTPreContext(context);
+	register_commands(ctx);
+  launch_remote(ctx);
+}
+
+export async function launch_remote(context: IMMTPreContext) {
+  // Initialize server first
+  context.server = new IMMTServer("http://localhost:3000");
+  
+  const wsock = new ws.WebSocket("http://localhost:3000/ws/lsp");
+  const connection = ws.WebSocket.createWebSocketStream(wsock);
+
+  connection.on("data",(chunk) => console.log(new TextDecoder().decode(chunk)));
+
+  context.client = new language.LanguageClient(
+    "immt-server",
+    "iMMT Language Server",
+    () => Promise.resolve({
+      reader: connection,
+      writer: connection,
+    }),
+    {
+        documentSelector: [
+            {scheme: "file", language: "tex"},
+            {scheme: "file", language: "latex"}
+        ],
+        synchronize: {}
+    }
+  );
+  await context.client.start().then(() => {
+    const ctx = new IMMTContext(context);
+    ctx.remote_server = undefined;
+    register_server_commands(ctx);
+  });
+}
+*/
 
 let _context : IMMTContext | IMMTPreContext | undefined = undefined;
 export function get_pre_context() : IMMTContext | IMMTPreContext | undefined {

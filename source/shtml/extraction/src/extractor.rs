@@ -10,7 +10,7 @@ use immt_ontology::narration::notations::{NotationComponent, OpNotation};
 use immt_ontology::narration::sections::SectionLevel;
 use immt_ontology::narration::variables::Variable;
 use immt_ontology::narration::{LazyDocRef, UncheckedDocumentElement};
-use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURIRef, NarrativeURITrait, SymbolURI, URIRefTrait};
+use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURITrait, SymbolURI, URIRefTrait};
 use immt_ontology::{DocumentRange, Resourcable};
 use immt_utils::prelude::HMap;
 use immt_utils::vecmap::VecMap;
