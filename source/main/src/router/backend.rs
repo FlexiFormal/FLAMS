@@ -446,14 +446,14 @@ async fn run_build(id:ArchiveId,target:FormatOrTarget,path:Option<String>,stale_
   use thaw::{ToastOptions,ToastPosition,MessageBar,MessageBarIntent,MessageBarBody};
   match enqueue(id,target,path,Some(stale_only)).await {
     Ok(i) => toaster.dispatch_toast(
-      view!{
+      move || view!{
         <MessageBar intent=MessageBarIntent::Success><MessageBarBody>
             {i}" new build tasks queued"
         </MessageBarBody></MessageBar>}.into_any(), 
       ToastOptions::default().with_position(ToastPosition::Top)
     ),
     Err(e) => toaster.dispatch_toast(
-      view!{
+      || view!{
         <MessageBar intent=MessageBarIntent::Error><MessageBarBody>
             {e.to_string()}
         </MessageBarBody></MessageBar>}.into_any(), 

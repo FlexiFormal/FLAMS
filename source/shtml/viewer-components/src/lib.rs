@@ -118,7 +118,7 @@ extern "C" {
 #[allow(clippy::missing_const_for_fn)]
 #[allow(unreachable_code)]
 #[allow(clippy::needless_return)]
-pub fn iterate(e:&Element) -> Option<AnyView<Dom>> {
+pub fn iterate(e:&Element) -> Option<AnyView> {
     tracing::trace!("iterating {} ({:?})",e.outer_html(),std::thread::current().id());
     #[cfg(any(feature="csr",feature="hydrate"))]
     {

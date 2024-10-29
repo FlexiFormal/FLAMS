@@ -181,6 +181,6 @@ pub fn Popover(
     }
     match node_type {
         DivOrMrow::Div => go!(html::Div;div).into_any(),
-        DivOrMrow::Mrow => go!(tachys::mathml::Mrow;mrow).into_any(),
+        DivOrMrow::Mrow => go!(leptos::tachys::mathml::Mrow;mrow).into_any(),
     }
 }

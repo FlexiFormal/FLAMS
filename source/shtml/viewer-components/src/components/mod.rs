@@ -10,10 +10,10 @@ pub use toc::*;
 use leptos::prelude::*;
 use leptos_dyn_dom::{DomCont, OriginalNode};
 use shtml_extraction::{open::OpenSHTMLElement, prelude::SHTMLElements};
-use tachys::view::any_view::AnyView;
+use leptos::tachys::view::any_view::AnyView;
 
 #[component]
-pub fn SHTMLComponents(#[prop(optional)] in_math:bool, elements:SHTMLElements,orig:OriginalNode) -> AnyView<Dom> {
+pub fn SHTMLComponents(#[prop(optional)] in_math:bool, elements:SHTMLElements,orig:OriginalNode) -> AnyView {
   if in_math { 
     do_components::<true>(0, elements, orig) 
   } else {
@@ -21,7 +21,7 @@ pub fn SHTMLComponents(#[prop(optional)] in_math:bool, elements:SHTMLElements,or
   }
 }
 
-fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:OriginalNode) -> AnyView<Dom> {
+fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:OriginalNode) -> AnyView {
   if let Some(next) = elements.iter().nth(skip) {
     tracing::debug!("Doing {next:?} ({:?})",std::thread::current().id());
     match next {

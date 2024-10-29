@@ -5,7 +5,7 @@ use leptos::prelude::{view, IntoAny};
 
 pub fn error_toast(err:Cow<'static,str>,toaster:thaw::ToasterInjection) {
   toaster.dispatch_toast(
-    view!{
+    move || view!{
       <MessageBar intent=MessageBarIntent::Error>
         <MessageBarBody>{err}</MessageBarBody>
       </MessageBar>

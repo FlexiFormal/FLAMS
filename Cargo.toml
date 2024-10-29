@@ -127,13 +127,13 @@ futures = {version="0.3"}
 
 
 # leptos
-leptos = { version = "=0.7.0-beta5", features=["nightly"]}
-leptos_axum = "=0.7.0-beta5"
-leptos_meta= "=0.7.0-beta5"
-leptos_router = { version = "=0.7.0-beta5", features=["nightly"]}
-thaw = { version="0.4.0-beta3",features=["nightly"] }
-thaw_components = "0.2.0-beta3"
-thaw_utils = "0.1.0-beta3"
+leptos = { version = "0.7.0-rc0", features=["nightly"]}
+leptos_axum = "0.7.0-rc0"
+leptos_meta= "0.7.0-rc0"
+leptos_router = { version = "0.7.0-rc0", features=["nightly"]}
+thaw = { version="0.4.0-beta4",features=["nightly"] }
+thaw_components = "0.2.0-beta4"
+thaw_utils = "0.1.0-beta4"
 icondata_bi = "0"
 icondata_ai = "0"
 
@@ -157,8 +157,8 @@ web-sys = { version = "0.3.70" }
 tsify-next = {version="0.5", features = ["js"]}
 js-sys = "0.3"
 
-leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
-#leptos-dyn-dom = { path="../leptos_dyn_dom"}
+#leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
+leptos-dyn-dom = { path="../leptos_dyn_dom"}
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
 #RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}

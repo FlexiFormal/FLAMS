@@ -170,8 +170,8 @@ impl ServerState {
         let basepath = Self::get_basepath();
         let mut leptos_cfg =
             leptos::prelude::get_configuration(None).expect("Failed to get leptos config");
-        leptos_cfg.leptos_options.site_root = basepath;
-        leptos_cfg.leptos_options.output_name = "immt".to_string();
+        leptos_cfg.leptos_options.site_root = basepath.into();
+        leptos_cfg.leptos_options.output_name = "immt".into();
 
         let settings = Settings::get();
         let ip = settings.ip;
