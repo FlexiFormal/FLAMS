@@ -40,7 +40,8 @@ ssr = [
   "shtml-viewer-components/ssr",
   "dep:immt-lsp",
   "dep:tracing-subscriber",
-  "dep:tokio-util"
+  "dep:tokio-util",
+  "dep:rayon"
 ]
 hydrate = [
   "dep:console_error_panic_hook",
@@ -91,6 +92,7 @@ toml = {workspace = true,optional=true}
 color-eyre = {workspace = true,optional=true}
 clap = {workspace = true,optional=true}
 leptos_axum = {workspace=true,optional=true}
+rayon = {workspace=true,optional=true}
 
 sqlx = {workspace=true,optional = true}
 libsqlite3-sys = {workspace = true,optional=true}
@@ -118,8 +120,11 @@ tracing-wasm = {workspace = true,optional = true}
 
 
 
-#tachys = {version="=0.1.0-beta5"}
+tachys = {workspace = true}
+server_fn = {workspace = true}
+leptos_macro = {workspace = true}
+server_fn_macro = {workspace = true}
+server_fn_macro_default = {workspace = true}
 #reactive_graph = {version="=0.1.0-beta5"}
-#leptos_macro = {version="=0.7.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #leptos_config = {version="=0.7.0-beta5"}

@@ -16,14 +16,26 @@ pub trait StringOrStr<'a>:
     ///
     /// Will return `Err` if self does not start with prefix.
     fn strip_prefix(self, s: &str) -> Result<Self, Self>;
+    #[must_use]
+    fn split_n(self, n:usize) -> (Self,Self);
+    fn trim_ws(&mut self);
     fn split_noparens<const OPEN: char, const CLOSE: char>(
         &'a self,
         split_char: char,
     ) -> impl Iterator<Item = &'a str>;
 }
 impl<'a> StringOrStr<'a> for &'a str {
+    #[inline]
     fn strip_prefix(self, s: &str) -> Result<Self, Self> {
         str::strip_prefix(self, s).map(str::trim_start).ok_or(self)
+    }
+    #[inline]
+    fn split_n(self, n: usize) -> (Self,Self) {
+        (&self[..n],&self[n..])
+    }
+    #[inline]
+    fn trim_ws(&mut self) {
+        *self = self.trim();
     }
     fn split_noparens<const OPEN: char, const CLOSE: char>(
         &'a self,
@@ -53,6 +65,14 @@ impl<'a> StringOrStr<'a> for String {
             None => Err(self),
         }
     }
+    #[inline]
+    fn trim_ws(&mut self) {
+        *self = self.trim().to_string();
+    }
+    fn split_n(mut self, n:usize) -> (Self,Self) {
+        let r = self.split_off(n);
+        (self,r)
+    }
     fn split_noparens<const OPEN: char, const CLOSE: char>(
         &'a self,
         split_char: char,
@@ -77,7 +97,9 @@ impl<'a> StringOrStr<'a> for String {
 pub trait ParseSource<'a>: 'a {
     type Pos: SourcePos;
     type Str: StringOrStr<'a>;
-    fn curr_pos(&self) -> &Self::Pos;
+    type Source;
+    fn source(&self) -> &Self::Source;
+    fn curr_pos(&self) -> Self::Pos;
     fn pop_head(&mut self) -> Option<char>;
     fn read_until_line_end(&mut self) -> (Self::Str, Self::Pos);
     fn trim_start(&mut self);
@@ -115,10 +137,16 @@ impl<R: Read, P: SourcePos> ParseReader<R, P> {
 impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> {
     type Pos = P;
     type Str = String;
+    type Source = R;
     #[inline]
-    fn curr_pos(&self) -> &P {
-        &self.pos
+    fn source(&self) -> &Self::Source {
+        &self.inner
     }
+    #[inline]
+    fn curr_pos(&self) -> P {
+        self.pos
+    }
+    #[inline]
     fn skip(&mut self, i: usize) {
         for _ in 0..i {
             self.pop_head();
@@ -155,7 +183,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
     fn read_until_line_end(&mut self) -> (String, P) {
         let (s, rn) = self.find_line_end();
         self.pos.update_str_no_newline(&s);
-        let pos = self.pos.clone();
+        let pos = self.pos;
         if let Some(rn) = rn {
             self.pos.update_newline(rn);
         }
@@ -195,14 +223,33 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
     }
     fn read_while(&mut self, mut pred: impl FnMut(char) -> bool) -> Self::Str {
         let mut ret = String::new();
+        let mut rn = false;
         while let Some(c) = self.get_char() {
             if !pred(c) {
                 self.push_char(c);
                 break;
             }
+            if rn && c == '\n' {
+                self.pos.update_newline(true);
+                rn = false;
+                continue
+            }
+            if rn {
+                self.pos.update_newline(false);
+                rn = false;
+            } else if c == '\n' {
+                self.pos.update_newline(false);
+                ret.push('\n');
+                continue
+            } else if c == '\r' {
+                ret.push('\n');
+                rn = true;
+                continue
+            }
             self.pos.update(c);
             ret.push(c);
         }
+        if rn {self.pos.update_newline(false);}
         ret
     }
     fn read_until_with_brackets<const OPEN: char, const CLOSE: char>(
@@ -211,6 +258,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
     ) -> Self::Str {
         let mut ret = String::new();
         let mut depth = 0;
+        let mut rn = false;
         while let Some(c) = self.get_char() {
             if c == OPEN {
                 depth += 1;
@@ -223,6 +271,23 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
                 ret.push(c);
                 continue;
             } else if depth > 0 {
+                if rn && c == '\n' {
+                    self.pos.update_newline(true);
+                    rn = false;
+                    continue
+                }
+                if rn {
+                    self.pos.update_newline(false);
+                    rn = false;
+                } else if c == '\n' {
+                    self.pos.update_newline(false);
+                    ret.push('\n');
+                    continue
+                } else if c == '\r' {
+                    ret.push('\n');
+                    rn = true;
+                    continue
+                }
                 self.pos.update(c);
                 ret.push(c);
                 continue;
@@ -234,6 +299,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
             self.pos.update(c);
             ret.push(c);
         }
+        if rn {self.pos.update_newline(false);}
         ret
     }
     fn peek_head(&mut self) -> Option<char> {
@@ -322,7 +388,7 @@ impl<R: Read, P: SourcePos> ParseReader<R, P> {
 
 pub struct ParseStr<'a, P: SourcePos> {
     input: &'a str,
-    pos: P,
+    pub pos: P,
 }
 impl<'a, P: SourcePos> ParseStr<'a, P> {
     #[must_use]
@@ -355,6 +421,30 @@ impl<'a, P: SourcePos> ParseStr<'a, P> {
             true
         }
     }
+
+    pub fn preview_until_with_brackets<const OPEN: char, const CLOSE: char>(
+        &self,
+        mut pred: impl FnMut(char) -> bool,
+    ) -> &'a str {
+        let mut depth = 0;
+        let i = self
+            .input
+            .find(|c| {
+                if c == OPEN {
+                    depth += 1;
+                    false
+                } else if c == CLOSE && depth > 0 {
+                    depth -= 1;
+                    false
+                } else {
+                    depth == 0 && pred(c)
+                }
+            })
+            .unwrap_or(self.input.len());
+        let (l, r) = self.input.split_at(i);
+        l
+    }
+
     pub fn read_until_escaped(&mut self, find: char, escape: char) -> &'a str {
         let mut chars = self.input.chars();
         let mut i: usize = 0;
@@ -377,7 +467,7 @@ impl<'a, P: SourcePos> ParseStr<'a, P> {
         ret
     }
 }
-impl<'a> ParseStr<'a, ByteOffset> {
+impl ParseStr<'_, ByteOffset> {
     #[inline]
     pub fn offset(&mut self) -> &mut ByteOffset {
         &mut self.pos
@@ -387,9 +477,13 @@ impl<'a> ParseStr<'a, ByteOffset> {
 impl<'a, P: SourcePos + 'a> ParseSource<'a> for ParseStr<'a, P> {
     type Pos = P;
     type Str = &'a str;
+    type Source = &'a str;
+    fn source(&self) -> &Self::Source {
+        &self.input
+    }
     #[inline]
-    fn curr_pos(&self) -> &P {
-        &self.pos
+    fn curr_pos(&self) -> P {
+        self.pos
     }
     fn pop_head(&mut self) -> Option<char> {
         if let Some(c) = self.input.chars().next() {
@@ -422,21 +516,21 @@ impl<'a, P: SourcePos + 'a> ParseSource<'a> for ParseStr<'a, P> {
                 let (l, r) = self.input.split_at(i);
                 self.input = &r[2..];
                 self.pos.update_str_no_newline(l);
-                let pos = self.pos.clone();
+                let pos = self.pos;
                 self.pos.update_newline(true);
                 return (l, pos);
             }
             let (l, r) = self.input.split_at(i);
             self.input = &r[1..];
             self.pos.update_str_no_newline(l);
-            let pos = self.pos.clone();
+            let pos = self.pos;
             self.pos.update_newline(false);
             (l, pos)
         } else {
             let ret = self.input;
             self.pos.update_str_no_newline(ret);
             self.input = "";
-            (ret, self.pos.clone())
+            (ret, self.pos)
         }
     }
     fn trim_start(&mut self) {

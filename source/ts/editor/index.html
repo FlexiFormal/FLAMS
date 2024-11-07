@@ -8,8 +8,23 @@
   <body>
     <h2>test</h2>
     
-    <div id="monaco-editor-root" style="height: 100px;width:700px"></div>
-    <script type="module" src="./dist/immt_editor.js"></script>
+    <div id="monaco-editor-root-1" style="height: 100px;width:700px"></div>
+    <!--<script type="module" src="./dist/immt_editor.js"></script>-->
+    <script type="module">
+      import { mountEditor } from './dist/immt_editor.js';
+      let editor = document.getElementById('monaco-editor-root-1');
+      let url = "http://localhost:3000/ws/lsp";
+      mountEditor(editor,url);
+    </script>
+
+    <div id="monaco-editor-root-2" style="height: 100px;width:700px"></div>
+    <!--<script type="module" src="./dist/immt_editor.js"></script>-->
+    <script type="module">
+      import { mountEditor } from './dist/immt_editor.js';
+      let editor2 = document.getElementById('monaco-editor-root-2');
+      let url2 = "http://localhost:3000/ws/lsp";
+      mountEditor(editor2,url2);
+    </script>
 
   </body>
 </html>

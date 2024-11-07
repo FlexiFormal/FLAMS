@@ -3,6 +3,9 @@ name = "immt-stex"
 version = "0.0.1"
 edition = "2021"
 
+[dev-dependencies]
+tracing-subscriber = {workspace = true}
+
 [dependencies]
 immt-shtml = {workspace=true}
 immt-ontology = {workspace=true}
@@ -17,6 +20,7 @@ tracing = {workspace = true}
 parking_lot = {workspace = true}
 paste = {workspace = true}
 either = {workspace = true}
+lazy_static = { workspace = true }
 
 [lints]
 workspace = true

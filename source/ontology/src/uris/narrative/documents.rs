@@ -22,6 +22,16 @@ impl DocumentURI {
     pub const SEPARATOR: char = 'd';
     #[must_use]
     pub fn no_doc() -> Self { NO_DOCUMENT.clone()}
+
+    #[must_use]
+    pub fn from_archive_relpath(a:ArchiveURI,rel_path:&str) -> Self {
+        let (path,mut name) = rel_path.rsplit_once('/')
+            .unwrap_or(("",rel_path));
+        name = name.rsplit_once('.').unwrap_or_else(|| unreachable!()).0;
+        let lang = Language::from_rel_path(name);
+        name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
+        (a % path) & (name,lang)
+    }
 }
 impl Display for DocumentURI {
     #[inline]

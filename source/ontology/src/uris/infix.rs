@@ -141,6 +141,33 @@ impl Rem<&str> for ArchiveURI {
     }
 }
 
+impl Div<Name> for PathURI {
+    type Output = Self;
+    fn div(self, rhs: Name) -> Self::Output {
+        Self {
+            archive: self.archive,
+            path: Some(if let Some(p) = self.path {
+                p / rhs
+            } else {rhs})
+        }
+    }
+}
+
+
+impl Div<&Name> for PathURI {
+    type Output = Self;
+    fn div(self, rhs: &Name) -> Self::Output {
+        self / rhs.clone()
+    }
+}
+
+impl Div<&str> for PathURI {
+    type Output = Self;
+    fn div(self, rhs: &str) -> Self::Output {
+        self / rhs.parse::<Name>().unwrap_or_else(|_| unreachable!())
+    }
+}
+
 impl BitOr<(Name, Language)> for ArchiveURI {
     type Output = ModuleURI;
     #[inline]

@@ -2,86 +2,32 @@ import { LogLevel } from 'vscode/services';
 import getKeybindingsServiceOverride from '@codingame/monaco-vscode-keybindings-service-override';
 import { MonacoEditorLanguageClientWrapper, WrapperConfig } from 'monaco-editor-wrapper';
 import { configureMonacoWorkers } from './utils/utils';
-import { IWebSocket, toSocket, WebSocketMessageReader, WebSocketMessageWriter } from 'vscode-ws-jsonrpc';
 import * as vscode from 'vscode';
-import { DataCallback, Disposable, Message, MessageWriter } from 'vscode-jsonrpc';
+import { getWS } from './utils/websockets';
+import { latexExtension } from './languages/latex';
 
-const text = `\\documentclass{article}
-\\usepackage{stex}
-\\usemodule[sTeX/Algebra/General]{mod?Group}
-\\begin{document}
-\\vardef{vG}[name=G]{G}
-
-Let $\\vG$ a \\sn{group}
-\\end{document}
-`;
-
-const text2 = `\\documentclass{article}
-\\usepackage{stex}
-\\usemodule[sTeX/Algebra/General]{mod?Group}
-\\begin{document}
-\\vardef{vG}[name=G]{G}
-
-Let $\\vG$ a \\sn{group}
-\\end{document}
-`;
-
-class NoContentLengthReader extends WebSocketMessageReader {
-  constructor(socket: IWebSocket) {
-    super(socket);
-  }
-  readMessage(message: any): void {
-    console.log("Read: ",message);
-    if (message.toString().startsWith('Content-Length:')) {
-        this.state = 'listening';
-        return;
-    }
-    if (this.state === 'initial') {
-        this.events.splice(0, 0, { message });
-    } else if (this.state === 'listening') {
-        try {
-            const data = JSON.parse(message);
-            this.callback!(data);
-        } catch (err) {
-            const error: Error = {
-                name: '' + 400,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                message: `Error during message parsing, reason = ${typeof err === 'object' ? (err as any).message : 'unknown'}`
-            };
-            this.fireError(error);
-        }
-    }
-  }
-}
+import { RegisteredFileSystemProvider, registerFileSystemOverlay, RegisteredMemoryFile } from '@codingame/monaco-vscode-files-service-override';
 
 
-class ContentLengthWriter extends WebSocketMessageWriter {
-  constructor(socket: IWebSocket) {
-    super(socket);
-  }
-  async write(msg: Message): Promise<void> {
-    try {
-        const content = JSON.stringify(msg);
-        console.log("Write: ",content);
-        const len = content.length;
-        this.socket.send(`Content-Length: ${len}\r\n\r\n${content}`);
-    } catch (e) {
-        this.errorCount++;
-        this.fireError(e, msg, this.errorCount);
-    }
-  }
-}
 
-export function mountEditor(element:HTMLElement): WrapperConfig {
-  const socket = new WebSocket("http://localhost:3000/ws/lsp");
-  const iWebSocket = toSocket(socket);
-  const reader = new NoContentLengthReader(iWebSocket);
-  const writer = new ContentLengthWriter(iWebSocket);
-  return {
+export function mountEditor(element:HTMLElement,lsp:string): MonacoEditorLanguageClientWrapper {
+  const connection = getWS(lsp);
+
+  /*
+  const file1 = vscode.Uri.file("/workspace/test.tex");
+  const file2 = vscode.Uri.file("/workspace/test2.tex");
+
+  const fileSystemProvider = new RegisteredFileSystemProvider(false);
+  fileSystemProvider.registerFile(new RegisteredMemoryFile(file1, text1));
+  fileSystemProvider.registerFile(new RegisteredMemoryFile(file2, text2));
+  registerFileSystemOverlay(1, fileSystemProvider);
+*/
+
+  const config = <WrapperConfig>{
     logLevel: LogLevel.Debug,
     vscodeApiConfig: {
         userServices: {
-            ...getKeybindingsServiceOverride(),
+            ...getKeybindingsServiceOverride()
         },
         userConfiguration: {
             json: JSON.stringify({
@@ -97,39 +43,23 @@ export function mountEditor(element:HTMLElement): WrapperConfig {
         $type: 'extended',
         codeResources: {
             main: {
-                text,
+                text:text1,
                 fileExt: 'tex',
+                //uri:file1.fsPath,
                 enforceLanguageId: "latex"
             }
         },
+        extensions:[latexExtension],
         useDiffEditor: false,
         monacoWorkerFactory: configureMonacoWorkers,
         htmlContainer: element
     },
     languageClientConfigs: {
-        latex: {
-            languageId: 'latex',
-            connection: {
-                options: {
-                    $type: 'WebSocketDirect',
-                    webSocket: socket,
-                    startOptions: {
-                        onCall: () => {
-                            console.log('Connected to socket.');
-                        },
-                        reportStatus: true
-                    },
-                    stopOptions: {
-                        onCall: () => {
-                            console.log('Disconnected from socket.');
-                        },
-                        reportStatus: true
-                    }
-                },
-                messageTransports: { reader:reader, writer:writer }
-            },
+        stex: {
+            languageId: 'stex',
+            connection: connection,
             clientOptions: {
-                documentSelector: ['latex'],
+                documentSelector: ['tex'],
                 workspaceFolder: {
                     index: 0,
                     name: 'workspace',
@@ -138,16 +68,48 @@ export function mountEditor(element:HTMLElement): WrapperConfig {
             }
         }
     }
-};
+  };
+  const wrapper = new MonacoEditorLanguageClientWrapper();
+
+  wrapper.init(config).then(async () => {
+    /*console.log(`opening ${file1.fsPath}`);
+    await vscode.workspace.openTextDocument(file1);
+    console.log(`opening ${file2.fsPath}`);
+    await vscode.workspace.openTextDocument(file2);
+    console.log(`starting`);*/
+    await wrapper.start().then(() => {
+        console.log("started!");
+    });
+  });
+  return wrapper;
 }
 
-async function test() {
-  const wrapper = new MonacoEditorLanguageClientWrapper();
+/*async function test() {
 
   const config = mountEditor(document.getElementById('monaco-editor-root')!);
   await wrapper.initAndStart(config);
-  // wait wrapper.dispose();
+  // await wrapper.dispose();
 };
 
 
 test();
+*/
+const text1 = `\\documentclass{article}
+\\usepackage{stex}
+\\usemodule[sTeX/Algebra/General]{mod?Group}
+\\begin{document}
+\\vardef{vG}[name=G]{G}
+
+Let $\\vG$ a \\sn{group}
+\\end{document}
+`;
+
+const text2 = `\\documentclass{article}
+\\usepackage{stex}
+\\usemodule[sTeX/Logic/General]{mod?Language}
+\\begin{document}
+\\vardef{vG}[name=G]{G}
+
+Let $\\vG$ a \\sn{language}
+\\end{document}
+`;

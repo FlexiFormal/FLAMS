@@ -52,7 +52,19 @@ export async function launch_local(context:IMMTPreContext) {
 	};
   context.client = new language.LanguageClient("immt-server","iMMT Language Server",serverOptions,{
 		documentSelector: [{scheme:"file", language:"tex"},{scheme:"file", language:"latex"}],
-		synchronize: {}
+		synchronize: {},
+    //outputChannel: context.outputChannel,
+    //traceOutputChannel: context.outputChannel,
+    markdown: {
+        isTrusted: true,
+        supportHtml: true
+    }
+    /*trace: {
+        server: {
+            verbosity: language.Trace.Verbose,
+            format: language.TraceFormat.Text
+        }
+    }*/
 	});
 	context.client.onNotification("immt/serverURL",(s:string) => {
 		context.server = new IMMTServer(s);

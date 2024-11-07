@@ -57,13 +57,9 @@ struct BuildTaskI {
 pub struct BuildTask(Arc<BuildTaskI>);
 impl BuildTask {
     #[must_use]
+    #[inline]
     pub fn document_uri(&self) -> DocumentURI {
-        let (path,mut name) = self.rel_path().rsplit_once('/')
-            .unwrap_or_else(|| ("",self.rel_path()));
-        name = name.rsplit_once('.').unwrap_or_else(|| unreachable!()).0;
-        let lang = Language::from_rel_path(name);
-        name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
-        (self.archive().owned() % path) & (name,lang)
+        DocumentURI::from_archive_relpath(self.archive().owned(), self.rel_path())
     }
     #[must_use]
     pub fn get_task_ref(&self,target:BuildTargetId) -> TaskRef {

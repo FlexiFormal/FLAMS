@@ -4,7 +4,6 @@ use immt_utils::{
     sourcerefs::SourceRange,
 };
 use std::path::Path;
-use tracing::warn;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Mode {
@@ -12,33 +11,37 @@ pub enum Mode {
     Math { display: bool },
 }
 
-pub struct TeXTokenizer<'a, Pa: ParseSource<'a>> {
+pub struct TeXTokenizer<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> {
     pub reader: Pa,
     pub letters: String,
     pub mode: Mode,
+    err:Err,
     source_file: Option<&'a Path>,
 }
-impl<'a, Pa: ParseSource<'a>> TeXTokenizer<'a, Pa> {
-    pub(crate) fn new(reader: Pa, source_file: Option<&'a Path>) -> Self {
+impl<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> TeXTokenizer<'a, Pa,Err> {
+    pub(crate) fn new(reader: Pa, source_file: Option<&'a Path>,err:Err) -> Self {
         TeXTokenizer {
             reader,
             mode: Mode::Text,
             source_file,
+            err,
             letters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string(),
         }
     }
 }
-impl<'a, Pa: ParseSource<'a>> Iterator for TeXTokenizer<'a, Pa> {
+impl<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> Iterator for TeXTokenizer<'a, Pa,Err> {
     type Item = TeXToken<Pa::Pos, Pa::Str>;
+
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.read_next()
     }
 }
 
-impl<'a, Pa: ParseSource<'a>> TeXTokenizer<'a, Pa> {
+impl<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> TeXTokenizer<'a, Pa,Err> {
     fn read_next(&mut self) -> Option<TeXToken<Pa::Pos, Pa::Str>> {
         self.reader.trim_start();
-        let start = self.reader.curr_pos().clone();
+        let start = self.reader.curr_pos();
         match self.reader.peek_head() {
             None => None,
             Some('%') => {
@@ -60,7 +63,7 @@ impl<'a, Pa: ParseSource<'a>> TeXTokenizer<'a, Pa> {
                         if self.reader.starts_with('$') {
                             self.reader.pop_head();
                         } else {
-                            self.problem("Missing $ closing display math");
+                            self.problem(start,"Missing $ closing display math");
                         }
                         self.close_math();
                         Some(TeXToken::EndMath { start })
@@ -103,7 +106,7 @@ impl<'a, Pa: ParseSource<'a>> TeXTokenizer<'a, Pa> {
                 Some(TeXToken::Text {
                     range: SourceRange {
                         start,
-                        end: self.reader.curr_pos().clone(),
+                        end: self.reader.curr_pos(),
                     },
                     text,
                 })
@@ -111,19 +114,18 @@ impl<'a, Pa: ParseSource<'a>> TeXTokenizer<'a, Pa> {
         }
     }
 
+    #[inline]
     pub fn open_math(&mut self, display: bool) {
         self.mode = Mode::Math { display };
     }
+    #[inline]
     pub fn close_math(&mut self) {
         self.mode = Mode::Text;
     }
 
-    pub fn problem(&self, msg: impl std::fmt::Display) {
-        if let Some(f) = self.source_file {
-            warn!(target:"source_file::tex-linter",source_file=%f.display(),pos = ?self.reader.curr_pos(),"{}",msg);
-        } else {
-            warn!(target:"source_file::tex-linter",source_file="(unknown file)",pos = ?self.reader.curr_pos(),"{}",msg);
-        }
+    #[inline]
+    pub fn problem(&mut self,start:Pa::Pos, msg: impl std::fmt::Display) {
+        (self.err)(msg.to_string(), SourceRange{start,end: self.reader.curr_pos()});
     }
 
     fn read_comment(&mut self, start: Pa::Pos) -> TeXToken<Pa::Pos, Pa::Str> {
@@ -134,3 +136,22 @@ impl<'a, Pa: ParseSource<'a>> TeXTokenizer<'a, Pa> {
         )
     }
 }
+
+/*
+#[test]
+fn test() {
+    use std::path::PathBuf;
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::Level::TRACE)
+            .finish(),
+    );
+    let path = PathBuf::from("/home/jazzpirate/work/MathHub/courses/FAU/IWGS/problems/source/regex/prob/regex_scientific.de.tex");
+    let str = std::fs::read_to_string(&path).unwrap();
+    let reader = immt_utils::parsing::ParseStr::<immt_utils::sourcerefs::LSPLineCol>::new(&str);
+    let tokenizer = TeXTokenizer::new(reader, Some(&path),|e,p| tracing::error!("Error {e} ({p:?})"));
+    for tk in tokenizer {
+        tracing::info!("{tk:?}");
+    }
+}
+*/

@@ -3,7 +3,7 @@
 
 mod dependencies;
 mod latex;
-mod quickparse;
+pub mod quickparse;
 mod rustex;
 use either::Either;
 use immt_shtml::{HTMLString, SHTML_DOC, SHTML_OMDOC};

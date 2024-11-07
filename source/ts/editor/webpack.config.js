@@ -8,8 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+//const TerserPlugin = require('terser-webpack-plugin');
 
 const config = {
+    mode: 'development',//'production',
     entry: resolve(__dirname, 'src', 'immt_editor.ts'),
     module: {
         rules: [
@@ -20,6 +22,10 @@ const config = {
             {
                 test: /\.ts?$/,
                 use: ['ts-loader']
+            },
+            {
+              resourceQuery: /raw/,
+              type: 'asset/source',
             }
         ]
     },
@@ -33,13 +39,15 @@ const config = {
         workerChunkLoading: 'import',
         environment: {
             dynamicImportInWorker: true
+        },
+        library: {
+            type: 'module'
         }
     },
     target: 'web',
     resolve: {
         extensions: ['.ts', '.js', '.json', '.ttf']
     },
-    mode: 'development',
     devtool: 'source-map'
 };
 

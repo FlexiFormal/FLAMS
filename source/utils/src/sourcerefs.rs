@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-pub trait SourcePos: Clone + Default + Debug {
+pub trait SourcePos: Clone + Copy + Default + Debug {
     fn update(&mut self, c: char);
     fn update_newline(&mut self, rn: bool);
     fn update_str_no_newline(&mut self, s: &str);
@@ -54,24 +54,24 @@ impl SourcePos for ByteOffset {
 
 #[derive(Clone, Copy, PartialEq, Eq,Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SourceOffsetLineCol {
+pub struct LSPLineCol {
     pub line: u32,
     pub col: u32,
 }
 
-impl Display for SourceOffsetLineCol {
+impl Display for LSPLineCol {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "l. {} c. {}", self.line, self.col)
     }
 }
-impl Debug for SourceOffsetLineCol {
+impl Debug for LSPLineCol {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         <Self as Display>::fmt(self, f)
     }
 }
 
-impl SourcePos for SourceOffsetLineCol {
+impl SourcePos for LSPLineCol {
     #[inline]
     #[allow(clippy::cast_possible_truncation)]
     fn update(&mut self, c: char) {
@@ -92,15 +92,18 @@ impl SourcePos for SourceOffsetLineCol {
     #[allow(clippy::cast_possible_truncation)]
     fn update_str_maybe_newline(&mut self, s: &str) {
         let s = s.split("\r\n").flat_map(|s| s.split(['\n', '\r']));
+        let mut last = "";
         let mut first = true;
         for l in s {
-            if !first {
+            if first {
+                first = false;
+            } else {
                 self.line += 1;
                 self.col = 0;
-                first = false;
             }
-            self.col += l.chars().map(|c| char::len_utf16(c) as u32).sum::<u32>();
+            last = l;
         }
+        self.col += last.chars().map(|c| char::len_utf16(c) as u32).sum::<u32>();
     }
 }
 
@@ -133,14 +136,21 @@ pub struct SourceRange<P: SourcePos> {
     pub start: P,
     pub end: P,
 }
-impl Display for SourceRange<ByteOffset> {
+impl<P: SourcePos> Display for SourceRange<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}-{}", self.start, self.end)
+        write!(f, "{:#?}-{:#?}", self.start, self.end)
     }
 }
-impl Debug for SourceRange<ByteOffset> {
+impl<P: SourcePos> Debug for SourceRange<P> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         <Self as Display>::fmt(self, f)
     }
+}
+
+#[test]
+fn test() {
+    let str = "\n\n";
+    let len = str.split("\r\n").flat_map(|s| s.split(['\r', '\n'])).count();
+    assert_eq!(len, 3);
 }

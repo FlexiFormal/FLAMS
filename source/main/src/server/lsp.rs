@@ -1,22 +1,86 @@
-use immt_lsp::async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket};
+use immt_lsp::{async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LanguageClient}, LSPState, ProgressCallbackServer};
 
-use immt_system::settings::Settings;
+use immt_ontology::uris::{DocumentURI, URIRefTrait};
+use immt_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive}, GlobalBackend}, settings::Settings};
+use immt_utils::{prelude::TreeChildIter, time::measure};
 use tower::ServiceBuilder;
 use tracing::Level;
-use immt_lsp::async_lsp::lsp_types as types;
+use immt_lsp::async_lsp::lsp_types as lsp;
 
 use crate::users::LoginState;
 
 //struct TickEvent;
 struct STDIOLSPServer {
   client:ClientSocket,
-  on_port:tokio::sync::watch::Receiver<Option<u16>>
+  state:LSPState,
+  on_port:tokio::sync::watch::Receiver<Option<u16>>,
+  workspaces:Vec<(String,lsp::Url)>
+}
+
+impl STDIOLSPServer {
+  fn load_all(&self) {
+    use rayon::prelude::*;
+    let client = self.client.clone();
+    let state = self.state.clone();
+    let workspaces = self.workspaces.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+      let (_,t) = measure(move || {
+        let mut files = Vec::new();
+        for a in GlobalBackend::get().all_archives().iter() {
+          if let Archive::Local(a) =a { 
+            a.with_sources(|d| for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
+              match e {
+                SourceEntry::File(f) => files.push((
+                  f.relative_path.split('/').fold(a.source_dir(),|p,s| p.join(s)),
+                  DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path)
+              )),
+                _ => {}
+              }
+            })
+          }
+        }
+        ProgressCallbackServer::with(client,"Initializing".to_string(),Some(files.len() as _),|p| {
+          /*files.par_iter().for_each(|(file,uri)| {
+            //p.update(file.display().to_string(), Some(1));
+            state.load(&file,&uri);
+          });*/
+          for (file,uri) in files {
+            p.update(file.display().to_string(), Some(1));
+            state.load(&file,&uri,|data| {
+              let lock = data.lock();
+              if !lock.diagnostics.is_empty() {
+                let mut client = p.client();
+                if let Ok(uri) = lsp::Url::from_file_path(&file) { 
+                  client.publish_diagnostics(lsp::PublishDiagnosticsParams {
+                    uri,version:None,diagnostics:lock.diagnostics.iter().map(immt_lsp::to_diagnostic).collect()
+                  });
+                }
+              }
+            });
+          }
+          let mathhubs = &Settings::get().mathhubs;
+          for (name,uri) in &workspaces {
+            tracing::info!("workspace: {name}@{uri}");
+          }
+        });
+      });
+      tracing::info!("initialized after {t}");
+    });
+  }
 }
 
 impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
   #[inline]
-  fn client(&mut self) -> &mut ClientSocket {
+  fn client_mut(&mut self) -> &mut ClientSocket {
     &mut self.client
+  }
+  #[inline]
+  fn client(&self) -> &ClientSocket {
+    &self.client
+  }
+  #[inline]
+  fn state(&self) -> &LSPState {
+    &self.state
   }
   fn initialized(&mut self) {
     let v = *self.on_port.borrow();
@@ -33,16 +97,21 @@ impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
             tracing::error!("failed to send notification: {}", r);
           };
           true
-      })).await;
+        })).await;
       });
     }
+    self.load_all();
+  }
+
+  fn initialize<I:Iterator<Item=(String,lsp::Url)> + Send + 'static>(&mut self,workspaces:I) {
+    self.workspaces = workspaces.collect();
   }
 }
 
 impl STDIOLSPServer {
   #[allow(clippy::let_and_return)]
   fn new_router(client:ClientSocket,on_port:tokio::sync::watch::Receiver<Option<u16>>) -> Router<immt_lsp::ServerWrapper<Self>> {
-    let /*mut*/ router = Router::from_language_server(immt_lsp::ServerWrapper::new(Self {client,on_port}));
+    let /*mut*/ router = Router::from_language_server(immt_lsp::ServerWrapper::new(Self {client,on_port,state:LSPState::default(),workspaces:Vec::new()}));
     //router.event(Self::on_tick);
     router
   }
@@ -106,20 +175,29 @@ impl ServerURL {
         format!("http://{}:{}",settings.ip,settings.port)
     }
 }
-impl types::notification::Notification for ServerURL {
+impl lsp::notification::Notification for ServerURL {
     type Params = String;
     const METHOD : &str = "immt/serverURL";
 }
 
 
 struct WSLSPServer {
-  client:ClientSocket
+  client:ClientSocket,
+  state:LSPState
 }
 
 impl immt_lsp::IMMTLSPServer for WSLSPServer {
   #[inline]
-  fn client(&mut self) -> &mut ClientSocket {
+  fn client_mut(&mut self) -> &mut ClientSocket {
     &mut self.client
+  }
+  #[inline]
+  fn client(&self) -> &ClientSocket {
+    &self.client
+  }
+  #[inline]
+  fn state(&self) -> &LSPState {
+    &self.state
   }
 }
 
@@ -136,7 +214,7 @@ pub(crate) async fn register(
     }
   };
   match login {
-    LoginState::NoAccounts | LoginState::Admin => immt_lsp::ws::upgrade(ws, |c| WSLSPServer { client: c }),
+    LoginState::NoAccounts | LoginState::Admin => immt_lsp::ws::upgrade(ws, |c| WSLSPServer { client: c, state:LSPState::default() }),
     _ => {
       let mut res = axum::response::Response::new(axum::body::Body::empty());
       *(res.status_mut()) = http::StatusCode::UNAUTHORIZED;

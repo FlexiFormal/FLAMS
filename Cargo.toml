@@ -127,10 +127,10 @@ futures = {version="0.3"}
 
 
 # leptos
-leptos = { version = "0.7.0-rc0", features=["nightly"]}
-leptos_axum = "0.7.0-rc0"
-leptos_meta= "0.7.0-rc0"
-leptos_router = { version = "0.7.0-rc0", features=["nightly"]}
+leptos = { version = "=0.7.0-rc0", features=["nightly"]}
+leptos_axum = "=0.7.0-rc0"
+leptos_meta= "=0.7.0-rc0"
+leptos_router = { version = "=0.7.0-rc0", features=["nightly"]}
 thaw = { version="0.4.0-beta4",features=["nightly"] }
 thaw_components = "0.2.0-beta4"
 thaw_utils = "0.1.0-beta4"
@@ -164,18 +164,18 @@ RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreade
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
 #tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
 
-#leptos_config = {version="=0.7.0-beta5"}
-#leptos_dom = {version="=0.7.0-beta5"}
-#leptos_hot_reload = {version="=0.7.0-beta5"}
-#leptos_macro = {version="=0.7.0-beta5"}
+#leptos_config = {version="=0.7.0-rc0"}
+#leptos_dom = {version="=0.7.0-rc0"}
+#leptos_hot_reload = {version="=0.7.0-rc0"}
 #leptos_router_macro = {version="=0.7.0-beta5"}
 #leptos_server = {version="=0.7.0-beta5"}
-#server_fn = {version="=0.7.0-beta5"}
-#server_fn_macro = {version="=0.7.0-beta5"}
-#server_fn_macro_default = {version="=0.7.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #reactive_graph = {version="=0.1.0-beta5"}
-#tachys = {version="=0.1.0-beta5"}
+leptos_macro = {version="=0.7.0-rc0"}
+tachys = {version="=0.1.0-rc0"}
+server_fn = {version="=0.7.0-rc0"}
+server_fn_macro = {version="=0.7.0-rc0"}
+server_fn_macro_default = {version="=0.7.0-rc0"}
 
 
 [[workspace.metadata.leptos]]

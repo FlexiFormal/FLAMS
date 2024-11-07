@@ -3,47 +3,47 @@ use crate::quickparse::latex::{
 };
 use immt_utils::{parsing::ParseSource, sourcerefs::SourceRange};
 
-pub fn read_verbatim_char<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>>(
+pub fn read_verbatim_char<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>,State,Err:FnMut(String,SourceRange<Pa::Pos>)>(
     mac: &mut Macro<'a, Pa::Str, Pa::Pos, T>,
-    p: &mut LaTeXParser<'a, Pa, T>,
+    p: &mut LaTeXParser<'a, Pa, Err,T,State>,
     end: char,
 ) {
-    let tstart = p.curr_pos().clone();
+    let tstart = p.curr_pos();
     let t = p.tokenizer.reader.read_until(|c| c == end);
-    if let Some(text) = T::from_text(
+    /*if let Some(text) = T::from_text(
         SourceRange {
             start: tstart,
-            end: p.curr_pos().clone(),
+            end: p.curr_pos(),
         },
         t,
     ) {
         mac.args.push(text);
-    }
+    }*/
     if let Some(h2) = p.tokenizer.reader.pop_head() {
         if h2 != end {
-            p.tokenizer.problem("Expected end of verbatim");
+            p.tokenizer.problem(mac.range.start,"Expected end of verbatim");
         }
     } else {
-        p.tokenizer.problem("Expected end of verbatim");
+        p.tokenizer.problem(mac.range.start,"Expected end of verbatim");
     }
 }
 
-pub fn read_verbatim_str<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>>(
+pub fn read_verbatim_str<'a, Pa: ParseSource<'a>, T: FromLaTeXToken<'a, Pa::Str, Pa::Pos>,State,Err:FnMut(String,SourceRange<Pa::Pos>)>(
     env: &mut Environment<'a, Pa::Str, Pa::Pos, T>,
-    p: &mut LaTeXParser<'a, Pa, T>,
+    p: &mut LaTeXParser<'a, Pa, Err, T,State>,
     end_str: &str,
 ) {
-    let tstart = p.curr_pos().clone();
+    let tstart = p.curr_pos();
     let t = p.tokenizer.reader.read_until_str(end_str);
-    if let Some(text) = T::from_text(
+    /*if let Some(text) = T::from_text(
         SourceRange {
             start: tstart,
-            end: p.curr_pos().clone(),
+            end: p.curr_pos(),
         },
         t,
     ) {
         env.args.push(text);
-    }
+    }*/
 }
 
 #[macro_export]
@@ -71,50 +71,70 @@ macro_rules! tex {
         #[allow(unused,unused_mut,non_snake_case)]
         pub fn [<$name _open>]<'a,
             Pa:ParseSource<'a>,
-            T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >($name:&mut Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) {
+            T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>,
+            State,Err:FnMut(String,SourceRange<Pa::Pos>)
+        >($name:&mut $crate::quickparse::latex::Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,Err,T,State>) {
             $( tex!{@envargs $p:$name $($args)* } )?
             $($start)*
         }
         #[allow(unused,unused_mut,non_snake_case)]
         pub fn [<$name _close>]<'a,
             Pa:ParseSource<'a>,
-            T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >(mut $name:Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> EnvironmentResult<'a,Pa::Str,Pa::Pos,T> {
+            T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>,
+            State,Err:FnMut(String,SourceRange<Pa::Pos>)
+        >(mut $name:$crate::quickparse::latex::Environment<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,Err,T,State>) -> $crate::quickparse::latex::EnvironmentResult<'a,Pa::Str,Pa::Pos,T> {
             tex!{@end $name $($end)*}
         }
     );};
-    (<l=$l:lifetime,Str=$str:ty,Pa=$pa:ty,Pos=$pos:ty,T=$t:ty> $p:ident => @begin{$name:ident}$( ($($args:tt)* ) )? {$($start:tt)*} $($end:tt)*) => {paste::paste!(
+    (<l=$l:lifetime $(,{$($others:tt)*})? ,Str=$str:ty,Pa=$pa:ty,Pos=$pos:ty,T=$t:ty,State=$state:ty> $p:ident => @begin{$name:ident}$( ($($args:tt)* ) )? {$($start:tt)*} $($end:tt)*) => {paste::paste!(
         #[allow(unused,unused_mut,non_snake_case)]
-        pub fn [<$name _open>]<$l>($name:&mut Environment<$l,$str,$pos,$t>,$p:&mut LaTeXParser<$l,$pa,$t>) {
+        pub fn [<$name _open>]<$l $(,$($others)*)?,Err:FnMut(String,SourceRange<Pos>)>($name:&mut $crate::quickparse::latex::Environment<$l,$str,$pos,$t,$state>,$p:&mut $crate::quickparse::latex::LaTeXParser<$l,$pa,Err,$t,$state>) {
             $( tex!{@envargs $p:$name $($args)* } )?
             $($start)*
         }
         #[allow(unused,unused_mut,non_snake_case)]
-        pub fn [<$name _close>]<$l>(mut $name:Environment<$l,$str,$pos,$t>,$p:&mut LaTeXParser<$l,$pa,$t>) -> EnvironmentResult<$l,$str,$pos,$t> {
+        pub fn [<$name _close>]<$l $(,$($others)*)?,Err:FnMut(String,SourceRange<Pos>)>(mut $name:$crate::quickparse::latex::Environment<$l,$str,$pos,$t,$state>,$p:&mut $crate::quickparse::latex::LaTeXParser<$l,$pa,Err,$t,$state>) -> $crate::quickparse::latex::EnvironmentResult<$l,$str,$pos,$t> {
+            tex!{@end $name $($end)*}
+        }
+    );};
+    (<l=$l:lifetime $(,{$($others:tt)*})? ,Pa=$pa:ty,T=$t:ty,State=$state:ty> $p:ident => @begin{$name:ident}$( ($($args:tt)* ) )? {$($start:tt)*} $($end:tt)*) => {paste::paste!(
+        #[allow(unused,unused_mut,non_snake_case)]
+        pub fn [<$name _open>]<$l $(,$($others)*)?,Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>($name:&mut $crate::quickparse::latex::Environment<$l,<$pa as ParseSource<'a>>::Str,Pos,$t>,$p:&mut $crate::quickparse::latex::LaTeXParser<$l,$pa,Err,$t,$state>) {
+            $( tex!{@envargs $p:$name $($args)* } )?
+            $($start)*
+        }
+        #[allow(unused,unused_mut,non_snake_case)]
+        pub fn [<$name _close>]<$l $(,$($others)*)?,Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>(mut $name:$crate::quickparse::latex::Environment<$l,<$pa as ParseSource<'a>>::Str,Pos,$t>,$p:&mut $crate::quickparse::latex::LaTeXParser<$l,$pa,Err,$t,$state>) -> $crate::quickparse::latex::EnvironmentResult<$l,<$pa as ParseSource<'a>>::Str,Pos,$t> {
             tex!{@end $name $($end)*}
         }
     );};
     (@end $name:ident $b:block !) => {
         $b
-        EnvironmentResult::Simple($name)
+        $crate::quickparse::latex::EnvironmentResult::Simple($name)
     };
     (@end $name:ident !) => {
-        EnvironmentResult::Simple($name)
+        $crate::quickparse::latex::EnvironmentResult::Simple($name)
     };
     (@end $name:ident $b:block) => {$b};
 
-    (<l=$l:lifetime,Str=$str:ty,Pa=$pa:ty,Pos=$pos:ty,T=$t:ty> $p:ident => $name:ident $($args:tt)*) => {
+    (<l=$l:lifetime $(,{$($others:tt)*})? ,Str=$str:ty,Pa=$pa:ty,Pos=$pos:ty,T=$t:ty,State=$state:ty> $p:ident => $name:ident $($args:tt)*) => {
         #[allow(unused_mut,non_snake_case)]
-        pub fn $name<$l>
-        (mut $name:Macro<$l,$str,$pos,$t>,$p:&mut LaTeXParser<$l,$pa,$t>) -> MacroResult<$l,$str,$pos,$t> {
+        pub fn $name<$l $(,$($others)*)?,Err:FnMut(String,SourceRange<$pos>)>
+        (mut $name:Macro<$l,$str,$pos,$t>,$p:&mut $crate::quickparse::latex::LaTeXParser<$l,$pa,Err,$t,$state>) -> MacroResult<$l,$str,$pos,$t> {
+            tex!{@args $p:$name$($args)*}
+        }
+    };
+    (<l=$l:lifetime $(,{$($others:tt)*})? ,Pa=$pa:ty,T=$t:ty,State=$state:ty> $p:ident => $name:ident $($args:tt)*) => {
+        #[allow(unused_mut,non_snake_case)]
+        pub fn $name<$l $(,$($others)*)?, Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>
+        (mut $name:Macro<$l,<$pa as ParseSource<'a>>::Str,Pos,$t>,$p:&mut $crate::quickparse::latex::LaTeXParser<$l,$pa,Err,$t,$state>) -> MacroResult<$l,<$pa as ParseSource<'a>>::Str,Pos,$t> {
             tex!{@args $p:$name$($args)*}
         }
     };
     ($p:ident => $name:ident$($args:tt)*) => {
         #[allow(unused_mut,non_snake_case)]
-        pub fn $name<'a, Pa:ParseSource<'a>, T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>
-        >(mut $name:Macro<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,T>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> {
+        pub fn $name<'a, Pa:ParseSource<'a>, T:FromLaTeXToken<'a,Pa::Str,Pa::Pos>,State,Err:FnMut(String,SourceRange<Pa::Pos>)
+        >(mut $name:Macro<'a,Pa::Str,Pa::Pos,T>,$p:&mut LaTeXParser<'a,Pa,Err,T,State>) -> MacroResult<'a,Pa::Str,Pa::Pos,T> {
             tex!{@args $p:$name$($args)*}
         }
     };
@@ -122,7 +142,7 @@ macro_rules! tex {
 
     (@envargs $p:ident:$name:ident{$arg:ident:name}$($args:tt)*) => {
         let Some($arg) = $p.read_name(&mut $name.begin) else {
-            $p.tokenizer.problem(concat!("Expected { after \\",stringify!($name)));
+            $p.tokenizer.problem($name.begin.range.start,concat!("Expected { after \\",stringify!($name)));
             return;
         };
         tex!{@envargs $p:$name $($args)*}
@@ -188,12 +208,19 @@ macro_rules! tex {
         let $opt = $p.read_opt_str(&mut $name.begin);
         tex!{@envargs $p:$name $($args)*}
     };
+    (@envargs $p:ident:$name:ident[$opt:ident:Map]$($args:tt)*) => {
+        let $opt = $p.read_opt_map(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
     (@envargs $p:ident:$name:ident V:C($c:expr) $($args:tt)*) => {
         $crate::quickparse::latex::rules::read_verbatim_char(&mut $name.begin,$p,$c);
         tex!{@envargs $p:$name $($args)*}
     };
     (@envargs $p:ident:$name:ident V) => {
         $crate::quickparse::latex::rules::read_verbatim_str($name,$p,concat!("\\end{",stringify!($name),"}"));
+    };
+    (@envargs $p:ident:$name:ident V!) => {
+        $crate::quickparse::latex::rules::read_verbatim_str($name,$p,&format!("\\end{{{}}}",$name.name));
     };
     (@envargs $p:ident:$name:ident($c:literal?$t:ident)$($args:tt)*) => {
         let $t = $p.tokenizer.reader.starts_with($c) && {
@@ -216,7 +243,7 @@ macro_rules! tex {
 
     (@args $p:ident:$name:ident{$arg:ident:name}$($args:tt)*) => {
         let Some($arg) = $p.read_name(&mut $name) else {
-            $p.tokenizer.problem(concat!("Expected { after \\",stringify!($name)));
+            $p.tokenizer.problem($name.range.start,concat!("Expected { after \\",stringify!($name)));
             return MacroResult::Simple($name);
         };
         tex!{@args $p:$name $($args)*}
@@ -281,6 +308,10 @@ macro_rules! tex {
         let $opt = $p.read_opt_str(&mut $name);
         tex!{@args $p:$name $($args)*}
     };
+    (@args $p:ident:$name:ident[$opt:ident:Map]$($args:tt)*) => {
+        let $opt = $p.read_opt_map(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
     (@args $p:ident:$name:ident V:C($c:expr) $($args:tt)*) => {
         $crate::quickparse::latex::rules::read_verbatim_char(&mut $name,$p,$c);
         tex!{@args $p:$name $($args)*}
@@ -295,7 +326,7 @@ macro_rules! tex {
         if let Some($t) = $p.tokenizer.reader.pop_head() {
             tex!{@args $p:$name $($args)*}
         } else {
-            $p.tokenizer.problem("Expected character");
+            $p.tokenizer.problem($name.range.start,"Expected character");
             MacroResult::Simple($name)
         }
     };
@@ -309,7 +340,7 @@ macro_rules! tex {
 }
 
 tex!(p => begin{n:name} => {
-    match p.environment(begin,n) {
+    match p.environment(begin,n.0,n.1) {
         EnvironmentResult::Success(e) => MacroResult::Success(e),
         EnvironmentResult::Other(v) => MacroResult::Other(v),
         EnvironmentResult::Simple(e) => T::from_environment(e).map_or_else(
@@ -320,12 +351,13 @@ tex!(p => begin{n:name} => {
 });
 
 tex!(p => end{n:name} => {
-    p.tokenizer.problem(format!("environment {} not open",n.as_ref()));
+    p.tokenizer.problem(end.range.start,format!("environment {} not open",n.0.as_ref()));
 }!);
 
 tex!(p => lstinline[_](c)V:C(c)!);
 tex!(p => verb[_](c)V:C(c)!);
 tex!(p => stexcodeinline[_](c)V:C(c)!);
+tex!(p => stexinline[_](c)V:C(c)!);
 tex!(p => begingroup => { p.open_group() }!);
 tex!(p => endgroup => { p.close_group() }!);
 tex!(p => makeatletter => { p.add_letters("@") }!);
@@ -356,18 +388,30 @@ tex!(p => DeclareDocumentEnvironment{_}{_}{_}{_}!);
 tex!(p => hbox{_:T}!);
 tex!(p => vbox{_:T}!);
 tex!(p => fbox{_:T}!);
+tex!(p => mvbox{_:T}!);
 tex!(p => text{_:T}!);
 tex!(p => texttt{_:T}!);
 tex!(p => textrm{_:T}!);
+tex!(p => textbf{_:T}!);
 tex!(p => ensuremath{_:M}!);
 tex!(p => scalebox{_}{_:T}!);
+
+tex!(p => def => {
+    p.tokenizer.reader.read_until(|c| c == '{');
+    p.skip_arg(&mut def);
+}!);
+tex!(p => edef => {def(edef,p)});
+tex!(p => gdef => {def(gdef,p)});
+tex!(p => xdef => {def(xdef,p)});
 
 use super::Environment;
 
 tex!(p => @begin{document} {}{
-    let _start = p.curr_pos().clone();
+    let _start = p.curr_pos();
     let _rest = p.tokenizer.reader.read_until_str("this string should never occur FOOBARBAZ BLA BLA asdk<ösndkf.k<asfb.mdv <sdasdjn");
 }!);
 tex!(p => @begin{verbatim}(V) {}{}!);
 tex!(p => @begin{lstlisting}(V) {}{}!);
 tex!(p => @begin{stexcode}(V) {}{}!);
+
+tex!(p => @begin{general_listing}(V!) {}{}!);

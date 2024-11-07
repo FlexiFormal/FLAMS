@@ -1,5 +1,6 @@
 use immt_utils::sourcerefs::{SourcePos, SourceRange};
 
+#[derive(Debug)]
 pub enum TeXToken<P: SourcePos, S> {
     Comment(SourceRange<P>),
     BeginGroupChar(P),

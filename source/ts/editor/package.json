@@ -17,8 +17,8 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.12",
     "@types/vscode": "~1.94.0",
+    "@types/ws": "^8.5.12",
     "css-loader": "~7.1.2",
     "http-server": "~14.1.1",
     "shx": "~0.3.4",
