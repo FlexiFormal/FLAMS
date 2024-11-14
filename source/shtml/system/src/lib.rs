@@ -4,8 +4,8 @@
 mod parser;
 
 use either::Either;
-use immt_ontology::uris::ArchiveURITrait;
-use immt_system::{backend::{AnyBackend, Backend}, build_result, build_target, building::{BuildArtifact, BuildResult, BuildResultArtifact, BuildTask}, formats::{BuildArtifactTypeId, CHECK, UNCHECKED_OMDOC}, source_format};
+use immt_ontology::uris::{ArchiveURITrait, DocumentURI};
+use immt_system::{backend::{AnyBackend, Backend}, build_result, build_target, building::{BuildArtifact, BuildResult, BuildResultArtifact, BuildTask}, formats::{BuildArtifactTypeId, OMDocResult, CHECK, UNCHECKED_OMDOC}, source_format};
 
 source_format!(shtml ["html","xhtml","htm"] [SHTML_IMPORT => SHTML_OMDOC => CHECK] @
   "Semantically annotated HTML"
@@ -38,8 +38,24 @@ fn extract(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
     Err(e) => return e,
     Ok(h) => h
   };
-  parser::HTMLParser::run(&html.0,task.document_uri(),task.rel_path(),backend)
+  match build_shtml(backend,&html.0,task.document_uri(),task.rel_path()) {
+    Err(e) => BuildResult {
+      log:Either::Left(e),
+      result:Err(Vec::new())
+    },
+    Ok((r,s)) => BuildResult {
+      log:Either::Left(s),
+      result:Ok(BuildResultArtifact::Data(Box::new(r)))
+    }
+  }
 }
+
+/// #### Errors
+#[inline]
+pub fn build_shtml(backend:&AnyBackend,html:&str,uri:DocumentURI,rel_path:&str) -> Result<(OMDocResult,String),String> {
+  parser::HTMLParser::run(html,uri,rel_path,backend)
+}
+
 
 pub struct HTMLString(pub String);
 impl BuildArtifact for HTMLString {

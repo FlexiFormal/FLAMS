@@ -3,7 +3,7 @@ use immt_utils::{
     parsing::{ParseSource, StringOrStr},
     sourcerefs::SourceRange,
 };
-use std::path::Path;
+use std::marker::PhantomData;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Mode {
@@ -11,25 +11,21 @@ pub enum Mode {
     Math { display: bool },
 }
 
-pub struct TeXTokenizer<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> {
+pub struct TeXTokenizer<'a, 
+    Pa:ParseSource<'a>,
+    Err:FnMut(String,SourceRange<Pa::Pos>)
+> {
     pub reader: Pa,
     pub letters: String,
     pub mode: Mode,
     err:Err,
-    source_file: Option<&'a Path>,
+    phantom:PhantomData<&'a ()>
 }
-impl<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> TeXTokenizer<'a, Pa,Err> {
-    pub(crate) fn new(reader: Pa, source_file: Option<&'a Path>,err:Err) -> Self {
-        TeXTokenizer {
-            reader,
-            mode: Mode::Text,
-            source_file,
-            err,
-            letters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string(),
-        }
-    }
-}
-impl<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> Iterator for TeXTokenizer<'a, Pa,Err> {
+
+impl<'a, 
+    Pa:ParseSource<'a>,
+    Err:FnMut(String,SourceRange<Pa::Pos>)
+> Iterator for TeXTokenizer<'a, Pa,Err> {
     type Item = TeXToken<Pa::Pos, Pa::Str>;
 
     #[inline]
@@ -38,7 +34,20 @@ impl<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> Iterator fo
     }
 }
 
-impl<'a, Pa: ParseSource<'a>,Err:FnMut(String,SourceRange<Pa::Pos>)> TeXTokenizer<'a, Pa,Err> {
+
+impl<'a, 
+    Pa:ParseSource<'a>,
+    Err:FnMut(String,SourceRange<Pa::Pos>)
+> TeXTokenizer<'a, Pa,Err> {
+    pub(crate) fn new(reader: Pa,err:Err) -> Self {
+        TeXTokenizer {
+            reader,
+            mode: Mode::Text,
+            phantom: PhantomData,
+            err,
+            letters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string(),
+        }
+    }
     fn read_next(&mut self) -> Option<TeXToken<Pa::Pos, Pa::Str>> {
         self.reader.trim_start();
         let start = self.reader.curr_pos();

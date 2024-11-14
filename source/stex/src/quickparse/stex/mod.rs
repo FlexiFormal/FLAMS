@@ -6,6 +6,7 @@ use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURITrait, Docu
 use immt_system::backend::AnyBackend;
 use immt_utils::{parsing::ParseStr, prelude::{TreeChild, TreeLike}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::VecSet};
 use rules::{ModuleReference, ModuleRules, STeXModuleStore, STeXParseState, STeXToken};
+use smallvec::SmallVec;
 
 use super::latex::LaTeXParser;
 
@@ -13,7 +14,7 @@ use super::latex::LaTeXParser;
 pub struct STeXParseDataI {
   pub annotations: Vec<STeXAnnot>,
   pub diagnostics: VecSet<STeXDiagnostic>,
-  pub modules:Vec<(ModuleURI,ModuleRules)>
+  pub modules:SmallVec<(ModuleURI,ModuleRules),1>
 }
 impl STeXParseDataI {
   #[inline]#[must_use]
@@ -117,7 +118,7 @@ pub struct STeXDiagnostic {
 #[must_use]
 pub fn quickparse<'a,S:STeXModuleStore>(uri:&'a DocumentURI,source: &'a str,path:&'a Path,backend:&'a AnyBackend,store:S) -> STeXParseDataI {
   let mut diagnostics = VecSet::new();
-  let mut modules = Vec::new();
+  let mut modules = SmallVec::new();
   let err = |message,range| diagnostics.insert(STeXDiagnostic {
     level:DiagnosticLevel::Warning,
     message, range
@@ -125,7 +126,6 @@ pub fn quickparse<'a,S:STeXModuleStore>(uri:&'a DocumentURI,source: &'a str,path
   let mut parser = if S::FULL  { 
     LaTeXParser::with_rules(
       ParseStr::new(source),
-      Some(path),
       STeXParseState::new(Some(uri.archive_uri()),Some(path),uri,backend,store),
       err,
       LaTeXParser::default_rules().into_iter().chain(
@@ -138,7 +138,6 @@ pub fn quickparse<'a,S:STeXModuleStore>(uri:&'a DocumentURI,source: &'a str,path
   } else {
     LaTeXParser::with_rules(
       ParseStr::new(source),
-      Some(path),
       STeXParseState::new(Some(uri.archive_uri()),Some(path),uri,backend,store),
       err,
       LaTeXParser::default_rules().into_iter().chain(
@@ -227,7 +226,7 @@ fn handle(
   tk:STeXToken<LSPLineCol>,
   stack:&mut Vec<(StackElem,std::vec::IntoIter<STeXToken<LSPLineCol>>)>,
   ret:&mut Vec<STeXAnnot>,
-  modules:&mut Vec<(ModuleURI,ModuleRules)>
+  modules:&mut SmallVec<(ModuleURI,ModuleRules),1>
 ) { match tk {
   STeXToken::Module {uri,rules,children,name_range,sig,meta_theory,full_range, smodule_range} => {
     modules.push((uri.clone(),rules));
@@ -275,35 +274,3 @@ fn handle(
     stack.push((StackElem::None,v.into_iter())),
   //_ => unreachable!()
 }}
-
-
-/*
-
-    ModuleRule(dict),MMTEnvRule(dict),ProblemRule(dict),UseModuleRule(dict),UseStructureRule(dict),
-    SymuseRule(dict),
-    SymrefRule("symref",dict),SymrefRule("sr",dict),
-    SymnameRule("symname",dict,false),SymnameRule("Symname",dict,true),
-    SymnameRule("sn", dict, false), SymnameRule("Sn", dict, true),
-    SymnamesRule("sns", dict, false), SymnamesRule("Sns", dict, true),
-    SkipCommand("stexstyleassertion","ovv"),
-    SkipCommand("stexstyledefinition", "ovv"),
-    SkipCommand("stexstyleparagraph", "ovv"),
-    SkipCommand("stexstyleexample", "ovv"),
-    SkipCommand("stexstyleproblem", "ovv"),
-    SkipCommand("mmlintent","vn"),
-    SkipCommand("mmlarg", "vn"),
-    VarDefRule(dict),VarSeqRule(dict),
-    SDefinitionRule(dict),SAssertionRule(dict),SParagraphRule(dict),
-    InlineDefRule(dict),InlineAssRule(dict),
-    InputrefRule(dict),
-    SetMetaRule(dict),
-    MHLike("mhgraphics",List("bmp","png","jpg","jpeg","pdf","BMP","PNG","JPG","JPEG","PDF"),dict),
-    MHLike("cmhgraphics",List("bmp","png","jpg","jpeg","pdf","BMP","PNG","JPG","JPEG","PDF"), dict),
-    MHLike("mhtikzinput", List("tex"), dict),
-    MHLike("cmhtikzinput", List("tex"), dict),
-    SymDeclRule(dict),SymDefRule(dict),NotationRule(dict),TextSymDeclRule(dict),
-    ImportModuleRule(dict),MathStructureRule(dict),ExtStructureRule(dict),ExtStructureStarRule(dict),
-    CopyModRule(dict),CopyModuleRule(dict),
-    InterpretModRule(dict), InterpretModuleRule(dict),
-    RealizeRule(dict),RealizationRule(dict)
-*/

@@ -441,7 +441,7 @@ impl<'a, P: SourcePos> ParseStr<'a, P> {
                 }
             })
             .unwrap_or(self.input.len());
-        let (l, r) = self.input.split_at(i);
+        let (l, _r) = self.input.split_at(i);
         l
     }
 

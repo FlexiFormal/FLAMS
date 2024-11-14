@@ -65,14 +65,17 @@ impl LSPDocument {
   #[inline]#[must_use]
   pub fn relative_path(&self) -> Option<&str> { self.data.rel_path.as_deref()}
 
+  #[inline]#[must_use]
+  pub fn document_uri(&self) -> Option<&DocumentURI> { self.data.doc_uri.as_ref()}
+
   #[inline]
   pub fn set_text(&self,s:String) {
     self.text.lock().text = s;
   }
 
   #[inline]
-  pub fn with_text(&self,f:impl FnOnce(&str)) {
-    f(&self.text.lock().text);    
+  pub fn with_text<R>(&self,f:impl FnOnce(&str) -> R) -> R {
+    f(&self.text.lock().text)
   }
   #[inline]
   pub fn delta(&self,text:String,range:Option<Range>) {
@@ -142,7 +145,7 @@ impl LSPDocument {
 
 struct LSPText {
   text: String,
-  up_to_date:bool
+  up_to_date:bool,
 }
 
 impl LSPText {

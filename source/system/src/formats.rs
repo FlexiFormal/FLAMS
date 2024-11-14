@@ -64,13 +64,19 @@ build_result!(pdf @ "PDF document (semantically opaque)");
 
 pub struct OMDocResult {
   pub document: UncheckedDocument,
+  pub html:HTMLData,
+  pub modules:Vec<UncheckedModule>,
+}
+
+#[derive(Debug)]
+pub struct HTMLData {
   pub html:String,
   pub css:Vec<CSS>,
   pub body:DocumentRange,
   pub inner_offset:usize,
-  pub refs:Vec<u8>,
-  pub modules:Vec<UncheckedModule>,
+  pub refs:Vec<u8>
 }
+
 impl OMDocResult {
 
   pub(crate) fn load_html_body(path:&Path,full:bool) -> Option<(Vec<CSS>,String)> {
@@ -213,7 +219,7 @@ impl OMDocResult {
     }
     let file = err!(std::fs::File::create(path));
     let mut buf = std::io::BufWriter::new(file);
-    let Self {html,css,body,inner_offset,refs,..} = self;
+    let Self {html:HTMLData{css,body,inner_offset,refs,html},..} = self;
     let css_offset = (refs.len() as u32).to_be_bytes();
     let css = err!(bincode::serde::encode_to_vec(css, bincode::config::standard()));
     let css_len = (css.len() as u32).to_be_bytes();

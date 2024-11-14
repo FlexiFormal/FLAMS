@@ -10,7 +10,7 @@ use immt_ontology::{
     uris::DocumentURI,
 };
 
-use super::Flattener;
+use super::GlobalFlattener;
 
 /*
 #[derive(Debug)]
@@ -66,7 +66,7 @@ impl PreDocFile {
         //Some(doc)//Some(Self { path, doc, offsets })
     }
 
-    pub(super) fn resolve(doc:UncheckedDocument, flattener: &mut Flattener) -> Document {
+    pub(super) fn resolve(doc:UncheckedDocument, flattener: &mut GlobalFlattener) -> Document {
         doc.check(flattener)
         /*DocFile {
             //path: self.path,

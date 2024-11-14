@@ -11,6 +11,19 @@ use shtml_viewer_components::components::TOCElem;
 use uris::{DocURIComponents, URIComponents};
 use crate::{users::Login, utils::from_server_clone};
 
+macro_rules! backend {
+  (($($lsp:tt)*) ($($global:tt)*)) => {
+    if immt_system::settings::Settings::get().lsp {
+      let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
+        return Err("no lsp server".to_string().into())
+      };
+      state.backend().$($lsp)*
+    } else {
+      immt_system::backend::GlobalBackend::get().$($global)*
+    }
+  }
+}
+
 #[server(
   prefix="/content",
   endpoint="document",
@@ -25,15 +38,17 @@ pub async fn document(
   l:Option<Language>,
   d:Option<String>
 ) -> Result<(DocumentURI,Vec<CSS>, String),ServerFnError<String>> {
+  use immt_system::backend::Backend;
   let Result::<DocURIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
   let Some(uri) = comps.parse() else {
     return Err("invalid uri".to_string().into())
   };
-  let Some((css,doc)) = immt_system::backend::GlobalBackend::get().get_html_body_async(&uri,true).await else {
+  let Some((css,doc)) = backend!((get_html_body(&uri,true))(get_html_body_async(&uri,true).await))  else {
     return Err("document not found".to_string().into())
   };
+
   let html = format!("<div{}</div>",doc.strip_prefix("<body").and_then(|s| s.strip_suffix("</body>")).unwrap_or(""));
   Ok((uri,css,html))
 }
@@ -52,13 +67,14 @@ pub async fn toc(
   l:Option<Language>,
   d:Option<String>
 ) -> Result<(Vec<CSS>, Vec<TOCElem>),ServerFnError<String>> {
+  use immt_system::backend::Backend;
   let Result::<DocURIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
   let Some(uri) = comps.parse() else {
     return Err("invalid uri".to_string().into())
   };
-  let Some(doc) =immt_system::backend::GlobalBackend::get().get_document_async(&uri).await else {
+  let Some(doc) = backend!((get_document(&uri))(get_document_async(&uri).await)) else {
     return Err("document not found".to_string().into())
   };
   Ok(toc::from_document(&doc).await)
@@ -83,6 +99,7 @@ pub async fn fragment(
   m:Option<String>,
   s:Option<String>
 ) -> Result<(Vec<CSS>, String),ServerFnError<String>> {
+  use immt_system::backend::Backend;
   let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
@@ -91,7 +108,7 @@ pub async fn fragment(
   };
   match uri {
     URI::Narrative(NarrativeURI::Document(uri)) => {
-      let Some((css,html)) = immt_system::backend::GlobalBackend::get().get_html_body_async(&uri,false).await else {
+      let Some((css,html)) = backend!((get_html_body(&uri,false))(get_html_body_async(&uri,false).await)) else {
         return Err("document not found".to_string().into())
       };
       Ok((css,html))

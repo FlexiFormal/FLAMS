@@ -1,4 +1,4 @@
-use immt_lsp::{async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LanguageClient}, LSPState, ProgressCallbackServer};
+use immt_lsp::{async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LanguageClient}, state::{to_diagnostic, LSPState}, IMMTLSPServer, ProgressCallbackServer};
 
 use immt_ontology::uris::{DocumentURI, URIRefTrait};
 use immt_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive}, GlobalBackend}, settings::Settings};
@@ -9,19 +9,25 @@ use immt_lsp::async_lsp::lsp_types as lsp;
 
 use crate::users::LoginState;
 
+
+static GLOBAL_STATE: std::sync::OnceLock<LSPState> = std::sync::OnceLock::new();
+
 //struct TickEvent;
-struct STDIOLSPServer {
+pub struct STDIOLSPServer {
   client:ClientSocket,
-  state:LSPState,
   on_port:tokio::sync::watch::Receiver<Option<u16>>,
   workspaces:Vec<(String,lsp::Url)>
 }
 
 impl STDIOLSPServer {
+  #[inline]
+  pub fn global_state() -> Option<&'static LSPState> {
+    GLOBAL_STATE.get()
+  }
   fn load_all(&self) {
     use rayon::prelude::*;
     let client = self.client.clone();
-    let state = self.state.clone();
+    let state = self.state().clone();
     let workspaces = self.workspaces.clone();
     let _ = tokio::task::spawn_blocking(move || {
       let (_,t) = measure(move || {
@@ -39,7 +45,7 @@ impl STDIOLSPServer {
             })
           }
         }
-        ProgressCallbackServer::with(client,"Initializing".to_string(),Some(files.len() as _),|p| {
+        ProgressCallbackServer::with(client,"Initializing".to_string(),Some(files.len() as _),|mut p| {
           /*files.par_iter().for_each(|(file,uri)| {
             //p.update(file.display().to_string(), Some(1));
             state.load(&file,&uri);
@@ -49,10 +55,9 @@ impl STDIOLSPServer {
             state.load(&file,&uri,|data| {
               let lock = data.lock();
               if !lock.diagnostics.is_empty() {
-                let mut client = p.client();
                 if let Ok(uri) = lsp::Url::from_file_path(&file) { 
-                  client.publish_diagnostics(lsp::PublishDiagnosticsParams {
-                    uri,version:None,diagnostics:lock.diagnostics.iter().map(immt_lsp::to_diagnostic).collect()
+                  let _ = p.client_mut().publish_diagnostics(lsp::PublishDiagnosticsParams {
+                    uri,version:None,diagnostics:lock.diagnostics.iter().map(to_diagnostic).collect()
                   });
                 }
               }
@@ -80,7 +85,7 @@ impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
   }
   #[inline]
   fn state(&self) -> &LSPState {
-    &self.state
+    Self::global_state().unwrap_or_else(|| unreachable!())
   }
   fn initialized(&mut self) {
     let v = *self.on_port.borrow();
@@ -111,7 +116,8 @@ impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
 impl STDIOLSPServer {
   #[allow(clippy::let_and_return)]
   fn new_router(client:ClientSocket,on_port:tokio::sync::watch::Receiver<Option<u16>>) -> Router<immt_lsp::ServerWrapper<Self>> {
-    let /*mut*/ router = Router::from_language_server(immt_lsp::ServerWrapper::new(Self {client,on_port,state:LSPState::default(),workspaces:Vec::new()}));
+    let _ = GLOBAL_STATE.set(LSPState::default());
+    let /*mut*/ router = Router::from_language_server(immt_lsp::ServerWrapper::new(Self {client,on_port,workspaces:Vec::new()}));
     //router.event(Self::on_tick);
     router
   }

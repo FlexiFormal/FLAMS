@@ -14,6 +14,10 @@ use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Title};
 use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, hooks::use_query_map, SsrMode, StaticSegment};
 
+//#[derive(Copy,Clone,Debug,serde::Serialize,serde::Deserialize)]
+//pub struct UseLSP(pub bool);
+
+
 #[component]
 pub fn Main() -> impl IntoView {
     provide_meta_context();
@@ -22,6 +26,7 @@ pub fn Main() -> impl IntoView {
         <Router>{
             let params = use_query_map();
             let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
+            //provide_context(UseLSP(params.with_untracked(|p|)))
             view!{<Routes fallback=|| NotFound()>
                 <ParentRoute ssr=SsrMode::PartiallyBlocked path=StaticSegment("/dashboard") view=Dashboard>
                     <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>

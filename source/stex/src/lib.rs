@@ -10,7 +10,7 @@ use immt_shtml::{HTMLString, SHTML_DOC, SHTML_OMDOC};
 use immt_system::{
     backend::AnyBackend, build_result, build_target, building::{BuildResult, BuildResultArtifact, BuildTask}, formats::{CHECK, PDF}, immt_extension, source_format
 };
-pub use rustex::RusTeX;
+pub use rustex::{RusTeX,OutputCont};
 
 source_format!(stex ["tex","ltx"] [
   PDFLATEX_FIRST => PDFLATEX => RUSTEX => SHTML_OMDOC => CHECK]

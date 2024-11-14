@@ -1,10 +1,10 @@
 use crate::{
-    quickparse::{latex::LaTeXParser
-    , stex::rules::{ModuleReference, STeXParseState, STeXToken}},
+    quickparse::{latex::LaTeXParser, 
+        stex::rules::{ModuleReference, STeXParseState, STeXToken}},
     PDFLATEX_FIRST,
 };
 use either::Either;
-use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI}};
+use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI}};
 use immt_system::{
     backend::AnyBackend,
     building::{BuildTask, Dependency, TaskRef},
@@ -28,7 +28,7 @@ pub enum STeXDependency {
         filepath: std::sync::Arc<str>
     },
     Module{
-        uri:ModuleURI,
+        //uri:ModuleURI,
         sig:Option<Language>,
         meta:Option<(ArchiveId,std::sync::Arc<str>)>
     }
@@ -36,18 +36,15 @@ pub enum STeXDependency {
 
 #[allow(clippy::type_complexity)]
 pub struct DepParser<'a> {
-    parser: LaTeXParser<'a, ParseStr<'a, ()>,fn(String,SourceRange<()>), STeXToken<()>,STeXParseState<'a,()>>,
+    parser: LaTeXParser<'a, ParseStr<'a,()>,STeXToken<()>,fn(String,SourceRange<()>),STeXParseState<'a,()>>,
     stack: Vec<std::vec::IntoIter<STeXToken<()>>>,
     curr: Option<std::vec::IntoIter<STeXToken<()>>>,
 }
-
-
 
 fn parse_deps<'a>(source: &'a str, path: &'a Path,archive:ArchiveURIRef<'a>,doc:&'a DocumentURI,backend:&'a AnyBackend) -> impl Iterator<Item = STeXDependency> + use<'a> {
     const NOERR: fn(String,SourceRange<()>) = |_,_| {};
     let parser = LaTeXParser::with_rules(
         ParseStr::new(source),
-        Some(path),
         STeXParseState::new(Some(archive),Some(path),doc,backend,()),
         NOERR,
         LaTeXParser::default_rules().into_iter().chain([
@@ -84,12 +81,12 @@ impl DepParser<'_> {
             STeXToken::UseModule { module:ModuleReference{uri,rel_path:Some(rel_path),..},.. } => {
                 Some(STeXDependency::UseModule { archive:uri.archive_id().clone(), module:rel_path })
             }
-            STeXToken::Module{uri,sig,children,meta_theory,..} => {
+            STeXToken::Module{/*uri,*/sig,children,meta_theory,..} => {
                 let old = std::mem::replace(&mut self.curr, Some(children.into_iter()));
                 if let Some(old) = old {
                     self.stack.push(old);
                 }
-                Some(STeXDependency::Module{uri,sig:sig.map(|(l,_)| l),meta:meta_theory.and_then(|(m,_)| m.rel_path.map(|p| (m.uri.archive_id().clone(),p)) )})
+                Some(STeXDependency::Module{/*uri,*/sig:sig.map(|(l,_)| l),meta:meta_theory.and_then(|(m,_)| m.rel_path.map(|p| (m.uri.archive_id().clone(),p)) )})
             }
             STeXToken::Inputref {
                 archive,
@@ -179,7 +176,7 @@ pub fn get_deps(backend: &AnyBackend, task: &BuildTask) {
                         });
                     }
                 }
-                STeXDependency::Module { uri:_, sig,meta } => {
+                STeXDependency::Module { /*uri:_,*/ sig,meta } => {
                     //yields.push(uri);
                     if let Some(lang) = sig {
                         let archive = task.archive().id().clone();

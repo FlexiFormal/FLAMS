@@ -2,7 +2,7 @@
 
 use std::ops::ControlFlow;
 
-use crate::{to_diagnostic, LSPStore};
+use crate::{state::to_diagnostic, LSPStore};
 
 use super::{IMMTLSPServer,ServerWrapper};
 use async_lsp::{lsp_types::{self as lsp}, LanguageClient, LanguageServer, ResponseError};
@@ -152,8 +152,21 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         ControlFlow::Continue(())
     }
 
+    #[must_use]
+    #[allow(clippy::let_underscore_future)]
+    //impl_notification!(! did_save = DidSaveTextDocument);
+    fn did_save(&mut self,params:lsp::DidSaveTextDocumentParams) -> Self::NotifyResult {
+        tracing::info!("did_save: {}",params.text_document.uri);
+        let state = self.inner.state().clone();
+        let client = self.inner.client().clone();
+        let uri = params.text_document.uri;
+        let _ = tokio::task::spawn_blocking(move || {
+            state.build_html(&uri, client);
+        });
+        ControlFlow::Continue(())
+    }
+
     impl_notification!(! will_save = WillSaveTextDocument);
-    impl_notification!(! did_save = DidSaveTextDocument);
     impl_notification!(! did_close = DidCloseTextDocument);
 
     // window/
@@ -344,7 +357,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 );
                 self.inner.state().get_semantic_tokens(&params.text_document.uri,p,None)
                     .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                    |f| Box::pin(f.map(|r| Ok(r.map(|r| lsp::SemanticTokensResult::Tokens(r))))) as _
+                    |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensResult::Tokens)))) as _
                     )
             })
         }
@@ -378,7 +391,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 );
                 self.inner.state().get_semantic_tokens(&params.text_document.uri,p,Some(params.range))
                     .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                    |f| Box::pin(f.map(|r| Ok(r.map(|r| lsp::SemanticTokensRangeResult::Tokens(r))))) as _
+                    |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensRangeResult::Tokens)))) as _
                     )
             })
         }

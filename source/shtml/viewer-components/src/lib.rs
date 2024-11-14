@@ -172,7 +172,8 @@ impl SectionContinuation {
 pub struct SectionContinuation;
 #[cfg(not(feature="ts"))]
 impl SectionContinuation {
-    pub fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+    /// #### Errors
+    pub const fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
         Ok(None)
     }
 }

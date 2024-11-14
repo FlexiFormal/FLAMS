@@ -134,7 +134,7 @@ pub(crate) fn Login(children:Children) -> impl IntoView {
     });
 
     view!{
-        {move || res.get().map_or_else(|| Some(view!(<Spinner/>)),|u| { user.set(u); None}) }
+        {move || view!(<Suspense>{move || res.get().map_or_else(|| Some(view!(<Spinner/>)),|u| { user.set(u); None})}</Suspense>) }
         {children()}
     }
 }

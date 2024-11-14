@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell};
 use either::Either;
 use html5ever::{interface::{NodeOrText, TreeSink}, parse_document, serialize::SerializeOpts, tendril::{SliceExt, StrTendril, TendrilSink}, ParseOpts, QualName};
 use immt_ontology::{languages::Language, narration::{documents::UncheckedDocument, LazyDocRef}, triple, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange};
-use immt_system::{backend::{AnyBackend, Backend}, building::{BuildResult, BuildResultArtifact}, formats::OMDocResult};
+use immt_system::{backend::{AnyBackend, Backend}, building::{BuildResult, BuildResultArtifact}, formats::{HTMLData, OMDocResult}};
 use immt_utils::{prelude::HSet, CSS};
 use nodes::{ElementData, NodeData, NodeRef};
 use shtml_extraction::{errors::SHTMLError, open::{terms::{OpenTerm, VarOrSym}, OpenSHTMLElement}, prelude::{Attributes, ExtractorState, RuleSet, SHTMLElements, SHTMLNode, SHTMLTag, StatefulExtractor}};
@@ -90,7 +90,7 @@ impl StatefulExtractor for Extractor<'_> {
 } 
 
 impl<'p> HTMLParser<'p> {
-  pub fn run(input:&str,uri:DocumentURI,rel_path:&'p str,backend:&'p AnyBackend) -> BuildResult {
+  pub fn run(input:&str,uri:DocumentURI,rel_path:&'p str,backend:&'p AnyBackend) -> Result<(OMDocResult,String),String> {
     let iri = uri.to_iri();
     let mut triples = HSet::default();
     for t in [
@@ -125,7 +125,7 @@ impl<'p> HTMLParser<'p> {
 
 impl TreeSink for HTMLParser<'_> {
   type Handle = NodeRef;
-  type Output = BuildResult;
+  type Output = Result<(OMDocResult,String),String>;
   type ElemName<'a> = &'a QualName where Self:'a;
 
   fn finish(self) -> Self::Output {
@@ -137,22 +137,35 @@ impl TreeSink for HTMLParser<'_> {
       errors,css,refs,title,triples,state,backend,..
     } = self.extractor.into_inner();
     if !errors.is_empty() {
+      return Err(errors);
+      /*
       return BuildResult {
         log:Either::Left(errors),
         result:Err(Vec::new())
-      }
+      } */
     }
     let Ok((uri,elems,modules)) = state.take() else {
-      return BuildResult {
+      return Err("Unbalanced sHTML document".to_string())
+      /*return BuildResult {
         log:Either::Left("Unbalanced sHTML document".to_string()),
         result:Err(Vec::new())
-      }
+      }*/
     };
     
     let _ = html5ever::serialize(&mut html, &self.document_node, SerializeOpts::default());
     let html = String::from_utf8_lossy_owned(html);
     backend.submit_triples(&uri,self.rel_path,triples.into_iter());
     let (body,inner_offset) = self.body.get();
+    Ok((OMDocResult {
+      document: UncheckedDocument {
+        uri,title,elements:elems
+      },
+      html:HTMLData {
+        html,css,refs,
+        body,inner_offset
+      },modules
+    },errors))
+    /*
     BuildResult {
       log:Either::Left(errors),
       result:Ok(BuildResultArtifact::Data(Box::new(OMDocResult {
@@ -162,7 +175,7 @@ impl TreeSink for HTMLParser<'_> {
         html,css,refs,modules,
         body,inner_offset
       })))
-    }
+    } */
   }
 
   #[inline]

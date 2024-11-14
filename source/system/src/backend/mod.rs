@@ -18,12 +18,12 @@ use immt_ontology::{
         ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIWithLanguage
     }, DocumentRange, LocalBackend
 };
-use immt_utils::CSS;
+use immt_utils::{prelude::HMap, triomphe, CSS};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use rdf::RDFStore;
 use std::{ops::Deref, path::PathBuf};
-use crate::formats::SourceFormatId;
+use crate::formats::{HTMLData, SourceFormatId};
 
 #[derive(Clone, Debug)]
 pub enum BackendChange {
@@ -41,7 +41,8 @@ pub enum BackendChange {
 
 #[derive(Clone,Debug)]
 pub enum AnyBackend{
-    Global(&'static GlobalBackend)
+    Global(&'static GlobalBackend),
+    Temp(TemporaryBackend)
 }
 
 pub trait Backend {
@@ -50,8 +51,11 @@ pub trait Backend {
     fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike>;
     fn get_base_path(&self,id:&ArchiveId) -> Option<PathBuf>;
     fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolURI) -> Option<ContentReference<T>>
-    where
-        Self: Sized;
+    where Self: Sized {
+            let m = self.get_module(uri.module())?;
+        // TODO this unnecessarily clones
+        ContentReference::new(&m, uri.name())
+    }
     fn with_archive_or_group<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&ArchiveOrGroup>) -> R) -> R
     where
         Self: Sized;
@@ -64,11 +68,26 @@ pub trait Backend {
     fn with_archive<R>(&self, id: &ArchiveId, f: impl FnOnce(Option<&Archive>) -> R) -> R
     where Self:Sized;
     
+    #[allow(unreachable_patterns)]
     fn with_local_archive<R>(
         &self,
         id: &ArchiveId,
         f: impl FnOnce(Option<&LocalArchive>) -> R,
-    ) -> R where Self:Sized;
+    ) -> R  where Self:Sized {
+        self.with_archive(id, |a| {
+            f(a.and_then(|a| match a {
+                Archive::Local(a) => Some(a),
+                _ => None,
+            }))
+        })
+    }
+    #[inline]
+    fn as_checker(&self) -> AsChecker<Self> where Self:Sized {
+        AsChecker(self)
+    }
+    fn get_html_body(&self,
+        d:&DocumentURI,full:bool
+    ) -> Option<(Vec<CSS>,String)>;
 }
 
 impl Backend for AnyBackend {
@@ -76,10 +95,22 @@ impl Backend for AnyBackend {
     fn to_any(&self) -> AnyBackend {
         self.clone()
     }
+
+    #[inline]
+    fn get_html_body(&self,
+            d:&DocumentURI,full:bool
+        ) -> Option<(Vec<CSS>,String)> {
+        match self {
+            Self::Global(b) => b.get_html_body(d,full),
+            Self::Temp(b) => b.get_html_body(d,full),
+        }
+    }
+
     #[inline]
     fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
         match self {
             Self::Global(b) => b.submit_triples(in_doc,rel_path,iter),
+            Self::Temp(b) => b.submit_triples(in_doc,rel_path,iter),
         }
     }
 
@@ -87,12 +118,14 @@ impl Backend for AnyBackend {
     fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
         match self {
             Self::Global(b) => b.get_document(uri),
+            Self::Temp(b) => b.get_document(uri),
         }
     }
 
     fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R where Self:Sized {
         match self {
             Self::Global(b) => b.with_archive_tree(f),
+            Self::Temp(b) => b.with_archive_tree(f),
         }
     }
 
@@ -100,6 +133,7 @@ impl Backend for AnyBackend {
     fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
         match self {
             Self::Global(b) => b.get_module(uri),
+            Self::Temp(b) => b.get_module(uri),
         }
     }
 
@@ -107,6 +141,7 @@ impl Backend for AnyBackend {
     fn get_base_path(&self,id:&ArchiveId) -> Option<PathBuf> {
         match self {
             Self::Global(b) => b.get_base_path(id),
+            Self::Temp(b) => b.get_base_path(id),
         }
     }
 
@@ -115,6 +150,7 @@ impl Backend for AnyBackend {
     where Self: Sized {
         match self {
             Self::Global(b) => b.get_declaration(uri),
+            Self::Temp(b) => b.get_declaration(uri),
         }
     }
 
@@ -123,6 +159,7 @@ impl Backend for AnyBackend {
     where Self: Sized {
         match self {
             Self::Global(b) => b.with_archive_or_group(id,f),
+            Self::Temp(b) => b.with_archive_or_group(id,f),
         }
     }
     
@@ -131,6 +168,7 @@ impl Backend for AnyBackend {
     where Self:Sized {
         match self {
             Self::Global(b) => b.with_archive(id, f),
+            Self::Temp(b) => b.with_archive(id, f),
         }
     }
     
@@ -142,6 +180,7 @@ impl Backend for AnyBackend {
     ) -> R where Self:Sized {
         match self {
             Self::Global(b) => b.with_local_archive(id, f),
+            Self::Temp(b) => b.with_local_archive(id, f),
         }
     }
 }
@@ -169,14 +208,6 @@ impl GlobalBackend {
         Self: Sized,
     {
         &GLOBAL
-    }
-
-    pub fn get_html_body(&self,
-        d:&DocumentURI,full:bool
-    ) -> Option<(Vec<CSS>,String)> {
-        self.manager().with_archive(d.archive_id(), |a|
-            a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(),full))
-        )
     }
 
     #[cfg(feature="tokio")]
@@ -233,7 +264,7 @@ impl GlobalBackend {
             .spawn_blocking(move || {
                 let slf = Self::get();
                 let mut cache = slf.cache.write();
-                let mut flattener = Flattener(&mut cache, &slf.archives);
+                let mut flattener = GlobalFlattener(&mut cache, &slf.archives);
                 flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name())
             })
             .await
@@ -264,7 +295,7 @@ impl GlobalBackend {
             .spawn_blocking(move || {
                 let slf = Self::get();
                 let mut cache = slf.cache.write();
-                let mut flattener = Flattener(&mut cache, &slf.archives);
+                let mut flattener = GlobalFlattener(&mut cache, &slf.archives);
                 flattener.load_module(top.as_path(), top.language(), top.name().first_name())
             })
             .await
@@ -277,6 +308,13 @@ impl Backend for &'static GlobalBackend {
     #[inline]
     fn to_any(&self) -> AnyBackend {
         AnyBackend::Global(self)
+    }
+
+    #[inline]
+    fn get_html_body(&self,
+            d:&DocumentURI,full:bool
+        ) -> Option<(Vec<CSS>,String)> {
+        GlobalBackend::get_html_body(&self, d, full)
     }
 
     #[inline]
@@ -331,19 +369,20 @@ impl Backend for GlobalBackend {
         AnyBackend::Global(Self::get())
     }
 
+    fn get_html_body(&self,
+        d:&DocumentURI,full:bool
+    ) -> Option<(Vec<CSS>,String)> {
+        self.manager().with_archive(d.archive_id(), |a|
+            a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(),full))
+        )
+    }
+
     fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
-        //use immt_ontology::rdf::{Triple,Quad,GraphName};
         self.manager().with_archive(in_doc.archive_id(), |a| {
             if let Some(a) = a {
                 a.submit_triples(in_doc,rel_path,self.triple_store(),iter);
             }
         });
-        /*
-        let iri = in_doc.to_iri();
-        self.triple_store.add_quads(iter.map(
-            |Triple {subject,predicate,object}|
-            Quad {subject,predicate,object,graph_name:GraphName::NamedNode(iri.clone())}
-        ));*/
     }
 
     #[inline]
@@ -358,20 +397,7 @@ impl Backend for GlobalBackend {
         f(archives.iter().find(|a| a.uri().archive_id() == id))
     }
 
-    #[allow(unreachable_patterns)]
-    fn with_local_archive<R>(
-        &self,
-        id: &ArchiveId,
-        f: impl FnOnce(Option<&LocalArchive>) -> R,
-    ) -> R
-    {
-        self.with_archive(id, |a| {
-            f(a.and_then(|a| match a {
-                Archive::Local(a) => Some(a),
-                _ => None,
-            }))
-        })
-    }
+
     fn with_archive_or_group<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&ArchiveOrGroup>) -> R) -> R {
         self.with_archive_tree(|t| f(t.find(id)))
     }
@@ -388,7 +414,7 @@ impl Backend for GlobalBackend {
             }
         }
         let mut cache = self.cache.write();
-        let mut flattener = Flattener(&mut cache, &self.archives);
+        let mut flattener = GlobalFlattener(&mut cache, &self.archives);
         flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name())
     }
 
@@ -409,22 +435,164 @@ impl Backend for GlobalBackend {
         }
         let m = {
             let mut cache = self.cache.write();
-            let mut flattener = Flattener(&mut cache, &self.archives);
+            let mut flattener = GlobalFlattener(&mut cache, &self.archives);
             flattener.load_module(uri.as_path(), uri.language(), uri.name().first_name())?
         };
         // TODO: this unnecessarily clones
         ModuleLike::in_module(&m, uri.name())
     }
 
-    fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolURI) -> Option<ContentReference<T>> {
-        let m = self.get_module(uri.module())?;
-        // TODO this unnecessarily clones
-        ContentReference::new(&m, uri.name())
+}
+
+#[derive(Debug)]
+struct TemporaryBackendI {
+    modules: parking_lot::Mutex<HMap<ModuleURI, Module>>,
+    documents: parking_lot::Mutex<HMap<DocumentURI, Document>>,
+    html:parking_lot::Mutex<HMap<DocumentURI,HTMLData>>,
+    parent:AnyBackend
+}
+
+#[derive(Clone,Debug)]
+pub struct TemporaryBackend {
+    inner: triomphe::Arc<TemporaryBackendI>
+}
+impl Default for TemporaryBackend {
+    #[inline]
+    fn default() -> Self {
+        Self::new(GlobalBackend::get().to_any())
     }
 }
 
-struct Flattener<'a>(&'a mut BackendCache, &'a ArchiveManager);
-impl Flattener<'_> {
+impl TemporaryBackend {
+    #[must_use]
+    pub fn new(parent:AnyBackend) -> Self {
+        Self { inner: triomphe::Arc::new(TemporaryBackendI { 
+            modules: parking_lot::Mutex::new(HMap::default()), 
+            documents: parking_lot::Mutex::new(HMap::default()),
+            html:parking_lot::Mutex::new(HMap::default()),
+            parent 
+        }) }
+    }
+    pub fn add_module(&self,m:Module) {
+        self.inner.modules.lock().insert(m.uri().clone(), m);
+    }
+    pub fn add_document(&self,d:Document) {
+        self.inner.documents.lock().insert(d.uri().clone(), d);
+    }
+    pub fn add_html(&self,uri:DocumentURI,d:HTMLData) {
+        self.inner.html.lock().insert(uri, d);
+    }
+}
+
+impl Backend for TemporaryBackend {
+    #[inline]
+    fn to_any(&self) -> AnyBackend {
+        AnyBackend::Temp(self.clone())
+    }
+    fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
+        self.inner.documents.lock().get(uri).cloned().or_else(|| 
+            self.inner.parent.get_document(uri)
+        )
+    }
+
+    fn get_html_body(&self,
+            d:&DocumentURI,full:bool
+        ) -> Option<(Vec<CSS>,String)> {
+        self.inner.html.lock().get(d).map_or_else(
+            || self.inner.parent.get_html_body(d,full),
+            |html| Some((
+                html.css.clone(),
+                if full { html.html[html.body.start..html.body.end].to_string() } else {
+                    html.html[html.body.start + html.inner_offset..html.body.end].to_string()
+                }
+            ))
+        )
+    }
+    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+        if uri.name().is_simple() {
+            return self.inner.modules.lock().get(uri).cloned().map(|m| ModuleLike::Module(m)).or_else(
+                || self.inner.parent.get_module(uri)
+            )
+        }
+        let top_uri = !uri.clone();
+        let top = self.inner.modules.lock().get(&top_uri).cloned().or_else(
+            || match self.inner.parent.get_module(&top_uri) {
+                Some(ModuleLike::Module(m)) => Some(m),
+                _ => None
+            }
+        )?;
+        ModuleLike::in_module(&top, uri.name())
+    }
+    #[inline]
+    fn get_base_path(&self,id:&ArchiveId) -> Option<PathBuf> {
+        self.inner.parent.get_base_path(id)
+    }
+
+    #[inline]
+    fn with_archive_or_group<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&ArchiveOrGroup>) -> R) -> R
+        where
+            Self: Sized {
+        self.inner.parent.with_archive_or_group(id, f)
+    }
+
+    #[inline]
+    fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R {
+        self.inner.parent.with_archive_tree(f)
+    }
+
+    #[inline]
+    fn with_archive<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&Archive>) -> R) -> R {
+        self.inner.parent.with_archive(id,f)
+    }
+
+    #[inline]
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>)
+            where Self:Sized {
+        self.inner.parent.submit_triples(in_doc,rel_path,iter);
+    }
+
+    
+}
+
+pub struct AsChecker<'a,B:Backend>(&'a B);
+
+impl<B:Backend> LocalBackend for AsChecker<'_,B> {
+    #[inline]
+    fn get_document(&mut self, uri: &DocumentURI) -> Option<Document> {
+        self.0.get_document(uri)
+    }
+    #[inline]
+    fn get_declaration<T: DeclarationTrait>(
+            &mut self,
+            uri: &SymbolURI,
+        ) -> Option<ContentReference<T>> {
+        self.0.get_declaration(uri)
+    }
+    #[inline]
+    fn get_module(&mut self, uri: &ModuleURI) -> Option<ModuleLike> {
+        self.0.get_module(uri)
+    }
+}
+
+
+impl<B:Backend> DocumentChecker for AsChecker<'_,B> {
+    #[inline]
+    fn open(&mut self, _elem: &mut UncheckedDocumentElement) {}
+    #[inline]
+    fn close(&mut self, _elem: &mut DocumentElement) {}
+}
+
+impl<B:Backend> ModuleChecker for AsChecker<'_,B> {
+    #[inline]
+    fn open(&mut self, _elem: &mut UncheckedDeclaration) {}
+    #[inline]
+    fn close(&mut self, _elem: &mut Declaration) {}
+}
+
+
+
+struct GlobalFlattener<'a>(&'a mut BackendCache, &'a ArchiveManager);
+impl GlobalFlattener<'_> {
     fn load_document(
         &mut self,
         path: PathURIRef,
@@ -452,7 +620,7 @@ impl Flattener<'_> {
     }
 }
 
-impl LocalBackend for Flattener<'_> {
+impl LocalBackend for GlobalFlattener<'_> {
     #[allow(clippy::option_if_let_else)]
     fn get_document(&mut self, uri: &DocumentURI) -> Option<Document> {
         if let Some(doc) = self.0.has_document(uri) {
@@ -488,14 +656,14 @@ impl LocalBackend for Flattener<'_> {
     }
 }
 
-impl DocumentChecker for Flattener<'_> {
+impl DocumentChecker for GlobalFlattener<'_> {
     #[inline]
     fn open(&mut self, _elem: &mut UncheckedDocumentElement) {}
     #[inline]
     fn close(&mut self, _elem: &mut DocumentElement) {}
 }
 
-impl ModuleChecker for Flattener<'_> {
+impl ModuleChecker for GlobalFlattener<'_> {
     #[inline]
     fn open(&mut self, _elem: &mut UncheckedDeclaration) {}
     #[inline]
