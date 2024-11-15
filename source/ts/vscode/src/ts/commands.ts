@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { IMMTContext, IMMTPreContext } from '../extension';
 import { CancellationToken } from 'vscode-languageclient';
+import * as language from 'vscode-languageclient';
 import { MathHubTreeProvider } from './mathhub';
 
 export enum Commands {
@@ -19,8 +20,10 @@ export function register_commands(context:IMMTPreContext) {
   /*context.register_command(Commands.HelloWorld, () => {
     vscode.window.showInformationMessage(greet("Dude"));
   });*/
+}
 
-
+interface HtmlRequestParams {
+  uri: language.URI
 }
 
 export function register_server_commands(context:IMMTContext) {
@@ -30,6 +33,17 @@ export function register_server_commands(context:IMMTContext) {
       switch (msg.command) {
         case "dashboard":
           openIframe(context.server.url + "/dashboard","Dashboard");
+          break;
+        case "preview":
+          const doc = vscode.window.activeTextEditor?.document;
+          if (doc) {
+            context.client.sendRequest<string | undefined>("immt/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
+              if (s) {openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s); }
+              else {
+                vscode.window.showInformationMessage("No preview available; building possibly failed");
+              }
+            });
+          }
       }
     })
   );

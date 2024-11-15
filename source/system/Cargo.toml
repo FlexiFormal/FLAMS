@@ -29,7 +29,7 @@ smallvec = {workspace = true}
 const_format = {workspace=true}
 lazy_static = {workspace=true}
 simple-home-dir = {workspace=true}
-tokio = {workspace=true,features=["rt","io-util"],optional=true}
+tokio = {workspace=true,features=["rt","io-util","sync","fs"],optional=true}
 chrono = {workspace=true}
 
 oxigraph = { workspace=true }

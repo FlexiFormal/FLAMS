@@ -29,6 +29,7 @@ impl STDIOLSPServer {
     let client = self.client.clone();
     let state = self.state().clone();
     let workspaces = self.workspaces.clone();
+    
     let _ = tokio::task::spawn_blocking(move || {
       let (_,t) = measure(move || {
         let mut files = Vec::new();
@@ -117,9 +118,11 @@ impl STDIOLSPServer {
   #[allow(clippy::let_and_return)]
   fn new_router(client:ClientSocket,on_port:tokio::sync::watch::Receiver<Option<u16>>) -> Router<immt_lsp::ServerWrapper<Self>> {
     let _ = GLOBAL_STATE.set(LSPState::default());
-    let /*mut*/ router = Router::from_language_server(immt_lsp::ServerWrapper::new(Self {client,on_port,workspaces:Vec::new()}));
+    let server = immt_lsp::ServerWrapper::new(Self {client,on_port,workspaces:Vec::new()});
+    server.router()
+    //let /*mut*/ router = Router::from_language_server();
     //router.event(Self::on_tick);
-    router
+    //router
   }
   /*fn on_tick(&mut self,_:TickEvent) -> ControlFlow<async_lsp::Result<()>> {
     tracing::info!("tick");

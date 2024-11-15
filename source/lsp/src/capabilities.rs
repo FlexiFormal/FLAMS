@@ -5,11 +5,12 @@ impl STeXSemanticTokens {
   pub const DECLARATION:u32 = 0;
   pub const NAME:u32 = 1;
   pub const KEYWORD:u32 = 2;
+  pub const SYMBOL:u32 = 3;
   // -------------------
-  pub const OPERATOR:u32 = 3;
-  pub const TYPE_PARAMETER:u32 = 4;
-  pub const TYPE:u32 = 5;
-  pub const ENUM:u32 = 6;
+  pub const OPERATOR:u32 = 4;
+  pub const TYPE_PARAMETER:u32 = 5;
+  pub const TYPE:u32 = 6;
+  pub const ENUM:u32 = 7;
 }
 
 lazy_static::lazy_static! {
@@ -18,6 +19,7 @@ lazy_static::lazy_static! {
       lsp::SemanticTokenType::ENUM_MEMBER,
       lsp::SemanticTokenType::PROPERTY,
       lsp::SemanticTokenType::KEYWORD,
+      lsp::SemanticTokenType::STRING,
       // ------------------------------
       lsp::SemanticTokenType::OPERATOR,
       lsp::SemanticTokenType::TYPE_PARAMETER,

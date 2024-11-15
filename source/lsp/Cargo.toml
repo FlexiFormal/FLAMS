@@ -21,6 +21,7 @@ tower = {workspace = true}
 tokio = {workspace=true}
 triomphe = {workspace=true}
 parking_lot = {workspace=true}
+serde = {workspace=true}
 
 axum = {workspace=true,optional=true}
 serde_json = {workspace=true,optional=true}

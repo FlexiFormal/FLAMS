@@ -1,13 +1,14 @@
 use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
+use futures::FutureExt;
 use immt_ontology::uris::{ArchiveURITrait, DocumentURI};
-use immt_stex::{quickparse::stex::{DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseData}, OutputCont, RusTeX};
+use immt_stex::{quickparse::stex::{DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseData, STeXParseDataI}, OutputCont, RusTeX};
 use immt_system::{backend::{archives::LocalArchive, AnyBackend, Backend, GlobalBackend, TemporaryBackend}, formats::OMDocResult};
-use immt_utils::{prelude::{HMap, TreeChildIter}, sourcerefs::SourceRange};
+use immt_utils::{prelude::{HMap, TreeChildIter}, sourcerefs::{LSPLineCol, SourceRange}};
 use smallvec::SmallVec;
 
-use crate::{capabilities::STeXSemanticTokens, documents::LSPDocument, IsLSPRange, LSPStore, ProgressCallbackClient, ProgressCallbackServer};
+use crate::{capabilities::STeXSemanticTokens, documents::LSPDocument, ClientExt, IsLSPRange, LSPStore, ProgressCallbackClient, ProgressCallbackServer};
 
 #[derive(Clone)]
 pub enum DocOrData {
@@ -34,20 +35,22 @@ impl LSPState {
     self.rustex.get_or_init(RusTeX::get)
   }
 
-  pub fn build_html(&self,uri:&lsp::Url,client:ClientSocket) {
-    let Some(DocOrData::Doc(doc)) = self.documents.read().get(uri).cloned() else {return};
-    let Ok(path) = uri.to_file_path() else {return};
-    let Some(doc_uri) = doc.document_uri().cloned() else {return};
-    if doc.relative_path().is_none() {return};
+  pub fn build_html(&self,uri:&lsp::Url,client:&mut ClientSocket) -> Option<DocumentURI> {
+    let Some(DocOrData::Doc(doc)) = self.documents.read().get(uri).cloned() else {return None };
+    let path = uri.to_file_path().ok()?;
+    let doc_uri = doc.document_uri().cloned()?;
+    if doc.html_up_to_date() {return Some(doc_uri)};
+    if doc.relative_path().is_none() {return None };
     let engine = self.rustex().builder()
       .set_sourcerefs(true);
-    let Some(engine) = doc.with_text(|text| engine.set_string(&path,text)) else {return};
-    ProgressCallbackServer::with(client, format!("Building {}",uri.as_str().rsplit_once('/').unwrap_or_else(|| unreachable!()).1), None, move |progress| {
+    let engine = doc.with_text(|text| engine.set_string(&path,text))?;
+    ProgressCallbackServer::with(client.clone(), format!("Building {}",uri.as_str().rsplit_once('/').unwrap_or_else(|| unreachable!()).1), None, move |progress| {
       let out = ClientOutput(std::cell::RefCell::new(progress));
       let(res,mut old) = engine.set_output(out).run();
-      let progress: ClientOutput = old.take_output().unwrap_or_else(|| unreachable!());
+      doc.set_html_up_to_date();
+      //let progress: ClientOutput = old.take_output().unwrap_or_else(|| unreachable!());
       if let Some(e) = &res.error {
-        let _ = progress.0.borrow_mut().client_mut().log_message(lsp::LogMessageParams {
+        let _ = client.log_message(lsp::LogMessageParams {
           typ: lsp::MessageType::ERROR,
           message: format!("RusTeX Error: {e}")
         });
@@ -57,10 +60,11 @@ impl LSPState {
           message: format!("RusTeX Error: {e}"),
           range: SourceRange::default()
         });
-        let _ = progress.0.borrow_mut().client_mut().publish_diagnostics(lsp::PublishDiagnosticsParams {
+        let _ = client.publish_diagnostics(lsp::PublishDiagnosticsParams {
           uri:uri.clone(),version:None,diagnostics:lock.diagnostics.iter().map(to_diagnostic).collect()
         });
         drop(lock);
+        None
       } else {
         let html = res.to_string();
         let rel_path = doc.relative_path().unwrap_or_else(|| unreachable!());
@@ -74,24 +78,32 @@ impl LSPState {
             let document = document.check(&mut self.backend.as_checker());
             self.backend.add_document(document);
             old.memorize(self.rustex());
-            let _ = progress.0.borrow().client().notify::<HTMLResult>(doc_uri.to_string());
+            Some(doc_uri)
           }
           Err(e) => {
-            let progress: ClientOutput = old.take_output().unwrap_or_else(|| unreachable!());
-            let _ = progress.0.borrow_mut().client_mut().log_message(lsp::LogMessageParams {
+            //let progress: ClientOutput = old.take_output().unwrap_or_else(|| unreachable!());
+            let _ = client.log_message(lsp::LogMessageParams {
               typ: lsp::MessageType::ERROR,
               message: format!("SHTML Error: {e}")
             });
+            None
           }
         }
       }
-    });
+    })
+  }
+
+  #[inline]
+  pub fn build_html_and_notify(&self,uri:&lsp::Url,mut client:ClientSocket) {
+    if let Some(uri) = self.build_html(uri, &mut client) {
+      client.html_result(&uri)
+    }
   }
 
   pub fn load(&self,p:&Path,uri:&DocumentURI,and_then:impl FnOnce(&STeXParseData)) {
     let Some(lsp_uri) = lsp::Url::from_file_path(p).ok() else {return};
     if self.documents.read().get(&lsp_uri).is_some() { return }
-    let state = LSPStore::<false>(self.clone());
+    let state = LSPStore::<false>::new(self.clone());
     if let Some(ret) = state.load(p, uri) {
       and_then(&ret);
       let mut docs = self.documents.write();
@@ -106,7 +118,7 @@ impl LSPState {
     let doc = LSPDocument::new(doc,uri.clone());
     if doc.has_annots() {
       let d = doc.clone();
-      let store = LSPStore(self.clone());
+      let store = LSPStore::new(self.clone());
       let _ = tokio::task::spawn_blocking(move || d.compute_annots(store));
     }
     self.documents.write().insert(uri,DocOrData::Doc(doc));
@@ -127,7 +139,7 @@ impl LSPState {
       )
     )}
     let d = self.get(uri)?;
-    let store = LSPStore(self.clone());
+    let store = LSPStore::<true>::new(self.clone());
     Some(async move { 
       d.with_annots(store,|data| {
         let diags = &data.diagnostics;
@@ -152,7 +164,7 @@ impl LSPState {
   #[must_use]
   pub fn get_symbols(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::DocumentSymbolResponse>>> {
     let d = self.get(uri)?;
-    let store = LSPStore(self.clone());
+    let store = LSPStore::new(self.clone());
     Some(d.with_annots(store,|data| {
       let r = lsp::DocumentSymbolResponse::Nested(to_symbols(&data.annotations));
       tracing::trace!("document symbols: {:?}",r);
@@ -165,7 +177,7 @@ impl LSPState {
   pub fn get_links(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<Vec<lsp::DocumentLink>>>> {
     let d = self.get(uri)?;
     let da = d.archive().cloned();
-    let store = LSPStore(self.clone());
+    let store = LSPStore::<true>::new(self.clone());
     Some(d.with_annots(store,move |data| {
       let mut ret = Vec::new();
       for e in <std::slice::Iter<'_,STeXAnnot> as TreeChildIter<STeXAnnot>>::dfs(data.annotations.iter()) {
@@ -199,10 +211,48 @@ impl LSPState {
     }))
   }
 
+
+  #[must_use]
+  pub fn get_hover(&self,uri:&lsp::Url,position:lsp::Position,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::Hover>>> {
+    let d = self.get(uri)?;
+    let da = d.archive().cloned();
+    let store = LSPStore::new(self.clone());
+    let pos = LSPLineCol {
+      line:position.line,
+      col:position.character
+    };
+    Some(d.with_annots(store,move |data| {
+      Self::at_position(data,pos).and_then(|annot| match annot {
+        STeXAnnot::SemanticMacro { uri, argnum, token_range, full_range } =>
+          Some(lsp::Hover {
+            range: Some(SourceRange::into_range(*full_range)),
+            contents:lsp::HoverContents::Markup(lsp::MarkupContent {
+              kind: lsp::MarkupKind::Markdown,
+              value: format!("<b>{uri}</b>")
+            })
+          }),
+        _ => None
+      })
+    }).map(|o| o.flatten()))
+  }
+
+  fn at_position(data:&STeXParseDataI,position:LSPLineCol) -> Option<&STeXAnnot> {
+    let mut ret = None;
+    for e in <std::slice::Iter<'_,STeXAnnot> as TreeChildIter<STeXAnnot>>::dfs(data.annotations.iter()) {
+      let range = e.range();
+      if range.contains(position) {
+        ret = Some(e);
+      } else if range.start > position {
+        if ret.is_some() { break }
+      }
+    }
+    ret
+  }
+
   pub fn get_semantic_tokens(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>,range:Option<lsp::Range>) -> Option<impl std::future::Future<Output=Option<lsp::SemanticTokens>>> {
     let range = range.map(SourceRange::from_range);
     let d = self.get(uri)?;
-    let store = LSPStore(self.clone());
+    let store = LSPStore::new(self.clone());
     Some(d.with_annots(store, |data| {
       let mut ret = Vec::new();
       let mut curr = (0u32,0u32);
@@ -251,6 +301,9 @@ impl LSPState {
               make!(k => KEYWORD);
               if let Some(t) = t { make!(v =>> t); }
             }
+          }
+          STeXAnnot::SemanticMacro{ token_range,..} => {
+            make!(token_range => SYMBOL);
           }
           STeXAnnot::Module { uri, name_range, sig, meta_theory, full_range, smodule_range, children } => {
             make!(smodule_range => DECLARATION);
@@ -357,6 +410,7 @@ fn to_symbols(v:&[STeXAnnot]) -> Vec<lsp::DocumentSymbol> {
           children:None
         });
       }
+      STeXAnnot::SemanticMacro { .. } => ()
     }} else if let Some((i,mut s)) = stack.pop() {
       curr = i;
       std::mem::swap(&mut ret, s.children.as_mut().unwrap_or_else(|| unreachable!()));
@@ -413,8 +467,3 @@ impl OutputCont for ClientOutput {
   }
 }
 
-struct HTMLResult;
-impl lsp::notification::Notification for HTMLResult {
-    type Params = String;
-    const METHOD : &str = "immt/htmlResult";
-}

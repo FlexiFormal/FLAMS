@@ -2,14 +2,14 @@
 #![allow(clippy::case_sensitive_file_extension_comparisons)]
 #![allow(clippy::cast_possible_truncation)]
 
-use std::path::{Path, PathBuf};
+use std::{borrow::Cow, collections::hash_map::Entry, path::{Path, PathBuf}};
 
-use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, PathURI, PathURITrait, SymbolURI, URIRefTrait}};
+use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
 use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
 use immt_utils::{parsing::ParseStr, sourcerefs::{SourcePos, SourceRange}, vecmap::VecSet};
 use smallvec::SmallVec;
 
-use crate::{quickparse::latex::{rules::{AnyEnv, AnyMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule}, Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState}, tex};
+use crate::{quickparse::latex::{rules::{AnyEnv, AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule}, Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState}, tex};
 use immt_utils::parsing::ParseSource;
 
 use super::STeXParseData;
@@ -66,6 +66,12 @@ pub enum STeXToken<Pos:SourcePos> {
     token_range: SourceRange<Pos>
   },
   Vec(Vec<STeXToken<Pos>>),
+  SemanticMacro {
+    uri:SymbolURI,
+    argnum:u8,
+    full_range: SourceRange<Pos>,
+    token_range: SourceRange<Pos>
+  }
 }
 
 impl<'a,P:SourcePos> FromLaTeXToken<'a, P,&'a str> for STeXToken<P> {
@@ -98,6 +104,27 @@ pub struct ModuleReference {
   pub rel_path:Option<std::sync::Arc<str>>,
   pub full_path:Option<std::sync::Arc<Path>>
 }
+impl ModuleReference {
+  #[must_use]
+  pub fn doc_uri(&self) -> Option<DocumentURI> {
+    let rel_path = &**self.rel_path.as_ref()?;
+    let (path,name) = rel_path.rsplit_once('/').map_or_else(
+      || (None,rel_path),
+      |(path,name)| (Some(path),name)
+    );
+    let path = path.map_or_else(
+      || self.uri.archive_uri().owned().into(),
+      |path| self.uri.archive_uri().owned() % path
+    );
+    let name = name.rsplit_once('.')
+      .map_or(name, |(name,_)| name);
+    let language = self.uri.language();
+    let name = if name.ends_with(Into::<&str>::into(language)) && name.len() > 3 {
+      &name[..name.len() - 3]
+    } else {name};
+    Some(path & (name,language))
+  }
+}
 
 pub trait STeXModuleStore {
   const FULL:bool;
@@ -124,6 +151,16 @@ pub struct SymbolRule {
   pub has_tp:bool,
   pub has_df:bool,
   pub argnum:u8
+}
+impl SymbolRule {
+  fn as_rule<'a,MS:STeXModuleStore,Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>(&self) -> Option<(Cow<'a,str>,AnyMacro<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>>)> {
+    self.macroname.as_ref().map(|m|
+      (m.to_string().into(),AnyMacro::Ext(DynMacro {
+        ptr:semantic_macro as _,
+        arg:(self.uri.clone(),self.argnum)
+      }))
+    )
+  }
 }
 
 lazy_static::lazy_static! {
@@ -169,9 +206,18 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
       match &mut g.kind {
         GroupKind::Module { uri, rules,.. } => {
           let rule = f(uri);
+          if MS::FULL {
+            if let Some((name,rule)) = rule.as_rule() {
+              let old = groups.rules.insert(
+                name.clone(),rule
+              );
+              if let Entry::Vacant(e) = g.inner.macro_rule_changes.entry(name) {
+                e.insert(old);
+              }
+            }
+          }
           let uri = rule.uri.clone();
           rules.push(ModuleRule::Symbol(rule));
-          // TODO add to group!
           return Some(uri)
         }
         _ => ()
@@ -181,6 +227,13 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
     None
   }
 
+  fn load_module(&mut self,module:&ModuleReference) -> Option<ModuleRules> {
+    self.modules.iter().find_map(|(m,rules)| if *m == module.uri {Some(rules.clone())} else {None})
+      .or_else(|| self.module_store.get_module(module).and_then(|d| 
+      d.lock().modules.iter().find_map(|(m,rules)| if *m == module.uri {Some(rules.clone())} else {None})
+    ))
+  }
+
   pub fn add_import<Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>(&mut self,module:&ModuleReference,groups:Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>,range:SourceRange<Pos>) {
     for g in groups.groups.iter_mut().rev() {
       match &mut g.kind {
@@ -188,7 +241,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
           if imports.0.contains(&module.uri) { return }
           imports.insert(module.uri.clone());
           rules.push(ModuleRule::Import(module.clone()));
-          if let Some(rules) = self.module_store.get_module(module) {
+          if let Some(rules) = self.load_module(module) {
             if MS::FULL {
               //rules.lock().
 
@@ -198,7 +251,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
           }
           return
         }
-        _ => ()
+        GroupKind::None => ()
       }
     }
 
@@ -316,7 +369,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
       let mut m_steps = muri.name().steps().iter();
       loop {
         let Some(f) = f_steps.next() else {
-          if m_steps.next().is_none() { return Some(&muri) }
+          if m_steps.next().is_none() { return Some(muri) }
           continue 'top
         };
         let Some(m) = m_steps.next() else { continue 'top };
@@ -339,6 +392,7 @@ pub enum GroupKind {
   }
 }
 
+#[non_exhaustive]
 pub struct STeXGroup<'a,
   MS:STeXModuleStore,
   Pos:SourcePos+'a,
@@ -376,11 +430,11 @@ impl<'a,
     self.inner.close(parser);
   }
   #[inline]
-  fn add_macro_rule(&mut self, name: &'a str, old: Option<AnyMacro<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>>) {
+  fn add_macro_rule(&mut self, name: Cow<'a,str>, old: Option<AnyMacro<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>>) {
     self.inner.add_macro_rule(name,old);
   }
   #[inline]
-  fn add_environment_rule(&mut self, name: &'a str, old: Option<AnyEnv<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>>) {
+  fn add_environment_rule(&mut self, name: Cow<'a,str>, old: Option<AnyEnv<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>>) {
     self.inner.add_environment_rule(name,old);
   }
   #[inline]
@@ -728,10 +782,15 @@ fn semantic_macro<'a,
   Pos:SourcePos + 'a,
   Err:FnMut(String,SourceRange<Pos>),
 >((uri,argnum):&(SymbolURI,u8),
-  mut m:Macro<'a, Pos, &'a str>,
-  parser: &mut LaTeXParser<'a,ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>
+  m:Macro<'a, Pos, &'a str>,
+  _parser: &mut LaTeXParser<'a,ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>
 ) -> MacroResult<'a, Pos, &'a str, STeXToken<Pos>> {
-  todo!()
+  MacroResult::Success(STeXToken::SemanticMacro { 
+    uri:uri.clone(), 
+    argnum: *argnum, 
+    full_range: m.range, 
+    token_range: m.token_range 
+  })
 }
 
 

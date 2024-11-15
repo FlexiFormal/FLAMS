@@ -45,6 +45,12 @@ pub enum STeXAnnot {
     smodule_range:SourceRange<LSPLineCol>,
     children:Vec<Self>
   },
+  SemanticMacro {
+    uri:SymbolURI,
+    argnum:u8,
+    token_range: SourceRange<LSPLineCol>,
+    full_range: SourceRange<LSPLineCol>
+  },
   ImportModule {
     archive_range: Option<SourceRange<LSPLineCol>>,
     path_range: SourceRange<LSPLineCol>,
@@ -82,6 +88,20 @@ pub enum STeXAnnot {
     df:Option<(SourceRange<LSPLineCol>,SourceRange<LSPLineCol>,Vec<Self>)>,
     token_range: SourceRange<LSPLineCol>,
     full_range: SourceRange<LSPLineCol>
+  }
+}
+impl STeXAnnot {
+  #[must_use]#[inline]
+  pub const fn range(&self) -> SourceRange<LSPLineCol> {
+    match self {
+      Self::Module { full_range, .. } |
+      Self::SemanticMacro { full_range, .. } |
+      Self::ImportModule { full_range, .. } |
+      Self::UseModule { full_range, .. } |
+      Self::SetMetatheory { full_range, .. } |
+      Self::Symdecl { full_range, .. } => *full_range,
+      Self::Inputref { range, .. } => *range,
+    }
   }
 }
 
@@ -262,6 +282,8 @@ fn handle(
       }
     }
   }
+  STeXToken::SemanticMacro { uri, argnum, full_range, token_range } =>
+    ret.push(STeXAnnot::SemanticMacro {uri,argnum,full_range,token_range}),
   STeXToken::ImportModule { archive_range, path_range, token_range, module, full_range } =>
     ret.push(STeXAnnot::ImportModule { archive_range, path_range, module, token_range, full_range }),
   STeXToken::UseModule { archive_range, path_range, module, token_range, full_range } =>

@@ -13,9 +13,28 @@ use immt_ontology::uris::{DocumentURI, PathURITrait, URIRefTrait, URIWithLanguag
 use immt_stex::quickparse::stex::{rules::STeXModuleStore, STeXParseData};
 use immt_system::backend::{AnyBackend, GlobalBackend};
 use immt_utils::sourcerefs::{LSPLineCol, SourceRange};
+use implementation::HTMLRequest;
 use state::{DocOrData, LSPState};
 
-pub trait IMMTLSPServer {
+pub trait ClientExt {
+  fn html_result(&self,uri:&DocumentURI);
+}
+
+struct HTMLResult;
+impl lsp::notification::Notification for HTMLResult {
+    type Params = String;
+    const METHOD : &str = "immt/htmlResult";
+}
+
+impl ClientExt for ClientSocket {
+  #[inline]
+  fn html_result(&self,uri:&DocumentURI) {
+    let _ = self.notify::<HTMLResult>(uri.to_string());
+  }
+}
+
+
+pub trait IMMTLSPServer:'static {
   fn client_mut(&mut self) -> &mut ClientSocket;
   fn client(& self) -> &ClientSocket;
   fn state(&self) -> &LSPState;
@@ -35,6 +54,13 @@ impl <T:IMMTLSPServer> ServerWrapper<T> {
     Self { inner }
   }
 
+  pub fn router(self) -> async_lsp::router::Router<Self> {
+    let mut r = async_lsp::router::Router::from_language_server(self);
+    r.request::<HTMLRequest,_>(Self::html_request);
+    //r.request(handler)
+    r
+  }
+
   pub fn get_progress(&self,tk: lsp::ProgressToken) -> ProgressCallbackClient {
     ProgressCallbackClient {
       client:self.inner.client().clone(),
@@ -45,7 +71,20 @@ impl <T:IMMTLSPServer> ServerWrapper<T> {
 
 
 #[derive(Clone)]
-pub struct LSPStore<const FULL:bool>(pub LSPState);
+pub struct LSPStore<const FULL:bool> {
+  state:LSPState,
+  cycles:Vec<DocumentURI>
+}
+impl<const FULL:bool> LSPStore<FULL> {
+  #[inline]
+  pub fn new(state:LSPState) -> Self {
+    Self {
+      state,
+      cycles:Vec::new()
+    }
+  }
+}
+
 impl<const FULL:bool> LSPStore<FULL> {
   fn load(self,p:&Path,uri:&DocumentURI) -> Option<STeXParseData> {
     let text = std::fs::read_to_string(p).ok()?;
@@ -61,14 +100,34 @@ impl<const FULL:bool> STeXModuleStore for LSPStore<FULL> {
   fn get_module(&mut self,module:&immt_stex::quickparse::stex::rules::ModuleReference) -> Option<STeXParseData> {
       module.full_path.as_ref().and_then(|p| {
         let lsp_uri = lsp::Url::from_file_path(p).ok()?;
-        let docs = self.0.documents.read();
+        let docs = self.state.documents.read();
         match docs.get(&lsp_uri) {
           Some(DocOrData::Data(d)) => return Some(d.clone()),
           Some(DocOrData::Doc(d)) => return Some(d.annotations.clone()),
           None => ()
         }
         drop(docs);
-        let uri = module.uri.as_path().owned() & (module.uri.name().clone(), module.uri.language());
+        let uri = module.doc_uri()?;
+        
+        if self.cycles.contains(&uri) { 
+          let mut str = String::new();
+          for c in &self.cycles {
+            str.push_str(&format!("{c}\n => "));
+          }
+          str.push_str(&format!("{uri}"));
+          tracing::error!("Importmodule cycle:\n{str}");
+          return None
+        }
+        self.cycles.push(uri.clone());
+        let r = self.clone().load(p,&uri).inspect(|ret| {
+          let mut docs = self.state.documents.write();
+          if let Entry::Vacant(e) = docs.entry(lsp_uri) {
+            e.insert(DocOrData::Data(ret.clone()));
+          }
+        });
+        self.cycles.pop();
+        r
+        /*
         let slf = self.clone();
         let p = p.clone();
         // avoid stack overflows
@@ -80,6 +139,7 @@ impl<const FULL:bool> STeXModuleStore for LSPStore<FULL> {
             }
           })
         }).join().unwrap_or_else(|_| unreachable!())
+         */
       })
   }
 }

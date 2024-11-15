@@ -1,4 +1,5 @@
 use crate::sourcerefs::{ByteOffset, SourcePos};
+use std::borrow::Cow;
 use std::fmt::{Debug, Display};
 use std::io::Read;
 
@@ -23,6 +24,7 @@ pub trait StringOrStr<'a>:
         &'a self,
         split_char: char,
     ) -> impl Iterator<Item = &'a str>;
+    fn as_cow(&self) -> Cow<'a,str>;
 }
 impl<'a> StringOrStr<'a> for &'a str {
     #[inline]
@@ -55,6 +57,10 @@ impl<'a> StringOrStr<'a> for &'a str {
                 c == split_char
             }
         })
+    }
+    #[inline]
+    fn as_cow(&self) -> Cow<'a,str> {
+        Cow::Borrowed(self)
     }
 }
 impl<'a> StringOrStr<'a> for String {
@@ -91,6 +97,10 @@ impl<'a> StringOrStr<'a> for String {
                 c == split_char
             }
         })
+    }
+    #[inline]
+    fn as_cow(&self) -> Cow<'a,str> {
+        Cow::Owned(self.clone())
     }
 }
 

@@ -10,7 +10,7 @@ pub fn verbcmd<'a,
   State: ParserState<'a,Pa,T,Err>
 >(parser: &mut LaTeXParser<'a,Pa,T,Err,State>,args:Pa::Str) {
   if !args.as_ref().is_empty() {
-    parser.add_macro_rule(args, Some(AnyMacro::Ptr(super::rules::lstinline as _)));
+    parser.add_macro_rule(args.as_cow(), Some(AnyMacro::Ptr(super::rules::lstinline as _)));
   }
 }
 
@@ -21,7 +21,7 @@ pub fn verbenv<'a,
   State: ParserState<'a,Pa,T,Err>
 >(parser: &mut LaTeXParser<'a,Pa, T, Err, State>,args:Pa::Str) {
   if !args.as_ref().is_empty() {
-    parser.add_environment_rule(args, Some(AnyEnv::Ptr((super::rules::general_listing_open as _, super::rules::general_listing_close as _))));
+    parser.add_environment_rule(args.as_cow(), Some(AnyEnv::Ptr((super::rules::general_listing_open as _, super::rules::general_listing_close as _))));
   }
 }
 
@@ -36,7 +36,7 @@ pub fn macro_dir<'a,
       let len = m.len();
       let (m,mut spec) = args.split_n(len);
       spec.trim_ws();
-      parser.add_macro_rule(m, Some(AnyMacro::Str(DynMacro {
+      parser.add_macro_rule(m.as_cow(), Some(AnyMacro::Str(DynMacro {
         ptr:do_macro_dir as _,
         arg:spec
       })));
@@ -85,7 +85,7 @@ pub fn env_dir<'a,
       let len = m.len();
       let (m,mut spec) = args.split_n(len);
       spec.trim_ws();
-      parser.add_environment_rule(m, Some(AnyEnv::Str(DynEnv {
+      parser.add_environment_rule(m.as_cow(), Some(AnyEnv::Str(DynEnv {
         open:do_env_dir as _,
         close: do_env_dir_close as _,
         arg:spec

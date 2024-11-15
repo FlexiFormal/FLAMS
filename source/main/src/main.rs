@@ -26,13 +26,16 @@ fn main() {
         }
     }
 
+
     let settings = settings::get_settings();
     tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("Failed to initialize Tokio runtime")
-        .block_on(run(settings));
+      .enable_all()
+      //.thread_stack_size(15 * 1024 * 1024)
+      .build()
+      .expect("Failed to initialize Tokio runtime")
+      .block_on(run(settings));
 }
+
 
 #[cfg(feature = "hydrate")]
 const fn main() {}

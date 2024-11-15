@@ -6,5 +6,6 @@
     "ts","ws",
     "ssr" //"hydrate"//
   ], // "all"
-  "search.useIgnoreFiles": false 
+  "search.useIgnoreFiles": false,
+  "dependi.rust.lockFileEnabled": true
 }

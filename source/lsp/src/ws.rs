@@ -15,7 +15,7 @@ pub fn upgrade<T:IMMTLSPServer+Send+'static>(ws:axum::extract::WebSocketUpgrade,
       .layer(CatchUnwindLayer::default())
       .layer(ConcurrencyLayer::default())
       .layer(ClientProcessMonitorLayer::new(client.clone()))
-      .service(Router::from_language_server(ServerWrapper::new(new(client))))
+      .service(ServerWrapper::new(new(client)).router())
     });
     let socket = SocketWrapper {
       inner:std::sync::Arc::new(parking_lot::Mutex::new(ws)),

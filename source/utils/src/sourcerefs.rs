@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-pub trait SourcePos: Clone + Copy + Default + Debug {
+pub trait SourcePos: Clone + Copy + Default + Debug + PartialOrd + Ord {
     fn update(&mut self, c: char);
     fn update_newline(&mut self, rn: bool);
     fn update_str_no_newline(&mut self, s: &str);
@@ -17,7 +17,7 @@ impl SourcePos for () {
     fn update_str_maybe_newline(&mut self, _: &str) {}
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default,PartialOrd,Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ByteOffset {
     pub offset: usize,
@@ -57,6 +57,16 @@ impl SourcePos for ByteOffset {
 pub struct LSPLineCol {
     pub line: u32,
     pub col: u32,
+}
+impl Ord for LSPLineCol {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.line.cmp(&other.line).then(self.col.cmp(&other.col))
+    }
+}
+impl PartialOrd for LSPLineCol {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Display for LSPLineCol {
@@ -145,6 +155,11 @@ impl<P: SourcePos> Debug for SourceRange<P> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         <Self as Display>::fmt(self, f)
+    }
+}
+impl<P:SourcePos> SourceRange<P> {
+    pub fn contains(&self, pos: P) -> bool {
+        self.start <= pos && pos <= self.end
     }
 }
 

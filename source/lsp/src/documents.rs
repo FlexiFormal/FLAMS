@@ -41,7 +41,7 @@ impl LSPDocument {
       } else {None}
     ));
     let (archive,rel_path) = ap.map_or((None,None),|(a,p)| (Some(a),p));
-    let r = LSPText { text ,up_to_date:false };
+    let r = LSPText { text ,up_to_date:false, html_up_to_date: false };
     let doc_uri = archive.as_ref().and_then(|a| rel_path.as_ref().map(|rp:&Box<str>| DocumentURI::from_archive_relpath(a.clone(), rp)));
     let data = DocumentData {
       lsp_uri,path,archive,rel_path,doc_uri
@@ -77,6 +77,16 @@ impl LSPDocument {
   pub fn with_text<R>(&self,f:impl FnOnce(&str) -> R) -> R {
     f(&self.text.lock().text)
   }
+
+  #[inline]
+  pub fn html_up_to_date(&self) -> bool {
+    self.text.lock().html_up_to_date
+  }
+
+  pub fn set_html_up_to_date(&self) {
+    self.text.lock().html_up_to_date = true
+  }
+
   #[inline]
   pub fn delta(&self,text:String,range:Option<Range>) {
     self.text.lock().delta(text, range);
@@ -146,6 +156,7 @@ impl LSPDocument {
 struct LSPText {
   text: String,
   up_to_date:bool,
+  html_up_to_date:bool
 }
 
 impl LSPText {
@@ -234,5 +245,6 @@ impl LSPText {
     let (start,end) = self.get_range(range);
     self.text.replace_range(start..end, &text);
     self.up_to_date = false;
+    self.html_up_to_date = false;
   }
 }

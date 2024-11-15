@@ -6,7 +6,8 @@ use crate::{state::to_diagnostic, LSPStore};
 
 use super::{IMMTLSPServer,ServerWrapper};
 use async_lsp::{lsp_types::{self as lsp}, LanguageClient, LanguageServer, ResponseError};
-use futures::{future::BoxFuture, FutureExt};
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
+use immt_ontology::uris::DocumentURI;
 
 macro_rules! impl_request {
   ($name:ident = $struct:ident) => {
@@ -48,6 +49,28 @@ macro_rules! impl_notification {
           ))))
       }
   }
+}
+
+#[derive(serde::Serialize,serde::Deserialize)]
+pub struct HtmlRequestParams {
+    pub uri: lsp::Url
+}
+
+pub(crate) struct HTMLRequest;
+impl lsp::request::Request for HTMLRequest {
+    type Params = HtmlRequestParams;
+    type Result = Option<String>;
+    const METHOD: &'static str = "immt/htmlRequest";
+}
+
+impl<T:IMMTLSPServer> ServerWrapper<T> {
+    pub(crate) fn html_request(&mut self,params:HtmlRequestParams) -> Res<Option<String>> {
+        let mut client = self.inner.client().clone();
+        let state = self.inner.state().clone();
+        Box::pin(tokio::task::spawn_blocking(move || {
+            state.build_html(&params.uri, &mut client).map(|d| d.to_string())
+        }).map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string())))
+    }
 }
 
 type Res<T> = BoxFuture<'static,Result<T,ResponseError>>;
@@ -137,7 +160,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 d.delta(change.text, change.range);
             }
             let mut client = self.inner.client().clone();
-            let _ = tokio::spawn(d.with_annots(LSPStore(self.inner.state().clone()),move |a| {
+            let _ = tokio::spawn(d.with_annots(LSPStore::new(self.inner.state().clone()),move |a| {
                 let r = lsp::PublishDiagnosticsParams {
                     uri: document.uri,
                     diagnostics:  a.diagnostics.iter().map(to_diagnostic).collect(),
@@ -161,7 +184,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         let client = self.inner.client().clone();
         let uri = params.text_document.uri;
         let _ = tokio::task::spawn_blocking(move || {
-            state.build_html(&uri, client);
+            state.build_html_and_notify(&uri, client);
         });
         ControlFlow::Continue(())
     }
@@ -231,8 +254,8 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     #[must_use]
     //impl_request!(references = References);
     fn references(&mut self, params: lsp::ReferenceParams) -> Res<Option<Vec<lsp::Location>>> {
-        tracing::info_span!("references").in_scope(move || {
-            tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, position: {:?}, context: {:?}",
+        tracing::trace_span!("references").in_scope(move || {
+            tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, position: {:?}, context: {:?}",
                 params.work_done_progress_params,
                 params.partial_result_params,
                 params.text_document_position,
@@ -252,8 +275,8 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     #[must_use]
     //impl_request!(! document_link = DocumentLinkRequest => (None));
     fn document_link(&mut self, params: lsp::DocumentLinkParams) -> Res<Option<Vec<lsp::DocumentLink>>> {
-        tracing::info_span!("document_link").in_scope(move || {
-            tracing::info!("uri: {},work_done_progress_params: {:?}, partial_results: {:?}",
+        tracing::trace_span!("document_link").in_scope(move || {
+            tracing::trace!("uri: {},work_done_progress_params: {:?}, partial_results: {:?}",
                 params.text_document.uri,
                 params.work_done_progress_params,
                 params.partial_result_params
@@ -262,6 +285,29 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 |tk| self.get_progress(tk)
             );
             self.inner.state().get_links(&params.text_document.uri,p)
+                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
+                |f| Box::pin(f.map(Result::Ok)) as _
+                )
+        })
+    }
+
+    #[must_use]
+    // impl_request!(! hover = HoverRequest => (None));
+    fn hover(&mut self, params: lsp::HoverParams) -> Res<Option<lsp::Hover>> {
+        tracing::info_span!("hover").in_scope(move || {
+            tracing::info!("uri: {},work_done_progress_params: {:?}, position: {:?}",
+                params.text_document_position_params.text_document.uri,
+                params.work_done_progress_params,
+                params.text_document_position_params.position
+            );
+            let p = params.work_done_progress_params.work_done_token.map(
+                |tk| self.get_progress(tk)
+            );
+            self.inner.state().get_hover(
+                &params.text_document_position_params.text_document.uri,
+                params.text_document_position_params.position,
+                p
+            )
                 .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
                 |f| Box::pin(f.map(Result::Ok)) as _
                 )
@@ -320,7 +366,6 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(! code_lens = CodeLensRequest => (None));
     impl_request!(! document_highlight = DocumentHighlightRequest => (None));
     impl_request!(! folding_range = FoldingRangeRequest => (None));
-    impl_request!(! hover = HoverRequest => (None));
     impl_request!(! definition = GotoDefinition => (None));
     
     impl_request!(implementation = GotoImplementation);

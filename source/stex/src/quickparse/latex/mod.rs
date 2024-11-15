@@ -8,7 +8,7 @@ use immt_utils::{
     sourcerefs::{SourcePos, SourceRange},
 };
 use rules::{AnyEnv, AnyMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule};
-use std::collections::hash_map::Entry;
+use std::{borrow::Cow, collections::hash_map::Entry};
 use std::convert::Into;
 use std::marker::PhantomData;
 use tex_engine::utils::HMap;
@@ -195,9 +195,9 @@ pub struct Group<'a,
 > {
     previous_letters: Option<String>,
     #[allow(clippy::type_complexity)]
-    macro_rule_changes: HMap<Pa::Str, Option<AnyMacro<'a, Pa, T, Err, State>>>,
+    pub macro_rule_changes: HMap<Cow<'a,str>, Option<AnyMacro<'a, Pa, T, Err, State>>>,
     #[allow(clippy::type_complexity)]
-    environment_rule_changes: HMap<Pa::Str, Option<AnyEnv<'a, Pa, T, Err, State>>>
+    pub environment_rule_changes: HMap<Cow<'a,str>, Option<AnyEnv<'a, Pa, T, Err, State>>>
 }
 
 pub trait GroupState<'a,
@@ -210,8 +210,8 @@ pub trait GroupState<'a,
     fn inner(&self) -> &Group<'a, Pa, T, Err, State>;
     fn inner_mut(&mut self) -> &mut Group<'a,Pa,T,Err,State>;
     fn close(self, parser: &mut LaTeXParser<'a, Pa, T, Err,State>);
-    fn add_macro_rule(&mut self, name: Pa::Str, old: Option<AnyMacro<'a, Pa, T, Err, State>>);
-    fn add_environment_rule(&mut self, name: Pa::Str, old: Option<AnyEnv<'a, Pa, T, Err, State>>);
+    fn add_macro_rule(&mut self, name: Cow<'a,str>, old: Option<AnyMacro<'a, Pa, T, Err, State>>);
+    fn add_environment_rule(&mut self, name: Cow<'a,str>, old: Option<AnyEnv<'a, Pa, T, Err, State>>);
     fn letter_change(&mut self, old: &str);
 }
 
@@ -235,12 +235,12 @@ impl<'a,
         self
     }
 
-    fn add_macro_rule(&mut self, name: Pa::Str, old: Option<AnyMacro<'a, Pa, T, Err, State>>) {
+    fn add_macro_rule(&mut self, name: Cow<'a,str>, old: Option<AnyMacro<'a, Pa, T, Err, State>>) {
         if let Entry::Vacant(e) = self.macro_rule_changes.entry(name) {
             e.insert(old);
         }
     }
-    fn add_environment_rule(&mut self, name: Pa::Str, old: Option<AnyEnv<'a, Pa, T, Err, State>>) {
+    fn add_environment_rule(&mut self, name: Cow<'a,str>, old: Option<AnyEnv<'a, Pa, T, Err, State>>) {
         if let Entry::Vacant(e) = self.environment_rule_changes.entry(name) {
             e.insert(old);
         }
@@ -301,9 +301,9 @@ pub struct LaTeXParser<
     State: ParserState<'a,Pa,T,Err>
 > {
     pub tokenizer: super::tokenizer::TeXTokenizer<'a, Pa,Err>,
-    macro_rules: HMap<Pa::Str, AnyMacro<'a, Pa, T, Err, State>>,
+    macro_rules: HMap<Cow<'a,str>, AnyMacro<'a, Pa, T, Err, State>>,
     pub groups: Vec<State::Group>,
-    environment_rules: HMap<Pa::Str, AnyEnv<'a, Pa, T, Err, State>>,
+    environment_rules: HMap<Cow<'a,str>, AnyEnv<'a, Pa, T, Err, State>>,
     directives: HMap<&'a str, fn(&mut Self,Pa::Str)>,
     buf: Vec<T>,
     pub state:State
@@ -317,8 +317,8 @@ macro_rules! count {
 macro_rules! default_rules {
     ($( $($name:ident)? $(($l:literal,$lname:ident))? ),*) => {
         #[must_use]
-        pub fn default_rules() -> [(Pa::Str,MacroRule<'a,Pa, T, Err, State>);count!($( $($name;)? $($lname;)? )*)] {[
-            $($((stringify!($name).into(),rules::$name))?$(($l.into(),rules::$lname))?),*
+        pub fn default_rules() -> [(&'static str,MacroRule<'a,Pa, T, Err, State>);count!($( $($name;)? $($lname;)? )*)] {[
+            $($((stringify!($name),rules::$name))?$(($l.into(),rules::$lname))?),*
         ]}
     }
 }
@@ -326,9 +326,9 @@ macro_rules! default_rules {
 macro_rules! default_envs {
     ($( $($name:ident)? $(($l:literal,$lname:ident))? ),*) => {
         #[must_use]
-        pub fn default_env_rules() -> [(Pa::Str,EnvironmentRule<'a,Pa, T, Err, State>);count!($( $($name;)? $($lname;)? )*)] {[
+        pub fn default_env_rules() -> [(&'static str,EnvironmentRule<'a,Pa, T, Err, State>);count!($( $($name;)? $($lname;)? )*)] {[
             $(paste::paste!(
-                $((stringify!($name).into(),(rules::[<$name _open>],rules::[<$name _close>])))?
+                $((stringify!($name),(rules::[<$name _open>],rules::[<$name _close>])))?
                 $(($l.into(),(rules::$lname,rules::rules::[<$lname _close>])))?
             )),*
         ]}
@@ -342,10 +342,42 @@ pub struct Groups<'a,'b,
     State: ParserState<'a,Pa,T,Err>
 > {
     pub groups:&'b mut Vec<State::Group>,
-    pub rules:&'b mut HMap<Pa::Str,AnyMacro<'a,Pa, T, Err, State>>,
-    pub environment_rules:&'b mut HMap<Pa::Str,AnyEnv<'a,Pa, T, Err, State>>,
+    pub rules:&'b mut HMap<Cow<'a,str>,AnyMacro<'a,Pa, T, Err, State>>,
+    pub environment_rules:&'b mut HMap<Cow<'a,str>,AnyEnv<'a,Pa, T, Err, State>>,
     pub tokenizer: &'b mut super::tokenizer::TeXTokenizer<'a, Pa, Err>,
 }
+
+impl<'a,'b,
+    Pa: ParseSource<'a>,
+    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
+    Err:FnMut(String,SourceRange<Pa::Pos>),
+    State: ParserState<'a,Pa,T,Err>
+> Groups<'a,'b,Pa,T,Err,State> {
+    pub fn add_macro_rule(&mut self, name: Cow<'a,str>, rule: Option<AnyMacro<'a, Pa, T, Err, State>>) {
+        let old = if let Some(rule) = rule {
+            self.rules.insert(name.clone(), rule)
+        } else {
+            self.rules.remove(&name)
+        };
+        if let Some(g) = self.groups.last_mut(){
+            g.add_macro_rule(name,old);
+        }
+    }
+
+    pub fn add_environment_rule(&mut self, name: Cow<'a,str>, rule: Option<AnyEnv<'a, Pa, T, Err, State>>) {
+        let old = if let Some(rule) = rule {
+            self.environment_rules.insert(name.clone(), rule)
+        } else {
+            self.environment_rules.remove(&name)
+        };
+        if let Some(g) = self.groups.last_mut(){
+            g.add_environment_rule(name,old);
+        }
+    }
+}
+
+/*
+*/
 
 impl<'a,
     Pa: ParseSource<'a>,
@@ -367,16 +399,16 @@ impl<'a,
         input: Pa,
         state:State,
         err:Err,
-        rules: impl Iterator<Item = (Pa::Str, MacroRule<'a, Pa, T, Err, State>)>,
-        envs: impl Iterator<Item = (Pa::Str, EnvironmentRule<'a, Pa, T, Err, State>)>,
+        rules: impl Iterator<Item = (&'a str, MacroRule<'a, Pa, T, Err, State>)>,
+        envs: impl Iterator<Item = (&'a str, EnvironmentRule<'a, Pa, T, Err, State>)>,
     ) -> Self {
         let mut macro_rules = HMap::default();
         let mut environment_rules = HMap::default();
         for (k, v) in rules {
-            macro_rules.insert(k, AnyMacro::Ptr(v));
+            macro_rules.insert(Cow::Borrowed(k), AnyMacro::Ptr(v));
         }
         for (k, v) in envs {
-            environment_rules.insert(k, AnyEnv::Ptr(v));
+            environment_rules.insert(Cow::Borrowed(k), AnyEnv::Ptr(v));
         }
         let mut directives = HMap::default();
         directives.insert("verbcmd",directives::verbcmd as _);
@@ -407,7 +439,7 @@ impl<'a,
         })
     }
 
-    pub fn add_macro_rule(&mut self, name: Pa::Str, rule: Option<AnyMacro<'a, Pa, T, Err, State>>) {
+    pub fn add_macro_rule(&mut self, name: Cow<'a,str>, rule: Option<AnyMacro<'a, Pa, T, Err, State>>) {
         let old = if let Some(rule) = rule {
             self.macro_rules.insert(name.clone(), rule)
         } else {
@@ -418,7 +450,7 @@ impl<'a,
         }
     }
 
-    pub fn add_environment_rule(&mut self, name: Pa::Str, rule: Option<AnyEnv<'a, Pa, T, Err, State>>) {
+    pub fn add_environment_rule(&mut self, name: Cow<'a,str>, rule: Option<AnyEnv<'a, Pa, T, Err, State>>) {
         let old = if let Some(rule) = rule {
             self.environment_rules.insert(name.clone(), rule)
         } else {
@@ -544,7 +576,7 @@ impl<'a,
     }
 
     fn cs(&mut self, name: Pa::Str, start: Pa::Pos) -> Option<T> {
-        match self.macro_rules.get(&name).cloned() {
+        match self.macro_rules.get(name.as_ref()).cloned() {
             Some(r) => {
                 let r#macro = Macro {
                     range: SourceRange {
@@ -587,7 +619,7 @@ impl<'a,
             //phantom:PhantomData
         };
         self.open_group();
-        let close = self.environment_rules.get(&env.name).cloned().map(|e|{
+        let close = self.environment_rules.get(env.name.as_ref()).cloned().map(|e|{
             e.open(&mut env, self);
             let close = e.close();
             close
