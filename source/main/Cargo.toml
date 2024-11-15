@@ -120,11 +120,11 @@ tracing-wasm = {workspace = true,optional = true}
 
 
 
-tachys = {workspace = true}
-server_fn = {workspace = true}
-leptos_macro = {workspace = true}
-server_fn_macro = {workspace = true}
-server_fn_macro_default = {workspace = true}
+#tachys = {workspace = true}
+#server_fn = {workspace = true}
+#leptos_macro = {workspace = true}
+#server_fn_macro = {workspace = true}
+#server_fn_macro_default = {workspace = true}
 #reactive_graph = {version="=0.1.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #leptos_config = {version="=0.7.0-beta5"}

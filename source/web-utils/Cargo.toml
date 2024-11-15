@@ -25,8 +25,8 @@ send_wrapper = {workspace=true}
 
 
 
-tachys = {workspace = true}
-leptos_macro = {workspace = true}
+#tachys = {workspace = true}
+#leptos_macro = {workspace = true}
 #tachys = {version="=0.1.0-beta5"}
 #reactive_graph = {version="=0.1.0-beta5"}
 #leptos_macro = {version="=0.7.0-beta5"}

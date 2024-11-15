@@ -37,7 +37,7 @@ pub fn Spinner(
     label: MaybeProp<String>,
     /// The size of the spinner.
     #[prop(optional, into)]
-    size: MaybeSignal<SpinnerSize>,
+    size: Signal<SpinnerSize>,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
     inject_css("immt-spinner", include_str!("./spinner.css"));
