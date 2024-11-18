@@ -22,7 +22,7 @@ use immt_utils::{prelude::HMap, triomphe, CSS};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use rdf::RDFStore;
-use std::{ops::Deref, path::PathBuf};
+use std::{ops::Deref, path::{Path, PathBuf}};
 use crate::formats::{HTMLData, SourceFormatId};
 
 #[derive(Clone, Debug)]
@@ -46,6 +46,8 @@ pub enum AnyBackend{
 }
 
 pub trait Backend {
+    type ArchiveIter<'a> : Iterator<Item=&'a Archive> where Self:Sized;
+
     fn to_any(&self) -> AnyBackend;
     fn get_document(&self, uri: &DocumentURI) -> Option<Document>;
     fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike>;
@@ -60,13 +62,29 @@ pub trait Backend {
     where
         Self: Sized;
 
-    fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R where Self:Sized;
+    #[allow(irrefutable_let_patterns)]
+    fn archive_of<R>(&self,p:&Path,mut f:impl FnMut(&LocalArchive,&str) -> R) -> Option<R> where Self:Sized {
+        let base = p.as_os_str().to_str()?;
+        self.with_archives(|mut a| a.find_map(|a| {
+            let Archive::Local(a) = a else {return None};
+            let ap = a.path().as_os_str().to_str()?;
+            base.strip_prefix(ap).map(|rp| f(a,rp))
+        }))
+    }
+
+    fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized;
+
+    //fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R where Self:Sized;
 
     fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>)
         where Self:Sized;
     
     fn with_archive<R>(&self, id: &ArchiveId, f: impl FnOnce(Option<&Archive>) -> R) -> R
     where Self:Sized;
+
+    fn get_html_body(&self,
+        d:&DocumentURI,full:bool
+    ) -> Option<(Vec<CSS>,String)>;
     
     #[allow(unreachable_patterns)]
     fn with_local_archive<R>(
@@ -81,19 +99,29 @@ pub trait Backend {
             }))
         })
     }
+
+    /*fn get_archive_for_path(p:&Path) -> Option<(ArchiveURI,String)> {
+
+    }*/
+
     #[inline]
     fn as_checker(&self) -> AsChecker<Self> where Self:Sized {
         AsChecker(self)
     }
-    fn get_html_body(&self,
-        d:&DocumentURI,full:bool
-    ) -> Option<(Vec<CSS>,String)>;
 }
 
 impl Backend for AnyBackend {
+    type ArchiveIter<'a> = std::slice::Iter<'a,Archive>;
     #[inline]
     fn to_any(&self) -> AnyBackend {
         self.clone()
+    }
+
+    fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized {
+        match self {
+            Self::Global(b) => b.with_archives(f),
+            Self::Temp(b) => b.with_archives(f),
+        }
     }
 
     #[inline]
@@ -119,13 +147,6 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_document(uri),
             Self::Temp(b) => b.get_document(uri),
-        }
-    }
-
-    fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R where Self:Sized {
-        match self {
-            Self::Global(b) => b.with_archive_tree(f),
-            Self::Temp(b) => b.with_archive_tree(f),
         }
     }
 
@@ -208,6 +229,11 @@ impl GlobalBackend {
         Self: Sized,
     {
         &GLOBAL
+    }
+
+    #[inline]
+    pub fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R {
+        self.archives.with_tree(f)
     }
 
     #[cfg(feature="tokio")]
@@ -305,6 +331,8 @@ impl GlobalBackend {
 }
 
 impl Backend for &'static GlobalBackend {
+    type ArchiveIter<'a> = std::slice::Iter<'a,Archive>;
+
     #[inline]
     fn to_any(&self) -> AnyBackend {
         AnyBackend::Global(self)
@@ -322,9 +350,8 @@ impl Backend for &'static GlobalBackend {
         GlobalBackend::submit_triples(self,in_doc,rel_path,iter);
     }
 
-    #[inline]
-    fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R where Self:Sized {
-        GlobalBackend::with_archive_tree(self, f)
+    fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized {
+        GlobalBackend::with_archives(self,f)
     }
 
     #[inline]
@@ -364,9 +391,16 @@ impl Backend for &'static GlobalBackend {
 }
 
 impl Backend for GlobalBackend {
+    type ArchiveIter<'a> = std::slice::Iter<'a,Archive>;
+
     #[inline]
     fn to_any(&self) -> AnyBackend {
         AnyBackend::Global(Self::get())
+    }
+
+    #[inline]
+    fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized {
+        self.archives.with_tree(|t| f(t.archives.iter()))
     }
 
     fn get_html_body(&self,
@@ -383,11 +417,6 @@ impl Backend for GlobalBackend {
                 a.submit_triples(in_doc,rel_path,self.triple_store(),iter);
             }
         });
-    }
-
-    #[inline]
-    fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R {
-        self.archives.with_tree(f)
     }
 
     #[inline]
@@ -485,6 +514,8 @@ impl TemporaryBackend {
 }
 
 impl Backend for TemporaryBackend {
+    type ArchiveIter<'a> = std::slice::Iter<'a,Archive>;
+
     #[inline]
     fn to_any(&self) -> AnyBackend {
         AnyBackend::Temp(self.clone())
@@ -493,6 +524,11 @@ impl Backend for TemporaryBackend {
         self.inner.documents.lock().get(uri).cloned().or_else(|| 
             self.inner.parent.get_document(uri)
         )
+    }
+
+    #[inline]
+    fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized {
+        self.inner.parent.with_archives(f)
     }
 
     fn get_html_body(&self,
@@ -533,11 +569,6 @@ impl Backend for TemporaryBackend {
         where
             Self: Sized {
         self.inner.parent.with_archive_or_group(id, f)
-    }
-
-    #[inline]
-    fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R {
-        self.inner.parent.with_archive_tree(f)
     }
 
     #[inline]

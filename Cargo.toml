@@ -125,6 +125,9 @@ html5ever = "0.29.0"
 async-lsp = {version="0.2",features=["tokio","async-io"]}
 futures = {version="0.3"}
 
+image = { version = "0.25"}
+webp = { version= "0.3"}
+dashmap = { version = "5" }
 
 # leptos
 leptos = { version = "=0.7.0-rc1", features=["nightly"]}
@@ -158,7 +161,7 @@ console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
 #reqwest = {version="0.12",features=["json"]}
 gloo-storage = "0.3"
-web-sys = { version = "0.3.70" }
+web-sys = { version = "0.3" }
 tsify-next = {version="0.5", features = ["js"]}
 js-sys = "0.3"
 

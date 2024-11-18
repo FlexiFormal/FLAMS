@@ -113,6 +113,8 @@ jobs:
         with:
           name: linux
           path: ./linux
+      - name: Set executable
+        run: chmod +x ./linux/immt
       - uses: actions/download-artifact@v4
         with:
           name: windows
@@ -121,6 +123,8 @@ jobs:
         with:
           name: mac_aarch64
           path: ./mac
+      - name: Set executable
+        run: chmod +x ./mac/immt
       - uses: actions/download-artifact@v4
         with:
           name: ts

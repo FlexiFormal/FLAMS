@@ -16,6 +16,9 @@ use triomphe::Arc;
 lazy_static! {
     static ref ARCHIVE_IDS: Arc<Mutex<TArcInterner<str, 4, 100>>> =
         Arc::new(Mutex::new(TArcInterner::default()));
+
+    static ref NO_ARCHIVE_ID:ArchiveId = ArchiveId::new("no/archive");
+    static ref NO_ARCHIVE_URI:ArchiveURI = "http://unknown.source?a=no/archive".parse().unwrap_or_else(|_| unreachable!());
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -26,6 +29,9 @@ impl ArchiveId {
         let s = self.as_ref();
         s.rsplit_once('/').map_or(s, |(_, s)| s)
     }
+
+    #[inline]#[must_use]
+    pub fn no_archive() -> Self { NO_ARCHIVE_ID.clone() }
 
     #[must_use]
     pub fn steps(&self) -> std::str::Split<char> {
@@ -108,6 +114,8 @@ impl Display for ArchiveURI {
 debugdisplay!(ArchiveURI);
 
 impl ArchiveURI {
+    #[must_use]
+    pub fn no_archive() -> Self { NO_ARCHIVE_URI.clone() }
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn new(base: BaseURI, archive: ArchiveId) -> Self {

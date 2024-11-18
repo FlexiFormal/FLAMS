@@ -30,12 +30,12 @@ export function register_server_commands(context:IMMTContext) {
   vscode.commands.executeCommand('setContext', 'immt.loaded', true);
 	vscode.window.registerWebviewViewProvider("immt-tools",
     webview(context,"stex-tools",msg => {
+      const doc = vscode.window.activeTextEditor?.document;
       switch (msg.command) {
         case "dashboard":
           openIframe(context.server.url + "/dashboard","Dashboard");
           break;
         case "preview":
-          const doc = vscode.window.activeTextEditor?.document;
           if (doc) {
             context.client.sendRequest<string | undefined>("immt/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
               if (s) {openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s); }
@@ -44,6 +44,20 @@ export function register_server_commands(context:IMMTContext) {
               }
             });
           }
+          break;
+        case "browser":
+          if (doc) {
+            context.client.sendRequest<string | undefined>("immt/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
+              if (s) {
+                const uri = vscode.Uri.parse(context.server.url).with({query:"uri=" + encodeURIComponent(s)});
+                vscode.env.openExternal(uri);
+              }
+              else {
+                vscode.window.showInformationMessage("No preview available; building possibly failed");
+              }
+            });
+          }
+          break;
       }
     })
   );

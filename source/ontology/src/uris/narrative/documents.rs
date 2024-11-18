@@ -9,7 +9,7 @@ use std::fmt::Display;
 use std::str::{FromStr, Split};
 
 lazy_static::lazy_static! {
-    static ref NO_DOCUMENT:DocumentURI = "http://unknown.document?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
+    static ref NO_DOCUMENT:DocumentURI = "http://unknown.source?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -27,7 +27,7 @@ impl DocumentURI {
     pub fn from_archive_relpath(a:ArchiveURI,rel_path:&str) -> Self {
         let (path,mut name) = rel_path.rsplit_once('/')
             .unwrap_or(("",rel_path));
-        name = name.rsplit_once('.').unwrap_or_else(|| unreachable!()).0;
+        name = name.rsplit_once('.').map_or_else(|| name,|(name,_)| name);
         let lang = Language::from_rel_path(name);
         name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
         (a % path) & (name,lang)

@@ -18,7 +18,7 @@ pub fn measure<F: FnOnce() -> R, R>(f: F) -> (R, Delta) {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Timestamp(NonZeroU64);
+pub struct Timestamp(pub NonZeroU64);
 
 trait AsU64 {
     fn into_u64(self) -> u64;

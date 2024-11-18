@@ -3,7 +3,7 @@ use std::path::Path;
 use async_lsp::lsp_types::{Position, Range, Url};
 use immt_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
 use immt_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
-use immt_system::backend::{archives::Archive, AnyBackend, GlobalBackend};
+use immt_system::backend::{archives::Archive, AnyBackend, Backend, GlobalBackend};
 use immt_utils::time::measure;
 
 use crate::LSPStore;
@@ -30,19 +30,22 @@ impl LSPDocument {
   #[allow(clippy::borrowed_box)]
   #[must_use]
   pub fn new(text:String,lsp_uri:Url) -> Self {
-    let path = lsp_uri.to_file_path().ok().map(Into::into);
+    let path:Option<Box<Path>> = lsp_uri.to_file_path().ok().map(Into::into);
+    let default = || {
+      let path = path.as_ref()?.as_os_str().to_str()?.into();
+      Some((ArchiveURI::no_archive(),Some(path)))
+    };
     let ap = path.as_ref().and_then(|path:&Box<Path>|
-      GlobalBackend::get().manager().all_archives().iter().find_map(|a|
-      if let Archive::Local(a) = a {
-        if path.starts_with(a.path()) {
-          let rel_path = path.display().to_string().strip_prefix(&a.source_dir().display().to_string()).map(Into::into);
-          Some((a.uri().owned(),rel_path))
-        } else {None}
-      } else {None}
-    ));
+      GlobalBackend::get().archive_of(path,|a,rp| {
+        let uri = a.uri().owned();
+        let rp = rp.strip_prefix("/source/").map(|r| r.into());
+        (uri,rp)
+      })
+    ).or_else(default);
     let (archive,rel_path) = ap.map_or((None,None),|(a,p)| (Some(a),p));
     let r = LSPText { text ,up_to_date:false, html_up_to_date: false };
     let doc_uri = archive.as_ref().and_then(|a| rel_path.as_ref().map(|rp:&Box<str>| DocumentURI::from_archive_relpath(a.clone(), rp)));
+    //tracing::info!("Document: {lsp_uri}\n - {doc_uri:?}\n - [{archive:?}]{{{rel_path:?}}}");
     let data = DocumentData {
       lsp_uri,path,archive,rel_path,doc_uri
     };

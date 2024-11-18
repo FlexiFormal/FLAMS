@@ -41,7 +41,11 @@ ssr = [
   "dep:immt-lsp",
   "dep:tracing-subscriber",
   "dep:tokio-util",
-  "dep:rayon"
+  "dep:rayon",
+  "dep:tex_engine",
+  "dep:image",
+  "dep:webp",
+  "dep:dashmap"
 ]
 hydrate = [
   "dep:console_error_panic_hook",
@@ -87,6 +91,8 @@ immt-system = {workspace=true,features=["tokio"],optional=true}
 immt-lsp = {workspace=true,optional=true, features=["ws"]}
 immt-stex = {workspace=true,optional=true}
 immt-shtml = {workspace=true,optional=true}
+tex_engine = {workspace=true,optional=true}
+
 tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}
 toml = {workspace = true,optional=true}
 color-eyre = {workspace = true,optional=true}
@@ -111,6 +117,10 @@ argon2 = {workspace=true,optional=true}
 
 tokio-util = {workspace=true,optional=true}
 tracing-subscriber = {workspace=true,optional=true}
+
+image = {workspace=true,optional=true}
+webp = {workspace=true,optional=true}
+dashmap = {workspace=true,optional=true}
 
 #hydrate
 console_error_panic_hook = {workspace = true,optional=true}

@@ -205,7 +205,7 @@ impl LSPState {
           _ => ()
         }
       }
-      tracing::info!("document links: {:?}",ret);
+      //tracing::info!("document links: {:?}",ret);
       if let Some(p) = progress { p.finish() }
       ret
     }))

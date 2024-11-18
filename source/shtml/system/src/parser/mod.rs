@@ -3,10 +3,9 @@ pub mod termsnotations;
 
 use std::cell::{Cell, RefCell};
 
-use either::Either;
 use html5ever::{interface::{NodeOrText, TreeSink}, parse_document, serialize::SerializeOpts, tendril::{SliceExt, StrTendril, TendrilSink}, ParseOpts, QualName};
 use immt_ontology::{languages::Language, narration::{documents::UncheckedDocument, LazyDocRef}, triple, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange};
-use immt_system::{backend::{AnyBackend, Backend}, building::{BuildResult, BuildResultArtifact}, formats::{HTMLData, OMDocResult}};
+use immt_system::{backend::{AnyBackend, Backend}, formats::{HTMLData, OMDocResult}};
 use immt_utils::{prelude::HSet, CSS};
 use nodes::{ElementData, NodeData, NodeRef};
 use shtml_extraction::{errors::SHTMLError, open::{terms::{OpenTerm, VarOrSym}, OpenSHTMLElement}, prelude::{Attributes, ExtractorState, RuleSet, SHTMLElements, SHTMLNode, SHTMLTag, StatefulExtractor}};
@@ -229,6 +228,33 @@ impl TreeSink for HTMLParser<'_> {
     //assert_eq!(parent.len(),parent.string().len());
     match child {
         NodeOrText::AppendNode(child) => {
+          if child.as_element().is_some_and(|n| n.name.local.as_ref().eq_ignore_ascii_case("img")) {
+            let Some(child_elem) = child.as_element() else {unreachable!()};
+            let mut attributes = child_elem.attributes.borrow_mut();
+            if let Some(src) = attributes.value("src") {
+              let path = std::path::Path::new(src);
+              if let Some(newsrc) = self.extractor.borrow().backend.archive_of(path, |a,rp| {
+                format!("/img?a={}&rp={}",a.id(),&rp[1..])
+              }) {
+                attributes.set("src",&newsrc);
+              } else {
+                let kpsewhich = &*tex_engine::engine::filesystem::kpathsea::KPATHSEA;
+                let last = src.rsplit_once('/').map_or(src,|(_,p)| p);
+                if let Some(file) = kpsewhich.which(last) {
+                  if file == path {
+                    let file = format!("/img?kpse={last}");
+                    attributes.set("src",&file);
+                  }
+                } else {
+                  let file = format!("/img?file={src}");
+                  attributes.set("src",&file);
+                }
+                // TODO
+              };
+            }
+            drop(attributes);
+            NodeRef::update_len(child_elem);
+          }
           //println!("Current Child: {}: >>>>{}<<<<",child.len(),child.string().replace('\n'," ").replace('\t'," "));
           //assert_eq!(child.len(),child.string().len());
           if parent.as_document().is_some() {
@@ -296,10 +322,10 @@ impl TreeSink for HTMLParser<'_> {
 
   #[inline]
   fn append_based_on_parent_node(
-          &self,
-          element: &Self::Handle,
-          prev_element: &Self::Handle,
-          child: NodeOrText<Self::Handle>,
+      &self,
+      element: &Self::Handle,
+      prev_element: &Self::Handle,
+      child: NodeOrText<Self::Handle>,
   ) {  
     if element.parent().is_some() {
         self.append_before_sibling(element, child);
@@ -412,14 +438,21 @@ impl Extractor<'_> {
   fn split(backend:&AnyBackend,p:&str) -> Option<(ArchiveURI,usize)> {
     if p.starts_with(META) {
         return Some((META_URI.clone(),29))
-    } else if p == URTHEORIES {
+    }
+    if p == URTHEORIES {
         return Some((UR_URI.clone(),31))
-    } else if p == "http://mathhub.info/my/archive" {
+    }
+    if p == "http://mathhub.info/my/archive" {
         return Some((MY_ARCHIVE.clone(),30))
-    } else if p == "http://kwarc.info/Papers/stex-mmt/paper" {
+    }
+    if p == "http://kwarc.info/Papers/stex-mmt/paper" {
         return Some((INJECTING.clone(),34))
-    } else if p == "http://kwarc.info/Papers/tug/paper" {
+    }
+    if p == "http://kwarc.info/Papers/tug/paper" {
         return Some((TUG.clone(),34))
+    }
+    if p.starts_with("file://") {
+      return Some((ArchiveURI::no_archive(),7))
     }
     if let Some(mut p) = p.strip_prefix(MATHHUB) {
         let mut i = MATHHUB.len();
@@ -429,8 +462,8 @@ impl Extractor<'_> {
         }
         return Self::split_old(backend,p,i)
     }
-    backend.with_archive_tree(|tree|
-      tree.archives.iter().find_map(|a| {
+    backend.with_archives(|mut tree|
+      tree.find_map(|a| {
         let base = a.uri();
         let base = base.base().as_ref();
         if p.starts_with(base) {
@@ -445,8 +478,8 @@ impl Extractor<'_> {
   }
 
   fn split_old(backend:&AnyBackend,p:&str,len:usize) -> Option<(ArchiveURI,usize)> {
-    backend.with_archive_tree(|tree|
-      tree.archives.iter().find_map(|a| {
+    backend.with_archives(|mut tree|
+      tree.find_map(|a| {
         if p.starts_with(a.id().as_ref()) {
             let mut l = a.id().as_ref().len();
             let np = &p[l..];

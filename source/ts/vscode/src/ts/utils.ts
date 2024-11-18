@@ -51,7 +51,7 @@ export async function download(url:string,to:string): Promise<boolean> {
   });
 }
 
-export async function unzip(zip:string,to:string,files:string[],skip:string[],progress?:vscode.Progress<{
+export async function unzip(zip:string,to:string,files:string[],skip:string[],executables:string[],progress?:vscode.Progress<{
   message?: string;
   increment?: number;
 }>): Promise<boolean> {
@@ -83,12 +83,8 @@ export async function unzip(zip:string,to:string,files:string[],skip:string[],pr
               const writer = fs.createWriteStream(target);
               readStream.on('end', () => {
                 writer.close();
-                if (!process.platform.startsWith("win")) {
-                  const mode = entry.externalFileAttributes >>> 16;
-                  const is_executable = (mode & 0o111) || (mode === 0o654);
-                  if (is_executable) {
-                    fs.chmod(target, 0o755,() => {});
-                  }
+                if (!process.platform.startsWith("win") && executables.includes(filename)) {
+                  fs.chmod(target, 0o755,() => {});
                 }
                 zipfile.readEntry();
               });

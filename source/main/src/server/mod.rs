@@ -1,6 +1,7 @@
 pub mod db;
 pub mod settings;
 pub mod lsp;
+mod img;
 
 use std::future::IntoFuture;
 
@@ -59,6 +60,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
             routes,
             axum::routing::get(|a, b, c| routes_handler(a, b, c).in_current_span()),
         )
+        .route("/img",axum::routing::get(img::img_handler))
         .fallback(file_and_error_handler)
         .layer(auth_layer)
         .layer(
@@ -93,7 +95,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
 
 async fn routes_handler(
     auth_session: axum_login::AuthSession<DBBackend>,
-    extract::State(ServerState { db, options }): extract::State<ServerState>,
+    extract::State(ServerState { db, options,.. }): extract::State<ServerState>,
     request: http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     let handler = leptos_axum::render_app_to_stream_with_context(
@@ -108,7 +110,7 @@ async fn routes_handler(
 
 async fn server_fn_handle(
     auth_session: axum_login::AuthSession<DBBackend>,
-    extract::State(ServerState { db, options }): extract::State<ServerState>,
+    extract::State(ServerState { db, options,.. }): extract::State<ServerState>,
     request: http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     leptos_axum::handle_server_fns_with_context(
@@ -154,6 +156,7 @@ impl<A> tower_http::trace::MakeSpan<A> for SpanLayer {
 pub(crate) struct ServerState {
     options: LeptosOptions,
     db: DBBackend,
+    pub(crate) images: img::ImageStore,
 }
 
 impl ServerState {
@@ -163,6 +166,7 @@ impl ServerState {
         Self {
             options: leptos_cfg.leptos_options,
             db,
+            images: img::ImageStore::default(),
         }
     }
 

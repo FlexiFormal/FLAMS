@@ -168,7 +168,6 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 };
                 let _ = client.publish_diagnostics(r);
             }));
-            //d.with_text(|t| tracing::info!("new text:\n{}",t));
         } else {
             tracing::warn!("document not found: {}",document.uri);
         }
@@ -179,7 +178,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     #[allow(clippy::let_underscore_future)]
     //impl_notification!(! did_save = DidSaveTextDocument);
     fn did_save(&mut self,params:lsp::DidSaveTextDocumentParams) -> Self::NotifyResult {
-        tracing::info!("did_save: {}",params.text_document.uri);
+        tracing::trace!("did_save: {}",params.text_document.uri);
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
         let uri = params.text_document.uri;
@@ -294,8 +293,8 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     #[must_use]
     // impl_request!(! hover = HoverRequest => (None));
     fn hover(&mut self, params: lsp::HoverParams) -> Res<Option<lsp::Hover>> {
-        tracing::info_span!("hover").in_scope(move || {
-            tracing::info!("uri: {},work_done_progress_params: {:?}, position: {:?}",
+        tracing::trace_span!("hover").in_scope(move || {
+            tracing::trace!("uri: {},work_done_progress_params: {:?}, position: {:?}",
                 params.text_document_position_params.text_document.uri,
                 params.work_done_progress_params,
                 params.text_document_position_params.position
@@ -391,8 +390,8 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         #[must_use]
         // impl_request!(semantic_tokens_full = SemanticTokensFullRequest);
         fn semantic_tokens_full(&mut self, params: lsp::SemanticTokensParams) -> Res<Option<lsp::SemanticTokensResult>> {
-            tracing::info_span!("semantic_tokens_full").in_scope(|| {
-                tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, uri: {}",
+            tracing::trace_span!("semantic_tokens_full").in_scope(|| {
+                tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, uri: {}",
                     params.work_done_progress_params,
                     params.partial_result_params,
                     params.text_document.uri
@@ -408,24 +407,10 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         }
 
         #[must_use]
-        // impl_request!(semantic_tokens_full_delta = SemanticTokensFullDeltaRequest);
-        fn semantic_tokens_full_delta(&mut self, params: lsp::SemanticTokensDeltaParams) -> Res<Option<lsp::SemanticTokensFullDeltaResult>> {
-            tracing::info_span!("semantic_tokens_full_delta").in_scope(|| {
-                tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, previous_result_id: {:?}, uri:{}",
-                    params.work_done_progress_params,
-                    params.partial_result_params,
-                    params.previous_result_id,
-                    params.text_document.uri
-                );
-                Box::pin(std::future::ready(Ok(None)))
-            })
-        }
-
-        #[must_use]
         // impl_request!(semantic_tokens_range = SemanticTokensRangeRequest);
         fn semantic_tokens_range(&mut self, params: lsp::SemanticTokensRangeParams) -> Res<Option<lsp::SemanticTokensRangeResult>> {
-            tracing::info_span!("semantic_tokens_range").in_scope(|| {
-                tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, range: {:?}, uri:{}",
+            tracing::trace_span!("semantic_tokens_range").in_scope(|| {
+                tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, range: {:?}, uri:{}",
                     params.work_done_progress_params,
                     params.partial_result_params,
                     params.range,
@@ -438,6 +423,20 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                     .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
                     |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensRangeResult::Tokens)))) as _
                     )
+            })
+        }
+
+        #[must_use]
+        // impl_request!(semantic_tokens_full_delta = SemanticTokensFullDeltaRequest);
+        fn semantic_tokens_full_delta(&mut self, params: lsp::SemanticTokensDeltaParams) -> Res<Option<lsp::SemanticTokensFullDeltaResult>> {
+            tracing::info_span!("semantic_tokens_full_delta").in_scope(|| {
+                tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, previous_result_id: {:?}, uri:{}",
+                    params.work_done_progress_params,
+                    params.partial_result_params,
+                    params.previous_result_id,
+                    params.text_document.uri
+                );
+                Box::pin(std::future::ready(Ok(None)))
             })
         }
 
