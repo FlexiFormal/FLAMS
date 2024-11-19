@@ -152,6 +152,7 @@ pub struct QueueSocket {
   socket: leptos::web_sys::WebSocket,
   #[cfg(doc)]
   socket: (),
+  #[cfg(feature="hydrate")]
   _running:RwSignal<bool>
 }
 impl WebSocket<NonZeroU32,QueueMessage> for QueueSocket {
@@ -169,7 +170,7 @@ impl crate::utils::ws::WebSocketServer<NonZeroU32,QueueMessage> for QueueSocket 
                 let listener = None;//immt_system::logger().listener();
                 Some(Self {
                     listener,
-                    _running:RwSignal::new(false),
+                    #[cfg(feature="hydrate")] _running:RwSignal::new(false),
                     #[cfg(feature="hydrate")] socket:unreachable!()
                 })
             }
@@ -378,9 +379,22 @@ pub struct Entry{
   id:u32,
   archive:ArchiveId,
   rel_path:String,
-  steps:RwSignal<VecMap<String,TaskState>>
+  #[cfg(feature="hydrate")]
+  steps:RwSignal<VecMap<String,TaskState>>,
+  #[cfg(not(feature="hydrate"))]
+  steps:VecMap<String,TaskState>,
 }
+
 impl Entry {
+
+  #[cfg(not(feature="hydrate"))]
+  fn as_view(&self) -> impl IntoView {
+    view!{
+      <li>{format!("[{}]{}",self.archive,self.rel_path)}</li>
+    }
+  }
+
+  #[cfg(feature="hydrate")]
   fn as_view(&self) -> impl IntoView {
     use immt_web_utils::components::{Collapsible,Header};
     let title=format!("[{}]{}",self.archive,self.rel_path);
@@ -390,7 +404,7 @@ impl Entry {
       v.iter().enumerate().find_map(|(i,(e,s))| if *s == TaskState::Done {None} else {
         Some((i+1,e.clone()))
       }).unwrap_or_else(|| (total,"Done".to_string()))
-  });
+    });
     let rel_path = self.rel_path.clone();
     let archive = self.archive.clone();
     view!{
@@ -413,11 +427,14 @@ impl Entry {
 #[cfg(feature="ssr")]
 impl From<immt_system::building::QueueEntry> for Entry {
   fn from(e:immt_system::building::QueueEntry) -> Self {
+    #[cfg(feature="hydrate")]
+    {unreachable!()}
+    #[cfg(not(feature="hydrate"))]
     Self {
       id:e.id.into(),
       archive:e.archive,
       rel_path:e.rel_path.to_string(),
-      steps:RwSignal::new(e.steps.into_iter().map(|(k,v)| (k.to_string(),v.into())).collect())
+      steps:e.steps.into_iter().map(|(k,v)| (k.to_string(),v.into())).collect()
     }
   }
 }

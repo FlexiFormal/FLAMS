@@ -153,7 +153,7 @@ async function download_from_github(dir:string,context:IMMTPreContext) {
       const dl = await download(url,zipfile);
       if (!dl) { return; }
       progress.report({ message: `Unzipping ${zipfile}` });
-      const zip = await unzip(zipfile,dir,[],["settings.toml"],["immt"],progress);
+      const zip = await unzip(zipfile,dir,[],["settings.toml"],[add_exe("immt")],progress);
       if (!zip) { return; }
       progress.report({ message: `Removing ${zipfile}` });
       fs.unlink(zipfile,err => {});

@@ -43,7 +43,7 @@ export async function download(url:string,to:string): Promise<boolean> {
       resolve(false);
     });
     req.on('timeout', () => {
-      vscode.window.showErrorMessage(`iMMT: Error downloading ${url}: timed`);
+      vscode.window.showErrorMessage(`iMMT: Error downloading ${url}: timeout`);
       file.close();
       fs.unlink(to,() => {});
       resolve(false);

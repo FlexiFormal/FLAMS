@@ -1,7 +1,7 @@
 pub mod db;
 pub mod settings;
 pub mod lsp;
-mod img;
+pub mod img;
 
 use std::future::IntoFuture;
 

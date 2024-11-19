@@ -1,6 +1,16 @@
 #![recursion_limit = "256"]
 #![feature(box_patterns)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/*#![feature(adt_const_params)]
+
+#[derive(std::marker::ConstParamTy,PartialEq,Eq)]
+pub enum Test {
+    A,
+    B
+}
+
+pub struct Foo<const T:Test>(String);
+*/
 
 use content::{declarations::DeclarationTrait, ContentReference, ModuleLike};
 use immt_utils::sourcerefs::{ByteOffset, SourceRange};

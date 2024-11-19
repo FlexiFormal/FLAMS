@@ -107,7 +107,10 @@ dependencies = ["vscode-build"]
 workspace = false
 dependencies = ["build-viewer"]
 script_runner = "@shell"
-script = '''cp ./source/shtml/viewer/pkg/shtml.js ./resources/assets/shtml.js && cp ./source/shtml/viewer/pkg/shtml_bg.wasm ./resources/assets/shtml_bg.wasm'''
+script = '''
+cp ./source/shtml/viewer/pkg/shtml.js ./resources/assets/shtml.js 
+cp ./source/shtml/viewer/pkg/shtml_bg.wasm ./resources/assets/shtml_bg.wasm
+'''
 
 [tasks.all-release]
 workspace = false
