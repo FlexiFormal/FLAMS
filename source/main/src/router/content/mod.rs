@@ -126,8 +126,8 @@ pub fn URITop() -> impl IntoView {
     <Stylesheet id="leptos" href="/pkg/immt.css"/>
     <Themer><Login><div style="min-height:100vh;">{
       use_query_map().with_untracked(|m| m.as_doc().map_or_else(
-        || todo!(),
-        |doc| view!(<Document doc/>)
+        || view!("TODO").into_any(),
+        |doc| view!(<Document doc/>).into_any()
       ))
     }</div></Login></Themer>
   }
