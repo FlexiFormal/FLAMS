@@ -132,6 +132,18 @@ impl SHTMLNode for NodeRef {
             }
         )
     }
+    fn inner_range(&self) -> DocumentRange {
+        self.as_element().map_or(
+            DocumentRange{start:0,end:0},
+            |elem| {
+                let tag_len = tag_len(&elem.name);
+                let attr_len = elem.attributes.borrow().len();
+                let start = elem.start_offset.get() + tag_len + attr_len;
+                let end = elem.end_offset.get() - (tag_len + 1);
+                DocumentRange{start,end}
+            }
+        )
+    }
     fn string(&self) -> String {
         let mut html = Vec::new();
         let _ = html5ever::serialize(&mut html, self, SerializeOpts {

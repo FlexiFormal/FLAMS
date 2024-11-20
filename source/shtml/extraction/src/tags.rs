@@ -58,7 +58,7 @@ macro_rules! do_tags {
     (@FUN $tag:ident ) => {|a,b,c| SHTMLTag::todo(a,b,c,SHTMLTag::$tag)}
 }
 
-do_tags!{118:
+do_tags!{115:
     Module                  = "theory"              @ module,
     MathStructure           = "feature-structure"   @ mathstructure,
     Morphism                = "feature-morphism"    @ morphism,   
@@ -72,10 +72,7 @@ do_tags!{118:
     SubProblem              = "subproblem"          @ subexercise,
 
     DocTitle                = "doctitle"            @ doctitle,
-    SectionTitle            = "sectiontitle"        @ title,
-    StatementTitle          = "statementtitle"      @ title,
-    ProofTitle              = "prooftitle"          @ title,
-    ProblemTitle            = "problemtitle"        @ title,
+    Title                   = "title"               @ title,
 
     Symdecl                 = "symdecl"             @ symdecl,
     Vardef                  = "vardef"              @ vardecl,

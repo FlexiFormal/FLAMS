@@ -137,7 +137,7 @@ impl OpenSHTMLElement {
             }
 
             Self::Title =>
-                if extractor.add_title(node.range()).is_err() {
+                if extractor.add_title(node.inner_range()).is_err() {
                     extractor.add_error(SHTMLError::NotInNarrative);
                 },
             Self::Symdecl { uri, arity, macroname, role, assoctype, reordering } => 

@@ -44,7 +44,7 @@ async function shtml_start() {{
 }}
 shtml_start();
     "#,
-    include_str!("../../../../source/shtml/viewer-components/src/shtml-top.js")
+    include_str!("../../../../source/shtml/viewer-components/shtml-top.js")
     ).as_bytes()).unwrap();
 }
 '''

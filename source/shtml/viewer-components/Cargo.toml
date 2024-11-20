@@ -29,6 +29,7 @@ send_wrapper = {workspace=true}
 wasm-bindgen = {workspace=true}
 serde = {workspace = true}
 either = {workspace = true}
+icondata_ch = {workspace = true}
 
 web-sys = {workspace = true,features=["ScrollIntoViewOptions","ScrollLogicalPosition"]} 
 

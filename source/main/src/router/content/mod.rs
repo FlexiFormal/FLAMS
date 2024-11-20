@@ -135,7 +135,7 @@ pub fn URITop() -> impl IntoView {
 
 #[component]
 pub fn Document(doc:DocURIComponents) -> impl IntoView {
-  use shtml_viewer_components::{SHTMLDocument,components::Toc};
+  use shtml_viewer_components::{SHTMLDocument,components::Toc,components::Burger};
   use leptos_dyn_dom::DomStringCont;
   let doccl = doc.clone();
   from_server_clone(false,
@@ -150,9 +150,11 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
       });
       let on_load = RwSignal::new(false);
       view!{<SHTMLDocument uri on_load>
+        <Burger>
         {move || if on_load.get() {toc_signal.get().map(|(css,toc)|
           view!(<Toc css toc/>)
         ) } else {None}}
+        </Burger>
         <DomStringCont html on_load cont=shtml_viewer_components::iterate/>
         </SHTMLDocument>}
     }</div>})

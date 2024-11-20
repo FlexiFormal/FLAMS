@@ -31,6 +31,7 @@ pub trait SHTMLNode {
     fn with_elements<R>(&mut self,f:impl FnMut(Option<&mut SHTMLElements>) -> R) -> R;
     fn delete(&self);
     fn range(&self) -> DocumentRange;
+    fn inner_range(&self) -> DocumentRange;
     fn string(&self) -> String;
     fn as_notation(&self) -> Option<NotationSpec>;
     fn as_op_notation(&self) -> Option<OpNotation>;
