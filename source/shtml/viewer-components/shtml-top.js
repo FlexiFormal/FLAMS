@@ -9,7 +9,7 @@ export function hasShtmlAttribute(node) {
   return false;
 }
 /*
-export function getDataShtmlAttributes(node) {
+function getDataShtmlAttributes(node) {
   const result = [];
   const attributes = node.attributes;
   for (let i = 0; i < attributes.length; i++) {

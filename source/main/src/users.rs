@@ -11,7 +11,9 @@ use immt_web_utils::components::error_toast;
 pub async fn login(username:String,password:String) -> Result<LoginState,ServerFnError<LoginError>> {
     use argon2::PasswordVerifier;
     use axum_login::AuthnBackend;
-    let mut session: axum_login::AuthSession<crate::server::db::DBBackend> = expect_context();
+    let Some(mut session)= use_context::<axum_login::AuthSession<crate::server::db::DBBackend>>() else {
+        return Ok(LoginState::None)
+    };
     if session.backend.admin.is_none() { return Ok(LoginState::NoAccounts) }
     if username == "admin" {
         let (pass_hash,salt) = session.backend.admin.as_ref().unwrap_or_else(|| unreachable!());
@@ -62,7 +64,9 @@ pub enum LoginState {
 impl LoginState {
     #[must_use]
     pub fn get() -> Self {
-        let session: axum_login::AuthSession<crate::server::db::DBBackend> = expect_context();
+        let Some(session) = use_context::<axum_login::AuthSession<crate::server::db::DBBackend>>() else {
+            return Self::None;
+        };
         match &session.backend.admin {
             None => Self::NoAccounts,
             Some(_) => match session.user {

@@ -45,6 +45,7 @@ async function shtml_start() {{
 shtml_start();
     "#,
     include_str!("../../../../source/shtml/viewer-components/shtml-top.js")
+        .replace("export function","function")
     ).as_bytes()).unwrap();
 }
 '''

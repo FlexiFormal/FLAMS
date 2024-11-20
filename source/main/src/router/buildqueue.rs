@@ -36,7 +36,7 @@ pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
   if login != LoginState::Admin && login != LoginState::NoAccounts {
     return Err(format!("Not logged in: {login:?}").into());
   }
-  let Ok(()) = QueueManager::get().start_queue(id.into()) else {
+  let Ok(Ok(())) = tokio::task::spawn_blocking(move || QueueManager::get().start_queue(id.into())).await else {
       return Err(format!("Queue {id} not found").into())
   };
   Ok(())
