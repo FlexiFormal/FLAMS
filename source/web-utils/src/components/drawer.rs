@@ -11,11 +11,11 @@ pub fn Drawer(
     mut children:ChildrenFnMut
 ) -> impl IntoView {
   use thaw::{Button,ButtonAppearance,DrawerSize,DrawerBody,OverlayDrawer,DrawerHeaderTitle,DrawerHeader,DrawerPosition,DrawerHeaderTitleAction};
-  inject_css("immt-drawer", ".immt-wide-drawer { z-index:5; .thaw-overlay-drawer { width: 80%; } }");
+  inject_css("immt-drawer", ".immt-wide-drawer { z-index:5; --thaw-drawer--size:80vw !important; }");
   let open = RwSignal::new(false);
   view!{
     <span on:click=move |_| open.set(true)>{(trigger.children)()}</span>
-    <OverlayDrawer class="immt-wide-drawer" open position=DrawerPosition::Right size=DrawerSize::Large>
+    <OverlayDrawer class="immt-wide-drawer" open position=DrawerPosition::Right>
       <DrawerHeader><DrawerHeaderTitle>
         <DrawerHeaderTitleAction slot>
           <Button

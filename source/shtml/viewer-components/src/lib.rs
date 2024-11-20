@@ -88,28 +88,7 @@ pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
 ];
 
 #[cfg_attr(not(feature="ts"),wasm_bindgen::prelude::wasm_bindgen)]
-#[cfg_attr(feature="ts",wasm_bindgen::prelude::wasm_bindgen(inline_js = "
-export function hasShtmlAttribute(node) {
-    const attributes = node.attributes;
-    for (let i = 0; i < attributes.length; i++) {
-        if (attributes[i].name.startsWith('shtml:')) {
-            return true;
-        }
-    }
-    return false;
-}
-
-export function getDataShtmlAttributes(node) {
-    const result = [];
-    const attributes = node.attributes;
-    for (let i = 0; i < attributes.length; i++) {
-        if (attributes[i].name.startsWith('shtml:')) {
-            result.push(attributes[i].name);
-        }
-    }
-    return result;
-}
-"))]
+#[cfg_attr(feature="ts",wasm_bindgen::prelude::wasm_bindgen(module = "src/shtml-top.js"))]
 extern "C" {
     #[wasm_bindgen::prelude::wasm_bindgen(js_name = "hasShtmlAttribute")]
     fn has_shtml_attribute(node: &leptos::web_sys::Node) -> bool;

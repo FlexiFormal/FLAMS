@@ -27,15 +27,7 @@ fn main() {
     std::fs::File::create(js_file).unwrap().write_all(format!(r#"{jv}
 const {{ run, set_server_url }} = wasm_bindgen;
 
-function hasShtmlAttribute(node) {{
-    const attributes = node.attributes;
-    for (let i = 0; i < attributes.length; i++) {{
-        if (attributes[i].name.startsWith('shtml:')) {{
-            return true;
-        }}
-    }}
-    return false;
-}}
+{}
 
 var PRIVATE__do_shtml_on_start = () => {{}};
 function shtml_on_start(f) {{
@@ -51,7 +43,9 @@ async function shtml_start() {{
     PRIVATE__do_shtml_on_start();
 }}
 shtml_start();
-    "#).as_bytes()).unwrap();
+    "#,
+    include_str!("../../../../source/shtml/viewer-components/src/shtml-top.js")
+    ).as_bytes()).unwrap();
 }
 '''
 

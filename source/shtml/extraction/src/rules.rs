@@ -73,7 +73,7 @@ pub trait RuleSet<E:SHTMLExtractor> {
     #[allow(clippy::cognitive_complexity)]
     fn applicable_rules<'a>(&self,extractor:&mut E,attrs:&'a mut E::Attr<'a>) -> Option<SHTMLElements> {
         let mut stripped = attrs.keys().filter(|s| {
-            if s.starts_with("shtml:") {
+            if s.starts_with("data-shtml-") {
                 //tracing::trace!("attribute {s} ({:?})",std::thread::current().id());
                 true
             } else { false }

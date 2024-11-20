@@ -155,7 +155,7 @@ impl<'n> NodeAttrs<'n> {
         ret
     }
 }
-impl<'n> Attributes for NodeAttrs<'n> {
+impl Attributes for NodeAttrs<'_> {
     type KeyIter<'a> = std::iter::Map<std::slice::Iter<'a, String>,for<'b> fn(&'b String) -> &'b str> where Self:'a;
     type Value<'a> = String where Self:'a;
     fn keys(&self) -> Self::KeyIter<'_> {

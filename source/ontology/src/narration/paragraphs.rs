@@ -51,11 +51,11 @@ impl ParagraphKind {
     #[must_use]
     pub fn from_shtml(s: &str) -> Option<Self> {
         Some(match s {
-            "shtml:definition" => Self::Definition,
-            "shtml:assertion" => Self::Assertion,
-            "shtml:paragraph" => Self::Paragraph,
-            "shtml:proof" => Self::Proof,
-            "shtml:subproof" => Self::SubProof,
+            "data-shtml-definition" => Self::Definition,
+            "data-shtml-assertion" => Self::Assertion,
+            "data-shtml-paragraph" => Self::Paragraph,
+            "data-shtml-proof" => Self::Proof,
+            "data-shtml-subproof" => Self::SubProof,
             _ => return None,
         })
     }

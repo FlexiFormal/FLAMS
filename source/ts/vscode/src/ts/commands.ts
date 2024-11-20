@@ -38,7 +38,7 @@ export function register_server_commands(context:IMMTContext) {
         case "preview":
           if (doc) {
             context.client.sendRequest<string | undefined>("immt/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
-              if (s) {openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s); }
+              if (s) {openIframe(context.server.url + "?uri=" + encodeURIComponent(s),doc.fileName); }
               else {
                 vscode.window.showInformationMessage("No preview available; building possibly failed");
               }
@@ -63,7 +63,7 @@ export function register_server_commands(context:IMMTContext) {
   );
 	vscode.window.registerTreeDataProvider("immt-mathhub",new MathHubTreeProvider(context));
   context.client.onNotification("immt/htmlResult",(s:string) => {
-    openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s);
+    openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s.split("&d=")[1]);
 	});
 }
 

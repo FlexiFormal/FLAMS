@@ -4,7 +4,7 @@ use crate::extractor::SHTMLExtractor;
 use crate::rules::SHTMLExtractionRule;
 use paste::paste;
 
-macro_rules! shtml { ($l:literal) => {concat!("shtml:",$l)} }
+macro_rules! shtml { ($l:literal) => {concat!("data-shtml-",$l)} }
 
 
 macro_rules! do_tags {

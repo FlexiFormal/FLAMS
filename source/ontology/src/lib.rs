@@ -12,6 +12,8 @@ pub enum Test {
 pub struct Foo<const T:Test>(String);
 */
 
+pub const SHTML_PREFIX: &str = "data-shtml-";
+
 use content::{declarations::DeclarationTrait, ContentReference, ModuleLike};
 use immt_utils::sourcerefs::{ByteOffset, SourceRange};
 use narration::documents::Document;

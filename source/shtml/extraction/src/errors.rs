@@ -29,7 +29,7 @@ impl Display for SHTMLError {
             Self::MissingElementsInList => f.write_str("missing elements in term list"),
             Self::MissingTermForComplex(head) => write!(f,"missing actual term for complex term {head:?}"),
             Self::UnresolvedVariable(name) => write!(f,"unresolved variable {name}"),
-            Self::MissingHeadForTerm => f.write_str("missing shtml:head attribute for term"),
+            Self::MissingHeadForTerm => f.write_str("missing data-shtml-head attribute for term"),
             Self::InvalidTermKind(s) => write!(f, "invalid term kind {s}"),
             Self::InvalidHeadForTermKind(kind,head) => write!(f, "invalid head {head:?} for term kind {kind:?}"),
             Self::InvalidArgSpec => write!(f, "invalid or missing argument marker"),
