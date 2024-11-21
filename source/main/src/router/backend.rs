@@ -374,7 +374,7 @@ fn dir(archive:ArchiveId,d:DirectoryData) -> impl IntoView {
 }
 
 fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
-  use immt_web_utils::components::{Drawer,Header,Trigger};
+  use immt_web_utils::components::{DrawerThaw,Header,Trigger};
   use thaw::{Button,ButtonAppearance};
 
   let link = format!("/?a={archive}&rp={}",f.rel_path);
@@ -383,7 +383,7 @@ fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
 
   let pathstr = f.rel_path.split('/').last().unwrap_or_else(|| unreachable!()).to_string();
   let header = view!(
-    <Drawer lazy=true>
+    <DrawerThaw lazy=true>
       <Trigger slot>
         <thaw::Icon icon=icondata_bi::BiFileRegular/>" "
         {pathstr}
@@ -392,7 +392,7 @@ fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
         <Button appearance=ButtonAppearance::Subtle>{button}</Button>
       </a></Header>
       <crate::router::content::Document doc=comps.clone()/>
-    </Drawer>
+    </DrawerThaw>
     {dialog(move |signal| if signal.get() {
       let id = archive.clone();
       let title = archive.clone();

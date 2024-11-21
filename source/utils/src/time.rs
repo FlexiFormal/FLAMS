@@ -39,7 +39,7 @@ impl AsU64 for i64 {
 #[inline]
 fn non_zero<I: AsU64>(i: I) -> NonZeroU64 {
     NonZeroU64::new(i.into_u64())
-        .unwrap_or_else(|| NonZeroU64::new(1).unwrap_or_else(|| unreachable!()))
+        .unwrap_or(unsafe{NonZeroU64::new_unchecked(1)})
 }
 impl Timestamp {
     #[must_use]
@@ -100,12 +100,13 @@ impl Display for Timestamp {
     }
 }
 
+#[allow(clippy::unsafe_derive_deserialize)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Delta(NonZeroU64);
 impl Default for Delta {
     fn default() -> Self {
-        Self(NonZeroU64::new(1).unwrap_or_else(|| unreachable!()))
+        Self(unsafe{NonZeroU64::new_unchecked(1)})
     }
 }
 impl Delta {
@@ -139,6 +140,15 @@ impl Mul<f64> for Delta {
         let t = (self.0.get() as f64 * rhs) as u64;
         Self(non_zero(t))
     }
+}
+impl Delta {
+    pub const SECOND : Self = Self(unsafe{NonZeroU64::new_unchecked(1000)});
+    pub const MINUTE : Self = Self(unsafe{NonZeroU64::new_unchecked(60_000)});
+    pub const HOUR : Self = Self(unsafe{NonZeroU64::new_unchecked(3_600_000)});
+    pub const DAY : Self = Self(unsafe{NonZeroU64::new_unchecked(86_400_000)});
+    pub const WEEK : Self = Self(unsafe{NonZeroU64::new_unchecked(604_800_000)});
+    pub const MONTH : Self = Self(unsafe{NonZeroU64::new_unchecked(2_592_000_000)});
+    pub const YEAR : Self = Self(unsafe{NonZeroU64::new_unchecked(31_536_000_000)});
 }
 impl Display for Delta {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -217,7 +227,7 @@ impl Display for MaxSeconds {
 
 #[derive(Debug,Copy,Clone,Default)]
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Eta{
+pub struct Eta {
   pub time_left:Delta,
   pub done:usize,
   pub total:usize

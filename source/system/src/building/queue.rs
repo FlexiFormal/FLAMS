@@ -5,7 +5,7 @@ use immt_utils::{change_listener::{ChangeListener, ChangeSender}, prelude::{HMap
 use parking_lot::RwLock;
 use tracing::{instrument, Instrument};
 use crate::{backend::{archives::{source_files::SourceEntry, ArchiveOrGroup}, AnyBackend, Backend}, formats::{BuildTargetId, FormatOrTargets}};
-use super::{queue_manager::{QueueId, Semaphore}, BuildResult, BuildTask, Eta, QueueMessage, TaskRef, TaskState };
+use super::{queue_manager::{QueueId, Semaphore}, BuildResult, BuildTask, BuildTaskId, Eta, QueueMessage, TaskRef, TaskState };
 use immt_utils::time::Timestamp;
 
 #[derive(Debug)]
@@ -25,7 +25,8 @@ impl Default for TaskMap {
 #[derive(Debug)]
 pub enum QueueState {
   Running(RunningQueue),
-  Idle
+  Idle,
+  Finished(FinishedQueue)
 }
 
 #[derive(Debug)]
@@ -66,7 +67,12 @@ impl Queue {
           done: done.iter().map(BuildTask::as_message).collect(),
         },
       QueueState::Idle =>
-        QueueMessage::Idle(self.0.map.read().map.values().map(BuildTask::as_message).collect())
+        QueueMessage::Idle(self.0.map.read().map.values().map(BuildTask::as_message).collect()),
+      QueueState::Finished(FinishedQueue{done,failed}) =>
+        QueueMessage::Finished{
+          failed: failed.iter().map(BuildTask::as_message).collect(),
+          done: done.iter().map(BuildTask::as_message).collect()
+        }
     }
   }
 
@@ -106,41 +112,80 @@ impl Queue {
     }
   }
 
+  #[inline]
   fn run_sync(&self) {
-    let mut timer = Timestamp::now();
     while let Some((task,id)) = self.get_next() {
-      let old = timer;
-      timer = Timestamp::now();
-      self.run_task(task, id,old);
+      self.run_task(task, id);
     }
+    self.finish();
   }
 
   #[cfg(feature="tokio")]
   async fn run_async(self,sem:std::sync::Arc<tokio::sync::Semaphore>) {
     loop {
-      let timer = Timestamp::now();
       let Ok(permit) = tokio::sync::Semaphore::acquire_owned(sem.clone()).await else {
-        return
+        break
       };
       let Some((task,id)) = self.get_next() else {
-        return
+        break
       };
       let selfclone = self.clone();
-      tokio::task::spawn_blocking(move || selfclone.run_task_async(task,id,permit,timer));
+      tokio::task::spawn_blocking(move || selfclone.run_task_async(task,id,permit));
     }
+    self.finish();
+  }
+
+  fn finish(&self) {
+    let state = &mut *self.0.state.write();
+    let QueueState::Running(RunningQueue{done,failed,..}) = state else {unreachable!()};
+    let done = std::mem::take(done);
+    let failed = std::mem::take(failed);
+    self.0.sender.lazy_send(||
+      QueueMessage::Finished { 
+        failed: failed.iter().map(BuildTask::as_message).collect(), 
+        done: done.iter().map(BuildTask::as_message).collect() }
+    );
+    *state = QueueState::Finished(FinishedQueue{done,failed});
   }
 
 
+  pub fn requeue_failed(&self) {
+    let mut state = self.0.state.write();
+    let QueueState::Finished(FinishedQueue { failed,.. }) = &mut *state else {return};
+    let failed = std::mem::take(failed);
+    *state = QueueState::Idle;
+    drop(state);
+    if failed.is_empty() {return }
+    let map = &mut *self.0.map.write();
+    map.dependents.clear();
+    map.counter = unsafe{ NonZeroU32::new_unchecked(1)};
+    map.total = failed.iter().map(|t| t.0.steps.len()).sum();
+    map.map.clear();
+    for t in failed {
+      map.map.insert((t.archive().id().clone(),t.0.rel_path.clone()), 
+        BuildTask(Arc::new(super::BuildTaskI {
+          id: BuildTaskId(map.counter),
+          rel_path: t.0.rel_path.clone(),
+          archive: t.0.archive.clone(),
+          steps: t.0.steps.clone(),
+          source: t.0.source.clone()
+        }))
+      );
+      map.counter = map.counter.saturating_add(1);
+    }
+    self.0.sender.lazy_send(|| QueueMessage::Idle(map.map.values().map(BuildTask::as_message).collect()));
+  }
+
   #[cfg(feature="tokio")]
-  fn run_task_async(&self,task:BuildTask,target:BuildTargetId,permit:tokio::sync::OwnedSemaphorePermit,timer:Timestamp) {
-    self.run_task(task, target, timer);
+  #[inline]
+  fn run_task_async(&self,task:BuildTask,target:BuildTargetId,permit:tokio::sync::OwnedSemaphorePermit) {
+    self.run_task(task, target);
     drop(permit);
   }
 
   #[allow(clippy::cast_possible_truncation)]
   #[allow(clippy::significant_drop_tightening)]
-  fn run_task(&self,task:BuildTask,target:BuildTargetId,timer:Timestamp) {
-    let started = timer.since_now();
+  fn run_task(&self,task:BuildTask,target:BuildTargetId) {
     self.0.sender.lazy_send(|| QueueMessage::TaskStarted{
       id:task.0.id,target
     });
@@ -171,7 +216,7 @@ impl Queue {
             *s.0.state.write() = TaskState::Failed;
           }
         }
-        let eta = state.timer.update(started, num);
+        let eta = state.timer.update(num);
         self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
           id:task.0.id,target,eta
         });
@@ -196,7 +241,7 @@ impl Queue {
             break
           }
         }
-        let eta = state.timer.update(timer.since_now(), 1);
+        let eta = state.timer.update(1);
         self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
           id:task.0.id,target,eta
         });
@@ -204,7 +249,14 @@ impl Queue {
         else {state.done.push(task);}
       }
     }
-    
+  }
+
+  fn maybe_restart(&self) {
+    let state = &mut *self.0.state.write();
+    if let QueueState::Finished(_) = state {
+      *state = QueueState::Idle;
+      *self.0.map.write() = TaskMap::default();
+    }
   }
 
   #[instrument(level = "info",
@@ -213,6 +265,7 @@ impl Queue {
     skip_all
   )]
   pub fn enqueue_group(&self,id:&ArchiveId,target:FormatOrTargets,stale_only:bool) -> usize {
+    self.maybe_restart();
     self.0.backend.with_archive_or_group(id, |g| match g {
       None => 0,
       Some(ArchiveOrGroup::Archive(id)) => {
@@ -262,6 +315,7 @@ impl Queue {
     skip_all
   )]
   pub fn enqueue_archive(&self,id:&ArchiveId,target:FormatOrTargets,stale_only:bool,rel_path:Option<&str>) -> usize {
+    self.maybe_restart();
     self.0.backend.with_archive(id, |archive| {
       let Some(archive) = archive else { return 0 };
       archive.with_sources(|d| {
@@ -318,21 +372,28 @@ impl RunningQueue {
 }
 
 #[derive(Debug)]
+pub struct FinishedQueue {
+  pub(super) done:Vec<BuildTask>,
+  pub(super) failed:Vec<BuildTask>
+}
+
+#[derive(Debug)]
 struct Timer {
-  average:Delta,
+  started:Timestamp,
   steps:usize,
   done:usize
 }
 impl Timer {
   fn new(total:usize) -> Self {
-    Self { average:Delta::default(),steps:total,done:0 }
+    Self { started: Timestamp::now(),steps:total,done:0 }
   }
   #[allow(clippy::cast_precision_loss)]
-  fn update(&mut self,delta:Delta,dones:u8) -> Eta {
-    self.average.update_average(self.done as f64 / (self.done as f64 + f64::from(dones)),delta);
+  fn update(&mut self,dones:u8) -> Eta {
     self.done += dones as usize;
+    let avg = self.started.since_now() * (1.0 / (self.done as f64));
+    let time_left = avg * ((self.steps - self.done) as f64);
     Eta {
-      time_left:self.average * ((self.steps - self.done) as f64),
+      time_left,
       done:self.done,
       total:self.steps
     }

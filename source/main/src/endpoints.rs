@@ -15,6 +15,7 @@
  * | [`/api/buildqueue/enqueue`](crate::router::backend::enqueue) | `archive=<STRING>`,  `target=<`[FormatOrTarget](crate::router::backend::FormatOrTarget)`>`, (optional) `path=STRING`, (optional) `stale_only=<BOOL>` (default:true) | `usize` - enqueue a new build job. Returns number of jobs queued (requires admin login)|
  * | [`/api/buildqueue/get_queues`](crate::router::buildqueue::get_queues) |  | `Vec<(NonZeroU32,String)>` - return the list of all (waiting or running) build queues as (id,name) pairs (requires admin login)|
  * | [`/api/buildqueue/run`](crate::router::buildqueue::run) | `id=<NonZeroU32>` | runs the build queue with the given id (requires admin login)|
+ * | [`/api/buildqueue/requeue`](crate::router::buildqueue::requeue) | `id=<NonZeroU32>` | requeues failed tasks in the queue with the given id (requires admin login)|
  * | [`/api/buildqueue/log`](crate::router::buildqueue::get_log) | `archive=<STRING>`, `rel_path=<STRING>`, `target=<STRING>` | returns the log of the stated build job (requires admin login)|
  * | **Web Sockets** | | |
  * | [`/ws/log`](crate::router::logging::LogSocket) |  |  |

@@ -194,6 +194,7 @@ pub struct QueueEntry {
 pub enum QueueMessage {
     Idle(Vec<QueueEntry>),
     Started {running:Vec<QueueEntry>,queue:Vec<QueueEntry>,blocked:Vec<QueueEntry>,failed:Vec<QueueEntry>,done:Vec<QueueEntry>},
+    Finished {failed:Vec<QueueEntry>,done:Vec<QueueEntry>},
     TaskStarted {id: BuildTaskId,target:BuildTargetId},
     TaskSuccess {id: BuildTaskId,target:BuildTargetId,eta:Eta},
     TaskFailed {id:BuildTaskId,target:BuildTargetId,eta:Eta}

@@ -1,0 +1,111 @@
+.immt-drawer-container {
+  z-index: 1000000;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  right: 0px;
+  text-align: left;
+}
+
+.immt-drawer__backdrop {
+  will-change: opacity;
+  transition-timing-function: cubic-bezier(0.33,0,0.67,1);
+  transition-property: opacity;
+  opacity: 1;
+  transition-duration: 250ms;
+  inset: 0px;
+  position: fixed;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.immt-drawer__backdrop.fade-in-transition-enter-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.immt-drawer__backdrop.fade-in-transition-leave-active {
+  transition: all 0.2s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.immt-drawer__backdrop.fade-in-transition-enter-from,
+.immt-drawer__backdrop.fade-in-transition-leave-to {
+  opacity: 0;
+}
+
+.immt-drawer__backdrop.fade-in-transition-leave-from,
+.immt-drawer__backdrop.fade-in-transition-enter-to {
+  opacity: 1;
+}
+
+.immt-drawer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  position: fixed;
+  max-width: 100vw;
+  height: auto;
+  max-height: 100vh;
+  background-color:#ffffff;
+  color: #242424;
+  box-shadow: 0 0 8px rgba(0,0,0,0.12), 0 32px 64px rgba(0,0,0,0.14);
+  transform: translate3d(0px, 0px, 0px);
+  opacity: 1;
+  will-change: transform, box-shadow, opacity;
+  transition-property: transform, box-shadow, opacity;
+  transition-duration: 250ms;
+  box-sizing: border-box;
+  border-right: 1px solid transparent;
+  overflow: hidden;
+  top: 0;
+  bottom: 0;
+  right: 0;
+}
+
+.immt-drawer-header {
+  width: 100%;
+  max-width: 100%;
+  padding: 24px 24px 8px;
+  gap: 8px;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+}
+
+.immt-drawer-header-title {
+  column-gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  display: flex;
+}
+
+.immt-drawer-header-title-heading {
+  font-family: 'Segoe UI', 'Segoe UI Web (West European)', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  margin: 0px;
+  grid-area: 1 / 1 / 1 / 3;
+}
+
+.immt-drawer-header-title-right {
+  margin-right: -8px;
+  grid-row: 1 / 1;
+  grid-column-start: 3;
+  place-self: start end;
+}
+
+.immt-drawer-body {
+  padding: 0 24px;
+  flex: 1 1 0%;
+  align-self: stretch;
+  position: relative;
+  z-index: 1;
+  overflow: auto;
+}
+
+.immt-drawer-body:last-child {
+  padding-bottom: 25px;
+}

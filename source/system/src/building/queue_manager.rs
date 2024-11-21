@@ -87,6 +87,16 @@ impl QueueManager {
     })
   }
 
+  /// ### Errors 
+  /// if no queue with that id exists
+  #[allow(clippy::result_unit_err)]
+  pub fn requeue_failed(&self,id:QueueId) -> Result<(),()> {
+    self.get_queue(id, |q| q.map_or(Err(()),|q| {
+      q.requeue_failed();
+      Ok(())
+    }))
+  }
+
   pub fn with_global<R>(&self,f:impl FnOnce(&Queue) -> R) -> R {
     let inner = self.inner.read();
     f(inner.get(&QueueId::global()).unwrap_or_else(|| unreachable!()))

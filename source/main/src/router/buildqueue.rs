@@ -41,6 +41,24 @@ pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
   };
   Ok(())
 }
+#[server(
+  prefix="/api/buildqueue",
+  endpoint="requeue",
+)]
+#[allow(clippy::unused_async)]
+pub async fn requeue(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
+  use crate::users::LoginState;
+  use immt_system::building::queue_manager::QueueManager;
+  
+  let login = LoginState::get();
+  if login != LoginState::Admin && login != LoginState::NoAccounts {
+    return Err(format!("Not logged in: {login:?}").into());
+  }
+  let Ok(Ok(())) = tokio::task::spawn_blocking(move || QueueManager::get().requeue_failed(id.into())).await else {
+      return Err(format!("Queue {id} not found").into())
+  };
+  Ok(())
+}
 
 #[server(
   prefix="/api/buildqueue",
@@ -94,7 +112,8 @@ pub fn QueuesTop() -> impl IntoView {
           },
           QueueData::Running(r) => {
               running(r).into_any()
-          }
+          },
+          QueueData::Finished(failed,done) => finished(curr,failed,done).into_any(),
           QueueData::Empty => view!(<div>"Other"</div>).into_any()
       }
     }}</Layout>
@@ -139,6 +158,33 @@ fn running(queue:RunningQueue) -> impl IntoView {
         <ul style="margin-left:30px"><For each=move || failed.get() key=|e| e.id children=|e| e.as_view()/></ul>
         <h3 id="finished">"Finished ("{move || done.with(Vec::len)}")"</h3>
         <ul style="margin-left:30px"><For each=move || done.get() key=|e| e.id children=|e| e.as_view()/></ul>
+    </Layout>
+  }
+}
+
+fn finished(id:NonZeroU32,failed:Vec<Entry>,done:Vec<Entry>) -> impl IntoView {
+  use immt_web_utils::components::{AnchorLink,Anchor,Header};
+  use thaw::{Button,Layout};
+  let act = Action::<(),Result<(),ServerFnError<String>>>::new(move |()| requeue(id));
+  let num_failed = failed.len();
+  let num_done = done.len(); 
+  view!{
+    <div style="width:100%"><div style="position:fixed;right:120px;z-index:10">
+        <Button on_click=move |_| {act.dispatch(());}>"Requeue Failed"</Button>
+    </div></div>
+    <div style="position:fixed;right:20px;z-index:5"><Anchor>
+        <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
+        <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
+    </Anchor></div>
+    <Layout content_style="text-align:left;">
+        <h3 id="failed">"Failed ("{num_failed}")"</h3>
+        <ul style="margin-left:30px">{
+          failed.iter().map(Entry::as_view).collect_view()
+        }</ul>
+        <h3 id="finished">"Finished ("{num_done}")"</h3>
+        <ul style="margin-left:30px">{
+          done.iter().map(Entry::as_view).collect_view()
+        }</ul>
     </Layout>
   }
 }
@@ -262,6 +308,8 @@ impl QueueSocket {
           done:RwSignal::new(done),
           eta:WrappedEta(RwSignal::new(Eta::default()))
         })),
+      QueueMessage::Finished { failed, done } =>
+        queue.set(QueueData::Finished(failed, done)),
       QueueMessage::TaskStarted { id, target } =>
         queue.with_untracked(|queue| 
           if let QueueData::Running(RunningQueue {queue,running,..}) = queue {
@@ -330,7 +378,8 @@ impl AllQueues {
 enum QueueData {
     Idle(RwSignal<Vec<Entry>>),
     Running(RunningQueue),
-    Empty
+    Empty,
+    Finished(Vec<Entry>,Vec<Entry>)
 }
 
 #[derive(Clone,Copy)]//,serde::Serialize,serde::Deserialize)]
@@ -505,6 +554,7 @@ impl From<immt_system::building::TaskState> for TaskState {
 pub enum QueueMessage {
     Idle(Vec<Entry>),
     Started {running:Vec<Entry>,queue:Vec<Entry>,blocked:Vec<Entry>,failed:Vec<Entry>,done:Vec<Entry>},
+    Finished { failed:Vec<Entry>, done:Vec<Entry> },
     TaskStarted {id:u32,target:String},
     TaskSuccess {id:u32,target:String,eta:Eta},
     TaskFailed {id:u32,target:String,eta:Eta}
@@ -522,6 +572,11 @@ impl From<immt_system::building::QueueMessage> for QueueMessage {
         failed:failed.into_iter().map(Into::into).collect(),
         done:done.into_iter().map(Into::into).collect()
       },
+      QueueMessage::Finished { failed, done } =>
+        Self::Finished {
+          failed:failed.into_iter().map(Into::into).collect(),
+          done:done.into_iter().map(Into::into).collect()
+        },
       QueueMessage::TaskStarted {id,target} => Self::TaskStarted {id:id.into(),target:target.to_string()},
       QueueMessage::TaskSuccess {id,target,eta} => Self::TaskSuccess {id:id.into(),target:target.to_string(),eta},
       QueueMessage::TaskFailed {id,target,eta} => Self::TaskFailed {id:id.into(),target:target.to_string(),eta}

@@ -1,16 +1,114 @@
 use leptos::prelude::*;
 use crate::inject_css;
 
-use super::{Header,Trigger};
+use super::Header;
+
+#[derive(Copy,Clone,Default)]
+pub enum DrawerSize {
+  RelativeSmall,
+  AbsoluteSmall,
+  RelativeMedium,
+  AbsoluteMedium,
+  RelativeWide,
+  #[default]
+  AbsoluteWide
+}
+impl DrawerSize {
+  fn css(self) -> &'static str {
+    inject_css("immt-drawer",include_str!("./drawer.css"));
+    match self {
+      Self::RelativeSmall => "width:20%;",
+      Self::AbsoluteSmall => "width:20vw;",
+      Self::RelativeMedium => "width:50%",
+      Self::AbsoluteMedium => "width:50vw;",
+      Self::RelativeWide => "width:80%;",
+      Self::AbsoluteWide => "width:80vw;",
+    }
+  }
+}
 
 #[component]
 pub fn Drawer(
     lazy:bool,
-    trigger:Trigger,
+    trigger:super::Trigger,
+    #[prop(optional)] header:Option<Header>,
+    #[prop(optional)] size:DrawerSize,
+    mut children:ChildrenFnMut
+) -> impl IntoView {
+  use thaw_components::{Teleport,FocusTrap,CSSTransition};
+  use thaw::{Button,ButtonAppearance,Scrollbar};
+  size.css();
+  let open_drawer = RwSignal::new(false);
+  let drawer_ref = NodeRef::<leptos::html::Div>::new();
+  let mask_ref = NodeRef::<leptos::html::Div>::new();
+  let is_lock = RwSignal::new(false);
+  Effect::new(move |_| {
+    if open_drawer.get() { is_lock.set(true); }
+  });
+  thaw_utils::use_lock_html_scroll(is_lock.into());
+
+  view!{
+    <span on:click=move |_| open_drawer.set(true)>{(trigger.children)()}</span>
+    <Teleport immediate=open_drawer>
+      <FocusTrap disabled=false active=open_drawer on_esc=move |_| open_drawer.set(false)>
+        <div class="immt-drawer-container">
+          <CSSTransition node_ref=mask_ref appear=open_drawer.get_untracked() show=open_drawer name="fade-in-transition" let:display>
+            <div 
+              class="immt-drawer__backdrop" 
+              style=move || display.get().unwrap_or_default()
+              on:click=move |_| open_drawer.set(false)
+              node_ref=mask_ref
+            />
+          </CSSTransition>
+          <CSSTransition
+            node_ref=drawer_ref
+            appear=open_drawer.get_untracked()
+            show=open_drawer
+            name="slide-in-from-right-transition"
+            on_after_leave=move || is_lock.set(false)
+            let:display
+          >
+            <div
+              class="immt-drawer"
+              style = move || {
+                display.get().map_or_else(|| size.css(),|d| d)
+              }
+              node_ref=drawer_ref
+              role="dialog"
+              aria-modal="true"
+            >
+              <header class="immt-drawer-header">
+                <div class="immt-drawer-header-title">
+                  <h2 class="immt-drawer-header-title-heading">{header.map(|h| (h.children)())}</h2>
+                  <div class="immt-drawer-header-title-right">
+                    <Button
+                      appearance=ButtonAppearance::Subtle
+                      on_click=move |_| open_drawer.set(false)>
+                      "x"
+                    </Button>
+                  </div>
+                </div>
+              </header>
+              <Scrollbar><div class="immt-drawer-body">{
+                if lazy {(move || if open_drawer.get() { Some(children())} else {None}).into_any()}
+                else {children()}
+              }</div></Scrollbar>
+            </div>
+          </CSSTransition>
+        </div>
+      </FocusTrap>
+    </Teleport>
+  }
+}
+
+#[component]
+pub fn DrawerThaw(
+    lazy:bool,
+    trigger:super::Trigger,
     #[prop(optional)] header:Option<Header>,
     mut children:ChildrenFnMut
 ) -> impl IntoView {
-  use thaw::{Button,ButtonAppearance,DrawerSize,DrawerBody,OverlayDrawer,DrawerHeaderTitle,DrawerHeader,DrawerPosition,DrawerHeaderTitleAction};
+  use thaw::{Button,ButtonAppearance,DrawerBody,OverlayDrawer,DrawerHeaderTitle,DrawerHeader,DrawerPosition,DrawerHeaderTitleAction};
   inject_css("immt-drawer", ".immt-wide-drawer { z-index:5; --thaw-drawer--size:80vw !important; }");
   let open = RwSignal::new(false);
   view!{

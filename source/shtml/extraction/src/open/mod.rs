@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use either::Either;
-use immt_ontology::{content::{declarations::{morphisms::UncheckedMorphism, structures::{UncheckedExtension, UncheckedMathStructure}, symbols::{ArgSpec, AssocType, Symbol}, UncheckedDeclaration}, modules::UncheckedModule, terms::{Term, Var}}, languages::Language, narration::{exercises::UncheckedExercise, notations::Notation, paragraphs::{ParagraphKind, UncheckedLogicalParagraph}, sections::{SectionLevel, UncheckedSection}, variables::Variable, UncheckedDocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait, URIRefTrait}};
+use immt_ontology::{content::{declarations::{morphisms::UncheckedMorphism, structures::{UncheckedExtension, UncheckedMathStructure}, symbols::{ArgSpec, AssocType, Symbol}, UncheckedDeclaration}, modules::UncheckedModule, terms::{Term, Var}}, languages::Language, narration::{exercises::UncheckedExercise, notations::Notation, paragraphs::{ParagraphKind, UncheckedLogicalParagraph}, sections::{SectionLevel, UncheckedSection}, variables::Variable, UncheckedDocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
 use smallvec::SmallVec;
 use terms::{OpenArg, PreVar, VarOrSym};
 
