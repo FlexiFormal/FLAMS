@@ -75,13 +75,13 @@ impl<'a> From<&'a PathURI> for PathURIRef<'a> {
         }
     }
 }
-impl URIOrRefTrait for PathURIRef<'_> {
+impl<'a> URIOrRefTrait for PathURIRef<'a> {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &'a BaseURI {
         self.archive.base
     }
     #[inline]
-    fn as_uri(&self) -> URIRef {
+    fn as_uri(&self) -> URIRef<'a> {
         URIRef::Path(*self)
     }
 }

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use either::Either;
-use immt_ontology::{content::{declarations::{morphisms::UncheckedMorphism, structures::{UncheckedExtension, UncheckedMathStructure}, symbols::{ArgSpec, AssocType, Symbol}, UncheckedDeclaration}, modules::UncheckedModule, terms::{Term, Var}}, languages::Language, narration::{exercises::UncheckedExercise, notations::Notation, paragraphs::{ParagraphKind, UncheckedLogicalParagraph}, sections::{SectionLevel, UncheckedSection}, variables::Variable, UncheckedDocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
+use immt_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::{ArgSpec, AssocType, Symbol}, OpenDeclaration}, modules::{NestedModule, OpenModule}, terms::{Term, Var}}, languages::Language, narration::{exercises::Exercise, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, sections::{Section, SectionLevel}, variables::Variable, DocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
 use smallvec::SmallVec;
 use terms::{OpenArg, PreVar, VarOrSym};
 
@@ -113,7 +113,7 @@ impl OpenSHTMLElement {
             }
             Self::SetSectionLevel(lvl) => 
                 extractor.add_document_element(
-                    UncheckedDocumentElement::SetSectionLevel(lvl)
+                    DocumentElement::SetSectionLevel(lvl)
                 ),
             Self::ImportModule(uri) => Self::close_importmodule(extractor, uri),
             Self::UseModule(uri) => Self::close_usemodule(extractor, uri),
@@ -189,7 +189,7 @@ impl OpenSHTMLElement {
                 let term = term.close(extractor);
                 let uri = extractor.get_narrative_uri() & &*extractor.new_id(Cow::Borrowed("term"));
                 extractor.set_in_term(false);
-                extractor.add_document_element(UncheckedDocumentElement::TopTerm { uri, term });
+                extractor.add_document_element(DocumentElement::TopTerm { uri, term });
             }
             Self::OpenTerm{term,is_top:false } => {
                 let term = term.close(extractor);
@@ -245,7 +245,7 @@ impl OpenSHTMLElement {
                         triple!(<(top.to_iri())> dc:HAS_PART <(uri.to_iri())>)
                     ]);
                 }
-                extractor.add_document_element(UncheckedDocumentElement::DocumentReference { 
+                extractor.add_document_element(DocumentElement::DocumentReference { 
                     id: top & &*id,
                     range: node.range(), 
                     target: uri
@@ -275,8 +275,8 @@ impl OpenSHTMLElement {
                 ]);
             }
         }
-        extractor.add_document_element(UncheckedDocumentElement::ImportModule(uri.clone()));
-        if extractor.add_content_element(UncheckedDeclaration::Import(uri),).is_err() {
+        extractor.add_document_element(DocumentElement::ImportModule(uri.clone()));
+        if extractor.add_content_element(OpenDeclaration::Import(uri),).is_err() {
             extractor.add_error(SHTMLError::NotInContent);
         }
     }
@@ -289,7 +289,7 @@ impl OpenSHTMLElement {
             ]);
             
         }
-        extractor.add_document_element(UncheckedDocumentElement::UseModule(uri));
+        extractor.add_document_element(DocumentElement::UseModule(uri));
     }
 
     fn close_module<E:SHTMLExtractor,N:SHTMLNode>(extractor:&mut E,node:&N,uri:ModuleURI,meta:Option<ModuleURI>,signature:Option<Language>) {
@@ -311,14 +311,14 @@ impl OpenSHTMLElement {
             ]);
         }
 
-        extractor.add_document_element(UncheckedDocumentElement::Module { 
+        extractor.add_document_element(DocumentElement::Module { 
             range: node.range(), 
             module: uri.clone(), 
             children: narrative
         });
 
         if uri.name().is_simple() {
-            extractor.add_module(UncheckedModule {
+            extractor.add_module(OpenModule {
                 uri,meta,signature,elements:content
             });
         } else { // NestedModule
@@ -331,10 +331,10 @@ impl OpenSHTMLElement {
                     ]);
                 }
             }
-            if extractor.add_content_element(UncheckedDeclaration::NestedModule { 
+            if extractor.add_content_element(OpenDeclaration::NestedModule(NestedModule { 
                 uri:sym,
                 elements:std::mem::take(&mut content)
-            }).is_err() {
+            })).is_err() {
                 extractor.add_error(SHTMLError::NotInContent);
 
             }
@@ -365,7 +365,7 @@ impl OpenSHTMLElement {
 
         if uri.name().last_name().as_ref().starts_with("EXTSTRUCT") {
             let Some(target) = content.iter().find_map(|d| match d {
-                UncheckedDeclaration::Import(uri) => Some(uri),
+                OpenDeclaration::Import(uri) => Some(uri),
                 _ => None
             }) else {
                 extractor.add_error(SHTMLError::NotInContent);
@@ -382,19 +382,19 @@ impl OpenSHTMLElement {
                     triple!(<(uri.to_iri())> ulo:EXTENDS <(target.to_iri())>)
                 ]);
             }
-            extractor.add_document_element(UncheckedDocumentElement::MathStructure { 
+            extractor.add_document_element(DocumentElement::MathStructure { 
                 range: node.range(), structure: uri.clone(), children: narrative
             });
-            if extractor.add_content_element(UncheckedDeclaration::Extension(UncheckedExtension {
+            if extractor.add_content_element(OpenDeclaration::Extension(Extension {
                 uri,elements:content,target
             })).is_err() {
                 extractor.add_error(SHTMLError::NotInContent);
             }
         } else {
-            extractor.add_document_element(UncheckedDocumentElement::MathStructure { 
+            extractor.add_document_element(DocumentElement::MathStructure { 
                 range: node.range(), structure: uri.clone(), children: narrative
             });
-            if extractor.add_content_element(UncheckedDeclaration::MathStructure(UncheckedMathStructure {
+            if extractor.add_content_element(OpenDeclaration::MathStructure(MathStructure {
                 uri,elements:content,macroname
             })).is_err() {
                 extractor.add_error(SHTMLError::NotInContent);
@@ -424,10 +424,10 @@ impl OpenSHTMLElement {
             }
         }
         
-        extractor.add_document_element(UncheckedDocumentElement::Morphism { 
+        extractor.add_document_element(DocumentElement::Morphism { 
             range: node.range(), morphism: uri.clone().expect("TODO") /* TODO */, children: narrative
         });
-        if extractor.add_content_element(UncheckedDeclaration::Morphism(UncheckedMorphism {
+        if extractor.add_content_element(OpenDeclaration::Morphism(Morphism {
             uri,domain,total,elements:content
         })).is_err() {
             extractor.add_error(SHTMLError::NotInContent);
@@ -440,7 +440,7 @@ impl OpenSHTMLElement {
             return
         };
         extractor.add_document_element(
-            UncheckedDocumentElement::Section(UncheckedSection {
+            DocumentElement::Section(Section {
                 range:node.range(),
                 level:lvl,
                 title,
@@ -481,8 +481,8 @@ impl OpenSHTMLElement {
             ]);
         }
 
-        extractor.add_document_element(UncheckedDocumentElement::Paragraph(
-            UncheckedLogicalParagraph {
+        extractor.add_document_element(DocumentElement::Paragraph(
+            LogicalParagraph {
                 range: node.range(),kind,inline,styles,
                 fors,uri,children,title
             }
@@ -526,8 +526,8 @@ impl OpenSHTMLElement {
             ]);
         }
 
-        extractor.add_document_element(UncheckedDocumentElement::Exercise(
-            UncheckedExercise {
+        extractor.add_document_element(DocumentElement::Exercise(
+            Exercise {
                 range: node.range(),uri,styles,autogradable,points,sub_exercise,
                 solutions,hints,notes,gnotes,title,children,preconditions,objectives
             }
@@ -550,9 +550,9 @@ impl OpenSHTMLElement {
             }
         }
         extractor.add_document_element(
-            UncheckedDocumentElement::SymbolDeclaration(uri.clone())
+            DocumentElement::SymbolDeclaration(uri.clone())
         );
-        if extractor.add_content_element(UncheckedDeclaration::Symbol(Symbol {
+        if extractor.add_content_element(OpenDeclaration::Symbol(Symbol {
             uri,arity,macroname,role,tp,df,assoctype,reordering
         })).is_err() {
             extractor.add_error(SHTMLError::NotInContent);
@@ -576,7 +576,7 @@ impl OpenSHTMLElement {
         }
         
         extractor.add_document_element(
-            UncheckedDocumentElement::Variable(Variable {
+            DocumentElement::Variable(Variable {
                 uri,arity,macroname,bind,role,tp,df,assoctype,reordering,is_seq
             })
         );
@@ -613,19 +613,19 @@ impl OpenSHTMLElement {
                     ]);
                 }
                 extractor.add_document_element(
-                    UncheckedDocumentElement::Notation { symbol, id:uri, notation }
+                    DocumentElement::Notation { symbol, id:uri, notation }
                 );
             }
             VarOrSym::S(_) => unreachable!(),
             VarOrSym::V(PreVar::Resolved(variable)) => 
                 extractor.add_document_element(
-                    UncheckedDocumentElement::VariableNotation { variable, id:uri, notation }
+                    DocumentElement::VariableNotation { variable, id:uri, notation }
                 ),
             VarOrSym::V(PreVar::Unresolved(name)) => match extractor.resolve_variable_name(name) {
                 Var::Name(name) => extractor.add_error(SHTMLError::UnresolvedVariable(name)),
                 Var::Ref{declaration,..} => 
                 extractor.add_document_element(
-                    UncheckedDocumentElement::VariableNotation { variable:declaration, id:uri, notation }
+                    DocumentElement::VariableNotation { variable:declaration, id:uri, notation }
                 ),
             }
         }

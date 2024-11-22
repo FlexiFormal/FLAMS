@@ -3,36 +3,25 @@ use std::fmt::Display;
 use immt_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term,
-    uris::{DocumentElementURI, SymbolURI},
-    DocumentRange,
+    content::terms::Term, uris::{DocumentElementURI, SymbolURI}, CheckingState, DocumentRange
 };
 
-use super::{DocumentElement, UncheckedDocumentElement};
+use super::DocumentElement;
 
-#[derive(Debug,Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct UncheckedLogicalParagraph {
+#[derive(Debug)]
+pub struct LogicalParagraph<State:CheckingState> {
     pub kind: ParagraphKind,
     pub uri: DocumentElementURI,
     pub inline: bool,
     pub title: Option<DocumentRange>,
     pub range: DocumentRange,
     pub styles: Box<[Box<str>]>,
-    pub children: Vec<UncheckedDocumentElement>,
+    pub children: State::Seq<DocumentElement<State>>,
     pub fors: VecMap<SymbolURI, Option<Term>>,
 }
 
-#[derive(Debug)]
-pub struct LogicalParagraph {
-    pub kind: ParagraphKind,
-    pub uri: DocumentElementURI,
-    pub inline: bool,
-    pub title: Option<DocumentRange>,
-    pub range: DocumentRange,
-    pub styles: Box<[Box<str>]>,
-    pub children: Box<[DocumentElement]>,
-    pub fors: VecMap<SymbolURI, Option<Term>>,
+crate::serde_impl!{
+    struct LogicalParagraph[kind,uri,inline,title,range,styles,children,fors]
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

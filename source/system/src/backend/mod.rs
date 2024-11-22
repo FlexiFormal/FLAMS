@@ -9,14 +9,14 @@ use docfile::PreDocFile;
 use immt_ontology::{
     content::{
         checking::ModuleChecker,
-        declarations::{Declaration, DeclarationTrait, UncheckedDeclaration},
+        declarations::{Declaration, DeclarationTrait, OpenDeclaration},
         modules::Module,
         ContentReference, ModuleLike
     }, languages::Language, narration::{
-        checking::DocumentChecker, documents::Document, DocumentElement, UncheckedDocumentElement,
+        checking::DocumentChecker, documents::Document, DocumentElement,
     }, uris::{
         ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIWithLanguage
-    }, DocumentRange, LocalBackend
+    }, Checked, DocumentRange, LocalBackend, Unchecked
 };
 use immt_utils::{prelude::HMap, triomphe, CSS};
 use lazy_static::lazy_static;
@@ -608,14 +608,14 @@ impl<B:Backend> LocalBackend for AsChecker<'_,B> {
 
 impl<B:Backend> DocumentChecker for AsChecker<'_,B> {
     #[inline]
-    fn open(&mut self, _elem: &mut UncheckedDocumentElement) {}
+    fn open(&mut self, _elem: &mut DocumentElement<Unchecked>) {}
     #[inline]
-    fn close(&mut self, _elem: &mut DocumentElement) {}
+    fn close(&mut self, _elem: &mut DocumentElement<Checked>) {}
 }
 
 impl<B:Backend> ModuleChecker for AsChecker<'_,B> {
     #[inline]
-    fn open(&mut self, _elem: &mut UncheckedDeclaration) {}
+    fn open(&mut self, _elem: &mut OpenDeclaration<Unchecked>) {}
     #[inline]
     fn close(&mut self, _elem: &mut Declaration) {}
 }
@@ -689,14 +689,14 @@ impl LocalBackend for GlobalFlattener<'_> {
 
 impl DocumentChecker for GlobalFlattener<'_> {
     #[inline]
-    fn open(&mut self, _elem: &mut UncheckedDocumentElement) {}
+    fn open(&mut self, _elem: &mut DocumentElement<Unchecked>) {}
     #[inline]
-    fn close(&mut self, _elem: &mut DocumentElement) {}
+    fn close(&mut self, _elem: &mut DocumentElement<Checked>) {}
 }
 
 impl ModuleChecker for GlobalFlattener<'_> {
     #[inline]
-    fn open(&mut self, _elem: &mut UncheckedDeclaration) {}
+    fn open(&mut self, _elem: &mut OpenDeclaration<Unchecked>) {}
     #[inline]
     fn close(&mut self, _elem: &mut Declaration) {}
 }

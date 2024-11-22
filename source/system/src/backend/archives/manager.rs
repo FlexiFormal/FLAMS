@@ -1,12 +1,12 @@
 use std::{ops::Deref, path::Path};
 
 use immt_ontology::{
-    content::modules::UncheckedModule, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURITrait, NameStep, PathURIRef, PathURITrait}
+    content::modules::OpenModule, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURITrait, NameStep, PathURIRef, PathURITrait}, Unchecked
 };
 use immt_utils::change_listener::ChangeSender;
 use oxigraph::model::Quad;
 
-use crate::backend::{docfile::PreDocFile, BackendChange};
+use crate::backend::BackendChange;
 
 use super::{Archive, ArchiveTree};
 
@@ -73,7 +73,7 @@ impl ArchiveManager {
         path_uri: PathURIRef,
         language: Language,
         name: &NameStep,
-    ) -> Option<UncheckedModule> {
+    ) -> Option<OpenModule<Unchecked>> {
         let archive = path_uri.archive_id();
         let path = path_uri.path();
         self.with_archive(archive, |a| {

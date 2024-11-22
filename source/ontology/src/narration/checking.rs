@@ -1,25 +1,19 @@
 use immt_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term,
-    narration::{
-        exercises::UncheckedExercise, paragraphs::UncheckedLogicalParagraph,
-        sections::UncheckedSection,
-    },
-    uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI},
-    DocumentRange, LocalBackend,
+    content::terms::Term, uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI}, Checked, DocumentRange, LocalBackend, MaybeResolved, Unchecked
 };
 
 use super::{
     exercises::{CognitiveDimension, Exercise},
     paragraphs::{LogicalParagraph, ParagraphKind},
     sections::{Section, SectionLevel},
-    DocumentElement, LazyDocRef, UncheckedDocumentElement,
+    DocumentElement, LazyDocRef
 };
 
 pub trait DocumentChecker: LocalBackend {
-    fn open(&mut self, elem: &mut UncheckedDocumentElement);
-    fn close(&mut self, elem: &mut DocumentElement);
+    fn open(&mut self, elem: &mut DocumentElement<Unchecked>);
+    fn close(&mut self, elem: &mut DocumentElement<Checked>);
 }
 
 enum Elem {
@@ -51,7 +45,7 @@ enum Elem {
         fors: VecMap<SymbolURI, Option<Term>>,
     },
     Exercise {
-        sub_problem: bool,
+        sub_exercise: bool,
         uri: DocumentElementURI,
         autogradable: bool,
         range: DocumentRange,
@@ -67,7 +61,7 @@ enum Elem {
     },
 }
 impl Elem {
-    fn close(self, v: Vec<DocumentElement>, checker: &mut impl DocumentChecker) -> DocumentElement {
+    fn close(self, v: Vec<DocumentElement<Checked>>, checker: &mut impl DocumentChecker) -> DocumentElement<Checked> {
         match self {
             Self::Section {
                 range,
@@ -83,21 +77,17 @@ impl Elem {
             }),
             Self::Module { range, module } => DocumentElement::Module {
                 range,
-                module: checker.get_module(&module).map_or_else(|| Err(module), Ok),
+                module: MaybeResolved::resolve(module,|m| checker.get_module(m)),
                 children: v.into_boxed_slice(),
             },
             Self::Morphism { range, morphism } => DocumentElement::Morphism {
                 range,
-                morphism: checker
-                    .get_declaration(&morphism)
-                    .map_or_else(|| Err(morphism), Ok),
+                morphism: MaybeResolved::resolve(morphism,|m| checker.get_declaration(m)),
                 children: v.into_boxed_slice(),
             },
             Self::MathStructure { range, structure } => DocumentElement::MathStructure {
                 range,
-                structure: checker
-                    .get_declaration(&structure)
-                    .map_or_else(|| Err(structure), Ok),
+                structure:MaybeResolved::resolve(structure,|m| checker.get_declaration(m)),
                 children: v.into_boxed_slice(),
             },
             Self::Paragraph {
@@ -119,7 +109,7 @@ impl Elem {
                 children: v.into_boxed_slice(),
             }),
             Self::Exercise {
-                sub_problem,
+                sub_exercise: sub_problem,
                 range,
                 uri,
                 autogradable,
@@ -133,7 +123,7 @@ impl Elem {
                 styles,
                 objectives,
             } => DocumentElement::Exercise(Exercise {
-                sub_problem,
+                sub_exercise: sub_problem,
                 uri,
                 autogradable,
                 points,
@@ -152,24 +142,25 @@ impl Elem {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub(super) struct DocumentCheckIter<'a, Check: DocumentChecker> {
     stack: Vec<(
         Elem,
-        std::vec::IntoIter<UncheckedDocumentElement>,
-        Vec<DocumentElement>,
+        std::vec::IntoIter<DocumentElement<Unchecked>>,
+        Vec<DocumentElement<Checked>>,
     )>,
-    curr_in: std::vec::IntoIter<UncheckedDocumentElement>,
-    curr_out: Vec<DocumentElement>,
+    curr_in: std::vec::IntoIter<DocumentElement<Unchecked>>,
+    curr_out: Vec<DocumentElement<Checked>>,
     checker: &'a mut Check,
     uri: &'a DocumentURI,
 }
 
 impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
     pub(super) fn go(
-        elems: Vec<UncheckedDocumentElement>,
+        elems: Vec<DocumentElement<Unchecked>>,
         checker: &mut Check,
         uri: &DocumentURI,
-    ) -> Vec<DocumentElement> {
+    ) -> Vec<DocumentElement<Checked>> {
         let mut slf = DocumentCheckIter {
             stack: Vec::new(),
             curr_in: elems.into_iter(),
@@ -194,40 +185,27 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn do_elem(&mut self, mut e: UncheckedDocumentElement) {
-        use UncheckedDocumentElement::*;
+    fn do_elem(&mut self, mut e: DocumentElement<Unchecked>) {
         self.checker.open(&mut e);
         let mut ret = match e {
-            SetSectionLevel(lvl) => DocumentElement::SetSectionLevel(lvl),
-            DocumentReference { id, range, target } => {
-                let target = self
-                    .checker
-                    .get_document(&target)
-                    .map_or_else(|| Err(target), Ok);
+            DocumentElement::SetSectionLevel(lvl) => DocumentElement::SetSectionLevel(lvl),
+            DocumentElement::DocumentReference { id, range, target } => {
+                let target = MaybeResolved::resolve(target,|m| self.checker.get_document(m));
                 DocumentElement::DocumentReference { id, range, target }
             }
-            SymbolDeclaration(uri) => {
-                let symbol = self
-                    .checker
-                    .get_declaration(&uri)
-                    .map_or_else(|| Err(uri), Ok);
+            DocumentElement::SymbolDeclaration(uri) => {
+                let symbol = MaybeResolved::resolve(uri,|m| self.checker.get_declaration(m));
                 DocumentElement::SymbolDeclaration(symbol)
             }
-            UseModule(module) => {
-                let module = self
-                    .checker
-                    .get_module(&module)
-                    .map_or_else(|| Err(module), Ok);
+            DocumentElement::UseModule(module) => {
+                let module = MaybeResolved::resolve(module,|m| self.checker.get_module(m));
                 DocumentElement::UseModule(module)
             }
-            ImportModule(module) => {
-                let module = self
-                    .checker
-                    .get_module(&module)
-                    .map_or_else(|| Err(module), Ok);
+            DocumentElement::ImportModule(module) => {
+                let module = MaybeResolved::resolve(module, |m| self.checker.get_module(m));
                 DocumentElement::ImportModule(module)
             }
-            Notation {
+            DocumentElement::Notation {
                 symbol,
                 id,
                 notation,
@@ -236,7 +214,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 id,
                 notation,
             },
-            VariableNotation {
+            DocumentElement::VariableNotation {
                 variable,
                 id,
                 notation,
@@ -245,9 +223,9 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 id,
                 notation,
             },
-            Variable(v) => DocumentElement::Variable(v),
-            Definiendum { range, uri } => DocumentElement::Definiendum { range, uri },
-            SymbolReference {
+            DocumentElement::Variable(v) => DocumentElement::Variable(v),
+            DocumentElement::Definiendum { range, uri } => DocumentElement::Definiendum { range, uri },
+            DocumentElement::SymbolReference {
                 range,
                 uri,
                 notation,
@@ -256,7 +234,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 uri,
                 notation,
             },
-            VariableReference {
+            DocumentElement::VariableReference {
                 range,
                 uri,
                 notation,
@@ -265,8 +243,8 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 uri,
                 notation,
             },
-            TopTerm { uri, term } => DocumentElement::TopTerm { uri, term },
-            Section(UncheckedSection {
+            DocumentElement::TopTerm { uri, term } => DocumentElement::TopTerm { uri, term },
+            DocumentElement::Section(Section {
                 range,
                 uri,
                 level,
@@ -287,7 +265,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 ));
                 return;
             }
-            Module {
+            DocumentElement::Module {
                 range,
                 module,
                 children,
@@ -298,7 +276,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                     .push((Elem::Module { range, module }, old_in, old_out));
                 return;
             }
-            Morphism {
+            DocumentElement::Morphism {
                 range,
                 morphism,
                 children,
@@ -309,7 +287,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                     .push((Elem::Morphism { range, morphism }, old_in, old_out));
                 return;
             }
-            MathStructure {
+            DocumentElement::MathStructure {
                 range,
                 structure,
                 children,
@@ -320,7 +298,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                     .push((Elem::MathStructure { range, structure }, old_in, old_out));
                 return;
             }
-            Paragraph(UncheckedLogicalParagraph {
+            DocumentElement::Paragraph(LogicalParagraph {
                 kind,
                 uri,
                 inline,
@@ -347,8 +325,8 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 ));
                 return;
             }
-            Exercise(UncheckedExercise {
-                sub_exercise: sub_problem,
+            DocumentElement::Exercise(Exercise {
+                sub_exercise,
                 uri,
                 autogradable,
                 points,
@@ -367,7 +345,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 let old_out = std::mem::take(&mut self.curr_out);
                 self.stack.push((
                     Elem::Exercise {
-                        sub_problem,
+                        sub_exercise,
                         uri,
                         range,
                         autogradable,

@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use crate::{
     content::terms::{ArgMode, Term},
-    uris::SymbolURI,
+    uris::SymbolURI, Resolvable,
 };
 
 use super::{Declaration, DeclarationTrait};
@@ -19,6 +19,12 @@ pub struct Symbol {
     pub df: Option<Term>,
     pub assoctype: Option<AssocType>,
     pub reordering: Option<Box<str>>,
+}
+impl Resolvable for Symbol {
+    type From = SymbolURI;
+    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+        std::borrow::Cow::Borrowed(&self.uri)
+    }
 }
 impl super::private::Sealed for Symbol {}
 impl DeclarationTrait for Symbol {

@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use immt_ontology::uris::NarrativeURI;
+use immt_ontology::{uris::NarrativeURI, Unchecked};
 use immt_utils::prelude::HMap;
 use smallvec::SmallVec;
 use shtml_extraction::prelude::{Attributes, SHTMLExtractor};
@@ -66,13 +66,13 @@ impl SHTMLExtractor for DOMExtractor {
     fn add_arg(&mut self,pos:(u8,Option<u8>),tm:immt_ontology::content::terms::Term,mode:immt_ontology::content::terms::ArgMode) -> Result<(),()> {
         todo!()
     }
-    fn add_content_element(&mut self,elem:immt_ontology::content::declarations::UncheckedDeclaration) -> Result<(),immt_ontology::content::declarations::UncheckedDeclaration> {
+    fn add_content_element(&mut self,elem:immt_ontology::content::declarations::OpenDeclaration<Unchecked>) -> Result<(),immt_ontology::content::declarations::OpenDeclaration<Unchecked>> {
         todo!()
     }
-    fn add_document_element(&mut self,elem:immt_ontology::narration::UncheckedDocumentElement) {
+    fn add_document_element(&mut self,elem:immt_ontology::narration::DocumentElement<Unchecked>) {
         todo!()
     }
-    fn add_module(&mut self,module:immt_ontology::content::modules::UncheckedModule) {
+    fn add_module(&mut self,module:immt_ontology::content::modules::OpenModule<Unchecked>) {
         todo!()
     }
     fn add_notation(&mut self,spec:shtml_extraction::prelude::NotationSpec) -> Result<(),shtml_extraction::prelude::NotationSpec> {
@@ -99,7 +99,7 @@ impl SHTMLExtractor for DOMExtractor {
     fn close_complex_term(&mut self) -> Option<immt_ontology::content::terms::Term> {
         todo!()
     }
-    fn close_content(&mut self) -> Option<(immt_ontology::uris::ModuleURI,Vec<immt_ontology::content::declarations::UncheckedDeclaration>)> {
+    fn close_content(&mut self) -> Option<(immt_ontology::uris::ModuleURI,Vec<immt_ontology::content::declarations::OpenDeclaration<Unchecked>>)> {
         todo!()
     }
     fn close_decl(&mut self) -> Option<(Option<immt_ontology::content::terms::Term>,Option<immt_ontology::content::terms::Term>)> {
@@ -108,7 +108,7 @@ impl SHTMLExtractor for DOMExtractor {
     fn close_exercise(&mut self) -> Option<shtml_extraction::prelude::ExerciseState> {
         todo!()
     }
-    fn close_narrative(&mut self) -> Option<(immt_ontology::uris::NarrativeURI,Vec<immt_ontology::narration::UncheckedDocumentElement>)> {
+    fn close_narrative(&mut self) -> Option<(immt_ontology::uris::NarrativeURI,Vec<immt_ontology::narration::DocumentElement<Unchecked>>)> {
         todo!()
     }
     fn close_notation(&mut self) -> Option<shtml_extraction::prelude::NotationState> {
@@ -117,7 +117,7 @@ impl SHTMLExtractor for DOMExtractor {
     fn close_paragraph(&mut self) -> Option<shtml_extraction::prelude::ParagraphState> {
        todo!() 
     }
-    fn close_section(&mut self) -> Option<(immt_ontology::uris::DocumentElementURI,Option<immt_ontology::DocumentRange>,Vec<immt_ontology::narration::UncheckedDocumentElement>)> {
+    fn close_section(&mut self) -> Option<(immt_ontology::uris::DocumentElementURI,Option<immt_ontology::DocumentRange>,Vec<immt_ontology::narration::DocumentElement<Unchecked>>)> {
         todo!()
     }
     fn get_content_uri(&self) -> Option<&immt_ontology::uris::ModuleURI> {

@@ -77,7 +77,7 @@ pub fn Toc(css:Vec<CSS>,toc:Vec<TOCElem>) -> impl IntoView {
   use immt_web_utils::components::Anchor;
   use thaw::Scrollbar;
   for css in css { do_css(css); }
-  leptos::logging::log!("toc: {toc:?}");
+  //leptos::logging::log!("toc: {toc:?}");
   view!{
     <div style="position:fixed;right:20px;z-index:5;background-color:var(--colorNeutralBackground1);"><Scrollbar style="max-height: 400px;"><Anchor>{
       toc.into_iter().map(TOCElem::into_view).collect_view()

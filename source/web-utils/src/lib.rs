@@ -1,4 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![recursion_limit = "256"]
 
 pub mod components;
 pub mod mathml;

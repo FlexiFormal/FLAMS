@@ -1,13 +1,11 @@
 use std::{
-    fmt::Debug,
     fs::File,
-    io::{BufReader, Read},
+    io::BufReader,
     path::Path,
 };
 
-use immt_ontology::{
-    narration::documents::{Document, UncheckedDocument},
-    uris::DocumentURI,
+use immt_ontology::narration::documents::{
+    Document, UncheckedDocument
 };
 
 use super::GlobalFlattener;
@@ -23,44 +21,25 @@ pub struct Offsets {
 }
 */
 
-#[derive(Debug)]
-pub struct HTMLFile {
-    path: Box<Path>,
-    //offsets: Offsets,
-}
-
-
-
-
-#[derive(Debug)]
-pub struct DocFile {
-    //path: Box<Path>,
-    doc: Document,
-    //offsets: Offsets,
-}
-
-impl DocFile {
-    #[inline]
-    pub(crate) fn strong_count(&self) -> usize {
-        self.doc.strong_count()
-    }
-    #[inline]
-    pub(crate) fn uri(&self) -> &DocumentURI {
-        self.doc.uri()
-    }
-    #[inline]
-    pub(crate) const fn doc(&self) -> &Document {
-        &self.doc
-    }
-}
-
 pub struct PreDocFile;
 
 impl PreDocFile {
     pub(crate) fn read_from_file(path: &Path) -> Option<UncheckedDocument> {
-        let file = File::open(path).ok()?;
+        macro_rules! err{
+            ($e:expr) => {
+                match $e {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::error!("Error loading {}: {e}",path.display());
+                        return None
+                    }
+                }
+            }
+        }
+        let file = err!(File::open(path));
         let file = BufReader::new(file);
-        bincode::serde::decode_from_reader(file, bincode::config::standard()).ok()
+        //UncheckedDocument::from_byte_stream(&mut file).ok()
+        Some(err!(bincode::serde::decode_from_reader(file, bincode::config::standard())))
         //let offsets = Self::read_initials(&mut file)?;
         //let doc = UncheckedDocument::from_byte_stream(&mut file).ok()?;
         //Some(doc)//Some(Self { path, doc, offsets })

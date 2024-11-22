@@ -3,12 +3,12 @@ mod iter;
 pub mod manager;
 pub mod source_files;
 
-use std::{io::Write, path::{Path, PathBuf}};
+use std::path::{Path, PathBuf};
 
 use either::Either;
 use ignore_regex::IgnoreSource;
 use immt_ontology::{
-    content::modules::UncheckedModule, file_states::FileStateSummary, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep, PathURITrait, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange
+    content::modules::OpenModule, file_states::FileStateSummary, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep, PathURITrait, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange, Unchecked
 };
 use immt_utils::{
     change_listener::ChangeSender,
@@ -22,7 +22,7 @@ use source_files::{FileStates, SourceDir};
 use spliter::ParallelSpliterator;
 use tracing::instrument;
 
-use crate::{building::{BuildArtifact, BuildResultArtifact}, formats::{BuildArtifactTypeId, BuildTargetId, OMDocResult, SourceFormatId}};
+use crate::{building::{BuildArtifact, BuildResultArtifact}, formats::{BuildTargetId, OMDocResult, SourceFormatId}};
 
 use super::{docfile::PreDocFile, rdf::RDFStore, BackendChange};
 
@@ -139,7 +139,7 @@ impl LocalArchive {
         path: Option<&Name>,
         name: &NameStep,
         language: Language,
-    ) -> Option<UncheckedModule> {
+    ) -> Option<OpenModule<Unchecked>> {
         let out = path
             .map_or_else(
                 || self.out_dir().join(".modules"),
@@ -152,11 +152,22 @@ impl LocalArchive {
             )
             .join(name.as_ref())
             .join(Into::<&'static str>::into(language));
+        macro_rules! err{
+            ($e:expr) => {
+                match $e {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::error!("Error loading {}: {e}",out.display());
+                        return None
+                    }
+                }
+            }
+        }
         if out.exists() {
-            let file = std::fs::File::open(&out).ok()?;
+            let file = err!(std::fs::File::open(&out));
             let file = std::io::BufReader::new(file);
-            bincode::serde::decode_from_reader(file, bincode::config::standard()).ok()
-            //UncheckedModule::from_byte_stream(&mut file).ok()
+            Some(err!(bincode::serde::decode_from_reader(file, bincode::config::standard())))
+            //OpenModule::from_byte_stream(&mut file).ok()
         } else {
             None
         }
@@ -305,7 +316,9 @@ impl LocalArchive {
         let p = top.join("doc");
         let file = err!(std::fs::File::create(&p));
         let mut buf = std::io::BufWriter::new(file);
+
         er!(bincode::serde::encode_into_std_write(document, &mut buf, bincode::config::standard()));
+        //er!(document.into_byte_stream(&mut buf));
 
         for m in modules {
             let path = m.uri.path();
@@ -322,9 +335,9 @@ impl LocalArchive {
                 .join(name.to_string());
             err!(std::fs::create_dir_all(&out));
             let out = out.join(Into::<&'static str>::into(language));
-
             let file = err!(std::fs::File::create(&out));
             let mut buf = std::io::BufWriter::new(file);
+            //er!(m.into_byte_stream(&mut buf));
             er!(bincode::serde::encode_into_std_write(m, &mut buf, bincode::config::standard()));
         }
     }
@@ -338,7 +351,7 @@ impl LocalArchive {
         macro_rules! err {
             ($e:expr) => {
                 if let Err(e) = $e {
-                    tracing::error!("Failed to save {}: {}", relative_path, e);
+                    tracing::error!("Failed to save [{}]{}: {}", self.id(), relative_path, e);
                     return
                 }
             }
@@ -497,7 +510,7 @@ impl Archive {
         path: Option<&Name>,
         name: &NameStep,
         language: Language,
-    ) -> Option<UncheckedModule> {
+    ) -> Option<OpenModule<Unchecked>> {
         match self {
             Self::Local(a) => a.load_module(path, name, language),
         }

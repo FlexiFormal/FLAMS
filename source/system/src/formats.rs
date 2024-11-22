@@ -1,6 +1,6 @@
 use std::{io::Read, path::Path};
 
-use immt_ontology::{content::modules::UncheckedModule, narration::documents::UncheckedDocument, DocumentRange};
+use immt_ontology::{content::modules::OpenModule, narration::documents::UncheckedDocument, DocumentRange, Unchecked};
 pub use immt_utils::global;
 use immt_utils::CSS;
 
@@ -65,7 +65,7 @@ build_result!(pdf @ "PDF document (semantically opaque)");
 pub struct OMDocResult {
   pub document: UncheckedDocument,
   pub html:HTMLData,
-  pub modules:Vec<UncheckedModule>,
+  pub modules:Vec<OpenModule<Unchecked>>,
 }
 
 #[derive(Debug)]

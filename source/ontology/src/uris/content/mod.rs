@@ -5,6 +5,8 @@ use crate::uris::{
     URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URITrait, URIWithLanguage, URI,
 };
 use const_format::concatcp;
+use modules::ModuleURIRef;
+use symbols::SymbolURIRef;
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -13,7 +15,7 @@ pub(super) mod symbols;
 
 pub trait ContentURITrait: URIWithLanguage {
     fn as_content(&self) -> ContentURIRef;
-    fn module(&self) -> &ModuleURI;
+    fn module(&self) -> ModuleURIRef;
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -73,14 +75,14 @@ impl ContentURITrait for ContentURI {
     #[inline]
     fn as_content(&self) -> ContentURIRef {
         match self {
-            Self::Module(m) => ContentURIRef::Module(m),
+            Self::Module(m) => ContentURIRef::Module(m.module()),
             Self::Symbol(s) => ContentURIRef::Symbol(s),
         }
     }
     #[inline]
-    fn module(&self) -> &ModuleURI {
+    fn module(&self) -> ModuleURIRef {
         match self {
-            Self::Module(m) => m,
+            Self::Module(m) => m.module(),
             Self::Symbol(s) => s.module(),
         }
     }
@@ -88,8 +90,8 @@ impl ContentURITrait for ContentURI {
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ContentURIRef<'a> {
-    Module(&'a ModuleURI),
-    Symbol(&'a SymbolURI),
+    Module(ModuleURIRef<'a>),
+    Symbol(SymbolURIRef<'a>),
 }
 impl URIWithLanguage for ContentURIRef<'_> {
     #[inline]
@@ -104,7 +106,7 @@ impl<'a> From<&'a ContentURI> for ContentURIRef<'a> {
     #[inline]
     fn from(value: &'a ContentURI) -> Self {
         match value {
-            ContentURI::Module(m) => Self::Module(m),
+            ContentURI::Module(m) => Self::Module(m.module()),
             ContentURI::Symbol(s) => Self::Symbol(s),
         }
     }
@@ -113,8 +115,8 @@ impl<'a> URIOrRefTrait for ContentURIRef<'a> {
     #[inline]
     fn base(&self) -> &'a BaseURI {
         match self {
-            Self::Module(m) => m.base(),
-            Self::Symbol(s) => s.base(),
+            Self::Module(m) => &m.path.archive.base,
+            Self::Symbol(s) => &s.module.path.archive.base,
         }
     }
     #[inline]
@@ -127,8 +129,8 @@ impl<'a> URIRefTrait<'a> for ContentURIRef<'a> {
     #[inline]
     fn owned(self) -> ContentURI {
         match self {
-            Self::Module(m) => ContentURI::Module(m.clone()),
-            Self::Symbol(s) => ContentURI::Symbol(s.clone()),
+            Self::Module(m) => ContentURI::Module(m.owned()),
+            Self::Symbol(s) => ContentURI::Symbol(s.owned()),
         }
     }
 }
@@ -138,10 +140,10 @@ impl<'a> ContentURITrait for ContentURIRef<'a> {
         *self
     }
     #[inline]
-    fn module(&self) -> &'a ModuleURI {
+    fn module(&self) -> ModuleURIRef<'a> {
         match self {
             Self::Module(m) => m,
-            Self::Symbol(s) => s.module(),
+            Self::Symbol(s) => &s.module,
         }
     }
 }
@@ -170,46 +172,52 @@ debugdisplay!(ContentURIRef<'_>);
 impl ArchiveURITrait for ContentURI {
     #[inline]
     fn archive_uri(&self) -> ArchiveURIRef {
-        self.module().archive_uri()
+        match self {
+            Self::Module(m) => m.archive_uri(),
+            Self::Symbol(s) => s.module.path.archive_uri(),
+        }
     }
 }
 impl<'a> ArchiveURITrait for ContentURIRef<'a> {
     #[inline]
     fn archive_uri(&self) -> ArchiveURIRef<'a> {
-        let m: &'a _ = match self {
-            Self::Module(m) => *m,
-            Self::Symbol(s) => s.module(),
-        };
-        m.archive_uri()
+        match self {
+            Self::Module(m) => m.path.archive_uri(),
+            Self::Symbol(s) => s.module.path.archive_uri(),
+        }
     }
 }
 
 impl PathURITrait for ContentURI {
     #[inline]
     fn as_path(&self) -> crate::uris::PathURIRef {
-        self.module().as_path()
+        match self {
+            Self::Module(m) => m.as_path(),
+            Self::Symbol(s) => s.as_path(),
+        }
     }
     #[inline]
     fn path(&self) -> Option<&crate::uris::Name> {
-        self.module().path()
+        match self {
+            Self::Module(m) => m.path(),
+            Self::Symbol(s) => s.path(),
+        }
     }
 }
 impl<'a> PathURITrait for ContentURIRef<'a> {
     #[inline]
     fn as_path(&self) -> crate::uris::PathURIRef<'a> {
-        let m: &'a _ = match self {
-            Self::Module(m) => *m,
-            Self::Symbol(s) => s.module(),
-        };
-        m.module().as_path()
+        match self {
+            Self::Module(m) => (**m).as_path(),
+            Self::Symbol(s) => s.module.as_path(),
+        }
     }
     #[inline]
     fn path(&self) -> Option<&'a crate::uris::Name> {
-        let m: &'a _ = match self {
-            Self::Module(m) => *m,
-            Self::Symbol(s) => s.module(),
-        };
-        m.path()
+        match self {
+            Self::Module(m) => m.path.path.as_ref(),
+            Self::Symbol(s) => s.module.path.path.as_ref(),
+        }
     }
 }
 

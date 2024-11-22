@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Debug};
 
 use declarations::{
     morphisms::Morphism,
@@ -8,7 +8,7 @@ use declarations::{
 use immt_utils::prelude::InnerArc;
 use modules::{Module, NestedModule};
 
-use crate::uris::{Name, NameStep};
+use crate::{uris::{ModuleURI, Name, NameStep, SymbolURI}, Checked, Resolvable};
 
 pub mod checking;
 pub mod declarations;
@@ -17,6 +17,12 @@ pub mod modules;
 pub mod terms;
 
 pub struct ContentReference<T: DeclarationTrait>(InnerArc<Module, T>);
+impl<T:DeclarationTrait+Resolvable<From=SymbolURI>> Resolvable for ContentReference<T> {
+    type From = SymbolURI;
+    fn id(&self) -> Cow<'_,Self::From> {
+        self.0.as_ref().id()
+    }
+}
 
 impl<T: DeclarationTrait> ContentReference<T> {
     #[must_use]
@@ -62,10 +68,22 @@ impl<T: DeclarationTrait + Debug> Debug for ContentReference<T> {
 #[derive(Debug)]
 pub enum ModuleLike {
     Module(Module),
-    NestedModule(ContentReference<NestedModule>),
-    Structure(ContentReference<MathStructure>),
-    Extension(ContentReference<Extension>),
-    Morphism(ContentReference<Morphism>),
+    NestedModule(ContentReference<NestedModule<Checked>>),
+    Structure(ContentReference<MathStructure<Checked>>),
+    Extension(ContentReference<Extension<Checked>>),
+    Morphism(ContentReference<Morphism<Checked>>),
+}
+impl Resolvable for ModuleLike {
+    type From = ModuleURI;
+    fn id(&self) -> Cow<'_,Self::From> {
+        match self {
+            Self::Module(m) => Cow::Borrowed(m.uri()),
+            Self::NestedModule(m) => Cow::Owned(m.as_ref().uri.clone().into_module()),
+            Self::Structure(s) => Cow::Owned(s.as_ref().uri.clone().into_module()),
+            Self::Extension(e) => Cow::Owned(e.as_ref().uri.clone().into_module()),
+            Self::Morphism(m) => todo!()//Cow::Owned(m.0.as_ref().uri.into_module()),
+        }
+    }
 }
 
 impl ModuleLike {

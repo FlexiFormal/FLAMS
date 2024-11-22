@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufWriter, Write};
 
 #[allow(clippy::missing_errors_doc)]
-pub trait BinaryWriter {
+pub trait BinaryWriter:Write {
     fn write_string(&mut self, s: &str) -> std::io::Result<()>;
     fn write_u16(&mut self, u: u16) -> std::io::Result<()>;
 }

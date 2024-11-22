@@ -1,17 +1,17 @@
 #![allow(clippy::result_large_err)]
 
 use std::borrow::Cow;
-use immt_ontology::content::declarations::UncheckedDeclaration;
-use immt_ontology::content::modules::UncheckedModule;
+use immt_ontology::content::declarations::OpenDeclaration;
+use immt_ontology::content::modules::OpenModule;
 use immt_ontology::content::terms::{Arg, ArgMode, Term, Var};
 use immt_ontology::languages::Language;
 use immt_ontology::narration::exercises::CognitiveDimension;
 use immt_ontology::narration::notations::{NotationComponent, OpNotation};
 use immt_ontology::narration::sections::SectionLevel;
 use immt_ontology::narration::variables::Variable;
-use immt_ontology::narration::{LazyDocRef, UncheckedDocumentElement};
+use immt_ontology::narration::{DocumentElement, LazyDocRef};
 use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURITrait, SymbolURI, URIRefTrait};
-use immt_ontology::{DocumentRange, Resourcable};
+use immt_ontology::{DocumentRange, Resourcable, Unchecked};
 use immt_utils::prelude::HMap;
 use immt_utils::vecmap::VecMap;
 use crate::errors::SHTMLError;
@@ -38,10 +38,10 @@ pub trait SHTMLNode {
     fn as_term(&self) -> Term;
 }
 
-#[derive(Clone,Debug)]
+#[derive(Debug)]
 pub struct ParagraphState {
     pub uri:DocumentElementURI,
-    pub children:Vec<UncheckedDocumentElement>,
+    pub children:Vec<DocumentElement<Unchecked>>,
     pub fors:VecMap<SymbolURI,Option<Term>>,
     pub title:Option<DocumentRange>
 }
@@ -55,7 +55,7 @@ pub struct NotationState {
 }
 
 
-#[derive(Clone,Debug)]
+#[derive(Debug)]
 pub struct ExerciseState {
     pub uri: DocumentElementURI,
     pub solutions: Vec<LazyDocRef<Box<str>>>,
@@ -63,30 +63,30 @@ pub struct ExerciseState {
     pub notes: Vec<LazyDocRef<Box<str>>>,
     pub gnotes: Vec<LazyDocRef<Box<str>>>,
     pub title: Option<DocumentRange>,
-    pub children: Vec<UncheckedDocumentElement>,
+    pub children: Vec<DocumentElement<Unchecked>>,
     pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
     pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
 }
 
 #[cfg(feature="full")]
-#[derive(Clone,Debug)]
+#[derive(Debug)]
 pub enum Narrative {
-    Container(NarrativeURI,Vec<UncheckedDocumentElement>),
+    Container(NarrativeURI,Vec<DocumentElement<Unchecked>>),
     Paragraph(ParagraphState),
     Section{
         uri:DocumentElementURI,
         title:Option<DocumentRange>,
-        children:Vec<UncheckedDocumentElement>
+        children:Vec<DocumentElement<Unchecked>>
     },
     Exercise(ExerciseState),
     Notation(NotationState)
 }
 
 #[cfg(feature="full")]
-#[derive(Clone,Debug)]
+#[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Content {
-    Container(ModuleURI,Vec<UncheckedDeclaration>),
+    Container(ModuleURI,Vec<OpenDeclaration<Unchecked>>),
     SingleTerm(Option<Term>),
     Symdecl{
         tp:Option<Term>,
@@ -96,13 +96,13 @@ pub enum Content {
 }
 
 #[cfg(feature="full")]
-#[derive(Clone,Debug)]
+#[derive(Debug)]
 pub struct ExtractorState {
     pub(crate) in_term:bool,
     pub(crate) ids: HMap<Cow<'static,str>,usize>,
     pub(crate) narrative:Vec<Narrative>,
     pub(crate) content:Vec<Content>,
-    pub(crate) modules:Vec<UncheckedModule>,
+    pub(crate) modules:Vec<OpenModule<Unchecked>>,
 }
 #[cfg(feature="full")]
 impl ExtractorState {
@@ -125,7 +125,7 @@ impl ExtractorState {
     }
     /// #### Errors
     #[allow(clippy::result_unit_err)]
-    pub fn take(mut self) -> Result<(DocumentURI,Vec<UncheckedDocumentElement>,Vec<UncheckedModule>),()> {
+    pub fn take(mut self) -> Result<(DocumentURI,Vec<DocumentElement<Unchecked>>,Vec<OpenModule<Unchecked>>),()> {
         if self.narrative.len() == 1 {
             let Some(Narrative::Container(document,elements)) = self.narrative.pop() else { unreachable!() };
             match document {
@@ -222,7 +222,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
             };
             for c in ch.iter().rev() {
                 match c {
-                    UncheckedDocumentElement::Variable(Variable{uri,is_seq,..}) if uri.name().steps().ends_with(names) =>
+                    DocumentElement::Variable(Variable{uri,is_seq,..}) if uri.name().steps().ends_with(names) =>
                         return Var::Ref { declaration: uri.clone(), is_sequence: Some(*is_seq) },
                     _ => ()
                 }
@@ -240,7 +240,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     fn open_complex_term(&mut self) {
         self.state_mut().content.push(Content::SingleTerm(None));
     }
-    fn close_content(&mut self) -> Option<(ModuleURI,Vec<UncheckedDeclaration>)> {
+    fn close_content(&mut self) -> Option<(ModuleURI,Vec<OpenDeclaration<Unchecked>>)> {
         match self.state_mut().content.pop() {
             Some(Content::Container(uri,elements)) => return Some((uri,elements)),
             Some(o) => self.state_mut().content.push(o),
@@ -248,7 +248,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         }
         None
     }
-    fn close_narrative(&mut self) -> Option<(NarrativeURI,Vec<UncheckedDocumentElement>)> {
+    fn close_narrative(&mut self) -> Option<(NarrativeURI,Vec<DocumentElement<Unchecked>>)> {
         let state = self.state_mut();
         let r =state.narrative.pop().unwrap_or_else(|| unreachable!());
         if state.narrative.is_empty() {
@@ -274,7 +274,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     fn open_section(&mut self,uri:DocumentElementURI) {
         self.state_mut().narrative.push(Narrative::Section { title: None, children: Vec::new(),uri });
     }
-    fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<UncheckedDocumentElement>)> {
+    fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<DocumentElement<Unchecked>>)> {
         match self.state_mut().narrative.pop() {
             Some(Narrative::Section { title, children,uri }) => return Some((uri,title,children)),
             Some(o) => self.state_mut().narrative.push(o),
@@ -383,7 +383,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         })
     }
 
-    fn add_module(&mut self,module:UncheckedModule) {
+    fn add_module(&mut self,module:OpenModule<Unchecked>) {
         self.state_mut().modules.push(module);
     }
 
@@ -405,7 +405,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     fn in_term(&self) -> bool { self.state().in_term }
     fn set_in_term(&mut self,b:bool) { self.state_mut().in_term = b }
 
-    fn add_document_element(&mut self,elem:UncheckedDocumentElement) {
+    fn add_document_element(&mut self,elem:DocumentElement<Unchecked>) {
         for narr in self.state_mut().narrative.iter_mut().rev() {
             if let Narrative::Container(_,c) = narr {
                 c.push(elem); return
@@ -430,7 +430,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     }
 
     /// ### Errors
-    fn add_content_element(&mut self,elem:UncheckedDeclaration) -> Result<(),UncheckedDeclaration> {
+    fn add_content_element(&mut self,elem:OpenDeclaration<Unchecked>) -> Result<(),OpenDeclaration<Unchecked>> {
         for cont in self.state_mut().content.iter_mut().rev() {
             if let Content::Container(_,c) = cont {
                 c.push(elem); return Ok(())
@@ -546,23 +546,23 @@ pub trait SHTMLExtractor {
 
     fn resolve_variable_name(&self,name:Name) -> Var;
     fn add_error(&mut self,err:SHTMLError);
-    fn add_module(&mut self,module:UncheckedModule);
+    fn add_module(&mut self,module:OpenModule<Unchecked>);
     fn new_id(&mut self,prefix:Cow<'static,str>) -> Box<str>;
     fn in_notation(&self) -> bool;
     fn in_term(&self) -> bool;
     fn set_in_term(&mut self,b:bool);
-    fn add_document_element(&mut self,elem:UncheckedDocumentElement);
+    fn add_document_element(&mut self,elem:DocumentElement<Unchecked>);
     /// ### Errors
-    fn add_content_element(&mut self,elem:UncheckedDeclaration) -> Result<(),UncheckedDeclaration>;
+    fn add_content_element(&mut self,elem:OpenDeclaration<Unchecked>) -> Result<(),OpenDeclaration<Unchecked>>;
 
     fn open_content(&mut self,uri:ModuleURI);
     fn open_narrative(&mut self,uri:Option<NarrativeURI>);
     fn open_complex_term(&mut self);
-    fn close_content(&mut self) -> Option<(ModuleURI,Vec<UncheckedDeclaration>)>;
-    fn close_narrative(&mut self) -> Option<(NarrativeURI,Vec<UncheckedDocumentElement>)>;
+    fn close_content(&mut self) -> Option<(ModuleURI,Vec<OpenDeclaration<Unchecked>>)>;
+    fn close_narrative(&mut self) -> Option<(NarrativeURI,Vec<DocumentElement<Unchecked>>)>;
     fn close_complex_term(&mut self) -> Option<Term>;
     fn open_section(&mut self,uri:DocumentElementURI);
-    fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<UncheckedDocumentElement>)>;
+    fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<DocumentElement<Unchecked>>)>;
     fn open_paragraph(&mut self,uri:DocumentElementURI,fors:Vec<SymbolURI>);
     fn close_paragraph(&mut self) -> Option<ParagraphState>;
     fn open_exercise(&mut self,uri:DocumentElementURI);

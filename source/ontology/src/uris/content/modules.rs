@@ -2,11 +2,13 @@ use crate::languages::Language;
 use crate::uris::errors::URIParseError;
 use crate::uris::macros::debugdisplay;
 use crate::uris::{
-    ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, Name, PathURI, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIRef, URIWithLanguage
+    ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, Name, PathURI, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIRef, URIRefTrait, URITrait, URIWithLanguage, URI
 };
 use const_format::concatcp;
 use std::fmt::Display;
 use std::str::{FromStr, Split};
+
+use super::ContentURI;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ModuleURI {
@@ -14,6 +16,7 @@ pub struct ModuleURI {
     pub(in crate::uris) name: Name,
     pub(in crate::uris) language: Language,
 }
+
 impl ModuleURI {
     pub const SEPARATOR: char = 'm';
     #[must_use]
@@ -41,6 +44,92 @@ impl Display for ModuleURI {
     }
 }
 debugdisplay!(ModuleURI);
+
+/*
+#[derive(Copy,Clone, PartialEq, Eq, Hash)]
+pub struct ModuleURIRef<'a> {
+    pub(in crate::uris) path: PathURIRef<'a>,
+    pub(in crate::uris) name: &'a Name,
+    pub(in crate::uris) language: Language,
+}
+impl Display for ModuleURIRef<'_> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}&{}={}&{}={}",
+            self.path,
+            ModuleURI::SEPARATOR,
+            self.name,
+            Language::SEPARATOR,
+            self.language
+        )
+    }
+}
+debugdisplay!(ModuleURIRef<'_>);
+*/
+
+impl URITrait for ModuleURI {
+    type Ref<'a> = &'a Self;//ModuleURIRef<'a>;
+}
+
+pub type ModuleURIRef<'a> = &'a ModuleURI;
+
+impl<'a> URIRefTrait<'a> for ModuleURIRef<'a> {
+    type Owned = ModuleURI;
+    #[inline]
+    fn owned(self) -> Self::Owned {
+        self.clone()
+    }
+}
+/*
+impl<'a> URIRefTrait<'a> for ModuleURIRef<'a> {
+    type Owned = ModuleURI;
+    fn owned(self) -> Self::Owned {
+        ModuleURI {
+            path: self.path.owned(),
+            name: self.name.clone(),
+            language: self.language,
+        }
+    }
+}
+*/
+impl From<ModuleURI> for URI {
+    #[inline]
+    fn from(value: ModuleURI) -> Self {
+        Self::Content(ContentURI::Module(value))
+    }
+}
+impl<'a> From<ModuleURIRef<'a>> for URIRef<'a> {
+    #[inline]
+    fn from(value: ModuleURIRef<'a>) -> Self {
+        URIRef::Content(ContentURIRef::Module(value))
+    }
+}
+/*
+impl<'a> URIOrRefTrait for ModuleURIRef<'a> {
+    #[inline]
+    fn base(&self) -> &'a BaseURI {
+        &self.path.archive.base
+    }
+    #[inline]
+    fn as_uri(&self) -> URIRef<'a> {
+        URIRef::Content(ContentURIRef::Module(*self))
+    }
+}
+
+impl<'a> From<&'a ModuleURI> for ModuleURIRef<'a> {
+    #[inline]
+    fn from(value: &'a ModuleURI) -> Self {
+        Self {
+            path: value.as_path(),
+            name: &value.name,
+            language: value.language,
+        }
+    }
+}
+*/
+
 impl URIOrRefTrait for ModuleURI {
     #[inline]
     fn base(&self) -> &BaseURI {
@@ -57,13 +146,31 @@ impl URIWithLanguage for ModuleURI {
         self.language
     }
 }
+/*
+impl URIWithLanguage for ModuleURIRef<'_> {
+    #[inline]
+    fn language(&self) -> Language {
+        self.language
+    }
+}
+*/
 impl ContentURITrait for ModuleURI {
     #[inline]
     fn as_content(&self) -> ContentURIRef {
         ContentURIRef::Module(self)
     }
     #[inline]
-    fn module(&self) -> &ModuleURI {
+    fn module(&self) -> ModuleURIRef {
+        self
+    }
+}
+impl<'a> ContentURITrait for ModuleURIRef<'a> {
+    #[inline]
+    fn as_content(&self) -> ContentURIRef<'a> {
+        ContentURIRef::Module(self)
+    }
+    #[inline]
+    fn module(&self) -> Self {
         self
     }
 }
@@ -168,9 +275,26 @@ impl PathURITrait for ModuleURI {
         self.path.path()
     }
 }
+impl<'a> ArchiveURITrait for ModuleURIRef<'a> {
+    #[inline]
+    fn archive_uri(&self) -> ArchiveURIRef<'a> {
+        self.path.archive_uri()
+    }
+}
+impl<'a> PathURITrait for ModuleURIRef<'a> {
+    #[inline]
+    fn as_path(&self) -> PathURIRef<'a> {
+        (*self).as_path()
+    }
+    #[inline]
+    fn path(&self) -> Option<&'a Name> {
+        self.path.path.as_ref()
+    }
+}
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use crate::uris::{serialize, ModuleURI};
+    use crate::uris::{serialize, ModuleURI,ModuleURIRef};
     serialize!(DE ModuleURI);
+    //serialize!(ModuleURIRef<'_>);
 }

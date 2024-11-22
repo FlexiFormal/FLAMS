@@ -1,47 +1,35 @@
 use std::{fmt::Display, str::FromStr};
 
 use crate::{
-    uris::{DocumentElementURI, SymbolURI},
-    DocumentRange,
+    uris::{DocumentElementURI, SymbolURI}, CheckingState, DocumentRange
 };
 
-use super::{DocumentElement, LazyDocRef, UncheckedDocumentElement};
-
-#[derive(Debug,Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct UncheckedExercise {
-    pub sub_exercise: bool,
-    pub range: DocumentRange,
-    pub uri: DocumentElementURI,
-    pub autogradable: bool,
-    pub points: Option<f32>,
-    pub solutions: Vec<LazyDocRef<Box<str>>>,
-    pub hints: Vec<LazyDocRef<Box<str>>>,
-    pub notes: Vec<LazyDocRef<Box<str>>>,
-    pub gnotes: Vec<LazyDocRef<Box<str>>>,
-    pub title: Option<DocumentRange>,
-    pub children: Vec<UncheckedDocumentElement>,
-    pub styles:Box<[Box<str>]>,
-    pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
-    pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
-}
+use super::{DocumentElement, LazyDocRef};
 
 #[derive(Debug)]
-pub struct Exercise {
-    pub sub_problem: bool,
+pub struct Exercise<State:CheckingState> {
+    pub sub_exercise: bool,
     pub uri: DocumentElementURI,
     pub range: DocumentRange,
     pub autogradable: bool,
     pub points: Option<f32>,
-    pub solutions: Box<[LazyDocRef<Box<str>>]>,
-    pub hints: Box<[LazyDocRef<Box<str>>]>,
-    pub notes: Box<[LazyDocRef<Box<str>>]>,
-    pub gnotes: Box<[LazyDocRef<Box<str>>]>,
+    pub solutions: State::Seq<LazyDocRef<Box<str>>>,
+    pub hints: State::Seq<LazyDocRef<Box<str>>>,
+    pub notes: State::Seq<LazyDocRef<Box<str>>>,
+    pub gnotes: State::Seq<LazyDocRef<Box<str>>>,
     pub title: Option<DocumentRange>,
-    pub children: Box<[DocumentElement]>,
+    pub children: State::Seq<DocumentElement<State>>,
     pub styles:Box<[Box<str>]>,
-    pub preconditions: Box<[(CognitiveDimension, SymbolURI)]>,
-    pub objectives: Box<[(CognitiveDimension, SymbolURI)]>,
+    pub preconditions: State::Seq<(CognitiveDimension, SymbolURI)>,
+    pub objectives: State::Seq<(CognitiveDimension, SymbolURI)>,
+}
+
+crate::serde_impl!{
+    struct Exercise[
+        sub_exercise,uri,range,autogradable,points,solutions,
+        hints,notes,gnotes,title,children,styles,preconditions,
+        objectives
+    ]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

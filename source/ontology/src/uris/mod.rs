@@ -32,7 +32,7 @@ pub mod terms;
 pub use archives::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait};
 pub use base::BaseURI;
 pub use content::{
-    modules::ModuleURI, symbols::SymbolURI, ContentURI, ContentURIRef, ContentURITrait,
+    modules::{ModuleURI,ModuleURIRef}, symbols::{SymbolURI,SymbolURIRef}, ContentURI, ContentURIRef, ContentURITrait,
 };
 pub use errors::URIParseError;
 pub use name::{Name, NameStep};
@@ -224,6 +224,8 @@ pub enum URIRef<'a> {
 }
 impl sealed::Sealed for ArchiveURIRef<'_> {}
 impl sealed::Sealed for PathURIRef<'_> {}
+//impl sealed::Sealed for ModuleURIRef<'_> {}
+//impl sealed::Sealed for SymbolURIRef<'_> {}
 impl sealed::Sealed for URIRef<'_> {}
 impl sealed::Sealed for ContentURIRef<'_> {}
 impl sealed::Sealed for NarrativeURIRef<'_> {}

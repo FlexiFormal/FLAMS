@@ -1,28 +1,24 @@
 use crate::{
-    content::{ModuleLike, ModuleTrait},
-    uris::{ModuleURI, SymbolURI},
+    content::ModuleTrait, uris::SymbolURI, Checked, CheckingState, Resolvable
 };
 
-use super::{Declaration, DeclarationTrait, UncheckedDeclaration};
-
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct UncheckedMorphism {
-    pub uri: Option<SymbolURI>,
-    pub domain: ModuleURI,
-    pub total: bool,
-    pub elements: Vec<UncheckedDeclaration>,
-}
+use super::{Declaration, DeclarationTrait, OpenDeclaration};
 
 #[derive(Debug)]
-pub struct Morphism {
+pub struct Morphism<State:CheckingState> {
     pub uri: Option<SymbolURI>,
-    pub domain: Result<ModuleLike, ModuleURI>,
+    pub domain: State::ModuleLike,
     pub total: bool,
-    pub elements: Box<[Declaration]>,
+    pub elements: State::Seq<OpenDeclaration<State>>,
 }
-impl super::private::Sealed for Morphism {}
-impl DeclarationTrait for Morphism {
+impl Resolvable for Morphism<Checked> {
+    type From = SymbolURI;
+    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+        todo!()
+    }
+}
+impl super::private::Sealed for Morphism<Checked> {}
+impl DeclarationTrait for Morphism<Checked> {
     #[inline]
     fn from_declaration(decl: &Declaration) -> Option<&Self> {
         match decl {
@@ -31,9 +27,12 @@ impl DeclarationTrait for Morphism {
         }
     }
 }
-impl ModuleTrait for Morphism {
+impl ModuleTrait for Morphism<Checked> {
     #[inline]
     fn declarations(&self) -> &[Declaration] {
         &self.elements
     }
+}
+crate::serde_impl!{
+    struct Morphism[uri,domain,total,elements]
 }

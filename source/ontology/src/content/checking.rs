@@ -1,19 +1,18 @@
 use crate::{
-    uris::{ModuleURI, SymbolURI},
-    LocalBackend,
+    uris::{ModuleURI, SymbolURI}, LocalBackend, MaybeResolved, Unchecked
 };
 
 use super::{
     declarations::{
-        morphisms::{Morphism, UncheckedMorphism},
-        structures::{Extension, MathStructure, UncheckedExtension, UncheckedMathStructure},
-        Declaration, UncheckedDeclaration,
+        morphisms::Morphism,
+        structures::{Extension, MathStructure},
+        Declaration, OpenDeclaration
     },
     modules::NestedModule,
 };
 
 pub trait ModuleChecker: LocalBackend {
-    fn open(&mut self, elem: &mut UncheckedDeclaration);
+    fn open(&mut self, elem: &mut OpenDeclaration<Unchecked>);
     fn close(&mut self, elem: &mut Declaration);
 }
 
@@ -36,9 +35,7 @@ impl Elem {
         match self {
             Self::Extension(uri, target) => {
                 //println!("Require declaration {target}");
-                let target = checker
-                    .get_declaration(&target)
-                    .map_or_else(|| Err(target), Ok);
+                let target = MaybeResolved::resolve(target,|m| checker.get_declaration(m));
                 Declaration::Extension(Extension {
                     uri,
                     target,
@@ -62,7 +59,7 @@ impl Elem {
             }
             Self::Morphism { uri, domain, total } => {
                 //println!("Require domain {domain}");
-                let domain = checker.get_module(&domain).map_or_else(|| Err(domain), Ok);
+                let domain = MaybeResolved::resolve(domain,|d| checker.get_module(d));
                 Declaration::Morphism(Morphism {
                     uri,
                     domain,
@@ -77,17 +74,17 @@ impl Elem {
 pub(super) struct ModuleCheckIter<'a, Check: ModuleChecker> {
     stack: Vec<(
         Elem,
-        std::vec::IntoIter<UncheckedDeclaration>,
+        std::vec::IntoIter<OpenDeclaration<Unchecked>>,
         Vec<Declaration>,
     )>,
-    curr_in: std::vec::IntoIter<UncheckedDeclaration>,
+    curr_in: std::vec::IntoIter<OpenDeclaration<Unchecked>>,
     curr_out: Vec<Declaration>,
     checker: &'a mut Check,
     uri: &'a ModuleURI,
 }
 impl<Check: ModuleChecker> ModuleCheckIter<'_, Check> {
     pub fn go(
-        elems: Vec<UncheckedDeclaration>,
+        elems: Vec<OpenDeclaration<Unchecked>>,
         checker: &mut Check,
         uri: &ModuleURI,
     ) -> Vec<Declaration> {
@@ -114,26 +111,26 @@ impl<Check: ModuleChecker> ModuleCheckIter<'_, Check> {
         }
     }
 
-    fn do_elem(&mut self, mut e: UncheckedDeclaration) {
+    fn do_elem(&mut self, mut e: OpenDeclaration<Unchecked>) {
         self.checker.open(&mut e);
         match e {
-            UncheckedDeclaration::Import(uri) => {
+            OpenDeclaration::Import(uri) => {
                 //println!("Require import {uri}");
                 let m = if !uri.clone() == *self.uri {
-                    Err(uri)
+                    MaybeResolved::unresolved(uri)
                 } else {
-                    self.checker.get_module(&uri).map_or_else(|| Err(uri), Ok)
+                    MaybeResolved::resolve(uri,|u| self.checker.get_module(u))
                 };
                 let mut m = Declaration::Import(m);
                 self.checker.close(&mut m);
                 self.curr_out.push(m);
             }
-            UncheckedDeclaration::Symbol(s) => {
+            OpenDeclaration::Symbol(s) => {
                 let mut m = Declaration::Symbol(s);
                 self.checker.close(&mut m);
                 self.curr_out.push(m);
             }
-            UncheckedDeclaration::Extension(UncheckedExtension {
+            OpenDeclaration::Extension(Extension {
                 target,
                 uri,
                 elements,
@@ -143,12 +140,12 @@ impl<Check: ModuleChecker> ModuleCheckIter<'_, Check> {
                 self.stack
                     .push((Elem::Extension(uri, target), old_in, old_out));
             }
-            UncheckedDeclaration::NestedModule { uri, elements } => {
+            OpenDeclaration::NestedModule(NestedModule { uri, elements }) => {
                 let old_in = std::mem::replace(&mut self.curr_in, elements.into_iter());
                 let old_out = std::mem::take(&mut self.curr_out);
                 self.stack.push((Elem::NestedModule(uri), old_in, old_out));
             }
-            UncheckedDeclaration::MathStructure(UncheckedMathStructure {
+            OpenDeclaration::MathStructure(MathStructure {
                 uri,
                 macroname,
                 elements,
@@ -158,7 +155,7 @@ impl<Check: ModuleChecker> ModuleCheckIter<'_, Check> {
                 self.stack
                     .push((Elem::MathStructure { uri, macroname }, old_in, old_out));
             }
-            UncheckedDeclaration::Morphism(UncheckedMorphism {
+            OpenDeclaration::Morphism(Morphism {
                 uri,
                 domain,
                 total,

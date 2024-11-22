@@ -29,7 +29,8 @@ pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -
           })));
           prefix = if prefix.is_empty() {uri.name().last_name().to_string()} else { format!("{prefix}/{}",uri.name().last_name()) };
         }
-        DocumentElement::DocumentReference { id, target:Ok(d),.. } => {
+        DocumentElement::DocumentReference { id, target,.. } if target.is_resolved() => {
+          let Some(d) = target.get() else { unreachable!() };
           let old = std::mem::replace(&mut curr, d.children().iter());
           stack.push((old,Some(TOCElem::Inputref{
             id: prefix.clone(),
