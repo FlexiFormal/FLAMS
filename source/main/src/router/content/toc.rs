@@ -4,7 +4,8 @@ use shtml_viewer_components::components::TOCElem;
 
 #[cfg(feature="ssr")]
 pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -> (Vec<CSS>,Vec<TOCElem>) {
-  use immt_ontology::narration::{DocumentElement,sections::Section};
+  use immt_ontology::narration::{sections::Section, DocumentElement, NarrationTrait};
+  use immt_system::backend::Backend;
   let mut curr = doc.children().iter();
   let mut prefix = String::new();
   let mut stack = Vec::new();
@@ -16,7 +17,7 @@ pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -
         DocumentElement::Section(Section{ uri, title,children,.. }) => {
           let old = std::mem::replace(&mut curr, children.iter());
           let title = if let Some(title) = title {
-            if let Some((c,h)) = immt_system::backend::GlobalBackend::get().get_html_fragment_async(uri.document(), *title).await {
+            if let Some((c,h)) = super::backend!(get_html_fragment(uri.document(), *title)) {
               for c in c {css.insert(c);}
               Some(h)
             } else {None}
@@ -31,10 +32,12 @@ pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -
         }
         DocumentElement::DocumentReference { id, target,.. } if target.is_resolved() => {
           let Some(d) = target.get() else { unreachable!() };
+          let title = d.title().map(ToString::to_string);
+          let uri = d.uri().clone();
           let old = std::mem::replace(&mut curr, d.children().iter());
           stack.push((old,Some(TOCElem::Inputref{
             id: prefix.clone(),
-            uri: id.clone(),
+            uri,title,
             children: std::mem::take(&mut ret)
           })));
           prefix = if prefix.is_empty() {id.name().last_name().to_string()} else { format!("{prefix}/{}",id.name().last_name()) };
@@ -49,12 +52,12 @@ pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -
     }}
     match stack.pop() {
       None => break,
-      Some((iter,Some(TOCElem::Inputref{mut id,uri,mut children}))) => {
+      Some((iter,Some(TOCElem::Inputref{mut id,uri,title,mut children}))) => {
         curr = iter;
         std::mem::swap(&mut prefix,&mut id);
         std::mem::swap(&mut ret,&mut children);
         if !children.is_empty() {
-          ret.push(TOCElem::Inputref{id,uri,children});
+          ret.push(TOCElem::Inputref{id,uri,title,children});
         }
       }
       Some((iter,Some(TOCElem::Section{mut id,uri,title,mut children}))) => {

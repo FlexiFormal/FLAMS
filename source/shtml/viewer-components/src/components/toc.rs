@@ -1,9 +1,11 @@
-#![allow(non_local_definitions)]
+//#![allow(non_local_definitions)]
 
-use immt_ontology::uris::{DocumentElementURI, DocumentURI};
+use immt_ontology::uris::{DocumentElementURI, DocumentURI, NarrativeURI};
 use immt_utils::CSS;
 use immt_web_utils::do_css;
 use leptos::prelude::*;
+
+use crate::components::navigation::NavElems;
 
 
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
@@ -38,14 +40,59 @@ pub enum TOCElem {
     children:Vec<TOCElem>
   },
   /// An inputref to some other document; the URI is the one for the
-  /// inputref itself; not the referenced Document. For the TOC,
-  /// which document is inputrefed is actually irrelevant.
+  /// referenced Document.
   Inputref{
     #[cfg_attr(feature="ts", tsify(type = "string"))]
-    uri:DocumentElementURI,
+    uri:DocumentURI,
+    title:Option<String>,
     id:String,
     children:Vec<TOCElem>
   }
+}
+
+pub trait TOCIter<'a> {
+  fn elem_iter(&'a self) -> std::slice::Iter<'a,TOCElem>;
+  fn iter_elems(&'a self) -> impl Iterator<Item=&'a TOCElem> {
+    struct TOCIterator<'b> {
+      curr:std::slice::Iter<'b,TOCElem>,
+      stack:Vec<std::slice::Iter<'b,TOCElem>>
+    }
+    impl<'b> Iterator for TOCIterator<'b> {
+      type Item = &'b TOCElem;
+      fn next(&mut self) -> Option<Self::Item> {
+        loop {
+          if let Some(elem) = self.curr.next() {
+            let children: &'b [_] = match elem {
+              TOCElem::Section{children,..} |
+              TOCElem::Inputref{children,..} => children
+            };
+            self.stack.push(std::mem::replace(&mut self.curr,children.iter()));
+            return Some(elem)
+          } else if let Some(s) = self.stack.pop() {
+            self.curr = s;
+          } else { return None }
+        }
+      }
+    }
+    TOCIterator { curr: self.elem_iter(), stack: Vec::new() }
+  }
+  fn do_titles(&'a self) {
+    NavElems::update_untracked(|nav| {
+      for e in self.iter_elems() { 
+        if let TOCElem::Inputref{title:Some(title),uri,..} = e {
+          nav.set_title(uri.clone(), title.clone());
+        }
+      }
+    });
+  }
+}
+impl<'a,A> TOCIter<'a> for &'a A where A:std::ops::Deref<Target=[TOCElem]> {
+  #[inline]
+  fn elem_iter(&'a self) -> std::slice::Iter<'a,TOCElem> { self.deref().iter() }
+}
+impl<'a> TOCIter<'a> for &'a [TOCElem] {
+  #[inline]
+  fn elem_iter(&'a self) -> std::slice::Iter<'a,TOCElem> { self.iter() }
 }
 
 impl TOCElem {
@@ -73,14 +120,57 @@ impl TOCElem {
 }
 
 #[component]
-pub fn Toc(css:Vec<CSS>,toc:Vec<TOCElem>) -> impl IntoView {
+pub fn Toc(#[prop(optional)] css:Vec<CSS>,toc:Vec<TOCElem>) -> impl IntoView {
   use immt_web_utils::components::Anchor;
   use thaw::Scrollbar;
   for css in css { do_css(css); }
-  //leptos::logging::log!("toc: {toc:?}");
   view!{
-    <div style="position:fixed;right:20px;z-index:5;background-color:var(--colorNeutralBackground1);"><Scrollbar style="max-height: 400px;"><Anchor>{
+    <div /*style="position:fixed;right:20px;z-index:5;background-color:inherit;"*/><Scrollbar style="max-height: 400px;"><Anchor>{
       toc.into_iter().map(TOCElem::into_view).collect_view()
     }</Anchor></Scrollbar></div>
   }
+}
+
+#[derive(Debug,Default,Clone,serde::Serialize,serde::Deserialize)]
+pub enum TOCSource {
+    #[default] None,
+    Ready(Vec<TOCElem>),
+    //Loading(Resource<Result<(Vec<CSS>,Vec<TOCElem>),ServerFnError<String>>>),
+    Get
+}
+
+#[allow(clippy::match_wildcard_for_single_variants)]
+pub fn do_toc<V:IntoView+'static>(toc:TOCSource,wrap:impl FnOnce(Option<AnyView>) -> V) -> impl IntoView {
+    use TOCIter;
+    match toc {
+        TOCSource::None => wrap(None).into_any(),
+        TOCSource::Ready(toc) => view!{
+            {toc.as_slice().do_titles()}
+            {wrap(Some(view!(<Toc toc/>).into_any()))}
+        }.into_any(),
+        TOCSource::Get => match expect_context() {
+            NarrativeURI::Document(uri) => {
+                let r = Resource::new(|| (),move |()| crate::config::server_config.get_toc(uri.clone()));
+                view!{
+                    {move || r.with(|r| if let Some(Ok((_,toc))) = r {
+                        toc.as_slice().do_titles();
+                    })}
+                    {wrap(Some((move || r.get().map_or_else(
+                        || view!(<immt_web_utils::components::Spinner/>).into_any(),
+                        |r| match r {
+                            Ok((css,toc)) => {
+                                for c in css { do_css(c); }
+                                Some(view!(<Toc toc/>))
+                            }
+                            Err(e) => {
+                                tracing::error!(e);
+                                None
+                            }
+                        }.into_any()
+                    )).into_any()))}
+                }.into_any()
+            }
+            _ => wrap(None).into_any()
+        }
+    }
 }

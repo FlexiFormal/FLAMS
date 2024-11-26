@@ -100,6 +100,13 @@ pub struct MaybeResolved<T:Resolvable> {
 }
 impl<T:Resolvable> MaybeResolved<T> {
     #[inline]
+    pub fn id(&self) -> Cow<'_,T::From> {
+        match &self.inner {
+            MaybeResolvedI::Resolved(r) => r.id(),
+            MaybeResolvedI::Unresolved(i) => Cow::Borrowed(i)
+        }
+    }
+    #[inline]
     pub const fn is_resolved(&self) -> bool {
         matches!(self.inner,MaybeResolvedI::Resolved(_))
     }

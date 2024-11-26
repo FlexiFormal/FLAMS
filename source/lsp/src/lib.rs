@@ -1,4 +1,5 @@
 mod implementation;
+pub mod annotations;
 pub mod documents;
 pub mod capabilities;
 pub mod state;

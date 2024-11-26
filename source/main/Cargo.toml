@@ -83,8 +83,9 @@ immt-utils = {workspace=true,features=["serde"]}
 immt-ontology = {workspace=true,features=["serde"]}
 either = {workspace = true}
 const-str = {workspace = true}
-shtml-viewer-components = {workspace = true}
+shtml-viewer-components = {workspace = true, features=["omdoc"]}
 leptos-dyn-dom = {workspace = true}
+paste = {workspace=true}
 
 # ssr
 immt-system = {workspace=true,features=["tokio"],optional=true}

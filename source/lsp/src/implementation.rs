@@ -2,12 +2,11 @@
 
 use std::ops::ControlFlow;
 
-use crate::{state::to_diagnostic, LSPStore};
+use crate::{annotations::to_diagnostic, LSPStore};
 
 use super::{IMMTLSPServer,ServerWrapper};
 use async_lsp::{lsp_types::{self as lsp}, LanguageClient, LanguageServer, ResponseError};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
-use immt_ontology::uris::DocumentURI;
 
 macro_rules! impl_request {
   ($name:ident = $struct:ident) => {
@@ -250,9 +249,9 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    #[must_use]
-    //impl_request!(references = References);
-    fn references(&mut self, params: lsp::ReferenceParams) -> Res<Option<Vec<lsp::Location>>> {
+    //#[must_use]
+    impl_request!(! references = References => (None));
+    /*fn references(&mut self, params: lsp::ReferenceParams) -> Res<Option<Vec<lsp::Location>>> {
         tracing::trace_span!("references").in_scope(move || {
             tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, position: {:?}, context: {:?}",
                 params.work_done_progress_params,
@@ -268,7 +267,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
             }
             Box::pin(std::future::ready(Ok(Some(Vec::new()))))
         })
-    }
+    }*/
 
 
     #[must_use]
@@ -312,6 +311,31 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 )
         })
     }
+
+    #[must_use]
+    // impl_request!(! definition = GotoDefinition => (None));
+    fn definition(&mut self, params: lsp::GotoDefinitionParams) -> Res<Option<lsp::GotoDefinitionResponse>> {
+        tracing::trace_span!("definition").in_scope(move || {
+            tracing::trace!("uri: {},work_done_progress_params: {:?}, position: {:?}",
+                params.text_document_position_params.text_document.uri,
+                params.work_done_progress_params,
+                params.text_document_position_params.position
+            );
+            let p = params.work_done_progress_params.work_done_token.map(
+                |tk| self.get_progress(tk)
+            );
+            self.inner.state().get_goto_definition(
+                &params.text_document_position_params.text_document.uri,
+                params.text_document_position_params.position,
+                p
+            )
+                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
+                |f| Box::pin(f.map(Result::Ok)) as _
+                )
+        })
+    }
+
+    impl_request!(declaration = GotoDeclaration);
 
     impl_request!(! workspace_diagnostic = WorkspaceDiagnosticRequest => (lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport {items:Vec::new()})));
 /*
@@ -365,11 +389,9 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(! code_lens = CodeLensRequest => (None));
     impl_request!(! document_highlight = DocumentHighlightRequest => (None));
     impl_request!(! folding_range = FoldingRangeRequest => (None));
-    impl_request!(! definition = GotoDefinition => (None));
     
     impl_request!(implementation = GotoImplementation);
     impl_request!(type_definition = GotoTypeDefinition);
-    impl_request!(declaration = GotoDeclaration);
     impl_request!(document_color = DocumentColor);
     impl_request!(color_presentation = ColorPresentationRequest);
     impl_request!(selection_range = SelectionRangeRequest);

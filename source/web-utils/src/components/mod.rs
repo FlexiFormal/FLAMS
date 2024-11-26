@@ -17,6 +17,20 @@ pub use theming::*;
 #[cfg(any(feature="ssr",feature="hydrate"))]
 mod theming;
 mod anchors;
+mod block;
+
+#[cfg(not(any(feature="ssr",feature="hydrate")))]
+#[component(transparent)]
+pub fn Themer(children:Children) -> impl IntoView {
+    use thaw::{ConfigProvider,ToasterProvider,Theme};
+    view!{
+      <ConfigProvider>
+        {children()}
+        //<ToasterProvider>{children()}</ToasterProvider>
+      </ConfigProvider>
+    }
+}
+
 
 pub use popover::*;
 pub use r#await::*;
@@ -24,8 +38,7 @@ pub use trees::*;
 pub use drawer::*;
 pub use anchors::*;
 pub use spinner::*;
-
-
+pub use block::*;
 
 #[leptos::prelude::slot]
 pub struct Header { children:leptos::prelude::Children }
@@ -33,6 +46,8 @@ pub struct Header { children:leptos::prelude::Children }
 pub struct Trigger { children:leptos::prelude::Children }
 
 use leptos::prelude::*;
+
+use crate::inject_css;
 
 #[component]
 pub fn Collapsible(
@@ -52,4 +67,17 @@ pub fn Collapsible(
             ).into_any()} else {children().into_any()}
         }</div>
     </details>}
+}
+
+#[component]
+pub fn Burger(children:Children) -> impl IntoView {
+  use thaw::{Menu,MenuTriggerType,MenuTrigger};
+  use icondata_ch::ChMenuHamburger;
+  inject_css("immt-burger", ".immt-burger {position:absolute !important;right:-10px;}");
+  view!{<div style="position:fixed;right:10px;position-anchor:inherit;">
+    <Menu class="immt-burger" on_select=|_| () trigger_type=MenuTriggerType::Hover>
+        <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
+        {children()}
+    </Menu>
+  </div>}
 }

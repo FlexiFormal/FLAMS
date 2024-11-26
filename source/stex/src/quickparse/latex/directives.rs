@@ -2,7 +2,7 @@ use immt_utils::{parsing::{ParseSource, StringOrStr}, sourcerefs::SourceRange};
 
 use super::{rules::{DynEnv, DynMacro}, AnyEnv, AnyMacro, Environment, EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult, ParserState};
 
-
+#[allow(clippy::needless_pass_by_value)]
 pub fn verbcmd<'a,
   Pa: ParseSource<'a>,
   T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
@@ -14,6 +14,7 @@ pub fn verbcmd<'a,
   }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn verbenv<'a,
   Pa: ParseSource<'a>,
   T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,

@@ -1,4 +1,4 @@
-use immt_lsp::{async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LanguageClient}, state::{to_diagnostic, LSPState}, IMMTLSPServer, ProgressCallbackServer};
+use immt_lsp::{annotations::to_diagnostic,async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LanguageClient}, state::LSPState, IMMTLSPServer, ProgressCallbackServer};
 
 use immt_ontology::uris::{DocumentURI, URIRefTrait};
 use immt_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive}, GlobalBackend}, settings::Settings};
@@ -25,7 +25,6 @@ impl STDIOLSPServer {
     GLOBAL_STATE.get()
   }
   fn load_all(&self) {
-    use rayon::prelude::*;
     let client = self.client.clone();
     let state = self.state().clone();
     let workspaces = self.workspaces.clone();
@@ -64,7 +63,6 @@ impl STDIOLSPServer {
               }
             });
           }
-          let mathhubs = &Settings::get().mathhubs;
           for (name,uri) in &workspaces {
             tracing::info!("workspace: {name}@{uri}");
           }

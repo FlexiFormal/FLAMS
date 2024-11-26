@@ -3,9 +3,13 @@ pub(crate) mod sections;
 mod terms;
 mod toc;
 pub(crate) mod navigation;
+#[cfg(feature="omdoc")]
+pub mod omdoc;
+
 pub use inputref::{InputRef,IfInputref};
 pub use terms::*;
 pub use toc::*;
+pub use sections::{OnSectionBegin,OnSectionEnd};
 
 use leptos::prelude::*;
 use leptos_dyn_dom::{DomCont, OriginalNode};
@@ -41,14 +45,4 @@ fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:Origina
   } else {
     view!(<DomCont orig cont=crate::iterate/>).into_any()
   }
-}
-
-#[component]
-pub fn Burger(children:Children) -> impl IntoView {
-  use thaw::{Menu,MenuTriggerType,MenuTrigger};
-  use icondata_ch::ChMenuHamburger;
-  view!{<div style="position:fixed;right:15px;position-anchor:inherit;"><Menu on_select=|_| () trigger_type=MenuTriggerType::Hover>
-    <MenuTrigger slot><div><thaw::Icon width="3em" height="3em" icon=ChMenuHamburger/></div></MenuTrigger>
-    {children()}
-  </Menu></div>}
 }

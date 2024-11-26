@@ -3,10 +3,10 @@ use std::fmt::Display;
 use immt_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term, uris::{DocumentElementURI, SymbolURI}, CheckingState, DocumentRange
+    content::terms::Term, uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
 };
 
-use super::DocumentElement;
+use super::{DocumentElement, NarrationTrait};
 
 #[derive(Debug)]
 pub struct LogicalParagraph<State:CheckingState> {
@@ -22,6 +22,17 @@ pub struct LogicalParagraph<State:CheckingState> {
 
 crate::serde_impl!{
     struct LogicalParagraph[kind,uri,inline,title,range,styles,children,fors]
+}
+
+impl NarrationTrait for LogicalParagraph<Checked> {
+    #[inline]
+    fn children(&self) -> &[DocumentElement<Checked>] {
+        &self.children
+    }
+    #[inline]
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+        if let DocumentElement::Paragraph(e) = e {Some(e)} else {None}
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -82,16 +93,22 @@ impl ParagraphKind {
             Self::Example => "example",
         }
     }
-}
-impl Display for ParagraphKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
+
+    #[must_use]
+    pub const fn as_display_str(self) -> &'static str {
+        match self {
             Self::Definition => "Definition",
             Self::Assertion => "Assertion",
             Self::Paragraph => "Paragraph",
             Self::Proof => "Proof",
             Self::SubProof => "Subproof",
             Self::Example => "Example",
-        })
+        }
+    }
+}
+impl Display for ParagraphKind {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_display_str())
     }
 }

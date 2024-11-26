@@ -133,7 +133,7 @@ pub trait URITrait: URIOrRefTrait + Into<URI> {
 }
 
 #[cfg(feature = "serde")]
-pub trait URITrait: URIOrRefTrait + serde::Deserialize<'static> + Into<URI> {
+pub trait URITrait: URIOrRefTrait + serde::Deserialize<'static> + Into<URI>+FromStr+std::fmt::Display {
     type Ref<'a>: URIRefTrait<'a, Owned = Self>; // where &'a Self:Into<Self::Ref<'a>>;
 }
 

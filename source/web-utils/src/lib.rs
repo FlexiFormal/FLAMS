@@ -8,6 +8,14 @@ use std::borrow::Cow;
 
 use immt_utils::{hashstr, CSS};
 
+#[cfg(feature = "ssr")]
+#[derive(Default,Clone)]
+pub struct CssIds(immt_utils::triomphe::Arc< 
+    immt_utils::parking_lot::Mutex<
+        immt_utils::vecmap::VecSet<Cow<'static,str>>
+    >
+>);
+
 pub fn do_css(css: CSS) {
     match css {
         CSS::Inline(s) => {
@@ -21,9 +29,16 @@ pub fn do_css(css: CSS) {
             #[cfg(feature = "ssr")]
             {
                 use leptos_meta::Stylesheet;
-                let _ = leptos::view! {
-                    <Stylesheet id=id href=s.to_string()/>
-                };
+                use leptos::prelude::expect_context;
+                let ids = expect_context::<CssIds>();
+                let mut ids = ids.0.lock();
+                if !ids.0.contains(&std::borrow::Cow::Borrowed(&id)) {
+                    ids.insert(id.clone().into());
+                    let _ = leptos::view! {
+                        <Stylesheet id=id href=s.to_string()/>
+                    };
+                }
+                drop(ids);
             }
             #[cfg(all(any(feature = "hydrate", feature = "csr"), not(feature = "ssr")))]
             {
@@ -65,11 +80,18 @@ fn do_inject_css(id: Cow<'static, str>, content: Cow<'static, str>) {
     {
         use leptos_meta::Style;
 
-        let _ = leptos::view! {
-            <Style id=id>
-                {content}
-            </Style>
-        };
+        use leptos::prelude::expect_context;
+        let ids = expect_context::<CssIds>();
+        let mut ids = ids.0.lock();
+        if !ids.0.contains(&id) {
+            ids.insert(id.clone());
+            let _ = leptos::view! {
+                <Style id=id>
+                    {content}
+                </Style>
+            };
+        }
+        drop(ids);
     }
     #[cfg(not(feature = "ssr"))]
     {

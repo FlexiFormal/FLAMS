@@ -2,27 +2,52 @@
 pub mod uris;
 pub mod toc;
 
-use immt_ontology::{languages::Language, uris::{ArchiveId, DocumentURI, NarrativeURI, URI}};
-use immt_utils::CSS;
+use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{paragraphs::LogicalParagraph, DocumentElement, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
+use immt_utils::{vecmap::VecSet, CSS};
 use immt_web_utils::do_css;
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
-use shtml_viewer_components::components::TOCElem;
+use shtml_viewer_components::{components::{omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource}, DocumentString};
 use uris::{DocURIComponents, URIComponents};
 use crate::{users::Login, utils::from_server_clone};
 
 macro_rules! backend {
-  (($($lsp:tt)*) ($($global:tt)*)) => {
+  ($fn:ident!($($args:tt)*)) => {
     if immt_system::settings::Settings::get().lsp {
       let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
         return Err("no lsp server".to_string().into())
       };
-      state.backend().$($lsp)*
+      state.backend().$fn($($args)*)
     } else {
-      immt_system::backend::GlobalBackend::get().$($global)*
+      ::paste::paste!{ 
+        immt_system::backend::GlobalBackend::get().[<$fn _async>]($($args)*).await
+      }
     }
-  }
+  };
+  ($fn:ident($($args:tt)*)) => {
+    if immt_system::settings::Settings::get().lsp {
+      crate::server::lsp::STDIOLSPServer::global_state().and_then(
+        |state| state.backend().$fn($($args)*)
+      )
+    } else {
+      immt_system::backend::GlobalBackend::get().$fn($($args)*)
+    }
+  };
+  ($b:ident => {$($lsp:tt)*}{$($global:tt)*}) => {
+    if immt_system::settings::Settings::get().lsp {
+      let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
+        return Err("no lsp server".to_string().into())
+      };
+      let $b = state.backend();
+      $($lsp)*
+    } else {
+      let $b = immt_system::backend::GlobalBackend::get();
+      $($global)*
+    }
+  };
 }
+
+pub(crate) use backend;
 
 #[server(
   prefix="/content",
@@ -45,7 +70,7 @@ pub async fn document(
   let Some(uri) = comps.parse() else {
     return Err("invalid uri".to_string().into())
   };
-  let Some((css,doc)) = backend!((get_html_body(&uri,true))(get_html_body_async(&uri,true).await))  else {
+  let Some((css,doc)) = backend!(get_html_body!(&uri,true)) else {
     return Err("document not found".to_string().into())
   };
 
@@ -74,7 +99,7 @@ pub async fn toc(
   let Some(uri) = comps.parse() else {
     return Err("invalid uri".to_string().into())
   };
-  let Some(doc) = backend!((get_document(&uri))(get_document_async(&uri).await)) else {
+  let Some(doc) = backend!(get_document!(&uri)) else {
     return Err("document not found".to_string().into())
   };
   Ok(toc::from_document(&doc).await)
@@ -108,12 +133,143 @@ pub async fn fragment(
   };
   match uri {
     URI::Narrative(NarrativeURI::Document(uri)) => {
-      let Some((css,html)) = backend!((get_html_body(&uri,false))(get_html_body_async(&uri,false).await)) else {
+      let Some((css,html)) = backend!(get_html_body!(&uri,false)) else {
         return Err("document not found".to_string().into())
       };
       Ok((css,html))
     }
-    _ => todo!()
+    URI::Narrative(NarrativeURI::Element(uri)) => {
+      let Some(e) = backend!(get_document_element!(&uri)) else {
+        return Err("element not found".to_string().into())
+      };
+      match e.as_ref() {
+        DocumentElement::Paragraph(LogicalParagraph{range,..}) => {
+          let Some((css,html)) = backend!(get_html_fragment!(uri.document(),*range)) else {
+            return Err("document not found".to_string().into())
+          };
+          Ok((css,html))
+        }
+        _ => return Err("not a paragraph".to_string().into())
+      }
+    }
+    URI::Content(ContentURI::Symbol(uri)) => {
+      get_definitions(uri).await.ok_or_else(||
+        "No definition found".to_string().into()
+      )
+    }
+    _ => return Err(format!("TODO").into())
+  }
+}
+
+#[cfg(feature="ssr")]
+async fn get_definitions(uri:SymbolURI) -> Option<(Vec<CSS>,String)> {
+  use immt_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
+  use immt_system::backend::{rdf::sparql, Backend, GlobalBackend};
+  let b = GlobalBackend::get();
+  let query = sparql::Select { 
+    subject: sparql::Var('x'),
+    pred: ulo2::DEFINES.into_owned(),
+    object: uri.to_iri()
+  }.into();
+  //println!("Getting definitions using query: {}",query);
+  let mut iter = b.triple_store().query(query).map(|r| r.into_uris()).unwrap_or_default().collect::<Vec<_>>();
+  for uri in iter {
+    if let Some(def) = b.get_document_element_async(&uri).await {
+      let LogicalParagraph{range,..} = def.as_ref();
+      if let Some(r) = b.get_html_fragment_async(uri.document(), *range).await {
+        return Some(r)
+      }
+    }
+  }
+  None
+}
+
+#[server(
+  prefix="/content",
+  endpoint="omdoc",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
+)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn omdoc(
+  uri:Option<URI>,
+  rp:Option<String>,
+  a:Option<ArchiveId>,
+  p:Option<String>,
+  l:Option<Language>,
+  d:Option<String>,
+  e:Option<String>,
+  m:Option<String>,
+  s:Option<String>
+) -> Result<(Vec<CSS>,AnySpec),ServerFnError<String>> {
+  use immt_system::backend::Backend;
+
+  let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
+    return Err("invalid uri components".to_string().into())
+  };
+  let Some(uri) = comps.parse() else {
+    return Err("invalid uri".to_string().into())
+  };
+  let mut css = VecSet::default();
+  match uri {
+    uri @ (URI::Base(_) | URI::Archive(_) | URI::Path(_)) => Ok((css.0,AnySpec::Other(uri.to_string()))),
+    URI::Narrative(NarrativeURI::Document(uri)) => {
+      let Some(doc) = backend!(get_document!(&uri)) else {
+        return Err("document not found".to_string().into())
+      };
+      let (css,r) = backend!(backend => {
+        let r = DocumentSpec::from_document(&doc, backend,&mut css);
+        (css,r)
+      }{
+        tokio::task::spawn_blocking(move || {
+          let r = DocumentSpec::from_document(&doc, backend,&mut css);
+          (css,r)
+        }).await.map_err(|e| e.to_string())?
+      });
+      Ok((css.0,r.into()))
+    }
+    URI::Narrative(NarrativeURI::Element(uri)) => {
+      let Some(e)
+        : Option<NarrativeReference<DocumentElement<Checked>>>
+        = backend!(get_document_element!(&uri)) else {
+        return Err("document element not found".to_string().into())
+      };
+      let (css,r) = backend!(backend => {
+        let r = DocumentElementSpec::from_element(e.as_ref(),backend, &mut css);
+        (css,r)
+      }{
+        tokio::task::spawn_blocking(move || {
+          let r = DocumentElementSpec::from_element(e.as_ref(), backend,&mut css);
+          (css,r)
+        }).await.map_err(|e| e.to_string())?
+      });
+      let Some(r) = r else {
+        return Err("element not found".to_string().into())
+      };
+      Ok((css.0,r.into()))
+    }
+    URI::Content(ContentURI::Module(uri)) => {
+      let Some(m) = backend!(get_module!(&uri)) else {
+        return Err("module not found".to_string().into())
+      };
+      let r = backend!(backend => {
+        AnySpec::from_module_like(&m, backend)
+      }{
+        tokio::task::spawn_blocking(move || {
+          AnySpec::from_module_like(&m, backend)
+        }).await.map_err(|e| e.to_string())?
+      });
+      Ok((Vec::new(),r))
+    }
+    URI::Content(ContentURI::Symbol(uri)) => {
+      let Some(s)
+        : Option<ContentReference<Declaration>>
+        = backend!(get_declaration!(&uri)) else {
+        return Err("declaration not found".to_string().into())
+      };
+      todo!()
+    }
   }
 }
 
@@ -124,84 +280,23 @@ pub fn URITop() -> impl IntoView {
   use uris::URIComponentsTrait;
   view!{
     <Stylesheet id="leptos" href="/pkg/immt.css"/>
-    <Themer><Login><div style="min-height:100vh;">{
-      use_query_map().with_untracked(|m| m.as_doc().map_or_else(
-        || view!("TODO").into_any(),
-        |doc| view!(<Document doc/>).into_any()
-      ))
-    }</div></Login></Themer>
+    <Themer>//<Login>
+      <div style="min-height:100vh;color:black;">{
+        use_query_map().with_untracked(|m| m.as_doc().map_or_else(
+          || view!("TODO").into_any(),
+          |doc| view!(<Document doc/>).into_any()
+        ))
+      }</div>//</Login>
+    </Themer>
   }
 }
 
 #[component]
 pub fn Document(doc:DocURIComponents) -> impl IntoView {
-  use shtml_viewer_components::{SHTMLDocument,components::Toc,components::Burger};
-  use leptos_dyn_dom::DomStringCont;
-  let doccl = doc.clone();
   from_server_clone(false,
-    move || doc.clone().into_args(document), |(uri,css,html)| view!{<div>{
-      for css in css { do_css(css); }
-      let r = Resource::new(|| (),move |()| doccl.clone().into_args(toc));
-      let toc_signal = RwSignal::new(None);
-      let _f = Effect::new(move || {
-        if let Some(Ok((c,t))) = r.get() {
-          toc_signal.set(Some((c,t)));
-        }
-      });
-      let on_load = RwSignal::new(false);
-      view!{<SHTMLDocument uri on_load>
-        <Burger>
-        {move || if on_load.get() {toc_signal.get().map(|(css,toc)|
-          view!(<Toc css toc/>)
-        ) } else {None}}
-        </Burger>
-        <DomStringCont html on_load cont=shtml_viewer_components::iterate/>
-        </SHTMLDocument>}
+    move || doc.clone().into_args(document), 
+    |(uri,css,html)| view!{<div>{
+        for css in css { do_css(css); }
+        view!(<DocumentString html uri toc=TOCSource::Get omdoc=OMDocSource::Get/>)
     }</div>})
 }
-
-/*
-macro_rules! uri {
-  ($(#[$meta:meta])* fn $name:ident($uri:ident : $uritp:ident $(,$n:ident:$t:ty)*) $(-> $ret:ty)? $f:block) => {
-    uri!{!! {$(#[$meta])* fn} $name($uri:$uritp $(,$n:$t)*) $(-> $ret)? $f}
-  };
-  ($(#[$meta:meta])* async fn $name:ident($uri:ident : $uritp:ident $(,$n:ident:$t:ty)*) $(-> $ret:ty)? $f:block) => {
-    uri!{!! {$(#[$meta])* async fn} $name($uri:$uritp $(,$n:$t)*) $(-> $ret)? $f}
-  };
-  (!! {$($pre:tt)*} $name:ident($uri:ident :DocumentURI $(,$n:ident:$t:ty)*) $(-> $ret:ty)? $f:block) => {
-    $($pre)* $name(uri:Option<DocumentURI>,a:Option<ArchiveId>,rp:Option<String>,l:Option<Language>,p:Option<String>,d:Option<String>$(,$n:$t)*) $(-> $ret)? {
-      let $uri = uri.or_else(|| if let Some(a) = a {
-        if let Some(rp) = rp {
-          return uris::from_archive_relpath(&a,&rp)
-        }
-        if let Some(d) = d {uris::get_doc_uri(&a,
-          p.map(|p| Name::from_str(&p).unwrap_or_else(|_| unreachable!())),
-          l.unwrap_or(Language::English),
-          Name::from_str(&d).unwrap_or_else(|_| unreachable!())
-        )} else {None}
-      } else {None});
-      $f
-    }
-  }
-}
-
-uri!{
-#[server(
-  prefix="/api/fragments",
-  endpoint="document",
-  input=server_fn::codec::GetUrl,
-  output=server_fn::codec::Json
-)]
-async fn document(uri:DocumentURI) -> Result<(Vec<CSS>, String),ServerFnError<String>> {
-  Ok((Vec::new(),String::new()))
-}}
-
-/*
-uri!{DOC
-  #[component]
-  fn Document(uri) -> impl IntoView {
-    todo!()
-  }
-}
-*/
-*/

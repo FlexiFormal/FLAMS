@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Debug};
+use std::{borrow::{self, Cow}, fmt::Debug};
 
 use declarations::{
     morphisms::Morphism,
@@ -8,7 +8,7 @@ use declarations::{
 use immt_utils::prelude::InnerArc;
 use modules::{Module, NestedModule};
 
-use crate::{uris::{ModuleURI, Name, NameStep, SymbolURI}, Checked, Resolvable};
+use crate::{uris::{ContentURIRef, ModuleURI, Name, NameStep, SymbolURI}, Checked, Resolvable};
 
 pub mod checking;
 pub mod declarations;
@@ -97,7 +97,7 @@ impl ModuleLike {
         if steps.is_empty() {
             return Some(Self::Module(m.clone()));
         }
-        let d: &Declaration = m.find(&steps[1..])?;
+        let d: &Declaration = m.find(steps)?;
         match d {
             Declaration::NestedModule(nm) => Some(Self::NestedModule(ContentReference(unsafe {
                 InnerArc::new_owned_infallible(m.clone(), |m| &m.0, |_| nm)
@@ -118,7 +118,9 @@ impl ModuleLike {
 
 pub trait ModuleTrait {
     fn declarations(&self) -> &[Declaration];
+    fn content_uri(&self) -> ContentURIRef;
     fn find<T: DeclarationTrait>(&self, steps: &[NameStep]) -> Option<&T> {
+        //println!("Trying to find {steps:?} in {}",self.content_uri());
         let mut steps = steps;
         let mut curr = self.declarations().iter();
         while !steps.is_empty() {
@@ -168,6 +170,7 @@ pub trait ModuleTrait {
 }
 
 impl ModuleTrait for ModuleLike {
+    #[inline]
     fn declarations(&self) -> &[Declaration] {
         match self {
             Self::Module(m) => m.declarations(),
@@ -175,6 +178,16 @@ impl ModuleTrait for ModuleLike {
             Self::Structure(s) => s.as_ref().declarations(),
             Self::Extension(s) => s.as_ref().declarations(),
             Self::Morphism(s) => s.as_ref().declarations(),
+        }
+    }
+    #[inline]
+    fn content_uri(&self) -> ContentURIRef {
+        match self {
+            Self::Module(m) => m.content_uri(),
+            Self::NestedModule(m) => m.as_ref().content_uri(),
+            Self::Structure(s) => s.as_ref().content_uri(),
+            Self::Extension(s) => s.as_ref().content_uri(),
+            Self::Morphism(s) => s.as_ref().content_uri(),
         }
     }
 }

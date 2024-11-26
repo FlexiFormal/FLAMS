@@ -15,33 +15,21 @@ pub fn InputRef<'a>(uri:DocumentURI,id: &'a str) -> impl IntoView {
 
 #[allow(clippy::similar_names)]
 pub(super) fn inputref(uri:DocumentURI,id:&str) -> impl IntoView {
-  inject_css("shtml-inputref", r#"
-.shtml-inputref {
-  margin: 5px 15px 5px 15px;
-  display: block;
-  border: 3px solid blue;
-  cursor:cell;
-  padding: 0 5px;
-  width:auto;
-  font-size:medium;
-  font-family:serif;
-  color:blue;
-}
-.shtml-inputref::before { content: "⊞ ";}"#);
-  let name = uri.name().to_string();
+  inject_css("shtml-inputref", include_str!("./inputref.css"));
   let replace = RwSignal::new(false);
   let replaced = RwSignal::new(false);
   let on_click = move |_| { replace.set(true); };
   let id = expect_context::<IdPrefix>().new_id(id);
-  NavElems::update_untracked(|ne| {
+  let title = NavElems::update_untracked(|ne| {
     ne.ids.insert(id.clone(), SectionOrInputref::Inputref(replace,replaced));
+    ne.get_title(uri.clone())
   });
 
   view!{
     <Provider value=InInputRef(true)><Provider value=IdPrefix(id.clone())> {
       move || if replace.get() { do_inputref(uri.clone(),replaced).into_any() } else {
         view!(<div id=id.clone() on:click=on_click class="shtml-inputref">{
-          name.clone()
+          move || view!(<span inner_html=title/>)
         }</div>).into_any()
     }}</Provider></Provider>
   }

@@ -13,9 +13,9 @@ use immt_ontology::{
         modules::Module,
         ContentReference, ModuleLike
     }, languages::Language, narration::{
-        checking::DocumentChecker, documents::Document, DocumentElement,
+        checking::DocumentChecker, documents::Document, DocumentElement, NarrationTrait, NarrativeReference,
     }, uris::{
-        ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIWithLanguage
+        ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIWithLanguage
     }, Checked, DocumentRange, LocalBackend, Unchecked
 };
 use immt_utils::{prelude::HMap, triomphe, CSS};
@@ -57,6 +57,12 @@ pub trait Backend {
             let m = self.get_module(uri.module())?;
         // TODO this unnecessarily clones
         ContentReference::new(&m, uri.name())
+    }    
+    fn get_document_element<T: NarrationTrait>(&self, uri: &DocumentElementURI) -> Option<NarrativeReference<T>>
+    where Self: Sized {
+            let d = self.get_document(uri.document())?;
+        // TODO this unnecessarily clones
+        NarrativeReference::new(&d, uri.name())
     }
     fn with_archive_or_group<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&ArchiveOrGroup>) -> R) -> R
     where
@@ -84,6 +90,10 @@ pub trait Backend {
 
     fn get_html_body(&self,
         d:&DocumentURI,full:bool
+    ) -> Option<(Vec<CSS>,String)>;
+
+    fn get_html_fragment(&self,
+        d:&DocumentURI,range:DocumentRange
     ) -> Option<(Vec<CSS>,String)>;
     
     #[allow(unreachable_patterns)]
@@ -131,6 +141,16 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_html_body(d,full),
             Self::Temp(b) => b.get_html_body(d,full),
+        }
+    }
+
+    #[inline]
+    fn get_html_fragment(&self,
+            d:&DocumentURI,range:DocumentRange
+        ) -> Option<(Vec<CSS>,String)> {
+        match self {
+            Self::Global(b) => b.get_html_fragment(d,range),
+            Self::Temp(b) => b.get_html_fragment(d,range),
         }
     }
 
@@ -246,14 +266,6 @@ impl GlobalBackend {
         f.await
     }
 
-    pub fn get_html_fragment(&self,
-        d:&DocumentURI,range:DocumentRange
-    ) -> Option<(Vec<CSS>,String)> {
-        self.manager().with_archive(d.archive_id(), |a|
-            a.and_then(|a| a.load_html_fragment(d.path(), d.name().first_name(), d.language(),range))
-        )
-    }
-
     #[cfg(feature="tokio")]
     pub async fn get_html_fragment_async(&self,
         d:&DocumentURI,range:DocumentRange
@@ -286,8 +298,7 @@ impl GlobalBackend {
             }
         }
         let uri = uri.clone();
-        tokio::runtime::Handle::current()
-            .spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
                 let slf = Self::get();
                 let mut cache = slf.cache.write();
                 let mut flattener = GlobalFlattener(&mut cache, &slf.archives);
@@ -317,8 +328,7 @@ impl GlobalBackend {
         }
 
         let top = !uri.clone();
-        let m = tokio::runtime::Handle::current()
-            .spawn_blocking(move || {
+        let m = tokio::task::spawn_blocking(move || {
                 let slf = Self::get();
                 let mut cache = slf.cache.write();
                 let mut flattener = GlobalFlattener(&mut cache, &slf.archives);
@@ -327,6 +337,17 @@ impl GlobalBackend {
             .await
             .ok()??;
         ModuleLike::in_module(&m, uri.name())
+    }
+
+    pub async fn get_declaration_async<T: DeclarationTrait>(&self, uri: &SymbolURI) -> Option<ContentReference<T>> {
+        let m = self.get_module_async(uri.module()).await?;
+        // TODO this unnecessarily clones
+        ContentReference::new(&m, uri.name())
+    }    
+    pub async fn get_document_element_async<T: NarrationTrait>(&self, uri: &DocumentElementURI) -> Option<NarrativeReference<T>> {
+        let d = self.get_document_async(uri.document()).await?;
+        // TODO this unnecessarily clones
+        NarrativeReference::new(&d, uri.name())
     }
 }
 
@@ -342,7 +363,13 @@ impl Backend for &'static GlobalBackend {
     fn get_html_body(&self,
             d:&DocumentURI,full:bool
         ) -> Option<(Vec<CSS>,String)> {
-        GlobalBackend::get_html_body(&self, d, full)
+        GlobalBackend::get_html_body(self, d, full)
+    }
+    #[inline]
+    fn get_html_fragment(&self,
+            d:&DocumentURI,range:DocumentRange
+        ) -> Option<(Vec<CSS>,String)> {
+        GlobalBackend::get_html_fragment(self, d, range)
     }
 
     #[inline]
@@ -398,6 +425,14 @@ impl Backend for GlobalBackend {
         AnyBackend::Global(Self::get())
     }
 
+    fn get_html_fragment(&self,
+        d:&DocumentURI,range:DocumentRange
+    ) -> Option<(Vec<CSS>,String)> {
+        self.manager().with_archive(d.archive_id(), |a|
+            a.and_then(|a| a.load_html_fragment(d.path(), d.name().first_name(), d.language(),range))
+        )
+    }
+
     #[inline]
     fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized {
         self.archives.with_tree(|t| f(t.archives.iter()))
@@ -425,7 +460,6 @@ impl Backend for GlobalBackend {
         let archives = &*self.all_archives();
         f(archives.iter().find(|a| a.uri().archive_id() == id))
     }
-
 
     fn with_archive_or_group<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&ArchiveOrGroup>) -> R) -> R {
         self.with_archive_tree(|t| f(t.find(id)))
@@ -544,9 +578,22 @@ impl Backend for TemporaryBackend {
             ))
         )
     }
+
+    fn get_html_fragment(&self,
+            d:&DocumentURI,range:DocumentRange
+        ) -> Option<(Vec<CSS>,String)> {
+        self.inner.html.lock().get(d).map_or_else(
+            || self.inner.parent.get_html_fragment(d,range),
+            |html| Some((
+                html.css.clone(),
+                html.html[range.start..range.end].to_string()
+            ))
+        )
+    }
+
     fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
         if uri.name().is_simple() {
-            return self.inner.modules.lock().get(uri).cloned().map(|m| ModuleLike::Module(m)).or_else(
+            return self.inner.modules.lock().get(uri).cloned().map(ModuleLike::Module).or_else(
                 || self.inner.parent.get_module(uri)
             )
         }

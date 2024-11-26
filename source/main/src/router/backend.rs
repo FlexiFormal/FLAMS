@@ -32,7 +32,7 @@ pub struct FileData {
 #[allow(clippy::unused_async)]
 pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupData>,Vec<ArchiveData>),ServerFnError<String>> {
   use immt_system::backend::archives::{Archive,ArchiveOrGroup as AoG};
-  use immt_system::backend::Backend;
+  //use immt_system::backend::Backend;
   use crate::users::LoginState;
 
   let login = LoginState::get();
@@ -210,7 +210,7 @@ pub async fn enqueue(archive:ArchiveId,
   use immt_system::{formats::FormatOrTargets,building::queue_manager::QueueManager};
   use immt_system::backend::archives::ArchiveOrGroup as AoG;
   use immt_system::formats::{SourceFormat,BuildTarget};
-  use immt_system::backend::Backend;
+  //use immt_system::backend::Backend;
 
   let login = LoginState::get();
   if login != LoginState::Admin && login != LoginState::NoAccounts {
@@ -374,7 +374,7 @@ fn dir(archive:ArchiveId,d:DirectoryData) -> impl IntoView {
 }
 
 fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
-  use immt_web_utils::components::{DrawerThaw,Header,Trigger};
+  use immt_web_utils::components::{Drawer,Header,Trigger};
   use thaw::{Button,ButtonAppearance};
 
   let link = format!("/?a={archive}&rp={}",f.rel_path);
@@ -383,7 +383,7 @@ fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
 
   let pathstr = f.rel_path.split('/').last().unwrap_or_else(|| unreachable!()).to_string();
   let header = view!(
-    <DrawerThaw lazy=true>
+    <Drawer lazy=true>
       <Trigger slot>
         <thaw::Icon icon=icondata_bi::BiFileRegular/>" "
         {pathstr}
@@ -392,7 +392,7 @@ fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
         <Button appearance=ButtonAppearance::Subtle>{button}</Button>
       </a></Header>
       <crate::router::content::Document doc=comps.clone()/>
-    </DrawerThaw>
+    </Drawer>
     {dialog(move |signal| if signal.get() {
       let id = archive.clone();
       let title = archive.clone();

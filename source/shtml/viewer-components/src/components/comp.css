@@ -1,0 +1,13 @@
+.shtml-comp {
+  /* -webkit-text-stroke: 0.04ex cyan */
+  color:dodgerblue;
+}
+.shtml-var-comp {
+  color:gray;
+}
+.shtml-def-comp {
+  color: mediumvioletred;
+}
+.shtml-comp-hover {
+  background-color:greenyellow;
+}

@@ -8,9 +8,11 @@ mod extractor;
 pub mod components;
 pub mod config;
 
-use components::{inputref::InInputRef, SHTMLComponents};
+use components::{inputref::InInputRef, SHTMLComponents, TOCSource};
 use immt_utils::prelude::HMap;
+use immt_web_utils::{components::wait, do_css, inject_css};
 use leptos::prelude::*;
+use leptos_dyn_dom::DomStringCont;
 use shtml_extraction::prelude::*;
 use leptos::tachys::view::any_view::AnyView;
 use leptos::web_sys::Element;
@@ -31,20 +33,120 @@ impl IdPrefix {
     }
 }
 
+#[cfg(not(feature="omdoc"))]
 #[component]
-pub fn SHTMLDocument(uri:DocumentURI, children: Children, #[prop(optional)] on_load:Option<RwSignal<bool>>) -> impl IntoView {
-    do_document(uri,children, on_load)
+pub fn DocumentFromURI(
+    uri:DocumentURI,
+    #[prop(optional,into)] toc:TOCSource
+) -> impl IntoView {
+    wait(
+        move || {
+            tracing::info!("fetching {uri}");
+            let fut = config::server_config.full_doc(uri.clone());
+            async move {fut.await.ok()}
+        }, 
+        move |(uri,css,html)| {
+            for c in css { do_css(c); }
+            view!(<DocumentString html uri toc=toc.clone()/>)
+        }, 
+        "Error loading document reference".to_string(),
+    )
+}
+
+#[cfg(feature="omdoc")]
+#[component]
+pub fn DocumentFromURI(
+    uri:DocumentURI,
+    #[prop(optional,into)] toc:TOCSource,
+    #[prop(optional)] omdoc:components::omdoc::OMDocSource
+) -> impl IntoView {
+    wait(
+        move || {
+            tracing::info!("fetching {uri}");
+            let fut = config::server_config.full_doc(uri.clone());
+            async move {fut.await.ok()}
+        }, 
+        move |(uri,css,html)| {
+            for c in css { do_css(c); }
+            view!(<DocumentString html uri toc=toc.clone() omdoc=omdoc.clone()/>)
+        }, 
+        "Error loading document reference".to_string(),
+    )
+}
+
+#[cfg(not(feature="omdoc"))]
+#[component]
+pub fn DocumentString(
+    html:String,
+    #[prop(optional)] uri:Option<DocumentURI>,
+    #[prop(optional,into)] toc:TOCSource
+) -> impl IntoView {
+    let uri = uri.unwrap_or_else(DocumentURI::no_doc);
+    let burger = !matches!(toc,TOCSource::None);
+    view! {<SHTMLDocumentSetup uri>
+        {if burger {Some(
+            do_burger(toc)
+        )} 
+        else { None }}
+        <DomStringCont html cont=iterate/>
+    </SHTMLDocumentSetup>}
+}
+
+#[cfg(feature="omdoc")]
+#[component]
+pub fn DocumentString(
+    html:String,
+    #[prop(optional)] uri:Option<DocumentURI>,
+    #[prop(optional,into)] toc:TOCSource,
+    #[prop(optional)] omdoc:components::omdoc::OMDocSource
+) -> impl IntoView {
+    let uri = uri.unwrap_or_else(DocumentURI::no_doc);
+    let burger = !matches!((&toc,&omdoc),(TOCSource::None,components::omdoc::OMDocSource::None));
+    view! {<SHTMLDocumentSetup uri>
+        {if burger {Some(
+            do_burger(toc,omdoc)
+        )} 
+        else { None }}
+        <DomStringCont html cont=iterate/>
+    </SHTMLDocumentSetup>}
 }
 
 
-fn do_document(uri:DocumentURI,children:Children, on_load:Option<RwSignal<bool>>) -> impl IntoView {
+#[cfg(not(feature="omdoc"))]
+fn do_burger(
+    toc:components::TOCSource
+) -> impl IntoView {
+    use immt_web_utils::components::Burger;
+    components::do_toc(toc,move |v| view!{
+        <Burger>{v}</Burger>
+    })
+}
+
+#[cfg(feature="omdoc")]
+fn do_burger(
+    toc:TOCSource,
+    omdoc:components::omdoc::OMDocSource
+) -> impl IntoView {
+    use immt_web_utils::components::Burger;
+    components::do_toc(toc,move |v| view!{
+        <Burger>{components::omdoc::do_omdoc(omdoc)}{v}</Burger>
+    })
+}
+
+#[component]
+pub fn SHTMLDocumentSetup(
+    uri:DocumentURI, 
+    children: Children, 
+    #[prop(optional)] on_load:Option<RwSignal<bool>>
+) -> impl IntoView {
     use crate::components::navigation::{Nav,NavElems,URLFragment};
+    inject_css("shtml-comp", include_str!("components/comp.css"));
     //let config = config::ServerConfig::clone_static();
     //provide_context(config);
     #[cfg(any(feature="csr",feature="hydrate"))]
     provide_context(RwSignal::new(DOMExtractor::default()));
     provide_context(InInputRef(false));
-    provide_context(RwSignal::new(NavElems{ids:HMap::default()}));
+    provide_context(RwSignal::new(NavElems{ids:HMap::default(),titles:HMap::default()}));
     provide_context(IdPrefix(String::new()));
     provide_context(URLFragment::new());
     provide_context(NarrativeURI::Document(uri));
@@ -53,6 +155,11 @@ fn do_document(uri:DocumentURI,children:Children, on_load:Option<RwSignal<bool>>
         <Nav on_load/>
         {r}
     }
+}
+
+#[component]
+pub fn SHTMLString(html:String) -> impl IntoView {
+    view!(<DomStringCont html cont=iterate/>)
 }
 
 pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
@@ -143,44 +250,5 @@ extern "C" {
     fn call(this: &SectionContinuation, uri: &str) -> wasm_bindgen::JsValue;
 }
 
-#[cfg(feature="ts")]
-impl SectionContinuation {
-    /// #### Errors
-  pub fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
-    use wasm_bindgen::JsCast;
-    let uri = uri.to_string();
-    let result = self.call(&uri);
-    if result.is_null() || result.is_undefined() {
-      return Ok(None);
-    }
-    let elem : leptos::web_sys::Element = result.dyn_into()?;
-    Ok(Some(elem))
-  }
-}
-
 #[cfg(not(feature="ts"))]
 pub struct SectionContinuation;
-#[cfg(not(feature="ts"))]
-impl SectionContinuation {
-    /// #### Errors
-    pub const fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
-        Ok(None)
-    }
-}
-
-#[derive(Copy,Clone)]
-pub struct OnSectionBegin(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
-impl OnSectionBegin {
-    /// #### Errors
-    pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
-        self.0.with_value(|f| f.do_call(uri))
-    }
-}
-#[derive(Copy,Clone)]
-pub struct OnSectionEnd(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
-impl OnSectionEnd {
-    /// #### Errors
-    pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
-        self.0.with_value(|f| f.do_call(uri))
-    }
-}

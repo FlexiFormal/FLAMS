@@ -59,6 +59,7 @@ impl SHTMLElements {
 impl<'a> IntoIterator for &'a SHTMLElements {
     type Item = &'a OpenSHTMLElement;
     type IntoIter = std::iter::Rev<std::slice::Iter<'a,OpenSHTMLElement>>;
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.elems.iter().rev()
     }
@@ -130,6 +131,7 @@ pub mod rules {
     use immt_ontology::content::declarations::symbols::{ArgSpec, AssocType};
     use immt_ontology::narration::paragraphs::ParagraphKind;
     use immt_ontology::uris::Name;
+    use immt_utils::vecmap::VecSet;
     use smallvec::SmallVec;
     use crate::errors::SHTMLError;
     use crate::open::OpenSHTMLElement;
@@ -290,11 +292,11 @@ pub mod rules {
             let id = attrs.get_id(extractor,Cow::Borrowed(kind.as_str()));
             let uri = extractor.get_narrative_uri() & &*id;
             let inline = attrs.get_bool(Self::Inline);
-            let mut fors = Vec::new();
+            let mut fors = VecSet::new();
             if let Some(f) = attrs.get(Self::Fors) {
                 for f in f.as_ref().split(',') {
                     if let Some(f) = extractor.get_sym_uri(f.trim()) {
-                        fors.push(f);
+                        fors.insert(f);
                     } else {
                         extractor.add_error(SHTMLError::InvalidKeyFor(Self::Fors.as_str(), Some(f.trim().into())));
                     };
@@ -427,6 +429,7 @@ pub mod rules {
         
         pub(crate) fn definiendum<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_symbol_uri(Self::Definiendum,extractor));
+            extractor.add_definiendum(uri.clone());
             Some(OpenSHTMLElement::Definiendum(uri))
         }
 

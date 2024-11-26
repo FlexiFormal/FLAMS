@@ -21,6 +21,8 @@ use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, 
 #[component]
 pub fn Main() -> impl IntoView {
     provide_meta_context();
+    #[cfg(feature = "ssr")]
+    provide_context(immt_web_utils::CssIds::default());
     view! {
         <Title text="iMᴍᴛ"/>
         <Router>{
@@ -28,25 +30,33 @@ pub fn Main() -> impl IntoView {
             let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
             //provide_context(UseLSP(params.with_untracked(|p|)))
             view!{<Routes fallback=|| NotFound()>
-                <ParentRoute ssr=SsrMode::PartiallyBlocked path=StaticSegment("/dashboard") view=Dashboard>
-                    <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
-                    //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
-                    <Route path=StaticSegment("log") view=|| view!(<MainPage page=Page::Log/>)/>
-                    <Route path=StaticSegment("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
-                    <Route path=StaticSegment("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
-                    <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
-                    <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
-                    <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
+                <ParentRoute ssr=SsrMode::PartiallyBlocked path=() view=Top>
+                    <ParentRoute path=StaticSegment("/dashboard") view=Dashboard>
+                        <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
+                        //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
+                        <Route path=StaticSegment("log") view=|| view!(<MainPage page=Page::Log/>)/>
+                        <Route path=StaticSegment("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
+                        <Route path=StaticSegment("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
+                        <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
+                        <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
+                        <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
+                    </ParentRoute>
+                    <Route path=StaticSegment("/") view={move || if has_params() {
+                            view! { <content::URITop/> }.into_any()
+                        } else {
+                            view! { <Redirect path="/dashboard"/> }.into_any()
+                        }}
+                    />
                 </ParentRoute>
-                <Route ssr=SsrMode::PartiallyBlocked path=StaticSegment("/") view={move || if has_params() {
-                        view! { <content::URITop/> }.into_any()
-                    } else {
-                        view! { <Redirect path="/dashboard"/> }.into_any()
-                    }}
-                />
             </Routes>}
         }</Router>
     }
+}
+
+#[component(transparent)]
+fn Top() -> impl IntoView {
+    use crate::users::Login;
+    view!{<Login><leptos_router::components::Outlet/></Login>}
 }
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]

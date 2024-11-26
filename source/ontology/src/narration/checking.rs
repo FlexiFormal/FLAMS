@@ -35,6 +35,11 @@ enum Elem {
         range: DocumentRange,
         structure: SymbolURI,
     },
+    Extension {
+        range: DocumentRange,
+        extension: SymbolURI,
+        target:SymbolURI
+    },
     Paragraph {
         kind: ParagraphKind,
         uri: DocumentElementURI,
@@ -90,6 +95,12 @@ impl Elem {
                 structure:MaybeResolved::resolve(structure,|m| checker.get_declaration(m)),
                 children: v.into_boxed_slice(),
             },
+            Self::Extension { range, extension,target } => DocumentElement::Extension {
+                range,
+                extension:MaybeResolved::resolve(extension,|m| checker.get_declaration(m)),
+                target:MaybeResolved::resolve(target,|m| checker.get_declaration(m)),
+                children: v.into_boxed_slice(),
+            },
             Self::Paragraph {
                 kind,
                 uri,
@@ -133,7 +144,7 @@ impl Elem {
                 solutions: solutions.into_boxed_slice(),
                 hints: hints.into_boxed_slice(),
                 notes: notes.into_boxed_slice(),
-                gnotes: gnotes.into_boxed_slice(),
+                grading_notes: gnotes.into_boxed_slice(),
                 preconditions: preconditions.into_boxed_slice(),
                 objectives: objectives.into_boxed_slice(),
                 children: v.into_boxed_slice(),
@@ -298,6 +309,18 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                     .push((Elem::MathStructure { range, structure }, old_in, old_out));
                 return;
             }
+            DocumentElement::Extension {
+                range,
+                extension,
+                target,
+                children,
+            } => {
+                let old_in = std::mem::replace(&mut self.curr_in, children.into_iter());
+                let old_out = std::mem::take(&mut self.curr_out);
+                self.stack
+                    .push((Elem::Extension { range, extension,target }, old_in, old_out));
+                return;
+            }
             DocumentElement::Paragraph(LogicalParagraph {
                 kind,
                 uri,
@@ -335,7 +358,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 hints,
                 styles,
                 notes,
-                gnotes,
+                grading_notes: gnotes,
                 title,
                 children,
                 preconditions,

@@ -3,7 +3,7 @@ use std::path::Path;
 use async_lsp::lsp_types::{Position, Range, Url};
 use immt_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
 use immt_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
-use immt_system::backend::{archives::Archive, AnyBackend, Backend, GlobalBackend};
+use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
 use immt_utils::time::measure;
 
 use crate::LSPStore;

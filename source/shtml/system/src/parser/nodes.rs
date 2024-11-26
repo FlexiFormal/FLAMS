@@ -152,6 +152,14 @@ impl SHTMLNode for NodeRef {
         });
         String::from_utf8_lossy_owned(html)
     }
+    fn inner_string(&self) -> String {
+        let mut html = Vec::new();
+        let _ = html5ever::serialize(&mut html, self, SerializeOpts {
+            traversal_scope:TraversalScope::ChildrenOnly(None),
+            ..Default::default()
+        });
+        String::from_utf8_lossy_owned(html)
+    }
 
     fn as_notation(&self) -> Option<NotationSpec> {
         fn get_node(node:NodeRef) -> NodeRef {
@@ -303,7 +311,7 @@ impl NodeRef {
   }
   pub fn len(&self) -> usize {
     match &self.data {
-        NodeData::Comment(c) => c.as_bytes().len() + "<!---->".len(),
+        NodeData::Comment(c) => 0,// c.as_bytes().len() + "<!---->".len(),
         NodeData::Text(t) => t.borrow().as_bytes().len(),
         NodeData::Element(e) => {
             e.end_offset.get() - e.start_offset.get()
@@ -606,8 +614,8 @@ impl NodeRef {
 
 #[inline]
 pub fn tag_len(name:&QualName) -> usize {
-    name.prefix.as_ref().map(|e| e.as_bytes().len() + 1 /* ':' */).unwrap_or_default()
-      + name.local.as_bytes().len()
+    name.prefix.as_ref().map(|e| e.len() + 1 /* ':' */).unwrap_or_default()
+      + name.local.len()
       + "<>".len()
 }
 
@@ -676,12 +684,6 @@ impl DoubleEndedIterator for Siblings {
     siblings_next!(next_back, next, previous_sibling);
 }
 
-
-
-
-
-
-
 impl Serialize for NodeRef {
     fn serialize<S>(&self, serializer: &mut S, traversal_scope: TraversalScope) -> std::io::Result<()>
         where
@@ -719,7 +721,7 @@ impl Serialize for NodeRef {
 
             (TraversalScope::IncludeNode, NodeData::Doctype{name,..}) => serializer.write_doctype(name),
             (TraversalScope::IncludeNode, NodeData::Text(text)) => serializer.write_text(&text.borrow()),
-            (TraversalScope::IncludeNode, NodeData::Comment(text)) => serializer.write_comment(text),
+            (TraversalScope::IncludeNode, NodeData::Comment(_text)) => Ok(()),//serializer.write_comment(text),
             (TraversalScope::IncludeNode, NodeData::ProcessingInstruction(target,data)) => {
                 serializer.write_processing_instruction(target, data)
             }

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use immt_ontology::{uris::NarrativeURI, Unchecked};
-use immt_utils::prelude::HMap;
+use immt_utils::{prelude::HMap, vecmap::VecSet};
 use smallvec::SmallVec;
 use shtml_extraction::prelude::{Attributes, SHTMLExtractor};
 use leptos::{prelude::expect_context, web_sys::Element};
@@ -81,6 +81,9 @@ impl SHTMLExtractor for DOMExtractor {
     fn add_op_notation(&mut self,op:immt_ontology::narration::notations::OpNotation) -> Result<(),immt_ontology::narration::notations::OpNotation> {
         todo!()
     }
+    fn add_definiendum(&mut self,uri:immt_ontology::uris::SymbolURI) {
+        todo!()
+    }
     fn add_resource<T:immt_ontology::Resourcable>(&mut self,t:&T) -> immt_ontology::narration::LazyDocRef<T> {
         todo!()
     }
@@ -133,7 +136,7 @@ impl SHTMLExtractor for DOMExtractor {
     fn open_exercise(&mut self,_uri:immt_ontology::uris::DocumentElementURI) {}
     fn open_narrative(&mut self,_uri:Option<immt_ontology::uris::NarrativeURI>) {}
     fn open_notation(&mut self) {}
-    fn open_paragraph(&mut self,_uri:immt_ontology::uris::DocumentElementURI,_fors:Vec<immt_ontology::uris::SymbolURI>) {}
+    fn open_paragraph(&mut self,_uri:immt_ontology::uris::DocumentElementURI,_fors:VecSet<immt_ontology::uris::SymbolURI>) {}
     fn open_section(&mut self,_uri:immt_ontology::uris::DocumentElementURI) {}
     fn set_document_title(&mut self,_title:Box<str>) {}
 }

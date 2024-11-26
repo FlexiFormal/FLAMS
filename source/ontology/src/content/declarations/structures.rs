@@ -1,5 +1,5 @@
 use crate::{
-    content::ModuleTrait, uris::SymbolURI, Checked, CheckingState, Resolvable
+    content::ModuleTrait, uris::{ContentURIRef, SymbolURI}, Checked, CheckingState, Resolvable
 };
 
 use super::{Declaration, DeclarationTrait, OpenDeclaration};
@@ -33,6 +33,10 @@ impl ModuleTrait for MathStructure<Checked> {
     fn declarations(&self) -> &[Declaration] {
         &self.elements
     }
+    #[inline]
+    fn content_uri(&self) -> ContentURIRef {
+        ContentURIRef::Symbol(&self.uri)
+    }
 }
 
 
@@ -41,6 +45,12 @@ pub struct Extension<State:CheckingState> {
     pub uri: SymbolURI,
     pub target: State::Decl<MathStructure<Checked>>,
     pub elements: State::Seq<OpenDeclaration<State>>,
+}
+impl Resolvable for Extension<Checked> {
+    type From = SymbolURI;
+    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+        std::borrow::Cow::Borrowed(&self.uri)
+    }
 }
 impl super::private::Sealed for Extension<Checked> {}
 impl DeclarationTrait for Extension<Checked> {
@@ -56,6 +66,10 @@ impl ModuleTrait for Extension<Checked> {
     #[inline]
     fn declarations(&self) -> &[Declaration] {
         &self.elements
+    }
+    #[inline]
+    fn content_uri(&self) -> ContentURIRef {
+        ContentURIRef::Symbol(&self.uri)
     }
 }
 

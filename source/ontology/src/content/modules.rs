@@ -4,7 +4,7 @@ use super::{
     ModuleLike, ModuleTrait,
 };
 use crate::{
-    languages::Language, uris::{ModuleURI, SymbolURI, URIWithLanguage}, Checked, CheckingState, MaybeResolved, Resolvable, Unchecked
+    languages::Language, uris::{ContentURIRef, ModuleURI, SymbolURI, URIWithLanguage}, Checked, CheckingState, MaybeResolved, Resolvable, Unchecked
 };
 use triomphe::Arc;
 
@@ -32,6 +32,10 @@ impl ModuleTrait for OpenModule<Checked> {
     #[inline]
     fn declarations(&self) -> &[Declaration] {
         &self.elements
+    }
+    #[inline]
+    fn content_uri(&self) -> ContentURIRef {
+        ContentURIRef::Module(&self.uri)
     }
 }
 
@@ -76,6 +80,10 @@ impl ModuleTrait for Module {
     fn declarations(&self) -> &[Declaration] {
         &self.0.elements
     }
+    #[inline]
+    fn content_uri(&self) -> ContentURIRef {
+        ContentURIRef::Module(self.uri())
+    }
 }
 
 #[cfg(feature="serde")]
@@ -119,6 +127,11 @@ impl ModuleTrait for NestedModule<Checked> {
     #[inline]
     fn declarations(&self) -> &[Declaration] {
         &self.elements
+    }
+
+    #[inline]
+    fn content_uri(&self) -> ContentURIRef {
+        ContentURIRef::Symbol(&self.uri)
     }
 }
 

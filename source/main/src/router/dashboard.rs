@@ -41,7 +41,7 @@ fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> 
   view!{
     <Themer>
       <Layout position=LayoutPosition::Absolute>
-        <Login>
+        //<Login>
           <LayoutHeader class="immt-header">
             <div style="width:100%">
               <Grid cols=3>
@@ -61,7 +61,7 @@ fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> 
             </div>
           </LayoutHeader>
           {f()}
-        </Login>
+        //</Login>
       </Layout>
     </Themer>
   }

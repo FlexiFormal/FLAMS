@@ -1,15 +1,62 @@
 use immt_ontology::languages::Language;
 use immt_ontology::rdf::{NamedNode, Quad, Triple};
-use immt_ontology::uris::{ArchiveURIRef, DocumentURI, PathURITrait, URIOrRefTrait, URIRefTrait};
-use oxigraph::sparql::{EvaluationError, Query, QueryResults};
+use immt_ontology::uris::{ArchiveURIRef, DocumentURI, PathURITrait, URIOrRefTrait, URIRefTrait, URITrait};
+use oxigraph::sparql::QuerySolutionIter;
 use oxrdfio::RdfFormat;
-use spargebra::SparqlSyntaxError;
 use std::fmt::{Debug, Display};
 use std::io::{BufReader, BufWriter};
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::Path;
 use std::string::FromUtf8Error;
 use tracing::instrument;
+
+pub mod sparql {
+    pub use oxigraph::sparql::*;
+    pub use spargebra::{SparqlSyntaxError,Query as QueryBuilder};
+    pub struct Var(pub char);
+    impl From<Var> for spargebra::term::TermPattern {
+        fn from(v:Var) -> Self {
+            Self::Variable(immt_ontology::rdf::Variable::new_unchecked(v.0))
+        }
+    }
+    impl From<Var> for spargebra::term::NamedNodePattern {
+        fn from(v:Var) -> Self {
+            Self::Variable(immt_ontology::rdf::Variable::new_unchecked(v.0))
+        }
+    }
+    pub trait TermPattern : Into<spargebra::term::TermPattern> {}
+    impl TermPattern for Var {}
+    pub trait NamedNodePattern: Into<spargebra::term::NamedNodePattern> {}
+    impl NamedNodePattern for Var {}
+    impl NamedNodePattern for super::NamedNode {}
+    impl TermPattern for super::NamedNode {}
+    pub struct Select<S:TermPattern,P:NamedNodePattern,O:TermPattern>{
+        pub subject:S,
+        pub pred:P,
+        pub object:O
+    }
+    impl<S:TermPattern,P:NamedNodePattern,O:TermPattern> From<Select<S,P,O>> for Query {
+        fn from(s:Select<S,P,O>) -> Self {
+            QueryBuilder::Select {
+                dataset:None,
+                base_iri:None,
+                pattern:spargebra::algebra::GraphPattern::Distinct { inner: Box::new(
+                    spargebra::algebra::GraphPattern::Bgp {
+                        patterns: vec![
+                            spargebra::term::TriplePattern {
+                                subject: s.subject.into(),
+                                predicate: s.pred.into(),
+                                object: s.object.into(),
+                            }
+                        ]
+                    }
+                ) }
+            }.into()
+        }
+    }
+}
+use sparql::{SparqlSyntaxError,EvaluationError, Query, QueryResults};
 
 use super::archives::Archive;
 
@@ -50,7 +97,55 @@ impl QueryResult {
         }
         Ok(String::from_utf8(buf)?)
     }
+
+    #[must_use]
+    pub fn into_uris<U:URITrait>(self) -> RetIter<U> {
+        RetIter(match self.0 {
+            QueryResults::Boolean(_) | QueryResults::Graph(_) => RetIterI::None,
+            QueryResults::Solutions(sols) => RetIterI::Sols(sols)
+        },PhantomData)
+    }
 }
+
+#[derive(Default)]
+enum RetIterI {
+    #[default]
+    None,
+    Sols(QuerySolutionIter)
+}
+
+
+pub struct RetIter<U:URITrait>(RetIterI,PhantomData<U>);
+impl<U:URITrait> Default for RetIter<U> {
+    #[inline]
+    fn default() -> Self {
+        Self(RetIterI::default(),PhantomData)
+    }
+}
+
+impl<U:URITrait> Iterator for RetIter<U> {
+    type Item = U;
+    fn next(&mut self) -> Option<Self::Item> {
+        let RetIterI::Sols(s) = &mut self.0 else {return None};
+        loop {
+            let s = match s.next() {
+                None => return None,
+                Some(Err(_)) => continue,
+                Some(Ok(s)) => s
+            };
+            //println!("Solution: {s:?}");
+            let [Some(immt_ontology::rdf::RDFTerm::NamedNode(n))] = s.values() else {continue};
+            let s = n.as_str();
+            //println!("Iri: {s}");
+            let s = immt_utils::escaping::IRI_ESCAPE.unescape(&s).to_string();
+            if let Ok(s) = s.parse() {
+                //println!("Parsed: {s}");
+                return Some(s)
+            }
+        }
+    }
+}
+
 impl AsRef<QueryResults> for QueryResult {
     #[inline]
     fn as_ref(&self) -> &QueryResults {
@@ -98,9 +193,10 @@ impl RDFStore {
     pub fn export(&self, iter: impl Iterator<Item = Triple>, p: &Path, uri: &DocumentURI) {
         if let Ok(file) = std::fs::File::create(p) {
             let writer = BufWriter::new(file);
-            let ns = uri.as_path().to_iri().to_string();
-            let ns = ns.strip_prefix("<").unwrap_or(&ns);
-            let ns = ns.strip_suffix(">").unwrap_or(ns);
+            let iri = uri.as_path().to_iri();
+            let ns = iri.as_str();
+            //let ns = ns.strip_prefix("<").unwrap_or(&ns);
+            //let ns = ns.strip_suffix(">").unwrap_or(ns);
             let mut writer = oxigraph::io::RdfSerializer::from_format(RdfFormat::Turtle)
                 .with_prefix("ns", ns)
                 .unwrap_or_else(|_| unreachable!())

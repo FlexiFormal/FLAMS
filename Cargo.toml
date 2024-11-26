@@ -130,16 +130,16 @@ webp = { version= "0.3"}
 dashmap = { version = "5" }
 
 # leptos
-leptos = { version = "=0.7.0-rc1", features=["nightly"]}
-leptos_axum = "=0.7.0-rc1"
-leptos_meta= "=0.7.0-rc1"
-leptos_router = { version = "=0.7.0-rc1", features=["nightly"]}
+leptos = { version = "=0.7.0-rc2", features=["nightly"]}
+leptos_axum = "=0.7.0-rc2"
+leptos_meta= "=0.7.0-rc2"
+leptos_router = { version = "=0.7.0-rc2", features=["nightly"]}
 
-thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "bb5129bbef20240032bc37bd84d3b0527c98f2b4"}
+thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw = { version="0.4.0-beta4",features=["nightly"] }
-thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "bb5129bbef20240032bc37bd84d3b0527c98f2b4"}
+thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw_components = "0.2.0-beta4"
-thaw_utils = { git = "https://github.com/thaw-ui/thaw", rev = "bb5129bbef20240032bc37bd84d3b0527c98f2b4"}
+thaw_utils = { features=["nightly"], git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw_utils = "0.1.0-beta4"
 
 icondata_bi = "0"
@@ -180,11 +180,11 @@ tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithr
 #leptos_server = {version="=0.7.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #reactive_graph = {version="=0.1.0-beta5"}
-leptos_macro = {version="=0.7.0-rc1"}
-tachys = {version="=0.1.0-rc1"}
-server_fn = {version="=0.7.0-rc1"}
-server_fn_macro = {version="=0.7.0-rc1"}
-server_fn_macro_default = {version="=0.7.0-rc1"}
+leptos_macro = {version="=0.7.0-rc2"}
+tachys = {version="=0.1.0-rc2"}
+server_fn = {version="=0.7.0-rc2"}
+server_fn_macro = {version="=0.7.0-rc2"}
+server_fn_macro_default = {version="=0.7.0-rc2"}
 
 
 [[workspace.metadata.leptos]]
@@ -217,8 +217,6 @@ lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_
 # https://crates.io/crates/lol_html <- HTML parsing/rewriting
 # https://docs.rs/memchr/2.7.4/memchr/ <- fast string search
 # https://docs.rs/icondata/latest/icondata/ <- icons
-# https://docs.rs/smallvec/latest/smallvec/
-# https://docs.rs/arrayvec/latest/arrayvec/
 # https://crates.io/crates/flume channels?
 
 # search:

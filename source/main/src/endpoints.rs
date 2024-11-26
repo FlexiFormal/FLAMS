@@ -1,3 +1,4 @@
+#![allow(rustdoc::private_intra_doc_links)]
 /*! # Public API Endpoints
  * 
  * | Path         | Arguments | Description / Return Value |
@@ -25,5 +26,6 @@
  * | [`/img`](crate::server::img::img_handler) | `kpse=<STRING>` or `file=<STRING>` (LSP only) or `a=<ArchiveID>&rp=<STRING>` | Images |
  * | [`/content/document`](crate::router::content::document) | [DocumentURI](immt_ontology::uris::DocumentURI) | `(`[DocumentURI](immt_ontology::uris::DocumentURI),`Vec<`[CSS](immt_utils::CSS)`>,String)` Returns a pair of CSS rules and the full body of the HTML for the given document (with the `<body>` node replaced by a `<div>`, but preserving all attributes/classes) |
  * | [`/content/fragment`](crate::router::content::fragment) | [URI](immt_ontology::uris::URI) | `(Vec<`[CSS](immt_utils::CSS)`>,String)` Returns a pair of CSS rules and the HTML fragment representing the given element; i.e. the inner HTML of a document (for inputrefs), the HTML or a semantic paragraph, etc. |
+ * | [`/content/omdoc`](crate::router::content::omdoc) | [URI](immt_ontology::uris::URI) | [`AnySpec`](shtml_viewer_components::components::omdoc::AnySpec) Returns the structural representation of the OMDoc conent at the given URI |
  * | [`/content/toc`](crate::router::content::toc()) | [DocumentURI](immt_ontology::uris::DocumentURI) | `(Vec<`[CSS](immt_utils::CSS)`>,Vec<`[TOCElem](shtml_viewer_components::components::TOCElem)`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
 */

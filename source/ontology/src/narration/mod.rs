@@ -10,7 +10,9 @@ pub mod variables;
 
 use std::marker::PhantomData;
 
+use documents::Document;
 use exercises::Exercise;
+use immt_utils::prelude::InnerArc;
 use notations::Notation;
 use paragraphs::LogicalParagraph;
 use sections::{Section, SectionLevel};
@@ -18,9 +20,9 @@ use variables::Variable;
 
 use crate::{
     content::{
-        declarations::{morphisms::Morphism, structures::MathStructure, symbols::Symbol},
+        declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::Symbol},
         terms::Term,
-    }, uris::{DocumentElementURI, DocumentURI, NameStep, SymbolURI}, Checked, CheckingState, DocumentRange, Unchecked
+    }, uris::{DocumentElementURI, DocumentURI, Name, NameStep, SymbolURI}, Checked, CheckingState, DocumentRange, Unchecked
 };
 
 #[derive(Debug,Clone)]
@@ -38,8 +40,115 @@ impl<T> LazyDocRef<T> {
     }
 }
 
+pub trait NarrationTrait {
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized;
+    fn children(&self) -> &[DocumentElement<Checked>];
 
-pub struct ElementHasNoChildren;
+    fn find<T: NarrationTrait>(&self, steps: &[NameStep]) -> Option<&T> {
+        enum I<'a> {
+            One(std::slice::Iter<'a,DocumentElement<Checked>>),
+            Mul(std::slice::Iter<'a,DocumentElement<Checked>>,Vec<std::slice::Iter<'a,DocumentElement<Checked>>>)
+        }
+        impl<'a> I<'a> {
+            fn push(&mut self,es:&'a[DocumentElement<Checked>]) {
+                match self {
+                    Self::One(_) => {
+                        let new = Self::Mul(es.iter(),Vec::with_capacity(1));
+                        let Self::One(s) = std::mem::replace(self,new) else {unreachable!()};
+                        let Self::Mul(_,v) = self else {unreachable!()};
+                        v.push(s);
+                    }
+                    Self::Mul(f,r) => {
+                        let of = std::mem::replace(f,es.iter());
+                        r.push(of);
+                    }
+                }
+            }
+        }
+        impl<'a> Iterator for I<'a> {
+            type Item = &'a DocumentElement<Checked>;
+            #[allow(clippy::option_if_let_else)]
+            fn next(&mut self) -> Option<Self::Item> { match self {
+                Self::One(s) => s.next(),
+                Self::Mul(f,r) => loop {
+                    if let Some(n) = f.next() {
+                        return Some(n)
+                    }
+                    let Some(mut n) = r.pop() else { unreachable!() };
+                    if r.is_empty() { 
+                        let r = n.next();
+                        *self = Self::One(n);
+                        return r
+                    } 
+                    *f = n;
+                }
+            }}
+        }
+        let mut steps = steps;
+        let mut curr = I::One(self.children().iter());
+        'outer: while !steps.is_empty() {
+            let step = &steps[0];
+            steps = &steps[1..];
+            while let Some(c) = curr.next() {
+                match c {
+                    DocumentElement::Section(Section {uri,children,..}) |
+                    DocumentElement::Paragraph(LogicalParagraph{uri,children,..}) |
+                    DocumentElement::Exercise(Exercise{uri,children,..})
+                        if uri.name().last_name() == step => {
+                        if steps.is_empty() {
+                            return T::from_element(c);
+                        }
+                        curr = I::One(children.iter());
+                        continue 'outer;
+                    }
+                    DocumentElement::Module { children,..} |
+                    DocumentElement::Morphism { children,..} |
+                    DocumentElement::MathStructure{ children,..} |
+                    DocumentElement::Extension{ children,..} => curr.push(children),
+                    DocumentElement::Notation{id:uri,..} |
+                    DocumentElement::VariableNotation { id:uri,.. } |
+                    DocumentElement::Variable(Variable {uri,..}) |
+                    DocumentElement::TopTerm { uri, .. }
+                        if uri.name().last_name() == step => {
+                        if steps.is_empty() {
+                            return T::from_element(c);
+                        }
+                        return None
+                    }
+                    _ => (),
+                }
+            }
+        }
+        None
+    }
+}
+
+pub struct NarrativeReference<T: NarrationTrait>(InnerArc<Document, T>);
+
+impl<T: NarrationTrait> NarrativeReference<T> {
+    #[must_use]
+    pub fn new(d: &Document, name: &Name) -> Option<Self> {
+        unsafe{
+            InnerArc::new(d, |d| &d.0,
+                |d| d.find(name.steps()).ok_or(())
+            ).ok().map(Self)
+        }
+    }
+}
+
+impl<T: NarrationTrait> AsRef<T> for NarrativeReference<T> {
+    #[inline]
+    fn as_ref(&self) -> &T {
+        self.0.as_ref()
+    }
+}
+
+impl<T: NarrationTrait + std::fmt::Debug> std::fmt::Debug for NarrativeReference<T> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_ref(), f)
+    }
+}
 
 //#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DocumentElement<State:CheckingState> {
@@ -58,6 +167,12 @@ pub enum DocumentElement<State:CheckingState> {
     MathStructure {
         range: DocumentRange,
         structure: State::Decl<MathStructure<Checked>>,
+        children: State::Seq<DocumentElement<State>>,
+    },
+    Extension {
+        range: DocumentRange,
+        extension: State::Decl<Extension<Checked>>,
+        target: State::Decl<MathStructure<Checked>>,
         children: State::Seq<DocumentElement<State>>,
     },
     DocumentReference {
@@ -101,7 +216,6 @@ pub enum DocumentElement<State:CheckingState> {
     Exercise(Exercise<State>),
 }
 
-
 crate::serde_impl! {
     enum DocumentElement {
         {0 = SetSectionLevel(l)}
@@ -109,19 +223,39 @@ crate::serde_impl! {
         {2 = Module{range,module,children}}
         {3 = Morphism{range,morphism,children}}
         {4 = MathStructure{range,structure,children}}
-        {5 = DocumentReference { id, range, target }}
-        {6 = SymbolDeclaration(s)}
-        {7 = Notation{symbol,id,notation}}
-        {8 = VariableNotation { variable, id, notation }}
-        {9 = Variable(v)}
-        {10 = Definiendum { range, uri }}
-        {11 = SymbolReference { range, uri, notation }}
-        {12 = VariableReference { range, uri, notation }}
-        {13 = TopTerm { uri, term }}
-        {14 = UseModule(m)}
-        {15 = ImportModule(m)}
-        {16 = Paragraph(p)}
-        {17 = Exercise(e)}
+        {5 = Extension{range,extension,target,children}}
+        {6 = DocumentReference { id, range, target }}
+        {7 = SymbolDeclaration(s)}
+        {8 = Notation{symbol,id,notation}}
+        {9 = VariableNotation { variable, id, notation }}
+        {10 = Variable(v)}
+        {11 = Definiendum { range, uri }}
+        {12 = SymbolReference { range, uri, notation }}
+        {13 = VariableReference { range, uri, notation }}
+        {14 = TopTerm { uri, term }}
+        {15 = UseModule(m)}
+        {16 = ImportModule(m)}
+        {17 = Paragraph(p)}
+        {18 = Exercise(e)}
+    }
+}
+
+impl NarrationTrait for DocumentElement<Checked> {
+    #[inline]
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+        Some(e)
+    }
+    fn children(&self) -> &[DocumentElement<Checked>] {
+        match self {
+            Self::Section(s) => s.children(),
+            Self::Paragraph(p) => p.children(),
+            Self::Exercise(e) => e.children(),
+            Self::Module { children, .. } |
+            Self::Morphism { children, .. } |
+            Self::MathStructure { children, .. } |
+            Self::Extension { children, .. } => children,
+            _ => &[],
+        }
     }
 }
 
@@ -133,6 +267,7 @@ impl<State:CheckingState> std::fmt::Debug for DocumentElement<State> {
             Self::Module { range, module, children } => f.debug_struct("Module").field("range", range).field("module", module).field("children", children).finish(),
             Self::Morphism { range, morphism, children } => f.debug_struct("Morphism").field("range", range).field("morphism", morphism).field("children", children).finish(),
             Self::MathStructure { range, structure, children } => f.debug_struct("MathStructure").field("range", range).field("structure", structure).field("children", children).finish(),
+            Self::Extension { range, extension,target, children } => f.debug_struct("Extension").field("range", range).field("extension", extension).field("target",target).field("children", children).finish(),
             Self::DocumentReference { id, range, target } => f.debug_struct("DocumentReference").field("id", id).field("range", range).field("target", target).finish(),
             Self::SymbolDeclaration(symbol) => f.debug_tuple("SymbolDeclaration").field(symbol).finish(),
             Self::Notation { symbol, id, notation } => f.debug_struct("Notation").field("symbol", symbol).field("id", id).field("notation", notation).finish(), 
@@ -165,3 +300,5 @@ impl DocumentElement<Unchecked> {
         Ok(())
     }
 }
+
+pub struct ElementHasNoChildren;

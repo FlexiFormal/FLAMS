@@ -78,6 +78,8 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         channel.send(Some(site_addr.port())).expect("Error sending port address");
     }
 
+    crate::fns::init();
+
     axum::serve(
         tokio::net::TcpListener::bind(&site_addr)
             .instrument(span.clone())

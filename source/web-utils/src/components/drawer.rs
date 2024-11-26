@@ -5,28 +5,38 @@ use super::Header;
 
 #[derive(Copy,Clone,Default)]
 pub enum DrawerSize {
-  RelativeSmall,
-  AbsoluteSmall,
-  RelativeMedium,
-  AbsoluteMedium,
-  RelativeWide,
+  Small,Medium,
   #[default]
-  AbsoluteWide
-}
-impl DrawerSize {
-  fn css(self) -> &'static str {
-    inject_css("immt-drawer",include_str!("./drawer.css"));
-    match self {
-      Self::RelativeSmall => "width:20%;",
-      Self::AbsoluteSmall => "width:20vw;",
-      Self::RelativeMedium => "width:50%",
-      Self::AbsoluteMedium => "width:50vw;",
-      Self::RelativeWide => "width:80%;",
-      Self::AbsoluteWide => "width:80vw;",
-    }
-  }
+  Wide
 }
 
+impl DrawerSize {
+  fn css(self) -> &'static str {
+    //inject_css("immt-drawer",include_str!("./drawer.css"));
+    let (cls,csstr) = match self {
+      Self::Small => ("immt-drawer-absolute-small", ".immt-drawer-absolute-small {--thaw-drawer--size:20vw !important;z-index:5;}"),
+      Self::Medium => ("immt-drawer-absolute-medium", ".immt-drawer-absolute-medium {--thaw-drawer--size:50vw !important;z-index:5;}"),
+      Self::Wide => ("immt-drawer-absolute-wide", ".immt-drawer-absolute-wide {--thaw-drawer--size:80vw !important;z-index:5;}"),
+    };
+    inject_css(cls,csstr);
+    cls
+  }
+  /*
+  const fn css(self) -> &'static str {
+    // --thaw-drawer--size:80vw !important;
+    match self {
+      Self::RelativeSmall => "--thaw-drawer--size:20% !important",
+      Self::AbsoluteSmall => "--thaw-drawer--size:20vw !important",
+      Self::RelativeMedium => "--thaw-drawer--size:50% !important",
+      Self::AbsoluteMedium => "--thaw-drawer--size:50vw !important",
+      Self::RelativeWide => "--thaw-drawer--size:80% !important",
+      Self::AbsoluteWide => "--thaw-drawer--size:80vw !important",
+    }
+  }
+   */
+}
+/*
+#[cfg(not(feature="themed"))]
 #[component]
 pub fn Drawer(
     lazy:bool,
@@ -36,7 +46,7 @@ pub fn Drawer(
     mut children:ChildrenFnMut
 ) -> impl IntoView {
   use thaw_components::{Teleport,FocusTrap,CSSTransition};
-  use thaw::{Button,ButtonAppearance,Scrollbar};
+  use crate::{Button,ButtonAppearance,Scrollbar};
   size.css();
   let open_drawer = RwSignal::new(false);
   let drawer_ref = NodeRef::<leptos::html::Div>::new();
@@ -100,20 +110,22 @@ pub fn Drawer(
     </Teleport>
   }
 }
+*/
 
 #[component]
-pub fn DrawerThaw(
-    lazy:bool,
-    trigger:super::Trigger,
-    #[prop(optional)] header:Option<Header>,
-    mut children:ChildrenFnMut
+pub fn Drawer(
+  lazy:bool,
+  trigger:super::Trigger,
+  #[prop(optional)] header:Option<Header>,
+  #[prop(optional)] size:DrawerSize,
+  mut children:ChildrenFnMut
 ) -> impl IntoView {
   use thaw::{Button,ButtonAppearance,DrawerBody,OverlayDrawer,DrawerHeaderTitle,DrawerHeader,DrawerPosition,DrawerHeaderTitleAction};
-  inject_css("immt-drawer", ".immt-wide-drawer { z-index:5; --thaw-drawer--size:80vw !important; }");
+  //inject_css("immt-drawer", ".immt-wide-drawer { z-index:5;}");
   let open = RwSignal::new(false);
   view!{
     <span on:click=move |_| open.set(true)>{(trigger.children)()}</span>
-    <OverlayDrawer class="immt-wide-drawer" open position=DrawerPosition::Right>
+    <OverlayDrawer class=size.css() open position=DrawerPosition::Right>
       <DrawerHeader><DrawerHeaderTitle>
         <DrawerHeaderTitleAction slot>
           <Button
@@ -125,7 +137,7 @@ pub fn DrawerThaw(
         {header.map(|h| (h.children)())}
       </DrawerHeaderTitle></DrawerHeader>
       <DrawerBody>{move ||
-        if lazy || open.get() { children().into_any()}
+        if !lazy || open.get() { children().into_any()}
         else {"".into_any()}
       }</DrawerBody>
     </OverlayDrawer>

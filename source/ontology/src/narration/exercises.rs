@@ -1,10 +1,10 @@
 use std::{fmt::Display, str::FromStr};
 
 use crate::{
-    uris::{DocumentElementURI, SymbolURI}, CheckingState, DocumentRange
+    uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
 };
 
-use super::{DocumentElement, LazyDocRef};
+use super::{DocumentElement, LazyDocRef, NarrationTrait};
 
 #[derive(Debug)]
 pub struct Exercise<State:CheckingState> {
@@ -16,7 +16,7 @@ pub struct Exercise<State:CheckingState> {
     pub solutions: State::Seq<LazyDocRef<Box<str>>>,
     pub hints: State::Seq<LazyDocRef<Box<str>>>,
     pub notes: State::Seq<LazyDocRef<Box<str>>>,
-    pub gnotes: State::Seq<LazyDocRef<Box<str>>>,
+    pub grading_notes: State::Seq<LazyDocRef<Box<str>>>,
     pub title: Option<DocumentRange>,
     pub children: State::Seq<DocumentElement<State>>,
     pub styles:Box<[Box<str>]>,
@@ -27,9 +27,20 @@ pub struct Exercise<State:CheckingState> {
 crate::serde_impl!{
     struct Exercise[
         sub_exercise,uri,range,autogradable,points,solutions,
-        hints,notes,gnotes,title,children,styles,preconditions,
+        hints,notes,grading_notes,title,children,styles,preconditions,
         objectives
     ]
+}
+
+impl NarrationTrait for Exercise<Checked> {
+    #[inline]
+    fn children(&self) -> &[DocumentElement<Checked>] {
+        &self.children
+    }
+    #[inline]
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+        if let DocumentElement::Exercise(e) = e {Some(e)} else {None}
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -133,7 +133,7 @@ impl OpenSHTMLElement {
             Self::Exercise { uri, styles, autogradable, points, sub_exercise } => Self::close_exercise(extractor, node, uri, styles, autogradable, points, sub_exercise),
 
             Self::Doctitle => {
-                extractor.set_document_title(node.string().into_boxed_str());
+                extractor.set_document_title(node.inner_string().into_boxed_str());
             }
 
             Self::Title =>
@@ -218,12 +218,14 @@ impl OpenSHTMLElement {
                     Either::Right((a,b)) => (a,Some(b))
                 };
                 if extractor.add_arg(pos, t, a.mode).is_err() {
+                    //println!("HERE 1");
                     extractor.add_error(SHTMLError::IncompleteArgs);
                 }
             }
             Self::HeadTerm => {
                 let tm = node.as_term();
                 if extractor.add_term(None,tm).is_err() {
+                    //println!("HERE 2");
                     extractor.add_error(SHTMLError::IncompleteArgs);
                 }
             }
@@ -232,10 +234,6 @@ impl OpenSHTMLElement {
                 return Some(self);
             }
             Self::ClosedTerm(_) => return Some(self),
-
-
-
-
 
             Self::Inputref { uri, id } => {
                 let top = extractor.get_narrative_uri();
@@ -365,7 +363,7 @@ impl OpenSHTMLElement {
 
         if uri.name().last_name().as_ref().starts_with("EXTSTRUCT") {
             let Some(target) = content.iter().find_map(|d| match d {
-                OpenDeclaration::Import(uri) => Some(uri),
+                OpenDeclaration::Import(uri) if !uri.name().last_name().as_ref().starts_with("EXTSTRUCT") => Some(uri),
                 _ => None
             }) else {
                 extractor.add_error(SHTMLError::NotInContent);
@@ -382,8 +380,8 @@ impl OpenSHTMLElement {
                     triple!(<(uri.to_iri())> ulo:EXTENDS <(target.to_iri())>)
                 ]);
             }
-            extractor.add_document_element(DocumentElement::MathStructure { 
-                range: node.range(), structure: uri.clone(), children: narrative
+            extractor.add_document_element(DocumentElement::Extension { 
+                range: node.range(), extension:uri.clone(), target: target.clone(), children: narrative
             });
             if extractor.add_content_element(OpenDeclaration::Extension(Extension {
                 uri,elements:content,target
@@ -529,7 +527,7 @@ impl OpenSHTMLElement {
         extractor.add_document_element(DocumentElement::Exercise(
             Exercise {
                 range: node.range(),uri,styles,autogradable,points,sub_exercise,
-                solutions,hints,notes,gnotes,title,children,preconditions,objectives
+                solutions,hints,notes,grading_notes: gnotes,title,children,preconditions,objectives
             }
         ));
     }

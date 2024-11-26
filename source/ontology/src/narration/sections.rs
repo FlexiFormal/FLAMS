@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
-use crate::{uris::DocumentElementURI, CheckingState, DocumentRange};
+use crate::{uris::DocumentElementURI, Checked, CheckingState, DocumentRange};
 
-use super::DocumentElement;
+use super::{DocumentElement, NarrationTrait};
 
 /*
 #[derive(Debug,Clone)]
@@ -27,6 +27,18 @@ pub struct Section<State:CheckingState> {
 
 crate::serde_impl!{
     struct Section[range,uri,level,title,children]
+}
+
+impl NarrationTrait for Section<Checked> {
+    #[inline]
+    fn children(&self) -> &[DocumentElement<Checked>] {
+        &self.children
+    }
+
+    #[inline]
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+        if let DocumentElement::Section(e) = e {Some(e)} else {None}
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -7,11 +7,12 @@ edition = "2021"
 workspace = true
 
 [features]
+omdoc = []
 ts = ["dep:tsify-next"]
 rdf = ["immt-ontology/rdf","shtml-extraction/rdf"]
-csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
-hydrate= ["ts","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
-ssr = ["leptos/ssr","rdf","immt-web-utils/ssr"]
+csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm","dep:parking_lot"]
+hydrate= ["ts","omdoc","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
+ssr = ["leptos/ssr","rdf","immt-web-utils/ssr","dep:immt-system","dep:tokio"]
 
 [dependencies]
 leptos-dyn-dom = {workspace=true}
@@ -19,6 +20,8 @@ leptos = {workspace=true}
 thaw = {workspace=true}
 shtml-extraction = {workspace=true}
 immt-ontology = {workspace=true,features=["serde"]}
+immt-system = {workspace=true, optional=true}
+tokio = {workspace = true,optional=true}
 immt-utils = {workspace=true}
 smallvec = {workspace=true}
 tracing = {workspace=true}
@@ -27,9 +30,10 @@ immt-web-utils = {workspace=true}
 urlencoding = {workspace=true}
 send_wrapper = {workspace=true}
 wasm-bindgen = {workspace=true}
-serde = {workspace = true}
-either = {workspace = true}
-icondata_ch = {workspace = true}
+serde = {workspace = true,features=["derive"]}
+either = {workspace = true, features=["serde"]}
+parking_lot = {workspace = true,optional=true}
+icondata_bi = {workspace = true}
 
 web-sys = {workspace = true,features=["ScrollIntoViewOptions","ScrollLogicalPosition"]} 
 

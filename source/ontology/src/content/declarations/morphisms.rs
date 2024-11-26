@@ -1,5 +1,5 @@
 use crate::{
-    content::ModuleTrait, uris::SymbolURI, Checked, CheckingState, Resolvable
+    content::ModuleTrait, uris::{ContentURIRef, SymbolURI}, Checked, CheckingState, Resolvable
 };
 
 use super::{Declaration, DeclarationTrait, OpenDeclaration};
@@ -31,6 +31,10 @@ impl ModuleTrait for Morphism<Checked> {
     #[inline]
     fn declarations(&self) -> &[Declaration] {
         &self.elements
+    }
+    #[inline]
+    fn content_uri(&self) -> ContentURIRef {
+        ContentURIRef::Symbol(self.uri.as_ref().unwrap())
     }
 }
 crate::serde_impl!{

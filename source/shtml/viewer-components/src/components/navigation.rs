@@ -1,3 +1,4 @@
+use immt_ontology::uris::DocumentURI;
 use immt_utils::prelude::HMap;
 use leptos::prelude::*;
 use web_sys::Element;
@@ -10,9 +11,25 @@ pub enum SectionOrInputref {
 }
 
 pub struct NavElems {
-    pub ids: HMap<String,SectionOrInputref>
+    pub ids: HMap<String,SectionOrInputref>,
+    pub titles: HMap<DocumentURI,RwSignal<String>>
 }
 impl NavElems {
+    pub fn get_title(&mut self,uri:DocumentURI) -> RwSignal<String> {
+        match self.titles.entry(uri) {
+            std::collections::hash_map::Entry::Occupied(e) => *e.get(),
+            std::collections::hash_map::Entry::Vacant(e) => { 
+                let name = e.key().name().to_string();
+                *e.insert(RwSignal::new(name))
+            }
+        }
+    }
+    pub fn set_title(&mut self,uri:DocumentURI,title:String) {
+        match self.titles.entry(uri) {
+            std::collections::hash_map::Entry::Occupied(e) => e.get().set(title),
+            std::collections::hash_map::Entry::Vacant(e) => { e.insert(RwSignal::new(title));}
+        }
+    }
     pub fn update_untracked<R>(f:impl FnOnce(&mut Self) -> R) -> R {
         expect_context::<RwSignal<Self>>().update_untracked(f)
     }

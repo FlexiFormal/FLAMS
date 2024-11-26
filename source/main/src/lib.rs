@@ -15,10 +15,35 @@ pub mod router;
 pub mod users;
 pub mod utils;
 
-#[cfg(feature = "hydrate")]
-fn fragment(uri:Option<immt_ontology::uris::URI>,rp:Option<String>,a:Option<immt_ontology::uris::ArchiveId>,p:Option<String>,l:Option<immt_ontology::languages::Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
--> std::pin::Pin<Box<dyn std::future::Future<Output=Result<(Vec<immt_utils::CSS>,String),leptos::prelude::ServerFnError<String>>> + Send>> {
-    Box::pin(crate::router::content::fragment(uri,rp,a,p,l,d,e,m,s))
+pub(crate) mod fns {
+    use std::{future::Future, pin::Pin};
+
+    use immt_ontology::{languages::Language, uris::{ArchiveId, DocumentURI, URI}};
+    use immt_utils::CSS;
+    use leptos::prelude::ServerFnError;
+    use shtml_viewer_components::components::{omdoc::AnySpec, TOCElem};
+
+    fn fragment(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
+    -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,String),ServerFnError<String>>> + Send>> {
+        Box::pin(crate::router::content::fragment(uri,rp,a,p,l,d,e,m,s))
+    }
+    fn full_doc(uri:Option<DocumentURI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>)
+    -> Pin<Box<dyn Future<Output=Result<(DocumentURI,Vec<CSS>,String),ServerFnError<String>>> + Send>> {
+        Box::pin(crate::router::content::document(uri,rp,a,p,l,d))
+    }
+    fn toc(uri:Option<DocumentURI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>)
+    -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,Vec<TOCElem>),ServerFnError<String>>> + Send>> {
+        Box::pin(crate::router::content::toc(uri,rp,a,p,l,d))
+    }
+    fn omdoc(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
+    -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,AnySpec),ServerFnError<String>>> + Send>> {
+        Box::pin(crate::router::content::omdoc(uri,rp,a,p,l,d,e,m,s))
+    }
+    pub(super) fn init() {
+        shtml_viewer_components::config::ServerConfig::initialize(
+            fragment,full_doc,toc,omdoc
+        );
+    }
 }
 
 #[cfg(feature = "hydrate")]
@@ -27,9 +52,7 @@ pub fn hydrate() {
     //use router::*;
     console_error_panic_hook::set_once();
     tracing_wasm::set_as_global_default();
-    shtml_viewer_components::config::ServerConfig::initialize(
-        fragment
-    );
+    fns::init();
     leptos::mount::hydrate_body(router::Main);
 }
 

@@ -1,12 +1,12 @@
 use crate::languages::Language;
 use crate::uris::{
-    debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef,
-    ContentURITrait, DocumentURI, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURIRef,
-    PathURITrait, SymbolURI, URIOrRefTrait, URIParseError, URIRef, URIWithLanguage,
+    debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, DocumentURI, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URITrait, URIWithLanguage, URI
 };
 use const_format::concatcp;
 use std::fmt::Display;
 use std::str::{FromStr, Split};
+
+use super::NarrativeURI;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct DocumentElementURI {
@@ -15,6 +15,17 @@ pub struct DocumentElementURI {
 }
 impl DocumentElementURI {
     pub const SEPARATOR: char = 'e';
+    #[inline]
+    #[must_use]
+    pub const fn document(&self) -> &DocumentURI {
+        &self.document
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn name(&self) -> &Name {
+        &self.name
+    }
 }
 impl Display for DocumentElementURI {
     #[inline]
@@ -49,13 +60,31 @@ impl NarrativeURITrait for DocumentElementURI {
         &self.document
     }
 }
-impl DocumentElementURI {
+impl URITrait for DocumentElementURI {
+    type Ref<'a> = &'a Self;
+}
+impl From<DocumentElementURI> for URI {
     #[inline]
-    #[must_use]
-    pub const fn name(&self) -> &Name {
-        &self.name
+    fn from(value: DocumentElementURI) -> Self {
+        Self::Narrative(NarrativeURI::Element(value))
     }
+}
+impl<'a> From<&'a DocumentElementURI> for URIRef<'a> {
+    #[inline]
+    fn from(value: &'a DocumentElementURI) -> Self {
+        URIRef::Narrative(NarrativeURIRef::Element(value))
+    }
+}
+impl<'a> URIRefTrait<'a> for &'a DocumentElementURI {
+    type Owned = DocumentElementURI;
+    #[inline]
+    fn owned(self) -> DocumentElementURI {
+        self.clone()
+    }
+}
 
+
+impl DocumentElementURI {
     pub(super) fn pre_parse<R>(
         s: &str,
         uri_kind: &'static str,

@@ -1,6 +1,7 @@
 pub use oxrdf::{
     BlankNode, GraphName, GraphNameRef, Literal, LiteralRef, NamedNode, NamedNodeRef, Quad,
     QuadRef, Subject, SubjectRef, Term as RDFTerm, TermRef as RDFTermRef, Triple, TripleRef,
+    Variable
 };
 
 #[macro_export]

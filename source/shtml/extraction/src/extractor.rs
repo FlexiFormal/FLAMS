@@ -13,7 +13,7 @@ use immt_ontology::narration::{DocumentElement, LazyDocRef};
 use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURITrait, SymbolURI, URIRefTrait};
 use immt_ontology::{DocumentRange, Resourcable, Unchecked};
 use immt_utils::prelude::HMap;
-use immt_utils::vecmap::VecMap;
+use immt_utils::vecmap::{VecMap, VecSet};
 use crate::errors::SHTMLError;
 use crate::open::terms::TermOrList;
 use crate::rules::SHTMLElements;
@@ -33,6 +33,7 @@ pub trait SHTMLNode {
     fn range(&self) -> DocumentRange;
     fn inner_range(&self) -> DocumentRange;
     fn string(&self) -> String;
+    fn inner_string(&self) -> String;
     fn as_notation(&self) -> Option<NotationSpec>;
     fn as_op_notation(&self) -> Option<OpNotation>;
     fn as_term(&self) -> Term;
@@ -283,7 +284,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         None
     }
     
-    fn open_paragraph(&mut self,uri:DocumentElementURI,fors:Vec<SymbolURI>) {
+    fn open_paragraph(&mut self,uri:DocumentElementURI,fors:VecSet<SymbolURI>) {
         let fors = fors.into_iter().map(|s| (s,None)).collect();
         self.state_mut().narrative.push(Narrative::Paragraph(ParagraphState {
             uri, children:Vec::new(), fors, title: None 
@@ -342,12 +343,14 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     fn close_args(&mut self) -> (Vec<Arg>,Option<Term>) {
         match self.state_mut().content.pop() {
             Some(Content::Args(args,head)) => {
+                //println!("Checking:\n{args:?}\n\n{head:?}\n");
                 let mut ret = Vec::new();
                 let mut iter = args.into_iter();
                 while let Some(Some((a,m))) = iter.next() {
                     ret.push(match a.close(m) {
                         Ok(a) => a,
                         Err(a) => {
+                            //println!("HERE 3");
                             self.add_error(SHTMLError::IncompleteArgs);
                             a
                         }
@@ -355,6 +358,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
                 }
                 for e in iter {
                     if e.is_some() {
+                        //println!("\n\nHERE 4\n\n");
                         self.add_error(SHTMLError::IncompleteArgs);
                     }
                 }
@@ -374,6 +378,16 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
             Narrative::Section{uri,..} => Some(uri.as_narrative().owned()),
             Narrative::Notation(_) => None
         }).unwrap_or_else(|| unreachable!())
+    }
+
+    fn add_definiendum(&mut self,uri:SymbolURI) {
+        for n in self.state_mut().narrative.iter_mut().rev() {
+            if let Narrative::Paragraph(ParagraphState { fors,..}) = n {
+                fors.get_or_insert_mut(uri, || None);
+                return
+            }
+        }
+        self.add_error(SHTMLError::NotInNarrative);
     }
 
     fn get_content_uri(&self) -> Option<&ModuleURI> {
@@ -563,7 +577,7 @@ pub trait SHTMLExtractor {
     fn close_complex_term(&mut self) -> Option<Term>;
     fn open_section(&mut self,uri:DocumentElementURI);
     fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<DocumentElement<Unchecked>>)>;
-    fn open_paragraph(&mut self,uri:DocumentElementURI,fors:Vec<SymbolURI>);
+    fn open_paragraph(&mut self,uri:DocumentElementURI,fors:VecSet<SymbolURI>);
     fn close_paragraph(&mut self) -> Option<ParagraphState>;
     fn open_exercise(&mut self,uri:DocumentElementURI);
     fn close_exercise(&mut self) -> Option<ExerciseState>;
@@ -580,6 +594,7 @@ pub trait SHTMLExtractor {
     #[allow(clippy::result_unit_err)]
     fn add_arg(&mut self,pos:(u8,Option<u8>),tm:Term,mode:ArgMode) -> Result<(),()>;
 
+    fn add_definiendum(&mut self,uri:SymbolURI);
 
     fn add_resource<T:Resourcable>(&mut self,t:&T) -> LazyDocRef<T>;
     /// #### Errors
@@ -739,7 +754,14 @@ pub trait Attributes {
     fn get_id<E:SHTMLExtractor>(&self,extractor:&mut E,prefix:Cow<'static,str>) -> Box<str> {
         self.get(SHTMLTag::Id).map_or_else(
             || extractor.new_id(prefix),
-            |v| Into::<String>::into(v).into_boxed_str()
+            |v| {
+                let v = v.as_ref();
+                if v.starts_with("http") && v.contains('?') {
+                    v.rsplit_once('?').unwrap_or_else(|| unreachable!()).1.into()
+                } else {
+                    Into::<String>::into(v).into_boxed_str()
+                }
+            }
         )
     }
 

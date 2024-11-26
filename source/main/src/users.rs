@@ -4,8 +4,8 @@ use std::{fmt::Display, str::FromStr};
 use leptos::prelude::*;
 #[cfg(feature="hydrate")]
 use std::borrow::Cow;
-#[cfg(feature="hydrate")]
-use immt_web_utils::components::error_toast;
+//#[cfg(feature="hydrate")]
+//use immt_web_utils::components::error_toast;
 
 #[server(prefix="/api",endpoint="login")]//, input=server_fn::codec::Cbor)]
 pub async fn login(username:String,password:String) -> Result<LoginState,ServerFnError<LoginError>> {
@@ -117,24 +117,29 @@ impl FromStr for LoginError {
     }
 }
 
-#[component]
+#[component(transparent)]
 pub(crate) fn Login(children:Children) -> impl IntoView {
     use immt_web_utils::components::Spinner;
     let user = RwSignal::new(LoginState::Loading);
     provide_context(user);
-    #[cfg(feature="hydrate")]
-    let toaster = thaw::ToasterInjection::expect_context();
+    //#[cfg(feature="hydrate")]
+    //let toaster = thaw::ToasterInjection::expect_context();
     let res = Resource::new_blocking(|| (),move |()| async move {
-      #[cfg(feature="ssr")]
-      #[allow(clippy::needless_return)]
-      { return LoginState::get(); }
-      #[cfg(feature="hydrate")]
-      {
-        login_state().await.unwrap_or_else(|e| {
-          error_toast(Cow::Owned(format!("Error: {e}")),toaster);
-          LoginState::None
-        })
-      }
+        match user.get() {
+            LoginState::Loading => (),
+            u => return u
+        }
+        #[cfg(feature="ssr")]
+        #[allow(clippy::needless_return)]
+        { return LoginState::get(); }
+        #[cfg(feature="hydrate")]
+        {
+            login_state().await.unwrap_or_else(|e| {
+                leptos::logging::error!("Error getting login state: {e}");
+            //error_toast(Cow::Owned(format!("Error: {e}")),toaster);
+                LoginState::None
+            })
+        }
     });
 
     view!{

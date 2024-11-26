@@ -154,6 +154,13 @@ impl PreVar {
             }
         }
     }) }
+    #[inline]#[must_use]
+    pub const fn name(&self) -> &Name {
+        match self {
+            Self::Resolved(declaration) => declaration.name(),
+            Self::Unresolved(name) => name
+        }
+    }
 }
 
 #[derive(Clone,Debug)]

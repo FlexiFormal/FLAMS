@@ -1,4 +1,4 @@
-use super::{checking::DocumentChecker, DocumentElement};
+use super::{checking::DocumentChecker, DocumentElement, NarrationTrait};
 use crate::{uris::DocumentURI, Checked, CheckingState, Resolvable, Unchecked};
 use core::str;
 use std::{borrow::Cow, fmt::Debug};
@@ -16,7 +16,7 @@ crate::serde_impl!{mod serde_doc =
 
 
 #[derive(Debug, Clone)]
-pub struct Document(Arc<OpenDocument<Checked>>);
+pub struct Document(pub(super) Arc<OpenDocument<Checked>>);
 impl Resolvable for Document {
     type From = DocumentURI;
     #[inline]
@@ -39,11 +39,29 @@ impl Document {
     pub fn title(&self) -> Option<&str> {
         self.0.title.as_deref()
     }
+}
 
+impl NarrationTrait for Document {
     #[inline]
     #[must_use]
-    pub fn children(&self) -> &[DocumentElement<Checked>] {
+    fn children(&self) -> &[DocumentElement<Checked>] {
         &self.0.elements
+    }
+    #[inline]
+    fn from_element(_: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+        None
+    }
+}
+
+impl NarrationTrait for OpenDocument<Checked> {
+    #[inline]
+    #[must_use]
+    fn children(&self) -> &[DocumentElement<Checked>] {
+        &self.elements
+    }
+    #[inline]
+    fn from_element(_: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+        None
     }
 }
 

@@ -5,7 +5,6 @@ use http::Request;
 use immt_ontology::uris::ArchiveId;
 use immt_system::{backend::{Backend, GlobalBackend}, settings::Settings};
 use immt_utils::time::Timestamp;
-use leptos::svg::Image;
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
 
@@ -58,8 +57,8 @@ impl ImageData {
 
 
 pub async fn img_handler(
-  mut uri: http::Uri,
-  axum::extract::State(ServerState {images,..}): axum::extract::State<ServerState>,
+  uri: http::Uri,
+  axum::extract::State(ServerState {images:_,..}): axum::extract::State<ServerState>,
   //request: http::Request<axum::body::Body>,
 ) -> axum::response::Response<ServeFileSystemResponseBody> {
 

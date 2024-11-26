@@ -609,11 +609,14 @@ impl ArchiveTree {
         let mut steps = id.steps().peekable();
         let mut curr = &self.groups;
         while let Some(step) = steps.next() {
-            let Ok(i) = curr.binary_search_by_key(&step, |v| v.id().last_name()) else {
-                return None;
+            let Some(e) = curr.iter().find(|e| e.id().last_name() == step) else {
+                return None
             };
-            if steps.peek().is_none() { return Some(&curr[i]); }
-            if let ArchiveOrGroup::Group(g) = &curr[i] {
+            /*let Ok(i) = curr.binary_search_by_key(&step, |v| v.id().last_name()) else {
+                return None;
+            };*/
+            if steps.peek().is_none() {return Some(e)} //{ return Some(&curr[i]); }
+            if let ArchiveOrGroup::Group(g) = e {//&curr[i] {
                 curr = &g.children;
             } else {return None;}
         }
@@ -621,8 +624,9 @@ impl ArchiveTree {
     }
 
     pub fn get(&self,id:&ArchiveId) -> Option<&Archive> {
-        self.archives.binary_search_by_key(&id, Archive::id).ok()
-            .map(|i| &self.archives[i])
+        self.archives.iter().find(|a| a.uri().archive_id() == id)
+        //self.archives.binary_search_by_key(&id, Archive::id).ok()
+        //    .map(|i| &self.archives[i])
     }
 
     #[instrument(level = "info",
