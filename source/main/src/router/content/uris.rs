@@ -21,6 +21,61 @@ pub enum URIKind {
   Declaration
 }
 
+
+#[derive(Clone)]
+pub enum SymURIComponents {
+  Uri(SymbolURI),
+  Comps{
+    a:ArchiveId,
+    p:Option<String>,
+    l:Option<Language>,
+    m:String,
+    s:String
+  }
+}
+
+impl SymURIComponents {
+  #[cfg(feature="ssr")]
+  pub fn parse(self) -> Option<SymbolURI> {
+    match self {
+      Self::Uri(uri) => Some(uri),
+      Self::Comps{a,p,l,m,s} => get_sym_uri(&a,p,l,&m,&s)
+    }
+  }
+
+  pub fn into_args<R,F:FnOnce(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>) -> R>(
+    self,f:F
+  ) -> R { match self {
+    Self::Uri(uri) => f(Some(uri),None,None,None,None,None),
+    Self::Comps{a,p,l,m,s} => f(None,Some(a),p,l,Some(m),Some(s))
+  }}
+}
+
+impl TryFrom<(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>)>
+  for SymURIComponents {
+    type Error = ();
+    fn try_from((uri,a,p,l,m,s):(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>)) -> Result<Self,()> {
+      if let Some(uri) = uri {
+        return if a.is_none() && p.is_none() && l.is_none() && m.is_none() && s.is_none() {
+          Ok(Self::Uri(uri))
+        } else { Err(())}
+      }
+      a.map_or_else(
+        || Err(()),
+        |a| match (m,s) {
+          (Some(m),Some(s)) =>
+            Ok(Self::Comps{a,p,l,m,s}),
+          _ => Err(())
+        }
+      )
+    }
+}
+
+
+
+
+
+
 #[derive(Clone)]
 pub enum DocURIComponents {
   Uri(DocumentURI),

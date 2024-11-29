@@ -1,12 +1,16 @@
 [tasks.wasm-pack]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--target","no-modules","--out-name","shtml"]
+args = ["build","--target","no-modules","--out-name","shtml",
+    "--","--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
+]
 
 [tasks.wasm-pack-ts]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--out-dir","ts","--","--features","ts"]
+args = ["build","--out-dir","ts","--","--features","ts",
+    "--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
+]
 
 
 [tasks.wasm-pack-dev]

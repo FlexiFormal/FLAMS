@@ -4,7 +4,7 @@ use immt_web_utils::{components::{Block,Header}, do_css};
 use narration::DocumentElementSpec;
 use leptos::prelude::*;
 
-use crate::SHTMLString;
+use crate::{SHTMLString, SHTMLStringMath};
 
 pub mod narration;
 pub mod content;
@@ -37,19 +37,14 @@ pub(crate) fn do_omdoc(omdoc:OMDocSource) -> impl IntoView {
         <Header slot><span inner_html=title/></Header>
         {match &omdoc {
             OMDocSource::Get => {
-                let uri = uri.clone();
-                let r = Resource::new(|| (),move |()| crate::config::server_config.omdoc(NarrativeURI::Document(uri.clone()).into()));
-                view!{
-                    <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move || {
-                        if let Some(Ok((_,omdoc))) = r.get() {
-                            let AnySpec::Document(omdoc) = omdoc else {unreachable!()};
-                            if let Some(s) = &omdoc.title {
-                                title.set(s.clone());
-                            }
-                            Some(omdoc.into_view())
-                        } else { None }
-                    }}</Suspense>
-                }.into_any()
+              let uri = uri.clone();
+              crate::config::get!(omdoc(NarrativeURI::Document(uri.clone()).into()) = (_,omdoc) => {
+                let AnySpec::Document(omdoc) = omdoc else {unreachable!()};
+                if let Some(s) = &omdoc.title {
+                    title.set(s.clone());
+                }
+                omdoc.into_view()
+              }).into_any()
             }
             OMDocSource::Ready(omdoc) => {
                 if let Some(s) = &omdoc.title {
@@ -90,6 +85,7 @@ pub enum AnySpec {
   Variable(narration::VariableSpec),
   Paragraph(narration::ParagraphSpec),
   Exercise(narration::ExerciseSpec),
+  Term(DocumentElementURI,String),
   DocReference{
     uri:DocumentURI,
     title:Option<String>
@@ -115,6 +111,12 @@ impl Spec for AnySpec {
         Self::Exercise(d) => d.into_view().into_any(),
         Self::DocReference{uri,title} => 
           narration::doc_ref(uri,title).into_any(),
+        Self::Term(uri,html) => view! {
+          <Block show_separator=false>
+            <Header slot><span><b>"Term "</b><SHTMLStringMath html/></span></Header>
+            ""
+          </Block>
+        }.into_any(),
         Self::Other(s) => view!(<div>{s}</div>).into_any()
       }
   }
@@ -184,15 +186,10 @@ pub(crate) fn module_name(uri:&ModuleURI) -> impl IntoView {
       <div style="margin-bottom:5px;"><thaw::Divider/></div>
       <Scrollbar style="max-height:300px">
       {
-        let r = Resource::new(|| (),move |()| crate::config::server_config.omdoc(uri.clone().into()));
-        view!{
-          <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move || {
-            if let Some(Ok((css,s))) = r.get() {
-              for c in css { do_css(c); }
-              {Some(s.into_view())}
-            } else {None}
-          }}</Suspense>
-        }
+        crate::config::get!(omdoc(uri.clone().into()) = (css,s) => {
+          for c in css { do_css(c); }
+          s.into_view()
+        })
       }
       </Scrollbar>
     </Popover></div>
@@ -211,26 +208,21 @@ pub(crate) fn doc_name(uri:&DocumentURI,title:String) -> impl IntoView {
     </div>
   }
 }
-pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:&'static str,title:String) -> impl IntoView {
+pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,title:String) -> impl IntoView {
   use immt_web_utils::components::{Popover,PopoverTrigger};
   let uristring = uri.to_string();
   view!{
     //<div style="display:inline-block;">
       <div style="display:inline-block;"><Popover>
-        <PopoverTrigger slot>{kind}" "<span class="shtml-comp"><SHTMLString html=title/></span></PopoverTrigger>
+        <PopoverTrigger slot>{kind.map(|k| view!({k}" "))}<span class="shtml-comp"><SHTMLString html=title/></span></PopoverTrigger>
         <div style="font-size:small;">{uristring}</div>
         <div style="margin-bottom:5px;"><thaw::Divider/></div>
         <div style="background-color:white;color:black;">
         {
-          let r = Resource::new(|| (),move |()| crate::config::server_config.paragraph(uri.clone()));
-          view!{
-            <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move || {
-              if let Some(Ok((css,s))) = r.get() {
-                for c in css { do_css(c); }
-                Some(view!(<SHTMLString html=s/>))
-              } else {None}
-            }}</Suspense>
-          }
+          crate::config::get!(paragraph(uri.clone()) = (css,s) => {
+            for c in css { do_css(c); }
+            view!(<SHTMLString html=s/>)
+          })
         }
         </div>
       </Popover></div>
@@ -240,7 +232,7 @@ pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:&'static str,title:Strin
 #[inline]
 pub(crate) fn symbol_name(uri:&SymbolURI,title:&str) -> impl IntoView {
   let html = format!(
-    "<span data-shtml-term=\"OMID\" data-shtml-head=\"{uri}\"><span data-shtml-comp>{title}</span></span>"
+    "<span data-shtml-term=\"OMID\" data-shtml-head=\"{uri}\" data-shtml-comp>{title}</span>"
   );
   view!(<SHTMLString html/>)
 }

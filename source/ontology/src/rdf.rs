@@ -542,5 +542,12 @@ pub mod ontologies {
         { LAST_CHECKED_AT <super::rdfs::DOMAIN> <TYPE>};
         DATAPROP SOURCEREF = "sourceref" : super::xsd::ANY_URI @ "The URI of the physical \
             location (e.g. file/URI, line, column) of the source code that introduced the subject.";
+
+        + REMEMBER = "cd-remember";
+        + UNDERSTAND = "cd-understand";
+        + APPLY = "cd-apply";
+        + ANALYZE = "cd-analyze";
+        + EVALUATE = "cd-evaluate";
+        + CREATE = "cd-create";
     }
 }

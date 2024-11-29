@@ -1,6 +1,9 @@
 use immt_ontology::languages::Language;
+use immt_ontology::narration::exercises::CognitiveDimension;
+use immt_ontology::narration::LOKind;
+use immt_ontology::rdf::ontologies::ulo2;
 use immt_ontology::rdf::{NamedNode, Quad, Triple};
-use immt_ontology::uris::{ArchiveURIRef, DocumentURI, PathURITrait, URIOrRefTrait, URIRefTrait, URITrait};
+use immt_ontology::uris::{ArchiveURIRef, DocumentElementURI, DocumentURI, PathURITrait, SymbolURI, URIOrRefTrait, URIRefTrait, URITrait};
 use oxigraph::sparql::QuerySolutionIter;
 use oxrdfio::RdfFormat;
 use std::fmt::{Debug, Display};
@@ -12,6 +15,7 @@ use std::string::FromUtf8Error;
 use tracing::instrument;
 
 pub mod sparql {
+    use immt_ontology::{rdf::ontologies::{self, ulo2}, uris::{SymbolURI, URIOrRefTrait}};
     pub use oxigraph::sparql::*;
     pub use spargebra::{SparqlSyntaxError,Query as QueryBuilder};
     pub struct Var(pub char);
@@ -31,6 +35,7 @@ pub mod sparql {
     impl NamedNodePattern for Var {}
     impl NamedNodePattern for super::NamedNode {}
     impl TermPattern for super::NamedNode {}
+
     pub struct Select<S:TermPattern,P:NamedNodePattern,O:TermPattern>{
         pub subject:S,
         pub pred:P,
@@ -54,6 +59,95 @@ pub mod sparql {
                 ) }
             }.into()
         }
+    }
+
+    pub fn lo_query(s:&SymbolURI) -> Query {
+        /* 
+SELECT DISTINCT ?x ?R ?t ?s WHERE {
+  { 
+    ?x ulo:defines ?s.
+    BIND("DEF" as ?R) 
+  } UNION { 
+    ?x ulo:example-for ?s.
+    BIND("EX" as ?R) 
+  } UNION {
+    ?x ulo:objective ?bn .
+    ?bn ulo:po-symbol ?s .
+    ?bn ulo:cognitive-dimension ?R .
+    ?x rdf:type ?t.
+  }
+        */
+        use spargebra::{algebra::{GraphPattern,Expression},term::TriplePattern};
+        #[inline]
+        fn var(s:&'static str) -> spargebra::term::Variable {
+            spargebra::term::Variable::new_unchecked(s)
+        }
+        let iri = s.to_iri();
+        QueryBuilder::Select {
+            dataset:None,
+            base_iri:None,
+            pattern: GraphPattern::Distinct {
+                inner: Box::new(GraphPattern::Project {
+                    inner: Box::new(GraphPattern::Union {
+                        left: Box::new(GraphPattern::Union {
+                            left:Box::new(GraphPattern::Extend { 
+                                inner: Box::new(GraphPattern::Bgp { 
+                                    patterns: vec![
+                                        TriplePattern { 
+                                            subject: var("x").into(), 
+                                            predicate: ulo2::DEFINES.into_owned().into(), 
+                                            object: iri.clone().into() 
+                                        }
+                                    ] 
+                                }), 
+                                variable: var("R").into(), 
+                                expression: Expression::Literal(
+                                    "DEF".into()
+                                )
+                            }),
+                            right:Box::new(GraphPattern::Extend {
+                                inner: Box::new(GraphPattern::Bgp { 
+                                    patterns: vec![
+                                        TriplePattern { 
+                                            subject: var("x").into(), 
+                                            predicate: ulo2::EXAMPLE_FOR.into_owned().into(), 
+                                            object: iri.clone().into() 
+                                        }
+                                    ] 
+                                }), 
+                                variable: var("R").into(), 
+                                expression: Expression::Literal(
+                                    "EX".into()
+                                )
+                            })
+                        }),
+                        right: Box::new(GraphPattern::Bgp { patterns: vec![
+                            TriplePattern { 
+                                subject: var("x").into(), 
+                                predicate: ulo2::OBJECTIVE.into_owned().into(), 
+                                object: var("bn").into() 
+                            }, 
+                            TriplePattern { 
+                                subject: var("bn").into(), 
+                                predicate: ulo2::POSYMBOL.into_owned().into(), 
+                                object: iri.into() 
+                            }, 
+                            TriplePattern { 
+                                subject: var("bn").into(), 
+                                predicate: ulo2::COGDIM.into_owned().into(), 
+                                object: var("R").into() 
+                            }, 
+                            TriplePattern { 
+                                subject: var("x").into(), 
+                                predicate: ontologies::rdf::TYPE.into_owned().into(), 
+                                object: var("t").into() 
+                            }
+                        ] })
+                    }),
+                    variables:vec![var("x").into(),var("R").into(),var("t").into()]
+                })
+            }
+        }.into()
     }
 }
 use sparql::{SparqlSyntaxError,EvaluationError, Query, QueryResults};
@@ -107,13 +201,26 @@ impl QueryResult {
     }
 }
 
+impl AsRef<QueryResults> for QueryResult {
+    #[inline]
+    fn as_ref(&self) -> &QueryResults {
+        &self.0
+    }
+}
+impl Deref for QueryResult {
+    type Target = QueryResults;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Default)]
 enum RetIterI {
     #[default]
     None,
     Sols(QuerySolutionIter)
 }
-
 
 pub struct RetIter<U:URITrait>(RetIterI,PhantomData<U>);
 impl<U:URITrait> Default for RetIter<U> {
@@ -146,18 +253,43 @@ impl<U:URITrait> Iterator for RetIter<U> {
     }
 }
 
-impl AsRef<QueryResults> for QueryResult {
-    #[inline]
-    fn as_ref(&self) -> &QueryResults {
-        &self.0
-    }
+pub struct LOIter {
+    inner: QuerySolutionIter
 }
-impl Deref for QueryResult {
-    type Target = QueryResults;
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl Iterator for LOIter {
+    type Item = (DocumentElementURI,LOKind);
+    fn next(&mut self) -> Option<Self::Item> {
+        use immt_ontology::rdf::RDFTerm;
+        loop {
+            let s = match self.inner.next() {
+                None => return None,
+                Some(Err(_)) => continue,
+                Some(Ok(s)) => s
+            };
+            let Some(RDFTerm::NamedNode(n)) = s.get("x") else {continue};
+            let Ok(uri) = immt_utils::escaping::IRI_ESCAPE.unescape(&n.as_str()).to_string().parse() else {continue};
+            let n = match s.get("R") {
+                Some(RDFTerm::Literal(l)) if l.value() == "DEF" =>
+                    return Some((uri,LOKind::Definition)),
+                Some(RDFTerm::Literal(l)) if l.value() == "EX" =>
+                    return Some((uri,LOKind::Example)),
+                Some(RDFTerm::NamedNode(s)) => s,
+                _ => continue,
+            };
+            let cd = match n.as_ref() {
+                ulo2::REMEMBER => CognitiveDimension::Remember,
+                ulo2::UNDERSTAND => CognitiveDimension::Understand,
+                ulo2::APPLY => CognitiveDimension::Apply,
+                ulo2::ANALYZE => CognitiveDimension::Analyze,
+                ulo2::EVALUATE => CognitiveDimension::Evaluate,
+                ulo2::CREATE => CognitiveDimension::Create,
+                _ => continue
+            };
+            let sub = matches!(s.get("t"),Some(RDFTerm::NamedNode(n)) if n.as_ref() == ulo2::SUBPROBLEM);
+            return Some((uri,if sub {LOKind::SubExercise(cd)} else {LOKind::Exercise(cd)}))
+        }
     }
+
 }
 
 pub struct RDFStore {
@@ -190,6 +322,16 @@ impl RDFStore {
         let loader = self.store.bulk_loader();
         let _ = loader.load_quads(iter);
     }
+
+    pub fn los(&self,s:&SymbolURI) -> Option<LOIter> {
+        let q = sparql::lo_query(s);
+        self.query(q).ok().and_then(|s|
+            if let QueryResults::Solutions(s) = s.0  {
+                Some(LOIter {inner: s})
+            } else {None}
+        )
+    }
+
     pub fn export(&self, iter: impl Iterator<Item = Triple>, p: &Path, uri: &DocumentURI) {
         if let Ok(file) = std::fs::File::create(p) {
             let writer = BufWriter::new(file);

@@ -57,15 +57,15 @@ impl CognitiveDimension {
     #[cfg(feature = "rdf")]
     #[must_use]
     pub const fn to_iri(&self) -> crate::rdf::NamedNodeRef {
-        use crate::rdf::NamedNodeRef;
+        use crate::rdf::ontologies::ulo2;
         use CognitiveDimension::*;
         match self {
-            Remember => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#remember"),
-            Understand => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#understand"),
-            Apply => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#apply"),
-            Analyze => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#analyze"),
-            Evaluate => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#evaluate"),
-            Create => NamedNodeRef::new_unchecked("http://mathhub.info/ulo#create"),
+            Remember => ulo2::REMEMBER,
+            Understand => ulo2::UNDERSTAND,
+            Apply => ulo2::APPLY,
+            Analyze => ulo2::ANALYZE,
+            Evaluate => ulo2::EVALUATE,
+            Create => ulo2::CREATE,
         }
     }
 }

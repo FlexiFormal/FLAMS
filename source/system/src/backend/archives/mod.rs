@@ -267,6 +267,15 @@ impl LocalArchive {
             OMDocResult::load_html_fragment(&p,range)
         )
     }
+    pub fn load_reference<T:immt_ontology::Resourcable>(&self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,range:DocumentRange
+    ) -> Option<T> {
+        self.get_filepath(path, name, language, "shtml").and_then(|p|
+            OMDocResult::load_reference(&p,range)
+        )
+    }
 
     #[cfg(feature="tokio")]
     pub fn load_html_fragment_async<'a>(&self,
@@ -481,6 +490,16 @@ impl Archive {
     ) -> Option<(Vec<CSS>,String)> {
         match self {
             Self::Local(a) => a.load_html_fragment(path, name, language,range),
+        }
+    }
+
+    pub fn load_reference<T:immt_ontology::Resourcable>(&self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,range:DocumentRange
+    ) -> Option<T> {
+        match self {
+            Self::Local(a) => a.load_reference(path, name, language,range),
         }
     }
 

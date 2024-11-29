@@ -50,6 +50,12 @@ macro_rules! oma {
             args:box [$($crate::oma!(@ARGSPAT $i:$p )),+]
         }
     };
+    ($head:pat,$args:pat) => {
+        $crate::content::terms::Term::OMA{
+            head:box $head,
+            args:$args
+        }
+    };
     ($head:expr,I@$($args:tt)*) => {
         $crate::content::terms::Term::OMA{
             head:Box::new($head),

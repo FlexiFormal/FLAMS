@@ -32,9 +32,28 @@ pub enum Term {
 }
 
 impl Term {
+    /// #### Errors
+    #[inline]
+    pub fn present(&self,presenter:&mut impl crate::narration::notations::Presenter) -> Result<(),crate::narration::notations::PresentationError> {
+        //println!("presenting {self}");
+        crate::narration::notations::Notation::present_term(self, presenter)
+    }
+
     pub fn term_list(i: impl Iterator<Item = Self>) -> Self {
         oma!(oms!(shtml:SEQUENCE_EXPRESSION),I@N:i)
     }
+
+    #[must_use]
+    pub fn as_list(&self) -> Option<&[Arg]> {
+        match self {
+            Self::OMA{
+                head:box Self::OMID(ContentURI::Symbol(s)),
+                args
+            } if *s == *crate::metatheory::SEQUENCE_EXPRESSION => Some(&**args),
+            _ => None
+        }
+    }
+
     #[must_use]
     pub fn is_record_field(&self) -> bool {
         matches!(self,oma!(omsp!(fp),[N:_,N:_]) if *fp == *crate::metatheory::FIELD_PROJECTION)
@@ -117,7 +136,8 @@ impl Term {
                 Ok(DFSContinuation::SkipChildren)
             }
             Self::Informal { .. } => {
-                todo!()
+                write!(f,"TODO: Display for Term::Informal")?;
+                Ok(DFSContinuation::SkipChildren)
             }
         }
     }
@@ -269,6 +289,23 @@ pub enum ArgMode {
     Sequence,
     Binding,
     BindingSequence,
+}
+impl ArgMode {
+    #[inline]#[must_use]
+    pub const fn as_char(self) -> char {
+        match self {
+            Self::Normal => 'i',
+            Self::Sequence => 'a',
+            Self::Binding => 'b',
+            Self::BindingSequence => 'B',
+        }
+    }
+}
+impl std::fmt::Display for ArgMode {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_char(self.as_char())
+    }
 }
 impl TryFrom<u8> for ArgMode {
     type Error = ();

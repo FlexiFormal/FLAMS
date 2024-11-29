@@ -1,5 +1,5 @@
 use either::Either;
-use html5ever::serialize::{HtmlSerializer, SerializeOpts, Serializer, TraversalScope};
+use html5ever::{interface::ElemName, serialize::{HtmlSerializer, SerializeOpts, Serializer, TraversalScope}};
 use immt_ontology::{content::terms::{ArgMode, Informal, Term}, narration::notations::{NotationComponent, OpNotation}};
 use shtml_extraction::{open::OpenSHTMLElement, prelude::{NotationSpec, SHTMLNode}};
 
@@ -14,16 +14,16 @@ impl NodeRef {
         let mut ret = "<span>".to_string();
         ret.push_str(&self.string());
         ret.push_str("</span>");
-        NotationSpec {attribute_index:5,components:vec![NotationComponent::S(ret.into())].into_boxed_slice(),is_text:true}
+        NotationSpec {attribute_index:5,inner_index:6,components:vec![NotationComponent::S(ret.into())].into_boxed_slice(),is_text:true}
     }, |n| {
-      let (is_text,attribute_index) = get_is_text_and_offset(n);
+      let (is_text,attribute_index,inner_index) = get_is_text_and_offsets(n);
       let mut ret = Vec::new();
       let mut strng = Vec::new();
       let _ = rec(self,&mut ret,&mut strng);
       if !strng.is_empty() {
         ret.push(NotationComponent::S(String::from_utf8_lossy(&strng).into_owned().into_boxed_str()));
       }
-      NotationSpec {attribute_index,components:ret.into_boxed_slice(),is_text}
+      NotationSpec {attribute_index,inner_index,components:ret.into_boxed_slice(),is_text}
     })
   }
 
@@ -31,9 +31,9 @@ impl NodeRef {
     self.as_element().map_or_else(
       || todo!("should be impossible"),
       |n| {
-        let (is_text,attribute_index) = get_is_text_and_offset(n);
+        let (is_text,attribute_index,inner_index) = get_is_text_and_offsets(n);
         let s = self.string();
-        OpNotation {attribute_index,text:s.into(),is_text}
+        OpNotation {attribute_index,inner_index,text:s.into(),is_text}
     })
   }
 
@@ -47,9 +47,9 @@ impl NodeRef {
         }
         elem.shtml.set(Some(shtml));
       }
-      if self.children().count() == 1 && self.first_child().is_some_and(|e| e.as_element().is_some()) {
+      /*if self.children().count() == 1 && self.first_child().is_some_and(|e| e.as_element().is_some()) {
         return self.first_child().unwrap_or_else(|| unreachable!()).do_term()
-      }
+      }*/
       let tag = elem.name.local.to_string();
       let attrs = elem.attributes.borrow().0.iter().map(|(k,v)| 
         (k.local.to_string().into_boxed_str(),v.to_string().into_boxed_str()) 
@@ -158,7 +158,7 @@ fn rec(node:&NodeRef,ret:&mut Vec<NotationComponent>,currstr:&mut Vec<u8>) -> (u
               String::from_utf8_lossy(&separator).into_owned().into_boxed_str()
             ));
           }
-          ret.push(NotationComponent::ArgSep{index:idx,tp:new_mode,sep:nret.into_boxed_slice()});
+          ret.push(NotationComponent::ArgSep{index:idx,mode:new_mode,sep:nret.into_boxed_slice()});
           return (index,tp)
         }
         OpenSHTMLElement::ArgMap => {
@@ -209,9 +209,60 @@ fn rec(node:&NodeRef,ret:&mut Vec<NotationComponent>,currstr:&mut Vec<u8>) -> (u
 }
 
 #[allow(clippy::cast_possible_truncation)]
-fn get_is_text_and_offset(e:&ElementData) -> (bool,u8) {
-  match e.name.local.as_ref() {
+fn get_is_text_and_offsets(e:&ElementData) -> (bool,u8,u16) {
+  let (t,o) = match e.name.local.as_ref() {
       s@ ("span"|"div") => (true,s.len() as u8 + 1),
       s => (false,s.len() as u8 + 1)
+  };
+  let i = e.attributes.borrow().len() as u16 + (o as u16 + 1);
+  (t,o,i)
+}
+
+pub(super) fn filter_node_term(mut node:NodeRef) -> NodeRef {
+  //println!("Here: {}",node.string());
+  'outer: while let Some(e) = node.as_element() {
+      /*println!("Checking: {e:?}\nChildren:");
+      for c in node.children() {
+        println!("  - {}",c.string());
+      }*/
+      if let Some(a) = e.shtml.take() {
+        if a.iter().any(|e| matches!(e,OpenSHTMLElement::ClosedTerm(_))) {
+          e.shtml.set(Some(a));
+          return node;
+        } else {
+          e.shtml.set(Some(a));
+        }
+      }
+      let num_children = node.children().filter(
+          |n| n.as_element().is_some() || n.as_text().is_some_and(|t| !t.borrow().trim().is_empty())
+      ).count();
+      if matches!(e.name.local.as_ref(),"math") && num_children == 1 {
+        if let Some(n) = node.children().find(|n| n.as_element().is_some()) {
+          node = n;
+          continue
+        }
+      }
+      //const SKIP_ATTRIBUTES: [&str;3] = ["style","class","data-shtml-type"];
+      if matches!(e.name.local.as_ref(),"mrow") && num_children == 1 {
+        if let Some(n) = node.children().find(|n| n.as_element().is_some()) {
+          node = n;
+          continue
+        }
+      }
+      if matches!(e.name.local.as_ref(),"span"|"div") && num_children == 1 {
+          if let Some(n) = node.children().find(|n| n.as_element().is_some()) {
+            for (k,v) in &e.attributes.borrow().0.0 {
+              let k = k.local_name().as_ref();
+              let v = &**v;
+              if (k == "class" && v != "rustex_contents") || k == "style" {
+                break 'outer;
+              }
+            }
+            node = n;
+            continue
+          }
+      }
+      break
   }
+  node
 }

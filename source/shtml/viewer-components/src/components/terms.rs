@@ -51,7 +51,7 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
         <PopoverTrigger class slot>{children()}</PopoverTrigger>
         //<div style="max-width:600px;">
           {match s {
-            VarOrSym::V(v) => view!{<div>"Variable" {v.name().last_name().to_string()}</div>}.into_any(),
+            VarOrSym::V(v) => view!{<span>"Variable "{v.name().last_name().to_string()}</span>}.into_any(),
             VarOrSym::S(ContentURI::Symbol(s)) => {
               let r = Resource::new(|| (),move |()| crate::config::server_config.definition(s.clone()));
               view!{

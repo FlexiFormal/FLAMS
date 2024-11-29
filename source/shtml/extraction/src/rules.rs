@@ -130,7 +130,7 @@ impl<const L:usize,E:SHTMLExtractor> RuleSet<E> for [SHTMLExtractionRule<E>;L] {
 pub mod rules {
     use immt_ontology::content::declarations::symbols::{ArgSpec, AssocType};
     use immt_ontology::narration::paragraphs::ParagraphKind;
-    use immt_ontology::uris::Name;
+    use immt_ontology::uris::{DocumentElementURI, Name};
     use immt_utils::vecmap::VecSet;
     use smallvec::SmallVec;
     use crate::errors::SHTMLError;
@@ -339,6 +339,20 @@ pub mod rules {
             Some(OpenSHTMLElement::Title)
         }
 
+        pub(crate) fn precondition<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let uri = err!(extractor,attrs.get_symbol_uri(Self::PreconditionSymbol,extractor));
+            let dim = err!(extractor,attrs.get_typed(Self::PreconditionDimension,|s| s.parse()));
+            extractor.add_precondition(uri, dim);
+            None
+        }
+
+        pub(crate) fn objective<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let uri = err!(extractor,attrs.get_symbol_uri(Self::ObjectiveSymbol,extractor));
+            let dim = err!(extractor,attrs.get_typed(Self::ObjectiveDimension,|s| s.parse()));
+            extractor.add_objective(uri, dim);
+            None
+        }
+
         pub(crate) fn symdecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_symbol_uri(Self::Symdecl,extractor));
             let role = opt!(extractor,attrs.get_typed(Self::Role, 
@@ -386,8 +400,10 @@ pub mod rules {
                 extractor.add_error(SHTMLError::InvalidKeyFor(Self::Notation.as_str(), None));
                 return None
             };
-            let fragment = attrs.get(Self::NotationFragment).map(|s| Into::<String>::into(s).into_boxed_str());
-            let id = fragment.unwrap_or_else(|| extractor.new_id(Cow::Borrowed("notation")));
+            let mut fragment = attrs.get(Self::NotationFragment).map(|s| Into::<String>::into(s).into_boxed_str());
+            if fragment.as_ref().is_some_and(|s| s.is_empty()) { fragment = None };
+            let id = fragment.as_ref().map_or("notation", |s| &**s).to_string();
+            let id = extractor.new_id(Cow::Owned(id));
             let prec = if let Some(v) = attrs.get(Self::Precedence) {
                 if let Ok(v) = isize::from_str(v.as_ref()) { v } else {
                     extractor.add_error(SHTMLError::InvalidKeyFor(Self::Precedence.as_str(), None));
@@ -506,12 +522,15 @@ pub mod rules {
                     let v = v.as_ref();
                     extractor.get_sym_uri(v).map_or_else(
                         || extractor.get_mod_uri(v).map_or_else(
-                            || {
-                                if v.contains('?') {
-                                    tracing::warn!("Suspicious variable name containing '?': {v}");
-                                }
-                                VarOrSym::V(PreVar::Unresolved(v.into()))
-                            },
+                              || DocumentElementURI::from_str(v).map_or_else(
+                                |_| {
+                                            if v.contains('?') {
+                                                tracing::warn!("Suspicious variable name containing '?': {v}");
+                                            }
+                                            VarOrSym::V(PreVar::Unresolved(v.into()))
+                                        },
+                                        |d| VarOrSym::V(PreVar::Resolved(d))
+                              ),
                             |m| VarOrSym::S(m.into())),
                         |s| VarOrSym::S(s.into())
                     )

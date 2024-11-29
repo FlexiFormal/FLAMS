@@ -26,7 +26,7 @@ pub fn SHTMLComponents(#[prop(optional)] in_math:bool, elements:SHTMLElements,or
 }
 
 fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:OriginalNode) -> AnyView {
-  if let Some(next) = elements.iter().nth(skip) {
+  if let Some(next) = elements.iter().rev().nth(skip) {
     tracing::debug!("Doing {next:?} ({:?})",std::thread::current().id());
     match next {
       OpenSHTMLElement::Section { uri,.. } => sections::section(uri.clone(),move || do_components::<MATH>(skip+1,elements,orig)).into_any(),

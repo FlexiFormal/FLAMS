@@ -2,13 +2,13 @@
 pub mod uris;
 pub mod toc;
 
-use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{paragraphs::LogicalParagraph, DocumentElement, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
+use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
 use immt_utils::{vecmap::VecSet, CSS};
 use immt_web_utils::do_css;
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 use shtml_viewer_components::{components::{omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource}, DocumentString};
-use uris::{DocURIComponents, URIComponents};
+use uris::{DocURIComponents, SymURIComponents, URIComponents};
 use crate::{users::Login, utils::from_server_clone};
 
 macro_rules! backend {
@@ -186,6 +186,38 @@ async fn get_definitions(uri:SymbolURI) -> Option<(Vec<CSS>,String)> {
 
 #[server(
   prefix="/content",
+  endpoint="los",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
+)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn los(
+  uri:Option<SymbolURI>,
+  a:Option<ArchiveId>,
+  p:Option<String>,
+  l:Option<Language>,
+  m:Option<String>,
+  s:Option<String>
+) -> Result<Vec<(DocumentElementURI,LOKind)>,ServerFnError<String>> {
+  use immt_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
+  use immt_system::backend::{rdf::sparql, Backend, GlobalBackend};
+  let Result::<SymURIComponents,_>::Ok(comps) = (uri,a,p,l,m,s).try_into() else {
+    return Err("invalid uri components".to_string().into())
+  };
+  let Some(uri) = comps.parse() else {
+    return Err("invalid uri".to_string().into())
+  };  
+  let Ok(v) = tokio::task::spawn_blocking(move || {
+    GlobalBackend::get().triple_store().los(&uri).map(|i| i.collect()).unwrap_or_default()
+  }).await else {
+    return Err("internal error".to_string().into())
+  };
+  Ok(v)
+}
+
+#[server(
+  prefix="/content",
   endpoint="omdoc",
   input=server_fn::codec::GetUrl,
   output=server_fn::codec::Json
@@ -219,11 +251,11 @@ pub async fn omdoc(
         return Err("document not found".to_string().into())
       };
       let (css,r) = backend!(backend => {
-        let r = DocumentSpec::from_document(&doc, backend,&mut css);
+        let r = DocumentSpec::from_document(&doc, &mut backend.presenter(),&mut css);
         (css,r)
       }{
         tokio::task::spawn_blocking(move || {
-          let r = DocumentSpec::from_document(&doc, backend,&mut css);
+          let r = DocumentSpec::from_document(&doc, &mut backend.presenter(),&mut css);
           (css,r)
         }).await.map_err(|e| e.to_string())?
       });
@@ -236,11 +268,11 @@ pub async fn omdoc(
         return Err("document element not found".to_string().into())
       };
       let (css,r) = backend!(backend => {
-        let r = DocumentElementSpec::from_element(e.as_ref(),backend, &mut css);
+        let r = DocumentElementSpec::from_element(e.as_ref(),&mut backend.presenter(), &mut css);
         (css,r)
       }{
         tokio::task::spawn_blocking(move || {
-          let r = DocumentElementSpec::from_element(e.as_ref(), backend,&mut css);
+          let r = DocumentElementSpec::from_element(e.as_ref(), &mut backend.presenter(),&mut css);
           (css,r)
         }).await.map_err(|e| e.to_string())?
       });
@@ -254,10 +286,10 @@ pub async fn omdoc(
         return Err("module not found".to_string().into())
       };
       let r = backend!(backend => {
-        AnySpec::from_module_like(&m, backend)
+        AnySpec::from_module_like(&m, &mut backend.presenter())
       }{
         tokio::task::spawn_blocking(move || {
-          AnySpec::from_module_like(&m, backend)
+          AnySpec::from_module_like(&m, &mut backend.presenter())
         }).await.map_err(|e| e.to_string())?
       });
       Ok((Vec::new(),r))

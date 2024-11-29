@@ -21,6 +21,7 @@ use crate::tags::SHTMLTag;
 
 pub struct NotationSpec {
     pub attribute_index: u8,
+    pub inner_index: u16,
     pub is_text:bool,
     pub components:Box<[NotationComponent]>
 }
@@ -50,6 +51,7 @@ pub struct ParagraphState {
 #[derive(Clone,Debug)]
 pub struct NotationState {
     pub attribute_index: u8,
+    pub inner_index:u16,
     pub is_text: bool,
     pub components: Box<[NotationComponent]>,
     pub op: Option<OpNotation>,
@@ -313,6 +315,22 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         }
         None
     }
+    fn add_precondition(&mut self,uri:SymbolURI,dim:CognitiveDimension) {
+        let e = self.state_mut().narrative.iter_mut().rev().find_map(|e|
+            if let Narrative::Exercise(e) = e { Some(e)} else {None}
+        );
+        if let Some(e) = e { e.preconditions.push((dim,uri)) } else {
+            self.add_error(SHTMLError::NotInNarrative);
+        }
+    }
+    fn add_objective(&mut self,uri:SymbolURI,dim:CognitiveDimension) {
+        let e = self.state_mut().narrative.iter_mut().rev().find_map(|e|
+            if let Narrative::Exercise(e) = e { Some(e)} else {None}
+        );
+        if let Some(e) = e { e.objectives.push((dim,uri)) } else {
+            self.add_error(SHTMLError::NotInNarrative);
+        }
+    }
     fn open_decl(&mut self) {
         self.state_mut().content.push(Content::Symdecl{df:None,tp:None});
     }
@@ -326,7 +344,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     }
     fn open_notation(&mut self) {
         self.state_mut().narrative.push(Narrative::Notation(NotationState { 
-            attribute_index:  0, is_text: false, components: Box::default(), op: None 
+            attribute_index:  0, inner_index:0,is_text: false, components: Box::default(), op: None 
         }));
     }
     fn close_notation(&mut self) -> Option<NotationState> {
@@ -408,7 +426,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
                 format!("{}_{}",e.key(),e.get())
             },
             std::collections::hash_map::Entry::Vacant(e) => {
-                let ret = format!("{}_0",e.key());
+                let ret = e.key().to_string();
                 e.insert(0);
                 ret
             }
@@ -452,14 +470,15 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         }
         Err(elem)
     }
-    fn add_notation(&mut self,NotationSpec{components,attribute_index,is_text}:NotationSpec) -> Result<(),NotationSpec> {
-        if let Some(Narrative::Notation(NotationState{components:comps,attribute_index:idx,is_text:text,..})) = self.state_mut().narrative.last_mut() {
+    fn add_notation(&mut self,NotationSpec{components,attribute_index,inner_index,is_text}:NotationSpec) -> Result<(),NotationSpec> {
+        if let Some(Narrative::Notation(NotationState{components:comps,attribute_index:idx,inner_index:iidx,is_text:text,..})) = self.state_mut().narrative.last_mut() {
             *comps = components;
+            *iidx = inner_index;
             *idx = attribute_index;
             *text = is_text;
             Ok(())
         } else {
-            Err(NotationSpec{attribute_index,is_text,components})
+            Err(NotationSpec{attribute_index,inner_index,is_text,components})
         }
     }
     fn add_op_notation(&mut self,op:OpNotation) -> Result<(),OpNotation> {
@@ -590,6 +609,9 @@ pub trait SHTMLExtractor {
     fn close_notation(&mut self) -> Option<NotationState>;
     fn open_args(&mut self);
     fn close_args(&mut self) -> (Vec<Arg>,Option<Term>);
+
+    fn add_precondition(&mut self,uri:SymbolURI,dim:CognitiveDimension);
+    fn add_objective(&mut self,uri:SymbolURI,dim:CognitiveDimension);
     /// #### Errors
     #[allow(clippy::result_unit_err)]
     fn add_arg(&mut self,pos:(u8,Option<u8>),tm:Term,mode:ArgMode) -> Result<(),()>;

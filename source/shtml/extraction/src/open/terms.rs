@@ -68,7 +68,13 @@ impl OpenTerm {
                     } else {
                         term.unwrap_or_else(|| unreachable!())
                     }
-                } else if let Some(t) = term { t }
+                }
+                else if let Some(mut t) = term {
+                    if let Term::Field { owner,.. } = &mut t {
+                        *owner = Some(Box::new(varorsym.resolve(extractor)));
+                    }
+                    t
+                }
                 else {
                     extractor.add_error(SHTMLError::MissingTermForComplex(varorsym.clone()));
                     varorsym.resolve(extractor)
@@ -80,12 +86,14 @@ impl OpenTerm {
                 let mut head = head.resolve(extractor);
                 if let Some(oma!(omsp!(ref fp),[N:ref p,N:Term::OML {ref name,tp:Option::None,df:Option::None}])) = head_term {
                     if *fp == *immt_ontology::metatheory::FIELD_PROJECTION {
+                        //println!("Is Field!");
                         return omfp!((p.clone()).(name.clone()) = (head)) // TODO avoid clone here
                     }
                     head = head_term.unwrap_or_else(|| unreachable!());
                 }
                 match (head,args) {
                     (omsp!(fp),box [Arg{ref term,mode:ArgMode::Normal},Arg{term:Term::OML{ref name,tp:Option::None,df:Option::None},mode:ArgMode::Normal}]) if fp == *immt_ontology::metatheory::FIELD_PROJECTION => {
+                        //println!("Is Field!");
                         Term::Field {
                             record:Box::new(term.clone()), // TODO avoid clone here
                             key:name.clone(), // TODO avoid clone here

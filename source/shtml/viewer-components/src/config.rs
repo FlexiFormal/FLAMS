@@ -1,5 +1,5 @@
 
-use immt_ontology::uris::{DocumentElementURI, DocumentURI, SymbolURI};
+use immt_ontology::{narration::LOKind, uris::{DocumentElementURI, DocumentURI, SymbolURI}};
 use leptos::prelude::*;
 use immt_utils::CSS;
 
@@ -13,6 +13,21 @@ use crate::components::TOCElem;
 
 pub const DEFAULT_SERVER_URL:&str = "https://immt.mathhub.info";
 
+macro_rules! get {
+    ($fn:ident($($arg:expr),*) = $res:pat => { $($code:tt)*}) => {{
+        use ::leptos::suspense::Suspense;
+        let r = ::leptos::prelude::Resource::new(|| (),move |()| $crate::config::server_config.$fn($($arg),*));
+        ::leptos::prelude::view!{
+            <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move ||
+                if let Some(Ok($res)) = r.get() {
+                    Some({$($code)*})
+                } else {None}
+            }</Suspense>
+        }
+    }}
+}
+
+pub(crate) use get;
 
 #[cfg(feature="csr")]
 #[cfg_attr(docsrs, doc(cfg(feature = "csr")))]
@@ -32,6 +47,9 @@ macro_rules! server_fun{
     (@DOCURI$(,$ty:ty)* => $ret:ty) => {
         server_fun!(Option<DocumentURI>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String> $(,$ty)* => $ret)
     };
+    (@SYMURI$(,$ty:ty)* => $ret:ty) => {
+        server_fun!(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>  $(,$ty)* => $ret)
+    };
 }
 
 pub struct ServerConfig {
@@ -48,7 +66,10 @@ pub struct ServerConfig {
     pub get_omdoc:std::sync::OnceLock<server_fun!(@URI => (Vec<CSS>,AnySpec))>,
     #[cfg(any(feature="hydrate",feature="ssr"))]
     #[allow(clippy::type_complexity)]
-    pub get_toc:std::sync::OnceLock<server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>))>
+    pub get_toc:std::sync::OnceLock<server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>))>,
+    #[cfg(any(feature="hydrate",feature="ssr"))]
+    #[allow(clippy::type_complexity)]
+    pub get_los:std::sync::OnceLock<server_fun!(@SYMURI => Vec<(DocumentElementURI,LOKind)>)>
 }
 
 impl ServerConfig {
@@ -137,6 +158,21 @@ impl ServerConfig {
 
     /// #### Errors
     /// #### Panics
+    #[allow(unreachable_code)]
+    pub async fn get_los(&self,uri:SymbolURI) -> Result<Vec<(DocumentElementURI,LOKind)>,String> {
+        #[cfg(feature="csr")]
+        return Self::remote(Self::los_url(&uri.to_string())).await;
+        #[cfg(any(feature="hydrate",feature="ssr"))]
+        {
+            let Some(f) = self.get_los.get() else {
+                panic!("Uninitialized shtml-viewer!!")
+            };
+            return f(Some(uri),None,None,None,None,None).await.map_err(|e| e.to_string());
+        }
+    }
+
+    /// #### Errors
+    /// #### Panics
     #[cfg(feature="omdoc")]
     #[allow(unreachable_code)]
     pub async fn omdoc(&self,uri:immt_ontology::uris::URI) -> Result<(Vec<CSS>,AnySpec),String> {
@@ -156,12 +192,16 @@ impl ServerConfig {
       inputref:server_fun!(@URI => (Vec<CSS>,String)),
       full_doc:server_fun!(@DOCURI => (DocumentURI,Vec<CSS>,String)),
       toc:server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>)),
-      omdoc:server_fun!(@URI => (Vec<CSS>,AnySpec))
+      omdoc:server_fun!(@URI => (Vec<CSS>,AnySpec)),
+      los:server_fun!(@SYMURI => Vec<(DocumentElementURI,LOKind)>)
     ) {
+        use leptos::server;
+
       let _ = server_config.get_fragment.set(inputref);
       let _ = server_config.get_omdoc.set(omdoc);
       let _ = server_config.get_full_doc.set(full_doc);
       let _ = server_config.get_toc.set(toc);
+      let _ = server_config.get_los.set(los);
     }
 }
 
@@ -177,7 +217,9 @@ impl Default for ServerConfig {
         #[cfg(any(feature="hydrate",feature="ssr"))]
         get_full_doc:std::sync::OnceLock::new(),
         #[cfg(any(feature="hydrate",feature="ssr"))]
-        get_toc:std::sync::OnceLock::new()
+        get_toc:std::sync::OnceLock::new(),
+        #[cfg(any(feature="hydrate",feature="ssr"))]
+        get_los:std::sync::OnceLock::new()
     }
   }
 }
@@ -201,6 +243,14 @@ impl ServerConfig {
     #[inline]
     fn fulldoc_url(uri:&str) -> String {
         format!("{}/content/document?uri={}",
+            server_config.server_url.lock(),
+            urlencoding::encode(uri)
+        )
+    }
+
+    #[inline]
+    fn los_url(uri:&str) -> String {
+        format!("{}/content/los?uri={}",
             server_config.server_url.lock(),
             urlencoding::encode(uri)
         )

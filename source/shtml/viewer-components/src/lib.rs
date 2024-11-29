@@ -12,14 +12,13 @@ use components::{inputref::InInputRef, SHTMLComponents, TOCSource};
 use immt_utils::prelude::HMap;
 use immt_web_utils::{components::wait, do_css, inject_css};
 use leptos::prelude::*;
-use leptos_dyn_dom::DomStringCont;
+use leptos_dyn_dom::{DomStringCont, DomStringContMath};
 use shtml_extraction::prelude::*;
 use leptos::tachys::view::any_view::AnyView;
 use leptos::web_sys::Element;
 use extractor::DOMExtractor;
 use crate::extractor::NodeAttrs;
-use immt_ontology::uris::{DocumentURI, NarrativeURI};
-
+use immt_ontology::{narration::exercises::CognitiveDimension, uris::{DocumentURI, NarrativeURI}};
 
 #[derive(Debug,Clone)]
 struct IdPrefix(pub String);
@@ -160,6 +159,10 @@ pub fn SHTMLDocumentSetup(
 #[component]
 pub fn SHTMLString(html:String) -> impl IntoView {
     view!(<DomStringCont html cont=iterate/>)
+}
+#[component]
+pub fn SHTMLStringMath(html:String) -> impl IntoView {
+    view!(<math><DomStringContMath html cont=iterate/></math>)
 }
 
 pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [

@@ -59,6 +59,13 @@ impl SHTMLExtractor for DOMExtractor {
         todo!()
     }
 
+    fn add_objective(&mut self,uri:immt_ontology::uris::SymbolURI,dim:immt_ontology::narration::exercises::CognitiveDimension) {
+        todo!()
+    }
+    fn add_precondition(&mut self,uri:immt_ontology::uris::SymbolURI,dim:immt_ontology::narration::exercises::CognitiveDimension) {
+        todo!()
+    }
+
     fn resolve_variable_name(&self,name:immt_ontology::uris::Name) -> immt_ontology::content::terms::Var {
         todo!()
     }

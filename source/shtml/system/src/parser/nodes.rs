@@ -1,7 +1,7 @@
 /*! slightly adapted from [Kuchikiki](https://github.com/brave/kuchikiki) */
 
-use std::{cell::{Cell, RefCell}, fmt::Debug, ops::Deref, rc::{Rc, Weak}};
-use html5ever::{interface::QuirksMode, local_name, ns, serialize::{Serialize, SerializeOpts, TraversalScope}, tendril::StrTendril, QualName};
+use std::{borrow::Borrow, cell::{Cell, RefCell}, fmt::Debug, ops::Deref, rc::{Rc, Weak}};
+use html5ever::{interface::{ElemName, QuirksMode}, local_name, ns, serialize::{Serialize, SerializeOpts, TraversalScope}, tendril::StrTendril, QualName};
 use immt_ontology::{narration::notations::OpNotation, DocumentRange};
 use immt_utils::vecmap::VecMap;
 use shtml_extraction::prelude::{NotationSpec, SHTMLElements, SHTMLNode, SHTMLTag};
@@ -161,34 +161,89 @@ impl SHTMLNode for NodeRef {
         String::from_utf8_lossy_owned(html)
     }
 
+    #[inline]
     fn as_notation(&self) -> Option<NotationSpec> {
-        fn get_node(node:NodeRef) -> NodeRef {
-            if let Some(e) = node.as_element() {
-                if matches!(e.name.local.as_ref(),"math") && node.children().count() == 1 {
-                    return get_node(node.children().next().unwrap_or_else(|| unreachable!()))
-                }
-            }
-            node
-        }
-        Some(get_node(self.clone()).do_notation())
+        Some(filter_node(self.deep_clone()).do_notation())
     }
+    #[inline]
     fn as_op_notation(&self) -> Option<OpNotation> {
-        fn get_node(node:NodeRef) -> NodeRef {
-            if let Some(e) = node.as_element() {
-                if matches!(e.name.local.as_ref(),"math"|"mrow") && node.children().count() == 1 {
-                    let next = node.children().next().unwrap_or_else(|| unreachable!());
-                    if next.as_element().is_some() {
-                        return get_node(next)
-                    }
-                }
-            }
-            node
-        }
-        Some(get_node(self.clone()).do_op_notation())
+        Some(filter_node(self.deep_clone()).do_op_notation())
     }
     #[inline]
     fn as_term(&self) -> immt_ontology::content::terms::Term {
-        self.do_term()
+        super::termsnotations::filter_node_term(self.clone()).do_term()
+    }
+}
+
+fn filter_node(mut node:NodeRef) -> NodeRef {
+    while let Some(e) = node.as_element() {
+        {
+            use shtml_extraction::prelude::Attributes;
+            let mut attrs = e.attributes.borrow_mut();
+            attrs.remove(SHTMLTag::NotationComp);
+            attrs.remove(SHTMLTag::NotationOpComp);
+            attrs.remove(SHTMLTag::NotationId);
+            attrs.remove(SHTMLTag::Term);
+            attrs.remove(SHTMLTag::Head);
+        }
+        let num_children = node.children().filter(
+            |n| n.as_element().is_some() || n.as_text().is_some()
+        ).count();
+        if matches!(e.name.local.as_ref(),"math") && num_children == 1 {
+          if let Some(n) = node.children().find(|n| n.as_element().is_some()) {
+            node = n;
+            continue
+          }
+        }
+        if matches!(e.name.local.as_ref(),"mrow"|"span"|"div")  && num_children == 1 && node.as_element().is_some_and(|n|
+            n.attributes.borrow().0.0.is_empty()
+        ) {
+            if let Some(n) = node.children().find(|n| n.as_element().is_some()) {
+              node = n;
+              continue
+            }
+        }
+        break
+    }
+    node
+}
+
+impl NodeRef {
+    pub(super) fn deep_clone(&self) -> Self {
+        let ret = NodeRef(Rc::new(Node {
+            parent: Cell::new(None),
+            previous_sibling: Cell::new(None),
+            next_sibling: Cell::new(None),
+            first_child: Cell::new(None),
+            last_child: Cell::new(None),
+            data: match &self.data {
+                NodeData::Comment(c) => NodeData::Comment(c.clone()),
+                NodeData::Text(t) => NodeData::Text(t.clone()),
+                NodeData::Document(d) => NodeData::Document(d.clone()),
+                NodeData::Element(e) => NodeData::Element(ElementData {
+                    name: e.name.clone(),
+                    attributes: e.attributes.clone(),
+                    shtml: Cell::new({
+                        let orig = e.shtml.take();
+                        e.shtml.set(orig.clone());
+                        orig
+                    }),
+                    start_offset: e.start_offset.clone(),
+                    end_offset: e.end_offset.clone(),
+                    closed: e.closed.clone(),
+                }),
+                NodeData::ProcessingInstruction(target,data) => NodeData::ProcessingInstruction(target.clone(),data.clone()),
+                NodeData::Doctype{name,_public_id,_system_id} => NodeData::Doctype{name:name.clone(),_public_id:_public_id.clone(),_system_id:_system_id.clone()},
+            }
+        }));
+        for c in self.children() {
+            match &c.data {
+                NodeData::Comment(_) => continue,
+                NodeData::Text(t) if t.borrow().trim().is_empty() => continue,
+                _ => ret.append(c.deep_clone())
+            }
+        }
+        ret
     }
 }
 

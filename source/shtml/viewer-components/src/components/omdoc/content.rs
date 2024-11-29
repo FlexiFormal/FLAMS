@@ -1,6 +1,6 @@
 use immt_ontology::{content::declarations::symbols::ArgSpec, languages::Language, uris::{ContentURITrait, ModuleURI, Name, SymbolURI}};
 use immt_utils::vecmap::VecSet;
-use crate::SHTMLString;
+use crate::{SHTMLString, SHTMLStringMath};
 
 use super::{narration::DocumentElementSpec, AnySpec, SpecDecl};
 use leptos::{context::Provider, prelude::*};
@@ -220,6 +220,53 @@ impl From<DeclarationSpec> for AnySpec {
     }
 }
 
+fn do_los(uri:SymbolURI) -> impl IntoView {
+    use immt_ontology::narration::LOKind;
+    view!{
+        <Collapsible lazy=true>
+            <Header slot><span>"Learning Objects"</span></Header>
+            {
+                let uri = uri.clone();
+                crate::config::get!(get_los(uri.clone()) = v => {
+                    let mut defs = Vec::new();
+                    let mut expls = Vec::new();
+                    let mut excs = Vec::new();
+                    for (uri,k) in v { match k {
+                        LOKind::Definition => defs.push(uri),
+                        LOKind::Example => expls.push(uri),
+                        LOKind::Exercise(cd) => excs.push((uri,false,cd)),
+                        LOKind::SubExercise(cd) => excs.push((uri,true,cd)),
+                        _ => unreachable!()
+                    }}
+                    view!{
+                        <div>{if defs.is_empty() { None } else {Some(
+                            super::comma_sep("Definitions", defs.into_iter().map(|uri| {
+                                let title = uri.name().last_name().to_string();
+                                super::doc_elem_name(uri,None,title)
+                            }))
+                        )}}</div>
+                        <div>{if expls.is_empty() { None } else {Some(
+                            super::comma_sep("Examples", expls.into_iter().map(|uri| {
+                                let title = uri.name().last_name().to_string();
+                                super::doc_elem_name(uri,None,title)
+                            }))
+                        )}}</div>
+                        <div>{if excs.is_empty() { None } else {Some(
+                            super::comma_sep("Exercises", excs.into_iter().map(|(uri,_,cd)| {
+                                let title = uri.name().last_name().to_string();
+                                view!{
+                                    {super::doc_elem_name(uri,None,title)}
+                                    " ("{cd.to_string()}")"
+                                }
+                            }))
+                        )}}</div>
+                    }
+                })
+            }
+        </Collapsible>
+    }
+}
+
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
 pub struct SymbolSpec {
     pub uri:SymbolURI,
@@ -236,19 +283,21 @@ impl super::Spec for SymbolSpec {
         let symbol_str = if use_context::<InStruct>().is_some() {
             "Field "
         } else {"Symbol "};
+        let uriclone = uri.clone();
         view!{
             <Block show_separator>
                 <Header slot><span>
                     <b>{symbol_str}{super::symbol_name(&uri, uri.name().last_name().as_ref())}</b>
                     {macro_name.map(|name| view!(<span>" ("<Text tag=TextTag::Code>"\\"{name}</Text>")"</span>))}
                 </span></Header>
-                <HeaderLeft slot>{tp_html.map(|html| view! {
-                    <SHTMLString html/>
-                })}</HeaderLeft>
-                <HeaderRight slot>{df_html.map(|html| view! {
-                    <SHTMLString html/>
-                })}</HeaderRight>
+                <HeaderLeft slot><span>{tp_html.map(|html| view! {
+                    "Type: "<SHTMLStringMath html/>
+                })}</span></HeaderLeft>
+                <HeaderRight slot><span>{df_html.map(|html| view! {
+                    "Definiens: "<SHTMLStringMath html/>
+                })}</span></HeaderRight>
                 "(TODO: Notations)"
+                {do_los(uriclone)}
             </Block>
         }
     }
@@ -269,36 +318,41 @@ impl From<SymbolSpec> for DeclarationSpec {
 #[cfg(feature="ssr")]
 mod froms {
     use immt_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::Symbol, Declaration, OpenDeclaration}, modules::{Module, NestedModule}, ModuleLike, ModuleTrait}, uris::ModuleURI, Checked, Resolvable};
-    use immt_system::backend::Backend;
+    use immt_system::backend::{Backend, StringPresenter};
     use immt_utils::vecmap::VecSet;
     use super::{DeclarationSpec, ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec, SymbolSpec, super::AnySpec};
 
     impl AnySpec {
-        pub fn from_module_like(m:&ModuleLike,backend:&impl Backend) -> Self {
+        pub fn from_module_like<B:Backend>(
+            m:&ModuleLike,presenter:&mut StringPresenter<'_,B>
+        ) -> Self {
             match m {
-                ModuleLike::Module(m) => ModuleSpec::from_module(m, backend).into(),
+                ModuleLike::Module(m) => ModuleSpec::from_module(m, presenter).into(),
                 ModuleLike::NestedModule(m) => {
                     let mut imports = VecSet::new();
-                    let children = DeclarationSpec::do_children(backend, &m.as_ref().elements, &mut imports);
+                    let children = DeclarationSpec::do_children(presenter, &m.as_ref().elements, &mut imports);
                     ModuleSpec{
                         uri:m.as_ref().uri.clone().into_module(),
                         children,imports,uses:VecSet::new(),metatheory:None,signature:None
                     }.into()
                 }
-                ModuleLike::Structure(s) => StructureSpec::from_structure(s.as_ref(), backend).into(),
-                ModuleLike::Extension(e) => ExtensionSpec::from_extension(e.as_ref(), backend).into(),
-                ModuleLike::Morphism(m) => MorphismSpec::from_morphism(m.as_ref(), backend).into()
+                ModuleLike::Structure(s) => StructureSpec::from_structure(s.as_ref(), presenter).into(),
+                ModuleLike::Extension(e) => ExtensionSpec::from_extension(e.as_ref(), presenter).into(),
+                ModuleLike::Morphism(m) => MorphismSpec::from_morphism(m.as_ref(), presenter).into()
             }
         }
     }
 
     impl SymbolSpec {
-        pub fn from_symbol(Symbol {uri,arity,df,tp,macroname,..}:&Symbol) -> Self {
+        pub fn from_symbol<B:Backend>(
+            Symbol {uri,arity,df,tp,macroname,..}:&Symbol,
+            presenter:&mut StringPresenter<'_,B>,
+        ) -> Self {
             Self {
                 uri:uri.clone(),
                 arity:arity.clone(),
-                df_html:None, // TODO
-                tp_html:None, // TODO
+                df_html:df.as_ref().and_then(|t| presenter.present(t).ok()),
+                tp_html:tp.as_ref().and_then(|t| presenter.present(t).ok()),
                 macro_name:macroname.as_ref().map(ToString::to_string),
                 notations:Vec::new() // TODO
             }
@@ -306,32 +360,32 @@ mod froms {
     }
 
     impl ModuleSpec<DeclarationSpec> {
-        pub fn from_module(module:&Module,backend:&impl Backend) -> Self {
+        pub fn from_module<B:Backend>(module:&Module,presenter:&mut StringPresenter<'_,B>,) -> Self {
             let uri = module.id().into_owned();
             let metatheory = module.meta().map(|c| c.id().into_owned());
             let signature = module.signature().map(|c| c.id().into_owned());
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(backend,module.declarations(),&mut imports);
+            let children = DeclarationSpec::do_children(presenter,module.declarations(),&mut imports);
             Self {uri,metatheory,signature,children,uses:VecSet::default(),imports}
         }
     }
 
     impl StructureSpec<DeclarationSpec> {
-        pub fn from_structure(s:&MathStructure<Checked>,backend:&impl Backend) -> Self {
+        pub fn from_structure<B:Backend>(s:&MathStructure<Checked>,presenter:&mut StringPresenter<'_,B>,) -> Self {
             let uri = s.uri.clone();
             let macro_name = s.macroname.as_ref().map(ToString::to_string);
-            let extensions = super::super::froms::get_extensions(backend,&uri).map(|e| 
+            let extensions = super::super::froms::get_extensions(presenter.backend(),&uri).map(|e| 
                 (
                   e.as_ref().uri.clone(),
                   e.as_ref().elements.iter().filter_map(|e|
                     if let OpenDeclaration::Symbol(s) = e {
-                      Some(SymbolSpec::from_symbol(s))
+                      Some(SymbolSpec::from_symbol(s,presenter))
                     } else { None }
                   ).collect()
                 )
               ).collect();
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(backend, s.declarations(), &mut imports);
+            let children = DeclarationSpec::do_children(presenter, s.declarations(), &mut imports);
             Self {
                 uri,macro_name,extends:imports,uses:VecSet::new(),children,extensions
             }
@@ -339,48 +393,48 @@ mod froms {
     }
 
     impl ExtensionSpec<DeclarationSpec> {
-        pub fn from_extension(e:&Extension<Checked>,backend:&impl Backend) -> Self {
+        pub fn from_extension<B:Backend>(e:&Extension<Checked>,presenter:&mut StringPresenter<'_,B>) -> Self {
             let target = e.target.id().into_owned();
             let uri = e.uri.clone();
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(backend,&e.elements,&mut imports);
+            let children = DeclarationSpec::do_children(presenter,&e.elements,&mut imports);
             ExtensionSpec { uri,target, uses:VecSet::new(), children }
         }
     }
 
     impl MorphismSpec<DeclarationSpec> {
-        pub fn from_morphism(m:&Morphism<Checked>,backend:&impl Backend) -> Self {
+        pub fn from_morphism<B:Backend>(m:&Morphism<Checked>,presenter:&mut StringPresenter<'_,B>) -> Self {
             let uri = m.uri.as_ref().unwrap().clone();
             let total = m.total;
             let target = Some(m.domain.id().into_owned());
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(backend,&m.elements,&mut imports);
+            let children = DeclarationSpec::do_children(presenter,&m.elements,&mut imports);
             MorphismSpec { uri, total, target, uses:VecSet::new(), children }
         }
     }
 
     impl DeclarationSpec {
-        pub fn do_children(backend:&impl Backend,children:&[Declaration],imports:&mut VecSet<ModuleURI>) -> Vec<Self> {
+        pub fn do_children<B:Backend>(presenter:&mut StringPresenter<'_,B>,children:&[Declaration],imports:&mut VecSet<ModuleURI>) -> Vec<Self> {
             let mut ret = Vec::new();
             for c in children {match c {
                 OpenDeclaration::Symbol(s) =>
-                    ret.push(SymbolSpec::from_symbol(s).into()),
+                    ret.push(SymbolSpec::from_symbol(s,presenter).into()),
                 OpenDeclaration::Import(m) =>
                     imports.insert(m.id().into_owned()),
                 OpenDeclaration::MathStructure(s) =>
-                    ret.push(StructureSpec::from_structure(s, backend).into()),
+                    ret.push(StructureSpec::from_structure(s, presenter).into()),
                 OpenDeclaration::NestedModule(m) => {
                     let mut imports = VecSet::new();
-                    let children = Self::do_children(backend, &m.elements, &mut imports);
+                    let children = Self::do_children(presenter, &m.elements, &mut imports);
                     ret.push(ModuleSpec{
                         uri:m.uri.clone().into_module(),
                         children,imports,uses:VecSet::new(),metatheory:None,signature:None
                     }.into())
                 }
                 OpenDeclaration::Extension(e) =>
-                    ret.push(ExtensionSpec::from_extension(e, backend).into()),
+                    ret.push(ExtensionSpec::from_extension(e, presenter).into()),
                 OpenDeclaration::Morphism(m) =>
-                    ret.push(MorphismSpec::from_morphism(m, backend).into())
+                    ret.push(MorphismSpec::from_morphism(m, presenter).into())
             }}
             ret
         }

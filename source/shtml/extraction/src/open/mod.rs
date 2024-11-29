@@ -189,7 +189,9 @@ impl OpenSHTMLElement {
                 let term = term.close(extractor);
                 let uri = extractor.get_narrative_uri() & &*extractor.new_id(Cow::Borrowed("term"));
                 extractor.set_in_term(false);
-                extractor.add_document_element(DocumentElement::TopTerm { uri, term });
+                if !matches!(term,Term::OMID{..}|Term::OMV{..}) {
+                    extractor.add_document_element(DocumentElement::TopTerm { uri, term });
+                }
             }
             Self::OpenTerm{term,is_top:false } => {
                 let term = term.close(extractor);
@@ -582,7 +584,7 @@ impl OpenSHTMLElement {
 
     fn close_notation<E:SHTMLExtractor>(extractor:&mut E,id:Box<str>,symbol:VarOrSym,precedence:isize,argprecs:SmallVec<isize,9>) {
         let Some(NotationState {
-            attribute_index,is_text,components,op
+            attribute_index,inner_index,is_text,components,op
         }) = extractor.close_notation() else {
             extractor.add_error(SHTMLError::NotInNarrative);
             return
@@ -595,6 +597,7 @@ impl OpenSHTMLElement {
         let notation = extractor.add_resource(&Notation {
             attribute_index,
             is_text,
+            inner_index,
             components,
             op,
             precedence,id,argprecs

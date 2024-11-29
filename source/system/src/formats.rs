@@ -169,6 +169,20 @@ impl OMDocResult {
     String::from_utf8(html).ok().map(|html| (css,html))
   }
 
+  pub(crate) fn load_reference<T:immt_ontology::Resourcable>(path:&Path,range:DocumentRange) -> Option<T> {
+    use std::io::{Seek,SeekFrom};
+    let file = std::fs::File::open(path).ok()?;
+    let mut file = std::io::BufReader::new(file);
+    let mut buf = [0;20];
+    file.read_exact(&mut buf).ok()?;
+    file.seek(SeekFrom::Current(range.start as i64)).ok()?;
+    let len = range.end - range.start;
+    let mut bytes = vec![0;len];
+    file.read_exact(&mut bytes).ok()?;
+    bincode::serde::decode_from_slice(&bytes,bincode::config::standard()).ok().map(|(a,_)| a)
+  }
+
+
   #[cfg(feature="tokio")]
   pub(crate) async fn load_html_fragment_async(path:std::path::PathBuf,range:DocumentRange) -> Option<(Vec<CSS>,String)> {
     use std::io::SeekFrom;

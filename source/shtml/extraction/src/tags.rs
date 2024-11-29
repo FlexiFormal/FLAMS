@@ -118,9 +118,9 @@ do_tags!{115:
     ProofPremise            = "premise"             @ no_op /* TODO */,
     ProofConclusion         = "spfconclusion"       @ no_op /* TODO */,
 
-    PreconditionDimension   = "preconditiondimension" @no_op /* TODO */,
+    PreconditionDimension   = "preconditiondimension" @ precondition,
     PreconditionSymbol      = "preconditionsymbol"  @no_op /* TODO */,
-    ObjectiveDimension      = "objectivedimension"  @no_op /* TODO */,
+    ObjectiveDimension      = "objectivedimension"  @ objective,
     ObjectiveSymbol         = "objectivesymbol"     @no_op /* TODO */,
     AnswerClass             = "answerclass"         @no_op /* TODO */,
     AnswerClassPts          = "answerclass-pts"     @no_op /* TODO */,

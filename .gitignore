@@ -23,3 +23,4 @@ tracing-indicatif
 /source/ts/**/tsconfig.tsbuildinfo
 source/ts/editor/old/**
 /rustc-ice-*
+.sqlx

@@ -11,7 +11,7 @@ pub mod variables;
 use std::marker::PhantomData;
 
 use documents::Document;
-use exercises::Exercise;
+use exercises::{CognitiveDimension, Exercise};
 use immt_utils::prelude::InnerArc;
 use notations::Notation;
 use paragraphs::LogicalParagraph;
@@ -25,12 +25,23 @@ use crate::{
     }, uris::{DocumentElementURI, DocumentURI, Name, NameStep, SymbolURI}, Checked, CheckingState, DocumentRange, Unchecked
 };
 
+
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum LOKind {
+    Definition,
+    Example,
+    Exercise(CognitiveDimension),
+    SubExercise(CognitiveDimension),
+}
+
 #[derive(Debug,Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LazyDocRef<T> {
-    start: usize,
-    end: usize,
-    in_doc: DocumentURI,
+    pub start: usize,
+    pub end: usize,
+    pub in_doc: DocumentURI,
     phantom_data: PhantomData<T>,
 }
 impl<T> LazyDocRef<T> {

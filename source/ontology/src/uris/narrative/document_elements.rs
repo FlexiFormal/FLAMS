@@ -26,6 +26,18 @@ impl DocumentElementURI {
     pub const fn name(&self) -> &Name {
         &self.name
     }
+
+    #[must_use]
+    pub fn parent(&self) -> Self {
+        if self.name.is_simple() { return self.clone() }
+        let steps = self.name.steps();
+        let steps = &steps[0..steps.len()-1];
+        let name = Name(steps.into());
+        Self {
+            document: self.document.clone(),
+            name
+        }
+    }
 }
 impl Display for DocumentElementURI {
     #[inline]

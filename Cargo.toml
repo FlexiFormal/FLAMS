@@ -127,20 +127,20 @@ futures = {version="0.3"}
 
 image = { version = "0.25"}
 webp = { version= "0.3"}
-dashmap = { version = "5" }
+dashmap = { version = "6" }
 
 # leptos
-leptos = { version = "=0.7.0-rc2", features=["nightly"]}
-leptos_axum = "=0.7.0-rc2"
-leptos_meta= "=0.7.0-rc2"
-leptos_router = { version = "=0.7.0-rc2", features=["nightly"]}
+leptos = { version = "=0.7.0-rc3", features=["nightly"]}
+leptos_axum = "=0.7.0-rc3"
+leptos_meta= "=0.7.0-rc3"
+leptos_router = { version = "=0.7.0-rc3", features=["nightly"]}
 
-thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-#thaw = { version="0.4.0-beta4",features=["nightly"] }
-thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-#thaw_components = "0.2.0-beta4"
-thaw_utils = { features=["nightly"], git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-#thaw_utils = "0.1.0-beta4"
+#thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
+thaw = { version="0.4.0-beta5",features=["nightly"] }
+#thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
+thaw_components = "0.2.0-beta5"
+#thaw_utils = { features=["nightly"], git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
+thaw_utils = {features=["nightly"],version="0.1.0-beta5"}
 
 icondata_bi = "0"
 icondata_ai = "0"
@@ -180,11 +180,11 @@ tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithr
 #leptos_server = {version="=0.7.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #reactive_graph = {version="=0.1.0-beta5"}
-leptos_macro = {version="=0.7.0-rc2"}
-tachys = {version="=0.1.0-rc2"}
-server_fn = {version="=0.7.0-rc2"}
-server_fn_macro = {version="=0.7.0-rc2"}
-server_fn_macro_default = {version="=0.7.0-rc2"}
+leptos_macro = {version="=0.7.0-rc3"}
+tachys = {version="=0.1.0-rc3"}
+server_fn = {version="=0.7.0-rc3"}
+server_fn_macro = {version="=0.7.0-rc3"}
+server_fn_macro_default = {version="=0.7.0-rc3"}
 
 
 [[workspace.metadata.leptos]]

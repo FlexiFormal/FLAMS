@@ -123,6 +123,12 @@ command = "cargo"
 args = ["leptos","build"]
 dependencies = ["build-viewer","copy-viewer","db"]
 
+[tasks.watch]
+workspace = false
+install_crate = "cargo-leptos"
+command = "cargo"
+args = ["leptos","watch","--","--port","3000"]
+
 [tasks.default]
 workspace = false
 alias = "all-release"
