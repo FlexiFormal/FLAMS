@@ -10,6 +10,7 @@ use immt_ontology::narration::notations::{NotationComponent, OpNotation};
 use immt_ontology::narration::sections::SectionLevel;
 use immt_ontology::narration::variables::Variable;
 use immt_ontology::narration::{DocumentElement, LazyDocRef};
+use immt_ontology::shtml::SHTMLKey;
 use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURITrait, SymbolURI, URIRefTrait};
 use immt_ontology::{DocumentRange, Resourcable, Unchecked};
 use immt_utils::prelude::HMap;
@@ -17,7 +18,6 @@ use immt_utils::vecmap::{VecMap, VecSet};
 use crate::errors::SHTMLError;
 use crate::open::terms::TermOrList;
 use crate::rules::SHTMLElements;
-use crate::tags::SHTMLTag;
 
 pub struct NotationSpec {
     pub attribute_index: u8,
@@ -647,16 +647,16 @@ pub trait Attributes {
     fn take(&mut self,key:&str) -> Option<String>;
 
     #[inline]
-    fn get(&self,tag:SHTMLTag) -> Option<Self::Value<'_>> {
+    fn get(&self,tag:SHTMLKey) -> Option<Self::Value<'_>> {
         self.value(tag.attr_name())
     }
     #[inline]
-    fn remove(&mut self,tag:SHTMLTag) -> Option<String> {
+    fn remove(&mut self,tag:SHTMLKey) -> Option<String> {
         self.take(tag.attr_name())
     }
 
     /// #### Errors
-    fn get_typed<E,T>(&self,key:SHTMLTag,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,SHTMLError> {
+    fn get_typed<E,T>(&self,key:SHTMLKey,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -664,7 +664,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn take_typed<E,T>(&mut self,key:SHTMLTag,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,SHTMLError> {
+    fn take_typed<E,T>(&mut self,key:SHTMLKey,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -672,7 +672,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn get_section_level(&self,key:SHTMLTag) -> Result<SectionLevel,SHTMLError> {
+    fn get_section_level(&self,key:SHTMLKey) -> Result<SectionLevel,SHTMLError> {
         use std::str::FromStr;
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
@@ -684,7 +684,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn take_section_level(&mut self,key:SHTMLTag) -> Result<SectionLevel,SHTMLError> {
+    fn take_section_level(&mut self,key:SHTMLKey) -> Result<SectionLevel,SHTMLError> {
         use std::str::FromStr;
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
@@ -696,19 +696,19 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn get_language(&self,key:SHTMLTag) -> Result<Language,SHTMLError> {
+    fn get_language(&self,key:SHTMLKey) -> Result<Language,SHTMLError> {
         use std::str::FromStr;
         self.get_typed(key,Language::from_str)
     }
 
     /// #### Errors
-    fn take_language(&mut self,key:SHTMLTag) -> Result<Language,SHTMLError> {
+    fn take_language(&mut self,key:SHTMLKey) -> Result<Language,SHTMLError> {
         use std::str::FromStr;
         self.take_typed(key,Language::from_str)
     }
 
     /// #### Errors
-    fn get_module_uri<E:SHTMLExtractor>(&self,key:SHTMLTag,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
+    fn get_module_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -719,7 +719,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn take_module_uri<E:SHTMLExtractor>(&mut self,key:SHTMLTag,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
+    fn take_module_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -730,7 +730,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn get_symbol_uri<E:SHTMLExtractor>(&self,key:SHTMLTag,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
+    fn get_symbol_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -741,7 +741,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn take_symbol_uri<E:SHTMLExtractor>(&mut self,key:SHTMLTag,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
+    fn take_symbol_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -752,7 +752,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn get_document_uri<E:SHTMLExtractor>(&self,key:SHTMLTag,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
+    fn get_document_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -763,7 +763,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn take_document_uri<E:SHTMLExtractor>(&mut self,key:SHTMLTag,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
+    fn take_document_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
@@ -774,7 +774,7 @@ pub trait Attributes {
     }
 
     fn get_id<E:SHTMLExtractor>(&self,extractor:&mut E,prefix:Cow<'static,str>) -> Box<str> {
-        self.get(SHTMLTag::Id).map_or_else(
+        self.get(SHTMLKey::Id).map_or_else(
             || extractor.new_id(prefix),
             |v| {
                 let v = v.as_ref();
@@ -787,13 +787,13 @@ pub trait Attributes {
         )
     }
 
-    fn get_bool(&self,key:SHTMLTag) -> bool {
+    fn get_bool(&self,key:SHTMLKey) -> bool {
         self.get(key)
             .and_then(|s| s.as_ref().parse().ok())
             .unwrap_or_default()
     }
 
-    fn take_bool(&mut self,key:SHTMLTag) -> bool {
+    fn take_bool(&mut self,key:SHTMLKey) -> bool {
         self.remove(key)
             .and_then(|s| s.parse().ok())
             .unwrap_or_default()

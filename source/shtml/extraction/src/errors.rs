@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use immt_ontology::uris::Name;
+use immt_ontology::{shtml::SHTMLKey, uris::Name};
 use crate::open::terms::{OpenTermKind, VarOrSym};
 
 #[derive(Clone,Debug)]
@@ -22,6 +22,7 @@ pub enum SHTMLError {
 }
 
 impl std::error::Error for SHTMLError {}
+const HEAD:&str = SHTMLKey::Head.attr_name();
 impl Display for SHTMLError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -29,7 +30,7 @@ impl Display for SHTMLError {
             Self::MissingElementsInList => f.write_str("missing elements in term list"),
             Self::MissingTermForComplex(head) => write!(f,"missing actual term for complex term {head:?}"),
             Self::UnresolvedVariable(name) => write!(f,"unresolved variable {name}"),
-            Self::MissingHeadForTerm => f.write_str("missing data-shtml-head attribute for term"),
+            Self::MissingHeadForTerm => write!(f,"missing {HEAD} attribute for term"),
             Self::InvalidTermKind(s) => write!(f, "invalid term kind {s}"),
             Self::InvalidHeadForTermKind(kind,head) => write!(f, "invalid head {head:?} for term kind {kind:?}"),
             Self::InvalidArgSpec => write!(f, "invalid or missing argument marker"),

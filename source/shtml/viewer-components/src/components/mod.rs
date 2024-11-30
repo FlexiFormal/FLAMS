@@ -6,6 +6,7 @@ pub(crate) mod navigation;
 #[cfg(feature="omdoc")]
 pub mod omdoc;
 
+use immt_ontology::{narration::{exercises::CognitiveDimension, LOKind}, uris::DocumentElementURI};
 pub use inputref::{InputRef,IfInputref};
 pub use terms::*;
 pub use toc::*;
@@ -44,5 +45,32 @@ fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:Origina
     }
   } else {
     view!(<DomCont orig cont=crate::iterate/>).into_any()
+  }
+}
+
+#[derive(Clone,Debug,PartialEq,Eq)]
+pub struct LOs {
+  pub definitions:Vec<DocumentElementURI>,
+  pub examples:Vec<DocumentElementURI>,
+  pub exercises:Vec<(bool,DocumentElementURI,CognitiveDimension)>
+}
+
+
+pub(crate) trait IntoLOs {
+  fn lo_sort(self) -> LOs;
+}
+
+impl IntoLOs for Vec<(DocumentElementURI,LOKind)> {
+  fn lo_sort(self) -> LOs {
+      let mut definitions = Vec::new();
+      let mut examples = Vec::new();
+      let mut exercises = Vec::new();
+      for (uri,k) in self { match k {
+        LOKind::Definition => definitions.push(uri),
+        LOKind::Example => examples.push(uri),
+        LOKind::Exercise(cd) => exercises.push((false,uri,cd)),
+        LOKind::SubExercise(cd) => exercises.push((true,uri,cd))
+      }}
+      LOs { definitions, examples, exercises}
   }
 }

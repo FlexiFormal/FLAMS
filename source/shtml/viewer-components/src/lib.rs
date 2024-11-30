@@ -166,35 +166,35 @@ pub fn SHTMLStringMath(html:String) -> impl IntoView {
 }
 
 pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
-    SHTMLTag::Section.rule(),
-    SHTMLTag::Term.rule(),
-    SHTMLTag::Arg.rule(),
+    rule(SHTMLTag::Section),
+    rule(SHTMLTag::Term),
+    rule(SHTMLTag::Arg),
 
-    SHTMLTag::InputRef.rule(),
+    rule(SHTMLTag::InputRef),
 
 
-    SHTMLTag::Comp.rule(),
-    SHTMLTag::VarComp.rule(),
-    SHTMLTag::MainComp.rule(),
+    rule(SHTMLTag::Comp),
+    rule(SHTMLTag::VarComp),
+    rule(SHTMLTag::MainComp),
 
-    SHTMLTag::IfInputref.rule(),
+    rule(SHTMLTag::IfInputref),
 
     // ---- no-ops --------
-    SHTMLTag::ArgMode.rule(),
-    SHTMLTag::NotationId.rule(),
-    SHTMLTag::Head.rule(),
-    SHTMLTag::Language.rule(),
-    SHTMLTag::Metatheory.rule(),
-    SHTMLTag::Signature.rule(),
-    SHTMLTag::Args.rule(),
-    SHTMLTag::Macroname.rule(),
-    SHTMLTag::Inline.rule(),
-    SHTMLTag::Fors.rule(),
-    SHTMLTag::Id.rule(),
-    SHTMLTag::NotationFragment.rule(),
-    SHTMLTag::Precedence.rule(),
-    SHTMLTag::Role.rule(),
-    SHTMLTag::Argprecs.rule()
+    rule(SHTMLTag::ArgMode),
+    rule(SHTMLTag::NotationId),
+    rule(SHTMLTag::Head),
+    rule(SHTMLTag::Language),
+    rule(SHTMLTag::Metatheory),
+    rule(SHTMLTag::Signature),
+    rule(SHTMLTag::Args),
+    rule(SHTMLTag::Macroname),
+    rule(SHTMLTag::Inline),
+    rule(SHTMLTag::Fors),
+    rule(SHTMLTag::Id),
+    rule(SHTMLTag::NotationFragment),
+    rule(SHTMLTag::Precedence),
+    rule(SHTMLTag::Role),
+    rule(SHTMLTag::Argprecs),
 ];
 
 #[cfg_attr(not(feature="ts"),wasm_bindgen::prelude::wasm_bindgen)]

@@ -68,28 +68,28 @@ impl Language {
     pub const fn flag_svg(&self) -> &'static str {
         // https://flagicons.lipis.dev/
         match self {
-            Self::English => r##"<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-gb" viewBox="0 0 640 480">
+            Self::English => r##"<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-gb" viewBox="0 0 640 480">
   <path fill="#012169" d="M0 0h640v480H0z"/>
   <path fill="#FFF" d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z"/>
   <path fill="#C8102E" d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z"/>
   <path fill="#FFF" d="M241 0v480h160V0zM0 160v160h640V160z"/>
   <path fill="#C8102E" d="M0 193v96h640v-96zM273 0v480h96V0z"/>
 </svg>"##,
-            Self::German => r##"<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-de" viewBox="0 0 640 480">
+            Self::German => r##"<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-de" viewBox="0 0 640 480">
   <path fill="#fc0" d="M0 320h640v160H0z"/>
   <path fill="#000001" d="M0 0h640v160H0z"/>
   <path fill="red" d="M0 160h640v160H0z"/>
 </svg>
 "##,
             Self::French => r##"
-<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-fr" viewBox="0 0 640 480">
+<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-fr" viewBox="0 0 640 480">
   <path fill="#fff" d="M0 0h640v480H0z"/>
   <path fill="#000091" d="M0 0h213.3v480H0z"/>
   <path fill="#e1000f" d="M426.7 0H640v480H426.7z"/>
 </svg>
 "##,
             Self::Romanian => r##"
-<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-ro" viewBox="0 0 640 480">
+<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-ro" viewBox="0 0 640 480">
   <g fill-rule="evenodd" stroke-width="1pt">
     <path fill="#00319c" d="M0 0h213.3v480H0z"/>
     <path fill="#ffde00" d="M213.3 0h213.4v480H213.3z"/>
@@ -98,31 +98,31 @@ impl Language {
 </svg>
 "##,
             Self::Arabic => r##"
-<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-ae" viewBox="0 0 640 480">
+<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-ae" viewBox="0 0 640 480">
   <path fill="#00732f" d="M0 0h640v160H0z"/>
   <path fill="#fff" d="M0 160h640v160H0z"/>
   <path fill="#000001" d="M0 320h640v160H0z"/>
   <path fill="red" d="M0 0h220v480H0z"/>
 </svg>
 "##,
-            Self::Bulgarian => r##"<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-bg" viewBox="0 0 640 480">
+            Self::Bulgarian => r##"<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-bg" viewBox="0 0 640 480">
   <path fill="#fff" d="M0 0h640v160H0z"/>
   <path fill="#00966e" d="M0 160h640v160H0z"/>
   <path fill="#d62612" d="M0 320h640v160H0z"/>
 </svg>"##,
             Self::Russian => r##"
-<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-ru" viewBox="0 0 640 480">
+<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-ru" viewBox="0 0 640 480">
   <path fill="#fff" d="M0 0h640v160H0z"/>
   <path fill="#0039a6" d="M0 160h640v160H0z"/>
   <path fill="#d52b1e" d="M0 320h640v160H0z"/>
 </svg>"##,
-            Self::Finnish => r##"<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-fi" viewBox="0 0 640 480">
+            Self::Finnish => r##"<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-fi" viewBox="0 0 640 480">
   <path fill="#fff" d="M0 0h640v480H0z"/>
   <path fill="#002f6c" d="M0 174.5h640v131H0z"/>
   <path fill="#002f6c" d="M175.5 0h130.9v480h-131z"/>
 </svg>"##,
             Self::Turkish => r##"
-<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-tr" viewBox="0 0 640 480">
+<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-tr" viewBox="0 0 640 480">
   <g fill-rule="evenodd">
     <path fill="#e30a17" d="M0 0h640v480H0z"/>
     <path fill="#fff" d="M407 247.5c0 66.2-54.6 119.9-122 119.9s-122-53.7-122-120 54.6-119.8 122-119.8 122 53.7 122 119.9"/>
@@ -132,7 +132,7 @@ impl Language {
 </svg>
 "##,
             Self::Slovenian => r##"
-<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-si" viewBox="0 0 640 480">
+<svg width="1.5em" xmlns="http://www.w3.org/2000/svg" id="flag-icons-si" viewBox="0 0 640 480">
   <defs>
     <clipPath id="si-a">
       <path fill-opacity=".7" d="M-15 0h682.6v512H-15.1z"/>

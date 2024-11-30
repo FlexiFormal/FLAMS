@@ -28,7 +28,7 @@ impl SHTMLExtractor for DOMExtractor {
                 format!("{}_{}",e.key(),e.get())
             },
             std::collections::hash_map::Entry::Vacant(e) => {
-                let ret = format!("{}_0",e.key());
+                let ret = e.key().to_string();
                 e.insert(0);
                 ret
             }

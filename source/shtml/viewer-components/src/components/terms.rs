@@ -1,9 +1,9 @@
-use immt_ontology::uris::ContentURI;
-use immt_web_utils::{components::{DivOrMrow, Popover, PopoverSize, PopoverTriggerType}, do_css, inject_css};
+use immt_ontology::uris::{ArchiveURITrait, ContentURI, DocumentElementURI, URIWithLanguage};
+use immt_web_utils::{components::{DivOrMrow, Popover, OnClickModal,PopoverSize, PopoverTriggerType}, do_css, inject_css};
 use leptos::{context::Provider, prelude::*};
 use shtml_extraction::open::terms::{OpenTerm, VarOrSym};
 
-use crate::SHTMLString;
+use crate::{components::{IntoLOs, LOs}, SHTMLString};
 
 #[derive(Clone)]
 pub(super) struct InTermState {
@@ -45,24 +45,19 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
       }
     );
     let s = in_term.owner;
+    let s_click = s.clone();
     let node_type = if MATH { DivOrMrow::Mrow } else { DivOrMrow::Div };
     view!(
       <Popover node_type class size=PopoverSize::Small on_open=move || is_hovered.set(true) on_close=move || is_hovered.set(false)>
         <PopoverTrigger class slot>{children()}</PopoverTrigger>
+        <OnClickModal slot>{do_onclick(s_click)}</OnClickModal>
         //<div style="max-width:600px;">
           {match s {
             VarOrSym::V(v) => view!{<span>"Variable "{v.name().last_name().to_string()}</span>}.into_any(),
-            VarOrSym::S(ContentURI::Symbol(s)) => {
-              let r = Resource::new(|| (),move |()| crate::config::server_config.definition(s.clone()));
-              view!{
-                <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move || {
-                  if let Some(Ok((css,s))) = r.get() {
-                    for c in css { do_css(c); }
-                    Some(view!(<div style="color:black;background-color:white;padding:3px;"><SHTMLString html=s/></div>))
-                  } else {None}
-                }}</Suspense>
-              }.into_any()
-            }
+            VarOrSym::S(ContentURI::Symbol(s)) => crate::config::get!(definition(s.clone()) = (css,s) => {
+              for c in css { do_css(c); }
+              Some(view!(<div style="color:black;background-color:white;padding:3px;"><SHTMLString html=s/></div>))
+            }).into_any(),
             VarOrSym::S(ContentURI::Module(m)) =>
               view!{<div>"Module" {m.name().last_name().to_string()}</div>}.into_any(),
         }}//</div>
@@ -71,6 +66,73 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
   } else { children().into_any() }
 }
 
+fn do_onclick(uri:VarOrSym) -> impl IntoView {
+  use thaw::{Combobox,ComboboxOption,ComboboxOptionGroup,Divider};
+  let s = match uri {
+    VarOrSym::V(v) => return view!{<span>"Variable "{v.name().last_name().to_string()}</span>}.into_any(),
+    VarOrSym::S(ContentURI::Module(m)) =>
+      return view!{<div>"Module" {m.name().last_name().to_string()}</div>}.into_any(),
+    VarOrSym::S(ContentURI::Symbol(s)) => s
+  };
+  let name = s.name().last_name().to_string();
+
+  crate::config::get!(get_los(s.clone(),false) = v => {
+    let LOs {definitions,examples,exercises} = v.lo_sort();
+    let ex_off = definitions.len();
+    let selected = RwSignal::new(definitions.first().map(|_| "0".to_string()));
+    let definitions = StoredValue::new(definitions);
+    let examples = StoredValue::new(examples);
+    view!{//<div>
+      <div style="display:flex;flex-direction:row;">
+        <div style="font-weight:bold;">{name.clone()}</div>
+        <div style="margin-left:auto;"><Combobox selected_options=selected placeholder="Select Definition or Example">
+          <ComboboxOptionGroup label="Definitions">{
+              definitions.with_value(|v| v.iter().enumerate().map(|(i,d)| {
+                let line = lo_line(d);
+                let value = i.to_string();
+                view!{
+                  <ComboboxOption text="" value>{line}</ComboboxOption>
+                }
+            }).collect_view())
+          }</ComboboxOptionGroup>
+          <ComboboxOptionGroup label="Examples">{
+            examples.with_value(|v| v.iter().enumerate().map(|(i,d)| {
+              let line = lo_line(d);
+              let value = (ex_off + i).to_string();
+              view!{
+                <ComboboxOption text="" value>{line}</ComboboxOption>
+              }
+            }).collect_view())
+          }</ComboboxOptionGroup>
+        </Combobox></div>
+      </div>
+      <div style="margin:5px;"><Divider/></div>
+      {move || {
+        let uri = selected.with(|s| s.as_ref().map(|s| {
+          let i: usize = s.parse().unwrap_or_else(|_| unreachable!());
+          if i < ex_off {
+            definitions.with_value(|v:&Vec<DocumentElementURI>| v.as_slice()[i].clone())
+          } else {
+            examples.with_value(|v:&Vec<DocumentElementURI>| v.as_slice()[i - ex_off].clone())
+          }
+        }));
+        uri.map(|uri| {
+          crate::config::get!(paragraph(uri.clone()) = (css,html) => {
+            for c in css { do_css(c); }
+            view!(<div><SHTMLString html=html/></div>)
+          })
+        })
+      }}
+    }//</div>}
+  }).into_any()
+}
+
+fn lo_line(uri:&DocumentElementURI) -> impl IntoView + 'static {
+  let archive = uri.archive_id().to_string();
+  let name = uri.name().to_string();
+  let lang = uri.language().flag_svg();
+  view!(<div><span>"["{archive}"] "{name}" "</span><div style="display:contents;" inner_html=lang/></div>)
+}
 
 pub(super) fn do_arg<V:IntoView+'static>(children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   let value : Option<InTermState> = None;

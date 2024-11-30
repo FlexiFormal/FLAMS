@@ -2,7 +2,7 @@
 pub mod uris;
 pub mod toc;
 
-use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
+use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::Exercise, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
 use immt_utils::{vecmap::VecSet, CSS};
 use immt_web_utils::do_css;
 use leptos::prelude::*;
@@ -22,6 +22,16 @@ macro_rules! backend {
       ::paste::paste!{ 
         immt_system::backend::GlobalBackend::get().[<$fn _async>]($($args)*).await
       }
+    }
+  };
+  ($fn:ident SYNC!($($args:tt)*)) => {
+    if immt_system::settings::Settings::get().lsp {
+      let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
+        return Err::<_,ServerFnError<String>>("no lsp server".to_string().into())
+      };
+      state.backend().$fn($($args)*)
+    } else {
+        immt_system::backend::GlobalBackend::get().$fn($($args)*)
     }
   };
   ($fn:ident($($args:tt)*)) => {
@@ -143,9 +153,10 @@ pub async fn fragment(
         return Err("element not found".to_string().into())
       };
       match e.as_ref() {
-        DocumentElement::Paragraph(LogicalParagraph{range,..}) => {
+        DocumentElement::Paragraph(LogicalParagraph{range,..}) |
+        DocumentElement::Exercise(Exercise{range,..}) => {
           let Some((css,html)) = backend!(get_html_fragment!(uri.document(),*range)) else {
-            return Err("document not found".to_string().into())
+            return Err("document element not found".to_string().into())
           };
           Ok((css,html))
         }
@@ -198,7 +209,8 @@ pub async fn los(
   p:Option<String>,
   l:Option<Language>,
   m:Option<String>,
-  s:Option<String>
+  s:Option<String>,
+  exercises:bool
 ) -> Result<Vec<(DocumentElementURI,LOKind)>,ServerFnError<String>> {
   use immt_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
   use immt_system::backend::{rdf::sparql, Backend, GlobalBackend};
@@ -209,11 +221,53 @@ pub async fn los(
     return Err("invalid uri".to_string().into())
   };  
   let Ok(v) = tokio::task::spawn_blocking(move || {
-    GlobalBackend::get().triple_store().los(&uri).map(|i| i.collect()).unwrap_or_default()
+    GlobalBackend::get().triple_store().los(&uri,exercises).map(|i| i.collect()).unwrap_or_default()
   }).await else {
     return Err("internal error".to_string().into())
   };
   Ok(v)
+}
+
+
+#[server(
+  prefix="/content",
+  endpoint="notations",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
+)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn notations(
+  uri:Option<URI>,
+  rp:Option<String>,
+  a:Option<ArchiveId>,
+  p:Option<String>,
+  l:Option<Language>,
+  d:Option<String>,
+  e:Option<String>,
+  m:Option<String>,
+  s:Option<String>
+) -> Result<Vec<(DocumentElementURI,Notation)>,ServerFnError<String>> {
+  use immt_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
+  use immt_system::backend::{rdf::sparql, Backend, GlobalBackend};
+
+  let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
+    return Err("invalid uri components".to_string().into())
+  };
+  let Some(uri) = comps.parse() else {
+    return Err("invalid uri".to_string().into())
+  };
+  let r = match uri {
+    URI::Content(ContentURI::Symbol(uri)) => 
+      tokio::task::spawn_blocking(move || Ok(backend!(get_notations SYNC!(&uri)).unwrap_or_default())).await,
+    URI::Narrative(NarrativeURI::Element(uri)) =>
+      tokio::task::spawn_blocking(move || Ok(backend!(get_var_notations SYNC!(&uri)).unwrap_or_default())).await,
+    _ => return Err(format!("Not a symbol or variable URI: {uri}").into())
+  };
+  let Ok(Ok(v)) = r else {
+    return Err("internal error".to_string().into())
+  };
+  Ok(v.0)
 }
 
 #[server(

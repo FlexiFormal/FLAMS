@@ -61,7 +61,7 @@ pub mod sparql {
         }
     }
 
-    pub fn lo_query(s:&SymbolURI) -> Query {
+    pub fn lo_query(s:&SymbolURI,exercises:bool) -> Query {
         /* 
 SELECT DISTINCT ?x ?R ?t ?s WHERE {
   { 
@@ -83,68 +83,77 @@ SELECT DISTINCT ?x ?R ?t ?s WHERE {
             spargebra::term::Variable::new_unchecked(s)
         }
         let iri = s.to_iri();
+
+        let defs_and_exs = GraphPattern::Union {
+            left:Box::new(GraphPattern::Extend { 
+                inner: Box::new(GraphPattern::Bgp { 
+                    patterns: vec![
+                        TriplePattern { 
+                            subject: var("x").into(), 
+                            predicate: ulo2::DEFINES.into_owned().into(), 
+                            object: iri.clone().into() 
+                        }
+                    ] 
+                }), 
+                variable: var("R").into(), 
+                expression: Expression::Literal(
+                    "DEF".into()
+                )
+            }),
+            right:Box::new(GraphPattern::Extend {
+                inner: Box::new(GraphPattern::Bgp { 
+                    patterns: vec![
+                        TriplePattern { 
+                            subject: var("x").into(), 
+                            predicate: ulo2::EXAMPLE_FOR.into_owned().into(), 
+                            object: iri.clone().into() 
+                        }
+                    ] 
+                }), 
+                variable: var("R").into(), 
+                expression: Expression::Literal(
+                    "EX".into()
+                )
+            })
+        };
+
         QueryBuilder::Select {
             dataset:None,
             base_iri:None,
             pattern: GraphPattern::Distinct {
                 inner: Box::new(GraphPattern::Project {
-                    inner: Box::new(GraphPattern::Union {
-                        left: Box::new(GraphPattern::Union {
-                            left:Box::new(GraphPattern::Extend { 
-                                inner: Box::new(GraphPattern::Bgp { 
-                                    patterns: vec![
-                                        TriplePattern { 
-                                            subject: var("x").into(), 
-                                            predicate: ulo2::DEFINES.into_owned().into(), 
-                                            object: iri.clone().into() 
-                                        }
-                                    ] 
-                                }), 
-                                variable: var("R").into(), 
-                                expression: Expression::Literal(
-                                    "DEF".into()
-                                )
-                            }),
-                            right:Box::new(GraphPattern::Extend {
-                                inner: Box::new(GraphPattern::Bgp { 
-                                    patterns: vec![
-                                        TriplePattern { 
-                                            subject: var("x").into(), 
-                                            predicate: ulo2::EXAMPLE_FOR.into_owned().into(), 
-                                            object: iri.clone().into() 
-                                        }
-                                    ] 
-                                }), 
-                                variable: var("R").into(), 
-                                expression: Expression::Literal(
-                                    "EX".into()
-                                )
-                            })
-                        }),
-                        right: Box::new(GraphPattern::Bgp { patterns: vec![
-                            TriplePattern { 
-                                subject: var("x").into(), 
-                                predicate: ulo2::OBJECTIVE.into_owned().into(), 
-                                object: var("bn").into() 
-                            }, 
-                            TriplePattern { 
-                                subject: var("bn").into(), 
-                                predicate: ulo2::POSYMBOL.into_owned().into(), 
-                                object: iri.into() 
-                            }, 
-                            TriplePattern { 
-                                subject: var("bn").into(), 
-                                predicate: ulo2::COGDIM.into_owned().into(), 
-                                object: var("R").into() 
-                            }, 
-                            TriplePattern { 
-                                subject: var("x").into(), 
-                                predicate: ontologies::rdf::TYPE.into_owned().into(), 
-                                object: var("t").into() 
-                            }
-                        ] })
-                    }),
-                    variables:vec![var("x").into(),var("R").into(),var("t").into()]
+                    inner: Box::new(if exercises {
+                        GraphPattern::Union {
+                            left: Box::new(defs_and_exs),
+                            right: Box::new(GraphPattern::Bgp { patterns: vec![
+                                TriplePattern { 
+                                    subject: var("x").into(), 
+                                    predicate: ulo2::OBJECTIVE.into_owned().into(), 
+                                    object: var("bn").into() 
+                                }, 
+                                TriplePattern { 
+                                    subject: var("bn").into(), 
+                                    predicate: ulo2::POSYMBOL.into_owned().into(), 
+                                    object: iri.into() 
+                                }, 
+                                TriplePattern { 
+                                    subject: var("bn").into(), 
+                                    predicate: ulo2::COGDIM.into_owned().into(), 
+                                    object: var("R").into() 
+                                }, 
+                                TriplePattern { 
+                                    subject: var("x").into(), 
+                                    predicate: ontologies::rdf::TYPE.into_owned().into(), 
+                                    object: var("t").into() 
+                                }
+                            ] })
+                        }
+                    } else {defs_and_exs}),
+                    variables:if(exercises) {
+                        vec![var("x").into(),var("R").into(),var("t").into()]
+                    } else {
+                        vec![var("x").into(),var("R").into()]
+                    }
                 })
             }
         }.into()
@@ -323,8 +332,8 @@ impl RDFStore {
         let _ = loader.load_quads(iter);
     }
 
-    pub fn los(&self,s:&SymbolURI) -> Option<LOIter> {
-        let q = sparql::lo_query(s);
+    pub fn los(&self,s:&SymbolURI,exercises:bool) -> Option<LOIter> {
+        let q = sparql::lo_query(s,exercises);
         self.query(q).ok().and_then(|s|
             if let QueryResults::Solutions(s) = s.0  {
                 Some(LOIter {inner: s})

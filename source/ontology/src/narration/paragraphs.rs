@@ -3,7 +3,7 @@ use std::fmt::Display;
 use immt_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term, uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
+    content::terms::Term, shtml::SHTMLKey, uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
 };
 
 use super::{DocumentElement, NarrationTrait};
@@ -48,14 +48,20 @@ pub enum ParagraphKind {
 }
 
 impl ParagraphKind {
+    const DEF:&str = SHTMLKey::Definition.attr_name();
+    const ASS:&str = SHTMLKey::Assertion.attr_name();
+    const PAR:&str = SHTMLKey::Paragraph.attr_name();
+    const PRO:&str = SHTMLKey::Proof.attr_name();
+    const SUB:&str = SHTMLKey::SubProof.attr_name();
     #[must_use]
     pub fn from_shtml(s: &str) -> Option<Self> {
+        
         Some(match s {
-            "data-shtml-definition" => Self::Definition,
-            "data-shtml-assertion" => Self::Assertion,
-            "data-shtml-paragraph" => Self::Paragraph,
-            "data-shtml-proof" => Self::Proof,
-            "data-shtml-subproof" => Self::SubProof,
+            Self::DEF => Self::Definition,
+            Self::ASS => Self::Assertion,
+            Self::PAR => Self::Paragraph,
+            Self::PRO => Self::Proof,
+            Self::SUB => Self::SubProof,
             _ => return None,
         })
     }

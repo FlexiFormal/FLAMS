@@ -29,4 +29,5 @@
  * | [`/content/omdoc`](crate::router::content::omdoc) | [URI](immt_ontology::uris::URI) | [`AnySpec`](shtml_viewer_components::components::omdoc::AnySpec) Returns the structural representation of the OMDoc conent at the given URI |
  * | [`/content/toc`](crate::router::content::toc()) | [DocumentURI](immt_ontology::uris::DocumentURI) | `(Vec<`[CSS](immt_utils::CSS)`>,Vec<`[TOCElem](shtml_viewer_components::components::TOCElem)`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
  * | [`/content/los`](crate::router::content::los()) | [SymolURI](immt_ontology::uris::SymbolURI) | `(`Vec<(`[DocumentElementURI],[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
+ * | [`/content/notations`](crate::router::content::notations()) | [SymolURI](immt_ontology::uris::URI) | `(`Vec<(`[DocumentElementURI],[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
 */

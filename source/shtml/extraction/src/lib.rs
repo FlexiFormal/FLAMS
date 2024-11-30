@@ -8,7 +8,8 @@ pub mod errors;
 pub mod open;
 
 pub mod prelude {
-    pub use crate::rules::*;
+    pub use crate::rules::{SHTMLElements,SHTMLExtractionRule,RuleSet};
     pub use super::extractor::*;
-    pub use super::tags::SHTMLTag;
+    pub use immt_ontology::shtml::SHTMLKey as SHTMLTag;
+    pub use crate::tags::{rule,all_rules};
 }

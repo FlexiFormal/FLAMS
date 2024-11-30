@@ -8,7 +8,7 @@ use immt_ontology::{languages::Language, narration::{documents::UncheckedDocumen
 use immt_system::{backend::{AnyBackend, Backend}, formats::{HTMLData, OMDocResult}};
 use immt_utils::{prelude::HSet, CSS};
 use nodes::{ElementData, NodeData, NodeRef};
-use shtml_extraction::{errors::SHTMLError, open::{terms::{OpenTerm, VarOrSym}, OpenSHTMLElement}, prelude::{Attributes, ExtractorState, RuleSet, SHTMLElements, SHTMLNode, SHTMLTag, StatefulExtractor}};
+use shtml_extraction::{errors::SHTMLError, open::{terms::{OpenTerm, VarOrSym}, OpenSHTMLElement}, prelude::{all_rules, Attributes, ExtractorState, RuleSet, SHTMLElements, SHTMLNode, SHTMLTag, StatefulExtractor}};
 
 pub struct HTMLParser<'p> {
   document_node:NodeRef,
@@ -270,7 +270,7 @@ impl TreeSink for HTMLParser<'_> {
               {
                 let mut attributes = child_elem.attributes.borrow_mut();
                 let mut extractor = self.extractor.borrow_mut();
-                if let Some(elements) = SHTMLTag::all_rules().applicable_rules(&mut *extractor, &mut *attributes) {
+                if let Some(elements) = all_rules().applicable_rules(&mut *extractor, &mut *attributes) {
                   drop(attributes);
                   update_attributes(&elements,child_elem);
                   child_elem.shtml.set(Some(elements));

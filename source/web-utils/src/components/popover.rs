@@ -7,6 +7,13 @@ use std::time::Duration;
 use thaw_utils::{add_event_listener, class_list,BoxCallback};
 use thaw_components::{CSSTransition,Follower};
 use super::binder::Binder;
+use thaw::{Dialog,DialogSurface,DialogBody};
+
+#[slot]
+pub struct OnClickModal {
+    children:Children,
+    #[prop(optional, into)] signal:RwSignal<bool>
+}
 
 /// Largely copied from [thaw](https://docs.rs/thaw), but modified
 /// to work with MathML.
@@ -22,6 +29,8 @@ pub fn Popover(
     #[prop(optional)]
     position: PopoverPosition,
     #[prop(optional)] max_width:u32,
+    #[prop(optional)]
+    on_click_modal:Option<OnClickModal>,
     children: Children,
     #[prop(optional, into)]
     appearance: MaybeProp<PopoverAppearance>,
@@ -41,8 +50,6 @@ pub fn Popover(
     let target_ref = node_type.new_ref();
     let is_show_popover = RwSignal::new(false);
     let show_popover_handle = StoredValue::new(None::<TimeoutHandle>);
-
-
 
     if on_open.is_some() || on_close.is_some() {
         Effect::watch(
@@ -103,7 +110,7 @@ pub fn Popover(
             let el = ev.target();
             let mut el: Option<leptos::web_sys::Element> =
                 el.into_js_result().map_or(None, |el| Some(el.into()));
-            let body = document().body().unwrap();
+            let body = document().body().expect("No document found!");
             while let Some(current_el) = el {
                 if current_el == *body {
                     break;
@@ -138,39 +145,52 @@ pub fn Popover(
         class: trigger_class,
         children: trigger_children,
     } = popover_trigger;
+
+    let modal_signal = on_click_modal.as_ref().map(|OnClickModal{signal,..}| *signal);
+
+    let do_trigger = move || match target_ref {
+        DivOrMrowRef::Div(target_ref) => view!{
+            <div
+                class=class_list![
+                    "thaw-popover-trigger",
+                    move || is_show_popover.get().then(|| "thaw-popover-trigger--open".to_string()),
+                    trigger_class
+                ]
+                node_ref=target_ref
+                on:click=move |_| if let Some(s) = modal_signal { s.set(true) }
+                on:mouseenter=on_mouse_enter
+                on:mouseleave=on_mouse_leave
+            >
+                {trigger_children()}
+            </div>
+        }.into_any(),
+        DivOrMrowRef::Mrow(target_ref) => view!{
+            <mrow
+                class=class_list![
+                    "thaw-popover-trigger",
+                    move || is_show_popover.get().then(|| "thaw-popover-trigger--open".to_string()),
+                    trigger_class
+                ]
+                node_ref=target_ref
+                on:click=move |_| if let Some(s) = modal_signal { s.set(true) }
+                on:mouseenter=on_mouse_enter
+                on:mouseleave=on_mouse_leave
+            >
+                {trigger_children()}
+            </mrow>
+        }.into_any()
+    };
     
     view! {
+        {on_click_modal.map(|OnClickModal{signal,children}| view!{
+            <Dialog open=signal>
+                <DialogSurface>//<DialogBody>
+                    {children()}
+                /*</DialogBody>*/</DialogSurface>
+            </Dialog>
+        })}
         <Binder target_ref max_width>
-            {match target_ref {
-                DivOrMrowRef::Div(target_ref) => view!{
-                    <div
-                        class=class_list![
-                            "thaw-popover-trigger",
-                            move || is_show_popover.get().then(|| "thaw-popover-trigger--open".to_string()),
-                            trigger_class
-                        ]
-                        node_ref=target_ref
-                        on:mouseenter=on_mouse_enter
-                        on:mouseleave=on_mouse_leave
-                    >
-                        {trigger_children()}
-                    </div>
-                }.into_any(),
-                DivOrMrowRef::Mrow(target_ref) => view!{
-                    <mrow
-                        class=class_list![
-                            "thaw-popover-trigger",
-                            move || is_show_popover.get().then(|| "thaw-popover-trigger--open".to_string()),
-                            trigger_class
-                        ]
-                        node_ref=target_ref
-                        on:mouseenter=on_mouse_enter
-                        on:mouseleave=on_mouse_leave
-                    >
-                        {trigger_children()}
-                    </mrow>
-                }.into_any()
-            }}
+            {do_trigger()}
             <Follower slot show=is_show_popover placement=position>
                 <CSSTransition
                     node_ref=popover_ref
@@ -237,7 +257,7 @@ impl DivOrMrow {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub(crate) enum DivOrMrowRef {
+pub enum DivOrMrowRef {
     Div(NodeRef::<html::Div>),
     Mrow(NodeRef::<leptos::tachys::mathml::Mrow>)
 }

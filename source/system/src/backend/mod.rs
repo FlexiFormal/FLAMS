@@ -10,12 +10,12 @@ use immt_ontology::{
     content::{
         checking::ModuleChecker, declarations::{Declaration, DeclarationTrait, OpenDeclaration}, modules::Module, terms::Term, ContentReference, ModuleLike
     }, languages::Language, narration::{
-        checking::DocumentChecker, documents::Document, notations::{Notation, PresentationError, Presenter}, DocumentElement, LazyDocRef, NarrationTrait, NarrativeReference
+        checking::DocumentChecker, documents::Document, exercises::Exercise, notations::{Notation, PresentationError, Presenter}, paragraphs::LogicalParagraph, sections::Section, DocumentElement, LazyDocRef, NarrationTrait, NarrativeReference
     }, uris::{
         ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIWithLanguage
     }, Checked, DocumentRange, LocalBackend, Unchecked
 };
-use immt_utils::{prelude::HMap, triomphe, vecmap::VecMap, CSS};
+use immt_utils::{prelude::HMap, triomphe, vecmap::{VecMap, VecSet}, CSS};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use rdf::RDFStore;
@@ -113,6 +113,62 @@ pub trait Backend {
                 _ => None,
             }))
         })
+    }
+
+    fn get_notations(&self,uri:&SymbolURI) -> Option<VecSet<(DocumentElementURI,Notation)>> where Self:Sized {
+        use rdf::sparql::{Select,Var};
+        use immt_ontology::rdf::ontologies::ulo2;
+        let iri = uri.to_iri();
+        let q = Select {
+            subject: Var('n'),
+            pred: ulo2::NOTATION_FOR.into_owned(),
+            object: iri
+        };
+        let ret:VecSet<_> = GlobalBackend::get().triple_store().query(q.into()).ok()?
+            .into_uris().filter_map(|uri| {
+                let elem = self.get_document_element::<DocumentElement<Checked>>(&uri)?;
+                let DocumentElement::Notation{notation,..} = elem.as_ref() else {
+                    return None
+                };
+                self.get_reference(&notation).map(|n| (uri,n))
+            })
+            .collect();
+        if ret.is_empty() { None } else {Some(ret)}
+    }
+
+    fn get_var_notations(&self,uri:&DocumentElementURI) -> Option<VecSet<(DocumentElementURI,Notation)>> where Self:Sized {
+        let parent = uri.parent();
+        let parent = self.get_document_element::<DocumentElement<Checked>>(&parent)?;
+        let mut ch = parent.as_ref().children().iter();
+        let mut stack = Vec::new();
+        let mut ret = VecSet::new();
+        loop {
+            let Some(next) = ch.next() else {
+                if let Some(n) = stack.pop() {
+                    ch = n;
+                    continue
+                }
+                break
+            };
+            let (uri,not) = match next {
+                DocumentElement::Module { children,.. } |
+                DocumentElement::Section(Section{children,..}) |
+                DocumentElement::Morphism{children,..} |
+                DocumentElement::MathStructure{children,..} |
+                DocumentElement::Extension{children,..} |
+                DocumentElement::Paragraph(LogicalParagraph{children,..}) |
+                DocumentElement::Exercise(Exercise{children,..}) => {
+                    let old = std::mem::replace(&mut ch,children.iter());
+                    stack.push(old);
+                    continue
+                }
+                DocumentElement::VariableNotation { variable, id, notation } if variable == uri => (id,notation),
+                _ => continue
+            };
+            let Some(r) = self.get_reference(&not) else { continue };
+            ret.insert((uri.clone(),r));
+        }
+        if ret.is_empty() { None } else {Some(ret)}
     }
 
     /*fn get_archive_for_path(p:&Path) -> Option<(ArchiveURI,String)> {
@@ -836,7 +892,6 @@ impl<'a,W:std::fmt::Write,B:Backend> TermPresenter<'a,W,B> {
     }
 
     fn load_var_notation(backend:&B,uri:&DocumentElementURI,needs_op:bool) -> Option<Notation> {
-        use immt_ontology::narration::{sections::Section,paragraphs::LogicalParagraph,exercises::Exercise};
         let parent = uri.parent();
         //println!("Looking for {uri} in {parent}");
         let parent = backend.get_document_element::<DocumentElement<Checked>>(&parent)?;

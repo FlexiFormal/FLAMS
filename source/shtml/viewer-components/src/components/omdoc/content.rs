@@ -1,6 +1,6 @@
 use immt_ontology::{content::declarations::symbols::ArgSpec, languages::Language, uris::{ContentURITrait, ModuleURI, Name, SymbolURI}};
 use immt_utils::vecmap::VecSet;
-use crate::{SHTMLString, SHTMLStringMath};
+use crate::{components::{IntoLOs,LOs}, SHTMLString, SHTMLStringMath};
 
 use super::{narration::DocumentElementSpec, AnySpec, SpecDecl};
 use leptos::{context::Provider, prelude::*};
@@ -99,6 +99,7 @@ pub struct StructureSpec<E:SpecDecl> {
 impl<E:SpecDecl> super::Spec for StructureSpec<E> {
     fn into_view(self) -> impl IntoView {
         let StructureSpec {uri,macro_name,extends,extensions,uses,children} = self;
+        let uriclone = uri.clone();
         view!{
             <Provider value=InStruct>
                 <Block>
@@ -118,6 +119,7 @@ impl<E:SpecDecl> super::Spec for StructureSpec<E> {
                             </Block>
                         }).collect_view()}
                     })} else {None}}
+                    {do_los(uriclone)}
                 </Block>
             </Provider>
         }
@@ -225,34 +227,25 @@ fn do_los(uri:SymbolURI) -> impl IntoView {
     view!{
         <Collapsible lazy=true>
             <Header slot><span>"Learning Objects"</span></Header>
-            {
+            <div style="padding-left:15px">{
                 let uri = uri.clone();
-                crate::config::get!(get_los(uri.clone()) = v => {
-                    let mut defs = Vec::new();
-                    let mut expls = Vec::new();
-                    let mut excs = Vec::new();
-                    for (uri,k) in v { match k {
-                        LOKind::Definition => defs.push(uri),
-                        LOKind::Example => expls.push(uri),
-                        LOKind::Exercise(cd) => excs.push((uri,false,cd)),
-                        LOKind::SubExercise(cd) => excs.push((uri,true,cd)),
-                        _ => unreachable!()
-                    }}
+                crate::config::get!(get_los(uri.clone(),true) = v => {
+                    let LOs {definitions,examples,exercises} = v.lo_sort();
                     view!{
-                        <div>{if defs.is_empty() { None } else {Some(
-                            super::comma_sep("Definitions", defs.into_iter().map(|uri| {
+                        <div>{if definitions.is_empty() { None } else {Some(
+                            super::comma_sep("Definitions", definitions.into_iter().map(|uri| {
                                 let title = uri.name().last_name().to_string();
                                 super::doc_elem_name(uri,None,title)
                             }))
                         )}}</div>
-                        <div>{if expls.is_empty() { None } else {Some(
-                            super::comma_sep("Examples", expls.into_iter().map(|uri| {
+                        <div>{if examples.is_empty() { None } else {Some(
+                            super::comma_sep("Examples", examples.into_iter().map(|uri| {
                                 let title = uri.name().last_name().to_string();
                                 super::doc_elem_name(uri,None,title)
                             }))
                         )}}</div>
-                        <div>{if excs.is_empty() { None } else {Some(
-                            super::comma_sep("Exercises", excs.into_iter().map(|(uri,_,cd)| {
+                        <div>{if exercises.is_empty() { None } else {Some(
+                            super::comma_sep("Exercises", exercises.into_iter().map(|(_,uri,cd)| {
                                 let title = uri.name().last_name().to_string();
                                 view!{
                                     {super::doc_elem_name(uri,None,title)}
@@ -262,7 +255,7 @@ fn do_los(uri:SymbolURI) -> impl IntoView {
                         )}}</div>
                     }
                 })
-            }
+            }</div>
         </Collapsible>
     }
 }
@@ -293,7 +286,7 @@ impl super::Spec for SymbolSpec {
                 <HeaderLeft slot><span>{tp_html.map(|html| view! {
                     "Type: "<SHTMLStringMath html/>
                 })}</span></HeaderLeft>
-                <HeaderRight slot><span>{df_html.map(|html| view! {
+                <HeaderRight slot><span style="white-space:nowrap;">{df_html.map(|html| view! {
                     "Definiens: "<SHTMLStringMath html/>
                 })}</span></HeaderRight>
                 "(TODO: Notations)"

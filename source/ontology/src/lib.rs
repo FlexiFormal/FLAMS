@@ -28,6 +28,7 @@ pub mod file_states;
 #[cfg(feature = "rdf")]
 pub mod rdf;
 pub mod uris;
+pub mod shtml;
 
 mod sealed {
     pub trait Sealed {}
@@ -215,6 +216,7 @@ pub mod metatheory {
         pub static ref FIELD_PROJECTION: SymbolURI = URI.clone() | "record field";
         pub static ref OF_TYPE: SymbolURI = URI.clone() | "of type";
         pub static ref SEQUENCE_EXPRESSION: SymbolURI = URI.clone() | "sequence expression";
+        pub(crate) static ref NOTATION_DUMMY: SymbolURI = URI.clone() | "notation dummy";
     }
 }
 

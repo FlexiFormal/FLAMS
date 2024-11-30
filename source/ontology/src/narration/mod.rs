@@ -28,7 +28,6 @@ use crate::{
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 pub enum LOKind {
     Definition,
     Example,

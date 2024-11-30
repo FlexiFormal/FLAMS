@@ -242,7 +242,6 @@ pub(super) fn filter_node_term(mut node:NodeRef) -> NodeRef {
           continue
         }
       }
-      //const SKIP_ATTRIBUTES: [&str;3] = ["style","class","data-shtml-type"];
       if matches!(e.name.local.as_ref(),"mrow") && num_children == 1 {
         if let Some(n) = node.children().find(|n| n.as_element().is_some()) {
           node = n;

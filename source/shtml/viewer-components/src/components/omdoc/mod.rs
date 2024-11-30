@@ -1,5 +1,5 @@
 use content::DeclarationSpec;
-use immt_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI};
+use immt_ontology::{shtml::SHTMLKey, uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI}};
 use immt_web_utils::{components::{Block,Header}, do_css};
 use narration::DocumentElementSpec;
 use leptos::prelude::*;
@@ -231,8 +231,11 @@ pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,tit
 
 #[inline]
 pub(crate) fn symbol_name(uri:&SymbolURI,title:&str) -> impl IntoView {
+  const TERM:&str = SHTMLKey::Term.attr_name();
+  const HEAD:&str = SHTMLKey::Head.attr_name();
+  const COMP:&str = SHTMLKey::Comp.attr_name();
   let html = format!(
-    "<span data-shtml-term=\"OMID\" data-shtml-head=\"{uri}\" data-shtml-comp>{title}</span>"
+    "<span {TERM}=\"OMID\" {HEAD}=\"{uri}\" {COMP}>{title}</span>"
   );
   view!(<SHTMLString html/>)
 }

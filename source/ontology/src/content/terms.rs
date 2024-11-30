@@ -1,6 +1,6 @@
-use crate::uris::{ContentURI, DocumentElementURI, Name};
+use crate::uris::{ContentURI, ContentURITrait, DocumentElementURI, Name, URIOrRefTrait, URIRef};
 use crate::{oma, oms, omsp};
-use immt_utils::prelude::{DFSContinuation, Indentor, TreeChild, TreeLike};
+use immt_utils::prelude::{DFSContinuation, Indentor, TreeChild, TreeChildIter, TreeLike};
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::str::FromStr;
 
@@ -149,6 +149,22 @@ impl Term {
             Self::Informal { .. } => todo!(),
         }
     }
+
+    #[inline]
+    pub fn subterm_iter(&self) -> impl Iterator<Item=&'_ Self> {
+        <TermChildrenIter as TreeChildIter<Self>>::dfs(
+            TermChildrenIter::One(self)
+        )
+    }
+
+    #[inline]
+    pub fn uri_iter(&self) -> impl Iterator<Item=URIRef<'_>> {
+        self.subterm_iter().filter_map(|t| match t {
+            Self::OMID(uri) => Some(uri.as_uri()),
+            Self::OMV(Var::Ref { declaration,.. }) => Some(declaration.as_uri()),
+            _ => None
+        })
+    }
 }
 
 impl Display for Term {
@@ -156,35 +172,6 @@ impl Display for Term {
         self.display_top::<true>(f, None)
     }
 }
-
-/*
-#[derive(Clone,Copy)]
-#[cfg_attr(feature="serde", derive(serde::Serialize))]
-pub enum TermRef<'a> {
-    OMID(ContentURIRef<'a>),
-    OMV(&'a Var),
-    OMA {
-        head:&'a Term,
-        args:&'a [Arg]
-    },
-    Field {
-        record:&'a Term,
-        key:&'a Var
-    },
-    OML {
-        name:&'a Name,
-        df:Option<&'a Term>,
-        tp:Option<&'a Term>
-    },
-    Informal {
-        tag: &'a str,
-        attributes: &'a [(Box<str>, Box<str>)],
-        children: &'a [Informal],
-        terms: &'a [Term]
-    }
-}
-
- */
 
 pub enum TermChildrenIter<'a> {
     Slice(std::slice::Iter<'a, Term>),

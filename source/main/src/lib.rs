@@ -18,7 +18,7 @@ pub mod utils;
 pub(crate) mod fns {
     use std::{future::Future, pin::Pin};
 
-    use immt_ontology::{languages::Language, narration::LOKind, uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI}};
+    use immt_ontology::{languages::Language, narration::{notations::Notation, LOKind}, uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI}};
     use immt_utils::CSS;
     use leptos::prelude::ServerFnError;
     use shtml_viewer_components::components::{omdoc::AnySpec, TOCElem};
@@ -35,17 +35,21 @@ pub(crate) mod fns {
     -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,Vec<TOCElem>),ServerFnError<String>>> + Send>> {
         Box::pin(crate::router::content::toc(uri,rp,a,p,l,d))
     }
-    fn los(uri:Option<SymbolURI>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,m:Option<String>,s:Option<String>)
+    fn los(uri:Option<SymbolURI>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,m:Option<String>,s:Option<String>,exercises:bool)
     -> Pin<Box<dyn Future<Output=Result<Vec<(DocumentElementURI,LOKind)>,ServerFnError<String>>> + Send>> {
-        Box::pin(crate::router::content::los(uri,a,p,l,m,s))
+        Box::pin(crate::router::content::los(uri,a,p,l,m,s,exercises))
     }
     fn omdoc(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
     -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,AnySpec),ServerFnError<String>>> + Send>> {
         Box::pin(crate::router::content::omdoc(uri,rp,a,p,l,d,e,m,s))
     }
+    fn notations(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
+    -> Pin<Box<dyn Future<Output=Result<Vec<(DocumentElementURI,Notation)>,ServerFnError<String>>> + Send>> {
+        Box::pin(crate::router::content::notations(uri,rp,a,p,l,d,e,m,s))
+    }
     pub(super) fn init() {
         shtml_viewer_components::config::ServerConfig::initialize(
-            fragment,full_doc,toc,omdoc,los
+            fragment,full_doc,toc,omdoc,los,notations
         );
     }
 }

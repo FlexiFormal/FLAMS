@@ -88,7 +88,7 @@ impl super::Spec for VariableSpec {
                 <HeaderLeft slot><span>{tp_html.map(|html| view! {
                     "Type: "<SHTMLStringMath html/>
                 })}</span></HeaderLeft>
-                <HeaderRight slot><span>{df_html.map(|html| view! {
+                <HeaderRight slot><span style="white-space:nowrap;">{df_html.map(|html| view! {
                     "Definiens: "<SHTMLStringMath html/>
                 })}</span></HeaderRight>
                 "(TODO: Notation?)"
@@ -175,7 +175,26 @@ pub struct ExerciseSpec {
 }
 impl super::Spec for ExerciseSpec {
     fn into_view(self) -> impl IntoView {
-        view!(<div>"TODO: Exercise"</div>)
+        let Self { uri, title, uses, preconditions, objectives, children,..} = self;
+        let title = title.unwrap_or_else(
+          || uri.name().last_name().to_string()
+        );
+        view!{
+          <Block>
+            <Header slot><b>
+              {super::doc_elem_name(uri,Some("Exercise"),title)}
+            </b></Header>
+            <HeaderLeft slot>{super::uses("Uses",uses.0)}</HeaderLeft>
+            <HeaderRight slot>{super::comma_sep(
+              "Objectives",
+              objectives.into_iter().map(|(dim,sym)| view!{
+                {super::symbol_name(&sym,sym.name().last_name().as_ref())}
+                " ("{dim.to_string()}")"
+              })
+            )}</HeaderRight>
+            {children.into_iter().map(super::Spec::into_view).collect_view()}
+          </Block>
+        }
     }
 }
 impl From<ExerciseSpec> for AnySpec {
