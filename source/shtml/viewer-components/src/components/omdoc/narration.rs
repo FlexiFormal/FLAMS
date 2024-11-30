@@ -1,4 +1,4 @@
-use immt_ontology::{content::declarations::symbols::ArgSpec, narration::{exercises::CognitiveDimension, paragraphs::ParagraphKind}, uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI}};
+use immt_ontology::{content::{declarations::symbols::ArgSpec, terms::Term}, narration::{exercises::CognitiveDimension, paragraphs::ParagraphKind}, uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI, URI}};
 use immt_utils::vecmap::{VecMap, VecSet};
 use crate::{components::omdoc::Spec, SHTMLString, SHTMLStringMath};
 
@@ -70,28 +70,40 @@ pub struct VariableSpec {
   pub uri:DocumentElementURI,
   pub arity:ArgSpec,
   pub macro_name:Option<String>,
-  pub tp_html:Option<String>,
-  pub df_html:Option<String>,
+  pub tp:Option<Term>,//Option<String>,
+  pub df:Option<Term>,//Option<String>,
   pub is_seq:bool
 }
 impl super::Spec for VariableSpec {
     fn into_view(self) -> impl IntoView {
-        let VariableSpec {uri,df_html,tp_html,arity,is_seq,macro_name} = self;
+        let VariableSpec {uri,df,tp,arity,is_seq,macro_name} = self;
         //let show_separator = !notations.is_empty();
         let varstr = if is_seq {"Sequence Variable "} else {"Variable "};
+        let name = uri.name().last_name().to_string();
         view!{
             <Block show_separator=false>
                 <Header slot><span>
-                    <b>{varstr}<span class="shtml-var-comp">{uri.name().last_name().to_string()}</span></b>
+                    <b>{varstr}<span class="shtml-var-comp">{name}</span></b>
                     {macro_name.map(|name| view!(<span>" ("<Text tag=TextTag::Code>"\\"{name}</Text>")"</span>))}
+                    {tp.map(|t| view! {
+                      " of type "{
+                        crate::config::get!(present(t.clone()) = html => {
+                          view!(<SHTMLStringMath html/>)
+                        })
+                      }
+                  })}
                 </span></Header>
-                <HeaderLeft slot><span>{tp_html.map(|html| view! {
-                    "Type: "<SHTMLStringMath html/>
-                })}</span></HeaderLeft>
-                <HeaderRight slot><span style="white-space:nowrap;">{df_html.map(|html| view! {
-                    "Definiens: "<SHTMLStringMath html/>
+                <HeaderLeft slot>
+                  {super::content::do_notations(URI::Narrative(uri.into()),arity)}
+                </HeaderLeft>
+                <HeaderRight slot><span style="white-space:nowrap;">{df.map(|t| view! {
+                    "Definiens: "{
+                      crate::config::get!(present(t.clone()) = html => {
+                        view!(<SHTMLStringMath html/>)
+                      })
+                    }
                 })}</span></HeaderRight>
-                "(TODO: Notation?)"
+                <span/>
             </Block>
         }
     }
@@ -115,7 +127,7 @@ pub struct ParagraphSpec {
   pub kind:ParagraphKind,
   pub inline:bool,
   pub uses:VecSet<ModuleURI>,
-  pub fors: VecMap<SymbolURI,Option<String>>,
+  pub fors: VecMap<SymbolURI,Option<Term>>,//Option<String>>,
   pub title:Option<String>,
   pub children:Vec<DocumentElementSpec>,
   pub definition_like:bool
@@ -134,9 +146,13 @@ impl super::Spec for ParagraphSpec {
             <HeaderLeft slot>{super::uses("Uses",uses.0)}</HeaderLeft>
             <HeaderRight slot>{super::comma_sep(
               if definition_like {"Defines"} else {"Concerns"},
-              fors.into_iter().map(|(k,html)| view!{
+              fors.into_iter().map(|(k,t)| view!{
                 {super::symbol_name(&k,k.name().last_name().as_ref())}
-                {html.map(|html| view!{" as "<SHTMLStringMath html/>})}
+                {t.map(|t| view!{" as "{
+                  crate::config::get!(present(t.clone()) = html => {
+                    view!(<SHTMLStringMath html/>)
+                  })
+                }})}
               })
             )}</HeaderRight>
             {children.into_iter().map(super::Spec::into_view).collect_view()}
@@ -224,7 +240,7 @@ pub enum DocumentElementSpec {
   Variable(VariableSpec),
   Paragraph(ParagraphSpec),
   Exercise(ExerciseSpec),
-  TopTerm(DocumentElementURI,String),
+  TopTerm(DocumentElementURI,Term),
   SymbolDeclaration(either::Either<SymbolURI,SymbolSpec>),
 }
 impl super::sealed::Sealed for DocumentElementSpec {}
@@ -241,9 +257,13 @@ impl super::Spec for DocumentElementSpec {
         Self::Variable(v) => v.into_view().into_any(),
         Self::Paragraph(p) => p.into_view().into_any(),
         Self::Exercise(e) => e.into_view().into_any(),
-        Self::TopTerm(uri,html) => view! {
+        Self::TopTerm(uri,t) => view! {
           <Block show_separator=false>
-            <Header slot><span><b>"Term "</b><SHTMLStringMath html/></span></Header>
+            <Header slot><span><b>"Term "</b>{
+              crate::config::get!(present(t.clone()) = html => {
+                view!(<SHTMLStringMath html/>)
+              })
+            }</span></Header>
             ""
           </Block>
         }.into_any(),
@@ -307,18 +327,18 @@ use immt_utils::{vecmap::VecSet, CSS};
   impl SectionSpec {
     pub fn from_section<B:Backend>(
       Section{title,children,uri,..}:&Section<Checked>,
-      presenter:&mut StringPresenter<'_,B>,
+      backend:&B,//&mut StringPresenter<'_,B>,
       css:&mut VecSet<CSS>
     ) -> Self {
       let mut uses = VecSet::new();
       let mut imports = VecSet::new();
-      let title = title.and_then(|r| if let Some((c,s)) = presenter.backend().get_html_fragment(uri.document(),r) {
+      let title = title.and_then(|r| if let Some((c,s)) = backend.get_html_fragment(uri.document(),r) {
         if s.trim().is_empty() { None } else {
           for c in c { css.insert(c)}
           Some(s)
         }
       } else {None});
-      let children = DocumentElementSpec::do_children(presenter,children,&mut uses,&mut imports,css);
+      let children = DocumentElementSpec::do_children(backend,children,&mut uses,&mut imports,css);
       Self { title, uri:uri.clone(), uses, children }
     }
   }
@@ -326,21 +346,21 @@ use immt_utils::{vecmap::VecSet, CSS};
   impl ParagraphSpec {
     pub fn from_paragraph<B:Backend>(
       LogicalParagraph{uri,kind,inline,fors,title,children,styles,..}:&LogicalParagraph<Checked>,
-      presenter:&mut StringPresenter<'_,B>,
+      backend:&B,//&mut StringPresenter<'_,B>,
       css:&mut VecSet<CSS>,
     ) -> Self {
       let definition_like = kind.is_definition_like(styles);
       let mut uses = VecSet::new();
       let mut imports = VecSet::new();
-      let title = title.and_then(|r| if let Some((c,s)) = presenter.backend().get_html_fragment(uri.document(),r) {
+      let title = title.and_then(|r| if let Some((c,s)) = backend.get_html_fragment(uri.document(),r) {
         if s.trim().is_empty() { None } else {
           for c in c { css.insert(c)}
           Some(s)
         }
       } else {None});
-      let children = DocumentElementSpec::do_children(presenter,children,&mut uses,&mut imports,css);
+      let children = DocumentElementSpec::do_children(backend,children,&mut uses,&mut imports,css);
       Self {
-        kind:*kind,inline:*inline,fors:fors.0.iter().map(|(k,v)| (k.clone(),v.as_ref().and_then(|t| presenter.present(t).ok()))).collect(),
+        kind:*kind,inline:*inline,fors:fors.clone(),//.0.iter().map(|(k,v)| (k.clone(),v.as_ref().and_then(|t| backend.present(t).ok()))).collect(),
         title, uri:uri.clone(), uses, children,
         definition_like
       }
@@ -351,18 +371,18 @@ use immt_utils::{vecmap::VecSet, CSS};
     #[allow(clippy::cast_possible_truncation)]
     pub fn from_exercise<B:Backend>(
       Exercise{uri,sub_exercise,autogradable,points,solutions,hints,notes,grading_notes,title,preconditions,objectives,children,..}:&Exercise<Checked>,
-      presenter:&mut StringPresenter<'_,B>,
+      backend:&B,//&mut StringPresenter<'_,B>,
       css:&mut VecSet<CSS>
     ) -> Self {
       let mut uses = VecSet::new();
       let mut imports = VecSet::new();
-      let title = title.and_then(|r| if let Some((c,s)) = presenter.backend().get_html_fragment(uri.document(), r) {
+      let title = title.and_then(|r| if let Some((c,s)) = backend.get_html_fragment(uri.document(), r) {
         if s.trim().is_empty() { None } else {
           for c in c { css.insert(c)}
           Some(s)
         }
       } else {None});
-      let children = DocumentElementSpec::do_children(presenter,children,&mut uses,&mut imports,css);
+      let children = DocumentElementSpec::do_children(backend,children,&mut uses,&mut imports,css);
       Self {
         sub_exercise:*sub_exercise,autogradable:*autogradable,points:*points,
         num_solutions:solutions.len() as _,
@@ -377,14 +397,14 @@ use immt_utils::{vecmap::VecSet, CSS};
   impl VariableSpec {
     pub fn from_variable<B:Backend>(
       Variable{uri,arity,macroname,tp,df,is_seq,..}:&Variable,
-      presenter:&mut StringPresenter<'_,B>,
+      backend:&B,//&mut StringPresenter<'_,B>,
     ) -> Self {
       Self {
         uri:uri.clone(),
         arity:arity.clone(),
         macro_name:macroname.as_ref().map(ToString::to_string),
-        tp_html:tp.as_ref().and_then(|t| presenter.present(t).ok()), // TODO
-        df_html:df.as_ref().and_then(|t| presenter.present(t).ok()), // TODO
+        tp:tp.clone(),//.as_ref().and_then(|t| backend.present(t).ok()), // TODO
+        df:df.clone(),//.as_ref().and_then(|t| backend.present(t).ok()), // TODO
         is_seq:*is_seq,
        }
     }
@@ -393,24 +413,24 @@ use immt_utils::{vecmap::VecSet, CSS};
   impl DocumentElementSpec {
     pub fn from_element<B:Backend>(
         e:&DocumentElement<Checked>,
-        presenter:&mut StringPresenter<'_,B>,
+        backend:&B,//&mut StringPresenter<'_,B>,
         css:&mut VecSet<CSS>,
     ) -> Option<Self> { match e {
       DocumentElement::Section(s) => {
-        Some(SectionSpec::from_section(s,presenter,css).into())
+        Some(SectionSpec::from_section(s,backend,css).into())
       }
       DocumentElement::Paragraph(p) => {
-        Some(ParagraphSpec::from_paragraph(p,presenter,css).into())
+        Some(ParagraphSpec::from_paragraph(p,backend,css).into())
       }
       DocumentElement::Exercise(p) => {
-        Some(ExerciseSpec::from_exercise(p,presenter,css).into())
+        Some(ExerciseSpec::from_exercise(p,backend,css).into())
       }
       _ => None
     }}
 
 
     fn do_children<B:Backend>(
-      presenter:&mut StringPresenter<'_,B>,
+      backend:&B,//&mut StringPresenter<'_,B>,
       children:&[DocumentElement<Checked>],
       uses:&mut VecSet<ModuleURI>,
       imports:&mut VecSet<ModuleURI>,
@@ -419,13 +439,13 @@ use immt_utils::{vecmap::VecSet, CSS};
       let mut ret = Vec::new();
       for c in children {match c {
         DocumentElement::Section(s) => {
-          ret.push(SectionSpec::from_section(s,presenter,css).into());
+          ret.push(SectionSpec::from_section(s,backend,css).into());
         }
         DocumentElement::Paragraph(p) => {
-          ret.push(ParagraphSpec::from_paragraph(p,presenter,css).into());
+          ret.push(ParagraphSpec::from_paragraph(p,backend,css).into());
         }
         DocumentElement::Exercise(p) => {
-          ret.push(ExerciseSpec::from_exercise(p,presenter,css).into());
+          ret.push(ExerciseSpec::from_exercise(p,backend,css).into());
         }
         DocumentElement::Module {module,children,..} => {
           let uri = module.id().into_owned();
@@ -434,7 +454,7 @@ use immt_utils::{vecmap::VecSet, CSS};
           } else { (None,None) };
           let mut uses = VecSet::new();
           let mut imports = VecSet::new();
-          let children = Self::do_children(presenter,children,&mut uses,&mut imports,css);
+          let children = Self::do_children(backend,children,&mut uses,&mut imports,css);
           ret.push(Self::Module(ModuleSpec { uri, imports, uses, metatheory, signature, children }));
         }
         DocumentElement::Morphism{morphism,children,..} => {
@@ -444,25 +464,25 @@ use immt_utils::{vecmap::VecSet, CSS};
           );
           let mut uses = VecSet::new();
           let mut imports = VecSet::new();
-          let children = Self::do_children(presenter,children,&mut uses,&mut imports,css);
+          let children = Self::do_children(backend,children,&mut uses,&mut imports,css);
           ret.push(Self::Morphism(MorphismSpec { uri, total, target, uses, children }));
         }
         DocumentElement::MathStructure{structure,children,..} => {
           let uri = structure.id().into_owned();
           let macroname = structure.get().and_then(|s| s.as_ref().macroname.as_ref().map(ToString::to_string));
-          let extensions = super::super::froms::get_extensions(presenter.backend(),&uri).map(|e| 
+          let extensions = super::super::froms::get_extensions(backend,&uri).map(|e| 
             (
               e.as_ref().uri.clone(),
               e.as_ref().elements.iter().filter_map(|e|
                 if let OpenDeclaration::Symbol(s) = e {
-                  Some(SymbolSpec::from_symbol(s,presenter))
+                  Some(SymbolSpec::from_symbol(s,backend))
                 } else { None }
               ).collect()
             )
           ).collect();
           let mut uses = VecSet::new();
           let mut imports = VecSet::new();
-          let children = Self::do_children(presenter,children,&mut uses,&mut imports,css);
+          let children = Self::do_children(backend,children,&mut uses,&mut imports,css);
           ret.push(Self::Structure(StructureSpec { uri, macro_name: macroname, uses, extends: imports, children,extensions }));
         }
         DocumentElement::Extension{extension,target,children,..} => {
@@ -470,7 +490,7 @@ use immt_utils::{vecmap::VecSet, CSS};
           let uri = extension.id().into_owned();
           let mut uses = VecSet::new();
           let mut imports = VecSet::new();
-          let children = Self::do_children(presenter,children,&mut uses,&mut imports,css);
+          let children = Self::do_children(backend,children,&mut uses,&mut imports,css);
           ret.push(Self::Extension(ExtensionSpec { uri,target, uses, children }));
         }
         DocumentElement::DocumentReference { target,.. } => {
@@ -479,10 +499,10 @@ use immt_utils::{vecmap::VecSet, CSS};
           ret.push(Self::DocumentReference { uri, title });
         }
         DocumentElement::SymbolDeclaration(s) => {
-          ret.push(Self::SymbolDeclaration(s.get().map_or_else(|| either::Left(s.id().into_owned()),|s| either::Right(SymbolSpec::from_symbol(s.as_ref(),presenter)))));
+          ret.push(Self::SymbolDeclaration(s.get().map_or_else(|| either::Left(s.id().into_owned()),|s| either::Right(SymbolSpec::from_symbol(s.as_ref(),backend)))));
         }
         DocumentElement::Variable(v) => {
-          ret.push(VariableSpec::from_variable(v,presenter).into());
+          ret.push(VariableSpec::from_variable(v,backend).into());
         }
         DocumentElement::UseModule(m) => {
           uses.insert(m.id().into_owned());
@@ -491,7 +511,7 @@ use immt_utils::{vecmap::VecSet, CSS};
           imports.insert(m.id().into_owned());
         }
         DocumentElement::TopTerm{term, uri, ..} => {
-          ret.push(Self::TopTerm(uri.clone(),presenter.present(term).unwrap_or_else(|e| format!("<mtext>term presenting failed: {e:?}</mtext>"))))
+          ret.push(Self::TopTerm(uri.clone(),term.clone()));//backend.present(term).unwrap_or_else(|e| format!("<mtext>term presenting failed: {e:?}</mtext>"))))
         }
         DocumentElement::Definiendum{..} |
         DocumentElement::SymbolReference {..} |
@@ -507,14 +527,14 @@ use immt_utils::{vecmap::VecSet, CSS};
   impl DocumentSpec {
     pub fn from_document<B:Backend>(
         d:&Document,
-        presenter:&mut StringPresenter<'_,B>,
+        backend:&B,//&mut StringPresenter<'_,B>,
         css:&mut VecSet<CSS>,
     ) -> Self {
       let uri = d.uri().clone();
       let title = d.title().map(ToString::to_string);
       let mut uses = VecSet::new();
       let mut imports = VecSet::new();
-      let children = DocumentElementSpec::do_children(presenter,d.children(), &mut uses, &mut imports,css);
+      let children = DocumentElementSpec::do_children(backend,d.children(), &mut uses, &mut imports,css);
       Self { uri, title, uses, children }
     }
   }

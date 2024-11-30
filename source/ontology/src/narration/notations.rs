@@ -1,5 +1,5 @@
 use smallvec::SmallVec;
-use crate::{content::terms::ArgMode, Resourcable};
+use crate::{content::terms::ArgMode, shtml::SHTMLKey, Resourcable};
 
 #[derive(Debug,Clone,PartialEq,Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -30,6 +30,32 @@ pub struct OpNotation {
     pub is_text:bool,
     pub inner_index:u16,
     pub text:Box<str>
+}
+impl OpNotation {
+
+    pub fn display_shtml<'a>(&'a self,as_variable:bool,uri:impl std::fmt::Display + 'a) -> impl std::fmt::Display + 'a {
+        struct OpDisplayer<'n,U:std::fmt::Display+'n>{
+            op:&'n OpNotation,
+            as_variable:bool,
+            uri:U,
+        }
+        impl<U:std::fmt::Display> std::fmt::Display for OpDisplayer<'_,U> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                const TERM :&str = SHTMLKey::Term.attr_name();
+                const HEAD:&str = SHTMLKey::Head.attr_name();
+                const COMP:&str = SHTMLKey::Comp.attr_name();
+                let tp = if self.as_variable { "OMV" } else { "OMID" };
+                let uri = &self.uri;
+                let text = &self.op.text;
+                write!(f,"<mrow {TERM}=\"{tp}\" {HEAD}=\"{uri}\" {COMP}>{text}</mrow>")
+            }
+        }
+        OpDisplayer {
+            op:self,
+            as_variable,
+            uri
+        }
+    }
 }
 
 #[derive(Debug,Clone,PartialEq,Eq)]
@@ -72,8 +98,14 @@ mod presentation {
             Self::Formatting
         }
     }
+    impl std::fmt::Display for PresentationError {
+        #[inline]
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f,"Presentation error: {self:?}")
+        }
+    }
 
-    pub trait Presenter: std::fmt::Write {
+    pub trait Presenter: std::fmt::Write+Sized {
         type N : AsRef<Notation>;
         fn get_notation(&mut self,uri:&SymbolURI) -> Option<Self::N>;
         fn get_op_notation(&mut self,uri:&SymbolURI) -> Option<Self::N>;
@@ -81,7 +113,10 @@ mod presentation {
         fn get_variable_op_notation(&mut self,uri:&DocumentElementURI) -> Option<Self::N>;
         fn in_text(&self) -> bool;
         /// #### Errors
-        fn cont(&mut self,tm:&Term) -> Result;
+        #[inline]
+        fn cont(&mut self,tm:&Term) -> Result {
+            tm.present(self)
+        }
     }
 
     impl AsRef<Self> for Notation {

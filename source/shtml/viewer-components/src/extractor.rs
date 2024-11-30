@@ -59,48 +59,48 @@ impl SHTMLExtractor for DOMExtractor {
         todo!()
     }
 
-    fn add_objective(&mut self,uri:immt_ontology::uris::SymbolURI,dim:immt_ontology::narration::exercises::CognitiveDimension) {
+    fn add_objective(&mut self,_uri:immt_ontology::uris::SymbolURI,_dim:immt_ontology::narration::exercises::CognitiveDimension) {
         todo!()
     }
-    fn add_precondition(&mut self,uri:immt_ontology::uris::SymbolURI,dim:immt_ontology::narration::exercises::CognitiveDimension) {
-        todo!()
-    }
-
-    fn resolve_variable_name(&self,name:immt_ontology::uris::Name) -> immt_ontology::content::terms::Var {
+    fn add_precondition(&mut self,_uri:immt_ontology::uris::SymbolURI,_dim:immt_ontology::narration::exercises::CognitiveDimension) {
         todo!()
     }
 
-    fn add_arg(&mut self,pos:(u8,Option<u8>),tm:immt_ontology::content::terms::Term,mode:immt_ontology::content::terms::ArgMode) -> Result<(),()> {
+    fn resolve_variable_name(&self,_name:immt_ontology::uris::Name) -> immt_ontology::content::terms::Var {
         todo!()
     }
-    fn add_content_element(&mut self,elem:immt_ontology::content::declarations::OpenDeclaration<Unchecked>) -> Result<(),immt_ontology::content::declarations::OpenDeclaration<Unchecked>> {
+
+    fn add_arg(&mut self,_pos:(u8,Option<u8>),_tm:immt_ontology::content::terms::Term,_mode:immt_ontology::content::terms::ArgMode) -> Result<(),()> {
         todo!()
     }
-    fn add_document_element(&mut self,elem:immt_ontology::narration::DocumentElement<Unchecked>) {
+    fn add_content_element(&mut self,_elem:immt_ontology::content::declarations::OpenDeclaration<Unchecked>) -> Result<(),immt_ontology::content::declarations::OpenDeclaration<Unchecked>> {
         todo!()
     }
-    fn add_module(&mut self,module:immt_ontology::content::modules::OpenModule<Unchecked>) {
+    fn add_document_element(&mut self,_elem:immt_ontology::narration::DocumentElement<Unchecked>) {
         todo!()
     }
-    fn add_notation(&mut self,spec:shtml_extraction::prelude::NotationSpec) -> Result<(),shtml_extraction::prelude::NotationSpec> {
+    fn add_module(&mut self,_module:immt_ontology::content::modules::OpenModule<Unchecked>) {
         todo!()
     }
-    fn add_op_notation(&mut self,op:immt_ontology::narration::notations::OpNotation) -> Result<(),immt_ontology::narration::notations::OpNotation> {
+    fn add_notation(&mut self,_spec:shtml_extraction::prelude::NotationSpec) -> Result<(),shtml_extraction::prelude::NotationSpec> {
         todo!()
     }
-    fn add_definiendum(&mut self,uri:immt_ontology::uris::SymbolURI) {
+    fn add_op_notation(&mut self,_op:immt_ontology::narration::notations::OpNotation) -> Result<(),immt_ontology::narration::notations::OpNotation> {
         todo!()
     }
-    fn add_resource<T:immt_ontology::Resourcable>(&mut self,t:&T) -> immt_ontology::narration::LazyDocRef<T> {
+    fn add_definiendum(&mut self,_uri:immt_ontology::uris::SymbolURI) {
         todo!()
     }
-    fn add_term(&mut self,symbol:Option<immt_ontology::uris::SymbolURI>,tm:immt_ontology::content::terms::Term) -> Result<(),immt_ontology::content::terms::Term> {
+    fn add_resource<T:immt_ontology::Resourcable>(&mut self,_t:&T) -> immt_ontology::narration::LazyDocRef<T> {
         todo!()
     }
-    fn add_title(&mut self,title:immt_ontology::DocumentRange) -> Result<(),immt_ontology::DocumentRange> {
+    fn add_term(&mut self,_symbol:Option<immt_ontology::uris::SymbolURI>,_tm:immt_ontology::content::terms::Term) -> Result<(),immt_ontology::content::terms::Term> {
         todo!()
     }
-    fn add_type(&mut self,tm:immt_ontology::content::terms::Term) -> Result<(),immt_ontology::content::terms::Term> {
+    fn add_title(&mut self,_title:immt_ontology::DocumentRange) -> Result<(),immt_ontology::DocumentRange> {
+        todo!()
+    }
+    fn add_type(&mut self,_tm:immt_ontology::content::terms::Term) -> Result<(),immt_ontology::content::terms::Term> {
         todo!()
     }
     fn close_args(&mut self) -> (Vec<immt_ontology::content::terms::Arg>,Option<immt_ontology::content::terms::Term>) {

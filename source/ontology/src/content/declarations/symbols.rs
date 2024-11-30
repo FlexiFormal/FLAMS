@@ -72,6 +72,15 @@ impl IntoIterator for ArgSpec {
     }
 }
 
+impl ArgSpec {
+    #[inline]
+    #[allow(clippy::cast_possible_truncation)]
+    #[must_use]
+    pub const fn num(&self) -> u8 {
+        self.0.len() as u8
+    }
+}
+
 impl Default for ArgSpec {
     #[inline]
     fn default() -> Self {

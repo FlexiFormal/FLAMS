@@ -1,5 +1,5 @@
 use content::DeclarationSpec;
-use immt_ontology::{shtml::SHTMLKey, uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI}};
+use immt_ontology::{content::terms::Term, shtml::SHTMLKey, uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI}};
 use immt_web_utils::{components::{Block,Header}, do_css};
 use narration::DocumentElementSpec;
 use leptos::prelude::*;
@@ -85,7 +85,7 @@ pub enum AnySpec {
   Variable(narration::VariableSpec),
   Paragraph(narration::ParagraphSpec),
   Exercise(narration::ExerciseSpec),
-  Term(DocumentElementURI,String),
+  Term(DocumentElementURI,Term),
   DocReference{
     uri:DocumentURI,
     title:Option<String>
@@ -111,9 +111,13 @@ impl Spec for AnySpec {
         Self::Exercise(d) => d.into_view().into_any(),
         Self::DocReference{uri,title} => 
           narration::doc_ref(uri,title).into_any(),
-        Self::Term(uri,html) => view! {
+        Self::Term(uri,t) => view! {
           <Block show_separator=false>
-            <Header slot><span><b>"Term "</b><SHTMLStringMath html/></span></Header>
+            <Header slot><span><b>"Term "</b>{
+              crate::config::get!(present(t.clone()) = html => {
+                view!(<SHTMLStringMath html/>)
+              })
+            }</span></Header>
             ""
           </Block>
         }.into_any(),
@@ -174,14 +178,21 @@ pub(crate) fn comma_sep<V:IntoView>(header:&'static str,mut elems:impl Iterator<
 }
 
 pub(crate) fn module_name(uri:&ModuleURI) -> impl IntoView {
-  use immt_web_utils::components::{Popover,PopoverTrigger};
+  use immt_web_utils::components::{Popover,OnClickModal,PopoverTrigger};
   use thaw::Scrollbar;
   let name = uri.name().last_name().to_string();
   let uristring = uri.to_string();
+  let uriclone = uri.clone();
   let uri = uri.clone();
   view!{
     <div style="display:inline-block;"><Popover>
       <PopoverTrigger slot><b class="shtml-comp">{name}</b></PopoverTrigger>  
+      <OnClickModal slot>{
+        crate::config::get!(omdoc(uriclone.clone().into()) = (css,s) => {
+          for c in css { do_css(c); }
+          s.into_view()
+        })
+      }</OnClickModal>
       <div style="font-size:small;">{uristring}</div>
       <div style="margin-bottom:5px;"><thaw::Divider/></div>
       <Scrollbar style="max-height:300px">

@@ -1,10 +1,10 @@
-use immt_ontology::{content::declarations::symbols::ArgSpec, languages::Language, uris::{ContentURITrait, ModuleURI, Name, SymbolURI}};
+use immt_ontology::{content::{declarations::symbols::ArgSpec, terms::Term}, languages::Language, uris::{ContentURITrait, ModuleURI, Name, SymbolURI, URIOrRefTrait, URIRefTrait,URI}};
 use immt_utils::vecmap::VecSet;
 use crate::{components::{IntoLOs,LOs}, SHTMLString, SHTMLStringMath};
 
 use super::{narration::DocumentElementSpec, AnySpec, SpecDecl};
 use leptos::{context::Provider, prelude::*};
-use immt_web_utils::components::{Block,Collapsible,Header,HeaderLeft,HeaderRight};
+use immt_web_utils::{components::{Block,Collapsible,Header,HeaderLeft,HeaderRight}, inject_css};
 use thaw::{Text,TextTag};
 
 #[derive(Copy,Clone)]
@@ -222,6 +222,71 @@ impl From<DeclarationSpec> for AnySpec {
     }
 }
 
+pub(super) fn do_notations(uri:URI,arity:ArgSpec) -> impl IntoView {
+    use thaw::{Table,TableRow,TableCell,TableHeaderCell,TableHeader};
+    let functional = arity.num() > 0;
+    let as_variable = match &uri {
+        URI::Content(_) => false,
+        URI::Narrative(_) => true,
+        _ => unreachable!()
+    };
+    let uriclone = uri.clone();
+    inject_css("immt-notation-table",include_str!("notations.css"));
+    crate::config::get!(notations(uri.clone()) = v => {
+        let uri = uriclone.clone();
+        if v.is_empty() {None} else {
+            Some(view!{
+                <div>
+                    <Table class="immt-notation-table"><TableRow>
+                    <TableCell class="immt-notation-header"><span>"Notations: "</span></TableCell>
+                    {let uri = uri;v.into_iter().map(move |(u,n)| {
+                        let html = n.display_shtml(false,as_variable,&uri).to_string();
+                        view!{
+                            <TableCell class="immt-notation-cell">
+                                <SHTMLStringMath html/>
+                            </TableCell>
+                        }
+                    }).collect_view()}
+                    </TableRow></Table>
+                </div>
+                /*<Table class="immt-notation-table">
+                    <TableHeader>
+                        <TableRow><TableHeaderCell class="immt-notation-cell"><b>
+                            "Notations"
+                        </b></TableHeaderCell></TableRow>
+                        <TableRow>
+                            <TableHeaderCell class="immt-notation-header">"source document"</TableHeaderCell>
+                            {if functional {Some(view!{<TableHeaderCell class="immt-notation-header">"operation"</TableHeaderCell>})} else {None}}
+                            <TableHeaderCell class="immt-notation-header">"notation"</TableHeaderCell>
+                        </TableRow>
+                    </TableHeader>
+                    {let uri = uri;v.into_iter().map(move |(u,n)| {
+                        //leptos::logging::log!("Here: {n:?}");
+                        let op = if functional {
+                            n.op.as_ref().map(|op| op.display_shtml(as_variable,&uri).to_string())
+                        } else {None};
+                        let not = n.display_shtml(false,as_variable,&uri).to_string();
+                        view!{<TableRow>
+                            <TableCell class="immt-notation-cell">{
+                                super::doc_name(u.document(), u.document().name().last_name().to_string())
+                            }</TableCell>
+                            {if functional {Some(view!{<TableCell class="immt-notation-cell">{
+                                op.map_or_else(
+                                    || "(No op)".into_any(),
+                                    |html| view!{<SHTMLStringMath html/>}.into_any()
+                                )
+                            }</TableCell>})} else {None}}
+                            <TableCell class="immt-notation-cell">
+                                <SHTMLStringMath html=not/>
+                            </TableCell>
+                        </TableRow>}
+                    }).collect_view()}
+                </Table>*/
+            })
+        }
+    })
+}
+
 fn do_los(uri:SymbolURI) -> impl IntoView {
     use immt_ontology::narration::LOKind;
     view!{
@@ -263,33 +328,42 @@ fn do_los(uri:SymbolURI) -> impl IntoView {
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
 pub struct SymbolSpec {
     pub uri:SymbolURI,
-    pub df_html:Option<String>,
-    pub tp_html:Option<String>,
+    pub df:Option<Term>,
+    pub tp:Option<Term>,
     pub arity:ArgSpec,
     pub macro_name:Option<String>,
-    pub notations:Vec<(ModuleURI,String,Option<String>,Option<String>)>
+    //pub notations:Vec<(ModuleURI,String,Option<String>,Option<String>)>
 }
 impl super::Spec for SymbolSpec {
     fn into_view(self) -> impl IntoView {
-        let SymbolSpec {uri,df_html,tp_html,arity,macro_name,notations} = self;
-        let show_separator = !notations.is_empty();
+        let SymbolSpec {uri,df,tp,arity,macro_name} = self;
+        let show_separator = true;// !notations.is_empty();
         let symbol_str = if use_context::<InStruct>().is_some() {
             "Field "
         } else {"Symbol "};
         let uriclone = uri.clone();
+        let uriclone_b = uri.clone();
         view!{
             <Block show_separator>
                 <Header slot><span>
                     <b>{symbol_str}{super::symbol_name(&uri, uri.name().last_name().as_ref())}</b>
                     {macro_name.map(|name| view!(<span>" ("<Text tag=TextTag::Code>"\\"{name}</Text>")"</span>))}
+                    {tp.map(|t| view! {
+                        " of type "{
+                            crate::config::get!(present(t.clone()) = html => {
+                                view!(<SHTMLStringMath html/>)
+                            })
+                        }
+                    })}
                 </span></Header>
-                <HeaderLeft slot><span>{tp_html.map(|html| view! {
-                    "Type: "<SHTMLStringMath html/>
-                })}</span></HeaderLeft>
-                <HeaderRight slot><span style="white-space:nowrap;">{df_html.map(|html| view! {
-                    "Definiens: "<SHTMLStringMath html/>
+                <HeaderLeft slot>{do_notations(URI::Content(uriclone_b.into()),arity)}</HeaderLeft>
+                <HeaderRight slot><span style="white-space:nowrap;">{df.map(|t| view! {
+                    "Definiens: "{
+                        crate::config::get!(present(t.clone()) = html => {
+                            view!(<SHTMLStringMath html/>)
+                        })
+                    }
                 })}</span></HeaderRight>
-                "(TODO: Notations)"
                 {do_los(uriclone)}
             </Block>
         }
@@ -317,21 +391,21 @@ mod froms {
 
     impl AnySpec {
         pub fn from_module_like<B:Backend>(
-            m:&ModuleLike,presenter:&mut StringPresenter<'_,B>
+            m:&ModuleLike,backend:&B//&mut StringPresenter<'_,B>
         ) -> Self {
             match m {
-                ModuleLike::Module(m) => ModuleSpec::from_module(m, presenter).into(),
+                ModuleLike::Module(m) => ModuleSpec::from_module(m, backend).into(),
                 ModuleLike::NestedModule(m) => {
                     let mut imports = VecSet::new();
-                    let children = DeclarationSpec::do_children(presenter, &m.as_ref().elements, &mut imports);
+                    let children = DeclarationSpec::do_children(backend, &m.as_ref().elements, &mut imports);
                     ModuleSpec{
                         uri:m.as_ref().uri.clone().into_module(),
                         children,imports,uses:VecSet::new(),metatheory:None,signature:None
                     }.into()
                 }
-                ModuleLike::Structure(s) => StructureSpec::from_structure(s.as_ref(), presenter).into(),
-                ModuleLike::Extension(e) => ExtensionSpec::from_extension(e.as_ref(), presenter).into(),
-                ModuleLike::Morphism(m) => MorphismSpec::from_morphism(m.as_ref(), presenter).into()
+                ModuleLike::Structure(s) => StructureSpec::from_structure(s.as_ref(), backend).into(),
+                ModuleLike::Extension(e) => ExtensionSpec::from_extension(e.as_ref(), backend).into(),
+                ModuleLike::Morphism(m) => MorphismSpec::from_morphism(m.as_ref(), backend).into()
             }
         }
     }
@@ -339,46 +413,52 @@ mod froms {
     impl SymbolSpec {
         pub fn from_symbol<B:Backend>(
             Symbol {uri,arity,df,tp,macroname,..}:&Symbol,
-            presenter:&mut StringPresenter<'_,B>,
+            backend:&B,//&mut StringPresenter<'_,B>,
         ) -> Self {
             Self {
                 uri:uri.clone(),
                 arity:arity.clone(),
-                df_html:df.as_ref().and_then(|t| presenter.present(t).ok()),
-                tp_html:tp.as_ref().and_then(|t| presenter.present(t).ok()),
+                df:df.clone(),//.as_ref().and_then(|t| backend.present(t).ok()),
+                tp:tp.clone(),//.as_ref().and_then(|t| backend.present(t).ok()),
                 macro_name:macroname.as_ref().map(ToString::to_string),
-                notations:Vec::new() // TODO
+                //notations:Vec::new() // TODO
             }
         }
     }
 
     impl ModuleSpec<DeclarationSpec> {
-        pub fn from_module<B:Backend>(module:&Module,presenter:&mut StringPresenter<'_,B>,) -> Self {
+        pub fn from_module<B:Backend>(
+            module:&Module,
+            backend:&B//&mut StringPresenter<'_,B>,
+        ) -> Self {
             let uri = module.id().into_owned();
             let metatheory = module.meta().map(|c| c.id().into_owned());
             let signature = module.signature().map(|c| c.id().into_owned());
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(presenter,module.declarations(),&mut imports);
+            let children = DeclarationSpec::do_children(backend,module.declarations(),&mut imports);
             Self {uri,metatheory,signature,children,uses:VecSet::default(),imports}
         }
     }
 
     impl StructureSpec<DeclarationSpec> {
-        pub fn from_structure<B:Backend>(s:&MathStructure<Checked>,presenter:&mut StringPresenter<'_,B>,) -> Self {
+        pub fn from_structure<B:Backend>(
+            s:&MathStructure<Checked>,
+            backend:&B//&mut StringPresenter<'_,B>,
+        ) -> Self {
             let uri = s.uri.clone();
             let macro_name = s.macroname.as_ref().map(ToString::to_string);
-            let extensions = super::super::froms::get_extensions(presenter.backend(),&uri).map(|e| 
+            let extensions = super::super::froms::get_extensions(backend,&uri).map(|e| 
                 (
                   e.as_ref().uri.clone(),
                   e.as_ref().elements.iter().filter_map(|e|
                     if let OpenDeclaration::Symbol(s) = e {
-                      Some(SymbolSpec::from_symbol(s,presenter))
+                      Some(SymbolSpec::from_symbol(s,backend))
                     } else { None }
                   ).collect()
                 )
               ).collect();
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(presenter, s.declarations(), &mut imports);
+            let children = DeclarationSpec::do_children(backend, s.declarations(), &mut imports);
             Self {
                 uri,macro_name,extends:imports,uses:VecSet::new(),children,extensions
             }
@@ -386,48 +466,58 @@ mod froms {
     }
 
     impl ExtensionSpec<DeclarationSpec> {
-        pub fn from_extension<B:Backend>(e:&Extension<Checked>,presenter:&mut StringPresenter<'_,B>) -> Self {
+        pub fn from_extension<B:Backend>(
+            e:&Extension<Checked>,
+            backend:&B//&mut StringPresenter<'_,B>
+        ) -> Self {
             let target = e.target.id().into_owned();
             let uri = e.uri.clone();
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(presenter,&e.elements,&mut imports);
+            let children = DeclarationSpec::do_children(backend,&e.elements,&mut imports);
             ExtensionSpec { uri,target, uses:VecSet::new(), children }
         }
     }
 
     impl MorphismSpec<DeclarationSpec> {
-        pub fn from_morphism<B:Backend>(m:&Morphism<Checked>,presenter:&mut StringPresenter<'_,B>) -> Self {
+        pub fn from_morphism<B:Backend>(
+            m:&Morphism<Checked>,
+            backend:&B//&mut StringPresenter<'_,B>
+        ) -> Self {
             let uri = m.uri.as_ref().unwrap().clone();
             let total = m.total;
             let target = Some(m.domain.id().into_owned());
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(presenter,&m.elements,&mut imports);
+            let children = DeclarationSpec::do_children(backend,&m.elements,&mut imports);
             MorphismSpec { uri, total, target, uses:VecSet::new(), children }
         }
     }
 
     impl DeclarationSpec {
-        pub fn do_children<B:Backend>(presenter:&mut StringPresenter<'_,B>,children:&[Declaration],imports:&mut VecSet<ModuleURI>) -> Vec<Self> {
+        pub fn do_children<B:Backend>(
+            backend:&B,//&mut StringPresenter<'_,B>,
+            children:&[Declaration],
+            imports:&mut VecSet<ModuleURI>
+        ) -> Vec<Self> {
             let mut ret = Vec::new();
             for c in children {match c {
                 OpenDeclaration::Symbol(s) =>
-                    ret.push(SymbolSpec::from_symbol(s,presenter).into()),
+                    ret.push(SymbolSpec::from_symbol(s,backend).into()),
                 OpenDeclaration::Import(m) =>
                     imports.insert(m.id().into_owned()),
                 OpenDeclaration::MathStructure(s) =>
-                    ret.push(StructureSpec::from_structure(s, presenter).into()),
+                    ret.push(StructureSpec::from_structure(s, backend).into()),
                 OpenDeclaration::NestedModule(m) => {
                     let mut imports = VecSet::new();
-                    let children = Self::do_children(presenter, &m.elements, &mut imports);
+                    let children = Self::do_children(backend, &m.elements, &mut imports);
                     ret.push(ModuleSpec{
                         uri:m.uri.clone().into_module(),
                         children,imports,uses:VecSet::new(),metatheory:None,signature:None
                     }.into())
                 }
                 OpenDeclaration::Extension(e) =>
-                    ret.push(ExtensionSpec::from_extension(e, presenter).into()),
+                    ret.push(ExtensionSpec::from_extension(e, backend).into()),
                 OpenDeclaration::Morphism(m) =>
-                    ret.push(MorphismSpec::from_morphism(m, presenter).into())
+                    ret.push(MorphismSpec::from_morphism(m, backend).into())
             }}
             ret
         }

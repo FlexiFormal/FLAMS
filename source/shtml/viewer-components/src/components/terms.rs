@@ -77,7 +77,7 @@ fn do_onclick(uri:VarOrSym) -> impl IntoView {
   let name = s.name().last_name().to_string();
 
   crate::config::get!(get_los(s.clone(),false) = v => {
-    let LOs {definitions,examples,exercises} = v.lo_sort();
+    let LOs {definitions,examples,..} = v.lo_sort();
     let ex_off = definitions.len();
     let selected = RwSignal::new(definitions.first().map(|_| "0".to_string()));
     let definitions = StoredValue::new(definitions);

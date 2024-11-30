@@ -305,11 +305,11 @@ pub async fn omdoc(
         return Err("document not found".to_string().into())
       };
       let (css,r) = backend!(backend => {
-        let r = DocumentSpec::from_document(&doc, &mut backend.presenter(),&mut css);
+        let r = DocumentSpec::from_document(&doc, backend,&mut css);
         (css,r)
       }{
         tokio::task::spawn_blocking(move || {
-          let r = DocumentSpec::from_document(&doc, &mut backend.presenter(),&mut css);
+          let r = DocumentSpec::from_document(&doc, backend,&mut css);
           (css,r)
         }).await.map_err(|e| e.to_string())?
       });
@@ -322,11 +322,11 @@ pub async fn omdoc(
         return Err("document element not found".to_string().into())
       };
       let (css,r) = backend!(backend => {
-        let r = DocumentElementSpec::from_element(e.as_ref(),&mut backend.presenter(), &mut css);
+        let r = DocumentElementSpec::from_element(e.as_ref(),backend, &mut css);
         (css,r)
       }{
         tokio::task::spawn_blocking(move || {
-          let r = DocumentElementSpec::from_element(e.as_ref(), &mut backend.presenter(),&mut css);
+          let r = DocumentElementSpec::from_element(e.as_ref(),backend,&mut css);
           (css,r)
         }).await.map_err(|e| e.to_string())?
       });
@@ -340,10 +340,10 @@ pub async fn omdoc(
         return Err("module not found".to_string().into())
       };
       let r = backend!(backend => {
-        AnySpec::from_module_like(&m, &mut backend.presenter())
+        AnySpec::from_module_like(&m, backend)
       }{
         tokio::task::spawn_blocking(move || {
-          AnySpec::from_module_like(&m, &mut backend.presenter())
+          AnySpec::from_module_like(&m, backend)
         }).await.map_err(|e| e.to_string())?
       });
       Ok((Vec::new(),r))

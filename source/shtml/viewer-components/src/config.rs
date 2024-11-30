@@ -301,6 +301,84 @@ impl ServerConfig {
         self.get_notations.call(uri,()).await
     }
 
+    #[cfg(feature="omdoc")]
+    pub async fn present(&self,t:immt_ontology::content::terms::Term) -> Result<String,String> {
+        use immt_ontology::content::terms::Term;
+        use immt_ontology::narration::notations::{Notation,Presenter,PresentationError};
+        use immt_ontology::uris::{ContentURI, NarrativeURI, URIOrRefTrait, URIRef, URIRefTrait};
+        use immt_utils::vecmap::VecSet;
+        #[cfg(any(feature="csr",feature="hydrate"))]
+        {
+            let syms : VecSet<_> = t.uri_iter().map(URIRef::owned).collect();
+            for s in syms {
+                match &s {
+                    URI::Content(ContentURI::Symbol(_)) =>
+                        self.load_notations(s).await,
+                    URI::Narrative(NarrativeURI::Element(_)) =>
+                        self.load_notations(s).await,
+                    _ => ()
+                }
+            }
+
+            struct Pres<'p> {
+                string:String,
+                slf:&'p ServerConfig
+            }
+            impl std::fmt::Write for Pres<'_> {
+                fn write_str(&mut self, s: &str) -> std::fmt::Result {
+                    self.string.push_str(s);
+                    Ok(())
+                }
+            }
+            impl Presenter for Pres<'_> {
+                type N = Notation;
+                fn get_notation(&mut self,uri:&SymbolURI) -> Option<Self::N> {
+                    let lock = self.slf.get_notations.cache.lock();
+                    lock.get(&uri.as_uri().owned())
+                        .and_then(|v| v.first()
+                        .map(|(_,n)| n.clone())
+                    )
+                }
+                fn get_op_notation(&mut self,uri:&SymbolURI) -> Option<Self::N> {
+                    let lock = self.slf.get_notations.cache.lock();
+                    lock.get(&uri.as_uri().owned())
+                        .and_then(|v| 
+                            v.iter().find_map(|(_,n)| if n.is_op() {Some(n.clone())} else {None})
+                    )
+                }
+                fn get_variable_notation(&mut self,uri:&DocumentElementURI) -> Option<Self::N> {
+                    let lock = self.slf.get_notations.cache.lock();
+                    lock.get(&uri.as_uri().owned())
+                        .and_then(|v| v.first()
+                        .map(|(_,n)| n.clone())
+                    )
+                }
+                fn get_variable_op_notation(&mut self,uri:&DocumentElementURI) -> Option<Self::N> {
+                    let lock = self.slf.get_notations.cache.lock();
+                    lock.get(&uri.as_uri().owned())
+                        .and_then(|v| 
+                            v.iter().find_map(|(_,n)| if n.is_op() {Some(n.clone())} else {None})
+                    )
+                }
+                #[inline]
+                fn in_text(&self) -> bool {false}
+            }
+            let mut p = Pres { string:String::new(), slf:self };
+            return t.present(&mut p).map(|()| p.string).map_err(|e| e.to_string())
+        }
+        #[cfg(feature="ssr")]
+        {
+            todo!()
+        }
+    }
+
+    #[cfg(all(feature="omdoc",any(feature="csr",feature="hydrate")))]
+    #[inline]
+    async fn load_notations(&self,uri:URI) {
+        if self.get_notations.cache.lock().get(&uri).is_some() { return }
+        let _ = self.get_notations.call(uri,()).await;
+    }
+
     #[cfg(any(feature="hydrate",feature="ssr"))]
     pub fn initialize(
       inputref:server_fun!(@URI => (Vec<CSS>,String)),
