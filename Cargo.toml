@@ -204,7 +204,7 @@ assets-dir = "resources/assets"
 site-pkg-dir = "pkg"
 style-file = "resources/main.scss"
 browserquery = "defaults"
-# lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
+lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
 
 # dafuq:
 # https://higherorderco.com/
