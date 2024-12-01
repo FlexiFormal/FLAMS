@@ -1,4 +1,4 @@
-use leptos::prelude::*;
+use leptos::{either::{Either, EitherOf4, EitherOf7}, prelude::*};
 use leptos_meta::Stylesheet;
 use leptos_router::components::Outlet;
 use crate::users::{Login,LoginState};
@@ -16,14 +16,14 @@ use immt_web_utils::components::error_toast;
 
 fn do_main(page:Page) -> impl IntoView {
   let inner =  || match page {
-    Page::Home => view!(<span>"TODO"</span>).into_any(),//view!{<HomePage/>}.into_any(),
-    Page::MathHub => view!{<super::backend::ArchivesTop/>}.into_any(),
+    Page::Home => EitherOf7::A(view!(<span>"TODO"</span>)),
+    Page::MathHub => EitherOf7::B(view!{<super::backend::ArchivesTop/>}),
     //Page::Graphs => view!{<GraphTest/>},
-    Page::Log => view!{<super::logging::Logger/>}.into_any(),
-    Page::Queue => view!{<super::buildqueue::QueuesTop/>}.into_any(),
-    Page::Query => view!{<super::query::Query/>}.into_any(),
-    Page::Settings => view!{<super::settings::Settings/>}.into_any(),
-    _ => view!(<span>"TODO"</span>).into_any(),//view!(<super::NotFound/>).into_any()
+    Page::Log => EitherOf7::C(view!{<super::logging::Logger/>}),
+    Page::Queue => EitherOf7::D(view!{<super::buildqueue::QueuesTop/>}),
+    Page::Query => EitherOf7::E(view!{<super::query::Query/>}),
+    Page::Settings => EitherOf7::F(view!{<super::settings::Settings/>}),
+    _ => EitherOf7::G(view!(<span>"TODO"</span>)),
     //Page::Login => view!{<LoginPage/>}
   };
   view!(<main style="height:100%">{inner()}</main>)
@@ -91,13 +91,13 @@ fn side_menu(page:Page) -> impl IntoView {
             <NavItem value="mathhub" href="/dashboard/mathhub">"MathHub"</NavItem>
             <NavItem value="query" href="/dashboard/query">"Queries"</NavItem>
             {move || match login.get() {
-                LoginState::Admin | LoginState::NoAccounts => view!{
+                LoginState::Admin | LoginState::NoAccounts => Either::Left(view!{
                     //<a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a>
                     <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                     <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                     <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
-                }.into_any(),
-                LoginState::User(..) | LoginState::None | LoginState::Loading => view!(<span/>).into_any()
+                }),
+                LoginState::User(..) | LoginState::None | LoginState::Loading => Either::Right(view!(<span/>))
             }}
         </NavDrawer>
     }
@@ -133,10 +133,10 @@ fn user_field() -> impl IntoView {
         }}
         <Divider/>
         {move || match login.get() {
-            LoginState::None => login_form().into_any(),
-            LoginState::Admin | LoginState::NoAccounts => view!(<span>"Admin"</span>).into_any(),
-            LoginState::User(user) => view!(<span>{user}</span>).into_any(),
-            LoginState::Loading => view!(<Spinner size=SpinnerSize::Tiny/>).into_any()
+            LoginState::None => EitherOf4::A(login_form()),
+            LoginState::Admin | LoginState::NoAccounts => EitherOf4::B(view!(<span>"Admin"</span>)),
+            LoginState::User(user) =>  EitherOf4::C(view!(<span>{user}</span>)),
+            LoginState::Loading => EitherOf4::D(view!(<Spinner size=SpinnerSize::Tiny/>))
         }}
     </Menu>}
 }

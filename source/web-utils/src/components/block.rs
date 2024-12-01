@@ -9,7 +9,6 @@ pub struct Footer { children:Children }
 pub struct HeaderRight { children:Children }
 #[slot]
 pub struct HeaderLeft { children:Children }
-
 #[slot]
 pub struct Separator { children:Children }
 
@@ -26,11 +25,11 @@ pub fn Block(
     use thaw::{Card,CardHeader,CardHeaderProps,CardHeaderAction,CardHeaderDescription,Divider,CardPreview,CardFooter};
     inject_css("immt-block",include_str!("block.css"));
     let has_header = header.is_some() || header_right.is_some() || header_left.is_some();
-    let has_separator = separator.is_some() || show_separator == Some(true) || (show_separator == None && has_header);
+    let has_separator = separator.is_some() || show_separator == Some(true) || (show_separator.is_none() && has_header);
     view!{
         <Card class="immt-block-card">
             {if has_header {
-                CardHeader(CardHeaderProps{
+                Some(CardHeader(CardHeaderProps{
                     class:Option::<String>::None.into(),
                     card_header_action:header_right.map(|c| CardHeaderAction{children:c.children}),
                     card_header_description:header_left.map(|c| CardHeaderDescription{children:c.children}),
@@ -38,8 +37,8 @@ pub fn Block(
                       || Box::new(|| view!(<span/>).into_any()) as Children,
                       |c| c.children
                     )
-                }).into_any()
-            } else {"".into_any()}}
+                }))
+            } else {None}}
             {if has_separator {
                 Some(separator.map_or_else(
                   || view!(<div style="margin:5px;"><Divider/></div>),

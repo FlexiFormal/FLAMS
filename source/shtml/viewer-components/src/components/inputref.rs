@@ -1,5 +1,5 @@
 use immt_ontology::uris::{DocumentURI, NarrativeURI};
-use leptos::{context::Provider, prelude::*};
+use leptos::{context::Provider, either::Either, prelude::*};
 use immt_web_utils::{do_css, inject_css};
 use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
 
@@ -27,10 +27,10 @@ pub(super) fn inputref(uri:DocumentURI,id:&str) -> impl IntoView {
 
   view!{
     <Provider value=InInputRef(true)><Provider value=IdPrefix(id.clone())> {
-      move || if replace.get() { do_inputref(uri.clone(),replaced).into_any() } else {
-        view!(<div id=id.clone() on:click=on_click class="shtml-inputref">{
+      move || if replace.get() { Either::Left(do_inputref(uri.clone(),replaced)) } else {
+        Either::Right(view!(<div id=id.clone() on:click=on_click class="shtml-inputref">{
           move || view!(<span inner_html=title/>)
-        }</div>).into_any()
+        }</div>))
     }}</Provider></Provider>
   }
 }
@@ -62,16 +62,16 @@ fn do_inputref(uri:DocumentURI,on_load:RwSignal<bool>) -> impl IntoView {
 #[component]
 pub fn IfInputref(value:bool,children:Children) -> impl IntoView {
   let in_inputref = expect_context::<InInputRef>().0;
-  if in_inputref == value { children() } else {
-    view!{<span data-if-inputref="false"/>}.into_any()
+  if in_inputref == value { Either::Left(children()) } else {
+    Either::Right(view!{<span data-if-inputref="false"/>})
   }
 }
 
 pub(super) fn if_inputref(val:bool,orig:OriginalNode) -> impl IntoView {
   let in_inputref = expect_context::<InInputRef>().0;
   if in_inputref == val { 
-    view!{<span style="display:contents">
+    Either::Left(view!{<span style="display:contents">
       <DomChildrenCont orig cont=crate::iterate/>
-    </span>}.into_any() 
-  } else { view!{<span data-if-inputref="false"/>}.into_any() } 
+    </span>}) 
+  } else { Either::Right(view!{<span data-if-inputref="false"/>}) } 
 }

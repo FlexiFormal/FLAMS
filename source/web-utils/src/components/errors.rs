@@ -9,7 +9,7 @@ pub fn error_toast(err:Cow<'static,str>,toaster:ToasterInjection) {
       <MessageBar intent=MessageBarIntent::Error>
         <MessageBarBody>{err}</MessageBarBody>
       </MessageBar>
-    }.into_any(),
+    },
     ToastOptions::default().with_position(ToastPosition::Top)
   );
 }

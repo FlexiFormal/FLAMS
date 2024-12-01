@@ -1,4 +1,4 @@
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 
 use crate::inject_css;
 
@@ -53,20 +53,20 @@ pub fn Spinner(
                 <span class="thaw-spinner__spinner-tail"></span>
             </span>
             {children.map_or_else(
-              || {
+              || Either::Left({
                 move || label.get().map(|label|
                   view! {
                       <label class="thaw-spinner__label">
                           {label}
                       </label>
-                  }.into_any()
+                  }
                 )
-              }.into_any(),
-              |children|  view! {
+              }),
+              |children| Either::Right(view! {
                 <label class="thaw-spinner__label">
                     {children()}
                 </label>
-            }.into_any()
+            })
             )}
         </div>
     }

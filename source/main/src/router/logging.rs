@@ -1,6 +1,6 @@
 use immt_utils::{logs::{LogFileLine, LogLevel, LogMessage, LogTree}, time::Timestamp, vecmap::VecMap};
 use immt_web_utils::{inject_css,components::{Tree,Leaf,Subtree,Header}};
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 use thaw::Caption1Strong;
 use immt_web_utils::components::Spinner;
 
@@ -48,20 +48,20 @@ pub fn Logger() -> impl IntoView {
         view!{
             <div class="immt-log-frame">{ move || {
                 if signals.top.with(Vec::is_empty) {
-                    view!(<div class="immt-spinner-frame"><Spinner/></div>).into_any()
-                } else {view!{<Tree>
+                    Either::Left(view!(<div class="immt-spinner-frame"><Spinner/></div>))
+                } else {Either::Right(view!{<Tree>
                     {do_ls(signals.top)}
-                </Tree>}.into_any()}
+                </Tree>})}
             }}</div>
             <div class="immt-warn-frame">
             <Caption1Strong><span style="color:var(--colorPaletteRedForeground1)">"Warnings"</span></Caption1Strong>{ move || {
                 if signals.top.get().is_empty() {
-                    view!(<div class="immt-spinner-frame"><Spinner/></div>).into_any()
-                } else {view!{<Tree>
+                    Either::Left(view!(<div class="immt-spinner-frame"><Spinner/></div>))
+                } else {Either::Right(view!{<Tree>
                     <For each=move || signals.warnings.get() key=|e| e.0.clone() children=move |e| view!(
                         <Leaf><LogLine e=e.1/></Leaf>
                     )/>
-                </Tree>}.into_any()}
+                </Tree>})}
             }}</div>
         }
     })
@@ -71,8 +71,8 @@ fn do_ls(v:RwSignal<Vec<LogEntrySignal>>) -> impl IntoView {
     view!{
         <For each=move || v.get() key=|e| e.id().to_string() children=|e| {
             match e {
-                LogEntrySignal::Simple(_,e) => view!(<Leaf><span class="immt-log-elem"><LogLine e/></span></Leaf>).into_any(),
-                LogEntrySignal::Span(_,e) => do_span(e).into_any()
+                LogEntrySignal::Simple(_,e) => Either::Left(view!(<Leaf><span class="immt-log-elem"><LogLine e/></span></Leaf>)),
+                LogEntrySignal::Span(_,e) => Either::Right(do_span(e))
             }
         }/>
     }
@@ -123,12 +123,12 @@ fn LogLineHelper(
         str.push(')');
     }
     if spinner {
-        view!(<span class=cls>
+        Either::Left(view!(<span class=cls>
             <span class="immt-spinner-inline">
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
-        </span>).into_any()
-    } else {view!(<span class=cls>{str}</span>).into_any()}
+        </span>))
+    } else {Either::Right(view!(<span class=cls>{str}</span>))}
 }
 
 const fn class_from_level(lvl:LogLevel) -> &'static str {

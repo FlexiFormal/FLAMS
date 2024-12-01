@@ -45,7 +45,7 @@ pub struct Header { children:leptos::prelude::Children }
 #[leptos::prelude::slot]
 pub struct Trigger { children:leptos::prelude::Children }
 
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 
 use crate::inject_css;
 
@@ -58,13 +58,13 @@ pub fn Collapsible(
     let expanded = RwSignal::new(false);
     view!{<details>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
-            header.map_or_else(|| view!(<span/>).into_any(),|c| (c.children)())
+            header.map(|c| (c.children)())
         }</summary>
         <div>{
-            if lazy { (move || if expanded.get() {
+            if lazy { Either::Left(move || if expanded.get() {
                 Some(children())
                 } else { None }
-            ).into_any()} else {children().into_any()}
+            )} else {Either::Right(children())}
         }</div>
     </details>}
 }

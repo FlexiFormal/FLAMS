@@ -152,7 +152,7 @@ struct Cache<
     getter:std::sync::OnceLock<T::DeTupledFun<V>>,
     #[cfg(feature="ssr")]
     phantom:std::marker::PhantomData<(T::First,V)>,
-    #[cfg(feature="csr")]
+    #[cfg(all(feature="csr",not(feature="ssr")))]
     phantom:std::marker::PhantomData<T>
 }
 
@@ -172,7 +172,7 @@ impl<
             getter:std::sync::OnceLock::new(),
             #[cfg(feature="ssr")]
             phantom:std::marker::PhantomData,
-            #[cfg(feature="csr")]
+            #[cfg(all(feature="csr",not(feature="ssr")))]
             phantom:std::marker::PhantomData
         }
     }

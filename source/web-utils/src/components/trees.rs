@@ -1,6 +1,6 @@
 #![allow(clippy::must_use_candidate)]
 use crate::inject_css;
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 
 #[component]
 pub fn Tree(children:Children) -> impl IntoView {
@@ -30,11 +30,11 @@ pub fn Subtree(
                 {(header.children)()}
             </summary>
         <Tree>{if lazy {
-            (move || if expanded.get() {
+            Either::Left(move || if expanded.get() {
                 let children = children();
                 Some(children)
-            } else {None}).into_any()
-        } else {children().into_any()}}</Tree>
+            } else {None})
+        } else {Either::Right(children())}}</Tree>
         </details></li>
     }
 }

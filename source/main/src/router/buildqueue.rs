@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use immt_ontology::uris::ArchiveId;
 use immt_utils::{time::{Delta, Eta}, vecmap::VecMap};
 use immt_web_utils::inject_css;
-use leptos::prelude::*;
+use leptos::{either::EitherOf4, prelude::*};
 
 use crate::utils::{from_server_clone, from_server_copy, ws::WebSocket};
 
@@ -108,13 +108,13 @@ pub fn QueuesTop() -> impl IntoView {
         let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
         match ls.get() {
           QueueData::Idle(v) => {
-              idle(curr,v).into_any()
+              EitherOf4::A(idle(curr,v))
           },
           QueueData::Running(r) => {
-              running(r).into_any()
+              EitherOf4::B(running(r))
           },
-          QueueData::Finished(failed,done) => finished(curr,failed,done).into_any(),
-          QueueData::Empty => view!(<div>"Other"</div>).into_any()
+          QueueData::Finished(failed,done) => EitherOf4::C(finished(curr,failed,done)),
+          QueueData::Empty => EitherOf4::D(view!(<div>"Other"</div>))
       }
     }}</Layout>
     </Show>}
@@ -496,13 +496,13 @@ impl TaskState {
   fn into_view(self,t:String,archive:&ArchiveId,rel_path:&str) -> impl IntoView {
     use immt_web_utils::components::{Collapsible,Header};
     match self {
-      Self::Running => view!{<i style="color:yellow">{t}" (Running)"</i>}.into_any(),
-      Self::Queued | Self::Blocked | Self::None => view!{<span style="color:gray">{t}" (...)"</span>}.into_any(),
+      Self::Running => EitherOf4::A(view!{<i style="color:yellow">{t}" (Running)"</i>}),
+      Self::Queued | Self::Blocked | Self::None => EitherOf4::B(view!{<span style="color:gray">{t}" (...)"</span>}),
       Self::Done => {
         let archive = archive.clone();
         let rel_path = rel_path.to_string();
         let tc = t.clone();
-        view!{
+        EitherOf4::C(view!{
           <Collapsible lazy=true>
             <Header slot><span style="color:green">{t}" (Done)"</span></Header>
             {
@@ -513,13 +513,13 @@ impl TaskState {
               view!{<pre style="border:2px solid black;width:fit-content;padding:5px;font-size:smaller;">{s}</pre>}
             })}
           </Collapsible>
-        }.into_any()
+        })
       },
       Self::Failed => {
         let archive = archive.clone();
         let rel_path = rel_path.to_string();
         let tc = t.clone();
-        view!{
+        EitherOf4::D(view!{
           <Collapsible lazy=true>
             <Header slot><span style="color:red">{t}" (Failed)"</span></Header>
             {
@@ -530,7 +530,7 @@ impl TaskState {
               view!{<pre style="border:2px solid black;width:fit-content;padding:5px;font-size:smaller;">{s}</pre>}
             })}
           </Collapsible>
-        }.into_any()
+        })
       }
     }
   }

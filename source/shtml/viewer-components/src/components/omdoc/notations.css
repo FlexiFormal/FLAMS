@@ -15,9 +15,9 @@
     height:fit-content !important;
     border:var(--strokeWidthThin) solid var(--colorNeutralStroke2);
 }
-.immt-notation-cell:first-child {
+.immt-notation-cell:first-child button {
     display:contents !important;
 }
-.immt-notation-header:first-child {
+.immt-notation-header:first-child button {
     display:contents !important;
 }

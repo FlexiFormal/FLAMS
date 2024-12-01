@@ -449,14 +449,14 @@ async fn run_build(id:ArchiveId,target:FormatOrTarget,path:Option<String>,stale_
       move || view!{
         <MessageBar intent=MessageBarIntent::Success><MessageBarBody>
             {i}" new build tasks queued"
-        </MessageBarBody></MessageBar>}.into_any(), 
+        </MessageBarBody></MessageBar>}, 
       ToastOptions::default().with_position(ToastPosition::Top)
     ),
     Err(e) => toaster.dispatch_toast(
       || view!{
         <MessageBar intent=MessageBarIntent::Error><MessageBarBody>
             {e.to_string()}
-        </MessageBarBody></MessageBar>}.into_any(), 
+        </MessageBarBody></MessageBar>}, 
       ToastOptions::default().with_position(ToastPosition::Top)
     )
   }

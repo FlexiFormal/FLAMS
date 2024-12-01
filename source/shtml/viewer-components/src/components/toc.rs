@@ -3,7 +3,7 @@
 use immt_ontology::uris::{DocumentElementURI, DocumentURI, NarrativeURI};
 use immt_utils::CSS;
 use immt_web_utils::do_css;
-use leptos::prelude::*;
+use leptos::{either::{Either, EitherOf4}, prelude::*};
 
 use crate::components::navigation::NavElems;
 
@@ -102,18 +102,18 @@ impl TOCElem {
     match self {
       Self::Section{title:Some(title),id,children,..} => {
         let id = format!("#{id}");
-        view!{
+        Either::Left(view!{
           <AnchorLink href=id>
             <Header slot>
               <DomStringCont html=title cont=crate::iterate/>
             </Header>
             {children.into_iter().map(Self::into_view).collect_view()}
           </AnchorLink>
-        }.into_any()
+        })
       }
       Self::Section{title:None,children,..} |
         Self::Inputref{children,..} => {
-        children.into_iter().map(Self::into_view).collect_view().into_any()
+        Either::Right(children.into_iter().map(Self::into_view).collect_view().into_any())
       }
     }
   }
@@ -143,21 +143,21 @@ pub enum TOCSource {
 pub fn do_toc<V:IntoView+'static>(toc:TOCSource,wrap:impl FnOnce(Option<AnyView>) -> V) -> impl IntoView {
     use TOCIter;
     match toc {
-        TOCSource::None => wrap(None).into_any(),
-        TOCSource::Ready(toc) => view!{
+        TOCSource::None => EitherOf4::A(wrap(None)),
+        TOCSource::Ready(toc) => EitherOf4::B(view!{
             {toc.as_slice().do_titles()}
             {wrap(Some(view!(<Toc toc/>).into_any()))}
-        }.into_any(),
+        }),
         TOCSource::Get => match expect_context() {
             NarrativeURI::Document(uri) => {
                 let r = Resource::new(|| (),move |()| crate::config::server_config.get_toc(uri.clone()));
-                view!{
+                EitherOf4::C(view!{
                     {move || r.with(|r| if let Some(Ok((_,toc))) = r {
                         toc.as_slice().do_titles();
                     })}
                     {wrap(Some((move || r.get().map_or_else(
-                        || view!(<immt_web_utils::components::Spinner/>).into_any(),
-                        |r| match r {
+                        || Either::Left(view!(<immt_web_utils::components::Spinner/>)),
+                        |r| Either::Right(match r {
                             Ok((css,toc)) => {
                                 for c in css { do_css(c); }
                                 Some(view!(<Toc toc/>))
@@ -166,11 +166,11 @@ pub fn do_toc<V:IntoView+'static>(toc:TOCSource,wrap:impl FnOnce(Option<AnyView>
                                 tracing::error!(e);
                                 None
                             }
-                        }.into_any()
+                        })
                     )).into_any()))}
-                }.into_any()
+                })
             }
-            _ => wrap(None).into_any()
+            _ => EitherOf4::D(wrap(None))
         }
     }
 }

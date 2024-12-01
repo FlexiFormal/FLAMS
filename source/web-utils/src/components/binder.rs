@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::too_many_lines)]
 
-use leptos::{context::Provider, prelude::*};
+use leptos::prelude::*;
 use thaw_utils::{add_event_listener, get_scroll_parent_node};
 use super::popover::DivOrMrowRef;
 use thaw_components::{Follower, FollowerPlacement, FollowerWidth, Teleport};
@@ -88,18 +88,14 @@ pub fn Binder(
         };
 
         let mut handle_vec = vec![];
-        let mut cursor = get_scroll_parent_node(&el);
-        loop {
-            if let Some(node) = cursor.take() {
-                cursor = get_scroll_parent_node(&node);
+        let mut cursor = get_scroll_parent_node(el);
+        while let Some(node) = cursor.take() {
+            cursor = get_scroll_parent_node(&node);
 
-                let handle = add_event_listener(node, leptos::ev::scroll, move |_| {
-                    sync_position();
-                });
-                handle_vec.push(handle);
-            } else {
-                break;
-            }
+            let handle = add_event_listener(node, leptos::ev::scroll, move |_| {
+                sync_position();
+            });
+            handle_vec.push(handle);
         }
         scrollable_element_handle_vec.set_value(handle_vec);
 
@@ -116,7 +112,7 @@ pub fn Binder(
 
     let remove_listener = move || {
         scrollable_element_handle_vec.update_value(|vec| {
-            vec.drain(..).for_each(|handle| handle.remove());
+            vec.drain(..).for_each(thaw_utils::EventListenerHandle::remove);
         });
         resize_handle.update_value(move |handle| {
             if let Some(handle) = handle.take() {
@@ -148,7 +144,7 @@ pub fn Binder(
         remove_listener();
     });
 
-    let follower_injection = FollowerInjection(Callback::new(move |_| sync_position()));
+    //let follower_injection = FollowerInjection(Callback::new(move |()| sync_position()));
 
     view! {
         {children()}
@@ -160,13 +156,15 @@ pub fn Binder(
                     node_ref=content_ref
                     style=move || content_style.get()
                 >
-                    <Provider value=follower_injection>{follower_children()}</Provider>
+                    //<Provider value=follower_injection>
+                        {follower_children()}
+                    //</Provider>
                 </div>
             </div>
         </Teleport>
     }
 }
-
+/*
 #[derive(Debug, Clone, Copy)]
 pub struct FollowerInjection(Callback<()>);
 
@@ -179,7 +177,7 @@ impl FollowerInjection {
         self.0.run(());
     }
 }
-
+ */
 
 struct FollowerPlacementOffset {
     pub top: f64,
@@ -188,7 +186,10 @@ struct FollowerPlacementOffset {
     pub placement: FollowerPlacement,
 }
 
-pub fn get_follower_placement_offset(
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::cast_lossless)]
+fn get_follower_placement_offset(
     max_width:u32,
     placement: FollowerPlacement,
     target_rect: DomRect,
@@ -196,14 +197,10 @@ pub fn get_follower_placement_offset(
     content_rect: DomRect,
 ) -> Option<FollowerPlacementOffset> {
     let barrier_left = (max_width / 2) as f64;
-    let Some(barrier_right) = window_inner_width().map(|w| w - barrier_left) else {
-        return None
-    };
+    let barrier_right = window_inner_width().map(|w| w - barrier_left)?;
     let (left, placement, top, transform) = match placement {
         FollowerPlacement::Top | FollowerPlacement::TopStart | FollowerPlacement::TopEnd => {
-            let Some(window_inner_height) = window_inner_height() else {
-                return None;
-            };
+            let window_inner_height = window_inner_height()?;
             let content_height = content_rect.height();
             let target_top = target_rect.top();
             let target_bottom = target_rect.bottom();
@@ -246,9 +243,7 @@ pub fn get_follower_placement_offset(
         FollowerPlacement::Bottom
         | FollowerPlacement::BottomStart
         | FollowerPlacement::BottomEnd => {
-            let Some(window_inner_height) = window_inner_height() else {
-                return None;
-            };
+            let window_inner_height = window_inner_height()?;
             let content_height = content_rect.height();
             let target_top = target_rect.top();
             let target_bottom = target_rect.bottom();
@@ -286,9 +281,7 @@ pub fn get_follower_placement_offset(
             }
         }
         FollowerPlacement::Left | FollowerPlacement::LeftStart | FollowerPlacement::LeftEnd => {
-            let Some(window_inner_width) = window_inner_width() else {
-                return None;
-            };
+            let window_inner_width = window_inner_width()?;
             let content_width = content_rect.width();
             let target_left = target_rect.left();
             let target_right = target_rect.right();
@@ -326,10 +319,7 @@ pub fn get_follower_placement_offset(
             }
         }
         FollowerPlacement::Right | FollowerPlacement::RightStart | FollowerPlacement::RightEnd => {
-            let Some(window_inner_width) = window_inner_width() else {
-                return None;
-            };
-
+            let window_inner_width = window_inner_width()?;
             let content_width = content_rect.width();
             let target_left = target_rect.left();
             let target_right = target_rect.right();
@@ -378,21 +368,13 @@ pub fn get_follower_placement_offset(
 }
 
 fn window_inner_width() -> Option<f64> {
-    let Ok(inner_width) = window().inner_width() else {
-        return None;
-    };
-    let Some(inner_width) = inner_width.as_f64() else {
-        return None;
-    };
+    let inner_width = window().inner_width().ok()?;
+    let inner_width = inner_width.as_f64()?;
     Some(inner_width)
 }
 
 fn window_inner_height() -> Option<f64> {
-    let Ok(inner_height) = window().inner_height() else {
-        return None;
-    };
-    let Some(inner_height) = inner_height.as_f64() else {
-        return None;
-    };
+    let inner_height = window().inner_height().ok()?;
+    let inner_height = inner_height.as_f64()?;
     Some(inner_height)
 }

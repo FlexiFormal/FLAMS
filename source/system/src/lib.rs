@@ -1,4 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![feature(lazy_type_alias)]
 
 pub mod backend;
 pub mod settings;

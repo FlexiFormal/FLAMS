@@ -3,7 +3,7 @@ use immt_utils::vecmap::VecSet;
 use crate::{components::{IntoLOs,LOs}, SHTMLString, SHTMLStringMath};
 
 use super::{narration::DocumentElementSpec, AnySpec, SpecDecl};
-use leptos::{context::Provider, prelude::*};
+use leptos::{context::Provider, either::{Either, EitherOf5}, prelude::*};
 use immt_web_utils::{components::{Block,Collapsible,Header,HeaderLeft,HeaderRight}, inject_css};
 use thaw::{Text,TextTag};
 
@@ -201,11 +201,11 @@ impl super::Spec for DeclarationSpec {
     #[inline]
     fn into_view(self) -> impl IntoView {
         match self {
-            Self::Symbol(e) => e.into_view().into_any(),
-            Self::NestedModule(e) => e.into_view().into_any(),
-            Self::Structure(e) => e.into_view().into_any(),
-            Self::Morphism(e) => e.into_view().into_any(),
-            Self::Extension(e) => e.into_view().into_any(),
+            Self::Symbol(e) => EitherOf5::A(e.into_view()),
+            Self::NestedModule(e) => EitherOf5::B(e.into_view()),
+            Self::Structure(e) => EitherOf5::C(e.into_view()),
+            Self::Morphism(e) => EitherOf5::D(e.into_view()),
+            Self::Extension(e) => EitherOf5::E(e.into_view()),
         }
     }
 }
@@ -224,6 +224,7 @@ impl From<DeclarationSpec> for AnySpec {
 
 pub(super) fn do_notations(uri:URI,arity:ArgSpec) -> impl IntoView {
     use thaw::{Table,TableRow,TableCell,TableHeaderCell,TableHeader};
+    use immt_web_utils::components::{Popover,PopoverTrigger};
     let functional = arity.num() > 0;
     let as_variable = match &uri {
         URI::Content(_) => false,
@@ -241,47 +242,57 @@ pub(super) fn do_notations(uri:URI,arity:ArgSpec) -> impl IntoView {
                     <TableCell class="immt-notation-header"><span>"Notations: "</span></TableCell>
                     {let uri = uri;v.into_iter().map(move |(u,n)| {
                         let html = n.display_shtml(false,as_variable,&uri).to_string();
+                        let htmlclone = html.clone();
+                        let uri = uri.clone();
                         view!{
                             <TableCell class="immt-notation-cell">
-                                <SHTMLStringMath html/>
+                                <Popover>
+                                    <PopoverTrigger slot><span>
+                                        <Provider value=crate::components::terms::DisablePopover>
+                                            <SHTMLStringMath html/>
+                                        </Provider>
+                                    </span></PopoverTrigger>
+                                    {
+                                        let html = htmlclone;
+                                        let op = if functional {
+                                            n.op.as_ref().map(|op| op.display_shtml(as_variable,&uri).to_string())
+                                        } else {None};
+                                        view!{<Table class="immt-notation-table">
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHeaderCell class="immt-notation-header">"source document"</TableHeaderCell>
+                                                    {if functional {Some(view!{<TableHeaderCell class="immt-notation-header">"operation"</TableHeaderCell>})} else {None}}
+                                                    <TableHeaderCell class="immt-notation-header">"notation"</TableHeaderCell>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableRow>
+                                                <TableCell class="immt-notation-cell">{
+                                                    super::doc_name(u.document(), u.document().name().last_name().to_string())
+                                                }</TableCell>
+                                                {if functional {Some(view!{<TableCell class="immt-notation-cell">{
+                                                    op.map_or_else(
+                                                        || Either::Left("(No op)"),
+                                                        |html| Either::Right(view!{
+                                                            <Provider value=crate::components::terms::DisablePopover>
+                                                                <SHTMLStringMath html/>
+                                                            </Provider>
+                                                        })
+                                                    )
+                                                }</TableCell>})} else {None}}
+                                                <TableCell class="immt-notation-cell">
+                                                    <Provider value=crate::components::terms::DisablePopover>
+                                                        <SHTMLStringMath html/>
+                                                    </Provider>
+                                                </TableCell>
+                                            </TableRow>
+                                        </Table>}
+                                    }
+                                </Popover>
                             </TableCell>
                         }
                     }).collect_view()}
                     </TableRow></Table>
                 </div>
-                /*<Table class="immt-notation-table">
-                    <TableHeader>
-                        <TableRow><TableHeaderCell class="immt-notation-cell"><b>
-                            "Notations"
-                        </b></TableHeaderCell></TableRow>
-                        <TableRow>
-                            <TableHeaderCell class="immt-notation-header">"source document"</TableHeaderCell>
-                            {if functional {Some(view!{<TableHeaderCell class="immt-notation-header">"operation"</TableHeaderCell>})} else {None}}
-                            <TableHeaderCell class="immt-notation-header">"notation"</TableHeaderCell>
-                        </TableRow>
-                    </TableHeader>
-                    {let uri = uri;v.into_iter().map(move |(u,n)| {
-                        //leptos::logging::log!("Here: {n:?}");
-                        let op = if functional {
-                            n.op.as_ref().map(|op| op.display_shtml(as_variable,&uri).to_string())
-                        } else {None};
-                        let not = n.display_shtml(false,as_variable,&uri).to_string();
-                        view!{<TableRow>
-                            <TableCell class="immt-notation-cell">{
-                                super::doc_name(u.document(), u.document().name().last_name().to_string())
-                            }</TableCell>
-                            {if functional {Some(view!{<TableCell class="immt-notation-cell">{
-                                op.map_or_else(
-                                    || "(No op)".into_any(),
-                                    |html| view!{<SHTMLStringMath html/>}.into_any()
-                                )
-                            }</TableCell>})} else {None}}
-                            <TableCell class="immt-notation-cell">
-                                <SHTMLStringMath html=not/>
-                            </TableCell>
-                        </TableRow>}
-                    }).collect_view()}
-                </Table>*/
             })
         }
     })

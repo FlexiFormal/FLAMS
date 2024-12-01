@@ -18,7 +18,7 @@ use leptos::tachys::view::any_view::AnyView;
 use leptos::web_sys::Element;
 use extractor::DOMExtractor;
 use crate::extractor::NodeAttrs;
-use immt_ontology::{narration::exercises::CognitiveDimension, uris::{DocumentURI, NarrativeURI}};
+use immt_ontology::{narration::exercises::CognitiveDimension, uris::{DocumentElementURI, DocumentURI, NarrativeURI, URI}};
 
 #[derive(Debug,Clone)]
 struct IdPrefix(pub String);
@@ -132,6 +132,39 @@ fn do_burger(
     })
 }
 
+#[cfg(feature="omdoc")]
+#[derive(Clone)]
+pub(crate) struct NotationForces {
+    owner: Owner,
+    map: StoredValue<immt_utils::prelude::HMap<URI,RwSignal<Option<DocumentElementURI>>>>
+}
+#[cfg(feature="omdoc")]
+impl NotationForces {
+    pub fn get(&self,uri:&URI) -> RwSignal<Option<DocumentElementURI>> {
+        self.owner.with(||
+            self.map
+                .with_value(|map| map.get(uri).copied())
+                .unwrap_or_else(|| {
+                    let sig = RwSignal::new(None);
+                    self.map.update_value(|map| {map.insert(uri.clone(),sig);});
+                    sig
+                }
+            )
+        )
+    }
+    pub fn new() -> Self {
+        let owner = Owner::current().expect("Something went horribly wrong");
+        Self {
+            owner,
+            map:StoredValue::new(immt_utils::prelude::HMap::default())
+        }
+    }
+
+    pub fn do_in<R>(&self,f:impl FnOnce() -> R) -> R {
+        self.owner.clone().with(f)
+    }
+}
+
 #[component]
 pub fn SHTMLDocumentSetup(
     uri:DocumentURI, 
@@ -149,6 +182,8 @@ pub fn SHTMLDocumentSetup(
     provide_context(IdPrefix(String::new()));
     provide_context(URLFragment::new());
     provide_context(NarrativeURI::Document(uri));
+    #[cfg(feature="omdoc")]
+    provide_context(NotationForces::new());
     let r = children();
     view! {
         <Nav on_load/>

@@ -5,7 +5,7 @@ pub mod toc;
 use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::Exercise, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
 use immt_utils::{vecmap::VecSet, CSS};
 use immt_web_utils::do_css;
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 use leptos_router::hooks::use_query_map;
 use shtml_viewer_components::{components::{omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource}, DocumentString};
 use uris::{DocURIComponents, SymURIComponents, URIComponents};
@@ -369,8 +369,8 @@ pub fn URITop() -> impl IntoView {
     <Themer>//<Login>
       <div style="min-height:100vh;color:black;">{
         use_query_map().with_untracked(|m| m.as_doc().map_or_else(
-          || view!("TODO").into_any(),
-          |doc| view!(<Document doc/>).into_any()
+          || Either::Left(view!("TODO")),
+          |doc| Either::Right(view!(<Document doc/>))
         ))
       }</div>//</Login>
     </Themer>

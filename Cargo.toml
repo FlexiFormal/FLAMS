@@ -130,10 +130,10 @@ webp = { version= "0.3"}
 dashmap = { version = "6" }
 
 # leptos
-leptos = { version = "=0.7.0-rc3", features=["nightly"]}
-leptos_axum = "=0.7.0-rc3"
-leptos_meta= "=0.7.0-rc3"
-leptos_router = { version = "=0.7.0-rc3", features=["nightly"]}
+leptos = { version = "0.7", features=["nightly"]}
+leptos_axum = "0.7"
+leptos_meta= "0.7"
+leptos_router = { version = "0.7", features=["nightly"]}
 
 #thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 thaw = { version="0.4.0-beta5",features=["nightly"] }
@@ -167,7 +167,7 @@ tsify-next = {version="0.5", features = ["js"]}
 js-sys = "0.3"
 
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
-#leptos-dyn-dom = { path="../leptos_dyn_dom"}
+# leptos-dyn-dom = { path="../leptos_dyn_dom"}
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
 #RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
@@ -180,11 +180,11 @@ tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithr
 #leptos_server = {version="=0.7.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #reactive_graph = {version="=0.1.0-beta5"}
-leptos_macro = {version="=0.7.0-rc3"}
-tachys = {version="=0.1.0-rc3"}
-server_fn = {version="=0.7.0-rc3"}
-server_fn_macro = {version="=0.7.0-rc3"}
-server_fn_macro_default = {version="=0.7.0-rc3"}
+leptos_macro = "0.7"
+tachys = "0.1"
+server_fn = "0.7"
+server_fn_macro = "0.7"
+server_fn_macro_default = "0.7"
 
 
 [[workspace.metadata.leptos]]

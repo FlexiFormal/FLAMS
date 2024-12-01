@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 use crate::components::Spinner;
 
 pub fn wait<
@@ -17,8 +17,8 @@ pub fn wait<
     view! {
       <Suspense fallback = || view!(<Spinner/>)>{move || {
         res.get().and_then(|r| r.take()).map_or_else(
-          || view!(<div>{err.clone()}</div>).into_any(),
-          |res| children(res).into_any()
+          || Either::Left(view!(<div>{err.clone()}</div>)),
+          |res| Either::Right(children(res))
         )
       }}</Suspense>
     }

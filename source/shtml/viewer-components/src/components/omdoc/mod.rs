@@ -38,19 +38,19 @@ pub(crate) fn do_omdoc(omdoc:OMDocSource) -> impl IntoView {
         {match &omdoc {
             OMDocSource::Get => {
               let uri = uri.clone();
-              crate::config::get!(omdoc(NarrativeURI::Document(uri.clone()).into()) = (_,omdoc) => {
+              leptos::either::Either::Left(crate::config::get!(omdoc(NarrativeURI::Document(uri.clone()).into()) = (_,omdoc) => {
                 let AnySpec::Document(omdoc) = omdoc else {unreachable!()};
                 if let Some(s) = &omdoc.title {
                     title.set(s.clone());
                 }
                 omdoc.into_view()
-              }).into_any()
+              }))
             }
             OMDocSource::Ready(omdoc) => {
                 if let Some(s) = &omdoc.title {
                     title.set(s.clone());
                 }
-                omdoc.clone().into_view().into_any()
+                leptos::either::Either::Right(omdoc.clone().into_view())
             }
             OMDocSource::None => unreachable!()
         }}
@@ -187,12 +187,12 @@ pub(crate) fn module_name(uri:&ModuleURI) -> impl IntoView {
   view!{
     <div style="display:inline-block;"><Popover>
       <PopoverTrigger slot><b class="shtml-comp">{name}</b></PopoverTrigger>  
-      <OnClickModal slot>{
+      <OnClickModal slot><Scrollbar style="max-height:80vh">{
         crate::config::get!(omdoc(uriclone.clone().into()) = (css,s) => {
           for c in css { do_css(c); }
           s.into_view()
         })
-      }</OnClickModal>
+      }</Scrollbar></OnClickModal>
       <div style="font-size:small;">{uristring}</div>
       <div style="margin-bottom:5px;"><thaw::Divider/></div>
       <Scrollbar style="max-height:300px">

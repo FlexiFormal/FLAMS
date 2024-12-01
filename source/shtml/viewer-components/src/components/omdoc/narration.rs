@@ -3,7 +3,7 @@ use immt_utils::vecmap::{VecMap, VecSet};
 use crate::{components::omdoc::Spec, SHTMLString, SHTMLStringMath};
 
 use super::{content::{ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec, SymbolSpec}, AnySpec};
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 use immt_web_utils::components::{Block,Collapsible,Header,HeaderLeft,HeaderRight};
 use thaw::{Text,TextTag};
 
@@ -39,16 +39,16 @@ pub struct SectionSpec {
 impl super::Spec for SectionSpec {
     fn into_view(self) -> impl IntoView {
       if let Some(title) = self.title {
-        view!{
+        Either::Left(view!{
           <Block>
             <Header slot><b style="font-size:larger"><SHTMLString html=title/></b></Header>
             <HeaderLeft slot>{super::uses("Uses",self.uses.0)}</HeaderLeft>
             {self.children.into_iter().map(super::Spec::into_view).collect_view()}
           </Block>
-        }.into_any()
+        })
       } else {
-        self.children.into_iter().map(super::Spec::into_view)
-          .collect_view().into_any()
+        Either::Right(self.children.into_iter().map(super::Spec::into_view)
+          .collect_view())
       }
     }
 }

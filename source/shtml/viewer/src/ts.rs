@@ -3,7 +3,7 @@
 use shtml_viewer_components::{components::{TOCElem,TOCSource}, DocumentFromURI, SectionContinuation};
 use immt_ontology::uris::DocumentURI;
 use wasm_bindgen::prelude::wasm_bindgen;
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -63,11 +63,11 @@ pub fn render_document(
   let comp = move || match document {
     DocumentOptions::HtmlString{html,toc} => {
       let toc = toc.map_or(TOCSource::None,TOCSource::Ready);
-      view!{<Themer><DocumentString html toc/></Themer>}.into_any()
+      Either::Left(view!{<Themer><DocumentString html toc/></Themer>})
     }
     DocumentOptions::FromBackend{uri,toc} => {
       let toc = toc.map_or(TOCSource::None,Into::into);
-      view!{<Themer><DocumentFromURI uri toc/></Themer>}.into_any()
+      Either::Right(view!{<Themer><DocumentFromURI uri toc/></Themer>})
     }
   };
 

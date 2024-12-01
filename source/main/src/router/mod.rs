@@ -10,7 +10,7 @@ pub(crate) mod logging;
 
 use dashboard::{Dashboard,MainPage};
 
-use leptos::prelude::*;
+use leptos::{either::Either, prelude::*};
 use leptos_meta::{provide_meta_context, Title};
 use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, hooks::use_query_map, SsrMode, StaticSegment};
 
@@ -42,9 +42,9 @@ pub fn Main() -> impl IntoView {
                         <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
                     </ParentRoute>
                     <Route path=StaticSegment("/") view={move || if has_params() {
-                            view! { <content::URITop/> }.into_any()
+                            Either::Left(view! { <content::URITop/> })
                         } else {
-                            view! { <Redirect path="/dashboard"/> }.into_any()
+                            Either::Right(view! { <Redirect path="/dashboard"/> })
                         }}
                     />
                 </ParentRoute>
