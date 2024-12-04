@@ -1,6 +1,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::module_name_repetitions)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![feature(let_chains)]
 
 //mod popover;
 
@@ -13,7 +14,7 @@ use immt_utils::prelude::HMap;
 use immt_web_utils::{components::wait, do_css, inject_css};
 use leptos::prelude::*;
 use leptos_dyn_dom::{DomStringCont, DomStringContMath};
-use shtml_extraction::prelude::*;
+use shtml_extraction::{open::terms::VarOrSym, prelude::*};
 use leptos::tachys::view::any_view::AnyView;
 use leptos::web_sys::Element;
 use extractor::DOMExtractor;
@@ -153,7 +154,7 @@ impl NotationForces {
         )
     }
     pub fn new() -> Self {
-        let owner = Owner::current().expect("Something went horribly wrong");
+        let owner = Owner::new();//current().expect("Something went horribly wrong");
         Self {
             owner,
             map:StoredValue::new(immt_utils::prelude::HMap::default())
@@ -165,13 +166,46 @@ impl NotationForces {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct OnClickProvider {
+    owner: Owner,
+    map: StoredValue<immt_utils::prelude::HMap<VarOrSym,RwSignal<bool>>>
+}
+impl OnClickProvider {
+    pub fn new() -> Self {
+        let owner = Owner::new();//.expect("Something went horribly wrong");
+        Self {
+            owner,
+            map:StoredValue::new(immt_utils::prelude::HMap::default())
+        }
+    }
+    pub fn get(&self,uri:&VarOrSym) -> RwSignal<bool> {
+        use thaw::{Dialog,DialogSurface};
+        use thaw::{Combobox,ComboboxOption,ComboboxOptionGroup,Divider};
+        use crate::components::terms::do_onclick;
+        if let Some(s) = self.map.with_value(|map| map.get(uri).copied()) {
+            return s
+        }
+        self.owner.with(move || {
+            let signal = RwSignal::new(false);
+            let uri = uri.clone();
+            self.map.update_value(|map| {map.insert(uri.clone(),signal);});
+            let _ = view!{<Dialog open=signal><DialogSurface>{
+                    do_onclick(uri)
+            }</DialogSurface></Dialog>};
+            signal
+        })
+    }
+}
+
 #[component]
-pub fn SHTMLDocumentSetup(
+pub fn SHTMLDocumentSetup<Ch:IntoView+'static>(
     uri:DocumentURI, 
-    children: Children, 
+    children: TypedChildren<Ch>, 
     #[prop(optional)] on_load:Option<RwSignal<bool>>
 ) -> impl IntoView {
     use crate::components::navigation::{Nav,NavElems,URLFragment};
+    let children = children.into_inner();
     inject_css("shtml-comp", include_str!("components/comp.css"));
     //let config = config::ServerConfig::clone_static();
     //provide_context(config);
@@ -184,6 +218,7 @@ pub fn SHTMLDocumentSetup(
     provide_context(NarrativeURI::Document(uri));
     #[cfg(feature="omdoc")]
     provide_context(NotationForces::new());
+    provide_context(OnClickProvider::new());
     let r = children();
     view! {
         <Nav on_load/>
@@ -253,29 +288,29 @@ extern "C" {
 #[allow(clippy::missing_const_for_fn)]
 #[allow(unreachable_code)]
 #[allow(clippy::needless_return)]
-pub fn iterate(e:&Element) -> Option<AnyView> {
-    tracing::trace!("iterating {} ({:?})",e.outer_html(),std::thread::current().id());
+pub fn iterate(e:&Element) -> Option<impl FnOnce() -> AnyView> {
+    //tracing::trace!("iterating {}",e.outer_html());
     #[cfg(any(feature="csr",feature="hydrate"))]
     {
         if !has_shtml_attribute(e) {
-            tracing::trace!("No attributes");
+            //tracing::trace!("No attributes");
             return None
         }
-        tracing::trace!("Has shtml attributes");
+        //tracing::trace!("Has shtml attributes");
         let sig = expect_context::<RwSignal<DOMExtractor>>();
         let r = sig.update_untracked(|extractor| {
             let mut attrs = NodeAttrs::new(e);
             RULES.applicable_rules(extractor,&mut attrs)
         });
         return r.map(|elements| {
-            tracing::trace!("got elements: {elements:?}");
+            //tracing::trace!("got elements: {elements:?}");
             let in_math = immt_web_utils::mathml::is(&e.tag_name()).is_some();
             let orig = e.clone().into();
-            view!(<SHTMLComponents orig elements in_math/>).into_any()
+            move || view!(<SHTMLComponents orig elements in_math/>).into_any()
         })
     }
     #[cfg(not(any(feature="csr",feature="hydrate")))]
-    {None}
+    {None::<fn() -> AnyView>}
 }
 
 #[cfg(feature="ts")]

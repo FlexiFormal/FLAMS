@@ -89,7 +89,7 @@ pub trait RuleSet<E:SHTMLExtractor> {
         let mut rules = SmallVec::<_,4>::new();
         for rule in self.iter_rules() {
             if let Some((i,_)) = stripped.iter().enumerate().find(|(_,s)| rule.applies(s)) {
-                tracing::debug!("found {:?}",rule.tag);
+                //tracing::debug!("found {:?}",rule.tag);
                 rules.push(rule);
                 stripped.remove(i);
             }

@@ -15,6 +15,7 @@ pub fn InputRef<'a>(uri:DocumentURI,id: &'a str) -> impl IntoView {
 
 #[allow(clippy::similar_names)]
 pub(super) fn inputref(uri:DocumentURI,id:&str) -> impl IntoView {
+  //leptos::logging::log!("inputref");
   inject_css("shtml-inputref", include_str!("./inputref.css"));
   let replace = RwSignal::new(false);
   let replaced = RwSignal::new(false);
@@ -60,7 +61,8 @@ fn do_inputref(uri:DocumentURI,on_load:RwSignal<bool>) -> impl IntoView {
 }
 
 #[component]
-pub fn IfInputref(value:bool,children:Children) -> impl IntoView {
+pub fn IfInputref<Ch:IntoView+'static>(value:bool,children:TypedChildren<Ch>) -> impl IntoView {
+  let children = children.into_inner();
   let in_inputref = expect_context::<InInputRef>().0;
   if in_inputref == value { Either::Left(children()) } else {
     Either::Right(view!{<span data-if-inputref="false"/>})

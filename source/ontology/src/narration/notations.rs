@@ -76,10 +76,10 @@ pub enum NotationComponent {
     Comp(Box<str>),
 }
 
-pub use presentation::{Presenter,PresentationError};
+pub use presentation::{Presenter,PresentationError,PresenterArgs};
 
 mod presentation {
-    use std::{fmt::Display, marker::PhantomData};
+    use std::fmt::Display;
     use immt_utils::prelude::HMap;
 
     use crate::{content::terms::{Arg, ArgMode, Informal, Term, Var}, oma, omsp, shtml::SHTMLKey, uris::{ContentURI, DocumentElementURI, SymbolURI, URITrait}};
@@ -167,8 +167,10 @@ mod presentation {
         }
     }
 
-    trait Args<W:std::fmt::Write> {
+    pub trait PresenterArgs<W:std::fmt::Write> {
+        /// #### Errors
         fn single(&self,idx:u8,mode:ArgMode,out:&mut W) -> Result;
+        /// #### Errors
         fn sequence(&self,idx:u8,mode:ArgMode)
         -> std::result::Result<impl Iterator<Item = impl FnOnce(&mut W) -> Result>,PresentationError>;
     }
@@ -223,14 +225,14 @@ mod presentation {
                 if self.omv { "OMV" } else { "OMID" }
             } else { self.termstr };
             if self.op {
-                self.notation.apply_op(f, termstr, &self.uri, &self.d)
+                self.notation.apply_op(f, termstr, &self.uri, &self.d,true)
             } else {
-                self.notation.apply_i(f, None,termstr, &self.uri, &self.d)
+                self.notation.apply_cont(f, None,termstr, &self.uri, true,&self.d)
             }.map_err(|_| std::fmt::Error)
         }
     }
 
-    impl<W:std::fmt::Write> Args<W> for Displayer {
+    impl<W:std::fmt::Write> PresenterArgs<W> for Displayer {
         fn single(&self,idx:u8,_mode:ArgMode,out:&mut W) -> Result {
             const TERM :&str = SHTMLKey::Term.attr_name();
             const HEAD:&str = SHTMLKey::Head.attr_name();
@@ -260,7 +262,7 @@ mod presentation {
         }
     }
 
-    impl<P:Presenter> Args<P> for &'_ [Arg] {
+    impl<P:Presenter> PresenterArgs<P> for &'_ [Arg] {
         fn single(&self,idx:u8,_mode:ArgMode,out:&mut P) -> Result {
             let Some(arg) = self.get((idx - 1) as usize) else {
                 return Err(PresentationError::ArgumentMismatch)
@@ -340,14 +342,14 @@ mod presentation {
                 omsp!(uri) =>
                     if let Some(n) = presenter.get_op_notation(uri) {
                         let args : &[Arg] = &[];
-                        n.as_ref().apply_op(presenter,"OMID",uri,&args)
+                        n.as_ref().apply_op(presenter,"OMID",uri,&args,true)
                     } else {
                         Self::default_omid(presenter,"OMID",uri,uri.name().last_name().as_ref(),presenter.in_text())
                     },
                 Term::OMV(Var::Ref{declaration:uri,is_sequence:_}) =>
                     if let Some(n) = presenter.get_variable_notation(uri) {
                         let args : &[Arg] = &[];
-                        n.as_ref().apply_op(presenter, "OMV",uri,&args)
+                        n.as_ref().apply_op(presenter, "OMV",uri,&args,true)
                     } else {
                         Self::default_omid(presenter,"OMV",uri,uri.name().last_name().as_ref(),presenter.in_text())
                     },
@@ -417,7 +419,8 @@ mod presentation {
             out:&mut W,
             termstr:&str,
             head:impl Display,
-            args:&impl Args<W>
+            args:&impl PresenterArgs<W>,
+            insert_arg_attrs:bool
         ) -> Result {
             const TERM :&str = SHTMLKey::Term.attr_name();
             const HEAD:&str = SHTMLKey::Head.attr_name();
@@ -428,7 +431,7 @@ mod presentation {
                 let end = &opn.text[index..];
                 write!(out,"{start} {TERM}=\"{termstr}\" {HEAD}=\"{head}\" {NID}=\"{}\"{end}",self.id).map_err(Into::into)
             } else {
-                self.apply_i(out,None,termstr,head,args)
+                self.apply_cont(out,None,termstr,head,insert_arg_attrs,args)
             }
         }
         fn apply_op_this(&self,
@@ -462,16 +465,18 @@ mod presentation {
         ) -> Result { 
             // println!("Here: {:?} \n - {args:?}",self.components);
             let termstr = termstr.unwrap_or_else(|| if args.iter().any(|a| matches!(a.mode,ArgMode::Binding|ArgMode::BindingSequence)) { "OMBIND"} else { "OMA" });
-            self.apply_i(presenter,this,termstr,head,&args)
+            self.apply_cont(presenter,this,termstr,head,true,&args)
         }
 
-        fn apply_i<W:std::fmt::Write>(
+        /// #### Errors
+        pub fn apply_cont<W:std::fmt::Write>(
             &self,
             out:&mut W,
             this:Option<&Term>,
             termstr:&str,
             head:impl Display,
-            args:&impl Args<W>
+            insert_arg_attrs:bool,
+            args:&impl PresenterArgs<W>
         ) -> Result {
             const TERM :&str = SHTMLKey::Term.attr_name();
             const HEAD:&str = SHTMLKey::Head.attr_name();
@@ -485,15 +490,15 @@ mod presentation {
                     let end = &start_node[index..];
                     write!(out,"{start} {TERM}=\"{termstr}\" {HEAD}=\"{head}\" {NID}=\"{}\"{end}",self.id)?;
                     for comp in comps {
-                        comp.apply(out,this,args,false)?;
+                        comp.apply(out,this,args,false,insert_arg_attrs)?;
                     }
                     Ok(())
                 }
                 Some(o) => {
                     write!(out,"<mrow {TERM}=\"{termstr}\" {HEAD}=\"{head}\" {NID}=\"{}\">",self.id)?;
-                    o.apply(out,this,args,false)?;
+                    o.apply(out,this,args,false,insert_arg_attrs)?;
                     for comp in comps {
-                        comp.apply(out,this,args,false)?;
+                        comp.apply(out,this,args,false,insert_arg_attrs)?;
                     }
                     write!(out,"</mrow>").map_err(Into::into)
                 }
@@ -505,7 +510,7 @@ mod presentation {
     }
 
     impl NotationComponent {
-        fn apply<W:std::fmt::Write>(&self,out:&mut W,this:Option<&Term>,args:&impl Args<W>,in_text:bool) -> Result {
+        fn apply<W:std::fmt::Write>(&self,out:&mut W,this:Option<&Term>,args:&impl PresenterArgs<W>,in_text:bool,insert_arg_attrs:bool) -> Result {
             match self {
                 Self::S(s) |
                 Self::Comp(s) => out.write_str(s).map_err(Into::into),
@@ -516,39 +521,43 @@ mod presentation {
                         out.write_str(s).map_err(Into::into)
                     },
                 Self::Arg(idx,mode) =>
-                    Self::do_arg(out,*idx,args, *mode,in_text),
+                    Self::do_arg(out,*idx,args, *mode,in_text,insert_arg_attrs),
                 Self::ArgSep { index, mode, sep } => 
-                    Self::do_term_ls(out,*mode,*index,args,
+                    Self::do_term_ls(out,*mode,*index,args,insert_arg_attrs,
                         |p| {
                             //println!("Separator: {sep:?}");
                             for c in sep.iter().skip(1) {
-                                c.apply(p, this, args,in_text)?;
+                                c.apply(p, this, args,in_text,insert_arg_attrs)?;
                             }
                             Ok(())
                         }
                     ),
-                t => write!(out,"<mtext>TODO: {t:?}</mtext>").map_err(Into::into)
+                t@Self::ArgMap{..} => write!(out,"<mtext>TODO: {t:?}</mtext>").map_err(Into::into)
             }
         }
 
-        fn do_arg<W:std::fmt::Write>(out:&mut W,idx:u8,args:&impl Args<W>,mode:ArgMode,in_text:bool) -> Result {
+        fn do_arg<W:std::fmt::Write>(out:&mut W,idx:u8,args:&impl PresenterArgs<W>,mode:ArgMode,in_text:bool,insert_arg_attrs:bool) -> Result {
             const ARG:&str = SHTMLKey::Arg.attr_name();
             const MODE:&str = SHTMLKey::ArgMode.attr_name();
             match mode {
                 ArgMode::Normal|ArgMode::Binding if !in_text => {
-                    write!(out,"<mrow {ARG}=\"{idx}\" {MODE}=\"{mode}\">")?;
-                    args.single(idx,mode,out)?;
-                    write!(out,"</mrow>").map_err(Into::into)
+                    if insert_arg_attrs {
+                        write!(out,"<mrow {ARG}=\"{idx}\" {MODE}=\"{mode}\">")?;
+                        args.single(idx,mode,out)?;
+                        write!(out,"</mrow>").map_err(Into::into)
+                    } else {
+                        args.single(idx,mode,out)
+                    }
                 }
                 ArgMode::Sequence|ArgMode::BindingSequence if !in_text => 
-                    Self::do_term_ls(out,mode,idx,args,
+                    Self::do_term_ls(out,mode,idx,args,insert_arg_attrs,
                         |p| write!(p,"<mo>,</mo>").map_err(Into::into)
                     ),
                 _ => write!(out,"<mtext>TODO: argument mode {mode:?}</mtext>").map_err(Into::into)
             }
         }
 
-        fn do_term_ls<W:std::fmt::Write>(out:&mut W,mode:ArgMode,idx:u8,args:&impl Args<W>,sep:impl Fn(&mut W) -> Result) -> Result {
+        fn do_term_ls<W:std::fmt::Write>(out:&mut W,mode:ArgMode,idx:u8,args:&impl PresenterArgs<W>,insert_arg_attrs:bool,sep:impl Fn(&mut W) -> Result) -> Result {
             const ARG:&str = SHTMLKey::Arg.attr_name();
             const MODE:&str = SHTMLKey::ArgMode.attr_name();
             let mut ls = args.sequence(idx,mode)?;
@@ -558,17 +567,17 @@ mod presentation {
                 _ => unreachable!()
             };
             let Some(first) = ls.next() else { return Ok(())};
-            write!(out,"<mrow {ARG}=\"{idx}1\" {MODE}=\"{mode}\">")?;
+            if insert_arg_attrs {write!(out,"<mrow {ARG}=\"{idx}1\" {MODE}=\"{mode}\">")?;}
             //println!("First {idx}{mode}: {first}");
             first(out)?;
-            write!(out,"</mrow>")?;
+            if insert_arg_attrs{write!(out,"</mrow>")?;}
             let mut i = 2;
             for term in ls {
                 sep(out)?;
-                write!(out,"<mrow {ARG}=\"{idx}{i}\" {MODE}=\"{mode}\">")?;
+                if insert_arg_attrs{ write!(out,"<mrow {ARG}=\"{idx}{i}\" {MODE}=\"{mode}\">")?;}
                 //println!("term {i} of {idx}{mode}: {term}");
                 term(out)?;
-                write!(out,"</mrow>")?;
+                if insert_arg_attrs{write!(out,"</mrow>")?;}
                 i += 1;
             }
             Ok(())//write!(presenter,"</mrow>").map_err(Into::into)

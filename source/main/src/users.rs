@@ -118,8 +118,9 @@ impl FromStr for LoginError {
 }
 
 #[component(transparent)]
-pub(crate) fn Login(children:Children) -> impl IntoView {
+pub(crate) fn Login<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
     use immt_web_utils::components::Spinner;
+    let children = children.into_inner();
     let user = RwSignal::new(LoginState::Loading);
     provide_context(user);
     //#[cfg(feature="hydrate")]

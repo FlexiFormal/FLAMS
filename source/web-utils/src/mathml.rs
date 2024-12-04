@@ -44,7 +44,8 @@ pub fn is(tag: &str) -> Option<&'static str> {
 use leptos::prelude::*;
 
 #[component]
-pub fn MathMLTag(tag: &'static str, children: Children) -> impl IntoView {
+pub fn MathMLTag<Ch:IntoView+'static>(tag: &'static str, children: TypedChildren<Ch>) -> impl IntoView {
+    let children = children.into_inner();
     match tag {
         "math" => view!(<math>{children()}</math>).into_any(),
         "mi" => view!(<mi>{children()}</mi>).into_any(),

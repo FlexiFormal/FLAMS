@@ -8,15 +8,16 @@ use thaw_components::{Follower, FollowerPlacement, FollowerWidth, Teleport};
 use leptos::web_sys::DomRect;
 
 #[component]
-pub fn Binder(
+pub fn Binder<Ch:IntoView+'static>(
     /// Used to track DOM locations
     #[prop(into)]
     target_ref: DivOrMrowRef,
     #[prop(optional)] mut max_width:u32,
     /// Content for pop-up display
     follower: Follower,
-    children: Children,
+    children: TypedChildren<Ch>,
 ) -> impl IntoView {
+    let children = children.into_inner();
     if max_width == 0 { max_width = 600 };
     crate::inject_css("thaw-id-binder", include_str!("./binder.css"));
     let Follower {

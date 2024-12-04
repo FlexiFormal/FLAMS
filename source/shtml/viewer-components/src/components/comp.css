@@ -9,5 +9,8 @@
   color: mediumvioletred;
 }
 .shtml-comp-hover {
-  background-color:greenyellow;
+  background-color:rgba(238, 255, 47, 0.702);
+}
+.shtml-comp-replaced {
+  border:1px dotted red;
 }

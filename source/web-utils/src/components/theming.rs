@@ -23,7 +23,7 @@ impl From<ThemeType> for thaw::Theme {
 }
 
 #[component(transparent)]
-pub fn Themer(children:Children) -> impl IntoView {
+pub fn Themer<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
     use thaw::{ConfigProvider,ToasterProvider,Theme};
     #[cfg(feature = "hydrate")]
     use gloo_storage::Storage;
@@ -42,6 +42,7 @@ pub fn Themer(children:Children) -> impl IntoView {
         });
         sig
     };
+    let children = children.into_inner();
     provide_context(signal);
     view!{
       <ConfigProvider theme=signal>

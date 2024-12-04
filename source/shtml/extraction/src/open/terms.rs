@@ -135,7 +135,7 @@ impl TermOrList {
     }
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Hash,PartialEq,Eq)]
 pub enum PreVar {
     Resolved(DocumentElementURI),
     Unresolved(Name)
@@ -171,7 +171,7 @@ impl PreVar {
     }
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Hash,PartialEq,Eq)]
 pub enum VarOrSym {
     S(ContentURI),
     V(PreVar)

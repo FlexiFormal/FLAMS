@@ -21,8 +21,9 @@ mod block;
 
 #[cfg(not(any(feature="ssr",feature="hydrate")))]
 #[component(transparent)]
-pub fn Themer(children:Children) -> impl IntoView {
+pub fn Themer<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
     use thaw::{ConfigProvider,ToasterProvider,Theme};
+    let children = children.into_inner();
     view!{
       <ConfigProvider>
         {children()}
@@ -50,11 +51,12 @@ use leptos::{either::Either, prelude::*};
 use crate::inject_css;
 
 #[component]
-pub fn Collapsible(
+pub fn Collapsible<Ch:IntoView+'static>(
     #[prop(optional)] lazy:bool,
     #[prop(optional)] header:Option<Header>,
-    mut children:ChildrenFnMut
+    children:TypedChildrenMut<Ch>
 ) -> impl IntoView {
+  let mut children = children.into_inner();
     let expanded = RwSignal::new(false);
     view!{<details>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
@@ -70,9 +72,10 @@ pub fn Collapsible(
 }
 
 #[component]
-pub fn Burger(children:Children) -> impl IntoView {
+pub fn Burger<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
   use thaw::{Menu,MenuTriggerType,MenuTrigger};
   use icondata_ch::ChMenuHamburger;
+  let children = children.into_inner();
   inject_css("immt-burger", ".immt-burger {position:absolute !important;right:-10px;}");
   view!{<div style="position:fixed;right:10px;position-anchor:inherit;">
     <Menu class="immt-burger" on_select=|_| () trigger_type=MenuTriggerType::Hover>

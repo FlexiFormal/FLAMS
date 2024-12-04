@@ -19,20 +19,22 @@ pub struct OnClickModal {
 /// Largely copied from [thaw](https://docs.rs/thaw), but modified
 /// to work with MathML.
 #[component]
-pub fn Popover(
+pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
     #[prop(optional, into)] class: MaybeProp<String>,
     /// Action that displays the popover.
     #[prop(optional)]
     trigger_type: PopoverTriggerType,
     /// The element or component that triggers popover.
-    popover_trigger: PopoverTrigger,
+    popover_trigger: PopoverTrigger<T>,
     /// Configures the position of the Popover.
     #[prop(optional)]
     position: PopoverPosition,
     #[prop(optional)] max_width:u32,
     #[prop(optional)]
     on_click_modal:Option<OnClickModal>,
-    children: Children,
+    #[prop(optional)]
+    on_click_signal:Option<RwSignal<bool>>,
+    children: TypedChildren<Ch>,
     #[prop(optional, into)]
     appearance: MaybeProp<PopoverAppearance>,
     #[prop(optional, into)] size: Signal<PopoverSize>,
@@ -44,6 +46,7 @@ pub fn Popover(
     //struct InnerPopover(RwSignal<Option<RwSignal<bool>>>);
     //let previous_popover = use_context::<InnerPopover>();
     //let this_popover = InnerPopover(RwSignal::new(None));
+    let children = children.into_inner();
     
     crate::inject_css("thaw-id-popover", include_str!("./popover.css"));
     let config_provider = thaw::ConfigInjection::expect_context();
@@ -146,8 +149,10 @@ pub fn Popover(
         class: trigger_class,
         children: trigger_children,
     } = popover_trigger;
+    let trigger_children = trigger_children.into_inner();
 
-    let modal_signal = on_click_modal.as_ref().map(|OnClickModal{signal,..}| *signal);
+    let modal_signal = on_click_modal.as_ref().map(|OnClickModal{signal,..}| *signal)
+        .or(on_click_signal);
 
     let do_trigger = move || match target_ref {
         DivOrMrowRef::Div(target_ref) => Either::Left(view!{
@@ -313,10 +318,10 @@ impl From<DivOrMrowElem> for leptos::web_sys::EventTarget {
 }
 
 #[slot]
-pub struct PopoverTrigger {
+pub struct PopoverTrigger<Ch> {
     #[prop(optional, into)]
     class: MaybeProp<String>,
-    children: Children,
+    children: TypedChildren<Ch>,
 }
 
 pub use thaw::{PopoverPosition,PopoverAppearance};

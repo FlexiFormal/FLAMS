@@ -1,6 +1,6 @@
 pub(crate) mod inputref;
 pub(crate) mod sections;
-mod terms;
+pub(crate) mod terms;
 mod toc;
 pub(crate) mod navigation;
 #[cfg(feature="omdoc")]
@@ -8,7 +8,6 @@ pub mod omdoc;
 
 use immt_ontology::{narration::{exercises::CognitiveDimension, LOKind}, uris::DocumentElementURI};
 pub use inputref::{InputRef,IfInputref};
-pub use terms::*;
 pub use toc::*;
 pub use sections::{OnSectionBegin,OnSectionEnd};
 
@@ -35,7 +34,7 @@ type EitherOf<A,B,C,D,E,F,G,H> = leptos::either::EitherOf8<A,B,C,D,E,F,G,H>;
 
 fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:OriginalNode,on_load:RwSignal<bool>) -> impl IntoView {
   if let Some(next) = elements.iter().rev().nth(skip) {
-    tracing::debug!("Doing {next:?} ({:?})",std::thread::current().id());
+    //tracing::debug!("Doing {next:?} ({:?})",std::thread::current().id());
     match next {
       OpenSHTMLElement::Section { uri,.. } => EitherOf::A(sections::section(uri.clone(),move || do_components::<MATH>(skip+1,elements,orig,on_load).into_any())),
       OpenSHTMLElement::Inputref { uri, id } => EitherOf::B(inputref::inputref(uri.clone(), id)),
@@ -57,7 +56,7 @@ fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:Origina
         ))
       }
       OpenSHTMLElement::Comp | OpenSHTMLElement::MainComp =>
-        EitherOf::E(terms::do_comp::<_,MATH>(move|| view!(<DomCont orig on_load cont=crate::iterate/>))),
+        EitherOf::E(terms::do_comp::<_,MATH>(move|| view!(<DomCont skip_head=true orig on_load cont=crate::iterate/>))),
       OpenSHTMLElement::Arg(arg) =>
         EitherOf::F(terms::do_arg(orig,*arg, move |orig| 
           do_components::<MATH>(skip+1,elements,orig,on_load).into_any()
@@ -65,7 +64,7 @@ fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:Origina
       _ => todo!()
     }
   } else {
-    EitherOf::G(view!(<DomCont orig on_load cont=crate::iterate/>))
+    EitherOf::G(view!(<DomCont skip_head=true orig on_load cont=crate::iterate/>))
   }
 }
 
