@@ -12,6 +12,9 @@ args = ["build","--out-dir","ts","--","--features","ts",
     "--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
 ]
 
+[tasks.ts]
+alias = "wasm-pack-ts"
+
 
 [tasks.wasm-pack-dev]
 install_crate = "wasm-pack"

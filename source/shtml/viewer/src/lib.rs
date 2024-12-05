@@ -20,7 +20,7 @@ pub fn run() {
     use immt_web_utils::components::Themer;
     use leptos::prelude::*;
     use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
-    use shtml_viewer_components::SHTMLDocumentSetup;
+    use shtml_viewer_components::{SHTMLDocumentSetup,SHTMLGlobalSetup};
     #[allow(unused_mut)]
     let mut config = tracing_wasm::WASMLayerConfigBuilder::new();
     //#[cfg(not(debug_assertions))]
@@ -30,9 +30,9 @@ pub fn run() {
     leptos_dyn_dom::hydrate_body(|orig| {
         leptos_meta::provide_meta_context();
         let on_load = RwSignal::new(false);
-        view!(<Themer><SHTMLDocumentSetup on_load uri=DocumentURI::no_doc()>
+        view!(<Themer><SHTMLGlobalSetup><SHTMLDocumentSetup on_load uri=DocumentURI::no_doc()>
             <DomChildrenCont orig on_load cont=shtml_viewer_components::iterate/>
-            </SHTMLDocumentSetup></Themer>
+            </SHTMLDocumentSetup></SHTMLGlobalSetup></Themer>
         )
     });
 }

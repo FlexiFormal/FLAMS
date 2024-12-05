@@ -1,7 +1,6 @@
 use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use futures::FutureExt;
 use immt_ontology::uris::DocumentURI;
 use immt_stex::{quickparse::stex::{DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseData, STeXParseDataI}, OutputCont, RusTeX};
 use immt_system::{backend::{archives::LocalArchive, AnyBackend, Backend, GlobalBackend, TemporaryBackend}, formats::OMDocResult};

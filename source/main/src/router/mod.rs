@@ -55,8 +55,10 @@ pub fn Main() -> impl IntoView {
 
 #[component(transparent)]
 fn Top() -> impl IntoView {
+    //use immt_web_utils::components::Themer;
+    //use shtml_viewer_components::SHTMLGlobalSetup;
     use crate::users::Login;
-    view!{<Login><leptos_router::components::Outlet/></Login>}
+    view!{<leptos_router::components::Outlet/>}
 }
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]

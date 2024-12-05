@@ -56,29 +56,51 @@ pub fn render_document(
   document:DocumentOptions,
   on_section_start: Option<SectionContinuation>,
   on_section_end: Option<SectionContinuation>
-) -> Result<(),String> {
-  use shtml_viewer_components::DocumentString;
+) -> Result<SHTMLMountHandle,String> {
+  use shtml_viewer_components::{DocumentString,SHTMLGlobalSetup};
   use immt_web_utils::components::Themer;
 
   let comp = move || match document {
     DocumentOptions::HtmlString{html,toc} => {
       let toc = toc.map_or(TOCSource::None,TOCSource::Ready);
-      Either::Left(view!{<Themer><DocumentString html toc/></Themer>})
+      Either::Left(view!{<Themer><SHTMLGlobalSetup><DocumentString html toc/></SHTMLGlobalSetup></Themer>})
     }
     DocumentOptions::FromBackend{uri,toc} => {
       let toc = toc.map_or(TOCSource::None,Into::into);
-      Either::Right(view!{<Themer><DocumentFromURI uri toc/></Themer>})
+      Either::Right(view!{<Themer><SHTMLGlobalSetup><DocumentFromURI uri toc/></SHTMLGlobalSetup></Themer>})
     }
   };
 
-  leptos::prelude::mount_to(to,move || {
+  let r = leptos::prelude::mount_to(to,move || {
     if let Some(start) = on_section_start {
       shtml_viewer_components::components::OnSectionBegin::set(start);
     };
     if let Some(end) = on_section_end {
       shtml_viewer_components::components::OnSectionEnd::set(end);
     };
-    comp()
-  }).forget();
-  Ok(())
+    comp().into_any()
+  });
+  Ok(SHTMLMountHandle(std::cell::Cell::new(Some(r))))
 }
+
+#[wasm_bindgen]
+pub struct SHTMLMountHandle(std::cell::Cell<Option<leptos::prelude::UnmountHandle<leptos::tachys::view::any_view::AnyViewState>>>);
+
+#[wasm_bindgen]
+impl SHTMLMountHandle {
+  /// unmounts the view and cleans up the reactive system.
+  /// Not calling this is a memory leak
+  pub fn unmount(&self) {
+    if let Some(owner) = self.0.take() {
+      drop(owner)
+    }
+  }
+}
+/*
+static GLOBAL_OWNER: std::sync::OnceLock<Owner> = std::sync::OnceLock::new();
+
+#[wasm_bindgen]
+pub fn global_setup() {
+  let _ = GLOBAL_OWNER.get_or_init(|| Owner::new_root(None));
+}
+*/

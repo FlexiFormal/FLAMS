@@ -176,7 +176,10 @@ mod term_replacing {
           (true,_) => "OMID",
           _ => "OMA"
         };
-        let notation = crate::config::server_config.get_notation(&u);
+        let Some(notation) = crate::config::server_config.get_notation(&u) else {
+          tracing::error!("Notation {u} not found");
+          return orig!()
+        };
         //tracing::info!("Rerendering replacable term: {}\n using notation {notation:?}",orig.html_string());
         let args = ArgPres(args);
         let mut html = String::new();

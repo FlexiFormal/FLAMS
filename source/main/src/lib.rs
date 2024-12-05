@@ -64,5 +64,5 @@ pub fn hydrate() {
     leptos::mount::hydrate_body(router::Main);
 }
 
-#[cfg(doc)]
+#[cfg(any(doc,feature="docs"))]
 pub mod endpoints;

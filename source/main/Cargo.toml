@@ -11,6 +11,7 @@ crate-type = ["cdylib","rlib"]
 #name = "immt"
 
 [features]
+docs = []
 ssr = [
   "dep:immt-system", 
   "dep:immt-stex",

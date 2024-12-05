@@ -146,6 +146,36 @@ impl NotationForces {
             self.map
                 .with_value(|map| map.get(uri).copied())
                 .unwrap_or_else(|| {
+                    #[cfg(any(feature="csr",feature="hydrate"))]
+                    let sig = {
+                        use gloo_storage::Storage;
+                        let s = gloo_storage::LocalStorage::get(format!("notation_{uri}"))
+                            .map_or_else(
+                            |_| RwSignal::new(None),
+                            |v:DocumentElementURI| {
+                                let uri = uri.clone();
+                                let sig = RwSignal::new(None);
+                                let _ = Resource::new(|| (),move |()| {let uri = uri.clone(); let v = v.clone();async move {
+                                    let _ = crate::config::server_config.notations(uri).await;
+                                    sig.set(Some(v));
+                                }}
+                                );
+                                sig
+                            }
+                        );
+                        let uri = uri.clone();
+                        Effect::new(move || {
+                            s.with(|s|
+                                if let Some(s) = s.as_ref() {
+                                    let _ = gloo_storage::LocalStorage::set(format!("notation_{uri}"),&s);
+                                } else {
+                                    let _ = gloo_storage::LocalStorage::delete(format!("notation_{uri}"));
+                                }
+                            );
+                        });
+                        s
+                    };
+                    #[cfg(not(any(feature="csr",feature="hydrate")))]
                     let sig = RwSignal::new(None);
                     self.map.update_value(|map| {map.insert(uri.clone(),sig);});
                     sig
@@ -198,6 +228,18 @@ impl OnClickProvider {
     }
 }
 
+
+#[component(transparent)]
+pub fn SHTMLGlobalSetup<Ch:IntoView+'static>(
+    children: TypedChildren<Ch>
+) -> impl IntoView {
+    let children = children.into_inner();
+    #[cfg(feature="omdoc")]
+    provide_context(NotationForces::new());
+    provide_context(OnClickProvider::new());
+    children()
+}
+
 #[component]
 pub fn SHTMLDocumentSetup<Ch:IntoView+'static>(
     uri:DocumentURI, 
@@ -216,9 +258,6 @@ pub fn SHTMLDocumentSetup<Ch:IntoView+'static>(
     provide_context(IdPrefix(String::new()));
     provide_context(URLFragment::new());
     provide_context(NarrativeURI::Document(uri));
-    #[cfg(feature="omdoc")]
-    provide_context(NotationForces::new());
-    provide_context(OnClickProvider::new());
     let r = children();
     view! {
         <Nav on_load/>

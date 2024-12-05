@@ -364,16 +364,17 @@ pub fn URITop() -> impl IntoView {
   use immt_web_utils::components::Themer;
   use leptos_meta::Stylesheet;
   use uris::URIComponentsTrait;
+  use shtml_viewer_components::SHTMLGlobalSetup;
   view!{
     <Stylesheet id="leptos" href="/pkg/immt.css"/>
-    <Themer>//<Login>
+    <Themer><SHTMLGlobalSetup><Login>
       <div style="min-height:100vh;color:black;">{
         use_query_map().with_untracked(|m| m.as_doc().map_or_else(
           || Either::Left(view!("TODO")),
           |doc| Either::Right(view!(<Document doc/>))
         ))
-      }</div>//</Login>
-    </Themer>
+      }</div></Login>
+    </SHTMLGlobalSetup></Themer>
   }
 }
 

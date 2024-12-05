@@ -38,8 +38,9 @@ pub fn Dashboard() -> impl IntoView {
 }
 
 fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+  use shtml_viewer_components::SHTMLGlobalSetup;
   view!{
-    <Themer>
+    <Themer><SHTMLGlobalSetup><Login>
       <Layout position=LayoutPosition::Absolute>
         //<Login>
           <LayoutHeader class="immt-header">
@@ -63,7 +64,7 @@ fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> 
           {f()}
         //</Login>
       </Layout>
-    </Themer>
+    </Login></SHTMLGlobalSetup></Themer>
   }
 }
 

@@ -302,14 +302,14 @@ impl ServerConfig {
     }
 
     #[cfg(feature="omdoc")]
-    pub fn get_notation(&self,uri:&immt_ontology::uris::DocumentElementURI) -> immt_ontology::narration::notations::Notation {
+    pub fn get_notation(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Option<immt_ontology::narration::notations::Notation> {
         #[cfg(any(feature="csr",feature="hydrate"))]
         {
             let lock = self.get_notations.cache.lock();
             lock.values()
                 .flat_map(|v| v.iter())
                 .find_map(|(u,n)| if u == uri {Some(n.clone())} else {None})
-                .expect("Notation not found; this should not happen")
+                //.expect("Notation not found; this should not happen")
         }
         #[cfg(not(any(feature="csr",feature="hydrate")))]
         { unreachable!()}

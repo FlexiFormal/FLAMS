@@ -193,7 +193,6 @@ impl LSPState {
     #[must_use]
     pub fn get_hover(&self,uri:&lsp::Url,position:lsp::Position,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::Hover>>> {
         let d = self.get(uri)?;
-        let da = d.archive().cloned();
         let store = LSPStore::new(self.clone());
         let pos = LSPLineCol {
             line:position.line,
@@ -218,7 +217,6 @@ impl LSPState {
     #[must_use]
     pub fn get_goto_definition(&self,uri:&lsp::Url,position:lsp::Position,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::GotoDefinitionResponse>>> {
         let d = self.get(uri)?;
-        let da = d.archive().cloned();
         let store = LSPStore::new(self.clone());
         let pos = LSPLineCol {
             line:position.line,
