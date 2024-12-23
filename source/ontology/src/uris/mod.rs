@@ -305,7 +305,6 @@ impl URI {
     fn parse_content(
         s: &str,
         module: &str,
-        (language, next): (Language, Option<&str>),
         path: impl FnOnce() -> PathURI,
         mut split: Split<char>,
     ) -> Result<ContentURI, URIParseError> {
@@ -313,9 +312,8 @@ impl URI {
         let module = move || ModuleURI {
             path: path(),
             name: name(),
-            language,
         };
-        let Some(next) = next else {
+        let Some(next) = split.next() else {
             return Ok(ContentURI::Module(module()));
         };
         next.strip_prefix(concatcp!(SymbolURI::SEPARATOR, "="))
@@ -451,7 +449,6 @@ impl FromStr for URI {
                         Ok(Self::Content(Self::parse_content(
                             s,
                             module,
-                            language()?,
                             path,
                             split,
                         )?))

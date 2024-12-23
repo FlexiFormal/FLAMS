@@ -16,7 +16,7 @@ pub async fn get_queues() -> Result<Vec<(NonZeroU32,String)>,ServerFnError<Strin
   use crate::users::LoginState;
   use immt_system::building::queue_manager::QueueManager;
   
-  let login = LoginState::get();
+  let login = LoginState::get_server();
   if login != LoginState::Admin && login != LoginState::NoAccounts {
     return Err(format!("Not logged in: {login:?}").into());
   }
@@ -32,7 +32,7 @@ pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
   use crate::users::LoginState;
   use immt_system::building::queue_manager::QueueManager;
   
-  let login = LoginState::get();
+  let login = LoginState::get_server();
   if login != LoginState::Admin && login != LoginState::NoAccounts {
     return Err(format!("Not logged in: {login:?}").into());
   }
@@ -50,7 +50,7 @@ pub async fn requeue(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
   use crate::users::LoginState;
   use immt_system::building::queue_manager::QueueManager;
   
-  let login = LoginState::get();
+  let login = LoginState::get_server();
   if login != LoginState::Admin && login != LoginState::NoAccounts {
     return Err(format!("Not logged in: {login:?}").into());
   }
@@ -69,7 +69,7 @@ pub async fn get_log(archive:ArchiveId,rel_path:String,target:String) -> Result<
   use crate::users::LoginState;
   use std::path::PathBuf;
   use immt_system::backend::{Backend,GlobalBackend};
-  let login = LoginState::get();
+  let login = LoginState::get_server();
   if login != LoginState::Admin && login != LoginState::NoAccounts {
     return Err("Not logged in".to_string().into());
   }    

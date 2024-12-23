@@ -14,7 +14,7 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize),ServerFnError<LoginEr
   use immt_system::settings::Settings;
   use immt_system::backend::GlobalBackend;
   use crate::users::LoginState;
-  match LoginState::get() {
+  match LoginState::get_server() {
       LoginState::Admin | LoginState::NoAccounts => {
           let mut spec = Settings::get().as_spec();
           if let Some(pw) = spec.server.admin_pwd.as_mut() {

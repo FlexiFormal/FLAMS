@@ -107,20 +107,6 @@ impl URIOrRefTrait for SymbolURI {
         URIRef::Content(self.as_content())
     }
 }
-impl URIWithLanguage for SymbolURI {
-    #[inline]
-    fn language(&self) -> Language {
-        self.module.language
-    }
-}
-/*
-impl URIWithLanguage for SymbolURIRef<'_> {
-    #[inline]
-    fn language(&self) -> Language {
-        self.module.language
-    }
-}
-*/
 
 impl ContentURITrait for SymbolURI {
     #[inline]

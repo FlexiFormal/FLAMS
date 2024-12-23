@@ -18,6 +18,7 @@ use immt_utils::vecmap::{VecMap, VecSet};
 use crate::errors::SHTMLError;
 use crate::open::terms::TermOrList;
 use crate::rules::SHTMLElements;
+use std::str::FromStr;
 
 pub struct NotationSpec {
     pub attribute_index: u8,
@@ -161,16 +162,6 @@ pub trait StatefulExtractor {
     fn state(&self) -> &ExtractorState;
     fn add_error(&mut self,err:SHTMLError);
     fn set_document_title(&mut self,title:Box<str>);
-
-    #[inline]
-    fn get_sym_uri_as_mod(&self, s:&str) -> Option<ModuleURI> { s.parse().ok() }
-    #[inline]
-    fn get_sym_uri(&self, s:&str) -> Option<SymbolURI> { s.parse().ok() }
-    #[inline]
-    fn get_mod_uri(&self, s:&str) -> Option<ModuleURI> { s.parse().ok() }
-    #[inline]
-    fn get_doc_uri(&self, s:&str) -> Option<DocumentURI> { s.parse().ok() }
-
     fn add_resource<T:Resourcable>(&mut self,t:&T) -> LazyDocRef<T>;
 
 }
@@ -187,22 +178,6 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         <Self as StatefulExtractor>::add_error(self,err);
     }
 
-    #[inline]
-    fn get_sym_uri_as_mod(&self, s:&str) -> Option<ModuleURI> {
-        <Self as StatefulExtractor>::get_sym_uri_as_mod(self, s)
-    }
-    #[inline]
-    fn get_sym_uri(&self, s:&str) -> Option<SymbolURI> {
-        <Self as StatefulExtractor>::get_sym_uri(self, s)
-    }
-    #[inline]
-    fn get_mod_uri(&self, s:&str) -> Option<ModuleURI> {
-        <Self as StatefulExtractor>::get_mod_uri(self, s)
-    }
-    #[inline]
-    fn get_doc_uri(&self, s:&str) -> Option<DocumentURI> {
-        <Self as StatefulExtractor>::get_doc_uri(self, s)
-    }
     #[inline]
     fn set_document_title(&mut self,title:Box<str>) {
         <Self as StatefulExtractor>::set_document_title(self, title);
@@ -627,15 +602,6 @@ pub trait SHTMLExtractor {
     fn add_type(&mut self,tm:Term) -> Result<(),Term>;
     /// #### Errors
     fn add_term(&mut self,symbol:Option<SymbolURI>,tm:Term) -> Result<(),Term>;
-
-    #[inline]
-    fn get_sym_uri_as_mod(&self, s:&str) -> Option<ModuleURI> { s.parse().ok() }
-    #[inline]
-    fn get_sym_uri(&self, s:&str) -> Option<SymbolURI> { s.parse().ok() }
-    #[inline]
-    fn get_mod_uri(&self, s:&str) -> Option<ModuleURI> { s.parse().ok() }
-    #[inline]
-    fn get_doc_uri(&self, s:&str) -> Option<DocumentURI> { s.parse().ok() }
 }
 
 pub trait Attributes {
@@ -696,81 +662,91 @@ pub trait Attributes {
     }
 
     /// #### Errors
+    #[inline]
     fn get_language(&self,key:SHTMLKey) -> Result<Language,SHTMLError> {
-        use std::str::FromStr;
         self.get_typed(key,Language::from_str)
     }
 
     /// #### Errors
+    #[inline]
     fn take_language(&mut self,key:SHTMLKey) -> Result<Language,SHTMLError> {
-        use std::str::FromStr;
         self.take_typed(key,Language::from_str)
     }
 
     /// #### Errors
+    #[inline]
     fn get_module_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
+        self.get_typed(key,ModuleURI::from_str)
+    }
+
+    fn get_new_module_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
-        extractor.get_mod_uri(v.as_ref()).map_or_else(
-            || Err(SHTMLError::InvalidKeyFor(key.as_str(), Some(v.into()))),
-            Ok
-        )
+        Ok(extractor.get_content_uri().map_or_else(
+            || extractor.get_narrative_uri().document().module_uri_from(v.as_ref()),
+            |m| m.clone() / v.as_ref()
+        ))
     }
 
     /// #### Errors
+    #[inline]
     fn take_module_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
+        self.take_typed(key, ModuleURI::from_str)
+    }
+
+    fn take_new_module_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
-        extractor.get_mod_uri(v.as_ref()).map_or_else(
-            || Err(SHTMLError::InvalidKeyFor(key.as_str(), Some(v))),
-            Ok
-        )
+        Ok(extractor.get_content_uri().map_or_else(
+            || extractor.get_narrative_uri().document().module_uri_from(&v),
+            |m| m.clone() / v.as_str()
+        ))
     }
 
     /// #### Errors
+    #[inline]
     fn get_symbol_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
+        self.get_typed(key,SymbolURI::from_str)
+    }
+
+    fn get_new_symbol_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
-        extractor.get_sym_uri(v.as_ref()).map_or_else(
-            || Err(SHTMLError::InvalidKeyFor(key.as_str(), Some(v.into()))),
-            Ok
-        )
+        let Some(module) = extractor.get_content_uri() else {
+            return Err(SHTMLError::NotInContent)
+        };
+        Ok(module.owned() | v.as_ref())
     }
 
     /// #### Errors
+    #[inline]
     fn take_symbol_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
+        self.take_typed(key,SymbolURI::from_str)
+    }
+
+    fn take_new_symbol_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
-        extractor.get_sym_uri(v.as_ref()).map_or_else(
-            || Err(SHTMLError::InvalidKeyFor(key.as_str(), Some(v))),
-            Ok
-        )
+        let Some(module) = extractor.get_content_uri() else {
+            return Err(SHTMLError::NotInContent)
+        };
+        Ok(module.owned() | v.as_str())
     }
 
     /// #### Errors
+    #[inline]
     fn get_document_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
-        let Some(v) = self.get(key) else {
-            return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        extractor.get_doc_uri(v.as_ref()).map_or_else(
-            || Err(SHTMLError::InvalidKeyFor(key.as_str(), Some(v.into()))),
-            Ok
-        )
+        self.get_typed(key, DocumentURI::from_str)
     }
 
     /// #### Errors
+    #[inline]
     fn take_document_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
-        let Some(v) = self.remove(key) else {
-            return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        extractor.get_doc_uri(v.as_ref()).map_or_else(
-            || Err(SHTMLError::InvalidKeyFor(key.as_str(), Some(v))),
-            Ok
-        )
+        self.take_typed(key, DocumentURI::from_str)
     }
 
     fn get_id<E:SHTMLExtractor>(&self,extractor:&mut E,prefix:Cow<'static,str>) -> Box<str> {

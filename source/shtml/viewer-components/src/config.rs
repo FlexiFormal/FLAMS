@@ -46,7 +46,7 @@ macro_rules! server_fun{
         server_fun!(Option<DocumentURI>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String> $(,$ty)* => $ret)
     };
     (@SYMURI$(,$ty:ty)* => $ret:ty) => {
-        server_fun!(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>  $(,$ty)* => $ret)
+        server_fun!(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>  $(,$ty)* => $ret)
     };
 }
 
@@ -110,7 +110,7 @@ impl ServerFunArgs for DocURIArgs {
 #[cfg(all(feature="csr",not(any(feature="hydrate",feature="ssr"))))]
 type SymURIArgs = SymbolURI;
 #[cfg(any(feature="hydrate",feature="ssr"))]
-type SymURIArgs = (Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>);
+type SymURIArgs = (Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>);
 impl ServerFunArgs for SymURIArgs {
     #[cfg(any(feature="hydrate",feature="ssr"))]
     type DeTupledFun<R> = server_fun!(@SYMURI => R);
@@ -119,7 +119,7 @@ impl ServerFunArgs for SymURIArgs {
     #[cfg(any(feature="hydrate",feature="ssr"))]
     #[inline]
     fn call<R>(uri:SymbolURI,_:(),f:&Self::DeTupledFun<R>) -> server_fun_ret!(R) {
-        f(Some(uri),None,None,None,None,None)
+        f(Some(uri),None,None,None,None)
     }
 }
 
@@ -127,7 +127,7 @@ impl ServerFunArgs for SymURIArgs {
 #[cfg(all(feature="csr",not(any(feature="hydrate",feature="ssr"))))]
 type SymURIWithBool = (SymbolURI,bool);
 #[cfg(any(feature="hydrate",feature="ssr"))]
-type SymURIWithBool = (Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>,bool);
+type SymURIWithBool = (Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>,bool);
 impl ServerFunArgs for SymURIWithBool {
     #[cfg(any(feature="hydrate",feature="ssr"))]
     type DeTupledFun<R> = server_fun!(@SYMURI,bool => R);
@@ -136,7 +136,7 @@ impl ServerFunArgs for SymURIWithBool {
     #[cfg(any(feature="hydrate",feature="ssr"))]
     #[inline]
     fn call<R>(uri:SymbolURI,b:bool,f:&Self::DeTupledFun<R>) -> server_fun_ret!(R) {
-        f(Some(uri),None,None,None,None,None,b)
+        f(Some(uri),None,None,None,None,b)
     }
 }
 

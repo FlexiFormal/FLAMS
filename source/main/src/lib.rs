@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 /*! Foo Bar
  * 
  * See [endpoints] for public API endpoints
@@ -35,9 +36,9 @@ pub(crate) mod fns {
     -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,Vec<TOCElem>),ServerFnError<String>>> + Send>> {
         Box::pin(crate::router::content::toc(uri,rp,a,p,l,d))
     }
-    fn los(uri:Option<SymbolURI>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,m:Option<String>,s:Option<String>,exercises:bool)
+    fn los(uri:Option<SymbolURI>,a:Option<ArchiveId>,p:Option<String>,m:Option<String>,s:Option<String>,exercises:bool)
     -> Pin<Box<dyn Future<Output=Result<Vec<(DocumentElementURI,LOKind)>,ServerFnError<String>>> + Send>> {
-        Box::pin(crate::router::content::los(uri,a,p,l,m,s,exercises))
+        Box::pin(crate::router::content::los(uri,a,p,m,s,exercises))
     }
     fn omdoc(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
     -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,AnySpec),ServerFnError<String>>> + Send>> {

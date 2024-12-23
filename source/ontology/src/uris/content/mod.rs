@@ -13,7 +13,7 @@ use std::str::FromStr;
 pub(super) mod modules;
 pub(super) mod symbols;
 
-pub trait ContentURITrait: URIWithLanguage {
+pub trait ContentURITrait: URIOrRefTrait {
     fn as_content(&self) -> ContentURIRef;
     fn module(&self) -> ModuleURIRef;
 }
@@ -62,15 +62,6 @@ impl URIOrRefTrait for ContentURI {
 impl URITrait for ContentURI {
     type Ref<'a> = ContentURIRef<'a>;
 }
-impl URIWithLanguage for ContentURI {
-    #[inline]
-    fn language(&self) -> Language {
-        match self {
-            Self::Module(m) => m.language,
-            Self::Symbol(s) => s.language(),
-        }
-    }
-}
 impl ContentURITrait for ContentURI {
     #[inline]
     fn as_content(&self) -> ContentURIRef {
@@ -92,15 +83,6 @@ impl ContentURITrait for ContentURI {
 pub enum ContentURIRef<'a> {
     Module(ModuleURIRef<'a>),
     Symbol(SymbolURIRef<'a>),
-}
-impl URIWithLanguage for ContentURIRef<'_> {
-    #[inline]
-    fn language(&self) -> Language {
-        match self {
-            Self::Module(m) => m.language,
-            Self::Symbol(s) => s.language(),
-        }
-    }
 }
 impl<'a> From<&'a ContentURI> for ContentURIRef<'a> {
     #[inline]

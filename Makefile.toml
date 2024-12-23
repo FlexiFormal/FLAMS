@@ -1,6 +1,6 @@
 [env]
 DATABASE_URL="sqlite:./resources/migrations/users.sqlite?mode=rwc"
-LEPTOS_WASM_OPT_VERSION="version_119"
+LEPTOS_WASM_OPT_VERSION="version_121"
 LEPTOS_SASS_VERSION="1.71.0"
 RUSTDOCFLAGS="--enable-index-page -Zunstable-options --generate-link-to-definition --cfg docsrs"
 
@@ -131,7 +131,7 @@ dependencies = ["build-viewer","copy-viewer","db"]
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
-args = ["leptos","watch","--","--port","3000"]
+args = ["leptos","watch","--","--port","3000","-c","/home/jazzpirate/work/Software/sTeX/iMMT/settings.toml"]
 
 [tasks.default]
 workspace = false

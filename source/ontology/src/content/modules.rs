@@ -24,7 +24,7 @@ pub struct Signature(pub Module);
 impl Resolvable for Signature {
     type From = Language;
     fn id(&self) -> std::borrow::Cow<'_,Self::From> {
-        std::borrow::Cow::Owned(self.0.uri().language())
+        std::borrow::Cow::Owned(Language::default())
     }
 }
 
@@ -88,7 +88,7 @@ impl ModuleTrait for Module {
 
 #[cfg(feature="serde")]
 mod serde_impl {
-    use crate::uris::URIWithLanguage;
+    use crate::languages::Language;
     impl serde::Serialize for super::Module {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -100,7 +100,7 @@ mod serde_impl {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: serde::Serializer {
-            self.0.0.uri.language().serialize(serializer)
+            Language::default().serialize(serializer)
         }
     }
 }
@@ -141,6 +141,7 @@ impl OpenModule<Unchecked> {
         |m| checker.get_module(m).and_then(|m| 
             if let ModuleLike::Module(m) = m { Some(m) } else { None }
         )));
+        /*
         let signature = self.signature.map(|language| {
             let uri = self.uri.clone() % language;
             //println!("Require signature {uri}");
@@ -152,11 +153,12 @@ impl OpenModule<Unchecked> {
                 },
             )
         });
+         */
         let elements = super::checking::ModuleCheckIter::go(self.elements, checker, &self.uri);
         Module(Arc::new(OpenModule {
             uri: self.uri,
             meta,
-            signature,
+            signature:None,
             elements: elements.into_boxed_slice(),
         }))
     }

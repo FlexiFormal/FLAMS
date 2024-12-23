@@ -45,7 +45,7 @@ pub async fn login(username:String,password:String) -> Result<LoginState,ServerF
 #[server(LoginStateFn,prefix="/api",endpoint="login_state")]
 #[allow(clippy::unused_async)]
 pub async fn login_state() -> Result<LoginState,ServerFnError<String>> {
-    Ok(LoginState::get())
+    Ok(LoginState::get_server())
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
@@ -63,7 +63,7 @@ pub enum LoginState {
 #[cfg(feature="ssr")]
 impl LoginState {
     #[must_use]
-    pub fn get() -> Self {
+    pub fn get_server() -> Self {
         let Some(session) = use_context::<axum_login::AuthSession<crate::server::db::DBBackend>>() else {
             return Self::None;
         };
@@ -117,10 +117,37 @@ impl FromStr for LoginError {
     }
 }
 
+impl LoginState {
+    #[inline]
+    pub fn get() -> Self {
+        let ctx:RwSignal<Self> = expect_context();
+        ctx.get()
+    }
+}
+
 #[component(transparent)]
 pub(crate) fn Login<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
     use immt_web_utils::components::Spinner;
     let children = children.into_inner();
+    let res = Resource::new_blocking(|| (),|()| async {
+        login_state().await.unwrap_or_else(|e| {
+            leptos::logging::error!("Error getting login state: {e}");
+        //error_toast(Cow::Owned(format!("Error: {e}")),toaster);
+            LoginState::None
+        })
+    });
+    let sig = RwSignal::new(LoginState::Loading);
+    let _ = view!{<Suspense>{move || {res.get();()}}</Suspense>};
+    //if let Some(v) = res.get_untracked() {sig.set(v)}
+    let _ = Effect::new(move |_| if let Some(r) = res.get() {sig.set(r)});
+    provide_context(sig);
+    children()
+/*
+
+
+    #[cfg(feature="ssr")]
+    let user = RwSignal::new(LoginState::get());
+    #[cfg(not(feature="ssr"))]
     let user = RwSignal::new(LoginState::Loading);
     provide_context(user);
     //#[cfg(feature="hydrate")]
@@ -128,23 +155,35 @@ pub(crate) fn Login<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl Int
     let res = Resource::new_blocking(|| (),move |()| async move {
         match user.get() {
             LoginState::Loading => (),
-            u => return u
+            u => return ()
         }
         #[cfg(feature="ssr")]
         #[allow(clippy::needless_return)]
-        { return LoginState::get(); }
+        { user.set(LoginState::get()) }
         #[cfg(feature="hydrate")]
         {
-            login_state().await.unwrap_or_else(|e| {
+            let r = login_state().await.unwrap_or_else(|e| {
                 leptos::logging::error!("Error getting login state: {e}");
             //error_toast(Cow::Owned(format!("Error: {e}")),toaster);
                 LoginState::None
-            })
+            });
+            user.set(r);
         }
     });
 
     view!{
-        {move || view!(<Suspense>{move || res.get().map_or_else(|| Some(view!(<Spinner/>)),|u| { user.set(u); None})}</Suspense>) }
+        {move || match user.get() {
+            LoginState::Loading => Some(view!{
+                <Suspense fallback = || view!(<Spinner/>)>
+                    {move || {res.get();match user.get() {
+                        LoginState::Loading => Some(view!(<Spinner/>)),
+                        _ => None
+                    }}}
+                </Suspense>
+            }),
+            _ => None
+        }}
         {children()}
     }
+     */
 }

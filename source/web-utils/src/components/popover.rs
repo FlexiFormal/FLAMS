@@ -199,10 +199,11 @@ pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
             {do_trigger()}
             <Follower slot show=is_show_popover placement=position>
                 <CSSTransition
-                    node_ref=popover_ref
+                    //node_ref=popover_ref
                     name="popover-transition"
                     appear=is_show_popover.get_untracked()
                     show=is_show_popover
+                    node_ref=popover_ref // remove
                     let:display
                 >
                     <div

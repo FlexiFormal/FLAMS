@@ -138,7 +138,6 @@ impl LocalArchive {
         &self,
         path: Option<&Name>,
         name: &NameStep,
-        language: Language,
     ) -> Option<OpenModule<Unchecked>> {
         let out = path
             .map_or_else(
@@ -150,8 +149,8 @@ impl LocalArchive {
                         .join(".modules")
                 },
             )
-            .join(name.as_ref())
-            .join(Into::<&'static str>::into(language));
+            .join(name.as_ref());
+            //.join(Into::<&'static str>::into(language));
         macro_rules! err{
             ($e:expr) => {
                 match $e {
@@ -332,7 +331,7 @@ impl LocalArchive {
         for m in modules {
             let path = m.uri.path();
             let name = m.uri.name();
-            let language = m.uri.language();
+            //let language = m.uri.language();
             let out = path.map_or_else(
                 || self.out_dir().join(".modules"),
                 |n| {
@@ -340,10 +339,10 @@ impl LocalArchive {
                         .iter()
                         .fold(self.out_dir().to_path_buf(), |p, n| p.join(n.as_ref()))
                         .join(".modules")
-                })
-                .join(name.to_string());
+                });
+                //.join(name.to_string());
             err!(std::fs::create_dir_all(&out));
-            let out = out.join(Into::<&'static str>::into(language));
+            let out = out.join(name.first_name().as_ref());
             let file = err!(std::fs::File::create(&out));
             let mut buf = std::io::BufWriter::new(file);
             //er!(m.into_byte_stream(&mut buf));
@@ -528,10 +527,9 @@ impl Archive {
         &self,
         path: Option<&Name>,
         name: &NameStep,
-        language: Language,
     ) -> Option<OpenModule<Unchecked>> {
         match self {
-            Self::Local(a) => a.load_module(path, name, language),
+            Self::Local(a) => a.load_module(path, name),
         }
     }
 

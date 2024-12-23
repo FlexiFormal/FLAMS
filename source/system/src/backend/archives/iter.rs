@@ -192,6 +192,7 @@ impl<'a> ArchiveIterator<'a> {
                         .collect();
                 }
                 "url-base" => dom_uri = v.into(),
+                //"ns" => dom_uri = v.into(),
                 "dependencies" => {
                     for d in v
                         .split(',')
@@ -213,6 +214,9 @@ impl<'a> ArchiveIterator<'a> {
             tracing::warn!(target:"archives","Archive {id} has no id");
             return None;
         }
+        /*if dom_uri.ends_with(id) {
+            dom_uri.split_off(id.len() + 1);
+        }*/
         let id = ArchiveId::new(id);
         if formats.is_empty() && !id.is_meta() {
             tracing::warn!(target:"archives","No formats found for archive {}",id);

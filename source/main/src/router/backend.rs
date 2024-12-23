@@ -34,41 +34,44 @@ pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupDa
   use immt_system::backend::archives::{Archive,ArchiveOrGroup as AoG};
   //use immt_system::backend::Backend;
   use crate::users::LoginState;
+  let login = LoginState::get_server();
 
-  let login = LoginState::get();
-  let allowed = login == LoginState::Admin || login == LoginState::NoAccounts;
-  immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| {
-    let v = match r#in {
-      None => &tree.groups,
-      Some(id) => match tree.find(&id) {
-        Some(AoG::Group(g)) => &g.children,
-        _ => return Err(format!("Archive Group {id} not found").into())
-      }
-    };
-    let mut groups = Vec::new();
-    let mut archives = Vec::new();
-    for a in v {
-      match a {
-        AoG::Archive(id) => {
-          let summary = if allowed {
-            tree.get(id).and_then(|a| 
-              if let Archive::Local(a) = a {
-                Some(a.state_summary())
-              } else { None }
-            )
-          } else {None};
-          archives.push(ArchiveData{id: id.clone(),summary});
+  tokio::task::spawn_blocking(move || {
+    let allowed = login == LoginState::Admin || login == LoginState::NoAccounts;
+    immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| {
+      let v = match r#in {
+        None => &tree.groups,
+        Some(id) => match tree.find(&id) {
+          Some(AoG::Group(g)) => &g.children,
+          _ => return Err(format!("Archive Group {id} not found").into())
         }
-        AoG::Group(g) => {
-          let summary = if allowed {
-            Some(g.state.summarize())
-          } else {None};
-          groups.push(ArchiveGroupData{id: g.id.clone(),summary});
+      };
+      let mut groups = Vec::new();
+      let mut archives = Vec::new();
+      for a in v {
+        match a {
+          AoG::Archive(id) => {
+            let summary = if allowed {
+              tree.get(id).and_then(|a| 
+                if let Archive::Local(a) = a {
+                  Some(a.state_summary())
+                } else { None }
+              )
+            } else {None};
+            archives.push(ArchiveData{id: id.clone(),summary});
+          }
+          AoG::Group(g) => {
+            let summary = if allowed {
+              Some(g.state.summarize())
+            } else {None};
+            groups.push(ArchiveGroupData{id: g.id.clone(),summary});
+          }
         }
       }
-    }
-    Ok((groups,archives))
-  })
+      Ok((groups,archives))
+    })
+  }).await
+    .unwrap_or_else(|e| Err(e.to_string().into()))
 }
 
 
@@ -78,36 +81,39 @@ pub async fn archive_entries(archive:ArchiveId,path:Option<String>) -> Result<(V
   use crate::users::LoginState;
   use either::Either;
   use immt_system::backend::{Backend,archives::source_files::SourceEntry};
+  let login = LoginState::get_server();
 
-  let login = LoginState::get();
-  let allowed = login == LoginState::Admin || login == LoginState::NoAccounts;
-  immt_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
-    let Some(a) = a else { return Err(format!("Archive {archive} not found").into()) };
-    a.with_sources(|d| {
-      let d = match path {
-        None => d,
-        Some(p) => match d.find(&p) {
-          Some(Either::Left(d)) => d,
-          _ => return Err(format!("Directory {p} not found in archive {archive}").into())
+  tokio::task::spawn_blocking(move || {
+    let allowed = login == LoginState::Admin || login == LoginState::NoAccounts;
+    immt_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
+      let Some(a) = a else { return Err(format!("Archive {archive} not found").into()) };
+      a.with_sources(|d| {
+        let d = match path {
+          None => d,
+          Some(p) => match d.find(&p) {
+            Some(Either::Left(d)) => d,
+            _ => return Err(format!("Directory {p} not found in archive {archive}").into())
+          }
+        };
+        let mut ds = Vec::new();
+        let mut fs = Vec::new();
+        for d in &d.children {
+          match d {
+            SourceEntry::Dir(d) => ds.push(DirectoryData{
+                rel_path:d.relative_path.to_string(),
+                summary: if allowed {Some(d.state.summarize())} else {None}
+            }),
+            SourceEntry::File(f) => fs.push(FileData {
+              rel_path:f.relative_path.to_string(),
+              format:f.format.to_string()
+            })
+          }
         }
-      };
-      let mut ds = Vec::new();
-      let mut fs = Vec::new();
-      for d in &d.children {
-        match d {
-          SourceEntry::Dir(d) => ds.push(DirectoryData{
-              rel_path:d.relative_path.to_string(),
-              summary: if allowed {Some(d.state.summarize())} else {None}
-          }),
-          SourceEntry::File(f) => fs.push(FileData {
-            rel_path:f.relative_path.to_string(),
-            format:f.format.to_string()
-          })
-        }
-      }
-      Ok((ds,fs))
+        Ok((ds,fs))
+      })
     })
-  })
+  }).await
+    .unwrap_or_else(|e| Err(e.to_string().into()))
 }
 
 
@@ -161,35 +167,38 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
   use crate::users::LoginState;
   use either::Either;
   use immt_system::backend::Backend;
+  let login = LoginState::get_server();
 
-  let login = LoginState::get();
-  if login != LoginState::Admin && login != LoginState::NoAccounts {
-    return Err("Not logged in".to_string().into());
-  }
-  path.map_or_else(
-    || immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| 
-      match tree.find(&archive) {
-        None => Err(format!("Archive {archive} not found").into()),
-        Some(AoG::Archive(id)) => {
-          let Some(Archive::Local(archive)) = tree.get(id) else {
-            return Err(format!("Archive {archive} not found").into())
-          };
-          Ok(archive.file_state().into())
+  tokio::task::spawn_blocking(move || {
+    if login != LoginState::Admin && login != LoginState::NoAccounts {
+      return Err("Not logged in".to_string().into());
+    }
+    path.map_or_else(
+      || immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| 
+        match tree.find(&archive) {
+          None => Err(format!("Archive {archive} not found").into()),
+          Some(AoG::Archive(id)) => {
+            let Some(Archive::Local(archive)) = tree.get(id) else {
+              return Err(format!("Archive {archive} not found").into())
+            };
+            Ok(archive.file_state().into())
+          }
+          Some(AoG::Group(g)) => Ok(g.state.clone().into()),
         }
-        Some(AoG::Group(g)) => Ok(g.state.clone().into()),
-      }
-    ),
-    |path| immt_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
-      let Some(a) = a else { return Err(format!("Archive {archive} not found").into()) };
-      a.with_sources(|d|
-        match d.find(&path) {
-          Some(Either::Left(d)) => Ok(d.state.clone().into()),
-          Some(Either::Right(f)) => Ok((&f.target_state).into()),
-          None => Err(format!("Directory {path} not found in archive {archive}").into())
-        }
-      )
-    })
-  )
+      ),
+      |path| immt_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
+        let Some(a) = a else { return Err(format!("Archive {archive} not found").into()) };
+        a.with_sources(|d|
+          match d.find(&path) {
+            Some(Either::Left(d)) => Ok(d.state.clone().into()),
+            Some(Either::Right(f)) => Ok((&f.target_state).into()),
+            None => Err(format!("Directory {path} not found in archive {archive}").into())
+          }
+        )
+      })
+    )
+  }).await
+    .unwrap_or_else(|e| Err(e.to_string().into()))
 }
 
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
@@ -211,53 +220,64 @@ pub async fn enqueue(archive:ArchiveId,
   use immt_system::backend::archives::ArchiveOrGroup as AoG;
   use immt_system::formats::{SourceFormat,BuildTarget};
   //use immt_system::backend::Backend;
+    let login = LoginState::get_server();
 
-  let login = LoginState::get();
-  if login != LoginState::Admin && login != LoginState::NoAccounts {
-    return Err("Not logged in".to_string().into());
-  }
-  let queues = QueueManager::get();
-  let stale_only = stale_only.unwrap_or(true);
-  #[allow(clippy::option_if_let_else)]
-  let tgts: Vec<_> = match &target {
-    FormatOrTarget::Targets(t) => {
-      let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
-        return Err(ServerFnError::MissingArg("Invalid target".into()))
-      };
-      v
+  tokio::task::spawn_blocking(move || {
+    if login != LoginState::Admin && login != LoginState::NoAccounts {
+      return Err("Not logged in".to_string().into());
     }
-    FormatOrTarget::Format(_) => Vec::new()
-  };
-  let fot = match target {
-    FormatOrTarget::Format(f) => FormatOrTargets::Format(
-      SourceFormat::get_from_str(&f).map_or_else(
-        || Err(ServerFnError::MissingArg("Invalid format".into())),
-        Ok
-      )?
-    ),
-    FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
-  };
-  let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
-    {match tree.find(&archive) {
-      Some(AoG::Archive(_)) => Ok(false),
-      Some(AoG::Group(_)) => Ok(true),
-      None => Err(format!("Archive {archive} not found").into()),
-    }}
-  )?;
-  if group && path.is_some() {
-    return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
-  }
+    let queues = QueueManager::get();
+    let stale_only = stale_only.unwrap_or(true);
+    #[allow(clippy::option_if_let_else)]
+    let tgts: Vec<_> = match &target {
+      FormatOrTarget::Targets(t) => {
+        let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
+          return Err(ServerFnError::MissingArg("Invalid target".into()))
+        };
+        v
+      }
+      FormatOrTarget::Format(_) => Vec::new()
+    };
+    let fot = match target {
+      FormatOrTarget::Format(f) => FormatOrTargets::Format(
+        SourceFormat::get_from_str(&f).map_or_else(
+          || Err(ServerFnError::MissingArg("Invalid format".into())),
+          Ok
+        )?
+      ),
+      FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
+    };
+    let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
+      {match tree.find(&archive) {
+        Some(AoG::Archive(_)) => Ok(false),
+        Some(AoG::Group(_)) => Ok(true),
+        None => Err(format!("Archive {archive} not found").into()),
+      }}
+    )?;
+    if group && path.is_some() {
+      return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
+    }
 
-  queues.with_global(|queue|
-    if group { Ok(queue.enqueue_group(&archive, fot, stale_only))} else {
-      Ok(queue.enqueue_archive(&archive, fot, stale_only,path.as_deref()))
-    }
-  )
+    queues.with_global(|queue|
+      if group { Ok(queue.enqueue_group(&archive, fot, stale_only))} else {
+        Ok(queue.enqueue_archive(&archive, fot, stale_only,path.as_deref()))
+      }
+    )
+  }).await
+    .unwrap_or_else(|e| Err(e.to_string().into()))
 }
 
 
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
+  /*let r = Resource::new(|| (),|()| group_entries(None));
+  view!{<Suspense fallback = || view!(<immt_web_utils::components::Spinner/>)>{move ||
+    match r.get() {
+      Some(Ok((groups,archives))) => leptos::either::EitherOf3::A(view!(<Tree><ArchivesAndGroups archives groups/></Tree>)),
+      Some(Err(e)) => leptos::either::EitherOf3::B(e.to_string()),
+      None => leptos::either::EitherOf3::C(view!(<immt_web_utils::components::Spinner/>)),
+    }
+  }</Suspense>}*/
   from_server_copy(false, || group_entries(None), |(groups,archives)|
     view!(<Tree><ArchivesAndGroups archives groups/></Tree>)
   )
@@ -427,9 +447,8 @@ fn badge(state:FileStateSummary) -> impl IntoView {
 
 fn dialog<V:IntoView + 'static>(children:impl Fn(RwSignal<bool>) -> V + Send + Clone + 'static) -> impl IntoView {
   use thaw::{Dialog,DialogSurface,DialogBody,DialogContent,Icon};
-  let login = expect_context::<RwSignal<LoginState>>();
   let clicked = RwSignal::new(false);
-  move || if matches!(login.get(),LoginState::Admin | LoginState::NoAccounts) {
+  move || if matches!(LoginState::get(),LoginState::Admin | LoginState::NoAccounts) {
     let children = (children.clone())(clicked);
     Some(view!{
       <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>

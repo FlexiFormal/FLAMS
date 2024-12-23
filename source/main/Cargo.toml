@@ -87,6 +87,7 @@ const-str = {workspace = true}
 shtml-viewer-components = {workspace = true, features=["omdoc"]}
 leptos-dyn-dom = {workspace = true}
 paste = {workspace=true}
+lazy_static = {workspace=true}
 
 # ssr
 immt-system = {workspace=true,features=["tokio"],optional=true}
@@ -137,6 +138,9 @@ tracing-wasm = {workspace = true,optional = true}
 #leptos_macro = {workspace = true}
 #server_fn_macro = {workspace = true}
 #server_fn_macro_default = {workspace = true}
-#reactive_graph = {version="=0.1.0-beta5"}
-#hydration_context = {version="=0.2.0-beta5"}
-#leptos_config = {version="=0.7.0-beta5"}
+#leptos_router_macro = {workspace = true}
+#leptos_config = {workspace = true}
+#leptos_dom = {workspace = true}
+
+#reactive_graph = {workspace = true}
+#hydration_context = {workspace = true}

@@ -66,8 +66,7 @@ impl BitOr<Name> for ArchiveURI {
     fn bitor(self, rhs: Name) -> Self::Output {
         ModuleURI {
             path: self.into(),
-            name: rhs,
-            language: Language::default(),
+            name: rhs
         }
     }
 }
@@ -168,41 +167,21 @@ impl Div<&str> for PathURI {
     }
 }
 
-impl BitOr<(Name, Language)> for ArchiveURI {
+impl BitOr<Name> for PathURI {
     type Output = ModuleURI;
     #[inline]
-    fn bitor(self, rhs: (Name, Language)) -> Self::Output {
-        ModuleURI {
-            path: self.into(),
-            name: rhs.0,
-            language: rhs.1,
-        }
-    }
-}
-impl BitOr<(&str, Language)> for ArchiveURI {
-    type Output = ModuleURI;
-    #[inline]
-    fn bitor(self, rhs: (&str, Language)) -> Self::Output {
-        <Self as BitOr<(Name, Language)>>::bitor(self, (rhs.0.into(), rhs.1))
-    }
-}
-
-impl BitOr<(Name, Language)> for PathURI {
-    type Output = ModuleURI;
-    #[inline]
-    fn bitor(self, rhs: (Name, Language)) -> Self::Output {
+    fn bitor(self, rhs: Name) -> Self::Output {
         ModuleURI {
             path: self,
-            name: rhs.0,
-            language: rhs.1,
+            name: rhs
         }
     }
 }
-impl BitOr<(&str, Language)> for PathURI {
+impl BitOr<&str> for PathURI {
     type Output = ModuleURI;
     #[inline]
-    fn bitor(self, rhs: (&str, Language)) -> Self::Output {
-        <Self as BitOr<(Name, Language)>>::bitor(self, (rhs.0.into(), rhs.1))
+    fn bitor(self, rhs: &str) -> Self::Output {
+        <Self as BitOr<Name>>::bitor(self, rhs.into())
     }
 }
 
@@ -284,15 +263,6 @@ impl BitAnd<&str> for DocumentURI {
     }
 }
 
-impl Rem<Language> for ModuleURI {
-    type Output = Self;
-    #[inline]
-    fn rem(mut self, language: Language) -> Self::Output {
-        self.language = language;
-        self
-    }
-}
-
 impl Not for ModuleURI {
     type Output = Self;
     #[inline]
@@ -304,7 +274,6 @@ impl Not for ModuleURI {
         let name = name.clone().into();
         Self {
             path: self.path,
-            language: self.language,
             name,
         }
     }
@@ -316,7 +285,6 @@ impl<'a> Div<&'a str> for ModuleURI {
     fn div(self, rhs: &'a str) -> Self::Output {
         Self {
             path:self.path,
-            language:self.language,
             name:self.name / rhs
         }
     }

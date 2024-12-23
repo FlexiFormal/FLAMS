@@ -40,7 +40,7 @@ pub fn Dashboard() -> impl IntoView {
 fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   use shtml_viewer_components::SHTMLGlobalSetup;
   view!{
-    <Themer><SHTMLGlobalSetup><Login>
+    <Themer><SHTMLGlobalSetup>
       <Layout position=LayoutPosition::Absolute>
         //<Login>
           <LayoutHeader class="immt-header">
@@ -64,7 +64,7 @@ fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> 
           {f()}
         //</Login>
       </Layout>
-    </Login></SHTMLGlobalSetup></Themer>
+    </SHTMLGlobalSetup></Themer>
   }
 }
 
@@ -85,20 +85,19 @@ pub fn MainPage(page:Page) -> impl IntoView {
 }
 
 fn side_menu(page:Page) -> impl IntoView {
-    let login = expect_context::<RwSignal<LoginState>>();
     view!{
         <NavDrawer selected_value=page.to_string() class="immt-menu-inner">
             <NavItem value="home" href="/">"Home"</NavItem>
             <NavItem value="mathhub" href="/dashboard/mathhub">"MathHub"</NavItem>
             <NavItem value="query" href="/dashboard/query">"Queries"</NavItem>
-            {move || match login.get() {
-                LoginState::Admin | LoginState::NoAccounts => Either::Left(view!{
+            {move || match LoginState::get() {
+                LoginState::Admin | LoginState::NoAccounts => Some(view!{
                     //<a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a>
                     <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                     <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                     <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
                 }),
-                LoginState::User(..) | LoginState::None | LoginState::Loading => Either::Right(view!(<span/>))
+                LoginState::User(..) | LoginState::None | LoginState::Loading => None
             }}
         </NavDrawer>
     }
@@ -107,7 +106,6 @@ fn side_menu(page:Page) -> impl IntoView {
 fn user_field() -> impl IntoView {
     use immt_web_utils::components::{Spinner,SpinnerSize};
     let theme = expect_context::<RwSignal::<thaw::Theme>>();
-    let login : RwSignal<LoginState> = expect_context();
     let on_select = move |key: String| match key.as_str() {
         "theme" => {
             theme.update(|v| {
@@ -122,8 +120,8 @@ fn user_field() -> impl IntoView {
     };
 
     view!{<Menu on_select trigger_type=MenuTriggerType::Hover class="immt-user-menu">
-        <MenuTrigger slot class="immt-user-menu-trigger">
-            <thaw::Avatar />
+        <MenuTrigger slot>
+            <div class="immt-user-menu-trigger"><thaw::Avatar /></div>
         </MenuTrigger>
         // AiGitlabFilled
         {move || {
@@ -133,7 +131,7 @@ fn user_field() -> impl IntoView {
             view!(<MenuItem value="theme" icon=icon>{text}</MenuItem>)
         }}
         <Divider/>
-        {move || match login.get() {
+        {move || match LoginState::get() {
             LoginState::None => EitherOf4::A(login_form()),
             LoginState::Admin | LoginState::NoAccounts => EitherOf4::B(view!(<span>"Admin"</span>)),
             LoginState::User(user) =>  EitherOf4::C(view!(<span>{user}</span>)),
@@ -144,10 +142,10 @@ fn user_field() -> impl IntoView {
 
 fn login_form() -> impl IntoView {
     let toaster = ToasterInjection::expect_context();
-    let login = expect_context::<RwSignal<LoginState>>();
     let _ = view!(<thaw::Input/><thaw::Button/>);
     let username = NodeRef::<leptos::html::Input>::new();
     let pw = NodeRef::<leptos::html::Input>::new();
+    let login  = expect_context();
     let action = Action::new(move |(name,pw):&(String,String)| {
       do_login(name.clone(),pw.clone(),login,toaster)
     });

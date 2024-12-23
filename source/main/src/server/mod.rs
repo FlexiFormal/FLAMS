@@ -205,22 +205,25 @@ impl ServerState {
 }
 
 fn shell(options: LeptosOptions) -> impl IntoView {
+    //use thaw::ssr::SSRMountStyleProvider;
     view! {
         <!DOCTYPE html>
-        <html lang="en">
-            <head>
-                <meta charset="utf-8"/>
-                <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                {
-                    #[cfg(debug_assertions)]
-                    {view!(<AutoReload options=options.clone() />)}
-                }
-                <HydrationScripts options />//islands=true/>
-                <leptos_meta::MetaTags/>
-            </head>
-            <body>
-                <Main/>
-            </body>
-        </html>
+        //<SSRMountStyleProvider>
+            <html lang="en">
+                <head>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    {
+                        #[cfg(debug_assertions)]
+                        {view!(<AutoReload options=options.clone() />)}
+                    }
+                    <HydrationScripts options />//islands=true/>
+                    <leptos_meta::MetaTags/>
+                </head>
+                <body>
+                    <Main/>
+                </body>
+            </html>
+        //</SSRMountStyleProvider>
     }
 }

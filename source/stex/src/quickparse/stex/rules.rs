@@ -116,9 +116,8 @@ impl ModuleReference {
       || self.uri.archive_uri().owned().into(),
       |path| self.uri.archive_uri().owned() % path
     );
-    let name = name.rsplit_once('.')
-      .map_or(name, |(name,_)| name);
-    let language = self.uri.language();
+    let (name,language) = name.rsplit_once('.')
+      .map_or((name,Language::default()), |(name,l)| (name,l.parse().unwrap_or_default()));
     let name = if name.ends_with(Into::<&str>::into(language)) && name.len() > 3 {
       &name[..name.len() - 3]
     } else {name};
@@ -299,7 +298,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
       last
     } else {path};
 
-    let uri = (PathURI::from(archive) / path) | (module,self.language);
+    let uri = (PathURI::from(archive) / path) | module;
 
     let p = basepath.join(last).join(format!("{top_module}.{}.tex",self.language));
     if p.exists() {
@@ -685,10 +684,8 @@ stex!(p => @begin{smodule}([opt]{name:name}){
       let sig = opt.get(&"sig").and_then(|v| v.val.parse().ok().map(|i| (i,v.val_range)));
       let uri = if let Some((m,_,_)) = get_module(p) {
         m.clone() / name.0
-      } else if p.state.doc_uri.name().last_name().as_ref() == name.0 {
-        p.state.doc_uri.as_path().owned() | (name.0,p.state.language)
       } else {
-        (p.state.doc_uri.as_path().owned() / p.state.doc_uri.name().last_name().as_ref()) | (name.0,p.state.language)
+        p.state.doc_uri.module_uri_from(name.0)
       };
       let meta_theory = match opt.get(&"meta").map(|v| v.val) {
         None => Some((ModuleReference{ 
@@ -737,10 +734,8 @@ stex!(p => @begin{smodule_deps}([opt]{name:name}){
       let sig = opt.get(&"sig").and_then(|v| v.val.parse().ok().map(|i| (i,v.val_range)));
       let uri = if let Some((m,_,_)) = get_module(p) {
         m.clone() / name.0
-      } else if p.state.doc_uri.name().last_name().as_ref() == name.0 {
-        p.state.doc_uri.as_path().owned() | (name.0,p.state.language)
       } else {
-        (p.state.doc_uri.as_path().owned() / p.state.doc_uri.name().last_name().as_ref()) | (name.0,p.state.language)
+        p.state.doc_uri.module_uri_from(name.0)
       };
       let meta_theory = match opt.get(&"meta").map(|v| v.val) {
         None => Some((ModuleReference{ 

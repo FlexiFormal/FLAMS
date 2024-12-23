@@ -133,14 +133,14 @@ dashmap = { version = "6" }
 leptos = { version = "0.7", features=["nightly"]}
 leptos_axum = "0.7"
 leptos_meta= "0.7"
-leptos_router = { version = "0.7", features=["nightly"]}
+leptos_router = { version = "=0.7.0", features=["nightly"]}
 
 #thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-thaw = { version="0.4.0-beta5",features=["nightly"] }
+thaw = { version="=0.4.0-beta5",features=["nightly"] }
 #thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-thaw_components = "0.2.0-beta5"
+thaw_components = "=0.2.0-beta5"
 #thaw_utils = { features=["nightly"], git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-thaw_utils = {features=["nightly"],version="0.1.0-beta5"}
+thaw_utils = {features=["nightly"],version="=0.1.0-beta5"}
 
 icondata_bi = "0"
 icondata_ai = "0"
@@ -157,7 +157,7 @@ http = {version="1"}
 
 # wasm
 tracing-wasm = "0.2"
-wasm-bindgen = "=0.2.96"
+wasm-bindgen = "=0.2.99"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
 #reqwest = {version="0.12",features=["json"]}
@@ -173,18 +173,18 @@ RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreade
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
 #tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
 
-#leptos_config = {version="=0.7.0-rc0"}
-#leptos_dom = {version="=0.7.0-rc0"}
 #leptos_hot_reload = {version="=0.7.0-rc0"}
-#leptos_router_macro = {version="=0.7.0-beta5"}
 #leptos_server = {version="=0.7.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #reactive_graph = {version="=0.1.0-beta5"}
-leptos_macro = "0.7"
-tachys = "0.1"
-server_fn = "0.7"
-server_fn_macro = "0.7"
-server_fn_macro_default = "0.7"
+#leptos_macro = "=0.7.0"
+#tachys = "=0.1.0"
+#server_fn = "=0.7.0"
+#server_fn_macro = "=0.7.0"
+#server_fn_macro_default = "=0.7.0"
+#leptos_config = {version="=0.7.0"}
+#leptos_dom = {version="=0.7.0"}
+#leptos_router_macro = {version="=0.7.0"}
 
 
 [[workspace.metadata.leptos]]

@@ -28,7 +28,6 @@ pub enum SymURIComponents {
   Comps{
     a:ArchiveId,
     p:Option<String>,
-    l:Option<Language>,
     m:String,
     s:String
   }
@@ -39,7 +38,7 @@ impl SymURIComponents {
   pub fn parse(self) -> Option<SymbolURI> {
     match self {
       Self::Uri(uri) => Some(uri),
-      Self::Comps{a,p,l,m,s} => get_sym_uri(&a,p,l,&m,&s)
+      Self::Comps{a,p,m,s} => get_sym_uri(&a,p,&m,&s)
     }
   }
 
@@ -47,16 +46,16 @@ impl SymURIComponents {
     self,f:F
   ) -> R { match self {
     Self::Uri(uri) => f(Some(uri),None,None,None,None,None),
-    Self::Comps{a,p,l,m,s} => f(None,Some(a),p,l,Some(m),Some(s))
+    Self::Comps{a,p,m,s} => f(None,Some(a),p,None,Some(m),Some(s))
   }}
 }
 
-impl TryFrom<(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>)>
+impl TryFrom<(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>)>
   for SymURIComponents {
     type Error = ();
-    fn try_from((uri,a,p,l,m,s):(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>)) -> Result<Self,()> {
+    fn try_from((uri,a,p,m,s):(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>)) -> Result<Self,()> {
       if let Some(uri) = uri {
-        return if a.is_none() && p.is_none() && l.is_none() && m.is_none() && s.is_none() {
+        return if a.is_none() && p.is_none() && m.is_none() && s.is_none() {
           Ok(Self::Uri(uri))
         } else { Err(())}
       }
@@ -64,7 +63,7 @@ impl TryFrom<(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<Language
         || Err(()),
         |a| match (m,s) {
           (Some(m),Some(s)) =>
-            Ok(Self::Comps{a,p,l,m,s}),
+            Ok(Self::Comps{a,p,m,s}),
           _ => Err(())
         }
       )
@@ -156,13 +155,11 @@ pub enum URIComponents {
   ModComps{
     a:ArchiveId,
     p:Option<String>,
-    l:Option<Language>,
     m:String,
   },
   SymComps{
     a:ArchiveId,
     p:Option<String>,
-    l:Option<Language>,
     m:String,
     s:String
   }
@@ -182,10 +179,10 @@ impl URIComponents {
       ).map(|d| URI::Narrative(d.into())),
       Self::ElemComps { a, p, l, d, e } =>
         get_elem_uri(&a, p, l, &d, &e).map(|e| URI::Narrative(e.into())),
-      Self::ModComps { a, p, l, m } =>
-        get_mod_uri(&a, p, l, &m).map(|m| URI::Content(m.into())),
-      Self::SymComps { a, p, l, m, s } =>
-        get_sym_uri(&a, p, l, &m, &s).map(|s| URI::Content(s.into())),
+      Self::ModComps { a, p, m } =>
+        get_mod_uri(&a, p, &m).map(|m| URI::Content(m.into())),
+      Self::SymComps { a, p, m, s } =>
+        get_sym_uri(&a, p, &m, &s).map(|s| URI::Content(s.into())),
     }
   }
 
@@ -196,8 +193,8 @@ impl URIComponents {
     Self::RelPath(a,rp) => f(None,Some(rp),Some(a),None,None,None,None,None,None),
     Self::DocComps{a,p,l,d} => f(None,None,Some(a),p,l,Some(d),None,None,None),
     Self::ElemComps{a,p,l,d,e} => f(None,None,Some(a),p,l,Some(d),Some(e),None,None),
-    Self::ModComps{a,p,l,m} => f(None,None,Some(a),p,l,None,None,Some(m),None),
-    Self::SymComps{a,p,l,m,s} => f(None,None,Some(a),p,l,None,None,Some(m),Some(s)),
+    Self::ModComps{a,p,m} => f(None,None,Some(a),p,None,None,None,Some(m),None),
+    Self::SymComps{a,p,m,s} => f(None,None,Some(a),p,None,None,None,Some(m),Some(s)),
   }}
 }
 
@@ -227,11 +224,11 @@ impl TryFrom<(Option<URI>,Option<String>,Option<ArchiveId>,Option<String>,Option
               } else {Err(())}
             } else {Err(())}
           } else if let Some(m) = m {
-            if d.is_none() && e.is_none() && s.is_none() {
-              Ok(Self::ModComps{a,p,l,m})
+            if d.is_none() && e.is_none() && s.is_none() && l.is_none() {
+              Ok(Self::ModComps{a,p,m})
             } else if let Some(s) = s {
-              if d.is_none() && e.is_none() {
-                Ok(Self::SymComps{a,p,l,m,s})
+              if d.is_none() && e.is_none() && l.is_none() {
+                Ok(Self::SymComps{a,p,m,s})
               } else {Err(())}
             } else {Err(())}
           } else {Err(())}
@@ -350,15 +347,14 @@ pub fn get_elem_uri(a:&ArchiveId,p:Option<String>,l:Option<Language>,d:&str,e:&s
 
 #[cfg(feature="ssr")]
 #[allow(clippy::many_single_char_names)]
-pub fn get_mod_uri(a:&ArchiveId,p:Option<String>,l:Option<Language>,m:&str) -> Option<ModuleURI> {
+pub fn get_mod_uri(a:&ArchiveId,p:Option<String>,m:&str) -> Option<ModuleURI> {
   let a = GlobalBackend::get().with_archive(a, |a| a.map(|a| a.uri().owned()))?;
   let p = if let Some(p) = p { a % Name::from_str(&p).unwrap_or_else(|_| unreachable!())} else { a.into()};
-  let l = l.unwrap_or_default();
-  Some(p | (m,l))
+  Some(p | m)
 }
 
 #[cfg(feature="ssr")]
 #[allow(clippy::many_single_char_names)]
-pub fn get_sym_uri(a:&ArchiveId,p:Option<String>,l:Option<Language>,m:&str,s:&str) -> Option<SymbolURI> {
-  get_mod_uri(a,p,l,m).map(|m| m | s)
+pub fn get_sym_uri(a:&ArchiveId,p:Option<String>,m:&str,s:&str) -> Option<SymbolURI> {
+  get_mod_uri(a,p,m).map(|m| m | s)
 }

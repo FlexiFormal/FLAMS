@@ -402,7 +402,7 @@ impl GlobalBackend {
                 let slf = Self::get();
                 let mut cache = slf.cache.write();
                 let mut flattener = GlobalFlattener(&mut cache, &slf.archives);
-                flattener.load_module(top.as_path(), top.language(), top.name().first_name())
+                flattener.load_module(top.as_path(), top.name().first_name())
             })
             .await
             .ok()??;
@@ -584,7 +584,7 @@ impl Backend for GlobalBackend {
         let m = {
             let mut cache = self.cache.write();
             let mut flattener = GlobalFlattener(&mut cache, &self.archives);
-            flattener.load_module(uri.as_path(), uri.language(), uri.name().first_name())?
+            flattener.load_module(uri.as_path(), uri.name().first_name())?
         };
         // TODO: this unnecessarily clones
         ModuleLike::in_module(&m, uri.name())
@@ -782,11 +782,10 @@ impl GlobalFlattener<'_> {
     fn load_module(
         &mut self,
         path: PathURIRef,
-        language: Language,
         name: &NameStep,
     ) -> Option<Module> {
         //println!("Module {path}&m={name}&l={language}");
-        let pre = self.1.load_module(path, language, name)?;
+        let pre = self.1.load_module(path, name)?;
         let module = pre.check(self);
         self.0.insert_module(module.clone());
         Some(module)
@@ -814,7 +813,7 @@ impl LocalBackend for GlobalFlattener<'_> {
                 return ModuleLike::in_module(m, uri.name());
             }
         }
-        let m = self.load_module(uri.as_path(), uri.language(), uri.name().first_name())?;
+        let m = self.load_module(uri.as_path(), uri.name().first_name())?;
         // TODO this unnecessarily clones
         ModuleLike::in_module(&m, uri.name())
     }

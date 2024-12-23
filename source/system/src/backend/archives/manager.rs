@@ -71,13 +71,12 @@ impl ArchiveManager {
     pub(crate) fn load_module(
         &self,
         path_uri: PathURIRef,
-        language: Language,
         name: &NameStep,
     ) -> Option<OpenModule<Unchecked>> {
         let archive = path_uri.archive_id();
         let path = path_uri.path();
         self.with_archive(archive, |a| {
-            a.and_then(|a| a.load_module(path, name, language))
+            a.and_then(|a| a.load_module(path, name))
         })
     }
 }

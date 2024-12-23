@@ -34,8 +34,7 @@ pub fn from_server_fnonce<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r
     }</Suspense>
   };
   if needs_login {
-    let login = expect_context::<RwSignal<LoginState>>();
-    Either::Left(move || {let go = go.clone(); match login.get() {
+    Either::Left(move || {let go = go.clone(); match LoginState::get() {
       LoginState::Loading => EitherOf3::A(view!(<Spinner/>)),
       LoginState::Admin | LoginState::NoAccounts => EitherOf3::B(go()),
       _ => EitherOf3::C(err(LoginError::NotLoggedIn.to_string()))
@@ -61,8 +60,7 @@ pub fn from_server_clone<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:
       }</Suspense>
   };
   if needs_login {
-    let login = expect_context::<RwSignal<LoginState>>();
-    Either::Left(move || {let go = go.clone(); match login.get() {
+    Either::Left(move || {let go = go.clone(); match LoginState::get() {
       LoginState::Loading => EitherOf3::A(view!(<Spinner/>)),
       LoginState::Admin | LoginState::NoAccounts => EitherOf3::B(go()),
       _ => EitherOf3::C(err(LoginError::NotLoggedIn.to_string()))
@@ -87,8 +85,7 @@ pub fn from_server_copy<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:i
       }</Suspense>
   };
   if needs_login {
-    let login = expect_context::<RwSignal<LoginState>>();
-    Either::Left(move || match login.get() {
+    Either::Left(move || match LoginState::get() {
       LoginState::Loading => EitherOf3::A(view!(<Spinner/>)),
       LoginState::Admin | LoginState::NoAccounts => EitherOf3::B(go()),
       _ => EitherOf3::C(err(LoginError::NotLoggedIn.to_string()))
@@ -106,8 +103,7 @@ fn err(e:String) -> impl IntoView {
 }
 
 pub fn needs_login<V:IntoView+'static>(mut f:impl FnMut() -> V + Send + 'static) -> impl IntoView {
-  let login = expect_context::<RwSignal<LoginState>>();
-  move || match login.get() {
+  move || match LoginState::get() {
     LoginState::Admin | LoginState::NoAccounts => EitherOf3::A(f()),
     LoginState::Loading => EitherOf3::B(view!(<Spinner/>)),
     o => {

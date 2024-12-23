@@ -1,8 +1,6 @@
 use crate::languages::Language;
 use crate::uris::{
-    debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef,
-    ContentURITrait, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURI, PathURIRef,
-    PathURITrait, URIOrRefTrait, URIParseError, URIRef, URIWithLanguage,
+    debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURI, PathURIRef, PathURITrait, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URIWithLanguage
 };
 use const_format::concatcp;
 use std::fmt::Display;
@@ -31,6 +29,15 @@ impl DocumentURI {
         let lang = Language::from_rel_path(name);
         name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
         (a % path) & (name,lang)
+    }
+
+    #[must_use]
+    pub fn module_uri_from(&self,name:&str) -> ModuleURI {
+        if self.name.last_name().as_ref() == name {
+            self.as_path().owned() | name
+        } else {
+            (self.as_path().owned() / self.name().last_name().as_ref()) | name
+        }
     }
 }
 impl Display for DocumentURI {

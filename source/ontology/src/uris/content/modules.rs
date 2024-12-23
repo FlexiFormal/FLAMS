@@ -14,7 +14,6 @@ use super::ContentURI;
 pub struct ModuleURI {
     pub(in crate::uris) path: PathURI,
     pub(in crate::uris) name: Name,
-    pub(in crate::uris) language: Language,
 }
 
 impl ModuleURI {
@@ -34,12 +33,10 @@ impl Display for ModuleURI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}&{}={}&{}={}",
+            "{}&{}={}",
             self.path,
             Self::SEPARATOR,
-            self.name,
-            Language::SEPARATOR,
-            self.language
+            self.name
         )
     }
 }
@@ -140,20 +137,6 @@ impl URIOrRefTrait for ModuleURI {
         URIRef::Content(self.as_content())
     }
 }
-impl URIWithLanguage for ModuleURI {
-    #[inline]
-    fn language(&self) -> Language {
-        self.language
-    }
-}
-/*
-impl URIWithLanguage for ModuleURIRef<'_> {
-    #[inline]
-    fn language(&self) -> Language {
-        self.language
-    }
-}
-*/
 impl ContentURITrait for ModuleURI {
     #[inline]
     fn as_content(&self) -> ContentURIRef {
@@ -204,42 +187,13 @@ impl ModuleURI {
                         })
                     },
                     |name| {
-                        let Some(l) = split.next() else {
-                            return Err(URIParseError::MissingPartFor {
-                                uri_kind,
-                                part: "language",
-                                original: s.to_string(),
-                            });
-                        };
-                        l.strip_prefix(concatcp!(Language::SEPARATOR, "="))
-                            .map_or_else(
-                                || {
-                                    Err(URIParseError::MissingPartFor {
-                                        uri_kind,
-                                        part: "language",
-                                        original: s.to_string(),
-                                    })
-                                },
-                                |lang| {
-                                    let language = lang.parse().map_or_else(
-                                        |()| {
-                                            Err(URIParseError::InvalidLanguage {
-                                                uri_kind,
-                                                original: s.to_string(),
-                                            })
-                                        },
-                                        Ok,
-                                    )?;
-                                    f(
-                                        Self {
-                                            path,
-                                            name: name.into(),
-                                            language,
-                                        },
-                                        split,
-                                    )
-                                },
-                            )
+                        f(
+                            Self {
+                                path,
+                                name: name.into(),
+                            },
+                            split,
+                        )
                     },
                 )
         })

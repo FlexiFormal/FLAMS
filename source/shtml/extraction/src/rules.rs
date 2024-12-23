@@ -135,7 +135,7 @@ pub mod rules {
     use immt_ontology::content::declarations::symbols::{ArgSpec, AssocType};
     use immt_ontology::narration::paragraphs::ParagraphKind;
     use immt_ontology::shtml::SHTMLKey;
-    use immt_ontology::uris::{DocumentElementURI, Name};
+    use immt_ontology::uris::{DocumentElementURI, ModuleURI, Name, SymbolURI};
     use immt_utils::vecmap::VecSet;
     use smallvec::SmallVec;
     use crate::errors::SHTMLError;
@@ -215,7 +215,7 @@ pub mod rules {
         }
 
         pub(crate) fn module<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
-            let uri = err!(extractor,attrs.take_module_uri(SHTMLKey::Module, extractor));
+            let uri = err!(extractor,attrs.take_new_module_uri(SHTMLKey::Module, extractor));
             let _ = attrs.take_language(SHTMLKey::Language);
             let meta = opt!(extractor,attrs.take_module_uri(SHTMLKey::Metatheory, extractor));
             let signature = opt!(extractor,attrs.take_language(SHTMLKey::Signature));
@@ -228,10 +228,7 @@ pub mod rules {
         }
 
         pub(crate) fn mathstructure<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
-            let Some(uri) = err!(extractor,attrs.take_module_uri(SHTMLKey::MathStructure, extractor)).into_symbol() else {
-                extractor.add_error(SHTMLError::InvalidKeyFor(SHTMLKey::MathStructure.as_str(), None));
-                return None
-            };
+            let uri = err!(extractor,attrs.take_new_symbol_uri(SHTMLKey::MathStructure, extractor));
             let macroname = attrs.remove(SHTMLKey::Macroname).map(|s| Into::<String>::into(s).into_boxed_str());
             extractor.open_content(uri.clone().into_module());
             extractor.open_narrative(None);
@@ -241,18 +238,7 @@ pub mod rules {
         }
 
         pub(crate) fn morphism<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
-            let Some(v) = attrs.remove(SHTMLKey::Morphism) else {
-                extractor.add_error(SHTMLError::InvalidKeyFor(SHTMLKey::Morphism.as_str(), None));
-                return None
-            };
-            let Some(uri) = extractor.get_sym_uri_as_mod(v.as_ref()) else {
-                extractor.add_error(SHTMLError::InvalidKeyFor(SHTMLKey::Morphism.as_str(), Some(v)));
-                return None
-            };
-            let Some(uri) = uri.into_symbol() else {
-                extractor.add_error(SHTMLError::InvalidKeyFor(SHTMLKey::Morphism.as_str(), Some(v)));
-                return None
-            };
+            let uri = err!(extractor,attrs.take_new_symbol_uri(SHTMLKey::Morphism,extractor));
             let domain = err!(extractor,attrs.take_module_uri(SHTMLKey::MorphismDomain, extractor));
             let total = attrs.take_bool(SHTMLKey::MorphismTotal);
             extractor.open_content(uri.clone().into_module());
@@ -303,7 +289,7 @@ pub mod rules {
             let mut fors = VecSet::new();
             if let Some(f) = attrs.get(SHTMLKey::Fors) {
                 for f in f.as_ref().split(',') {
-                    if let Some(f) = extractor.get_sym_uri(f.trim()) {
+                    if let Ok(f) = f.trim().parse() {
                         fors.insert(f);
                     } else {
                         extractor.add_error(SHTMLError::InvalidKeyFor(SHTMLKey::Fors.as_str(), Some(f.trim().into())));
@@ -362,7 +348,7 @@ pub mod rules {
         }
 
         pub(crate) fn symdecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
-            let uri = err!(extractor,attrs.get_symbol_uri(SHTMLKey::Symdecl,extractor));
+            let uri = err!(extractor,attrs.get_new_symbol_uri(SHTMLKey::Symdecl,extractor));
             let role = opt!(extractor,attrs.get_typed(SHTMLKey::Role, 
                 |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
             )).unwrap_or_default();
@@ -528,9 +514,9 @@ pub mod rules {
                 },
                 Some(v) => {
                     let v = v.as_ref();
-                    extractor.get_sym_uri(v).map_or_else(
-                        || extractor.get_mod_uri(v).map_or_else(
-                              || DocumentElementURI::from_str(v).map_or_else(
+                    v.parse::<SymbolURI>().ok().map_or_else(
+                        || v.parse::<ModuleURI>().map_or_else(
+                              |_| DocumentElementURI::from_str(v).map_or_else(
                                 |_| {
                                             if v.contains('?') {
                                                 tracing::warn!("Suspicious variable name containing '?': {v}");
@@ -551,7 +537,7 @@ pub mod rules {
                 OpenTermKind::OMA
             });
             let term = match (kind,head) {
-                (OpenTermKind::OMID,VarOrSym::S(uri))
+                (OpenTermKind::OMID|OpenTermKind::OMV,VarOrSym::S(uri))
                     => OpenTerm::Symref { uri, notation },
                 (OpenTermKind::OMID|OpenTermKind::OMV,VarOrSym::V(name))
                     => OpenTerm::Varref { name, notation },
