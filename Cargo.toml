@@ -6,6 +6,7 @@ members = [
   "source/stex","source/shtml/system",
   "source/shtml/viewer", 
   "source/shtml/viewer-components", "source/shtml/extraction",
+  "source/git"
   #"source/vscode"
   ]
 resolver = "2"
@@ -65,6 +66,7 @@ immt-utils = { path = "source/utils",version="0.0.1" }
 immt-ontology = { path = "source/ontology",version="0.0.1" }
 immt-system = { path = "source/system",version="0.0.1" }
 immt-lsp = { path = "source/lsp",version="0.0.1" }
+immt-git = { path = "source/git",version="0.0.1" }
 immt-web-utils = { path = "source/web-utils",version="0.0.1" }
 # shtml-viewer = { path = "shtml/viewer",version="0.0.1" }
 shtml-extraction = { path = "source/shtml/extraction",version="0.0.1" }
@@ -125,9 +127,13 @@ html5ever = "0.29.0"
 async-lsp = {version="0.2",features=["tokio","async-io"]}
 futures = {version="0.3"}
 
+# reqwest = {version="0",features=["json"]}
+
 image = { version = "0.25"}
 webp = { version= "0.3"}
 dashmap = { version = "6" }
+
+gitlab = { version="0"}
 
 # leptos
 leptos = { version = "0.7", features=["nightly"]}
@@ -160,7 +166,6 @@ tracing-wasm = "0.2"
 wasm-bindgen = "=0.2.99"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
-#reqwest = {version="0.12",features=["json"]}
 gloo-storage = "0.3"
 web-sys = { version = "0.3" }
 tsify-next = {version="0.5", features = ["js"]}

@@ -478,7 +478,7 @@ pub async fn uris(uris:Vec<String>) -> Result<Vec<Option<URI>>,ServerFnError<Str
     }
     let lang = Language::from_rel_path(m);
     m = m.strip_suffix(&format!(".{lang}")).unwrap_or(m);
-    Some((a % path) & (m,lang))
+    ((a % path).ok()? & (m,lang)).ok()
   }
 
   fn get_mod_uri(pathstr: &str) -> Option<ModuleURI> {
@@ -492,7 +492,7 @@ pub async fn uris(uris:Vec<String>) -> Result<Vec<Option<URI>>,ServerFnError<Str
     if path.starts_with('/') {
         path = &path[1..];
     }
-    Some((a % path) | m)
+    ((a % path).ok()? | m).ok()
   }
 
   fn get_sym_uri(pathstr: &str) -> Option<SymbolURI> {
@@ -501,14 +501,14 @@ pub async fn uris(uris:Vec<String>) -> Result<Vec<Option<URI>>,ServerFnError<Str
             let (m,_) = m.rsplit_once('?')?;
             let (a,b) = s.rsplit_once(']')?;
             let am = get_mod_uri(a)?;
-            let name = am.name().clone() / b;
+            let name = (am.name().clone() / b).ok()?;
             let module = get_mod_uri(m)?;
             return Some(module | name)
         }
         None => pathstr.rsplit_once('?')?
     };
     let m = get_mod_uri(m)?;
-    Some(m | s)
+    (m | s).ok()
   }
 
   Ok(

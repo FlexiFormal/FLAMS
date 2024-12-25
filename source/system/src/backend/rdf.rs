@@ -440,7 +440,7 @@ impl RDFStore {
             .strip_suffix(&format!(".{language}"))
             .unwrap_or(parentname);
         let pathstr = parent.parent()?.to_str()?.strip_prefix(out.to_str()?)?;
-        let doc = (a.owned() % pathstr) & (parentname, language);
+        let doc = ((a.owned() % pathstr).ok()? & (parentname, language)).ok()?;
         Some(doc.to_iri())
     }
 }

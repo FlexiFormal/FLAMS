@@ -35,7 +35,7 @@ pub use content::{
     modules::{ModuleURI,ModuleURIRef}, symbols::{SymbolURI,SymbolURIRef}, ContentURI, ContentURIRef, ContentURITrait,
 };
 pub use errors::URIParseError;
-pub use name::{Name, NameStep};
+pub use name::{Name, NameStep,InvalidURICharacter};
 pub use narrative::{
     document_elements::DocumentElementURI, documents::DocumentURI, NarrativeURI, NarrativeURIRef,
     NarrativeURITrait,
@@ -305,16 +305,16 @@ impl URI {
     fn parse_content(
         s: &str,
         module: &str,
-        path: impl FnOnce() -> PathURI,
+        path: impl FnOnce() -> Result<PathURI,URIParseError>,
         mut split: Split<char>,
     ) -> Result<ContentURI, URIParseError> {
-        let name = move || module.into();
-        let module = move || ModuleURI {
-            path: path(),
-            name: name(),
-        };
+        let name = move || module.parse();
+        let module = move || Ok::<_,URIParseError>(ModuleURI {
+            path: path()?,
+            name: name()?,
+        });
         let Some(next) = split.next() else {
-            return Ok(ContentURI::Module(module()));
+            return Ok(ContentURI::Module(module()?));
         };
         next.strip_prefix(concatcp!(SymbolURI::SEPARATOR, "="))
             .map_or_else(
@@ -331,8 +331,8 @@ impl URI {
                         })
                     } else {
                         Ok(ContentURI::Symbol(SymbolURI {
-                            module: module(),
-                            name: symbol.into(),
+                            module: module()?,
+                            name: symbol.parse()?,
                         }))
                     }
                 },
@@ -342,17 +342,17 @@ impl URI {
         s: &str,
         document: &str,
         (language, next): (Language, Option<&str>),
-        path: impl FnOnce() -> PathURI,
+        path: impl FnOnce() -> Result<PathURI,URIParseError>,
         mut split: Split<char>,
     ) -> Result<NarrativeURI, URIParseError> {
-        let name = move || document.into();
-        let document = move || DocumentURI {
-            path: path(),
-            name: name(),
+        let name = move || document.parse();
+        let document = move || Ok::<_,URIParseError>(DocumentURI {
+            path: path()?,
+            name: name()?,
             language,
-        };
+        });
         let Some(next) = next else {
-            return Ok(NarrativeURI::Document(document()));
+            return Ok(NarrativeURI::Document(document()?));
         };
         next.strip_prefix(concatcp!(DocumentElementURI::SEPARATOR, "="))
             .map_or_else(
@@ -369,8 +369,8 @@ impl URI {
                         })
                     } else {
                         Ok(NarrativeURI::Element(DocumentElementURI {
-                            document: document(),
-                            name: element.into(),
+                            document: document()?,
+                            name: element.parse()?,
                         }))
                     }
                 },
@@ -406,10 +406,10 @@ impl FromStr for URI {
                     let (path, next) =
                         if let Some(path) = next.strip_prefix(concatcp!(PathURI::SEPARATOR, "=")) {
                             (
-                                Either::Left(|| PathURI {
+                                Either::Left(|| Ok(PathURI {
                                     archive: archive(),
-                                    path: Some(path.into()),
-                                }),
+                                    path: Some(path.parse()?),
+                                })),
                                 split.next(),
                             )
                         } else {
@@ -423,10 +423,10 @@ impl FromStr for URI {
                         };
                     let path = move || match path {
                         Either::Left(p) => p(),
-                        Either::Right(p) => p(),
+                        Either::Right(p) => Ok(p()),
                     };
                     let Some(next) = next else {
-                        return Ok(Self::Path(path()));
+                        return Ok(Self::Path(path()?));
                     };
                     let mut language = || {
                         split.next().map_or_else(

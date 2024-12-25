@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::fmt::Display;
 
+use super::name::InvalidURICharacter;
+
 #[derive(Debug)]
 pub enum URIParseError {
     TooManyPartsFor {
@@ -20,6 +22,13 @@ pub enum URIParseError {
         original: String,
     },
     URLParseError(url::ParseError),
+    InvalidCharacter(InvalidURICharacter)
+}
+impl From<InvalidURICharacter> for URIParseError {
+    #[inline]
+    fn from(e: InvalidURICharacter) -> Self {
+        Self::InvalidCharacter(e)
+    }
 }
 impl From<url::ParseError> for URIParseError {
     #[inline]
@@ -51,6 +60,9 @@ impl Display for URIParseError {
             }
             Self::URLParseError(_) => {
                 write!(f, "invalid URL")
+            }
+            Self::InvalidCharacter(e) => {
+                Display::fmt(e, f)
             }
         }
     }

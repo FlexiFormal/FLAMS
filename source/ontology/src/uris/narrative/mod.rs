@@ -211,7 +211,7 @@ impl FromStr for NarrativeURI {
                     |name| {
                         Ok(Self::Element(DocumentElementURI {
                             document,
-                            name: name.into(),
+                            name: name.parse()?,
                         }))
                     },
                 )

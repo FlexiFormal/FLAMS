@@ -151,7 +151,7 @@ pub mod rules {
     pub type SV<E:SHTMLExtractor> = SmallVec<SHTMLExtractionRule<E>,4>;
 
     lazy_static::lazy_static! {
-        static ref ERROR : Name = "ERROR".into();
+        static ref ERROR : Name = "ERROR".parse().unwrap_or_else(|_| unreachable!());
     }
 
     macro_rules! err {
@@ -258,7 +258,13 @@ pub mod rules {
         pub(crate) fn section<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let lvl = err!(extractor,attrs.get_section_level(SHTMLKey::Section));
             let id = attrs.get_id(extractor,Cow::Borrowed("section"));
-            let uri = extractor.get_narrative_uri() & &*id;
+            let uri = match extractor.get_narrative_uri() & &*id {
+                Ok(uri) => uri,
+                Err(e) => {
+                    extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                    return None
+                }
+            };
             extractor.open_section(uri.clone());
             Some(OpenSHTMLElement::Section { lvl, uri })
         }
@@ -284,7 +290,13 @@ pub mod rules {
 
         fn do_paragraph<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,kind:ParagraphKind) -> Option<OpenSHTMLElement> {
             let id = attrs.get_id(extractor,Cow::Borrowed(kind.as_str()));
-            let uri = extractor.get_narrative_uri() & &*id;
+            let uri = match extractor.get_narrative_uri() & &*id {
+                Ok(uri) => uri,
+                Err(e) => {
+                    extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                    return None
+                }
+            };
             let inline = attrs.get_bool(SHTMLKey::Inline);
             let mut fors = VecSet::new();
             if let Some(f) = attrs.get(SHTMLKey::Fors) {
@@ -316,7 +328,13 @@ pub mod rules {
                 |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
             )).unwrap_or_default();
             let id = attrs.get_id(extractor,Cow::Borrowed("exercise"));
-            let uri = extractor.get_narrative_uri() & &*id;
+            let uri = match extractor.get_narrative_uri() & &*id {
+                Ok(uri) => uri,
+                Err(e) => {
+                    extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                    return None
+                }
+            };
             let _ = attrs.take_language(SHTMLKey::Language);
             let autogradable = attrs.get_bool(SHTMLKey::Autogradable);
             let points = attrs.get(SHTMLKey::ProblemPoints)
@@ -505,7 +523,13 @@ pub mod rules {
         pub(crate) fn term<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             if extractor.in_notation() { return None }
             let notation = attrs.value(SHTMLKey::NotationId.attr_name()).map(|n|
-                n.as_ref().into()
+                match n.as_ref().parse::<Name>() {
+                    Ok(n) => n,
+                    Err(e) => {
+                        extractor.add_error(SHTMLError::InvalidURI(n.into()));
+                        ERROR.clone()
+                    }
+                }
             );
             let head = match attrs.value(SHTMLKey::Head.attr_name()) {
                 None => {
@@ -521,13 +545,19 @@ pub mod rules {
                                             if v.contains('?') {
                                                 tracing::warn!("Suspicious variable name containing '?': {v}");
                                             }
-                                            VarOrSym::V(PreVar::Unresolved(v.into()))
+                                            match v.parse() {
+                                                Ok(v) => Some(VarOrSym::V(PreVar::Unresolved(v))),
+                                                Err(e) => {
+                                                    extractor.add_error(SHTMLError::InvalidURI(v.to_string()));
+                                                    None
+                                                }
+                                            }
                                         },
-                                        |d| VarOrSym::V(PreVar::Resolved(d))
+                                        |d| Some(VarOrSym::V(PreVar::Resolved(d)))
                               ),
-                            |m| VarOrSym::S(m.into())),
-                        |s| VarOrSym::S(s.into())
-                    )
+                            |m| Some(VarOrSym::S(m.into()))),
+                        |s| Some(VarOrSym::S(s.into()))
+                    )?
                 }
             };
             //attrs.set(tagstrings::HEAD,&head.to_string());

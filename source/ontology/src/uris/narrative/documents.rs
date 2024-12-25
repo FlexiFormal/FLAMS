@@ -1,4 +1,5 @@
 use crate::languages::Language;
+use crate::uris::name::InvalidURICharacter;
 use crate::uris::{
     debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURI, PathURIRef, PathURITrait, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URIWithLanguage
 };
@@ -28,15 +29,15 @@ impl DocumentURI {
         name = name.rsplit_once('.').map_or_else(|| name,|(name,_)| name);
         let lang = Language::from_rel_path(name);
         name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
-        (a % path) & (name,lang)
+        ((a % path).unwrap_or_else(|_| unreachable!()) & (name,lang)).unwrap_or_else(|_| unreachable!())
     }
 
     #[must_use]
-    pub fn module_uri_from(&self,name:&str) -> ModuleURI {
+    pub fn module_uri_from(&self,name:&str) -> Result<ModuleURI,InvalidURICharacter> {
         if self.name.last_name().as_ref() == name {
             self.as_path().owned() | name
         } else {
-            (self.as_path().owned() / self.name().last_name().as_ref()) | name
+            (self.as_path().owned() / self.name().last_name().as_ref())? | name
         }
     }
 }
@@ -140,7 +141,7 @@ impl DocumentURI {
                                     f(
                                         Self {
                                             path,
-                                            name: name.into(),
+                                            name: name.parse()?,
                                             language,
                                         },
                                         split,

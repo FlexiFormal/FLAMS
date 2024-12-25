@@ -187,7 +187,13 @@ impl OpenSHTMLElement {
             }
             Self::OpenTerm { term, is_top:true } => {
                 let term = term.close(extractor);
-                let uri = extractor.get_narrative_uri() & &*extractor.new_id(Cow::Borrowed("term"));
+                let uri = match extractor.get_narrative_uri() & &*extractor.new_id(Cow::Borrowed("term")) {
+                    Ok(uri) => uri,
+                    Err(e) => {
+                        extractor.add_error(SHTMLError::InvalidURI("(should be impossible)".to_string()));
+                        return None
+                    }
+                };
                 extractor.set_in_term(false);
                 if !matches!(term,Term::OMID{..}|Term::OMV{..}) {
                     extractor.add_document_element(DocumentElement::TopTerm { uri, term });
@@ -246,7 +252,13 @@ impl OpenSHTMLElement {
                     ]);
                 }
                 extractor.add_document_element(DocumentElement::DocumentReference { 
-                    id: top & &*id,
+                    id: match top & &*id {
+                        Ok(id) => id,
+                        Err(e) => {
+                            extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                            return None
+                        }
+                    },
                     range: node.range(), 
                     target: uri
                 });
@@ -593,7 +605,13 @@ impl OpenSHTMLElement {
             extractor.add_error(SHTMLError::NotInNarrative);
             return
         }
-        let uri = extractor.get_narrative_uri() & &*id;
+        let uri = match extractor.get_narrative_uri() & &*id {
+            Ok(uri) => uri,
+            Err(e) => {
+                extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                return
+            }
+        };
         let notation = extractor.add_resource(&Notation {
             attribute_index,
             is_text,

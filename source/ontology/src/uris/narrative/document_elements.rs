@@ -123,7 +123,7 @@ impl DocumentElementURI {
                         f(
                             Self {
                                 document,
-                                name: name.into(),
+                                name: name.parse()?,
                             },
                             split,
                         )

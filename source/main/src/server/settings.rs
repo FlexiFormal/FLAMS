@@ -1,9 +1,10 @@
 use clap::Parser;
+use immt_utils::settings::GitlabSettings;
 use core::panic;
 use immt_system::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
 use std::path::{Path, PathBuf};
 
-#[derive(Parser)]
+#[derive(Parser,Debug)]
 #[command(propagate_version = true, version, about, long_about = Some(
 "iMᴍᴛ - Generic knowledge management system for flexiformal knowledge\n\
 --------------------------------------------------------------------\n\
@@ -50,6 +51,12 @@ struct Cli {
     /// enter lsp mode
     #[arg(long)]
     pub(crate) lsp: bool,
+
+    #[arg(long)]
+    pub(crate) gitlab_url: Option<String>,
+
+    #[arg(long)]
+    pub(crate) gitlab_token: Option<String>
 }
 impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
     fn from(cli: Cli) -> Self {
@@ -73,6 +80,10 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
             buildqueue: BuildQueueSettings {
                 num_threads: cli.threads,
             },
+            gitlab: GitlabSettings {
+                url: cli.gitlab_url.map(Into::into),
+                token: cli.gitlab_token.map(Into::into)
+            },
             lsp: cli.lsp
         };
         (cli.config_file, settings)
@@ -80,7 +91,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
 }
 
 impl Cli {
-    #[must_use]
+    #[must_use]#[inline]
     fn get() -> Self {
         Self::parse()
     }

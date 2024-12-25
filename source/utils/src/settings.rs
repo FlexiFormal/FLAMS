@@ -15,7 +15,9 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
     pub buildqueue: BuildQueueSettings,
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub lsp:bool
+    pub lsp:bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub gitlab: GitlabSettings,
 }
 impl Add for SettingsSpec {
     type Output = Self;
@@ -30,6 +32,7 @@ impl Add for SettingsSpec {
             server: self.server + rhs.server,
             log_dir: self.log_dir.or(rhs.log_dir),
             buildqueue: self.buildqueue + rhs.buildqueue,
+            gitlab:self.gitlab + rhs.gitlab,
             lsp:self.lsp || rhs.lsp
         }
     }
@@ -45,6 +48,7 @@ impl AddAssign for SettingsSpec {
         if self.log_dir.is_none() {
             self.log_dir = rhs.log_dir;
         }
+        self.gitlab += rhs.gitlab;
         self.buildqueue += rhs.buildqueue;
     }
 }
@@ -79,6 +83,14 @@ impl SettingsSpec {
                 num_threads: std::env::var("IMMT_NUM_THREADS")
                     .ok()
                     .and_then(|s| s.parse().ok()),
+            },
+            gitlab: GitlabSettings {
+                url:std::env::var("IMMT_GITLAB_URL")
+                    .ok()
+                    .map(Into::into),
+                token:std::env::var("IMMT_GITLAB_TOKEN")
+                    .ok()
+                    .map(Into::into),
             },
             lsp:false
         }
@@ -143,6 +155,35 @@ impl AddAssign for BuildQueueSettings {
     fn add_assign(&mut self, rhs: Self) {
         if self.num_threads.is_none() {
             self.num_threads = rhs.num_threads;
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GitlabSettings {
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub url: Option<Box<str>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub token: Option<Box<str>>,
+}
+
+impl Add for GitlabSettings {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            url: self.url.or(rhs.url),
+            token: self.token.or(rhs.token),
+        }
+    }
+}
+impl AddAssign for GitlabSettings {
+    fn add_assign(&mut self, rhs: Self) {
+        if self.url.is_none() {
+            self.url = rhs.url;
+        }
+        if self.token.is_none() {
+            self.token = rhs.token;
         }
     }
 }

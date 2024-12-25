@@ -683,10 +683,10 @@ pub trait Attributes {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
-        Ok(extractor.get_content_uri().map_or_else(
+        extractor.get_content_uri().map_or_else(
             || extractor.get_narrative_uri().document().module_uri_from(v.as_ref()),
             |m| m.clone() / v.as_ref()
-        ))
+        ).map_err(|_| SHTMLError::InvalidURI(v.into()))
     }
 
     /// #### Errors
@@ -699,10 +699,10 @@ pub trait Attributes {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
         };
-        Ok(extractor.get_content_uri().map_or_else(
+        extractor.get_content_uri().map_or_else(
             || extractor.get_narrative_uri().document().module_uri_from(&v),
             |m| m.clone() / v.as_str()
-        ))
+        ).map_err(|_| SHTMLError::InvalidURI(v.into()))
     }
 
     /// #### Errors
@@ -718,7 +718,7 @@ pub trait Attributes {
         let Some(module) = extractor.get_content_uri() else {
             return Err(SHTMLError::NotInContent)
         };
-        Ok(module.owned() | v.as_ref())
+        (module.owned() | v.as_ref()).map_err(|_| SHTMLError::InvalidURI(v.into()))
     }
 
     /// #### Errors
@@ -734,7 +734,7 @@ pub trait Attributes {
         let Some(module) = extractor.get_content_uri() else {
             return Err(SHTMLError::NotInContent)
         };
-        Ok(module.owned() | v.as_str())
+        (module.owned() | v.as_str()).map_err(|_| SHTMLError::InvalidURI(v.into()))
     }
 
     /// #### Errors

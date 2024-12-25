@@ -97,9 +97,24 @@ impl Debug for Name {
         Display::fmt(self, f)
     }
 }
+
+pub const INVALID_CHARS: [char;3] = ['\\','{','}'];
+
+#[derive(Debug)]
+pub struct InvalidURICharacter;
+impl Display for InvalidURICharacter {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid URI character")
+    }
+}
+
 impl FromStr for Name {
-    type Err = Infallible;
+    type Err = InvalidURICharacter;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.contains(INVALID_CHARS) {
+            return Err(InvalidURICharacter);
+        }
         let steps = s
             .split('/')
             .map(|s| NameStep(NAMES.lock().get_or_intern(s)));
@@ -107,17 +122,24 @@ impl FromStr for Name {
     }
 }
 
-#[allow(clippy::fallible_impl_from)]
-impl<A: AsRef<str>> From<A> for Name {
+impl From<NameStep> for Name {
     #[inline]
-    fn from(s: A) -> Self {
-        s.as_ref().parse().unwrap()
+    fn from(step: NameStep) -> Self {
+        Self(SmallVec::from([step]))
     }
 }
 
+/*impl<A: AsRef<str>> TryFrom<A> for Name {
+    type Error = InvalidURICharacter;
+    #[inline]
+    fn try_from(s: A) -> Result<Self,InvalidURICharacter> {
+        s.as_ref().parse()
+    }
+}*/
+
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use super::{Name, NameStep};
+    use super::{InvalidURICharacter, Name, NameStep};
     use crate::uris::serialize;
     serialize!(as NameStep);
     impl<'de> serde::Deserialize<'de> for NameStep {
@@ -130,7 +152,7 @@ mod serde_impl {
     impl<'de> serde::Deserialize<'de> for Name {
         fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             let s = String::deserialize(deserializer)?;
-            Ok(s.parse().unwrap_or_else(|_| unreachable!()))
+            s.parse().map_err(|e:InvalidURICharacter| serde::de::Error::custom(e.to_string()))
         }
     }
 }

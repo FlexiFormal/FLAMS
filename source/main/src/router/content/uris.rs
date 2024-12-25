@@ -339,22 +339,22 @@ pub fn get_doc_uri(a:&ArchiveId,p:Option<Name>,l:Language,d:Name) -> Option<Docu
 pub fn get_elem_uri(a:&ArchiveId,p:Option<String>,l:Option<Language>,d:&str,e:&str) -> Option<DocumentElementURI> {
   get_doc_uri(
     a,
-    p.map(|p| Name::from_str(&p).unwrap_or_else(|_| unreachable!())),
+    p.map(|p| Name::from_str(&p).ok())?,
     l.unwrap_or_default(),
-    Name::from_str(d).unwrap_or_else(|_| unreachable!())
-  ).map(|d| d & e)
+    Name::from_str(d).ok()?
+  ).and_then(|d| (d & e).ok())
 }
 
 #[cfg(feature="ssr")]
 #[allow(clippy::many_single_char_names)]
 pub fn get_mod_uri(a:&ArchiveId,p:Option<String>,m:&str) -> Option<ModuleURI> {
   let a = GlobalBackend::get().with_archive(a, |a| a.map(|a| a.uri().owned()))?;
-  let p = if let Some(p) = p { a % Name::from_str(&p).unwrap_or_else(|_| unreachable!())} else { a.into()};
-  Some(p | m)
+  let p = if let Some(p) = p { a % Name::from_str(&p).ok()?} else { a.into()};
+  (p | m).ok()
 }
 
 #[cfg(feature="ssr")]
 #[allow(clippy::many_single_char_names)]
 pub fn get_sym_uri(a:&ArchiveId,p:Option<String>,m:&str,s:&str) -> Option<SymbolURI> {
-  get_mod_uri(a,p,m).map(|m| m | s)
+  get_mod_uri(a,p,m).and_then(|m| (m | s).ok())
 }

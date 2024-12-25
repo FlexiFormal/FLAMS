@@ -38,6 +38,7 @@ ssr = [
   "dep:argon2",
   "dep:http",
   "immt-web-utils/ssr",
+  "dep:immt-git",
   "shtml-viewer-components/ssr",
   "dep:immt-lsp",
   "dep:tracing-subscriber",
@@ -90,10 +91,11 @@ paste = {workspace=true}
 lazy_static = {workspace=true}
 
 # ssr
-immt-system = {workspace=true,features=["tokio"],optional=true}
+immt-system = {workspace=true,features=["gitlab"],optional=true}
 immt-lsp = {workspace=true,optional=true, features=["ws"]}
 immt-stex = {workspace=true,optional=true}
 immt-shtml = {workspace=true,optional=true}
+immt-git = {workspace=true,optional=true,features=["gitlab"]}
 tex_engine = {workspace=true,optional=true}
 
 tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}

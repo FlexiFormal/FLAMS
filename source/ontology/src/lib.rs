@@ -212,11 +212,11 @@ pub mod metatheory {
     use lazy_static::lazy_static;
     lazy_static! {
         pub static ref URI: ModuleURI =
-            BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf" | "Metatheory";
-        pub static ref FIELD_PROJECTION: SymbolURI = URI.clone() | "record field";
-        pub static ref OF_TYPE: SymbolURI = URI.clone() | "of type";
-        pub static ref SEQUENCE_EXPRESSION: SymbolURI = URI.clone() | "sequence expression";
-        pub(crate) static ref NOTATION_DUMMY: SymbolURI = URI.clone() | "notation dummy";
+            ((BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf") | "Metatheory").unwrap_or_else(|_| unreachable!());
+        pub static ref FIELD_PROJECTION: SymbolURI = (URI.clone() | "record field").unwrap_or_else(|_| unreachable!());
+        pub static ref OF_TYPE: SymbolURI = (URI.clone() | "of type").unwrap_or_else(|_| unreachable!());
+        pub static ref SEQUENCE_EXPRESSION: SymbolURI = (URI.clone() | "sequence expression").unwrap_or_else(|_| unreachable!());
+        pub(crate) static ref NOTATION_DUMMY: SymbolURI = (URI.clone() | "notation dummy").unwrap_or_else(|_| unreachable!());
     }
 }
 

@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use immt_utils::settings::GitlabSettings;
 pub use immt_utils::settings::{SettingsSpec,BuildQueueSettings, ServerSettings};
 use lazy_static::lazy_static;
 
@@ -20,6 +21,8 @@ pub struct Settings {
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
     pub num_threads: u8,
+    pub gitlab_url: Option<Box<str>>,
+    pub gitlab_token: Option<Box<str>>,
     pub lsp:bool
 }
 impl Debug for Settings {
@@ -55,6 +58,10 @@ impl Settings {
             },
             buildqueue: BuildQueueSettings {
                 num_threads: Some(self.num_threads),
+            },
+            gitlab: GitlabSettings {
+                url: self.gitlab_url.clone(),
+                token: self.gitlab_token.clone(),
             },
             lsp: self.lsp
         };
@@ -108,7 +115,9 @@ impl From<SettingsSpec> for Settings {
                     1
                 }
             }),
-            lsp: spec.lsp
+            lsp: spec.lsp,
+            gitlab_token: spec.gitlab.token,
+            gitlab_url: spec.gitlab.url
         }
     }
 }

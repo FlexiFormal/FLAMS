@@ -221,7 +221,7 @@ impl FromStr for ContentURI {
                     |name| {
                         Ok(Self::Symbol(SymbolURI {
                             module,
-                            name: name.into(),
+                            name: name.parse()?,
                         }))
                     },
                 )

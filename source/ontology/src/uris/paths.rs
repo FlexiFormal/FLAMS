@@ -146,7 +146,7 @@ impl PathURI {
                     (
                         Self {
                             archive,
-                            path: Some(p.into()),
+                            path: Some(p.parse()?),
                         },
                         None,
                     )

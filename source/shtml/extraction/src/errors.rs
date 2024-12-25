@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use immt_ontology::{shtml::SHTMLKey, uris::Name};
+use immt_ontology::{shtml::SHTMLKey, uris::{InvalidURICharacter, Name}};
 use crate::open::terms::{OpenTermKind, VarOrSym};
 
 #[derive(Clone,Debug)]
@@ -18,6 +18,7 @@ pub enum SHTMLError {
     NotInParagraph,
     NotInExercise,
     InvalidKey,
+    InvalidURI(String),
     IncompleteArgs
 }
 
@@ -41,7 +42,16 @@ impl Display for SHTMLError {
             Self::NotInParagraph => f.write_str("unbalanced logical paragraph"),
             Self::NotInExercise => f.write_str("unbalanced exercise element"),
             Self::InvalidKey => f.write_str("invalid key in shtml element"),
-            Self::IncompleteArgs => f.write_str("incomplete argument list")
+            Self::IncompleteArgs => f.write_str("incomplete argument list"),
+            Self::InvalidURI(s) => write!(f,"invalid URI: {s}"),
         }
     }
 }
+/*
+impl From<InvalidURICharacter> for SHTMLError {
+    #[inline]
+    fn from(e: InvalidURICharacter) -> Self {
+        Self::InvalidURI
+    }
+}
+     */

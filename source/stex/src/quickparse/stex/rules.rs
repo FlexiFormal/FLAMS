@@ -4,7 +4,7 @@
 
 use std::{borrow::Cow, collections::hash_map::Entry, path::{Path, PathBuf}};
 
-use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
+use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
 use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
 use immt_utils::{parsing::ParseStr, sourcerefs::{SourcePos, SourceRange}, vecmap::VecSet};
 use smallvec::SmallVec;
@@ -113,15 +113,15 @@ impl ModuleReference {
       |(path,name)| (Some(path),name)
     );
     let path = path.map_or_else(
-      || self.uri.archive_uri().owned().into(),
+      || Ok(self.uri.archive_uri().owned().into()),
       |path| self.uri.archive_uri().owned() % path
-    );
+    ).ok()?;
     let (name,language) = name.rsplit_once('.')
       .map_or((name,Language::default()), |(name,l)| (name,l.parse().unwrap_or_default()));
     let name = if name.ends_with(Into::<&str>::into(language)) && name.len() > 3 {
       &name[..name.len() - 3]
     } else {name};
-    Some(path & (name,language))
+    (path & (name,language)).ok()
   }
 }
 
@@ -298,7 +298,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
       last
     } else {path};
 
-    let uri = (PathURI::from(archive) / path) | module;
+    let uri = ((PathURI::from(archive) / path).ok()? | module).ok()?;
 
     let p = basepath.join(last).join(format!("{top_module}.{}.tex",self.language));
     if p.exists() {
@@ -652,11 +652,18 @@ stex!(p => symdecl('*'?star){name:name}[args:Map] => {
     }}
 
     let (state,groups) = p.split();
-    if let Some(uri) = state.add_rule(|m| {
-      let uri = m.clone() | name.1;
+    let Ok(fname) : Result<Name,_> = name.1.parse() else {
+      p.tokenizer.problem(name.2.start, format!("Invalid uri segment {}",name.1));
+      return MacroResult::Simple(symdecl)
+    };
+    let has_df = df.is_some();
+    let has_tp = tp.is_some();
+    let mn = macroname.as_ref();
+    if let Some(uri) = state.add_rule(move |m| {
+      let uri = m.clone() | fname;
       SymbolRule {
-        uri,macroname:macroname.as_ref().map(|s| s.clone().into()),
-        has_df:df.is_some(),has_tp:tp.is_some(),argnum
+        uri,macroname:mn.map(|s| s.clone().into()),
+        has_df,has_tp,argnum
       }
     },groups,symdecl.range) {
       let name_ranges = name.0.map(|r| (r,name.2));
@@ -686,6 +693,10 @@ stex!(p => @begin{smodule}([opt]{name:name}){
         m.clone() / name.0
       } else {
         p.state.doc_uri.module_uri_from(name.0)
+      };
+      let Ok(uri) = uri else {
+        p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.1));
+        return ()
       };
       let meta_theory = match opt.get(&"meta").map(|v| v.val) {
         None => Some((ModuleReference{ 
@@ -736,6 +747,10 @@ stex!(p => @begin{smodule_deps}([opt]{name:name}){
         m.clone() / name.0
       } else {
         p.state.doc_uri.module_uri_from(name.0)
+      };
+      let Ok(uri) = uri else {
+        p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.1));
+        return ()
       };
       let meta_theory = match opt.get(&"meta").map(|v| v.val) {
         None => Some((ModuleReference{ 

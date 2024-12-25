@@ -16,6 +16,11 @@ use backend::GlobalBackend;
 
 static LOG : std::sync::OnceLock<logging::LogStore> = std::sync::OnceLock::new();
 
+#[cfg(feature="gitlab")]
+lazy_static::lazy_static!{
+    pub static ref GITLAB: immt_git::gl::GLInstance = immt_git::gl::GLInstance::default();
+}
+
 pub fn initialize(settings: SettingsSpec) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
@@ -27,6 +32,15 @@ pub fn initialize(settings: SettingsSpec) {
                 tracing_appender::rolling::Rotation::NEVER
             )
         });
+    }
+    #[cfg(feature="gitlab")]
+    {
+        match (&settings.gitlab_url,&settings.gitlab_token) {
+            (Some(url),Some(token)) => {
+                GITLAB.clone().load(url,token.to_string());
+            }
+            _ => ()
+        }
     }
     let backend = GlobalBackend::get().manager();
     let mhs = &*settings.mathhubs;

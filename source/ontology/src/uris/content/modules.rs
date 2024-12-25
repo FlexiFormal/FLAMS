@@ -190,7 +190,7 @@ impl ModuleURI {
                         f(
                             Self {
                                 path,
-                                name: name.into(),
+                                name: name.parse()?,
                             },
                             split,
                         )

@@ -20,7 +20,6 @@ use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, 
 
 #[component]
 pub fn Main() -> impl IntoView {
-    use crate::users::Login;
     provide_meta_context();
     #[cfg(feature = "ssr")]
     provide_context(immt_web_utils::CssIds::default());
@@ -30,7 +29,7 @@ pub fn Main() -> impl IntoView {
             let params = use_query_map();
             let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
             //provide_context(UseLSP(params.with_untracked(|p|)))
-            view!{<Login><Routes fallback=|| NotFound()>
+            view!{<Routes fallback=|| NotFound()>
                 <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
                     <ParentRoute path=StaticSegment("/dashboard") view=Dashboard>
                         <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
@@ -49,17 +48,18 @@ pub fn Main() -> impl IntoView {
                         }}
                     />
                 </ParentRoute>
-            </Routes></Login>}
+            </Routes>}
         }</Router>
     }
 }
 
 #[component(transparent)]
 fn Top() -> impl IntoView {
+    use crate::users::Login;
     //use immt_web_utils::components::Themer;
     //use shtml_viewer_components::SHTMLGlobalSetup;
     //use crate::users::Login;
-    view!{<leptos_router::components::Outlet/>}
+    view!{<Login><leptos_router::components::Outlet/></Login>}
 }
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]

@@ -161,7 +161,7 @@ impl SymbolURI {
                         f(
                             Self {
                                 module,
-                                name: name.into(),
+                                name: name.parse()?,
                             },
                             split,
                         )

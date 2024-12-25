@@ -9,3 +9,7 @@
 
 [buildqueue]
 # num_threads=6
+
+[gitlab]
+# url = "https://gl.mathhub.info"
+# token = "SECRET_TOKEN"
