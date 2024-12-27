@@ -4,7 +4,7 @@ use super::{
     ModuleLike, ModuleTrait,
 };
 use crate::{
-    languages::Language, uris::{ContentURIRef, ModuleURI, SymbolURI, URIWithLanguage}, Checked, CheckingState, MaybeResolved, Resolvable, Unchecked
+    languages::Language, uris::{ContentURIRef, ModuleURI, SymbolURI}, Checked, CheckingState, MaybeResolved, Resolvable, Unchecked
 };
 use triomphe::Arc;
 

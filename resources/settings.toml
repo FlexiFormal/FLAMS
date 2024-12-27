@@ -13,3 +13,5 @@
 [gitlab]
 # url = "https://gl.mathhub.info"
 # token = "SECRET_TOKEN"
+# app_id = "APP_ID"
+# app_secret = "APP_SECRET"
