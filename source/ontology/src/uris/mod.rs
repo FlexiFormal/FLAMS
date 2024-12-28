@@ -108,7 +108,7 @@ macro_rules! common {
         #[cfg(feature = "rdf")]
         fn to_iri(&self) -> crate::rdf::NamedNode {
             crate::rdf::NamedNode::new(immt_utils::escaping::IRI_ESCAPE.escape(self).to_string())
-                .unwrap_or_else(|e| panic!("{e}:{self}"))
+                .unwrap_or_else(|_| unreachable!())
         }
         fn base(&self) -> &BaseURI;
         fn as_uri(&self) -> URIRef;

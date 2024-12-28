@@ -407,7 +407,11 @@ pub mod rules {
             let symbol = if let Ok(s) = attrs.get_symbol_uri(SHTMLKey::Notation, extractor) {
                 VarOrSym::S(s.into())
             } else if let Some(v) = attrs.get(SHTMLKey::Notation) {
-                VarOrSym::V(PreVar::Unresolved(v.as_ref().parse().unwrap_or_else(|_| unreachable!())))
+                let Ok(n) = v.as_ref().parse() else {
+                    extractor.add_error(SHTMLError::InvalidURI(v.into()));
+                    return None
+                };
+                VarOrSym::V(PreVar::Unresolved(n))
             } else {
                 extractor.add_error(SHTMLError::InvalidKeyFor(SHTMLKey::Notation.as_str(), None));
                 return None
