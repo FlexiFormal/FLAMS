@@ -91,6 +91,12 @@ impl SettingsSpec {
                 token:std::env::var("IMMT_GITLAB_TOKEN")
                     .ok()
                     .map(Into::into),
+                app_id:std::env::var("IMMT_GITLAB_APP_ID")
+                    .ok().map(Into::into),
+                app_secret:std::env::var("IMMT_GITLAB_APP_SECRET")
+                    .ok().map(Into::into),
+                redirect_url:std::env::var("IMMT_GITLAB_REDIRECT_URL")
+                    .ok().map(Into::into),
             },
             lsp:false
         }
@@ -166,6 +172,12 @@ pub struct GitlabSettings {
     pub url: Option<Box<str>>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub token: Option<Box<str>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub app_id: Option<Box<str>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub app_secret: Option<Box<str>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub redirect_url: Option<Box<str>>,
 }
 
 impl Add for GitlabSettings {
@@ -174,6 +186,9 @@ impl Add for GitlabSettings {
         Self {
             url: self.url.or(rhs.url),
             token: self.token.or(rhs.token),
+            app_id: self.app_id.or(rhs.app_id),
+            app_secret: self.app_secret.or(rhs.app_secret),
+            redirect_url: self.redirect_url.or(rhs.redirect_url),
         }
     }
 }
@@ -184,6 +199,15 @@ impl AddAssign for GitlabSettings {
         }
         if self.token.is_none() {
             self.token = rhs.token;
+        }
+        if self.app_id.is_none() {
+            self.app_id = rhs.app_id;
+        }
+        if self.app_secret.is_none() {
+            self.app_secret = rhs.app_secret;
+        }
+        if self.redirect_url.is_none() {
+            self.redirect_url = rhs.redirect_url;
         }
     }
 }

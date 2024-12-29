@@ -56,7 +56,13 @@ struct Cli {
     pub(crate) gitlab_url: Option<String>,
 
     #[arg(long)]
-    pub(crate) gitlab_token: Option<String>
+    pub(crate) gitlab_token: Option<String>,
+    #[arg(long)]
+    pub(crate) gitlab_app_id: Option<String>,
+    #[arg(long)]
+    pub(crate) gitlab_app_secret: Option<String>,
+    #[arg(long)]
+    pub(crate) gitlab_redirect_url: Option<String>
 }
 impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
     fn from(cli: Cli) -> Self {
@@ -82,7 +88,10 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
             },
             gitlab: GitlabSettings {
                 url: cli.gitlab_url.map(Into::into),
-                token: cli.gitlab_token.map(Into::into)
+                token: cli.gitlab_token.map(Into::into),
+                app_id: cli.gitlab_app_id.map(Into::into),
+                app_secret: cli.gitlab_app_secret.map(Into::into),
+                redirect_url: cli.gitlab_redirect_url.map(Into::into),
             },
             lsp: cli.lsp
         };

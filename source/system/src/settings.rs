@@ -23,6 +23,9 @@ pub struct Settings {
     pub num_threads: u8,
     pub gitlab_url: Option<Box<str>>,
     pub gitlab_token: Option<Box<str>>,
+    pub gitlab_app_id:Option<Box<str>>,
+    pub gitlab_app_secret:Option<Box<str>>,
+    pub gitlab_redirect_url:Option<Box<str>>,
     pub lsp:bool
 }
 impl Debug for Settings {
@@ -62,6 +65,9 @@ impl Settings {
             gitlab: GitlabSettings {
                 url: self.gitlab_url.clone(),
                 token: self.gitlab_token.clone(),
+                app_id: self.gitlab_app_id.clone(),
+                app_secret: self.gitlab_app_secret.clone(),
+                redirect_url: self.gitlab_redirect_url.clone(),
             },
             lsp: self.lsp
         };
@@ -117,7 +123,10 @@ impl From<SettingsSpec> for Settings {
             }),
             lsp: spec.lsp,
             gitlab_token: spec.gitlab.token,
-            gitlab_url: spec.gitlab.url
+            gitlab_url: spec.gitlab.url,
+            gitlab_app_id: spec.gitlab.app_id,
+            gitlab_app_secret: spec.gitlab.app_secret,
+            gitlab_redirect_url: spec.gitlab.redirect_url
         }
     }
 }

@@ -47,7 +47,8 @@ ssr = [
   "dep:tex_engine",
   "dep:image",
   "dep:webp",
-  "dep:dashmap"
+  "dep:dashmap",
+  "dep:oauth2","dep:reqwest"
 ]
 hydrate = [
   "dep:console_error_panic_hook",
@@ -98,6 +99,8 @@ immt-shtml = {workspace=true,optional=true}
 immt-git = {workspace=true,optional=true,features=["gitlab"]}
 tex_engine = {workspace=true,optional=true}
 
+oauth2 = {workspace=true,optional=true}
+reqwest = {workspace=true,optional=true}
 tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}
 toml = {workspace = true,optional=true}
 color-eyre = {workspace = true,optional=true}

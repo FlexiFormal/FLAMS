@@ -23,6 +23,9 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize,bool),ServerFnError<Lo
           if let Some(tk) = spec.gitlab.token.as_mut() {
               *tk = "********".to_string().into_boxed_str();
           }
+          if let Some(secret) = spec.gitlab.app_secret.as_mut() {
+              *secret = "********".to_string().into_boxed_str();
+          }
           let rels = GlobalBackend::get().triple_store().num_relations();
           Ok((spec,rels,immt_system::GITLAB.has_loaded()))
       },

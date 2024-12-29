@@ -2,14 +2,15 @@ pub mod db;
 pub mod settings;
 pub mod lsp;
 pub mod img;
+mod gl;
 
 use std::future::IntoFuture;
 
-use axum::{error_handling::HandleErrorLayer, extract, response::IntoResponse, Router};
+use axum::{error_handling::HandleErrorLayer, extract, response::{IntoResponse, Redirect, Response}, Router};
 use axum_login::AuthManagerLayerBuilder;
 use axum_macros::FromRef;
 use db::DBBackend;
-use http::Uri;
+use http::{StatusCode, Uri};
 use immt_system::settings::Settings;
 use leptos::prelude::*;
 use leptos_axum::{generate_route_list, LeptosRoutes};
@@ -44,11 +45,20 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
 
     let span = tracing::info_span!(target:"server","request");
 
-    let app = axum::Router::<ServerState>::new()
+    let has_gl = state.oauth.is_some();
+
+    let mut app = axum::Router::<ServerState>::new()
         .route("/ws/log",axum::routing::get(crate::router::logging::LogSocket::ws_handler))
         .route("/ws/queue",axum::routing::get(crate::router::buildqueue::QueueSocket::ws_handler))
         .route("/ws/lsp",axum::routing::get(crate::server::lsp::register))
-        .route(
+        ;
+
+    if has_gl {
+        app = app.route("/gl_login", axum::routing::get(gl::gl_login))
+            .route("/gitlab_login",axum::routing::get(gl::gl_cont));
+    }
+
+    let app = app.route(
             "/api/*fn_name",
             axum::routing::get(server_fn_handle).post(server_fn_handle),
         )
@@ -159,16 +169,19 @@ pub(crate) struct ServerState {
     options: LeptosOptions,
     db: DBBackend,
     pub(crate) images: img::ImageStore,
+    pub(crate) oauth: Option<gl::OAuthConfig>
 }
 
 impl ServerState {
     async fn new() -> Self {
         let leptos_cfg = Self::setup_leptos();
+        let oauth = gl::OAuthConfig::new(&leptos_cfg);
         let db = DBBackend::new().in_current_span().await;
         Self {
             options: leptos_cfg.leptos_options,
             db,
             images: img::ImageStore::default(),
+            oauth
         }
     }
 
