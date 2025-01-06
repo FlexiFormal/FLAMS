@@ -3,7 +3,7 @@ mod cache;
 mod docfile;
 pub mod rdf;
 
-use archives::{manager::ArchiveManager, source_files::FileState, Archive, ArchiveOrGroup, ArchiveTree, LocalArchive};
+use archives::{manager::ArchiveManager, source_files::FileState, Archive, ArchiveGroup, ArchiveOrGroup, ArchiveTree, LocalArchive};
 use cache::BackendCache;
 use docfile::PreDocFile;
 use immt_ontology::{
@@ -15,7 +15,7 @@ use immt_ontology::{
         ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIWithLanguage
     }, Checked, DocumentRange, LocalBackend, Unchecked
 };
-use immt_utils::{prelude::HMap, triomphe, vecmap::{VecMap, VecSet}, CSS};
+use immt_utils::{prelude::{HMap, TreeLike}, triomphe, vecmap::{VecMap, VecSet}, CSS};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use rdf::RDFStore;
@@ -790,6 +790,15 @@ pub enum SandboxedRepository {
         remote:Box<str>
     }
 }
+impl SandboxedRepository {
+    #[inline]
+    pub fn id(&self) -> &ArchiveId {
+        match self {
+            SandboxedRepository::Copy(id) => id,
+            SandboxedRepository::Git{id,..} => id
+        }
+    }
+}
 
 #[derive(Debug)]
 struct SandboxedBackendI {
@@ -820,23 +829,6 @@ impl SandboxedBackend {
     #[inline]
     pub fn path_for(&self,id:&ArchiveId) -> PathBuf {
         self.0.path.join(id.as_ref())
-    }
-    #[inline]
-    pub fn add(&self,sb:SandboxedRepository) {
-        let id = match &sb {
-            SandboxedRepository::Copy(id) => id,
-            SandboxedRepository::Git { id,.. } => id
-        };
-        let mut repos = self.0.repos.write();
-        if repos.iter().any(|r| match r {
-            SandboxedRepository::Copy(a) => a == id,
-            SandboxedRepository::Git { id:bid,.. } => bid == id,
-        }) {
-            tracing::error!(target:"sandbox","Already exists: {id}");
-            return
-        }
-        repos.push(sb);
-        self.0.manager.load(&self.0.path);
     }
 
     pub fn new(name:&str) -> Self {
@@ -909,18 +901,32 @@ impl SandboxedBackend {
         count
     }
 
-    #[tracing::instrument(level = "info",
-        target = "sandbox",
-        name = "require"
-    )]
-    pub fn require(&self,id:&ArchiveId) {
-        // TODO this can be massively optimized
+    #[inline]
+    pub fn add(&self,sb:SandboxedRepository,then:impl FnOnce()) {
         let mut repos = self.0.repos.write();
-        if repos.iter().any(|r| match r {
-            SandboxedRepository::Copy(a) => a == id,
-            SandboxedRepository::Git { id:bid,.. } => bid == id,
-        }) { return }
-        //repos.push(SandboxedRepository::Copy(id.clone()));
+        let id = sb.id();
+        if let Some(i) = repos.iter().position(|r| r.id() == id) {
+            repos.remove(i);
+        }
+        self.require_meta_infs(id,&mut *repos,
+            |_,_| {},
+            |_,_,_| {
+                tracing::error!(target:"sandbox","A group with id {id} already exists!");
+            },
+            || {}
+        );
+        repos.push(sb);
+        drop(repos);
+        then();
+        self.0.manager.load(&self.0.path);
+    }
+
+    fn require_meta_infs(&self,id:&ArchiveId,repos: &mut Vec<SandboxedRepository>,
+        then:impl FnOnce(&LocalArchive,&mut Vec<SandboxedRepository>),
+        group:impl FnOnce(&ArchiveGroup,&ArchiveTree,&mut Vec<SandboxedRepository>),
+        else_:impl FnOnce()
+    ) {
+        if repos.iter().any(|r| r.id() == id) { return }
         let backend = GlobalBackend::get();
         backend.manager().with_tree(move |t| {
             let mut steps = id.steps();
@@ -931,48 +937,30 @@ impl SandboxedBackend {
             let mut ls = &t.groups;
             loop {
                 let Some(a) = ls.iter().find(|a| a.id().last_name() == current) else {
-                    tracing::error!("could not find archive {id}");
-                    return
+                    else_(); return
                 };
                 match a {
                     ArchiveOrGroup::Archive(a) => {
                         if steps.next().is_some() {
-                            tracing::error!("could not find archive {id}");
-                            return
+                            else_(); return
                         }
-                        if !repos.iter().any(|r| match r {
-                            SandboxedRepository::Copy(a) => a == id,
-                            SandboxedRepository::Git { id:bid,.. } => bid == id,
-                        }) { 
-                            repos.push(SandboxedRepository::Copy(id.clone()));
-                            self.copy_archive(t, id);
-                        }
-                        break
+                        let Some(Archive::Local(a)) = t.get(id) else {
+                            else_(); return
+                        };
+                        then(a,repos); return
                     }
                     ArchiveOrGroup::Group(g) => {
                         let Some(next) = steps.next() else {
-                            for a in t.archives.iter() {
-                                if let Archive::Local(a) = a {
-                                    if a.id().as_ref().starts_with(id.as_ref()) {
-                                        if !repos.iter().any(|r| match r {
-                                            SandboxedRepository::Copy(b) => b == a.id(),
-                                            SandboxedRepository::Git { id,.. } => id == a.id(),
-                                        }) {
-                                            repos.push(SandboxedRepository::Copy(a.id().clone()));
-                                            self.copy_archive(t, &a.id());
-                                        }
-                                    }
-                                }
-                            }
-                            break
+                            group(g,t,repos);
+                            return
                         };
                         if let Some(ArchiveOrGroup::Archive(a)) = g.children.iter().find(|a| a.id().last_name() == "meta-inf") {
-                            if !repos.iter().any(|r| match r {
-                                SandboxedRepository::Copy(b) => b == a,
-                                SandboxedRepository::Git { id:bid,.. } => bid == a,
-                            }) {
-                                repos.push(SandboxedRepository::Copy(a.clone()));
-                                self.copy_archive(t, &a);
+                            if !repos.iter().any(|r| r.id() == a) {
+                                let Some(Archive::Local(a)) = t.get(id) else {
+                                    else_(); return
+                                };
+                                repos.push(SandboxedRepository::Copy(a.id().clone()));
+                                self.copy_archive(a);
                             }
                         }
                         current = next;
@@ -981,19 +969,44 @@ impl SandboxedBackend {
                 }
             }
         });
+    }
+
+    #[tracing::instrument(level = "info",
+        target = "sandbox",
+        name = "require"
+    )]
+    pub fn require(&self,id:&ArchiveId) {
+        // TODO this can be massively optimized
+        let mut repos = self.0.repos.write();
+        self.require_meta_infs(id, &mut *repos, 
+            |a,repos| {
+                repos.push(SandboxedRepository::Copy(id.clone()));
+                self.copy_archive(a);
+            }, 
+            |g,t,repos| for a in g.dfs().unwrap_or_else(|| unreachable!()) {
+                if let ArchiveOrGroup::Archive(a) = a {
+                    if let Some(Archive::Local(a)) = t.get(id) {
+                        if !repos.iter().any(|r| r.id() == a.id()) {
+                            if let Some(Archive::Local(a)) = t.get(id) {
+                                repos.push(SandboxedRepository::Copy(a.id().clone()));
+                                self.copy_archive(a);
+                            };
+                        }
+                    }
+                }
+            },
+            || tracing::error!("could not find archive {id}")
+        );
+        drop(repos);
         self.0.manager.load(&self.0.path);
     }
 
-    fn copy_archive(&self,tree:&ArchiveTree, id:&ArchiveId) {
-        let Some(Archive::Local(a)) = tree.get(id) else {
-            tracing::error!("could not find local archive {id}");
-            return
-        };
+    fn copy_archive(&self,a:&LocalArchive) {
         let path = a.path();
-        let target = self.0.path.join(id.as_ref());
-        tracing::info!("copying archive {id} to {}",target.display());
+        let target = self.0.path.join(a.id().as_ref());
+        tracing::info!("copying archive {} to {}",a.id(),target.display());
         if let Err(e) = immt_utils::fs::copy_dir_all(path,&target) {
-            tracing::error!("could not copy archive {id}: {e}");
+            tracing::error!("could not copy archive {}: {e}",a.id());
         }
     }
 }

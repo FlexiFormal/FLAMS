@@ -154,6 +154,9 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
       };
       Ok((sb.clone(),sb.path_for(&archive)))
     })?;
+    if path.exists() {
+      let _ = std::fs::remove_dir_all(&path);
+    }
     let commit = if has_release {
       let repo = immt_git::repos::GitRepo::clone_from_oauth(&secret, &url, "release", &path, true)
         .map_err(|e| e.to_string())?;
@@ -170,7 +173,7 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
       repo.mark_managed().map_err(|e| e.to_string())?;
       commit
     };
-    backend.add(SandboxedRepository::Git { id:archive.clone(),commit,branch:branch.into(),remote:url.into() });
+    backend.add(SandboxedRepository::Git { id:archive.clone(),commit,branch:branch.into(),remote:url.into() },|| ());
     let formats = backend.with_archive(&archive, |a| {
       let Some(Archive::Local(a)) = a else {
         return Err("Archive not found".to_string())
