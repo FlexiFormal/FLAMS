@@ -15,7 +15,7 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize,bool),ServerFnError<Lo
   use immt_system::backend::GlobalBackend;
   use crate::users::LoginState;
   match LoginState::get_server() {
-      LoginState::Admin | LoginState::NoAccounts => {
+      LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
           let mut spec = Settings::get().as_spec();
           if let Some(pw) = spec.server.admin_pwd.as_mut() {
               *pw = "********".to_string();
@@ -69,14 +69,18 @@ pub(super) fn Settings() -> impl IntoView {
             <td class="immt-settings-col"><b>"Log Directory"</b></td>
             <td class="immt-settings-col">{settings.log_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
           </tr>
+          <tr>
+            <td class="immt-settings-col"><b>"Database Path"</b></td>
+            <td class="immt-settings-col">{settings.database.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
+          </tr>
+          <tr>
+            <td class="immt-settings-col"><b>"Temp Directory"</b></td>
+            <td class="immt-settings-col">{settings.temp_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
+          </tr>
         <tr><td><h3>"Server"</h3></td><td/></tr>
           <tr>
             <td class="immt-settings-col"><b>"IP/Port"</b></td>
             <td class="immt-settings-col">{settings.server.ip.unwrap_or_else(|| unreachable!())}":"{settings.server.port}</td>
-          </tr>
-          <tr>
-            <td class="immt-settings-col"><b>"Database Path"</b></td>
-            <td class="immt-settings-col">{settings.server.database.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
           </tr>
           <tr>
             <td class="immt-settings-col"><b>"Gitlab URL"</b></td>

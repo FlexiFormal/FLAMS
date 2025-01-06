@@ -323,6 +323,10 @@ impl Default for RDFStore {
 
 impl RDFStore {
     #[inline]
+    pub fn clear(&self) {
+        self.store.clear();
+    }
+    #[inline]
     #[must_use]
     pub fn num_relations(&self) -> usize {
         self.store.len().unwrap_or_default()

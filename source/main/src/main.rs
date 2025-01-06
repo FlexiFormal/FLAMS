@@ -4,6 +4,11 @@ fn main() {
     use immt_system::settings::SettingsSpec;
     #[allow(unused_imports)]
     use immt_stex::STEX;
+    fn exit() {
+      immt_system::building::queue_manager::QueueManager::clear();
+      let _ = immt_system::settings::Settings::get().close();
+      std::process::exit(0)
+    }
 
     #[allow(clippy::redundant_pub_crate)]
     #[allow(clippy::future_not_send)]
@@ -16,12 +21,12 @@ fn main() {
             tokio::select! {
               () = immt::server::run(Some(sender)) => {},
               () = immt::server::lsp::lsp(recv) => {},
-              _ = tokio::signal::ctrl_c() => std::process::exit(0)
+              _ = tokio::signal::ctrl_c() => exit()
             }
         } else {
             tokio::select! {
               () = immt::server::run(None) => {},
-              _ = tokio::signal::ctrl_c() => std::process::exit(0)
+              _ = tokio::signal::ctrl_c() => exit()
             }
         }
     }

@@ -1,11 +1,12 @@
 # debug = true
 # log_dir = "~/.immt/log"
+# temp_dir = "~/.immt/tmp"
+# database = "~/.immt/users.sqlite"
 
 [server]
 # port = 3000
 # ip = "127.0.0.1"
 # admin_pwd = "foobar"
-# database = "~/.immt/users.sqlite"
 
 [buildqueue]
 # num_threads=6

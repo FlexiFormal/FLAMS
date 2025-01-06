@@ -13,6 +13,10 @@ impl BackendCache {
     const EVERY_MODS: usize = 500;
     const EVERY_DOCS: usize = 500;
 
+    pub fn clear(&mut self) {
+        self.modules.clear();self.documents.clear();
+    }
+
     #[inline]
     fn gc(&mut self) {
         if self.modules.len() >= Self::EVERY_MODS {

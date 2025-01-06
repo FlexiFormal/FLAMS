@@ -217,7 +217,7 @@ pub(crate) async fn register(
     Some(_) => match auth_session.user {
         None => LoginState::None,
         Some(crate::users::User{id:0,username,..}) if username == "admin" => LoginState::Admin,
-        Some(u) => LoginState::User(u.username)
+        Some(u) => LoginState::User{name:u.username,avatar:u.avatar_url.unwrap_or_default(),is_admin:u.is_admin}
     }
   };
   match login {

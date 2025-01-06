@@ -38,7 +38,6 @@ ssr = [
   "dep:argon2",
   "dep:http",
   "immt-web-utils/ssr",
-  "dep:immt-git",
   "shtml-viewer-components/ssr",
   "dep:immt-lsp",
   "dep:tracing-subscriber",
@@ -48,7 +47,8 @@ ssr = [
   "dep:image",
   "dep:webp",
   "dep:dashmap",
-  "dep:oauth2","dep:reqwest"
+  "immt-git/gitlab",
+  "immt-git/git2",
 ]
 hydrate = [
   "dep:console_error_panic_hook",
@@ -90,17 +90,15 @@ shtml-viewer-components = {workspace = true, features=["omdoc"]}
 leptos-dyn-dom = {workspace = true}
 paste = {workspace=true}
 lazy_static = {workspace=true}
+immt-git = {workspace=true}
 
 # ssr
 immt-system = {workspace=true,features=["gitlab"],optional=true}
 immt-lsp = {workspace=true,optional=true, features=["ws"]}
 immt-stex = {workspace=true,optional=true}
 immt-shtml = {workspace=true,optional=true}
-immt-git = {workspace=true,optional=true,features=["gitlab"]}
 tex_engine = {workspace=true,optional=true}
 
-oauth2 = {workspace=true,optional=true}
-reqwest = {workspace=true,optional=true}
 tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}
 toml = {workspace = true,optional=true}
 color-eyre = {workspace = true,optional=true}
@@ -111,7 +109,7 @@ rayon = {workspace=true,optional=true}
 sqlx = {workspace=true,optional = true}
 libsqlite3-sys = {workspace = true,optional=true}
 
-axum = {workspace=true,optional=true}
+axum = {workspace=true,optional=true}#,features=["macros"]}
 axum-macros = {workspace=true,optional = true}
 tower = {workspace = true,optional = true}
 tower-http = {workspace = true,optional = true}

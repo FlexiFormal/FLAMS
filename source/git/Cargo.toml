@@ -4,22 +4,28 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-gitlab = ["dep:gitlab","dep:tokio","dep:parking_lot","dep:serde"] #["dep:reqwest"]
+git2 = ["dep:git2","dep:walkdir","dep:immt-utils"]
+gitlab = ["dep:gitlab","dep:tokio","dep:parking_lot","dep:oauth2","dep:reqwest","dep:immt-ontology"]
 
 [dev-dependencies]
 #tracing-subscriber = {workspace=true}
 
 [dependencies]
 #immt-system = {workspace=true,features=["tokio"]}
-#immt-utils = {workspace=true, features=["rayon","async","serde"]}
-#immt-ontology = {workspace=true, features = ["rdf","serde"]}
+immt-utils = {workspace=true, optional=true}
+immt-ontology = {workspace=true,optional=true}
 
 tokio = {workspace=true, optional=true}#,features=["rt","io-util","sync","fs"],optional=true}
-serde = {workspace=true, optional=true}
-#reqwest = {workspace=true, optional=true}
+serde = {workspace=true}
+reqwest = {workspace=true, optional=true}
 gitlab = {workspace = true,optional = true}
 parking_lot = {workspace = true,optional=true}
+oauth2 = {workspace = true,optional=true}
+chrono = {workspace = true,features=["serde"]}
+git2 = {workspace = true, optional=true}
+walkdir = {workspace = true, optional=true}
 tracing = {workspace = true}
+smallvec = {workspace = true}
 
 [lints]
 workspace = true

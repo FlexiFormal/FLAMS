@@ -9,6 +9,7 @@ use crate::formats::{BuildArtifactTypeId, BuildTargetId};
 
 pub mod queue_manager;
 mod queue;
+pub use queue::QueueName;
 mod queueing;
 
 #[cfg(all(test,feature="tokio"))]

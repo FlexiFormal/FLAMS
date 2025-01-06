@@ -118,7 +118,7 @@ pub trait WebSocketServer<
       Some(_) => match auth_session.user {
           None => LoginState::None,
           Some(crate::users::User{id:0,username,..}) if username == "admin" => LoginState::Admin,
-          Some(u) => LoginState::User(u.username)
+          Some(u) => LoginState::User{name:u.username,avatar:u.avatar_url.unwrap_or_default(),is_admin:u.is_admin}
       }
     };
     Self::new(login,auth_session.backend).await.map_or_else(
@@ -188,10 +188,10 @@ pub trait WebSocket<
     #[cfg(feature="ssr")]
     #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
     fn force_start_server() {
-        let (signal_read,_) = signal(false);
-        let _res = Effect::new(move |_| {
-            let _ = signal_read.get();
-        });
+        //let (signal_read,_) = signal(false);
+        //let _res = Effect::new(move |_| {
+        //    let _ = signal_read.get();
+        //});
     }
 
     #[cfg(feature="hydrate")]
@@ -200,9 +200,9 @@ pub trait WebSocket<
       mut on_start:impl FnMut(Self) + 'static
     )
     where Self:WebSocketClient<ClientMsg,ServerMsg> {
-        let (signal_read,_) = signal(false);
+        //let (signal_read,_) = signal(false);
         let _res = Effect::new(move |_| {
-            let _ = signal_read.get();
+            //let _ = signal_read.get();
             if let Some(r) = Self::start(handle.clone()) {
                 on_start(r);
             }

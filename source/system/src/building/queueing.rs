@@ -13,16 +13,22 @@ impl Queue {
 
   #[allow(clippy::significant_drop_in_scrutinee)]
   pub(super) fn sort(map:&TaskMap,state:&mut RunningQueue) {
-    let RunningQueue {queue,done,blocked,..} = state;
+    let RunningQueue {queue,done,blocked,failed,..} = state;
     let mut tasks = map.map.values().cloned().collect::<Vec<_>>();
     let mut weak = true;
     while !tasks.is_empty() {
       let mut changed = false;
       for t in &tasks {
-        let Some(step) = t.steps().iter().find(|s| 
-          !matches!(*s.0.state.read(),TaskState::Done)
-        ) else {
-          done.push(t.clone());
+        let mut has_failed = false;
+        let Some(step) = t.steps().iter().find(|s| {
+          let state = s.0.state.read();
+          if *state == TaskState::Failed {
+            has_failed = true;
+            return false
+          }
+          !matches!(*state,TaskState::Done)
+        }) else {
+          if has_failed {failed.push(t.clone())} else {done.push(t.clone());}
           continue
         };
         let mut newstate = TaskState::Queued;
@@ -167,7 +173,12 @@ impl Queue {
           e.insert(BuildTask(task_i.clone()));
           BuildTask(task_i)
         }
-        Entry::Occupied(_) => continue,
+        Entry::Occupied(o) => {
+          for s in o.get().steps() {
+            *s.0.state.write() = TaskState::None;
+          }
+          continue
+        },
       };
       if let FormatOrTargets::Format(fmt) = target {
         (fmt.dependencies())(backend,&task);

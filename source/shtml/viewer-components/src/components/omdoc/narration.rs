@@ -4,7 +4,7 @@ use crate::{components::omdoc::Spec, SHTMLString, SHTMLStringMath};
 
 use super::{content::{ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec, SymbolSpec}, AnySpec};
 use leptos::{either::Either, prelude::*};
-use immt_web_utils::components::{Block,Collapsible,Header,HeaderLeft,HeaderRight};
+use immt_web_utils::components::{Block,LazyCollapsible,Header,HeaderLeft,HeaderRight};
 use thaw::{Text,TextTag};
 
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
@@ -278,7 +278,7 @@ pub(crate) fn doc_ref(uri:DocumentURI,title:Option<String>) -> impl IntoView {
   let name = title.unwrap_or_else(|| uri.name().last_name().to_string());
   let uricl = uri.clone();
   view!{//<Block>
-    <Collapsible lazy=true>
+    <LazyCollapsible>
       <Header slot><b>"Document "{super::doc_name(&uri, name)}</b></Header>
       <div style="padding-left:15px;">{
         let uri = uricl.clone();
@@ -292,7 +292,7 @@ pub(crate) fn doc_ref(uri:DocumentURI,title:Option<String>) -> impl IntoView {
           }}</Suspense>
         }
       }</div>
-    </Collapsible>
+    </LazyCollapsible>
     }//</Block>}
 }
 

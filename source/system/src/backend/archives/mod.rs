@@ -172,12 +172,12 @@ impl LocalArchive {
         }
     }
 
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,load:bool,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
         let out = rel_path.split('/').fold(self.out_dir().to_path_buf(),|p,s| p.join(s));
         let _ = std::fs::create_dir_all(&out);
         let out = out.join("index.ttl");
         relational.export(iter,&out,in_doc);
-        relational.load(&out,in_doc.to_iri());
+        if load {relational.load(&out,in_doc.to_iri());}
     }
 
     fn get_filepath(&self,
@@ -418,9 +418,9 @@ impl Archive {
         }
     }
 
-    pub fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    pub fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,load:bool,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
         match self {
-            Self::Local(a) => a.submit_triples(in_doc,rel_path,relational,iter)
+            Self::Local(a) => a.submit_triples(in_doc,rel_path,relational,load,iter)
         }
     }
 

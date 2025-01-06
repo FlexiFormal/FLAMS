@@ -1,9 +1,10 @@
 #![allow(clippy::must_use_candidate)]
 use crate::inject_css;
-use leptos::{either::Either, prelude::*};
+use leptos::prelude::*;
 
 #[component]
-pub fn Tree(children:Children) -> impl IntoView {
+pub fn Tree<T:IntoView+'static>(children:TypedChildren<T>) -> impl IntoView {
+    let children = children.into_inner();
     inject_css("immt-treeview",include_str!("trees.css"));
     view!{
         <ul class="immt-treeview">{children()}</ul>
@@ -11,30 +12,47 @@ pub fn Tree(children:Children) -> impl IntoView {
 }
 
 #[component]
-pub fn Leaf(children:Children) -> impl IntoView {
+pub fn Leaf<T:IntoView+'static>(children:TypedChildren<T>) -> impl IntoView {
+    let children = children.into_inner();
     view!{
         <li class="immt-treeview-li">{children()}</li>
     }
 }
 
 #[component]
-pub fn Subtree(
-    #[prop(optional)] lazy:bool,
+pub fn Subtree<T:IntoView+'static>(
     header:super::Header,
-    mut children:ChildrenFnMut
+    children:TypedChildren<T>
 ) -> impl IntoView {
+    let children = children.into_inner();
     let expanded = RwSignal::new(false);
     view!{
         <li class="immt-treeview-li"><details>
             <summary class="immt-treeview-summary" on:click=move |_| {expanded.update(|b| *b = !*b)}>
                 {(header.children)()}
             </summary>
-        <Tree>{if lazy {
-            Either::Left(move || if expanded.get() {
-                let children = children();
-                Some(children)
-            } else {None})
-        } else {Either::Right(children())}}</Tree>
+        <Tree>{children()}</Tree>
+        </details></li>
+    }
+}
+
+#[component]
+pub fn LazySubtree<T:IntoView+'static>(
+    header:super::Header,
+    children:TypedChildrenMut<T>
+) -> impl IntoView {
+    let mut children = children.into_inner();
+    let expanded = RwSignal::new(false);
+    view!{
+        <li class="immt-treeview-li"><details>
+            <summary class="immt-treeview-summary" on:click=move |_| {expanded.update(|b| *b = !*b)}>
+                {(header.children)()}
+            </summary>
+        <Tree>{move || if expanded.get() {
+            let children = children();
+            Some(children)
+        } else {None}
+        }</Tree>
         </details></li>
     }
 }

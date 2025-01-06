@@ -29,10 +29,31 @@ pub enum QueueState {
   Finished(FinishedQueue)
 }
 
+#[derive(Debug,Clone)]
+pub enum QueueName {
+  Global,
+  Sandbox {
+    name:std::sync::Arc<str>,
+    idx:u16
+  }
+}
+impl std::fmt::Display for QueueName {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Global => f.write_str("global"),
+      Self::Sandbox { name,idx } => {
+        f.write_str(name)?;
+        idx.fmt(f)
+      }
+    }
+  }
+}
+
+
 #[derive(Debug)]
 pub(super) struct QueueI {
   backend:AnyBackend,
-  name:std::sync::Arc<str>,
+  name:QueueName,
   pub id:QueueId,
   pub(super) map:RwLock<TaskMap>,
   sender:ChangeSender<QueueMessage>,
@@ -43,7 +64,7 @@ pub(super) struct QueueI {
 pub struct Queue(pub(super) Arc<QueueI>);
 
 impl Queue {
-  pub(crate) fn new(id:QueueId,name:std::sync::Arc<str>,backend:AnyBackend) -> Self {
+  pub(crate) fn new(id:QueueId,name:QueueName,backend:AnyBackend) -> Self {
     Self(Arc::new(QueueI { 
       id,name,
       backend,
@@ -51,6 +72,11 @@ impl Queue {
       sender:ChangeSender::new(32),
       state:RwLock::new(QueueState::Idle) 
     }))
+  }
+
+  #[inline]
+  pub fn backend(&self) -> &AnyBackend {
+    &self.0.backend
   }
 
   #[must_use]
@@ -77,7 +103,7 @@ impl Queue {
   }
 
   #[inline]#[must_use]
-  pub fn name(&self) -> &std::sync::Arc<str> { &self.0.name }
+  pub fn name(&self) -> &QueueName { &self.0.name }
 
   #[instrument(level = "info",
     target = "buildqueue",
@@ -90,7 +116,7 @@ impl Queue {
     if matches!(&*state,QueueState::Running(_)) { return }
     let map = self.0.map.read();
     let mut running = RunningQueue::new(map.total);
-    tracing::info_span!(target:"buildqueue","sorting...").in_scope(|| {
+    tracing::info_span!("sorting...").in_scope(|| {
       Self::sort(&map,&mut running);
       tracing::info!("Done");
     });
@@ -162,6 +188,9 @@ impl Queue {
     map.total = failed.iter().map(|t| t.0.steps.len()).sum();
     map.map.clear();
     for t in failed {
+      for s in t.0.steps.iter() {
+        *s.0.state.write() = TaskState::None;
+      }
       map.map.insert((t.archive().id().clone(),t.0.rel_path.clone()), 
         BuildTask(Arc::new(super::BuildTaskI {
           id: BuildTaskId(map.counter),
@@ -255,7 +284,7 @@ impl Queue {
     let state = &mut *self.0.state.write();
     if let QueueState::Finished(_) = state {
       *state = QueueState::Idle;
-      *self.0.map.write() = TaskMap::default();
+      //*self.0.map.write() = TaskMap::default();
     }
   }
 
@@ -266,6 +295,9 @@ impl Queue {
   )]
   pub fn enqueue_group(&self,id:&ArchiveId,target:FormatOrTargets,stale_only:bool) -> usize {
     self.maybe_restart();
+    if let AnyBackend::Sandbox(b) = &self.0.backend {
+      b.require(id);
+    }
     self.0.backend.with_archive_or_group(id, |g| match g {
       None => 0,
       Some(ArchiveOrGroup::Archive(id)) => {
@@ -316,6 +348,9 @@ impl Queue {
   )]
   pub fn enqueue_archive(&self,id:&ArchiveId,target:FormatOrTargets,stale_only:bool,rel_path:Option<&str>) -> usize {
     self.maybe_restart();
+    if let AnyBackend::Sandbox(b) = &self.0.backend {
+      b.require(id);
+    }
     self.0.backend.with_archive(id, |archive| {
       let Some(archive) = archive else { return 0 };
       archive.with_sources(|d| {

@@ -7,9 +7,7 @@ mod trees;
 mod drawer;
 mod spinner;
 
-#[cfg(feature="hydrate")]
 mod errors;
-#[cfg(feature="hydrate")]
 pub use errors::*;
 
 #[cfg(any(feature="ssr",feature="hydrate"))]
@@ -52,7 +50,21 @@ use crate::inject_css;
 
 #[component]
 pub fn Collapsible<Ch:IntoView+'static>(
-    #[prop(optional)] lazy:bool,
+    #[prop(optional)] header:Option<Header>,
+    children:TypedChildren<Ch>
+) -> impl IntoView {
+  let mut children = children.into_inner();
+    let expanded = RwSignal::new(false);
+    view!{<details>
+        <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
+            header.map(|c| (c.children)())
+        }</summary>
+        <div>{children()}</div>
+    </details>}
+}
+
+#[component]
+pub fn LazyCollapsible<Ch:IntoView+'static>(
     #[prop(optional)] header:Option<Header>,
     children:TypedChildrenMut<Ch>
 ) -> impl IntoView {
@@ -62,12 +74,9 @@ pub fn Collapsible<Ch:IntoView+'static>(
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
             header.map(|c| (c.children)())
         }</summary>
-        <div>{
-            if lazy { Either::Left(move || if expanded.get() {
-                Some(children())
-                } else { None }
-            )} else {Either::Right(children())}
-        }</div>
+        <div>{move || if expanded.get() {
+          Some(children())
+        } else { None }}</div>
     </details>}
 }
 

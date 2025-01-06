@@ -5,8 +5,10 @@ pub mod content;
 pub mod settings;
 pub mod backend;
 pub mod query;
+pub mod git;
 pub(crate) mod buildqueue;
 pub(crate) mod logging;
+pub(crate) mod users;
 
 use dashboard::{Dashboard,MainPage};
 
@@ -38,6 +40,8 @@ pub fn Main() -> impl IntoView {
                         <Route path=StaticSegment("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
                         <Route path=StaticSegment("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
                         <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
+                        <Route path=StaticSegment("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
+                        <Route path=StaticSegment("users") view=|| view!(<MainPage page=Page::Users/>)/>
                         <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
                         <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
                     </ParentRoute>
@@ -72,7 +76,9 @@ enum Page {
     Queue,
     Settings,
     Login,
-    Query
+    Query,
+    MyArchives,
+    Users
 }
 impl Page {
     pub const fn key(self) -> &'static str {
@@ -86,6 +92,8 @@ impl Page {
             Queue => "queue",
             Settings => "settings",
             Query => "query",
+            MyArchives => "archives",
+            Users => "users",
             NotFound => "notfound"
         }
     }

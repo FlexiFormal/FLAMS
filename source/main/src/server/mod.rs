@@ -2,7 +2,6 @@ pub mod db;
 pub mod settings;
 pub mod lsp;
 pub mod img;
-mod gl;
 
 use std::future::IntoFuture;
 
@@ -11,6 +10,7 @@ use axum_login::AuthManagerLayerBuilder;
 use axum_macros::FromRef;
 use db::DBBackend;
 use http::{StatusCode, Uri};
+use immt_git::gl::auth::GitLabOAuth;
 use immt_system::settings::Settings;
 use leptos::prelude::*;
 use leptos_axum::{generate_route_list, LeptosRoutes};
@@ -33,7 +33,8 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let session_layer =
         tower_sessions::SessionManagerLayer::new(session_store).with_expiry(Expiry::OnInactivity(
             tower_sessions::cookie::time::Duration::days(5),
-        ));
+        )).with_secure(false).with_same_site(tower_sessions::cookie::SameSite::Lax);
+
     let auth_layer = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_| async {
             http::StatusCode::BAD_REQUEST
@@ -46,7 +47,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let span = tracing::info_span!(target:"server","request");
 
     let has_gl = state.oauth.is_some();
-
+    
     let mut app = axum::Router::<ServerState>::new()
         .route("/ws/log",axum::routing::get(crate::router::logging::LogSocket::ws_handler))
         .route("/ws/queue",axum::routing::get(crate::router::buildqueue::QueueSocket::ws_handler))
@@ -54,8 +55,8 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         ;
 
     if has_gl {
-        app = app.route("/gl_login", axum::routing::get(gl::gl_login))
-            .route("/gitlab_login",axum::routing::get(gl::gl_cont));
+        app = app//.route("/gl_login", axum::routing::get(gl::gl_login))
+            .route("/gitlab_login",axum::routing::get(gl_cont));
     }
 
     let app = app.route(
@@ -76,7 +77,9 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         .layer(
             tower_http::cors::CorsLayer::new()
                 .allow_methods([http::Method::GET, http::Method::POST])
-                .allow_origin(tower_http::cors::Any),
+                .allow_origin(tower_http::cors::Any)
+                //.allow_credentials(true)
+                .allow_headers([http::header::COOKIE,http::header::SET_COOKIE]),
         )
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
@@ -105,15 +108,33 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     .unwrap_or_else(|e| panic!("{e}"));
 }
 
+async fn gl_cont(
+    extract::Query(params): extract::Query<immt_git::gl::auth::AuthRequest>,
+    extract::State(state):extract::State<ServerState>,
+    mut auth_session: axum_login::AuthSession<DBBackend>,
+) -> Result<axum::response::Response,StatusCode> {
+    let oauth = state.oauth.as_ref().unwrap_or_else(|| unreachable!());
+    let token = oauth.callback(params).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let gl = immt_system::GITLAB.get().await.unwrap_or_else(|| unreachable!());
+    let user = gl.get_oauth_user(&token).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Ok(Some(u)) = state.db.add_user(user, token.secret().clone()).await {
+        let _ = auth_session.login(&u).await;
+    }
+    Ok(Redirect::to("/dashboard").into_response())
+}
+
 async fn routes_handler(
     auth_session: axum_login::AuthSession<DBBackend>,
-    extract::State(ServerState { db, options,.. }): extract::State<ServerState>,
+    extract::State(ServerState { db, options,oauth,.. }): extract::State<ServerState>,
     request: http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     let handler = leptos_axum::render_app_to_stream_with_context(
         move || {
             provide_context(auth_session.clone());
             provide_context(db.clone());
+            provide_context(oauth.clone());
         },
         move || shell(options.clone()),
     );
@@ -122,7 +143,7 @@ async fn routes_handler(
 
 async fn server_fn_handle(
     auth_session: axum_login::AuthSession<DBBackend>,
-    extract::State(ServerState { db, options,.. }): extract::State<ServerState>,
+    extract::State(ServerState { db, options,oauth,.. }): extract::State<ServerState>,
     request: http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     leptos_axum::handle_server_fns_with_context(
@@ -130,6 +151,7 @@ async fn server_fn_handle(
             provide_context(auth_session.clone());
             provide_context(options.clone());
             provide_context(db.clone());
+            provide_context(oauth.clone());
         },
         request,
     )
@@ -169,13 +191,18 @@ pub(crate) struct ServerState {
     options: LeptosOptions,
     db: DBBackend,
     pub(crate) images: img::ImageStore,
-    pub(crate) oauth: Option<gl::OAuthConfig>
+    pub(crate) oauth: Option<GitLabOAuth>
 }
 
 impl ServerState {
     async fn new() -> Self {
         let leptos_cfg = Self::setup_leptos();
-        let oauth = gl::OAuthConfig::new(&leptos_cfg);
+        let redirect = Settings::get().gitlab_redirect_url.as_ref();
+        let oauth = if let Some(redirect) = redirect {
+            immt_system::GITLAB.get().await.and_then(|gl|
+                gl.new_oauth(&format!("{redirect}/gitlab_login")).ok()
+            )
+        } else { None };
         let db = DBBackend::new().in_current_span().await;
         Self {
             options: leptos_cfg.leptos_options,

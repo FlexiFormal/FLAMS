@@ -13,9 +13,13 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
     pub log_dir: Option<Box<Path>>,
     #[cfg_attr(feature = "serde", serde(default))]
+    pub temp_dir: Option<Box<Path>>,
+    #[cfg_attr(feature = "serde", serde(default))]
     pub buildqueue: BuildQueueSettings,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub lsp:bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub database: Option<Box<Path>>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub gitlab: GitlabSettings,
 }
@@ -31,6 +35,8 @@ impl Add for SettingsSpec {
             debug: self.debug.or(rhs.debug),
             server: self.server + rhs.server,
             log_dir: self.log_dir.or(rhs.log_dir),
+            temp_dir: self.temp_dir.or(rhs.temp_dir),
+            database: self.database.or(rhs.database),
             buildqueue: self.buildqueue + rhs.buildqueue,
             gitlab:self.gitlab + rhs.gitlab,
             lsp:self.lsp || rhs.lsp
@@ -47,6 +53,12 @@ impl AddAssign for SettingsSpec {
         self.server += rhs.server;
         if self.log_dir.is_none() {
             self.log_dir = rhs.log_dir;
+        }
+        if self.temp_dir.is_none() {
+            self.temp_dir = rhs.temp_dir;
+        }
+        if self.database.is_none() {
+            self.database = rhs.database;
         }
         self.gitlab += rhs.gitlab;
         self.buildqueue += rhs.buildqueue;
@@ -65,6 +77,12 @@ impl SettingsSpec {
             log_dir: std::env::var("IMMT_LOG_DIR")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
+            temp_dir: std::env::var("IMMT_TEMP_DIR")
+                .ok()
+                .map(|s| PathBuf::from(s).into_boxed_path()),
+            database: std::env::var("IMMT_DATABASE")
+                .ok()
+                .map(|s| PathBuf::from(s).into_boxed_path()),
             server: ServerSettings {
                 port: std::env::var("IMMT_PORT")
                     .ok()
@@ -75,9 +93,6 @@ impl SettingsSpec {
                         .expect("Could not parse IP address (environment variable IMMT_IP)")
                 }),
                 admin_pwd: std::env::var("IMMT_ADMIN_PWD").ok(),
-                database: std::env::var("IMMT_DATABASE")
-                    .ok()
-                    .map(|s| PathBuf::from(s).into_boxed_path()),
             },
             buildqueue: BuildQueueSettings {
                 num_threads: std::env::var("IMMT_NUM_THREADS")
@@ -112,8 +127,6 @@ pub struct ServerSettings {
     pub ip: Option<std::net::IpAddr>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub admin_pwd: Option<String>,
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub database: Option<Box<Path>>,
 }
 impl Add for ServerSettings {
     type Output = Self;
@@ -122,7 +135,6 @@ impl Add for ServerSettings {
             port: if self.port == 0 { rhs.port } else { self.port },
             ip: self.ip.or(rhs.ip),
             admin_pwd: self.admin_pwd.or(rhs.admin_pwd),
-            database: self.database.or(rhs.database),
         }
     }
 }
@@ -136,9 +148,6 @@ impl AddAssign for ServerSettings {
         }
         if self.admin_pwd.is_none() {
             self.admin_pwd = rhs.admin_pwd;
-        }
-        if self.database.is_none() {
-            self.database = rhs.database;
         }
     }
 }

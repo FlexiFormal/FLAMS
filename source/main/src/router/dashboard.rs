@@ -1,6 +1,6 @@
-use leptos::{either::{Either, EitherOf4, EitherOf7}, prelude::*};
+use leptos::{either::{Either, EitherOf4, EitherOf7, EitherOf9}, prelude::*};
 use leptos_meta::Stylesheet;
-use leptos_router::components::Outlet;
+use leptos_router::{components::{Outlet, Redirect}, hooks::use_navigate};
 use crate::users::{Login,LoginState};
 
 use super::Page;
@@ -16,14 +16,16 @@ use immt_web_utils::components::error_toast;
 
 fn do_main(page:Page) -> impl IntoView {
   let inner =  || match page {
-    Page::Home => EitherOf7::A(view!(<span>"TODO"</span>)),
-    Page::MathHub => EitherOf7::B(view!{<super::backend::ArchivesTop/>}),
+    Page::Home => EitherOf9::A(view!(<span>"TODO"</span>)),
+    Page::MathHub => EitherOf9::B(view!{<super::backend::ArchivesTop/>}),
     //Page::Graphs => view!{<GraphTest/>},
-    Page::Log => EitherOf7::C(view!{<super::logging::Logger/>}),
-    Page::Queue => EitherOf7::D(view!{<super::buildqueue::QueuesTop/>}),
-    Page::Query => EitherOf7::E(view!{<super::query::Query/>}),
-    Page::Settings => EitherOf7::F(view!{<super::settings::Settings/>}),
-    _ => EitherOf7::G(view!(<span>"TODO"</span>)),
+    Page::Log => EitherOf9::C(view!{<super::logging::Logger/>}),
+    Page::Queue => EitherOf9::D(view!{<super::buildqueue::QueuesTop/>}),
+    Page::Query => EitherOf9::E(view!{<super::query::Query/>}),
+    Page::Settings => EitherOf9::F(view!{<super::settings::Settings/>}),
+    Page::MyArchives => EitherOf9::G(view!{<super::git::Archives/>}),
+    Page::Users => EitherOf9::H(view!{<super::users::Users/>}),
+    _ => EitherOf9::I(view!(<span>"TODO"</span>)),
     //Page::Login => view!{<LoginPage/>}
   };
   view!(<main style="height:100%">{inner()}</main>)
@@ -91,13 +93,27 @@ fn side_menu(page:Page) -> impl IntoView {
             <NavItem value="mathhub" href="/dashboard/mathhub">"MathHub"</NavItem>
             <NavItem value="query" href="/dashboard/query">"Queries"</NavItem>
             {move || match LoginState::get() {
-                LoginState::Admin | LoginState::NoAccounts => Some(view!{
-                    //<a href="/dashboard/graphs"><MenuItem key="graphs" label="Graphs"/></a>
+                LoginState::NoAccounts => leptos::either::EitherOf5::A(view!{
                     <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                     <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                     <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
                 }),
-                LoginState::User(..) | LoginState::None | LoginState::Loading => None
+                LoginState::Admin  => leptos::either::EitherOf5::B(view!{
+                  <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
+                  <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
+                  <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
+                  <NavItem value="users" href="/dashboard/users">"Manage Users"</NavItem>
+                }),
+                LoginState::User{is_admin:true,..} => leptos::either::EitherOf5::C(view!{
+                  <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
+                  <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
+                  <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
+                  <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
+                }),
+                LoginState::User{..} => leptos::either::EitherOf5::D(view!{
+                    <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
+                }),
+                LoginState::None | LoginState::Loading => leptos::either::EitherOf5::E(())
             }}
         </NavDrawer>
     }
@@ -118,10 +134,15 @@ fn user_field() -> impl IntoView {
         }
         _ => unreachable!()
     };
+    let src = Memo::new(|_| match LoginState::get() {
+      LoginState::User{avatar,..} => Some(avatar),
+      LoginState::Admin => Some("/admin.png".to_string()),
+      _ => None
+    });
 
-    view!{<Menu on_select trigger_type=MenuTriggerType::Hover class="immt-user-menu">
+    view!{<div class="immt-user-menu-trigger"><Menu on_select trigger_type=MenuTriggerType::Hover class="immt-user-menu">
         <MenuTrigger slot>
-            <div class="immt-user-menu-trigger"><thaw::Avatar /></div>
+            <thaw::Avatar src />
         </MenuTrigger>
         // AiGitlabFilled
         {move || {
@@ -133,55 +154,50 @@ fn user_field() -> impl IntoView {
         <Divider/>
         {move || match LoginState::get() {
             LoginState::None => EitherOf4::A(login_form()),
-            LoginState::Admin | LoginState::NoAccounts => EitherOf4::B(view!(<span>"Admin"</span>)),
-            LoginState::User(user) =>  EitherOf4::C(view!(<span>{user}</span>)),
+            LoginState::NoAccounts => EitherOf4::B(view!(<span>"Admin"</span>)),
+            LoginState::Admin => EitherOf4::C(logout_form("admin".to_string())),
+            LoginState::User{name,..} => EitherOf4::C(logout_form(name)),
             LoginState::Loading => EitherOf4::D(view!(<Spinner size=SpinnerSize::Tiny/>))
         }}
-    </Menu>}
+    </Menu></div>}
+}
+
+fn logout_form(user:String) -> impl IntoView {
+  use thaw::{Button,Input,InputType};
+  let login  = expect_context::<RwSignal<LoginState>>();
+  let action = Action::new(move |_| {
+    login.set(LoginState::None);
+    crate::users::logout()
+  });
+  view!(<span>{user}" "<Button on_click=move |_| {action.dispatch(());}>Logout</Button></span>)
 }
 
 fn login_form() -> impl IntoView {
-    let toaster = ToasterInjection::expect_context();
-    let _ = view!(<thaw::Input/><thaw::Button/>);
-    let username = NodeRef::<leptos::html::Input>::new();
-    let pw = NodeRef::<leptos::html::Input>::new();
-    let login  = expect_context();
-    let action = Action::new(move |(name,pw):&(String,String)| {
-      do_login(name.clone(),pw.clone(),login,toaster)
-    });
-
-    let on_submit = move |ev: leptos::ev::SubmitEvent| {
-        // stop the page from reloading!
-        ev.prevent_default();
-        let un = username.get().expect("<input> should be mounted").value();
-        let pw = pw.get().expect("<input> should be mounted").value();
-        action.dispatch((un,pw));
-    };
-    view!{
-        <form on:submit=on_submit>
-            <Caption1>"Login:"</Caption1><br/>
-            <span class="thaw-input">
-                <input node_ref=username class="thaw-input__input" type="text" placeholder="user name" name="username"/>
-            </span><br/>
-            <span class="thaw-input">
-                <input node_ref=pw class="thaw-input__input" type="password" placeholder="password" name="password"/>
-            </span><br/>
-            <input class="thaw-button--secondary thaw-button--small thaw-button thaw-button--rounded" type="submit" value="Log in"/>
-        </form>
-    }
+  use thaw::{Button,Input,InputType};
+  let pw = NodeRef::<leptos::html::Input>::new();
+  let login  = expect_context();
+  let action = Action::new(move |pwd:&String| {
+    do_login(pwd.clone(),login)
+  });
+  let value = RwSignal::<String>::new(String::new());
+  view!{
+    <Button on_click=move |_| {action.dispatch(value.get_untracked());}>Login</Button>
+    <Input placeholder="admin pwd" value input_type=InputType::Password/>
+  }
 }
 
+
+
 #[allow(unused_variables)]
-async fn do_login(name:String,pw:String,login:RwSignal<LoginState>,toaster:thaw::ToasterInjection) {
-  match crate::users::login(name, pw).await {
-    Ok(u@(LoginState::Admin | LoginState::User(_))) => login.set(u),
-    Ok(_) => {
-      #[cfg(feature="hydrate")]
-      error_toast(Cow::Borrowed("User does not exist or password incorrect"), toaster);
-    }
+async fn do_login(pw:String,login:RwSignal<LoginState>) {
+  let pwd = if pw.is_empty() {None} else {Some(pw)};
+  match crate::users::login(pwd).await {
+    Ok(Some(u@ (LoginState::Admin | LoginState::User{..}))) => login.set(u),
+    Ok(_) => (),
     Err(e) => {
       #[cfg(feature="hydrate")]
-      error_toast(Cow::Owned(format!("Error: {e}")),toaster);
+      error_toast(Cow::Owned(format!("Error: {e}")));
     }
   }
+  let _ = view!(<Redirect path="/"/>);
 }

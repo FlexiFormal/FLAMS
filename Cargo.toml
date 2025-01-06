@@ -101,6 +101,7 @@ bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 # cfg-if = "1"
 tokio = { version = "1"}#, features = ["fs","io-util","sync","test-util","macros","rt"] }
 tokio-util = { version="0.7", features = ["compat"] }
+tempfile = {version="3"}
 
 password-hash = {version="0.5"}
 argon2 = {version="0.5"}
@@ -135,12 +136,13 @@ webp = { version= "0.3"}
 dashmap = { version = "6" }
 
 gitlab = { version="0"}
+git2 = {version="0.19", default-features = false, features = ["vendored-libgit2"] }
 
 # leptos
 leptos = { version = "0.7", features=["nightly"]}
 leptos_axum = "0.7"
 leptos_meta= "0.7"
-leptos_router = { version = "=0.7.0", features=["nightly"]}
+leptos_router = { version = "0.7", features=["nightly"]}
 
 #thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 thaw = { version="=0.4.0-beta5",features=["nightly"] }

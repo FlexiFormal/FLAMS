@@ -19,8 +19,8 @@ use immt_utils::{prelude::HMap, triomphe, vecmap::{VecMap, VecSet}, CSS};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use rdf::RDFStore;
-use std::{ops::Deref, path::{Path, PathBuf}, rc::Rc};
-use crate::formats::{HTMLData, SourceFormatId};
+use std::{ops::Deref, os::unix::fs::MetadataExt, path::{Path, PathBuf}, rc::Rc};
+use crate::{formats::{HTMLData, SourceFormatId}, settings::Settings};
 
 #[derive(Clone, Debug)]
 pub enum BackendChange {
@@ -34,12 +34,6 @@ pub enum BackendChange {
         old: Option<FileState>,
         new: FileState,
     },
-}
-
-#[derive(Clone,Debug)]
-pub enum AnyBackend{
-    Global(&'static GlobalBackend),
-    Temp(TemporaryBackend)
 }
 
 pub trait Backend {
@@ -181,8 +175,56 @@ pub trait Backend {
     }
 }
 
+
+#[derive(Clone,Debug)]
+pub enum AnyBackend{
+    Global(&'static GlobalBackend),
+    Temp(TemporaryBackend),
+    Sandbox(SandboxedBackend)
+}
+impl AnyBackend {
+    pub fn mathhubs(&self) -> Vec<PathBuf> {
+        let mut global: Vec<PathBuf> = Settings::get().mathhubs.iter().map(|p| p.to_path_buf()).collect();
+        match self {
+            AnyBackend::Global(g) => global,
+            AnyBackend::Temp(t) => global,
+            AnyBackend::Sandbox(s) => {
+                global.insert(0,s.0.path.to_path_buf());
+                global
+            },
+        }
+    }
+}
+
+pub enum EitherArchiveIter<'a> {
+    Global(std::slice::Iter<'a,Archive>),
+    Sandbox(std::iter::Chain<std::slice::Iter<'a,Archive>,std::slice::Iter<'a,Archive>>)
+}
+impl<'a> From<std::slice::Iter<'a,Archive>> for EitherArchiveIter<'a> {
+    #[inline]
+    fn from(value: std::slice::Iter<'a, Archive>) -> Self {
+        Self::Global(value)
+    }
+}
+impl<'a> From<std::iter::Chain<std::slice::Iter<'a,Archive>,std::slice::Iter<'a,Archive>>> for EitherArchiveIter<'a> {
+    #[inline]
+    fn from(value: std::iter::Chain<std::slice::Iter<'a,Archive>,std::slice::Iter<'a,Archive>>) -> Self {
+        Self::Sandbox(value)
+    }
+}
+impl<'a> Iterator for EitherArchiveIter<'a> {
+    type Item = &'a Archive;
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Global(i) => i.next(),
+            Self::Sandbox(i) => i.next(),
+        }
+    }
+}
+
 impl Backend for AnyBackend {
-    type ArchiveIter<'a> = std::slice::Iter<'a,Archive>;
+    type ArchiveIter<'a> = EitherArchiveIter<'a>;
     #[inline]
     fn to_any(&self) -> AnyBackend {
         self.clone()
@@ -191,8 +233,9 @@ impl Backend for AnyBackend {
     #[inline]
     fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized {
         match self {
-            Self::Global(b) => b.with_archives(f),
+            Self::Global(b) => b.with_archives(|i| f(i.into())),
             Self::Temp(b) => b.with_archives(f),
+            Self::Sandbox(b) => b.with_archives(|i| f(i.into())),
         }
     }
 
@@ -201,6 +244,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_reference(rf),
             Self::Temp(b) => b.get_reference(rf),
+            Self::Sandbox(b) => b.get_reference(rf),
         }
     }
 
@@ -211,6 +255,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_html_body(d,full),
             Self::Temp(b) => b.get_html_body(d,full),
+            Self::Sandbox(b) => b.get_html_body(d,full),
         }
     }
 
@@ -221,6 +266,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_html_fragment(d,range),
             Self::Temp(b) => b.get_html_fragment(d,range),
+            Self::Sandbox(b) => b.get_html_fragment(d,range),
         }
     }
 
@@ -229,6 +275,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.submit_triples(in_doc,rel_path,iter),
             Self::Temp(b) => b.submit_triples(in_doc,rel_path,iter),
+            Self::Sandbox(b) => b.submit_triples(in_doc,rel_path,iter),
         }
     }
 
@@ -237,6 +284,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_document(uri),
             Self::Temp(b) => b.get_document(uri),
+            Self::Sandbox(b) => b.get_document(uri),
         }
     }
 
@@ -245,6 +293,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_module(uri),
             Self::Temp(b) => b.get_module(uri),
+            Self::Sandbox(b) => b.get_module(uri),
         }
     }
 
@@ -253,6 +302,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_base_path(id),
             Self::Temp(b) => b.get_base_path(id),
+            Self::Sandbox(b) => b.get_base_path(id),
         }
     }
 
@@ -262,6 +312,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.get_declaration(uri),
             Self::Temp(b) => b.get_declaration(uri),
+            Self::Sandbox(b) => b.get_declaration(uri),
         }
     }
 
@@ -271,6 +322,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.with_archive_or_group(id,f),
             Self::Temp(b) => b.with_archive_or_group(id,f),
+            Self::Sandbox(b) => b.with_archive_or_group(id,f),
         }
     }
     
@@ -280,6 +332,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.with_archive(id, f),
             Self::Temp(b) => b.with_archive(id, f),
+            Self::Sandbox(b) => b.with_archive(id, f),
         }
     }
     
@@ -292,6 +345,7 @@ impl Backend for AnyBackend {
         match self {
             Self::Global(b) => b.with_local_archive(id, f),
             Self::Temp(b) => b.with_local_archive(id, f),
+            Self::Sandbox(b) => b.with_local_archive(id, f),
         }
     }
 }
@@ -507,13 +561,13 @@ impl Backend for GlobalBackend {
     fn get_html_fragment(&self,
         d:&DocumentURI,range:DocumentRange
     ) -> Option<(Vec<CSS>,String)> {
-        self.manager().with_archive(d.archive_id(), |a|
+        self.archives.with_archive(d.archive_id(), |a|
             a.and_then(|a| a.load_html_fragment(d.path(), d.name().first_name(), d.language(),range))
         )
     }
 
     fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
-        self.manager().with_archive(rf.in_doc.archive_id(),|a|
+        self.archives.with_archive(rf.in_doc.archive_id(),|a|
             a.and_then(|a| a.load_reference(rf.in_doc.path(), rf.in_doc.name().first_name(), rf.in_doc.language(),DocumentRange {start:rf.start, end:rf.end}))
         )
     }
@@ -526,15 +580,15 @@ impl Backend for GlobalBackend {
     fn get_html_body(&self,
         d:&DocumentURI,full:bool
     ) -> Option<(Vec<CSS>,String)> {
-        self.manager().with_archive(d.archive_id(), |a|
+        self.archives.with_archive(d.archive_id(), |a|
             a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(),full))
         )
     }
 
     fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
-        self.manager().with_archive(in_doc.archive_id(), |a| {
+        self.archives.with_archive(in_doc.archive_id(), |a| {
             if let Some(a) = a {
-                a.submit_triples(in_doc,rel_path,self.triple_store(),iter);
+                a.submit_triples(in_doc,rel_path,self.triple_store(),true,iter);
             }
         });
     }
@@ -549,6 +603,7 @@ impl Backend for GlobalBackend {
     fn with_archive_or_group<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&ArchiveOrGroup>) -> R) -> R {
         self.with_archive_tree(|t| f(t.find(id)))
     }
+
     fn get_base_path(&self,id:&ArchiveId) -> Option<PathBuf> {
         self.with_local_archive(id, |a| a.map(|a| a.path().to_path_buf()))
     }
@@ -633,7 +688,7 @@ impl TemporaryBackend {
 }
 
 impl Backend for TemporaryBackend {
-    type ArchiveIter<'a> = std::slice::Iter<'a,Archive>;
+    type ArchiveIter<'a> = EitherArchiveIter<'a>;
 
     #[inline]
     fn to_any(&self) -> AnyBackend {
@@ -723,9 +778,338 @@ impl Backend for TemporaryBackend {
             where Self:Sized {
         self.inner.parent.submit_triples(in_doc,rel_path,iter);
     }
-
-    
 }
+
+#[derive(Debug,Clone)]
+pub enum SandboxedRepository {
+    Copy(ArchiveId),
+    Git{
+        id: ArchiveId,
+        branch:Box<str>,
+        commit:immt_git::Commit,
+        remote:Box<str>
+    }
+}
+
+#[derive(Debug)]
+struct SandboxedBackendI {
+    path: Box<Path>,
+    repos: parking_lot::RwLock<Vec<SandboxedRepository>>,
+    manager: ArchiveManager,
+    cache: RwLock<cache::BackendCache>,
+}
+#[derive(Debug,Clone)]
+pub struct SandboxedBackend(triomphe::Arc<SandboxedBackendI>);
+impl Drop for SandboxedBackendI {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.path);
+    }
+}
+impl SandboxedBackend {
+    #[inline]
+    pub fn get_repos(&self) -> Vec<SandboxedRepository> {
+        self.0.repos.read().clone()
+    }
+
+    #[inline]
+    pub fn with_repos<R>(&self,f:impl FnOnce(&[SandboxedRepository]) -> R) -> R {
+        let inner = self.0.repos.read();
+        f(inner.as_slice())
+    }
+
+    #[inline]
+    pub fn path_for(&self,id:&ArchiveId) -> PathBuf {
+        self.0.path.join(id.as_ref())
+    }
+    #[inline]
+    pub fn add(&self,sb:SandboxedRepository) {
+        let id = match &sb {
+            SandboxedRepository::Copy(id) => id,
+            SandboxedRepository::Git { id,.. } => id
+        };
+        let mut repos = self.0.repos.write();
+        if repos.iter().any(|r| match r {
+            SandboxedRepository::Copy(a) => a == id,
+            SandboxedRepository::Git { id:bid,.. } => bid == id,
+        }) {
+            tracing::error!(target:"sandbox","Already exists: {id}");
+            return
+        }
+        repos.push(sb);
+        self.0.manager.load(&self.0.path);
+    }
+
+    pub fn new(name:&str) -> Self {
+        let p = crate::settings::Settings::get().temp_dir().join(name);
+        let i = SandboxedBackendI {
+            path: p.into(),
+            repos: parking_lot::RwLock::new(Vec::new()),
+            manager: ArchiveManager::default(),
+            cache: RwLock::new(cache::BackendCache::default()),
+        };
+        SandboxedBackend(triomphe::Arc::new(i))
+    }
+
+    #[tracing::instrument(level = "info",
+        target = "sandbox",
+        name = "migrating",
+        fields(path = %self.0.path.display()),
+        skip_all
+    )]
+    pub fn migrate(&self) -> usize {
+        fn existent_parent(p:&Path) -> &Path {
+            if p.exists() {return p}
+            existent_parent(p.parent().unwrap_or_else(|| unreachable!()))
+        }
+        fn same_fs(p1:&Path,p2:&Path) -> bool {
+            let p1 = existent_parent(p1);
+            let p2 = existent_parent(p2);
+            let md1 = p1.metadata().unwrap_or_else(|_| unreachable!());
+            let md2 = p2.metadata().unwrap_or_else(|_| unreachable!());
+            md1.dev() == md2.dev()
+        }
+        let mut count = 0;
+        let mut cnt = &mut count;
+        let global = GlobalBackend::get();
+        let mut global_cache = global.cache.write();
+        let mut sandbox_cache = self.0.cache.write();
+        self.0.manager.reinit(move |sandbox| 
+            global.archives.reinit(|global| {
+                sandbox.groups.clear();
+                let Some(main) = Settings::get().mathhubs.first() else {unreachable!()};
+                for a in std::mem::take(&mut sandbox.archives) {
+                    *cnt += 1;
+                    let Archive::Local(a) = a else { unreachable!()};
+                    let source = a.path();
+                    let target = main.join(a.id().as_ref());
+                    if target.exists() {
+                        let _ = std::fs::remove_dir_all(&target);
+                    }
+                    if let Some(p) = target.parent() {
+                        let _ = std::fs::create_dir_all(p);
+                    }
+                    if same_fs(source,&target) {
+                        let _ = std::fs::rename(source, target);
+                    } else {
+                        let _ = immt_utils::fs::copy_dir_all(source,&target);
+                    }
+                }
+            }, Settings::get().mathhubs.iter().map(|p| &**p)), 
+            [&*self.0.path]
+        );
+        global.triple_store.clear();
+        global_cache.clear();
+        sandbox_cache.clear();
+        drop(global_cache);
+        drop(sandbox_cache);
+        immt_utils::background(|| {
+            let global = GlobalBackend::get();
+            global.triple_store.load_archives(&global.all_archives());
+        });
+        count
+    }
+
+    #[tracing::instrument(level = "info",
+        target = "sandbox",
+        name = "require"
+    )]
+    pub fn require(&self,id:&ArchiveId) {
+        // TODO this can be massively optimized
+        let mut repos = self.0.repos.write();
+        if repos.iter().any(|r| match r {
+            SandboxedRepository::Copy(a) => a == id,
+            SandboxedRepository::Git { id:bid,.. } => bid == id,
+        }) { return }
+        //repos.push(SandboxedRepository::Copy(id.clone()));
+        let backend = GlobalBackend::get();
+        backend.manager().with_tree(move |t| {
+            let mut steps = id.steps();
+            let Some(mut current) = steps.next() else {
+                tracing::error!("empty archive ID");
+                return
+            };
+            let mut ls = &t.groups;
+            loop {
+                let Some(a) = ls.iter().find(|a| a.id().last_name() == current) else {
+                    tracing::error!("could not find archive {id}");
+                    return
+                };
+                match a {
+                    ArchiveOrGroup::Archive(a) => {
+                        if steps.next().is_some() {
+                            tracing::error!("could not find archive {id}");
+                            return
+                        }
+                        if !repos.iter().any(|r| match r {
+                            SandboxedRepository::Copy(a) => a == id,
+                            SandboxedRepository::Git { id:bid,.. } => bid == id,
+                        }) { 
+                            repos.push(SandboxedRepository::Copy(id.clone()));
+                            self.copy_archive(t, id);
+                        }
+                        break
+                    }
+                    ArchiveOrGroup::Group(g) => {
+                        let Some(next) = steps.next() else {
+                            for a in t.archives.iter() {
+                                if let Archive::Local(a) = a {
+                                    if a.id().as_ref().starts_with(id.as_ref()) {
+                                        if !repos.iter().any(|r| match r {
+                                            SandboxedRepository::Copy(b) => b == a.id(),
+                                            SandboxedRepository::Git { id,.. } => id == a.id(),
+                                        }) {
+                                            repos.push(SandboxedRepository::Copy(a.id().clone()));
+                                            self.copy_archive(t, &a.id());
+                                        }
+                                    }
+                                }
+                            }
+                            break
+                        };
+                        if let Some(ArchiveOrGroup::Archive(a)) = g.children.iter().find(|a| a.id().last_name() == "meta-inf") {
+                            if !repos.iter().any(|r| match r {
+                                SandboxedRepository::Copy(b) => b == a,
+                                SandboxedRepository::Git { id:bid,.. } => bid == a,
+                            }) {
+                                repos.push(SandboxedRepository::Copy(a.clone()));
+                                self.copy_archive(t, &a);
+                            }
+                        }
+                        current = next;
+                        ls = &g.children;
+                    }
+                }
+            }
+        });
+        self.0.manager.load(&self.0.path);
+    }
+
+    fn copy_archive(&self,tree:&ArchiveTree, id:&ArchiveId) {
+        let Some(Archive::Local(a)) = tree.get(id) else {
+            tracing::error!("could not find local archive {id}");
+            return
+        };
+        let path = a.path();
+        let target = self.0.path.join(id.as_ref());
+        tracing::info!("copying archive {id} to {}",target.display());
+        if let Err(e) = immt_utils::fs::copy_dir_all(path,&target) {
+            tracing::error!("could not copy archive {id}: {e}");
+        }
+    }
+}
+
+impl Backend for SandboxedBackend {
+    type ArchiveIter<'a> = std::iter::Chain<std::slice::Iter<'a,Archive>,std::slice::Iter<'a,Archive>>;
+
+    #[inline]
+    fn to_any(&self) -> AnyBackend {
+        AnyBackend::Sandbox(self.clone())
+    }
+
+    fn get_html_fragment(&self,
+        d:&DocumentURI,range:DocumentRange
+    ) -> Option<(Vec<CSS>,String)> {
+        self.with_archive(d.archive_id(), |a|
+            a.and_then(|a| a.load_html_fragment(d.path(), d.name().first_name(), d.language(),range))
+        )
+    }
+    fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
+        self.with_archive(rf.in_doc.archive_id(),|a|
+            a.and_then(|a| a.load_reference(rf.in_doc.path(), rf.in_doc.name().first_name(), rf.in_doc.language(),DocumentRange {start:rf.start, end:rf.end}))
+        )
+    }
+
+    #[inline]
+    fn with_archives<R>(&self,f:impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R where Self:Sized {
+        self.0.manager.with_tree(|t1|
+            GlobalBackend::get().with_archive_tree(|t2| {
+                f(t1.archives.iter().chain(t2.archives.iter()))
+            })
+        )
+    }
+
+    fn get_html_body(&self,
+        d:&DocumentURI,full:bool
+    ) -> Option<(Vec<CSS>,String)> {
+        self.with_archive(d.archive_id(), |a|
+            a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(),full))
+        )
+    }
+
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+        self.0.manager.with_archive(in_doc.archive_id(), |a| {
+            if let Some(a) = a {
+                a.submit_triples(in_doc,rel_path,GlobalBackend::get().triple_store(),false,iter);
+            }
+        });
+    }
+
+    fn with_archive<R>(&self, id: &ArchiveId, f: impl FnOnce(Option<&Archive>) -> R) -> R {
+        if let Some(r) = self.0.manager.all_archives().iter().find(|a| a.uri().archive_id() == id) {
+            return f(Some(r))
+        };
+        GlobalBackend::get().with_archive(id,f)
+    }
+
+    fn with_archive_or_group<R>(&self,id:&ArchiveId,f:impl FnOnce(Option<&ArchiveOrGroup>) -> R) -> R {
+        let cell = std::cell::Cell::new(Some(f));
+        if let Some(r) = self.0.manager.with_tree(|t|
+            t.find(id).map(|a| (cell.take().unwrap_or_else(|| unreachable!()))(Some(a)))
+        ) { return r };
+        let f = cell.take().unwrap_or_else(|| unreachable!());
+        GlobalBackend::get().with_archive_or_group(id,f)
+    }
+
+    fn get_base_path(&self,id:&ArchiveId) -> Option<PathBuf> {
+        self.with_local_archive(id, |a| a.map(|a| a.path().to_path_buf()))
+    }
+
+    fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
+        let id = uri.archive_id();
+        if self.0.manager.with_archive(id, |a| a.is_none()) {
+            return GlobalBackend::get().get_document(uri);
+        }
+        {
+            let lock = self.0.cache.read();
+            if let Some(doc) = lock.has_document(uri) {
+                return Some(doc.clone());
+            }
+        }
+        let mut cache = self.0.cache.write();
+        let mut flattener = SandboxFlattener(&mut cache, &self.0.manager,&GlobalBackend::get().archives);
+        flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+        let id = uri.archive_id();
+        if self.0.manager.with_archive(id, |a| a.is_none()) {
+            return GlobalBackend::get().get_module(uri);
+        }
+        {
+            let lock = self.0.cache.read();
+            if uri.name().is_simple() {
+                if let Some(m) = lock.has_module(uri) {
+                    return Some(ModuleLike::Module(m.clone()));
+                }
+            } else {
+                let top_uri = !uri.clone();
+                if let Some(m) = lock.has_module(&top_uri) {
+                    return ModuleLike::in_module(m, uri.name());
+                }
+            }
+        }
+        let m = {
+            let mut cache = self.0.cache.write();
+            let mut flattener = SandboxFlattener(&mut cache, &self.0.manager,&GlobalBackend::get().archives);
+            flattener.load_module(uri.as_path(), uri.name().first_name())?
+        };
+        // TODO: this unnecessarily clones
+        ModuleLike::in_module(&m, uri.name())
+    }
+
+}
+
 
 pub struct AsChecker<'a,B:Backend>(&'a B);
 
@@ -762,8 +1146,6 @@ impl<B:Backend> ModuleChecker for AsChecker<'_,B> {
     fn close(&mut self, _elem: &mut Declaration) {}
 }
 
-
-
 struct GlobalFlattener<'a>(&'a mut BackendCache, &'a ArchiveManager);
 impl GlobalFlattener<'_> {
     fn load_document(
@@ -774,7 +1156,7 @@ impl GlobalFlattener<'_> {
     ) -> Option<Document> {
         //println!("Document {path}&d={name}&l={language}");
         let pre = self.1.load_document(path, language, name)?;
-        let doc_file = PreDocFile::resolve(pre,self);
+        let doc_file = pre.check(self);
         let doc = doc_file.clone();
         self.0.insert_document(doc_file);
         Some(doc)
@@ -836,6 +1218,91 @@ impl DocumentChecker for GlobalFlattener<'_> {
 }
 
 impl ModuleChecker for GlobalFlattener<'_> {
+    #[inline]
+    fn open(&mut self, _elem: &mut OpenDeclaration<Unchecked>) {}
+    #[inline]
+    fn close(&mut self, _elem: &mut Declaration) {}
+}
+
+
+struct SandboxFlattener<'a>(&'a mut BackendCache, &'a ArchiveManager,&'a ArchiveManager);
+impl SandboxFlattener<'_> {
+    fn load_document(
+        &mut self,
+        path: PathURIRef,
+        language: Language,
+        name: &NameStep,
+    ) -> Option<Document> {
+        let be = if self.1.with_archive(path.archive_id(), |a| a.is_some()) {
+            self.1
+        } else {self.2};
+        //println!("Document {path}&d={name}&l={language}");
+        let pre = be.load_document(path, language, name)?;
+        let doc_file = pre.check(self);
+        let doc = doc_file.clone();
+        self.0.insert_document(doc_file);
+        Some(doc)
+    }
+    fn load_module(
+        &mut self,
+        path: PathURIRef,
+        name: &NameStep,
+    ) -> Option<Module> {
+        let be = if self.1.with_archive(path.archive_id(), |a| a.is_some()) {
+            self.1
+        } else {self.2};
+        //println!("Module {path}&m={name}&l={language}");
+        let pre = be.load_module(path, name)?;
+        let module = pre.check(self);
+        self.0.insert_module(module.clone());
+        Some(module)
+    }
+}
+
+impl LocalBackend for SandboxFlattener<'_> {
+    #[allow(clippy::option_if_let_else)]
+    fn get_document(&mut self, uri: &DocumentURI) -> Option<Document> {
+        if let Some(doc) = self.0.has_document(uri) {
+            Some(doc.clone())
+        } else {
+            self.load_document(uri.as_path(), uri.language(), uri.name().first_name())
+        }
+    }
+
+    fn get_module(&mut self, uri: &ModuleURI) -> Option<ModuleLike> {
+        if uri.name().is_simple() {
+            if let Some(m) = self.0.has_module(uri) {
+                return Some(ModuleLike::Module(m.clone()));
+            }
+        } else {
+            let top_uri = !uri.clone();
+            if let Some(m) = self.0.has_module(&top_uri) {
+                return ModuleLike::in_module(m, uri.name());
+            }
+        }
+        let m = self.load_module(uri.as_path(), uri.name().first_name())?;
+        // TODO this unnecessarily clones
+        ModuleLike::in_module(&m, uri.name())
+    }
+
+    fn get_declaration<T: DeclarationTrait>(
+        &mut self,
+        uri: &SymbolURI,
+    ) -> Option<immt_ontology::content::ContentReference<T>> {
+        let m = self.get_module(uri.module())?;
+        // TODO this unnecessarily clones
+        ContentReference::new(&m, uri.name())
+    }
+}
+
+impl DocumentChecker for SandboxFlattener<'_> {
+    #[inline]
+    fn open(&mut self, _elem: &mut DocumentElement<Unchecked>) {}
+    #[inline]
+    fn close(&mut self, _elem: &mut DocumentElement<Checked>) {}
+}
+
+impl ModuleChecker for SandboxFlattener<'_> {
     #[inline]
     fn open(&mut self, _elem: &mut OpenDeclaration<Unchecked>) {}
     #[inline]

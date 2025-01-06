@@ -24,7 +24,8 @@ build_target!(
   = pdflatex_first
 );
 
-fn pdflatex_first(_:&AnyBackend,task:&BuildTask) -> BuildResult {
+
+fn pdflatex_first(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
   let Either::Left(path) = task.source() else {
     return BuildResult {
       log:Either::Left("Needs a physical file".to_string()),
@@ -33,9 +34,10 @@ fn pdflatex_first(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   };
   latex::clean(path);
   let log = path.with_extension("log");
+  let mh = backend.mathhubs().into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(",");
   let ret = latex::pdflatex_and_bib(
     path,
-    std::iter::once(("STEX_WRITESMS","true"))
+    [("STEX_WRITESMS","true"),("MATHHUB",&mh)],
   );
   if ret.is_ok() {
     BuildResult {
@@ -56,7 +58,7 @@ build_target!(
   = pdflatex_second
 );
 
-fn pdflatex_second(_:&AnyBackend,task:&BuildTask) -> BuildResult {
+fn pdflatex_second(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
   let Either::Left(path) = task.source() else {
     return BuildResult {
       log:Either::Left("Needs a physical file".to_string()),
@@ -64,9 +66,10 @@ fn pdflatex_second(_:&AnyBackend,task:&BuildTask) -> BuildResult {
     }
   };
   let log = path.with_extension("log");
+  let mh = backend.mathhubs().into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(",");
   let ret = latex::pdflatex(
     path,
-    std::iter::once(("STEX_USESMS","true"))
+    [("STEX_USESMS","true"),("MATHHUB",&mh)]
   );
   if ret.is_ok() {
     BuildResult {
@@ -87,7 +90,7 @@ build_target!(
   = rustex
 );
 
-fn rustex(_:&AnyBackend,task:&BuildTask) -> BuildResult {
+fn rustex(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
   // TODO make work with string as well
   let Either::Left(path) = task.source() else {
     return BuildResult {
@@ -97,9 +100,13 @@ fn rustex(_:&AnyBackend,task:&BuildTask) -> BuildResult {
   };
   let out = path.with_extension("rlog");
   let ocl = out.clone();
+  let mh = backend.mathhubs().into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(",");
   let run = move || RusTeX::get().run_with_envs(
-    path, false, 
-    std::iter::once(("STEX_USESMS".to_string(),"true".to_string())),
+    path, false,
+    [
+      ("STEX_USESMS".to_string(),"true".to_string()),
+      ("MATHHUB".to_string(),mh)
+    ],
     Some(&ocl)
   );
   #[cfg(debug_assertions)]

@@ -7,40 +7,49 @@ use std::borrow::Cow;
 //#[cfg(feature="hydrate")]
 //use immt_web_utils::components::error_toast;
 
-#[server(prefix="/api",endpoint="login")]//, input=server_fn::codec::Cbor)]
-pub async fn login(username:String,password:String) -> Result<LoginState,ServerFnError<LoginError>> {
+#[server(prefix="/api",endpoint="login")]
+pub async fn login(admin_pwd:Option<String>) -> Result<Option<LoginState>,ServerFnError<LoginError>> {
+    use immt_git::gl::auth::GitLabOAuth;
     use argon2::PasswordVerifier;
-    use axum_login::AuthnBackend;
     let Some(mut session)= use_context::<axum_login::AuthSession<crate::server::db::DBBackend>>() else {
-        return Ok(LoginState::None)
+        return Ok(Some(LoginState::None))
     };
-    if session.backend.admin.is_none() { return Ok(LoginState::NoAccounts) }
-    if username == "admin" {
+    if session.backend.admin.is_none() { return Ok(Some(LoginState::NoAccounts)) }
+    if let Some(password) = admin_pwd {
         let (pass_hash,salt) = session.backend.admin.as_ref().unwrap_or_else(|| unreachable!());
         let hash = password_hash::PasswordHash::parse(pass_hash, password_hash::Encoding::B64)
             .map_err(|e| ServerFnError::WrappedServerError(e.into()))?;
         let hasher = argon2::Argon2::default();
         return if hasher.verify_password(password.as_bytes(), &hash).is_ok() {
-            session.login(&User {id:0,username:"admin".to_string(),session_auth_hash:salt.as_bytes().to_owned()}).await
+            session.login(&User::admin(salt.as_bytes().to_owned())).await
                 .map_err(|e| {
                     leptos::logging::log!("Wut: {e}");
                     ServerFnError::WrappedServerError(e.into())
                 })?;
-            Ok(LoginState::Admin)
+            leptos_axum::redirect("/dashboard");
+            return Ok(Some(LoginState::Admin))
         } else {
-            Err(LoginError::WrongUsernameOrPassword.into())
+            return Err(LoginError::WrongUsernameOrPassword.into())
         }
     }
-    match session.backend.authenticate((username,password)).await? {
-        Some(user) => {
-            session.login(&user).await
-                .map_err(|e| ServerFnError::WrappedServerError(e.into()))?;
-            Ok(LoginState::User(user.username))
-        }
-        _ => Ok(LoginState::None)
+    let oauth:Option<GitLabOAuth> = expect_context();
+    if let Some(oauth) = oauth.as_ref() {
+        leptos_axum::redirect(oauth.login_url().as_str())
+    } else {
+        leptos_axum::redirect("/dashboard")
     }
+    Ok(None)
 }
 
+#[server(prefix="/api",endpoint="logout")]
+pub async fn logout() -> Result<(),ServerFnError<LoginError>> {
+    let Some(mut session)= use_context::<axum_login::AuthSession<crate::server::db::DBBackend>>() else {
+        return Ok(());
+    };
+    let _ = session.logout().await;
+    leptos_axum::redirect("/dashboard");
+    Ok(())
+}
 
 #[server(LoginStateFn,prefix="/api",endpoint="login_state")]
 #[allow(clippy::unused_async)]
@@ -53,12 +62,31 @@ pub struct User {
     pub id: i64,
     pub username: String,
     pub session_auth_hash: Vec<u8>,
+    pub avatar_url:Option<String>,
+    pub is_admin:bool,
+    pub secret:String
+}
+impl User {
+    pub(crate) fn admin(hash:Vec<u8>) -> Self {
+        Self {
+            id:0,
+            username:"admin".to_string(),
+            session_auth_hash:hash,
+            secret:String::new(),
+            is_admin:true,
+            avatar_url:None
+        }
+    }
 }
 
 
 #[derive(Clone,serde::Serialize,serde::Deserialize,Debug,PartialEq,Eq)]
 pub enum LoginState {
-    Loading,Admin,User(String),None,NoAccounts
+    Loading,Admin,User{
+        name:String,
+        avatar:String,
+        is_admin:bool
+    },None,NoAccounts
 }
 #[cfg(feature="ssr")]
 impl LoginState {
@@ -72,7 +100,7 @@ impl LoginState {
             Some(_) => match session.user {
                 None => Self::None,
                 Some(User{id:0,username,..}) if username == "admin" => Self::Admin,
-                Some(u) => Self::User(u.username)
+                Some(u) => Self::User{name:u.username,avatar:u.avatar_url.unwrap_or_default(),is_admin:u.is_admin}
             }
         }
     }
@@ -83,7 +111,7 @@ impl Display for LoginState {
         match self {
             Self::Loading => write!(f,"Loading"),
             Self::Admin => write!(f,"Admin"),
-            Self::User(u) => write!(f,"User: {u}"),
+            Self::User{name,..} => write!(f,"User: {name}"),
             Self::None => write!(f,"None"),
             Self::NoAccounts => write!(f,"No accounts")
         }
@@ -142,48 +170,4 @@ pub(crate) fn Login<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl Int
     let _ = Effect::new(move |_| if let Some(r) = res.get() {sig.set(r)});
     provide_context(sig);
     children()
-/*
-
-
-    #[cfg(feature="ssr")]
-    let user = RwSignal::new(LoginState::get());
-    #[cfg(not(feature="ssr"))]
-    let user = RwSignal::new(LoginState::Loading);
-    provide_context(user);
-    //#[cfg(feature="hydrate")]
-    //let toaster = thaw::ToasterInjection::expect_context();
-    let res = Resource::new_blocking(|| (),move |()| async move {
-        match user.get() {
-            LoginState::Loading => (),
-            u => return ()
-        }
-        #[cfg(feature="ssr")]
-        #[allow(clippy::needless_return)]
-        { user.set(LoginState::get()) }
-        #[cfg(feature="hydrate")]
-        {
-            let r = login_state().await.unwrap_or_else(|e| {
-                leptos::logging::error!("Error getting login state: {e}");
-            //error_toast(Cow::Owned(format!("Error: {e}")),toaster);
-                LoginState::None
-            });
-            user.set(r);
-        }
-    });
-
-    view!{
-        {move || match user.get() {
-            LoginState::Loading => Some(view!{
-                <Suspense fallback = || view!(<Spinner/>)>
-                    {move || {res.get();match user.get() {
-                        LoginState::Loading => Some(view!(<Spinner/>)),
-                        _ => None
-                    }}}
-                </Suspense>
-            }),
-            _ => None
-        }}
-        {children()}
-    }
-     */
 }

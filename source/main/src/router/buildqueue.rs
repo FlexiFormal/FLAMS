@@ -4,23 +4,54 @@ use immt_ontology::uris::ArchiveId;
 use immt_utils::{time::{Delta, Eta}, vecmap::VecMap};
 use immt_web_utils::inject_css;
 use leptos::{either::EitherOf4, prelude::*};
+use leptos_router::hooks::use_params_map;
 
-use crate::utils::{from_server_clone, from_server_copy, ws::WebSocket};
+use crate::{users::LoginState, utils::{from_server_clone, from_server_copy, ws::WebSocket}};
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+pub struct QueueInfo {
+  pub id:NonZeroU32,
+  pub name:String,
+  pub archives:Option<Vec<RepoInfo>>
+}
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+pub enum RepoInfo {
+  Copy(ArchiveId),
+  Git{
+    id:ArchiveId,
+    remote:String,
+    branch:String,
+    commit:immt_git::Commit
+  }
+}
+
 
 #[server(
   prefix="/api/buildqueue",
   endpoint="get_queues",
 )]
 #[allow(clippy::unused_async)]
-pub async fn get_queues() -> Result<Vec<(NonZeroU32,String)>,ServerFnError<String>> {
-  use crate::users::LoginState;
+pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
   use immt_system::building::queue_manager::QueueManager;
-  
+  use immt_system::backend::SandboxedRepository;
   let login = LoginState::get_server();
-  if login != LoginState::Admin && login != LoginState::NoAccounts {
-    return Err(format!("Not logged in: {login:?}").into());
-  }
-  Ok(QueueManager::get().all_queues().into_iter().map(|(k,v)| (k.into(),v.to_string())).collect())
+  let ls = match login {
+    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
+    LoginState::NoAccounts | LoginState::Admin | LoginState::User{is_admin:true,..} =>
+      tokio::task::spawn_blocking(|| QueueManager::get().all_queues()).await,
+    LoginState::User{name,..} =>
+      tokio::task::spawn_blocking(move || QueueManager::get().queues_for_user(&name)).await
+  }.map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?;
+  Ok(ls.into_iter().map(|(k,v,d)| 
+    QueueInfo {
+      id:k.into(),
+      name:v.to_string(),
+      archives:d.map(|d| d.into_iter().map(|ri| match ri {
+        SandboxedRepository::Copy(id) => RepoInfo::Copy(id),
+        SandboxedRepository::Git { id,branch,commit,remote } => RepoInfo::Git { id,branch:branch.to_string(),commit,remote:remote.to_string() }
+      }).collect())
+    }
+  ).collect())
 }
 
 #[server(
@@ -29,32 +60,22 @@ pub async fn get_queues() -> Result<Vec<(NonZeroU32,String)>,ServerFnError<Strin
 )]
 #[allow(clippy::unused_async)]
 pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
-  use crate::users::LoginState;
-  use immt_system::building::queue_manager::QueueManager;
-  
+  use immt_system::building::{queue_manager::QueueManager,QueueName};
   let login = LoginState::get_server();
-  if login != LoginState::Admin && login != LoginState::NoAccounts {
-    return Err(format!("Not logged in: {login:?}").into());
+  let qm = QueueManager::get();
+  match login {
+    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
+    LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
+    LoginState::User{name,..} => {
+      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(id.into(), |q| {
+        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
+      })).await.map_err(|e| e.to_string())?;
+      if !allowed {
+        return Err(format!("Not allowed to run queue {id}").into());
+      }
+    }
   }
   let Ok(Ok(())) = tokio::task::spawn_blocking(move || QueueManager::get().start_queue(id.into())).await else {
-      return Err(format!("Queue {id} not found").into())
-  };
-  Ok(())
-}
-#[server(
-  prefix="/api/buildqueue",
-  endpoint="requeue",
-)]
-#[allow(clippy::unused_async)]
-pub async fn requeue(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
-  use crate::users::LoginState;
-  use immt_system::building::queue_manager::QueueManager;
-  
-  let login = LoginState::get_server();
-  if login != LoginState::Admin && login != LoginState::NoAccounts {
-    return Err(format!("Not logged in: {login:?}").into());
-  }
-  let Ok(Ok(())) = tokio::task::spawn_blocking(move || QueueManager::get().requeue_failed(id.into())).await else {
       return Err(format!("Queue {id} not found").into())
   };
   Ok(())
@@ -62,21 +83,214 @@ pub async fn requeue(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
 
 #[server(
   prefix="/api/buildqueue",
+  endpoint="requeue",
+)]
+#[allow(clippy::unused_async)]
+pub async fn requeue(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
+  use immt_system::building::{queue_manager::QueueManager,QueueName};
+  let login = LoginState::get_server();
+  let qm = QueueManager::get();
+  match login {
+    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
+    LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
+    LoginState::User{name,..} => {
+      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(id.into(), |q| {
+        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
+      })).await.map_err(|e| e.to_string())?;
+      if !allowed {
+        return Err(format!("Not allowed to run queue {id}").into());
+      }
+    }
+  }
+  let Ok(Ok(())) = tokio::task::spawn_blocking(move || QueueManager::get().requeue_failed(id.into())).await else {
+      return Err(format!("Queue {id} not found").into())
+  };
+  Ok(())
+}
+
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+pub enum FormatOrTarget {
+  Format(String),
+  Targets(Vec<String>)
+}
+
+#[server(
+  prefix="/api/buildqueue",
+  endpoint="enqueue"
+)]
+#[allow(clippy::unused_async)]
+pub async fn enqueue(archive:ArchiveId,
+  target:FormatOrTarget,
+  path:Option<String>,stale_only:Option<bool>,
+  queue:Option<NonZeroU32>
+) -> Result<usize,ServerFnError<String>> {
+  use immt_system::{formats::FormatOrTargets,building::queue_manager::QueueManager};
+  use immt_system::backend::archives::ArchiveOrGroup as AoG;
+  use immt_system::formats::{SourceFormat,BuildTarget};
+  
+
+  fn do_private(archive:ArchiveId,target:FormatOrTarget,
+    path:Option<String>,stale_only:Option<bool>) -> Result<usize,ServerFnError<String>> {
+
+    let queues = QueueManager::get();
+    let stale_only = stale_only.unwrap_or(true);
+
+    #[allow(clippy::option_if_let_else)]
+    let tgts: Vec<_> = match &target {
+      FormatOrTarget::Targets(t) => {
+        let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
+          return Err(ServerFnError::MissingArg("Invalid target".into()))
+        };
+        v
+      }
+      FormatOrTarget::Format(_) => Vec::new()
+    };
+    let fot = match target {
+      FormatOrTarget::Format(f) => FormatOrTargets::Format(
+        SourceFormat::get_from_str(&f).map_or_else(
+          || Err(ServerFnError::MissingArg("Invalid format".into())),
+          Ok
+        )?
+      ),
+      FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
+    };
+    let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
+      {match tree.find(&archive) {
+        Some(AoG::Archive(_)) => Ok(false),
+        Some(AoG::Group(_)) => Ok(true),
+        None => Err(format!("Archive {archive} not found").into()),
+      }}
+    )?;
+    if group && path.is_some() {
+      return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
+    }
+
+    queues.with_global(|queue|
+      if group { Ok(queue.enqueue_group(&archive, fot, stale_only))} else {
+        Ok(queue.enqueue_archive(&archive, fot, stale_only,path.as_deref()))
+      }
+    )
+  }
+
+  fn do_public(archive:ArchiveId,target:FormatOrTarget,
+    path:Option<String>,stale_only:Option<bool>,queue:either::Either<NonZeroU32,String>) -> Result<usize,ServerFnError<String>> {
+
+    let queues = QueueManager::get();
+    let queue = match queue {
+      either::Either::Right(name) => queues.new_queue(&name),
+      either::Either::Left(id) => id.into()
+    };
+    let stale_only = stale_only.unwrap_or(true);
+
+    #[allow(clippy::option_if_let_else)]
+    let tgts: Vec<_> = match &target {
+      FormatOrTarget::Targets(t) => {
+        let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
+          return Err(ServerFnError::MissingArg("Invalid target".into()))
+        };
+        v
+      }
+      FormatOrTarget::Format(_) => Vec::new()
+    };
+    let fot = match target {
+      FormatOrTarget::Format(f) => FormatOrTargets::Format(
+        SourceFormat::get_from_str(&f).map_or_else(
+          || Err(ServerFnError::MissingArg("Invalid format".into())),
+          Ok
+        )?
+      ),
+      FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
+    };
+    let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
+      {match tree.find(&archive) {
+        Some(AoG::Archive(_)) => Ok(false),
+        Some(AoG::Group(_)) => Ok(true),
+        None => Err(format!("Archive {archive} not found").into()),
+      }}
+    )?;
+    if group && path.is_some() {
+      return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
+    }
+
+    queues.with_queue(queue,|queue| {
+      let Some(queue) = queue else {unreachable!()};
+      if group { Ok(queue.enqueue_group(&archive, fot, stale_only))} else {
+        Ok(queue.enqueue_archive(&archive, fot, stale_only,path.as_deref()))
+      }
+    })
+  }
+
+  //use immt_system::backend::Backend;
+  let login = LoginState::get_server();
+
+  tokio::task::spawn_blocking(move || {
+    let public = match (&login,queue) {
+      (LoginState::None | LoginState::Loading,_) => return Err("Not logged in".to_string().into()),
+      (LoginState::User{name,..},Some(q)) => {
+        let allowed = QueueManager::get().with_queue(q.into(), |q| {
+          q.is_some_and(|q| matches!(q.name(),immt_system::building::QueueName::Sandbox{name:qname,..} if &**qname == name))
+        });
+        if !allowed {
+          return Err(format!("Not allowed to run queue {q}").into())
+        }
+        true
+      }
+      (LoginState::NoAccounts,_) => false,
+      _ => true
+    };
+    if public {
+      let queue = match (queue,login) {
+        (Some(q),_) => either::Either::Left(q),
+        (_,LoginState::User{name,..}) => either::Either::Right(name),
+        (_,LoginState::Admin) => either::Either::Right("admin".to_string()),
+        _ => unreachable!()
+      };
+      do_public(archive,target,path,stale_only,queue)
+    } else { 
+      do_private(archive,target,path,stale_only)
+    }
+  }).await.unwrap_or_else(|e| Err(e.to_string().into()))
+}
+
+#[server(
+  prefix="/api/buildqueue",
   endpoint="log",
 )]
 #[allow(clippy::unused_async)]
-pub async fn get_log(archive:ArchiveId,rel_path:String,target:String) -> Result<String,ServerFnError<String>> {
+pub async fn get_log(queue:NonZeroU32,archive:ArchiveId,rel_path:String,target:String) -> Result<String,ServerFnError<String>> {
   use crate::users::LoginState;
   use std::path::PathBuf;
   use immt_system::backend::{Backend,GlobalBackend};
+  use immt_system::{formats::FormatOrTargets,building::{QueueName,queue_manager::QueueManager}};
   let login = LoginState::get_server();
-  if login != LoginState::Admin && login != LoginState::NoAccounts {
-    return Err("Not logged in".to_string().into());
-  }    
+  let qm = QueueManager::get();
+  let be = match login {
+    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
+    LoginState::NoAccounts => GlobalBackend::get().to_any(),
+    LoginState::Admin | LoginState::User{is_admin:true,..} => {
+      let Some(be) = qm.with_queue(queue.into(), |q| q.map(|q| q.backend().clone())) else {
+        return Err(format!("Queue {queue} not found").into())
+      };
+      be
+    }
+    LoginState::User{name,..} => {
+      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(queue.into(), |q| {
+        q.and_then(|q| if matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name) {
+          Some(q.backend().clone())
+        } else {None})
+      })).await.map_err(|e| e.to_string())?;
+      let Some(be) = allowed else {
+        return Err(format!("Not allowed to run queue {queue}").into());
+      };
+      be
+    }
+  };
+
   let Some(target) = immt_system::formats::BuildTarget::get_from_str(&target) else {
     return Err(format!("Target {target} not found").into())
   };
-  let path = GlobalBackend::get().with_archive(&archive, |a| {
+  let path = be.with_archive(&archive, |a| {
     let Some(a) = a else { return Err::<PathBuf,String>(format!("Archive {archive} not found")) };
     Ok(a.get_log(&rel_path, target))
   })?;
@@ -85,58 +299,223 @@ pub async fn get_log(archive:ArchiveId,rel_path:String,target:String) -> Result<
 }
 
 
+#[server(
+  prefix="/api/buildqueue",
+  endpoint="migrate"
+)]
+#[allow(clippy::unused_async)]
+pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
+  use immt_system::building::{queue_manager::QueueManager,QueueName};
+  use immt_system::backend::{Backend,SandboxedRepository,archives::Archive};
+  let login = LoginState::get_server();
+  let (_,secret) = super::git::get_oauth()?;
+  tokio::task::spawn_blocking(move || {
+    let queues = QueueManager::get();
+    match &login {
+      LoginState::None | LoginState::Loading => return Err("Not logged in".to_string().into()),
+      LoginState::Admin | LoginState::User{is_admin:true,..} => (),
+      LoginState::User{name,..} => if !queues.with_queue(queue.into(),|q| {
+        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
+      }) {
+        return Err(format!("Not allowed to run queue {queue}").into())
+      }
+      LoginState::NoAccounts => return Err("Migration only makes sense in public mode".to_string().into())
+    }
+    let (_,n) = queues.migrate::<(),String>(queue.into(),|sandbox| {
+      sandbox.with_repos(|repos| {
+        for r in repos {
+          if let SandboxedRepository::Git { id,.. } = r {
+            sandbox.with_archive::<Result<_,String>>(id, |a| {
+              let Some(Archive::Local(a)) = a else { return Ok(())};
+              let repo = immt_git::repos::GitRepo::open(a.path()).map_err(|e| e.to_string())?;
+              repo.add_dir(a.path()).map_err(|e| e.to_string())?;
+              let _ = repo.commit_all("migrating").map_err(|e| e.to_string())?;
+              repo.mark_managed().map_err(|e| e.to_string())?;
+              repo.push_with_oauth(&secret).map_err(|e| e.to_string())?;
+              Ok(())
+            })?;
+          }
+        }
+        Ok(())
+      })
+    })?;
+    Ok(n)
+  }).await.unwrap_or_else(|e| Err(e.to_string().into()))
+}
+
+#[server(
+  prefix="/api/buildqueue",
+  endpoint="delete"
+)]
+#[allow(clippy::unused_async)]
+pub async fn delete(queue:NonZeroU32) -> Result<(),ServerFnError<String>> {
+  use immt_system::building::{queue_manager::QueueManager,QueueName};
+  let login = LoginState::get_server();
+  let qm = QueueManager::get();
+  match login {
+    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
+    LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
+    LoginState::User{name,..} => {
+      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(queue.into(), |q| {
+        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
+      })).await.map_err(|e| e.to_string())?;
+      if !allowed {
+        return Err(format!("Not allowed to run queue {queue}").into());
+      }
+    }
+  }
+  qm.delete(queue.into());
+  Ok(())
+}
+
+#[derive(Copy,Clone)]
+struct UpdateQueues(RwSignal<()>);
+
 #[component]
 pub fn QueuesTop() -> impl IntoView {
   use thaw::{TabList,Tab,Divider,Layout};
   use immt_web_utils::components::Spinner;
-  from_server_copy(true,get_queues,|v| {
-    let queues = AllQueues::new(v);
-    QueueSocket::run(queues);
-    provide_context(queues);
-    inject_css("immt-fullscreen", ".immt-fullscreen { width:100%; height:calc(100% - 44px - 21px) }");
-    view!{<Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>
-      <TabList selected_value=queues.selected.get().to_string()>
-        <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
-          <Tab value=i.to_string()>{
-            queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
-          }</Tab>
-        } />
-      </TabList>
-      <div style="margin:10px"><Divider/></div>
-      <Layout class="immt-fullscreen">{move || {
-        let curr = queues.selected.get();
-        let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
-        match ls.get() {
-          QueueData::Idle(v) => {
-              EitherOf4::A(idle(curr,v))
-          },
-          QueueData::Running(r) => {
-              EitherOf4::B(running(r))
-          },
-          QueueData::Finished(failed,done) => EitherOf4::C(finished(curr,failed,done)),
-          QueueData::Empty => EitherOf4::D(view!(<div>"Other"</div>))
+
+  let update = UpdateQueues(RwSignal::new(()));
+  provide_context(update);
+  move || {
+    let _ = update.0.get();
+    let params = use_params_map();
+    let id = move || params.read().get("queue");
+
+    from_server_copy(true,get_queues,move |v| {
+      if v.is_empty() {
+        return leptos::either::Either::Left(view!(<div>"(No running queues)"</div>))
       }
-    }}</Layout>
-    </Show>}
+      let queues = AllQueues::new(v);
+      if let Some(id) = id() {
+        if let Ok(id) = id.parse() {
+          queues.selected.update_untracked(|v| *v = id);
+        }
+      }
+      provide_context(queues);
+      let selected_value = RwSignal::new(queues.selected.get_untracked().to_string());
+      let _ = Effect::new(move |_| {
+        let value = selected_value.get();
+        let selected = queues.selected.get_untracked();
+        let value = value.parse().unwrap_or_else(|_| unreachable!());
+        if selected != value {
+          queues.selected.set(value);
+        }
+      });
+      inject_css("immt-fullscreen", ".immt-fullscreen { width:100%; height:calc(100% - 44px - 21px) }");
+      leptos::either::Either::Right(view!{
+        <TabList selected_value>
+          <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
+            <Tab value=i.to_string()>{
+              queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
+            }</Tab>
+          }/>
+        </TabList>
+        <div style="margin:10px"><Divider/></div>
+        <Layout class="immt-fullscreen">{move || {
+          let curr = queues.selected.get();
+          queues.show.update_untracked(|v| *v = false);
+          QueueSocket::run(queues);
+          move || view! {
+            <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
+              let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
+              move || match ls.get() {
+                QueueData::Idle(v) => {
+                    EitherOf4::A(idle(curr,v))
+                },
+                QueueData::Running(r) => {
+                    EitherOf4::B(running(curr,r))
+                },
+                QueueData::Finished(failed,done) => EitherOf4::C(finished(curr,failed,done)),
+                QueueData::Empty => EitherOf4::D(view!(<div>"Other"</div>))
+              }
+            }</Show>
+          }
+        }}</Layout>
+      })
+    })
+  }
+}
+
+fn repos(id:NonZeroU32,active:bool) -> impl IntoView {
+  use immt_web_utils::components::{Collapsible,Header};
+  use thaw::{Caption1Strong,Table,TableBody,TableHeader,TableRow,TableHeaderCell,TableCell,TableCellLayout};
+  if matches!(LoginState::get(),LoginState::NoAccounts) { return None }
+  let queues : AllQueues = expect_context();
+  let repos = queues.queue_repos.with_untracked(|v| v.get(&id).cloned()).flatten();
+  let Some(repos) = repos else { return None };
+  if repos.is_empty() { return None }
+  inject_css("immt-repo-table", include_str!("repo-table.css"));
+  Some(view!{<div style="margin-left:45px;width:fit-content;"><Collapsible>
+    <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
+    <Table class="immt-repo-table">
+      <TableHeader><TableRow>
+        <TableHeaderCell><Caption1Strong>"Archive"</Caption1Strong></TableHeaderCell>
+        <TableHeaderCell><Caption1Strong>"Branch"</Caption1Strong></TableHeaderCell>
+        <TableHeaderCell><Caption1Strong>"Commit"</Caption1Strong></TableHeaderCell>
+      </TableRow></TableHeader>
+      <TableBody>{
+        repos.into_iter().map(|d| match d {
+          RepoInfo::Copy(id) => leptos::either::Either::Left(view!{
+            <TableRow>
+              <TableCell><TableCellLayout>{id.to_string()}</TableCellLayout></TableCell>
+              <TableCell><TableCellLayout>"(Copied from MathHub)"</TableCellLayout></TableCell>
+            </TableRow>
+          }),
+          RepoInfo::Git{id,branch,commit,..} => leptos::either::Either::Right(view!{
+            <TableRow>
+              <TableCell><TableCellLayout>{id.to_string()}</TableCellLayout></TableCell>
+              <TableCell><TableCellLayout>{branch}</TableCellLayout></TableCell>
+              <TableCell><TableCellLayout>
+                {commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}
+              </TableCellLayout></TableCell>
+            </TableRow>
+          }),
+        }).collect_view()
+      }</TableBody>
+    </Table>
+  </Collapsible></div>})
+}
+
+fn delete_action(id:NonZeroU32) -> Action<(),()> {
+  use thaw::{ToasterInjection,MessageBar,MessageBarIntent,MessageBarBody,ToastOptions,ToastPosition};
+  let update : UpdateQueues = expect_context();
+  let toaster = ToasterInjection::expect_context();
+  Action::new(move |()| async move {
+    match delete(id).await {
+      Ok(()) => update.0.set(()),
+      Err(e) => toaster.dispatch_toast(
+        || view!{
+          <MessageBar intent=MessageBarIntent::Error><MessageBarBody>
+              {e.to_string()}
+          </MessageBarBody></MessageBar>}, 
+        ToastOptions::default().with_position(ToastPosition::Top)
+      )
+    }
   })
 }
 
 fn idle(id:NonZeroU32,ls:RwSignal<Vec<Entry>>) -> impl IntoView {
   use thaw::Button;
   let act = Action::<(),Result<(),ServerFnError<String>>>::new(move |()| run(id));
+  let del = delete_action(id);
   view!{
     <div style="width:100%"><div style="position:fixed;right:20px">
         <Button on_click=move |_| {act.dispatch(());}>"Run"</Button>
+        <Button on_click=move |_| {del.dispatch(());}>"Delete"</Button>
     </div></div>
+    {repos(id,true)}
     <ol reversed style="margin-left:30px">
       <For each=move || ls.get() key=|e| e.id children=|e| e.as_view()/>
     </ol>
   }
 }
 
-fn running(queue:RunningQueue) -> impl IntoView {
+fn running(id:NonZeroU32,queue:RunningQueue) -> impl IntoView {
   use immt_web_utils::components::{AnchorLink,Anchor,Header};
-  use thaw::Layout;
+  use thaw::{Layout,Button};
+  let del = delete_action(id);
   let RunningQueue {running,queue,blocked,failed,done,eta} = queue;
   view!{
     <div style="position:fixed;right:20px;z-index:5"><Anchor>
@@ -146,8 +525,12 @@ fn running(queue:RunningQueue) -> impl IntoView {
         <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
         <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
     </Anchor></div>
+    {repos(id,false)}
     <Layout content_style="text-align:left;">
         {eta.into_view()}
+        <div style="width:100%"><div style="position:fixed;right:20px">
+            <Button on_click=move |_| {del.dispatch(());}>"Abort and Delete"</Button>
+        </div></div>
         <h3 id="running">"Running ("{move || running.with(Vec::len)}")"</h3>
         <ul style="margin-left:30px"><For each=move || running.get() key=|e| e.id children=|e| e.as_view()/></ul>
         <h3 id="queued">"Queued ("{move || queue.with(Vec::len)}")"</h3>
@@ -165,17 +548,23 @@ fn running(queue:RunningQueue) -> impl IntoView {
 fn finished(id:NonZeroU32,failed:Vec<Entry>,done:Vec<Entry>) -> impl IntoView {
   use immt_web_utils::components::{AnchorLink,Anchor,Header};
   use thaw::{Button,Layout};
-  let act = Action::<(),Result<(),ServerFnError<String>>>::new(move |()| requeue(id));
+  let requeue = Action::new(move |()| requeue(id));
   let num_failed = failed.len();
   let num_done = done.len(); 
+  let del = delete_action(id);
   view!{
     <div style="width:100%"><div style="position:fixed;right:120px;z-index:10">
-        <Button on_click=move |_| {act.dispatch(());}>"Requeue Failed"</Button>
+        {if num_failed > 0 {Some(view!(
+          <Button on_click=move |_| {requeue.dispatch(());}>"Requeue Failed"</Button>
+          <Button on_click=move |_| {del.dispatch(());}>"Delete"</Button>
+        ))} else { None }}
+        {migrate_button(id,num_failed)}
     </div></div>
     <div style="position:fixed;right:20px;z-index:5"><Anchor>
         <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
         <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
     </Anchor></div>
+    {repos(id,true)}
     <Layout content_style="text-align:left;">
         <h3 id="failed">"Failed ("{num_failed}")"</h3>
         <ul style="margin-left:30px">{
@@ -186,6 +575,55 @@ fn finished(id:NonZeroU32,failed:Vec<Entry>,done:Vec<Entry>) -> impl IntoView {
           done.iter().map(Entry::as_view).collect_view()
         }</ul>
     </Layout>
+  }
+}
+
+fn migrate_button(id:NonZeroU32,num_failed:usize) -> impl IntoView {
+  use leptos::either::EitherOf3;
+  use thaw::{ToasterInjection,MessageBar,MessageBarIntent,MessageBarBody,ToastOptions,ToastPosition,Button,Dialog,DialogSurface,DialogBody,DialogContent,Caption1Strong,Divider};
+
+  let toaster = ToasterInjection::expect_context();
+  if matches!(LoginState::get(),LoginState::NoAccounts) { return EitherOf3::A(()) }
+  let update : UpdateQueues = expect_context();
+  let migrate = 
+    Action::new(move |()| async move {
+      match migrate(id).await {
+        Err(e) => toaster.dispatch_toast(
+          || view!{
+            <MessageBar intent=MessageBarIntent::Error><MessageBarBody>
+                {e.to_string()}
+            </MessageBarBody></MessageBar>}, 
+          ToastOptions::default().with_position(ToastPosition::Top)
+        ),
+        Ok(i) => {
+          toaster.dispatch_toast(
+            move || view!{
+              <MessageBar intent=MessageBarIntent::Success><MessageBarBody>
+                  {i}" archives migrated"
+              </MessageBarBody></MessageBar>}, 
+            ToastOptions::default().with_position(ToastPosition::Top)
+          );
+          update.0.set(());
+        }
+      }
+    });
+  if num_failed == 0 { EitherOf3::B(view!{
+    <Button on_click=move |_| {migrate.dispatch(());}>"Migrate"</Button>
+  })} else {
+    let clicked = RwSignal::new(false);
+    EitherOf3::C(view!{
+      <Button on_click=move |_| {clicked.set(true);}>"Migrate"</Button>
+      <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
+        <Caption1Strong><span style="color:red">WARNING</span></Caption1Strong>
+        <Divider/>
+        <p>{num_failed}" jobs have failed to build!"<br/>"Migrate anyway?"</p>
+        <div>
+          <div style="width:min-content;margin-left:auto;">
+            <Button on_click=move |_| {migrate.dispatch(());}>"Force Migration"</Button>
+          </div>
+        </div>
+      </DialogContent></DialogBody></DialogSurface></Dialog>
+    })
   }
 }
 
@@ -212,7 +650,7 @@ impl crate::utils::ws::WebSocketServer<NonZeroU32,QueueMessage> for QueueSocket 
     async fn new(account:crate::users::LoginState,_db:crate::server::db::DBBackend) -> Option<Self> {
         use crate::users::LoginState;
         match account {
-            LoginState::Admin | LoginState::NoAccounts => {
+            LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
                 let listener = None;//immt_system::logger().listener();
                 Some(Self {
                     listener,
@@ -233,7 +671,7 @@ impl crate::utils::ws::WebSocketServer<NonZeroU32,QueueMessage> for QueueSocket 
     }
     async fn handle_message(&mut self,msg:NonZeroU32) -> Option<QueueMessage> {
       let (lst,msg) = immt_system::building::queue_manager::QueueManager::get()
-        .get_queue(msg.into(), |q| 
+        .with_queue(msg.into(), |q| 
           q.map(|q| (q.listener(),q.state_message()))
       )?;
       self.listener = Some(lst);
@@ -274,6 +712,7 @@ impl QueueSocket {
   fn run(queues:AllQueues) {
     use crate::utils::ws::WebSocketClient;
     Self::force_start_client(move |msg| {
+      //tracing::warn!("Starting!");
       let current = queues.selected.get_untracked();
       queues.queues.with_untracked(|queues| {
         let Some(queue) = queues.get(&current) else {
@@ -289,7 +728,7 @@ impl QueueSocket {
     },move |mut socket| {
       Effect::new(move |_| {
         if socket._running.get() {
-          let current = queues.selected.get();
+          let current = queues.selected.get_untracked();
           socket.send(&current);
         }
       });
@@ -361,15 +800,27 @@ struct AllQueues {
     show:RwSignal<bool>,
     selected:RwSignal<NonZeroU32>,
     queue_names:RwSignal<VecMap<NonZeroU32,String>>,
+    queue_repos:RwSignal<VecMap<NonZeroU32,Option<Vec<RepoInfo>>>>,
     queues:RwSignal<VecMap<NonZeroU32,RwSignal<QueueData>>>
 }
 
 impl AllQueues {
-  fn new(ids:Vec<(NonZeroU32,String)>) -> Self {
-    let queues = RwSignal::new(ids.iter().map(|(id,_)| (*id,RwSignal::new(QueueData::Empty))).collect());
-    let selected = ids.first().map_or_else(||NonZeroU32::new(1).unwrap_or_else(|| unreachable!()),|(i,_)| *i);
-    let queue_names = RwSignal::new(ids.into());
-      Self {show:RwSignal::new(false),selected:RwSignal::new(selected),queues,queue_names}
+  fn new(ids:Vec<QueueInfo>) -> Self {
+    let queues = RwSignal::new(ids.iter().map(|v| (v.id,RwSignal::new(QueueData::Empty))).collect());
+    let selected = ids.first().map_or_else(||NonZeroU32::new(1).unwrap_or_else(|| unreachable!()),|v| v.id);
+    let mut queue_names = VecMap::default();
+    let mut queue_repos = VecMap::default();
+    for d in ids {
+      queue_names.insert(d.id,d.name);
+      queue_repos.insert(d.id,d.archives)
+    }
+    Self {
+      show:RwSignal::new(false),
+      selected:RwSignal::new(selected),
+      queues,
+      queue_names:RwSignal::new(queue_names),
+      queue_repos:RwSignal::new(queue_repos)
+    }
   }
 }
 
@@ -494,7 +945,8 @@ pub enum TaskState {
 }
 impl TaskState {
   fn into_view(self,t:String,archive:&ArchiveId,rel_path:&str) -> impl IntoView {
-    use immt_web_utils::components::{Collapsible,Header};
+    use immt_web_utils::components::{LazyCollapsible,Header};
+    use thaw::Scrollbar;
     match self {
       Self::Running => EitherOf4::A(view!{<i style="color:yellow">{t}" (Running)"</i>}),
       Self::Queued | Self::Blocked | Self::None => EitherOf4::B(view!{<span style="color:gray">{t}" (...)"</span>}),
@@ -503,16 +955,19 @@ impl TaskState {
         let rel_path = rel_path.to_string();
         let tc = t.clone();
         EitherOf4::C(view!{
-          <Collapsible lazy=true>
+          <LazyCollapsible>
             <Header slot><span style="color:green">{t}" (Done)"</span></Header>
             {
               let archive = archive.clone();
               let rel_path = rel_path.clone();
               let tc = tc.clone();
-              from_server_clone(true, move || get_log(archive.clone(),rel_path.to_string(),tc.clone()), |s| {
-              view!{<pre style="border:2px solid black;width:fit-content;padding:5px;font-size:smaller;">{s}</pre>}
+              let queue = expect_context::<AllQueues>().selected.get_untracked();
+              from_server_clone(true, move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()), |s| {
+              view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
+                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+              </Scrollbar>}
             })}
-          </Collapsible>
+          </LazyCollapsible>
         })
       },
       Self::Failed => {
@@ -520,16 +975,19 @@ impl TaskState {
         let rel_path = rel_path.to_string();
         let tc = t.clone();
         EitherOf4::D(view!{
-          <Collapsible lazy=true>
+          <LazyCollapsible>
             <Header slot><span style="color:red">{t}" (Failed)"</span></Header>
             {
               let archive = archive.clone();
               let rel_path = rel_path.clone();
               let tc = tc.clone();
-              from_server_clone(true, move || get_log(archive.clone(),rel_path.to_string(),tc.clone()), |s| {
-              view!{<pre style="border:2px solid black;width:fit-content;padding:5px;font-size:smaller;">{s}</pre>}
+              let queue = expect_context::<AllQueues>().selected.get_untracked();
+              from_server_clone(true, move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()), |s| {
+              view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
+                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+              </Scrollbar>}
             })}
-          </Collapsible>
+          </LazyCollapsible>
         })
       }
     }

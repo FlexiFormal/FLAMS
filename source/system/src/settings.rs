@@ -20,6 +20,7 @@ pub struct Settings {
     pub ip: std::net::IpAddr,
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
+    temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
     pub num_threads: u8,
     pub gitlab_url: Option<Box<str>>,
     pub gitlab_token: Option<Box<str>>,
@@ -47,17 +48,28 @@ impl Settings {
         SETTINGS.get().expect("Settings not initialized")
     }
 
+    pub fn temp_dir(&self) -> PathBuf {
+        self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf()
+    }
+
+    pub fn close(&self) {
+        if let Some(td) = self.temp_dir.write().take() {
+            let _ = td.close();
+        }
+    }
+
     #[must_use]
     pub fn as_spec(&self) -> SettingsSpec {
         let spec = SettingsSpec {
             mathhubs: self.mathhubs.to_vec(),
             debug: Some(self.debug),
             log_dir: Some(self.log_dir.clone()),
+            temp_dir: Some(self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf().into_boxed_path()),
+            database: Some(self.database.clone()),
             server: ServerSettings {
                 port: self.port,
                 ip: Some(self.ip),
                 admin_pwd: self.admin_pwd.as_ref().map(ToString::to_string),
-                database: Some(self.database.clone()),
             },
             buildqueue: BuildQueueSettings {
                 num_threads: Some(self.num_threads),
@@ -94,6 +106,13 @@ impl From<SettingsSpec> for Settings {
                     .join("log")
                     .into_boxed_path()
             }),
+            temp_dir: parking_lot::RwLock::new(Some(spec.temp_dir.map_or_else(
+                || tempfile::TempDir::new().expect("Could not create temp dir"),
+                |p| {
+                    std::fs::create_dir_all(&p);
+                    tempfile::Builder::new().tempdir_in(p).expect("Could not create temp dir")
+                },
+            ))),
             port: if spec.server.port == 0 {
                 8095
             } else {
@@ -104,7 +123,7 @@ impl From<SettingsSpec> for Settings {
                 .ip
                 .unwrap_or_else(|| "127.0.0.1".parse().unwrap_or_else(|_| unreachable!())),
             admin_pwd: spec.server.admin_pwd.map(String::into_boxed_str),
-            database: spec.server.database.unwrap_or_else(|| {
+            database: spec.database.unwrap_or_else(|| {
                 CONFIG_DIR
                     .as_ref()
                     .expect("could not determine config directory")

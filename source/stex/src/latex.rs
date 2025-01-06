@@ -49,7 +49,7 @@ pub fn clean(path: &Path) {
     }
 }
 
-pub fn pdflatex_and_bib<S: AsRef<std::ffi::OsStr>, I: Iterator<Item = (S, S)>>(
+pub fn pdflatex_and_bib<S: AsRef<std::ffi::OsStr>, I: IntoIterator<Item = (S, S)>>(
     path: &Path,
     envs: I,
 ) -> Result<(), ()> {
@@ -79,7 +79,7 @@ pub fn pdflatex_and_bib<S: AsRef<std::ffi::OsStr>, I: Iterator<Item = (S, S)>>(
     Ok(())
 }
 
-pub fn pdflatex<S: AsRef<std::ffi::OsStr>, I: Iterator<Item = (S, S)>>(
+pub fn pdflatex<S: AsRef<std::ffi::OsStr>, I: IntoIterator<Item = (S, S)>>(
     path: &Path,
     envs: I,
 ) -> Result<(), ()> {
@@ -92,7 +92,7 @@ pub fn pdflatex<S: AsRef<std::ffi::OsStr>, I: Iterator<Item = (S, S)>>(
     //tracing::info!("Running: pdflatex {stem} in {}", parent.display());
     let out = run_command(
         "pdflatex",
-        ["-interaction", "nonstopmode", "-halt-on-error", stem].into_iter(),
+        ["-interaction", "nonstopmode", "-halt-on-error", stem],
         parent,
         envs,
     )?;
@@ -110,8 +110,8 @@ pub fn pdflatex<S: AsRef<std::ffi::OsStr>, I: Iterator<Item = (S, S)>>(
 fn run_command<
     A: AsRef<OsStr>,
     S: AsRef<OsStr>,
-    Env: Iterator<Item = (S, S)>,
-    Args: Iterator<Item = A>,
+    Env: IntoIterator<Item = (S, S)>,
+    Args: IntoIterator<Item = A>,
 >(
     cmd: &str,
     args: Args,

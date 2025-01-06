@@ -4,7 +4,7 @@ use crate::{components::{IntoLOs,LOs}, SHTMLString, SHTMLStringMath};
 
 use super::{narration::DocumentElementSpec, AnySpec, SpecDecl};
 use leptos::{context::Provider, either::{Either, EitherOf5}, prelude::*};
-use immt_web_utils::{components::{Block,Collapsible,Header,HeaderLeft,HeaderRight}, inject_css};
+use immt_web_utils::{components::{Block,LazyCollapsible,Header,HeaderLeft,HeaderRight}, inject_css};
 use thaw::{Text,TextTag};
 
 #[derive(Copy,Clone)]
@@ -301,7 +301,7 @@ pub(super) fn do_notations(uri:URI,arity:ArgSpec) -> impl IntoView {
 fn do_los(uri:SymbolURI) -> impl IntoView {
     use immt_ontology::narration::LOKind;
     view!{
-        <Collapsible lazy=true>
+        <LazyCollapsible>
             <Header slot><span>"Learning Objects"</span></Header>
             <div style="padding-left:15px">{
                 let uri = uri.clone();
@@ -332,7 +332,7 @@ fn do_los(uri:SymbolURI) -> impl IntoView {
                     }
                 })
             }</div>
-        </Collapsible>
+        </LazyCollapsible>
     }
 }
 

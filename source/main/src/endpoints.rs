@@ -13,11 +13,16 @@
  * | [`/api/backend/build_status`](backend::build_status) | `archive=<STRING>`, (optional) `path=<STRING>` | [FileStates](crate::router::backend::FileStates) - the build status of the provided archive, or (if given) the relative path within the provided archive (requires admin login) |
  * | [`/api/backend/query`](query_api) | `query=<STRING>` | `STRING` - SPARQL query endpoint; returns SPARQL JSON |
  * | **Build Queue** | | |
- * | [`/api/buildqueue/enqueue`](backend::enqueue) | `archive=<STRING>`,  `target=<`[FormatOrTarget](crate::router::backend::FormatOrTarget)`>`, (optional) `path=STRING`, (optional) `stale_only=<BOOL>` (default:true) | `usize` - enqueue a new build job. Returns number of jobs queued (requires admin login)|
+ * | [`/api/buildqueue/enqueue`](buildqueue::enqueue) | `archive=<STRING>`,  `target=<`[FormatOrTarget](crate::router::backend::FormatOrTarget)`>`, (optional) `path=STRING`, (optional) `stale_only=<BOOL>` (default:true) | `usize` - enqueue a new build job. Returns number of jobs queued (requires admin login)|
  * | [`/api/buildqueue/get_queues`](buildqueue::get_queues) |  | `Vec<(NonZeroU32,String)>` - return the list of all (waiting or running) build queues as (id,name) pairs (requires admin login)|
  * | [`/api/buildqueue/run`](buildqueue::run) | `id=<NonZeroU32>` | runs the build queue with the given id (requires admin login)|
  * | [`/api/buildqueue/requeue`](buildqueue::requeue) | `id=<NonZeroU32>` | requeues failed tasks in the queue with the given id (requires admin login)|
  * | [`/api/buildqueue/log`](buildqueue::get_log) | `archive=<STRING>`, `rel_path=<STRING>`, `target=<STRING>` | returns the log of the stated build job (requires admin login)|
+ * | [`/api/buildqueue/migrate`](buildqueue::migrate) | `id=<NonZeroU32>` | |
+ * | [`/api/buildqueue/delete`](buildqueue::delete) | `id=<NonZeroU32>` | |
+ * | **Git** | | |
+ * | [`/api/gitlab/get_archives`](git::get_archives) |  | [`ProjectTree`](git::ProjectTree) - returns the list of GitLab projects |
+ * | [`/api/gitlab/get_branches`](git::get_branches) | `id=<u64>` | `Vec<`[`Branch`](immt_git::Branch)`>` - returns the list of branches for the given GitLab project |
  * | **Web Sockets** | | |
  * | [`/ws/log`](crate::router::logging::LogSocket) |  |  |
  * | [`/ws/queue`](crate::router::buildqueue::QueueSocket) |  |  |
@@ -46,7 +51,8 @@ use crate::{
     backend,
     query::query_api,
     buildqueue,
-    content
+    content,
+    git
   },
   server::img::img_handler,
 };

@@ -35,16 +35,20 @@ pub fn initialize(settings: SettingsSpec) {
     }
     #[cfg(feature="gitlab")]
     {
-        match (&settings.gitlab_url,&settings.gitlab_token) {
-            (Some(url),Some(token)) => {
-                GITLAB.clone().load(url,token.to_string());
-            }
-            _ => ()
+        if let Some(url) = &settings.gitlab_url {
+            let cfg = immt_git::gl::GitlabConfig::new(
+                url.to_string(),
+                settings.gitlab_token.as_ref().map(ToString::to_string),
+                settings.gitlab_app_id.as_ref().map(ToString::to_string),
+                settings.gitlab_app_secret.as_ref().map(ToString::to_string)
+            );
+            GITLAB.clone().load(cfg);
+
         }
     }
     let backend = GlobalBackend::get().manager();
     let mhs = &*settings.mathhubs;
-    for p in mhs {
+    for p in mhs.iter().rev() {
         backend.load(p);
     }
     let f = || {

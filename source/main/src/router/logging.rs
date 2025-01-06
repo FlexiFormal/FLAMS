@@ -1,5 +1,5 @@
 use immt_utils::{logs::{LogFileLine, LogLevel, LogMessage, LogTree}, time::Timestamp, vecmap::VecMap};
-use immt_web_utils::{inject_css,components::{Tree,Leaf,Subtree,Header}};
+use immt_web_utils::{inject_css,components::{Tree,Leaf,LazySubtree,Header}};
 use leptos::{either::Either, prelude::*};
 use thaw::Caption1Strong;
 use immt_web_utils::components::Spinner;
@@ -71,21 +71,21 @@ fn do_ls(v:RwSignal<Vec<LogEntrySignal>>) -> impl IntoView {
     view!{
         <For each=move || v.get() key=|e| e.id().to_string() children=|e| {
             match e {
-                LogEntrySignal::Simple(_,e) => Either::Left(view!(<Leaf><span class="immt-log-elem"><LogLine e/></span></Leaf>)),
-                LogEntrySignal::Span(_,e) => Either::Right(do_span(e))
+                LogEntrySignal::Simple(_,e) => view!(<Leaf><span class="immt-log-elem"><LogLine e/></span></Leaf>).into_any(),
+                LogEntrySignal::Span(_,e) => do_span(e).into_any()
             }
         }/>
     }
 }
 fn do_span(s:SpanSignal) -> impl IntoView {
     let children = s.children;
-    view!{<Subtree>
+    view!{<LazySubtree>
         <Header slot>{move || {let s = s.clone(); match s.message.get() {
             SpanMessage::Open {name,timestamp} => view!(<LogLineHelper message=name timestamp target=s.target level=s.level args=s.args spinner=true/>),
             SpanMessage::Closed(message) => view!(<LogLineHelper message target=s.target level=s.level args=s.args spinner=false />)
         }}}</Header>
         {move || do_ls(children)}
-    </Subtree>}
+    </LazySubtree>}
 }
 
 
@@ -160,7 +160,7 @@ impl crate::utils::ws::WebSocketServer<(),Log> for LogSocket {
     async fn new(account:crate::users::LoginState,_db:crate::server::db::DBBackend) -> Option<Self> {
         use crate::users::LoginState;
         match account {
-            LoginState::Admin | LoginState::NoAccounts => {
+            LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
                 let listener = immt_system::logger().listener();
                 Some(Self {
                     listener,

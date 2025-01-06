@@ -2,12 +2,7 @@ pub(crate) mod ws;
 
 use leptos::{either::{Either, EitherOf3}, prelude::*};
 
-#[cfg(feature="hydrate")]
-use thaw::ToasterInjection;
-#[cfg(feature="hydrate")]
-use std::borrow::Cow;
-use std::{fmt::Display, future::Future};
-#[cfg(feature="hydrate")]
+use std::{borrow::Cow, fmt::Display, future::Future};
 use immt_web_utils::components::error_toast;
 
 use immt_web_utils::components::Spinner;
@@ -36,7 +31,7 @@ pub fn from_server_fnonce<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r
   if needs_login {
     Either::Left(move || {let go = go.clone(); match LoginState::get() {
       LoginState::Loading => EitherOf3::A(view!(<Spinner/>)),
-      LoginState::Admin | LoginState::NoAccounts => EitherOf3::B(go()),
+      LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => EitherOf3::B(go()),
       _ => EitherOf3::C(err(LoginError::NotLoggedIn.to_string()))
     }})
   } else { Either::Right(go()) }
@@ -62,7 +57,7 @@ pub fn from_server_clone<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:
   if needs_login {
     Either::Left(move || {let go = go.clone(); match LoginState::get() {
       LoginState::Loading => EitherOf3::A(view!(<Spinner/>)),
-      LoginState::Admin | LoginState::NoAccounts => EitherOf3::B(go()),
+      LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => EitherOf3::B(go()),
       _ => EitherOf3::C(err(LoginError::NotLoggedIn.to_string()))
     }})
   } else { Either::Right(go()) }
@@ -87,24 +82,19 @@ pub fn from_server_copy<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:i
   if needs_login {
     Either::Left(move || match LoginState::get() {
       LoginState::Loading => EitherOf3::A(view!(<Spinner/>)),
-      LoginState::Admin | LoginState::NoAccounts => EitherOf3::B(go()),
+      LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => EitherOf3::B(go()),
       _ => EitherOf3::C(err(LoginError::NotLoggedIn.to_string()))
     })
   } else { Either::Right(go()) }
 }
 
 fn err(e:String) -> impl IntoView {
-  #[cfg(feature="hydrate")]
-  {
-    let toaster = expect_context::<ToasterInjection>();
-    error_toast(Cow::Owned(format!("Error: {e}")), toaster);
-  }
-  view!(<h3 style="color:red">"Error: "{e}</h3>)
+    error_toast(Cow::Owned(format!("Error: {e}")));
 }
 
 pub fn needs_login<V:IntoView+'static>(mut f:impl FnMut() -> V + Send + 'static) -> impl IntoView {
   move || match LoginState::get() {
-    LoginState::Admin | LoginState::NoAccounts => EitherOf3::A(f()),
+    LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => EitherOf3::A(f()),
     LoginState::Loading => EitherOf3::B(view!(<Spinner/>)),
     o => {
       leptos::logging::log!("Wut? {o:?}");

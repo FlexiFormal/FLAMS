@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use argon2::{PasswordHash, PasswordVerifier,PasswordHasher};
 use axum_login::{tracing::Instrument, AuthUser, AuthnBackend};
+use immt_git::gl::auth::GitlabUser;
 use immt_system::settings::Settings;
 use leptos::prelude::ServerFnError;
 use password_hash::{rand_core::OsRng, SaltString};
@@ -29,6 +30,11 @@ impl DBBackend {
             let salt_str = salt.as_str().to_string();
             (pass_hash_str,salt_str)
         });
+        if !db_path.exists() {
+            tokio::fs::create_dir_all(db_path.parent().expect("Invalid database path"))
+                .await.expect("Failed to create database directory");
+            tokio::fs::File::create(db_path).await.expect("Failed to create database file");
+        }
         let db_path = db_path
             .as_os_str()
             .to_str()
@@ -45,52 +51,74 @@ impl DBBackend {
         Self { pool,admin }
     }
 
+    pub async fn all_users(&self) -> Result<Vec<SqlUser>,UserError> {
+        sqlx::query_as!(SqlUser, "SELECT * FROM users")
+            .fetch_all(&self.pool)
+            .in_current_span()
+            .await.map_err(Into::into)
+    }
+
+    pub async fn set_admin(&self,id:i64,is_admin:bool) -> Result<(),UserError> {
+        sqlx::query!("UPDATE users SET is_admin=$2 WHERE id=$1",id,is_admin)
+            .execute(&self.pool)
+            .in_current_span()
+            .await.map_err(Into::into).map(|_| ())
+    }
+
     /// #### Errors
-    pub async fn add_user(&self,username:String,password:String) -> Result<Option<User>,UserError> {
+    pub async fn add_user(&self,user:GitlabUser,secret:String) -> Result<Option<User>,UserError> {
         #[derive(Debug)]
-        struct InsertUser { pub id:i64 }
+        struct InsertUser { pub id:i64, is_admin:bool }
+        let GitlabUser {id:gitlab_id,name,username,avatar_url,email,can_create_group,can_create_project} = user;
         
         if username.len() < 2 { return Err(UserError::InvalidUserName)}
-        if password.len() < 2 { return Err(UserError::InvalidPassword)}
+        if secret.len() < 2 { return Err(UserError::InvalidPassword)}
         let argon2 = argon2::Argon2::default();
         let salt = SaltString::generate(&mut OsRng);
-        let pass_hash = argon2.hash_password(password.as_bytes(), &salt)?;
-        let pass_hash_str = pass_hash.to_string();
-        let salt = salt.as_str();
-        let new_id:InsertUser = sqlx::query_as!(InsertUser,
-            "INSERT INTO users (username,pass_hash,salt) VALUES ($1,$2,$3) RETURNING id",
-            username,pass_hash_str,salt
-        ).fetch_one(&self.pool).await?;
+        let pass_hash = argon2.hash_password(secret.as_bytes(), &salt)?;
         let hash_bytes = pass_hash.hash.unwrap_or_else(|| unreachable!()).as_bytes().to_owned();
-        Ok(Some(User {
+        //let salt = salt.as_str();
+        let new_id:InsertUser = sqlx::query_as!(InsertUser,
+            "INSERT INTO users (gitlab_id,name,username,email,avatar_url,can_create_group,can_create_project,secret,secret_hash,is_admin) 
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) 
+            ON CONFLICT (gitlab_id) DO UPDATE 
+            SET name = excluded.name, username = excluded.username, email = excluded.email, avatar_url = excluded.avatar_url, can_create_group = excluded.can_create_group, can_create_project = excluded.can_create_project, secret = excluded.secret, secret_hash = excluded.secret_hash
+            RETURNING id,is_admin",
+            gitlab_id,name,username,email,avatar_url,can_create_group,can_create_project,secret,hash_bytes,false//,salt
+        ).fetch_one(&self.pool).await?;
+        let u = User {
             id: new_id.id,
             username,
-            session_auth_hash: hash_bytes
-        }))
+            session_auth_hash: hash_bytes,
+            secret,
+            avatar_url:Some(avatar_url),
+            is_admin:new_id.is_admin
+        };
+        Ok(Some(u))
     }
 }
 
 #[async_trait::async_trait]
 impl AuthnBackend for DBBackend {
     type User = User;
-    type Credentials = (String, String);
+    type Credentials = (i64, String);
     type Error = UserError;
 
     async fn authenticate(
         &self,
-        (username, password): Self::Credentials,
+        (gitlab_id, secret): Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
         let Some(user) =
-            sqlx::query_as!(SqlUser, "SELECT * FROM users WHERE username=$1", username)
+            sqlx::query_as!(SqlUser, "SELECT * FROM users WHERE gitlab_id=$1", gitlab_id)
                 .fetch_optional(&self.pool)
                 .in_current_span()
                 .await?
         else {
             return Ok(None);
         };
-        let hash = PasswordHash::parse(&user.pass_hash, password_hash::Encoding::B64)?;
-        let hasher = argon2::Argon2::default();
-        if hasher.verify_password(password.as_bytes(), &hash).is_ok() {
+        //let hash = PasswordHash::parse(&user.secret_hash, password_hash::Encoding::B64)?;
+        //let hasher = argon2::Argon2::default();
+        if user.secret == secret {//hasher.verify_password(secret.as_bytes(), &hash).is_ok() {
             Ok(Some(user.into_user()?))
         } else {
             Ok(None)
@@ -98,7 +126,7 @@ impl AuthnBackend for DBBackend {
     }
 
     async fn get_user(&self, user_id: &i64) -> Result<Option<Self::User>, Self::Error> {
-        if *user_id == 0 { return Ok(Some(User {id:0,username:"admin".to_string(),session_auth_hash:self.admin.as_ref().unwrap_or_else(|| unreachable!()).1.as_bytes().to_owned()})) }
+        if *user_id == 0 { return Ok(Some(User::admin(self.admin.as_ref().unwrap_or_else(|| unreachable!()).1.as_bytes().to_owned()))) }
         let Some(res) = sqlx::query_as!(SqlUser, "SELECT * FROM users WHERE id=$1", *user_id)
             .fetch_optional(&self.pool)
             .in_current_span()
@@ -125,23 +153,29 @@ impl AuthUser for User {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, FromRow)]
-struct SqlUser {
-    id: i64,
-    username: String,
-    pass_hash: String,
-    salt: String,
+pub(crate) struct SqlUser {
+    pub(crate) id: i64,
+    gitlab_id:i64,
+    pub(crate) name:String,
+    pub(crate) username: String,
+    pub(crate) email: String,
+    pub(crate) avatar_url: String,
+    can_create_group: bool,
+    can_create_project: bool,
+    secret:String,
+    secret_hash: Vec<u8>,
+    pub(crate) is_admin:bool
+    //salt: String,
 }
 impl SqlUser {
     fn into_user(self) -> Result<User, UserError> {
-        let PasswordHash { hash, .. } =
-            PasswordHash::parse(&self.pass_hash, password_hash::Encoding::B64)?;
-        let Some(hash) = hash.map(|h| h.as_bytes().to_owned()) else {
-            return Err(UserError::PasswordHashNone);
-        };
         Ok(User {
             id: self.id,
             username: self.username,
-            session_auth_hash: hash,
+            session_auth_hash: self.secret_hash,
+            secret: self.secret,
+            is_admin:self.is_admin,
+            avatar_url:Some(self.avatar_url)
         })
     }
 }

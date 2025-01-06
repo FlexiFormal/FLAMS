@@ -1,4 +1,5 @@
 #![recursion_limit = "256"]
+#![feature(let_chains)]
 /*! Foo Bar
  * 
  * See [endpoints] for public API endpoints

@@ -1,9 +1,13 @@
+use std::num::NonZeroU32;
+
 use immt_ontology::{file_states::FileStateSummary, uris::ArchiveId};
 use immt_utils::{time::Timestamp, vecmap::VecMap};
 use leptos::prelude::*;
-use immt_web_utils::{components::{Header, Leaf, Subtree, Tree}, inject_css};
+use immt_web_utils::{components::{Header, Leaf, LazySubtree, Tree}, inject_css};
 
 use crate::{users::LoginState, utils::{from_server_clone, from_server_copy}};
+
+use super::buildqueue::FormatOrTarget;
 
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 pub struct ArchiveData {
@@ -37,7 +41,7 @@ pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupDa
   let login = LoginState::get_server();
 
   tokio::task::spawn_blocking(move || {
-    let allowed = login == LoginState::Admin || login == LoginState::NoAccounts;
+    let allowed = matches!(login,LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..});
     immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| {
       let v = match r#in {
         None => &tree.groups,
@@ -84,7 +88,7 @@ pub async fn archive_entries(archive:ArchiveId,path:Option<String>) -> Result<(V
   let login = LoginState::get_server();
 
   tokio::task::spawn_blocking(move || {
-    let allowed = login == LoginState::Admin || login == LoginState::NoAccounts;
+    let allowed = matches!(login,LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..});
     immt_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
       let Some(a) = a else { return Err(format!("Archive {archive} not found").into()) };
       a.with_sources(|d| {
@@ -170,7 +174,9 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
   let login = LoginState::get_server();
 
   tokio::task::spawn_blocking(move || {
-    if login != LoginState::Admin && login != LoginState::NoAccounts {
+
+    let allowed = matches!(login,LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..});
+    if !allowed {
       return Err("Not logged in".to_string().into());
     }
     path.map_or_else(
@@ -201,83 +207,9 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
     .unwrap_or_else(|e| Err(e.to_string().into()))
 }
 
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub enum FormatOrTarget {
-  Format(String),
-  Targets(Vec<String>)
-}
-
-#[server(
-  prefix="/api/buildqueue",
-  endpoint="enqueue"
-)]
-#[allow(clippy::unused_async)]
-pub async fn enqueue(archive:ArchiveId,
-  target:FormatOrTarget,
-  path:Option<String>,stale_only:Option<bool>
-) -> Result<usize,ServerFnError<String>> {
-  use immt_system::{formats::FormatOrTargets,building::queue_manager::QueueManager};
-  use immt_system::backend::archives::ArchiveOrGroup as AoG;
-  use immt_system::formats::{SourceFormat,BuildTarget};
-  //use immt_system::backend::Backend;
-    let login = LoginState::get_server();
-
-  tokio::task::spawn_blocking(move || {
-    if login != LoginState::Admin && login != LoginState::NoAccounts {
-      return Err("Not logged in".to_string().into());
-    }
-    let queues = QueueManager::get();
-    let stale_only = stale_only.unwrap_or(true);
-    #[allow(clippy::option_if_let_else)]
-    let tgts: Vec<_> = match &target {
-      FormatOrTarget::Targets(t) => {
-        let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
-          return Err(ServerFnError::MissingArg("Invalid target".into()))
-        };
-        v
-      }
-      FormatOrTarget::Format(_) => Vec::new()
-    };
-    let fot = match target {
-      FormatOrTarget::Format(f) => FormatOrTargets::Format(
-        SourceFormat::get_from_str(&f).map_or_else(
-          || Err(ServerFnError::MissingArg("Invalid format".into())),
-          Ok
-        )?
-      ),
-      FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
-    };
-    let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
-      {match tree.find(&archive) {
-        Some(AoG::Archive(_)) => Ok(false),
-        Some(AoG::Group(_)) => Ok(true),
-        None => Err(format!("Archive {archive} not found").into()),
-      }}
-    )?;
-    if group && path.is_some() {
-      return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
-    }
-
-    queues.with_global(|queue|
-      if group { Ok(queue.enqueue_group(&archive, fot, stale_only))} else {
-        Ok(queue.enqueue_archive(&archive, fot, stale_only,path.as_deref()))
-      }
-    )
-  }).await
-    .unwrap_or_else(|e| Err(e.to_string().into()))
-}
-
 
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
-  /*let r = Resource::new(|| (),|()| group_entries(None));
-  view!{<Suspense fallback = || view!(<immt_web_utils::components::Spinner/>)>{move ||
-    match r.get() {
-      Some(Ok((groups,archives))) => leptos::either::EitherOf3::A(view!(<Tree><ArchivesAndGroups archives groups/></Tree>)),
-      Some(Err(e)) => leptos::either::EitherOf3::B(e.to_string()),
-      None => leptos::either::EitherOf3::C(view!(<immt_web_utils::components::Spinner/>)),
-    }
-  }</Suspense>}*/
   from_server_copy(false, || group_entries(None), |(groups,archives)|
     view!(<Tree><ArchivesAndGroups archives groups/></Tree>)
   )
@@ -309,7 +241,7 @@ fn group(a:ArchiveGroupData) -> impl IntoView {
   let id = a.id;
   let f = move || group_entries(Some(id.clone()));
   view!{
-    <Subtree lazy=true>
+    <LazySubtree>
       <Header slot>{header}</Header>
       {
         //let id = id.clone();
@@ -317,8 +249,8 @@ fn group(a:ArchiveGroupData) -> impl IntoView {
           view!(<Tree><ArchivesAndGroups groups archives/></Tree>)
         )
       }
-    </Subtree>
-  }
+    </LazySubtree>
+  }.into_any()
 }
 
 fn archive(a:ArchiveData) -> impl IntoView {
@@ -338,7 +270,7 @@ fn archive(a:ArchiveData) -> impl IntoView {
   );
   let id = a.id;
   view!{
-    <Subtree lazy=true>
+    <LazySubtree>
       <Header slot>{header}</Header>
       {
         let id = id.clone();
@@ -347,7 +279,7 @@ fn archive(a:ArchiveData) -> impl IntoView {
           view!(<Tree>{dirs_and_files(&nid,dirs,files)}</Tree>)
         )
       }
-    </Subtree>
+    </LazySubtree>
   }
 }
 
@@ -381,7 +313,7 @@ fn dir(archive:ArchiveId,d:DirectoryData) -> impl IntoView {
   let rel_path = d.rel_path;
   let f = move || archive_entries(id.clone(),Some(rel_path.clone()));
   view!{
-    <Subtree lazy=true>
+    <LazySubtree>
       <Header slot>{header}</Header>
       {
         let archive = archive.clone();
@@ -389,8 +321,8 @@ fn dir(archive:ArchiveId,d:DirectoryData) -> impl IntoView {
           view!(<Tree>{dirs_and_files(&archive,dirs,files)}</Tree>)
         )
       }
-    </Subtree>
-  }
+    </LazySubtree>
+  }.into_any()
 }
 
 fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
@@ -448,7 +380,7 @@ fn badge(state:FileStateSummary) -> impl IntoView {
 fn dialog<V:IntoView + 'static>(children:impl Fn(RwSignal<bool>) -> V + Send + Clone + 'static) -> impl IntoView {
   use thaw::{Dialog,DialogSurface,DialogBody,DialogContent,Icon};
   let clicked = RwSignal::new(false);
-  move || if matches!(LoginState::get(),LoginState::Admin | LoginState::NoAccounts) {
+  move || if matches!(LoginState::get(),LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..}) {
     let children = (children.clone())(clicked);
     Some(view!{
       <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
@@ -461,9 +393,9 @@ fn dialog<V:IntoView + 'static>(children:impl Fn(RwSignal<bool>) -> V + Send + C
   } else { None }
 }
 
-async fn run_build(id:ArchiveId,target:FormatOrTarget,path:Option<String>,stale_only:bool,toaster:thaw::ToasterInjection) {
+async fn run_build(queue_id:Option<NonZeroU32>,id:ArchiveId,target:FormatOrTarget,path:Option<String>,stale_only:bool,toaster:thaw::ToasterInjection) {
   use thaw::{ToastOptions,ToastPosition,MessageBar,MessageBarIntent,MessageBarBody};
-  match enqueue(id,target,path,Some(stale_only)).await {
+  match super::buildqueue::enqueue(id,target,path,Some(stale_only),queue_id).await {
     Ok(i) => toaster.dispatch_toast(
       move || view!{
         <MessageBar intent=MessageBarIntent::Success><MessageBarBody>
@@ -490,8 +422,9 @@ fn modal(archive:ArchiveId,path:Option<String>,states:FileStates,format:Option<S
   );
   let toaster = ToasterInjection::expect_context();
   let targets = format.is_some();
+  let queue_id = RwSignal::<Option<NonZeroU32>>::new(None);
   let act = Action::new(move |(t,b):&(FormatOrTarget,bool)| {
-    run_build(archive.clone(),t.clone(),path.clone(),*b,toaster)
+    run_build(queue_id.get_untracked(),archive.clone(),t.clone(),path.clone(),*b,toaster)
   });
   view!{
     <div class="immt-treeview-file-card"><Card>
@@ -510,6 +443,7 @@ fn modal(archive:ArchiveId,path:Option<String>,states:FileStates,format:Option<S
           })}</CardHeaderAction>
         </CardHeader>
         <Divider/>
+        {select_queue(queue_id)}
         <Table>
             <thead>
                 <tr>
@@ -554,5 +488,47 @@ fn modal(archive:ArchiveId,path:Option<String>,states:FileStates,format:Option<S
         </Table>
 
     </Card></div>
+  }
+}
+
+pub(crate) fn select_queue(queue_id:RwSignal<Option<NonZeroU32>>) -> impl IntoView { move || {
+  let user = LoginState::get();
+  if matches!(user,LoginState::NoAccounts) {  return None }
+  let r = Resource::new(|| (),move |()| super::buildqueue::get_queues());
+  Some(view!{<Suspense fallback = || view!(<immt_web_utils::components::Spinner/>)>{move || {
+    match r.get() {
+      None => leptos::either::EitherOf3::A(view!(<immt_web_utils::components::Spinner/>)),
+      Some(Err(e)) => leptos::either::EitherOf3::B(immt_web_utils::components::error_toast(e.to_string().into())),
+      Some(Ok(queues)) => leptos::either::EitherOf3::C(view!{<div><div style="width:fit-content;margin-left:auto;">{do_queues(queue_id,queues)}</div></div>})
+    }
+  }}</Suspense>})
+}}
+
+fn do_queues(queue_id:RwSignal<Option<NonZeroU32>>,v:Vec<super::buildqueue::QueueInfo>) -> impl IntoView {
+  use thaw::Select;
+  inject_css("immt-select-queue", include_str!("select_queue.css"));
+  let queues = if v.is_empty() { 
+    vec![(0u32,"New Build Queue".to_string())] 
+  } else {
+    v.into_iter().map(|q| (q.id.get(),q.name)).chain(std::iter::once((0u32,"New Build Queue".to_string()))).collect()
+  };
+  let value = RwSignal::new(queues.first().unwrap_or_else(|| unreachable!()).clone().1);
+  let qc = queues.clone();
+  let _ = Effect::new(move |_| {
+    let queue = value.get();
+    if queue == "New Build Queue" {
+      queue_id.update_untracked(|v| *v = None);
+    } else {
+      let idx = qc.iter().find_map(|(id,name)| if *name == queue {Some(*id)} else {None}).unwrap_or_else(|| unreachable!());
+      queue_id.update_untracked(|v| *v = Some(NonZeroU32::new(idx).unwrap_or_else(|| unreachable!())));
+    }
+  });
+  view!{
+    <span style="font-style:italic;">"Build Queue: "
+    <Select value class="immt-select-queue">{
+      queues.into_iter().map(|(id,name)| view!{
+        <option value=name.clone()>{name.clone()}</option>
+      }).collect_view()
+    }</Select></span>
   }
 }
