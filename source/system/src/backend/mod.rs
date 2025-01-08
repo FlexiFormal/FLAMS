@@ -849,21 +849,25 @@ impl SandboxedBackend {
         skip_all
     )]
     pub fn migrate(&self) -> usize {
-        fn existent_parent(p:&Path) -> &Path {
-            if p.exists() {return p}
-            existent_parent(p.parent().unwrap_or_else(|| unreachable!()))
-        }
+        #[cfg(target_os="windows")]
         fn same_fs(p1:&Path,p2:&Path) -> bool {
+            let Some(p1) = p1.components().next()
+                .and_then(|c| c.as_os_str().to_str()) else {return false};
+            let Some(p2) = p2.components().next()
+                .and_then(|c| c.as_os_str().to_str()) else {return false};
+            p1 == p2
+        }
+        #[cfg(not(target_os="windows"))]
+        fn same_fs(p1:&Path,p2:&Path) -> bool {
+            fn existent_parent(p:&Path) -> &Path {
+                if p.exists() {return p}
+                existent_parent(p.parent().unwrap_or_else(|| unreachable!()))
+            }
             let p1 = existent_parent(p1);
             let p2 = existent_parent(p2);
             let md1 = p1.metadata().unwrap_or_else(|_| unreachable!());
             let md2 = p2.metadata().unwrap_or_else(|_| unreachable!());
-            #[cfg(target_os="windows")]
-            {md1.volume_serial_number().is_some_and(|i1|
-                md2.volume_serial_number().is_some_and(|i2| i1 == i2)
-            )}
-            #[cfg(not(target_os="windows"))]
-            {md1.dev() == md2.dev()}
+            md1.dev() == md2.dev()
         }
         let mut count = 0;
         let mut cnt = &mut count;
