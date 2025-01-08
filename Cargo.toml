@@ -123,7 +123,7 @@ oxrdfio = { version = "0.1"}#, features = ["async-tokio"] }
 
 sqlx = {version="0.8", features=["sqlite","macros","runtime-tokio"]}
 libsqlite3-sys = {version="*",features=["bundled"]}
-rstest = "0.23"
+rstest = "0.24"
 html5ever = "0.29.0"
 
 async-lsp = {version="0.2",features=["tokio","async-io"]}
@@ -137,7 +137,7 @@ webp = { version= "0.3"}
 dashmap = { version = "6" }
 
 gitlab = { version="0"}
-git2 = {version="0.19", default-features = false, features = ["vendored-libgit2"] }
+git2 = {version="0.20", default-features = false, features = ["vendored-libgit2"] }
 
 # leptos
 leptos = { version = "0.7", features=["nightly"]}
@@ -156,13 +156,13 @@ icondata_bi = "0"
 icondata_ai = "0"
 icondata_ch = "0"
 
-axum = {version="0.7",features=["ws"]}
-axum-macros = {version="0.4.2"}
+axum = {version="=0.7",features=["ws"]}
+axum-macros = {version="0.5"}
 # leptos_axum requires 0.4:
 tower = {version="0.5",features=["util"]}
 tower-http = {version="0.6",features=["fs","trace","cors"]}
-tower-sessions = { version="0.13"}
-axum-login = {version = "0.16"}
+tower-sessions = { version="=0.13"}
+axum-login = {version = "=0.16"}
 http = {version="1"}
 
 # wasm
