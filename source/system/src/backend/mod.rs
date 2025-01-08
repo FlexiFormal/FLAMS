@@ -994,13 +994,11 @@ impl SandboxedBackend {
                 self.copy_archive(a);
             }, 
             |g,t,repos| for a in g.dfs().unwrap_or_else(|| unreachable!()) {
-                if let ArchiveOrGroup::Archive(a) = a {
+                if let ArchiveOrGroup::Archive(id) = a {
                     if let Some(Archive::Local(a)) = t.get(id) {
-                        if !repos.iter().any(|r| r.id() == a.id()) {
-                            if let Some(Archive::Local(a)) = t.get(id) {
-                                repos.push(SandboxedRepository::Copy(a.id().clone()));
-                                self.copy_archive(a);
-                            };
+                        if !repos.iter().any(|r| r.id() == id) {
+                            repos.push(SandboxedRepository::Copy(id.clone()));
+                            self.copy_archive(a);
                         }
                     }
                 }

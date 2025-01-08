@@ -75,6 +75,15 @@ impl LoginState {
           } else { Err(format!("Queue {id} not found")) }
         })
       }
+      (LoginState::Admin,Some(id)) => {
+        qm.with_queue(id.into(),|q| {
+          if let Some(q) = q {
+            Ok(f(id.into(),q))
+          } else {
+            Err(format!("Queue {id} not found"))
+          }
+        })
+      }
       (LoginState::User{name,..},_) => {
         let queue = qm.new_queue(name);
         qm.with_queue(queue,|q| {
