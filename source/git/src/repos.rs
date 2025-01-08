@@ -23,6 +23,8 @@ impl From<git2::Commit<'_>> for super::Commit {
   }
 }
 
+const NOTES_NS: &str = "refs/notes/immt";
+
 impl GitRepo {
   /// #### Errors
   pub fn open<P:AsRef<Path>>(path:P) -> Result<Self,git2::Error> {
@@ -46,7 +48,7 @@ impl GitRepo {
     let sig = self.0.signature()?;
     self.0.note(
       &sig, &sig, 
-      Some("refs/notes/commits"), head, note, true
+      Some(NOTES_NS), head, note, true
     )?;
     Ok(())
   }
@@ -54,22 +56,22 @@ impl GitRepo {
   /// #### Errors
   pub fn with_latest_note<R>(&self,f:impl FnOnce(&str) -> R) -> Result<Option<R>,git2::Error> {
     let head = self.0.head()?.peel_to_commit()?.id();
-    self.0.find_note(Some("refs/notes/commits"), head).map(
+    self.0.find_note(Some(NOTES_NS), head).map(
       |n| n.message().map(f)
     )
   }
 
   /// #### Errors
   #[inline]
-  pub fn mark_managed(&self) -> Result<(),git2::Error> {
-    self.add_note("iMMT_managed")
+  pub fn mark_managed(&self,branch:&str,base_commit:&str) -> Result<(),git2::Error> {
+    self.add_note(&format!("{branch};{base_commit}"))
   }
 
   /// #### Errors
   #[inline]
-  pub fn is_managed(&self) -> Result<bool,git2::Error> {
-    self.with_latest_note(|s| s == "iMMT_managed")
-      .map(|b| b.is_some_and(|b| b))
+  pub fn get_managed(&self) -> Result<Option<String>,git2::Error> {
+    self.with_latest_note(|s| s.to_string())
+      //.map(|b| b.is_some_and(|b| b))
   }
 
   /// #### Errors
@@ -111,10 +113,15 @@ impl GitRepo {
     fetch.remote_callbacks(cbs);
     if shallow { fetch.depth(1); }
     self.0.find_remote("origin")?
-      .fetch(&[branch], Some(&mut fetch), None)?;
+      .fetch(&[branch,&format!("+{NOTES_NS}:{NOTES_NS}")], Some(&mut fetch), None)?;
     let remote = self.0.find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)?;
     let commit = remote.get().peel_to_commit()?;
-    self.0.branch(branch, &commit, false)?.set_upstream(Some(&format!("origin/{branch}")))
+    if let Ok(mut local) = self.0.find_branch(branch, git2::BranchType::Local) {
+      local.get_mut().set_target(commit.id(), "fast forward")?;
+      Ok(())
+    } else {
+      self.0.branch(branch, &commit, false)?.set_upstream(Some(&format!("origin/{branch}")))
+    }
   }
 
   /// #### Errors
@@ -135,7 +142,10 @@ impl GitRepo {
     cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user, password));
     let mut opts = git2::PushOptions::new();
     opts.remote_callbacks(cbs);
-    remote.push(&[&format!("+refs/heads/{branch_name}:refs/heads/{branch_name}")],Some(&mut opts))?;
+    remote.push(&[
+      format!("+refs/heads/{branch_name}:refs/heads/{branch_name}").as_str(),
+      NOTES_NS
+    ],Some(&mut opts))?;
     Ok(())
   }
 
@@ -199,10 +209,43 @@ impl GitRepo {
     let mut remote = self.0.find_remote("origin")?;
     let mut cbs = git2::RemoteCallbacks::new();
     cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user,password));
-    remote.fetch(&["+refs/heads/*:refs/remotes/origin/*"],Some(
+
+    remote.fetch(&[
+        "+refs/heads/*:refs/remotes/origin/*",
+        &format!("{NOTES_NS}:{NOTES_NS}")
+      ],Some(
         git2::FetchOptions::new().remote_callbacks(cbs)
       ),None)?;
     let head = self.0.head()?.peel_to_commit()?;
+    let Some(s) = self.get_managed()? else {
+      return Ok(Vec::new())
+    };
+    let Some((_,managed)) = s.split_once(';') else {
+      return Err(git2::Error::from_str("unexpected git note on release branch"))
+    };
+    let managed_id = git2::Oid::from_str(managed)?;
+    let managed = self.0.find_commit(managed_id)?;
+
+    let mut new_commits = Vec::new();
+    for branch in self.0.branches(Some(git2::BranchType::Remote))? {
+      let (branch,_) = branch?;
+      let Some(branch_name) = branch.name()? else {continue};
+      if branch_name == "origin/HEAD" || branch_name == "origin/release" {continue}
+      let branch_name = branch_name.strip_prefix("origin/").unwrap_or(branch_name);
+      let tip_commit = branch.get().peel_to_commit()?;
+      if tip_commit.id() == managed_id { continue }
+      let mut found = false;
+      self.walk(tip_commit.clone(),|id|
+        if managed_id == id {found = true;false} else {true}
+      );
+      if found {
+        new_commits.push((branch_name.to_string(),tip_commit.into()));
+      }
+    }
+    Ok(new_commits)
+
+    /*
+
     let mut history = HSet::default();
     history.insert(head.id());
     self.walk(head.clone(),|id| {history.insert(id);true});
@@ -223,7 +266,9 @@ impl GitRepo {
         new_commits.push((branch_name.to_string(),tip_commit.into()));
       }
     }
+
     Ok(new_commits)
+     */
   }
 
   /// #### Errors
@@ -250,6 +295,7 @@ impl GitRepo {
   /// #### Errors
   pub fn commit_all(&self,message:&str) -> Result<super::Commit,git2::Error> {
     let mut index = self.0.index()?;
+    let managed = self.get_managed()?;
     let id = index.write_tree()?;
     let tree = self.0.find_tree(id)?;
     let parent = self.0.head()?.peel_to_commit()?;
@@ -260,6 +306,9 @@ impl GitRepo {
       message, &tree, &[&parent]
     )?;
     let commit = self.0.find_commit(commit)?;
+    if let Some(mg) = managed {
+      self.add_note(&mg)?
+    }
     Ok(commit.into())
   }
 
@@ -302,7 +351,9 @@ impl GitRepo {
     self.0.commit(
       Some("HEAD"),
       &sig, &sig, 
-      &format!("Merge commit {}",commit.id().to_string()), &tree, &[&parent,&commit]
+      &format!("Merge commit {}",commit.id().to_string()), 
+      &tree, 
+      &[&parent,&commit]
     ).map(|_| ())
   }
 

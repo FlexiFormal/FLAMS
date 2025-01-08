@@ -156,6 +156,9 @@ impl QueueManager {
         }
         _ => ()
       }
+      if matches!(q.name(),QueueName::Global) {
+        inner.insert(id, Queue::new(id,QueueName::Global,GlobalBackend::get().to_any()));
+      }
     }
   }
 

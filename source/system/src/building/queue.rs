@@ -281,10 +281,9 @@ impl Queue {
   }
 
   fn maybe_restart(&self) {
-    let state = &mut *self.0.state.write();
-    if let QueueState::Finished(_) = state {
-      *state = QueueState::Idle;
-      //*self.0.map.write() = TaskMap::default();
+    let mut state = self.0.state.write();
+    if let QueueState::Finished(_) = &mut *state {
+      drop(state);self.requeue_failed();
     }
   }
 

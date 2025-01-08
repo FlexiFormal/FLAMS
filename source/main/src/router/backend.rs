@@ -393,25 +393,6 @@ fn dialog<V:IntoView + 'static>(children:impl Fn(RwSignal<bool>) -> V + Send + C
   } else { None }
 }
 
-async fn run_build(queue_id:Option<NonZeroU32>,id:ArchiveId,target:FormatOrTarget,path:Option<String>,stale_only:bool,toaster:thaw::ToasterInjection) {
-  use thaw::{ToastOptions,ToastPosition,MessageBar,MessageBarIntent,MessageBarBody};
-  match super::buildqueue::enqueue(id,target,path,Some(stale_only),queue_id).await {
-    Ok(i) => toaster.dispatch_toast(
-      move || view!{
-        <MessageBar intent=MessageBarIntent::Success><MessageBarBody>
-            {i}" new build tasks queued"
-        </MessageBarBody></MessageBar>}, 
-      ToastOptions::default().with_position(ToastPosition::Top)
-    ),
-    Err(e) => toaster.dispatch_toast(
-      || view!{
-        <MessageBar intent=MessageBarIntent::Error><MessageBarBody>
-            {e.to_string()}
-        </MessageBarBody></MessageBar>}, 
-      ToastOptions::default().with_position(ToastPosition::Top)
-    )
-  }
-}
 
 fn modal(archive:ArchiveId,path:Option<String>,states:FileStates,format:Option<String>) -> impl IntoView {
   use thaw::{ToasterInjection,Card,CardHeader,CardHeaderAction,Table,Caption1Strong,Button,ButtonSize,Divider};//,CardHeaderDescription
@@ -423,9 +404,11 @@ fn modal(archive:ArchiveId,path:Option<String>,states:FileStates,format:Option<S
   let toaster = ToasterInjection::expect_context();
   let targets = format.is_some();
   let queue_id = RwSignal::<Option<NonZeroU32>>::new(None);
-  let act = Action::new(move |(t,b):&(FormatOrTarget,bool)| {
-    run_build(queue_id.get_untracked(),archive.clone(),t.clone(),path.clone(),*b,toaster)
-  });
+  let act = immt_web_utils::components::message_action(
+    move |(t,b)|
+      super::buildqueue::enqueue(archive.clone(), t, path.clone(), Some(b), queue_id.get_untracked())
+    , |i| format!("{i} new build tasks queued")
+  );
   view!{
     <div class="immt-treeview-file-card"><Card>
         <CardHeader>
@@ -498,7 +481,7 @@ pub(crate) fn select_queue(queue_id:RwSignal<Option<NonZeroU32>>) -> impl IntoVi
   Some(view!{<Suspense fallback = || view!(<immt_web_utils::components::Spinner/>)>{move || {
     match r.get() {
       None => leptos::either::EitherOf3::A(view!(<immt_web_utils::components::Spinner/>)),
-      Some(Err(e)) => leptos::either::EitherOf3::B(immt_web_utils::components::error_toast(e.to_string().into())),
+      Some(Err(e)) => leptos::either::EitherOf3::B(immt_web_utils::components::display_error(e.to_string().into())),
       Some(Ok(queues)) => leptos::either::EitherOf3::C(view!{<div><div style="width:fit-content;margin-left:auto;">{do_queues(queue_id,queues)}</div></div>})
     }
   }}</Suspense>})

@@ -65,7 +65,7 @@ pub(crate) fn Users() -> impl IntoView {
     match r.get() {
       Some(Ok(users)) if users.is_empty() => leptos::either::EitherOf4::A("(No users)"),
       Some(Err(e)) => leptos::either::EitherOf4::B(
-        immt_web_utils::components::error_toast(e.to_string().into())
+        immt_web_utils::components::display_error(e.to_string().into())
       ),
       None => leptos::either::EitherOf4::C(view!(<immt_web_utils::components::Spinner/>)),
       Some(Ok(users)) => leptos::either::EitherOf4::D(user_table(users))

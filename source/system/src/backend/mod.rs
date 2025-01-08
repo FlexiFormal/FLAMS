@@ -858,7 +858,12 @@ impl SandboxedBackend {
             let p2 = existent_parent(p2);
             let md1 = p1.metadata().unwrap_or_else(|_| unreachable!());
             let md2 = p2.metadata().unwrap_or_else(|_| unreachable!());
-            md1.dev() == md2.dev()
+            #[cfg(target_os="windows")]
+            {md1.volume_serial_number().is_some_and(|i1|
+                md2.volume_serial_number().is_some_and(|i2| i1 == i2)
+            )}
+            #[cfg(not(target_os="windows"))]
+            {md1.dev() == md2.dev()}
         }
         let mut count = 0;
         let mut cnt = &mut count;
@@ -954,9 +959,9 @@ impl SandboxedBackend {
                             group(g,t,repos);
                             return
                         };
-                        if let Some(ArchiveOrGroup::Archive(a)) = g.children.iter().find(|a| a.id().last_name() == "meta-inf") {
+                        if let Some(ArchiveOrGroup::Archive(a)) = g.children.iter().find(|a| a.id().is_meta()) {
                             if !repos.iter().any(|r| r.id() == a) {
-                                let Some(Archive::Local(a)) = t.get(id) else {
+                                let Some(Archive::Local(a)) = t.get(a) else {
                                     else_(); return
                                 };
                                 repos.push(SandboxedRepository::Copy(a.id().clone()));

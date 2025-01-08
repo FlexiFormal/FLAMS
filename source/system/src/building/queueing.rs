@@ -174,6 +174,7 @@ impl Queue {
           BuildTask(task_i)
         }
         Entry::Occupied(o) => {
+          count += 1;
           for s in o.get().steps() {
             *s.0.state.write() = TaskState::None;
           }

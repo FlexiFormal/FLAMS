@@ -3,7 +3,7 @@ pub(crate) mod ws;
 use leptos::{either::{Either, EitherOf3}, prelude::*};
 
 use std::{borrow::Cow, fmt::Display, future::Future};
-use immt_web_utils::components::error_toast;
+use immt_web_utils::components::display_error;
 
 use immt_web_utils::components::Spinner;
 
@@ -89,7 +89,7 @@ pub fn from_server_copy<E,Fut,F,T,V:IntoView+'static>(needs_login:bool,f: F, r:i
 }
 
 fn err(e:String) -> impl IntoView {
-    error_toast(Cow::Owned(format!("Error: {e}")));
+    display_error(Cow::Owned(format!("Error: {e}")));
 }
 
 pub fn needs_login<V:IntoView+'static>(mut f:impl FnMut() -> V + Send + 'static) -> impl IntoView {

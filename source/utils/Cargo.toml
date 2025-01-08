@@ -21,6 +21,7 @@ smallvec={workspace=true}
 tracing={workspace=true}
 inventory = {workspace=true}
 paste = {workspace=true}
+filetime = {workspace=true}
 
 async-broadcast={workspace=true,optional=true}
 rayon={workspace=true,optional=true}

@@ -21,7 +21,78 @@ pub enum RepoInfo {
     id:ArchiveId,
     remote:String,
     branch:String,
-    commit:immt_git::Commit
+    commit:immt_git::Commit,
+    updates:Vec<(String,immt_git::Commit)>
+  }
+}
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+pub enum FormatOrTarget {
+  Format(String),
+  Targets(Vec<String>)
+}
+
+#[cfg(feature="ssr")]
+impl LoginState {
+  pub(crate) fn with_queue<R>(&self,id:NonZeroU32,f:impl FnOnce(&immt_system::building::Queue) -> R) -> Result<R,String> {
+    use immt_system::building::QueueName;
+    let qm = immt_system::building::queue_manager::QueueManager::get();
+    match self {
+      LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {self:?}")),
+      LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
+      LoginState::User{name,..} => {
+        return qm.with_queue(id.into(), move |q| {
+          if let Some(q) = q {
+            if matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name) {
+              Ok(f(q))
+            } else {
+              Err(format!("Not allowed to run queue {id}"))
+            }
+          } else { Err(format!("Queue {id} not found")) }
+        });
+      }
+    }
+    qm.with_queue(id.into(),move |q|
+      if let Some(q) = q {
+        Ok(f(q))
+      } else { Err(format!("Queue {id} not found")) }
+    )
+  }
+
+  pub(crate) fn with_opt_queue<R>(&self,id:Option<NonZeroU32>,f:impl FnOnce(immt_system::building::queue_manager::QueueId,&immt_system::building::Queue) -> R) -> Result<R,String> {
+    use immt_system::building::QueueName;
+    let qm = immt_system::building::queue_manager::QueueManager::get();
+    match (self,id) {
+      (LoginState::None | LoginState::Loading,_) => return Err(format!("Not logged in: {self:?}")),
+      (LoginState::User{name,..},Some(id)) => {
+        qm.with_queue(id.into(), move |q| {
+          if let Some(q) = q {
+            if matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name) {
+              Ok(f(id.into(),q))
+            } else {
+              Err(format!("Not allowed to run queue {id}"))
+            }
+          } else { Err(format!("Queue {id} not found")) }
+        })
+      }
+      (LoginState::User{name,..},_) => {
+        let queue = qm.new_queue(name);
+        qm.with_queue(queue,|q| {
+          let Some(q) = q else {unreachable!()};
+          Ok(f(queue,q))
+        })
+      }
+      (LoginState::Admin,_) => {
+        let queue = qm.new_queue("admin");
+        qm.with_queue(queue,|q| {
+          let Some(q) = q else {unreachable!()};
+          Ok(f(queue,q))
+        })
+      }
+      (LoginState::NoAccounts,_) => {
+        qm.with_global(|q| Ok(f(immt_system::building::queue_manager::QueueId::global(),q)))
+      }
+    }
   }
 }
 
@@ -33,25 +104,53 @@ pub enum RepoInfo {
 #[allow(clippy::unused_async)]
 pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
   use immt_system::building::queue_manager::QueueManager;
-  use immt_system::backend::SandboxedRepository;
+  use immt_system::backend::{AnyBackend,SandboxedRepository};
   let login = LoginState::get_server();
-  let ls = match login {
-    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
-    LoginState::NoAccounts | LoginState::Admin | LoginState::User{is_admin:true,..} =>
-      tokio::task::spawn_blocking(|| QueueManager::get().all_queues()).await,
-    LoginState::User{name,..} =>
-      tokio::task::spawn_blocking(move || QueueManager::get().queues_for_user(&name)).await
-  }.map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?;
-  Ok(ls.into_iter().map(|(k,v,d)| 
-    QueueInfo {
-      id:k.into(),
-      name:v.to_string(),
-      archives:d.map(|d| d.into_iter().map(|ri| match ri {
-        SandboxedRepository::Copy(id) => RepoInfo::Copy(id),
-        SandboxedRepository::Git { id,branch,commit,remote } => RepoInfo::Git { id,branch:branch.to_string(),commit,remote:remote.to_string() }
-      }).collect())
+  let oauth = super::git::get_oauth().ok();
+  tokio::task::spawn_blocking(move || {
+    let ls = match login {
+      LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
+      LoginState::NoAccounts | LoginState::Admin | LoginState::User{is_admin:true,..} =>
+        QueueManager::get().all_queues(),
+      LoginState::User{name,..} =>
+        QueueManager::get().queues_for_user(&name)
+    };
+    let mut ret = Vec::new();
+    for (k,v,d) in ls {
+      let archives = if let Some(d) = d {
+        let mut archives = Vec::new();
+        for ri in d { match ri {
+          SandboxedRepository::Copy(id) => archives.push(RepoInfo::Copy(id)),
+          SandboxedRepository::Git { id, branch, commit, remote } => {
+            let updates = if let Some((oauth,secret)) = &oauth {
+              let gitlab_url = &**immt_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
+              let Some(path) = QueueManager::get().with_queue(k, |q| {
+                let q = q?;
+                let AnyBackend::Sandbox(be) = q.backend() else {return None};
+                Some(be.path_for(&id))
+              }) else {continue};
+              immt_git::repos::GitRepo::open(path).ok().and_then(|git| {
+                git.get_origin_url().ok().and_then(|url| {
+                  if url.starts_with(gitlab_url) {
+                    git.get_new_commits_with_oauth(secret).ok()
+                  } else { None }
+                })
+              }).unwrap_or_default()
+            } else { Vec::new()};
+            archives.push(RepoInfo::Git { 
+              id,branch:branch.to_string(),commit,remote:remote.to_string(),updates
+            })
+          }
+        }}
+        Some(archives)
+      } else { None };
+
+      ret.push(QueueInfo {
+        id:k.into(),name:v.to_string(),archives
+      })
     }
-  ).collect())
+    Ok(ret)
+  }).await.unwrap_or_else(|e| Err(e.to_string().into()))
 }
 
 #[server(
@@ -62,23 +161,11 @@ pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
 pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
   use immt_system::building::{queue_manager::QueueManager,QueueName};
   let login = LoginState::get_server();
-  let qm = QueueManager::get();
-  match login {
-    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
-    LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
-    LoginState::User{name,..} => {
-      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(id.into(), |q| {
-        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
-      })).await.map_err(|e| e.to_string())?;
-      if !allowed {
-        return Err(format!("Not allowed to run queue {id}").into());
-      }
-    }
-  }
-  let Ok(Ok(())) = tokio::task::spawn_blocking(move || QueueManager::get().start_queue(id.into())).await else {
-      return Err(format!("Queue {id} not found").into())
-  };
-  Ok(())
+  tokio::task::spawn_blocking(move || {
+    login.with_queue(id,|_| ())?;
+    QueueManager::get().start_queue(id.into()).map_err(|()| "Queue does not exist".to_string())?;
+    Ok(())
+  }).await.map_err(|e| e.to_string())?
 }
 
 #[server(
@@ -89,30 +176,9 @@ pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
 pub async fn requeue(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
   use immt_system::building::{queue_manager::QueueManager,QueueName};
   let login = LoginState::get_server();
-  let qm = QueueManager::get();
-  match login {
-    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
-    LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
-    LoginState::User{name,..} => {
-      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(id.into(), |q| {
-        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
-      })).await.map_err(|e| e.to_string())?;
-      if !allowed {
-        return Err(format!("Not allowed to run queue {id}").into());
-      }
-    }
-  }
-  let Ok(Ok(())) = tokio::task::spawn_blocking(move || QueueManager::get().requeue_failed(id.into())).await else {
-      return Err(format!("Queue {id} not found").into())
-  };
-  Ok(())
-}
-
-
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub enum FormatOrTarget {
-  Format(String),
-  Targets(Vec<String>)
+  tokio::task::spawn_blocking(move || {
+    login.with_queue(id,|q| q.requeue_failed())
+  }).await.map_err(|e| e.to_string())?.map_err(Into::into)
 }
 
 #[server(
@@ -128,129 +194,53 @@ pub async fn enqueue(archive:ArchiveId,
   use immt_system::{formats::FormatOrTargets,building::queue_manager::QueueManager};
   use immt_system::backend::archives::ArchiveOrGroup as AoG;
   use immt_system::formats::{SourceFormat,BuildTarget};
-  
 
-  fn do_private(archive:ArchiveId,target:FormatOrTarget,
-    path:Option<String>,stale_only:Option<bool>) -> Result<usize,ServerFnError<String>> {
+  let login = LoginState::get_server();
 
-    let queues = QueueManager::get();
-    let stale_only = stale_only.unwrap_or(true);
+  tokio::task::spawn_blocking(move || 
+    login.with_opt_queue::<Result<_,ServerFnError<String>>>(queue, |id,queue| {
+      let stale_only = stale_only.unwrap_or(true);
 
-    #[allow(clippy::option_if_let_else)]
-    let tgts: Vec<_> = match &target {
-      FormatOrTarget::Targets(t) => {
-        let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
-          return Err(ServerFnError::MissingArg("Invalid target".into()))
-        };
-        v
+      #[allow(clippy::option_if_let_else)]
+      let tgts: Vec<_> = match &target {
+        FormatOrTarget::Targets(t) => {
+          let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
+            return Err(ServerFnError::MissingArg("Invalid target".into()))
+          };
+          v
+        }
+        FormatOrTarget::Format(_) => Vec::new()
+      };
+
+      let fot = match target {
+        FormatOrTarget::Format(f) => FormatOrTargets::Format(
+          SourceFormat::get_from_str(&f).map_or_else(
+            || Err(ServerFnError::MissingArg("Invalid format".into())),
+            Ok
+          )?
+        ),
+        FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
+      };
+
+      let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
+        {match tree.find(&archive) {
+          Some(AoG::Archive(_)) => Ok(false),
+          Some(AoG::Group(_)) => Ok(true),
+          None => Err(format!("Archive {archive} not found").into()),
+        }}
+      )?;
+
+      if group && path.is_some() {
+        return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
       }
-      FormatOrTarget::Format(_) => Vec::new()
-    };
-    let fot = match target {
-      FormatOrTarget::Format(f) => FormatOrTargets::Format(
-        SourceFormat::get_from_str(&f).map_or_else(
-          || Err(ServerFnError::MissingArg("Invalid format".into())),
-          Ok
-        )?
-      ),
-      FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
-    };
-    let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
-      {match tree.find(&archive) {
-        Some(AoG::Archive(_)) => Ok(false),
-        Some(AoG::Group(_)) => Ok(true),
-        None => Err(format!("Archive {archive} not found").into()),
-      }}
-    )?;
-    if group && path.is_some() {
-      return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
-    }
 
-    queues.with_global(|queue|
-      if group { Ok(queue.enqueue_group(&archive, fot, stale_only))} else {
-        Ok(queue.enqueue_archive(&archive, fot, stale_only,path.as_deref()))
-      }
-    )
-  }
-
-  fn do_public(archive:ArchiveId,target:FormatOrTarget,
-    path:Option<String>,stale_only:Option<bool>,queue:either::Either<NonZeroU32,String>) -> Result<usize,ServerFnError<String>> {
-
-    let queues = QueueManager::get();
-    let queue = match queue {
-      either::Either::Right(name) => queues.new_queue(&name),
-      either::Either::Left(id) => id.into()
-    };
-    let stale_only = stale_only.unwrap_or(true);
-
-    #[allow(clippy::option_if_let_else)]
-    let tgts: Vec<_> = match &target {
-      FormatOrTarget::Targets(t) => {
-        let Some(v) = t.iter().map(|s| BuildTarget::get_from_str(s)).collect::<Option<Vec<_>>>() else {
-          return Err(ServerFnError::MissingArg("Invalid target".into()))
-        };
-        v
-      }
-      FormatOrTarget::Format(_) => Vec::new()
-    };
-    let fot = match target {
-      FormatOrTarget::Format(f) => FormatOrTargets::Format(
-        SourceFormat::get_from_str(&f).map_or_else(
-          || Err(ServerFnError::MissingArg("Invalid format".into())),
-          Ok
-        )?
-      ),
-      FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
-    };
-    let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
-      {match tree.find(&archive) {
-        Some(AoG::Archive(_)) => Ok(false),
-        Some(AoG::Group(_)) => Ok(true),
-        None => Err(format!("Archive {archive} not found").into()),
-      }}
-    )?;
-    if group && path.is_some() {
-      return Err(ServerFnError::MissingArg("Must specify either an archive with optional path or a group".into())) 
-    }
-
-    queues.with_queue(queue,|queue| {
-      let Some(queue) = queue else {unreachable!()};
-      if group { Ok(queue.enqueue_group(&archive, fot, stale_only))} else {
+      if group { 
+        Ok(queue.enqueue_group(&archive, fot, stale_only))
+      } else {
         Ok(queue.enqueue_archive(&archive, fot, stale_only,path.as_deref()))
       }
     })
-  }
-
-  //use immt_system::backend::Backend;
-  let login = LoginState::get_server();
-
-  tokio::task::spawn_blocking(move || {
-    let public = match (&login,queue) {
-      (LoginState::None | LoginState::Loading,_) => return Err("Not logged in".to_string().into()),
-      (LoginState::User{name,..},Some(q)) => {
-        let allowed = QueueManager::get().with_queue(q.into(), |q| {
-          q.is_some_and(|q| matches!(q.name(),immt_system::building::QueueName::Sandbox{name:qname,..} if &**qname == name))
-        });
-        if !allowed {
-          return Err(format!("Not allowed to run queue {q}").into())
-        }
-        true
-      }
-      (LoginState::NoAccounts,_) => false,
-      _ => true
-    };
-    if public {
-      let queue = match (queue,login) {
-        (Some(q),_) => either::Either::Left(q),
-        (_,LoginState::User{name,..}) => either::Either::Right(name),
-        (_,LoginState::Admin) => either::Either::Right("admin".to_string()),
-        _ => unreachable!()
-      };
-      do_public(archive,target,path,stale_only,queue)
-    } else { 
-      do_private(archive,target,path,stale_only)
-    }
-  }).await.unwrap_or_else(|e| Err(e.to_string().into()))
+  ).await.map_err(|e| e.to_string())??
 }
 
 #[server(
@@ -263,37 +253,21 @@ pub async fn get_log(queue:NonZeroU32,archive:ArchiveId,rel_path:String,target:S
   use std::path::PathBuf;
   use immt_system::backend::{Backend,GlobalBackend};
   use immt_system::{formats::FormatOrTargets,building::{QueueName,queue_manager::QueueManager}};
-  let login = LoginState::get_server();
-  let qm = QueueManager::get();
-  let be = match login {
-    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
-    LoginState::NoAccounts => GlobalBackend::get().to_any(),
-    LoginState::Admin | LoginState::User{is_admin:true,..} => {
-      let Some(be) = qm.with_queue(queue.into(), |q| q.map(|q| q.backend().clone())) else {
-        return Err(format!("Queue {queue} not found").into())
-      };
-      be
-    }
-    LoginState::User{name,..} => {
-      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(queue.into(), |q| {
-        q.and_then(|q| if matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name) {
-          Some(q.backend().clone())
-        } else {None})
-      })).await.map_err(|e| e.to_string())?;
-      let Some(be) = allowed else {
-        return Err(format!("Not allowed to run queue {queue}").into());
-      };
-      be
-    }
-  };
-
+  
   let Some(target) = immt_system::formats::BuildTarget::get_from_str(&target) else {
     return Err(format!("Target {target} not found").into())
   };
-  let path = be.with_archive(&archive, |a| {
-    let Some(a) = a else { return Err::<PathBuf,String>(format!("Archive {archive} not found")) };
-    Ok(a.get_log(&rel_path, target))
-  })?;
+  let login = LoginState::get_server();
+  let id = archive.clone();
+  let Some(path) = tokio::task::spawn_blocking(move ||
+    login.with_queue(queue, |q|
+      q.backend().with_archive(&id, |a| 
+        a.map(|a| a.get_log(&rel_path,target))
+      )
+    )
+  ).await.map_err(|e| e.to_string())?? else {
+    return Err(format!("Archive {archive} not found").into())
+  };
   let v = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
   Ok(String::from_utf8_lossy(&v).to_string())
 }
@@ -308,20 +282,13 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
   use immt_system::building::{queue_manager::QueueManager,QueueName};
   use immt_system::backend::{Backend,SandboxedRepository,archives::Archive};
   let login = LoginState::get_server();
+  if matches!(LoginState::NoAccounts,login) {
+    return Err("Migration only makes sense in public mode".to_string().into())
+  }
   let (_,secret) = super::git::get_oauth()?;
   tokio::task::spawn_blocking(move || {
-    let queues = QueueManager::get();
-    match &login {
-      LoginState::None | LoginState::Loading => return Err("Not logged in".to_string().into()),
-      LoginState::Admin | LoginState::User{is_admin:true,..} => (),
-      LoginState::User{name,..} => if !queues.with_queue(queue.into(),|q| {
-        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
-      }) {
-        return Err(format!("Not allowed to run queue {queue}").into())
-      }
-      LoginState::NoAccounts => return Err("Migration only makes sense in public mode".to_string().into())
-    }
-    let (_,n) = queues.migrate::<(),String>(queue.into(),|sandbox| {
+    login.with_queue(queue, |_| ())?;
+    let (_,n) = immt_system::building::queue_manager::QueueManager::get().migrate::<(),String>(queue.into(),|sandbox| {
       sandbox.with_repos(|repos| {
         for r in repos {
           if let SandboxedRepository::Git { id,.. } = r {
@@ -330,7 +297,7 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
               let repo = immt_git::repos::GitRepo::open(a.path()).map_err(|e| e.to_string())?;
               repo.add_dir(a.path()).map_err(|e| e.to_string())?;
               let _ = repo.commit_all("migrating").map_err(|e| e.to_string())?;
-              repo.mark_managed().map_err(|e| e.to_string())?;
+              //repo.mark_managed().map_err(|e| e.to_string())?;
               repo.push_with_oauth(&secret).map_err(|e| e.to_string())?;
               Ok(())
             })?;
@@ -351,21 +318,11 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
 pub async fn delete(queue:NonZeroU32) -> Result<(),ServerFnError<String>> {
   use immt_system::building::{queue_manager::QueueManager,QueueName};
   let login = LoginState::get_server();
-  let qm = QueueManager::get();
-  match login {
-    LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {login:?}").into()),
-    LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
-    LoginState::User{name,..} => {
-      let allowed = tokio::task::spawn_blocking(move || qm.with_queue(queue.into(), |q| {
-        q.is_some_and(|q| matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name))
-      })).await.map_err(|e| e.to_string())?;
-      if !allowed {
-        return Err(format!("Not allowed to run queue {queue}").into());
-      }
-    }
-  }
-  qm.delete(queue.into());
-  Ok(())
+  tokio::task::spawn_blocking(move || {
+    login.with_queue(queue, |_| ())?;
+    QueueManager::get().delete(queue.into());
+    Ok(())
+  }).await.unwrap_or_else(|e| Err(e.to_string().into()))
 }
 
 #[derive(Copy,Clone)]
@@ -438,14 +395,15 @@ pub fn QueuesTop() -> impl IntoView {
   }
 }
 
-fn repos(id:NonZeroU32,active:bool) -> impl IntoView {
+fn repos(queue_id:NonZeroU32,allowed:bool) -> impl IntoView {
   use immt_web_utils::components::{Collapsible,Header};
   use thaw::{Caption1Strong,Table,TableBody,TableHeader,TableRow,TableHeaderCell,TableCell,TableCellLayout};
   if matches!(LoginState::get(),LoginState::NoAccounts) { return None }
   let queues : AllQueues = expect_context();
-  let repos = queues.queue_repos.with_untracked(|v| v.get(&id).cloned()).flatten();
+  let repos = queues.queue_repos.with_untracked(|v| v.get(&queue_id).cloned()).flatten();
   let Some(repos) = repos else { return None };
   if repos.is_empty() { return None }
+  let style = if allowed { "" } else { "color:gray;" };
   inject_css("immt-repo-table", include_str!("repo-table.css"));
   Some(view!{<div style="margin-left:45px;width:fit-content;"><Collapsible>
     <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
@@ -459,18 +417,68 @@ fn repos(id:NonZeroU32,active:bool) -> impl IntoView {
         repos.into_iter().map(|d| match d {
           RepoInfo::Copy(id) => leptos::either::Either::Left(view!{
             <TableRow>
-              <TableCell><TableCellLayout>{id.to_string()}</TableCellLayout></TableCell>
+              <TableCell><TableCellLayout><span style=style>{id.to_string()}</span></TableCellLayout></TableCell>
               <TableCell><TableCellLayout>"(Copied from MathHub)"</TableCellLayout></TableCell>
             </TableRow>
           }),
-          RepoInfo::Git{id,branch,commit,..} => leptos::either::Either::Right(view!{
-            <TableRow>
-              <TableCell><TableCellLayout>{id.to_string()}</TableCellLayout></TableCell>
-              <TableCell><TableCellLayout>{branch}</TableCellLayout></TableCell>
-              <TableCell><TableCellLayout>
-                {commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}
-              </TableCellLayout></TableCell>
-            </TableRow>
+          RepoInfo::Git{id,branch,commit,updates,remote} => leptos::either::Either::Right({
+            let style = if allowed {
+              if updates.is_empty() {
+                "color:green;"
+              } else {
+                "color:yellowgreen;"
+              }
+            } else {style};
+            let idstr = id.to_string();
+            view!{
+              <TableRow>
+                <TableCell><TableCellLayout><span style=style>{idstr}</span></TableCellLayout></TableCell>
+                <TableCell><TableCellLayout>{branch}</TableCellLayout></TableCell>
+                <TableCell><TableCellLayout>
+                  {commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}
+                  {if allowed {Some({
+                    if updates.is_empty() {leptos::either::Either::Left(view!(<span style=style>" (already up-to-date)"</span>))} else {
+                      leptos::either::Either::Right({
+                        use thaw::{Button,ButtonSize,Combobox,ComboboxOption,ToasterInjection};
+                        let first = updates.first().map(|(name,_)| name.clone()).unwrap_or_default();
+                        let branch = RwSignal::new(first.clone());
+                        let _ = Effect::new(move || if branch.with(|s| s.is_empty()) {
+                          branch.set(first.clone());
+                        });
+                        let update : UpdateQueues = expect_context();
+                        let toaster = ToasterInjection::expect_context();
+                        let commit_map:VecMap<_,_> = updates.clone().into();
+                        let archive = id.clone();
+                        let act = immt_web_utils::components::message_action(
+                          move |()| super::git::update_from_branch(Some(queue_id),archive.clone(),remote.clone(),branch.get_untracked()),
+                          move |(i,_)| {
+                            update.0.set(());
+                            format!("{i} jobs queued")
+                          }
+                        );
+                        view!{
+                          <span style="color:green">
+                            " Updates available: "
+                          </span>
+                          <div style="margin-left:10px">
+                            <Button size=ButtonSize::Small on_click=move |_| {act.dispatch(());}>"Update"</Button>
+                            " from branch: "
+                            <div style="display:inline-block;"><Combobox selected_options=branch>{
+                              updates.into_iter().map(|(name,commit)| {let vname = name.clone(); view!{
+                                <ComboboxOption text="" value=vname>
+                                  {name}<span style="font-size:x-small">" (Last commit "{commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}")"</span>
+                                </ComboboxOption>
+                              }}).collect_view()
+                            }</Combobox></div>
+                          </div>
+                        }
+
+                      })
+                    }
+                  })} else {None}}
+                </TableCellLayout></TableCell>
+              </TableRow>
+            }
           }),
         }).collect_view()
       }</TableBody>
@@ -479,19 +487,14 @@ fn repos(id:NonZeroU32,active:bool) -> impl IntoView {
 }
 
 fn delete_action(id:NonZeroU32) -> Action<(),()> {
-  use thaw::{ToasterInjection,MessageBar,MessageBarIntent,MessageBarBody,ToastOptions,ToastPosition};
+  use thaw::ToasterInjection;
   let update : UpdateQueues = expect_context();
   let toaster = ToasterInjection::expect_context();
   Action::new(move |()| async move {
     match delete(id).await {
       Ok(()) => update.0.set(()),
-      Err(e) => toaster.dispatch_toast(
-        || view!{
-          <MessageBar intent=MessageBarIntent::Error><MessageBarBody>
-              {e.to_string()}
-          </MessageBarBody></MessageBar>}, 
-        ToastOptions::default().with_position(ToastPosition::Top)
-      )
+      Err(e) => 
+        immt_web_utils::components::error_with_toaster(e.to_string(), toaster),
     }
   })
 }
@@ -556,9 +559,9 @@ fn finished(id:NonZeroU32,failed:Vec<Entry>,done:Vec<Entry>) -> impl IntoView {
     <div style="width:100%"><div style="position:fixed;right:120px;z-index:10">
         {if num_failed > 0 {Some(view!(
           <Button on_click=move |_| {requeue.dispatch(());}>"Requeue Failed"</Button>
-          <Button on_click=move |_| {del.dispatch(());}>"Delete"</Button>
         ))} else { None }}
         {migrate_button(id,num_failed)}
+        <Button on_click=move |_| {del.dispatch(());}>"Delete"</Button>
     </div></div>
     <div style="position:fixed;right:20px;z-index:5"><Anchor>
         <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
@@ -580,33 +583,16 @@ fn finished(id:NonZeroU32,failed:Vec<Entry>,done:Vec<Entry>) -> impl IntoView {
 
 fn migrate_button(id:NonZeroU32,num_failed:usize) -> impl IntoView {
   use leptos::either::EitherOf3;
-  use thaw::{ToasterInjection,MessageBar,MessageBarIntent,MessageBarBody,ToastOptions,ToastPosition,Button,Dialog,DialogSurface,DialogBody,DialogContent,Caption1Strong,Divider};
-
-  let toaster = ToasterInjection::expect_context();
+  use thaw::{Button,Dialog,DialogSurface,DialogBody,DialogContent,Caption1Strong,Divider};
   if matches!(LoginState::get(),LoginState::NoAccounts) { return EitherOf3::A(()) }
   let update : UpdateQueues = expect_context();
-  let migrate = 
-    Action::new(move |()| async move {
-      match migrate(id).await {
-        Err(e) => toaster.dispatch_toast(
-          || view!{
-            <MessageBar intent=MessageBarIntent::Error><MessageBarBody>
-                {e.to_string()}
-            </MessageBarBody></MessageBar>}, 
-          ToastOptions::default().with_position(ToastPosition::Top)
-        ),
-        Ok(i) => {
-          toaster.dispatch_toast(
-            move || view!{
-              <MessageBar intent=MessageBarIntent::Success><MessageBarBody>
-                  {i}" archives migrated"
-              </MessageBarBody></MessageBar>}, 
-            ToastOptions::default().with_position(ToastPosition::Top)
-          );
-          update.0.set(());
-        }
-      }
-    });
+  let migrate = immt_web_utils::components::message_action(
+    move |()| migrate(id), 
+    move |i| {
+      update.0.set(());
+      format!("{i} archives migrated")
+    }
+  );
   if num_failed == 0 { EitherOf3::B(view!{
     <Button on_click=move |_| {migrate.dispatch(());}>"Migrate"</Button>
   })} else {

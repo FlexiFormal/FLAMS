@@ -23,6 +23,7 @@ serde = {workspace=true}
 gloo-storage = {workspace=true,optional=true}
 send_wrapper = {workspace=true}
 icondata_ch = {workspace=true}
+tracing = {workspace=true}
 
 
 

@@ -12,7 +12,7 @@ use thaw::{Caption1, Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPositi
 #[cfg(feature="hydrate")]
 use std::borrow::Cow;
 #[cfg(feature="hydrate")]
-use immt_web_utils::components::error_toast;
+use immt_web_utils::components::display_error;
 
 fn do_main(page:Page) -> impl IntoView {
   let inner =  || match page {
@@ -196,7 +196,7 @@ async fn do_login(pw:String,login:RwSignal<LoginState>) {
     Ok(_) => (),
     Err(e) => {
       #[cfg(feature="hydrate")]
-      error_toast(Cow::Owned(format!("Error: {e}")));
+      display_error(Cow::Owned(format!("Error: {e}")));
     }
   }
   let _ = view!(<Redirect path="/"/>);

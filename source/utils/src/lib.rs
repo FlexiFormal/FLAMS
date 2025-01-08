@@ -67,10 +67,14 @@ pub mod fs {
         for entry in std::fs::read_dir(src)? {
             let entry = entry?;
             let ty = entry.file_type()?;
+            let target = dst.join(entry.file_name());
             if ty.is_dir() {
-                copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+                copy_dir_all(&entry.path(), &target)?;
             } else {
-                std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+                let md = entry.metadata()?;
+                std::fs::copy(entry.path(), &target)?;
+                let mtime = filetime::FileTime::from_last_modification_time(&md);
+                filetime::set_file_mtime(&target, mtime)?;
             }
         }
         Ok(())
