@@ -19,7 +19,7 @@ use immt_utils::{prelude::{HMap, TreeLike}, triomphe, vecmap::{VecMap, VecSet}, 
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use rdf::RDFStore;
-use std::{ops::Deref, os::unix::fs::MetadataExt, path::{Path, PathBuf}, rc::Rc};
+use std::{ops::Deref, path::{Path, PathBuf}, rc::Rc};
 use crate::{formats::{HTMLData, SourceFormatId}, settings::Settings};
 
 #[derive(Clone, Debug)]
@@ -859,6 +859,7 @@ impl SandboxedBackend {
         }
         #[cfg(not(target_os="windows"))]
         fn same_fs(p1:&Path,p2:&Path) -> bool {
+            use std::os::unix::fs::MetadataExt; 
             fn existent_parent(p:&Path) -> &Path {
                 if p.exists() {return p}
                 existent_parent(p.parent().unwrap_or_else(|| unreachable!()))
