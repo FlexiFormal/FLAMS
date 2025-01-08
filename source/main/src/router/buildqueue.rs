@@ -291,7 +291,7 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
   use immt_system::building::{queue_manager::QueueManager,QueueName};
   use immt_system::backend::{Backend,SandboxedRepository,archives::Archive};
   let login = LoginState::get_server();
-  if matches!(LoginState::NoAccounts,login) {
+  if matches!(login,LoginState::NoAccounts) {
     return Err("Migration only makes sense in public mode".to_string().into())
   }
   let (_,secret) = super::git::get_oauth()?;
