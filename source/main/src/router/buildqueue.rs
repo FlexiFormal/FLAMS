@@ -294,26 +294,28 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
   if matches!(login,LoginState::NoAccounts) {
     return Err("Migration only makes sense in public mode".to_string().into())
   }
-  let (_,secret) = super::git::get_oauth()?;
+  let oauth = super::git::get_oauth().ok();
   tokio::task::spawn_blocking(move || {
     login.with_queue(queue, |_| ())?;
     let (_,n) = immt_system::building::queue_manager::QueueManager::get().migrate::<(),String>(queue.into(),|sandbox| {
-      sandbox.with_repos(|repos| {
-        for r in repos {
-          if let SandboxedRepository::Git { id,.. } = r {
-            sandbox.with_archive::<Result<_,String>>(id, |a| {
-              let Some(Archive::Local(a)) = a else { return Ok(())};
-              let repo = immt_git::repos::GitRepo::open(a.path()).map_err(|e| e.to_string())?;
-              repo.add_dir(a.path()).map_err(|e| e.to_string())?;
-              let _ = repo.commit_all("migrating").map_err(|e| e.to_string())?;
-              //repo.mark_managed().map_err(|e| e.to_string())?;
-              repo.push_with_oauth(&secret).map_err(|e| e.to_string())?;
-              Ok(())
-            })?;
-          }
-        }
-        Ok(())
-      })
+      if let Some((_,secret)) = oauth.as_ref() {
+        sandbox.with_repos(|repos| {
+          for r in repos {
+            if let SandboxedRepository::Git { id,.. } = r {
+              sandbox.with_archive::<Result<_,String>>(id, |a| {
+                let Some(Archive::Local(a)) = a else { return Ok(())};
+                let repo = immt_git::repos::GitRepo::open(a.path()).map_err(|e| e.to_string())?;
+                repo.add_dir(a.path()).map_err(|e| e.to_string())?;
+                let _ = repo.commit_all("migrating").map_err(|e| e.to_string())?;
+                //repo.mark_managed().map_err(|e| e.to_string())?;
+                repo.push_with_oauth(secret).map_err(|e| e.to_string())?;
+                Ok(())
+              })?;
+              }
+            }
+          Ok(())
+        })
+      } else { Ok(()) }
     })?;
     Ok(n)
   }).await.unwrap_or_else(|e| Err(e.to_string().into()))
