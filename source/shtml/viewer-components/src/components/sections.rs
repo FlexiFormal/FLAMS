@@ -3,6 +3,36 @@ use leptos::{prelude::*,context::Provider};
 use crate::{IdPrefix, SectionContinuation};
 use super::navigation::{NavElems, SectionOrInputref};
 
+#[cfg(feature="ts")]
+pub fn do_begin(uri:&DocumentElementURI) -> Option<NodeRef<leptos::html::Div>> {
+  let bg: OnSectionBegin = use_context()?;
+  do_ref(bg.get(uri))
+}
+
+#[cfg(feature="ts")]
+pub fn do_end(uri:&DocumentElementURI) -> Option<NodeRef<leptos::html::Div>> {
+  let bg: OnSectionEnd = use_context()?;
+  do_ref(bg.get(uri))
+}
+
+#[cfg(feature="ts")]
+fn do_ref(f:Result<Option<SectionFn>,wasm_bindgen::JsValue>) -> Option<NodeRef<leptos::html::Div>> {
+  let f = match f {
+    Ok(f) => f?,
+    Err(e) => {
+      tracing::error!("Error getting section callback: {e:?}");
+      return None
+    }
+  };
+  let ret = NodeRef::new();
+  let _f = Effect::new(move || if let Some(e) = ret.get() {
+    if let Err(e) = f.call(&e) {
+      tracing::error!("Error calling section callback: {e:?}");
+    }
+  });
+  Some(ret)
+}
+
 pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
 
   let id = expect_context::<IdPrefix>().new_id(uri.name().last_name().as_ref());
@@ -10,62 +40,62 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
     ne.ids.insert(id.clone(),SectionOrInputref::Section);
   });
 
-  let rf = NodeRef::new();
-
   #[cfg(feature="ts")]
-  if let Some(bg) = use_context::<OnSectionBegin>() {
-    let uri = uri.clone();
-    let _f = Effect::new(move || if let Some(node) = rf.get() {
-      let node : web_sys::HtmlDivElement = node;
-      if let Ok(Some(e)) = bg.call(&uri) {
-        let _ = node.prepend_with_node_1(&e);
-      }
-    });
-  }
-
+  let begin_rf = do_begin(&uri);
   #[cfg(feature="ts")]
-  if let Some(end) = use_context::<OnSectionEnd>() {
-    let uri = uri.clone();
-    let _f = Effect::new(move || if let Some(node) = rf.get() {
-      let node : web_sys::HtmlDivElement = node;
-      if let Ok(Some(e)) = end.call(&uri) {
-        let _ = node.append_child(&e);
-      }
-    });
-  }
+  let end_rf = do_end(&uri);
 
   //use_context::<OnSectionBegin>().map(|s|)
 
   view!{
     <Provider value=IdPrefix(id.clone())>
       <Provider value=NarrativeURI::Element(uri)>
-        <div node_ref=rf id=id style="display:content">
-          {children()}
-        </div>
+      <div id=id style="display:content">
+        {#[cfg(feature="ts")]
+        {begin_rf.map(|rf| view!(<div node_ref=rf/>))}
+        }
+        {children()}
+        {#[cfg(feature="ts")]
+        {end_rf.map(|rf| view!(<div node_ref=rf/>))}
+        }
+      </div>
       </Provider>
     </Provider>
   }
 }
 
+
+#[cfg(feature="ts")]
+pub(crate) struct SectionFn(web_sys::js_sys::Function);
+#[cfg(feature="ts")]
+impl SectionFn {
+  pub fn call(&self,e:&web_sys::HtmlDivElement) -> Result<(),wasm_bindgen::JsValue> {
+    self.0.call1(&wasm_bindgen::JsValue::UNDEFINED,&wasm_bindgen::JsValue::from(e))?;
+    Ok(())
+  }
+}
+
+#[cfg(not(feature="ts"))]
+pub(crate) struct SectionFn();
+
 #[cfg(feature="ts")]
 impl SectionContinuation {
     /// #### Errors
-  pub fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+  pub fn get_fn(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<SectionFn>,wasm_bindgen::JsValue> {
     use wasm_bindgen::JsCast;
     let uri = uri.to_string();
-    let result = self.call(&uri);
-    if result.is_null() || result.is_undefined() {
-      return Ok(None);
-    }
-    let elem : leptos::web_sys::Element = result.dyn_into()?;
-    Ok(Some(elem))
+    let f = self.call1(&wasm_bindgen::JsValue::UNDEFINED,&wasm_bindgen::JsValue::from_str(&uri))?;
+    if f.is_null() || f.is_undefined() { return Ok(None); }
+    let f = web_sys::js_sys::Function::from(f);
+    if !f.is_function() { return Err(f.into()) }
+    Ok(Some(SectionFn(f)))
   }
 }
 
 #[cfg(not(feature="ts"))]
 impl SectionContinuation {
     /// #### Errors
-    pub const fn do_call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
+    pub const fn get_fn(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<SectionFn>,wasm_bindgen::JsValue> {
         Ok(None)
     }
 }
@@ -74,8 +104,8 @@ impl SectionContinuation {
 pub struct OnSectionBegin(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
 impl OnSectionBegin {
     /// #### Errors
-    pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
-        self.0.with_value(|f| f.do_call(uri))
+    pub fn get(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<SectionFn>,wasm_bindgen::JsValue> {
+        self.0.with_value(|f| f.get_fn(uri))
     }
     pub fn set(f:SectionContinuation) {
         let f = Self(StoredValue::new(send_wrapper::SendWrapper::new(f)));
@@ -86,8 +116,8 @@ impl OnSectionBegin {
 pub struct OnSectionEnd(StoredValue<send_wrapper::SendWrapper<SectionContinuation>>);
 impl OnSectionEnd {
     /// #### Errors
-    pub fn call(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<leptos::web_sys::Element>,wasm_bindgen::JsValue> {
-        self.0.with_value(|f| f.do_call(uri))
+    pub fn get(&self,uri:&immt_ontology::uris::DocumentElementURI) -> Result<Option<SectionFn>,wasm_bindgen::JsValue> {
+        self.0.with_value(|f| f.get_fn(uri))
     }
     pub fn set(f:SectionContinuation) {
         let f = Self(StoredValue::new(send_wrapper::SendWrapper::new(f)));

@@ -8,6 +8,7 @@ serde = ["dep:serde"]
 rayon = ["dep:rayon","dep:spliter"]
 async = ["dep:async-broadcast"]
 tokio = ["dep:tokio"]
+wasm = ["dep:wasm-bindgen","serde","dep:tsify-next"]
 
 [dev-dependencies]
 tracing-subscriber = {workspace=true}
@@ -23,6 +24,8 @@ inventory = {workspace=true}
 paste = {workspace=true}
 filetime = {workspace=true}
 
+wasm-bindgen = {workspace=true,optional=true}
+tsify-next = {workspace=true,optional=true}
 async-broadcast={workspace=true,optional=true}
 rayon={workspace=true,optional=true}
 spliter={workspace=true,optional=true}

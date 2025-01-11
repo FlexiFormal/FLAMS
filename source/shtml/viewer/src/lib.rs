@@ -11,7 +11,6 @@ pub fn set_server_url(server_url: String) {
     shtml_viewer_components::config::set_server_url(server_url);
 }
 
-
 #[cfg(any(doc,not(feature="ts")))]
 #[cfg_attr(docsrs, doc(cfg(not(feature = "ts"))))]
 #[wasm_bindgen(start)]

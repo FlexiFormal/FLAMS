@@ -39,10 +39,12 @@ pub fn hashstr<A: std::hash::Hash>(prefix: &str, a: &A) -> String {
 }
 
 #[derive(Debug, Clone,PartialEq,Eq)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CSS {
-    Link(Str),
-    Inline(Str),
+    Link(#[cfg_attr(feature = "wasm", tsify(type = "string"))] Str),
+    Inline(#[cfg_attr(feature = "wasm", tsify(type = "string"))] Str),
 }
 
 #[cfg(feature="tokio")]

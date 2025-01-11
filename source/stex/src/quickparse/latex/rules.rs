@@ -404,13 +404,13 @@ macro_rules! tex {
     (@envargs $p:ident:$name:ident{$arg:ident:M}$($args:tt)*) => {
         let mode = $p.tokenizer.mode;
         let $arg = if matches!($p.tokenizer.mode,$crate::quickparse::tokenizer::Mode::Math{..}) {
-            $p.read_argument(&mut $name.begin);
+            $p.get_argument(&mut $name.begin)
         } else {
             $p.tokenizer.open_math(false);
-            let r = $p.read_argument(&mut $name.begin);
+            let r = $p.get_argument(&mut $name.begin);
             $p.tokenizer.close_math();
             r
-        }
+        };
         tex!{@envargs $p:$name $($args)*}
     };
     (@envargs $p:ident:$name:ident{_:M}$($args:tt)*) => {
@@ -442,6 +442,10 @@ macro_rules! tex {
     };
     (@envargs $p:ident:$name:ident[$opt:ident]$($args:tt)*) => {
         let $opt = $p.read_opt_str(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident[mut $opt:ident:Map]$($args:tt)*) => {
+        let mut $opt = $p.read_opt_map(&mut $name.begin);
         tex!{@envargs $p:$name $($args)*}
     };
     (@envargs $p:ident:$name:ident[$opt:ident:Map]$($args:tt)*) => {
@@ -502,13 +506,13 @@ macro_rules! tex {
     (@args $p:ident:$name:ident{$arg:ident:M}$($args:tt)*) => {
         let mode = $p.tokenizer.mode;
         let $arg = if matches!($p.tokenizer.mode,$crate::quickparse::tokenizer::Mode::Math{..}) {
-            $p.read_argument(&mut $name);
+            $p.get_argument(&mut $name)
         } else {
             $p.tokenizer.open_math(false);
-            let r = $p.read_argument(&mut $name);
+            let r = $p.get_argument(&mut $name);
             $p.tokenizer.close_math();
             r
-        }
+        };
         tex!{@args $p:$name $($args)*}
     };
     (@args $p:ident:$name:ident{_:M}$($args:tt)*) => {
@@ -539,6 +543,10 @@ macro_rules! tex {
     };
     (@args $p:ident:$name:ident[$opt:ident]$($args:tt)*) => {
         let $opt = $p.read_opt_str(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident[mut $opt:ident:Map]$($args:tt)*) => {
+        let mut $opt = $p.read_opt_map(&mut $name);
         tex!{@args $p:$name $($args)*}
     };
     (@args $p:ident:$name:ident[$opt:ident:Map]$($args:tt)*) => {

@@ -2,14 +2,14 @@
 #![allow(clippy::case_sensitive_file_extension_comparisons)]
 #![allow(clippy::cast_possible_truncation)]
 
-use std::{borrow::Cow, collections::hash_map::Entry, path::{Path, PathBuf}};
+use std::{borrow::Cow, collections::hash_map::Entry, num::NonZeroU8, path::{Path, PathBuf}};
 
 use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
 use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
-use immt_utils::{parsing::ParseStr, sourcerefs::{SourcePos, SourceRange}, vecmap::VecSet};
+use immt_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::VecSet};
 use smallvec::SmallVec;
 
-use crate::{quickparse::latex::{rules::{AnyEnv, AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule}, Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState}, tex};
+use crate::{quickparse::latex::{rules::{AnyEnv, AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule}, Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, OptMap, ParserState}, tex};
 use immt_utils::parsing::ParseSource;
 
 use super::STeXParseData;
@@ -46,7 +46,7 @@ pub enum STeXToken<Pos:SourcePos> {
   },
   Module {
     uri:ModuleURI,
-    rules:ModuleRules,
+    rules:ModuleRules<Pos>,
     name_range:SourceRange<Pos>,
     sig:Option<(Language,SourceRange<Pos>)>,
     meta_theory:Option<(ModuleReference,Option<SourceRange<Pos>>)>,
@@ -56,22 +56,33 @@ pub enum STeXToken<Pos:SourcePos> {
   },
   #[allow(clippy::type_complexity)]
   Symdecl {
-    uri:SymbolURI,
+    uri:SymbolReference<Pos>,
     macroname:Option<String>,
     main_name_range:SourceRange<Pos>,
     name_ranges:Option<(SourceRange<Pos>,SourceRange<Pos>)>,
     full_range: SourceRange<Pos>,
-    tp:Option<(SourceRange<Pos>,SourceRange<Pos>,Vec<STeXToken<Pos>>)>,
-    df:Option<(SourceRange<Pos>,SourceRange<Pos>,Vec<STeXToken<Pos>>)>,
+    parsed_args:Box<SymdeclArgs<Pos,STeXToken<Pos>>>,
     token_range: SourceRange<Pos>
   },
-  Vec(Vec<STeXToken<Pos>>),
+  #[allow(clippy::type_complexity)]
+  Symdef {
+    uri:SymbolReference<Pos>,
+    macroname:Option<String>,
+    main_name_range:SourceRange<Pos>,
+    name_ranges:Option<(SourceRange<Pos>,SourceRange<Pos>)>,
+    full_range: SourceRange<Pos>,
+    parsed_args:Box<SymdeclArgs<Pos,STeXToken<Pos>>>,
+    notation_args:NotationArgs<Pos,STeXToken<Pos>>,
+    notation:(SourceRange<Pos>,Vec<STeXToken<Pos>>),
+    token_range: SourceRange<Pos>
+  },
   SemanticMacro {
-    uri:SymbolURI,
+    uri:SymbolReference<Pos>,
     argnum:u8,
     full_range: SourceRange<Pos>,
     token_range: SourceRange<Pos>
-  }
+  },
+  Vec(Vec<STeXToken<Pos>>),
 }
 
 impl<'a,P:SourcePos> FromLaTeXToken<'a, P,&'a str> for STeXToken<P> {
@@ -96,6 +107,13 @@ impl<'a,P:SourcePos> FromLaTeXToken<'a, P,&'a str> for STeXToken<P> {
   fn from_environment(e: Environment<'a, P, &'a str, Self>) -> Option<Self> {
     Some(Self::Vec(e.children))
   }
+}
+
+#[derive(Debug,Clone)]
+pub struct SymbolReference<Pos:SourcePos> {
+  pub uri: SymbolURI,
+  pub filepath: Option<std::sync::Arc<Path>>,
+  pub range: SourceRange<Pos>
 }
 
 #[derive(Debug,Clone)]
@@ -138,21 +156,21 @@ impl STeXModuleStore for () {
 }
 
 #[derive(Debug)]
-pub enum ModuleRule {
+pub enum ModuleRule<Pos:SourcePos> {
   Import(ModuleReference),
-  Symbol(SymbolRule)
+  Symbol(SymbolRule<Pos>)
 }
 
-#[derive(Debug)]
-pub struct SymbolRule {
-  pub uri:SymbolURI,
+#[derive(Debug,Clone)]
+pub struct SymbolRule<Pos:SourcePos> {
+  pub uri:SymbolReference<Pos>,
   pub macroname:Option<std::sync::Arc<str>>,
   pub has_tp:bool,
   pub has_df:bool,
   pub argnum:u8
 }
-impl SymbolRule {
-  fn as_rule<'a,MS:STeXModuleStore,Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>(&self) -> Option<(Cow<'a,str>,AnyMacro<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>>)> {
+impl<Pos:SourcePos> SymbolRule<Pos> {
+  fn as_rule<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<Pos>)>(&self) -> Option<(Cow<'a,str>,AnyMacro<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>>)> {
     self.macroname.as_ref().map(|m|
       (m.to_string().into(),AnyMacro::Ext(DynMacro {
         ptr:semantic_macro as _,
@@ -162,45 +180,91 @@ impl SymbolRule {
   }
 }
 
-lazy_static::lazy_static! {
-  static ref EMPTY_RULES : ModuleRules = ModuleRules { rules:std::sync::Arc::new([])};
-}
-
 #[derive(Debug,Clone)]
-pub struct ModuleRules {
-  pub rules:std::sync::Arc<[ModuleRule]>
+pub struct ModuleRules<Pos:SourcePos> {
+  pub rules:std::sync::Arc<[ModuleRule<Pos>]>
 }
-impl Default for ModuleRules {
+impl<Pos:SourcePos> Default for ModuleRules<Pos> {
   #[inline]
   fn default() -> Self {
-      EMPTY_RULES.clone()
+    Self {rules: std::sync::Arc::new([]) }
   }
 }
 
-pub struct STeXParseState<'a,MS:STeXModuleStore> {
+pub struct STeXParseState<'a,Pos:SourcePos,MS:STeXModuleStore> {
   archive: Option<ArchiveURIRef<'a>>,
   in_path:Option<std::sync::Arc<Path>>,
   doc_uri:&'a DocumentURI,
   backend:&'a AnyBackend,
   language:Language,
-  modules: SmallVec<(ModuleURI,ModuleRules),1>,
+  modules: SmallVec<(ModuleURI,ModuleRules<Pos>),1>,
   module_store:MS
 }
-impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
+impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
+  fn load_module(&mut self,module:&ModuleReference) -> Option<ModuleRules<LSPLineCol>> {
+    self.modules.iter().find_map(|(m,rules)| if *m == module.uri {Some(rules.clone())} else {None})
+      .or_else(|| self.module_store.get_module(module).and_then(|d| 
+      d.lock().modules.iter().find_map(|(m,rules)| if *m == module.uri {Some(rules.clone())} else {None})
+    ))
+  }
+  fn load_rules<Err:FnMut(String,SourceRange<LSPLineCol>)>(
+    irules:&ModuleRules<LSPLineCol>,
+    current:&mut HMap<Cow<'a,str>,AnyMacro<'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>>,
+    changes:&mut HMap<Cow<'a,str>,Option<AnyMacro<'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>>>,
+    f: &mut impl FnMut(&ModuleReference) -> Option<ModuleRules<LSPLineCol>>
+  ) {
+    for rule in irules.rules.iter() {
+      match rule {
+        ModuleRule::Import(m) => if let Some(rls) = f(m) {
+          Self::load_rules(&rls,current,changes,f);
+        },
+        ModuleRule::Symbol(rule) => {
+          if let Some((name,rule)) = rule.as_rule() {
+            let old = current.insert(
+              name.clone(),rule
+            );
+            if let Entry::Vacant(e) = changes.entry(name) {
+              e.insert(old);
+            }
+          }
+        }
+      }
+    }
+  }
+  pub fn add_import<Err:FnMut(String,SourceRange<LSPLineCol>)>(&mut self,module:&ModuleReference,groups:Groups<'a,'_,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>,range:SourceRange<LSPLineCol>) {
+    for g in groups.groups.iter_mut().rev() {
+      match &mut g.kind {
+        GroupKind::Module { rules,imports,.. } => {
+          if imports.0.contains(&module.uri) { return }
+          imports.insert(module.uri.clone());
+          rules.push(ModuleRule::Import(module.clone()));
+          if let Some(irules) = self.load_module(module) {
+            if MS::FULL {
+              Self::load_rules(&irules,groups.rules,&mut g.inner.macro_rule_changes,
+                &mut |m| self.load_module(m)
+              );
+            }
+          } else {
+            groups.tokenizer.problem(range.start, format!("module {} not found in {:?}",module.uri,module.full_path.as_ref().map(|p| p.display())));
+          }
+          return
+        }
+        GroupKind::None => ()
+      }
+    }
+
+    groups.tokenizer.problem(range.start, "\\importmodule is only allowed in a module".to_string());
+  }
+}
+
+impl<'a,Pos:SourcePos,MS:STeXModuleStore> STeXParseState<'a,Pos,MS> {
   #[inline]#[must_use]
   pub fn new(archive:Option<ArchiveURIRef<'a>>,in_path:Option<&'a Path>,uri:&'a DocumentURI,backend:&'a AnyBackend,on_module:MS) -> Self {
     let language = in_path.map(Language::from_file).unwrap_or_default();
     Self { archive, in_path:in_path.map(Into::into), doc_uri:uri, language, backend, modules:SmallVec::new(), module_store: on_module }
   }
 
-  /*#[inline]
-  pub fn push_module(&mut self,uri:ModuleURI) {
-    self.in_modules.push((
-      uri,Vec::new(),VecSet::default(),VecSet::default()
-    ));
-  }*/
-
-  pub fn add_rule<Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>(&mut self,f:impl FnOnce(&ModuleURI) -> SymbolRule,groups:Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>,range:SourceRange<Pos>) -> Option<SymbolURI> {
+  pub fn add_rule<Err:FnMut(String,SourceRange<Pos>)>(&mut self,f:impl FnOnce(&ModuleURI) -> SymbolRule<Pos>,groups:Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>,range:SourceRange<Pos>) -> Option<SymbolReference<Pos>> {
     for g in groups.groups.iter_mut().rev() {
       match &mut g.kind {
         GroupKind::Module { uri, rules,.. } => {
@@ -216,7 +280,8 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
             }
           }
           let uri = rule.uri.clone();
-          rules.push(ModuleRule::Symbol(rule));
+          rules.push(ModuleRule::Symbol(rule.clone()));
+          g.symbols.push(rule);
           return Some(uri)
         }
         _ => ()
@@ -225,48 +290,6 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
     groups.tokenizer.problem(range.start, "\\symdecl is only allowed in a module".to_string());
     None
   }
-
-  fn load_module(&mut self,module:&ModuleReference) -> Option<ModuleRules> {
-    self.modules.iter().find_map(|(m,rules)| if *m == module.uri {Some(rules.clone())} else {None})
-      .or_else(|| self.module_store.get_module(module).and_then(|d| 
-      d.lock().modules.iter().find_map(|(m,rules)| if *m == module.uri {Some(rules.clone())} else {None})
-    ))
-  }
-
-  pub fn add_import<Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>(&mut self,module:&ModuleReference,groups:Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>,range:SourceRange<Pos>) {
-    for g in groups.groups.iter_mut().rev() {
-      match &mut g.kind {
-        GroupKind::Module { rules,imports,.. } => {
-          if imports.0.contains(&module.uri) { return }
-          imports.insert(module.uri.clone());
-          rules.push(ModuleRule::Import(module.clone()));
-          if let Some(rules) = self.load_module(module) {
-            if MS::FULL {
-              //rules.lock().
-
-            }
-          } else {
-            groups.tokenizer.problem(range.start, format!("module {} not found",module.uri));
-          }
-          return
-        }
-        GroupKind::None => ()
-      }
-    }
-
-    groups.tokenizer.problem(range.start, "\\importmodule is only allowed in a module".to_string());
-  }
-
-  pub fn add_use<Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>)>(&mut self,module:&ModuleReference,groups:Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>) {
-
-  }
-
-  /*#[inline]
-  pub fn pop_module(&mut self) {
-    if let Some((uri,rules,_,_)) = self.in_modules.pop() {
-      self.modules.push((uri,ModuleRules { rules: rules.into() }));
-    }
-  }*/
 
   #[allow(clippy::case_sensitive_file_extension_comparisons)]
   #[allow(clippy::needless_pass_by_value)]
@@ -381,13 +404,13 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,MS> {
 
 #[derive(Default)]
 #[allow(clippy::large_enum_variant)]
-pub enum GroupKind {
+pub enum GroupKind<Pos:SourcePos> {
   #[default]
   None,
   Module{
     uri:ModuleURI,
     imports:VecSet<ModuleURI>,
-    rules: Vec<ModuleRule>
+    rules: Vec<ModuleRule<Pos>>
   }
 }
 
@@ -397,8 +420,9 @@ pub struct STeXGroup<'a,
   Pos:SourcePos+'a,
   Err:FnMut(String,SourceRange<Pos>)
 > {
-  pub inner: Group<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>>,
-  pub kind:GroupKind,
+  pub inner: Group<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>>,
+  pub kind:GroupKind<Pos>,
+  pub symbols:Vec<SymbolRule<Pos>>,
   pub uses:VecSet<ModuleURI>
 }
 
@@ -406,34 +430,35 @@ impl<'a,
   MS:STeXModuleStore,
   Pos:SourcePos+'a,
   Err:FnMut(String,SourceRange<Pos>)
-> GroupState<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>> for STeXGroup<'a,MS,Pos,Err> {
+> GroupState<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>> for STeXGroup<'a,MS,Pos,Err> {
   #[inline]
   fn new(parent:Option<&mut Self>) -> Self {
     Self {
       inner:Group::new(parent.map(|p| &mut p.inner)),
       kind:GroupKind::None,
+      symbols:Vec::new(),
       uses:VecSet::default()
     }
   }
 
   #[inline]
-  fn inner(&self) -> &Group<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>> {
+  fn inner(&self) -> &Group<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,Pos,MS>> {
     &self.inner
   }
   #[inline]
-  fn inner_mut(&mut self) -> &mut Group<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>> {
+  fn inner_mut(&mut self) -> &mut Group<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>> {
     &mut self.inner
   }
   #[inline]
-  fn close(self, parser: &mut LaTeXParser<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err,STeXParseState<'a,MS>>) {
+  fn close(self, parser: &mut LaTeXParser<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err,STeXParseState<'a,Pos,MS>>) {
     self.inner.close(parser);
   }
   #[inline]
-  fn add_macro_rule(&mut self, name: Cow<'a,str>, old: Option<AnyMacro<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>>) {
+  fn add_macro_rule(&mut self, name: Cow<'a,str>, old: Option<AnyMacro<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,Pos,MS>>>) {
     self.inner.add_macro_rule(name,old);
   }
   #[inline]
-  fn add_environment_rule(&mut self, name: Cow<'a,str>, old: Option<AnyEnv<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>>) {
+  fn add_environment_rule(&mut self, name: Cow<'a,str>, old: Option<AnyEnv<'a, ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,Pos,MS>>>) {
     self.inner.add_environment_rule(name,old);
   }
   #[inline]
@@ -446,23 +471,22 @@ impl<'a,
   MS:STeXModuleStore,
   Pos:SourcePos+'a,
   Err:FnMut(String,SourceRange<Pos>)
-> ParserState<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err> for STeXParseState<'a,MS> {
+> ParserState<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err> for STeXParseState<'a,Pos,MS> {
   type Group = STeXGroup<'a,MS,Pos,Err>;
-  type MacroArg = (SymbolURI,u8);
+  type MacroArg = (SymbolReference<Pos>,u8);
 }
 
 #[must_use]
 #[allow(clippy::type_complexity)]
 pub fn all_rules<'a,
-  Pos:SourcePos,
   MS:STeXModuleStore,
-  Err:FnMut(String,SourceRange<Pos>)
+  Err:FnMut(String,SourceRange<LSPLineCol>)
 >() -> [(&'static str,MacroRule<'a,
-  ParseStr<'a,Pos>,
-  STeXToken<Pos>,
+  ParseStr<'a,LSPLineCol>,
+  STeXToken<LSPLineCol>,
   Err,
-  STeXParseState<'a,MS>,
->);8] {[
+  STeXParseState<'a,LSPLineCol,MS>,
+>);9] {[
   ("importmodule",importmodule as _),
   ("setmetatheory",setmetatheory as _),
   ("usemodule",usemodule as _),
@@ -470,65 +494,75 @@ pub fn all_rules<'a,
   ("stexstyleassertion",stexstyleassertion as _),
   ("stexstyledefinition",stexstyledefinition as _),
   ("stexstyleparagraph",stexstyleparagraph as _),
-  ("symdecl",symdecl as _)
+  ("symdecl",symdecl as _),
+  ("symdef",symdef as _)
 ]}
 
 #[must_use]
 #[allow(clippy::type_complexity)]
 pub fn declarative_rules<'a,
-  Pos:SourcePos,
   MS:STeXModuleStore,
-  Err:FnMut(String,SourceRange<Pos>)
+  Err:FnMut(String,SourceRange<LSPLineCol>)
 >() -> [(&'static str,MacroRule<'a,
-  ParseStr<'a,Pos>,
-  STeXToken<Pos>,
+  ParseStr<'a,LSPLineCol>,
+  STeXToken<LSPLineCol>,
   Err,
-  STeXParseState<'a,MS>
->);6] {[
+  STeXParseState<'a,LSPLineCol,MS>
+>);7] {[
   ("importmodule",importmodule as _),
   ("setmetatheory",setmetatheory as _),
   ("stexstyleassertion",stexstyleassertion as _),
   ("stexstyledefinition",stexstyledefinition as _),
   ("stexstyleparagraph",stexstyleparagraph as _),
-  ("symdecl",symdecl as _)
+  ("symdecl",symdecl as _),
+  ("symdef",symdef as _),
 ]}
 
 #[must_use]
 #[allow(clippy::type_complexity)]
 pub fn all_env_rules<'a,
-  Pos:SourcePos,
   MS:STeXModuleStore,
-  Err:FnMut(String,SourceRange<Pos>)
+  Err:FnMut(String,SourceRange<LSPLineCol>)
 >() -> [(&'static str,
   EnvironmentRule<'a,
-    ParseStr<'a,Pos>,
-    STeXToken<Pos>,
+    ParseStr<'a,LSPLineCol>,
+    STeXToken<LSPLineCol>,
     Err,
-    STeXParseState<'a,MS>
+    STeXParseState<'a,LSPLineCol,MS>
 >);1] {[
   ("smodule",(smodule_open as _, smodule_close as _))
 ]}
 
 #[must_use]
 #[allow(clippy::type_complexity)]
-pub fn declarative_env_rules<'a,Pos:SourcePos,MS:STeXModuleStore,Err:FnMut(String,SourceRange<Pos>)>() -> [(&'static str,EnvironmentRule<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>>);1] {[
+pub fn declarative_env_rules<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>)>() -> [(&'static str,EnvironmentRule<'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,STeXParseState<'a,LSPLineCol,MS>>);1] {[
   ("smodule",(smodule_open as _, smodule_close as _))
 ]}
 
 macro_rules! stex {
   ($p:ident => @begin $($stuff:tt)+) => {
-    tex!(<{'a,Pos:SourcePos,MS:STeXModuleStore,Err:FnMut(String,SourceRange<Pos>)} E{'a,Pos,&'a str,STeXToken<Pos>} P{'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>} R{'a,Pos,&'a str,STeXToken<Pos>}>
+    tex!(<{'a,Pos:SourcePos,MS:STeXModuleStore,Err:FnMut(String,SourceRange<Pos>)} E{'a,Pos,&'a str,STeXToken<Pos>} P{'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>} R{'a,Pos,&'a str,STeXToken<Pos>}>
       $p => @begin $($stuff)*
     );
   };
   ($p:ident => $($stuff:tt)+) => {
-    tex!(<{'a,Pos:SourcePos,MS:STeXModuleStore,Err:FnMut(String,SourceRange<Pos>)} M{'a,Pos,&'a str} P{'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>} R{'a,Pos,&'a str,STeXToken<Pos>}>
+    tex!(<{'a,Pos:SourcePos,MS:STeXModuleStore,Err:FnMut(String,SourceRange<Pos>)} M{'a,Pos,&'a str} P{'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>} R{'a,Pos,&'a str,STeXToken<Pos>}>
+      $p => $($stuff)*
+    );
+  };
+  (LSP: $p:ident => @begin $($stuff:tt)+) => {
+    tex!(<{'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>)} E{'a,LSPLineCol,&'a str,STeXToken<LSPLineCol>} P{'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,STeXParseState<'a,LSPLineCol,MS>} R{'a,LSPLineCol,&'a str,STeXToken<LSPLineCol>}>
+      $p => @begin $($stuff)*
+    );
+  };
+  (LSP: $p:ident => $($stuff:tt)+) => {
+    tex!(<{'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>)} M{'a,LSPLineCol,&'a str} P{'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,STeXParseState<'a,LSPLineCol,MS>} R{'a,LSPLineCol,&'a str,STeXToken<LSPLineCol>}>
       $p => $($stuff)*
     );
   };
 }
 
-stex!(p => importmodule[archive:str]{module:name} => {
+stex!(LSP: p => importmodule[archive:str]{module:name} => {
         let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (Some(ArchiveId::new(a)),Some(r)));
         if let Some(r) = p.state.resolve_module(module.0, archive) {
           let (state,groups) = p.split();
@@ -562,7 +596,7 @@ stex!(p => usemodule[archive:str]{module:name} => {
       let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (Some(ArchiveId::new(a)),Some(r)));
       if let Some(r) = p.state.resolve_module(module.0, archive) {
         let (state,groups) = p.split();
-        state.add_use(&r,groups);
+        //state.add_use(&r,groups);
         MacroResult::Success(STeXToken::UseModule { 
           archive_range, path_range:module.1,module:r,
           full_range:usemodule.range, token_range:usemodule.token_range
@@ -625,57 +659,204 @@ fn get_module<'a,'b,
   Pos:SourcePos+'a,
   MS:STeXModuleStore,
   Err:FnMut(String,SourceRange<Pos>)
->(p:&'b mut LaTeXParser<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,MS>>)
- -> Option<(&'b ModuleURI,&'b mut VecSet<ModuleURI>,&'b mut Vec<ModuleRule>)> {
-  p.groups.iter_mut().rev().find_map(|g| match &mut g.kind {
-    GroupKind::Module { uri, imports, rules } => Some((&*uri,imports,rules)),
-    GroupKind::None => None
+>(p:&'b mut LaTeXParser<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>>)
+  -> Option<(&'b ModuleURI,&'b mut VecSet<ModuleURI>,&'b mut Vec<ModuleRule<Pos>>)> {
+    p.groups.iter_mut().rev().find_map(|g| match &mut g.kind {
+      GroupKind::Module { uri, imports, rules } => Some((&*uri,imports,rules)),
+      GroupKind::None => None
   })
- }
+}
 
-stex!(p => symdecl('*'?star){name:name}[args:Map] => {
+#[derive(Debug,Clone)]
+pub struct SymdeclArgs<Pos:SourcePos,Tk> {
+  pub name:Option<(String,SourceRange<Pos>,SourceRange<Pos>)>,
+  pub args:Option<(u8,SourceRange<Pos>,SourceRange<Pos>)>,
+  pub tp:Option<(SourceRange<Pos>,SourceRange<Pos>,Vec<Tk>)>,
+  pub df:Option<(SourceRange<Pos>,SourceRange<Pos>,Vec<Tk>)>,
+  pub return_:Option<(SourceRange<Pos>,SourceRange<Pos>,Vec<Tk>)>,
+  pub style:Option<(SourceRange<Pos>,SourceRange<Pos>)>,
+  pub assoc:Option<(SourceRange<Pos>,SourceRange<Pos>)>,
+  pub role:Option<(SourceRange<Pos>,SourceRange<Pos>)>,
+  pub reorder:Option<(SourceRange<Pos>,SourceRange<Pos>)>
+}
+impl<Pos:SourcePos,T1> SymdeclArgs<Pos,T1> {
+  pub fn into_other<T2>(self,mut cont:impl FnMut(Vec<T1>) -> Vec<T2>) -> SymdeclArgs<Pos,T2> {
+    let SymdeclArgs{name,args,tp,df,return_,style,assoc,role,reorder} = self;
+    SymdeclArgs {
+      name,args,style,assoc,role,reorder,
+      tp:tp.map(|(a,b,c)| (a,b,cont(c))),
+      df:df.map(|(a,b,c)| (a,b,cont(c))),
+      return_:return_.map(|(a,b,c)| (a,b,cont(c)))
+    }
+  }
+}
+fn symdecl_args<'a,Pos:SourcePos>(args:&mut OptMap<'a,Pos,&'a str,STeXToken<Pos>>,mut err:impl FnMut(Pos,String)) -> SymdeclArgs<Pos,STeXToken<Pos>> {
+  let mut ret = SymdeclArgs { name:None,args:None,tp:None,df:None,return_:None,style:None,assoc:None,role:None,reorder:None };
+  if let Some(val) = args.inner.remove(&"name") {
+    ret.name = Some((val.str.trim().to_string(),val.key_range,val.val_range));
+  }
+  if let Some(val) = args.inner.remove(&"args") {
+    let str = val.str.trim();
+    if str.bytes().all(|b| b.is_ascii_digit()) && str.len() == 1 { 
+      let arg:u8 = str.parse().unwrap_or_else(|_| unreachable!());
+      ret.args = Some((arg,val.key_range,val.val_range));
+    } else if str.bytes().all(|b| b == b'i' || b == b'a' || b == b'b' || b == b'B') {
+      if str.len() > 9 {
+        err(val.val_range.start,"Too many arguments".to_string());
+      } else {
+        ret.args = Some((str.len() as u8,val.key_range,val.val_range));
+      }
+    } else {
+      err(val.val_range.start,format!("Invalid args value: >{}<",str));
+    }
+  }
+  if let Some(val) = args.inner.remove(&"type") {
+    ret.tp = Some((val.key_range,val.val_range,val.val));
+  }
+  if let Some(val) = args.inner.remove(&"def") {
+    ret.df = Some((val.key_range,val.val_range,val.val));
+  }
+  if let Some(val) = args.inner.remove(&"return") {
+    ret.return_ = Some((val.key_range,val.val_range,val.val));
+  }
+  if let Some(val) = args.inner.remove(&"style") {
+    ret.style = Some((val.key_range,val.val_range));
+  }
+  if let Some(val) = args.inner.remove(&"assoc") {
+    ret.assoc = Some((val.key_range,val.val_range));
+  }
+  if let Some(val) = args.inner.remove(&"role") {
+    ret.role = Some((val.key_range,val.val_range));
+  }
+  if let Some(val) = args.inner.remove(&"reorder") {
+    ret.reorder = Some((val.key_range,val.val_range));
+  }
+  ret
+}
+
+stex!(p => symdecl('*'?star){name:name}[mut args:Map] => {
     let macroname = if star {None} else {Some(name.0.to_string())};
     let main_name_range = name.1;
-    let mut name = (None,name.0,name.1);
-    let mut tp = None;
-    let mut df = None;
-    let mut argnum = 0;
-    for (key,val) in args.inner.0 { match key {
-      "type" => tp = Some((val.key_range, val.val_range, val.val)),
-      "def" => df = Some((val.key_range, val.val_range, val.val)),
-      "args" => if val.str.bytes().all(|b| b.is_ascii_digit()) { argnum = val.str.parse().unwrap_or_else(|_| unreachable!()) } else {
-        argnum = val.str.len() as u8;
-      },
-      "name" => name = (Some(val.key_range),val.str,val.val_range),
-      "return"|"style"|"assoc"|"role"|"reorder" => (), // TODO maybe
-      _ => p.tokenizer.problem(val.key_range.start, format!("Unknown key {key}"))
-    }}
-
+    let mut name = (None,name.0.to_string(),name.1);
+    let parsed_args = symdecl_args(&mut args,|a,b| p.tokenizer.problem(a,b));
+    if let Some((n,k,v)) = &parsed_args.name {
+      let n = n.strip_prefix('{').unwrap_or(n.as_str());
+      let n = n.strip_suffix('}').unwrap_or(n);
+      name = (Some(*k),n.to_string(),*v);
+    }
+    for (k,v) in args.inner.iter() {
+      p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k));
+    }
     let (state,groups) = p.split();
     let Ok(fname) : Result<Name,_> = name.1.parse() else {
       p.tokenizer.problem(name.2.start, format!("Invalid uri segment {}",name.1));
       return MacroResult::Simple(symdecl)
     };
-    let has_df = df.is_some();
-    let has_tp = tp.is_some();
+    let has_df = parsed_args.df.is_some();
+    let has_tp = parsed_args.tp.is_some();
     let mn = macroname.as_ref();
+    let filepath = state.in_path.clone();
     if let Some(uri) = state.add_rule(move |m| {
       let uri = m.clone() | fname;
+      let uri = SymbolReference {
+        uri,filepath,
+        range:symdecl.range
+      };
       SymbolRule {
         uri,macroname:mn.map(|s| s.clone().into()),
-        has_df,has_tp,argnum
+        has_df,has_tp,argnum:parsed_args.args.as_ref().map(|(a,_,_)| *a).unwrap_or_default()
       }
     },groups,symdecl.range) {
       let name_ranges = name.0.map(|r| (r,name.2));
       MacroResult::Success(STeXToken::Symdecl { 
         uri, macroname, main_name_range, name_ranges,
-        tp, df, full_range:symdecl.range,
+        full_range:symdecl.range,parsed_args:Box::new(parsed_args),
         token_range:symdecl.token_range
       })
     } else {
       MacroResult::Simple(symdecl)
     }
   }
+);
+
+
+#[derive(Debug,Clone)]
+pub struct NotationArgs<Pos:SourcePos,Tk> {
+  pub id:Option<(String,SourceRange<Pos>,SourceRange<Pos>)>,
+  pub prec:Option<(SourceRange<Pos>,SourceRange<Pos>,Vec<Tk>)>,
+  pub op:Option<(SourceRange<Pos>,SourceRange<Pos>,Vec<Tk>)>
+}
+impl<Pos:SourcePos,T1> NotationArgs<Pos,T1> {
+  pub fn into_other<T2>(self,mut cont:impl FnMut(Vec<T1>) -> Vec<T2>) -> NotationArgs<Pos,T2> {
+    let NotationArgs{id,prec,op} = self;
+    NotationArgs {
+      id,
+      prec:prec.map(|(a,b,c)| (a,b,cont(c))),
+      op:op.map(|(a,b,c)| (a,b,cont(c))),
+    }
+  }
+}
+fn notation_args<'a,Pos:SourcePos>(args:&mut OptMap<'a,Pos,&'a str,STeXToken<Pos>>,mut err:impl FnMut(Pos,String)) -> NotationArgs<Pos,STeXToken<Pos>> {
+  let mut ret = NotationArgs { id:None,prec:None,op: None };
+  if let Some(val) = args.inner.remove(&"prec") {
+    ret.prec = Some((val.key_range,val.val_range,val.val));
+  }
+  if let Some(val) = args.inner.remove(&"op") {
+    ret.op = Some((val.key_range,val.val_range,val.val));
+  }
+  if let Some(i) = args.inner.0.iter().position(|(_,v)| v.str.is_empty()) {
+    let (r,d) = args.inner.0.remove(i);
+    ret.id = Some((r.to_string(),d.key_range,d.val_range));
+  }
+  ret
+}
+
+
+stex!(p => symdef{name:name}[mut args:Map]{notation:M} => {
+  let macroname = Some(name.0.to_string());
+  let main_name_range = name.1;
+  let mut name = (None,name.0.to_string(),name.1);
+  let parsed_args = symdecl_args(&mut args,|a,b| p.tokenizer.problem(a,b));
+  if let Some((n,k,v)) = &parsed_args.name {
+    let n = n.strip_prefix('{').unwrap_or(n.as_str());
+    let n = n.strip_suffix('}').unwrap_or(n);
+    name = (Some(*k),n.to_string(),*v);
+  }
+  let notation_args = notation_args(&mut args,|a,b| p.tokenizer.problem(a,b));
+  for (k,v) in args.inner.iter() {
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k));
+  }
+  let (state,groups) = p.split();
+  let Ok(fname) : Result<Name,_> = name.1.parse() else {
+    p.tokenizer.problem(name.2.start, format!("Invalid uri segment {}",name.1));
+    return MacroResult::Simple(symdef)
+  };
+  let has_df = parsed_args.df.is_some();
+  let has_tp = parsed_args.tp.is_some();
+  let mn = macroname.as_ref();
+  let filepath = state.in_path.clone();
+  if let Some(uri) = state.add_rule(move |m| {
+    let uri = m.clone() | fname;
+    let uri = SymbolReference {
+      uri,filepath,
+      range:symdef.range
+    };
+    SymbolRule {
+      uri,macroname:mn.map(|s| s.clone().into()),
+      has_df,has_tp,argnum:parsed_args.args.as_ref().map(|(a,_,_)| *a).unwrap_or_default()
+    }
+  },groups,symdef.range) {
+    let name_ranges = name.0.map(|r| (r,name.2));
+    MacroResult::Success(STeXToken::Symdef { 
+      uri, macroname, main_name_range, name_ranges,
+      full_range:symdef.range,parsed_args:Box::new(parsed_args),
+      notation_args,notation,
+      token_range:symdef.token_range
+    })
+  } else {
+    MacroResult::Simple(symdef)
+  }
+}
 );
 
 lazy_static::lazy_static! {
@@ -791,9 +972,9 @@ fn semantic_macro<'a,
   MS:STeXModuleStore,
   Pos:SourcePos + 'a,
   Err:FnMut(String,SourceRange<Pos>),
->((uri,argnum):&(SymbolURI,u8),
+>((uri,argnum):&(SymbolReference<Pos>,u8),
   m:Macro<'a, Pos, &'a str>,
-  _parser: &mut LaTeXParser<'a,ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,MS>>
+  _parser: &mut LaTeXParser<'a,ParseStr<'a,Pos>, STeXToken<Pos>, Err, STeXParseState<'a,Pos,MS>>
 ) -> MacroResult<'a, Pos, &'a str, STeXToken<Pos>> {
   MacroResult::Success(STeXToken::SemanticMacro { 
     uri:uri.clone(), 

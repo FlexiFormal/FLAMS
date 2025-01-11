@@ -168,6 +168,7 @@ http = {version="1"}
 # wasm
 tracing-wasm = "0.2"
 wasm-bindgen = "0.2.97"
+wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
 gloo-storage = "0.3"

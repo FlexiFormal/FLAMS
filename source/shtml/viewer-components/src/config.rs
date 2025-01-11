@@ -2,6 +2,8 @@
 use immt_ontology::{narration::LOKind, uris::{DocumentElementURI, DocumentURI, SymbolURI}};
 use leptos::prelude::*;
 use immt_utils::CSS;
+#[cfg(feature="csr")]
+use std::borrow::Cow;
 
 #[cfg(feature="omdoc")]
 use crate::components::omdoc::AnySpec;
@@ -70,6 +72,8 @@ trait ServerFunArgs {
     type DeTupledFun<R>;
     type First:std::hash::Hash+std::fmt::Display+PartialEq+Eq+Clone;
     type Extra;
+    #[cfg(feature="csr")]
+    fn as_params(e:&Self::Extra) -> Cow<'static,str>;
     #[cfg(any(feature="hydrate",feature="ssr"))]
     fn call<R>(uri:Self::First,extra:Self::Extra,f:&Self::DeTupledFun<R>) -> server_fun_ret!(R);
 }
@@ -83,6 +87,8 @@ impl ServerFunArgs for URIArgs {
     type DeTupledFun<R> = server_fun!(@URI => R);
     type First = URI;
     type Extra = ();
+    #[cfg(feature="csr")]
+    fn as_params(_:&Self::Extra) -> Cow<'static,str> {"".into()}
     #[cfg(any(feature="hydrate",feature="ssr"))]
     #[inline]
     fn call<R>(uri:URI,_:(),f:&Self::DeTupledFun<R>) -> server_fun_ret!(R) {
@@ -99,6 +105,8 @@ impl ServerFunArgs for DocURIArgs {
     type DeTupledFun<R> = server_fun!(@DOCURI => R);
     type First = DocumentURI;
     type Extra = ();
+    #[cfg(feature="csr")]
+    fn as_params(_:&Self::Extra) -> Cow<'static,str> {"".into()}
     #[cfg(any(feature="hydrate",feature="ssr"))]
     #[inline]
     fn call<R>(uri:DocumentURI,_:(),f:&Self::DeTupledFun<R>) -> server_fun_ret!(R) {
@@ -116,6 +124,8 @@ impl ServerFunArgs for SymURIArgs {
     type DeTupledFun<R> = server_fun!(@SYMURI => R);
     type First = SymbolURI;
     type Extra = ();
+    #[cfg(feature="csr")]
+    fn as_params(_:&Self::Extra) -> Cow<'static,str> {"".into()}
     #[cfg(any(feature="hydrate",feature="ssr"))]
     #[inline]
     fn call<R>(uri:SymbolURI,_:(),f:&Self::DeTupledFun<R>) -> server_fun_ret!(R) {
@@ -125,14 +135,16 @@ impl ServerFunArgs for SymURIArgs {
 
 
 #[cfg(all(feature="csr",not(any(feature="hydrate",feature="ssr"))))]
-type SymURIWithBool = (SymbolURI,bool);
+type LOArgs = (SymbolURI,bool);
 #[cfg(any(feature="hydrate",feature="ssr"))]
-type SymURIWithBool = (Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>,bool);
-impl ServerFunArgs for SymURIWithBool {
+type LOArgs = (Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>,bool);
+impl ServerFunArgs for LOArgs {
     #[cfg(any(feature="hydrate",feature="ssr"))]
     type DeTupledFun<R> = server_fun!(@SYMURI,bool => R);
     type First = SymbolURI;
     type Extra = bool;
+    #[cfg(feature="csr")]
+    fn as_params(b:&Self::Extra) -> Cow<'static,str> {format!("&exercises={b}").into()}
     #[cfg(any(feature="hydrate",feature="ssr"))]
     #[inline]
     fn call<R>(uri:SymbolURI,b:bool,f:&Self::DeTupledFun<R>) -> server_fun_ret!(R) {
@@ -179,8 +191,8 @@ impl<
 
     #[cfg(feature="csr")]
     #[inline]
-    fn url(&self,uri:&str) -> String {
-        format!("{}/content/{}?uri={}",
+    fn url(&self,uri:&str,extra:Cow<'static,str>) -> String {
+        format!("{}/content/{}?uri={}{extra}",
             server_config.server_url.lock(),
             self.url_frag,
             urlencoding::encode(uri)
@@ -200,7 +212,14 @@ impl<
         }}
         
         #[cfg(feature="csr")]
-        return ServerConfig::remote(self.url(&key.to_string())).await;
+        {
+            let ret: Result<V,_> = ServerConfig::remote(self.url(&key.to_string(),T::as_params(&extra))).await;
+            if let Ok(v) = &ret {
+                let mut cache = self.cache.lock();
+                cache.insert( key.clone(), v.clone());
+            }
+            return ret
+        }
 
         #[cfg(any(feature="hydrate",feature="ssr"))]
         {
@@ -229,7 +248,7 @@ pub struct ServerConfig {
     #[cfg(feature="omdoc")]
     get_omdoc:Cache<URIArgs,(Vec<CSS>,AnySpec)>,
     get_toc:Cache<DocURIArgs,(Vec<CSS>,Vec<TOCElem>)>,
-    get_los:Cache<SymURIWithBool,Vec<(DocumentElementURI,LOKind)>>,
+    get_los:Cache<LOArgs,Vec<(DocumentElementURI,LOKind)>>,
     #[cfg(feature="omdoc")]
     get_notations:Cache<URIArgs,Vec<(DocumentElementURI,immt_ontology::narration::notations::Notation)>>,
 }
@@ -298,7 +317,8 @@ impl ServerConfig {
     #[cfg(feature="omdoc")]
     #[inline]
     pub async fn notations(&self,uri:immt_ontology::uris::URI) -> Result<Vec<(DocumentElementURI,immt_ontology::narration::notations::Notation)>,String> {
-        self.get_notations.call(uri,()).await
+        let ret = self.get_notations.call(uri,()).await;
+        ret
     }
 
     #[cfg(feature="omdoc")]

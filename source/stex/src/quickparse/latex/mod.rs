@@ -755,6 +755,36 @@ impl<'a,
         v
     }
 
+    pub fn get_argument(&mut self, in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>) -> (SourceRange<Pa::Pos>,Vec<T>) {
+        self.tokenizer.reader.trim_start();
+        let start = self.curr_pos();
+        if self.tokenizer.reader.starts_with('{') {
+            self.tokenizer.reader.pop_head();
+            let v = self.group_i();
+            in_macro.range.end = self.curr_pos();
+            let range = SourceRange { start, end:self.curr_pos() };
+            (range,v)
+        } else if self.tokenizer.reader.starts_with('\\') {
+            let t = self.tokenizer.next().unwrap_or_else(|| unreachable!());
+            in_macro.range.end = self.curr_pos();
+            if let Some(t) = self.default(t) {
+                let range = SourceRange { start, end:self.curr_pos() };
+                (range,vec![t])
+            } else {
+                let range = SourceRange { start, end:self.curr_pos() };
+                (range,Vec::new())
+            }
+        } else {
+            let n = self.tokenizer.next();
+            if n.is_none() {
+                self.tokenizer.problem(start,"Expected argument");
+            }
+            in_macro.range.end = self.curr_pos();
+            let range = SourceRange { start, end:self.curr_pos() };
+            (range,Vec::new())
+        }
+    }
+
     pub fn read_argument(&mut self, in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>) {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {

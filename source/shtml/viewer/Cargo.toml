@@ -11,7 +11,8 @@ workspace = true
 
 [features]
 ssr = [] # just to make documentation happy
-ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde"]
+ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde","immt-utils/wasm","dep:wasm-bindgen-futures"]
+omdoc = ["shtml-viewer-components/omdoc"]
 
 [dependencies]
 shtml-viewer-components = {workspace=true,features = ["csr"]}
@@ -25,9 +26,11 @@ console_error_panic_hook = {workspace=true}
 tracing-wasm = {workspace=true}
 tracing = {workspace=true,features=["release_max_level_info"]}
 
+immt-utils = {workspace=true}
 tsify-next = {workspace=true,optional = true}
 serde = {workspace=true,optional=true}
 immt-ontology = {workspace=true}
+wasm-bindgen-futures = {workspace=true,optional=true}
 
 
 #tachys = {workspace = true}

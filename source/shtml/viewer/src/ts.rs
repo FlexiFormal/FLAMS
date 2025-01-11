@@ -5,6 +5,12 @@ use immt_ontology::uris::DocumentURI;
 use wasm_bindgen::prelude::wasm_bindgen;
 use leptos::{either::Either, prelude::*};
 
+#[wasm_bindgen]
+/// activates debug logging
+pub fn set_debug_log() {
+    let _ = tracing_wasm::try_set_as_global_default();
+}
+
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 /// Options for rendering an SHTML document
@@ -96,11 +102,39 @@ impl SHTMLMountHandle {
     }
   }
 }
-/*
-static GLOBAL_OWNER: std::sync::OnceLock<Owner> = std::sync::OnceLock::new();
 
-#[wasm_bindgen]
-pub fn global_setup() {
-  let _ = GLOBAL_OWNER.get_or_init(|| Owner::new_root(None));
+pub mod server {
+  use wasm_bindgen::prelude::wasm_bindgen;
+  use shtml_viewer_components::config::{ServerConfig,server_config};
+  pub use immt_utils::CSS;
+  use tsify_next::Tsify;
+  /// The currently set server URL
+  #[wasm_bindgen]
+  pub fn get_server_url() -> String {
+    server_config.server_url.lock().clone()
+  }
+
+  #[derive(Tsify, serde::Serialize, serde::Deserialize)]
+  #[tsify(into_wasm_abi, from_wasm_abi)]
+  pub struct HTMLFragment {
+    pub css: Vec<CSS>,
+    pub html: String
+  }
+
+  #[wasm_bindgen]
+  pub async fn get_document_html(doc:&str) -> Result<HTMLFragment,String> { 
+    let doc = doc.parse().map_err(|e| "invalid document URI".to_string())?;
+    server_config.inputref(doc).await.map(|(css,html)|
+      HTMLFragment {css, html}
+    )
+  }
+
+  #[wasm_bindgen]
+  pub async fn get_paragraph_html(elem:&str) -> Result<HTMLFragment,String> { 
+    let doc = elem.parse().map_err(|e| "invalid document URI".to_string())?;
+    server_config.paragraph(doc).await.map(|(css,html)|
+      HTMLFragment {css, html}
+    )
+  }
+
 }
-*/

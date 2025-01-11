@@ -36,7 +36,7 @@ pub enum STeXDependency {
 
 #[allow(clippy::type_complexity)]
 pub struct DepParser<'a> {
-    parser: LaTeXParser<'a, ParseStr<'a,()>,STeXToken<()>,fn(String,SourceRange<()>),STeXParseState<'a,()>>,
+    parser: LaTeXParser<'a, ParseStr<'a,()>,STeXToken<()>,fn(String,SourceRange<()>),STeXParseState<'a,(),()>>,
     stack: Vec<std::vec::IntoIter<STeXToken<()>>>,
     curr: Option<std::vec::IntoIter<STeXToken<()>>>,
 }

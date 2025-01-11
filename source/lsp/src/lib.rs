@@ -128,19 +128,6 @@ impl<const FULL:bool> STeXModuleStore for LSPStore<FULL> {
         });
         self.cycles.pop();
         r
-        /*
-        let slf = self.clone();
-        let p = p.clone();
-        // avoid stack overflows
-        std::thread::spawn(move || {
-          slf.clone().load(&p,&uri).inspect(|ret| {
-            let mut docs = slf.0.documents.write();
-            if let Entry::Vacant(e) = docs.entry(lsp_uri) {
-              e.insert(DocOrData::Data(ret.clone()));
-            }
-          })
-        }).join().unwrap_or_else(|_| unreachable!())
-         */
       })
   }
 }

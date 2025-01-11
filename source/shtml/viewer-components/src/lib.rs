@@ -234,6 +234,8 @@ pub fn SHTMLGlobalSetup<Ch:IntoView+'static>(
     children: TypedChildren<Ch>
 ) -> impl IntoView {
     let children = children.into_inner();
+    #[cfg(any(feature="csr",feature="hydrate"))]
+    provide_context(RwSignal::new(DOMExtractor::default()));
     #[cfg(feature="omdoc")]
     provide_context(NotationForces::new());
     provide_context(OnClickProvider::new());
@@ -355,11 +357,12 @@ pub fn iterate(e:&Element) -> Option<impl FnOnce() -> AnyView> {
 #[cfg(feature="ts")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen::prelude::wasm_bindgen(typescript_type = "((uri: string) => Element | null)")]
+    #[wasm_bindgen(extends = web_sys::js_sys::Function)]
+    #[wasm_bindgen::prelude::wasm_bindgen(typescript_type = "(uri: string) => (((HTMLDivElement) => void) | undefined)")]
     pub type SectionContinuation;
 
-    #[wasm_bindgen::prelude::wasm_bindgen(method, structural, js_name = "call")]
-    fn call(this: &SectionContinuation, uri: &str) -> wasm_bindgen::JsValue;
+    //#[wasm_bindgen::prelude::wasm_bindgen(method, structural, js_name = call)]
+    //fn call(this: &SectionContinuation, uri: wasm_bindgen::JsValue) -> wasm_bindgen::JsValue;
 }
 
 #[cfg(not(feature="ts"))]

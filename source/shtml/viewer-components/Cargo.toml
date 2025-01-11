@@ -8,10 +8,10 @@ workspace = true
 
 [features]
 omdoc = ["dep:icondata_ai","dep:gloo-storage"]
-ts = ["dep:tsify-next"]
+ts = ["dep:tsify-next","immt-utils/wasm"]
 rdf = ["immt-ontology/rdf","shtml-extraction/rdf"]
 csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
-hydrate= ["ts","omdoc","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
+hydrate= ["omdoc","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
 ssr = ["leptos/ssr","rdf","immt-web-utils/ssr","dep:immt-system","dep:tokio"]
 
 [dependencies]

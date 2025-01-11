@@ -142,7 +142,11 @@ mod term_replacing {
       macro_rules! orig {
         () => {{
           substituted.update_untracked(|v| *v = false);
-          let (o,sig) = if on_load.get_untracked() { (oclone.deep_clone(),RwSignal::new(false))} else {(orig.clone(),on_load)};
+          let (o,sig) = if on_load.get_untracked() { 
+            (oclone.deep_clone(),RwSignal::new(false))
+          } else {
+            (orig.clone(),on_load)
+          };
           Either::Left(
             //view!(<mrow>{
               do_components::<true>(0,elements.clone(),o,sig).into_any()
@@ -210,6 +214,7 @@ pub(super) fn math_term(skip:usize,mut elements:shtml_extraction::prelude::SHTML
   if term_replacing::DO_REPLACEMENTS {
     Either::Left({
       if use_context::<Option<SkipOne>>().flatten().is_some() {
+        tracing::debug!("Skipping");
         let value : Option<SkipOne> = None;
         EitherOf3::A(view!(<Provider value>{super::do_components::<true>(skip+1,elements,orig,on_load).into_any()}</Provider>))
       } else {

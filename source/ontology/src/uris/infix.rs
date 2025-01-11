@@ -167,7 +167,11 @@ impl Div<&Name> for PathURI {
 impl Div<&str> for PathURI {
     type Output = Result<Self,InvalidURICharacter>;
     fn div(self, rhs: &str) -> Self::Output {
-        Ok(self / rhs.parse::<Name>()?)
+        if rhs.is_empty() {
+            Ok(self)
+        } else {
+            Ok(self / rhs.parse::<Name>()?)
+        }
     }
 }
 
