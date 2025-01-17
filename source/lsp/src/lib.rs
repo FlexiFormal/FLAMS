@@ -11,9 +11,9 @@ use std::{collections::hash_map::Entry, path::Path};
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
 pub use async_lsp;
 use immt_ontology::uris::{DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
-use immt_stex::quickparse::stex::{rules::STeXModuleStore, STeXParseData};
+use immt_stex::quickparse::stex::{structs::{ModuleReference, STeXModuleStore}, STeXParseData};
 use immt_system::backend::{AnyBackend, GlobalBackend};
-use immt_utils::sourcerefs::{LSPLineCol, SourceRange};
+use immt_utils::{prelude::HMap, sourcerefs::{LSPLineCol, SourceRange}};
 use implementation::HTMLRequest;
 use state::{DocOrData, LSPState};
 
@@ -70,44 +70,51 @@ impl <T:IMMTLSPServer> ServerWrapper<T> {
   }
 }
 
-
-#[derive(Clone)]
-pub struct LSPStore<const FULL:bool> {
-  state:LSPState,
+pub struct LSPStore<'a,const FULL:bool> {
+  pub(crate) map:&'a mut HMap<lsp::Url,DocOrData>,
   cycles:Vec<DocumentURI>
 }
-impl<const FULL:bool> LSPStore<FULL> {
+impl<'a,const FULL:bool> LSPStore<'a,FULL> {
   #[inline]
-  pub fn new(state:LSPState) -> Self {
+  pub fn new(map:&'a mut HMap<lsp::Url,DocOrData>) -> Self {
     Self {
-      state,
+      map,
       cycles:Vec::new()
     }
   }
-}
 
-impl<const FULL:bool> LSPStore<FULL> {
-  fn load(self,p:&Path,uri:&DocumentURI) -> Option<STeXParseData> {
+  fn load(&mut self,p:&Path,uri:&DocumentURI) -> Option<STeXParseData> {
     let text = std::fs::read_to_string(p).ok()?;
-    Some(immt_stex::quickparse::stex::quickparse(
+    let r = immt_stex::quickparse::stex::quickparse(
       uri,&text, p,
       &AnyBackend::Global(GlobalBackend::get()),
       self
-    ).lock())
+    ).lock();
+    Some(r)
+  }
+
+  fn load_as_false(&mut self,p:&Path,uri:&DocumentURI) -> Option<STeXParseData> {
+    if !FULL {
+      self.load(p,uri)
+    } else {
+      let mut nstore = LSPStore::<'_,false>::new(self.map);
+      nstore.cycles = std::mem::take(&mut self.cycles);
+      let r = nstore.load(p,uri);
+      self.cycles = nstore.cycles;
+      r
+    }
   }
 }
-impl<const FULL:bool> STeXModuleStore for LSPStore<FULL> {
+impl<'a,const FULL:bool> STeXModuleStore for &mut LSPStore<'a,FULL> {
   const FULL:bool = FULL;
-  fn get_module(&mut self,module:&immt_stex::quickparse::stex::rules::ModuleReference) -> Option<STeXParseData> {
+  fn get_module(&mut self,module:&ModuleReference) -> Option<STeXParseData> {
       module.full_path.as_ref().and_then(|p| {
         let lsp_uri = lsp::Url::from_file_path(p).ok()?;
-        let docs = self.state.documents.read();
-        match docs.get(&lsp_uri) {
+        match self.map.get(&lsp_uri) {
           Some(DocOrData::Data(d)) => return Some(d.clone()),
           Some(DocOrData::Doc(d)) => return Some(d.annotations.clone()),
           None => ()
         }
-        drop(docs);
         let uri = module.doc_uri()?;
         
         if self.cycles.contains(&uri) { 
@@ -120,9 +127,8 @@ impl<const FULL:bool> STeXModuleStore for LSPStore<FULL> {
           return None
         }
         self.cycles.push(uri.clone());
-        let r = self.clone().load(p,&uri).inspect(|ret| {
-          let mut docs = self.state.documents.write();
-          if let Entry::Vacant(e) = docs.entry(lsp_uri) {
+        let r = self.load_as_false(p,&uri).inspect(|ret| {
+          if let Entry::Vacant(e) = self.map.entry(lsp_uri) {
             e.insert(DocOrData::Data(ret.clone()));
           }
         });

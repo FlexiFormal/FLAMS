@@ -1,6 +1,6 @@
-use crate::quickparse::latex::{
+use crate::quickparse::{latex::{
     FromLaTeXToken, LaTeXParser, Macro
-};
+}, stex::DiagnosticLevel};
 use immt_utils::{parsing::{ParseSource, StringOrStr}, sourcerefs::{SourcePos, SourceRange}};
 
 use super::{Environment, ParserState};
@@ -31,7 +31,7 @@ pub enum EnvironmentResult<'a,
 pub type MacroRule<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > =
     fn(
@@ -42,7 +42,7 @@ pub type MacroRule<'a,
 pub type EnvOpenRule<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > = for<'b, 'c> fn(
     &'b mut Environment<'a, Pa::Pos,Pa::Str,T>, 
@@ -52,7 +52,7 @@ pub type EnvOpenRule<'a,
 pub type EnvCloseRule<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > =
     for<'b> fn(
@@ -63,7 +63,7 @@ pub type EnvCloseRule<'a,
 pub type EnvironmentRule<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > = (EnvOpenRule<'a, Pa,T,Err,State>, EnvCloseRule<'a, Pa,T,Err,State>);
 
@@ -72,7 +72,7 @@ pub type EnvironmentRule<'a,
 pub struct DynMacro<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>,
     Arg
 > {
@@ -88,7 +88,7 @@ pub struct DynMacro<'a,
 pub struct DynEnv<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>,
     Arg
 > {
@@ -107,7 +107,7 @@ pub struct DynEnv<'a,
 pub enum AnyMacro<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > {
     Ptr(MacroRule<'a,Pa,T,Err,State>),
@@ -118,7 +118,7 @@ pub enum AnyMacro<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > AnyMacro<'a,Pa,T,Err,State> {
     pub fn call(&self,
@@ -136,7 +136,7 @@ impl<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > Clone for AnyMacro<'a,Pa,T,Err,State> {
     fn clone(&self) -> Self {
@@ -161,7 +161,7 @@ impl<'a,
 pub enum AnyEnv<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > {
     Ptr(EnvironmentRule<'a,Pa,T,Err,State>),
@@ -172,7 +172,7 @@ pub enum AnyEnv<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > AnyEnv<'a,Pa,T,Err,State> {
     pub fn open<'b, 'c>(&self,
@@ -197,7 +197,7 @@ impl<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > Clone for AnyEnv<'a,Pa,T,Err,State> {
     fn clone(&self) -> Self {
@@ -225,7 +225,7 @@ impl<'a,
 pub fn read_verbatim_char<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(
     mac: &mut Macro<'a, Pa::Pos, Pa::Str>,
@@ -245,17 +245,17 @@ pub fn read_verbatim_char<'a,
     }*/
     if let Some(h2) = p.tokenizer.reader.pop_head() {
         if h2 != end {
-            p.tokenizer.problem(mac.range.start,"Expected end of verbatim");
+            p.tokenizer.problem(mac.range.start,"Expected end of verbatim",DiagnosticLevel::Error);
         }
     } else {
-        p.tokenizer.problem(mac.range.start,"Expected end of verbatim");
+        p.tokenizer.problem(mac.range.start,"Expected end of verbatim",DiagnosticLevel::Error);
     }
 }
 
 pub fn read_verbatim_str<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(
     _env: &mut Environment<'a, Pa::Pos, Pa::Str, T>,
@@ -301,7 +301,7 @@ macro_rules! tex {
         pub fn $name<'a,
             Pa: ::immt_utils::parsing::ParseSource<'a>,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>),
+            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
             State: $crate::quickparse::latex::ParserState<'a,Pa,T,Err>
         >(
             mut $name:$crate::quickparse::latex::Macro<'a,Pa::Pos,Pa::Str>,
@@ -316,7 +316,7 @@ macro_rules! tex {
         pub fn [<$name _open>]<'a,
             Pa: ::immt_utils::parsing::ParseSource<'a>,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>),
+            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
             State: $crate::quickparse::latex::ParserState<'a,Pa,T,Err>
         >(
             $name:&mut $crate::quickparse::latex::Environment<'a, Pa::Pos, Pa::Str, T>,
@@ -329,7 +329,7 @@ macro_rules! tex {
         pub fn [<$name _close>]<'a,
             Pa: ::immt_utils::parsing::ParseSource<'a>,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>),
+            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
             State: $crate::quickparse::latex::ParserState<'a,Pa,T,Err>
         >(
             mut $name:$crate::quickparse::latex::Environment<'a,Pa::Pos, Pa::Str, T>,
@@ -378,7 +378,7 @@ macro_rules! tex {
 
     (@envargs $p:ident:$name:ident{$arg:ident:name}$($args:tt)*) => {
         let Some($arg) = $p.read_name(&mut $name.begin) else {
-            $p.tokenizer.problem($name.begin.range.start,concat!("Expected { after \\",stringify!($name)));
+            $p.tokenizer.problem($name.begin.range.start,concat!("Expected { after \\",stringify!($name)),DiagnosticLevel::Error);
             return;
         };
         tex!{@envargs $p:$name $($args)*}
@@ -472,7 +472,7 @@ macro_rules! tex {
         if let Some($t) = $p.tokenizer.reader.pop_head() {
             tex!{@envargs $p:$name $($args)*}
         } else {
-            $p.tokenizer.problem("Expected character");
+            $p.tokenizer.problem("Expected character",DiagnosticLevel::Error);
         }
     };
     (@envargs $p:ident:$name:ident => $b:block) => {$b};
@@ -480,7 +480,7 @@ macro_rules! tex {
 
     (@args $p:ident:$name:ident{$arg:ident:name}$($args:tt)*) => {
         let Some($arg) = $p.read_name(&mut $name) else {
-            $p.tokenizer.problem($name.range.start,concat!("Expected { after \\",stringify!($name)));
+            $p.tokenizer.problem($name.range.start,concat!("Expected { after \\",stringify!($name)),DiagnosticLevel::Error);
             return $crate::quickparse::latex::rules::MacroResult::Simple($name);
         };
         tex!{@args $p:$name $($args)*}
@@ -567,7 +567,7 @@ macro_rules! tex {
         if let Some($t) = $p.tokenizer.reader.pop_head() {
             tex!{@args $p:$name $($args)*}
         } else {
-            $p.tokenizer.problem($name.range.start,"Expected character");
+            $p.tokenizer.problem($name.range.start,"Expected character",DiagnosticLevel::Error);
             $crate::quickparse::latex::rules::MacroResult::Simple($name)
         }
     };
@@ -593,7 +593,7 @@ tex!(p => begin{n:name} => {
 });
 
 tex!(p => end{n:name} => {
-    p.tokenizer.problem(end.range.start,format!("environment {} not open",n.0.as_ref()));
+    p.tokenizer.problem(end.range.start,format!("environment {} not open",n.0.as_ref()),DiagnosticLevel::Error);
 }!);
 
 tex!(p => lstinline[_](c)V:C(c)!);
@@ -637,6 +637,7 @@ tex!(p => textrm{_:T}!);
 tex!(p => textbf{_:T}!);
 tex!(p => ensuremath{_:M}!);
 tex!(p => scalebox{_}{_:T}!);
+tex!(p => raisebox{_}{_:T}!);
 
 tex!(p => def => {
     p.tokenizer.reader.read_until(|c| c == '{');

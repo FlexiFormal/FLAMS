@@ -112,7 +112,7 @@ impl SHTMLNode for NodeRef {
         f(None)
     }
 
-#[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_possible_wrap)]
     fn delete(&self) {
         self.len_update(-(self.len() as isize));
         let mut p = self.parent();
@@ -121,6 +121,12 @@ impl SHTMLNode for NodeRef {
             assert_eq!(pr.len(),pr.string().len());
             p = pr.parent();
         }*/
+    }
+    #[inline]
+    fn delete_children(&self) {
+        for c in self.children() {
+            c.delete();
+        }
     }
     fn range(&self) -> DocumentRange {
         self.as_element().map_or(

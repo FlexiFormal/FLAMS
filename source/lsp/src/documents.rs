@@ -6,7 +6,7 @@ use immt_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
 use immt_utils::time::measure;
 
-use crate::LSPStore;
+use crate::{state::LSPState, LSPStore};
 
 
 struct DocumentData {
@@ -111,15 +111,20 @@ impl LSPDocument {
   }
 
   #[allow(clippy::significant_drop_tightening)]
-  fn load_annotations_and<R>(&self,store:LSPStore<true>,f:impl FnOnce(&STeXParseDataI) -> R) -> Option<R> {
+  fn load_annotations_and<R>(&self,state:LSPState,f:impl FnOnce(&STeXParseDataI) -> R) -> Option<R> {
     let mut lock = self.text.lock();
     let uri = self.data.doc_uri.as_ref()?;
     let path = self.data.path.as_ref()?;
+
+    let mut docs = state.documents.write();
+    let mut store = LSPStore::<true>::new(&mut *docs);
     let (data,t) = measure(|| immt_stex::quickparse::stex::quickparse(
       uri,&lock.text, path,
       &AnyBackend::Global(GlobalBackend::get()),
-      store
+      &mut store
     ));
+    drop(store);
+    drop(docs);
     tracing::info!("quickparse took {t}");
     data.replace(&self.annotations);
     lock.up_to_date = true;
@@ -133,7 +138,7 @@ impl LSPDocument {
   }
 
   #[inline]#[must_use]#[allow(clippy::significant_drop_tightening)]
-  pub async fn with_annots<R:Send+'static>(self,store:LSPStore<true>,f:impl FnOnce(&STeXParseDataI) -> R + Send + 'static) -> Option<R> {
+  pub async fn with_annots<R:Send+'static>(self,state:LSPState,f:impl FnOnce(&STeXParseDataI) -> R + Send + 'static) -> Option<R> {
     if !self.has_annots() {return None}
     if self.is_up_to_date() {
       let lock = self.annotations.lock();
@@ -141,7 +146,7 @@ impl LSPDocument {
       return Some(f(&lock))
     }
     match tokio::task::spawn_blocking(move || {
-      self.load_annotations_and(store,f)
+      self.load_annotations_and(state,f)
     }).await {
       Ok(r) => r,
       Err(e) => {
@@ -151,8 +156,9 @@ impl LSPDocument {
     }
   }
 
-  pub fn compute_annots(&self,store:LSPStore<true>) {
-    self.load_annotations_and(store,|_| ());
+  #[inline]
+  pub fn compute_annots(&self,state:LSPState) {
+    self.load_annotations_and(state,|_| ());
   }
 }
 

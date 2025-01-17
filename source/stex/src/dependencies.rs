@@ -1,6 +1,5 @@
 use crate::{
-    quickparse::{latex::LaTeXParser, 
-        stex::rules::{ModuleReference, STeXParseState, STeXToken}},
+    quickparse::{latex::LaTeXParser, stex::{structs::{ModuleReference, STeXParseState, STeXToken}, DiagnosticLevel}},
     PDFLATEX_FIRST,
 };
 use either::Either;
@@ -36,16 +35,16 @@ pub enum STeXDependency {
 
 #[allow(clippy::type_complexity)]
 pub struct DepParser<'a> {
-    parser: LaTeXParser<'a, ParseStr<'a,()>,STeXToken<()>,fn(String,SourceRange<()>),STeXParseState<'a,(),()>>,
+    parser: LaTeXParser<'a, ParseStr<'a,()>,STeXToken<()>,fn(String,SourceRange<()>,DiagnosticLevel),STeXParseState<'a,(),()>>,
     stack: Vec<std::vec::IntoIter<STeXToken<()>>>,
     curr: Option<std::vec::IntoIter<STeXToken<()>>>,
 }
 
 fn parse_deps<'a>(source: &'a str, path: &'a Path,archive:ArchiveURIRef<'a>,doc:&'a DocumentURI,backend:&'a AnyBackend) -> impl Iterator<Item = STeXDependency> + use<'a> {
-    const NOERR: fn(String,SourceRange<()>) = |_,_| {};
+    const NOERR: fn(String,SourceRange<()>,DiagnosticLevel) = |_,_,_| {};
     let parser = LaTeXParser::with_rules(
         ParseStr::new(source),
-        STeXParseState::new(Some(archive),Some(path),doc,backend,()),
+        STeXParseState::<(),()>::new(Some(archive),Some(path),doc,backend,()),
         NOERR,
         LaTeXParser::default_rules().into_iter().chain([
             ("importmodule", rules::importmodule_deps as _),

@@ -134,7 +134,7 @@ impl Queue {
       Semaphore::Linear => self.run_sync(),
       #[cfg(feature="tokio")]
       Semaphore::Counting { inner:sem, .. } => 
-        {tokio::task::spawn(self.clone().run_async(sem).in_current_span());}
+        {tokio::task::spawn(self.clone().run_async(sem));}//.in_current_span());}
     }
   }
 

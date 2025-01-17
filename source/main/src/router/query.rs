@@ -16,7 +16,7 @@ pub async fn query_api(query:String) -> Result<String,ServerFnError<String>> {
   tracing::info!("Query: {query}");
   let r = tokio::task::spawn_blocking(move || {
       GlobalBackend::get().triple_store().query_str(&query).map(QueryResult::into_json)
-  }).in_current_span().await;
+  }).await;//.in_current_span().await;
   match r {
     Ok(Ok(Ok(r))) => Ok(r),
     Ok(Ok(Err(e)) | Err(e)) => Err(ServerFnError::WrappedServerError(e.to_string())),

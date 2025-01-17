@@ -2,15 +2,20 @@ use async_lsp::lsp_types::{self as lsp, CompletionOptions};
 
 pub struct STeXSemanticTokens;
 impl STeXSemanticTokens {
-  pub const DECLARATION:u32 = 0;
-  pub const NAME:u32 = 1;
-  pub const KEYWORD:u32 = 2;
-  pub const SYMBOL:u32 = 3;
+  pub const NAME:u32 = 0;           // dark blue          light blue  !
+  pub const TEMP:u32 = 1;           // light blue         dark blue   !
+  pub const KEYWORD:u32 = 2;        // violet             pink        !
+  pub const SYMBOL:u32 = 3;         // brown              red         !
+  pub const DECLARATION: u32 = 4;   // Dark Purple        dark brown  !
+  pub const REF_MACRO: u32 = 5;        // Lime               cyan        ! 
   // -------------------
-  pub const OPERATOR:u32 = 4;
-  pub const TYPE_PARAMETER:u32 = 5;
-  pub const TYPE:u32 = 6;
-  pub const ENUM:u32 = 7;
+  pub const OPERATOR:u32 = 6;       // white
+  pub const TYPE_PARAMETER:u32 = 7; // math green
+  pub const TYPE:u32 = 8;           // same
+  pub const ENUM:u32 = 9;           // same
+  pub const MODIFIER: u32 = 10;     // yellow / nothing
+  pub const COMMENT: u32 = 11;      // dark green
+  pub const DECORATOR: u32 = 12;    // yellow / nothing
 }
 
 lazy_static::lazy_static! {
@@ -20,11 +25,16 @@ lazy_static::lazy_static! {
       lsp::SemanticTokenType::PROPERTY,
       lsp::SemanticTokenType::KEYWORD,
       lsp::SemanticTokenType::STRING,
+      lsp::SemanticTokenType::REGEXP,
+      lsp::SemanticTokenType::NUMBER,
       // ------------------------------
       lsp::SemanticTokenType::OPERATOR,
       lsp::SemanticTokenType::TYPE_PARAMETER,
       lsp::SemanticTokenType::TYPE,
       lsp::SemanticTokenType::ENUM,
+      lsp::SemanticTokenType::MODIFIER,
+      lsp::SemanticTokenType::COMMENT,
+      lsp::SemanticTokenType::DECORATOR,
     ],
     token_modifiers: vec![
       //lsp::SemanticTokenModifier::DEPRECATED,
@@ -186,7 +196,7 @@ pub fn capabilities() -> lsp::ServerCapabilities { lsp::ServerCapabilities {
         text_document_registration_options:tdro(),
         static_registration_options:lsp::StaticRegistrationOptions { id:Some("stex-inlay-hint".to_string()) },
         inlay_hint_options:lsp::InlayHintOptions {
-          resolve_provider:Some(true),
+          resolve_provider:Some(false),
           work_done_progress_options:lsp::WorkDoneProgressOptions { work_done_progress:Some(true) } 
         }
       }

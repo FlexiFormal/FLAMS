@@ -5,7 +5,7 @@ use immt_ontology::content::declarations::OpenDeclaration;
 use immt_ontology::content::modules::OpenModule;
 use immt_ontology::content::terms::{Arg, ArgMode, Term, Var};
 use immt_ontology::languages::Language;
-use immt_ontology::narration::exercises::CognitiveDimension;
+use immt_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, CognitiveDimension, GradingNote, SolutionData};
 use immt_ontology::narration::notations::{NotationComponent, OpNotation};
 use immt_ontology::narration::sections::SectionLevel;
 use immt_ontology::narration::variables::Variable;
@@ -32,6 +32,7 @@ pub trait SHTMLNode {
     fn ancestors(&self) -> Self::Ancestors<'_>;
     fn with_elements<R>(&mut self,f:impl FnMut(Option<&mut SHTMLElements>) -> R) -> R;
     fn delete(&self);
+    fn delete_children(&self);
     fn range(&self) -> DocumentRange;
     fn inner_range(&self) -> DocumentRange;
     fn string(&self) -> String;
@@ -62,14 +63,38 @@ pub struct NotationState {
 #[derive(Debug)]
 pub struct ExerciseState {
     pub uri: DocumentElementURI,
-    pub solutions: Vec<LazyDocRef<Box<str>>>,
-    pub hints: Vec<LazyDocRef<Box<str>>>,
+    pub solutions: Vec<SolutionData<Unchecked>>,
+    pub gnote:Option<GnoteState>,
+    pub choice_block:Option<ChoiceBlockState>,
+    pub hints: Vec<DocumentRange>,
     pub notes: Vec<LazyDocRef<Box<str>>>,
-    pub gnotes: Vec<LazyDocRef<Box<str>>>,
     pub title: Option<DocumentRange>,
     pub children: Vec<DocumentElement<Unchecked>>,
     pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
     pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
+}
+impl ExerciseState {
+    pub fn new(uri:DocumentElementURI) -> Self {
+        Self {
+            uri,solutions:Vec::new(),
+            gnote:None,choice_block:None,hints:Vec::new(),
+            notes:Vec::new(),title:None,children:Vec::new(),
+            preconditions:Vec::new(),objectives:Vec::new()
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GnoteState {
+    pub answer_classes:Vec<AnswerClass>
+}
+
+#[derive(Debug)]
+pub struct ChoiceBlockState {
+    pub multiple:bool,
+    pub inline:bool,
+    pub styles:Box<[Box<str>]>,
+    pub choices:Vec<Choice>
 }
 
 #[cfg(feature="full")]
@@ -240,6 +265,41 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
             None
         }
     }
+
+    fn with_exercise<R>(&mut self,then:impl FnOnce(&mut ExerciseState) -> R) -> Option<R> {
+        let state = self.state_mut();
+        for e in state.narrative.iter_mut().rev() {
+            if let Narrative::Exercise(e) = e {
+                return Some(then(e));
+            }
+        }
+        None
+    }
+
+    fn push_answer_class(&mut self,id:Box<str>,kind:AnswerKind) {
+        if !self.with_exercise(|e| 
+            if let Some(gnote) = e.gnote.as_mut() {
+                gnote.answer_classes.push(AnswerClass {
+                    id,kind,feedback:"".into()
+                });
+                true
+            } else { false }
+        ).unwrap_or_default() {
+            //extractor.add_error(SHTMLError::NotInExercise);
+        }
+    }
+
+    fn push_problem_choice(&mut self,correct:bool) {
+        if !self.with_exercise(|ex| 
+            if let Some(block) = &mut ex.choice_block {
+                block.choices.push(Choice {correct,verdict:Default::default(),feedback:Default::default()});
+                true
+            } else { false }
+        ).unwrap_or_default() {
+            //extractor.add_error(SHTMLError::NotInExercise);
+        }
+    }
+
     fn close_complex_term(&mut self) -> Option<Term> {
         match self.state_mut().content.pop() {
             Some(Content::SingleTerm(t)) => return t,
@@ -275,10 +335,44 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
         }
         None
     }
+    fn open_gnote(&mut self) {
+        if !self.with_exercise(|e| {
+            if let Some(g) = &e.gnote {
+                false
+            } else {
+                e.gnote = Some(GnoteState { answer_classes:Vec::new()});
+                true
+            }
+        }).unwrap_or_default() {
+            //self.add_error(SHTMLError::NotInExercise);
+        }
+    }
+    fn close_gnote(&mut self) -> Option<GnoteState> {
+        self.with_exercise(|e| e.gnote.take()).flatten()
+    }
+
+    fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>) {
+        if !self.with_exercise(|e| {
+            if let Some(g) = &e.choice_block {
+                false
+            } else {
+                e.choice_block = Some(ChoiceBlockState { 
+                    multiple,inline:styles.iter().any(|s| &**s == "inline"),styles,choices:Vec::new()
+                });
+                true
+            }
+        }).unwrap_or_default() {
+            //self.add_error(SHTMLError::NotInExercise);
+        }
+    }
+    fn close_choice_block(&mut self) -> Option<ChoiceBlockState>  {
+        self.with_exercise(|e| e.choice_block.take()).flatten()
+    }
+
     fn open_exercise(&mut self,uri:DocumentElementURI) {
         self.state_mut().narrative.push(Narrative::Exercise(ExerciseState {
             uri, children:Vec::new(), title: None,solutions:Vec::new(),
-            hints:Vec::new(),notes:Vec::new(),gnotes:Vec::new(),
+            hints:Vec::new(),notes:Vec::new(),gnote:None,choice_block:None,
             preconditions:Vec::new(),objectives:Vec::new(), 
         }));
     }
@@ -552,6 +646,8 @@ pub trait SHTMLExtractor {
         self.get_content_uri().map(URIOrRefTrait::to_iri)
     }
 
+    fn with_exercise<R>(&mut self,then:impl FnOnce(&mut ExerciseState) -> R) -> Option<R>;
+
     fn resolve_variable_name(&self,name:Name) -> Var;
     fn add_error(&mut self,err:SHTMLError);
     fn add_module(&mut self,module:OpenModule<Unchecked>);
@@ -575,6 +671,13 @@ pub trait SHTMLExtractor {
     fn close_paragraph(&mut self) -> Option<ParagraphState>;
     fn open_exercise(&mut self,uri:DocumentElementURI);
     fn close_exercise(&mut self) -> Option<ExerciseState>;
+    fn open_gnote(&mut self);
+    fn close_gnote(&mut self) -> Option<GnoteState>;
+    fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>);
+    fn close_choice_block(&mut self) -> Option<ChoiceBlockState>;
+    fn push_answer_class(&mut self,id:Box<str>,kind:AnswerKind);
+    fn push_problem_choice(&mut self,correct:bool);
+
     fn set_document_title(&mut self,title:Box<str>);
     /// #### Errors
     fn add_title(&mut self,title:DocumentRange) -> Result<(),DocumentRange>;

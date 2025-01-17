@@ -159,7 +159,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 d.delta(change.text, change.range);
             }
             let mut client = self.inner.client().clone();
-            let _ = tokio::spawn(d.with_annots(LSPStore::new(self.inner.state().clone()),move |a| {
+            let _ = tokio::spawn(d.with_annots(self.inner.state().clone(),move |a| {
                 let r = lsp::PublishDiagnosticsParams {
                     uri: document.uri,
                     diagnostics:  a.diagnostics.iter().map(to_diagnostic).collect(),
@@ -335,7 +335,9 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    impl_request!(declaration = GotoDeclaration);
+    impl_request!(! code_lens = CodeLensRequest => (None));
+
+    impl_request!(! declaration = GotoDefinition => (None));
 
     impl_request!(! workspace_diagnostic = WorkspaceDiagnosticRequest => (lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport {items:Vec::new()})));
 /*
@@ -382,11 +384,31 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 */
+    #[must_use]
+    //impl_request!(! inlay_hint = InlayHintRequest => (None));
+    fn inlay_hint(&mut self, params: lsp::InlayHintParams) -> Res<Option<Vec<lsp::InlayHint>>> {
+        tracing::trace_span!("inlay hint").in_scope(move || {
+            tracing::trace!("uri: {},work_done_progress_params: {:?}",
+                params.text_document.uri,
+                params.work_done_progress_params,
+            );
+            let p = params.work_done_progress_params.work_done_token.map(
+                |tk| self.get_progress(tk)
+            );
+            self.inner.state().get_inlay_hints(
+                &params.text_document.uri,
+                p
+            )
+                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
+                |f| Box::pin(f.map(Result::Ok)) as _
+                )
+        })
+    }
+    // inlayHint/
+    impl_request!(inlay_hint_resolve = InlayHintResolveRequest);
 
 
     impl_request!(! code_action = CodeActionRequest => (None));
-    impl_request!(! inlay_hint = InlayHintRequest => (None));
-    impl_request!(! code_lens = CodeLensRequest => (None));
     impl_request!(! document_highlight = DocumentHighlightRequest => (None));
     impl_request!(! folding_range = FoldingRangeRequest => (None));
     
@@ -476,9 +498,6 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     // typeHierarchy/
     impl_request!(supertypes = TypeHierarchySupertypes);
     impl_request!(subtypes = TypeHierarchySubtypes);
-
-    // inlayHint/
-    impl_request!(inlay_hint_resolve = InlayHintResolveRequest);
 
     // completionItem/
     impl_request!(completion_item_resolve = ResolveCompletionItem);

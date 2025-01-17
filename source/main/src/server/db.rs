@@ -54,14 +54,14 @@ impl DBBackend {
     pub async fn all_users(&self) -> Result<Vec<SqlUser>,UserError> {
         sqlx::query_as!(SqlUser, "SELECT * FROM users")
             .fetch_all(&self.pool)
-            .in_current_span()
+            //.in_current_span()
             .await.map_err(Into::into)
     }
 
     pub async fn set_admin(&self,id:i64,is_admin:bool) -> Result<(),UserError> {
         sqlx::query!("UPDATE users SET is_admin=$2 WHERE id=$1",id,is_admin)
             .execute(&self.pool)
-            .in_current_span()
+            //.in_current_span()
             .await.map_err(Into::into).map(|_| ())
     }
 
@@ -111,7 +111,7 @@ impl AuthnBackend for DBBackend {
         let Some(user) =
             sqlx::query_as!(SqlUser, "SELECT * FROM users WHERE gitlab_id=$1", gitlab_id)
                 .fetch_optional(&self.pool)
-                .in_current_span()
+                //.in_current_span()
                 .await?
         else {
             return Ok(None);
@@ -129,7 +129,7 @@ impl AuthnBackend for DBBackend {
         if *user_id == 0 { return Ok(Some(User::admin(self.admin.as_ref().unwrap_or_else(|| unreachable!()).1.as_bytes().to_owned()))) }
         let Some(res) = sqlx::query_as!(SqlUser, "SELECT * FROM users WHERE id=$1", *user_id)
             .fetch_optional(&self.pool)
-            .in_current_span()
+            //.in_current_span()
             .await?
         else {
             return Ok(None);

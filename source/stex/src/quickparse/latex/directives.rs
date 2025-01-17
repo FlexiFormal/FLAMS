@@ -1,12 +1,14 @@
 use immt_utils::{parsing::{ParseSource, StringOrStr}, sourcerefs::SourceRange};
 
+use crate::quickparse::stex::DiagnosticLevel;
+
 use super::{rules::{DynEnv, DynMacro}, AnyEnv, AnyMacro, Environment, EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro, MacroResult, ParserState};
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn verbcmd<'a,
   Pa: ParseSource<'a>,
   T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-  Err:FnMut(String,SourceRange<Pa::Pos>),
+  Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
   State: ParserState<'a,Pa,T,Err>
 >(parser: &mut LaTeXParser<'a,Pa,T,Err,State>,args:Pa::Str) {
   if !args.as_ref().is_empty() {
@@ -18,7 +20,7 @@ pub fn verbcmd<'a,
 pub fn verbenv<'a,
   Pa: ParseSource<'a>,
   T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-  Err:FnMut(String,SourceRange<Pa::Pos>),
+  Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
   State: ParserState<'a,Pa,T,Err>
 >(parser: &mut LaTeXParser<'a,Pa, T, Err, State>,args:Pa::Str) {
   if !args.as_ref().is_empty() {
@@ -29,7 +31,7 @@ pub fn verbenv<'a,
 pub fn macro_dir<'a,
   Pa: ParseSource<'a>,
   T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-  Err:FnMut(String,SourceRange<Pa::Pos>),
+  Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
   State: ParserState<'a,Pa,T,Err>
 >(parser: &mut LaTeXParser<'a,Pa, T, Err, State>,args:Pa::Str) {
   if !args.as_ref().is_empty() {
@@ -48,7 +50,7 @@ pub fn macro_dir<'a,
 fn do_macro_dir<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(arg:&Pa::Str,
     mut m:Macro<'a, Pa::Pos, Pa::Str>,
@@ -63,7 +65,7 @@ fn do_macro_dir<'a,
 fn do_spec<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(spec:&str,
     m:&mut Macro<'a, Pa::Pos, Pa::Str>,
@@ -71,14 +73,14 @@ fn do_spec<'a,
 ) {
     for c in spec.as_bytes() { match *c {
         b'v' => parser.skip_arg(m),
-        _ => parser.tokenizer.problem(m.range.start, format!("Unknown arg spec {c}")),
+        _ => parser.tokenizer.problem(m.range.start, format!("Unknown arg spec {c}"),DiagnosticLevel::Error),
     }}
 }
 
 pub fn env_dir<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(parser: &mut LaTeXParser<'a,Pa, T, Err, State>,args:Pa::Str) {
   if !args.as_ref().is_empty() {
@@ -99,7 +101,7 @@ pub fn env_dir<'a,
 fn do_env_dir<'a,'b,'c,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(arg:&Pa::Str,
     e:&'b mut Environment<'a, Pa::Pos, Pa::Str, T>,
@@ -111,7 +113,7 @@ fn do_env_dir<'a,'b,'c,
 fn do_env_dir_close<'a,'b,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(
     e:Environment<'a, Pa::Pos, Pa::Str, T>,
@@ -123,7 +125,7 @@ fn do_env_dir_close<'a,'b,
 pub fn nolint<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(parser: &mut LaTeXParser<'a,Pa, T, Err, State>, _:Pa::Str) {
   parser.tokenizer.reader.read_until_str("%%STEXIDE dolint");
@@ -133,6 +135,6 @@ pub fn nolint<'a,
 pub fn dolint<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 >(_: &mut LaTeXParser<'a,Pa, T, Err, State>, _:Pa::Str) {}

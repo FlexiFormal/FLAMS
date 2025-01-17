@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use immt_ontology::{uris::NarrativeURI, Unchecked};
 use immt_utils::{prelude::HMap, vecmap::VecSet};
 use smallvec::SmallVec;
-use shtml_extraction::prelude::{Attributes, SHTMLExtractor};
-use leptos::{prelude::expect_context, web_sys::Element};
+use shtml_extraction::prelude::{Attributes, GnoteState, SHTMLExtractor};
+use leptos::{prelude::{expect_context, UpdateValue}, web_sys::Element};
 
 #[derive(Default)]
 pub struct DOMExtractor {
@@ -136,6 +136,20 @@ impl SHTMLExtractor for DOMExtractor {
     fn get_narrative_uri(&self) -> immt_ontology::uris::NarrativeURI {
         expect_context::<NarrativeURI>()
     }
+    fn with_exercise<R>(&mut self,then:impl FnOnce(&mut shtml_extraction::prelude::ExerciseState) -> R) -> Option<R> {
+        todo!()
+    }
+    fn close_gnote(&mut self) -> Option<GnoteState> {
+        todo!()   
+    }
+    fn close_choice_block(&mut self) -> Option<shtml_extraction::prelude::ChoiceBlockState> {
+        todo!()
+    }
+
+    fn push_answer_class(&mut self,id:Box<str>,kind:immt_ontology::narration::exercises::AnswerKind) {}
+    fn push_problem_choice(&mut self,correct:bool) {}
+    fn open_gnote(&mut self) {}
+    fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>) {}
     fn open_args(&mut self) {}
     fn open_complex_term(&mut self) {}
     fn open_content(&mut self,_uri:immt_ontology::uris::ModuleURI) {}

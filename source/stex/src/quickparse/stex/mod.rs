@@ -1,13 +1,15 @@
 pub mod rules;
+pub mod structs;
 
 use std::path::Path;
 
 use chrono::format::parse;
 use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURITrait, DocumentURI, ModuleURI, SymbolURI}};
 use immt_system::backend::AnyBackend;
-use immt_utils::{parsing::ParseStr, prelude::{TreeChild, TreeLike}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::VecSet};
-use rules::{ModuleReference, ModuleRules, NotationArgs, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymdeclArgs};
+use immt_utils::{parsing::ParseStr, prelude::{TreeChild, TreeChildIter, TreeLike}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::VecSet};
+use rules::{NotationArgs, SymdeclArgs};
 use smallvec::SmallVec;
+use structs::{ModuleReference, ModuleRules, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMod};
 
 use super::latex::LaTeXParser;
 
@@ -100,6 +102,13 @@ pub enum STeXAnnot {
     token_range: SourceRange<LSPLineCol>,
     notation:(SourceRange<LSPLineCol>,Vec<Self>),
     full_range: SourceRange<LSPLineCol>
+  },
+  SymName {
+    uri:SymbolReference<LSPLineCol>,
+    full_range: SourceRange<LSPLineCol>,
+    token_range: SourceRange<LSPLineCol>,
+    name_range: SourceRange<LSPLineCol>,
+    mod_:SymnameMod<LSPLineCol>
   }
 }
 impl STeXAnnot {
@@ -131,14 +140,14 @@ impl STeXAnnot {
           notation_args:notation_args.into_other(|v| Self::from_tokens(v,if let Some(m) = modules.as_mut() { Some(*m) } else { None } )),
           notation:(notation.0,Self::from_tokens(notation.1,None))
         }),
+        STeXToken::SymName { uri, full_range, token_range, name_range, mod_ } =>
+          v.push(STeXAnnot::SymName { uri, full_range, token_range, name_range, mod_ }),
         STeXToken::Vec(vi) => v.extend(Self::from_tokens(vi,if let Some(m) = modules.as_mut() { Some(*m) } else { None } )),
       }
     }
     v
   }
-}
-
-impl STeXAnnot {
+  
   #[must_use]#[inline]
   pub const fn range(&self) -> SourceRange<LSPLineCol> {
     match self {
@@ -148,24 +157,73 @@ impl STeXAnnot {
       Self::UseModule { full_range, .. } |
       Self::SetMetatheory { full_range, .. } |
       Self::Symdecl { full_range, .. } |
-      Self::Symdef  { full_range, .. } => *full_range,
+      Self::Symdef  { full_range, .. } |
+      Self::SymName { full_range, .. } => *full_range,
       Self::Inputref { range, .. } => *range,
+    }
+  }
+}
+
+type Multiple<'a,const N:usize> = std::iter::Flatten<std::iter::FilterMap<std::array::IntoIter<Option<std::slice::Iter<'a, STeXAnnot>>, N>, fn(Option<std::slice::Iter<'a, STeXAnnot>>) -> Option<std::slice::Iter<'a, STeXAnnot>>>>;
+
+pub enum AnnotIter<'a> {
+  Slice(std::slice::Iter<'a,STeXAnnot>),
+  Multiple4(Multiple<'a,4>),
+  Multiple6(Multiple<'a,6>)
+}
+impl<'a> From<std::slice::Iter<'a,STeXAnnot>> for AnnotIter<'a> {
+  #[inline]
+  fn from(v:std::slice::Iter<'a,STeXAnnot>) -> Self { Self::Slice(v) }
+} 
+impl<'a> Iterator for AnnotIter<'a> {
+  type Item = &'a STeXAnnot;
+  #[inline]
+  fn next(&mut self) -> Option<Self::Item> {
+    match self {
+      Self::Slice(v) => v.next(),
+      Self::Multiple4(v) => v.next(),
+      Self::Multiple6(v) => v.next()
     }
   }
 }
 
 impl TreeLike for STeXAnnot {
   type Child<'a> = &'a Self;
-  type RefIter<'a> = std::slice::Iter<'a, Self>;
+  type RefIter<'a> = AnnotIter<'a>;
   fn children(&self) -> Option<Self::RefIter<'_>> {
+    #[inline]
+    fn ident(o:Option<std::slice::Iter<STeXAnnot>>) -> Option<std::slice::Iter<STeXAnnot>> { o }
     match self {
-      Self::Module { children, .. } => Some(children.iter()),
+      Self::Module { children, .. }  => Some(AnnotIter::Slice(children.iter())),
+      Self::Symdecl { parsed_args,.. } => {
+        let arr = [
+          parsed_args.argtypes.as_ref().map(|(_,_,tps)| tps.iter() ),
+          parsed_args.tp.as_ref().map(|(_,_,tp)| tp.iter()),
+          parsed_args.df.as_ref().map(|(_,_,df)| df.iter() ),
+          parsed_args.return_.as_ref().map(|(_,_,df)| df.iter() ),
+        ];
+        let r  = arr.into_iter().filter_map(ident as _).flatten();
+        Some(AnnotIter::Multiple4(r))
+      }
+      Self::Symdef { parsed_args,notation_args,.. } => {
+        let arr = [
+          parsed_args.argtypes.as_ref().map(|(_,_,tps)| tps.iter() ),
+          parsed_args.tp.as_ref().map(|(_,_,tp)| tp.iter()),
+          parsed_args.df.as_ref().map(|(_,_,df)| df.iter() ),
+          parsed_args.return_.as_ref().map(|(_,_,df)| df.iter() ),
+          notation_args.prec.as_ref().map(|(_,_,df)| df.iter() ),
+          notation_args.op.as_ref().map(|(_,_,df)| df.iter() ),
+        ];
+        let r  = arr.into_iter().filter_map(ident as _).flatten();
+        Some(AnnotIter::Multiple6(r))
+      }
       _ => None
     }
   }
 }
+
 impl TreeChild<STeXAnnot> for &STeXAnnot {
-  fn children<'a>(&self) -> Option<std::slice::Iter<'a, STeXAnnot>>
+  fn children<'a>(&self) -> Option<AnnotIter<'a>>
       where
           Self: 'a {
     <STeXAnnot as TreeLike>::children(self)
@@ -188,8 +246,8 @@ pub struct STeXDiagnostic {
 pub fn quickparse<'a,S:STeXModuleStore>(uri:&'a DocumentURI,source: &'a str,path:&'a Path,backend:&'a AnyBackend,store:S) -> STeXParseDataI {
   let mut diagnostics = VecSet::new();
   let mut modules = SmallVec::new();
-  let err = |message,range| diagnostics.insert(STeXDiagnostic {
-    level:DiagnosticLevel::Warning,
+  let err = |message,range,level| diagnostics.insert(STeXDiagnostic {
+    level,
     message, range
   });
   let mut parser = if S::FULL  { 

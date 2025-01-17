@@ -1,6 +1,7 @@
 pub(crate) mod inputref;
 pub(crate) mod sections;
 pub(crate) mod terms;
+pub(crate) mod exercise;
 mod toc;
 pub(crate) mod navigation;
 #[cfg(feature="omdoc")]
@@ -26,45 +27,65 @@ pub fn SHTMLComponents(#[prop(optional)] in_math:bool, elements:SHTMLElements,or
   }
 }
 
-#[cfg(not(feature="omdoc"))]
-type EitherOf<A,B,C,D,E,F,G> = leptos::either::EitherOf7<A,B,C,D,E,F,G>;
-#[cfg(feature="omdoc")]
-type EitherOf<A,B,C,D,E,F,G,H> = leptos::either::EitherOf8<A,B,C,D,E,F,G,H>;
-
-
 fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:OriginalNode,on_load:RwSignal<bool>) -> impl IntoView {
   if let Some(next) = elements.iter().rev().nth(skip) {
     //tracing::debug!("Doing {next:?} ({:?})",std::thread::current().id());
     match next {
-      OpenSHTMLElement::Section { uri,.. } => EitherOf::A(sections::section(uri.clone(),move || do_components::<MATH>(skip+1,elements,orig,on_load).into_any())),
-      OpenSHTMLElement::Inputref { uri, id } => EitherOf::B(inputref::inputref(uri.clone(), id)),
-      OpenSHTMLElement::IfInputref(b) => EitherOf::C(inputref::if_inputref(*b,orig)),
+      OpenSHTMLElement::Section { uri,.. } => sections::section(uri.clone(),move || do_components::<MATH>(skip+1,elements,orig,on_load)).into_any(),
+      OpenSHTMLElement::Inputref { uri, id } => inputref::inputref(uri.clone(), id).into_any(),
+      OpenSHTMLElement::IfInputref(b) => inputref::if_inputref(*b,orig).into_any(),
       OpenSHTMLElement::OpenTerm { term, .. } => {
         #[cfg(feature="omdoc")]
         if MATH {
           let term = term.clone();
-          EitherOf::H(terms::math_term(skip,elements,orig,on_load,term))
+          terms::math_term(skip,elements,orig,on_load,term).into_any()
         } else {
-          EitherOf::D(terms::do_term::<_,MATH>(term.clone(),move || 
-            do_components::<MATH>(skip+1,elements,orig,on_load).into_any()
-          ))
+          terms::do_term::<_,MATH>(term.clone(),move || 
+            do_components::<MATH>(skip+1,elements,orig,on_load)
+          ).into_any()
         }
 
         #[cfg(not(feature="omdoc"))]
-        EitherOf::D(terms::do_term::<_,MATH>(term.clone(),move || 
-          do_components::<MATH>(skip+1,elements,orig,on_load).into_any()
-        ))
+        terms::do_term::<_,MATH>(term.clone(),move || 
+          do_components::<MATH>(skip+1,elements,orig,on_load)
+        ).into_any()
       }
       OpenSHTMLElement::Comp | OpenSHTMLElement::MainComp =>
-        EitherOf::E(terms::do_comp::<_,MATH>(move|| view!(<DomCont skip_head=true orig on_load cont=crate::iterate/>))),
+        terms::do_comp::<_,MATH>(move|| view!(<DomCont skip_head=true orig on_load cont=crate::iterate/>)).into_any(),
       OpenSHTMLElement::Arg(arg) =>
-        EitherOf::F(terms::do_arg(orig,*arg, move |orig| 
-          do_components::<MATH>(skip+1,elements,orig,on_load).into_any()
-        )),
+        terms::do_arg(orig,*arg, move |orig| 
+          do_components::<MATH>(skip+1,elements,orig,on_load)
+        ).into_any(),
+      OpenSHTMLElement::Exercise { uri, autogradable, sub_exercise,.. } =>
+        exercise::exercise(uri.clone(), *autogradable, *sub_exercise,
+          move || do_components::<MATH>(skip+1,elements,orig,on_load)
+        ).into_any(),
+      OpenSHTMLElement::ProblemHint => {
+        exercise::hint(
+          move || do_components::<MATH>(skip+1,elements,orig,on_load)
+        ).into_any()
+      }
+      OpenSHTMLElement::ExerciseSolution(id) => {
+        let id = id.clone();
+        exercise::solution(skip+1,elements,orig,on_load,id).into_any()
+      }
+      OpenSHTMLElement::ExerciseGradingNote => {
+        exercise::gnote(skip+1,elements,orig,on_load).into_any()
+      }
+      OpenSHTMLElement::ChoiceBlock { multiple, inline } => {
+        exercise::choice_block(*multiple,
+          move || do_components::<MATH>(skip+1,elements,orig,on_load)
+        ).into_any()
+      }
+      OpenSHTMLElement::ProblemChoice => {
+        exercise::problem_choice(
+          move || do_components::<MATH>(skip+1,elements,orig,on_load)
+        ).into_any()
+      }
       _ => todo!()
     }
   } else {
-    EitherOf::G(view!(<DomCont skip_head=true orig on_load cont=crate::iterate/>))
+    view!(<DomCont skip_head=true orig on_load cont=crate::iterate/>).into_any()
   }
 }
 

@@ -5,6 +5,8 @@ use immt_utils::{
 };
 use std::marker::PhantomData;
 
+use super::stex::DiagnosticLevel;
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Mode {
     Text,
@@ -13,7 +15,7 @@ pub enum Mode {
 
 pub struct TeXTokenizer<'a, 
     Pa:ParseSource<'a>,
-    Err:FnMut(String,SourceRange<Pa::Pos>)
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
 > {
     pub reader: Pa,
     pub letters: String,
@@ -24,7 +26,7 @@ pub struct TeXTokenizer<'a,
 
 impl<'a, 
     Pa:ParseSource<'a>,
-    Err:FnMut(String,SourceRange<Pa::Pos>)
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
 > Iterator for TeXTokenizer<'a, Pa,Err> {
     type Item = TeXToken<Pa::Pos, Pa::Str>;
 
@@ -37,7 +39,7 @@ impl<'a,
 
 impl<'a, 
     Pa:ParseSource<'a>,
-    Err:FnMut(String,SourceRange<Pa::Pos>)
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
 > TeXTokenizer<'a, Pa,Err> {
     pub(crate) fn new(reader: Pa,err:Err) -> Self {
         TeXTokenizer {
@@ -72,7 +74,7 @@ impl<'a,
                         if self.reader.starts_with('$') {
                             self.reader.pop_head();
                         } else {
-                            self.problem(start,"Missing $ closing display math");
+                            self.problem(start,"Missing $ closing display math",DiagnosticLevel::Error);
                         }
                         self.close_math();
                         Some(TeXToken::EndMath { start })
@@ -133,8 +135,8 @@ impl<'a,
     }
 
     #[inline]
-    pub fn problem(&mut self,start:Pa::Pos, msg: impl std::fmt::Display) {
-        (self.err)(msg.to_string(), SourceRange{start,end: self.reader.curr_pos()});
+    pub fn problem(&mut self,start:Pa::Pos, msg: impl std::fmt::Display,level:DiagnosticLevel) {
+        (self.err)(msg.to_string(), SourceRange{start,end: self.reader.curr_pos()},level);
     }
 
     fn read_comment(&mut self, start: Pa::Pos) -> TeXToken<Pa::Pos, Pa::Str> {

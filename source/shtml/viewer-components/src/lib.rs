@@ -276,7 +276,7 @@ pub fn SHTMLStringMath(html:String) -> impl IntoView {
     view!(<math><DomStringContMath html cont=iterate/></math>)
 }
 
-pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
+pub static RULES:[SHTMLExtractionRule<DOMExtractor>;33] = [
     rule(SHTMLTag::Section),
     rule(SHTMLTag::Term),
     rule(SHTMLTag::Arg),
@@ -289,6 +289,15 @@ pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
     rule(SHTMLTag::MainComp),
 
     rule(SHTMLTag::IfInputref),
+
+    rule(SHTMLTag::Problem),
+    rule(SHTMLTag::SubProblem),
+    rule(SHTMLTag::ExerciseHint),
+    rule(SHTMLTag::ExerciseSolution),
+    rule(SHTMLTag::ExerciseGradingNote),
+    rule(SHTMLTag::ProblemMultipleChoiceBlock),
+    rule(SHTMLTag::ProblemSingleChoiceBlock),
+    rule(SHTMLTag::ProblemChoice),
 
     // ---- no-ops --------
     rule(SHTMLTag::ArgMode),
@@ -306,21 +315,12 @@ pub static RULES:[SHTMLExtractionRule<DOMExtractor>;23] = [
     rule(SHTMLTag::Precedence),
     rule(SHTMLTag::Role),
     rule(SHTMLTag::Argprecs),
+    rule(SHTMLTag::Autogradable),
+    rule(SHTMLTag::AnswerClassPts),
 ];
 
-#[cfg_attr(not(feature="ts"),wasm_bindgen::prelude::wasm_bindgen)]
-#[cfg_attr(feature="ts",wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-export function hasShtmlAttribute(node) {
-  //if (node.tagName.toLowerCase() === "section") {return true}
-  const attributes = node.attributes;
-  for (let i = 0; i < attributes.length; i++) {
-      if (attributes[i].name.startsWith('data-shtml-')) {
-          return true;
-      }
-  }
-  return false;
-}
-"#))]
+#[cfg_attr(feature="csr",wasm_bindgen::prelude::wasm_bindgen)]
+#[cfg_attr(not(feature="csr"),wasm_bindgen::prelude::wasm_bindgen(module="/shtml-top.js"))]
 extern "C" {
     #[wasm_bindgen::prelude::wasm_bindgen(js_name = "hasShtmlAttribute")]
     fn has_shtml_attribute(node: &leptos::web_sys::Node) -> bool;

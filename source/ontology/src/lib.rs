@@ -237,6 +237,8 @@ pub trait Resourcable:serde::Serialize + for <'a> serde::Deserialize<'a> {}
 #[cfg(not(feature="serde"))]
 pub trait Resourcable {}
 
+impl Resourcable for Box<str> {}
+
 
 macro_rules! serde_impl {
     (@i_count ) => { 0 };

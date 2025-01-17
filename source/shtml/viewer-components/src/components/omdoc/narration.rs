@@ -182,7 +182,6 @@ pub struct ExerciseSpec {
   pub num_solutions:u8,
   pub num_hints:u8,
   pub num_notes:u8,
-  pub num_grading_notes:u8,
   pub title:Option<String>,
   pub preconditions:Vec<(CognitiveDimension,SymbolURI)>,
   pub objectives:Vec<(CognitiveDimension,SymbolURI)>,
@@ -370,7 +369,7 @@ use immt_utils::{vecmap::VecSet, CSS};
   impl ExerciseSpec {
     #[allow(clippy::cast_possible_truncation)]
     pub fn from_exercise<B:Backend>(
-      Exercise{uri,sub_exercise,autogradable,points,solutions,hints,notes,grading_notes,title,preconditions,objectives,children,..}:&Exercise<Checked>,
+      Exercise{uri,sub_exercise,autogradable,points,solutions,hints,notes,title,preconditions,objectives,children,..}:&Exercise<Checked>,
       backend:&B,//&mut StringPresenter<'_,B>,
       css:&mut VecSet<CSS>
     ) -> Self {
@@ -386,7 +385,7 @@ use immt_utils::{vecmap::VecSet, CSS};
       Self {
         sub_exercise:*sub_exercise,autogradable:*autogradable,points:*points,
         num_solutions:solutions.len() as _,
-        num_hints:hints.len() as _,num_notes:notes.len() as _,num_grading_notes:grading_notes.len() as _,
+        num_hints:hints.len() as _,num_notes:notes.len() as _,
         preconditions:preconditions.to_vec(),
         objectives:objectives.to_vec(),
         title, uri:uri.clone(), uses, children 

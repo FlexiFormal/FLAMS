@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use either::Either;
-use immt_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::{ArgSpec, AssocType, Symbol}, OpenDeclaration}, modules::{NestedModule, OpenModule}, terms::{Term, Var}}, languages::Language, narration::{exercises::Exercise, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, sections::{Section, SectionLevel}, variables::Variable, DocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
+use immt_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::{ArgSpec, AssocType, Symbol}, OpenDeclaration}, modules::{NestedModule, OpenModule}, terms::{Term, Var}}, languages::Language, narration::{exercises::{ChoiceBlock, Exercise, GradingNote, SolutionData}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, sections::{Section, SectionLevel}, variables::Variable, DocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
 use smallvec::SmallVec;
 use terms::{OpenArg, PreVar, VarOrSym};
 
@@ -89,7 +89,15 @@ pub enum OpenSHTMLElement {
     ArgMap,
     ArgMapSep,
     HeadTerm,
-
+    ProblemHint,
+    ExerciseSolution(Option<Box<str>>),
+    ExerciseGradingNote,
+    AnswerClass,
+    AnswerClassFeedback,
+    ChoiceBlock{multiple:bool,inline:bool},
+    ProblemChoice,
+    ProblemChoiceVerdict,
+    ProblemChoiceFeedback,
 
 
     Inputref{uri:DocumentURI,id:Box<str>},
@@ -98,6 +106,7 @@ pub enum OpenSHTMLElement {
 
     Comp,
     MainComp,
+    DefComp,
     Arg(OpenArg),
 }
 
@@ -241,6 +250,9 @@ impl OpenSHTMLElement {
             Self::Comp | Self::MainComp if extractor.in_notation() => {
                 return Some(self);
             }
+            Self::DefComp if extractor.in_notation() => {
+                return Some(Self::Comp);
+            }
             Self::ClosedTerm(_) => return Some(self),
 
             Self::Inputref { uri, id } => {
@@ -264,8 +276,102 @@ impl OpenSHTMLElement {
                 });
                 previous.elems.retain(|e| !matches!(e,Self::Invisible));
             }
-
-            Self::IfInputref(_) | Self::Definiendum(_) | Self::Comp | Self::MainComp => (),
+            Self::ProblemHint =>
+                if extractor.with_exercise(|ex|
+                    ex.hints.push(node.inner_range())
+                ).is_none() {
+                    // extractor.add_error(SHTMLError::NotInExercise);
+                }
+            Self::ExerciseSolution(id) => {
+                let s = node.inner_string().into_boxed_str();
+                let r = extractor.add_resource(&s);
+                node.delete_children();
+                if extractor.with_exercise(|ex| {
+                    ex.solutions.push(SolutionData::Solution{html:r,answer_class:id});
+                }).is_none() {
+                    //extractor.add_error(SHTMLError::NotInExercise);
+                }
+            }
+            Self::ExerciseGradingNote => {
+                let s = node.inner_string().into_boxed_str();
+                let r = extractor.add_resource(&s);
+                node.delete_children();
+                if let Some(gnote) = extractor.close_gnote() {
+                    if extractor.with_exercise(|ex| ex.solutions.push(
+                        SolutionData::Grading(GradingNote {
+                            answer_classes: gnote.answer_classes,
+                            html: r
+                        })
+                    )).is_none() {
+                        //extractor.add_error(SHTMLError::NotInExercise);
+                    }
+                } else {
+                    //extractor.add_error(SHTMLError::NotInExercise);
+                }
+            }
+            Self::ChoiceBlock { .. } => {
+                let range = node.range();
+                if let Some(cb) = extractor.close_choice_block() {
+                    if extractor.with_exercise(|ex| ex.solutions.push(
+                        SolutionData::ChoiceBlock(ChoiceBlock {
+                            multiple:cb.multiple,
+                            inline:cb.inline,
+                            range,
+                            styles:cb.styles,
+                            choices:cb.choices
+                        })
+                    )).is_none() {
+                        //extractor.add_error(SHTMLError::NotInExercise);
+                    }
+                } else {
+                    //extractor.add_error(SHTMLError::NotInExercise);
+                }
+            }
+            Self::AnswerClassFeedback => {
+                let s = node.string().into_boxed_str();
+                node.delete();
+                if !extractor.with_exercise(|ex| {
+                    if let Some(n) = &mut ex.gnote {
+                        if let Some(ac) = n.answer_classes.last_mut() {
+                            ac.feedback = s;
+                            true
+                        } else {false}
+                    } else {false}
+                }).unwrap_or_default() {
+                    //extractor.add_error(SHTMLError::NotInExercise);
+                }
+            }
+            Self::ProblemChoiceVerdict => {
+                let s = node.string().into_boxed_str();
+                node.delete();
+                if !extractor.with_exercise(|ex| {
+                    if let Some(n) = &mut ex.choice_block {
+                        if let Some(ac) = n.choices.last_mut() {
+                            ac.verdict = s;
+                            true
+                        } else {false}
+                    } else {false}
+                }).unwrap_or_default() {
+                    //extractor.add_error(SHTMLError::NotInExercise);
+                }
+            }
+            Self::ProblemChoiceFeedback => {
+                let s = node.string().into_boxed_str();
+                node.delete();
+                if !extractor.with_exercise(|ex| {
+                    if let Some(n) = &mut ex.choice_block {
+                        if let Some(ac) = n.choices.last_mut() {
+                            ac.feedback = s;
+                            true
+                        } else {false}
+                    } else {false}
+                }).unwrap_or_default() {
+                    //extractor.add_error(SHTMLError::NotInExercise);
+                }
+            }
+            Self::IfInputref(_) | Self::Definiendum(_) | Self::Comp | Self::MainComp | 
+            Self::DefComp | Self::ProblemHint | Self::AnswerClass |
+            Self::ProblemChoice => (),
         }
         None
     }
@@ -502,7 +608,7 @@ impl OpenSHTMLElement {
     }
 
     fn close_exercise<E:SHTMLExtractor,N:SHTMLNode>(extractor:&mut E,node:&N,uri:DocumentElementURI,styles:Box<[Box<str>]>,autogradable:bool,points:Option<f32>,sub_exercise:bool) {
-        let Some(ExerciseState{solutions,hints,notes,gnotes,title,children,preconditions,objectives,..}) = extractor.close_exercise() else {
+        let Some(ExerciseState{solutions,hints,notes,title,children,preconditions,objectives,..}) = extractor.close_exercise() else {
             extractor.add_error(SHTMLError::NotInExercise);
             return
         };
@@ -541,7 +647,7 @@ impl OpenSHTMLElement {
         extractor.add_document_element(DocumentElement::Exercise(
             Exercise {
                 range: node.range(),uri,styles,autogradable,points,sub_exercise,
-                solutions,hints,notes,grading_notes: gnotes,title,children,preconditions,objectives
+                solutions,hints,notes,title,children,preconditions,objectives
             }
         ));
     }

@@ -69,7 +69,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         )
         .leptos_routes_with_handler(
             routes,
-            axum::routing::get(|a, b, c| routes_handler(a, b, c).in_current_span()),
+            axum::routing::get(|a, b, c| routes_handler(a, b, c)),//.in_current_span()),
         )
         .route("/img",axum::routing::get(img::img_handler))
         .fallback(file_and_error_handler)
@@ -138,7 +138,7 @@ async fn routes_handler(
         },
         move || shell(options.clone()),
     );
-    handler(request).in_current_span().await
+    handler(request).await//.in_current_span().await
 }
 
 async fn server_fn_handle(
@@ -173,7 +173,7 @@ async fn file_and_error_handler(
             .unwrap_or_else(|_| unreachable!());
     }
     r(uri, extract::State(state), request)
-        .in_current_span()
+        //.in_current_span()
         .await
 }
 

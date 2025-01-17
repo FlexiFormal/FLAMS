@@ -133,6 +133,7 @@ impl<const L:usize,E:SHTMLExtractor> RuleSet<E> for [SHTMLExtractionRule<E>;L] {
 #[allow(clippy::unnecessary_wraps)]
 pub mod rules {
     use immt_ontology::content::declarations::symbols::{ArgSpec, AssocType};
+    use immt_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, SolutionData};
     use immt_ontology::narration::paragraphs::ParagraphKind;
     use immt_ontology::shtml::SHTMLKey;
     use immt_ontology::uris::{DocumentElementURI, ModuleURI, Name, SymbolURI};
@@ -341,6 +342,65 @@ pub mod rules {
                 .and_then(|s| s.as_ref().parse().ok());
             extractor.open_exercise(uri.clone());
             Some(OpenSHTMLElement::Exercise { sub_exercise, styles, uri, autogradable, points })
+        }
+
+        pub(crate) fn problem_hint<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            // TODO Check if in problem!
+            Some(OpenSHTMLElement::ProblemHint)
+        }
+
+        pub(crate) fn solution<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            // TODO Check if in problem!
+            let mut id = attrs.remove(SHTMLKey::AnswerClass).map(Into::into);
+            if id.as_ref().is_some_and(|s:&Box<str>| s.is_empty()) { id = None }
+            Some(OpenSHTMLElement::ExerciseSolution(id))
+        }
+
+        pub(crate) fn gnote<E:SHTMLExtractor>(extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            extractor.open_gnote();
+            Some(OpenSHTMLElement::ExerciseGradingNote)
+        }
+
+        pub(crate) fn answer_class<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let id = attrs.get_id(extractor,Cow::Borrowed("AC"));
+            let kind = opt!(extractor,attrs.get_typed(SHTMLKey::AnswerClassPts,|s| s.parse())).unwrap_or(AnswerKind::Trait(0.0));
+            extractor.push_answer_class(id,kind);
+            Some(OpenSHTMLElement::AnswerClass)
+        }
+
+        pub(crate) fn ac_feedback<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            Some(OpenSHTMLElement::AnswerClassFeedback)
+        }
+
+        pub(crate) fn multiple_choice_block<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let styles = opt!(extractor,attrs.get_typed(SHTMLKey::Styles, 
+                |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
+            )).unwrap_or_default();
+            let inline = styles.iter().any(|s| &**s == "inline");
+            extractor.open_choice_block(true,styles);
+            Some(OpenSHTMLElement::ChoiceBlock{multiple:true,inline})
+        }
+        pub(crate) fn single_choice_block<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let styles = opt!(extractor,attrs.get_typed(SHTMLKey::Styles, 
+                |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
+            )).unwrap_or_default();
+            let inline = styles.iter().any(|s| &**s == "inline");
+            extractor.open_choice_block(true,styles);
+            Some(OpenSHTMLElement::ChoiceBlock{multiple:false,inline})
+        }
+        pub(crate) fn problem_choice<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let correct = attrs.get_bool(SHTMLKey::ProblemChoice);//attrs.take_bool(SHTMLKey::ProblemChoice);
+            attrs.set(SHTMLKey::ProblemChoice.attr_name(), "");
+            extractor.push_problem_choice(correct);
+            Some(OpenSHTMLElement::ProblemChoice)
+        }
+
+        pub(crate) fn problem_choice_verdict<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            Some(OpenSHTMLElement::ProblemChoiceVerdict)
+        }
+
+        pub(crate) fn problem_choice_feedback<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            Some(OpenSHTMLElement::ProblemChoiceFeedback)
         }
 
         pub(crate) fn doctitle<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
@@ -637,6 +697,10 @@ pub mod rules {
 
         pub(crate) fn maincomp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::MainComp)
+        }
+
+        pub(crate) fn defcomp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            Some(OpenSHTMLElement::DefComp)
         }
 
     //}

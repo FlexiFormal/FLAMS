@@ -13,6 +13,8 @@ use std::convert::Into;
 use std::marker::PhantomData;
 use tex_engine::utils::HMap;
 
+use super::stex::DiagnosticLevel;
+
 
 pub trait FromLaTeXToken<'a, Pos:SourcePos, Str:StringOrStr<'a>>: Sized + std::fmt::Debug {
     fn from_comment(r: SourceRange<Pos>) -> Option<Self>;
@@ -190,7 +192,7 @@ pub struct OptMap<'a,
 pub struct Group<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > {
     previous_letters: Option<String>,
@@ -203,7 +205,7 @@ pub struct Group<'a,
 pub trait GroupState<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > {
     fn new(parent:Option<&mut Self>) -> Self;
@@ -218,7 +220,7 @@ pub trait GroupState<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > GroupState<'a,Pa,T,Err,State> for Group<'a, Pa, T, Err,State> {
     fn new(_:Option<&mut Self>) -> Self {
@@ -269,7 +271,7 @@ impl<'a,
 pub trait ParserState<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>)
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
 >:Sized {
     type Group:GroupState<'a,Pa,T,Err,Self>;
     type MacroArg:Clone;
@@ -278,7 +280,7 @@ pub trait ParserState<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>)
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
 > ParserState<'a,Pa,T,Err> for () {
     type Group=Group<'a,Pa,T,Err,Self>;
     type MacroArg = ();
@@ -287,7 +289,7 @@ impl<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > Group<'a, Pa, T, Err, State> {
 
@@ -297,7 +299,7 @@ pub struct LaTeXParser<
     'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > {
     pub tokenizer: super::tokenizer::TeXTokenizer<'a, Pa,Err>,
@@ -338,7 +340,7 @@ macro_rules! default_envs {
 pub struct Groups<'a,'b,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > {
     pub groups:&'b mut Vec<State::Group>,
@@ -350,7 +352,7 @@ pub struct Groups<'a,'b,
 impl<'a,'b,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > Groups<'a,'b,Pa,T,Err,State> {
     pub fn add_macro_rule(&mut self, name: Cow<'a,str>, rule: Option<AnyMacro<'a, Pa, T, Err, State>>) {
@@ -382,7 +384,7 @@ impl<'a,'b,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > LaTeXParser<'a, Pa, T, Err,State> {
     pub fn new(input: Pa, state:State,err:Err) -> Self {
@@ -500,6 +502,7 @@ impl<'a,
         textbf,
         ensuremath,
         scalebox,
+        raisebox,
         def,edef,gdef,xdef
     );
 
@@ -540,11 +543,11 @@ impl<'a,
                 None
             }
             TeXToken::EndGroupChar(p) => {
-                self.tokenizer.problem(p,"Unmatched close group");
+                self.tokenizer.problem(p,"Unmatched close group",DiagnosticLevel::Error);
                 None
             }
             TeXToken::EndMath { start,.. } => {
-                self.tokenizer.problem(start,"Unmatched math close");
+                self.tokenizer.problem(start,"Unmatched math close",DiagnosticLevel::Error);
                 None
             }
             TeXToken::ControlSequence { start, name } => self.cs(name, start),
@@ -558,7 +561,7 @@ impl<'a,
 
     pub fn close_group(&mut self) {
         match self.groups.pop() {
-            None => self.tokenizer.problem(self.curr_pos(),"Unmatched }"),
+            None => self.tokenizer.problem(self.curr_pos(),"Unmatched }",DiagnosticLevel::Error),
             Some(g) => g.close(self),
         }
     }
@@ -661,12 +664,12 @@ impl<'a,
                                 "Expected \\end{{{}}}, found \\end{{{}}}",
                                 env.name.as_ref(),
                                 n.as_ref()
-                            ));
+                            ),DiagnosticLevel::Error);
                             break;
                         }
                         None => {
                             self.tokenizer
-                                .problem(end_macro.range.start,"Expected environment name after \\end");
+                                .problem(end_macro.range.start,"Expected environment name after \\end",DiagnosticLevel::Error);
                             break;
                         }
                     }
@@ -677,7 +680,7 @@ impl<'a,
             }
         }
         self.close_group();
-        self.tokenizer.problem(env.begin.range.start,"Unclosed environment");
+        self.tokenizer.problem(env.begin.range.start,"Unclosed environment",DiagnosticLevel::Error);
         EnvironmentResult::Simple(env)
     }
 
@@ -693,7 +696,7 @@ impl<'a,
             d(self,args);
         } else {
             self.tokenizer
-                .problem(self.curr_pos(),format!("Unknown directive {s}"));
+                .problem(self.curr_pos(),format!("Unknown directive {s}"),DiagnosticLevel::Error);
         }
     }
 
@@ -710,7 +713,7 @@ impl<'a,
                 v.push(n);
             }
         }
-        self.tokenizer.problem(start,"Unclosed math group");
+        self.tokenizer.problem(start,"Unclosed math group",DiagnosticLevel::Error);
         self.close_group();
         v
     }
@@ -728,7 +731,7 @@ impl<'a,
                 v.push(n);
             }
         }
-        self.tokenizer.problem(start,"Unclosed group");
+        self.tokenizer.problem(start,"Unclosed group",DiagnosticLevel::Error);
         v
     }
 
@@ -737,7 +740,7 @@ impl<'a,
         let mut v = Vec::new();
         while !self.tokenizer.reader.starts_with('}') {
             let Some(next) = self.tokenizer.next() else {
-                self.tokenizer.problem(start,"Unclosed group");
+                self.tokenizer.problem(start,"Unclosed group",DiagnosticLevel::Error);
                 return v;
             };
             if matches!(next,TeXToken::EndGroupChar(_)) {
@@ -750,7 +753,7 @@ impl<'a,
         if self.tokenizer.reader.starts_with('}') {
             self.tokenizer.reader.pop_head();
         } else {
-            self.tokenizer.problem(start,"Unclosed group");
+            self.tokenizer.problem(start,"Unclosed group",DiagnosticLevel::Error);
         }
         v
     }
@@ -777,7 +780,7 @@ impl<'a,
         } else {
             let n = self.tokenizer.next();
             if n.is_none() {
-                self.tokenizer.problem(start,"Expected argument");
+                self.tokenizer.problem(start,"Expected argument",DiagnosticLevel::Error);
             }
             in_macro.range.end = self.curr_pos();
             let range = SourceRange { start, end:self.curr_pos() };
@@ -953,7 +956,7 @@ impl<'a,
 impl<'a,
     Pos:SourcePos,
     T: FromLaTeXToken<'a, Pos, &'a str>,
-    Err:FnMut(String,SourceRange<Pos>),
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > LaTeXParser<'a, ParseStr<'a,Pos>,T,Err,State> {
     pub fn read_opt_map(
@@ -1003,7 +1006,7 @@ impl<'a,
                         let mut val = Vec::new();
                         while self.tokenizer.reader.peek_head().is_some() {
                             let Some(next) = self.tokenizer.next() else {
-                                self.tokenizer.problem(value_start,"Unclosed optional argument");
+                                self.tokenizer.problem(value_start,"Unclosed optional argument",DiagnosticLevel::Error);
                                 break;
                             };
                             if let Some(n) = self.default(next) {
@@ -1022,7 +1025,8 @@ impl<'a,
                     }
                     _ => {
                         self.tokenizer.problem(key_start, 
-                            format!("value for key \"{key}\" in {} ended unexpectedly",in_macro.name)
+                            format!("value for key \"{key}\" in {} ended unexpectedly",in_macro.name),
+                            DiagnosticLevel::Error
                         );
                         break
                     }
@@ -1049,7 +1053,7 @@ impl<'a,
 impl<'a,
     Pa: ParseSource<'a>,
     T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err:FnMut(String,SourceRange<Pa::Pos>),
+    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > Iterator
     for LaTeXParser<'a, Pa, T, Err, State>

@@ -99,13 +99,33 @@ impl LSPState {
     }
   }
 
-  pub fn load(&self,p:&Path,uri:&DocumentURI,and_then:impl FnOnce(&STeXParseData)) {
+  pub fn load_all<P:AsRef<Path>,I:IntoIterator<Item=(P,DocumentURI)>>(&self,iter:I,mut and_then:impl FnMut(&P,&STeXParseData)) {
+    let mut ndocs = HMap::default();
+    let mut state = LSPStore::<false>::new(&mut ndocs);
+    for (p,uri) in iter {
+      if let Some(ret) = state.load(p.as_ref(), &uri) {
+        and_then(&p,&ret);
+        if let Entry::Vacant(e) = state.map.entry(lsp::Url::from_file_path(p).unwrap()) {
+          e.insert(DocOrData::Data(ret));
+        }
+      }
+    }
+    let mut docs = self.documents.write();
+    for (k,v) in ndocs {
+      if let Entry::Vacant(e) = docs.entry(k) {
+        e.insert(v);
+      }
+    }
+  }
+
+  pub fn load<const FULL:bool>(&self,p:&Path,uri:&DocumentURI,and_then:impl FnOnce(&STeXParseData)) {
     let Some(lsp_uri) = lsp::Url::from_file_path(p).ok() else {return};
     if self.documents.read().get(&lsp_uri).is_some() { return }
-    let state = LSPStore::<false>::new(self.clone());
+    let mut docs = self.documents.write();
+    let mut state = LSPStore::<'_,FULL>::new(&mut *docs);
     if let Some(ret) = state.load(p, uri) {
       and_then(&ret);
-      let mut docs = self.documents.write();
+      drop(state);
       if let Entry::Vacant(e) = docs.entry(lsp_uri) {
         e.insert(DocOrData::Data(ret));
       }
@@ -117,8 +137,10 @@ impl LSPState {
     let doc = LSPDocument::new(doc,uri.clone());
     if doc.has_annots() {
       let d = doc.clone();
-      let store = LSPStore::new(self.clone());
-      let _ = tokio::task::spawn_blocking(move || d.compute_annots(store));
+      let slf = self.clone();
+      let _ = tokio::task::spawn_blocking(move || {
+        d.compute_annots(slf);
+      });
     }
     self.documents.write().insert(uri,DocOrData::Doc(doc));
   }

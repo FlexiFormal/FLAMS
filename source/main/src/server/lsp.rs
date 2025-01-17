@@ -28,7 +28,6 @@ impl STDIOLSPServer {
     let client = self.client.clone();
     let state = self.state().clone();
     let workspaces = self.workspaces.clone();
-    
     let _ = tokio::task::spawn_blocking(move || {
       let (_,t) = measure(move || {
         let mut files = Vec::new();
@@ -46,23 +45,23 @@ impl STDIOLSPServer {
           }
         }
         ProgressCallbackServer::with(client,"Initializing".to_string(),Some(files.len() as _),|mut p| {
-          /*files.par_iter().for_each(|(file,uri)| {
-            //p.update(file.display().to_string(), Some(1));
-            state.load(&file,&uri);
-          });*/
-          for (file,uri) in files {
-            p.update(file.display().to_string(), Some(1));
-            state.load(&file,&uri,|data| {
-              let lock = data.lock();
-              if !lock.diagnostics.is_empty() {
-                if let Ok(uri) = lsp::Url::from_file_path(&file) { 
-                  let _ = p.client_mut().publish_diagnostics(lsp::PublishDiagnosticsParams {
-                    uri,version:None,diagnostics:lock.diagnostics.iter().map(to_diagnostic).collect()
-                  });
-                }
+          //let mut i = 0;
+          state.load_all(files.into_iter().map(|(path,uri)| {
+            //i += 1;
+            //if i % 100 == 0 {
+              p.update(path.display().to_string(), Some(1));
+            //}
+            (path,uri)
+          }), |file,data| {
+            let lock = data.lock();
+            if !lock.diagnostics.is_empty() {
+              if let Ok(uri) = lsp::Url::from_file_path(&file) { 
+                let _ = p.client().clone().publish_diagnostics(lsp::PublishDiagnosticsParams {
+                  uri,version:None,diagnostics:lock.diagnostics.iter().map(to_diagnostic).collect()
+                });
               }
-            });
-          }
+            }
+          });
           for (name,uri) in &workspaces {
             tracing::info!("workspace: {name}@{uri}");
           }
@@ -104,6 +103,7 @@ impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
         })).await;
       });
     }
+    tracing::info!("Using {} threads",tokio::runtime::Handle::current().metrics().num_workers());
     self.load_all();
   }
 
