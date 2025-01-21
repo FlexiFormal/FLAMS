@@ -7,7 +7,7 @@ edition = "2021"
 workspace = true
 
 [features]
-omdoc = ["dep:icondata_ai","dep:gloo-storage"]
+omdoc = ["dep:gloo-storage"]
 ts = ["dep:tsify-next","immt-utils/wasm"]
 rdf = ["immt-ontology/rdf","shtml-extraction/rdf"]
 csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
@@ -33,8 +33,12 @@ wasm-bindgen = {workspace=true}
 serde = {workspace = true,features=["derive"]}
 either = {workspace = true, features=["serde"]}
 icondata_bi = {workspace = true}
-icondata_ai = {workspace = true,optional=true}
+icondata_ai = {workspace = true}
 gloo-storage = {workspace = true,optional=true}
+# const_format = {workspace = true}
+# paste = {workspace = true}
+
+serde_json = {workspace=true}
 
 web-sys = {workspace = true,features=["ScrollIntoViewOptions","ScrollLogicalPosition"]} 
 

@@ -1,4 +1,4 @@
-use std::{borrow::{self, Cow}, fmt::Debug};
+use std::{borrow::Cow, fmt::Debug};
 
 use declarations::{
     morphisms::Morphism,
@@ -81,7 +81,7 @@ impl Resolvable for ModuleLike {
             Self::NestedModule(m) => Cow::Owned(m.as_ref().uri.clone().into_module()),
             Self::Structure(s) => Cow::Owned(s.as_ref().uri.clone().into_module()),
             Self::Extension(e) => Cow::Owned(e.as_ref().uri.clone().into_module()),
-            Self::Morphism(m) => todo!()//Cow::Owned(m.0.as_ref().uri.into_module()),
+            Self::Morphism(_) => todo!()//Cow::Owned(m.0.as_ref().uri.into_module()),
         }
     }
 }

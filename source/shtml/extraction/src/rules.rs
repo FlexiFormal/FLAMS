@@ -133,7 +133,7 @@ impl<const L:usize,E:SHTMLExtractor> RuleSet<E> for [SHTMLExtractionRule<E>;L] {
 #[allow(clippy::unnecessary_wraps)]
 pub mod rules {
     use immt_ontology::content::declarations::symbols::{ArgSpec, AssocType};
-    use immt_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, SolutionData};
+    use immt_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, FillInSolOption, SolutionData};
     use immt_ontology::narration::paragraphs::ParagraphKind;
     use immt_ontology::shtml::SHTMLKey;
     use immt_ontology::uris::{DocumentElementURI, ModuleURI, Name, SymbolURI};
@@ -188,34 +188,34 @@ pub mod rules {
     //    use std::str::FromStr;
     //    use crate::{open::OpenSHTMLElement, prelude::{Attributes, SHTMLExtractor}};
 
-        pub(crate) fn no_op<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> { None }
+        pub fn no_op<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> { None }
 
         /*pub(crate) fn todo<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,tag:SHTMLKey) -> Option<OpenSHTMLElement> {
             todo!("Tag {}",tag.as_str()) 
         }*/
 
-        pub(crate) fn invisible<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn invisible<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             if attrs.take_bool(SHTMLKey::Invisible) {
                 Some(OpenSHTMLElement::Invisible)
             } else { None }
         }
 
-        pub(crate) fn setsectionlevel<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn setsectionlevel<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let lvl = err!(extractor,attrs.get_section_level(SHTMLKey::SetSectionLevel));
             Some(OpenSHTMLElement::SetSectionLevel(lvl))
         }
 
-        pub(crate) fn importmodule<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn importmodule<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.take_module_uri(SHTMLKey::ImportModule, extractor));
             Some(OpenSHTMLElement::ImportModule(uri))
         }
 
-        pub(crate) fn usemodule<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn usemodule<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.take_module_uri(SHTMLKey::UseModule, extractor));
             Some(OpenSHTMLElement::UseModule(uri))
         }
 
-        pub(crate) fn module<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn module<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.take_new_module_uri(SHTMLKey::Module, extractor));
             let _ = attrs.take_language(SHTMLKey::Language);
             let meta = opt!(extractor,attrs.take_module_uri(SHTMLKey::Metatheory, extractor));
@@ -228,7 +228,7 @@ pub mod rules {
             })
         }
 
-        pub(crate) fn mathstructure<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn mathstructure<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.take_new_symbol_uri(SHTMLKey::MathStructure, extractor));
             let macroname = attrs.remove(SHTMLKey::Macroname).map(|s| Into::<String>::into(s).into_boxed_str());
             extractor.open_content(uri.clone().into_module());
@@ -238,7 +238,7 @@ pub mod rules {
             })
         }
 
-        pub(crate) fn morphism<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn morphism<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.take_new_symbol_uri(SHTMLKey::Morphism,extractor));
             let domain = err!(extractor,attrs.take_module_uri(SHTMLKey::MorphismDomain, extractor));
             let total = attrs.take_bool(SHTMLKey::MorphismTotal);
@@ -250,13 +250,13 @@ pub mod rules {
             })
         }
 
-        pub(crate) fn assign<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn assign<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let symbol = err!(extractor,attrs.get_symbol_uri(SHTMLKey::Assign,extractor));
             extractor.open_complex_term();
             Some(OpenSHTMLElement::Assign(symbol))
         }
 
-        pub(crate) fn section<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn section<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let lvl = err!(extractor,attrs.get_section_level(SHTMLKey::Section));
             let id = attrs.get_id(extractor,Cow::Borrowed("section"));
             let uri = match extractor.get_narrative_uri() & &*id {
@@ -270,22 +270,22 @@ pub mod rules {
             Some(OpenSHTMLElement::Section { lvl, uri })
         }
 
-        pub(crate) fn definition<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn definition<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_paragraph(extractor, attrs, nexts, ParagraphKind::Definition)
         }
-        pub(crate) fn paragraph<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn paragraph<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_paragraph(extractor, attrs, nexts, ParagraphKind::Paragraph)
         }
-        pub(crate) fn assertion<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn assertion<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_paragraph(extractor, attrs, nexts, ParagraphKind::Assertion)
         }
-        pub(crate) fn example<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn example<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_paragraph(extractor, attrs, nexts, ParagraphKind::Example)
         }
-        pub(crate) fn proof<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn proof<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_paragraph(extractor, attrs, nexts, ParagraphKind::Proof)
         }
-        pub(crate) fn subproof<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn subproof<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_paragraph(extractor, attrs, nexts, ParagraphKind::SubProof)
         }
 
@@ -316,11 +316,11 @@ pub mod rules {
             Some(OpenSHTMLElement::Paragraph { kind, inline, styles,uri })
         }
 
-        pub(crate) fn exercise<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn exercise<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_exercise(extractor,attrs,nexts,false)
         }
 
-        pub(crate) fn subexercise<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn subexercise<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_exercise(extractor,attrs,nexts,true)
         }
 
@@ -344,35 +344,36 @@ pub mod rules {
             Some(OpenSHTMLElement::Exercise { sub_exercise, styles, uri, autogradable, points })
         }
 
-        pub(crate) fn problem_hint<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn problem_hint<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             // TODO Check if in problem!
             Some(OpenSHTMLElement::ProblemHint)
         }
 
-        pub(crate) fn solution<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn solution<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             // TODO Check if in problem!
             let mut id = attrs.remove(SHTMLKey::AnswerClass).map(Into::into);
+            nexts.retain(|r| !matches!(r.tag,SHTMLKey::AnswerClass));
             if id.as_ref().is_some_and(|s:&Box<str>| s.is_empty()) { id = None }
             Some(OpenSHTMLElement::ExerciseSolution(id))
         }
 
-        pub(crate) fn gnote<E:SHTMLExtractor>(extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn gnote<E:SHTMLExtractor>(extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             extractor.open_gnote();
             Some(OpenSHTMLElement::ExerciseGradingNote)
         }
 
-        pub(crate) fn answer_class<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn answer_class<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let id = attrs.get_id(extractor,Cow::Borrowed("AC"));
-            let kind = opt!(extractor,attrs.get_typed(SHTMLKey::AnswerClassPts,|s| s.parse())).unwrap_or(AnswerKind::Trait(0.0));
+            let kind = opt!(extractor,attrs.get_typed(SHTMLKey::AnswerClassPts,str::parse)).unwrap_or(AnswerKind::Trait(0.0));
             extractor.push_answer_class(id,kind);
             Some(OpenSHTMLElement::AnswerClass)
         }
 
-        pub(crate) fn ac_feedback<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn ac_feedback<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::AnswerClassFeedback)
         }
 
-        pub(crate) fn multiple_choice_block<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn multiple_choice_block<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let styles = opt!(extractor,attrs.get_typed(SHTMLKey::Styles, 
                 |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
             )).unwrap_or_default();
@@ -380,52 +381,84 @@ pub mod rules {
             extractor.open_choice_block(true,styles);
             Some(OpenSHTMLElement::ChoiceBlock{multiple:true,inline})
         }
-        pub(crate) fn single_choice_block<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+
+        pub fn single_choice_block<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let styles = opt!(extractor,attrs.get_typed(SHTMLKey::Styles, 
                 |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
             )).unwrap_or_default();
             let inline = styles.iter().any(|s| &**s == "inline");
-            extractor.open_choice_block(true,styles);
+            extractor.open_choice_block(false,styles);
             Some(OpenSHTMLElement::ChoiceBlock{multiple:false,inline})
         }
-        pub(crate) fn problem_choice<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+
+        pub fn problem_choice<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let correct = attrs.get_bool(SHTMLKey::ProblemChoice);//attrs.take_bool(SHTMLKey::ProblemChoice);
             attrs.set(SHTMLKey::ProblemChoice.attr_name(), "");
             extractor.push_problem_choice(correct);
             Some(OpenSHTMLElement::ProblemChoice)
         }
 
-        pub(crate) fn problem_choice_verdict<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn problem_choice_verdict<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::ProblemChoiceVerdict)
         }
 
-        pub(crate) fn problem_choice_feedback<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn problem_choice_feedback<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::ProblemChoiceFeedback)
         }
 
-        pub(crate) fn doctitle<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        #[allow(clippy::cast_precision_loss)]
+        pub fn fillinsol<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let val = attrs.get_typed(SHTMLKey::ProblemFillinsolWidth, 
+                |s| {
+                    if s.contains('.') {
+                        s.parse::<f32>().map_err(|_| ())
+                    } else {
+                        s.parse::<i32>().map(|i| i as f32).map_err(|_| ())
+                    }
+                }
+            ).ok();
+            extractor.open_fillinsol(val);
+            Some(OpenSHTMLElement::Fillinsol(val))
+        }
+
+        pub fn fillinsol_case<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+            let Some(val) = attrs.remove(SHTMLKey::ProblemFillinsolCase) else {unreachable!()};
+            let verdict = attrs.take_bool(SHTMLKey::ProblemFillinsolCaseVerdict);
+            let Some(value) = attrs.remove(SHTMLKey::ProblemFillinsolCaseValue) else {
+                extractor.add_error(SHTMLError::IncompleteArgs);
+                return None
+            };
+            let Some(opt) = FillInSolOption::from_values(&val,&value,verdict) else {
+                extractor.add_error(SHTMLError::IncompleteArgs);
+                return None
+            };
+            extractor.push_fillinsol_case(opt);
+            Some(OpenSHTMLElement::FillinsolCase)
+        }
+
+        pub fn doctitle<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::Doctitle)
         }
 
-        pub(crate) fn title<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn title<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::Title)
         }
 
-        pub(crate) fn precondition<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn precondition<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_symbol_uri(SHTMLKey::PreconditionSymbol,extractor));
-            let dim = err!(extractor,attrs.get_typed(SHTMLKey::PreconditionDimension,|s| s.parse()));
+            let dim = err!(extractor,attrs.get_typed(SHTMLKey::PreconditionDimension,str::parse));
             extractor.add_precondition(uri, dim);
             None
         }
 
-        pub(crate) fn objective<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn objective<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_symbol_uri(SHTMLKey::ObjectiveSymbol,extractor));
-            let dim = err!(extractor,attrs.get_typed(SHTMLKey::ObjectiveDimension,|s| s.parse()));
+            let dim = err!(extractor,attrs.get_typed(SHTMLKey::ObjectiveDimension,str::parse));
             extractor.add_objective(uri, dim);
             None
         }
 
-        pub(crate) fn symdecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn symdecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_new_symbol_uri(SHTMLKey::Symdecl,extractor));
             let role = opt!(extractor,attrs.get_typed(SHTMLKey::Role, 
                 |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
@@ -438,14 +471,14 @@ pub mod rules {
             Some(OpenSHTMLElement::Symdecl { uri, arity, macroname, role, assoctype, reordering })
         }
 
-        pub(crate) fn vardecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn vardecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_vardecl(extractor, attrs, nexts,SHTMLKey::Vardef, false)
         }
-        pub(crate) fn varseq<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn varseq<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             do_vardecl(extractor, attrs, nexts, SHTMLKey::Varseq, true)
         }
 
-        pub(crate) fn do_vardecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,tag:SHTMLKey,is_seq:bool) -> Option<OpenSHTMLElement> {
+        pub fn do_vardecl<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,tag:SHTMLKey,is_seq:bool) -> Option<OpenSHTMLElement> {
             let Some(name) = attrs.get(tag).and_then(|v| Name::from_str(v.as_ref()).ok()) else {
                 extractor.add_error(SHTMLError::InvalidKeyFor(tag.as_str(), None));
                 return None
@@ -463,7 +496,7 @@ pub mod rules {
             Some(OpenSHTMLElement::Vardecl { uri, arity, macroname, role, assoctype, reordering, bind, is_seq })
         }
 
-        pub(crate) fn notation<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn notation<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let symbol = if let Ok(s) = attrs.get_symbol_uri(SHTMLKey::Notation, extractor) {
                 VarOrSym::S(s.into())
             } else if let Some(v) = attrs.get(SHTMLKey::Notation) {
@@ -500,7 +533,7 @@ pub mod rules {
             Some(OpenSHTMLElement::Notation { id, symbol, precedence: prec, argprecs })
         }
 
-        pub(crate) fn notationcomp<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn notationcomp<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             attrs.remove(SHTMLKey::NotationComp);
             attrs.remove(SHTMLKey::Term);
             attrs.remove(SHTMLKey::Head);
@@ -509,7 +542,7 @@ pub mod rules {
             nexts.retain(|r| !matches!(r.tag,SHTMLKey::Term|SHTMLKey::Head|SHTMLKey::NotationId|SHTMLKey::Invisible));
             Some(OpenSHTMLElement::NotationComp)
         }
-        pub(crate) fn notationopcomp<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn notationopcomp<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             attrs.remove(SHTMLKey::NotationComp);
             attrs.remove(SHTMLKey::Term);
             attrs.remove(SHTMLKey::Head);
@@ -519,13 +552,13 @@ pub mod rules {
             Some(OpenSHTMLElement::NotationOpComp)
         }
         
-        pub(crate) fn definiendum<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn definiendum<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_symbol_uri(SHTMLKey::Definiendum,extractor));
             extractor.add_definiendum(uri.clone());
             Some(OpenSHTMLElement::Definiendum(uri))
         }
 
-        pub(crate) fn r#type<E:SHTMLExtractor>(extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn r#type<E:SHTMLExtractor>(extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             if extractor.in_term() {
                 extractor.add_error(SHTMLError::InvalidKey);
                 return None
@@ -534,27 +567,27 @@ pub mod rules {
             Some(OpenSHTMLElement::Type)
         }
 
-        pub(crate) fn conclusion<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn conclusion<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_symbol_uri(SHTMLKey::Conclusion,extractor));
             let in_term = extractor.in_term();
             extractor.set_in_term(true);
             Some(OpenSHTMLElement::Conclusion { uri, in_term })
         }
 
-        pub(crate) fn definiens<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn definiens<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = opt!(extractor,attrs.get_symbol_uri(SHTMLKey::Definiens,extractor));
             let in_term = extractor.in_term();
             extractor.set_in_term(true);
             Some(OpenSHTMLElement::Definiens { uri, in_term })
         }
 
-        pub(crate) fn mmtrule<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn mmtrule<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let id = attrs.get(SHTMLKey::Rule).unwrap_or_else(|| unreachable!()).as_ref().to_string().into_boxed_str();
             extractor.open_args();
             Some(OpenSHTMLElement::MMTRule(id))
         }
 
-        pub(crate) fn argsep<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn argsep<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             attrs.remove(SHTMLKey::Term);
             attrs.remove(SHTMLKey::ArgSep);
             attrs.remove(SHTMLKey::Head);
@@ -564,7 +597,7 @@ pub mod rules {
             Some(OpenSHTMLElement::ArgSep)
         }
 
-        pub(crate) fn argmap<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn argmap<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             attrs.remove(SHTMLKey::Term);
             attrs.remove(SHTMLKey::Head);
             attrs.remove(SHTMLKey::ArgMap);
@@ -574,7 +607,7 @@ pub mod rules {
             Some(OpenSHTMLElement::ArgMap)
         }
 
-        pub(crate) fn argmapsep<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn argmapsep<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             attrs.remove(SHTMLKey::Term);
             attrs.remove(SHTMLKey::Head);
             attrs.remove(SHTMLKey::ArgMapSep);
@@ -584,7 +617,7 @@ pub mod rules {
             Some(OpenSHTMLElement::ArgMapSep)
         }
 
-        pub(crate) fn term<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn term<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             if extractor.in_notation() { return None }
             let notation = attrs.value(SHTMLKey::NotationId.attr_name()).map(|n|
                 match n.as_ref().parse::<Name>() {
@@ -663,7 +696,7 @@ pub mod rules {
             Some(OpenSHTMLElement::OpenTerm{term, is_top})
         }
 
-        pub(crate) fn arg<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn arg<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let Some(value) = attrs.value(SHTMLKey::Arg.attr_name()) else {
                 extractor.add_error(SHTMLError::InvalidArgSpec);
                 return None
@@ -676,30 +709,30 @@ pub mod rules {
             Some(OpenSHTMLElement::Arg(arg))
         }
 
-        pub(crate) fn headterm<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn headterm<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::HeadTerm)
         }
 
-        pub(crate) fn inputref<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn inputref<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let uri = err!(extractor,attrs.get_document_uri(SHTMLKey::InputRef,extractor));
             let id = attrs.get_id(extractor,Cow::Owned(uri.name().last_name().to_string()));
             Some(OpenSHTMLElement::Inputref { uri, id })
         }
 
-        pub(crate) fn ifinputref<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn ifinputref<E:SHTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             let value = attrs.get_bool(SHTMLKey::IfInputref); 
             Some(OpenSHTMLElement::IfInputref(value))
         }
 
-        pub(crate) fn comp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn comp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::Comp)
         }
 
-        pub(crate) fn maincomp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn maincomp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::MainComp)
         }
 
-        pub(crate) fn defcomp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
+        pub fn defcomp<E:SHTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             Some(OpenSHTMLElement::DefComp)
         }
 

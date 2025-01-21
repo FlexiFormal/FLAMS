@@ -225,6 +225,8 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
             }
         }
     }
+    
+    #[allow(clippy::unnecessary_map_or)]
     fn starts_with(&mut self, c: char) -> bool {
         self.get_char().map_or(false, |c2| {
             self.push_char(c2);

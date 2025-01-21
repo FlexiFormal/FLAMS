@@ -120,7 +120,7 @@ cp ./source/shtml/viewer/pkg/shtml_bg.wasm ./resources/assets/shtml_bg.wasm
 workspace = false
 dependencies = ["build-viewer","copy-viewer","db","leptos-release","copy-to-bin"]
 
-[tasks.leptos-dev]
+[tasks.dev]
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"

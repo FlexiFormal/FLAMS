@@ -20,7 +20,7 @@ mod block;
 #[cfg(not(any(feature="ssr",feature="hydrate")))]
 #[component(transparent)]
 pub fn Themer<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-    use thaw::{ConfigProvider,ToasterProvider,Theme};
+    use thaw::ConfigProvider;//,ToasterProvider,Theme};
     let children = children.into_inner();
     view!{
       <ConfigProvider>
@@ -44,7 +44,7 @@ pub struct Header { children:leptos::prelude::Children }
 #[leptos::prelude::slot]
 pub struct Trigger { children:leptos::prelude::Children }
 
-use leptos::{either::Either, prelude::*};
+use leptos::prelude::*;
 
 use crate::inject_css;
 
@@ -53,7 +53,7 @@ pub fn Collapsible<Ch:IntoView+'static>(
     #[prop(optional)] header:Option<Header>,
     children:TypedChildren<Ch>
 ) -> impl IntoView {
-  let mut children = children.into_inner();
+  let children = children.into_inner();
     let expanded = RwSignal::new(false);
     view!{<details>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{

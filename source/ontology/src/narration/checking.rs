@@ -5,7 +5,7 @@ use crate::{
 };
 
 use super::{
-    exercises::{CognitiveDimension, Exercise, SolutionData},
+    exercises::{CognitiveDimension, Exercise, GradingNote, Solutions},
     paragraphs::{LogicalParagraph, ParagraphKind},
     sections::{Section, SectionLevel},
     DocumentElement, LazyDocRef
@@ -55,7 +55,8 @@ enum Elem {
         autogradable: bool,
         range: DocumentRange,
         points: Option<f32>,
-        solutions: Vec<SolutionData<Unchecked>>,
+        solutions: LazyDocRef<Solutions>,
+        gnotes: Vec<LazyDocRef<GradingNote>>,
         hints: Vec<DocumentRange>,
         notes: Vec<LazyDocRef<Box<str>>>,
         title: Option<DocumentRange>,
@@ -125,6 +126,7 @@ impl Elem {
                 autogradable,
                 points,
                 solutions,
+                gnotes,
                 hints,
                 notes,
                 title,
@@ -139,7 +141,8 @@ impl Elem {
                 title,
                 styles,
                 range,
-                solutions: solutions.into_iter().map(SolutionData::close).collect(),
+                solutions,
+                gnotes: gnotes.into_boxed_slice(),
                 hints: hints.into_boxed_slice(),
                 notes: notes.into_boxed_slice(),
                 preconditions: preconditions.into_boxed_slice(),
@@ -355,6 +358,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 hints,
                 styles,
                 notes,
+                gnotes,
                 title,
                 children,
                 preconditions,
@@ -370,6 +374,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                         autogradable,
                         points,
                         solutions,
+                        gnotes,
                         styles,
                         hints,
                         notes,

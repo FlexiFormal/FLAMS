@@ -233,7 +233,7 @@ pub(super) fn do_notations(uri:URI,arity:ArgSpec) -> impl IntoView {
     };
     let uriclone = uri.clone();
     inject_css("immt-notation-table",include_str!("notations.css"));
-    crate::config::get!(notations(uri.clone()) = v => {
+    crate::remote::get!(notations(uri.clone()) = v => {
         let uri = uriclone.clone();
         if v.is_empty() {None} else {
             Some(view!{
@@ -305,7 +305,7 @@ fn do_los(uri:SymbolURI) -> impl IntoView {
             <Header slot><span>"Learning Objects"</span></Header>
             <div style="padding-left:15px">{
                 let uri = uri.clone();
-                crate::config::get!(get_los(uri.clone(),true) = v => {
+                crate::remote::get!(get_los(uri.clone(),true) = v => {
                     let LOs {definitions,examples,exercises} = v.lo_sort();
                     view!{
                         <div>{if definitions.is_empty() { None } else {Some(
@@ -361,7 +361,7 @@ impl super::Spec for SymbolSpec {
                     {macro_name.map(|name| view!(<span>" ("<Text tag=TextTag::Code>"\\"{name}</Text>")"</span>))}
                     {tp.map(|t| view! {
                         " of type "{
-                            crate::config::get!(present(t.clone()) = html => {
+                            crate::remote::get!(present(t.clone()) = html => {
                                 view!(<SHTMLStringMath html/>)
                             })
                         }
@@ -370,7 +370,7 @@ impl super::Spec for SymbolSpec {
                 <HeaderLeft slot>{do_notations(URI::Content(uriclone_b.into()),arity)}</HeaderLeft>
                 <HeaderRight slot><span style="white-space:nowrap;">{df.map(|t| view! {
                     "Definiens: "{
-                        crate::config::get!(present(t.clone()) = html => {
+                        crate::remote::get!(present(t.clone()) = html => {
                             view!(<SHTMLStringMath html/>)
                         })
                     }

@@ -1,4 +1,4 @@
-use crate::uris::{ContentURI, ContentURITrait, DocumentElementURI, Name, URIOrRefTrait, URIRef};
+use crate::uris::{ContentURI, DocumentElementURI, Name, URIOrRefTrait, URIRef};
 use crate::{oma, oms, omsp};
 use immt_utils::prelude::{DFSContinuation, Indentor, TreeChild, TreeChildIter, TreeLike};
 use std::fmt::{Debug, Display, Formatter, Write};

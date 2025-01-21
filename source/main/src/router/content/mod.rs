@@ -2,12 +2,12 @@
 pub mod uris;
 pub mod toc;
 
-use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::Exercise, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
+use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::{Exercise, ExerciseFeedback, ExerciseResponse, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
 use immt_utils::{vecmap::VecSet, CSS};
 use immt_web_utils::do_css;
 use leptos::{either::Either, prelude::*};
 use leptos_router::hooks::use_query_map;
-use shtml_viewer_components::{components::{omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource}, DocumentString};
+use shtml_viewer_components::components::{documents::DocumentString, omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource};
 use uris::{DocURIComponents, SymURIComponents, URIComponents};
 use crate::{users::Login, utils::from_server_clone};
 
@@ -230,7 +230,6 @@ pub async fn los(
   Ok(v)
 }
 
-
 #[server(
   prefix="/content",
   endpoint="notations",
@@ -360,6 +359,65 @@ pub async fn omdoc(
     }
   }
 }
+
+#[cfg(feature="ssr")]
+fn get_solution(uri:&DocumentElementURI) -> Result<Solutions,ServerFnError<String>> {
+  use immt_system::backend::Backend;
+  match backend!(get_document_element(&uri)) {
+    Some(rf) => {
+      let e: &Exercise<Checked> = rf.as_ref();
+      let Some(sol) = backend!(get_reference(&e.solutions)) else {
+        return Err("solutions not found".to_string().into())
+      };
+      Ok(sol)
+    }
+    _ => Err(format!("Exercise {uri} not found").into()),
+  }
+}
+
+#[server(
+  prefix="/content",
+  endpoint="solution",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
+)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn solution(
+  uri:Option<URI>,
+  rp:Option<String>,
+  a:Option<ArchiveId>,
+  p:Option<String>,
+  l:Option<Language>,
+  d:Option<String>,
+  e:Option<String>,
+) -> Result<Solutions,ServerFnError<String>> {
+  tokio::task::spawn_blocking(move || {
+    let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,None,None).try_into() else {
+      return Err("invalid uri components".to_string().into())
+    };
+    let Some(URI::Narrative(NarrativeURI::Element(uri))) = comps.parse() else {
+      return Err("invalid uri".to_string().into())
+    };
+    get_solution(&uri).map_err(|e| {
+      e
+    })
+  }).await.map_err(|e| e.to_string())?
+}
+
+/*
+#[server(
+  prefix="/content",
+  endpoint="feedback"
+)]
+pub async fn feedback(response:ExerciseResponse)  -> Result<ExerciseFeedback,ServerFnError<String>> {
+  tokio::task::spawn_blocking(move || {
+    let solution = get_solution(&response.uri)?;
+    solution.check(&response).ok_or_else(|| "Solution does not match Exercise".to_string().into())
+  }).await.map_err(|e| e.to_string())?
+}
+ */
+
 
 #[component(transparent)]
 pub fn URITop() -> impl IntoView {

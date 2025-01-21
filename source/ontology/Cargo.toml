@@ -20,6 +20,7 @@ url = {workspace=true}
 either = {workspace=true}
 const_format = {workspace=true}
 paste = {workspace=true}
+regex = {workspace=true}
 tokio = {workspace=true,optional=true,features=["io-util"]}
 
 [lints]

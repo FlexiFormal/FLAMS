@@ -144,24 +144,13 @@ impl URLFragment {
 }
 
 #[component]
-pub fn Nav(on_load:Option<RwSignal<bool>>) -> impl IntoView {
+pub fn Nav() -> impl IntoView {
   let fragment = expect_context::<URLFragment>();
   move || {
     tracing::trace!("Checking URL fragment");
-    match on_load {
-        None => {
-            let s = fragment.0.get();
-            if !s.is_empty() {
-                NavElems::with_untracked(|e| e.navigate_to(&s));
-            }
-        }
-        Some(signal) => if signal.get() {
-            let s = fragment.0.get();
-            if !s.is_empty() {
-                NavElems::with_untracked(|e| e.navigate_to(&s));
-            }
-        }
+    let s = fragment.0.get();
+    if !s.is_empty() {
+        NavElems::with_untracked(|e| e.navigate_to(&s));
     }
-    ""
   }
 }

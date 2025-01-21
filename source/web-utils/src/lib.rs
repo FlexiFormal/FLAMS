@@ -20,7 +20,7 @@ pub fn do_css(css: CSS) {
     match css {
         CSS::Inline(s) => {
             let id = hashstr("id_", &s);
-            //#[cfg(feature="ssr")]
+            #[cfg(feature="ssr")]
             let s = String::from(s);
             do_inject_css(id.into(), s.into());
         }

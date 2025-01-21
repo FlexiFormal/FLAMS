@@ -33,6 +33,7 @@ impl DocumentURI {
     }
 
     #[must_use]
+    /// #### Errors
     pub fn module_uri_from(&self,name:&str) -> Result<ModuleURI,InvalidURICharacter> {
         if self.name.last_name().as_ref() == name {
             self.as_path().owned() | name

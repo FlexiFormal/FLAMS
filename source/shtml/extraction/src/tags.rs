@@ -96,12 +96,12 @@ do_tags!{
     ObjectiveDimension          @ objective,
     ObjectiveSymbol             @ no_op,
     ProblemMinutes              @ no_op /* TODO */,
-    ProblemFillinsol            @ no_op /* TODO */,
-    ProblemFillinsolCase        @ no_op /* TODO */,
-    ProblemFillinsolCaseValue   @ no_op /* TODO */,
-    ProblemFillinsolCaseVerdict @ no_op /* TODO */,
-    ProblemFillinsolValue       @ no_op /* TODO */,
-    ProblemFillinsolVerdict     @ no_op /* TODO */,
+
+    ProblemFillinsol            @ fillinsol,
+    ProblemFillinsolWidth       @ no_op,
+    ProblemFillinsolCase        @ fillinsol_case,
+    ProblemFillinsolCaseValue   @ no_op,
+    ProblemFillinsolCaseVerdict @ no_op,
 
     ProblemNote                 @ no_op /* TODO */,
     ExerciseSolution            @ solution,

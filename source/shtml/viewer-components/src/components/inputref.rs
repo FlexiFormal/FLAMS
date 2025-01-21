@@ -3,7 +3,7 @@ use leptos::{context::Provider, either::Either, prelude::*};
 use immt_web_utils::{do_css, inject_css};
 use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
 
-use crate::{components::navigation::{NavElems, SectionOrInputref}, extractor::DOMExtractor, IdPrefix};
+use crate::{components::navigation::{NavElems, SectionOrInputref}, config::IdPrefix, extractor::DOMExtractor};
 
 #[derive(Copy,Clone)]
 pub struct InInputRef(pub bool);
@@ -45,7 +45,7 @@ fn do_inputref(uri:DocumentURI,on_load:RwSignal<bool>) -> impl IntoView {
     move || {
       tracing::info!("Inputref fetching {uri}");
       let uri = uri.clone();
-      async move {crate::config::server_config.inputref(uri).await.ok()}
+      async move {crate::remote::server_config.inputref(uri).await.ok()}
     },
     move |(css,html)| {
       for c in css { do_css(c); }

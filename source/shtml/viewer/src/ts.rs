@@ -1,7 +1,8 @@
 #![allow(non_local_definitions)]
 
-use shtml_viewer_components::{components::{TOCElem,TOCSource}, DocumentFromURI, SectionContinuation};
-use immt_ontology::uris::DocumentURI;
+use immt_utils::vecmap::VecMap;
+use shtml_viewer_components::{components::{documents::{DocumentFromURI, DocumentString}, TOCElem, TOCSource}, ts::{NamedJsFunction, SectionContinuation}};
+use immt_ontology::{narration::exercises::{ExerciseResponse, Solutions}, uris::DocumentURI};
 use wasm_bindgen::prelude::wasm_bindgen;
 use leptos::{either::Either, prelude::*};
 
@@ -34,6 +35,7 @@ pub enum DocumentOptions {
     }
 }
 
+
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 /// Options for rendering a table of contents
@@ -63,30 +65,53 @@ pub fn render_document(
   on_section_start: Option<SectionContinuation>,
   on_section_end: Option<SectionContinuation>
 ) -> Result<SHTMLMountHandle,String> {
-  use shtml_viewer_components::{DocumentString,SHTMLGlobalSetup};
+  use shtml_viewer_components::SHTMLGlobalSetup;
   use immt_web_utils::components::Themer;
 
   let comp = move || match document {
     DocumentOptions::HtmlString{html,toc} => {
       let toc = toc.map_or(TOCSource::None,TOCSource::Ready);
-      Either::Left(view!{<Themer><SHTMLGlobalSetup><DocumentString html toc/></SHTMLGlobalSetup></Themer>})
+      Either::Left(view!{<GlobalSetup><DocumentString html toc/></GlobalSetup>})
     }
     DocumentOptions::FromBackend{uri,toc} => {
       let toc = toc.map_or(TOCSource::None,Into::into);
-      Either::Right(view!{<Themer><SHTMLGlobalSetup><DocumentFromURI uri toc/></SHTMLGlobalSetup></Themer>})
+      Either::Right(view!{<GlobalSetup><DocumentFromURI uri toc/></GlobalSetup>})
     }
   };
 
   let r = leptos::prelude::mount_to(to,move || {
     if let Some(start) = on_section_start {
-      shtml_viewer_components::components::OnSectionBegin::set(start);
+      shtml_viewer_components::components::OnSectionBegin::set(start.get().into());
     };
     if let Some(end) = on_section_end {
-      shtml_viewer_components::components::OnSectionEnd::set(end);
+      shtml_viewer_components::components::OnSectionEnd::set(end.get().into());
     };
     comp().into_any()
   });
   Ok(SHTMLMountHandle(std::cell::Cell::new(Some(r))))
+}
+
+#[wasm_bindgen]
+pub fn shtml_setup() {
+
+}
+
+#[component]
+fn GlobalSetup<V:IntoView+'static>(children:TypedChildren<V>) -> impl IntoView {
+  use shtml_viewer_components::SHTMLGlobalSetup;
+  use immt_web_utils::components::Themer;
+  use leptos::either::Either::{Left,Right};
+  let children = children.into_inner();
+  let children = move || if shtml_viewer_components::is_in_shtml() {
+    Left(children())
+  } else {
+    Right(view!(<SHTMLGlobalSetup>{children()}</SHTMLGlobalSetup>))
+  };
+  if with_context::<thaw::ConfigInjection,_>(|_| ()).is_none() {
+    Left(view!(<Themer>{children()}</Themer>))
+  } else {
+    Right(children())
+  }
 }
 
 #[wasm_bindgen]
@@ -98,14 +123,14 @@ impl SHTMLMountHandle {
   /// Not calling this is a memory leak
   pub fn unmount(&self) {
     if let Some(owner) = self.0.take() {
-      drop(owner)
+      drop(owner);
     }
   }
 }
 
 pub mod server {
   use wasm_bindgen::prelude::wasm_bindgen;
-  use shtml_viewer_components::config::{ServerConfig,server_config};
+  use shtml_viewer_components::remote::{ServerConfig,server_config};
   pub use immt_utils::CSS;
   use tsify_next::Tsify;
   /// The currently set server URL
@@ -122,6 +147,7 @@ pub mod server {
   }
 
   #[wasm_bindgen]
+  /// #### Errors
   pub async fn get_document_html(doc:&str) -> Result<HTMLFragment,String> { 
     let doc = doc.parse().map_err(|e| "invalid document URI".to_string())?;
     server_config.inputref(doc).await.map(|(css,html)|
@@ -130,6 +156,7 @@ pub mod server {
   }
 
   #[wasm_bindgen]
+  /// #### Errors
   pub async fn get_paragraph_html(elem:&str) -> Result<HTMLFragment,String> { 
     let doc = elem.parse().map_err(|e| "invalid document URI".to_string())?;
     server_config.paragraph(doc).await.map(|(css,html)|

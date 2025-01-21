@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 /// sets the server url used to the provided one; by default `https://immt.mathhub.info`.
 pub fn set_server_url(server_url: String) {
     tracing::debug!("setting server url: {server_url}");
-    shtml_viewer_components::config::set_server_url(server_url);
+    shtml_viewer_components::remote::set_server_url(server_url);
 }
 
 #[cfg(any(doc,not(feature="ts")))]
@@ -28,9 +28,8 @@ pub fn run() {
 
     leptos_dyn_dom::hydrate_body(|orig| {
         leptos_meta::provide_meta_context();
-        let on_load = RwSignal::new(false);
-        view!(<Themer><SHTMLGlobalSetup><SHTMLDocumentSetup on_load uri=DocumentURI::no_doc()>
-            <DomChildrenCont orig on_load cont=shtml_viewer_components::iterate/>
+        view!(<Themer><SHTMLGlobalSetup><SHTMLDocumentSetup uri=DocumentURI::no_doc()>
+            <DomChildrenCont orig cont=shtml_viewer_components::iterate/>
             </SHTMLDocumentSetup></SHTMLGlobalSetup></Themer>
         )
     });

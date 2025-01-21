@@ -16,7 +16,7 @@ pub enum SHTMLError {
     NotInContent,
     NotInNarrative,
     NotInParagraph,
-    NotInExercise,
+    NotInExercise(&'static str),
     InvalidKey,
     InvalidURI(String),
     IncompleteArgs
@@ -40,7 +40,7 @@ impl Display for SHTMLError {
             Self::NotInContent => f.write_str("content element outside of a module"),
             Self::NotInNarrative => f.write_str("unbalanced narrative element"),
             Self::NotInParagraph => f.write_str("unbalanced logical paragraph"),
-            Self::NotInExercise => f.write_str("unbalanced exercise element"),
+            Self::NotInExercise(s) => write!(f,"unbalanced exercise element: {s}"),
             Self::InvalidKey => f.write_str("invalid key in shtml element"),
             Self::IncompleteArgs => f.write_str("incomplete argument list"),
             Self::InvalidURI(s) => write!(f,"invalid URI: {s}"),

@@ -4,7 +4,7 @@ use leptos::{context::Provider, either::{Either, EitherOf3}, prelude::*};
 use leptos_dyn_dom::OriginalNode;
 use shtml_extraction::open::terms::{OpenArg, OpenTerm, PreVar, VarOrSym};
 
-use crate::{components::{IntoLOs, LOs}, SHTMLString};
+use crate::{components::{IntoLOs, LOs}, config::SHTMLConfig, SHTMLString};
 
 #[cfg(feature="omdoc")]
 enum DomTermArgs {
@@ -88,16 +88,17 @@ mod term_replacing {
     mut head:InTermState,
     elements:SHTMLElements,
     orig:OriginalNode,
-    on_load:RwSignal<bool>,
     is_var:bool,
     uri:URI,
     notation_signal:RwSignal<Option<DocumentElementURI>>
   ) -> impl IntoView {
     let args = head.args;
-    
+    let parsed = RwSignal::new(false);
+
     head.replacable = true;
+    //let on_load = RwSignal::new(false);
     
-    let _ = Effect::new(move || if on_load.get() {
+    let _ = Effect::new(move || if parsed.get() {
       if args.with_untracked(|e| matches!(e,DomTermArgs::Open(_))) {
         args.update(|args| {
           let DomTermArgs::Open(v) = args else {unreachable!()};
@@ -142,29 +143,32 @@ mod term_replacing {
       macro_rules! orig {
         () => {{
           substituted.update_untracked(|v| *v = false);
-          let (o,sig) = if on_load.get_untracked() { 
-            (oclone.deep_clone(),RwSignal::new(false))
-          } else {
-            (orig.clone(),on_load)
-          };
-          Either::Left(
+          let o = oclone.deep_clone();
+          let r = leptos::either::EitherOf3::A(
             //view!(<mrow>{
-              do_components::<true>(0,elements.clone(),o,sig).into_any()
+              do_components::<true>(0,elements.clone(),o).into_any()
             //}</mrow>)
-          )
+          );
+          parsed.set(true);
+          r
         }};
       }
-      if let Some(u) = notation_signal.get() && on_load.get() {
+      if let Some(u) = notation_signal.get() {
         if substituted.get() {
-          let after_subst = RwSignal::new(false);
-          let _ = Effect::new(move |_| if after_subst.get() {
-            substituted.set(false);
-          });
-          return Either::Left(
+          let rf = NodeRef::new();
+          let _ = Effect::new(move ||
+            if rf.get().is_some() {
+              substituted.set(false);
+            }
+          );
+          return leptos::either::EitherOf3::B({
+            view!(<mspace node_ref=rf style="display:content;"/>)
             //view!(<mrow>{
-              do_components::<true>(0,elements.clone(),oclone.deep_clone(),after_subst).into_any()
+              //let r = do_components::<true>(0,elements.clone(),oclone.deep_clone()).into_any();
+              //substituted.set(true);
+              //r
             //}</mrow>)
-          )
+          });
         }
 
         let Some(is_op) = args.with(|v| {
@@ -180,7 +184,7 @@ mod term_replacing {
           (true,_) => "OMID",
           _ => "OMA"
         };
-        let Some(notation) = crate::config::server_config.get_notation(&u) else {
+        let Some(notation) = crate::remote::server_config.get_notation(&u) else {
           tracing::error!("Notation {u} not found");
           return orig!()
         };
@@ -193,7 +197,7 @@ mod term_replacing {
         } else {
           //tracing::debug!("Applied notation; {elements:?} original:\n{}\nresult:\n{html}",oclone.html_string());
           substituted.update_untracked(|v| *v = true);
-          Either::Right(view!{<mrow class="shtml-comp-replaced"><Provider value=Some(SkipOne)>
+          leptos::either::EitherOf3::C(view!{<mrow class="shtml-comp-replaced"><Provider value=Some(SkipOne)>
             //{view!(
               <DomStringContMath html cont=crate::iterate/>
             //)}
@@ -210,13 +214,15 @@ mod term_replacing {
 pub(super) struct DisablePopover;
 
 #[cfg(feature="omdoc")]
-pub(super) fn math_term(skip:usize,mut elements:shtml_extraction::prelude::SHTMLElements,orig:OriginalNode,on_load:RwSignal<bool>,t:OpenTerm) -> impl IntoView {
+pub(super) fn math_term(skip:usize,mut elements:shtml_extraction::prelude::SHTMLElements,orig:OriginalNode,t:OpenTerm) -> impl IntoView {
+    use crate::config::SHTMLConfig;
+
   if term_replacing::DO_REPLACEMENTS {
     Either::Left({
       if use_context::<Option<SkipOne>>().flatten().is_some() {
         tracing::debug!("Skipping");
         let value : Option<SkipOne> = None;
-        EitherOf3::A(view!(<Provider value>{super::do_components::<true>(skip+1,elements,orig,on_load).into_any()}</Provider>))
+        EitherOf3::A(view!(<Provider value>{super::do_components::<true>(skip+1,elements,orig).into_any()}</Provider>))
       } else {
         let head = InTermState::new(t.take_head());
         let subst = use_context::<DisablePopover>().is_none();
@@ -227,24 +233,24 @@ pub(super) fn math_term(skip:usize,mut elements:shtml_extraction::prelude::SHTML
             _ => None
           };
           let notation_signal = 
-            uri.as_ref().map(|(_,uri)| expect_context::<crate::NotationForces>().get(&uri));
+            uri.as_ref().map(|(_,uri)| expect_context::<SHTMLConfig>().get_forced_notation(&uri));
           if let Some(notation_signal) = notation_signal {
             let Some((is_var,uri)) = uri else {unreachable!()};
             //tracing::info!("Here: {elements:?}");
             elements.elems.truncate(elements.elems.len() - (skip + 1));
-            return Either::Left(EitherOf3::C(term_replacing::replacable(head,elements,orig,on_load,is_var,uri,notation_signal)));
+            return Either::Left(EitherOf3::C(term_replacing::replacable(head,elements,orig,is_var,uri,notation_signal)));
           }
         }
         
         EitherOf3::B(
-          view!(<Provider value=Some(head)>{super::do_components::<true>(skip+1,elements,orig,on_load).into_any()}</Provider>)
+          view!(<Provider value=Some(head)>{super::do_components::<true>(skip+1,elements,orig).into_any()}</Provider>)
         )
       }
     })
   } else {
     Either::Right(
     do_term::<_,true>(t,move || 
-      super::do_components::<true>(skip+1,elements,orig,on_load).into_any()
+      super::do_components::<true>(skip+1,elements,orig).into_any()
     ))
   }
 }
@@ -283,7 +289,7 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
     let node_type = if MATH { DivOrMrow::Mrow } else { DivOrMrow::Div };
     
     if do_popover() {
-      let ocp = expect_context::<crate::OnClickProvider>().get(&s);
+      let ocp = expect_context::<crate::config::SHTMLConfig>().get_on_click(&s);
       //let s_click = s.clone();
       Either::Left(view!(
         <Popover node_type class 
@@ -297,7 +303,7 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
           //<div style="max-width:600px;">
             {match s {
               VarOrSym::V(v) => EitherOf3::A(view!{<span>"Variable "{v.name().last_name().to_string()}</span>}),
-              VarOrSym::S(ContentURI::Symbol(s)) => EitherOf3::B(crate::config::get!(definition(s.clone()) = (css,s) => {
+              VarOrSym::S(ContentURI::Symbol(s)) => EitherOf3::B(crate::remote::get!(definition(s.clone()) = (css,s) => {
                 for c in css { do_css(c); }
                 Some(view!(<div style="color:black;background-color:white;padding:3px;"><SHTMLString html=s/></div>))
               })),
@@ -310,7 +316,8 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
   } else { Either::Right(children()) }
 }
 
-pub(crate) fn do_onclick(uri:VarOrSym) -> impl IntoView {
+#[allow(clippy::too_many_lines)]
+pub fn do_onclick(uri:VarOrSym) -> impl IntoView {
   use thaw::{Combobox,ComboboxOption,ComboboxOptionGroup,Divider};
   #[cfg(feature="omdoc")]
   let uriclone = uri.clone();
@@ -322,7 +329,7 @@ pub(crate) fn do_onclick(uri:VarOrSym) -> impl IntoView {
   };
   let name = s.name().last_name().to_string();
 
-  EitherOf3::C(crate::config::get!(get_los(s.clone(),false) = v => {
+  EitherOf3::C(crate::remote::get!(get_los(s.clone(),false) = v => {
     let LOs {definitions,examples,..} = v.lo_sort();
     let ex_off = definitions.len();
     let selected = RwSignal::new(definitions.first().map(|_| "0".to_string()));
@@ -363,7 +370,7 @@ pub(crate) fn do_onclick(uri:VarOrSym) -> impl IntoView {
           }
         }));
         uri.map(|uri| {
-          crate::config::get!(paragraph(uri.clone()) = (css,html) => {
+          crate::remote::get!(paragraph(uri.clone()) = (css,html) => {
             for c in css { do_css(c); }
             view!(<div><SHTMLString html=html/></div>)
           })
@@ -376,10 +383,10 @@ pub(crate) fn do_onclick(uri:VarOrSym) -> impl IntoView {
             VarOrSym::V(PreVar::Resolved(v)) => Some((true,URI::Narrative(v.clone().into()))),
             _ => None
           };
-          uri.map(|(is_variable,uri)| {let uricl = uri.clone();crate::config::get!(notations(uri.clone()) = v => {
+          uri.map(|(is_variable,uri)| {let uricl = uri.clone();crate::remote::get!(notations(uri.clone()) = v => {
             if v.is_empty() { None } else {Some({
               let uri = uricl.clone();
-              let notation_signal = expect_context::<crate::NotationForces>().get(&uri);
+              let notation_signal = expect_context::<SHTMLConfig>().get_forced_notation(&uri);
               //let selected = RwSignal::new("None".to_string());
               let selected = RwSignal::new(if let Some(v) = notation_signal.get_untracked() {
                 v.to_string()
@@ -444,7 +451,7 @@ pub(crate) fn do_onclick(uri:VarOrSym) -> impl IntoView {
   }}))
 }
 
-pub(crate) fn lo_line(uri:&DocumentElementURI) -> impl IntoView + 'static {
+pub fn lo_line(uri:&DocumentElementURI) -> impl IntoView + 'static {
   let archive = uri.archive_id().to_string();
   let name = uri.name().to_string();
   let lang = uri.language().flag_svg();

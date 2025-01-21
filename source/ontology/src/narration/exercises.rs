@@ -3,7 +3,7 @@ use std::{fmt::Display, str::FromStr};
 use smallvec::SmallVec;
 
 use crate::{
-    uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange, Resourcable, Unchecked
+    uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
 };
 
 use super::{DocumentElement, LazyDocRef, NarrationTrait};
@@ -15,7 +15,8 @@ pub struct Exercise<State:CheckingState> {
     pub range: DocumentRange,
     pub autogradable: bool,
     pub points: Option<f32>,
-    pub solutions: State::Seq<SolutionData<State>>,
+    pub solutions: LazyDocRef<Solutions>,//State::Seq<SolutionData>,
+    pub gnotes: State::Seq<LazyDocRef<GradingNote>>,
     pub hints: State::Seq<DocumentRange>,
     pub notes: State::Seq<LazyDocRef<Box<str>>>,
     pub title: Option<DocumentRange>,
@@ -25,87 +26,151 @@ pub struct Exercise<State:CheckingState> {
     pub objectives: State::Seq<(CognitiveDimension, SymbolURI)>,
 }
 
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct Solutions(pub Box<[SolutionData]>);
+impl crate::Resourcable for Solutions {}
+impl Solutions {
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn check(&self,response:&ExerciseResponse) -> Option<ExerciseFeedback> {
+        fn next_sol<'a>(solutions:&mut SmallVec<Box<str>,1>,datas: &mut impl Iterator<Item=&'a SolutionData>) -> Option<&'a SolutionData> {
+            loop {
+                match datas.next() {
+                    None => return None,
+                    Some(SolutionData::Solution{html,..}) => solutions.push(html.clone()),
+                    Some(c) => return Some(c)
+                }
+            }
+        }
+        let mut correct = true;
+        let mut solutions = SmallVec::new();
+        let mut data = SmallVec::new();
+        let mut datas = self.0.iter();
+
+        for response in &response.responses {
+            let sol = next_sol(&mut solutions,&mut datas)?;
+            match (response,sol) {
+                (ExerciseResponseType::SingleChoice(selected),SolutionData::ChoiceBlock(ChoiceBlock {multiple:false,choices,..})) => 
+                    data.push(CheckedResult::SingleChoice {
+                        selected:*selected,
+                        choices:choices.iter().enumerate().map(|(i,Choice{correct:cr,verdict,feedback})| {
+                            if *selected as usize == i {
+                                correct = correct && *cr;
+                            }
+                            BlockFeedback { is_correct: *cr, verdict_str: verdict.to_string(), feedback: feedback.to_string() }
+                        }).collect()
+                    }),
+                (ExerciseResponseType::MultipleChoice(selected),SolutionData::ChoiceBlock(ChoiceBlock {multiple:true,choices,..})) => {
+                    if selected.len() != choices.len() {
+                        return None
+                    }
+                    data.push(CheckedResult::MultipleChoice { 
+                        selected: selected.clone(), 
+                        choices: choices.iter().enumerate().map(|(i,Choice{correct:cr,verdict,feedback})| {
+                            correct = correct && (selected[i] == *cr);
+                            BlockFeedback {
+                                is_correct: *cr, verdict_str: verdict.to_string(), feedback: feedback.to_string() 
+                            }
+                        }).collect()
+                    });
+                }
+                (ExerciseResponseType::Fillinsol(s),SolutionData::FillInSol(f)) => {
+                    let mut fill_correct = None;
+                    let mut matching = None;
+                    let mut options = SmallVec::new();
+                    for (i,o) in f.opts.iter().enumerate() {
+                        match o {
+                            FillInSolOption::Exact { string, verdict, feedback } => {
+                                if fill_correct.is_none() && &**string == s.as_str() {
+                                    fill_correct = Some(*verdict);
+                                    matching = Some(i);
+                                }
+                                options.push(FillinFeedback{ 
+                                    is_correct:*verdict,
+                                    feedback:feedback.to_string(),
+                                    kind:FillinFeedbackKind::Exact(string.to_string())
+                                });
+                            }
+                            FillInSolOption::NumericalRange { from, to, verdict, feedback } => {
+                                if fill_correct.is_none() {
+                                    let num = if s.contains('.') { s.parse::<f32>().ok() } else {
+                                        s.parse::<i32>().ok().map(|i| i as f32)
+                                    };
+                                    if let Some(f) = num {
+                                        if f >= *from && f <= *to {
+                                            fill_correct = Some(*verdict);
+                                            matching = Some(i);
+                                        }
+                                    }
+                                }
+                                options.push(FillinFeedback{ 
+                                    is_correct:*verdict,
+                                    feedback:feedback.to_string(),
+                                    kind:FillinFeedbackKind::NumRange{from:*from,to:*to}
+                                });
+                            }
+                            FillInSolOption::Regex { regex, verdict, feedback } => {
+                                if fill_correct.is_none() && regex.0.is_match(s) {
+                                    fill_correct = Some(*verdict);
+                                    matching = Some(i);
+                                }
+                                options.push(FillinFeedback{ 
+                                    is_correct:*verdict,
+                                    feedback:feedback.to_string(),
+                                    kind:FillinFeedbackKind::Regex(regex.0.as_str().to_string())
+                                });
+                            }
+                        }
+                    }
+                    correct = correct && fill_correct.unwrap_or_default();
+                    data.push(CheckedResult::FillinSol { 
+                        matching, options, text: s.to_string()
+                    });
+                }
+                _ => return None
+            }
+        }
+
+        if next_sol(&mut solutions,&mut datas).is_some() {
+            return None
+        }
+
+        Some(ExerciseFeedback {
+            correct,solutions,data
+        })
+    }
+}
+
+
 crate::serde_impl!{
     struct Exercise[
-        sub_exercise,uri,range,autogradable,points,solutions,
+        sub_exercise,uri,range,autogradable,points,solutions,gnotes,
         hints,notes,title,children,styles,preconditions,
         objectives
     ]
 }
 
-#[derive(Debug)]
-pub enum SolutionData<State:CheckingState> {
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub enum SolutionData {
     Solution{
-        html:LazyDocRef<Box<str>>,
+        html:Box<str>,
         answer_class:Option<Box<str>>
     },
-    Grading(GradingNote<State>),
-    ChoiceBlock(ChoiceBlock<State>)
+    ChoiceBlock(ChoiceBlock),
+    FillInSol(FillInSol)
 }
 
-impl SolutionData<Unchecked> {
-    #[must_use]
-    pub fn close(self) -> SolutionData<Checked> {
-        match self {
-            Self::Solution{html,answer_class} => SolutionData::Solution{html,answer_class},
-            Self::Grading(g) => SolutionData::Grading(
-                GradingNote {
-                    html:g.html,
-                    answer_classes:g.answer_classes.into_boxed_slice()
-                }
-            ),
-            Self::ChoiceBlock(ChoiceBlock{multiple,inline,range,styles,choices}) => SolutionData::ChoiceBlock(
-                ChoiceBlock { multiple, inline, range,styles,choices:choices.into_boxed_slice() }
-            )
-        }
-    }
-}
-
-impl Clone for SolutionData<Checked> {
-    #[inline]
-    fn clone(&self) -> Self {
-        match self {
-            Self::Solution{html,answer_class} => 
-                Self::Solution{html:html.clone(), answer_class:answer_class.clone()},
-            Self::Grading(g) => Self::Grading(g.clone()),
-            Self::ChoiceBlock(b) =>
-                Self::ChoiceBlock(b.clone())
-        }
-    }
-}
-
-crate::serde_impl!{mod solution_serde_impl =
-    enum SolutionData{
-        {0 = Solution{html,answer_class}}
-        {1 = Grading(g)}
-        {2 = ChoiceBlock(b)}
-    }
-}
-
-#[derive(Debug)]
-pub struct ChoiceBlock<State:CheckingState> { 
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct ChoiceBlock { 
     pub multiple:bool,
     pub inline:bool,
     pub range:DocumentRange,
     pub styles:Box<[Box<str>]>,
-    pub choices:State::Seq<Choice>
-}
-
-impl Clone for ChoiceBlock<Checked> {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self{
-            multiple:self.multiple,
-            inline:self.inline,
-            range:self.range,
-            styles:self.styles.clone(),
-            choices:self.choices.clone()
-        }
-    }
-}
-
-crate::serde_impl!{mod choice_serde_impl =
-    struct ChoiceBlock[multiple,inline,range,styles,choices]
+    pub choices:Vec<Choice>
 }
 
 #[derive(Debug,Clone)]
@@ -116,24 +181,150 @@ pub struct Choice {
     pub feedback:Box<str>
 }
 
-#[derive(Debug)]
-pub struct GradingNote<State:CheckingState> {
-    pub html:LazyDocRef<Box<str>>,
-    pub answer_classes:State::Seq<AnswerClass>
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct FillInSol {
+    pub width:Option<f32>,
+    pub opts: Vec<FillInSolOption>
 }
 
-impl Clone for GradingNote<Checked> {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self {
-            html:self.html.clone(),
-            answer_classes:self.answer_classes.clone()
+#[derive(Debug,Clone)]
+pub struct FillinRegex(regex::Regex);
+
+#[cfg(feature="serde")]
+mod regex_serde {
+    use super::FillinRegex;
+    impl serde::Serialize for FillinRegex {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+            serializer.serialize_str(self.0.as_str())
+        }
+    }
+
+    impl<'de> serde::Deserialize<'de> for FillinRegex {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+            let s = String::deserialize(deserializer)?;
+            regex::Regex::new(&s).map(FillinRegex).map_err(serde::de::Error::custom)
         }
     }
 }
 
-crate::serde_impl!{mod grading_note_serde_impl =
-    struct GradingNote[html,answer_classes]
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub enum FillInSolOption{
+    Exact{
+        string:Box<str>,
+        verdict:bool,
+        feedback:Box<str>
+    },
+    NumericalRange{
+        from:f32,to:f32,
+        verdict:bool,
+        feedback:Box<str>
+    },
+    Regex{
+        regex:FillinRegex,
+        verdict:bool,
+        feedback:Box<str>
+    }
+}
+impl FillInSolOption {
+    #[allow(clippy::cast_precision_loss)]
+    #[must_use]
+    pub fn from_values(kind:&str,value:&str,verdict:bool) -> Option<Self> {
+        match kind {
+            "exact" => Some(Self::Exact { 
+                string: value.to_string().into(), 
+                verdict, 
+                feedback:String::new().into()
+            }),
+            "numrange" => {
+                let (from,to) = value.split_once('-')?;
+                let from = if from.contains('.') {
+                    f32::from_str(from).ok()?
+                } else {
+                    i32::from_str(from).ok()? as _   
+                };
+                let to = if to.contains('.') {
+                    f32::from_str(to).ok()?
+                } else {
+                    i32::from_str(to).ok()? as _   
+                };
+                Some(Self::NumericalRange { 
+                    from, 
+                    to, 
+                    verdict, 
+                    feedback:String::new().into()
+                })
+            },
+            "regex" => Some(Self::Regex { 
+                regex: FillinRegex(regex::Regex::new(
+                    value
+                    //&format!("^{value}?")
+                ).ok()?), 
+                verdict, 
+                feedback:String::new().into()
+            }),
+            _ => None
+        }
+    }
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct GradingNote {
+    pub html:Box<str>,
+    pub answer_classes:Vec<AnswerClass>
+}
+impl crate::Resourcable for GradingNote {}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct ExerciseFeedback {
+    pub correct:bool,
+    pub solutions:SmallVec<Box<str>,1>,
+    pub data:SmallVec<CheckedResult,4>
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct BlockFeedback {
+    pub is_correct:bool,
+    pub verdict_str:String,
+    pub feedback:String
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub struct FillinFeedback {
+    pub is_correct:bool,
+    pub feedback:String,
+    pub kind:FillinFeedbackKind,
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub enum FillinFeedbackKind {
+    Exact(String),
+    NumRange{from:f32,to:f32},
+    Regex(String)
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+pub enum CheckedResult {
+    SingleChoice{
+        selected:u16,
+        choices:SmallVec<BlockFeedback,4>
+    },
+    MultipleChoice{
+        selected:SmallVec<bool,8>,
+        choices:SmallVec<BlockFeedback,4>
+    },
+    FillinSol {
+        matching:Option<usize>,
+        text:String,
+        options:SmallVec<FillinFeedback,4>
+    }
 }
 
 #[derive(Debug,Clone)]
@@ -148,10 +339,9 @@ pub struct ExerciseResponse {
 #[cfg_attr(feature="serde", serde(untagged))]
 pub enum ExerciseResponseType {
     MultipleChoice(SmallVec<bool,8>),
-    SingleChoice(u16)
+    SingleChoice(u16),
+    Fillinsol(String)
 }
-
-
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

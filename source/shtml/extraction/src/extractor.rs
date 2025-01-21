@@ -5,7 +5,7 @@ use immt_ontology::content::declarations::OpenDeclaration;
 use immt_ontology::content::modules::OpenModule;
 use immt_ontology::content::terms::{Arg, ArgMode, Term, Var};
 use immt_ontology::languages::Language;
-use immt_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, CognitiveDimension, GradingNote, SolutionData};
+use immt_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, CognitiveDimension, FillInSol, FillInSolOption, GradingNote, SolutionData};
 use immt_ontology::narration::notations::{NotationComponent, OpNotation};
 use immt_ontology::narration::sections::SectionLevel;
 use immt_ontology::narration::variables::Variable;
@@ -63,21 +63,26 @@ pub struct NotationState {
 #[derive(Debug)]
 pub struct ExerciseState {
     pub uri: DocumentElementURI,
-    pub solutions: Vec<SolutionData<Unchecked>>,
+    pub solutions: Vec<SolutionData>,
     pub gnote:Option<GnoteState>,
     pub choice_block:Option<ChoiceBlockState>,
+    pub fillinsol:Option<FillinsolState>,
     pub hints: Vec<DocumentRange>,
     pub notes: Vec<LazyDocRef<Box<str>>>,
+    pub gnotes: Vec<LazyDocRef<GradingNote>>,
     pub title: Option<DocumentRange>,
     pub children: Vec<DocumentElement<Unchecked>>,
     pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
     pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
 }
 impl ExerciseState {
-    pub fn new(uri:DocumentElementURI) -> Self {
+    #[must_use]
+    pub const fn new(uri:DocumentElementURI) -> Self {
         Self {
             uri,solutions:Vec::new(),
             gnote:None,choice_block:None,hints:Vec::new(),
+            fillinsol:None,
+            gnotes:Vec::new(),
             notes:Vec::new(),title:None,children:Vec::new(),
             preconditions:Vec::new(),objectives:Vec::new()
         }
@@ -95,6 +100,11 @@ pub struct ChoiceBlockState {
     pub inline:bool,
     pub styles:Box<[Box<str>]>,
     pub choices:Vec<Choice>
+}
+
+#[derive(Debug)]
+pub struct FillinsolState {
+    pub cases:Vec<FillInSolOption>
 }
 
 #[cfg(feature="full")]
@@ -285,18 +295,29 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
                 true
             } else { false }
         ).unwrap_or_default() {
-            //extractor.add_error(SHTMLError::NotInExercise);
+            self.add_error(SHTMLError::NotInExercise("1"));
         }
     }
 
     fn push_problem_choice(&mut self,correct:bool) {
         if !self.with_exercise(|ex| 
             if let Some(block) = &mut ex.choice_block {
-                block.choices.push(Choice {correct,verdict:Default::default(),feedback:Default::default()});
+                block.choices.push(Choice {correct,verdict:Box::default(),feedback:Default::default()});
                 true
             } else { false }
         ).unwrap_or_default() {
-            //extractor.add_error(SHTMLError::NotInExercise);
+            self.add_error(SHTMLError::NotInExercise("2"));
+        }
+    }
+
+    fn push_fillinsol_case(&mut self,case:FillInSolOption) {
+        if !self.with_exercise(|ex| 
+            if let Some(fillin) = &mut ex.fillinsol {
+                fillin.cases.push(case);
+                true
+            } else { false }
+        ).unwrap_or_default() {
+            self.add_error(SHTMLError::NotInExercise("3"));
         }
     }
 
@@ -337,18 +358,36 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     }
     fn open_gnote(&mut self) {
         if !self.with_exercise(|e| {
-            if let Some(g) = &e.gnote {
+            if e.gnote.is_some() {
                 false
             } else {
                 e.gnote = Some(GnoteState { answer_classes:Vec::new()});
                 true
             }
         }).unwrap_or_default() {
-            //self.add_error(SHTMLError::NotInExercise);
+            self.add_error(SHTMLError::NotInExercise("4"));
         }
     }
+
     fn close_gnote(&mut self) -> Option<GnoteState> {
         self.with_exercise(|e| e.gnote.take()).flatten()
+    }
+
+    fn open_fillinsol(&mut self,_width:Option<f32>) {
+        if !self.with_exercise(|ex|
+            if ex.fillinsol.is_some() {
+                false
+            } else {
+                ex.fillinsol = Some(FillinsolState { cases:Vec::new() });
+                true
+            }
+        ).unwrap_or_default() {
+            self.add_error(SHTMLError::NotInExercise("5"));
+        }
+    }
+
+    fn close_fillinsol(&mut self) -> Option<FillinsolState> {
+        self.with_exercise(|e| e.fillinsol.take()).flatten()
     }
 
     fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>) {
@@ -362,7 +401,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
                 true
             }
         }).unwrap_or_default() {
-            //self.add_error(SHTMLError::NotInExercise);
+            self.add_error(SHTMLError::NotInExercise("6"));
         }
     }
     fn close_choice_block(&mut self) -> Option<ChoiceBlockState>  {
@@ -370,11 +409,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     }
 
     fn open_exercise(&mut self,uri:DocumentElementURI) {
-        self.state_mut().narrative.push(Narrative::Exercise(ExerciseState {
-            uri, children:Vec::new(), title: None,solutions:Vec::new(),
-            hints:Vec::new(),notes:Vec::new(),gnote:None,choice_block:None,
-            preconditions:Vec::new(),objectives:Vec::new(), 
-        }));
+        self.state_mut().narrative.push(Narrative::Exercise(ExerciseState::new(uri)));
     }
     fn close_exercise(&mut self) -> Option<ExerciseState> {
         match self.state_mut().narrative.pop() {
@@ -675,6 +710,9 @@ pub trait SHTMLExtractor {
     fn close_gnote(&mut self) -> Option<GnoteState>;
     fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>);
     fn close_choice_block(&mut self) -> Option<ChoiceBlockState>;
+    fn open_fillinsol(&mut self,width:Option<f32>);
+    fn close_fillinsol(&mut self) -> Option<FillinsolState>;
+    fn push_fillinsol_case(&mut self,case:FillInSolOption);
     fn push_answer_class(&mut self,id:Box<str>,kind:AnswerKind);
     fn push_problem_choice(&mut self,correct:bool);
 
@@ -778,10 +816,11 @@ pub trait Attributes {
 
     /// #### Errors
     #[inline]
-    fn get_module_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
+    fn get_module_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,_extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         self.get_typed(key,ModuleURI::from_str)
     }
 
+    /// #### Errors
     fn get_new_module_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
@@ -794,10 +833,11 @@ pub trait Attributes {
 
     /// #### Errors
     #[inline]
-    fn take_module_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
+    fn take_module_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,_extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         self.take_typed(key, ModuleURI::from_str)
     }
 
+    /// #### Errors
     fn take_new_module_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<ModuleURI,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
@@ -810,10 +850,11 @@ pub trait Attributes {
 
     /// #### Errors
     #[inline]
-    fn get_symbol_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
+    fn get_symbol_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,_extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         self.get_typed(key,SymbolURI::from_str)
     }
 
+    /// #### Errors
     fn get_new_symbol_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         let Some(v) = self.get(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
@@ -826,10 +867,11 @@ pub trait Attributes {
 
     /// #### Errors
     #[inline]
-    fn take_symbol_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
+    fn take_symbol_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,_extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         self.take_typed(key,SymbolURI::from_str)
     }
 
+    /// #### Errors
     fn take_new_symbol_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<SymbolURI,SHTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(SHTMLError::InvalidKeyFor(key.as_str(), None))
@@ -842,13 +884,13 @@ pub trait Attributes {
 
     /// #### Errors
     #[inline]
-    fn get_document_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
+    fn get_document_uri<E:SHTMLExtractor>(&self,key:SHTMLKey,_extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
         self.get_typed(key, DocumentURI::from_str)
     }
 
     /// #### Errors
     #[inline]
-    fn take_document_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
+    fn take_document_uri<E:SHTMLExtractor>(&mut self,key:SHTMLKey,_extractor:&mut E) -> Result<DocumentURI,SHTMLError> {
         self.take_typed(key, DocumentURI::from_str)
     }
 

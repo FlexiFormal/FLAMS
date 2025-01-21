@@ -35,6 +35,7 @@
  * | [`/content/toc`](content::toc()) | [DocumentURI] | `(Vec<`[CSS]`>,Vec<`[TOCElem]`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
  * | [`/content/los`](content::los()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
  * | [`/content/notations`](content::notations()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
+ * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](immt_ontology::narration::exercises::Solutions) |
 */
 
 

@@ -34,7 +34,7 @@ impl ModuleTrait for Morphism<Checked> {
     }
     #[inline]
     fn content_uri(&self) -> ContentURIRef {
-        ContentURIRef::Symbol(self.uri.as_ref().unwrap())
+        ContentURIRef::Symbol(self.uri.as_ref().unwrap_or_else(|| unreachable!()))
     }
 }
 crate::serde_impl!{

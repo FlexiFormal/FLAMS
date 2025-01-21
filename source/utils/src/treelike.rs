@@ -170,6 +170,7 @@ where
     }
 
     #[allow(clippy::missing_errors_doc)]
+    #[allow(clippy::unnecessary_map_or)]
     fn dfs_with_close<
         R,
         SG,
@@ -522,7 +523,7 @@ mod tests {
             }
         }
     }
-    impl<'a> TreeChild<TopFoo> for &'a FooChild {
+    impl TreeChild<TopFoo> for &FooChild {
         fn children<'b>(&self) -> Option<<TopFoo as TreeLike>::RefIter<'b>>
         where
             Self: 'b,

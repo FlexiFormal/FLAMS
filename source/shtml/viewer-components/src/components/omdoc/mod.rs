@@ -38,7 +38,7 @@ pub(crate) fn do_omdoc(omdoc:OMDocSource) -> impl IntoView {
         {match &omdoc {
             OMDocSource::Get => {
               let uri = uri.clone();
-              leptos::either::Either::Left(crate::config::get!(omdoc(NarrativeURI::Document(uri.clone()).into()) = (_,omdoc) => {
+              leptos::either::Either::Left(crate::remote::get!(omdoc(NarrativeURI::Document(uri.clone()).into()) = (_,omdoc) => {
                 let AnySpec::Document(omdoc) = omdoc else {unreachable!()};
                 if let Some(s) = &omdoc.title {
                     title.set(s.clone());
@@ -114,7 +114,7 @@ impl Spec for AnySpec {
         Self::Term(uri,t) => view! {
           <Block show_separator=false>
             <Header slot><span><b>"Term "</b>{
-              crate::config::get!(present(t.clone()) = html => {
+              crate::remote::get!(present(t.clone()) = html => {
                 view!(<SHTMLStringMath html/>)
               })
             }</span></Header>
@@ -188,7 +188,7 @@ pub(crate) fn module_name(uri:&ModuleURI) -> impl IntoView {
     <div style="display:inline-block;"><Popover>
       <PopoverTrigger slot><b class="shtml-comp">{name}</b></PopoverTrigger>  
       <OnClickModal slot><Scrollbar style="max-height:80vh">{
-        crate::config::get!(omdoc(uriclone.clone().into()) = (css,s) => {
+        crate::remote::get!(omdoc(uriclone.clone().into()) = (css,s) => {
           for c in css { do_css(c); }
           s.into_view()
         })
@@ -197,7 +197,7 @@ pub(crate) fn module_name(uri:&ModuleURI) -> impl IntoView {
       <div style="margin-bottom:5px;"><thaw::Divider/></div>
       <Scrollbar style="max-height:300px">
       {
-        crate::config::get!(omdoc(uri.clone().into()) = (css,s) => {
+        crate::remote::get!(omdoc(uri.clone().into()) = (css,s) => {
           for c in css { do_css(c); }
           s.into_view()
         })
@@ -215,7 +215,7 @@ pub(crate) fn doc_name(uri:&DocumentURI,title:String) -> impl IntoView {
         <PopoverTrigger slot><span class="shtml-comp"><SHTMLString html=title/></span></PopoverTrigger>
         {uristring}
       </Popover>
-      <a style="display:inline-block;" target="_blank" href={crate::config::server_config.top_doc_url(&uri)}><thaw::Icon icon=icondata_bi::BiLinkRegular /></a>
+      <a style="display:inline-block;" target="_blank" href={crate::remote::server_config.top_doc_url(&uri)}><thaw::Icon icon=icondata_bi::BiLinkRegular /></a>
     </div>
   }
 }
@@ -230,7 +230,7 @@ pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,tit
         <div style="margin-bottom:5px;"><thaw::Divider/></div>
         <div style="background-color:white;color:black;">
         {
-          crate::config::get!(paragraph(uri.clone()) = (css,s) => {
+          crate::remote::get!(paragraph(uri.clone()) = (css,s) => {
             for c in css { do_css(c); }
             view!(<SHTMLString html=s/>)
           })

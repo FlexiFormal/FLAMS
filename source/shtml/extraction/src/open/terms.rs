@@ -185,6 +185,7 @@ impl Display for VarOrSym {
     }
 }
 impl VarOrSym {
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn resolve<E:SHTMLExtractor>(self,extractor:&mut E) -> Term {
         match self {
             Self::S(uri) => {

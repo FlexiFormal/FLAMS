@@ -145,7 +145,12 @@ impl SHTMLExtractor for DOMExtractor {
     fn close_choice_block(&mut self) -> Option<shtml_extraction::prelude::ChoiceBlockState> {
         todo!()
     }
+    fn close_fillinsol(&mut self) -> Option<shtml_extraction::prelude::FillinsolState> {
+        todo!()
+    }
 
+    fn push_fillinsol_case(&mut self,case:immt_ontology::narration::exercises::FillInSolOption) {}
+    fn open_fillinsol(&mut self,width:Option<f32>) {}
     fn push_answer_class(&mut self,id:Box<str>,kind:immt_ontology::narration::exercises::AnswerKind) {}
     fn push_problem_choice(&mut self,correct:bool) {}
     fn open_gnote(&mut self) {}

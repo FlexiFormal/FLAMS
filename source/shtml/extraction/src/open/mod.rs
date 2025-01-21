@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use either::Either;
-use immt_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::{ArgSpec, AssocType, Symbol}, OpenDeclaration}, modules::{NestedModule, OpenModule}, terms::{Term, Var}}, languages::Language, narration::{exercises::{ChoiceBlock, Exercise, GradingNote, SolutionData}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, sections::{Section, SectionLevel}, variables::Variable, DocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
+use immt_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::{ArgSpec, AssocType, Symbol}, OpenDeclaration}, modules::{NestedModule, OpenModule}, terms::{Term, Var}}, languages::Language, narration::{exercises::{ChoiceBlock, Exercise, FillInSol, FillInSolOption, GradingNote, SolutionData, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, sections::{Section, SectionLevel}, variables::Variable, DocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
 use smallvec::SmallVec;
 use terms::{OpenArg, PreVar, VarOrSym};
 
@@ -98,6 +98,8 @@ pub enum OpenSHTMLElement {
     ProblemChoice,
     ProblemChoiceVerdict,
     ProblemChoiceFeedback,
+    Fillinsol(Option<f32>),
+    FillinsolCase,
 
 
     Inputref{uri:DocumentURI,id:Box<str>},
@@ -112,6 +114,7 @@ pub enum OpenSHTMLElement {
 
 impl OpenSHTMLElement {
     #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity)]
     pub(crate) fn close<E:SHTMLExtractor,N:SHTMLNode>(self,previous:&mut SHTMLElements,next:&mut SHTMLElements,extractor:&mut E,node:&N) -> Option<Self> {
         //println!("{self:?}}}");
         match self {
@@ -280,33 +283,30 @@ impl OpenSHTMLElement {
                 if extractor.with_exercise(|ex|
                     ex.hints.push(node.inner_range())
                 ).is_none() {
-                    // extractor.add_error(SHTMLError::NotInExercise);
+                    extractor.add_error(SHTMLError::NotInExercise("a"));
                 }
             Self::ExerciseSolution(id) => {
                 let s = node.inner_string().into_boxed_str();
-                let r = extractor.add_resource(&s);
                 node.delete_children();
                 if extractor.with_exercise(|ex| {
-                    ex.solutions.push(SolutionData::Solution{html:r,answer_class:id});
+                    ex.solutions.push(SolutionData::Solution{html:s,answer_class:id});
                 }).is_none() {
-                    //extractor.add_error(SHTMLError::NotInExercise);
+                    extractor.add_error(SHTMLError::NotInExercise("b"));
                 }
             }
             Self::ExerciseGradingNote => {
                 let s = node.inner_string().into_boxed_str();
-                let r = extractor.add_resource(&s);
                 node.delete_children();
                 if let Some(gnote) = extractor.close_gnote() {
-                    if extractor.with_exercise(|ex| ex.solutions.push(
-                        SolutionData::Grading(GradingNote {
-                            answer_classes: gnote.answer_classes,
-                            html: r
-                        })
-                    )).is_none() {
-                        //extractor.add_error(SHTMLError::NotInExercise);
+                    let gnote = GradingNote {
+                        answer_classes: gnote.answer_classes, html:s
+                    };
+                    let r = extractor.add_resource(&gnote);
+                    if extractor.with_exercise(|ex| ex.gnotes.push(r)).is_none() {
+                        extractor.add_error(SHTMLError::NotInExercise("c"));
                     }
                 } else {
-                    //extractor.add_error(SHTMLError::NotInExercise);
+                    extractor.add_error(SHTMLError::NotInExercise("d"));
                 }
             }
             Self::ChoiceBlock { .. } => {
@@ -321,10 +321,10 @@ impl OpenSHTMLElement {
                             choices:cb.choices
                         })
                     )).is_none() {
-                        //extractor.add_error(SHTMLError::NotInExercise);
+                        extractor.add_error(SHTMLError::NotInExercise("e"));
                     }
                 } else {
-                    //extractor.add_error(SHTMLError::NotInExercise);
+                    extractor.add_error(SHTMLError::NotInExercise("f"));
                 }
             }
             Self::AnswerClassFeedback => {
@@ -338,7 +338,7 @@ impl OpenSHTMLElement {
                         } else {false}
                     } else {false}
                 }).unwrap_or_default() {
-                    //extractor.add_error(SHTMLError::NotInExercise);
+                    extractor.add_error(SHTMLError::NotInExercise("g"));
                 }
             }
             Self::ProblemChoiceVerdict => {
@@ -352,7 +352,7 @@ impl OpenSHTMLElement {
                         } else {false}
                     } else {false}
                 }).unwrap_or_default() {
-                    //extractor.add_error(SHTMLError::NotInExercise);
+                    extractor.add_error(SHTMLError::NotInExercise("h"));
                 }
             }
             Self::ProblemChoiceFeedback => {
@@ -366,11 +366,41 @@ impl OpenSHTMLElement {
                         } else {false}
                     } else {false}
                 }).unwrap_or_default() {
-                    //extractor.add_error(SHTMLError::NotInExercise);
+                    extractor.add_error(SHTMLError::NotInExercise("i"));
+                }
+            }
+            Self::Fillinsol(width) => {
+                if !extractor.with_exercise(|ex| {
+                    if let Some(n) = std::mem::take(&mut ex.fillinsol) {
+                        ex.solutions.push(SolutionData::FillInSol(
+                            FillInSol { width:width, opts:n.cases }
+                        ));
+                        true
+                    } else {false}
+                }).unwrap_or_default() {
+                    extractor.add_error(SHTMLError::NotInExercise("j"));
+                }
+            }
+            Self::FillinsolCase => {
+                let s = node.inner_string().into_boxed_str();
+                node.delete();
+                if !extractor.with_exercise(|ex| {
+                    if let Some(n) = &mut ex.fillinsol {
+                        n.cases.last_mut().is_some_and(|n| match n {
+                            FillInSolOption::Exact { feedback,.. } |
+                            FillInSolOption::NumericalRange { feedback,.. } |
+                            FillInSolOption::Regex { feedback,.. } => {
+                                *feedback = s;
+                                true
+                            }
+                        })
+                    } else {false}
+                }).unwrap_or_default() {
+                    extractor.add_error(SHTMLError::NotInExercise("k"));
                 }
             }
             Self::IfInputref(_) | Self::Definiendum(_) | Self::Comp | Self::MainComp | 
-            Self::DefComp | Self::ProblemHint | Self::AnswerClass |
+            Self::DefComp | Self::AnswerClass |
             Self::ProblemChoice => (),
         }
         None
@@ -608,8 +638,8 @@ impl OpenSHTMLElement {
     }
 
     fn close_exercise<E:SHTMLExtractor,N:SHTMLNode>(extractor:&mut E,node:&N,uri:DocumentElementURI,styles:Box<[Box<str>]>,autogradable:bool,points:Option<f32>,sub_exercise:bool) {
-        let Some(ExerciseState{solutions,hints,notes,title,children,preconditions,objectives,..}) = extractor.close_exercise() else {
-            extractor.add_error(SHTMLError::NotInExercise);
+        let Some(ExerciseState{solutions,hints,notes,gnotes,title,children,preconditions,objectives,..}) = extractor.close_exercise() else {
+            extractor.add_error(SHTMLError::NotInExercise("l"));
             return
         };
 
@@ -643,10 +673,12 @@ impl OpenSHTMLElement {
                 triple!(<(doc)> ulo:CONTAINS <(iri)>)
             ]);
         }
+        let solutions = extractor.add_resource(&Solutions(solutions.into_boxed_slice()));
 
         extractor.add_document_element(DocumentElement::Exercise(
             Exercise {
                 range: node.range(),uri,styles,autogradable,points,sub_exercise,
+                gnotes,
                 solutions,hints,notes,title,children,preconditions,objectives
             }
         ));

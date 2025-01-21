@@ -150,7 +150,7 @@ pub fn do_toc<V:IntoView+'static>(toc:TOCSource,wrap:impl FnOnce(Option<AnyView>
         }),
         TOCSource::Get => match expect_context() {
             NarrativeURI::Document(uri) => {
-                let r = Resource::new(|| (),move |()| crate::config::server_config.get_toc(uri.clone()));
+                let r = Resource::new(|| (),move |()| crate::remote::server_config.get_toc(uri.clone()));
                 EitherOf4::C(view!{
                     {move || r.with(|r| if let Some(Ok((_,toc))) = r {
                         toc.as_slice().do_titles();

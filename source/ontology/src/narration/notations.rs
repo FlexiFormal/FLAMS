@@ -94,7 +94,7 @@ mod presentation {
     }
     impl From<std::fmt::Error> for PresentationError {
         #[inline]
-        fn from(value: std::fmt::Error) -> Self {
+        fn from(_: std::fmt::Error) -> Self {
             Self::Formatting
         }
     }
@@ -156,6 +156,7 @@ mod presentation {
         notations: HMap<SymbolURI,Vec<Notation>>,
         var_notations: HMap<DocumentElementURI,Vec<Notation>>,
     }
+    /*
     impl NotationStore {
         #[inline]
         pub fn push(&mut self, uri:SymbolURI,notation:Notation) {
@@ -166,6 +167,7 @@ mod presentation {
             self.var_notations.entry(uri).or_default().push(notation);
         }
     }
+     */
 
     pub trait PresenterArgs<W:std::fmt::Write> {
         /// #### Errors

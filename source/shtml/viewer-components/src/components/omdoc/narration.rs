@@ -87,7 +87,7 @@ impl super::Spec for VariableSpec {
                     {macro_name.map(|name| view!(<span>" ("<Text tag=TextTag::Code>"\\"{name}</Text>")"</span>))}
                     {tp.map(|t| view! {
                       " of type "{
-                        crate::config::get!(present(t.clone()) = html => {
+                        crate::remote::get!(present(t.clone()) = html => {
                           view!(<SHTMLStringMath html/>)
                         })
                       }
@@ -98,7 +98,7 @@ impl super::Spec for VariableSpec {
                 </HeaderLeft>
                 <HeaderRight slot><span style="white-space:nowrap;">{df.map(|t| view! {
                     "Definiens: "{
-                      crate::config::get!(present(t.clone()) = html => {
+                      crate::remote::get!(present(t.clone()) = html => {
                         view!(<SHTMLStringMath html/>)
                       })
                     }
@@ -149,7 +149,7 @@ impl super::Spec for ParagraphSpec {
               fors.into_iter().map(|(k,t)| view!{
                 {super::symbol_name(&k,k.name().last_name().as_ref())}
                 {t.map(|t| view!{" as "{
-                  crate::config::get!(present(t.clone()) = html => {
+                  crate::remote::get!(present(t.clone()) = html => {
                     view!(<SHTMLStringMath html/>)
                   })
                 }})}
@@ -179,9 +179,6 @@ pub struct ExerciseSpec {
   pub sub_exercise:bool,
   pub autogradable:bool,
   pub points:Option<f32>,
-  pub num_solutions:u8,
-  pub num_hints:u8,
-  pub num_notes:u8,
   pub title:Option<String>,
   pub preconditions:Vec<(CognitiveDimension,SymbolURI)>,
   pub objectives:Vec<(CognitiveDimension,SymbolURI)>,
@@ -259,7 +256,7 @@ impl super::Spec for DocumentElementSpec {
         Self::TopTerm(uri,t) => view! {
           <Block show_separator=false>
             <Header slot><span><b>"Term "</b>{
-              crate::config::get!(present(t.clone()) = html => {
+              crate::remote::get!(present(t.clone()) = html => {
                 view!(<SHTMLStringMath html/>)
               })
             }</span></Header>
@@ -281,7 +278,7 @@ pub(crate) fn doc_ref(uri:DocumentURI,title:Option<String>) -> impl IntoView {
       <Header slot><b>"Document "{super::doc_name(&uri, name)}</b></Header>
       <div style="padding-left:15px;">{
         let uri = uricl.clone();
-        let r = Resource::new(|| (),move |()| crate::config::server_config.omdoc(NarrativeURI::Document(uri.clone()).into()));
+        let r = Resource::new(|| (),move |()| crate::remote::server_config.omdoc(NarrativeURI::Document(uri.clone()).into()));
         view!{
           <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move || {
             if let Some(Ok((_,omdoc))) = r.get() {
@@ -384,8 +381,6 @@ use immt_utils::{vecmap::VecSet, CSS};
       let children = DocumentElementSpec::do_children(backend,children,&mut uses,&mut imports,css);
       Self {
         sub_exercise:*sub_exercise,autogradable:*autogradable,points:*points,
-        num_solutions:solutions.len() as _,
-        num_hints:hints.len() as _,num_notes:notes.len() as _,
         preconditions:preconditions.to_vec(),
         objectives:objectives.to_vec(),
         title, uri:uri.clone(), uses, children 

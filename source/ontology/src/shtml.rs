@@ -40,7 +40,7 @@ macro_rules! do_keys {
 }
 
 
-do_keys!{115:
+do_keys!{114:
     Module                      = "theory"
     MathStructure               = "feature-structure"
     Morphism                    = "feature-morphism"
@@ -114,11 +114,10 @@ do_keys!{115:
     ProblemChoiceVerdict        = "problem-choice-verdict"
     ProblemChoiceFeedback       = "problem-choice-feedback"
     ProblemFillinsol            = "fillinsol"
+    ProblemFillinsolWidth       = "fillinsol-width"
     ProblemFillinsolCase        = "fillin-case"
     ProblemFillinsolCaseValue   = "fillin-case-value"
     ProblemFillinsolCaseVerdict = "fillin-case-verdict"
-    ProblemFillinsolValue       = "fillin-value"
-    ProblemFillinsolVerdict     = "fillin-verdict"
     ExerciseSolution            = "solution"
     ExerciseHint                = "problemhint"
     ProblemNote                 = "problemnote"
