@@ -8,6 +8,9 @@ use crate::{
 
 use super::{DocumentElement, LazyDocRef, NarrationTrait};
 
+#[cfg(feature="wasm")]
+use wasm_bindgen::prelude::wasm_bindgen;
+
 #[derive(Debug)]
 pub struct Exercise<State:CheckingState> {
     pub sub_exercise: bool,
@@ -26,19 +29,24 @@ pub struct Exercise<State:CheckingState> {
     pub objectives: State::Seq<(CognitiveDimension, SymbolURI)>,
 }
 
-#[allow(clippy::unsafe_derive_deserialize)]
+#[cfg(not(feature="wasm"))]
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
-//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct Solutions(
-    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
     pub Box<[SolutionData]>
 );
 
 #[cfg(feature="wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
+#[allow(clippy::unsafe_derive_deserialize)]
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[wasm_bindgen]
+pub struct Solutions(
+    #[wasm_bindgen(skip)]
+    pub Box<[SolutionData]>
+);
+
+#[cfg(feature="wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Solutions{
     #[inline]
     #[must_use]
@@ -321,19 +329,26 @@ pub struct GradingNote {
 }
 impl crate::Resourcable for GradingNote {}
 
-#[allow(clippy::unsafe_derive_deserialize)]
+#[cfg(not(feature="wasm"))]
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
-//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct ExerciseFeedback {
     pub correct:bool,
-    //#[cfg_attr(feature="wasm", tsify(type = "string[]"))]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
+    pub solutions:SmallVec<Box<str>,1>,
+    pub data:SmallVec<CheckedResult,4>
+}
+
+
+#[cfg(feature="wasm")]
+#[allow(clippy::unsafe_derive_deserialize)]
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[wasm_bindgen]
+pub struct ExerciseFeedback {
+    pub correct:bool,
+    #[wasm_bindgen(skip)]
     pub solutions:SmallVec<Box<str>,1>,
     //#[cfg_attr(feature="wasm", tsify(type = "CheckedResult[]"))]
-    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
+    #[wasm_bindgen(skip)]
     pub data:SmallVec<CheckedResult,4>
 }
 
