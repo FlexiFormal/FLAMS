@@ -28,7 +28,7 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
   }
 }
 
-type SectCont = JsOrRsF<DocumentElementURI,Option<JsOrRsF<HtmlDivElement,()>>>;
+type SectCont = JsOrRsF<DocumentElementURI,Option<TsCont>>;
 
 #[derive(Clone)]
 pub struct OnSectionBegin(SectCont);

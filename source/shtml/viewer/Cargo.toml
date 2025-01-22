@@ -11,7 +11,7 @@ workspace = true
 
 [features]
 ssr = [] # just to make documentation happy
-ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde","immt-utils/wasm","dep:wasm-bindgen-futures"]
+ts = ["shtml-viewer-components/ts","dep:tsify-next","dep:serde","immt-utils/wasm","dep:wasm-bindgen-futures","immt-ontology/wasm"]
 omdoc = ["shtml-viewer-components/omdoc"]
 
 [dependencies]

@@ -157,6 +157,8 @@ mod serde_resolved {
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct DocumentRange {
     pub start: usize,
     pub end: usize,

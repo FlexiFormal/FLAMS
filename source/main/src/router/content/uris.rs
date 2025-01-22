@@ -264,6 +264,69 @@ pub trait URIComponentsTrait {
         Some(DocURIComponents::Comps{a,p,l,d})
       } else {None}
   }
+  fn as_comps(&self) -> Option<URIComponents> {
+    if let Some(uri) = self.get("uri") {
+      return URI::from_str(uri).ok().map(URIComponents::Uri)
+    }
+    let a = self.get(charstr!(ArchiveURI)).map(ArchiveId::new)?;
+    if let Some(rp) = self.get_string("rp") {
+      return if self.get(charstr!(DocumentURI)).is_none() && 
+        self.get(charstr!(DocumentElementURI)).is_none() && 
+        self.get(charstr!(ModuleURI)).is_none() && 
+        self.get(charstr!(SymbolURI)).is_none() {
+          Some(URIComponents::RelPath(a,rp))
+      } else {None}
+    }
+    if let Some(e) = self.get(charstr!(DocumentElementURI)) {
+      let Some(d) = self.get(charstr!(DocumentURI)) else {
+        return None
+      };
+      return if self.get(charstr!(ModuleURI)).is_none() && 
+      self.get(charstr!(SymbolURI)).is_none() {
+        Some(URIComponents::ElemComps { 
+          a, 
+          p: self.get(charstr!(PathURI)).map(ToString::to_string), 
+          l:  self.get("l").and_then(|s| Language::from_str(s).ok()), 
+          d:d.to_string(), e:e.to_string() 
+        })
+      } else {None}
+    }
+    if let Some(d) = self.get(charstr!(DocumentURI)) {
+      return if self.get(charstr!(ModuleURI)).is_none() && 
+      self.get(charstr!(SymbolURI)).is_none() {
+        Some(URIComponents::DocComps { 
+          a, 
+          p: self.get(charstr!(PathURI)).map(ToString::to_string),
+          l:  self.get("l").and_then(|s| Language::from_str(s).ok()), 
+          d:d.to_string()
+        })
+      } else {None}
+    }
+    if let Some(s) = self.get(charstr!(SymbolURI)) {
+      let Some(m) = self.get(charstr!(ModuleURI)) else {
+        return None
+      };
+      return if self.get(charstr!(DocumentURI)).is_none() && 
+      self.get(charstr!(DocumentElementURI)).is_none() {
+        Some(URIComponents::SymComps { 
+          a, 
+          p: self.get(charstr!(PathURI)).map(ToString::to_string), 
+          m:m.to_string(), s:s.to_string() 
+        })
+      } else {None}
+    }
+    if let Some(m) = self.get(charstr!(ModuleURI)) {
+      return if self.get(charstr!(DocumentURI)).is_none() && 
+      self.get(charstr!(DocumentElementURI)).is_none() {
+        Some(URIComponents::ModComps { 
+          a, 
+          p: self.get(charstr!(PathURI)).map(ToString::to_string), 
+          m:m.to_string()
+        })
+      } else {None}
+    }
+    None
+  }
 
   #[cfg(feature="ssr")]
   fn parse(&self) -> Option<URI> {

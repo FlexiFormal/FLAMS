@@ -1,11 +1,20 @@
-use immt_ontology::{narration::exercises::{BlockFeedback, CheckedResult, ExerciseFeedback, ExerciseResponse as OrigResponse, FillinFeedback}, uris::DocumentElementURI};
+use immt_ontology::{narration::exercises::{BlockFeedback, CheckedResult, ExerciseFeedback, ExerciseResponse as OrigResponse, FillinFeedback, Solutions}, uris::DocumentElementURI};
+use immt_utils::vecmap::VecMap;
 use leptos::{context::Provider, prelude::*};
 use leptos_dyn_dom::OriginalNode;
 use serde::Serialize;
 use shtml_extraction::prelude::SHTMLElements;
 use smallvec::SmallVec;
 
+use crate::{components::documents::ForcedName, ts::{JsFun, JsOrRsF}};
+
 //use crate::ExerciseOptions;
+
+pub enum ExerciseOptions {
+  OnResponse(JsOrRsF<OrigResponse,()>),
+  WithFeedback(VecMap<DocumentElementURI,ExerciseFeedback>),
+  WithSolutions(VecMap<DocumentElementURI,Solutions>)
+}
 
 #[derive(Clone,Debug)]
 pub struct CurrentExercise {
@@ -40,53 +49,54 @@ enum ExerciseResponse {
 }
 
 pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:bool,sub_exercise:bool,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+  let uri = with_context::<ForcedName,_>(|n| n.update(uri)).unwrap_or_else(|| uri.clone());
   let ex = CurrentExercise{
     solutions:RwSignal::new(0),
-    uri:uri.clone(),
+    uri,
     responses:RwSignal::new(SmallVec::new()),
     feedback:RwSignal::new(None)
   };
   let responses = ex.responses;
-  let is_done = false /*with_context(|exopt:&ExerciseOptions| {
-    if let Some((s,r)) = exopt.responses.get(uri) {
-      if let Some(r) = s.check(r) {
-        ex.feedback.update_untracked(|v| *v = Some(r));
-      } else {
-        tracing::error!("Answer to Exercise does not match solution");
+  let is_done = with_context(|opt:&ExerciseOptions|
+    match opt { 
+      ExerciseOptions::WithFeedback(m) => {
+        if let Some(fb) = m.get(&ex.uri) {
+          ex.feedback.update_untracked(|v| *v = Some(fb.clone()));
+          leptos::either::Either::Left(true)
+        } else { leptos::either::Either::Left(false) }
       }
-      true
-    } else {false }
-  }).unwrap_or_default()*/;
-  /*let _ = Effect::new(move |_| {
-    if let Some(resp) = ex.responses.try_with(|resp| 
-      CurrentExercise::to_response(&uri, resp)
-    ) {
-      tracing::info!("Response: {}",serde_json::to_string(&resp).unwrap());
+      ExerciseOptions::OnResponse(f) =>
+        leptos::either::Either::Right(f.clone()),
+      ExerciseOptions::WithSolutions(_) => leptos::either::Either::Left(false)
     }
-  });*/
+  ).unwrap_or(leptos::either::Either::Left(false));
+  let uri = ex.uri.clone();
   view!{
     <Provider value=ex>
       <div style="border-left:3px solid red;margin-top:5px;margin-bottom:5px;padding-left:5px;margin-left:-8px">
         <b>"Exercise"</b>
         {//<form>{
           let r = children();
-          if is_done || responses.get_untracked().is_empty() {
-            leptos::either::Either::Left(r)
-          } else {
-            leptos::either::Either::Right(view!{
+          match is_done {
+            leptos::either::Either::Left(true) =>
+              leptos::either::Either::Left(r),
+            leptos::either::Either::Right(f) => {
+              let _ = Effect::new(move |_| {
+                if let Some(resp) = responses.try_with(|resp| 
+                  CurrentExercise::to_response(&uri, resp)
+                ) {
+                  f.apply(&resp);
+                }
+              });
+              leptos::either::Either::Left(r)
+            }
+            _ if responses.get_untracked().is_empty() =>
+              leptos::either::Either::Left(r),
+            _ => leptos::either::Either::Right(view!{
               {r}
               {submit_answer()}
             })
           }
-          /* responses.with_untracked(|resp| {
-            let r = CurrentExercise::to_response(&uricl, resp);
-            let Ok(j) = serde_json::to_string(&r) else {unreachable!()};
-            if r.responses.is_empty() {
-              tracing::info!("No response :(");
-            } else {
-              tracing::info!("Has response: {j}");
-            }
-          });*/
         }//</form>
       </div>
     </Provider>
@@ -100,25 +110,44 @@ fn submit_answer() -> impl IntoView {
     let responses = current.responses;
     let feedback = current.feedback;
     move || if feedback.with(Option::is_none) {
-      let uri = uri.clone();
-      let act = Action::new(move |()| {let uri = uri.clone(); async move {
-        match crate::remote::server_config.solution(uri.clone()).await {
-          Ok(r) => {
-            let resp = responses.with_untracked(|responses|
-              CurrentExercise::to_response(&uri, responses)
-            );
-            if let Some(r) = r.check(&resp) {
-              feedback.set(Some(r));
-            } else {
-              tracing::error!("Answer to Exercise does not match solution");
-            }
-          }
-          Err(s) => tracing::error!("{s}")
+      let do_solution = move |uri:&_,r:&Solutions| {
+        let resp = responses.with_untracked(|responses|
+          CurrentExercise::to_response(uri, responses)
+        );
+        if let Some(r) = r.check(&resp) {
+          feedback.set(Some(r));
+        } else {
+          tracing::error!("Answer to Exercise does not match solution");
         }
-      }});
+      };
+      let uri = uri.clone();
+      let foract = if let Some(s) = with_context(|opt:&ExerciseOptions|
+        if let ExerciseOptions::WithSolutions(m) = opt {
+          if let Some(sol) = m.get(&uri) {
+            Some(sol.clone())
+            //let sol = sol.clone();
+            //Some(leptos::either::Either::Left(move || do_solution(&sol)))
+          } else { None }
+        } else { None }
+      ).flatten() {
+        leptos::either::Either::Left(move || do_solution(&uri,&s))
+      } else {
+        leptos::either::Either::Right(
+          Action::new(move |()| {let uri = uri.clone();let do_solution = do_solution.clone(); async move {
+            match crate::remote::server_config.solution(uri.clone()).await {
+              Ok(r) => do_solution(&uri,&r),
+              Err(s) => tracing::error!("{s}")
+            }
+          }})
+        )
+      };
+      let foract = move || match &foract {
+        leptos::either::Either::Right(act) => {act.dispatch(());}
+        leptos::either::Either::Left(sol) => sol()
+      };
       Some(view!{
         <div style="margin:5px 0;"><div style="margin-left:auto;width:fit-content;">
-          <Button size=ButtonSize::Small on_click=move |_| {act.dispatch(());}>"Submit Answer"</Button>
+          <Button size=ButtonSize::Small on_click=move |_| {foract()}>"Submit Answer"</Button>
         </div></div>
       })
     } else { None }
@@ -250,7 +279,7 @@ fn multiple_choice<V:IntoView+'static>(
     move || feedback.with(|v| 
       if let Some(feedback) = v.as_ref() {
         let err = || {
-          tracing::error!("Answer to exercise does not match solution!");
+          tracing::error!("Answer to exercise does not match solution:");
           Either::C(view!(<div style="color:red;">"ERROR"</div>))
         };
         let Some(CheckedResult::MultipleChoice{selected,choices}) = feedback.data.get(block) else {return err()};

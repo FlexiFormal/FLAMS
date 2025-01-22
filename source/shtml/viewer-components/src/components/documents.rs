@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use immt_ontology::uris::DocumentURI;
+use immt_ontology::uris::{DocumentElementURI, DocumentURI, Name, NameStep};
 use super::TOCSource;
 use immt_web_utils::components::wait;
 use immt_web_utils::do_css;
@@ -15,7 +15,6 @@ pub fn DocumentFromURI(
     #[prop(optional,into)] toc:TOCSource,
     #[prop(optional)] omdoc:crate::components::omdoc::OMDocSource
 ) -> impl IntoView {
-
     wait(
         move || {
             tracing::info!("fetching {uri}");
@@ -27,6 +26,25 @@ pub fn DocumentFromURI(
             view!(<DocumentString html uri toc=toc.clone() omdoc=omdoc.clone()/>)
         }, 
         "Error loading document reference".to_string(),
+    )
+}
+
+#[component]
+pub fn FragmentFromURI(
+    uri:DocumentElementURI,
+) -> impl IntoView {
+    let uricl = uri.clone();
+    wait(
+        move || {
+            tracing::info!("fetching {uri}");
+            let fut = crate::remote::server_config.paragraph(uri.clone());
+            async move {fut.await.ok()}
+        }, 
+        move |(_,css,html)| {
+            for c in css { do_css(c); }
+            view!(<FragmentString html uri=uricl.clone()/>)
+        }, 
+        "Error loading document fragment".to_string(),
     )
 }
 
@@ -69,6 +87,39 @@ pub fn DocumentString(
         else { None }}
         <DomStringCont html cont=iterate/>
     </SHTMLDocumentSetup>}
+}
+
+#[component]
+pub fn FragmentString(
+    html:String,
+    #[prop(optional)] uri:Option<DocumentElementURI>,
+) -> impl IntoView {
+    use leptos::context::Provider;
+    let name = uri.as_ref().map(|uri| uri.name().last_name().clone());
+    let uri = uri.map_or_else(DocumentURI::no_doc,|d| d.document().clone());
+    if let Some(name) = name { leptos::either::Either::Left(
+        view!{<SHTMLDocumentSetup uri>
+            <Provider value=ForcedName(name)>
+            <DomStringCont html cont=iterate/>
+            </Provider>
+        </SHTMLDocumentSetup>}
+    )} else {
+        leptos::either::Either::Right(
+            view!{<SHTMLDocumentSetup uri>
+                <DomStringCont html cont=iterate/>
+            </SHTMLDocumentSetup>}
+        )
+    }
+}
+
+#[derive(Clone,Debug)]
+pub struct ForcedName(NameStep);
+impl ForcedName {
+    pub fn update(&self,uri:&DocumentElementURI) -> DocumentElementURI {
+        let name = uri.name().clone();
+        let doc = uri.document().clone();
+        doc & name.with_last_name(self.0.clone())
+    }
 }
 
 

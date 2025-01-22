@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
-use immt_ontology::uris::DocumentElementURI;
-use wasm_bindgen::JsValue;
+use immt_ontology::{narration::exercises::ExerciseResponse, uris::DocumentElementURI};
+use wasm_bindgen::{prelude::wasm_bindgen,convert::{FromWasmAbi, IntoWasmAbi}, JsValue};
 use web_sys::HtmlDivElement;
 
 pub trait AsTs {
@@ -62,6 +62,12 @@ impl FromTs for HtmlDivElement {
   }
 }
 
+impl AsTs for ExerciseResponse {
+  fn as_ts(&self) -> JsValue {
+    self.clone().into()
+  }
+}
+
 impl<T:AsTs> AsTs for Option<T> {
   #[inline]
   fn as_ts(&self) -> JsValue {
@@ -115,7 +121,7 @@ impl<T1:AsTs,T2:AsTs,T3:AsTs> JsFunArgable for (T1,T2,T3) {
 
 pub struct JsFun<Args:JsFunArgable,R:FromTs> {
   pub js:send_wrapper::SendWrapper<web_sys::js_sys::Function>,
-  ret:PhantomData<send_wrapper::SendWrapper<(Args,R)>>
+  pub ret:PhantomData<send_wrapper::SendWrapper<(Args,R)>>
 }
 // unsafe impl<Args:JsFunArgable,R:Tsable> Send for JsFun<Args,R> {}
 
@@ -206,6 +212,8 @@ pub trait NamedJsFunction {
   fn get(self) -> Self::Base;
 }
 
+pub use send_wrapper::SendWrapper as SendWrapperReexported;
+
 #[macro_export]
 macro_rules! ts_function {
   ($name:ident @ $ts_type:literal = $args:ty => $ret:ty) => {
@@ -213,7 +221,7 @@ macro_rules! ts_function {
       #[cfg(feature="ts")]
       #[::wasm_bindgen::prelude::wasm_bindgen]
       extern "C" {
-        #[::wasm_bindgen::prelude::wasm_bindgen(extends = ::web_sys::js_sys::Function)]
+        #[::wasm_bindgen::prelude::wasm_bindgen(extends = ::leptos::web_sys::js_sys::Function)]
         #[::wasm_bindgen::prelude::wasm_bindgen(typescript_type = $ts_type)]
         pub type $name;
       }
@@ -226,12 +234,12 @@ macro_rules! ts_function {
     impl $crate::ts::NamedJsFunction for $name {
       type Args = $args;
       type R = $ret;
-      type Base = JsFun<$args,$ret>;
+      type Base = $crate::ts::JsFun<$args,$ret>;
       #[cfg(feature="ts")]
       fn get(self) -> Self::Base {
-        JsFun {
-          js:send_wrapper::SendWrapper::new(self.into()),
-          ret:PhantomData
+        $crate::ts::JsFun {
+          js: $crate::ts::SendWrapperReexported::new(self.into()),
+          ret: ::std::marker::PhantomData
         }
       }
     }
@@ -239,7 +247,58 @@ macro_rules! ts_function {
   };
 }
 
-pub type TsCont = JsOrRsF<HtmlDivElement,()>;
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct LeptosContext(std::cell::RefCell<Option<leptos::prelude::Owner>>);
+impl LeptosContext {
+  pub fn with<R>(&self,f:impl FnOnce() -> R) -> R {
+    self.0.borrow().as_ref().expect("Leptos context cleaned up already!").with(f)
+  } 
+}
+
+#[wasm_bindgen]
+impl LeptosContext {
+  /// Cleans up the reactive system.
+  /// Not calling this is a memory leak
+  pub fn cleanup(&self) {
+    if let Some(mount) = self.0.borrow_mut().take() {
+      mount.cleanup();
+      drop(mount);
+    }
+  }
+}
+
+impl From<leptos::prelude::Owner> for LeptosContext {
+  #[inline]
+  fn from(value: leptos::prelude::Owner) -> Self {
+      Self(std::cell::RefCell::new(Some(value)))
+  }
+}
+
+impl AsTs for LeptosContext {
+  #[inline]
+  fn as_ts(&self) -> JsValue {
+      JsValue::from(self.clone())
+  }
+}
+ 
+#[wasm_bindgen(typescript_custom_section)]
+const TS_CONT_FUN: &'static str = r#"export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;"#;
+
+pub type TsCont = JsOrRsF<(HtmlDivElement,LeptosContext),()>;
+
+ts_function!{
+  TsTopCont @ "LeptosContinuation"
+  = (HtmlDivElement,LeptosContext) => ()
+}
+
+impl TsTopCont {
+  #[inline]
+  #[cfg(feature="ts")]
+  pub fn to_cont(self) -> TsCont {
+    JsOrRsF::Js(self.get())
+  }
+}
 
 impl TsCont {
   pub fn view(self) -> impl leptos::prelude::IntoView {
@@ -247,7 +306,8 @@ impl TsCont {
     let ret = NodeRef::new();
     let _f = Effect::new(move || 
       if let Some(e) = ret.get() {
-        if let Err(e) = self.apply(&e) {
+        let owner = leptos::prelude::Owner::current().expect("Not in a leptos reactive context!");
+        if let Err(e) = self.apply(&(e,owner.into())) {
           tracing::error!("Error calling continuation: {e}");
         }
       }
@@ -267,6 +327,6 @@ impl TsCont {
 }
 
 ts_function!{
-  SectionContinuation @ "(uri: string) => ( ((HTMLDivElement) => void) | undefined )"
+  SectionContinuation @ "(uri: string) => (LeptosContinuation | undefined)"
   = DocumentElementURI => Option<TsCont>
 }

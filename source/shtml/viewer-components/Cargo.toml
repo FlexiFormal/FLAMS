@@ -8,7 +8,7 @@ workspace = true
 
 [features]
 omdoc = ["dep:gloo-storage"]
-ts = ["dep:tsify-next","immt-utils/wasm"]
+ts = ["dep:tsify-next"]
 rdf = ["immt-ontology/rdf","shtml-extraction/rdf"]
 csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
 hydrate= ["omdoc","leptos-dyn-dom/hydrate","leptos/hydrate","immt-web-utils/hydrate"]
@@ -19,10 +19,10 @@ leptos-dyn-dom = {workspace=true}
 leptos = {workspace=true}
 thaw = {workspace=true}
 shtml-extraction = {workspace=true}
-immt-ontology = {workspace=true,features=["serde"]}
+immt-ontology = {workspace=true,features=["wasm"]}
 immt-system = {workspace=true, optional=true}
 tokio = {workspace = true,optional=true}
-immt-utils = {workspace=true}
+immt-utils = {workspace=true,features=["wasm"]}
 smallvec = {workspace=true}
 tracing = {workspace=true}
 lazy_static = {workspace=true}

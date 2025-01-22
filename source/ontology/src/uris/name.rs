@@ -71,6 +71,17 @@ impl Name {
     pub fn last_name(&self) -> &NameStep {
         self.0.last().unwrap_or_else(|| unreachable!())
     }
+
+    #[must_use]
+    pub fn with_last_name(mut self,s:NameStep) -> Name {
+        if self.0.len() == 1 {
+            Self(smallvec::smallvec![s])
+        } else {
+            self.0.pop();
+            self.0.push(s);
+            self
+        }
+    }
     #[inline]
     #[must_use]
     pub fn first_name(&self) -> &NameStep {

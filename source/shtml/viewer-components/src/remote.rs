@@ -252,7 +252,7 @@ pub struct ServerConfig {
     #[cfg(feature="csr")]
     pub server_url:immt_utils::parking_lot::Mutex<String>,
     get_full_doc:Cache<DocURIArgs,(DocumentURI,Vec<CSS>,String)>,
-    get_fragment:Cache<URIArgs,(Vec<CSS>,String)>,
+    get_fragment:Cache<URIArgs,(URI,Vec<CSS>,String)>,
     #[cfg(feature="omdoc")]
     get_omdoc:Cache<URIArgs,(Vec<CSS>,AnySpec)>,
     get_toc:Cache<DocURIArgs,(Vec<CSS>,Vec<TOCElem>)>,
@@ -274,14 +274,14 @@ impl ServerConfig {
     /// #### Errors
     /// #### Panics
     #[inline]
-    pub async fn inputref(&self,doc:DocumentURI) -> Result<(Vec<CSS>,String),String> {
+    pub async fn inputref(&self,doc:DocumentURI) -> Result<(URI,Vec<CSS>,String),String> {
         self.get_fragment.call(URI::Narrative(doc.into()),()).await
     }
 
     /// #### Errors
     /// #### Panics
     #[inline]
-    pub async fn paragraph(&self,doc:DocumentElementURI) -> Result<(Vec<CSS>,String),String> {
+    pub async fn paragraph(&self,doc:DocumentElementURI) -> Result<(URI,Vec<CSS>,String),String> {
         self.get_fragment.call(URI::Narrative(doc.into()),()).await
     }
 
@@ -289,7 +289,7 @@ impl ServerConfig {
     /// #### Panics
     #[inline]
     pub async fn definition(&self,uri:SymbolURI) -> Result<(Vec<CSS>,String),String> {
-        self.get_fragment.call(URI::Content(uri.into()),()).await
+        self.get_fragment.call(URI::Content(uri.into()),()).await.map(|(_,a,b)| (a,b))
     }
 
     /// #### Errors
@@ -431,7 +431,7 @@ impl ServerConfig {
 
     #[cfg(any(feature="hydrate",feature="ssr"))]
     pub fn initialize(
-      inputref:server_fun!(@URI => (Vec<CSS>,String)),
+      fragment:server_fun!(@URI => (URI,Vec<CSS>,String)),
       full_doc:server_fun!(@DOCURI => (DocumentURI,Vec<CSS>,String)),
       toc:server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>)),
       omdoc:server_fun!(@URI => (Vec<CSS>,AnySpec)),
@@ -439,7 +439,7 @@ impl ServerConfig {
       notations:server_fun!(@URI => Vec<(DocumentElementURI,immt_ontology::narration::notations::Notation)>),
       solutions:server_fun!(@URI => immt_ontology::narration::exercises::Solutions),
     ) {
-      let _ = server_config.get_fragment.getter.set(inputref);
+      let _ = server_config.get_fragment.getter.set(fragment);
       let _ = server_config.get_omdoc.getter.set(omdoc);
       let _ = server_config.get_full_doc.getter.set(full_doc);
       let _ = server_config.get_toc.getter.set(toc);

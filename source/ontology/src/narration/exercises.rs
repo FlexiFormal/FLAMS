@@ -26,9 +26,38 @@ pub struct Exercise<State:CheckingState> {
     pub objectives: State::Seq<(CognitiveDimension, SymbolURI)>,
 }
 
+#[allow(clippy::unsafe_derive_deserialize)]
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
-pub struct Solutions(pub Box<[SolutionData]>);
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
+pub struct Solutions(
+    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
+    pub Box<[SolutionData]>
+);
+
+#[cfg(feature="wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
+impl Solutions{
+    #[inline]
+    #[must_use]
+    pub fn from_json(json:&str) -> Option<Self> {
+        serde_json::from_str(json).ok()
+    }
+    #[inline]
+    #[must_use]
+    pub fn to_json(&self) -> Option<String> {
+        serde_json::to_string(self).ok()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn check_response(&self,response:&ExerciseResponse) -> Option<ExerciseFeedback> {
+        self.check(response)
+    }
+}
+
 impl crate::Resourcable for Solutions {}
 impl Solutions {
     #[must_use]
@@ -82,7 +111,7 @@ impl Solutions {
                     let mut options = SmallVec::new();
                     for (i,o) in f.opts.iter().enumerate() {
                         match o {
-                            FillInSolOption::Exact { string, verdict, feedback } => {
+                            FillInSolOption::Exact { value: string, verdict, feedback } => {
                                 if fill_correct.is_none() && &**string == s.as_str() {
                                     fill_correct = Some(*verdict);
                                     matching = Some(i);
@@ -154,6 +183,8 @@ crate::serde_impl!{
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum SolutionData {
     Solution{
         html:Box<str>,
@@ -165,6 +196,8 @@ pub enum SolutionData {
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct ChoiceBlock { 
     pub multiple:bool,
     pub inline:bool,
@@ -175,6 +208,8 @@ pub struct ChoiceBlock {
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Choice {
     pub correct:bool,
     pub verdict:Box<str>,
@@ -183,13 +218,20 @@ pub struct Choice {
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct FillInSol {
     pub width:Option<f32>,
     pub opts: Vec<FillInSolOption>
 }
 
 #[derive(Debug,Clone)]
-pub struct FillinRegex(regex::Regex);
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct FillinRegex(
+    //#[cfg_attr(feature="wasm", tsify(type = "string"))]
+    regex::Regex
+);
 
 #[cfg(feature="serde")]
 mod regex_serde {
@@ -210,9 +252,11 @@ mod regex_serde {
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum FillInSolOption{
     Exact{
-        string:Box<str>,
+        value:Box<str>,
         verdict:bool,
         feedback:Box<str>
     },
@@ -233,7 +277,7 @@ impl FillInSolOption {
     pub fn from_values(kind:&str,value:&str,verdict:bool) -> Option<Self> {
         match kind {
             "exact" => Some(Self::Exact { 
-                string: value.to_string().into(), 
+                value: value.to_string().into(), 
                 verdict, 
                 feedback:String::new().into()
             }),
@@ -277,16 +321,41 @@ pub struct GradingNote {
 }
 impl crate::Resourcable for GradingNote {}
 
+#[allow(clippy::unsafe_derive_deserialize)]
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct ExerciseFeedback {
     pub correct:bool,
+    //#[cfg_attr(feature="wasm", tsify(type = "string[]"))]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
     pub solutions:SmallVec<Box<str>,1>,
+    //#[cfg_attr(feature="wasm", tsify(type = "CheckedResult[]"))]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
     pub data:SmallVec<CheckedResult,4>
+}
+
+#[cfg(feature="wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
+impl ExerciseFeedback {
+    #[inline]
+    #[must_use]
+    pub fn from_json(json:&str) -> Option<Self> {
+        serde_json::from_str(json).ok()
+    }
+    #[inline]
+    #[must_use]
+    pub fn to_json(&self) -> Option<String> {
+        serde_json::to_string(self).ok()
+    }
 }
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct BlockFeedback {
     pub is_correct:bool,
     pub verdict_str:String,
@@ -295,6 +364,8 @@ pub struct BlockFeedback {
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct FillinFeedback {
     pub is_correct:bool,
     pub feedback:String,
@@ -303,6 +374,8 @@ pub struct FillinFeedback {
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum FillinFeedbackKind {
     Exact(String),
     NumRange{from:f32,to:f32},
@@ -311,34 +384,52 @@ pub enum FillinFeedbackKind {
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
+//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum CheckedResult {
     SingleChoice{
         selected:u16,
+        //#[cfg_attr(feature="wasm", tsify(type = "BlockFeedback[]"))]
         choices:SmallVec<BlockFeedback,4>
     },
     MultipleChoice{
+        //#[cfg_attr(feature="wasm", tsify(type = "boolean[]"))]
         selected:SmallVec<bool,8>,
+        //#[cfg_attr(feature="wasm", tsify(type = "BlockFeedback[]"))]
         choices:SmallVec<BlockFeedback,4>
     },
     FillinSol {
         matching:Option<usize>,
         text:String,
+        //#[cfg_attr(feature="wasm", tsify(type = "FillinFeedback[]"))]
         options:SmallVec<FillinFeedback,4>
     }
 }
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+//#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct ExerciseResponse {
+    #[cfg_attr(feature="wasm", tsify(type = "string"))]
     pub uri:DocumentElementURI,
+    #[cfg_attr(feature="wasm", tsify(type = "ExerciseResponseType[]"))]
     pub responses:SmallVec<ExerciseResponseType,4>
 }
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature="serde", serde(untagged))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+/// Either a list of booleans (multiple choice), a single integer (single choice),
+/// or a string (fill-in-the-gaps)
 pub enum ExerciseResponseType {
-    MultipleChoice(SmallVec<bool,8>),
+    MultipleChoice(
+        #[cfg_attr(feature="wasm", tsify(type = "boolean[]"))]
+        SmallVec<bool,8>
+    ),
     SingleChoice(u16),
     Fillinsol(String)
 }

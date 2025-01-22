@@ -7,7 +7,7 @@ use immt_utils::{vecmap::VecSet, CSS};
 use immt_web_utils::do_css;
 use leptos::{either::Either, prelude::*};
 use leptos_router::hooks::use_query_map;
-use shtml_viewer_components::components::{documents::DocumentString, omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource};
+use shtml_viewer_components::components::{documents::{DocumentString, FragmentString, FragmentStringProps}, omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource};
 use uris::{DocURIComponents, SymURIComponents, URIComponents};
 use crate::{users::Login, utils::from_server_clone};
 
@@ -133,7 +133,7 @@ pub async fn fragment(
   e:Option<String>,
   m:Option<String>,
   s:Option<String>
-) -> Result<(Vec<CSS>, String),ServerFnError<String>> {
+) -> Result<(URI,Vec<CSS>, String),ServerFnError<String>> {
   use immt_system::backend::Backend;
   let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
     return Err("invalid uri components".to_string().into())
@@ -141,32 +141,38 @@ pub async fn fragment(
   let Some(uri) = comps.parse() else {
     return Err("invalid uri".to_string().into())
   };
-  match uri {
-    URI::Narrative(NarrativeURI::Document(uri)) => {
-      let Some((css,html)) = backend!(get_html_body!(&uri,false)) else {
+  match &uri {
+    URI::Narrative(NarrativeURI::Document(duri)) => {
+      let Some((css,html)) = backend!(get_html_body!(duri,false)) else {
         return Err("document not found".to_string().into())
       };
-      Ok((css,html))
+      Ok((uri,css,html))
     }
-    URI::Narrative(NarrativeURI::Element(uri)) => {
-      let Some(e) = backend!(get_document_element!(&uri)) else {
+    URI::Narrative(NarrativeURI::Element(euri)) => {
+      let Some(e) = backend!(get_document_element!(euri)) else {
         return Err("element not found".to_string().into())
       };
       match e.as_ref() {
         DocumentElement::Paragraph(LogicalParagraph{range,..}) |
         DocumentElement::Exercise(Exercise{range,..}) => {
-          let Some((css,html)) = backend!(get_html_fragment!(uri.document(),*range)) else {
+          let Some((css,html)) = backend!(get_html_fragment!(euri.document(),*range)) else {
             return Err("document element not found".to_string().into())
           };
-          Ok((css,html))
+          Ok((uri,css,html))
         }
+        DocumentElement::Section(immt_ontology::narration::sections::Section{range,..}) => {
+          let Some((css,html)) = backend!(get_html_fragment!(euri.document(),*range)) else {
+            return Err("document element not found".to_string().into())
+          };
+          Ok((uri,css,html))
+        },
         _ => return Err("not a paragraph".to_string().into())
       }
     }
-    URI::Content(ContentURI::Symbol(uri)) => {
-      get_definitions(uri).await.ok_or_else(||
+    URI::Content(ContentURI::Symbol(suri)) => {
+      get_definitions(suri.clone()).await.ok_or_else(||
         "No definition found".to_string().into()
-      )
+      ).map(|(a,b)| (uri,a,b))
     }
     URI::Base(_) => return Err("TODO: base".to_string().into()),
     URI::Archive(_) => return Err("TODO: archive".to_string().into()),
@@ -425,17 +431,37 @@ pub fn URITop() -> impl IntoView {
   use leptos_meta::Stylesheet;
   use uris::URIComponentsTrait;
   use shtml_viewer_components::SHTMLGlobalSetup;
+  use leptos::either::EitherOf3 as Either;
   view!{
     <Stylesheet id="leptos" href="/pkg/immt.css"/>
     <Themer><SHTMLGlobalSetup>//<Login>
       <div style="min-height:100vh;color:black;">{
         use_query_map().with_untracked(|m| m.as_doc().map_or_else(
-          || Either::Left(view!("TODO")),
-          |doc| Either::Right(view!(<Document doc/>))
+          || {
+            let Some(uri) = m.as_comps() else {
+              return Either::C(immt_web_utils::components::display_error("Invalid URI".into()));
+            };
+            Either::B(view!(<Fragment uri/>))
+          },
+          |doc| Either::A(view!(<Document doc/>))
         ))
       }</div>//</Login>
     </SHTMLGlobalSetup></Themer>
   }
+}
+
+#[component]
+pub fn Fragment(uri:URIComponents) -> impl IntoView {
+  from_server_clone(false,
+    move || uri.clone().into_args(fragment), 
+    move |(uri,css,html)| {
+      let uri = if let URI::Narrative(NarrativeURI::Element(uri)) = uri { Some(uri)} else {None};
+      view!{<div>{
+        for css in css { do_css(css); }
+        FragmentString(FragmentStringProps{html,uri})
+      }</div>}
+    }
+  )
 }
 
 #[component]

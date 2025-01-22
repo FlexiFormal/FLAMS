@@ -230,7 +230,7 @@ pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,tit
         <div style="margin-bottom:5px;"><thaw::Divider/></div>
         <div style="background-color:white;color:black;">
         {
-          crate::remote::get!(paragraph(uri.clone()) = (css,s) => {
+          crate::remote::get!(paragraph(uri.clone()) = (_,css,s) => {
             for c in css { do_css(c); }
             view!(<SHTMLString html=s/>)
           })

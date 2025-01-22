@@ -40,17 +40,17 @@ pub(super) fn inputref(uri:DocumentURI,id:&str) -> impl IntoView {
 fn do_inputref(uri:DocumentURI,on_load:RwSignal<bool>) -> impl IntoView {
   use immt_web_utils::components::wait;
   use leptos_dyn_dom::DomStringCont;
-  let uriclone = uri.clone();
+  let uricl = uri.clone();
   wait(
     move || {
       tracing::info!("Inputref fetching {uri}");
       let uri = uri.clone();
       async move {crate::remote::server_config.inputref(uri).await.ok()}
     },
-    move |(css,html)| {
+    move |(_,css,html)| {
       for c in css { do_css(c); }
       view!(<span style="display:contents">
-      <Provider value=NarrativeURI::Document(uriclone.clone())>
+      <Provider value=NarrativeURI::Document(uricl.clone())>
       <Provider value = RwSignal::new(DOMExtractor::default())>
         <DomStringCont html cont=crate::iterate on_load/>
       </Provider></Provider>

@@ -25,6 +25,7 @@ use leptos::web_sys::Element;
 use extractor::DOMExtractor;
 use crate::extractor::NodeAttrs;
 use immt_ontology::{narration::exercises::{CognitiveDimension, ExerciseResponse, Solutions}, uris::{DocumentElementURI, DocumentURI, NarrativeURI, URI}};
+pub use components::exercise::ExerciseOptions;
 
 /*
 #[derive(Debug,Clone,Default,serde::Serialize,serde::Deserialize)]

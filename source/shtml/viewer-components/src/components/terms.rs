@@ -370,7 +370,7 @@ pub fn do_onclick(uri:VarOrSym) -> impl IntoView {
           }
         }));
         uri.map(|uri| {
-          crate::remote::get!(paragraph(uri.clone()) = (css,html) => {
+          crate::remote::get!(paragraph(uri.clone()) = (_,css,html) => {
             for c in css { do_css(c); }
             view!(<div><SHTMLString html=html/></div>)
           })

@@ -26,7 +26,7 @@ pub(crate) mod fns {
     use shtml_viewer_components::components::{omdoc::AnySpec, TOCElem};
 
     fn fragment(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
-    -> Pin<Box<dyn Future<Output=Result<(Vec<CSS>,String),ServerFnError<String>>> + Send>> {
+    -> Pin<Box<dyn Future<Output=Result<(URI,Vec<CSS>,String),ServerFnError<String>>> + Send>> {
         Box::pin(crate::router::content::fragment(uri,rp,a,p,l,d,e,m,s))
     }
     fn full_doc(uri:Option<DocumentURI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>)
