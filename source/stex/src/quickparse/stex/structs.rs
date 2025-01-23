@@ -50,6 +50,16 @@ pub enum STeXToken<Pos:SourcePos> {
     children:Vec<STeXToken<Pos>>,
     smodule_range: SourceRange<Pos>
   },
+  MathStructure {
+    uri:SymbolReference<Pos>,
+    extends:Vec<(SymbolReference<Pos>,SourceRange<Pos>)>,
+    rules:ModuleRules<Pos>,
+    name_range:SourceRange<Pos>,
+    real_name_range:Option<SourceRange<Pos>>,
+    full_range: SourceRange<Pos>,
+    children:Vec<STeXToken<Pos>>,
+    mathstructure_range: SourceRange<Pos>
+  },
   #[allow(clippy::type_complexity)]
   Symdecl {
     uri:SymbolReference<Pos>,
@@ -59,6 +69,14 @@ pub enum STeXToken<Pos:SourcePos> {
     full_range: SourceRange<Pos>,
     parsed_args:Box<SymdeclArgs<Pos,STeXToken<Pos>>>,
     token_range: SourceRange<Pos>
+  },
+  Notation {
+    uri:SymbolReference<Pos>,
+    token_range: SourceRange<Pos>,
+    name_range:SourceRange<Pos>,
+    notation_args:NotationArgs<Pos,STeXToken<Pos>>,
+    notation:(SourceRange<Pos>,Vec<STeXToken<Pos>>),
+    full_range: SourceRange<Pos>,
   },
   #[allow(clippy::type_complexity)]
   Symdef {
@@ -83,12 +101,12 @@ pub enum STeXToken<Pos:SourcePos> {
     full_range: SourceRange<Pos>,
     token_range: SourceRange<Pos>,
     name_range:SourceRange<Pos>,
-    mod_:SymnameMod<Pos>
+    mode:SymnameMode<Pos>
   },
   Vec(Vec<STeXToken<Pos>>),
 }
 #[derive(Debug)]
-pub enum SymnameMod<Pos:SourcePos> {
+pub enum SymnameMode<Pos:SourcePos> {
   Cap {
     post:Option<(SourceRange<Pos>,SourceRange<Pos>,String)>,
   },
@@ -175,7 +193,8 @@ impl STeXModuleStore for () {
 #[derive(Debug)]
 pub enum ModuleRule<Pos:SourcePos> {
   Import(ModuleReference),
-  Symbol(SymbolRule<Pos>)
+  Symbol(SymbolRule<Pos>),
+  Structure(SymbolRule<Pos>,Vec<ModuleRule<Pos>>)
 }
 
 #[derive(Debug,Clone)]
@@ -246,7 +265,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
         ModuleRule::Import(m) => if let Some(rls) = f(m) {
           Self::load_rules(m.clone(),rls.clone(),prev,current,changes,semantic_rules,f);
         },
-        ModuleRule::Symbol(rule) => {
+        ModuleRule::Symbol(rule) | ModuleRule::Structure(rule,_) => {
           //symbols.push(rule.clone());
           if let Some((name,rule)) = rule.as_rule() {
             let old = current.insert(
@@ -439,11 +458,65 @@ impl<'a,Pos:SourcePos,MS:STeXModuleStore> STeXParseState<'a,Pos,MS> {
     Self { archive, in_path:in_path.map(Into::into), doc_uri:uri, language, backend, modules:SmallVec::new(), module_store: on_module }
   }
 
-  pub fn add_rule<Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel)>(&mut self,f:impl FnOnce(&ModuleURI) -> SymbolRule<Pos>,groups:Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>,range:SourceRange<Pos>) -> Option<SymbolReference<Pos>> {
+
+  pub fn add_structure<Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel)>(&mut self,
+    groups:&mut Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>,
+    name:Name,
+    macroname:Option<std::sync::Arc<str>>,
+    range:SourceRange<Pos>,
+  ) -> Option<SymbolReference<Pos>> {
     for g in groups.groups.iter_mut().rev() {
       match &mut g.kind {
         GroupKind::Module { uri, rules,.. } => {
-          let rule = f(uri);
+          let suri = uri.clone() | name;
+          let uri = SymbolReference {
+            uri:suri,filepath:self.in_path.clone(),range
+          };
+          let rule = SymbolRule {
+            uri,macroname,has_tp:false,has_df:false,argnum:0
+          };
+          if MS::FULL {
+            if let Some((name,rule)) = rule.as_rule() {
+              let old = groups.rules.insert(
+                name.clone(),rule
+              );
+              if let Entry::Vacant(e) = g.inner.macro_rule_changes.entry(name) {
+                e.insert(old);
+              }
+            }
+          }
+          g.semantic_rules.push(either::Either::Left(rule.clone()));
+          let uri = rule.uri.clone();
+          rules.push(ModuleRule::Structure(rule,Vec::new()));
+          return Some(uri)
+        }
+        _ => ()
+      }
+    }
+    groups.tokenizer.problem(range.start, "mathstructure is only allowed in a module".to_string(),DiagnosticLevel::Error);
+    None
+  }
+
+  pub fn add_symbol<Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel)>(&mut self,
+    groups:&mut Groups<'a,'_,ParseStr<'a,Pos>,STeXToken<Pos>,Err,Self>,
+    name:Name,
+    macroname:Option<std::sync::Arc<str>>,
+    range:SourceRange<Pos>,
+    has_tp:bool,
+    has_df:bool,
+    argnum:u8
+  ) -> Option<SymbolReference<Pos>> {
+    for g in groups.groups.iter_mut().rev() {
+      match &mut g.kind {
+        GroupKind::Module { uri, rules,.. } |
+        GroupKind::MathStructure { uri, rules } => {
+          let suri = uri.clone() | name;
+          let uri = SymbolReference {
+            uri:suri,filepath:self.in_path.clone(),range
+          };
+          let rule = SymbolRule {
+            uri,macroname,has_tp,has_df,argnum
+          };
           if MS::FULL {
             if let Some((name,rule)) = rule.as_rule() {
               let old = groups.rules.insert(
@@ -584,6 +657,10 @@ pub enum GroupKind<Pos:SourcePos> {
   #[default]
   None,
   Module{
+    uri:ModuleURI,
+    rules: Vec<ModuleRule<Pos>>
+  },
+  MathStructure{
     uri:ModuleURI,
     rules: Vec<ModuleRule<Pos>>
   }

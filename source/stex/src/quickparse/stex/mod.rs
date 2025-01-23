@@ -9,7 +9,7 @@ use immt_system::backend::AnyBackend;
 use immt_utils::{parsing::ParseStr, prelude::{TreeChild, TreeChildIter, TreeLike}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::VecSet};
 use rules::{NotationArgs, SymdeclArgs};
 use smallvec::SmallVec;
-use structs::{ModuleReference, ModuleRules, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMod};
+use structs::{ModuleReference, ModuleRules, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode};
 
 use super::latex::LaTeXParser;
 
@@ -47,6 +47,15 @@ pub enum STeXAnnot {
     full_range: SourceRange<LSPLineCol>,
     smodule_range:SourceRange<LSPLineCol>,
     children:Vec<Self>
+  },
+  MathStructure {
+    uri:SymbolReference<LSPLineCol>,
+    extends:Vec<(SymbolReference<LSPLineCol>,SourceRange<LSPLineCol>)>,
+    name_range:SourceRange<LSPLineCol>,
+    real_name_range:Option<SourceRange<LSPLineCol>>,
+    full_range: SourceRange<LSPLineCol>,
+    children:Vec<Self>,
+    mathstructure_range: SourceRange<LSPLineCol>
   },
   SemanticMacro {
     uri:SymbolReference<LSPLineCol>,
@@ -91,6 +100,14 @@ pub enum STeXAnnot {
     token_range: SourceRange<LSPLineCol>,
     full_range: SourceRange<LSPLineCol>
   },
+  Notation {
+    uri:SymbolReference<LSPLineCol>,
+    token_range: SourceRange<LSPLineCol>,
+    name_range:SourceRange<LSPLineCol>,
+    notation_args:NotationArgs<LSPLineCol,Self>,
+    notation:(SourceRange<LSPLineCol>,Vec<Self>),
+    full_range: SourceRange<LSPLineCol>,
+  },
   #[allow(clippy::type_complexity)]
   Symdef {
     uri:SymbolReference<LSPLineCol>,
@@ -108,7 +125,7 @@ pub enum STeXAnnot {
     full_range: SourceRange<LSPLineCol>,
     token_range: SourceRange<LSPLineCol>,
     name_range: SourceRange<LSPLineCol>,
-    mod_:SymnameMod<LSPLineCol>
+    mod_:SymnameMode<LSPLineCol>
   }
 }
 impl STeXAnnot {
@@ -119,6 +136,9 @@ impl STeXAnnot {
         STeXToken::Module { uri, name_range, sig, meta_theory, full_range, smodule_range, children,rules } => {
           if let Some(ref mut m) = modules { m.push((uri.clone(),rules)) };
           v.push(STeXAnnot::Module { uri, name_range, sig, meta_theory, full_range, smodule_range, children:Self::from_tokens(children,None) });
+        }
+        STeXToken::MathStructure { uri, extends, name_range, real_name_range, full_range, children, mathstructure_range,.. } => {
+          v.push(STeXAnnot::MathStructure { uri, extends, name_range, real_name_range, full_range, children:Self::from_tokens(children,None),mathstructure_range });
         }
         STeXToken::SemanticMacro { uri, argnum, token_range, full_range } => 
           v.push(STeXAnnot::SemanticMacro { uri, argnum, token_range, full_range }),
@@ -134,13 +154,18 @@ impl STeXAnnot {
           v.push(STeXAnnot::Symdecl { uri, macroname, main_name_range, name_ranges, token_range, full_range, 
             parsed_args:Box::new(parsed_args.into_other(|v| Self::from_tokens(v,if let Some(m) = modules.as_mut() { Some(*m) } else { None } )))
           }),
+        STeXToken::Notation { uri, token_range, name_range, notation_args, notation, full_range } =>
+          v.push(STeXAnnot::Notation { uri,token_range,name_range,full_range,
+            notation_args:notation_args.into_other(|v| Self::from_tokens(v,if let Some(m) = modules.as_mut() { Some(*m) } else { None } )),
+            notation:(notation.0,Self::from_tokens(notation.1,None))
+          }),
         STeXToken::Symdef { uri, macroname, main_name_range, name_ranges, token_range, full_range, parsed_args, notation_args, notation } =>
         v.push(STeXAnnot::Symdef { uri, macroname, main_name_range, name_ranges, token_range, full_range, 
           parsed_args:Box::new(parsed_args.into_other(|v| Self::from_tokens(v,if let Some(m) = modules.as_mut() { Some(*m) } else { None } ))),
           notation_args:notation_args.into_other(|v| Self::from_tokens(v,if let Some(m) = modules.as_mut() { Some(*m) } else { None } )),
           notation:(notation.0,Self::from_tokens(notation.1,None))
         }),
-        STeXToken::SymName { uri, full_range, token_range, name_range, mod_ } =>
+        STeXToken::SymName { uri, full_range, token_range, name_range, mode: mod_ } =>
           v.push(STeXAnnot::SymName { uri, full_range, token_range, name_range, mod_ }),
         STeXToken::Vec(vi) => v.extend(Self::from_tokens(vi,if let Some(m) = modules.as_mut() { Some(*m) } else { None } )),
       }
@@ -152,13 +177,15 @@ impl STeXAnnot {
   pub const fn range(&self) -> SourceRange<LSPLineCol> {
     match self {
       Self::Module { full_range, .. } |
+      Self::MathStructure { full_range,.. } |
       Self::SemanticMacro { full_range, .. } |
       Self::ImportModule { full_range, .. } |
       Self::UseModule { full_range, .. } |
       Self::SetMetatheory { full_range, .. } |
       Self::Symdecl { full_range, .. } |
       Self::Symdef  { full_range, .. } |
-      Self::SymName { full_range, .. } => *full_range,
+      Self::SymName { full_range, .. } |
+      Self::Notation { full_range,.. } => *full_range,
       Self::Inputref { range, .. } => *range,
     }
   }

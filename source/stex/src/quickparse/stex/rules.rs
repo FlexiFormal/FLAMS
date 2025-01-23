@@ -24,7 +24,7 @@ pub fn all_rules<'a,
   STeXToken<LSPLineCol>,
   Err,
   STeXParseState<'a,LSPLineCol,MS>,
->);17] {[
+>);18] {[
   ("importmodule",importmodule as _),
   ("setmetatheory",setmetatheory as _),
   ("usemodule",usemodule as _),
@@ -42,6 +42,7 @@ pub fn all_rules<'a,
   ("sns",symnames as _),
   ("Symnames",Symnames as _),
   ("Sns",Symnames as _),
+  ("notation",notation as _)
 ]}
 
 #[must_use]
@@ -75,14 +76,17 @@ pub fn all_env_rules<'a,
     STeXToken<LSPLineCol>,
     Err,
     STeXParseState<'a,LSPLineCol,MS>
->);1] {[
-  ("smodule",(smodule_open as _, smodule_close as _))
+>);2] {[
+  ("smodule",(smodule_open as _, smodule_close as _)),
+  ("mathstructure",(mathstructure_open as _,mathstructure_close as _))
 ]}
 
 #[must_use]
 #[allow(clippy::type_complexity)]
-pub fn declarative_env_rules<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>() -> [(&'static str,EnvironmentRule<'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,STeXParseState<'a,LSPLineCol,MS>>);1] {[
-  ("smodule",(smodule_open as _, smodule_close as _))
+pub fn declarative_env_rules<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>() -> [(&'static str,EnvironmentRule<'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,STeXParseState<'a,LSPLineCol,MS>>);
+  2] {[
+  ("smodule",(smodule_open as _, smodule_close as _)),
+  ("mathstructure",(mathstructure_open as _,mathstructure_close as _))
 ]}
 
 macro_rules! stex {
@@ -201,18 +205,6 @@ stex!(p => inputref('*'?_s)[archive:str]{filepath:name} => {
     }
 );
 
-fn get_module<'a,'b,
-  Pos:SourcePos+'a,
-  MS:STeXModuleStore,
-  Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel)
->(p:&'b mut LaTeXParser<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>>)
-  -> Option<(&'b ModuleURI,&'b mut Vec<ModuleRule<Pos>>)> {
-    p.groups.iter_mut().rev().find_map(|g| match &mut g.kind {
-      GroupKind::Module { uri, rules } => Some((&*uri,rules)),
-      GroupKind::None => None
-  })
-}
-
 fn strip_comments(s:&str) -> Cow<'_,str> {
   if let Some(i) = s.find('%') {
     let rest = &s[i..];
@@ -317,7 +309,7 @@ stex!(p => symdecl('*'?star){name:name}[mut args:Map] => {
     for (k,v) in args.inner.iter() {
       p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
     }
-    let (state,groups) = p.split();
+    let (state,mut groups) = p.split();
     let Ok(fname) : Result<Name,_> = name.1.parse() else {
       p.tokenizer.problem(name.2.start, format!("Invalid uri segment {}",name.1),DiagnosticLevel::Error);
       return MacroResult::Simple(symdecl)
@@ -326,17 +318,11 @@ stex!(p => symdecl('*'?star){name:name}[mut args:Map] => {
     let has_tp = parsed_args.tp.is_some();
     let mn = macroname.as_ref();
     let filepath = state.in_path.clone();
-    if let Some(uri) = state.add_rule(move |m| {
-      let uri = m.clone() | fname;
-      let uri = SymbolReference {
-        uri,filepath,
-        range:symdecl.range
-      };
-      SymbolRule {
-        uri,macroname:mn.map(|s| s.clone().into()),
-        has_df,has_tp,argnum:parsed_args.args.as_ref().map(|(a,_,_)| *a).unwrap_or_default()
-      }
-    },groups,symdecl.range) {
+    if let Some(uri) = state.add_symbol(&mut groups,fname,
+      mn.map(|s| s.clone().into()),
+      symdecl.range,has_tp,has_df,
+      parsed_args.args.as_ref().map(|(a,_,_)| *a).unwrap_or_default()
+    ) {
       let name_ranges = name.0.map(|r| (r,name.2));
       MacroResult::Success(STeXToken::Symdecl { 
         uri, macroname, main_name_range, name_ranges,
@@ -381,6 +367,25 @@ fn notation_args<'a,Pos:SourcePos>(args:&mut OptMap<'a,Pos,&'a str,STeXToken<Pos
   ret
 }
 
+stex!(LSP: p => notation('*'?star){name:name}[mut args:Map]{not:M} => {
+  let notation_args = notation_args(&mut args,|a,b| p.tokenizer.problem(a,b,DiagnosticLevel::Error));
+  for (k,v) in args.inner.iter() {
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+  }
+  let (state,groups) = p.split();
+  let Some(s) = state.get_symbol(groups,name.0) else {
+    p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(notation);
+  };
+  MacroResult::Success(STeXToken::Notation {
+    uri:s,
+    token_range:notation.token_range,
+    name_range:name.1,
+    notation_args,
+    notation:not,
+    full_range:notation.range
+  })
+});
 
 stex!(p => symdef{name:name}[mut args:Map]{notation:M} => {
   let macroname = Some(name.0.to_string());
@@ -396,7 +401,7 @@ stex!(p => symdef{name:name}[mut args:Map]{notation:M} => {
   for (k,v) in args.inner.iter() {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
   }
-  let (state,groups) = p.split();
+  let (state,mut groups) = p.split();
   let Ok(fname) : Result<Name,_> = name.1.parse() else {
     p.tokenizer.problem(name.2.start, format!("Invalid uri segment {}",name.1),DiagnosticLevel::Error);
     return MacroResult::Simple(symdef)
@@ -405,17 +410,11 @@ stex!(p => symdef{name:name}[mut args:Map]{notation:M} => {
   let has_tp = parsed_args.tp.is_some();
   let mn = macroname.as_ref();
   let filepath = state.in_path.clone();
-  if let Some(uri) = state.add_rule(move |m| {
-    let uri = m.clone() | fname;
-    let uri = SymbolReference {
-      uri,filepath,
-      range:symdef.range
-    };
-    SymbolRule {
-      uri,macroname:mn.map(|s| s.clone().into()),
-      has_df,has_tp,argnum:parsed_args.args.as_ref().map(|(a,_,_)| *a).unwrap_or_default()
-    }
-  },groups,symdef.range) {
+  if let Some(uri) = state.add_symbol(&mut groups,fname,
+    mn.map(|s| s.clone().into()),
+    symdef.range,has_tp,has_df,
+    parsed_args.args.as_ref().map(|(a,_,_)| *a).unwrap_or_default()
+  ) {
     let name_ranges = name.0.map(|r| (r,name.2));
     MacroResult::Success(STeXToken::Symdef { 
       uri, macroname, main_name_range, name_ranges,
@@ -448,7 +447,7 @@ stex!(LSP: p => symname[mut args:Map]{name:name} => {
   MacroResult::Success(STeXToken::SymName { 
     uri:s, full_range: symname.range, token_range: symname.token_range,
     name_range: name.1, 
-    mod_: super::structs::SymnameMod::PrePost{ pre, post }
+    mode: super::structs::SymnameMode::PrePost{ pre, post }
   })
 });
 
@@ -467,7 +466,7 @@ stex!(LSP: p => Symname[mut args:Map]{name:name} => {
   MacroResult::Success(STeXToken::SymName { 
     uri:s, full_range: Symname.range, token_range: Symname.token_range,
     name_range: name.1, 
-    mod_: super::structs::SymnameMod::Cap{ post }
+    mode: super::structs::SymnameMode::Cap{ post }
   })
 });
 
@@ -486,7 +485,7 @@ stex!(LSP: p => symnames[mut args:Map]{name:name} => {
   MacroResult::Success(STeXToken::SymName { 
     uri:s, full_range: symnames.range, token_range: symnames.token_range,
     name_range: name.1, 
-    mod_: super::structs::SymnameMod::PostS{ pre }
+    mode: super::structs::SymnameMode::PostS{ pre }
   })
 });
 
@@ -499,7 +498,7 @@ stex!(LSP: p => Symnames{name:name} => {
   MacroResult::Success(STeXToken::SymName { 
     uri:s, full_range: Symnames.range, token_range: Symnames.token_range,
     name_range: name.1, 
-    mod_: super::structs::SymnameMod::CapAndPostS
+    mode: super::structs::SymnameMode::CapAndPostS
   })
 });
 
@@ -510,6 +509,18 @@ lazy_static::lazy_static! {
     GlobalBackend::get().with_local_archive(immt_ontology::metatheory::URI.archive_id(), |a|
     a.map(|a| a.source_dir().join("Metatheory.en.tex").into())
   );
+}
+
+fn get_module<'a,'b,
+  Pos:SourcePos+'a,
+  MS:STeXModuleStore,
+  Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel)
+>(p:&'b mut LaTeXParser<'a,ParseStr<'a,Pos>,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>>)
+  -> Option<(&'b ModuleURI,&'b mut Vec<ModuleRule<Pos>>)> {
+    p.groups.iter_mut().rev().find_map(|g| match &mut g.kind {
+      GroupKind::Module { uri, rules } => Some((&*uri,rules)),
+      _ => None
+  })
 }
 
 stex!(p => @begin{smodule}([opt]{name:name}){
@@ -565,6 +576,58 @@ stex!(p => @begin{smodule}([opt]{name:name}){
       }
     }
 );
+
+
+stex!(p => @begin{mathstructure}({name:name}[real_name:str]){
+  let name_range = name.1;
+  let macroname = name.0;
+  let (name,real_name_range) = if let Some((n,r)) = real_name {
+    (n.to_string(),Some(r))
+  } else {
+    (name.0.to_string(),None)
+  };
+
+  let Ok(fname) : Result<Name,_> = name.parse() else {
+    p.tokenizer.problem(name_range.start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
+    return
+  };
+  let (state,mut groups) = p.split();
+  let filepath = state.in_path.clone();
+  let Some(uri) = state.add_structure(
+    &mut groups,fname,Some(macroname.clone().into()),mathstructure.begin.range
+  ) else {return};
+
+  groups.groups.last_mut().unwrap_or_else(|| unreachable!()).kind = GroupKind::MathStructure{
+    uri:uri.uri.clone().into_module(),rules:Vec::new()
+  };
+
+  mathstructure.children.push(STeXToken::MathStructure { 
+    uri, name_range,
+    real_name_range,
+    mathstructure_range: mathstructure.name_range,
+    full_range: mathstructure.begin.range,
+    rules: ModuleRules::default(),
+    extends: Vec::new(),
+    children: Vec::new() 
+  })
+}{
+  match mathstructure.children.first() {
+    Some(STeXToken::MathStructure { .. }) => {
+      let mut ch = mathstructure.children.drain(..);
+      let Some(STeXToken::MathStructure { uri,real_name_range, extends, rules, name_range, mut full_range, mut children, mathstructure_range }) = ch.next() else{
+        unreachable!()
+      };
+      children.extend(ch);
+      if let Some(end) = mathstructure.end {
+        full_range.end = end.range.end;
+      }
+      EnvironmentResult::Success(STeXToken::MathStructure {
+        uri,extends,rules,name_range,full_range,real_name_range,children,mathstructure_range
+      })
+    }
+    _ => EnvironmentResult::Simple(mathstructure)
+  }
+});
 
 stex!(p => @begin{smodule_deps}([opt]{name:name}){
       let opt = opt.as_keyvals();

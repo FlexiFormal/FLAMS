@@ -1,7 +1,7 @@
 use crate::{state::LSPState, IsLSPRange, LSPStore, ProgressCallbackClient};
 use async_lsp::lsp_types as lsp;
 use immt_ontology::uris::{ArchiveId, ArchiveURI, ArchiveURITrait};
-use immt_stex::quickparse::stex::{structs::SymnameMod, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI};
+use immt_stex::quickparse::stex::{structs::SymnameMode, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI};
 use smallvec::SmallVec;
 use futures::FutureExt;
 use crate::capabilities::STeXSemanticTokens;
@@ -29,6 +29,17 @@ impl AnnotExt for STeXAnnot {
             Self::Module { uri, full_range, name_range, children,.. } =>
                 Some((lsp::DocumentSymbol {
                     name: uri.to_string(),
+                    detail:None,
+                    kind:lsp::SymbolKind::MODULE,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:name_range.into_range(),
+                    children:None
+                },&children)),
+            Self::MathStructure { uri, name_range, full_range, children,.. } =>
+                Some((lsp::DocumentSymbol {
+                    name: uri.uri.to_string(),
                     detail:None,
                     kind:lsp::SymbolKind::MODULE,
                     tags:None,
@@ -106,7 +117,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range:range.into_range(),
                     children:None
                 },&[])),
-            Self::SemanticMacro { .. } | Self::SymName{ .. } => None
+            Self::SemanticMacro { .. } | Self::SymName{ .. } | Self::Notation{ .. } => None
         }
     }
 
@@ -127,13 +138,15 @@ impl AnnotExt for STeXAnnot {
                     data:None
                 });
             }
-            Self::ImportModule { .. } |
-            Self::UseModule { .. } |
-            Self::SemanticMacro { .. } |
-            Self::SetMetatheory { .. } | 
-            Self::Module { .. } |
-            Self::Symdecl { .. } |
-            Self::SymName { .. } |
+            Self::ImportModule{ .. } |
+            Self::UseModule{ .. } |
+            Self::SemanticMacro{ .. } |
+            Self::SetMetatheory{ .. } | 
+            Self::Module{ .. } | 
+            Self::MathStructure{ .. } |
+            Self::Symdecl{ .. } |
+            Self::SymName{ .. } |
+            Self::Notation{ .. } |
             Self::Symdef{ .. } => ()
         }
     }
@@ -154,17 +167,18 @@ impl AnnotExt for STeXAnnot {
                 }))
             }
             Self::SemanticMacro{ uri,token_range:range,.. } |
-            Self::SymName{ uri,name_range:range,.. } => {
+            Self::SymName{ uri,name_range:range,.. } |
+            Self::Notation{ uri,name_range:range,.. } => {
                 if !range.contains(pos) {return None};
                 let Some(p) = &uri.filepath else {return None};
                 let Ok(url) = lsp::Url::from_file_path(p) else {return None};
-                tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
                 Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                     uri: url,
                     range:SourceRange::into_range(uri.range)
                 }))
             }
-            Self::Module{ .. } | Self::Symdecl { .. } | Self::Symdef { .. } | Self::Inputref{ .. } => None
+            Self::Module{ .. } | Self::MathStructure { .. } | Self::Symdecl { .. } | Self::Symdef { .. } | Self::Inputref{ .. } => None
         }
     }
     fn semantic_tokens(&self,cont:&mut impl FnMut(SourceRange<LSPLineCol>,u32)) {
@@ -179,6 +193,22 @@ impl AnnotExt for STeXAnnot {
                 end_range.end.col -= 1;
                 end_range.start.line = end_range.end.line;
                 end_range.start.col = end_range.end.col - "smodule".len() as u32;
+                cont(end_range,STeXSemanticTokens::DECLARATION);
+            }
+            Self::MathStructure { uri, extends, name_range, real_name_range, full_range, children, mathstructure_range } => {
+                cont(*mathstructure_range, STeXSemanticTokens::DECLARATION);
+                cont(*name_range,STeXSemanticTokens::NAME);
+                if let Some(r) = real_name_range {
+                    cont(*r,STeXSemanticTokens::NAME)
+                }
+                for c in children {
+                    c.semantic_tokens(cont);
+                }
+                let mut end_range = *full_range;
+                end_range.end.col -= 1;
+                end_range.start.line = end_range.end.line;
+                let s = if extends.is_empty() { "mathstructure"} else { "extstructure"};
+                end_range.start.col = end_range.end.col - s.len() as u32;
                 cont(end_range,STeXSemanticTokens::DECLARATION);
             }
             Self::SetMetatheory { token_range,.. } |
@@ -228,24 +258,24 @@ impl AnnotExt for STeXAnnot {
                 cont(*token_range, STeXSemanticTokens::DECLARATION);
                 cont(*main_name_range, STeXSemanticTokens::NAME);
                 
-                let mut props = SmallVec::<(SourceRange<LSPLineCol>,SourceRange<LSPLineCol>,Option<u32>,Option<&Vec<Self>>),4>::new();
+                let mut props = SmallVec::<(SourceRange<LSPLineCol>,SourceRange<LSPLineCol>,u32,Option<u32>,Option<&Vec<Self>>),4>::new();
                 macro_rules! insert {
                     ($key:ident,$p:pat => $r:ident + $v:ident = $e:expr ; $tks:expr) => {
                         if let Some($p) = &parsed_args.$key {
-                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_)| (b.start.line,b.start.col)) {
+                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_,_)| (b.start.line,b.start.col)) {
                                 Ok(i) => i,
                                 Err(i) => i
                             };
-                            props.insert(i,(*$r,*$v,$e,$tks));
+                            props.insert(i,(*$r,*$v,STeXSemanticTokens::KEYWORD,$e,$tks));
                         }
                     };
-                    (N $key:ident,$p:pat => $r:ident + $v:ident = $e:expr) => {
+                    (N $key:ident,$p:pat => $r:ident + $v:ident = $k:expr; $e:expr) => {
                         if let Some($p) = &notation_args.$key {
-                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_)| (b.start.line,b.start.col)) {
+                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_,_)| (b.start.line,b.start.col)) {
                                 Ok(i) => i,
                                 Err(i) => i
                             };
-                            props.insert(i,(*$r,*$v,$e,None));
+                            props.insert(i,(*$r,*$v,$k,$e,None));
                         }
                     };
                 }
@@ -259,15 +289,49 @@ impl AnnotExt for STeXAnnot {
                 insert!(role,(k,v) => k + v = Some(STeXSemanticTokens::KEYWORD);None);
                 insert!(reorder,(k,v) => k + v = None;None);
                 insert!(argtypes,(k,v,t) => k + v = None;Some(t));
-                insert!(N id,(_,k,v) => k + v = Some(STeXSemanticTokens::NAME));
-                insert!(N prec,(k,v,_) => k + v = Some(STeXSemanticTokens::KEYWORD));
-                insert!(N op,(k,v,_) => k + v = None);
-                for (k,v,t,tks) in props {
-                    cont(k,STeXSemanticTokens::KEYWORD);
+                insert!(N id,(_,k,v) => k + v = STeXSemanticTokens::NAME;None);
+                insert!(N prec,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;Some(STeXSemanticTokens::KEYWORD));
+                insert!(N op,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;None);
+                for (k,v,t1,t,tks) in props {
+                    cont(k,t1);
                     if let Some(t) = t {cont(v,t); }
                     if let Some(tks) = tks {for c in tks {
                         c.semantic_tokens(cont);
                     }}
+                }
+                for c in &notation.1 {
+                    c.semantic_tokens(cont);
+                }
+            }
+            Self::Notation{ token_range,name_range,notation,notation_args,.. } => {
+                cont(*token_range,STeXSemanticTokens::DECLARATION);
+                cont(*name_range,STeXSemanticTokens::SYMBOL);
+
+                let mut props = SmallVec::<(SourceRange<LSPLineCol>,SourceRange<LSPLineCol>,u32,Option<u32>,Option<&Vec<Self>>),4>::new();
+                macro_rules! insert {
+                    ($key:ident,$p:pat => $r:ident + $v:ident = $k:expr; $e:expr) => {
+                        if let Some($p) = &notation_args.$key {
+                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_,_)| (b.start.line,b.start.col)) {
+                                Ok(i) => i,
+                                Err(i) => i
+                            };
+                            props.insert(i,(*$r,*$v,$k,$e,None));
+                        }
+                    };
+                }
+                insert!(id,(_,k,v) => k + v = STeXSemanticTokens::NAME;None);
+                insert!(prec,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;Some(STeXSemanticTokens::KEYWORD));
+                insert!(op,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;None);
+                for (k,v,t1,t,tks) in props {
+                    cont(k,t1);
+                    if let Some(t) = t {cont(v,t); }
+                    if let Some(tks) = tks {for c in tks {
+                        c.semantic_tokens(cont);
+                    }}
+                }
+
+                for c in &notation.1 {
+                    c.semantic_tokens(cont);
                 }
             }
             Self::SymName { token_range,name_range,..} => {
@@ -280,7 +344,8 @@ impl AnnotExt for STeXAnnot {
     fn hover(&self) -> Option<lsp::Hover> {
         match self {
             Self::SemanticMacro { uri, full_range:range,.. } |
-            Self::SymName {uri,name_range:range,.. } =>
+            Self::SymName {uri,name_range:range,.. } |
+            Self::Notation{uri,name_range:range,.. } =>
                 Some(lsp::Hover {
                     range: Some(SourceRange::into_range(*range)),
                     contents:lsp::HoverContents::Markup(lsp::MarkupContent {
@@ -297,23 +362,23 @@ impl AnnotExt for STeXAnnot {
                 let name = uri.uri.name().last_name();
                 let name = name.as_ref();
                 let name = match mod_ {
-                    SymnameMod::Cap { post:Some((_,_,post)) } => {
+                    SymnameMode::Cap { post:Some((_,_,post)) } => {
                         let cap = name.chars().next().unwrap().to_uppercase().to_string();
                         format!("={cap}{}{post}",&name[1..])
                     }
-                    SymnameMod::Cap { .. } => {
+                    SymnameMode::Cap { .. } => {
                         let cap = name.chars().next().unwrap().to_uppercase().to_string();
                         format!("={cap}{}",&name[1..])
                     }
-                    SymnameMod::PostS { pre:Some((_,_,pre))} => format!("={pre}{name}s"),
-                    SymnameMod::PostS { ..} => format!("={name}s"),
-                    SymnameMod::CapAndPostS => {
+                    SymnameMode::PostS { pre:Some((_,_,pre))} => format!("={pre}{name}s"),
+                    SymnameMode::PostS { ..} => format!("={name}s"),
+                    SymnameMode::CapAndPostS => {
                         let cap = name.chars().next().unwrap().to_uppercase().to_string();
                         format!("={cap}{}s",&name[1..])
                     }
-                    SymnameMod::PrePost { pre:Some((_,_,pre)),post:Some((_,_,post)) } => format!("={pre}{name}{post}"),
-                    SymnameMod::PrePost { pre:Some((_,_,pre)),.. } => format!("={pre}{name}"),
-                    SymnameMod::PrePost { post:Some((_,_,post)),.. } => format!("={name}{post}"),
+                    SymnameMode::PrePost { pre:Some((_,_,pre)),post:Some((_,_,post)) } => format!("={pre}{name}{post}"),
+                    SymnameMode::PrePost { pre:Some((_,_,pre)),.. } => format!("={pre}{name}"),
+                    SymnameMode::PrePost { post:Some((_,_,post)),.. } => format!("={name}{post}"),
                     _ => format!("={name}")
                 };
                 Some(lsp::InlayHint {

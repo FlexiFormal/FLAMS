@@ -5,7 +5,7 @@ edition = "2021"
 
 [features]
 tokio = ["dep:tokio","immt-utils/tokio","immt-ontology/tokio"]
-gitlab = ["dep:immt-git","tokio"]
+gitlab = ["immt-git/gitlab","tokio"]
 
 [dev-dependencies]
 tracing-subscriber = {workspace=true}
@@ -13,7 +13,7 @@ tracing-subscriber = {workspace=true}
 [dependencies]
 immt-utils = {workspace=true, features=["rayon","async","serde"]}
 immt-ontology = {workspace=true, features = ["rdf","serde"]}
-immt-git = {workspace=true,features=["gitlab"],optional=true}
+immt-git = {workspace=true}
 
 tracing = {workspace=true}
 tracing-subscriber = {workspace=true}
