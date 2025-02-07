@@ -289,11 +289,6 @@ pub mod server {
   use shtml_viewer_components::remote::{ServerConfig,server_config};
   pub use immt_utils::CSS;
   use tsify_next::Tsify;
-  /// The currently set server URL
-  #[wasm_bindgen]
-  pub fn get_server_url() -> String {
-    server_config.server_url.lock().clone()
-  }
 
   #[derive(Tsify, serde::Serialize, serde::Deserialize)]
   #[tsify(into_wasm_abi, from_wasm_abi)]

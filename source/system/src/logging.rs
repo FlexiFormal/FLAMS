@@ -49,7 +49,7 @@ pub(crate) fn tracing(logdir:&Path,level: tracing::Level,rotation: tracing_appen
       )
       .with(logger.clone().with_filter(LevelFilter::from(level)))
       .with(tracing_error::ErrorLayer::default());
-  tracing::subscriber::set_global_default(subscriber).expect(
+  let _ = tracing::subscriber::set_global_default(subscriber).expect(
     "Error initializing tracing subscriber"
   );
   logger

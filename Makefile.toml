@@ -1,6 +1,6 @@
 [env]
 DATABASE_URL="sqlite:./resources/migrations/users.sqlite?mode=rwc"
-LEPTOS_WASM_OPT_VERSION="version_121"
+LEPTOS_WASM_OPT_VERSION="version_122"
 LEPTOS_SASS_VERSION="1.71.0"
 RUSTDOCFLAGS="--enable-index-page -Zunstable-options --generate-link-to-definition --cfg docsrs"
 
@@ -125,7 +125,7 @@ workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
 args = ["leptos","build"]
-dependencies = ["build-viewer","copy-viewer","db"]
+# dependencies = ["build-viewer","copy-viewer","db"]
 
 [tasks.watch]
 workspace = false

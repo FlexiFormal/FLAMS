@@ -245,8 +245,7 @@ pub mod rules {
             extractor.open_content(uri.clone().into_module());
             extractor.open_narrative(None);
             Some(OpenSHTMLElement::Morphism {
-                uri:Some(uri), // TODO
-                domain,total,//content:Vec::new(),narrative:Vec::new()
+                uri,domain,total,//content:Vec::new(),narrative:Vec::new()
             })
         }
 
@@ -262,7 +261,7 @@ pub mod rules {
             let uri = match extractor.get_narrative_uri() & &*id {
                 Ok(uri) => uri,
                 Err(e) => {
-                    extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                    extractor.add_error(SHTMLError::InvalidURI(format!("7: {id}")));
                     return None
                 }
             };
@@ -294,7 +293,7 @@ pub mod rules {
             let uri = match extractor.get_narrative_uri() & &*id {
                 Ok(uri) => uri,
                 Err(e) => {
-                    extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                    extractor.add_error(SHTMLError::InvalidURI(format!("8: {id}")));
                     return None
                 }
             };
@@ -332,7 +331,7 @@ pub mod rules {
             let uri = match extractor.get_narrative_uri() & &*id {
                 Ok(uri) => uri,
                 Err(e) => {
-                    extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                    extractor.add_error(SHTMLError::InvalidURI(format!("9: {id}")));
                     return None
                 }
             };
@@ -425,11 +424,11 @@ pub mod rules {
             let Some(val) = attrs.remove(SHTMLKey::ProblemFillinsolCase) else {unreachable!()};
             let verdict = attrs.take_bool(SHTMLKey::ProblemFillinsolCaseVerdict);
             let Some(value) = attrs.remove(SHTMLKey::ProblemFillinsolCaseValue) else {
-                extractor.add_error(SHTMLError::IncompleteArgs);
+                extractor.add_error(SHTMLError::IncompleteArgs(5));
                 return None
             };
             let Some(opt) = FillInSolOption::from_values(&val,&value,verdict) else {
-                extractor.add_error(SHTMLError::IncompleteArgs);
+                extractor.add_error(SHTMLError::IncompleteArgs(6));
                 return None
             };
             extractor.push_fillinsol_case(opt);
@@ -501,7 +500,7 @@ pub mod rules {
                 VarOrSym::S(s.into())
             } else if let Some(v) = attrs.get(SHTMLKey::Notation) {
                 let Ok(n) = v.as_ref().parse() else {
-                    extractor.add_error(SHTMLError::InvalidURI(v.into()));
+                    extractor.add_error(SHTMLError::InvalidURI(format!("10: {}",v.as_ref())));
                     return None
                 };
                 VarOrSym::V(PreVar::Unresolved(n))
@@ -619,15 +618,17 @@ pub mod rules {
 
         pub fn term<E:SHTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenSHTMLElement> {
             if extractor.in_notation() { return None }
-            let notation = attrs.value(SHTMLKey::NotationId.attr_name()).map(|n|
-                match n.as_ref().parse::<Name>() {
-                    Ok(n) => n,
+            let notation = attrs.value(SHTMLKey::NotationId.attr_name()).and_then(|n| {
+                let asr = n.as_ref().trim();
+                if asr.is_empty() {return None }
+                match asr.parse::<Name>() {
+                    Ok(n) => Some(n),
                     Err(e) => {
-                        extractor.add_error(SHTMLError::InvalidURI(n.into()));
-                        ERROR.clone()
+                        extractor.add_error(SHTMLError::InvalidURI(format!("12: {}",n.as_ref())));
+                        Some(ERROR.clone())
                     }
                 }
-            );
+            });
             let head = match attrs.value(SHTMLKey::Head.attr_name()) {
                 None => {
                     extractor.add_error(SHTMLError::MissingHeadForTerm);
@@ -645,7 +646,7 @@ pub mod rules {
                                             match v.parse() {
                                                 Ok(v) => Some(VarOrSym::V(PreVar::Unresolved(v))),
                                                 Err(e) => {
-                                                    extractor.add_error(SHTMLError::InvalidURI(v.to_string()));
+                                                    extractor.add_error(SHTMLError::InvalidURI(format!("13: {v}")));
                                                     None
                                                 }
                                             }

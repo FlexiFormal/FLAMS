@@ -41,6 +41,8 @@ const {{ run, set_server_url }} = wasm_bindgen;
 
 {}
 
+window.IMMT_SERVER_URL = "https://immt.mathhub.info";
+
 var PRIVATE__do_shtml_on_start = () => {{}};
 function shtml_on_start(f) {{
     let old = PRIVATE__do_shtml_on_start;

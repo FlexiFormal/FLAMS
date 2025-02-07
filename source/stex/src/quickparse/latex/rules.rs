@@ -383,11 +383,34 @@ macro_rules! tex {
         };
         tex!{@envargs $p:$name $($args)*}
     };
+    (@envargs $p:ident:$name:ident{$arg:ident:!name}$($args:tt)*) => {
+        let Some($arg) = $p.read_name_normalized(&mut $name.begin) else {
+            $p.tokenizer.problem($name.begin.range.start,concat!("Expected { after \\",stringify!($name)),DiagnosticLevel::Error);
+            return;
+        };
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident{$arg:ident:name+}$($args:tt)*) => {
+        let $arg = $p.read_names(&mut $name.begin);
+        if $arg.is_empty() {
+            $p.tokenizer.problem($name.begin.range.start,concat!("Expected { after \\",stringify!($name)),DiagnosticLevel::Error);
+            return;
+        };
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident{$arg:ident:!name+}$($args:tt)*) => {
+        let $arg = $p.read_names_normalized(&mut $name.begin);
+        if $arg.is_empty() {
+            $p.tokenizer.problem($name.begin.range.start,concat!("Expected { after \\",stringify!($name)),DiagnosticLevel::Error);
+            return;
+        };
+        tex!{@envargs $p:$name $($args)*}
+    };
     (@envargs $p:ident:$name:ident{$arg:ident:T}$($args:tt)*) => {
         let mode = $p.tokenizer.mode;
         $p.open_group();
         $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
-        let $arg = $p.read_argument(&mut $name.begin);
+        let $arg = $p.get_argument(&mut $name.begin);
         $p.tokenizer.mode = mode;
         $p.close_group();
         tex!{@envargs $p:$name $($args)*}
@@ -440,6 +463,10 @@ macro_rules! tex {
         let $opt = $p.read_opt_str(&mut $name.begin).into_name();
         tex!{@envargs $p:$name $($args)*}
     };
+    (@envargs $p:ident:$name:ident[$opt:ident:!name]$($args:tt)*) => {
+        let $opt = $p.read_opt_name_normalized(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
     (@envargs $p:ident:$name:ident[$opt:ident]$($args:tt)*) => {
         let $opt = $p.read_opt_str(&mut $name.begin);
         tex!{@envargs $p:$name $($args)*}
@@ -450,6 +477,10 @@ macro_rules! tex {
     };
     (@envargs $p:ident:$name:ident[$opt:ident:Map]$($args:tt)*) => {
         let $opt = $p.read_opt_map(&mut $name.begin);
+        tex!{@envargs $p:$name $($args)*}
+    };
+    (@envargs $p:ident:$name:ident[$opt:ident:type $tp:ty]$($args:tt)*) => {
+        let $opt = <Vec<$tp> as crate::quickparse::latex::KeyValValues<_,_,_,_>>::parse_opt($p);
         tex!{@envargs $p:$name $($args)*}
     };
     (@envargs $p:ident:$name:ident V:C($c:expr) $($args:tt)*) => {
@@ -485,11 +516,22 @@ macro_rules! tex {
         };
         tex!{@args $p:$name $($args)*}
     };
+    (@args $p:ident:$name:ident{$arg:ident:!name}$($args:tt)*) => {
+        let Some($arg) = $p.read_name_normalized(&mut $name) else {
+            $p.tokenizer.problem($name.range.start,concat!("Expected { after \\",stringify!($name)),DiagnosticLevel::Error);
+            return $crate::quickparse::latex::rules::MacroResult::Simple($name);
+        };
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident{$arg:ident}$($args:tt)*) => {
+        let $arg = $p.get_argument(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
     (@args $p:ident:$name:ident{$arg:ident:T}$($args:tt)*) => {
         let mode = $p.tokenizer.mode;
         $p.open_group();
         $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
-        let $arg = $p.read_argument(&mut $name);
+        let $arg = $p.get_argument(&mut $name);
         $p.tokenizer.mode = mode;
         $p.close_group();
         tex!{@args $p:$name $($args)*}
@@ -541,6 +583,10 @@ macro_rules! tex {
         let $opt = $p.read_opt_str(&mut $name).into_name();
         tex!{@args $p:$name $($args)*}
     };
+    (@args $p:ident:$name:ident[$opt:ident:!name]$($args:tt)*) => {
+        let $opt = $p.read_opt_name_normalized(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
     (@args $p:ident:$name:ident[$opt:ident]$($args:tt)*) => {
         let $opt = $p.read_opt_str(&mut $name);
         tex!{@args $p:$name $($args)*}
@@ -551,6 +597,10 @@ macro_rules! tex {
     };
     (@args $p:ident:$name:ident[$opt:ident:Map]$($args:tt)*) => {
         let $opt = $p.read_opt_map(&mut $name);
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident[$opt:ident:type $tp:ty]$($args:tt)*) => {
+        let $opt = <Vec<$tp> as crate::quickparse::latex::KeyValValues<_,_,_,_>>::parse_opt($p);
         tex!{@args $p:$name $($args)*}
     };
     (@args $p:ident:$name:ident V:C($c:expr) $($args:tt)*) => {

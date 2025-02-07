@@ -19,7 +19,7 @@ pub enum SHTMLError {
     NotInExercise(&'static str),
     InvalidKey,
     InvalidURI(String),
-    IncompleteArgs
+    IncompleteArgs(u8)
 }
 
 impl std::error::Error for SHTMLError {}
@@ -42,7 +42,7 @@ impl Display for SHTMLError {
             Self::NotInParagraph => f.write_str("unbalanced logical paragraph"),
             Self::NotInExercise(s) => write!(f,"unbalanced exercise element: {s}"),
             Self::InvalidKey => f.write_str("invalid key in shtml element"),
-            Self::IncompleteArgs => f.write_str("incomplete argument list"),
+            Self::IncompleteArgs(i) => write!(f,"incomplete argument list: {i}"),
             Self::InvalidURI(s) => write!(f,"invalid URI: {s}"),
         }
     }

@@ -15,6 +15,7 @@ mod treelike;
 pub mod vecmap;
 pub mod settings;
 pub mod logs;
+//pub mod file_id;
 
 pub use parking_lot;
 pub use triomphe;

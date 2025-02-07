@@ -24,7 +24,7 @@ enum Elem {
         macroname: Option<Box<str>>,
     },
     Morphism {
-        uri: Option<SymbolURI>,
+        uri: SymbolURI,
         domain: ModuleURI,
         total: bool,
     },

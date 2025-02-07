@@ -33,6 +33,7 @@ lazy_static = {workspace=true}
 simple-home-dir = {workspace=true}
 tokio = {workspace=true,features=["rt","io-util","sync","fs"],optional=true}
 chrono = {workspace=true}
+serde_json = {workspace=true}
 
 oxigraph = { workspace=true }
 spargebra = { workspace=true,features=["rdf-star"] }

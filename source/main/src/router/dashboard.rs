@@ -16,7 +16,7 @@ use immt_web_utils::components::display_error;
 
 fn do_main(page:Page) -> impl IntoView {
   let inner =  || match page {
-    Page::Home => EitherOf9::A(view!(<span>"TODO"</span>)),
+    Page::Home => EitherOf9::A(view!(<super::index::Index/>)),
     Page::MathHub => EitherOf9::B(view!{<super::backend::ArchivesTop/>}),
     //Page::Graphs => view!{<GraphTest/>},
     Page::Log => EitherOf9::C(view!{<super::logging::Logger/>}),

@@ -9,7 +9,7 @@ use std::str::FromStr;
 use triomphe::Arc;
 
 lazy_static! {
-    pub(super) static ref NAMES: Arc<Mutex<TArcInterner<str, 4, 1000>>> =
+    pub(super) static ref NAMES: Arc<Mutex<TArcInterner<str, 4, 100_000>>> =
         Arc::new(Mutex::new(TArcInterner::default()));
 }
 
@@ -73,7 +73,7 @@ impl Name {
     }
 
     #[must_use]
-    pub fn with_last_name(mut self,s:NameStep) -> Name {
+    pub fn with_last_name(mut self,s:NameStep) -> Self {
         if self.0.len() == 1 {
             Self(smallvec::smallvec![s])
         } else {
@@ -123,7 +123,7 @@ impl Display for InvalidURICharacter {
 impl FromStr for Name {
     type Err = InvalidURICharacter;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.contains(INVALID_CHARS) {
+        if s.contains(INVALID_CHARS) || s.is_empty() {
             return Err(InvalidURICharacter);
         }
         let steps = s

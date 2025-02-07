@@ -6,6 +6,7 @@ pub mod settings;
 pub mod backend;
 pub mod query;
 pub mod git;
+pub mod index;
 pub(crate) mod buildqueue;
 pub(crate) mod logging;
 pub(crate) mod users;
@@ -18,6 +19,7 @@ use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, 
 
 //#[derive(Copy,Clone,Debug,serde::Serialize,serde::Deserialize)]
 //pub struct UseLSP(pub bool);
+
 
 
 #[component]

@@ -191,3 +191,105 @@ impl<V> VecSet<V> {
         Self(Vec::new())
     }
 }
+
+impl<V:Clone> VecSet<V> {
+    pub fn insert_clone(&mut self, value: &V)
+    where
+        V: PartialEq {
+            if !self.0.contains(value) {
+                self.0.push(value.clone());
+            }
+    }
+}
+
+
+
+#[derive(Clone, Hash, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct OrdSet<V:Ord>(pub Vec<V>);
+
+impl<V, V2:Ord> PartialEq<OrdSet<V2>> for OrdSet<V>
+where
+    V: Ord+PartialEq<V2>,
+{
+    fn eq(&self, other: &OrdSet<V2>) -> bool {
+        self.0.len() == other.0.len() && self.iter().zip(other.iter()).all(|(v1, v2)| v1 == v2)
+    }
+}
+
+impl<V:Ord> Default for OrdSet<V> {
+    #[inline]
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+impl<V: PartialEq<V>+Ord> FromIterator<V> for OrdSet<V> {
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        let mut v = Vec::new();
+        for elem in iter {
+            if let Err(i) = v.binary_search(&elem) {
+                v.insert(i, elem);
+            }
+        }
+        Self(v)
+    }
+}
+impl<V: Debug+Ord> Debug for OrdSet<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.0.iter()).finish()
+    }
+}
+impl<V:Ord> IntoIterator for OrdSet<V> {
+    type Item = V;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<V: PartialEq<V>+Ord> From<Vec<V>> for OrdSet<V> {
+    #[inline]
+    fn from(v: Vec<V>) -> Self {
+        v.into_iter().collect()
+    }
+}
+
+impl<V:Ord> OrdSet<V> {
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = &V> {
+        self.0.iter()
+    }
+    pub fn insert(&mut self, value: V)
+    where
+        V: PartialEq,
+    {
+        if let Err(i) = self.0.binary_search(&value) {
+            self.0.insert(i, value);
+        }
+    }
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    #[inline]
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn contains(&self,v:&V) -> bool {
+        self.0.binary_search(v).is_ok()
+    }
+}
+
+impl<V:Ord+Clone> OrdSet<V> {
+    pub fn insert_clone(&mut self, value: &V) {
+        if let Err(i) = self.0.binary_search(value) {
+            self.0.insert(i, value.clone());
+        }
+    }
+}

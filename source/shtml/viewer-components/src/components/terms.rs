@@ -1,4 +1,4 @@
-use immt_ontology::{content::terms::ArgMode, uris::{ArchiveURITrait, ContentURI, DocumentElementURI, URIWithLanguage, URI}};
+use immt_ontology::{content::terms::ArgMode, uris::{ArchiveURITrait, ContentURI, DocumentElementURI, SymbolURI, URIWithLanguage, URI}};
 use immt_web_utils::{components::{DivOrMrow, Popover, OnClickModal,PopoverSize, PopoverTriggerType}, do_css, inject_css};
 use leptos::{context::Provider, either::{Either, EitherOf3}, prelude::*};
 use leptos_dyn_dom::OriginalNode;
@@ -264,7 +264,19 @@ pub(super) fn do_term<V:IntoView+'static,const MATH:bool>(t:OpenTerm,children:im
   }
 }
 
-pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+pub(super) fn do_definiendum<V:IntoView+'static,const MATH:bool>(children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+  if MATH {
+    leptos::either::Either::Left(view!{
+      <mrow class="shtml-def-comp">{children()}</mrow>
+    })
+  } else {
+    leptos::either::Either::Right(view!{
+      <span class="shtml-def-comp">{children()}</span>
+    })
+  }
+}
+
+pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(is_defi:bool,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   use immt_web_utils::components::PopoverTrigger;
   //tracing::info!("comp!");
   let in_term = use_context::<Option<InTermState>>().flatten();
@@ -273,15 +285,17 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(children:impl FnOnce()
     //tracing::debug!("comp of term {:?}",in_term.owner);
     let is_var = matches!(in_term.owner,VarOrSym::V(_));
     let class = Memo::new(move |_| 
-      match (is_hovered.get(), is_var/*,in_term.replaced.get_untracked() */) {
+      match (is_defi,is_hovered.get(), is_var/*,in_term.replaced.get_untracked() */) {
         /*(true, true, true) => "shtml-comp-replaced shtml-var-comp shtml-comp-hover".to_string(),
         (true, false, true) => "shtml-comp-replaced shtml-comp shtml-comp-hover".to_string(),
         (false, true, true) => "shtml-comp-replaced shtml-var-comp".to_string(),
         (false, false, true) => "shtml-comp-replaced shtml-comp".to_string(),*/
-        (true, true) => "shtml-var-comp shtml-comp-hover".to_string(),
-        (true, false) => "shtml-comp shtml-comp-hover".to_string(),
-        (false, true) => "shtml-var-comp".to_string(),
-        (false, false) => "shtml-comp".to_string(),
+        (true, false,_) => "shtml-def-comp".to_string(),
+        (true, true,_) => "shtml-def-comp shtml-comp-hover".to_string(),
+        (_,true, true) => "shtml-var-comp shtml-comp-hover".to_string(),
+        (_,true, false) => "shtml-comp shtml-comp-hover".to_string(),
+        (_,false, true) => "shtml-var-comp".to_string(),
+        (_,false, false) => "shtml-comp".to_string(),
       }
     );
     let do_popover = || use_context::<DisablePopover>().is_none();

@@ -1,4 +1,4 @@
-use immt_ontology::uris::{ArchiveId, BaseURI};
+use immt_ontology::{archive_json::{ArchiveDatum, Institution}, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI}};
 use immt_utils::vecmap::{VecMap, VecSet};
 use parking_lot::RwLock;
 use std::{
@@ -10,7 +10,7 @@ use crate::{backend::archives::{
     ignore_regex::IgnoreSource, source_files::SourceDir, RepositoryData,
 }, formats::SourceFormat};
 
-use super::LocalArchive;
+use super::{ArchiveIndex, LocalArchive};
 
 pub(super) struct ArchiveIterator<'a> {
     path: &'a Path,
@@ -233,18 +233,62 @@ impl<'a> ArchiveIterator<'a> {
                 return None;
             }
         };
+        let uri = dom_uri & id;
+        let (institutions,index) = read_index_file(&uri,&path.with_file_name("archive.json"));
         Some(LocalArchive {
             out_path: out_path.into(),
             ignore,
             file_state: RwLock::new(SourceDir::default()),
             data: RepositoryData {
-                uri: dom_uri & id,
+                uri,
                 attributes,
                 formats,
+                institutions,index,
                 dependencies: dependencies.into(),
             },
         })
     }
+}
+
+fn read_index_file(archive:&ArchiveURI,path:&Path) -> (Box<[Institution]>,Box<[ArchiveIndex]>) {
+    if !path.exists() {
+        return (Vec::new().into(),Vec::new().into())
+    }
+    let reader = match std::fs::File::open(path) {
+        Ok(reader) => reader,
+        Err(e) => {
+            tracing::error!("Could not read index file {}: {e}", path.display());
+            return (Vec::new().into(),Vec::new().into())
+        }
+    };
+    let reader = std::io::BufReader::new(reader);
+    let v = match serde_json::from_reader::<_,Vec<ArchiveDatum>>(reader) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Invalid JSON file {}: {e}", path.display());
+            return (Vec::new().into(),Vec::new().into())
+        }
+    };
+    let mut insts = Vec::new();
+    let mut idxs = Vec::new();
+    for d in v {
+        match d {
+            ArchiveDatum::Document(d) => idxs.push(ArchiveIndex::from_kind(d,archive,
+                |i| format!("{}/img?a={}&rp=source/{i}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
+            )),
+            ArchiveDatum::Institution(i) => insts.push(match i {
+                Institution::University { title, place, country, url, acronym, logo }
+                    => Institution::University { title, place, country, url, acronym, 
+                        logo: format!("{}/img?a={}&rp=source/{logo}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
+                    },
+                Institution::School { title, place, country, url, acronym, logo }
+                    => Institution::School { title, place, country, url, acronym, 
+                        logo: format!("{}/img?a={}&rp=source/{logo}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
+                    }
+            }),
+        }
+    }
+    (insts.into(),idxs.into())
 }
 
 impl Iterator for ArchiveIterator<'_> {

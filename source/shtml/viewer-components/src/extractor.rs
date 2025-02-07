@@ -88,9 +88,6 @@ impl SHTMLExtractor for DOMExtractor {
     fn add_op_notation(&mut self,_op:immt_ontology::narration::notations::OpNotation) -> Result<(),immt_ontology::narration::notations::OpNotation> {
         todo!()
     }
-    fn add_definiendum(&mut self,_uri:immt_ontology::uris::SymbolURI) {
-        todo!()
-    }
     fn add_resource<T:immt_ontology::Resourcable>(&mut self,_t:&T) -> immt_ontology::narration::LazyDocRef<T> {
         todo!()
     }
@@ -149,6 +146,7 @@ impl SHTMLExtractor for DOMExtractor {
         todo!()
     }
 
+    fn add_definiendum(&mut self,_uri:immt_ontology::uris::SymbolURI) {}
     fn push_fillinsol_case(&mut self,case:immt_ontology::narration::exercises::FillInSolOption) {}
     fn open_fillinsol(&mut self,width:Option<f32>) {}
     fn push_answer_class(&mut self,id:Box<str>,kind:immt_ontology::narration::exercises::AnswerKind) {}

@@ -136,7 +136,7 @@ impl Solutions {
                                         s.parse::<i32>().ok().map(|i| i as f32)
                                     };
                                     if let Some(f) = num {
-                                        if f >= *from && f <= *to {
+                                        if !from.is_some_and(|v| f < v) && !to.is_some_and(|v| f > v) {
                                             fill_correct = Some(*verdict);
                                             matching = Some(i);
                                         }
@@ -269,7 +269,7 @@ pub enum FillInSolOption{
         feedback:Box<str>
     },
     NumericalRange{
-        from:f32,to:f32,
+        from:Option<f32>,to:Option<f32>,
         verdict:bool,
         feedback:Box<str>
     },
@@ -290,16 +290,18 @@ impl FillInSolOption {
                 feedback:String::new().into()
             }),
             "numrange" => {
-                let (from,to) = value.split_once('-')?;
+                let (s,neg) = value.strip_prefix('-').map_or((value,false),|s| (s,true));
+                let (from,to) = if let Some((from,to)) = s.split_once('-') {(from,to)} else { ("",s)};
                 let from = if from.contains('.') {
-                    f32::from_str(from).ok()?
-                } else {
-                    i32::from_str(from).ok()? as _   
+                    Some(f32::from_str(from).ok()?)
+                } else if from.is_empty() { None } else {
+                    Some(i128::from_str(from).ok()? as _)
                 };
+                let from = if neg { from.map(|f| -f) } else { from };
                 let to = if to.contains('.') {
-                    f32::from_str(to).ok()?
-                } else {
-                    i32::from_str(to).ok()? as _   
+                    Some(f32::from_str(to).ok()?)
+                } else if to.is_empty() {None} else {
+                    Some(i128::from_str(to).ok()? as _)
                 };
                 Some(Self::NumericalRange { 
                     from, 
@@ -393,7 +395,7 @@ pub struct FillinFeedback {
 //#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum FillinFeedbackKind {
     Exact(String),
-    NumRange{from:f32,to:f32},
+    NumRange{from:Option<f32>,to:Option<f32>},
     Regex(String)
 }
 

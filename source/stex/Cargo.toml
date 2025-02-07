@@ -16,7 +16,7 @@ RusTeX = {workspace=true}
 tex_engine = {workspace=true}
 
 chrono = {workspace = true}
-tracing = {workspace = true}
+tracing = {workspace = true, features=["log"]}
 parking_lot = {workspace = true}
 paste = {workspace = true}
 either = {workspace = true}

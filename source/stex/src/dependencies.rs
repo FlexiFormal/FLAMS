@@ -85,7 +85,7 @@ impl DepParser<'_> {
                 if let Some(old) = old {
                     self.stack.push(old);
                 }
-                Some(STeXDependency::Module{/*uri,*/sig:sig.map(|(l,_)| l),meta:meta_theory.and_then(|(m,_)| m.rel_path.map(|p| (m.uri.archive_id().clone(),p)) )})
+                Some(STeXDependency::Module{/*uri,*/sig,meta:meta_theory.and_then(|m| m.rel_path.map(|p| (m.uri.archive_id().clone(),p)) )})
             }
             STeXToken::Inputref {
                 archive,

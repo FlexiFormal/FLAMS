@@ -87,7 +87,7 @@ pub fn SHTMLStringMath(html:String) -> impl IntoView {
     view!(<math><DomStringContMath html cont=iterate/></math>)
 }
 
-pub static RULES:[SHTMLExtractionRule<DOMExtractor>;34] = [
+pub static RULES:[SHTMLExtractionRule<DOMExtractor>;36] = [
     rule(SHTMLTag::Section),
     rule(SHTMLTag::Term),
     rule(SHTMLTag::Arg),
@@ -98,7 +98,9 @@ pub static RULES:[SHTMLExtractionRule<DOMExtractor>;34] = [
     rule(SHTMLTag::Comp),
     rule(SHTMLTag::VarComp),
     rule(SHTMLTag::MainComp),
+    rule(SHTMLTag::DefComp),
 
+    rule(SHTMLTag::Definiendum),
     rule(SHTMLTag::IfInputref),
 
     rule(SHTMLTag::Problem),
@@ -135,6 +137,18 @@ pub static RULES:[SHTMLExtractionRule<DOMExtractor>;34] = [
 #[cfg_attr(all(not(feature="csr"),not(feature="ts")),wasm_bindgen::prelude::wasm_bindgen(module="/shtml-top.js"))]
 #[cfg_attr(feature="ts",wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
 export function hasShtmlAttribute(node) {
+  if (node.tagName.toLowerCase() === "img") {
+    // replace "srv:" by server url
+    const attributes = node.attributes;
+    for (let i = 0; i < attributes.length; i++) {
+        if (attributes[i].name === 'src') {
+            const src = attributes[i].value;
+            if (src.startsWith('srv:')) {
+                attributes[i].value = src.replace('srv:', window.IMMT_SERVER_URL);
+            }
+        }
+    }
+  }
   //if (node.tagName.toLowerCase() === "section") {return true}
   const attributes = node.attributes;
   for (let i = 0; i < attributes.length; i++) {
@@ -144,10 +158,23 @@ export function hasShtmlAttribute(node) {
   }
   return false;
 }
+
+window.IMMT_SERVER_URL = "https://immt.mathhub.info";
+
+export function setServerUrl(url) {
+  window.IMMT_SERVER_URL = url;
+  set_server_url(url);
+}
 "#))]
 extern "C" {
     #[wasm_bindgen::prelude::wasm_bindgen(js_name = "hasShtmlAttribute")]
     fn has_shtml_attribute(node: &leptos::web_sys::Node) -> bool;
+}
+
+#[cfg(feature="hydrate")]
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js="export function init_immt_url() { window.IMMT_SERVER_URL=\"\";}\ninit_immt_url();")]
+extern "C" {
+    pub fn init_immt_url();
 }
 
 #[allow(clippy::missing_const_for_fn)]

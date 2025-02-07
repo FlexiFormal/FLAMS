@@ -6,7 +6,7 @@ use super::{Declaration, DeclarationTrait, OpenDeclaration};
 
 #[derive(Debug)]
 pub struct Morphism<State:CheckingState> {
-    pub uri: Option<SymbolURI>,
+    pub uri: SymbolURI,
     pub domain: State::ModuleLike,
     pub total: bool,
     pub elements: State::Seq<OpenDeclaration<State>>,
@@ -14,7 +14,7 @@ pub struct Morphism<State:CheckingState> {
 impl Resolvable for Morphism<Checked> {
     type From = SymbolURI;
     fn id(&self) -> std::borrow::Cow<'_,Self::From> {
-        todo!()
+        std::borrow::Cow::Borrowed(&self.uri)
     }
 }
 impl super::private::Sealed for Morphism<Checked> {}
@@ -34,7 +34,7 @@ impl ModuleTrait for Morphism<Checked> {
     }
     #[inline]
     fn content_uri(&self) -> ContentURIRef {
-        ContentURIRef::Symbol(self.uri.as_ref().unwrap_or_else(|| unreachable!()))
+        ContentURIRef::Symbol(&self.uri)
     }
 }
 crate::serde_impl!{

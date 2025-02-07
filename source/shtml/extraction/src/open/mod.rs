@@ -28,7 +28,7 @@ pub enum OpenSHTMLElement {
         macroname: Option<Box<str>>,
     },
     Morphism {
-        uri: Option<SymbolURI>,
+        uri: SymbolURI,
         domain: ModuleURI,
         total: bool
     },
@@ -239,14 +239,14 @@ impl OpenSHTMLElement {
                 };
                 if extractor.add_arg(pos, t, a.mode).is_err() {
                     //println!("HERE 1");
-                    extractor.add_error(SHTMLError::IncompleteArgs);
+                    extractor.add_error(SHTMLError::IncompleteArgs(3));
                 }
             }
             Self::HeadTerm => {
                 let tm = node.as_term();
                 if extractor.add_term(None,tm).is_err() {
                     //println!("HERE 2");
-                    extractor.add_error(SHTMLError::IncompleteArgs);
+                    extractor.add_error(SHTMLError::IncompleteArgs(4));
                 }
             }
 
@@ -270,7 +270,7 @@ impl OpenSHTMLElement {
                     id: match top & &*id {
                         Ok(id) => id,
                         Err(e) => {
-                            extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                            extractor.add_error(SHTMLError::InvalidURI(format!("5: {id}")));
                             return None
                         }
                     },
@@ -373,13 +373,14 @@ impl OpenSHTMLElement {
                 if !extractor.with_exercise(|ex| {
                     if let Some(n) = std::mem::take(&mut ex.fillinsol) {
                         ex.solutions.push(SolutionData::FillInSol(
-                            FillInSol { width:width, opts:n.cases }
+                            FillInSol { width, opts:n.cases }
                         ));
                         true
                     } else {false}
                 }).unwrap_or_default() {
                     extractor.add_error(SHTMLError::NotInExercise("j"));
                 }
+                node.delete_children();
             }
             Self::FillinsolCase => {
                 let s = node.inner_string().into_boxed_str();
@@ -550,7 +551,7 @@ impl OpenSHTMLElement {
         }
     }
 
-    fn close_morphism<E:SHTMLExtractor,N:SHTMLNode>(extractor:&mut E,node:&N,uri:Option<SymbolURI>,domain:ModuleURI,total:bool) {
+    fn close_morphism<E:SHTMLExtractor,N:SHTMLNode>(extractor:&mut E,node:&N,uri:SymbolURI,domain:ModuleURI,total:bool) {
         let Some((_,narrative)) = extractor.close_narrative() else {
             extractor.add_error(SHTMLError::NotInNarrative);
             return
@@ -563,7 +564,7 @@ impl OpenSHTMLElement {
         #[cfg(feature="rdf")]
         if E::RDF {
             if let Some(cont) = extractor.get_content_iri() {
-                let iri = uri.as_ref().expect("TODO").to_iri(); // TODO
+                let iri = uri.to_iri(); // TODO
                 extractor.add_triples([
                     triple!(<(iri.clone())> : ulo:MORPHISM),
                     triple!(<(iri.clone())> rdfs:DOMAIN <(domain.to_iri())>),
@@ -573,7 +574,7 @@ impl OpenSHTMLElement {
         }
         
         extractor.add_document_element(DocumentElement::Morphism { 
-            range: node.range(), morphism: uri.clone().expect("TODO") /* TODO */, children: narrative
+            range: node.range(), morphism: uri.clone(), children: narrative
         });
         if extractor.add_content_element(OpenDeclaration::Morphism(Morphism {
             uri,domain,total,elements:content
@@ -746,7 +747,7 @@ impl OpenSHTMLElement {
         let uri = match extractor.get_narrative_uri() & &*id {
             Ok(uri) => uri,
             Err(e) => {
-                extractor.add_error(SHTMLError::InvalidURI(id.to_string()));
+                extractor.add_error(SHTMLError::InvalidURI(format!("6: {id}")));
                 return
             }
         };

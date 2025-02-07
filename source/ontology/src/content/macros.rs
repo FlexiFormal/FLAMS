@@ -78,9 +78,9 @@ macro_rules! oma {
 
 #[macro_export]
 macro_rules! oml {
-    ($name:literal $(:$tp:expr;)? $(:=$df:expr)?) => {
+    ($name:expr; $(:$tp:expr;)? $(:=$df:expr)?) => {
         $crate::content::terms::Term::OML{
-            name:$name.into(),
+            name:$name,
             tp:$crate::oml!(@TPDF $($tp)?),
             df:$crate::oml!(@TPDF $($df)?),
         }
@@ -90,7 +90,7 @@ macro_rules! oml {
 }
 #[macro_export]
 macro_rules! omv {
-    ($name:literal) => {
-        $crate::content::terms::Term::OMV($crate::content::terms::Var::Name($name.into()))
+    ($name:expr;) => {
+        $crate::content::terms::Term::OMV($crate::content::terms::Var::Name($name))
     };
 }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use either::Either;
 use ignore_regex::IgnoreSource;
 use immt_ontology::{
-    content::modules::OpenModule, file_states::FileStateSummary, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep, PathURITrait, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange, Unchecked
+    archive_json::{Institution, ArchiveIndex}, content::modules::OpenModule, file_states::FileStateSummary, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep, PathURITrait, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange, Unchecked
 };
 use immt_utils::{
     change_listener::ChangeSender,
@@ -32,6 +32,8 @@ pub(super) struct RepositoryData {
     pub(super) attributes: VecMap<Box<str>, Box<str>>,
     pub(super) formats: VecSet<SourceFormatId>,
     pub(super) dependencies: Box<[ArchiveId]>,
+    pub(super) institutions: Box<[Institution]>,
+    pub(super) index:Box<[ArchiveIndex]>
 }
 
 #[derive(Debug)]
@@ -552,6 +554,7 @@ impl Archive {
 pub struct ArchiveTree {
     pub archives: Vec<Archive>,
     pub groups: Vec<ArchiveOrGroup>,
+    pub index:(VecSet<Institution>,VecSet<ArchiveIndex>)
 }
 
 #[derive(Debug)]
@@ -679,6 +682,14 @@ impl ArchiveTree {
         let (old, new, _) = old_new_f.into_inner();
         //news.sort_by_key(|a| a.id()); <- alternative
         *self = new;
+        for a in &self.archives {
+            for i in &a.data().institutions {
+                self.index.0.insert_clone(i);
+            }
+            for doc in &a.data().index {
+                self.index.1.insert_clone(doc);
+            }
+        }
         // TODO olds
     }
 

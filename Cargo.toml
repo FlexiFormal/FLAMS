@@ -21,6 +21,12 @@ codegen-units = 1
 panic = "abort"
 strip = "symbols"
 
+[profile.bench]
+opt-level = 2
+lto = "fat"
+codegen-units = 1
+strip = "none"
+
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]
 inherits = "release"
@@ -103,6 +109,7 @@ bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
 tokio = { version = "1"}#, features = ["fs","io-util","sync","test-util","macros","rt"] }
 tokio-util = { version="0.7", features = ["compat"] }
 tempfile = {version="3"}
+phf = { version = "0.11", default-features = false, features=["macros"] }
 
 password-hash = {version="0.5"}
 argon2 = {version="0.5"}
@@ -179,9 +186,9 @@ js-sys = "0.3"
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
 #leptos-dyn-dom = { path="../leptos_dyn_dom"}
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
-#RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
+# RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
-#tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
+# tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
 
 #leptos_hot_reload = {version="=0.7.0-rc0"}
 #leptos_server = {version="=0.7.0-beta5"}

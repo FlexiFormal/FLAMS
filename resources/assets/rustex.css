@@ -93,6 +93,7 @@ span {display:contents;}
     overflow: visible;
     text-align: left;
     vertical-align: baseline;
+    justify-content: start;
     /*span { position:relative; display: contents; }*/
 }
 
@@ -107,8 +108,8 @@ span {display:contents;}
 
 .rustex-space-in-hbox {
     display: inline-block;
-    margin-left: auto;
-    margin-right: auto;
+    /*margin-left: auto;
+    margin-right: auto;*/
     line-height: 0;
     &:before {
         content: " ";
@@ -145,13 +146,13 @@ span {display:contents;}
 }
 .rustex-vcenter-container {
     display:inline-block;
-    width: min-content;
+    width: 100%;
     height: min-content;
     white-space: initial;
     vertical-align: middle;
     > div {
         height: min-content;
-        width: 100%;
+        width: min-content;
         display: inline-flex;
         flex-direction: column;
         vertical-align: middle;
@@ -195,7 +196,8 @@ span {display:contents;}
 .rustex-vskip, .rustex-vkern {
     display: block;
 }
-.rustex-mskip {}
+
+/*.rustex-mskip {}*/
 
 .rustex-vss {
     display:block;margin-top: auto;margin-bottom: auto;
@@ -216,38 +218,81 @@ span {display:contents;}
 }
 
 .rustex-math-ord, .rustex-math-open, .rustex-math-close, .rustex-math-cramped {
-    padding-left: 0;
-    padding-right: 0;
+    /*padding-left: 0;
+    padding-right: 0;*/
 }
+
 .rustex-math-op {
-    padding-left: 0.15em;
+    &:has(+ .rustex-math-ord) { padding-right: 0.15em;}
+    /*padding-left: 0.15em;
     padding-right: 0.15em;
     + .rustex-math-op { padding-left: 0; }
     &:has(+ .rustex-math-op) { padding-right: 0; }
     &:first-child { padding-left: 0; }
-    &:last-child { padding-right: 0; }
+    &:last-child { padding-right: 0; }*/
 }
+.rustex-math-ord, .rustex-math-open, .rustex-math-close {
+    + .rustex-math-op { padding-left: 0.15em; }
+    + .rustex-math-bin { padding-left: 0.15em; }
+    + .rustex-math-rel { padding-left: 0.2em; }
+}
+
 .rustex-math-bin {
-    padding-left: 0.15em;
+    &:has(+ .rustex-math-ord) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-rel) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-op) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-open) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-close) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-punct) { padding-right: 0.15em;}
+
+    + .rustex-math-op { padding-left: 0.15em; }
+    + .rustex-math-rel { padding-left: 0.2em; }
+    /*padding-left: 0.15em;
     padding-right: 0.15em;
     + .rustex-math-bin { padding-left: 0; }
     &:has(+ .rustex-math-bin) { padding-right: 0; }
     &:first-child { padding-left: 0; }
-    &:last-child { padding-right: 0; }
+    &:last-child { padding-right: 0; }*/
 }
 .rustex-math-rel {
-    padding-left: 0.2em;
+    &:has(+ .rustex-math-ord) { padding-right: 0.2em;}
+    &:has(+ .rustex-math-bin) { padding-right: 0.2em;}
+    &:has(+ .rustex-math-op) { padding-right: 0.2em;}
+    &:has(+ .rustex-math-open) { padding-right: 0.2em;}
+    &:has(+ .rustex-math-close) { padding-right: 0.2em;}
+    &:has(+ .rustex-math-punct) { padding-right: 0.2em;}
+
+    + .rustex-math-op { padding-left: 0.15em; }
+    + .rustex-math-bin { padding-left: 0.15em; }
+    /*padding-left: 0.2em;
     padding-right: 0.2em;
     + .rustex-math-rel { padding-left: 0; }
     &:has(+ .rustex-math-rel) { padding-right: 0; }
     &:first-child { padding-left: 0; }
-    &:last-child { padding-right: 0; }
+    &:last-child { padding-right: 0; }*/
 }
 .rustex-math-punct {
-    padding-left: 0;
+    &:has(+ .rustex-math-ord) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-rel) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-op) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-open) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-close) { padding-right: 0.15em;}
+    &:has(+ .rustex-math-bin) { padding-right: 0.15em;}
+
+    + .rustex-math-op { padding-left: 0.15em; }
+    + .rustex-math-bin { padding-left: 0.15em; }
+    + .rustex-math-rel { padding-left: 0.2em; }
+    /*padding-left: 0;
     padding-right: 0.15em;
     &:has(+ .rustex-math-punct) { padding-right: 0; }
-    &:last-child { padding-right: 0; }
+    &:last-child { padding-right: 0; }*/
+}
+
+* + .rustex-mkern {
+    padding-left:0;
+}
+.rustex-mkern + * {
+    padding-right:0;
 }
 
 .rustex-display {
@@ -270,73 +315,37 @@ span {display:contents;}
         writing-mode: initial;
     }
 }
-
-/* inline-flex avoids weird vertical gaps in e.g. footnote markers */
 /*
-mtext {
-    letter-spacing: initial;
-    word-spacing: initial;
-    display: inline-flex;
-}
-mtext > {display:initial}
-mtext * {
-    font-size: inherit;
-    writing-mode: initial;
+munder > :not(:first-child) {
+    math-depth: inherit;
+    math-style: inherit;
 }
 
-mi { position: relative}
-mo {position: relative;padding-left: 0;padding-right: 0}
-msub > :nth-child(2), msup > :nth-child(2) {font-size:inherit}
-mfrac > * {font-size: inherit}
-mover > :not(:first-child), munder > :not(:first-child) {font-size:inherit}
-mtd {padding:0;text-align: start}
-
- */
-
-/*
-
-.rustex-vbox, .rustex-vtop, .rustex-vcenter,.rustex-foreign {
-    display:inline-flex;
-    flex-direction: column;
+mover > :not(:first-child) {
+    math-depth: inherit;
+    math-style: inherit;
 }
 
-.rustex-hbox, .rustex-vbox, .rustex-vtop, .rustex-vcenter {
-    overflow: visible;
-    text-align: left;
+munderover > :not(:first-child) {
+    math-depth: inherit;
+    math-style: inherit;
 }
 
-.rustex-hbox, .rustex-hbox-no-space {
-    display:inline-flex;
-    white-space: pre;
-    width: min-content;
-    height: min-content;
-    align-items: baseline;
+msub > :not(:first-child) {
+    math-depth: inherit;
+    math-style: inherit;
 }
 
-.rustex-display-vcenter {
-    text-align:center;
-    display:block;
-    align-self: center;
-    margin-top: 5px;
-    margin-bottom: 5px;
-    width: 100%;
-    min-width: 100%;
+msup > :not(:first-child) {
+    math-depth: inherit;
+    math-style: inherit;
 }
 
-.rustex-hbox-no-space > .rustex-space-in-hbox, .rustex-hbox-no-space > span > .rustex-space-in-hbox, .rustex-hbox-no-space > span > span > .rustex-space-in-hbox {
-    margin:0;
+msubsup > :not(:first-child) {
+    math-depth: inherit;
+    math-style: inherit;
 }
-.rustex-hbox > .rustex-text, .rustex-hbox > span > .rustex-text, .rustex-hbox > span > span > .rustex-text, .rustex-hbox > span > span > span > .rustex-text {
-    display:inline-block;
-    margin-bottom:1.2px;
-}
-
-
-.rustex-paragraph > .rustex-text, .rustex-paragraph > span > .rustex-text, .rustex-paragraph > span > span > .rustex-text, .rustex-paragraph > span > span > span > .rustex-text  { display:contents; }
-
- */
-
-
+*/
 
 /* --------------------------------------------------- Tables ------------------------------------------------------- */
 
@@ -377,12 +386,6 @@ mtd {padding:0;text-align: start}
     justify-content: flex-start;
     grid-column: span var(--rustex-align-num);
 }
-/*
-.rustex-halign-cell > .rustex-space-in-hbox, .rustex-halign-cell > span > .rustex-space-in-hbox, .rustex-halign-cell > span > span > .rustex-space-in-hbox {
-    margin:0;
-}
-
- */
 
 /* --------------------------------------------------- Others ------------------------------------------------------- */
 

@@ -3,6 +3,12 @@ name = "immt-ontology"
 version = "0.0.1"
 edition = "2021"
 
+[dev-dependencies]
+walkdir = {workspace=true}
+tracing-subscriber = {workspace=true}
+tracing = {workspace=true}
+serde_json = {workspace=true}
+
 [features]
 rdf = ["dep:oxrdf"]
 tokio = ["dep:tokio"]

@@ -11,11 +11,11 @@ use std::{collections::hash_map::Entry, path::Path};
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
 pub use async_lsp;
 use immt_ontology::uris::{DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
-use immt_stex::quickparse::stex::{structs::{ModuleReference, STeXModuleStore}, STeXParseData};
+use immt_stex::quickparse::stex::{structs::{GetModuleError, ModuleReference, STeXModuleStore}, STeXParseData};
 use immt_system::backend::{AnyBackend, GlobalBackend};
 use immt_utils::{prelude::HMap, sourcerefs::{LSPLineCol, SourceRange}};
 use implementation::HTMLRequest;
-use state::{DocOrData, LSPState};
+use state::{DocData, LSPState, UrlOrFile};
 
 pub trait ClientExt {
   fn html_result(&self,uri:&DocumentURI);
@@ -45,6 +45,13 @@ pub trait IMMTLSPServer:'static {
   fn initialize<I:Iterator<Item=(String,lsp::Url)> + Send + 'static>(&mut self,_workspaces:I) {}
 }
 
+#[derive(serde::Serialize,serde::Deserialize)]
+struct ReloadParams {}
+struct Reload;
+impl lsp::notification::Notification for Reload {
+  type Params = ReloadParams;
+  const METHOD: &str = "immt/reload";
+}
 
 pub struct ServerWrapper<T:IMMTLSPServer> {
   pub inner:T
@@ -58,11 +65,18 @@ impl <T:IMMTLSPServer> ServerWrapper<T> {
   pub fn router(self) -> async_lsp::router::Router<Self> {
     let mut r = async_lsp::router::Router::from_language_server(self);
     r.request::<HTMLRequest,_>(Self::html_request);
+    r.notification::<Reload>(Self::reload);
     //r.request(handler)
     r
   }
 
   pub fn get_progress(&self,tk: lsp::ProgressToken) -> ProgressCallbackClient {
+    match &tk {
+      lsp::ProgressToken::Number(n) if *n > 0 => {
+        TOKEN.fetch_max(*n as u32 + 1, std::sync::atomic::Ordering::Relaxed);
+      }
+      _ => ()
+    }
     ProgressCallbackClient {
       client:self.inner.client().clone(),
       token:tk
@@ -71,12 +85,12 @@ impl <T:IMMTLSPServer> ServerWrapper<T> {
 }
 
 pub struct LSPStore<'a,const FULL:bool> {
-  pub(crate) map:&'a mut HMap<lsp::Url,DocOrData>,
+  pub(crate) map:&'a mut HMap<UrlOrFile,DocData>,
   cycles:Vec<DocumentURI>
 }
 impl<'a,const FULL:bool> LSPStore<'a,FULL> {
   #[inline]
-  pub fn new(map:&'a mut HMap<lsp::Url,DocOrData>) -> Self {
+  pub fn new(map:&'a mut HMap<UrlOrFile,DocData>) -> Self {
     Self {
       map,
       cycles:Vec::new()
@@ -105,36 +119,62 @@ impl<'a,const FULL:bool> LSPStore<'a,FULL> {
     }
   }
 }
+
+
 impl<'a,const FULL:bool> STeXModuleStore for &mut LSPStore<'a,FULL> {
   const FULL:bool = FULL;
-  fn get_module(&mut self,module:&ModuleReference) -> Option<STeXParseData> {
-      module.full_path.as_ref().and_then(|p| {
-        let lsp_uri = lsp::Url::from_file_path(p).ok()?;
-        match self.map.get(&lsp_uri) {
-          Some(DocOrData::Data(d)) => return Some(d.clone()),
-          Some(DocOrData::Doc(d)) => return Some(d.annotations.clone()),
-          None => ()
-        }
-        let uri = module.doc_uri()?;
-        
-        if self.cycles.contains(&uri) { 
-          let mut str = String::new();
-          for c in &self.cycles {
-            str.push_str(&format!("{c}\n => "));
+  fn get_module(&mut self,module:&ModuleReference,in_path:Option<&std::sync::Arc<Path>>) -> Result<STeXParseData,GetModuleError> {
+      let Some(p) = module.full_path.as_ref() else {
+        return Err(GetModuleError::NotFound(module.uri.clone()))
+      };
+      let uri = &module.in_doc;
+      if let Some(i) = self.cycles.iter().position(|u| u == uri) { 
+        let mut ret = self.cycles[i..].to_vec();
+        ret.push(uri.clone());
+        return Err(GetModuleError::Cycle(ret))
+      }
+
+      macro_rules! do_return {
+        ($e:expr) => {{
+          /*if TRACK_DEPS {
+            if let Some(in_path) = in_path {
+              if module.uri != *immt_ontology::metatheory::URI {
+                $e.lock().dependents.insert_clone(in_path);
+              }
+            }
+          }*/
+          return Ok($e)
+        }}
+      }
+
+      let lsp_uri = UrlOrFile::File(p.clone());
+      //let lsp_uri = lsp::Url::from_file_path(p).map_err(|_| GetModuleError::NotFound(module.uri.clone()))?;
+      match self.map.get(&lsp_uri) {
+        Some(DocData::Data(d,_)) => do_return!(d.clone()),
+        Some(DocData::Doc(d)) if d.is_up_to_date() => do_return!(d.annotations.clone()),
+        _ => ()
+      }
+      
+      self.cycles.push(uri.clone());
+      let r = self.load_as_false(p,uri).inspect(|ret| {
+        match self.map.entry(lsp_uri) {
+          Entry::Vacant(e) => {e.insert(DocData::Data(ret.clone(),FULL));}
+          Entry::Occupied(mut e) => {
+            e.get_mut().merge(DocData::Data(ret.clone(),FULL));
           }
-          str.push_str(&format!("{uri}"));
-          tracing::error!("Importmodule cycle:\n{str}");
-          return None
         }
-        self.cycles.push(uri.clone());
-        let r = self.load_as_false(p,&uri).inspect(|ret| {
-          if let Entry::Vacant(e) = self.map.entry(lsp_uri) {
-            e.insert(DocOrData::Data(ret.clone()));
+      });
+      /*if TRACK_DEPS {
+        if let Some(r) = &r {
+          if let Some(in_path) = in_path {
+            if module.uri != *immt_ontology::metatheory::URI {
+              r.lock().dependencies.insert_clone(in_path);
+            }
           }
-        });
-        self.cycles.pop();
-        r
-      })
+        }
+      }*/
+      self.cycles.pop();
+      r.ok_or_else(|| GetModuleError::NotFound(module.uri.clone()))
   }
 }
 
@@ -167,16 +207,17 @@ impl IsLSPRange for SourceRange<LSPLineCol> {
   }
 }
 
-pub struct ProgressCallbackClient {
-  client:ClientSocket,
-  token: async_lsp::lsp_types::ProgressToken
-}
-
 pub struct ProgressCallbackServer {
   client:ClientSocket,
-  token:String,
+  token:u32,
+  handle:tokio::task::JoinHandle<()>,
   progress:Option<parking_lot::Mutex<(u32,u32)>>
 }
+
+lazy_static::lazy_static! {
+  static ref TOKEN:triomphe::Arc<std::sync::atomic::AtomicU32> = triomphe::Arc::new(std::sync::atomic::AtomicU32::new(42));
+}
+
 impl ProgressCallbackServer {
 
   #[inline]
@@ -192,22 +233,19 @@ impl ProgressCallbackServer {
 
   #[must_use]#[allow(clippy::let_underscore_future)]
   pub fn new(mut client:ClientSocket,title:String, total:Option<u32>) -> Self {
-    let tk = immt_utils::hashstr("progress_", &title);//TOKEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let token = async_lsp::lsp_types::ProgressToken::String(tk.clone());
+    let token = TOKEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let f = client.work_done_progress_create(
       lsp::WorkDoneProgressCreateParams {
-          token
+          token:lsp::NumberOrString::Number(token as _)
         }
       );
     let mut c = client.clone();
-    let tk2 = tk.clone();
-    let _ = tokio::spawn(async move {
-      let r = f.await;
-      if let Err(e) = r {
+    let handle = tokio::spawn(async move {
+      if let Err(e) = f.await {
         tracing::error!("Error: {}",e);
       } else {
         let _ = c.progress(async_lsp::lsp_types::ProgressParams {
-          token:async_lsp::lsp_types::ProgressToken::String(tk2),
+          token:async_lsp::lsp_types::ProgressToken::Number(token as _),
           value:async_lsp::lsp_types::ProgressParamsValue::WorkDone(
             async_lsp::lsp_types::WorkDoneProgress::Begin(
               async_lsp::lsp_types::WorkDoneProgressBegin {
@@ -221,7 +259,8 @@ impl ProgressCallbackServer {
         });
       }
   });
-    Self { client, token:tk, progress:total.map(|i| parking_lot::Mutex::new((0,i))) }
+    //tracing::info!("New progress with id {token}");
+    Self { client, token, handle, progress:total.map(|i| parking_lot::Mutex::new((0,i))) }
   }
 
   pub fn update(&self,message:String,add_step:Option<u32>) {
@@ -235,8 +274,9 @@ impl ProgressCallbackServer {
       let lock = lock.lock();
       (format!("{}/{}:{message}",lock.0,lock.1),Some(100 * lock.0 / lock.1))
     } else {(message,None)};
-    let token = async_lsp::lsp_types::ProgressToken::String(self.token.clone());
+    let token = async_lsp::lsp_types::ProgressToken::Number(self.token as _);
     //tracing::info!("updating progress {}",self.token);
+    while !self.handle.is_finished() { std::thread::sleep(std::time::Duration::from_millis(10));}
     let _ = self.client.clone().progress(async_lsp::lsp_types::ProgressParams {
       token,
       value:async_lsp::lsp_types::ProgressParamsValue::WorkDone(
@@ -254,7 +294,7 @@ impl ProgressCallbackServer {
 
 impl Drop for ProgressCallbackServer {
   fn drop(&mut self) {
-    let token = async_lsp::lsp_types::ProgressToken::String(std::mem::take(&mut self.token));
+    let token = async_lsp::lsp_types::ProgressToken::Number(self.token as _);
     let _ = self.client.progress(async_lsp::lsp_types::ProgressParams {
       token,
       value:async_lsp::lsp_types::ProgressParamsValue::WorkDone(
@@ -266,6 +306,11 @@ impl Drop for ProgressCallbackServer {
       )
     });
   }
+}
+
+pub struct ProgressCallbackClient {
+  client:ClientSocket,
+  token: async_lsp::lsp_types::ProgressToken
 }
 
 impl ProgressCallbackClient {

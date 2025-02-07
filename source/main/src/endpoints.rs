@@ -4,7 +4,9 @@
  * | Path         | Arguments | Description / Return Value |
  * | ------------ | --------- | ----------- |
  * | **API** | <!--<hr>--> | POST requests with arguments being `application/x-www-form-urlencoded`-encoded  |
- * | [`/api/settings`](get_settings) | (None) | [Settings](SettingsSpec) (requires admin login) |
+ * | [`/api/index`](crate::router::index::index()) | (None) |  |
+ * | [`/api/settings`](settings::get_settings) | (None) | [Settings](SettingsSpec) (requires admin login) |
+ * | [`/api/reload`](settings::reload) | (None) | (requires admin login) |
  * | [`/api/login`](login) | `username=<STRING>`, `password=<STRING>` | log in |
  * | [`/api/login_state`](login_state) | (None) | [LoginState] |
  * | **Backend** | | |
@@ -36,6 +38,7 @@
  * | [`/content/los`](content::los()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
  * | [`/content/notations`](content::notations()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
  * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](immt_ontology::narration::exercises::Solutions) |
+ * | [`/content/legacy/uris`](content::uris()) | | |
 */
 
 
@@ -48,7 +51,7 @@ use shtml_viewer_components::components::{omdoc::AnySpec,TOCElem};
 use crate::{
   users::{login,login_state,LoginState},
   router::{
-    settings::get_settings,
+    settings,
     backend,
     query::query_api,
     buildqueue,

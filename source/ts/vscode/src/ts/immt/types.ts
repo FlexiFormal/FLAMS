@@ -88,7 +88,6 @@ export type DocumentURIParams = DocumentURI |
   { a:string, p?:string, d:string, l?:Language }
 ;
 
-
 export type URIParams = DocumentURI | 
   { a:string} | // ArchiveURI
   { a: string, rp: string } | // DocumentURI 
@@ -97,3 +96,13 @@ export type URIParams = DocumentURI |
   { a:string, p?:string, m:string, l?:Language } | // ModuleURI
   { a:string, p?:string, m:string, l?:Language, s:string } // SymbolURI
 ;
+
+export type Institution = { title:string, place:string, country:string, url:string, acronym:string, logo:string, type:"university"|"school"};
+export type ArchiveIndex =
+  {type:"library", archive:string, title:string, teaser?:string, thumbnail?:string} |
+  {type:"book", title:string, authors:string[], file:string, teaser?:string, thumbnail?:string} |
+  {type:"paper", title:string, authors:string[], file:string, thumbnail?:string, teaser?:string, venue?:string, venue_url?:string} |
+  {type:"course", title:string,landing:string, acronym?:string, instructors:string[], institution:string, notes:string, slides?:string, thumbnail?:string, quizzes:boolean, homeworks:boolean, instances:Instance[], teaser?:string} |
+  {type:"self-study", title:string, landing:string, acronym?:string, notes:string, slides?:string, thumbnail?:string, };
+
+export type Instance = {semester:string, instructors?:string[]};

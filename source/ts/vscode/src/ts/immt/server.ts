@@ -12,7 +12,7 @@ export class IMMTServer {
 
   /// requires login
   async api_settings(): Promise<immt.Settings | undefined> {
-    const ret = <[immt.Settings,any] | undefined> await this.postRequest("api/settings",{});
+    const ret = await this.postRequest<{},[immt.Settings,any,any] | undefined>("api/settings",{});
     if (ret) {
       const [settings,_] = ret;
       return settings;
@@ -35,6 +35,10 @@ export class IMMTServer {
 
   async backend_archive_entries(archive:string,in_path?:string): Promise<[immt.Directory[],immt.File[]] | undefined> {
     return await this.postRequest("api/backend/archive_entries",{archive:archive,path:in_path});
+  }
+
+  async index(): Promise<[immt.Institution[],immt.ArchiveIndex[]] | undefined> {
+    return await this.postRequest("api/index",{});
   }
 
   async query(sparql:String): Promise<any> {
@@ -91,7 +95,7 @@ export class IMMTServer {
 
     const queryString = buildQueryString(request).join('&');
     const url = `${this._url}/${endpoint}${queryString ? '?' + queryString : ''}`;
-    console.log(url);
+    console.log("Calling",url);
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -99,7 +103,9 @@ export class IMMTServer {
       }
     });
     if (response.ok) {
-      return await response.json() as TResponse;
+      const j = await response.json();
+      console.log("Response",url,":",j);
+      return j as TResponse;
     }
   }
 
@@ -120,6 +126,7 @@ export class IMMTServer {
       }
     };
     appendToForm(request);
+    console.log(`Calling ${this._url}/${endpoint} with body`,formData);
     const response = await fetch(`${this._url}/${endpoint}`, {
       method: 'POST',
       headers: {
@@ -129,7 +136,9 @@ export class IMMTServer {
     });
 
     if (response.ok) {
-      return await response.json() as TResponse;
+      const j = await response.json();
+      console.log(`Response ${this._url}/${endpoint} with body:`,j);
+      return j as TResponse;
     }
   }
 }

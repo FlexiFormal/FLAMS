@@ -67,8 +67,18 @@ impl<T:IMMTLSPServer> ServerWrapper<T> {
         let mut client = self.inner.client().clone();
         let state = self.inner.state().clone();
         Box::pin(tokio::task::spawn_blocking(move || {
-            state.build_html(&params.uri, &mut client).map(|d| d.to_string())
+            state.build_html(&params.uri.into(), &mut client).map(|d| d.to_string())
         }).map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string())))
+    }
+    pub(crate) fn reload(&mut self,_:crate::ReloadParams) -> <Self as LanguageServer>::NotifyResult {
+        let state = self.inner.state().clone();
+        let client = self.inner.client().clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            tracing::info!("LSP: reload");
+            state.backend().reset();
+            state.load_mathhubs(client);
+        });
+        ControlFlow::Continue(())
     }
 }
 
@@ -140,7 +150,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
             document.version,
             document.text
         );
-        self.inner.state().insert(document.uri,document.text);
+        self.inner.state().insert(document.uri.into(),document.text);
         ControlFlow::Continue(())
     }
     #[must_use]
@@ -148,7 +158,8 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     //impl_notification!(! did_change = DidChangeTextDocument);
     fn did_change(&mut self, params: lsp::DidChangeTextDocumentParams) -> Self::NotifyResult {
         let document = params.text_document;
-        if let Some(d) = self.inner.state().get(&document.uri) {
+        let uri = document.uri.clone().into();
+        if let Some(d) = self.inner.state().get(&uri) {
             for change in params.content_changes {
                 tracing::trace!("URI: {},version: {}, text: \"{}\", range: {:?}",
                     document.uri,
@@ -180,7 +191,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
         tracing::trace!("did_save: {}",params.text_document.uri);
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
-        let uri = params.text_document.uri;
+        let uri = params.text_document.uri.into();
         let _ = tokio::task::spawn_blocking(move || {
             state.build_html_and_notify(&uri, client);
         });
@@ -188,7 +199,12 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     }
 
     impl_notification!(! will_save = WillSaveTextDocument);
-    impl_notification!(! did_close = DidCloseTextDocument);
+    
+    //impl_notification!(! did_close = DidCloseTextDocument);    
+    fn did_close(&mut self,params:lsp::DidCloseTextDocumentParams) -> Self::NotifyResult {
+        tracing::trace!("did_close: {}",params.text_document.uri);
+        ControlFlow::Continue(())
+    }
 
     // window/
         // workDoneProgress/
@@ -216,7 +232,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
             let p = params.work_done_progress_params.work_done_token.map(
                 |tk| self.get_progress(tk)
             );
-            self.inner.state().get_symbols(&params.text_document.uri,p)
+            self.inner.state().get_symbols(&params.text_document.uri.into(),p)
                 .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
                 |f| Box::pin(f.map(Result::Ok)) as _
                 )
@@ -242,7 +258,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
             let p = params.work_done_progress_params.work_done_token.map(
                 |tk| self.get_progress(tk)
             );
-            self.inner.state().get_diagnostics(&params.text_document.uri,p)
+            self.inner.state().get_diagnostics(&params.text_document.uri.into(),p)
                 .map_or_else(|| Box::pin(std::future::ready(Ok(default()))) as _,
                 |f| Box::pin(f.map(Result::Ok)) as _
             )
@@ -282,7 +298,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
             let p = params.work_done_progress_params.work_done_token.map(
                 |tk| self.get_progress(tk)
             );
-            self.inner.state().get_links(&params.text_document.uri,p)
+            self.inner.state().get_links(&params.text_document.uri.into(),p)
                 .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
                 |f| Box::pin(f.map(Result::Ok)) as _
                 )
@@ -302,7 +318,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 |tk| self.get_progress(tk)
             );
             self.inner.state().get_hover(
-                &params.text_document_position_params.text_document.uri,
+                &params.text_document_position_params.text_document.uri.into(),
                 params.text_document_position_params.position,
                 p
             )
@@ -325,7 +341,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 |tk| self.get_progress(tk)
             );
             self.inner.state().get_goto_definition(
-                &params.text_document_position_params.text_document.uri,
+                params.text_document_position_params.text_document.uri.into(),
                 params.text_document_position_params.position,
                 p
             )
@@ -396,7 +412,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 |tk| self.get_progress(tk)
             );
             self.inner.state().get_inlay_hints(
-                &params.text_document.uri,
+                &params.text_document.uri.into(),
                 p
             )
                 .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
@@ -426,7 +442,9 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(rename = Rename);
     impl_request!(prepare_type_hierarchy = TypeHierarchyPrepare);
     impl_request!(will_save_wait_until = WillSaveWaitUntil);
-    impl_request!(completion = Completion);
+
+    impl_request!(!completion = Completion => (None));
+
     impl_request!(signature_help = SignatureHelpRequest);
     impl_request!(linked_editing_range = LinkedEditingRange);
     impl_request!(prepare_call_hierarchy = CallHierarchyPrepare);
@@ -443,7 +461,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 let p = params.work_done_progress_params.work_done_token.map(
                     |tk| self.get_progress(tk)
                 );
-                self.inner.state().get_semantic_tokens(&params.text_document.uri,p,None)
+                self.inner.state().get_semantic_tokens(&params.text_document.uri.into(),p,None)
                     .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
                     |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensResult::Tokens)))) as _
                     )
@@ -463,7 +481,7 @@ impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
                 let p = params.work_done_progress_params.work_done_token.map(
                     |tk| self.get_progress(tk)
                 );
-                self.inner.state().get_semantic_tokens(&params.text_document.uri,p,Some(params.range))
+                self.inner.state().get_semantic_tokens(&params.text_document.uri.into(),p,Some(params.range))
                     .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
                     |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensRangeResult::Tokens)))) as _
                     )

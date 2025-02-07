@@ -494,7 +494,7 @@ mod froms {
             m:&Morphism<Checked>,
             backend:&B//&mut StringPresenter<'_,B>
         ) -> Self {
-            let uri = m.uri.as_ref().unwrap().clone();
+            let uri = m.uri.clone();
             let total = m.total;
             let target = Some(m.domain.id().into_owned());
             let mut imports = VecSet::new();

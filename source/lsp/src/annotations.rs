@@ -1,7 +1,7 @@
-use crate::{state::LSPState, IsLSPRange, LSPStore, ProgressCallbackClient};
+use crate::{state::{LSPState, UrlOrFile}, IsLSPRange, LSPStore, ProgressCallbackClient};
 use async_lsp::lsp_types as lsp;
-use immt_ontology::uris::{ArchiveId, ArchiveURI, ArchiveURITrait};
-use immt_stex::quickparse::stex::{structs::SymnameMode, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI};
+use immt_ontology::{narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURI, ArchiveURITrait}};
+use immt_stex::quickparse::{latex::ParsedKeyValue, stex::{rules::{MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, structs::{InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymnameMode}, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI}};
 use smallvec::SmallVec;
 use futures::FutureExt;
 use crate::capabilities::STeXSemanticTokens;
@@ -11,9 +11,9 @@ use immt_utils::{prelude::TreeChildIter, sourcerefs::{LSPLineCol, SourceRange}};
 trait AnnotExt:Sized {
     fn as_symbol(&self) -> Option<(lsp::DocumentSymbol,&[Self])>;
     fn links(&self,top_archive:Option<&ArchiveURI>,f:impl FnMut(lsp::DocumentLink));
-    fn goto_definition(&self,pos:LSPLineCol) -> Option<lsp::GotoDefinitionResponse>;
+    fn goto_definition(&self,in_doc:&UrlOrFile,pos:LSPLineCol) -> Option<lsp::GotoDefinitionResponse>;
     fn semantic_tokens(&self,cont:&mut impl FnMut(SourceRange<LSPLineCol>,u32));
-    fn hover(&self) -> Option<lsp::Hover>;
+    fn hover(&self,pos:LSPLineCol) -> Option<lsp::Hover>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
 }
 
@@ -41,14 +41,62 @@ impl AnnotExt for STeXAnnot {
                 Some((lsp::DocumentSymbol {
                     name: uri.uri.to_string(),
                     detail:None,
-                    kind:lsp::SymbolKind::MODULE,
+                    kind:lsp::SymbolKind::CLASS,
                     tags:None,
                     deprecated:None,
                     range:full_range.into_range(),
                     selection_range:name_range.into_range(),
                     children:None
                 },&children)),
-            Self::Symdecl { uri, macroname, main_name_range, name_ranges, full_range,.. } =>
+            Self::ConservativeExt { uri, full_range, extstructure_range, children,.. } =>
+                Some((lsp::DocumentSymbol {
+                    name: format!("{}_EXT",uri.uri),
+                    detail:None,
+                    kind:lsp::SymbolKind::CLASS,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:extstructure_range.into_range(),
+                    children:None
+                },&children)),
+            Self::MorphismEnv { full_range, env_range, uri,children,.. } =>
+                Some((lsp::DocumentSymbol {
+                    name: uri.to_string(),
+                    detail:None,
+                    kind:lsp::SymbolKind::CLASS,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:env_range.into_range(),
+                    children:None
+                },&children)),
+            Self::InlineMorphism { full_range, uri,token_range,.. } =>
+                Some((lsp::DocumentSymbol {
+                    name: uri.to_string(),
+                    detail:None,
+                    kind:lsp::SymbolKind::CLASS,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:token_range.into_range(),
+                    children:None
+                },&[])),
+            Self::Paragraph{kind,full_range,name_range,children,..} |
+            Self::InlineParagraph{kind,full_range,token_range:name_range,children,.. } => {
+                Some((lsp::DocumentSymbol {
+                    name:kind.to_string(),
+                    detail:None,
+                    kind:lsp::SymbolKind::PACKAGE,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:name_range.into_range(),
+                    children:None
+                },&children))
+            }
+            Self::Symdecl { uri, main_name_range, full_range,.. } |
+            Self::TextSymdecl { uri, main_name_range, full_range,.. } |
+            Self::Symdef { uri,main_name_range, full_range,.. } =>
                 Some((lsp::DocumentSymbol {
                     name: uri.uri.to_string(),
                     detail:None,
@@ -59,11 +107,22 @@ impl AnnotExt for STeXAnnot {
                     selection_range:main_name_range.into_range(),
                     children:None
                 },&[])),
-            Self::Symdef { uri, macroname, main_name_range, name_ranges, full_range,.. } =>
+            Self::Vardef { name, main_name_range, full_range,.. } =>
                 Some((lsp::DocumentSymbol {
-                    name: uri.uri.to_string(),
+                    name: name.to_string(),
                     detail:None,
-                    kind:lsp::SymbolKind::OBJECT,
+                    kind:lsp::SymbolKind::VARIABLE,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:main_name_range.into_range(),
+                    children:None
+                },&[])),
+            Self::Varseq { name, main_name_range,full_range,.. } =>
+                Some((lsp::DocumentSymbol {
+                    name: name.to_string(),
+                    detail:None,
+                    kind:lsp::SymbolKind::VARIABLE,
                     tags:None,
                     deprecated:None,
                     range:full_range.into_range(),
@@ -85,6 +144,17 @@ impl AnnotExt for STeXAnnot {
                 Some((lsp::DocumentSymbol {
                     name: format!("usemodule@{}",module.uri),
                     detail:Some(module.uri.to_string()),
+                    kind:lsp::SymbolKind::PACKAGE,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:full_range.into_range(),
+                    children:None
+                },&[])),
+            Self::UseStructure { structure, full_range,.. } =>
+                Some((lsp::DocumentSymbol {
+                    name: format!("usestructure@{}",structure.uri),
+                    detail:None,
                     kind:lsp::SymbolKind::PACKAGE,
                     tags:None,
                     deprecated:None,
@@ -117,7 +187,11 @@ impl AnnotExt for STeXAnnot {
                     selection_range:range.into_range(),
                     children:None
                 },&[])),
-            Self::SemanticMacro { .. } | Self::SymName{ .. } | Self::Notation{ .. } => None
+            Self::SemanticMacro { .. } | Self::VariableMacro { .. } | Self::SymName{ .. } | 
+            Self::Symref{ .. } | Self::Notation{ .. } | Self::Svar{ .. } |
+            Self::Symuse{ .. } | Self::Definiens{ .. } | 
+            Self::Defnotation { .. } | Self::RenameDecl{ .. } |
+            Self::Assign{ .. } => None
         }
     }
 
@@ -138,20 +212,22 @@ impl AnnotExt for STeXAnnot {
                     data:None
                 });
             }
-            Self::ImportModule{ .. } |
-            Self::UseModule{ .. } |
-            Self::SemanticMacro{ .. } |
-            Self::SetMetatheory{ .. } | 
-            Self::Module{ .. } | 
-            Self::MathStructure{ .. } |
-            Self::Symdecl{ .. } |
-            Self::SymName{ .. } |
-            Self::Notation{ .. } |
-            Self::Symdef{ .. } => ()
+            Self::ImportModule{ .. } | Self::UseModule{ .. } |
+            Self::SemanticMacro{ .. } | Self::VariableMacro { .. } |
+            Self::SetMetatheory{ .. } | Self::Module{ .. } | Self::MathStructure{ .. } |
+            Self::Symdecl{ .. } | Self::TextSymdecl{..} | 
+            Self::SymName{ .. } | Self::Symref{ .. } |
+            Self::Notation{ .. } | Self::Symdef{ .. } | Self::Vardef{ .. } |
+            Self::Paragraph{..} | Self::Symuse{ .. } | Self::Svar{ .. } |
+            Self::Varseq{ .. } | Self::Definiens{ .. } |
+            Self::Defnotation { .. } | Self::ConservativeExt{..} |
+            Self::UseStructure{ .. } | Self::InlineParagraph{..} |
+            Self::MorphismEnv{ .. } | Self::RenameDecl{ .. } |
+            Self::Assign{ .. } | Self::InlineMorphism{ .. } => ()
         }
     }
 
-    fn goto_definition(&self,pos:LSPLineCol) -> Option<lsp::GotoDefinitionResponse> {
+    fn goto_definition(&self,in_doc:&UrlOrFile,pos:LSPLineCol) -> Option<lsp::GotoDefinitionResponse> {
         match self {
             Self::ImportModule { module,archive_range,path_range,.. } |
             Self::UseModule { module,archive_range,path_range,.. } |
@@ -166,9 +242,62 @@ impl AnnotExt for STeXAnnot {
                     uri,range:lsp::Range::default()
                 }))
             }
+            Self::ConservativeExt{ ext_range,uri,..} => {
+                if !ext_range.contains(pos) {return None};
+                let Some(p) = &uri.filepath else {return None};
+                let Ok(url) = lsp::Url::from_file_path(p) else {return None};
+                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: url,
+                    range:SourceRange::into_range(uri.range)
+                }))
+            } 
+            Self::MorphismEnv{ domain_range,domain,..} => {
+                if domain_range.contains(pos) {
+                    let Some((p,range)) = (match domain {
+                        ModuleOrStruct::Module(uri) => uri.full_path.as_ref().map(|r| (r,SourceRange::default())),
+                        ModuleOrStruct::Struct(uri) => uri.filepath.as_ref().map(|r| (r,uri.range))
+                    }) else {return None};
+                    let Ok(url) = lsp::Url::from_file_path(p) else {return None};
+                    return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                        uri: url,
+                        range:SourceRange::into_range(range)
+                    }))
+                } else { None }
+            }
+            Self::InlineMorphism{ domain_range,domain,assignments,..} => {
+                if domain_range.contains(pos) {
+                    let Some((p,range)) = (match domain {
+                        ModuleOrStruct::Module(uri) => uri.full_path.as_ref().map(|r| (r,SourceRange::default())),
+                        ModuleOrStruct::Struct(uri) => uri.filepath.as_ref().map(|r| (r,uri.range))
+                    }) else {return None};
+                    let Ok(url) = lsp::Url::from_file_path(p) else {return None};
+                    return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                        uri: url,
+                        range:SourceRange::into_range(range)
+                    }))
+                }
+                for a in assignments {
+                    if a.symbol_range.contains(pos) {
+                        let Some(p) = &a.symbol.filepath else {return None};
+                        let Ok(url) = lsp::Url::from_file_path(p) else {return None};
+                        return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                            uri: url,
+                            range:SourceRange::into_range(a.symbol_range)
+                        }))
+                    }
+                }
+                None
+            }
             Self::SemanticMacro{ uri,token_range:range,.. } |
             Self::SymName{ uri,name_range:range,.. } |
-            Self::Notation{ uri,name_range:range,.. } => {
+            Self::Symref{ uri,name_range:range,.. } |
+            Self::Notation{ uri,name_range:range,.. } |
+            Self::Symuse{ uri,name_range:range,.. } |
+            Self::Definiens{ uri,name_range:Some(range),.. } |
+            Self::UseStructure{ structure:uri,structure_range:range,..} |
+            Self::RenameDecl{uri,orig_range:range,..} |
+            Self::Assign{uri,orig_range:range,..} => {
                 if !range.contains(pos) {return None};
                 let Some(p) = &uri.filepath else {return None};
                 let Ok(url) = lsp::Url::from_file_path(p) else {return None};
@@ -178,13 +307,73 @@ impl AnnotExt for STeXAnnot {
                     range:SourceRange::into_range(uri.range)
                 }))
             }
-            Self::Module{ .. } | Self::MathStructure { .. } | Self::Symdecl { .. } | Self::Symdef { .. } | Self::Inputref{ .. } => None
+            Self::Paragraph{parsed_args,..} |
+            Self::InlineParagraph{parsed_args,.. } => {
+                for p in parsed_args {
+                    if let ParagraphArg::Fors(ParsedKeyValue{val_range,val,..}) = p {
+                        if val_range.contains(pos) {
+                            for (s,r) in val {
+                                if r.contains(pos) {
+                                    let Some(p) = &s.filepath else {return None};
+                                    let Ok(url) = lsp::Url::from_file_path(p) else {return None};
+                                    //tracing::info!("Going to definition for {}: {}@{:?}",s.uri,url,range);
+                                    return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                                        uri: url,
+                                        range:SourceRange::into_range(s.range)
+                                    }))
+                                }
+                            }
+                        }
+                        return None
+                    }
+                }
+                None
+            }
+            Self::VariableMacro{orig,full_range,..} => {
+                if !full_range.contains(pos) {return None};
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri:in_doc.clone().into(),
+                    range:SourceRange::into_range(*orig)
+                }))
+            }
+            Self::MathStructure { extends, .. } =>
+                extends.iter().find_map(|(uri,r)| if r.contains(pos) {
+                    let Some(p) = &uri.filepath else {return None};
+                    let Ok(url) = lsp::Url::from_file_path(p) else {return None};
+                    //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                    Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                        uri: url,
+                        range:SourceRange::into_range(uri.range)
+                    }))
+                } else {None}),
+            Self::Module{ .. } | Self::Symdecl { .. } | Self::Svar{ .. } |
+            Self::Symdef { .. } | Self::Inputref{ .. } |
+            Self::Vardef{ .. } | Self::Varseq{ .. } |
+            Self::Definiens{ .. } | Self::Defnotation { .. } |
+            Self::TextSymdecl{ .. } => None
         }
     }
     fn semantic_tokens(&self,cont:&mut impl FnMut(SourceRange<LSPLineCol>,u32)) {
         match self {
-            Self::Module { uri, name_range, sig, meta_theory, full_range, smodule_range, children } => {
+            Self::Module { uri, name_range, full_range, smodule_range,opts, children,.. } => {
                 cont(*smodule_range, STeXSemanticTokens::DECLARATION);
+                for o in opts { match o {
+                    SModuleArg::Title(v) => {
+                        cont(v.key_range,STeXSemanticTokens::KEYWORD);
+                        for e in &v.val {
+                            e.semantic_tokens(cont);
+                        }
+                    }
+                    SModuleArg::Sig(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::KEYWORD);
+                    }
+                    //SModuleArg::Creators(ParsedKeyValue{key_range,..}) |
+                    //SModuleArg::Contributors(ParsedKeyValue{key_range,..}) |
+                    SModuleArg::Meta(ParsedKeyValue{key_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                    }
+                }}
                 cont(*name_range,STeXSemanticTokens::NAME);
                 for c in children {
                     c.semantic_tokens(cont);
@@ -195,11 +384,22 @@ impl AnnotExt for STeXAnnot {
                 end_range.start.col = end_range.end.col - "smodule".len() as u32;
                 cont(end_range,STeXSemanticTokens::DECLARATION);
             }
-            Self::MathStructure { uri, extends, name_range, real_name_range, full_range, children, mathstructure_range } => {
+            Self::MathStructure { uri, extends, name_range, opts, full_range, children, mathstructure_range } => {
                 cont(*mathstructure_range, STeXSemanticTokens::DECLARATION);
                 cont(*name_range,STeXSemanticTokens::NAME);
-                if let Some(r) = real_name_range {
-                    cont(*r,STeXSemanticTokens::NAME)
+                for o in opts { match o {
+                    MathStructureArg::This(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for e in val {
+                            e.semantic_tokens(cont);
+                        }
+                    }
+                    MathStructureArg::Name(range, _) => {
+                        cont(*range,STeXSemanticTokens::NAME);
+                    }
+                }}
+                for (_,r) in extends {
+                    cont(*r,STeXSemanticTokens::SYMBOL)
                 }
                 for c in children {
                     c.semantic_tokens(cont);
@@ -211,154 +411,475 @@ impl AnnotExt for STeXAnnot {
                 end_range.start.col = end_range.end.col - s.len() as u32;
                 cont(end_range,STeXSemanticTokens::DECLARATION);
             }
+            Self::ConservativeExt { uri, ext_range, full_range, extstructure_range, children } => {
+                cont(*extstructure_range, STeXSemanticTokens::DECLARATION);
+                cont(*ext_range,STeXSemanticTokens::SYMBOL);
+                for c in children {
+                    c.semantic_tokens(cont);
+                }
+                let mut end_range = *full_range;
+                end_range.end.col -= 1;
+                end_range.start.line = end_range.end.line;
+                end_range.start.col = end_range.end.col - "extstructure*".len() as u32;
+                cont(end_range,STeXSemanticTokens::DECLARATION);
+            }
+            Self::MorphismEnv{ env_range,star,kind,name_range,domain_range,full_range,domain,children,..} => {
+                cont(*env_range,STeXSemanticTokens::DECLARATION);
+                cont(*name_range,STeXSemanticTokens::NAME);
+                match domain {
+                    ModuleOrStruct::Struct(_) => cont(*domain_range,STeXSemanticTokens::SYMBOL),
+                    _ => ()
+                }
+                for c in children {
+                    c.semantic_tokens(cont);
+                }
+
+                let mut end_range = *full_range;
+                end_range.end.col -= 1;
+                end_range.start.line = end_range.end.line;
+                let len = match kind {
+                    MorphismKind::CopyModule => "copymodule".len(),
+                    MorphismKind::InterpretModule => "interpretmodule".len()
+                };
+                let len = if *star {len + 1} else {len}; 
+                end_range.start.col = end_range.end.col - len as u32;
+                cont(end_range,STeXSemanticTokens::DECLARATION);
+            }
+            Self::InlineMorphism{token_range,name_range,domain_range,domain,assignments,..} => {
+                cont(*token_range,STeXSemanticTokens::DECLARATION);
+                cont(*name_range,STeXSemanticTokens::NAME);
+                match domain {
+                    ModuleOrStruct::Struct(_) => cont(*domain_range,STeXSemanticTokens::SYMBOL),
+                    _ => ()
+                }
+                for InlineMorphAssign{first,second,symbol_range,..} in assignments {
+                    cont(*symbol_range,STeXSemanticTokens::SYMBOL);
+                    if let Some((e,knd)) = first {
+                        let end = LSPLineCol{ line:e.line, col:e.col + 1};
+                        let range = SourceRange{ start:*e, end};
+                        cont(range,STeXSemanticTokens::KEYWORD);
+                        match knd {
+                            InlineMorphAssKind::Df(v) => for c in v {
+                                c.semantic_tokens(cont);
+                            },
+                            InlineMorphAssKind::Rename(mn,_,n) => {
+                                if let Some((_,mn)) = mn {
+                                    cont(*mn,STeXSemanticTokens::NAME);
+                                }
+                                cont(*n,STeXSemanticTokens::NAME);
+                            }
+                        }
+                    }
+                    if let Some((e,knd)) = second {
+                        let end = LSPLineCol{ line:e.line, col:e.col + 1};
+                        let range = SourceRange{ start:*e, end};
+                        cont(range,STeXSemanticTokens::KEYWORD);
+                        match knd {
+                            InlineMorphAssKind::Df(v) => for c in v {
+                                c.semantic_tokens(cont);
+                            },
+                            InlineMorphAssKind::Rename(mn,_,n) => {
+                                if let Some((_,mn)) = mn {
+                                    cont(*mn,STeXSemanticTokens::NAME);
+                                }
+                                cont(*n,STeXSemanticTokens::NAME);
+                            }
+                        }
+                    }
+                }
+            }
+            Self::UseModule { token_range, ..}  =>
+                cont(*token_range,STeXSemanticTokens::LOCAL),
+            Self::UseStructure { token_range,structure_range, ..}  => {
+                cont(*token_range,STeXSemanticTokens::LOCAL);
+                cont(*structure_range,STeXSemanticTokens::SYMBOL);
+            }
+            Self::Inputref{ token_range:range, .. } |
+            Self::Defnotation { full_range:range } =>
+                cont(*range,STeXSemanticTokens::REF_MACRO),
             Self::SetMetatheory { token_range,.. } |
-            Self::ImportModule { token_range, ..} |
-            Self::UseModule { token_range, ..} |
-            Self::Inputref{ token_range, .. } =>
+            Self::ImportModule { token_range, ..} =>
                 cont(*token_range,STeXSemanticTokens::DECLARATION),
             Self::SemanticMacro{ token_range,..} =>
                 cont(*token_range,STeXSemanticTokens::SYMBOL),
-            Self::Symdecl { main_name_range, name_ranges, token_range, parsed_args, .. } => {
-                cont(*token_range, STeXSemanticTokens::DECLARATION);
-                cont(*main_name_range, STeXSemanticTokens::NAME);
-                
-                let mut props = SmallVec::<
-                    (SourceRange<LSPLineCol>,SourceRange<LSPLineCol>,Option<u32>,Option<&Vec<Self>>),
-                4>::new();
-                macro_rules! insert {
-                    ($key:ident,$p:pat => $r:ident + $v:ident = $e:expr ; $tks:expr) => {
-                        if let Some($p) = &parsed_args.$key {
-                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_)| (b.start.line,b.start.col)) {
-                                Ok(i) => i,
-                                Err(i) => i
-                            };
-                            props.insert(i,(*$r,*$v,$e,$tks));
-                        }
-                    };
+            Self::VariableMacro{ token_range,.. } =>
+                cont(*token_range,STeXSemanticTokens::VARIABLE),
+            Self::Paragraph{kind, symbol,name_range,parsed_args,children,full_range,..} => {
+                if symbol.is_some() {
+                    cont(*name_range,STeXSemanticTokens::DECLARATION);
+                } else {
+                    cont(*name_range,STeXSemanticTokens::REF_MACRO);
                 }
-                insert!(name,(_,k,v) => k + v = Some(STeXSemanticTokens::NAME);None);
-                insert!(args,(_,k,v) => k + v = Some(STeXSemanticTokens::KEYWORD);None);
-                insert!(tp,(k,v,t) => k + v = None;Some(t));
-                insert!(df,(k,v,t) => k + v = None;Some(t));
-                insert!(return_,(k,v,t) => k + v = None;Some(t));
-                insert!(style,(k,v) => k + v = Some(STeXSemanticTokens::NAME);None);
-                insert!(assoc,(k,v) => k + v = Some(STeXSemanticTokens::KEYWORD);None);
-                insert!(role,(k,v) => k + v = Some(STeXSemanticTokens::KEYWORD);None);
-                insert!(reorder,(k,v) => k + v = None;None);
-                insert!(argtypes,(k,v,t) => k + v = None;Some(t));
-                for (k,v,t,tks) in props {
-                    cont(k,STeXSemanticTokens::KEYWORD);
-                    if let Some(t) = t {cont(v,t); }
-                    if let Some(tks) = tks {for c in tks {
-                        c.semantic_tokens(cont);
-                    }}
+                for e in parsed_args { match e {
+                    ParagraphArg::Tp(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Df(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Return(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Argtypes(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Title(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
+                        }
+                    }
+                    ParagraphArg::Args(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::KEYWORD);
+                    }
+                    ParagraphArg::Name(ParsedKeyValue{key_range,val_range,..}) |
+                    ParagraphArg::MacroName(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::NAME);
+                    }
+                    ParagraphArg::Style(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Assoc(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Role(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Reorder(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::From(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::To(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Judgment(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Id(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD),
+                    ParagraphArg::Fors(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for (_,f) in val {
+                            cont(*f,STeXSemanticTokens::SYMBOL);
+                        }
+                    }
+                }}
+                for c in children {
+                    c.semantic_tokens(cont);
+                }
+                let mut end_range = *full_range;
+                end_range.end.col -= 1;
+                end_range.start.line = end_range.end.line;
+                let parname = match kind {
+                    ParagraphKind::Definition => "sdefinition".len(),
+                    ParagraphKind::Paragraph => "sparagraph".len(),
+                    ParagraphKind::Proof => "sproof".len(),
+                    ParagraphKind::Example => "sexample".len(),
+                    ParagraphKind::Assertion => "sassertion".len(),
+                    _ => return
+                };
+                end_range.start.col = end_range.end.col - parname as u32;
+                if symbol.is_some() {
+                    cont(end_range,STeXSemanticTokens::DECLARATION);
+                } else {
+                    cont(end_range,STeXSemanticTokens::REF_MACRO);
                 }
             }
-            Self::Symdef { main_name_range, name_ranges, token_range, parsed_args, notation_args, notation, .. } => {
-                cont(*token_range, STeXSemanticTokens::DECLARATION);
-                cont(*main_name_range, STeXSemanticTokens::NAME);
-                
-                let mut props = SmallVec::<(SourceRange<LSPLineCol>,SourceRange<LSPLineCol>,u32,Option<u32>,Option<&Vec<Self>>),4>::new();
-                macro_rules! insert {
-                    ($key:ident,$p:pat => $r:ident + $v:ident = $e:expr ; $tks:expr) => {
-                        if let Some($p) = &parsed_args.$key {
-                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_,_)| (b.start.line,b.start.col)) {
-                                Ok(i) => i,
-                                Err(i) => i
-                            };
-                            props.insert(i,(*$r,*$v,STeXSemanticTokens::KEYWORD,$e,$tks));
-                        }
-                    };
-                    (N $key:ident,$p:pat => $r:ident + $v:ident = $k:expr; $e:expr) => {
-                        if let Some($p) = &notation_args.$key {
-                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_,_)| (b.start.line,b.start.col)) {
-                                Ok(i) => i,
-                                Err(i) => i
-                            };
-                            props.insert(i,(*$r,*$v,$k,$e,None));
-                        }
-                    };
+            Self::InlineParagraph{kind, symbol,token_range,parsed_args,children,full_range,..} => {
+                if symbol.is_some() {
+                    cont(*token_range,STeXSemanticTokens::DECLARATION);
+                } else {
+                    cont(*token_range,STeXSemanticTokens::REF_MACRO);
                 }
-                insert!(name,(_,k,v) => k + v = Some(STeXSemanticTokens::NAME);None);
-                insert!(args,(_,k,v) => k + v = Some(STeXSemanticTokens::KEYWORD);None);
-                insert!(tp,(k,v,t) => k + v = None;Some(t));
-                insert!(df,(k,v,t) => k + v = None;Some(t));
-                insert!(return_,(k,v,t) => k + v = None;Some(t));
-                insert!(style,(k,v) => k + v = Some(STeXSemanticTokens::NAME);None);
-                insert!(assoc,(k,v) => k + v = Some(STeXSemanticTokens::KEYWORD);None);
-                insert!(role,(k,v) => k + v = Some(STeXSemanticTokens::KEYWORD);None);
-                insert!(reorder,(k,v) => k + v = None;None);
-                insert!(argtypes,(k,v,t) => k + v = None;Some(t));
-                insert!(N id,(_,k,v) => k + v = STeXSemanticTokens::NAME;None);
-                insert!(N prec,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;Some(STeXSemanticTokens::KEYWORD));
-                insert!(N op,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;None);
-                for (k,v,t1,t,tks) in props {
-                    cont(k,t1);
-                    if let Some(t) = t {cont(v,t); }
-                    if let Some(tks) = tks {for c in tks {
-                        c.semantic_tokens(cont);
-                    }}
-                }
-                for c in &notation.1 {
+                for e in parsed_args { match e {
+                    ParagraphArg::Tp(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Df(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Return(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Argtypes(ParsedKeyValue{key_range,val,..}) |
+                    ParagraphArg::Title(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
+                        }
+                    }
+                    ParagraphArg::Args(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::KEYWORD);
+                    }
+                    ParagraphArg::Name(ParsedKeyValue{key_range,val_range,..}) |
+                    ParagraphArg::MacroName(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::NAME);
+                    }
+                    ParagraphArg::Style(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Assoc(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Role(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Reorder(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Judgment(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::From(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::To(ParsedKeyValue{key_range,..}) |
+                    ParagraphArg::Id(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD),
+                    ParagraphArg::Fors(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for (_,f) in val {
+                            cont(*f,STeXSemanticTokens::SYMBOL);
+                        }
+                    }
+                }}
+                for c in children {
                     c.semantic_tokens(cont);
                 }
             }
-            Self::Notation{ token_range,name_range,notation,notation_args,.. } => {
+            Self::Symdecl { main_name_range, token_range, parsed_args, .. } => {
+                cont(*token_range, STeXSemanticTokens::DECLARATION);
+                cont(*main_name_range, STeXSemanticTokens::NAME);
+                
+                for e in parsed_args { match e {
+                    SymdeclArg::Tp(ParsedKeyValue{key_range,val,..}) |
+                    SymdeclArg::Df(ParsedKeyValue{key_range,val,..}) |
+                    SymdeclArg::Return(ParsedKeyValue{key_range,val,..}) |
+                    SymdeclArg::Argtypes(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
+                        }
+                    }
+                    SymdeclArg::Args(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::KEYWORD);
+                    }
+                    SymdeclArg::Name(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::NAME);
+                    }
+                    SymdeclArg::Style(ParsedKeyValue{key_range,..}) |
+                    SymdeclArg::Assoc(ParsedKeyValue{key_range,..}) |
+                    SymdeclArg::Role(ParsedKeyValue{key_range,..}) |
+                    SymdeclArg::Reorder(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD)
+                }}
+            }
+            Self::TextSymdecl { main_name_range, token_range, parsed_args, .. } => {
+                cont(*token_range, STeXSemanticTokens::DECLARATION);
+                cont(*main_name_range, STeXSemanticTokens::NAME);
+                
+                for e in parsed_args { match e {
+                    TextSymdeclArg::Tp(ParsedKeyValue{key_range,val,..}) |
+                    TextSymdeclArg::Df(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
+                        }
+                    }
+                    TextSymdeclArg::Name(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::NAME);
+                    }
+                    TextSymdeclArg::Style(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD)
+                }}
+            }
+            Self::Symdef { main_name_range, token_range, parsed_args, .. } => {
+                cont(*token_range, STeXSemanticTokens::DECLARATION);
+                cont(*main_name_range, STeXSemanticTokens::NAME);
+                
+                for e in parsed_args { match e {
+                    SymdefArg::Tp(ParsedKeyValue{key_range,val,..}) |
+                    SymdefArg::Df(ParsedKeyValue{key_range,val,..}) |
+                    SymdefArg::Return(ParsedKeyValue{key_range,val,..}) |
+                    SymdefArg::Op(ParsedKeyValue{key_range,val,..}) |
+                    SymdefArg::Argtypes(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
+                        }
+                    }
+                    SymdefArg::Args(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::KEYWORD);
+                    }
+                    SymdefArg::Name(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::NAME);
+                    }
+                    SymdefArg::Id(v,_) =>
+                        cont(*v,STeXSemanticTokens::NAME),
+                    SymdefArg::Style(ParsedKeyValue{key_range,..}) |
+                    SymdefArg::Assoc(ParsedKeyValue{key_range,..}) |
+                    SymdefArg::Role(ParsedKeyValue{key_range,..}) |
+                    SymdefArg::Prec(ParsedKeyValue{key_range,..}) |
+                    SymdefArg::Reorder(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD)
+                }}
+            }
+            Self::RenameDecl{token_range,orig_range,name_range,macroname_range,..} => {
+                cont(*token_range,STeXSemanticTokens::DECLARATION);
+                cont(*orig_range,STeXSemanticTokens::SYMBOL);
+                if let Some(n) = name_range {
+                    cont(*n,STeXSemanticTokens::NAME);
+                }
+                cont(*macroname_range,STeXSemanticTokens::NAME);
+            }
+            Self::Assign{token_range,orig_range,..} => {
+                cont(*token_range,STeXSemanticTokens::DECLARATION);
+                cont(*orig_range,STeXSemanticTokens::SYMBOL);
+            }
+            Self::Svar {full_range,..} =>
+                cont(*full_range,STeXSemanticTokens::VARIABLE),
+            Self::Vardef { main_name_range, token_range, parsed_args, .. } |
+            Self::Varseq { main_name_range, token_range, parsed_args, .. } => {
+                cont(*token_range, STeXSemanticTokens::LOCAL);
+                cont(*main_name_range, STeXSemanticTokens::NAME);
+
+                for e in parsed_args { match e {
+                    VardefArg::Tp(ParsedKeyValue{key_range,val,..}) |
+                    VardefArg::Df(ParsedKeyValue{key_range,val,..}) |
+                    VardefArg::Return(ParsedKeyValue{key_range,val,..}) |
+                    VardefArg::Op(ParsedKeyValue{key_range,val,..}) |
+                    VardefArg::Argtypes(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
+                        }
+                    }
+                    VardefArg::Args(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::KEYWORD);
+                    }
+                    VardefArg::Name(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::NAME);
+                    }
+                    VardefArg::Id(v,_) =>
+                        cont(*v,STeXSemanticTokens::NAME),
+                    VardefArg::Style(ParsedKeyValue{key_range,..}) |
+                    VardefArg::Assoc(ParsedKeyValue{key_range,..}) |
+                    VardefArg::Role(ParsedKeyValue{key_range,..}) |
+                    VardefArg::Prec(ParsedKeyValue{key_range,..}) |
+                    VardefArg::Bind(ParsedKeyValue{key_range,..}) |
+                    VardefArg::Reorder(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD)
+                }}
+            }
+            Self::Notation{ token_range,name_range,notation_args,.. } => {
                 cont(*token_range,STeXSemanticTokens::DECLARATION);
                 cont(*name_range,STeXSemanticTokens::SYMBOL);
-
-                let mut props = SmallVec::<(SourceRange<LSPLineCol>,SourceRange<LSPLineCol>,u32,Option<u32>,Option<&Vec<Self>>),4>::new();
-                macro_rules! insert {
-                    ($key:ident,$p:pat => $r:ident + $v:ident = $k:expr; $e:expr) => {
-                        if let Some($p) = &notation_args.$key {
-                            let i = match props.binary_search_by_key(&($r.start.line,$r.start.col),|(b,_,_,_,_)| (b.start.line,b.start.col)) {
-                                Ok(i) => i,
-                                Err(i) => i
-                            };
-                            props.insert(i,(*$r,*$v,$k,$e,None));
+                for e in notation_args { match e {
+                    NotationArg::Op(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
                         }
-                    };
-                }
-                insert!(id,(_,k,v) => k + v = STeXSemanticTokens::NAME;None);
-                insert!(prec,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;Some(STeXSemanticTokens::KEYWORD));
-                insert!(op,(k,v,_) => k + v = STeXSemanticTokens::KEYWORD;None);
-                for (k,v,t1,t,tks) in props {
-                    cont(k,t1);
-                    if let Some(t) = t {cont(v,t); }
-                    if let Some(tks) = tks {for c in tks {
-                        c.semantic_tokens(cont);
-                    }}
-                }
-
-                for c in &notation.1 {
-                    c.semantic_tokens(cont);
-                }
+                    }
+                    NotationArg::Id(v,_) =>
+                        cont(*v,STeXSemanticTokens::NAME),
+                    NotationArg::Prec(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD)
+                }}
             }
-            Self::SymName { token_range,name_range,..} => {
+            Self::SymName { token_range,name_range,..} |
+            Self::Symref{ token_range,name_range,..} |
+            Self::Symuse{ token_range,name_range,.. } => {
                 cont(*token_range,STeXSemanticTokens::REF_MACRO);
                 cont(*name_range,STeXSemanticTokens::SYMBOL);
+            }
+            Self::Definiens{ token_range,name_range,..} => {
+                cont(*token_range,STeXSemanticTokens::REF_MACRO);
+                if let Some(r) = name_range {
+                    cont(*r,STeXSemanticTokens::SYMBOL);
+                }
             }
         }
     }
 
-    fn hover(&self) -> Option<lsp::Hover> {
+    fn hover(&self,pos:LSPLineCol) -> Option<lsp::Hover> {
+        fn uriname(pre:&str,d:&impl std::fmt::Display) -> String {
+            format!("{pre}<sup>`{d}`</sup>")
+        }
+        //tracing::info!("Here: {self:?}");
         match self {
             Self::SemanticMacro { uri, full_range:range,.. } |
             Self::SymName {uri,name_range:range,.. } |
-            Self::Notation{uri,name_range:range,.. } =>
+            Self::Symref{ uri, name_range:range,.. } |
+            Self::Notation{uri,name_range:range,.. } |
+            Self::Symuse{uri,name_range:range,.. } |
+            Self::Definiens{uri,name_range:Some(range),.. } |
+            Self::ConservativeExt { uri, ext_range:range, .. } |
+            Self::UseStructure{structure:uri,structure_range:range,..} |
+            Self::MorphismEnv{domain:ModuleOrStruct::Struct(uri),domain_range:range,..} |
+            Self::RenameDecl{uri,orig_range:range,..} |
+            Self::Assign{uri,orig_range:range,..} =>
                 Some(lsp::Hover {
                     range: Some(SourceRange::into_range(*range)),
                     contents:lsp::HoverContents::Markup(lsp::MarkupContent {
                     kind: lsp::MarkupKind::Markdown,
-                    value: format!("<b>{}</b>",uri.uri)
+                    value: uriname("",&uri.uri)
                     })
                 }),
-            _ => None
+            Self::InlineMorphism { domain_range,domain, assignments,.. } => {
+                if domain_range.contains(pos) {
+                    let uri = match domain {
+                        ModuleOrStruct::Struct(sym) => &sym.uri,
+                        _ => return None
+                    };
+                    return Some(lsp::Hover {
+                        range: Some(SourceRange::into_range(*domain_range)),
+                        contents:lsp::HoverContents::Markup(lsp::MarkupContent {
+                        kind: lsp::MarkupKind::Markdown,
+                        value: uriname("",uri)
+                        })
+                    });
+                }
+                for a in assignments {
+                    if a.symbol_range.contains(pos) {
+                        return Some(lsp::Hover {
+                            range: Some(SourceRange::into_range(a.symbol_range)),
+                            contents:lsp::HoverContents::Markup(lsp::MarkupContent {
+                            kind: lsp::MarkupKind::Markdown,
+                            value: uriname("",&a.symbol.uri)
+                            })
+                        });
+                    }
+                }
+                None
+            }
+            Self::Svar{full_range,name,..} | 
+            Self::VariableMacro { name, full_range,.. } =>
+                Some(lsp::Hover {
+                    range: Some(SourceRange::into_range(*full_range)),
+                    contents:lsp::HoverContents::Markup(lsp::MarkupContent {
+                    kind: lsp::MarkupKind::Markdown,
+                    value: uriname("Variable ",name)
+                    })
+                }),
+            Self::MathStructure{extends,..} =>
+                extends.iter().find_map(|(s,r)|
+                    if r.contains(pos) {
+                        Some(lsp::Hover {
+                            range: Some(SourceRange::into_range(*r)),
+                            contents:lsp::HoverContents::Markup(lsp::MarkupContent {
+                            kind: lsp::MarkupKind::Markdown,
+                            value: uriname("",&s.uri)
+                            })
+                        })
+                    } else { None }
+                ),
+            Self::Paragraph{parsed_args,..} |
+            Self::InlineParagraph{parsed_args,..} => {
+                for p in parsed_args {
+                    if let ParagraphArg::Fors(ParsedKeyValue{val_range,val,..}) = p {
+                        if val_range.contains(pos) {
+                            for (s,r) in val {
+                                if r.contains(pos) {
+                                    return Some(lsp::Hover {
+                                        range: Some(SourceRange::into_range(*r)),
+                                        contents:lsp::HoverContents::Markup(lsp::MarkupContent {
+                                            kind: lsp::MarkupKind::Markdown,
+                                            value: uriname("",&s.uri)
+                                        })
+                                    });
+                                }
+                            }
+                        }
+                        return None
+                    }
+                }
+                None
+            }
+            Self::Module{..} | Self::ImportModule{..} | 
+            Self::UseModule{..} | Self::SetMetatheory{..} | Self::Inputref{..} |
+            Self::Symdecl{..} | Self::Symdef{..} | Self::Vardef{ .. } |
+            Self::Varseq{ .. } | Self::Definiens{..} |
+            Self::TextSymdecl{ .. } |
+            Self::Defnotation { .. } | Self::MorphismEnv{..} => None
         }
     }
     fn inlay_hint(&self) -> Option<lsp::InlayHint> {
         match self {
-            Self::SymName { uri, full_range, token_range, name_range, mod_ } => {
+            Self::SymName { uri, full_range, token_range, name_range, mode: mod_ } => {
                 let name = uri.uri.name().last_name();
                 let name = name.as_ref();
                 let name = match mod_ {
@@ -392,6 +913,17 @@ impl AnnotExt for STeXAnnot {
                     data:None
                 })
             }
+            Self::Definiens{uri,name_range:None,full_range,..} => 
+                Some(lsp::InlayHint {
+                    position: SourceRange::into_range(*full_range).end,
+                    label:lsp::InlayHintLabel::String(format!("[{}]",uri.uri.name())),
+                    kind: Some(lsp::InlayHintKind::PARAMETER),
+                    text_edits:None,
+                    tooltip:None,
+                    padding_left:None,
+                    padding_right:None,
+                    data:None
+                }),
             _ => None
         }
     }
@@ -400,7 +932,7 @@ impl AnnotExt for STeXAnnot {
 
 impl LSPState {
     #[must_use]
-    pub fn get_diagnostics(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=lsp::DocumentDiagnosticReportResult>> {
+    pub fn get_diagnostics(&self,uri:&UrlOrFile,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=lsp::DocumentDiagnosticReportResult>> {
         fn default() -> lsp::DocumentDiagnosticReportResult { lsp::DocumentDiagnosticReportResult::Report(
             lsp::DocumentDiagnosticReport::Full(
                 lsp::RelatedFullDocumentDiagnosticReport::default()
@@ -431,7 +963,7 @@ impl LSPState {
 
 
     #[must_use]
-    pub fn get_symbols(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::DocumentSymbolResponse>>> {
+    pub fn get_symbols(&self,uri:&UrlOrFile,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::DocumentSymbolResponse>>> {
         #[allow(deprecated)]
         fn to_symbols(v:&[STeXAnnot]) -> Vec<lsp::DocumentSymbol> {
             let mut curr = v.iter();
@@ -468,7 +1000,7 @@ impl LSPState {
     }
 
     #[must_use]
-    pub fn get_links(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<Vec<lsp::DocumentLink>>>> {
+    pub fn get_links(&self,uri:&UrlOrFile,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<Vec<lsp::DocumentLink>>>> {
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let slf = self.clone();
@@ -485,32 +1017,32 @@ impl LSPState {
     }
 
     #[must_use]
-    pub fn get_hover(&self,uri:&lsp::Url,position:lsp::Position,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::Hover>>> {
+    pub fn get_hover(&self,uri:&UrlOrFile,position:lsp::Position,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::Hover>>> {
         let d = self.get(uri)?;
         let pos = LSPLineCol {
             line:position.line,
             col:position.character
         };
         Some(d.with_annots(self.clone(),move |data| {
-            at_position(data,pos).and_then(STeXAnnot::hover)
+            at_position(data,pos).and_then(|e| e.hover(pos))
         }).map(|o| o.flatten()))
     }
 
 
     #[must_use]
-    pub fn get_goto_definition(&self,uri:&lsp::Url,position:lsp::Position,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::GotoDefinitionResponse>>> {
-        let d = self.get(uri)?;
+    pub fn get_goto_definition(&self,uri:UrlOrFile,position:lsp::Position,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::GotoDefinitionResponse>>> {
+        let d = self.get(&uri)?;
         let pos = LSPLineCol {
             line:position.line,
             col:position.character
         };
         Some(d.with_annots(self.clone(),move |data| {
-            at_position(data,pos).and_then(|e| e.goto_definition(pos))
+            at_position(data,pos).and_then(|e| e.goto_definition(&uri,pos))
         }).map(|o| o.flatten()))
     }
 
     #[must_use]
-    pub fn get_inlay_hints(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<Vec<lsp::InlayHint>>>> {
+    pub fn get_inlay_hints(&self,uri:&UrlOrFile,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<Vec<lsp::InlayHint>>>> {
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(),move |data| {
             let iter : AnnotIter = data.annotations.iter().into();
@@ -520,7 +1052,7 @@ impl LSPState {
         }))
     }
 
-    pub fn get_semantic_tokens(&self,uri:&lsp::Url,progress:Option<ProgressCallbackClient>,range:Option<lsp::Range>) -> Option<impl std::future::Future<Output=Option<lsp::SemanticTokens>>> {
+    pub fn get_semantic_tokens(&self,uri:&UrlOrFile,progress:Option<ProgressCallbackClient>,range:Option<lsp::Range>) -> Option<impl std::future::Future<Output=Option<lsp::SemanticTokens>>> {
         let range = range.map(SourceRange::from_range);
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(), |data| {
@@ -532,7 +1064,11 @@ impl LSPState {
                         return
                     }
                     let delta_line = range.start.line - curr.0;
-                    let delta_start = if delta_line == 0 { range.start.col - curr.1 } else { range.start.col };
+                    let delta_start = if delta_line == 0  {
+                        if range.start.col > curr.1 {
+                            range.start.col - curr.1 
+                        } else {return }
+                    } else { range.start.col };
                     curr = (range.start.line,range.start.col);
                     if range.start.line == range.end.line {
                         let length = if range.end.col < range.start.col {

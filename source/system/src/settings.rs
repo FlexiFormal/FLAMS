@@ -2,7 +2,7 @@
 
 use std::{
     fmt::Debug,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, sync::atomic::AtomicU16,
 };
 
 use immt_utils::settings::GitlabSettings;
@@ -16,10 +16,11 @@ pub struct Settings {
     pub mathhubs_is_default:bool,
     pub debug: bool,
     pub log_dir: Box<Path>,
-    pub port: u16,
+    pub port: AtomicU16,
     pub ip: std::net::IpAddr,
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
+    external_url:Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
     pub num_threads: u8,
     pub gitlab_url: Option<Box<str>>,
@@ -36,6 +37,7 @@ impl Debug for Settings {
 }
 
 impl Settings {
+    pub fn port(&self) -> u16 { self.port.load(std::sync::atomic::Ordering::Relaxed) }
     #[allow(clippy::missing_panics_doc)]
     pub(crate) fn initialize(settings: SettingsSpec) {
         SETTINGS
@@ -46,6 +48,11 @@ impl Settings {
     #[allow(clippy::missing_panics_doc)]
     pub fn get() -> &'static Self {
         SETTINGS.get().expect("Settings not initialized")
+    }
+
+    #[inline]
+    pub fn external_url(&self) -> Option<&str> {
+        self.external_url.as_ref().map(|v| &**v)
     }
 
     pub fn temp_dir(&self) -> PathBuf {
@@ -60,6 +67,7 @@ impl Settings {
 
     #[must_use]
     pub fn as_spec(&self) -> SettingsSpec {
+        let port = self.port();
         let spec = SettingsSpec {
             mathhubs: self.mathhubs.to_vec(),
             debug: Some(self.debug),
@@ -67,8 +75,11 @@ impl Settings {
             temp_dir: Some(self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf().into_boxed_path()),
             database: Some(self.database.clone()),
             server: ServerSettings {
-                port: self.port,
+                port,
                 ip: Some(self.ip),
+                external_url: self.external_url.as_ref().map(ToString::to_string).or_else(
+                    || Some(format!("http://{}:{port}",self.ip)),
+                ),
                 admin_pwd: self.admin_pwd.as_ref().map(ToString::to_string),
             },
             buildqueue: BuildQueueSettings {
@@ -113,11 +124,12 @@ impl From<SettingsSpec> for Settings {
                     tempfile::Builder::new().tempdir_in(p).expect("Could not create temp dir")
                 },
             ))),
-            port: if spec.server.port == 0 {
+            external_url: spec.server.external_url.map(String::into_boxed_str),
+            port: AtomicU16::new(if spec.server.port == 0 {
                 8095
             } else {
                 spec.server.port
-            },
+            }),
             ip: spec
                 .server
                 .ip

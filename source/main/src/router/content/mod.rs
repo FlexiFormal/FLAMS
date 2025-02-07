@@ -11,6 +11,18 @@ use shtml_viewer_components::components::{documents::{DocumentString, FragmentSt
 use uris::{DocURIComponents, SymURIComponents, URIComponents};
 use crate::{users::Login, utils::from_server_clone};
 
+#[cfg(feature="ssr")]
+pub(crate) fn insert_base_url(mut v:Vec<CSS>) -> Vec<CSS> {
+  for c in v.iter_mut() {
+    if let CSS::Link(lnk) = c {
+      if let Some(r) = lnk.strip_prefix("srv:") {
+        *lnk = format!("{}{r}", immt_system::settings::Settings::get().external_url().unwrap_or("")).into_boxed_str()
+      }
+    }
+  }
+  v
+}
+
 macro_rules! backend {
   ($fn:ident!($($args:tt)*)) => {
     if immt_system::settings::Settings::get().lsp {
@@ -85,7 +97,7 @@ pub async fn document(
   };
 
   let html = format!("<div{}</div>",doc.strip_prefix("<body").and_then(|s| s.strip_suffix("</body>")).unwrap_or(""));
-  Ok((uri,css,html))
+  Ok((uri,insert_base_url(css),html))
 }
 
 #[server(
@@ -146,7 +158,7 @@ pub async fn fragment(
       let Some((css,html)) = backend!(get_html_body!(duri,false)) else {
         return Err("document not found".to_string().into())
       };
-      Ok((uri,css,html))
+      Ok((uri,insert_base_url(css),html))
     }
     URI::Narrative(NarrativeURI::Element(euri)) => {
       let Some(e) = backend!(get_document_element!(euri)) else {
@@ -158,13 +170,13 @@ pub async fn fragment(
           let Some((css,html)) = backend!(get_html_fragment!(euri.document(),*range)) else {
             return Err("document element not found".to_string().into())
           };
-          Ok((uri,css,html))
+          Ok((uri,insert_base_url(css),html))
         }
         DocumentElement::Section(immt_ontology::narration::sections::Section{range,..}) => {
           let Some((css,html)) = backend!(get_html_fragment!(euri.document(),*range)) else {
             return Err("document element not found".to_string().into())
           };
-          Ok((uri,css,html))
+          Ok((uri,insert_base_url(css),html))
         },
         _ => return Err("not a paragraph".to_string().into())
       }
@@ -172,7 +184,7 @@ pub async fn fragment(
     URI::Content(ContentURI::Symbol(suri)) => {
       get_definitions(suri.clone()).await.ok_or_else(||
         "No definition found".to_string().into()
-      ).map(|(a,b)| (uri,a,b))
+      ).map(|(css,b)| (uri,insert_base_url(css),b))
     }
     URI::Base(_) => return Err("TODO: base".to_string().into()),
     URI::Archive(_) => return Err("TODO: archive".to_string().into()),
@@ -196,8 +208,8 @@ async fn get_definitions(uri:SymbolURI) -> Option<(Vec<CSS>,String)> {
   for uri in iter {
     if let Some(def) = b.get_document_element_async(&uri).await {
       let LogicalParagraph{range,..} = def.as_ref();
-      if let Some(r) = b.get_html_fragment_async(uri.document(), *range).await {
-        return Some(r)
+      if let Some((css,r)) = b.get_html_fragment_async(uri.document(), *range).await {
+        return Some((insert_base_url(css),r))
       }
     }
   }
@@ -306,7 +318,7 @@ pub async fn omdoc(
   };
   let mut css = VecSet::default();
   match uri {
-    uri @ (URI::Base(_) | URI::Archive(_) | URI::Path(_)) => Ok((css.0,AnySpec::Other(uri.to_string()))),
+    uri @ (URI::Base(_) | URI::Archive(_) | URI::Path(_)) => Ok((insert_base_url(css.0),AnySpec::Other(uri.to_string()))),
     URI::Narrative(NarrativeURI::Document(uri)) => {
       let Some(doc) = backend!(get_document!(&uri)) else {
         return Err("document not found".to_string().into())
@@ -320,7 +332,7 @@ pub async fn omdoc(
           (css,r)
         }).await.map_err(|e| e.to_string())?
       });
-      Ok((css.0,r.into()))
+      Ok((insert_base_url(css.0),r.into()))
     }
     URI::Narrative(NarrativeURI::Element(uri)) => {
       let Some(e)
@@ -340,7 +352,7 @@ pub async fn omdoc(
       let Some(r) = r else {
         return Err("element not found".to_string().into())
       };
-      Ok((css.0,r.into()))
+      Ok((insert_base_url(css.0),r.into()))
     }
     URI::Content(ContentURI::Module(uri)) => {
       let Some(m) = backend!(get_module!(&uri)) else {
@@ -361,7 +373,7 @@ pub async fn omdoc(
         = backend!(get_declaration!(&uri)) else {
         return Err("declaration not found".to_string().into())
       };
-      todo!()
+      return Err(format!("TODO: {uri}").into())
     }
   }
 }

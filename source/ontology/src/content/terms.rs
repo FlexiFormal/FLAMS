@@ -427,21 +427,21 @@ mod tests {
         static ref NAMESPACE: BaseURI = BaseURI::new_unchecked("http://example.com/");
         static ref ARCHIVE1: ArchiveURI = NAMESPACE.clone() & "some/archive";
         static ref ARCHIVE2: ArchiveURI = NAMESPACE.clone() & "some/other/archive";
-        static ref MODULE1: ModuleURI = ARCHIVE1.clone() | "some/module";
-        static ref MODULE2: ModuleURI = ARCHIVE2.clone() | "some/module";
-        static ref SYM1: SymbolURI = MODULE1.clone() | "some symbol";
-        static ref SYM2: SymbolURI = MODULE2.clone() | "other symbol";
-        static ref FUNC1: SymbolURI = MODULE1.clone() | "some function";
-        static ref FUNC2: SymbolURI = MODULE2.clone() | "other function";
+        static ref MODULE1: ModuleURI = (ARCHIVE1.clone() | "some/module").unwrap();
+        static ref MODULE2: ModuleURI = (ARCHIVE2.clone() | "some/module").unwrap();
+        static ref SYM1: SymbolURI = (MODULE1.clone() | "some symbol").unwrap();
+        static ref SYM2: SymbolURI = (MODULE2.clone() | "other symbol").unwrap();
+        static ref FUNC1: SymbolURI = (MODULE1.clone() | "some function").unwrap();
+        static ref FUNC2: SymbolURI = (MODULE2.clone() | "other function").unwrap();
         static ref TERM: Term = oma!(oms!(FUNC1.clone()),[
             {N:oma!(oms!(FUNC2.clone()),[
                 {N:oms!(SYM1.clone())},
                 {N:oms!(SYM2.clone())}
             ])},
             {N:oma!(oms!(FUNC1.clone()),[
-                {N:oml!("some name" := oms!(SYM2.clone()))},
+                {N:oml!("some name".parse().unwrap(); := oms!(SYM2.clone()))},
                 {N:oms!(SYM1.clone())},
-                {N:omv!("some var")}
+                {N:omv!("some var".parse().unwrap();)}
             ])}
         ]);
     }

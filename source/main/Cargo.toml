@@ -91,6 +91,7 @@ leptos-dyn-dom = {workspace = true}
 paste = {workspace=true}
 lazy_static = {workspace=true}
 immt-git = {workspace=true}
+urlencoding = {workspace=true}
 
 # ssr
 immt-system = {workspace=true,features=["gitlab"],optional=true}

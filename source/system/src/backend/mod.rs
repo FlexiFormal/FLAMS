@@ -70,7 +70,10 @@ pub trait Backend {
         self.with_archives(|mut a| a.find_map(|a| {
             let Archive::Local(a) = a else {return None};
             let ap = a.path().as_os_str().to_str()?;
-            base.strip_prefix(ap).map(|rp| f(a,rp))
+            if let Some(r) = base.strip_prefix(ap) {
+                if r.starts_with('/') || r.is_empty() { return Some(f(a,r))}
+            }
+            None
         }))
     }
 
@@ -380,6 +383,16 @@ impl GlobalBackend {
         self.archives.with_tree(f)
     }
 
+    pub fn reset(&self) {
+        self.cache.write().clear();
+        self.archives.reinit(|_| (), crate::settings::Settings::get().mathhubs.iter().map(|b| &**b));
+        self.triple_store.clear();
+        immt_utils::background(|| {
+            let global = GlobalBackend::get();
+            global.triple_store.load_archives(&global.all_archives());
+        });
+    }
+
     #[cfg(feature="tokio")]
     pub async fn get_html_body_async(&self,
         d:&DocumentURI,full:bool
@@ -667,6 +680,14 @@ impl Default for TemporaryBackend {
 }
 
 impl TemporaryBackend {
+
+    pub fn reset(&self) {
+        self.inner.modules.lock().clear();
+        self.inner.documents.lock().clear();
+        let global = GlobalBackend::get();
+        global.reset();
+    }
+
     #[must_use]
     pub fn new(parent:AnyBackend) -> Self {
         Self { inner: triomphe::Arc::new(TemporaryBackendI { 

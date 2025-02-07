@@ -32,6 +32,15 @@ impl PathURI {
     pub fn path(&self) -> Option<&Name> {
         self.path.as_ref()
     }
+    #[inline]
+    #[must_use]
+    pub fn up(mut self) -> Self {
+        if let Some(name) = &mut self.path {
+            name.0.pop();
+            if name.0.is_empty() {self.path = None}
+        }
+        self
+    }
 }
 impl Display for PathURI {
     #[inline]

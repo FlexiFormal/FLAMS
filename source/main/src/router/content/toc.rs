@@ -71,5 +71,5 @@ pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -
       Some((iter,None)) => curr = iter
     }
   }
-  (css.0,ret)
+  (super::insert_base_url(css.0),ret)
 }

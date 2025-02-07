@@ -2,12 +2,14 @@ pub mod rules;
 pub mod directives;
 
 use crate::quickparse::tokens::TeXToken;
+use immt_ontology::languages::Language;
 use immt_utils::{
     parsing::{ParseSource, ParseStr, StringOrStr},
     prelude::*,
     sourcerefs::{SourcePos, SourceRange},
 };
 use rules::{AnyEnv, AnyMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule};
+use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry};
 use std::convert::Into;
 use std::marker::PhantomData;
@@ -168,6 +170,7 @@ pub struct OptVal<'a,Pos:SourcePos> {
     pub val_range: SourceRange<Pos>,
 }
 
+#[derive(Debug)]
 pub struct OptMapVal<'a,
     Pos:SourcePos,
     Str:StringOrStr<'a>,
@@ -180,6 +183,7 @@ pub struct OptMapVal<'a,
     phantom:PhantomData<Str>
 }
 
+#[derive(Debug)]
 pub struct OptMap<'a,
     Pos:SourcePos,
     Str:StringOrStr<'a>,
@@ -423,7 +427,7 @@ impl<'a,
         LaTeXParser {
             tokenizer: super::tokenizer::TeXTokenizer::new(input, err),
             macro_rules,
-            groups: Vec::new(),
+            groups: vec![State::Group::new(None)],
             environment_rules,
             directives,
             buf: Vec::new(),
@@ -791,23 +795,10 @@ impl<'a,
     pub fn read_argument(&mut self, in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>) {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
-            //let start = self.curr_pos();
             self.tokenizer.reader.pop_head();
             let _v = self.group_i();
-            /*if let Some(g) = T::from_group(
-                SourceRange {
-                    start,
-                    end: self.curr_pos(),
-                },
-                v,
-            ) {
-                in_macro.args.push(g);
-            }*/
         } else if self.tokenizer.reader.starts_with('\\') {
             let _t = self.tokenizer.next().unwrap_or_else(|| unreachable!());
-            /*if let Some(t) = self.default(t) {
-                in_macro.args.push(t);
-            }*/
         } else {
             let _ = self.tokenizer.next();
         }
@@ -831,14 +822,7 @@ impl<'a,
                 start: tstart,
                 end: self.curr_pos(),
             };
-            /*let text = Cfg::Token::from_text(
-                range,
-                s.clone(),
-            );*/
             self.tokenizer.reader.pop_head();
-            /*if let Some(t) = text {
-                in_macro.args.push(t);
-            }*/
             in_macro.range.end = self.curr_pos();
             OptArg {
                 inner: Some(s),
@@ -861,7 +845,6 @@ impl<'a,
     pub fn read_name(&mut self, r#in: &mut Macro<'a, Pa::Pos, Pa::Str>) -> Option<(Pa::Str,SourceRange<Pa::Pos>)> {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
-            //let gstart = self.curr_pos();
             self.tokenizer.reader.pop_head();
             self.tokenizer.reader.trim_start();
             let tstart = self.curr_pos();
@@ -870,18 +853,7 @@ impl<'a,
                 .reader
                 .read_until_with_brackets::<'{', '}'>(|c| c == '}');
             let range = SourceRange { start: tstart, end: self.curr_pos() };
-            //let text = Cfg::Token::from_text(range,s.clone());
             self.tokenizer.reader.pop_head();
-            //let v = text.map_or_else(|| Vec::new(), |t| vec![t]);
-            /*if let Some(g) = T::from_group(
-                SourceRange {
-                    start: gstart,
-                    end: self.curr_pos(),
-                },
-                v,
-            ) {
-                r#in.args.push(g);
-            }*/
             r#in.range.end = self.curr_pos();
             Some((s,range))
         } else {
@@ -889,27 +861,39 @@ impl<'a,
         }
     }
 
+    pub fn read_names(&mut self, r#in: &mut Macro<'a, Pa::Pos, Pa::Str>) -> Vec<(Pa::Str,SourceRange<Pa::Pos>)> {
+        self.tokenizer.reader.trim_start();
+        if self.tokenizer.reader.starts_with('{') {
+            let mut ret = Vec::new();
+            loop {
+                self.tokenizer.reader.pop_head();
+                self.tokenizer.reader.trim_start();
+                let tstart = self.curr_pos();
+                let s = self
+                    .tokenizer
+                    .reader
+                    .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c==',');
+                let range = SourceRange { start: tstart, end: self.curr_pos() };
+                ret.push((s,range));
+                if self.tokenizer.reader.starts_with('}') {break}
+            }
+            self.tokenizer.reader.pop_head();
+            
+            r#in.range.end = self.curr_pos();
+            ret
+        } else { Vec::new() }
+    }
+
     pub fn skip_opt(&mut self, in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>) -> bool {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('[') {
             self.tokenizer.reader.pop_head();
             self.tokenizer.reader.trim_start();
-            //let tstart = self.curr_pos();
             let _s = self
                 .tokenizer
                 .reader
                 .read_until_with_brackets::<'{', '}'>(|c| c == ']');
-            /*let text = Cfg::Token::from_text(
-                SourceRange {
-                    start: tstart,
-                    end: self.curr_pos(),
-                },
-                s.clone(),
-            );*/
             self.tokenizer.reader.pop_head();
-            /*if let Some(t) = text {
-                in_macro.args.push(t);
-            }*/
             in_macro.range.end = self.curr_pos();
             true
         } else {
@@ -921,34 +905,379 @@ impl<'a,
         if self.tokenizer.reader.starts_with('{') {
             self.tokenizer.reader.pop_head();
             self.tokenizer.reader.trim_start();
-            //let tstart = self.curr_pos();
             let _s = self
                 .tokenizer
                 .reader
                 .read_until_with_brackets::<'{', '}'>(|c| c == '}');
-            /*let text = Cfg::Token::from_text(
-                SourceRange {
-                    start: tstart,
-                    end: self.curr_pos(),
-                },
-                s.clone(),
-            );*/
             self.tokenizer.reader.pop_head();
-            /*if let Some(t) = text {
-                in_macro.args.push(t);
-            }*/
         } else {
             let _ = self.tokenizer.next();
         }
         in_macro.range.end = self.curr_pos();
     }
 
-    fn skip_comments(&mut self) {
+    pub fn skip_comments(&mut self) {
         self.tokenizer.reader.trim_start();
         while self.tokenizer.reader.starts_with('%') {
             let _ = self.tokenizer.next();
             self.tokenizer.reader.trim_start();
         }
+    }
+}
+
+pub trait KeyValValues<'a,
+    Pos:SourcePos,
+    T:FromLaTeXToken<'a,Pos,&'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State:ParserState<'a,ParseStr<'a,Pos>,T,Err>
+>:Sized+Default {
+    fn parse_opt(
+        parser:&mut LaTeXParser<'a,ParseStr<'a,Pos>,T,Err,State>
+    ) -> Option<Self> {
+        parser.skip_comments();
+        if !parser.tokenizer.reader.starts_with('[') { return None }
+        let mut ret = Self::default();
+        parser.tokenizer.reader.pop_head();
+        loop {
+            parser.skip_comments();
+            let key_start = parser.curr_pos();
+            let key = parser.tokenizer.reader.read_until(|c| c == ']' || c == ',' || c == '=' || c == '%').trim();
+            let key_end = parser.curr_pos();
+            parser.skip_comments();
+            match parser.tokenizer.reader.pop_head() {
+                Some(']') => {
+                    if !key.is_empty() {
+                        let kvp = KeyValParser {
+                            start:parser.curr_pos(),
+                            key,
+                            key_range:SourceRange{start:key_start,end:key_end},
+                            value_end:parser.curr_pos(),
+                            has_value:false,
+                            parser
+                        };
+                        ret.next(kvp,key);
+                    }
+                    break
+                }
+                Some(',') if !key.is_empty() => {
+                    let kvp = KeyValParser {
+                        start:parser.curr_pos(),
+                        key,
+                        key_range:SourceRange{start:key_start,end:key_end},
+                        value_end:parser.curr_pos(),
+                        has_value:false,
+                        parser
+                    };
+                    ret.next(kvp,key);
+                }
+                Some(',') => (),
+                Some('=') => {
+                    parser.skip_comments();
+                    let start = parser.curr_pos();
+                    let kvp = KeyValParser {
+                        start,
+                        key,
+                        key_range:SourceRange{start:key_start,end:key_end},
+                        value_end:parser.curr_pos(),
+                        has_value:true,
+                        parser
+                    };
+                    ret.next(kvp,key);
+                    parser.skip_comments();
+                    match parser.tokenizer.reader.pop_head() {
+                        Some(',') => (),
+                        Some(']') => break,
+                        c => {
+                            parser.tokenizer.problem(start,format!("Unexpected end of key-value list: {c:?}"),DiagnosticLevel::Error);
+                            break
+                        }
+                    }
+                }
+                _ => {
+                    parser.tokenizer.problem(key_start,"Unexpected end of key-value list 2",DiagnosticLevel::Error);
+                    break
+                }
+            }
+        }
+        Some(ret)
+    }
+    fn next(
+        &mut self,
+        parser:KeyValParser<'a, '_,Pos,T,Err,State>,
+        key:&str
+    );
+}
+
+pub trait KeyValKind<'a,
+    Pos:SourcePos,
+    T:FromLaTeXToken<'a,Pos,&'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State:ParserState<'a,ParseStr<'a,Pos>,T,Err>
+>:Sized {
+    fn next_val(
+        parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>,
+        key:&str
+    ) -> Option<Self>;
+}
+impl<'a,
+    Pos:SourcePos,
+    T:FromLaTeXToken<'a,Pos,&'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State:ParserState<'a,ParseStr<'a,Pos>,T,Err>,
+    K:KeyValKind<'a,Pos,T,Err,State>
+> KeyValValues<'a,Pos,T,Err,State> for Vec<K> {
+    fn next(
+        &mut self,
+        mut parser:KeyValParser<'a, '_,Pos,T,Err,State>,
+        key:&str
+    ) {
+        if let Some(v) = K::next_val(&mut parser,key) {
+            self.push(v);
+        } else {
+            parser.parser.tokenizer.problem(parser.start,format!("Unexpected key {key}"),DiagnosticLevel::Error);
+            parser.skip_value();
+        }
+    }
+
+}
+
+#[derive(Clone,Debug)]
+pub struct ParsedKeyValue<Pos:SourcePos,T> {
+    pub key_range: SourceRange<Pos>,
+    pub val_range: SourceRange<Pos>,
+    pub val: T
+}
+pub trait KeyValParsable<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+>:Sized+'a {
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+        -> Option<Self>;
+    fn parse_key_val(parser:&mut KeyValParser<'a,'_,Pos,T,Err,State>) -> Option<ParsedKeyValue<Pos,Self>> {
+        Self::parse_key_val_inner(parser).map(|val| ParsedKeyValue {
+            key_range:parser.key_range,
+            val_range:SourceRange{start:parser.start,end:parser.value_end},
+            val
+        })
+    }
+}
+
+impl<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParsable<'a,Pos,T,Err,State> for () {
+    #[inline]
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+            -> Option<Self> {
+        parser.skip_value();
+        Some(())
+    }
+}
+
+impl<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParsable<'a,Pos,T,Err,State> for Language {
+    #[inline]
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+            -> Option<Self> {
+        let Some(s) = parser.read_value_str_normalized() else {
+            parser.problem("Missing value",DiagnosticLevel::Error);
+            return None
+        };
+        let Ok(l) = s.parse() else {
+            parser.problem("Invalid language",DiagnosticLevel::Error);
+            return None
+        };
+        Some(l)
+    }
+}
+
+impl<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParsable<'a,Pos,T,Err,State> for Box<str> {
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+            -> Option<Self> {
+        parser.read_value_str_normalized().map(|s| match s {
+            Cow::Borrowed(s) => s.to_string().into_boxed_str(),
+            Cow::Owned(s) => s.into_boxed_str()
+        })
+    }
+}
+impl<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str> + 'a,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParsable<'a,Pos,T,Err,State> for Vec<T> {
+
+    #[inline]
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+            -> Option<Self> {
+        Some(parser.tokens())
+    }
+}
+impl<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str> + 'a,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParsable<'a,Pos,T,Err,State> for u8 {
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+            -> Option<Self> {
+        parser.read_value_str().and_then(|s| s.parse().ok())
+    }
+}
+
+pub struct KeyValParser<'a,'b,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+>{
+    pub start:Pos,
+    pub key_range:SourceRange<Pos>,
+    pub key:&'a str,
+    value_end:Pos,
+    pub has_value:bool,
+    pub parser:&'b mut LaTeXParser<'a, ParseStr<'a,Pos>,T,Err,State>,
+}
+impl<'a,'b,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str>,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParser<'a,'b,Pos,T,Err,State> {
+    #[inline]
+    pub fn parse<R:KeyValParsable<'a,Pos,T,Err,State>>(&mut self) -> Option<ParsedKeyValue<Pos,R>> {
+        R::parse_key_val(self)
+    }
+    #[inline] 
+    pub fn to_key_value<Tp>(&self,val:Tp) -> ParsedKeyValue<Pos,Tp> {
+        ParsedKeyValue {
+            key_range:self.key_range,
+            val_range:SourceRange{start:self.start,end:self.value_end},
+            val
+        }
+    }
+    #[inline]
+    pub fn problem<D:std::fmt::Display>(&mut self,msg:D,severity:DiagnosticLevel) {
+        self.parser.tokenizer.problem(self.start,msg,severity)
+    }
+    #[inline]
+    pub fn tokens(&mut self) -> Vec<T> { 
+        self.read_value_str().map_or(Vec::default(),
+            |s| self.parser.reparse(s,self.start)
+        )
+    }
+    pub fn read_value_str(&mut self) -> Option<&'a str> {
+        if !self.has_value {return None }
+        self.parser.skip_comments();
+        let value_start = self.parser.curr_pos();
+        let str = self.parser.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == ']' || c == ',');
+        self.value_end = self.parser.curr_pos();
+        Some(str)
+    }
+    pub fn read_value_str_normalized(&mut self) -> Option<Cow<'a,str>> {
+        if !self.has_value {return None }
+        self.parser.skip_comments();
+        let had_braces = self.parser.tokenizer.reader.starts_with('{');
+        if had_braces {
+            self.parser.tokenizer.reader.pop_head();
+            self.parser.skip_comments();
+        }
+        let get_next = if had_braces {
+            |s:&mut Self| s.parser.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == '}' || c == '%')
+        } else {
+            |s:&mut Self| s.parser.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == ']' || c == ',' || c == '%')
+        };
+        let value_start = self.parser.curr_pos();
+        let first_str = get_next(self);//self.parser.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == ']' || c == ',' || c == '%');
+        if self.parser.tokenizer.reader.starts_with('%') {
+            let mut nexts = SmallVec::<_,2>::new();
+            let mut end_pos = self.parser.curr_pos();
+            loop {
+                self.parser.skip_comments();
+                let next = get_next(self);
+                end_pos = self.parser.curr_pos();
+                if !next.is_empty() { nexts.push(next); }
+                if self.parser.tokenizer.reader.starts_with('%') {
+                    continue
+                }
+                break
+            }
+            self.value_end = end_pos;
+            if had_braces {self.parser.tokenizer.reader.pop_head();};
+            if nexts.iter().all(|s| s.trim().is_empty()) {
+                Some(normalize_ws(first_str))
+            } else {
+                Some(Cow::Owned(join_strs(first_str,nexts)))
+            }
+        } else {
+            self.value_end = self.parser.curr_pos();
+            if had_braces {self.parser.tokenizer.reader.pop_head();};
+            Some(normalize_ws(first_str))
+        }
+    }
+
+
+    pub fn read_value_strs_normalized(&mut self) -> Vec<(Cow<'a,str>,SourceRange<Pos>)> {
+        if !self.has_value {return Vec::new() }
+        self.parser.skip_comments();
+        if !self.parser.tokenizer.reader.starts_with('{') {
+            return self.read_value_str_normalized().map_or(Vec::default(),|s| vec![
+                (s,SourceRange{start:self.start,end:self.value_end})
+            ])
+        }
+        self.parser.tokenizer.reader.pop_head();
+        self.parser.skip_comments();
+        let mut ret = Vec::new();
+        loop {
+            let value_start = self.parser.curr_pos();
+            let first_str = self.parser.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == '}' || c == '%' || c == ',');
+            if self.parser.tokenizer.reader.starts_with('%') {
+                let mut nexts = SmallVec::<_,2>::new();
+                let mut end_pos = self.parser.curr_pos();
+                loop {
+                    self.parser.skip_comments();
+                    let next = self.parser.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == '}' || c == '%' || c == ',');
+                    end_pos = self.parser.curr_pos();
+                    nexts.push(next);
+                    if self.parser.tokenizer.reader.starts_with('%') {
+                        continue
+                    }
+                    break
+                }
+                let range = SourceRange { start: value_start, end: end_pos };
+                if nexts.iter().all(|s| s.trim().is_empty()) {
+                    ret.push((normalize_ws(first_str),range))
+                } else {
+                    ret.push((Cow::Owned(join_strs(first_str,nexts)),range))
+                }
+                if let Some(',') = self.parser.tokenizer.reader.pop_head() { continue }
+                break
+            } else {
+                let range = SourceRange { start: value_start, end:  self.parser.curr_pos() };
+                ret.push((normalize_ws(first_str),range));
+                if let Some(',') = self.parser.tokenizer.reader.pop_head() { continue }
+                break
+            }
+        }
+        self.value_end = self.parser.curr_pos();
+        ret
+    }
+
+    pub fn skip_value(&mut self) {
+        self.read_value_str();
     }
 }
 
@@ -959,6 +1288,27 @@ impl<'a,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > LaTeXParser<'a, ParseStr<'a,Pos>,T,Err,State> {
+
+    pub fn reparse(&mut self,s:&'a str,at:Pos) -> Vec<T> {
+        let mut new = ParseStr::new(s);
+        new.pos = at;
+        let mut old = std::mem::replace(&mut self.tokenizer.reader,new);
+        let mut val = Vec::new();
+        while self.tokenizer.reader.peek_head().is_some() {
+            let Some(next) = self.tokenizer.next() else {
+                self.tokenizer.problem(at,"Unclosed optional argument",DiagnosticLevel::Error);
+                break;
+            };
+            if let Some(n) = self.default(next) {
+                val.push(n);
+            }
+            self.tokenizer.reader.trim_start();
+        }
+        old.pos = self.curr_pos();
+        self.tokenizer.reader = old;
+        val
+    }
+
     pub fn read_opt_map(
         &mut self,
         in_macro: &mut Macro<'a, Pos, &'a str>,
@@ -1000,22 +1350,7 @@ impl<'a,
                         self.skip_comments();
                         let value_start = self.curr_pos();
                         let str = self.tokenizer.reader.read_until_with_brackets::<'{','}'>(|c| c == ']' || c == ',');
-                        let mut new = ParseStr::new(str);
-                        new.pos = value_start;
-                        let mut old = std::mem::replace(&mut self.tokenizer.reader,new);
-                        let mut val = Vec::new();
-                        while self.tokenizer.reader.peek_head().is_some() {
-                            let Some(next) = self.tokenizer.next() else {
-                                self.tokenizer.problem(value_start,"Unclosed optional argument",DiagnosticLevel::Error);
-                                break;
-                            };
-                            if let Some(n) = self.default(next) {
-                                val.push(n);
-                            }
-                            self.tokenizer.reader.trim_start();
-                        }
-                        old.pos = self.curr_pos();
-                        self.tokenizer.reader = old;
+                        let val = self.reparse(str, value_start);
                         map.insert(key,OptMapVal {
                             key_range: SourceRange {start:key_start,end:key_end},
                             val_range: SourceRange {start:value_start,end:self.curr_pos()},
@@ -1036,19 +1371,179 @@ impl<'a,
                 inner: map,
                 phantom: PhantomData,
             }
-        } else {            
-            /*let range = SourceRange {
-                start: self.curr_pos(),
-                end: self.curr_pos(),
-            };*/
+        } else {
             OptMap {
                 inner: VecMap::new(),
                 phantom: PhantomData,
             }
         }
     }
+
+    pub fn read_opt_name_normalized(&mut self, r#in: &mut Macro<'a, Pos, &'a str>) -> Option<(Cow<'a,str>,SourceRange<Pos>)> {
+        self.skip_comments();
+        if self.tokenizer.reader.starts_with('[') {
+            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.trim_start();
+            let tstart = self.curr_pos();
+            let first_str = self
+                .tokenizer
+                .reader
+                .read_until_with_brackets::<'{', '}'>(|c| c == ']' || c == '%');
+            let first_end = self.curr_pos();
+            if self.tokenizer.reader.starts_with('%') {
+                let mut nexts = SmallVec::<_,2>::new();
+                let mut end_pos = self.curr_pos();
+                loop {
+                    self.skip_comments();
+                    let next = self
+                        .tokenizer
+                        .reader
+                        .read_until_with_brackets::<'{', '}'>(|c| c == ']' || c == '%');
+                    end_pos = self.curr_pos();
+                    nexts.push(next);
+                    if self.tokenizer.reader.starts_with('%') {
+                        continue
+                    }
+                    self.tokenizer.reader.pop_head();
+                    break
+                }
+                let range = SourceRange { start: tstart, end: end_pos };
+                r#in.range.end = self.curr_pos();
+                if nexts.iter().all(|s| s.trim().is_empty()) {
+                    Some((normalize_ws(first_str),range))
+                } else {
+                    Some((Cow::Owned(join_strs(first_str,nexts)),range))
+                }
+            } else {
+                self.tokenizer.reader.pop_head();
+                let range = SourceRange { start: tstart, end: first_end };
+                r#in.range.end = self.curr_pos();
+                Some((normalize_ws(first_str),range))
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn read_name_normalized(&mut self, r#in: &mut Macro<'a, Pos, &'a str>) -> Option<(Cow<'a,str>,SourceRange<Pos>)> {
+        self.skip_comments();
+        if self.tokenizer.reader.starts_with('{') {
+            self.tokenizer.reader.pop_head();
+            self.skip_comments();
+            let tstart = self.curr_pos();
+            let first_str = self
+                .tokenizer
+                .reader
+                .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%');
+            let first_end = self.curr_pos();
+            if self.tokenizer.reader.starts_with('%') {
+                let mut nexts = SmallVec::<_,2>::new();
+                let mut end_pos = self.curr_pos();
+                loop {
+                    self.skip_comments();
+                    let next = self
+                        .tokenizer
+                        .reader
+                        .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%');
+                    end_pos = self.curr_pos();
+                    nexts.push(next);
+                    if self.tokenizer.reader.starts_with('%') {
+                        continue
+                    }
+                    self.tokenizer.reader.pop_head();
+                    break
+                }
+                let range = SourceRange { start: tstart, end: end_pos };
+                r#in.range.end = self.curr_pos();
+                if nexts.iter().all(|s| s.trim().is_empty()) {
+                    Some((normalize_ws(first_str),range))
+                } else {
+                    Some((Cow::Owned(join_strs(first_str,nexts)),range))
+                }
+            } else {
+                self.tokenizer.reader.pop_head();
+                let range = SourceRange { start: tstart, end: first_end };
+                r#in.range.end = self.curr_pos();
+                Some((normalize_ws(first_str),range))
+            }
+        } else {
+            let start = self.curr_pos();
+            let c = self.tokenizer.reader.read_n(1);
+            Some((Cow::Borrowed(c),SourceRange {start,end:self.curr_pos()}))
+        }
+    }
+
+    pub fn read_names_normalized(&mut self, r#in: &mut Macro<'a, Pos, &'a str>) -> Vec<(Cow<'a,str>,SourceRange<Pos>)> {
+        self.skip_comments();
+        if self.tokenizer.reader.starts_with('{') {
+            self.tokenizer.reader.pop_head();
+            let mut ret = Vec::new();
+            loop {
+                self.skip_comments();
+                let tstart = self.curr_pos();
+                let first_str = self
+                    .tokenizer
+                    .reader
+                    .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c ==',' || c == '%');
+                let first_end = self.curr_pos();
+                if self.tokenizer.reader.starts_with('%') {
+                    let mut nexts = SmallVec::<_,2>::new();
+                    let mut end_pos = self.curr_pos();
+                    loop {
+                        self.skip_comments();
+                        let next = self
+                            .tokenizer
+                            .reader
+                            .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%' || c==',');
+                        end_pos = self.curr_pos();
+                        nexts.push(next);
+                        if self.tokenizer.reader.starts_with('%') {
+                            continue
+                        }
+                        break
+                    }
+                    let range = SourceRange { start: tstart, end: end_pos };
+                    if nexts.iter().all(|s| s.trim().is_empty()) {
+                        ret.push((normalize_ws(first_str),range))
+                    } else {
+                        ret.push((Cow::Owned(join_strs(first_str,nexts)),range))
+                    }
+                    if let Some(',') = self.tokenizer.reader.pop_head() {
+                        continue
+                    }
+                    break
+                } else {
+                    let range = SourceRange { start: tstart, end: first_end };
+                    ret.push((normalize_ws(first_str),range));
+                    if let Some(',') = self.tokenizer.reader.pop_head() {continue}
+                    break
+                }
+            }
+            r#in.range.end = self.curr_pos();
+            ret
+        } else {
+            Vec::new()
+        }
+    }
 }
 
+fn normalize_ws<'a>(s:&'a str) -> Cow<'a,str> {
+    if s.contains(&['\t',' ','\r','\n']) {
+        let v = s.trim().split_ascii_whitespace().collect::<SmallVec<_,2>>();
+        Cow::Owned(v.join(" "))
+    } else {
+        Cow::Borrowed(s)
+    }
+}
+
+fn join_strs(first:&str,rest:SmallVec<&str,2>) -> String {
+    let mut ret = first.trim_start().to_string();
+    for r in rest {
+        ret.push_str(r.trim_start());
+    }
+    let v = ret.trim_end().split_ascii_whitespace().collect::<SmallVec<_,2>>();
+    v.join(" ")
+}
 
 impl<'a,
     Pa: ParseSource<'a>,

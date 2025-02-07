@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-pub trait SourcePos: Clone + Copy + Default + Debug + PartialOrd + Ord {
+pub trait SourcePos: Clone + Copy + Default + Debug + PartialOrd + Ord + 'static {
     fn update(&mut self, c: char);
     fn update_newline(&mut self, rn: bool);
     fn update_str_no_newline(&mut self, s: &str);

@@ -25,6 +25,9 @@ pub mod content;
 pub mod languages;
 pub mod narration;
 pub mod file_states;
+
+#[cfg(feature = "serde")]
+pub mod archive_json;
 #[cfg(feature = "rdf")]
 pub mod rdf;
 pub mod uris;
@@ -210,9 +213,10 @@ impl From<std::io::Error> for DecodeError {
 */
 
 pub mod metatheory {
-    use crate::uris::{BaseURI, ModuleURI, SymbolURI};
+    use crate::{languages::Language, uris::{BaseURI, DocumentURI, ModuleURI, SymbolURI}};
     use lazy_static::lazy_static;
     lazy_static! {
+        pub static ref DOC_URI: DocumentURI = ((BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf") & ("Metatheory",Language::English)).unwrap_or_else(|_| unreachable!());
         pub static ref URI: ModuleURI =
             ((BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf") | "Metatheory").unwrap_or_else(|_| unreachable!());
         pub static ref FIELD_PROJECTION: SymbolURI = (URI.clone() | "record field").unwrap_or_else(|_| unreachable!());

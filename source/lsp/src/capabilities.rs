@@ -3,30 +3,32 @@ use async_lsp::lsp_types::{self as lsp, CompletionOptions};
 pub struct STeXSemanticTokens;
 impl STeXSemanticTokens {
   pub const NAME:u32 = 0;           // dark blue          light blue  !
-  pub const TEMP:u32 = 1;           // light blue         dark blue   !
-  pub const KEYWORD:u32 = 2;        // violet             pink        !
-  pub const SYMBOL:u32 = 3;         // brown              red         !
-  pub const DECLARATION: u32 = 4;   // Dark Purple        dark brown  !
-  pub const REF_MACRO: u32 = 5;        // Lime               cyan        ! 
+  pub const KEYWORD:u32 = 1;        // violet             pink        !
+  pub const SYMBOL:u32 = 2;         // brown              red         !
+  pub const DECLARATION: u32 = 3;   // Dark Purple        dark brown  !
+  pub const REF_MACRO: u32 = 4;     // Lime               cyan        !
+  pub const VARIABLE:u32 = 5;       // ?
+  pub const LOCAL:u32 = 6;          // light blue         dark blue   !
   // -------------------
-  pub const OPERATOR:u32 = 6;       // white
-  pub const TYPE_PARAMETER:u32 = 7; // math green
-  pub const TYPE:u32 = 8;           // same
-  pub const ENUM:u32 = 9;           // same
-  pub const MODIFIER: u32 = 10;     // yellow / nothing
-  pub const COMMENT: u32 = 11;      // dark green
-  pub const DECORATOR: u32 = 12;    // yellow / nothing
+  pub const OPERATOR:u32 = 7;       // white
+  pub const TYPE_PARAMETER:u32 = 8; // math green
+  pub const TYPE:u32 = 9;           // same
+  pub const ENUM:u32 = 10;           // same
+  pub const MODIFIER: u32 = 11;     // yellow / nothing
+  pub const COMMENT: u32 = 12;      // dark green
+  pub const DECORATOR: u32 = 13;    // yellow / nothing
 }
 
 lazy_static::lazy_static! {
   pub static ref SEMANTIC_TOKENS : lsp::SemanticTokensLegend = lsp::SemanticTokensLegend {
     token_types: vec![
       lsp::SemanticTokenType::ENUM_MEMBER,
-      lsp::SemanticTokenType::PROPERTY,
       lsp::SemanticTokenType::KEYWORD,
       lsp::SemanticTokenType::STRING,
       lsp::SemanticTokenType::REGEXP,
       lsp::SemanticTokenType::NUMBER,
+      lsp::SemanticTokenType::VARIABLE,
+      lsp::SemanticTokenType::PROPERTY,
       // ------------------------------
       lsp::SemanticTokenType::OPERATOR,
       lsp::SemanticTokenType::TYPE_PARAMETER,

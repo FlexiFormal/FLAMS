@@ -1,17 +1,16 @@
-use std::path::Path;
+use std::{path::Path, sync::atomic::AtomicBool};
 
-use async_lsp::lsp_types::{Position, Range, Url};
+use async_lsp::{lsp_types::{Position, Range, Url}, ClientSocket};
 use immt_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
 use immt_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
 use immt_utils::time::measure;
 
-use crate::{state::LSPState, LSPStore};
+use crate::{state::{LSPState, UrlOrFile}, LSPStore};
 
 
 struct DocumentData {
-  lsp_uri:Url,
-  path:Option<Box<Path>>,
+  path:Option<std::sync::Arc<Path>>,
   archive:Option<ArchiveURI>,
   rel_path:Option<Box<str>>,
   doc_uri:Option<DocumentURI>
@@ -19,8 +18,9 @@ struct DocumentData {
 
 #[derive(Clone)]
 pub struct LSPDocument {
+  up_to_date:triomphe::Arc<AtomicBool>,
   text:triomphe::Arc<parking_lot::Mutex<LSPText>>,
-  pub annotations: STeXParseData,
+  pub(crate) annotations: STeXParseData,
   data:triomphe::Arc<DocumentData>
 }
 
@@ -29,13 +29,13 @@ impl LSPDocument {
   #[allow(clippy::cast_possible_truncation)]
   #[allow(clippy::borrowed_box)]
   #[must_use]
-  pub fn new(text:String,lsp_uri:Url) -> Self {
-    let path:Option<Box<Path>> = lsp_uri.to_file_path().ok().map(Into::into);
+  pub fn new(text:String,lsp_uri:UrlOrFile) -> Self {
+    let path = if let UrlOrFile::File(p) = lsp_uri {Some(p)} else {None}; //lsp_uri.to_file_path().ok().map(Into::into);
     let default = || {
       let path = path.as_ref()?.as_os_str().to_str()?.into();
       Some((ArchiveURI::no_archive(),Some(path)))
     };
-    let ap = path.as_ref().and_then(|path:&Box<Path>|
+    let ap = path.as_ref().and_then(|path|
       GlobalBackend::get().archive_of(path,|a,rp| {
         let uri = a.uri().owned();
         let rp = rp.strip_prefix("/source/").map(|r| r.into());
@@ -43,21 +43,20 @@ impl LSPDocument {
       })
     ).or_else(default);
     let (archive,rel_path) = ap.map_or((None,None),|(a,p)| (Some(a),p));
-    let r = LSPText { text ,up_to_date:false, html_up_to_date: false };
+    let r = LSPText { text , html_up_to_date: false };
     let doc_uri = archive.as_ref().and_then(|a| rel_path.as_ref().map(|rp:&Box<str>| DocumentURI::from_archive_relpath(a.clone(), rp)));
     //tracing::info!("Document: {lsp_uri}\n - {doc_uri:?}\n - [{archive:?}]{{{rel_path:?}}}");
     let data = DocumentData {
-      lsp_uri,path,archive,rel_path,doc_uri
+      path,archive,rel_path,doc_uri
     };
     Self {
+      up_to_date:triomphe::Arc::new(AtomicBool::new(false)),
       text:triomphe::Arc::new(parking_lot::Mutex::new(r)),
       data:triomphe::Arc::new(data),
       annotations: STeXParseData::default()
     }
   }
 
-  #[inline]#[must_use]
-  pub fn lsp_uri(&self) -> &Url {&self.data.lsp_uri}
 
   #[inline]#[must_use]
   pub fn path(&self) -> Option<&Path> { self.data.path.as_deref()}
@@ -72,8 +71,12 @@ impl LSPDocument {
   pub fn document_uri(&self) -> Option<&DocumentURI> { self.data.doc_uri.as_ref()}
 
   #[inline]
-  pub fn set_text(&self,s:String) {
-    self.text.lock().text = s;
+  pub fn set_text(&self,s:String) -> bool {
+    let mut txt = self.text.lock();
+    if txt.text == s { return false }
+    txt.text = s;
+    self.up_to_date.store(false,std::sync::atomic::Ordering::SeqCst);
+    true
   }
 
   #[inline]
@@ -92,6 +95,7 @@ impl LSPDocument {
 
   #[inline]
   pub fn delta(&self,text:String,range:Option<Range>) {
+    self.up_to_date.store(false,std::sync::atomic::Ordering::SeqCst);
     self.text.lock().delta(text, range);
   }
   #[inline]
@@ -118,23 +122,29 @@ impl LSPDocument {
 
     let mut docs = state.documents.write();
     let mut store = LSPStore::<true>::new(&mut *docs);
-    let (data,t) = measure(|| immt_stex::quickparse::stex::quickparse(
+    let data =
+    //let (data,t) = measure(|| 
+      immt_stex::quickparse::stex::quickparse(
       uri,&lock.text, path,
       &AnyBackend::Global(GlobalBackend::get()),
-      &mut store
-    ));
+      &mut store);
+    //);
+    data.replace(&self.annotations);
+    self.up_to_date.store(true, std::sync::atomic::Ordering::SeqCst);
     drop(store);
     drop(docs);
-    tracing::info!("quickparse took {t}");
-    data.replace(&self.annotations);
-    lock.up_to_date = true;
+    //tracing::info!("quickparse took {t}");
     drop(lock);
+    /*let path = path.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+      state.relint_dependents(path);
+    });*/
     let lock = self.annotations.lock();
     Some(f(&lock))
   }
 
-  fn is_up_to_date(&self) -> bool {
-    self.text.lock().up_to_date
+  pub fn is_up_to_date(&self) -> bool {
+    self.up_to_date.load(std::sync::atomic::Ordering::SeqCst)
   }
 
   #[inline]#[must_use]#[allow(clippy::significant_drop_tightening)]
@@ -164,7 +174,6 @@ impl LSPDocument {
 
 struct LSPText {
   text: String,
-  up_to_date:bool,
   html_up_to_date:bool
 }
 
@@ -253,7 +262,6 @@ impl LSPText {
     };
     let (start,end) = self.get_range(range);
     self.text.replace_range(start..end, &text);
-    self.up_to_date = false;
     self.html_up_to_date = false;
   }
 }

@@ -4,6 +4,7 @@ import * as immt from './immt/types';
 import { IMMTServer } from './immt/server';
 import path from 'path';
 import * as fs from 'fs';
+import { log } from 'console';
 
 export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   primary_server:IMMTServer;

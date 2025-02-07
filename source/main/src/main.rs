@@ -31,12 +31,13 @@ fn main() {
         }
     }
 
-
     let settings = settings::get_settings();
-    tokio::runtime::Builder::new_multi_thread()
-      .enable_all()
-      //.thread_stack_size(15 * 1024 * 1024)
-      .build()
+    let mut rt = tokio::runtime::Builder::new_multi_thread();
+    rt.enable_all();
+    #[cfg(debug_assertions)]
+    { rt.thread_stack_size(4 * 1024 * 1024); }
+
+    rt.build()
       .expect("Failed to initialize Tokio runtime")
       .block_on(run(settings));
 }

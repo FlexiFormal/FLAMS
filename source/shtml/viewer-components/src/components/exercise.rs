@@ -1,4 +1,4 @@
-use immt_ontology::{narration::exercises::{BlockFeedback, CheckedResult, ExerciseFeedback, ExerciseResponse as OrigResponse, FillinFeedback, Solutions}, uris::DocumentElementURI};
+use immt_ontology::{narration::exercises::{BlockFeedback, CheckedResult, ExerciseFeedback, ExerciseResponse as OrigResponse, FillinFeedback, FillinFeedbackKind, Solutions}, uris::DocumentElementURI};
 use immt_utils::vecmap::VecMap;
 use leptos::{context::Provider, prelude::*};
 use leptos_dyn_dom::OriginalNode;
@@ -85,7 +85,7 @@ pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:
                 if let Some(resp) = responses.try_with(|resp| 
                   CurrentExercise::to_response(&uri, resp)
                 ) {
-                  f.apply(&resp);
+                  let _ = f.apply(&resp);
                 }
               });
               leptos::either::Either::Left(r)
@@ -415,7 +415,7 @@ pub(super) fn fillinsol(wd:Option<f32>) -> impl IntoView {
     return None
   };
   let feedback = ex.feedback;
-  Some(move || feedback.with(|v|
+  Some(move || {let style = wd.map(|wd| format!("width:{wd}px;"));feedback.with(|v|
     if let Some(feedback) = v.as_ref() {
       let err = || {
         tracing::error!("Answer to exercise does not match solution!");
@@ -427,6 +427,12 @@ pub(super) fn fillinsol(wd:Option<f32>) -> impl IntoView {
 
         (*is_correct,Some(feedback.clone()))
       } else {(false,None)};
+      let solution = if correct { None } else {
+        options.iter().find_map(|f| match f{
+          FillinFeedback{is_correct:true,kind:FillinFeedbackKind::Exact(s),..} => Some(s.clone()),
+          _ => None
+        })
+      };
       let icon = if correct {
         view!(<Icon icon=icondata_ai::AiCheckCircleOutlined style="color:green;"/>)
       } else {
@@ -434,7 +440,8 @@ pub(super) fn fillinsol(wd:Option<f32>) -> impl IntoView {
       };
       Either::B(view!{
         {icon}" "
-        <input type="text" disabled value=text.clone()/>
+        <input type="text" style=style disabled value=text.clone()/>
+        {solution.map(|s| view!(" "<pre style="color:green">{s}</pre>))}
         {feedback.map(|s| view!(" "<span style="background-color:lightgray;" inner_html=s/>))}
       })
     } else {
@@ -445,10 +452,9 @@ pub(super) fn fillinsol(wd:Option<f32>) -> impl IntoView {
           *s = val;
         }
       );
-      let style = wd.map(|wd| format!("width:{wd}px;"));
       Either::A(view!{
         <input type="text" style=style on:input:target=move |ev| {sig.set(ev.target().value());}/>
       })
     }
-  ))
+  )})
 }

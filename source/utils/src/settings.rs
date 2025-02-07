@@ -92,6 +92,7 @@ impl SettingsSpec {
                     s.parse()
                         .expect("Could not parse IP address (environment variable IMMT_IP)")
                 }),
+                external_url: std::env::var("IMMT_EXTERNAL_URL").ok(),
                 admin_pwd: std::env::var("IMMT_ADMIN_PWD").ok(),
             },
             buildqueue: BuildQueueSettings {
@@ -127,6 +128,8 @@ pub struct ServerSettings {
     pub ip: Option<std::net::IpAddr>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub admin_pwd: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub external_url: Option<String>,
 }
 impl Add for ServerSettings {
     type Output = Self;
@@ -135,6 +138,7 @@ impl Add for ServerSettings {
             port: if self.port == 0 { rhs.port } else { self.port },
             ip: self.ip.or(rhs.ip),
             admin_pwd: self.admin_pwd.or(rhs.admin_pwd),
+            external_url: self.external_url.or(rhs.external_url),
         }
     }
 }
@@ -148,6 +152,9 @@ impl AddAssign for ServerSettings {
         }
         if self.admin_pwd.is_none() {
             self.admin_pwd = rhs.admin_pwd;
+        }
+        if self.external_url.is_none() {
+            self.external_url = rhs.external_url;
         }
     }
 }

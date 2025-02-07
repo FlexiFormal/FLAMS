@@ -45,6 +45,9 @@ struct Cli {
     pub(crate) ip: Option<String>,
 
     #[arg(long)]
+    pub(crate) external_url: Option<String>,
+
+    #[arg(long)]
     /// The database file to use for account management etc.
     pub(crate) db: Option<PathBuf>,
 
@@ -87,6 +90,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
                 port: cli.port.unwrap_or_default(),
                 ip: cli.ip.map(|s| s.parse().expect("Illegal ip")),
                 admin_pwd: cli.admin_pwd,
+                external_url: cli.external_url
             },
             buildqueue: BuildQueueSettings {
                 num_threads: cli.threads,

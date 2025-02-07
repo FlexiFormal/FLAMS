@@ -27,47 +27,11 @@ impl STDIOLSPServer {
   fn load_all(&self) {
     let client = self.client.clone();
     let state = self.state().clone();
-    let workspaces = self.workspaces.clone();
+    for (name,uri) in &self.workspaces {
+      tracing::info!("workspace: {name}@{uri}");
+    }
     let _ = tokio::task::spawn_blocking(move || {
-      let (_,t) = measure(move || {
-        let mut files = Vec::new();
-        for a in GlobalBackend::get().all_archives().iter() {
-          if let Archive::Local(a) =a { 
-            a.with_sources(|d| for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
-              match e {
-                SourceEntry::File(f) => files.push((
-                  f.relative_path.split('/').fold(a.source_dir(),|p,s| p.join(s)),
-                  DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path)
-              )),
-                _ => {}
-              }
-            })
-          }
-        }
-        ProgressCallbackServer::with(client,"Initializing".to_string(),Some(files.len() as _),|mut p| {
-          //let mut i = 0;
-          state.load_all(files.into_iter().map(|(path,uri)| {
-            //i += 1;
-            //if i % 100 == 0 {
-              p.update(path.display().to_string(), Some(1));
-            //}
-            (path,uri)
-          }), |file,data| {
-            let lock = data.lock();
-            if !lock.diagnostics.is_empty() {
-              if let Ok(uri) = lsp::Url::from_file_path(&file) { 
-                let _ = p.client().clone().publish_diagnostics(lsp::PublishDiagnosticsParams {
-                  uri,version:None,diagnostics:lock.diagnostics.iter().map(to_diagnostic).collect()
-                });
-              }
-            }
-          });
-          for (name,uri) in &workspaces {
-            tracing::info!("workspace: {name}@{uri}");
-          }
-        });
-      });
-      tracing::info!("initialized after {t}");
+      state.load_mathhubs(client);
     });
   }
 }
@@ -104,7 +68,8 @@ impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
       });
     }
     tracing::info!("Using {} threads",tokio::runtime::Handle::current().metrics().num_workers());
-    self.load_all();
+    //#[cfg(not(debug_assertions))]
+    {self.load_all();}
   }
 
   fn initialize<I:Iterator<Item=(String,lsp::Url)> + Send + 'static>(&mut self,workspaces:I) {
@@ -154,8 +119,10 @@ pub async fn lsp(on_port:tokio::sync::watch::Receiver<Option<u16>>) {
       .service(STDIOLSPServer::new_router(client,on_port))
   });
 
+  let debug = immt_system::settings::Settings::get().debug;
+
   tracing_subscriber::fmt()
-    .with_max_level(Level::INFO)//if debug {Level::TRACE} else {Level::INFO})
+    .with_max_level(Level::INFO)//(if debug {Level::TRACE} else {Level::INFO})
     .with_ansi(false)
     .with_target(true)
     .with_writer(std::io::stderr)
@@ -179,7 +146,7 @@ struct ServerURL;
 impl ServerURL {
     fn get() -> String {
         let settings = Settings::get();
-        format!("http://{}:{}",settings.ip,settings.port)
+        format!("http://{}:{}",settings.ip,settings.port())
     }
 }
 impl lsp::notification::Notification for ServerURL {
@@ -228,4 +195,42 @@ pub(crate) async fn register(
       res
     }
   }
+}
+
+#[tokio::test]
+async fn linter() {
+  tracing_subscriber::fmt().init();
+  let _ce = color_eyre::install();
+  let mut spec = immt_system::settings::SettingsSpec::default();
+  spec.lsp = true;
+  immt_system::initialize(spec);
+  let state = LSPState::default();
+  let _ = GLOBAL_STATE.set(state.clone());
+  tracing::info!("Waiting for stex to load...");
+  std::thread::sleep(std::time::Duration::from_secs(6));
+  tracing::info!("Go!");
+  let (_,t) = measure(move || {
+    tracing::info!("Loading all archives");
+    let mut files = Vec::new();
+    for a in GlobalBackend::get().all_archives().iter() {
+      if let Archive::Local(a) =a { 
+        a.with_sources(|d| for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
+          match e {
+            SourceEntry::File(f) => files.push((
+              f.relative_path.split('/').fold(a.source_dir(),|p,s| p.join(s)).into(),
+              DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path)
+          )),
+            _ => {}
+          }
+        })
+      }
+    }
+    let len = files.len();
+    tracing::info!("Linting {len} files");
+    state.load_all(files.into_iter()/*.enumerate().map(|(i,(path,uri))| {
+      tracing::info!("{}/{len}: {}",i+1,path.display());
+      (path,uri)
+    })*/, |_,_| {});
+  });
+  tracing::info!("initialized after {t}");
 }

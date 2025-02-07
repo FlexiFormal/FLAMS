@@ -141,7 +141,7 @@ pub trait ModuleTrait {
                         curr = m.declarations().iter();
                     }
                     Declaration::Morphism(m)
-                        if m.uri.as_ref().map(|u| u.name().last_name()) == Some(step) =>
+                        if m.uri.name().last_name() == step =>
                     {
                         if steps.is_empty() {
                             return T::from_declaration(c);

@@ -302,7 +302,7 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     fn push_problem_choice(&mut self,correct:bool) {
         if !self.with_exercise(|ex| 
             if let Some(block) = &mut ex.choice_block {
-                block.choices.push(Choice {correct,verdict:Box::default(),feedback:Default::default()});
+                block.choices.push(Choice {correct,verdict:Box::default(),feedback:Box::default()});
                 true
             } else { false }
         ).unwrap_or_default() {
@@ -465,23 +465,20 @@ impl<E:StatefulExtractor> SHTMLExtractor for E {
     fn close_args(&mut self) -> (Vec<Arg>,Option<Term>) {
         match self.state_mut().content.pop() {
             Some(Content::Args(args,head)) => {
-                //println!("Checking:\n{args:?}\n\n{head:?}\n");
                 let mut ret = Vec::new();
                 let mut iter = args.into_iter();
                 while let Some(Some((a,m))) = iter.next() {
                     ret.push(match a.close(m) {
                         Ok(a) => a,
                         Err(a) => {
-                            //println!("HERE 3");
-                            self.add_error(SHTMLError::IncompleteArgs);
+                            self.add_error(SHTMLError::IncompleteArgs(1));
                             a
                         }
                     });
                 }
                 for e in iter {
                     if e.is_some() {
-                        //println!("\n\nHERE 4\n\n");
-                        self.add_error(SHTMLError::IncompleteArgs);
+                        self.add_error(SHTMLError::IncompleteArgs(2));
                     }
                 }
                 return (ret,head);
@@ -828,7 +825,7 @@ pub trait Attributes {
         extractor.get_content_uri().map_or_else(
             || extractor.get_narrative_uri().document().module_uri_from(v.as_ref()),
             |m| m.clone() / v.as_ref()
-        ).map_err(|_| SHTMLError::InvalidURI(v.into()))
+        ).map_err(|_| SHTMLError::InvalidURI(format!("1: {}",v.as_ref())))
     }
 
     /// #### Errors
@@ -845,7 +842,7 @@ pub trait Attributes {
         extractor.get_content_uri().map_or_else(
             || extractor.get_narrative_uri().document().module_uri_from(&v),
             |m| m.clone() / v.as_str()
-        ).map_err(|_| SHTMLError::InvalidURI(v.into()))
+        ).map_err(|_| SHTMLError::InvalidURI(format!("2: {v}")))
     }
 
     /// #### Errors
@@ -862,7 +859,7 @@ pub trait Attributes {
         let Some(module) = extractor.get_content_uri() else {
             return Err(SHTMLError::NotInContent)
         };
-        (module.owned() | v.as_ref()).map_err(|_| SHTMLError::InvalidURI(v.into()))
+        (module.owned() | v.as_ref()).map_err(|_| SHTMLError::InvalidURI(format!("3: {}",v.as_ref())))
     }
 
     /// #### Errors
@@ -879,7 +876,7 @@ pub trait Attributes {
         let Some(module) = extractor.get_content_uri() else {
             return Err(SHTMLError::NotInContent)
         };
-        (module.owned() | v.as_str()).map_err(|_| SHTMLError::InvalidURI(v.into()))
+        (module.owned() | v.as_str()).map_err(|_| SHTMLError::InvalidURI(format!("4: {v}")))
     }
 
     /// #### Errors

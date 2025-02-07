@@ -27,7 +27,33 @@ use crate::{router::Main, utils::ws::WebSocketServer};
   skip_all
 )]
 pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
-    let state = ServerState::new().in_current_span().await;
+    let mut state = ServerState::new().in_current_span().await;
+    let mut addr = state.options.site_addr.clone();
+    let mut changed = false;
+    let mut listener = None;
+    let span = tracing::info_span!(target:"server","request");
+    for p in addr.port()..65535 {
+        addr.set_port(p);
+        if let Ok(l) = tokio::net::TcpListener::bind(addr.clone())
+            .instrument(span.clone())
+            .await {
+            listener = Some(l);
+            break
+        } else {
+            changed = true;
+        }
+    }
+    let listener = listener.expect("Could not bind to any port");
+
+    if changed {
+        if port_channel.is_some() {
+            tracing::warn!("Port already in use; used {} instead",addr.port());
+        } else {
+            println!("Port already in use; used {} instead",addr.port());
+        }
+        immt_system::settings::Settings::get().port.store(addr.port(), std::sync::atomic::Ordering::Relaxed);
+        state.options.site_addr = addr;
+    }
 
     let session_store = MemoryStore::default();
     let session_layer =
@@ -42,9 +68,6 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         .layer(AuthManagerLayerBuilder::new(state.db.clone(), session_layer).build());
 
     let routes = generate_route_list(Main);
-    let site_addr = state.options.site_addr;
-
-    let span = tracing::info_span!(target:"server","request");
 
     let has_gl = state.oauth.is_some();
     
@@ -88,17 +111,12 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let app: Router<()> = app.with_state(state);
 
     if let Some(channel) = port_channel {
-        channel.send(Some(site_addr.port())).expect("Error sending port address");
+        channel.send(Some(addr.port())).expect("Error sending port address");
     }
 
     crate::fns::init();
 
-    axum::serve(
-        tokio::net::TcpListener::bind(&site_addr)
-            .instrument(span.clone())
-            //.in_current_span()
-            .await
-            .expect("Failed to initialize TCP listener"),
+    axum::serve(listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .into_future()
@@ -221,7 +239,7 @@ impl ServerState {
 
         let settings = Settings::get();
         let ip = settings.ip;
-        let port = settings.port;
+        let port = settings.port();
         leptos_cfg.leptos_options.site_addr = std::net::SocketAddr::new(ip, port);
         leptos_cfg
     }

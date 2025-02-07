@@ -50,8 +50,12 @@ fn do_components<const MATH:bool>(skip:usize,elements:SHTMLElements,orig:Origina
           do_components::<MATH>(skip+1,elements,orig)
         ).into_any()
       }
+      OpenSHTMLElement::DefComp =>
+        terms::do_comp::<_,MATH>(true,move|| view!(<DomCont skip_head=true orig cont=crate::iterate/>)).into_any(),
       OpenSHTMLElement::Comp | OpenSHTMLElement::MainComp =>
-        terms::do_comp::<_,MATH>(move|| view!(<DomCont skip_head=true orig cont=crate::iterate/>)).into_any(),
+        terms::do_comp::<_,MATH>(false,move|| view!(<DomCont skip_head=true orig cont=crate::iterate/>)).into_any(),
+      OpenSHTMLElement::Definiendum(uri) =>
+        terms::do_definiendum::<_,MATH>(move || do_components::<MATH>(skip+1,elements,orig)).into_any(),
       OpenSHTMLElement::Arg(arg) =>
         terms::do_arg(orig,*arg, move |orig| 
           do_components::<MATH>(skip+1,elements,orig)

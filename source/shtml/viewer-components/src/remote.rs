@@ -36,6 +36,18 @@ pub fn set_server_url(s:String) {
     *server_config.server_url.lock() = s;
 }
 
+#[cfg(feature="csr")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+/// gets the current server url
+pub fn get_server_url() -> String {
+    server_config.server_url.lock().clone()
+}
+
+#[cfg(not(feature="csr"))]
+pub fn get_server_url() -> String {
+    String::new()
+}
+
 #[cfg(any(feature="hydrate",feature="ssr"))]
 macro_rules! server_fun{
     ($($ty:ty),* => $ret:ty) => {

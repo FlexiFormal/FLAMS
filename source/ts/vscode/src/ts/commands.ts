@@ -26,6 +26,8 @@ interface HtmlRequestParams {
   uri: language.URI
 }
 
+interface ReloadParams {}
+
 export function register_server_commands(context:IMMTContext) {
   vscode.commands.executeCommand('setContext', 'immt.loaded', true);
 	vscode.window.registerWebviewViewProvider("immt-tools",
@@ -44,6 +46,9 @@ export function register_server_commands(context:IMMTContext) {
               }
             });
           }
+          break;
+        case "reload":
+          context.client.sendNotification("immt/reload",<ReloadParams>{});
           break;
         case "browser":
           if (doc) {
@@ -92,7 +97,7 @@ export function webview(immtcontext:IMMTContext,html_file:string,onMessage?: (e:
       };
       const tkuri = webviewView.webview.asWebviewUri(vscode.Uri.joinPath(
         immtcontext.vsc.extensionUri,
-          "resources","toolkit.min.js"
+          "resources","bundled.js"
       ));
       const cssuri = webviewView.webview.asWebviewUri(vscode.Uri.joinPath(
         immtcontext.vsc.extensionUri,

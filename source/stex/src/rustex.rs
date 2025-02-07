@@ -235,6 +235,7 @@ impl RusTeX {
     ) -> Result<String, String> {
         let (mut engine,settings) = self.set_up(envs, out);
         let res = engine.run(file.to_str().unwrap_or_else(|| unreachable!()), settings);
+        
         res.error.as_ref().map_or_else(
             || {
                 if memorize {
@@ -243,7 +244,7 @@ impl RusTeX {
                 }
                 Ok(res.to_string())
             },
-            |e| Err(e.to_string()),
+            |(e,_)| Err(e.to_string()),
         )
     }
 
@@ -296,7 +297,6 @@ impl EngineRemnants {
         }
     }
 }
-
 
 impl RusTeXRunBuilder<true> {
     pub fn run(mut self) -> (CompilationResult,EngineRemnants) {
@@ -410,7 +410,7 @@ fn give_back(engine: RusTeXEngine, base: &mut EngineBase) {
     *font_system = engine.fontsystem;
     let oldinterner = engine.aux.memory.cs_interner();
     let iter = CommandIterator {
-        prefix: b"c_stex_module_",
+        prefixes: &[b"c_stex_module_",b"c_stex_mathhub_"],
         cmds: engine.state.destruct().into_iter(),
         interner: oldinterner,
     };
@@ -423,7 +423,7 @@ fn give_back(engine: RusTeXEngine, base: &mut EngineBase) {
 }
 
 pub struct CommandIterator<'a, I: Iterator<Item = (InternedCSName<u8>, TeXCommand<Types>)>> {
-    prefix: &'static [u8],
+    prefixes: &'static [&'static [u8]],
     cmds: I,
     interner: &'a <InternedCSName<u8> as CSName<u8>>::Handler,
 }
@@ -435,7 +435,7 @@ impl<I: Iterator<Item = (InternedCSName<u8>, TeXCommand<Types>)>> Iterator
         loop {
             if let Some((name, cmd)) = self.cmds.next() {
                 let bname = self.interner.resolve(name);
-                if bname.starts_with(self.prefix) {
+                if self.prefixes.iter().any(|p| bname.starts_with(p)) {
                     return Some((name, cmd));
                 }
             } else {

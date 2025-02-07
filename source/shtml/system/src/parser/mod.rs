@@ -223,7 +223,7 @@ impl TreeSink for HTMLParser<'_> {
             if let Some(src) = attributes.value("src") {
               let path = std::path::Path::new(src);
               if let Some(newsrc) = self.extractor.borrow().backend.archive_of(path, |a,rp| {
-                format!("/img?a={}&rp={}",a.id(),&rp[1..])
+                format!("srv:/img?a={}&rp={}",a.id(),&rp[1..])
               }) {
                 attributes.set("src",&newsrc);
               } else {
@@ -231,11 +231,11 @@ impl TreeSink for HTMLParser<'_> {
                 let last = src.rsplit_once('/').map_or(src,|(_,p)| p);
                 if let Some(file) = kpsewhich.which(last) {
                   if file == path {
-                    let file = format!("/img?kpse={last}");
+                    let file = format!("srv:/img?kpse={last}");
                     attributes.set("src",&file);
                   }
                 } else {
-                  let file = format!("/img?file={src}");
+                  let file = format!("srv:/img?file={src}");
                   attributes.set("src",&file);
                 }
                 // TODO
@@ -341,7 +341,10 @@ impl TreeSink for HTMLParser<'_> {
                   let attrs = elem.attributes.borrow();
                   if attrs.value("rel") == Some("stylesheet") {
                     if let Some(lnk) = attrs.value("href") {
-                      self.extractor.borrow_mut().css.push(CSS::Link(lnk.into()));
+                      let val = if let Some(v) = CSS_SUBSTS.get(lnk) {
+                        v.to_string().into_boxed_str()
+                      } else { lnk.to_string().into_boxed_str() };
+                      self.extractor.borrow_mut().css.push(CSS::Link(val));
                       node.delete();
                       return
                     }
@@ -406,8 +409,12 @@ impl TreeSink for HTMLParser<'_> {
   fn add_attrs_if_missing(&self, _target: &Self::Handle, _attrs: Vec<html5ever::Attribute>) {
     unreachable!()
   }
-
 }
+
+static CSS_SUBSTS: phf::Map<&'static str,&'static str> = phf::phf_map!{
+  "https://raw.githack.com/Jazzpirate/RusTeX/main/rustex/src/resources/rustex.css" 
+  => "srv:/rustex.css"
+};
 
 fn update_attributes(elements:&SHTMLElements,child:&ElementData) {
   let mut attrs = child.attributes.borrow_mut();
@@ -421,9 +428,7 @@ fn update_attributes(elements:&SHTMLElements,child:&ElementData) {
     }
     OpenSHTMLElement::Morphism { uri,domain,..} => {
       attrs.update(SHTMLTag::MorphismDomain, domain);
-      if let Some(uri) = uri {
-        attrs.update(SHTMLTag::Morphism, &uri.clone().into_module());
-      }
+      attrs.update(SHTMLTag::Morphism, &uri.clone().into_module());
     }
     OpenSHTMLElement::Assign(uri) => {
       attrs.update(SHTMLTag::Assign, uri);
