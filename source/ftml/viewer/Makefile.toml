@@ -17,8 +17,6 @@ install_crate = "wasm-pack"
 command = "wasm-pack"
 args = ["build","--dev","--out-dir","ts","--","--features","ts,omdoc"]
 
-[tasks.ts]
-alias = "wasm-pack-ts"
 
 
 [tasks.wasm-pack-dev]
@@ -63,6 +61,35 @@ ftml_start();
     ).as_bytes()).unwrap();
 }
 '''
+
+
+[tasks.copy-flams-to-ts]
+workspace = false
+script_runner = "@rust"
+script = '''
+use std::path::Path;
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            std::fs::copy(&entry.path(), &dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+fn main() {
+  let _ = std::fs::remove_dir_all(Path::new("./ts/flams"));
+  std::fs::create_dir_all(Path::new("./ts/flams")).unwrap();
+  copy_dir_all(&Path::new("../../ts/vscode/src/ts/flams"),&Path::new("./ts/flams")).unwrap();
+}
+'''
+
+[tasks.ts]
+dependencies = ["wasm-pack-ts","copy-flams-to-ts"]
 
 [tasks.clean]
 command = "cargo"

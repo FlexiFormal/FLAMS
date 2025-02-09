@@ -25,16 +25,16 @@ jobs:
         run: cargo make vscode
       - name: ts
         run: cd source/ftml/viewer && cargo make wasm-pack-ts
-      - name: doc
-        run: cargo make doc
-      - name: Remove lock file
-        run: rm target/doc/.lock
+#      - name: doc
+#        run: cargo make doc
+#      - name: Remove lock file
+#        run: rm target/doc/.lock
       - name: Set executable
         run: chmod +x bin/flams
-      - name: Upload Docs
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: target/doc
+#      - name: Upload Docs
+#        uses: actions/upload-pages-artifact@v3
+#        with:
+#          path: target/doc
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -166,16 +166,16 @@ jobs:
             ./ts.zip
             ./ftml.zip
             ./vscode/flams.vsix
-  deploy-docs:
-    needs: linux
-    permissions:
-      pages: write      # to deploy to Pages
-      id-token: write   # to verify the deployment originates from an appropriate source
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4 
+#  deploy-docs:
+#    needs: linux
+#    permissions:
+#      pages: write      # to deploy to Pages
+#      id-token: write   # to verify the deployment originates from an appropriate source
+#    environment:
+#      name: github-pages
+#      url: ${{ steps.deployment.outputs.page_url }}
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Deploy to GitHub Pages
+#        id: deployment
+#        uses: actions/deploy-pages@v4 

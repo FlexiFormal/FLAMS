@@ -11,7 +11,7 @@ export class FLAMSServer {
   }
 
   /// requires login
-  async api_settings(): Promise<flams.Settings | undefined> {
+  async apiSettings(): Promise<flams.Settings | undefined> {
     const ret = await this.postRequest<{},[flams.Settings,any,any] | undefined>("api/settings",{});
     if (ret) {
       const [settings,_] = ret;
@@ -21,19 +21,19 @@ export class FLAMSServer {
 
 
   /// sets a cookie, i.e. only makes sense in a client-side context
-  async api_login(username:string,password:string): Promise<void> {
+  async apiLogin(username:string,password:string): Promise<void> {
     await this.postRequest("api/login",{username:username,password:password});
   }
 
-  async api_login_state(): Promise<flams.LoginState | undefined> {
+  async apiLoginState(): Promise<flams.LoginState | undefined> {
     return await this.postRequest("api/login_state",{});
   }
 
-  async backend_group_entries(in_entry?:string): Promise<[flams.ArchiveGroup[],flams.Archive[]] | undefined> {
+  async backendGroupEntries(in_entry?:string): Promise<[flams.ArchiveGroup[],flams.Archive[]] | undefined> {
     return await this.postRequest("api/backend/group_entries",{in:in_entry});
   }
 
-  async backend_archive_entries(archive:string,in_path?:string): Promise<[flams.Directory[],flams.File[]] | undefined> {
+  async backendArchiveEntries(archive:string,in_path?:string): Promise<[flams.Directory[],flams.File[]] | undefined> {
     return await this.postRequest("api/backend/archive_entries",{archive:archive,path:in_path});
   }
 
@@ -45,7 +45,7 @@ export class FLAMSServer {
     return await this.postRequest("api/backend/query",{query:sparql});
   }
 
-  async content_document(uri:flams.DocumentURIParams):Promise<[flams.DocumentURI,flams.CSS[],string] | undefined> {
+  async contentDocument(uri:flams.DocumentURIParams):Promise<[flams.DocumentURI,flams.CSS[],string] | undefined> {
     const arg = (uri instanceof flams.DocumentURI)? { uri: uri.uri } : uri;
     const ret = <[string,flams.CSS[],string] | undefined> await this.getRequest("content/document",arg);
     if (ret) {
@@ -54,12 +54,12 @@ export class FLAMSServer {
     }
   }
 
-  async content_fragment(uri:flams.URIParams):Promise<[flams.CSS[],string] | undefined> {
+  async contentFragment(uri:flams.URIParams):Promise<[flams.CSS[],string] | undefined> {
     const arg = (uri instanceof flams.DocumentURI)? { uri: uri.uri } : uri;
     return await this.getRequest("content/fragment",arg);
   }
 
-  async content_toc(uri:flams.DocumentURIParams):Promise<[flams.CSS[],flams.TOCElem[]] | undefined> {
+  async contentToc(uri:flams.DocumentURIParams):Promise<[flams.CSS[],flams.TOCElem[]] | undefined> {
     const arg = (uri instanceof flams.DocumentURI)? { uri: uri.uri } : uri;
     return await this.getRequest("content/toc",arg);
   }
@@ -143,4 +143,4 @@ export class FLAMSServer {
   }
 }
 
-type IsEqual<T1,T2> = (T1 | T2) extends (T1 & T2) ? true : never;
+//type IsEqual<T1,T2> = (T1 | T2) extends (T1 & T2) ? true : never;

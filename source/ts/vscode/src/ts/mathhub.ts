@@ -19,7 +19,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   }
   async getChildren(element?: AnyMH | undefined): Promise<AnyMH[]> {
     if (!this.mathhubs) {
-      const mhs = await this.primary_server.api_settings();
+      const mhs = await this.primary_server.apiSettings();
       if (!mhs) {
         this.mathhubs = [];
       } else {
@@ -66,7 +66,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   }
 
   private async df_from_server(a:Archive,rp?:string): Promise<[Dir[],File[]] | undefined> {
-    const entries = await (a.local? this.primary_server.backend_archive_entries(a.id,rp) : this.remote_server?.backend_archive_entries(a.id,rp));
+    const entries = await (a.local? this.primary_server.backendArchiveEntries(a.id,rp) : this.remote_server?.backendArchiveEntries(a.id,rp));
     if (!entries) {
       vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No file entries found");
       return;
@@ -88,7 +88,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   }
 
   private async ga_from_local_server(id:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
-    const entries = await this.primary_server.backend_group_entries(id);
+    const entries = await this.primary_server.backendGroupEntries(id);
     if (!entries) {
       vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       return;
@@ -104,7 +104,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
       vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No remote server set`);
       return;
     }
-    const entries = await this.remote_server.backend_group_entries(id);
+    const entries = await this.remote_server.backendGroupEntries(id);
     if (!entries) {
       vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       return;
@@ -116,7 +116,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   }
 
   private async ga_from_both_servers(id?:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
-    const entries = await this.primary_server.backend_group_entries(id);
+    const entries = await this.primary_server.backendGroupEntries(id);
     if (!entries) {
       vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       return;
@@ -125,7 +125,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     const group_entries = groups.map(g => new ArchiveGroup(g,LRB.Local));
     const archive_entries = archives.map(a => new Archive(a,true,this.mathhubs));
     if (this.remote_server) {
-      const remote_entries = await this.remote_server.backend_group_entries(id);
+      const remote_entries = await this.remote_server.backendGroupEntries(id);
       if (!remote_entries) {
         vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Failed to query remote server at ${this.remote_server.url}`);
         return [group_entries,archive_entries];

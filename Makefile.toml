@@ -80,7 +80,6 @@ fn main() {
 }
 '''
 
-
 [tasks.build-viewer]
 workspace = false
 cwd = "./source/ftml/viewer"
