@@ -1,8 +1,8 @@
 use std::{borrow::Cow, collections::hash_map::Entry, path::{Path, PathBuf}};
 
-use immt_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, ContentURI, ContentURIRef, ContentURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait}};
-use immt_system::backend::{AnyBackend, Backend};
-use immt_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{OrdSet, VecMap, VecSet}};
+use flams_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, ContentURI, ContentURIRef, ContentURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait}};
+use flams_system::backend::{AnyBackend, Backend};
+use flams_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{OrdSet, VecMap, VecSet}};
 use smallvec::SmallVec;
 
 use crate::quickparse::latex::{rules::{AnyEnv, AnyMacro, DynMacro}, Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState};

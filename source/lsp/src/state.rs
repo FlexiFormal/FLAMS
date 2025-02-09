@@ -1,10 +1,10 @@
 use std::{collections::hash_map::Entry, path::{Path, PathBuf}};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use immt_ontology::uris::{DocumentURI, URIRefTrait};
-use immt_stex::{quickparse::stex::{DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseData, STeXParseDataI}, OutputCont, RusTeX};
-use immt_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive, LocalArchive}, AnyBackend, Backend, GlobalBackend, TemporaryBackend}, formats::OMDocResult};
-use immt_utils::{prelude::{HMap, TreeChildIter}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::OrdSet};
+use flams_ontology::uris::{DocumentURI, URIRefTrait};
+use flams_stex::{quickparse::stex::{DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseData, STeXParseDataI}, OutputCont, RusTeX};
+use flams_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive, LocalArchive}, AnyBackend, Backend, GlobalBackend, TemporaryBackend}, formats::OMDocResult};
+use flams_utils::{prelude::{HMap, TreeChildIter}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::OrdSet};
 use smallvec::SmallVec;
 
 use crate::{annotations::to_diagnostic, capabilities::STeXSemanticTokens, documents::LSPDocument, ClientExt, IsLSPRange, LSPStore, ProgressCallbackClient, ProgressCallbackServer};
@@ -186,7 +186,7 @@ impl LSPState {
       } else {
         let html = res.to_string();
         let rel_path = doc.relative_path().unwrap_or_else(|| unreachable!());
-        match immt_shtml::build_shtml(&AnyBackend::Temp(self.backend.clone()), &html, doc_uri.clone(), rel_path) {
+        match flams_ftml::build_ftml(&AnyBackend::Temp(self.backend.clone()), &html, doc_uri.clone(), rel_path) {
           Ok((OMDocResult{document,html,modules},_)) => {
             self.backend.add_html(document.uri.clone(), html);
             for m in modules {
@@ -202,7 +202,7 @@ impl LSPState {
             let mut lock = doc.annotations.lock();
             lock.diagnostics.insert(STeXDiagnostic {
               level: DiagnosticLevel::Error,
-              message: format!("sHTML Error: {e}"),
+              message: format!("FTML Error: {e}"),
               range: SourceRange::default()
             });
             let _ = client.publish_diagnostics(lsp::PublishDiagnosticsParams {
@@ -256,7 +256,7 @@ impl LSPState {
   } */
 
   pub fn load_mathhubs(&self,client:ClientSocket) {
-    let (_,t) = immt_utils::time::measure(move || {
+    let (_,t) = flams_utils::time::measure(move || {
       let mut files = Vec::new();
 
       for a in GlobalBackend::get().all_archives().iter() {

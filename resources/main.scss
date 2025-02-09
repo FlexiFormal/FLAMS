@@ -3,12 +3,12 @@
 @import "./components/loglist";
 */
 
-.immt-main {
+.flams-main {
     height:calc(100vh - 67px);
     top:67px!important;
 }
 
-.immt-header {
+.flams-header {
     width:100vw;
     height: 67px;
     text-align: center;
@@ -21,30 +21,30 @@
     }
 }
 
-.immt-menu {
+.flams-menu {
     border-right: var(--strokeWidthThickest) double var(--colorNeutralStroke1);
     min-width: 120px !important;
     width:120px;
     height: 100%;
 }
 
-.immt-menu-inner {
+.flams-menu-inner {
     width:120px;
 }
 
 body { margin: 0}
 
-.immt-inline-badge {
+.flams-inline-badge {
     width:1em;
     height:1em;
     font-size: smaller;
 }
 
-.immt-user-menu-trigger{
+.flams-user-menu-trigger{
     width:fit-content;
     margin-left:auto;
 } 
-.immt-user-menu {
+.flams-user-menu {
     position:absolute !important;
     right:0
 }

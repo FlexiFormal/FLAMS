@@ -4,7 +4,7 @@ use std::ops::ControlFlow;
 
 use crate::{annotations::to_diagnostic, LSPStore};
 
-use super::{IMMTLSPServer,ServerWrapper};
+use super::{FLAMSLSPServer,ServerWrapper};
 use async_lsp::{lsp_types::{self as lsp}, LanguageClient, LanguageServer, ResponseError};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
@@ -59,10 +59,10 @@ pub(crate) struct HTMLRequest;
 impl lsp::request::Request for HTMLRequest {
     type Params = HtmlRequestParams;
     type Result = Option<String>;
-    const METHOD: &'static str = "immt/htmlRequest";
+    const METHOD: &'static str = "flams/htmlRequest";
 }
 
-impl<T:IMMTLSPServer> ServerWrapper<T> {
+impl<T:FLAMSLSPServer> ServerWrapper<T> {
     pub(crate) fn html_request(&mut self,params:HtmlRequestParams) -> Res<Option<String>> {
         let mut client = self.inner.client().clone();
         let state = self.inner.state().clone();
@@ -84,7 +84,7 @@ impl<T:IMMTLSPServer> ServerWrapper<T> {
 
 type Res<T> = BoxFuture<'static,Result<T,ResponseError>>;
 
-impl<T:IMMTLSPServer> LanguageServer for ServerWrapper<T> {
+impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
   type Error = ResponseError;
   type NotifyResult = ControlFlow<async_lsp::Result<()>>;
 

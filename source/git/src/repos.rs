@@ -23,7 +23,7 @@ impl From<git2::Commit<'_>> for super::Commit {
   }
 }
 
-const NOTES_NS: &str = "refs/notes/immt";
+const NOTES_NS: &str = "refs/notes/flams";
 
 impl GitRepo {
   /// #### Errors
@@ -205,7 +205,7 @@ impl GitRepo {
 
   /// #### Errors
   pub fn get_new_commits(&self,user:&str,password:&str) -> Result<Vec<(String,super::Commit)>,git2::Error> {
-    use immt_utils::prelude::HSet;
+    use flams_utils::prelude::HSet;
     let mut remote = self.0.find_remote("origin")?;
     let mut cbs = git2::RemoteCallbacks::new();
     cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user,password));

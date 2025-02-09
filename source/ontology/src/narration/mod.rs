@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 
 use documents::Document;
 use exercises::{CognitiveDimension, Exercise};
-use immt_utils::prelude::InnerArc;
+use flams_utils::prelude::InnerArc;
 use notations::Notation;
 use paragraphs::LogicalParagraph;
 use sections::{Section, SectionLevel};

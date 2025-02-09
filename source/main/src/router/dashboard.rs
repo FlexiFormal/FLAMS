@@ -4,7 +4,7 @@ use leptos_router::{components::{Outlet, Redirect}, hooks::use_navigate};
 use crate::users::{Login,LoginState};
 
 use super::Page;
-use immt_web_utils::components::Themer;
+use flams_web_utils::components::Themer;
 
 use thaw::{Caption1, Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider, Menu, MenuItem, MenuTrigger, MenuTriggerType, NavDrawer, NavItem, ToasterInjection};
 
@@ -12,7 +12,7 @@ use thaw::{Caption1, Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPositi
 #[cfg(feature="hydrate")]
 use std::borrow::Cow;
 #[cfg(feature="hydrate")]
-use immt_web_utils::components::display_error;
+use flams_web_utils::components::display_error;
 
 fn do_main(page:Page) -> impl IntoView {
   let inner =  || match page {
@@ -34,24 +34,24 @@ fn do_main(page:Page) -> impl IntoView {
 #[component(transparent)]
 pub fn Dashboard() -> impl IntoView {
   view!{
-    <Stylesheet id="leptos" href="/pkg/immt.css"/>
+    <Stylesheet id="leptos" href="/pkg/flams.css"/>
     <Outlet/>
   }
 }
 
 fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
-  use shtml_viewer_components::SHTMLGlobalSetup;
+  use ftml_viewer_components::FTMLGlobalSetup;
   view!{
-    <Themer><SHTMLGlobalSetup>
+    <Themer><FTMLGlobalSetup>
       <Layout position=LayoutPosition::Absolute>
         //<Login>
-          <LayoutHeader class="immt-header">
+          <LayoutHeader class="flams-header">
             <div style="width:100%">
               <Grid cols=3>
                 <GridItem>""</GridItem>
                 <GridItem>
                   <h1 style="font-family:serif;color:var(--colorBrandForeground1)">
-                    "iMᴍᴛ"
+                    "𝖥𝖫∀𝖬∫"
                   </h1>
                 </GridItem>
                 <GridItem>
@@ -66,15 +66,15 @@ fn do_dashboard<V:IntoView + 'static>(f:impl FnOnce() -> V + Send + 'static) -> 
           {f()}
         //</Login>
       </Layout>
-    </SHTMLGlobalSetup></Themer>
+    </FTMLGlobalSetup></Themer>
   }
 }
 
 #[component]
 pub fn MainPage(page:Page) -> impl IntoView {
   do_dashboard(move || view!(
-    <Layout position=LayoutPosition::Absolute class="immt-main" content_style="height:100%" has_sider=true>
-      <LayoutSider class="immt-menu" content_style="width:100%;height:100%">
+    <Layout position=LayoutPosition::Absolute class="flams-main" content_style="height:100%" has_sider=true>
+      <LayoutSider class="flams-menu" content_style="width:100%;height:100%">
         {side_menu(page)}
       </LayoutSider>
       <Layout>
@@ -88,7 +88,7 @@ pub fn MainPage(page:Page) -> impl IntoView {
 
 fn side_menu(page:Page) -> impl IntoView {
     view!{
-        <NavDrawer selected_value=page.to_string() class="immt-menu-inner">
+        <NavDrawer selected_value=page.to_string() class="flams-menu-inner">
             <NavItem value="home" href="/">"Home"</NavItem>
             <NavItem value="mathhub" href="/dashboard/mathhub">"MathHub"</NavItem>
             <NavItem value="query" href="/dashboard/query">"Queries"</NavItem>
@@ -120,7 +120,7 @@ fn side_menu(page:Page) -> impl IntoView {
 }
 
 fn user_field() -> impl IntoView {
-    use immt_web_utils::components::{Spinner,SpinnerSize};
+    use flams_web_utils::components::{Spinner,SpinnerSize};
     let theme = expect_context::<RwSignal::<thaw::Theme>>();
     let on_select = move |key: String| match key.as_str() {
         "theme" => {
@@ -140,7 +140,7 @@ fn user_field() -> impl IntoView {
       _ => None
     });
 
-    view!{<div class="immt-user-menu-trigger"><Menu on_select trigger_type=MenuTriggerType::Hover class="immt-user-menu">
+    view!{<div class="flams-user-menu-trigger"><Menu on_select trigger_type=MenuTriggerType::Hover class="flams-user-menu">
         <MenuTrigger slot>
             <thaw::Avatar src />
         </MenuTrigger>

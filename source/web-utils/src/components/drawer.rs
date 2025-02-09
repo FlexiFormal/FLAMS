@@ -12,11 +12,11 @@ pub enum DrawerSize {
 
 impl DrawerSize {
   fn css(self) -> &'static str {
-    //inject_css("immt-drawer",include_str!("./drawer.css"));
+    //inject_css("flams-drawer",include_str!("./drawer.css"));
     let (cls,csstr) = match self {
-      Self::Small => ("immt-drawer-absolute-small", ".immt-drawer-absolute-small {--thaw-drawer--size:20vw !important;z-index:5;}"),
-      Self::Medium => ("immt-drawer-absolute-medium", ".immt-drawer-absolute-medium {--thaw-drawer--size:50vw !important;z-index:5;}"),
-      Self::Wide => ("immt-drawer-absolute-wide", ".immt-drawer-absolute-wide {--thaw-drawer--size:80vw !important;z-index:5;}"),
+      Self::Small => ("flams-drawer-absolute-small", ".flams-drawer-absolute-small {--thaw-drawer--size:20vw !important;z-index:5;}"),
+      Self::Medium => ("flams-drawer-absolute-medium", ".flams-drawer-absolute-medium {--thaw-drawer--size:50vw !important;z-index:5;}"),
+      Self::Wide => ("flams-drawer-absolute-wide", ".flams-drawer-absolute-wide {--thaw-drawer--size:80vw !important;z-index:5;}"),
     };
     inject_css(cls,csstr);
     cls
@@ -33,7 +33,7 @@ pub fn Drawer<Ch:IntoView+'static>(
 ) -> impl IntoView {
   use thaw::{Button,ButtonAppearance,DrawerBody,OverlayDrawer,DrawerHeaderTitle,DrawerHeader,DrawerPosition,DrawerHeaderTitleAction};
   let mut children = children.into_inner();
-  //inject_css("immt-drawer", ".immt-wide-drawer { z-index:5;}");
+  //inject_css("flams-drawer", ".flams-wide-drawer { z-index:5;}");
   let open = RwSignal::new(false);
   view!{
     <span on:click=move |_| open.set(true)>{(trigger.children)()}</span>

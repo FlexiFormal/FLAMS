@@ -1,5 +1,5 @@
 [package]
-name = "immt-stex"
+name = "flams-stex"
 version = "0.0.1"
 edition = "2021"
 
@@ -7,10 +7,10 @@ edition = "2021"
 tracing-subscriber = {workspace = true}
 
 [dependencies]
-immt-shtml = {workspace=true}
-immt-ontology = {workspace=true}
-immt-system = {workspace=true}
-immt-utils = {workspace=true}
+flams-ftml = {workspace=true}
+flams-ontology = {workspace=true}
+flams-system = {workspace=true}
+flams-utils = {workspace=true}
 
 RusTeX = {workspace=true}
 tex_engine = {workspace=true}

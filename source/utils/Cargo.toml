@@ -1,5 +1,5 @@
 [package]
-name = "immt-utils"
+name = "flams-utils"
 version = "0.0.1"
 edition = "2021"
 
@@ -23,6 +23,7 @@ tracing={workspace=true}
 inventory = {workspace=true}
 paste = {workspace=true}
 filetime = {workspace=true}
+lightningcss = {workspace=true}
 
 wasm-bindgen = {workspace=true,optional=true}
 tsify-next = {workspace=true,optional=true}

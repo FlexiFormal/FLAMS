@@ -44,7 +44,7 @@ pub use paths::{PathURI, PathURIRef, PathURITrait};
 
 use const_format::concatcp;
 use either::Either;
-use immt_utils::parsing::StringOrStr;
+use flams_utils::parsing::StringOrStr;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::str::{FromStr, Split};
@@ -107,7 +107,7 @@ macro_rules! common {
     () => {
         #[cfg(feature = "rdf")]
         fn to_iri(&self) -> crate::rdf::NamedNode {
-            crate::rdf::NamedNode::new(immt_utils::escaping::IRI_ESCAPE.escape(self).to_string())
+            crate::rdf::NamedNode::new(flams_utils::escaping::IRI_ESCAPE.escape(self).to_string())
                 .unwrap_or_else(|_| unreachable!())
         }
         fn base(&self) -> &BaseURI;

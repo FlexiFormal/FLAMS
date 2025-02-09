@@ -3,13 +3,13 @@ use crate::{
     PDFLATEX_FIRST,
 };
 use either::Either;
-use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI}};
-use immt_system::{
+use flams_ontology::{languages::Language, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI}};
+use flams_system::{
     backend::AnyBackend,
     building::{BuildTask, Dependency, TaskRef},
     formats::CHECK,
 };
-use immt_utils::{parsing::ParseStr, sourcerefs::SourceRange};
+use flams_utils::{parsing::ParseStr, sourcerefs::SourceRange};
 use std::path::Path;
 use crate::quickparse::stex::rules as rules;
 

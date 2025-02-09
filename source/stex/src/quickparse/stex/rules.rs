@@ -4,13 +4,13 @@
 
 use std::{borrow::Cow, collections::hash_map::Entry, num::NonZeroU8, path::{Path, PathBuf}, str::FromStr};
 
-use immt_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
-use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
-use immt_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{VecMap, VecSet}};
+use flams_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
+use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
+use flams_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{VecMap, VecSet}};
 use smallvec::SmallVec;
 
 use crate::{quickparse::{latex::{rules::{AnyEnv, AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule}, Environment, FromLaTeXToken, Group, GroupState, Groups, KeyValKind, LaTeXParser, Macro, OptMap, ParsedKeyValue, ParserState}, stex::structs::MorphismKind}, tex};
-use immt_utils::parsing::ParseSource;
+use flams_utils::parsing::ParseSource;
 
 use super::{structs::{GroupKind, InlineMorphAssKind, InlineMorphAssign, MacroArg, ModuleOrStruct, ModuleReference, ModuleRule, ModuleRules, MorphismSpec, STeXGroup, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymbolRule}, DiagnosticLevel, STeXParseData};
 
@@ -1068,7 +1068,7 @@ stex!(p => svar[optname:!name]{arg:!name} => {
 lazy_static::lazy_static! {
   static ref META_REL_PATH:std::sync::Arc<str> = "Metatheory.en.tex".into(); 
   static ref META_FULL_PATH:Option<std::sync::Arc<Path>> = 
-    GlobalBackend::get().with_local_archive(immt_ontology::metatheory::URI.archive_id(), |a|
+    GlobalBackend::get().with_local_archive(flams_ontology::metatheory::URI.archive_id(), |a|
     a.map(|a| a.source_dir().join("Metatheory.en.tex").into())
   );
 }
@@ -1114,8 +1114,8 @@ stex!(LSP: p => @begin{smodule}([opt:type SModuleArg<LSPLineCol,STeXToken<LSPLin
       }}
       let meta_theory = if has_meta_theory == Some(false) {
         Some(ModuleReference { 
-          uri:immt_ontology::metatheory::URI.clone(),
-          in_doc:immt_ontology::metatheory::DOC_URI.clone(),
+          uri:flams_ontology::metatheory::URI.clone(),
+          in_doc:flams_ontology::metatheory::DOC_URI.clone(),
           rel_path:Some(META_REL_PATH.clone()),
           full_path:META_FULL_PATH.clone()
         })
@@ -1422,8 +1422,8 @@ stex!(p => @begin{smodule_deps}([opt]{name:name}){
       };
       let meta_theory = match opt.get(&"meta").map(|v| v.val) {
         None => Some(ModuleReference{ 
-          uri:immt_ontology::metatheory::URI.clone(),
-          in_doc:immt_ontology::metatheory::DOC_URI.clone(),
+          uri:flams_ontology::metatheory::URI.clone(),
+          in_doc:flams_ontology::metatheory::DOC_URI.clone(),
           rel_path:Some(META_REL_PATH.clone()),
           full_path:META_FULL_PATH.clone()
         }),

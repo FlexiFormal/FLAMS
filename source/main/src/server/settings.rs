@@ -1,12 +1,12 @@
 use clap::Parser;
-use immt_utils::settings::GitlabSettings;
+use flams_utils::settings::GitlabSettings;
 use core::panic;
-use immt_system::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
+use flams_system::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser,Debug)]
 #[command(propagate_version = true, version, about, long_about = Some(
-"iMᴍᴛ - Generic knowledge management system for flexiformal knowledge\n\
+"𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System\n\
 --------------------------------------------------------------------\n\
 See the \u{1b}]8;;https://github.com/UniFormal/MMT\u{1b}\\documentation\u{1b}]8;;\u{1b}\\ for details"
 ))]

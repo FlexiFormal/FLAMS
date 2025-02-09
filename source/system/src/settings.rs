@@ -5,8 +5,8 @@ use std::{
     path::{Path, PathBuf}, sync::atomic::AtomicU16,
 };
 
-use immt_utils::settings::GitlabSettings;
-pub use immt_utils::settings::{SettingsSpec,BuildQueueSettings, ServerSettings};
+use flams_utils::settings::GitlabSettings;
+pub use flams_utils::settings::{SettingsSpec,BuildQueueSettings, ServerSettings};
 use lazy_static::lazy_static;
 
 static SETTINGS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
@@ -165,7 +165,7 @@ impl From<SettingsSpec> for Settings {
 lazy_static! {
     static ref MATHHUB_PATHS: Box<[Box<Path>]> = mathhubs().into();
     static ref CONFIG_DIR: Option<Box<Path>> =
-        simple_home_dir::home_dir().map(|d| d.join(".immt").into_boxed_path());
+        simple_home_dir::home_dir().map(|d| d.join(".flams").into_boxed_path());
     static ref EXE_DIR: Option<Box<Path>> = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(Into::into));

@@ -1,7 +1,7 @@
-use immt_ontology::{
+use flams_ontology::{
     content::modules::Module, narration::documents::Document, uris::{DocumentURI, ModuleURI}
 };
-use immt_utils::prelude::HMap;
+use flams_utils::prelude::HMap;
 
 #[derive(Default, Debug)]
 pub(super) struct BackendCache {

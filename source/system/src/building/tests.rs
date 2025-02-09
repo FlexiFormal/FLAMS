@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use immt_utils::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
+use flams_utils::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
 
 use crate::{backend::AnyBackend, building::{BuildTask,BuildResult},build_result, build_target, formats::CHECK, source_format};
 

@@ -3,9 +3,9 @@ pub(crate) mod ws;
 use leptos::{either::{Either, EitherOf3}, prelude::*};
 
 use std::{borrow::Cow, fmt::Display, future::Future};
-use immt_web_utils::components::display_error;
+use flams_web_utils::components::display_error;
 
-use immt_web_utils::components::Spinner;
+use flams_web_utils::components::Spinner;
 
 use crate::users::{LoginError, LoginState};
 

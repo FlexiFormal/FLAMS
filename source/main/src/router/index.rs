@@ -1,4 +1,4 @@
-use immt_ontology::{archive_json::{ArchiveIndex, Institution}, uris::DocumentURI};
+use flams_ontology::{archive_json::{ArchiveIndex, Institution}, uris::DocumentURI};
 use leptos::prelude::*;
 use thaw::{Card,CardHeader,CardFooter,CardPreview,CardHeaderDescription,CardHeaderAction,Body1,Caption1,Scrollbar};
 
@@ -10,7 +10,7 @@ use crate::utils::from_server_fnonce;
   output=server_fn::codec::Json
 )]
 pub async fn index() -> Result<(Vec<Institution>,Vec<ArchiveIndex>),ServerFnError> {
-use immt_system::backend::GlobalBackend;
+use flams_system::backend::GlobalBackend;
 tokio::task::spawn_blocking(|| {
   let (a,b) = GlobalBackend::get().with_archive_tree(|t| t.index.clone());
   (a.0,b.0)
@@ -19,7 +19,7 @@ tokio::task::spawn_blocking(|| {
 
 #[component]
 pub fn Index() -> impl IntoView {
-  immt_web_utils::inject_css("immt-index-card", ".immt-index-card{max-width:400px;margin:10px;}");
+  flams_web_utils::inject_css("flams-index-card", ".flams-index-card{max-width:400px;margin:10px;}");
   from_server_fnonce(false, index, |(is,idxs)| {
     let mut libraries = Vec::new();
     let mut books = Vec::new();
@@ -81,7 +81,7 @@ fn do_books(books:Vec<ArchiveIndex>) -> impl IntoView {
 fn book(book:ArchiveIndex) -> impl IntoView {
   let ArchiveIndex::Book {title,authors,file,teaser,thumbnail}
     = book else {unreachable!()};
-  view!{<Card class="immt-index-card">
+  view!{<Card class="flams-index-card">
     <CardHeader>
       {link_doc(&file,|| view!(<Body1><b inner_html=title.to_string()/></Body1>))}
       <CardHeaderDescription slot><Caption1>
@@ -103,7 +103,7 @@ fn do_papers(papers:Vec<ArchiveIndex>) -> impl IntoView {
 fn paper(paper:ArchiveIndex) -> impl IntoView {
   let ArchiveIndex::Paper {title,authors,file,teaser,thumbnail,venue,venue_url}
     = paper else {unreachable!()};
-  view!{<Card class="immt-index-card">
+  view!{<Card class="flams-index-card">
     <CardHeader>
       {link_doc(&file,|| view!(<Body1><b inner_html=title.to_string()/></Body1>))}
       <CardHeaderDescription slot><Caption1>
@@ -138,7 +138,7 @@ fn do_self_studies(sss:Vec<ArchiveIndex>) -> impl IntoView {
 fn self_study(ss:ArchiveIndex) -> impl IntoView {
   let ArchiveIndex::SelfStudy { title, landing, acronym, notes, slides, thumbnail }
     = ss else {unreachable!()};
-  view!{<Card class="immt-index-card">
+  view!{<Card class="flams-index-card">
     <CardHeader>
       {link_doc(&landing,|| view!(
         <Body1><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></Body1>
@@ -167,7 +167,7 @@ fn course(course:ArchiveIndex,insts:&[Institution]) -> impl IntoView + 'static {
   let ArchiveIndex::Course { title, landing, acronym, instructors, institution, notes, slides, thumbnail, quizzes, homeworks, instances, teaser }
   = course else {unreachable!()};
   let inst = insts.iter().find(|i| i.acronym() == &*institution).cloned();
-  view!{<Card class="immt-index-card">
+  view!{<Card class="flams-index-card">
     <CardHeader>
       {link_doc(&landing,|| view!(
         <Body1><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></Body1>
@@ -204,7 +204,7 @@ fn do_libraries(libs:Vec<ArchiveIndex>) -> impl IntoView {
 fn library(lib:ArchiveIndex) -> impl IntoView {
   let ArchiveIndex::Library { archive, title, teaser, thumbnail }
   = lib else {unreachable!()};
-  view!{<Card class="immt-index-card">
+  view!{<Card class="flams-index-card">
   <CardHeader>
     <Body1><b inner_html=title.to_string()/></Body1>
     <CardHeaderDescription slot><Caption1>

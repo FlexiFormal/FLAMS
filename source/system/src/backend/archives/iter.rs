@@ -1,5 +1,5 @@
-use immt_ontology::{archive_json::{ArchiveDatum, Institution}, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI}};
-use immt_utils::vecmap::{VecMap, VecSet};
+use flams_ontology::{archive_json::{ArchiveDatum, Institution}, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI}};
+use flams_utils::vecmap::{VecMap, VecSet};
 use parking_lot::RwLock;
 use std::{
     fs::ReadDir,
@@ -150,7 +150,7 @@ impl<'a> ArchiveIterator<'a> {
             tracing::warn!(target:"archives","Could not find parent directory of {}", path.display());
             return None;
         };
-        let out_path = top_dir.join(".immt");
+        let out_path = top_dir.join(".flams");
         let Ok(reader) = std::fs::File::open(path) else {
             tracing::warn!(target:"archives","Could not open manifest {}", path.display());
             return None;

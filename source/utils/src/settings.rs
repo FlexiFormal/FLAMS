@@ -71,47 +71,47 @@ impl SettingsSpec {
     pub fn from_envs() -> Self {
         Self {
             mathhubs: Vec::new(),
-            debug: std::env::var("IMMT_DEBUG")
+            debug: std::env::var("FLAMS_DEBUG")
                 .ok()
                 .and_then(|s| s.parse().ok()),
-            log_dir: std::env::var("IMMT_LOG_DIR")
+            log_dir: std::env::var("FLAMS_LOG_DIR")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
-            temp_dir: std::env::var("IMMT_TEMP_DIR")
+            temp_dir: std::env::var("FLAMS_TEMP_DIR")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
-            database: std::env::var("IMMT_DATABASE")
+            database: std::env::var("FLAMS_DATABASE")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
             server: ServerSettings {
-                port: std::env::var("IMMT_PORT")
+                port: std::env::var("FLAMS_PORT")
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or_default(),
-                ip: std::env::var("IMMT_IP").ok().map(|s| {
+                ip: std::env::var("FLAMS_IP").ok().map(|s| {
                     s.parse()
-                        .expect("Could not parse IP address (environment variable IMMT_IP)")
+                        .expect("Could not parse IP address (environment variable FLAMS_IP)")
                 }),
-                external_url: std::env::var("IMMT_EXTERNAL_URL").ok(),
-                admin_pwd: std::env::var("IMMT_ADMIN_PWD").ok(),
+                external_url: std::env::var("FLAMS_EXTERNAL_URL").ok(),
+                admin_pwd: std::env::var("FLAMS_ADMIN_PWD").ok(),
             },
             buildqueue: BuildQueueSettings {
-                num_threads: std::env::var("IMMT_NUM_THREADS")
+                num_threads: std::env::var("FLAMS_NUM_THREADS")
                     .ok()
                     .and_then(|s| s.parse().ok()),
             },
             gitlab: GitlabSettings {
-                url:std::env::var("IMMT_GITLAB_URL")
+                url:std::env::var("FLAMS_GITLAB_URL")
                     .ok()
                     .map(Into::into),
-                token:std::env::var("IMMT_GITLAB_TOKEN")
+                token:std::env::var("FLAMS_GITLAB_TOKEN")
                     .ok()
                     .map(Into::into),
-                app_id:std::env::var("IMMT_GITLAB_APP_ID")
+                app_id:std::env::var("FLAMS_GITLAB_APP_ID")
                     .ok().map(Into::into),
-                app_secret:std::env::var("IMMT_GITLAB_APP_SECRET")
+                app_secret:std::env::var("FLAMS_GITLAB_APP_SECRET")
                     .ok().map(Into::into),
-                redirect_url:std::env::var("IMMT_GITLAB_REDIRECT_URL")
+                redirect_url:std::env::var("FLAMS_GITLAB_REDIRECT_URL")
                     .ok().map(Into::into),
             },
             lsp:false

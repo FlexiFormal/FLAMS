@@ -5,7 +5,7 @@ use declarations::{
     structures::{Extension, MathStructure},
     Declaration, DeclarationTrait,
 };
-use immt_utils::prelude::InnerArc;
+use flams_utils::prelude::InnerArc;
 use modules::{Module, NestedModule};
 
 use crate::{uris::{ContentURIRef, ModuleURI, Name, NameStep, SymbolURI}, Checked, Resolvable};

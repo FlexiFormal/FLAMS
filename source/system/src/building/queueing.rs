@@ -1,8 +1,8 @@
 use std::collections::hash_map::Entry;
 
 use either::Either;
-use immt_ontology::uris::{ArchiveURITrait, URIRefTrait};
-use immt_utils::{triomphe::Arc, vecmap::VecSet};
+use flams_ontology::uris::{ArchiveURITrait, URIRefTrait};
+use flams_utils::{triomphe::Arc, vecmap::VecSet};
 use parking_lot::RwLock;
 
 use crate::{backend::{archives::{source_files::{FileState, SourceFile}, Archive}, AnyBackend}, formats::{BuildTargetId, FormatOrTargets}};

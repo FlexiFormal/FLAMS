@@ -1,9 +1,9 @@
 use std::num::NonZeroU32;
 
-use immt_ontology::{file_states::FileStateSummary, uris::ArchiveId};
-use immt_utils::{time::Timestamp, vecmap::VecMap};
+use flams_ontology::{file_states::FileStateSummary, uris::ArchiveId};
+use flams_utils::{time::Timestamp, vecmap::VecMap};
 use leptos::prelude::*;
-use immt_web_utils::{components::{Header, Leaf, LazySubtree, Tree}, inject_css};
+use flams_web_utils::{components::{Header, Leaf, LazySubtree, Tree}, inject_css};
 
 use crate::{users::LoginState, utils::{from_server_clone, from_server_copy}};
 
@@ -35,14 +35,14 @@ pub struct FileData {
 #[server(prefix="/api/backend",endpoint="group_entries")]
 #[allow(clippy::unused_async)]
 pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupData>,Vec<ArchiveData>),ServerFnError<String>> {
-  use immt_system::backend::archives::{Archive,ArchiveOrGroup as AoG};
-  //use immt_system::backend::Backend;
+  use flams_system::backend::archives::{Archive,ArchiveOrGroup as AoG};
+  //use flams_system::backend::Backend;
   use crate::users::LoginState;
   let login = LoginState::get_server();
 
   tokio::task::spawn_blocking(move || {
     let allowed = matches!(login,LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..});
-    immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| {
+    flams_system::backend::GlobalBackend::get().with_archive_tree(|tree| {
       let v = match r#in {
         None => &tree.groups,
         Some(id) => match tree.find(&id) {
@@ -84,12 +84,12 @@ pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupDa
 pub async fn archive_entries(archive:ArchiveId,path:Option<String>) -> Result<(Vec<DirectoryData>,Vec<FileData>),ServerFnError<String>> {
   use crate::users::LoginState;
   use either::Either;
-  use immt_system::backend::{Backend,archives::source_files::SourceEntry};
+  use flams_system::backend::{Backend,archives::source_files::SourceEntry};
   let login = LoginState::get_server();
 
   tokio::task::spawn_blocking(move || {
     let allowed = matches!(login,LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..});
-    immt_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
+    flams_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
       let Some(a) = a else { return Err(format!("Archive {archive} not found").into()) };
       a.with_sources(|d| {
         let d = match path {
@@ -127,16 +127,16 @@ pub struct FileStates(
 );
 
 #[cfg(feature="ssr")]
-impl From<immt_system::backend::archives::source_files::FileStates> for FileStates {
-  fn from(value: immt_system::backend::archives::source_files::FileStates) -> Self {
+impl From<flams_system::backend::archives::source_files::FileStates> for FileStates {
+  fn from(value: flams_system::backend::archives::source_files::FileStates) -> Self {
     Self(value.formats.into_iter().map(|(k,v)| (k.to_string(),v)).collect())
   }
 }
 
 #[cfg(feature="ssr")]
-impl From<&VecMap<immt_system::formats::BuildTargetId,immt_system::backend::archives::source_files::FileState>> for FileStates {
-  fn from(value: &VecMap<immt_system::formats::BuildTargetId,immt_system::backend::archives::source_files::FileState>) -> Self {
-    use immt_system::backend::archives::source_files::FileState;
+impl From<&VecMap<flams_system::formats::BuildTargetId,flams_system::backend::archives::source_files::FileState>> for FileStates {
+  fn from(value: &VecMap<flams_system::formats::BuildTargetId,flams_system::backend::archives::source_files::FileState>) -> Self {
+    use flams_system::backend::archives::source_files::FileState;
     Self(value.iter().map(|(k,v)| (k.to_string(),
       match v {
         FileState::New => FileStateSummary {
@@ -167,10 +167,10 @@ impl From<&VecMap<immt_system::formats::BuildTargetId,immt_system::backend::arch
 #[server(prefix="/api/backend",endpoint="build_status")]
 #[allow(clippy::unused_async)]
 pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileStates,ServerFnError<String>> {
-  use immt_system::backend::archives::{Archive,ArchiveOrGroup as AoG};
+  use flams_system::backend::archives::{Archive,ArchiveOrGroup as AoG};
   use crate::users::LoginState;
   use either::Either;
-  use immt_system::backend::Backend;
+  use flams_system::backend::Backend;
   let login = LoginState::get_server();
 
   tokio::task::spawn_blocking(move || {
@@ -180,7 +180,7 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
       return Err("Not logged in".to_string().into());
     }
     path.map_or_else(
-      || immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| 
+      || flams_system::backend::GlobalBackend::get().with_archive_tree(|tree| 
         match tree.find(&archive) {
           None => Err(format!("Archive {archive} not found").into()),
           Some(AoG::Archive(id)) => {
@@ -192,7 +192,7 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
           Some(AoG::Group(g)) => Ok(g.state.clone().into()),
         }
       ),
-      |path| immt_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
+      |path| flams_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
         let Some(a) = a else { return Err(format!("Archive {archive} not found").into()) };
         a.with_sources(|d|
           match d.find(&path) {
@@ -326,7 +326,7 @@ fn dir(archive:ArchiveId,d:DirectoryData) -> impl IntoView {
 }
 
 fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
-  use immt_web_utils::components::{Drawer,Header,Trigger};
+  use flams_web_utils::components::{Drawer,Header,Trigger};
   use thaw::{Button,ButtonAppearance};
 
   let link = format!("/?a={archive}&rp={}",f.rel_path);
@@ -366,13 +366,13 @@ fn badge(state:FileStateSummary) -> impl IntoView {
   use thaw::{Badge,BadgeAppearance,BadgeColor};
   view!{
     {if state.new == 0 {None} else {Some(view!(
-      " "<Badge class="immt-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Success>{state.new}</Badge>
+      " "<Badge class="flams-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Success>{state.new}</Badge>
     ))}}
     {if state.stale == 0 {None} else {Some(view!(
-      " "<Badge class="immt-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Warning>{state.stale}</Badge>
+      " "<Badge class="flams-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Warning>{state.stale}</Badge>
     ))}}
     {if state.deleted == 0 {None} else {Some(view!(
-      " "<Badge class="immt-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Danger>{state.deleted}</Badge>
+      " "<Badge class="flams-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Danger>{state.deleted}</Badge>
     ))}}
   }
 }
@@ -396,7 +396,7 @@ fn dialog<V:IntoView + 'static>(children:impl Fn(RwSignal<bool>) -> V + Send + C
 
 fn modal(archive:ArchiveId,path:Option<String>,states:FileStates,format:Option<String>) -> impl IntoView {
   use thaw::{ToasterInjection,Card,CardHeader,CardHeaderAction,Table,Caption1Strong,Button,ButtonSize,Divider};//,CardHeaderDescription
-  inject_css("immt-filecard", include_str!("filecards.css"));
+  inject_css("flams-filecard", include_str!("filecards.css"));
   let title = path.as_ref().map_or_else(
     || archive.to_string(),
     |path| format!("[{archive}]{path}")
@@ -404,13 +404,13 @@ fn modal(archive:ArchiveId,path:Option<String>,states:FileStates,format:Option<S
   let toaster = ToasterInjection::expect_context();
   let targets = format.is_some();
   let queue_id = RwSignal::<Option<NonZeroU32>>::new(None);
-  let act = immt_web_utils::components::message_action(
+  let act = flams_web_utils::components::message_action(
     move |(t,b)|
       super::buildqueue::enqueue(archive.clone(), t, path.clone(), Some(b), queue_id.get_untracked())
     , |i| format!("{i} new build tasks queued")
   );
   view!{
-    <div class="immt-treeview-file-card"><Card>
+    <div class="flams-treeview-file-card"><Card>
         <CardHeader>
           <Caption1Strong>{title}</Caption1Strong>
           <CardHeaderAction slot>{format.map(|f| {
@@ -478,10 +478,10 @@ pub(crate) fn select_queue(queue_id:RwSignal<Option<NonZeroU32>>) -> impl IntoVi
   let user = LoginState::get();
   if matches!(user,LoginState::NoAccounts) {  return None }
   let r = Resource::new(|| (),move |()| super::buildqueue::get_queues());
-  Some(view!{<Suspense fallback = || view!(<immt_web_utils::components::Spinner/>)>{move || {
+  Some(view!{<Suspense fallback = || view!(<flams_web_utils::components::Spinner/>)>{move || {
     match r.get() {
-      None => leptos::either::EitherOf3::A(view!(<immt_web_utils::components::Spinner/>)),
-      Some(Err(e)) => leptos::either::EitherOf3::B(immt_web_utils::components::display_error(e.to_string().into())),
+      None => leptos::either::EitherOf3::A(view!(<flams_web_utils::components::Spinner/>)),
+      Some(Err(e)) => leptos::either::EitherOf3::B(flams_web_utils::components::display_error(e.to_string().into())),
       Some(Ok(queues)) => leptos::either::EitherOf3::C(view!{<div><div style="width:fit-content;margin-left:auto;">{do_queues(queue_id,queues)}</div></div>})
     }
   }}</Suspense>})
@@ -489,7 +489,7 @@ pub(crate) fn select_queue(queue_id:RwSignal<Option<NonZeroU32>>) -> impl IntoVi
 
 fn do_queues(queue_id:RwSignal<Option<NonZeroU32>>,v:Vec<super::buildqueue::QueueInfo>) -> impl IntoView {
   use thaw::Select;
-  inject_css("immt-select-queue", include_str!("select_queue.css"));
+  inject_css("flams-select-queue", include_str!("select_queue.css"));
   let queues = if v.is_empty() { 
     vec![(0u32,"New Build Queue".to_string())] 
   } else {
@@ -508,7 +508,7 @@ fn do_queues(queue_id:RwSignal<Option<NonZeroU32>>,v:Vec<super::buildqueue::Queu
   });
   view!{
     <span style="font-style:italic;">"Build Queue: "
-    <Select value class="immt-select-queue">{
+    <Select value class="flams-select-queue">{
       queues.into_iter().map(|(id,name)| view!{
         <option value=name.clone()>{name.clone()}</option>
       }).collect_view()

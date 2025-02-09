@@ -1,4 +1,4 @@
-.immt-drawer-container {
+.flams-drawer-container {
   z-index: 1000000;
   position: absolute;
   top: 0px;
@@ -7,7 +7,7 @@
   text-align: left;
 }
 
-.immt-drawer__backdrop {
+.flams-drawer__backdrop {
   will-change: opacity;
   transition-timing-function: cubic-bezier(0.33,0,0.67,1);
   transition-property: opacity;
@@ -18,25 +18,25 @@
   background-color: rgba(0, 0, 0, 0.4);
 }
 
-.immt-drawer__backdrop.fade-in-transition-enter-active {
+.flams-drawer__backdrop.fade-in-transition-enter-active {
   transition: all 0.2s cubic-bezier(0.4, 0, 1, 1);
 }
 
-.immt-drawer__backdrop.fade-in-transition-leave-active {
+.flams-drawer__backdrop.fade-in-transition-leave-active {
   transition: all 0.2s cubic-bezier(0, 0, 0.2, 1);
 }
 
-.immt-drawer__backdrop.fade-in-transition-enter-from,
-.immt-drawer__backdrop.fade-in-transition-leave-to {
+.flams-drawer__backdrop.fade-in-transition-enter-from,
+.flams-drawer__backdrop.fade-in-transition-leave-to {
   opacity: 0;
 }
 
-.immt-drawer__backdrop.fade-in-transition-leave-from,
-.immt-drawer__backdrop.fade-in-transition-enter-to {
+.flams-drawer__backdrop.fade-in-transition-leave-from,
+.flams-drawer__backdrop.fade-in-transition-enter-to {
   opacity: 1;
 }
 
-.immt-drawer {
+.flams-drawer {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -61,7 +61,7 @@
   right: 0;
 }
 
-.immt-drawer-header {
+.flams-drawer-header {
   width: 100%;
   max-width: 100%;
   padding: 24px 24px 8px;
@@ -74,14 +74,14 @@
   z-index: 2;
 }
 
-.immt-drawer-header-title {
+.flams-drawer-header-title {
   column-gap: 8px;
   justify-content: space-between;
   align-items: center;
   display: flex;
 }
 
-.immt-drawer-header-title-heading {
+.flams-drawer-header-title-heading {
   font-family: 'Segoe UI', 'Segoe UI Web (West European)', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
   font-size: 20px;
   font-weight: 600;
@@ -90,14 +90,14 @@
   grid-area: 1 / 1 / 1 / 3;
 }
 
-.immt-drawer-header-title-right {
+.flams-drawer-header-title-right {
   margin-right: -8px;
   grid-row: 1 / 1;
   grid-column-start: 3;
   place-self: start end;
 }
 
-.immt-drawer-body {
+.flams-drawer-body {
   padding: 0 24px;
   flex: 1 1 0%;
   align-self: stretch;
@@ -106,6 +106,6 @@
   overflow: auto;
 }
 
-.immt-drawer-body:last-child {
+.flams-drawer-body:last-child {
   padding-bottom: 25px;
 }

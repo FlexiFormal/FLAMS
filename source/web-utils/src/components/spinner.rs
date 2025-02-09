@@ -40,7 +40,7 @@ pub fn Spinner(
     size: Signal<SpinnerSize>,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
-    inject_css("immt-spinner", include_str!("./spinner.css"));
+    inject_css("flams-spinner", include_str!("./spinner.css"));
 
     let cls = format!("thaw-spinner thaw-spinner--{}", size.get().as_str());
 

@@ -10,10 +10,10 @@ use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
 pub use async_lsp;
-use immt_ontology::uris::{DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
-use immt_stex::quickparse::stex::{structs::{GetModuleError, ModuleReference, STeXModuleStore}, STeXParseData};
-use immt_system::backend::{AnyBackend, GlobalBackend};
-use immt_utils::{prelude::HMap, sourcerefs::{LSPLineCol, SourceRange}};
+use flams_ontology::uris::{DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
+use flams_stex::quickparse::stex::{structs::{GetModuleError, ModuleReference, STeXModuleStore}, STeXParseData};
+use flams_system::backend::{AnyBackend, GlobalBackend};
+use flams_utils::{prelude::HMap, sourcerefs::{LSPLineCol, SourceRange}};
 use implementation::HTMLRequest;
 use state::{DocData, LSPState, UrlOrFile};
 
@@ -24,7 +24,7 @@ pub trait ClientExt {
 struct HTMLResult;
 impl lsp::notification::Notification for HTMLResult {
     type Params = String;
-    const METHOD : &str = "immt/htmlResult";
+    const METHOD : &str = "flams/htmlResult";
 }
 
 impl ClientExt for ClientSocket {
@@ -35,7 +35,7 @@ impl ClientExt for ClientSocket {
 }
 
 
-pub trait IMMTLSPServer:'static {
+pub trait FLAMSLSPServer:'static {
   fn client_mut(&mut self) -> &mut ClientSocket;
   fn client(& self) -> &ClientSocket;
   fn state(&self) -> &LSPState;
@@ -50,13 +50,13 @@ struct ReloadParams {}
 struct Reload;
 impl lsp::notification::Notification for Reload {
   type Params = ReloadParams;
-  const METHOD: &str = "immt/reload";
+  const METHOD: &str = "flams/reload";
 }
 
-pub struct ServerWrapper<T:IMMTLSPServer> {
+pub struct ServerWrapper<T:FLAMSLSPServer> {
   pub inner:T
 }
-impl <T:IMMTLSPServer> ServerWrapper<T> {
+impl <T:FLAMSLSPServer> ServerWrapper<T> {
   #[inline]
   pub const fn new(inner:T) -> Self {
     Self { inner }
@@ -99,7 +99,7 @@ impl<'a,const FULL:bool> LSPStore<'a,FULL> {
 
   fn load(&mut self,p:&Path,uri:&DocumentURI) -> Option<STeXParseData> {
     let text = std::fs::read_to_string(p).ok()?;
-    let r = immt_stex::quickparse::stex::quickparse(
+    let r = flams_stex::quickparse::stex::quickparse(
       uri,&text, p,
       &AnyBackend::Global(GlobalBackend::get()),
       self
@@ -138,7 +138,7 @@ impl<'a,const FULL:bool> STeXModuleStore for &mut LSPStore<'a,FULL> {
         ($e:expr) => {{
           /*if TRACK_DEPS {
             if let Some(in_path) = in_path {
-              if module.uri != *immt_ontology::metatheory::URI {
+              if module.uri != *flams_ontology::metatheory::URI {
                 $e.lock().dependents.insert_clone(in_path);
               }
             }
@@ -167,7 +167,7 @@ impl<'a,const FULL:bool> STeXModuleStore for &mut LSPStore<'a,FULL> {
       /*if TRACK_DEPS {
         if let Some(r) = &r {
           if let Some(in_path) = in_path {
-            if module.uri != *immt_ontology::metatheory::URI {
+            if module.uri != *flams_ontology::metatheory::URI {
               r.lock().dependencies.insert_clone(in_path);
             }
           }

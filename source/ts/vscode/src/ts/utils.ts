@@ -31,19 +31,19 @@ export async function download(url:string,to:string): Promise<boolean> {
       });
     });
     req.on('error', err => {
-      vscode.window.showErrorMessage(`iMMT: Error downloading ${url}: ${err}`);
+      vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error downloading ${url}: ${err}`);
       file.close();
       fs.unlink(to,() => {});
       resolve(false);
     });
     req.on('abort', () => {
-      vscode.window.showErrorMessage(`iMMT: Error downloading ${url}: aborted`);
+      vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error downloading ${url}: aborted`);
       file.close();
       fs.unlink(to,() => {});
       resolve(false);
     });
     req.on('timeout', () => {
-      vscode.window.showErrorMessage(`iMMT: Error downloading ${url}: timeout`);
+      vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error downloading ${url}: timeout`);
       file.close();
       fs.unlink(to,() => {});
       resolve(false);
@@ -58,7 +58,7 @@ export async function unzip(zip:string,to:string,files:string[],skip:string[],ex
   return await new Promise<boolean>((resolve,reject) => {
     yauzl.open(zip, {lazyEntries: true, autoClose: false}, (err, zipfile) => {
       if (err || !zipfile) {
-        vscode.window.showErrorMessage(`iMMT: Error unzipping ${zip}: ${err}`);
+        vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error unzipping ${zip}: ${err}`);
         resolve(false);
         return;
       }
@@ -76,7 +76,7 @@ export async function unzip(zip:string,to:string,files:string[],skip:string[],ex
             const target = path.join(to,filename);
             zipfile.openReadStream(entry, (err, readStream) => {
               if (err) { 
-                vscode.window.showErrorMessage(`iMMT: Error unzipping ${zip}/${filename}: ${err}`);
+                vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error unzipping ${zip}/${filename}: ${err}`);
                 resolve(false);
                 return;
               }
@@ -100,7 +100,7 @@ export async function unzip(zip:string,to:string,files:string[],skip:string[],ex
       });
 
       zipfile.on('error', (err) => {
-        vscode.window.showErrorMessage(`iMMT: Error unzipping ${zip}: ${err}`);
+        vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error unzipping ${zip}: ${err}`);
         resolve(false);
         return;
       });

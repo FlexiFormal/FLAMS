@@ -1,4 +1,4 @@
-.immt-query-container {
+.flams-query-container {
     width:calc(100% - 10px);
     height:200px;
     position: relative;
@@ -12,23 +12,23 @@
     box-sizing: border-box;
 }
 
-.immt-query-container:focus-within {
+.flams-query-container:focus-within {
     border-bottom-color: var(--colorCompoundBrandStroke);
     outline: transparent solid var(--strokeWidthThick);
     border: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
 }
 
-.immt-query-container:hover {
+.flams-query-container:hover {
     border: var(--strokeWidthThin) solid var(--colorNeutralStroke1Hover);
     border-bottom-color: var(--colorNeutralStrokeAccessibleHover);
 }
 
-.immt-query-container:active {
+.flams-query-container:active {
     border: var(--strokeWidthThin) solid var(--colorNeutralStroke1Pressed);
     border-bottom-color: var(--colorNeutralStrokeAccessiblePressed);
 }
 
-.immt-query-container::after {
+.flams-query-container::after {
     content: "";
     position: absolute;
     bottom: -1px;
@@ -46,18 +46,18 @@
     clip-path: inset(calc(100% - var(--strokeWidthThick)) 0 0 0);
 }
 
-.immt-query-container:focus-within::after {
+.flams-query-container:focus-within::after {
     transition-delay: var(--curveDecelerateMid);
     transition-duration: var(--durationNormal);
     transition-property: transform;
     transform: scaleX(1);
 }
 
-.immt-query-container:focus-within:active::after {
+.flams-query-container:focus-within:active::after {
     border-bottom-color: var(--colorCompoundBrandStrokePressed);
 }
 
-.immt-query-inner {
+.flams-query-inner {
     flex-grow: 1;
     height: 100%;
     max-height: 260px;

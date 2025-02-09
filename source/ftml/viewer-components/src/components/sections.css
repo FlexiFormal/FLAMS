@@ -1,0 +1,73 @@
+body {
+  counter-reset: ftml-part ftml-chapter ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
+}
+
+.ftml-part {
+  counter-reset: ftml-chapter ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
+  counter-increment: ftml-part;
+  & .ftml-title {
+    display:block;
+    font-weight: bold;
+    font-size:xx-large;
+    margin:20px 0;
+    &::before {
+      content: "Part " counter(ftml-part, upper-roman) "\A";
+      white-space: pre-wrap;
+    }
+  }
+}
+
+.ftml-chapter {
+  counter-reset: ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
+  counter-increment: ftml-chapter;
+  & .ftml-title {
+    display:block;
+    font-weight: bold;
+    font-size:x-large;
+    margin:15px 0;
+    &::before {
+      content: "Chapter " counter(ftml-chapter) " - ";
+    }
+  }
+}
+
+.ftml-section {
+  counter-reset: ftml-subsection ftml-subsubsection ftml-paragraph;
+  counter-increment: ftml-section;
+  & .ftml-title {
+    display:block;
+    font-weight: bold;
+    font-size:large;
+    margin:10px 0;
+    &::before {
+      content: counter(ftml-section) " ";
+    }
+  }
+}
+
+.ftml-subsection {
+  counter-reset: ftml-subsubsection ftml-paragraph;
+  counter-increment: ftml-subsection;
+  & .ftml-title {
+    display:block;
+    font-weight: bold;
+    font-size:larger;
+    margin:5px 0;
+    &::before {
+      content: counter(ftml-section) "." counter(ftml-subsection) " ";
+    }
+  }
+}
+
+.ftml-subsubsection {
+  counter-reset: ftml-paragraph;
+  counter-increment: ftml-subsubsection;
+  & .ftml-title {
+    display:block;
+    font-weight: bold;
+    font-size:larger;
+    &::before {
+      content: counter(ftml-section) "." counter(ftml-subsection) "." counter(ftml-subsubsection) " ";
+    }
+  }
+}

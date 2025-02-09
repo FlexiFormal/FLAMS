@@ -6,7 +6,7 @@ use crate::uris::{
 };
 use const_format::concatcp;
 use either::Either;
-use immt_utils::parsing::StringOrStr;
+use flams_utils::parsing::StringOrStr;
 use std::fmt::Display;
 use std::str::{FromStr, Split};
 

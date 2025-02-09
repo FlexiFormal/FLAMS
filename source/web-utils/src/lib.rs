@@ -6,13 +6,13 @@ pub mod mathml;
 
 use std::borrow::Cow;
 
-use immt_utils::{hashstr, CSS};
+use flams_utils::{hashstr, CSS};
 
 #[cfg(feature = "ssr")]
 #[derive(Default,Clone)]
-pub struct CssIds(immt_utils::triomphe::Arc< 
-    immt_utils::parking_lot::Mutex<
-        immt_utils::vecmap::VecSet<Cow<'static,str>>
+pub struct CssIds(flams_utils::triomphe::Arc< 
+    flams_utils::parking_lot::Mutex<
+        flams_utils::vecmap::VecSet<Cow<'static,str>>
     >
 >);
 
@@ -23,6 +23,13 @@ pub fn do_css(css: CSS) {
             #[cfg(feature="ssr")]
             let s = String::from(s);
             do_inject_css(id.into(), s.into());
+        }
+        CSS::Class{name,css} => {
+            #[cfg(feature="ssr")]
+            let name = String::from(name);
+            #[cfg(feature="ssr")]
+            let css = String::from(css);
+            do_inject_css(name.into(), css.into());
         }
         CSS::Link(s) => {
             let id = hashstr("id_", &s);

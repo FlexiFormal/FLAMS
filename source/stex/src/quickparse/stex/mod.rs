@@ -3,9 +3,9 @@ pub mod structs;
 
 use std::path::Path;
 
-use immt_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURITrait, DocumentURI, ModuleURI, Name, SymbolURI}};
-use immt_system::backend::AnyBackend;
-use immt_utils::{parsing::ParseStr, prelude::{TreeChild, TreeLike}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::{OrdSet, VecSet}};
+use flams_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURITrait, DocumentURI, ModuleURI, Name, SymbolURI}};
+use flams_system::backend::AnyBackend;
+use flams_utils::{parsing::ParseStr, prelude::{TreeChild, TreeLike}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::{OrdSet, VecSet}};
 use rules::{MathStructureArg, MathStructureArgIter, NotationArg, NotationArgIter, ParagraphArg, ParagraphArgIter, SModuleArg, SModuleArgIter, SymdeclArg, SymdeclArgIter, SymdefArg, SymdefArgIter, TextSymdeclArg, TextSymdeclArgIter, VardefArg, VardefArgIter};
 use smallvec::SmallVec;
 use structs::{InlineMorphAssIter, InlineMorphAssign, ModuleOrStruct, ModuleReference, ModuleRules, MorphismKind, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode};
@@ -22,7 +22,7 @@ pub struct STeXParseDataI {
 impl STeXParseDataI {
   #[inline]#[must_use]
   pub fn lock(self) -> STeXParseData {
-    immt_utils::triomphe::Arc::new(parking_lot::Mutex::new(self))
+    flams_utils::triomphe::Arc::new(parking_lot::Mutex::new(self))
   }
   #[inline]
   pub fn replace(self,old:&STeXParseData) {
@@ -34,7 +34,7 @@ impl STeXParseDataI {
   }
 }
 
-pub type STeXParseData = immt_utils::triomphe::Arc<parking_lot::Mutex<STeXParseDataI>>;
+pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParseDataI>>;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]

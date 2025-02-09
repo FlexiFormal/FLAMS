@@ -1,7 +1,7 @@
 use std::str::FromStr;
-use immt_ontology::{languages::Language, uris::{ArchiveId, ArchiveURI, DocumentElementURI, DocumentURI, ModuleURI, Name, PathURI, SymbolURI, URIRefTrait, URI}};
+use flams_ontology::{languages::Language, uris::{ArchiveId, ArchiveURI, DocumentElementURI, DocumentURI, ModuleURI, Name, PathURI, SymbolURI, URIRefTrait, URI}};
 #[cfg(feature="ssr")]
-use immt_system::backend::{Backend, GlobalBackend};
+use flams_system::backend::{Backend, GlobalBackend};
 
 macro_rules! charstr {
   ($c:ident) => {

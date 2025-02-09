@@ -1,10 +1,10 @@
 use std::{path::Path, sync::atomic::AtomicBool};
 
 use async_lsp::{lsp_types::{Position, Range, Url}, ClientSocket};
-use immt_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
-use immt_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
-use immt_system::backend::{AnyBackend, Backend, GlobalBackend};
-use immt_utils::time::measure;
+use flams_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
+use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
+use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
+use flams_utils::time::measure;
 
 use crate::{state::{LSPState, UrlOrFile}, LSPStore};
 
@@ -124,7 +124,7 @@ impl LSPDocument {
     let mut store = LSPStore::<true>::new(&mut *docs);
     let data =
     //let (data,t) = measure(|| 
-      immt_stex::quickparse::stex::quickparse(
+      flams_stex::quickparse::stex::quickparse(
       uri,&lock.text, path,
       &AnyBackend::Global(GlobalBackend::get()),
       &mut store);

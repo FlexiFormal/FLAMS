@@ -1,7 +1,7 @@
 use crate::quickparse::{latex::{
     FromLaTeXToken, LaTeXParser, Macro
 }, stex::DiagnosticLevel};
-use immt_utils::{parsing::{ParseSource, StringOrStr}, sourcerefs::{SourcePos, SourceRange}};
+use flams_utils::{parsing::{ParseSource, StringOrStr}, sourcerefs::{SourcePos, SourceRange}};
 
 use super::{Environment, ParserState};
 
@@ -299,9 +299,9 @@ macro_rules! tex {
     ($p:ident => $name:ident$($args:tt)*) => {
         #[allow(unused_mut,non_snake_case)]
         pub fn $name<'a,
-            Pa: ::immt_utils::parsing::ParseSource<'a>,
+            Pa: ::flams_utils::parsing::ParseSource<'a>,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
+            Err:FnMut(String,::flams_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
             State: $crate::quickparse::latex::ParserState<'a,Pa,T,Err>
         >(
             mut $name:$crate::quickparse::latex::Macro<'a,Pa::Pos,Pa::Str>,
@@ -314,9 +314,9 @@ macro_rules! tex {
     ($p:ident => @begin{$name:ident}$( ($($args:tt)* ) )? {$($start:tt)*} $($end:tt)*) => {paste::paste!(
         #[allow(unused,unused_mut,non_snake_case)]
         pub fn [<$name _open>]<'a,
-            Pa: ::immt_utils::parsing::ParseSource<'a>,
+            Pa: ::flams_utils::parsing::ParseSource<'a>,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
+            Err:FnMut(String,::flams_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
             State: $crate::quickparse::latex::ParserState<'a,Pa,T,Err>
         >(
             $name:&mut $crate::quickparse::latex::Environment<'a, Pa::Pos, Pa::Str, T>,
@@ -327,9 +327,9 @@ macro_rules! tex {
         }
         #[allow(unused,unused_mut,non_snake_case)]
         pub fn [<$name _close>]<'a,
-            Pa: ::immt_utils::parsing::ParseSource<'a>,
+            Pa: ::flams_utils::parsing::ParseSource<'a>,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-            Err:FnMut(String,::immt_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
+            Err:FnMut(String,::flams_utils::sourcerefs::SourceRange<Pa::Pos>,DiagnosticLevel),
             State: $crate::quickparse::latex::ParserState<'a,Pa,T,Err>
         >(
             mut $name:$crate::quickparse::latex::Environment<'a,Pa::Pos, Pa::Str, T>,

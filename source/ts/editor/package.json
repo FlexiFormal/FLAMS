@@ -1,13 +1,13 @@
 {
-  "name": "immt-editor",
-  "displayName": "iMᴍᴛ - Generic knowledge management system for flexiformal knowledge",
+  "name": "flams-editor",
+  "displayName": "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System",
   "description": "todo",
   "version": "0.0.1",
   "license": "GPL3",
   "publisher": "kwarc",
   "repository": {
     "type": "git",
-    "url": "github:KWARC/iMMT"
+    "url": "github:KWARC/FLAMS"
   },
   "type": "module",
   "dependencies": {

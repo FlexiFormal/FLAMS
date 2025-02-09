@@ -1,12 +1,12 @@
 #[cfg(feature = "ssr")]
 fn main() {
-    use immt::server::settings;
-    use immt_system::settings::SettingsSpec;
+    use flams::server::settings;
+    use flams_system::settings::SettingsSpec;
     #[allow(unused_imports)]
-    use immt_stex::STEX;
+    use flams_stex::STEX;
     fn exit() {
-      immt_system::building::queue_manager::QueueManager::clear();
-      let _ = immt_system::settings::Settings::get().close();
+      flams_system::building::queue_manager::QueueManager::clear();
+      let _ = flams_system::settings::Settings::get().close();
       std::process::exit(0)
     }
 
@@ -15,17 +15,17 @@ fn main() {
     async fn run(settings: SettingsSpec) {
       let lsp = settings.lsp;
         let _ce = color_eyre::install();
-        immt_system::initialize(settings);
+        flams_system::initialize(settings);
         if lsp {
             let (sender,recv) = tokio::sync::watch::channel(None);
             tokio::select! {
-              () = immt::server::run(Some(sender)) => {},
-              () = immt::server::lsp::lsp(recv) => {},
+              () = flams::server::run(Some(sender)) => {},
+              () = flams::server::lsp::lsp(recv) => {},
               _ = tokio::signal::ctrl_c() => exit()
             }
         } else {
             tokio::select! {
-              () = immt::server::run(None) => {},
+              () = flams::server::run(None) => {},
               _ = tokio::signal::ctrl_c() => exit()
             }
         }

@@ -2,16 +2,16 @@ use std::{default, ops::Deref, path::PathBuf, sync::atomic::AtomicU64};
 
 use axum::body::Body;
 use http::Request;
-use immt_ontology::uris::ArchiveId;
-use immt_system::{backend::{Backend, GlobalBackend}, settings::Settings};
-use immt_utils::time::Timestamp;
+use flams_ontology::uris::ArchiveId;
+use flams_system::{backend::{Backend, GlobalBackend}, settings::Settings};
+use flams_utils::time::Timestamp;
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
 
 use super::ServerState;
 
 #[derive(Clone,Default)]
-pub struct ImageStore(immt_utils::triomphe::Arc<ImageStoreI>);
+pub struct ImageStore(flams_utils::triomphe::Arc<ImageStoreI>);
 
 #[derive(Default)]
 struct ImageStoreI {

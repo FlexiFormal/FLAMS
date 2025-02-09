@@ -1,5 +1,5 @@
 [package]
-name = "immt-lsp"
+name = "flams-lsp"
 version = "0.0.1"
 edition = "2021"
 
@@ -10,10 +10,10 @@ workspace = true
 ws = ["dep:axum","dep:serde_json"]
 
 [dependencies]
-immt-system = {workspace=true,features=["tokio"]}
-immt-shtml = {workspace=true}
-immt-ontology = {workspace=true}
-immt-utils = {workspace = true}
+flams-system = {workspace=true,features=["tokio"]}
+flams-ftml = {workspace=true}
+flams-ontology = {workspace=true}
+flams-utils = {workspace = true}
 tracing={workspace=true}
 async-lsp = {workspace=true}
 futures = {workspace=true}
@@ -28,4 +28,4 @@ serde_json = {workspace=true,optional=true}
 lazy_static = {workspace=true}
 smallvec = {workspace = true}
 
-immt-stex = {workspace = true}
+flams-stex = {workspace = true}

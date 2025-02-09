@@ -26,9 +26,9 @@ use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, 
 pub fn Main() -> impl IntoView {
     provide_meta_context();
     #[cfg(feature = "ssr")]
-    provide_context(immt_web_utils::CssIds::default());
+    provide_context(flams_web_utils::CssIds::default());
     view! {
-        <Title text="iMᴍᴛ"/>
+        <Title text="𝖥𝖫∀𝖬∫"/>
         <Router>{
             let params = use_query_map();
             let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
@@ -62,8 +62,8 @@ pub fn Main() -> impl IntoView {
 #[component(transparent)]
 fn Top() -> impl IntoView {
     use crate::users::Login;
-    //use immt_web_utils::components::Themer;
-    //use shtml_viewer_components::SHTMLGlobalSetup;
+    //use flams_web_utils::components::Themer;
+    //use ftml_viewer_components::FTMLGlobalSetup;
     //use crate::users::Login;
     view!{<Login><leptos_router::components::Outlet/></Login>}
 }

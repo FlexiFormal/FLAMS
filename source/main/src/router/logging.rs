@@ -1,16 +1,16 @@
-use immt_utils::{logs::{LogFileLine, LogLevel, LogMessage, LogTree}, time::Timestamp, vecmap::VecMap};
-use immt_web_utils::{inject_css,components::{Tree,Leaf,LazySubtree,Header}};
+use flams_utils::{logs::{LogFileLine, LogLevel, LogMessage, LogTree}, time::Timestamp, vecmap::VecMap};
+use flams_web_utils::{inject_css,components::{Tree,Leaf,LazySubtree,Header}};
 use leptos::{either::Either, prelude::*};
 use thaw::Caption1Strong;
-use immt_web_utils::components::Spinner;
+use flams_web_utils::components::Spinner;
 
 use crate::utils::{needs_login, ws::WebSocket};
 
 #[cfg(feature="ssr")]
-async fn full_log() -> Result<immt_utils::logs::LogTree,()> {
+async fn full_log() -> Result<flams_utils::logs::LogTree,()> {
     use tokio::io::AsyncBufReadExt;
 
-    let path = immt_system::logger().log_file();
+    let path = flams_system::logger().log_file();
 
     let reader = tokio::io::BufReader::new(tokio::fs::File::open(path).await.map_err(|_| ())?);
     let mut lines = reader.lines();
@@ -29,7 +29,7 @@ async fn full_log() -> Result<immt_utils::logs::LogTree,()> {
 #[component]
 pub fn Logger() -> impl IntoView {
     needs_login(|| {
-        inject_css("immt-logging", include_str!("logs.css"));
+        inject_css("flams-logging", include_str!("logs.css"));
         let signals = LogSignals {
             top: RwSignal::new(Vec::new()),
             open_span_paths: RwSignal::new(VecMap::new()),
@@ -46,17 +46,17 @@ pub fn Logger() -> impl IntoView {
             }
         });
         view!{
-            <div class="immt-log-frame">{ move || {
+            <div class="flams-log-frame">{ move || {
                 if signals.top.with(Vec::is_empty) {
-                    Either::Left(view!(<div class="immt-spinner-frame"><Spinner/></div>))
+                    Either::Left(view!(<div class="flams-spinner-frame"><Spinner/></div>))
                 } else {Either::Right(view!{<Tree>
                     {do_ls(signals.top)}
                 </Tree>})}
             }}</div>
-            <div class="immt-warn-frame">
+            <div class="flams-warn-frame">
             <Caption1Strong><span style="color:var(--colorPaletteRedForeground1)">"Warnings"</span></Caption1Strong>{ move || {
                 if signals.top.get().is_empty() {
-                    Either::Left(view!(<div class="immt-spinner-frame"><Spinner/></div>))
+                    Either::Left(view!(<div class="flams-spinner-frame"><Spinner/></div>))
                 } else {Either::Right(view!{<Tree>
                     <For each=move || signals.warnings.get() key=|e| e.0.clone() children=move |e| view!(
                         <Leaf><LogLine e=e.1/></Leaf>
@@ -71,7 +71,7 @@ fn do_ls(v:RwSignal<Vec<LogEntrySignal>>) -> impl IntoView {
     view!{
         <For each=move || v.get() key=|e| e.id().to_string() children=|e| {
             match e {
-                LogEntrySignal::Simple(_,e) => view!(<Leaf><span class="immt-log-elem"><LogLine e/></span></Leaf>).into_any(),
+                LogEntrySignal::Simple(_,e) => view!(<Leaf><span class="flams-log-elem"><LogLine e/></span></Leaf>).into_any(),
                 LogEntrySignal::Span(_,e) => do_span(e).into_any()
             }
         }/>
@@ -104,7 +104,7 @@ fn LogLineHelper(
     args:VecMap<String,String>,
     #[prop(optional)] spinner:bool,
 ) -> impl IntoView {
-    use immt_web_utils::components::SpinnerSize;
+    use flams_web_utils::components::SpinnerSize;
     use std::fmt::Write;
     let cls = class_from_level(level);
     let mut str = timestamp.map_or_else(
@@ -124,7 +124,7 @@ fn LogLineHelper(
     }
     if spinner {
         Either::Left(view!(<span class=cls>
-            <span class="immt-spinner-inline">
+            <span class="flams-spinner-inline">
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
         </span>))
@@ -133,16 +133,16 @@ fn LogLineHelper(
 
 const fn class_from_level(lvl:LogLevel) -> &'static str {
     match lvl {
-        LogLevel::ERROR => "immt-log-error",
-        LogLevel::WARN => "immt-log-warn",
-        LogLevel::INFO => "immt-log-info",
-        LogLevel::DEBUG => "immt-log-debug",
-        LogLevel::TRACE => "immt-log-trace",
+        LogLevel::ERROR => "flams-log-error",
+        LogLevel::WARN => "flams-log-warn",
+        LogLevel::INFO => "flams-log-info",
+        LogLevel::DEBUG => "flams-log-debug",
+        LogLevel::TRACE => "flams-log-trace",
     }
 }
 pub struct LogSocket {
     #[cfg(feature="ssr")]
-    listener: immt_utils::change_listener::ChangeListener<LogFileLine<String>>,
+    listener: flams_utils::change_listener::ChangeListener<LogFileLine<String>>,
     #[cfg(all(feature="hydrate",not(doc)))]
     socket: leptos::web_sys::WebSocket,
     #[cfg(all(feature="hydrate",doc))]
@@ -161,7 +161,7 @@ impl crate::utils::ws::WebSocketServer<(),Log> for LogSocket {
         use crate::users::LoginState;
         match account {
             LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
-                let listener = immt_system::logger().listener();
+                let listener = flams_system::logger().listener();
                 Some(Self {
                     listener,
                     #[cfg(feature="hydrate")] socket:unreachable!()
@@ -206,7 +206,7 @@ impl LogSocket {
     }
 
     fn populate(signals:LogSignals,tree:LogTree) {
-        use immt_utils::logs::{LogTreeElem,LogSpan};
+        use flams_utils::logs::{LogTreeElem,LogSpan};
 
         fn add(signal:&mut Vec<LogEntrySignal>,warnings:RwSignal<Vec<(String,LogMessage)>>,e:LogTreeElem) {
             let id = e.id();

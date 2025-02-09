@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
-import { get_context, IMMTContext } from '../extension';
-import * as immt from './immt/types';
-import { IMMTServer } from './immt/server';
+import { get_context, FLAMSContext } from '../extension';
+import * as flams from './flams/types';
+import { FLAMSServer } from './flams/server';
 import path from 'path';
 import * as fs from 'fs';
 import { log } from 'console';
 
 export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
-  primary_server:IMMTServer;
-  remote_server:IMMTServer | undefined;
+  primary_server:FLAMSServer;
+  remote_server:FLAMSServer | undefined;
   mathhubs:string[] | undefined;
-  constructor(context:IMMTContext) {
+  constructor(context:FLAMSContext) {
     this.primary_server = context.server;
     this.remote_server = context.remote_server;
   }
@@ -68,7 +68,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   private async df_from_server(a:Archive,rp?:string): Promise<[Dir[],File[]] | undefined> {
     const entries = await (a.local? this.primary_server.backend_archive_entries(a.id,rp) : this.remote_server?.backend_archive_entries(a.id,rp));
     if (!entries) {
-      vscode.window.showErrorMessage("iMMT: No file entries found");
+      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No file entries found");
       return;
     }
     const [dirs,files] = entries;
@@ -90,7 +90,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   private async ga_from_local_server(id:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
     const entries = await this.primary_server.backend_group_entries(id);
     if (!entries) {
-      vscode.window.showErrorMessage("iMMT: No archives found");
+      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       return;
     }
     const [groups,archives] = entries;
@@ -101,12 +101,12 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
 
   private async ga_from_remote_server(id:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
     if (!this.remote_server) {
-      vscode.window.showErrorMessage(`iMMT: No remote server set`);
+      vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No remote server set`);
       return;
     }
     const entries = await this.remote_server.backend_group_entries(id);
     if (!entries) {
-      vscode.window.showErrorMessage("iMMT: No archives found");
+      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       return;
     }
     const [groups,archives] = entries;
@@ -118,7 +118,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   private async ga_from_both_servers(id?:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
     const entries = await this.primary_server.backend_group_entries(id);
     if (!entries) {
-      vscode.window.showErrorMessage("iMMT: No archives found");
+      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       return;
     }
     const [groups,archives] = entries;
@@ -127,7 +127,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     if (this.remote_server) {
       const remote_entries = await this.remote_server.backend_group_entries(id);
       if (!remote_entries) {
-        vscode.window.showErrorMessage(`iMMT: Failed to query remote server at ${this.remote_server.url}`);
+        vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Failed to query remote server at ${this.remote_server.url}`);
         return [group_entries,archive_entries];
       }
       const [remote_groups,remote_archives] = remote_entries;
@@ -161,10 +161,10 @@ enum LRB {
 class ArchiveGroup extends vscode.TreeItem {
   id:string;
   lr:LRB;
-  constructor(group:immt.ArchiveGroup,lr:LRB) {
+  constructor(group:flams.ArchiveGroup,lr:LRB) {
     const name = group.id.split("/").pop();
     if (!name) {
-      throw new Error("iMMT: Invalid archive group name");
+      throw new Error("𝖥𝖫∀𝖬∫: Invalid archive group name");
     }
     super(name,vscode.TreeItemCollapsibleState.Collapsed);
     this.id = group.id;
@@ -178,10 +178,10 @@ class ArchiveGroup extends vscode.TreeItem {
 class Archive extends vscode.TreeItem {
   id:string;
   local:boolean;
-  constructor(archive:immt.Archive,local:boolean,mhs?:string[]) {
+  constructor(archive:flams.Archive,local:boolean,mhs?:string[]) {
     const name = archive.id.split("/").pop();
     if (!name) {
-      throw new Error("iMMT: Invalid archive name");
+      throw new Error("𝖥𝖫∀𝖬∫: Invalid archive name");
     }
     super(name,vscode.TreeItemCollapsibleState.Collapsed);
     this.id = archive.id;
@@ -207,10 +207,10 @@ class Dir extends vscode.TreeItem {
   archive:Archive;
   rel_path:string;
 
-  constructor(archive:Archive,dir:immt.Directory) {
+  constructor(archive:Archive,dir:flams.Directory) {
     const name = dir.rel_path.split("/").pop();
     if (!name) {
-      throw new Error("iMMT: Invalid directory name");
+      throw new Error("𝖥𝖫∀𝖬∫: Invalid directory name");
     }
     super(name,vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `[${archive.id}]${dir.rel_path}`;
@@ -232,7 +232,7 @@ class Dir extends vscode.TreeItem {
 class File extends vscode.TreeItem {
   archive:Archive;
   rel_path:string;
-  constructor(archive:Archive,file:immt.File) {
+  constructor(archive:Archive,file:flams.File) {
     const name = path.basename(file.rel_path);
     super(name,vscode.TreeItemCollapsibleState.None);
     this.archive = archive;

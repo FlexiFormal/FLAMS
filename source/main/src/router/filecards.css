@@ -1,20 +1,20 @@
-.immt-treeview-file-new {
+.flams-treeview-file-new {
   color: var(--colorPaletteYellowForeground1);
   ::after { content: ' (new)'; }
 }
-.immt-treeview-file-stale {
+.flams-treeview-file-stale {
   color: var(--colorStatusWarningForeground3);
   ::after { content: ' (changed)'; }
 }
-.immt-treeview-file-deleted {
+.flams-treeview-file-deleted {
   color: var(--colorStatusDangerForeground1);
   text-decoration: line-through;
   ::after { content: ' (deleted)'; }
 }
-.immt-treeview-file-up-to-date {
+.flams-treeview-file-up-to-date {
   color: var(--colorStatusSuccessForeground1);
 }
 
-.immt-treeview-file-card {
+.flams-treeview-file-card {
   text-align: left;
 }

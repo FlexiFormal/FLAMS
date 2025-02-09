@@ -1,8 +1,8 @@
 use std::{io::Read, path::Path};
 
-use immt_ontology::{content::modules::OpenModule, narration::documents::UncheckedDocument, DocumentRange, Unchecked};
-pub use immt_utils::global;
-use immt_utils::CSS;
+use flams_ontology::{content::modules::OpenModule, narration::documents::UncheckedDocument, DocumentRange, Unchecked};
+pub use flams_utils::global;
+use flams_utils::CSS;
 
 use crate::{backend::AnyBackend, building::{BuildArtifact, BuildResult, BuildTask}};
 
@@ -169,7 +169,7 @@ impl OMDocResult {
     String::from_utf8(html).ok().map(|html| (css,html))
   }
 
-  pub(crate) fn load_reference<T:immt_ontology::Resourcable>(path:&Path,range:DocumentRange) -> Option<T> {
+  pub(crate) fn load_reference<T:flams_ontology::Resourcable>(path:&Path,range:DocumentRange) -> Option<T> {
     use std::io::{Seek,SeekFrom};
     let file = std::fs::File::open(path).ok()?;
     let mut file = std::io::BufReader::new(file);
@@ -272,14 +272,14 @@ impl BuildArtifact for OMDocResult {
 }
 
 
-global! {IMMTExtension {name,
+global! {FLAMSExtension {name,
   on_start: fn()
 }}
 
 #[macro_export]
-macro_rules! immt_extension {
+macro_rules! flams_extension {
   ($name:ident = $f:expr) => {
-    $crate::formats::global!{NEW {$crate::formats}IMMTExtension; $name [$f]}
+    $crate::formats::global!{NEW {$crate::formats} FLAMSExtension; $name [$f]}
   }
 }
 

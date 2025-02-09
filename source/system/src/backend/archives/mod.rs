@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 
 use either::Either;
 use ignore_regex::IgnoreSource;
-use immt_ontology::{
+use flams_ontology::{
     archive_json::{Institution, ArchiveIndex}, content::modules::OpenModule, file_states::FileStateSummary, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep, PathURITrait, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange, Unchecked
 };
-use immt_utils::{
+use flams_utils::{
     change_listener::ChangeSender,
     prelude::{TreeChild, TreeLike},
     vecmap::{VecMap, VecSet}, CSS,
@@ -47,7 +47,7 @@ impl LocalArchive {
     #[inline]
     #[must_use]
     pub fn out_dir_of(p: &Path) -> PathBuf {
-        p.join(".immt")
+        p.join(".flams")
     }
 
     #[inline]
@@ -76,7 +76,7 @@ impl LocalArchive {
     #[must_use]
     pub fn out_dir(&self) -> &Path {
         &self.out_path
-    } //self.path().join(".immt") }
+    } //self.path().join(".flams") }
 
     #[inline]
     #[must_use]
@@ -174,7 +174,7 @@ impl LocalArchive {
         }
     }
 
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,load:bool,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,load:bool,iter:impl Iterator<Item=flams_ontology::rdf::Triple>) {
         let out = rel_path.split('/').fold(self.out_dir().to_path_buf(),|p,s| p.join(s));
         let _ = std::fs::create_dir_all(&out);
         let out = out.join("index.ttl");
@@ -244,7 +244,7 @@ impl LocalArchive {
         name: &NameStep,
         language: Language,full:bool
     ) -> Option<(Vec<CSS>,String)> {
-        self.get_filepath(path, name, language, "shtml").and_then(|p|
+        self.get_filepath(path, name, language, "ftml").and_then(|p|
             OMDocResult::load_html_body(&p,full)
         )
     }
@@ -255,7 +255,7 @@ impl LocalArchive {
         name: &'a NameStep,
         language: Language,full:bool
     ) -> Option<impl std::future::Future<Output=Option<(Vec<CSS>,String)>> + 'a> {
-        let p = self.get_filepath(path, name, language, "shtml")?;
+        let p = self.get_filepath(path, name, language, "ftml")?;
         Some(OMDocResult::load_html_body_async(p,full))
     }
 
@@ -264,16 +264,16 @@ impl LocalArchive {
         name: &NameStep,
         language: Language,range:DocumentRange
     ) -> Option<(Vec<CSS>,String)> {
-        self.get_filepath(path, name, language, "shtml").and_then(|p|
+        self.get_filepath(path, name, language, "ftml").and_then(|p|
             OMDocResult::load_html_fragment(&p,range)
         )
     }
-    pub fn load_reference<T:immt_ontology::Resourcable>(&self,
+    pub fn load_reference<T:flams_ontology::Resourcable>(&self,
         path: Option<&Name>,
         name: &NameStep,
         language: Language,range:DocumentRange
     ) -> Option<T> {
-        self.get_filepath(path, name, language, "shtml").and_then(|p|
+        self.get_filepath(path, name, language, "ftml").and_then(|p|
             OMDocResult::load_reference(&p,range)
         )
     }
@@ -284,7 +284,7 @@ impl LocalArchive {
         name: &'a NameStep,
         language: Language,range:DocumentRange
     ) -> Option<impl std::future::Future<Output=Option<(Vec<CSS>,String)>> + 'a> {
-        let p = self.get_filepath(path, name, language, "shtml")?;
+        let p = self.get_filepath(path, name, language, "ftml")?;
         Some(OMDocResult::load_html_fragment_async(p,range))
     }
 
@@ -320,7 +320,7 @@ impl LocalArchive {
                 }
             }
         }
-        let p = top.join("shtml");
+        let p = top.join("ftml");
         result.write(&p);
         let OMDocResult {document,modules,..} = result;
         let p = top.join("doc");
@@ -420,7 +420,7 @@ impl Archive {
         }
     }
 
-    pub fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,load:bool,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    pub fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,relational:&RDFStore,load:bool,iter:impl Iterator<Item=flams_ontology::rdf::Triple>) {
         match self {
             Self::Local(a) => a.submit_triples(in_doc,rel_path,relational,load,iter)
         }
@@ -494,7 +494,7 @@ impl Archive {
         }
     }
 
-    pub fn load_reference<T:immt_ontology::Resourcable>(&self,
+    pub fn load_reference<T:flams_ontology::Resourcable>(&self,
         path: Option<&Name>,
         name: &NameStep,
         language: Language,range:DocumentRange

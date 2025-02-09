@@ -5,9 +5,9 @@ use leptos::prelude::*;
 #[component]
 pub fn Tree<T:IntoView+'static>(children:TypedChildren<T>) -> impl IntoView {
     let children = children.into_inner();
-    inject_css("immt-treeview",include_str!("trees.css"));
+    inject_css("flams-treeview",include_str!("trees.css"));
     view!{
-        <ul class="immt-treeview">{children()}</ul>
+        <ul class="flams-treeview">{children()}</ul>
     }
 }
 
@@ -15,7 +15,7 @@ pub fn Tree<T:IntoView+'static>(children:TypedChildren<T>) -> impl IntoView {
 pub fn Leaf<T:IntoView+'static>(children:TypedChildren<T>) -> impl IntoView {
     let children = children.into_inner();
     view!{
-        <li class="immt-treeview-li">{children()}</li>
+        <li class="flams-treeview-li">{children()}</li>
     }
 }
 
@@ -27,8 +27,8 @@ pub fn Subtree<T:IntoView+'static>(
     let children = children.into_inner();
     let expanded = RwSignal::new(false);
     view!{
-        <li class="immt-treeview-li"><details>
-            <summary class="immt-treeview-summary" on:click=move |_| {expanded.update(|b| *b = !*b)}>
+        <li class="flams-treeview-li"><details>
+            <summary class="flams-treeview-summary" on:click=move |_| {expanded.update(|b| *b = !*b)}>
                 {(header.children)()}
             </summary>
         <Tree>{children()}</Tree>
@@ -44,8 +44,8 @@ pub fn LazySubtree<T:IntoView+'static>(
     let mut children = children.into_inner();
     let expanded = RwSignal::new(false);
     view!{
-        <li class="immt-treeview-li"><details>
-            <summary class="immt-treeview-summary" on:click=move |_| {expanded.update(|b| *b = !*b)}>
+        <li class="flams-treeview-li"><details>
+            <summary class="flams-treeview-summary" on:click=move |_| {expanded.update(|b| *b = !*b)}>
                 {(header.children)()}
             </summary>
         <Tree>{move || if expanded.get() {

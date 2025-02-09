@@ -1,6 +1,6 @@
 use std::{fmt::{Display, Write}, path::{Path, PathBuf}};
 
-use immt_utils::{change_listener::{ChangeListener, ChangeSender}, logs::LogFileLine, time::Timestamp, triomphe::Arc, vecmap::VecMap};
+use flams_utils::{change_listener::{ChangeListener, ChangeSender}, logs::LogFileLine, time::Timestamp, triomphe::Arc, vecmap::VecMap};
 use parking_lot::RwLock;
 use tracing::span::Id;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -110,7 +110,7 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
       self.0.notifier.lazy_send(move || {
           let target: Option<String> = {
               let tg = event.metadata().target();
-              if tg.starts_with("immt") { None } else { Some(tg.into()) }
+              if tg.starts_with("flams") { None } else { Some(tg.into()) }
           };
           let mut visitor = StringVisitor::default();
           event.record(&mut visitor);
@@ -140,7 +140,7 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
       self.0.notifier.lazy_send(move || {
           let target: Option<String> = {
               let tg = md.metadata().target();
-              if tg.starts_with("immt") { None } else { Some(tg.into()) }
+              if tg.starts_with("flams") { None } else { Some(tg.into()) }
           };
           let timestamp = Timestamp::now();
           let parent = if md.is_root() { None }

@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-use immt_utils::vecmap::VecMap;
+use flams_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term, shtml::SHTMLKey, uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
+    content::terms::Term, ftml::FTMLKey, uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
 };
 
 use super::{DocumentElement, NarrationTrait};
@@ -48,13 +48,13 @@ pub enum ParagraphKind {
 }
 
 impl ParagraphKind {
-    const DEF:&str = SHTMLKey::Definition.attr_name();
-    const ASS:&str = SHTMLKey::Assertion.attr_name();
-    const PAR:&str = SHTMLKey::Paragraph.attr_name();
-    const PRO:&str = SHTMLKey::Proof.attr_name();
-    const SUB:&str = SHTMLKey::SubProof.attr_name();
+    const DEF:&str = FTMLKey::Definition.attr_name();
+    const ASS:&str = FTMLKey::Assertion.attr_name();
+    const PAR:&str = FTMLKey::Paragraph.attr_name();
+    const PRO:&str = FTMLKey::Proof.attr_name();
+    const SUB:&str = FTMLKey::SubProof.attr_name();
     #[must_use]
-    pub fn from_shtml(s: &str) -> Option<Self> {
+    pub fn from_ftml(s: &str) -> Option<Self> {
         
         Some(match s {
             Self::DEF => Self::Definition,

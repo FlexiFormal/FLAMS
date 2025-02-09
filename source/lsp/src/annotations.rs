@@ -1,12 +1,12 @@
 use crate::{state::{LSPState, UrlOrFile}, IsLSPRange, LSPStore, ProgressCallbackClient};
 use async_lsp::lsp_types as lsp;
-use immt_ontology::{narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURI, ArchiveURITrait}};
-use immt_stex::quickparse::{latex::ParsedKeyValue, stex::{rules::{MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, structs::{InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymnameMode}, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI}};
+use flams_ontology::{narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURI, ArchiveURITrait}};
+use flams_stex::quickparse::{latex::ParsedKeyValue, stex::{rules::{MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, structs::{InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymnameMode}, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI}};
 use smallvec::SmallVec;
 use futures::FutureExt;
 use crate::capabilities::STeXSemanticTokens;
-use immt_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
-use immt_utils::{prelude::TreeChildIter, sourcerefs::{LSPLineCol, SourceRange}};
+use flams_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
+use flams_utils::{prelude::TreeChildIter, sourcerefs::{LSPLineCol, SourceRange}};
 
 trait AnnotExt:Sized {
     fn as_symbol(&self) -> Option<(lsp::DocumentSymbol,&[Self])>;

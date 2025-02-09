@@ -1,4 +1,4 @@
-use immt_utils::{parsing::{ParseSource, StringOrStr}, sourcerefs::SourceRange};
+use flams_utils::{parsing::{ParseSource, StringOrStr}, sourcerefs::SourceRange};
 
 use crate::quickparse::stex::DiagnosticLevel;
 

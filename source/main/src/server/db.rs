@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use argon2::{PasswordHash, PasswordVerifier,PasswordHasher};
 use axum_login::{tracing::Instrument, AuthUser, AuthnBackend};
-use immt_git::gl::auth::GitlabUser;
-use immt_system::settings::Settings;
+use flams_git::gl::auth::GitlabUser;
+use flams_system::settings::Settings;
 use leptos::prelude::ServerFnError;
 use password_hash::{rand_core::OsRng, SaltString};
 use sqlx::{prelude::FromRow, SqlitePool};

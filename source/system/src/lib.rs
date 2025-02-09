@@ -8,9 +8,9 @@ pub mod formats;
 pub mod building;
 
 use building::queue_manager::QueueManager;
-use formats::IMMTExtension;
+use formats::FLAMSExtension;
 #[cfg(feature="tokio")]
-use immt_utils::background;
+use flams_utils::background;
 use settings::SettingsSpec;
 use backend::GlobalBackend;
 
@@ -18,7 +18,7 @@ static LOG : std::sync::OnceLock<logging::LogStore> = std::sync::OnceLock::new()
 
 #[cfg(feature="gitlab")]
 lazy_static::lazy_static!{
-    pub static ref GITLAB: immt_git::gl::GLInstance = immt_git::gl::GLInstance::default();
+    pub static ref GITLAB: flams_git::gl::GLInstance = flams_git::gl::GLInstance::default();
 }
 
 pub fn initialize(settings: SettingsSpec) {
@@ -36,7 +36,7 @@ pub fn initialize(settings: SettingsSpec) {
     #[cfg(feature="gitlab")]
     {
         if let Some(url) = &settings.gitlab_url {
-            let cfg = immt_git::gl::GitlabConfig::new(
+            let cfg = flams_git::gl::GitlabConfig::new(
                 url.to_string(),
                 settings.gitlab_token.as_ref().map(ToString::to_string),
                 settings.gitlab_app_id.as_ref().map(ToString::to_string),
@@ -60,7 +60,7 @@ pub fn initialize(settings: SettingsSpec) {
     #[cfg(not(feature="tokio"))]
     f();
     QueueManager::initialize(settings.num_threads);
-    for e in IMMTExtension::all() {
+    for e in FLAMSExtension::all() {
         let span = tracing::info_span!("Initializing",extension=e.name());
         let f = move || {
             span.in_scope(||

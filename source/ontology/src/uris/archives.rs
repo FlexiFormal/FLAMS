@@ -5,7 +5,7 @@ use crate::uris::{
 };
 use const_format::concatcp;
 use either::Either;
-use immt_utils::gc::{TArcInterned, TArcInterner};
+use flams_utils::gc::{TArcInterned, TArcInterner};
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::convert::Infallible;

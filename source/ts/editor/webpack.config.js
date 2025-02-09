@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 
 const config = {
     mode: 'development',//'production',
-    entry: resolve(__dirname, 'src', 'immt_editor.ts'),
+    entry: resolve(__dirname, 'src', 'flams_editor.ts'),
     module: {
         rules: [
             {
@@ -33,7 +33,7 @@ const config = {
         outputModule: true
     },
     output: {
-        filename: 'immt_editor.js',
+        filename: 'flams_editor.js',
         path: resolve(__dirname, 'dist'),
         module: true,
         workerChunkLoading: 'import',

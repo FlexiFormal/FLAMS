@@ -1,0 +1,16 @@
+.ftml-comp {
+  /* -webkit-text-stroke: 0.04ex cyan */
+  color:dodgerblue;
+}
+.ftml-var-comp {
+  color:gray;
+}
+.ftml-def-comp {
+  color: mediumvioletred;
+}
+.ftml-comp-hover {
+  background-color:rgba(238, 255, 47, 0.702);
+}
+.ftml-comp-replaced {
+  border:1px dotted red;
+}

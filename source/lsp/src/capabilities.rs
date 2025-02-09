@@ -75,7 +75,7 @@ pub fn capabilities() -> lsp::ServerCapabilities { lsp::ServerCapabilities {
       }
   ))),
   document_symbol_provider: Some(lsp::OneOf::Right(lsp::DocumentSymbolOptions {
-      label:Some("iMMT".to_string()),
+      label:Some("FLAMS".to_string()),
       work_done_progress_options:lsp::WorkDoneProgressOptions { work_done_progress:Some(true) }
   })),
   workspace_symbol_provider: Some(lsp::OneOf::Right(lsp::WorkspaceSymbolOptions {
@@ -83,7 +83,7 @@ pub fn capabilities() -> lsp::ServerCapabilities { lsp::ServerCapabilities {
       resolve_provider:Some(true)
   })),
   workspace:Some(lsp::WorkspaceServerCapabilities {
-      workspace_folders:Some(lsp::WorkspaceFoldersServerCapabilities { supported:Some(true),change_notifications:Some(lsp::OneOf::Right("immt-change-listener".to_string())) }),
+      workspace_folders:Some(lsp::WorkspaceFoldersServerCapabilities { supported:Some(true),change_notifications:Some(lsp::OneOf::Right("flams-change-listener".to_string())) }),
       file_operations:Some(lsp::WorkspaceFileOperationsServerCapabilities {
           did_create:Some(lsp::FileOperationRegistrationOptions { filters:fo_filter()}),
           did_rename:Some(lsp::FileOperationRegistrationOptions { filters:fo_filter()}),

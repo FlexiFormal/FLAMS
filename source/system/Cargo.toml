@@ -1,19 +1,19 @@
 [package]
-name = "immt-system"
+name = "flams-system"
 version = "0.0.1"
 edition = "2021"
 
 [features]
-tokio = ["dep:tokio","immt-utils/tokio","immt-ontology/tokio"]
-gitlab = ["immt-git/gitlab","tokio"]
+tokio = ["dep:tokio","flams-utils/tokio","flams-ontology/tokio"]
+gitlab = ["flams-git/gitlab","tokio"]
 
 [dev-dependencies]
 tracing-subscriber = {workspace=true}
 
 [dependencies]
-immt-utils = {workspace=true, features=["rayon","async","serde"]}
-immt-ontology = {workspace=true, features = ["rdf","serde"]}
-immt-git = {workspace=true}
+flams-utils = {workspace=true, features=["rayon","async","serde"]}
+flams-ontology = {workspace=true, features = ["rdf","serde"]}
+flams-git = {workspace=true}
 
 tracing = {workspace=true}
 tracing-subscriber = {workspace=true}

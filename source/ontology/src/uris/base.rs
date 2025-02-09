@@ -2,7 +2,7 @@ use crate::uris::errors::URIParseError;
 use crate::uris::macros::debugdisplay;
 use crate::uris::{sealed, URIOrRefTrait, URIRef, URIRefTrait, URITrait, URI};
 use either::Either;
-use immt_utils::gc::{TArcInterned, TArcInterner};
+use flams_utils::gc::{TArcInterned, TArcInterner};
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::fmt::Display;

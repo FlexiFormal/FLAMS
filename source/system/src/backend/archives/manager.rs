@@ -1,9 +1,9 @@
 use std::{ops::Deref, path::Path};
 
-use immt_ontology::{
+use flams_ontology::{
     content::modules::OpenModule, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURITrait, NameStep, PathURIRef, PathURITrait}, Unchecked
 };
-use immt_utils::change_listener::ChangeSender;
+use flams_utils::change_listener::ChangeSender;
 use oxigraph::model::Quad;
 
 use crate::backend::BackendChange;
@@ -100,8 +100,8 @@ impl<F> MaybeQuads for F where F: FnMut(Quad) + Send {}
 #[cfg(test)]
 mod tests {
 
-    use immt_ontology::source_format;
-    use immt_utils::time::measure;
+    use flams_ontology::source_format;
+    use flams_utils::time::measure;
 
     use super::*;
 

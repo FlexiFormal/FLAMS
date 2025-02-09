@@ -1,4 +1,4 @@
-use immt_utils::binary::BinaryWriter;
+use flams_utils::binary::BinaryWriter;
 use parking_lot::Mutex;
 use tex_engine::prelude::Mouth;
 use ::RusTeX::engine::{CompilationResult, RusTeXEngineExt};
@@ -200,7 +200,7 @@ impl RusTeX {
         self.run_with_envs(
             file,
             memorize,
-            std::iter::once(("IMMT_ADMIN_PWD".to_string(), "NOPE".to_string())),
+            std::iter::once(("FLAMS_ADMIN_PWD".to_string(), "NOPE".to_string())),
             out
         )
     }
@@ -251,7 +251,7 @@ impl RusTeX {
     pub fn builder(&self) -> RusTeXRunBuilder<false> {
         RusTeXRunBuilder{
             inner: self.0.lock().clone().into_engine(
-                std::iter::once(("IMMT_ADMIN_PWD".to_string(), "NOPE".to_string())), 
+                std::iter::once(("FLAMS_ADMIN_PWD".to_string(), "NOPE".to_string())), 
                 TracingOutput
             ),
             settings: RTSettings {

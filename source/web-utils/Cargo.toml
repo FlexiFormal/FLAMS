@@ -1,5 +1,5 @@
 [package]
-name = "immt-web-utils"
+name = "flams-web-utils"
 version = "0.0.1"
 edition = "2021"
 
@@ -18,7 +18,7 @@ leptos_meta = {workspace=true}
 thaw = {workspace=true}
 thaw_utils = {workspace=true}
 thaw_components = {workspace=true}
-immt-utils = {workspace=true,features=["serde"]}
+flams-utils = {workspace=true,features=["serde"]}
 serde = {workspace=true}
 gloo-storage = {workspace=true,optional=true}
 send_wrapper = {workspace=true}

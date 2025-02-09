@@ -7,13 +7,13 @@ export class Versions {
   private _latex:boolean | undefined;
 	private _stex_path: string | undefined;
 	private _stex_version : Version | undefined;
-	private _immt_version : Version | undefined;
+	private _flams_version : Version | undefined;
 
   constructor() {}
 
-  get immt_path(): string | undefined {
-		const config = vscode.workspace.getConfiguration("immt");
-		return config.get<string>(Settings.ImmtPath)?.trim();
+  get flams_path(): string | undefined {
+		const config = vscode.workspace.getConfiguration("flams");
+		return config.get<string>(Settings.FlamsPath)?.trim();
 	}
 
 	get stex_path(): string | undefined {
@@ -38,14 +38,14 @@ export class Versions {
 	}
 
   async isValid(): Promise<boolean> {
-		let immt = await this.immtversion();
-		let stex = await this.stexversion();
-		return immt !== undefined && stex !== undefined && 
-      immt.newer_than(REQUIRED_IMMT) && 
+		let flams = await this.flamsVersion();
+		let stex = await this.stexVersion();
+		return flams !== undefined && stex !== undefined && 
+      flams.newer_than(REQUIRED_FLAMS) && 
       stex.newer_than(REQUIRED_STEX);
 	}
 
-	async stexversion(): Promise<Version | undefined> {
+	async stexVersion(): Promise<Version | undefined> {
 		if (this._stex_version) {return this._stex_version;}
 		await this.hasSTeX();
 		if (this._stex_path) {
@@ -60,25 +60,25 @@ export class Versions {
 		}
 	}
 
-  async immtversion(): Promise<Version | undefined> {
-		if (this._immt_version) {return this._immt_version; }
-    let path = this.immt_path;
+  async flamsVersion(): Promise<Version | undefined> {
+		if (this._flams_version) {return this._flams_version; }
+    let path = this.flams_path;
     if (path) {
       let res = await call_cmd(path,["--version"]);
       if (res) {
-			  const regex = /immt (\d+\.\d+\.\d+)/;
+			  const regex = /flams (\d+\.\d+\.\d+)/;
         const match = res.match(regex);
         if (match) {
           const vstring = match[1];
-          this._immt_version = new Version(vstring);
-          return this._immt_version;
+          this._flams_version = new Version(vstring);
+          return this._flams_version;
         }
       }
     }
 	}
 
   reset() {
-		this._immt_version = undefined;
+		this._flams_version = undefined;
 	}
 }
 
@@ -114,6 +114,6 @@ export class Version {
 	}
 }
 
-export const REQUIRED_IMMT = new Version([0,0,1]);
+export const REQUIRED_FLAMS = new Version([0,0,1]);
 export const REQUIRED_STEX = new Version([4,0,0]);
 

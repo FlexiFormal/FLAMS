@@ -10,8 +10,8 @@ use axum_login::AuthManagerLayerBuilder;
 use axum_macros::FromRef;
 use db::DBBackend;
 use http::{StatusCode, Uri};
-use immt_git::gl::auth::GitLabOAuth;
-use immt_system::settings::Settings;
+use flams_git::gl::auth::GitLabOAuth;
+use flams_system::settings::Settings;
 use leptos::prelude::*;
 use leptos_axum::{generate_route_list, LeptosRoutes};
 use tower::ServiceBuilder;
@@ -51,7 +51,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         } else {
             println!("Port already in use; used {} instead",addr.port());
         }
-        immt_system::settings::Settings::get().port.store(addr.port(), std::sync::atomic::Ordering::Relaxed);
+        flams_system::settings::Settings::get().port.store(addr.port(), std::sync::atomic::Ordering::Relaxed);
         state.options.site_addr = addr;
     }
 
@@ -127,14 +127,14 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
 }
 
 async fn gl_cont(
-    extract::Query(params): extract::Query<immt_git::gl::auth::AuthRequest>,
+    extract::Query(params): extract::Query<flams_git::gl::auth::AuthRequest>,
     extract::State(state):extract::State<ServerState>,
     mut auth_session: axum_login::AuthSession<DBBackend>,
 ) -> Result<axum::response::Response,StatusCode> {
     let oauth = state.oauth.as_ref().unwrap_or_else(|| unreachable!());
     let token = oauth.callback(params).await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let gl = immt_system::GITLAB.get().await.unwrap_or_else(|| unreachable!());
+    let gl = flams_system::GITLAB.get().await.unwrap_or_else(|| unreachable!());
     let user = gl.get_oauth_user(&token).await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if let Ok(Some(u)) = state.db.add_user(user, token.secret().clone()).await {
@@ -183,10 +183,10 @@ async fn file_and_error_handler(
     request: http::Request<axum::body::Body>,
 ) -> axum::response::Response {
     let r = leptos_axum::file_and_error_handler(shell);
-    if uri.path().ends_with("immt_bg.wasm") {
-        // change to "immt.wasm"
+    if uri.path().ends_with("flams_bg.wasm") {
+        // change to "flams.wasm"
         uri = Uri::builder()
-            .path_and_query("/pkg/immt.wasm")
+            .path_and_query("/pkg/flams.wasm")
             .build()
             .unwrap_or_else(|_| unreachable!());
     }
@@ -217,7 +217,7 @@ impl ServerState {
         let leptos_cfg = Self::setup_leptos();
         let redirect = Settings::get().gitlab_redirect_url.as_ref();
         let oauth = if let Some(redirect) = redirect {
-            immt_system::GITLAB.get().await.and_then(|gl|
+            flams_system::GITLAB.get().await.and_then(|gl|
                 gl.new_oauth(&format!("{redirect}/gitlab_login")).ok()
             )
         } else { None };
@@ -235,7 +235,7 @@ impl ServerState {
         let mut leptos_cfg =
             leptos::prelude::get_configuration(None).expect("Failed to get leptos config");
         leptos_cfg.leptos_options.site_root = basepath.into();
-        leptos_cfg.leptos_options.output_name = "immt".into();
+        leptos_cfg.leptos_options.output_name = "flams".into();
 
         let settings = Settings::get();
         let ip = settings.ip;
@@ -247,7 +247,7 @@ impl ServerState {
     #[cfg(debug_assertions)]
     fn get_basepath() -> String {
         if std::env::var("LEPTOS_OUTPUT_NAME").is_err() {
-            unsafe { std::env::set_var("LEPTOS_OUTPUT_NAME", "immt") };
+            unsafe { std::env::set_var("LEPTOS_OUTPUT_NAME", "flams") };
         }
         "target/web".to_string()
     }

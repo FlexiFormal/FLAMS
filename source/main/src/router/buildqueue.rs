@@ -1,8 +1,8 @@
 use std::num::NonZeroU32;
 
-use immt_ontology::uris::ArchiveId;
-use immt_utils::{time::{Delta, Eta}, vecmap::VecMap};
-use immt_web_utils::inject_css;
+use flams_ontology::uris::ArchiveId;
+use flams_utils::{time::{Delta, Eta}, vecmap::VecMap};
+use flams_web_utils::inject_css;
 use leptos::{either::EitherOf4, prelude::*};
 use leptos_router::hooks::use_params_map;
 
@@ -21,8 +21,8 @@ pub enum RepoInfo {
     id:ArchiveId,
     remote:String,
     branch:String,
-    commit:immt_git::Commit,
-    updates:Vec<(String,immt_git::Commit)>
+    commit:flams_git::Commit,
+    updates:Vec<(String,flams_git::Commit)>
   }
 }
 
@@ -34,9 +34,9 @@ pub enum FormatOrTarget {
 
 #[cfg(feature="ssr")]
 impl LoginState {
-  pub(crate) fn with_queue<R>(&self,id:NonZeroU32,f:impl FnOnce(&immt_system::building::Queue) -> R) -> Result<R,String> {
-    use immt_system::building::QueueName;
-    let qm = immt_system::building::queue_manager::QueueManager::get();
+  pub(crate) fn with_queue<R>(&self,id:NonZeroU32,f:impl FnOnce(&flams_system::building::Queue) -> R) -> Result<R,String> {
+    use flams_system::building::QueueName;
+    let qm = flams_system::building::queue_manager::QueueManager::get();
     match self {
       LoginState::None | LoginState::Loading => return Err(format!("Not logged in: {self:?}")),
       LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => (),
@@ -59,9 +59,9 @@ impl LoginState {
     )
   }
 
-  pub(crate) fn with_opt_queue<R>(&self,id:Option<NonZeroU32>,f:impl FnOnce(immt_system::building::queue_manager::QueueId,&immt_system::building::Queue) -> R) -> Result<R,String> {
-    use immt_system::building::QueueName;
-    let qm = immt_system::building::queue_manager::QueueManager::get();
+  pub(crate) fn with_opt_queue<R>(&self,id:Option<NonZeroU32>,f:impl FnOnce(flams_system::building::queue_manager::QueueId,&flams_system::building::Queue) -> R) -> Result<R,String> {
+    use flams_system::building::QueueName;
+    let qm = flams_system::building::queue_manager::QueueManager::get();
     match (self,id) {
       (LoginState::None | LoginState::Loading,_) => return Err(format!("Not logged in: {self:?}")),
       (LoginState::User{name,..},Some(id)) => {
@@ -99,7 +99,7 @@ impl LoginState {
         })
       }
       (LoginState::NoAccounts,_) => {
-        qm.with_global(|q| Ok(f(immt_system::building::queue_manager::QueueId::global(),q)))
+        qm.with_global(|q| Ok(f(flams_system::building::queue_manager::QueueId::global(),q)))
       }
     }
   }
@@ -112,8 +112,8 @@ impl LoginState {
 )]
 #[allow(clippy::unused_async)]
 pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
-  use immt_system::building::queue_manager::QueueManager;
-  use immt_system::backend::{AnyBackend,SandboxedRepository};
+  use flams_system::building::queue_manager::QueueManager;
+  use flams_system::backend::{AnyBackend,SandboxedRepository};
   let login = LoginState::get_server();
   let oauth = super::git::get_oauth().ok();
   tokio::task::spawn_blocking(move || {
@@ -132,13 +132,13 @@ pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
           SandboxedRepository::Copy(id) => archives.push(RepoInfo::Copy(id)),
           SandboxedRepository::Git { id, branch, commit, remote } => {
             let updates = if let Some((oauth,secret)) = &oauth {
-              let gitlab_url = &**immt_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
+              let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
               let Some(path) = QueueManager::get().with_queue(k, |q| {
                 let q = q?;
                 let AnyBackend::Sandbox(be) = q.backend() else {return None};
                 Some(be.path_for(&id))
               }) else {continue};
-              immt_git::repos::GitRepo::open(path).ok().and_then(|git| {
+              flams_git::repos::GitRepo::open(path).ok().and_then(|git| {
                 git.get_origin_url().ok().and_then(|url| {
                   if url.starts_with(gitlab_url) {
                     git.get_new_commits_with_oauth(secret).ok()
@@ -168,7 +168,7 @@ pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
 )]
 #[allow(clippy::unused_async)]
 pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
-  use immt_system::building::{queue_manager::QueueManager,QueueName};
+  use flams_system::building::{queue_manager::QueueManager,QueueName};
   let login = LoginState::get_server();
   tokio::task::spawn_blocking(move || {
     login.with_queue(id,|_| ())?;
@@ -183,7 +183,7 @@ pub async fn run(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
 )]
 #[allow(clippy::unused_async)]
 pub async fn requeue(id:NonZeroU32) -> Result<(),ServerFnError<String>> {
-  use immt_system::building::{queue_manager::QueueManager,QueueName};
+  use flams_system::building::{queue_manager::QueueManager,QueueName};
   let login = LoginState::get_server();
   tokio::task::spawn_blocking(move || {
     login.with_queue(id,|q| q.requeue_failed())
@@ -200,9 +200,9 @@ pub async fn enqueue(archive:ArchiveId,
   path:Option<String>,stale_only:Option<bool>,
   queue:Option<NonZeroU32>
 ) -> Result<usize,ServerFnError<String>> {
-  use immt_system::{formats::FormatOrTargets,building::queue_manager::QueueManager};
-  use immt_system::backend::archives::ArchiveOrGroup as AoG;
-  use immt_system::formats::{SourceFormat,BuildTarget};
+  use flams_system::{formats::FormatOrTargets,building::queue_manager::QueueManager};
+  use flams_system::backend::archives::ArchiveOrGroup as AoG;
+  use flams_system::formats::{SourceFormat,BuildTarget};
 
   let login = LoginState::get_server();
 
@@ -231,7 +231,7 @@ pub async fn enqueue(archive:ArchiveId,
         FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice())
       };
 
-      let group = immt_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
+      let group = flams_system::backend::GlobalBackend::get().with_archive_tree(|tree| -> Result<bool,ServerFnError<String>>
         {match tree.find(&archive) {
           Some(AoG::Archive(_)) => Ok(false),
           Some(AoG::Group(_)) => Ok(true),
@@ -260,10 +260,10 @@ pub async fn enqueue(archive:ArchiveId,
 pub async fn get_log(queue:NonZeroU32,archive:ArchiveId,rel_path:String,target:String) -> Result<String,ServerFnError<String>> {
   use crate::users::LoginState;
   use std::path::PathBuf;
-  use immt_system::backend::{Backend,GlobalBackend};
-  use immt_system::{formats::FormatOrTargets,building::{QueueName,queue_manager::QueueManager}};
+  use flams_system::backend::{Backend,GlobalBackend};
+  use flams_system::{formats::FormatOrTargets,building::{QueueName,queue_manager::QueueManager}};
   
-  let Some(target) = immt_system::formats::BuildTarget::get_from_str(&target) else {
+  let Some(target) = flams_system::formats::BuildTarget::get_from_str(&target) else {
     return Err(format!("Target {target} not found").into())
   };
   let login = LoginState::get_server();
@@ -288,8 +288,8 @@ pub async fn get_log(queue:NonZeroU32,archive:ArchiveId,rel_path:String,target:S
 )]
 #[allow(clippy::unused_async)]
 pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
-  use immt_system::building::{queue_manager::QueueManager,QueueName};
-  use immt_system::backend::{Backend,SandboxedRepository,archives::Archive};
+  use flams_system::building::{queue_manager::QueueManager,QueueName};
+  use flams_system::backend::{Backend,SandboxedRepository,archives::Archive};
   let login = LoginState::get_server();
   if matches!(login,LoginState::NoAccounts) {
     return Err("Migration only makes sense in public mode".to_string().into())
@@ -297,14 +297,14 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
   let oauth = super::git::get_oauth().ok();
   tokio::task::spawn_blocking(move || {
     login.with_queue(queue, |_| ())?;
-    let (_,n) = immt_system::building::queue_manager::QueueManager::get().migrate::<(),String>(queue.into(),|sandbox| {
+    let (_,n) = flams_system::building::queue_manager::QueueManager::get().migrate::<(),String>(queue.into(),|sandbox| {
       if let Some((_,secret)) = oauth.as_ref() {
         sandbox.with_repos(|repos| {
           for r in repos {
             if let SandboxedRepository::Git { id,.. } = r {
               sandbox.with_archive::<Result<_,String>>(id, |a| {
                 let Some(Archive::Local(a)) = a else { return Ok(())};
-                let repo = immt_git::repos::GitRepo::open(a.path()).map_err(|e| e.to_string())?;
+                let repo = flams_git::repos::GitRepo::open(a.path()).map_err(|e| e.to_string())?;
                 repo.add_dir(a.path()).map_err(|e| e.to_string())?;
                 let _ = repo.commit_all("migrating").map_err(|e| e.to_string())?;
                 //repo.mark_managed().map_err(|e| e.to_string())?;
@@ -327,7 +327,7 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
 )]
 #[allow(clippy::unused_async)]
 pub async fn delete(queue:NonZeroU32) -> Result<(),ServerFnError<String>> {
-  use immt_system::building::{queue_manager::QueueManager,QueueName};
+  use flams_system::building::{queue_manager::QueueManager,QueueName};
   let login = LoginState::get_server();
   tokio::task::spawn_blocking(move || {
     login.with_queue(queue, |_| ())?;
@@ -342,7 +342,7 @@ struct UpdateQueues(RwSignal<()>);
 #[component]
 pub fn QueuesTop() -> impl IntoView {
   use thaw::{TabList,Tab,Divider,Layout};
-  use immt_web_utils::components::Spinner;
+  use flams_web_utils::components::Spinner;
 
   let update = UpdateQueues(RwSignal::new(()));
   provide_context(update);
@@ -371,7 +371,7 @@ pub fn QueuesTop() -> impl IntoView {
           queues.selected.set(value);
         }
       });
-      inject_css("immt-fullscreen", ".immt-fullscreen { width:100%; height:calc(100% - 44px - 21px) }");
+      inject_css("flams-fullscreen", ".flams-fullscreen { width:100%; height:calc(100% - 44px - 21px) }");
       leptos::either::Either::Right(view!{
         <TabList selected_value>
           <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
@@ -381,7 +381,7 @@ pub fn QueuesTop() -> impl IntoView {
           }/>
         </TabList>
         <div style="margin:10px"><Divider/></div>
-        <Layout class="immt-fullscreen">{move || {
+        <Layout class="flams-fullscreen">{move || {
           let curr = queues.selected.get();
           queues.show.update_untracked(|v| *v = false);
           QueueSocket::run(queues);
@@ -407,7 +407,7 @@ pub fn QueuesTop() -> impl IntoView {
 }
 
 fn repos(queue_id:NonZeroU32,allowed:bool) -> impl IntoView {
-  use immt_web_utils::components::{Collapsible,Header};
+  use flams_web_utils::components::{Collapsible,Header};
   use thaw::{Caption1Strong,Table,TableBody,TableHeader,TableRow,TableHeaderCell,TableCell,TableCellLayout};
   if matches!(LoginState::get(),LoginState::NoAccounts) { return None }
   let queues : AllQueues = expect_context();
@@ -415,10 +415,10 @@ fn repos(queue_id:NonZeroU32,allowed:bool) -> impl IntoView {
   let Some(repos) = repos else { return None };
   if repos.is_empty() { return None }
   let style = if allowed { "" } else { "color:gray;" };
-  inject_css("immt-repo-table", include_str!("repo-table.css"));
+  inject_css("flams-repo-table", include_str!("repo-table.css"));
   Some(view!{<div style="margin-left:45px;width:fit-content;"><Collapsible>
     <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
-    <Table class="immt-repo-table">
+    <Table class="flams-repo-table">
       <TableHeader><TableRow>
         <TableHeaderCell><Caption1Strong>"Archive"</Caption1Strong></TableHeaderCell>
         <TableHeaderCell><Caption1Strong>"Branch"</Caption1Strong></TableHeaderCell>
@@ -460,7 +460,7 @@ fn repos(queue_id:NonZeroU32,allowed:bool) -> impl IntoView {
                         let toaster = ToasterInjection::expect_context();
                         let commit_map:VecMap<_,_> = updates.clone().into();
                         let archive = id.clone();
-                        let act = immt_web_utils::components::message_action(
+                        let act = flams_web_utils::components::message_action(
                           move |()| super::git::update_from_branch(Some(queue_id),archive.clone(),remote.clone(),branch.get_untracked()),
                           move |(i,_)| {
                             update.0.set(());
@@ -505,7 +505,7 @@ fn delete_action(id:NonZeroU32) -> Action<(),()> {
     match delete(id).await {
       Ok(()) => update.0.set(()),
       Err(e) => 
-        immt_web_utils::components::error_with_toaster(e.to_string(), toaster),
+        flams_web_utils::components::error_with_toaster(e.to_string(), toaster),
     }
   })
 }
@@ -527,7 +527,7 @@ fn idle(id:NonZeroU32,ls:RwSignal<Vec<Entry>>) -> impl IntoView {
 }
 
 fn running(id:NonZeroU32,queue:RunningQueue) -> impl IntoView {
-  use immt_web_utils::components::{AnchorLink,Anchor,Header};
+  use flams_web_utils::components::{AnchorLink,Anchor,Header};
   use thaw::{Layout,Button};
   let del = delete_action(id);
   let RunningQueue {running,queue,blocked,failed,done,eta} = queue;
@@ -560,7 +560,7 @@ fn running(id:NonZeroU32,queue:RunningQueue) -> impl IntoView {
 }
 
 fn finished(id:NonZeroU32,failed:Vec<Entry>,done:Vec<Entry>) -> impl IntoView {
-  use immt_web_utils::components::{AnchorLink,Anchor,Header};
+  use flams_web_utils::components::{AnchorLink,Anchor,Header};
   use thaw::{Button,Layout};
   let requeue = Action::new(move |()| requeue(id));
   let num_failed = failed.len();
@@ -597,7 +597,7 @@ fn migrate_button(id:NonZeroU32,num_failed:usize) -> impl IntoView {
   use thaw::{Button,Dialog,DialogSurface,DialogBody,DialogContent,Caption1Strong,Divider};
   if matches!(LoginState::get(),LoginState::NoAccounts) { return EitherOf3::A(()) }
   let update : UpdateQueues = expect_context();
-  let migrate = immt_web_utils::components::message_action(
+  let migrate = flams_web_utils::components::message_action(
     move |()| migrate(id), 
     move |i| {
       update.0.set(());
@@ -628,7 +628,7 @@ fn migrate_button(id:NonZeroU32,num_failed:usize) -> impl IntoView {
 pub struct QueueSocket {
   #[cfg(feature="ssr")]
   #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
-  listener: Option<immt_utils::change_listener::ChangeListener<immt_system::building::QueueMessage>>,
+  listener: Option<flams_utils::change_listener::ChangeListener<flams_system::building::QueueMessage>>,
   #[cfg(all(not(doc),feature="hydrate"))]
   socket: leptos::web_sys::WebSocket,
   #[cfg(doc)]
@@ -648,7 +648,7 @@ impl crate::utils::ws::WebSocketServer<NonZeroU32,QueueMessage> for QueueSocket 
         use crate::users::LoginState;
         match account {
             LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
-                let listener = None;//immt_system::logger().listener();
+                let listener = None;//flams_system::logger().listener();
                 Some(Self {
                     listener,
                     #[cfg(feature="hydrate")] _running:RwSignal::new(false),
@@ -667,7 +667,7 @@ impl crate::utils::ws::WebSocketServer<NonZeroU32,QueueMessage> for QueueSocket 
       }
     }
     async fn handle_message(&mut self,msg:NonZeroU32) -> Option<QueueMessage> {
-      let (lst,msg) = immt_system::building::queue_manager::QueueManager::get()
+      let (lst,msg) = flams_system::building::queue_manager::QueueManager::get()
         .with_queue(msg.into(), |q| 
           q.map(|q| (q.listener(),q.state_message()))
       )?;
@@ -848,8 +848,8 @@ struct WrappedEta(RwSignal<Eta>);
 impl WrappedEta {
   fn into_view(self) -> impl IntoView {
     use thaw::ProgressBar;
-    inject_css("immt-eta", r"
-.immt-progress-bar {height:10px;}
+    inject_css("flams-eta", r"
+.flams-progress-bar {height:10px;}
     ");
     let pctg = Memo::new(move |_| {
       let eta = self.0.get();
@@ -864,7 +864,7 @@ impl WrappedEta {
       }
     };
     view!{
-      <div style="width:500px;"><ProgressBar class="immt-progress-bar" value=pctg/>
+      <div style="width:500px;"><ProgressBar class="flams-progress-bar" value=pctg/>
         {move || (pctg.get() * 100.0).to_string().chars().take(4).collect::<String>()} "%; ca. "{time_left}" remaining"
       </div>
     }
@@ -893,7 +893,7 @@ impl Entry {
 
   #[cfg(feature="hydrate")]
   fn as_view(&self) -> impl IntoView {
-    use immt_web_utils::components::{Collapsible,Header};
+    use flams_web_utils::components::{Collapsible,Header};
     let title=format!("[{}]{}",self.archive,self.rel_path);
     let total = self.steps.with_untracked(|v| v.0.len());
     let steps = self.steps;
@@ -922,8 +922,8 @@ impl Entry {
 }
 
 #[cfg(feature="ssr")]
-impl From<immt_system::building::QueueEntry> for Entry {
-  fn from(e:immt_system::building::QueueEntry) -> Self {
+impl From<flams_system::building::QueueEntry> for Entry {
+  fn from(e:flams_system::building::QueueEntry) -> Self {
     #[cfg(feature="hydrate")]
     {unreachable!()}
     #[cfg(not(feature="hydrate"))]
@@ -942,7 +942,7 @@ pub enum TaskState {
 }
 impl TaskState {
   fn into_view(self,t:String,archive:&ArchiveId,rel_path:&str) -> impl IntoView {
-    use immt_web_utils::components::{LazyCollapsible,Header};
+    use flams_web_utils::components::{LazyCollapsible,Header};
     use thaw::Scrollbar;
     match self {
       Self::Running => EitherOf4::A(view!{<i style="color:yellow">{t}" (Running)"</i>}),
@@ -991,9 +991,9 @@ impl TaskState {
   }
 }
 #[cfg(feature="ssr")]
-impl From<immt_system::building::TaskState> for TaskState {
-  fn from(e:immt_system::building::TaskState) -> Self {
-    use immt_system::building::TaskState;
+impl From<flams_system::building::TaskState> for TaskState {
+  fn from(e:flams_system::building::TaskState) -> Self {
+    use flams_system::building::TaskState;
     match e {
       TaskState::Running => Self::Running,
       TaskState::Queued => Self::Queued,
@@ -1015,9 +1015,9 @@ pub enum QueueMessage {
     TaskFailed {id:u32,target:String,eta:Eta}
 }
 #[cfg(feature="ssr")]
-impl From<immt_system::building::QueueMessage> for QueueMessage {
-  fn from(e:immt_system::building::QueueMessage) -> Self {
-    use immt_system::building::QueueMessage;
+impl From<flams_system::building::QueueMessage> for QueueMessage {
+  fn from(e:flams_system::building::QueueMessage) -> Self {
+    use flams_system::building::QueueMessage;
     match e {
       QueueMessage::Idle(v) => Self::Idle(v.into_iter().map(Into::into).collect()),
       QueueMessage::Started {running,queue,blocked,failed,done} => Self::Started {

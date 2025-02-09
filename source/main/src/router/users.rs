@@ -61,13 +61,13 @@ pub async fn set_admin(user_id:i64, is_admin:bool) -> Result<(),ServerFnError<Lo
 #[component]
 pub(crate) fn Users() -> impl IntoView {
   let r = Resource::new(|| (),|()| get_users());
-  view!{<Suspense fallback = || view!(<immt_web_utils::components::Spinner/>)>{move ||
+  view!{<Suspense fallback = || view!(<flams_web_utils::components::Spinner/>)>{move ||
     match r.get() {
       Some(Ok(users)) if users.is_empty() => leptos::either::EitherOf4::A("(No users)"),
       Some(Err(e)) => leptos::either::EitherOf4::B(
-        immt_web_utils::components::display_error(e.to_string().into())
+        flams_web_utils::components::display_error(e.to_string().into())
       ),
-      None => leptos::either::EitherOf4::C(view!(<immt_web_utils::components::Spinner/>)),
+      None => leptos::either::EitherOf4::C(view!(<flams_web_utils::components::Spinner/>)),
       Some(Ok(users)) => leptos::either::EitherOf4::D(user_table(users))
     }
   }</Suspense>}

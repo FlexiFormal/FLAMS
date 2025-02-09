@@ -1,4 +1,4 @@
-use immt_web_utils::inject_css;
+use flams_web_utils::inject_css;
 use leptos::prelude::*;
 
 
@@ -10,8 +10,8 @@ use leptos::prelude::*;
 )]
 #[cfg_attr(feature="ssr", tracing::instrument(level = "info", name = "query", target="query", skip_all))]
 pub async fn query_api(query:String) -> Result<String,ServerFnError<String>> {
-  use immt_system::backend::GlobalBackend;
-  use immt_system::backend::rdf::QueryResult;
+  use flams_system::backend::GlobalBackend;
+  use flams_system::backend::rdf::QueryResult;
   use tracing::Instrument;
   tracing::info!("Query: {query}");
   let r = tokio::task::spawn_blocking(move || {
@@ -33,7 +33,7 @@ const QUERY:&str = r"SELECT ?x ?y WHERE {
 #[component]
 pub fn Query() -> impl IntoView {
   use leptos::form::ActionForm;
-  inject_css("immt-query", include_str!("query.css"));
+  inject_css("flams-query", include_str!("query.css"));
 
   let action = ServerAction::<QueryApi>::new();
   let rf = NodeRef::<leptos::html::Div>::new();
@@ -48,8 +48,8 @@ pub fn Query() -> impl IntoView {
     <div>
       <h1>Query</h1>
       <ActionForm action>
-          <span class="immt-query-container">
-              <textarea name="query" class="immt-query-inner">{QUERY.to_string()}</textarea>
+          <span class="flams-query-container">
+              <textarea name="query" class="flams-query-inner">{QUERY.to_string()}</textarea>
           </span>
           <br/><input type="submit" value="Query"/>
       </ActionForm>

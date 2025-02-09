@@ -1,5 +1,5 @@
 [package]
-name = "immt-ontology"
+name = "flams-ontology"
 version = "0.0.1"
 edition = "2021"
 
@@ -12,12 +12,12 @@ serde_json = {workspace=true}
 [features]
 rdf = ["dep:oxrdf"]
 tokio = ["dep:tokio"]
-serde = ["dep:serde","immt-utils/serde","smallvec/serde"]
+serde = ["dep:serde","flams-utils/serde","smallvec/serde"]
 wasm = ["serde","dep:wasm-bindgen","dep:tsify-next","dep:serde_json"]
 
 [dependencies]
 oxrdf = {workspace=true,optional=true}
-immt-utils = {workspace=true}
+flams-utils = {workspace=true}
 lazy_static = {workspace=true}
 triomphe = {workspace=true}
 parking_lot = {workspace=true}

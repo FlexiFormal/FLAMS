@@ -1,15 +1,15 @@
 use std::num::NonZeroU32;
 
-use immt_ontology::uris::ArchiveId;
-use immt_utils::vecmap::VecMap;
+use flams_ontology::uris::ArchiveId;
+use flams_utils::vecmap::VecMap;
 use leptos::prelude::*;
 use either::Either;
 
 use crate::users::LoginState;
 
 #[cfg(feature="ssr")]
-pub(crate) fn get_oauth() -> Result<(immt_git::gl::auth::GitLabOAuth,String),ServerFnError<String>> {
-  use immt_git::gl::auth::GitLabOAuth;
+pub(crate) fn get_oauth() -> Result<(flams_git::gl::auth::GitLabOAuth,String),ServerFnError<String>> {
+  use flams_git::gl::auth::GitLabOAuth;
   let Some(session)= use_context::<axum_login::AuthSession<crate::server::db::DBBackend>>() else {
     return Err("Internal Error".to_string().into())
   };
@@ -31,7 +31,7 @@ pub enum GitState {
   },
   Live {
     commit:String,
-    updates:Vec<(String,immt_git::Commit)>
+    updates:Vec<(String,flams_git::Commit)>
   }
 }
 
@@ -40,10 +40,10 @@ pub enum GitState {
   prefix="/api/gitlab",
   endpoint="get_archives",
 )]
-pub async fn get_archives() -> Result<Vec<(immt_git::Project,ArchiveId,GitState)>,ServerFnError<String>> {
-  use immt_git::gl::auth::GitLabOAuth;
-  use immt_git::gl::auth::AccessToken;
-  use immt_system::backend::{Backend,AnyBackend,GlobalBackend,archives::Archive,SandboxedRepository};
+pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState)>,ServerFnError<String>> {
+  use flams_git::gl::auth::GitLabOAuth;
+  use flams_git::gl::auth::AccessToken;
+  use flams_system::backend::{Backend,AnyBackend,GlobalBackend,archives::Archive,SandboxedRepository};
   let (oauth,secret) = get_oauth()?;
   let r = oauth.get_projects(secret.clone()).await
     .map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?;
@@ -58,11 +58,11 @@ pub async fn get_archives() -> Result<Vec<(immt_git::Project,ArchiveId,GitState)
   }
   tokio::task::spawn_blocking(move || {
     let backend = GlobalBackend::get();
-    let gitlab_url = &**immt_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
+    let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
     let mut manageds = backend.all_archives().iter().filter_map(|a| {
       let Archive::Local(a) = a else {return None};
       if !r2.iter().any(|(_,id)| id == a.id()) { return None }
-      immt_git::repos::GitRepo::open(a.path()).ok().and_then(|git| {
+      flams_git::repos::GitRepo::open(a.path()).ok().and_then(|git| {
         git.get_origin_url().ok().and_then(|url| {
           if url.starts_with(gitlab_url) {
             let newer = git.get_new_commits_with_oauth(&secret).ok().unwrap_or_default();
@@ -74,7 +74,7 @@ pub async fn get_archives() -> Result<Vec<(immt_git::Project,ArchiveId,GitState)
       })
     }).collect::<VecMap<_,_>>();
 
-    use immt_system::building::{queue_manager::QueueManager,QueueName};
+    use flams_system::building::{queue_manager::QueueManager,QueueName};
     let mut building = VecMap::new();
     QueueManager::get().with_all_queues(|qs| {
       for (qid,q) in qs {
@@ -105,7 +105,7 @@ pub async fn get_archives() -> Result<Vec<(immt_git::Project,ArchiveId,GitState)
   prefix="/api/gitlab",
   endpoint="get_branches",
 )]
-pub async fn get_branches(id:u64) -> Result<Vec<immt_git::Branch>,ServerFnError<String>> {
+pub async fn get_branches(id:u64) -> Result<Vec<flams_git::Branch>,ServerFnError<String>> {
   let (oauth,secret) = get_oauth()?;
   oauth.get_branches(id, secret).await
   .map_err(|e| ServerFnError::WrappedServerError(e.to_string()))
@@ -117,9 +117,9 @@ pub async fn get_branches(id:u64) -> Result<Vec<immt_git::Branch>,ServerFnError<
   endpoint="update_from_branch",
 )]
 pub async fn update_from_branch(id:Option<NonZeroU32>,archive:ArchiveId,url:String,branch:String) -> Result<(usize,NonZeroU32),ServerFnError<String>> {
-  use immt_system::building::{queue_manager::QueueManager,QueueName};
-  use immt_system::backend::{AnyBackend,GlobalBackend,SandboxedRepository,Backend,archives::Archive};
-  use immt_system::formats::FormatOrTargets;
+  use flams_system::building::{queue_manager::QueueManager,QueueName};
+  use flams_system::backend::{AnyBackend,GlobalBackend,SandboxedRepository,Backend,archives::Archive};
+  use flams_system::formats::FormatOrTargets;
   let (oauth,secret) = get_oauth()?;
   let login = LoginState::get_server();
   if matches!(login,LoginState::NoAccounts) {
@@ -131,7 +131,7 @@ pub async fn update_from_branch(id:Option<NonZeroU32>,archive:ArchiveId,url:Stri
       backend.require(&archive);
       let path = backend.path_for(&archive);
       if !path.exists() { return Err(format!("Archive {archive} not found!"))}
-      let repo = immt_git::repos::GitRepo::open(&path)
+      let repo = flams_git::repos::GitRepo::open(&path)
         .map_err(|e| e.to_string())?;
       repo.fetch_branch_from_oauth(&secret,&branch,false).map_err(|e| e.to_string())?;
       let commit = repo.current_commit_on(&branch).map_err(|e| e.to_string())?;
@@ -158,9 +158,9 @@ pub async fn update_from_branch(id:Option<NonZeroU32>,archive:ArchiveId,url:Stri
   endpoint="clone_to_queue",
 )]
 pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,branch:String,has_release:bool) -> Result<(usize,NonZeroU32),ServerFnError<String>> {
-  use immt_system::building::{queue_manager::QueueManager,QueueName};
-  use immt_system::backend::{AnyBackend,SandboxedRepository,Backend,archives::Archive};
-  use immt_system::formats::FormatOrTargets;
+  use flams_system::building::{queue_manager::QueueManager,QueueName};
+  use flams_system::backend::{AnyBackend,SandboxedRepository,Backend,archives::Archive};
+  use flams_system::formats::FormatOrTargets;
   let (oauth,secret) = get_oauth()?;
   let login = LoginState::get_server();
   if matches!(login,LoginState::NoAccounts) {
@@ -175,7 +175,7 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
         let _ = std::fs::remove_dir_all(&path);
       }
       let commit = if has_release {
-        let repo = immt_git::repos::GitRepo::clone_from_oauth(&secret, &url, "release", &path, false)
+        let repo = flams_git::repos::GitRepo::clone_from_oauth(&secret, &url, "release", &path, false)
           .map_err(|e| e.to_string())?;
         repo.fetch_branch_from_oauth(&secret,&branch,false).map_err(|e| e.to_string())?;
         let commit = repo.current_commit_on(&branch).map_err(|e| e.to_string())?;
@@ -183,7 +183,7 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
         repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
         repo.current_commit().map_err(|e| e.to_string())?
       } else {
-        let repo = immt_git::repos::GitRepo::clone_from_oauth(&secret,&url, &branch, &path,false)
+        let repo = flams_git::repos::GitRepo::clone_from_oauth(&secret,&url, &branch, &path,false)
           .map_err(|e| e.to_string())?;
         let commit = repo.current_commit().map_err(|e| e.to_string())?;
         repo.new_branch("release").map_err(|e| e.to_string())?;
@@ -209,13 +209,13 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
 #[component]
 pub fn Archives() -> impl IntoView {
   let r = Resource::new(|| (),|()| get_archives());
-  view!{<Suspense fallback = || view!(<immt_web_utils::components::Spinner/>)>{move ||
+  view!{<Suspense fallback = || view!(<flams_web_utils::components::Spinner/>)>{move ||
     match r.get() {
       Some(Ok(projects)) if projects.is_empty() => leptos::either::EitherOf4::A("(No archives)"),
       Some(Err(e)) => leptos::either::EitherOf4::B(
-        immt_web_utils::components::display_error(e.to_string().into())
+        flams_web_utils::components::display_error(e.to_string().into())
       ),
-      None => leptos::either::EitherOf4::C(view!(<immt_web_utils::components::Spinner/>)),
+      None => leptos::either::EitherOf4::C(view!(<flams_web_utils::components::Spinner/>)),
       Some(Ok(projects)) => leptos::either::EitherOf4::D(do_projects(projects))
     }
   }</Suspense>}
@@ -257,7 +257,7 @@ impl ProjectTree {
 }
 
 impl ProjectTree {
-  fn add(&mut self,repo: immt_git::Project,id:ArchiveId,state:GitState) {
+  fn add(&mut self,repo: flams_git::Project,id:ArchiveId,state:GitState) {
     use thaw::ToasterInjection;
     let mut steps = id.steps().enumerate().peekable();
     let mut current = self;
@@ -309,8 +309,8 @@ impl ProjectTree {
   }
 }
 
-fn do_projects(vec:Vec<(immt_git::Project,ArchiveId,GitState)>) -> impl IntoView {
-  use immt_web_utils::components::{Tree,Subtree,Leaf,Header};
+fn do_projects(vec:Vec<(flams_git::Project,ArchiveId,GitState)>) -> impl IntoView {
+  use flams_web_utils::components::{Tree,Subtree,Leaf,Header};
   use thaw::Caption1Strong;
 
   let queue = RwSignal::new(None);
@@ -377,7 +377,7 @@ fn managed(name:ArchiveId,id:u64,state:&GitState,default_branch:Option<String>,g
         let QueueSignal(queue,get_queues) = expect_context();
         let commit_map:VecMap<_,_> = updates.clone().into();
         let namecl = name.clone();
-        let act = immt_web_utils::components::message_action(
+        let act = flams_web_utils::components::message_action(
           move |()| update_from_branch(queue.get_untracked(),namecl.clone(),git_url.clone(),branch.get_untracked()),
           move |(i,q)| {
             let commit = commit_map.get(&branch.get_untracked()).unwrap_or_else(|| unreachable!()).clone();
@@ -425,10 +425,10 @@ fn unmanaged(name:ArchiveId,id:u64,and_then:RwSignal<GitState>,git_url:String) -
   });
   view!{
     <span style="color:grey">{name_str}" (unmanaged) "</span>
-    <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move ||
+    <Suspense fallback=|| view!(<flams_web_utils::components::Spinner/>)>{move ||
       match r.get() {
-        Some(Err(e)) => leptos::either::EitherOf3::B(immt_web_utils::components::display_error(e.to_string().into())),
-        None => leptos::either::EitherOf3::C(view!(<immt_web_utils::components::Spinner/>)),
+        Some(Err(e)) => leptos::either::EitherOf3::B(flams_web_utils::components::display_error(e.to_string().into())),
+        None => leptos::either::EitherOf3::C(view!(<flams_web_utils::components::Spinner/>)),
         Some(Ok((branches,has_release))) => leptos::either::EitherOf3::A({
           let first = branches.first().map(|f| f.name.clone()).unwrap_or_default();
           let branch = RwSignal::new(first.clone());
@@ -439,7 +439,7 @@ fn unmanaged(name:ArchiveId,id:u64,and_then:RwSignal<GitState>,git_url:String) -
           let name = name.clone();
           let git_url = git_url.clone();
           let commit_map : VecMap<_,_> = branches.iter().map(|b| (b.name.clone(),b.commit.clone())).collect();
-          let act = immt_web_utils::components::message_action(
+          let act = flams_web_utils::components::message_action(
             move |()| clone_to_queue(queue.get_untracked(),name.clone(),git_url.clone(),branch.get_untracked(),has_release),
             move |(i,q)| {
               let commit = commit_map.get(&branch.get_untracked()).unwrap_or_else(|| unreachable!()).clone();
@@ -470,17 +470,17 @@ fn unmanaged(name:ArchiveId,id:u64,url:String,parents:Vec<Project>) -> impl Into
   let r = Resource::new(|| (),move |()| get_branches(id));
   view!{
     <span style="color:grey">{name.to_string()}" (unmanaged) "</span>
-    <Suspense fallback=|| view!(<immt_web_utils::components::Spinner/>)>{move ||
+    <Suspense fallback=|| view!(<flams_web_utils::components::Spinner/>)>{move ||
       match r.get() {
         Some(Ok(b)) => leptos::either::EitherOf3::A(branches(b,name.clone(),url.clone(),parents.clone())),
-        Some(Err(e)) => leptos::either::EitherOf3::B(immt_web_utils::components::error_toast(e.to_string().into())),
-        None => leptos::either::EitherOf3::C(view!(<immt_web_utils::components::Spinner/>))
+        Some(Err(e)) => leptos::either::EitherOf3::B(flams_web_utils::components::error_toast(e.to_string().into())),
+        None => leptos::either::EitherOf3::C(view!(<flams_web_utils::components::Spinner/>))
       }
     }</Suspense>
   }
 }
 
-fn branches(mut branches:Vec<immt_git::Branch>,name:ArchiveId,url:String,parents:Vec<Project>) -> impl IntoView {
+fn branches(mut branches:Vec<flams_git::Branch>,name:ArchiveId,url:String,parents:Vec<Project>) -> impl IntoView {
   use thaw::{Select,Divider,Button,ButtonSize,ToasterInjection,MessageBar,MessageBarIntent,MessageBarBody,ToastOptions,ToastPosition,Dialog,DialogSurface,DialogBody,DialogContent};
   tracing::info!("{name} - parents: {parents:?}");
 

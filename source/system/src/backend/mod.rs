@@ -6,7 +6,7 @@ pub mod rdf;
 use archives::{manager::ArchiveManager, source_files::FileState, Archive, ArchiveGroup, ArchiveOrGroup, ArchiveTree, LocalArchive};
 use cache::BackendCache;
 use docfile::PreDocFile;
-use immt_ontology::{
+use flams_ontology::{
     content::{
         checking::ModuleChecker, declarations::{Declaration, DeclarationTrait, OpenDeclaration}, modules::Module, terms::Term, ContentReference, ModuleLike
     }, languages::Language, narration::{
@@ -15,7 +15,7 @@ use immt_ontology::{
         ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIWithLanguage
     }, Checked, DocumentRange, LocalBackend, Unchecked
 };
-use immt_utils::{prelude::{HMap, TreeLike}, triomphe, vecmap::{VecMap, VecSet}, CSS};
+use flams_utils::{prelude::{HMap, TreeLike}, triomphe, vecmap::{VecMap, VecSet}, CSS};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use rdf::RDFStore;
@@ -81,7 +81,7 @@ pub trait Backend {
 
     //fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R where Self:Sized;
 
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>)
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=flams_ontology::rdf::Triple>)
         where Self:Sized;
     
     fn with_archive<R>(&self, id: &ArchiveId, f: impl FnOnce(Option<&Archive>) -> R) -> R
@@ -95,7 +95,7 @@ pub trait Backend {
         d:&DocumentURI,range:DocumentRange
     ) -> Option<(Vec<CSS>,String)>;
 
-    fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T>
+    fn get_reference<T:flams_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T>
     where Self:Sized;
     
     #[allow(unreachable_patterns)]
@@ -114,7 +114,7 @@ pub trait Backend {
 
     fn get_notations(&self,uri:&SymbolURI) -> Option<VecSet<(DocumentElementURI,Notation)>> where Self:Sized {
         use rdf::sparql::{Select,Var};
-        use immt_ontology::rdf::ontologies::ulo2;
+        use flams_ontology::rdf::ontologies::ulo2;
         let iri = uri.to_iri();
         let q = Select {
             subject: Var('n'),
@@ -243,7 +243,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T:flams_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
         match self {
             Self::Global(b) => b.get_reference(rf),
             Self::Temp(b) => b.get_reference(rf),
@@ -274,7 +274,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=flams_ontology::rdf::Triple>) {
         match self {
             Self::Global(b) => b.submit_triples(in_doc,rel_path,iter),
             Self::Temp(b) => b.submit_triples(in_doc,rel_path,iter),
@@ -387,7 +387,7 @@ impl GlobalBackend {
         self.cache.write().clear();
         self.archives.reinit(|_| (), crate::settings::Settings::get().mathhubs.iter().map(|b| &**b));
         self.triple_store.clear();
-        immt_utils::background(|| {
+        flams_utils::background(|| {
             let global = GlobalBackend::get();
             global.triple_store.load_archives(&global.all_archives());
         });
@@ -514,12 +514,12 @@ impl Backend for &'static GlobalBackend {
     }
 
     #[inline]
-    fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T:flams_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
         GlobalBackend::get_reference(self,rf)
     }
 
     #[inline]
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=flams_ontology::rdf::Triple>) {
         GlobalBackend::submit_triples(self,in_doc,rel_path,iter);
     }
 
@@ -579,7 +579,7 @@ impl Backend for GlobalBackend {
         )
     }
 
-    fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T:flams_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
         self.archives.with_archive(rf.in_doc.archive_id(),|a|
             a.and_then(|a| a.load_reference(rf.in_doc.path(), rf.in_doc.name().first_name(), rf.in_doc.language(),DocumentRange {start:rf.start, end:rf.end}))
         )
@@ -598,7 +598,7 @@ impl Backend for GlobalBackend {
         )
     }
 
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=flams_ontology::rdf::Triple>) {
         self.archives.with_archive(in_doc.archive_id(), |a| {
             if let Some(a) = a {
                 a.submit_triples(in_doc,rel_path,self.triple_store(),true,iter);
@@ -752,7 +752,7 @@ impl Backend for TemporaryBackend {
         )
     }
 
-    fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T:flams_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
         self.inner.html.lock().get(&rf.in_doc).map_or_else(
             || self.inner.parent.get_reference(rf),
             |html| {
@@ -795,7 +795,7 @@ impl Backend for TemporaryBackend {
     }
 
     #[inline]
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>)
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=flams_ontology::rdf::Triple>)
             where Self:Sized {
         self.inner.parent.submit_triples(in_doc,rel_path,iter);
     }
@@ -807,7 +807,7 @@ pub enum SandboxedRepository {
     Git{
         id: ArchiveId,
         branch:Box<str>,
-        commit:immt_git::Commit,
+        commit:flams_git::Commit,
         remote:Box<str>
     }
 }
@@ -914,7 +914,7 @@ impl SandboxedBackend {
                     if same_fs(source,&target) {
                         let _ = std::fs::rename(source, target);
                     } else {
-                        let _ = immt_utils::fs::copy_dir_all(source,&target);
+                        let _ = flams_utils::fs::copy_dir_all(source,&target);
                     }
                 }
             }, Settings::get().mathhubs.iter().map(|p| &**p)), 
@@ -925,7 +925,7 @@ impl SandboxedBackend {
         sandbox_cache.clear();
         drop(global_cache);
         drop(sandbox_cache);
-        immt_utils::background(|| {
+        flams_utils::background(|| {
             let global = GlobalBackend::get();
             global.triple_store.load_archives(&global.all_archives());
         });
@@ -1034,7 +1034,7 @@ impl SandboxedBackend {
         let path = a.path();
         let target = self.0.path.join(a.id().as_ref());
         tracing::info!("copying archive {} to {}",a.id(),target.display());
-        if let Err(e) = immt_utils::fs::copy_dir_all(path,&target) {
+        if let Err(e) = flams_utils::fs::copy_dir_all(path,&target) {
             tracing::error!("could not copy archive {}: {e}",a.id());
         }
     }
@@ -1055,7 +1055,7 @@ impl Backend for SandboxedBackend {
             a.and_then(|a| a.load_html_fragment(d.path(), d.name().first_name(), d.language(),range))
         )
     }
-    fn get_reference<T:immt_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T:flams_ontology::Resourcable>(&self,rf:&LazyDocRef<T>) -> Option<T> {
         self.with_archive(rf.in_doc.archive_id(),|a|
             a.and_then(|a| a.load_reference(rf.in_doc.path(), rf.in_doc.name().first_name(), rf.in_doc.language(),DocumentRange {start:rf.start, end:rf.end}))
         )
@@ -1078,7 +1078,7 @@ impl Backend for SandboxedBackend {
         )
     }
 
-    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=immt_ontology::rdf::Triple>) {
+    fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=flams_ontology::rdf::Triple>) {
         self.0.manager.with_archive(in_doc.archive_id(), |a| {
             if let Some(a) = a {
                 a.submit_triples(in_doc,rel_path,GlobalBackend::get().triple_store(),false,iter);
@@ -1245,7 +1245,7 @@ impl LocalBackend for GlobalFlattener<'_> {
     fn get_declaration<T: DeclarationTrait>(
         &mut self,
         uri: &SymbolURI,
-    ) -> Option<immt_ontology::content::ContentReference<T>> {
+    ) -> Option<flams_ontology::content::ContentReference<T>> {
         let m = self.get_module(uri.module())?;
         // TODO this unnecessarily clones
         ContentReference::new(&m, uri.name())
@@ -1330,7 +1330,7 @@ impl LocalBackend for SandboxFlattener<'_> {
     fn get_declaration<T: DeclarationTrait>(
         &mut self,
         uri: &SymbolURI,
-    ) -> Option<immt_ontology::content::ContentReference<T>> {
+    ) -> Option<flams_ontology::content::ContentReference<T>> {
         let m = self.get_module(uri.module())?;
         // TODO this unnecessarily clones
         ContentReference::new(&m, uri.name())
@@ -1380,7 +1380,7 @@ impl<'a,W:std::fmt::Write,B:Backend> TermPresenter<'a,W,B> {
 
     fn load_notation(backend:&B,uri:&SymbolURI,needs_op:bool) -> Option<Notation> {
         use rdf::sparql::{Select,Var};
-        use immt_ontology::rdf::ontologies::ulo2;
+        use flams_ontology::rdf::ontologies::ulo2;
         let iri = uri.to_iri();
         let q = Select {
             subject: Var('n'),
@@ -1443,7 +1443,7 @@ impl<'a,W:std::fmt::Write,B:Backend> std::fmt::Write for TermPresenter<'a,W,B> {
 impl<'a,W:std::fmt::Write,B:Backend> Presenter for TermPresenter<'a,W,B> {
     type N = Rc<Notation>;
     #[inline]
-    fn cont(&mut self,tm:&immt_ontology::content::terms::Term) -> Result<(),PresentationError> {
+    fn cont(&mut self,tm:&flams_ontology::content::terms::Term) -> Result<(),PresentationError> {
         tm.present(self)
     }
 

@@ -1,11 +1,11 @@
-use immt_lsp::{annotations::to_diagnostic,async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LanguageClient}, state::LSPState, IMMTLSPServer, ProgressCallbackServer};
+use flams_lsp::{annotations::to_diagnostic,async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LanguageClient}, state::LSPState, FLAMSLSPServer, ProgressCallbackServer};
 
-use immt_ontology::uris::{DocumentURI, URIRefTrait};
-use immt_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive}, GlobalBackend}, settings::Settings};
-use immt_utils::{prelude::TreeChildIter, time::measure};
+use flams_ontology::uris::{DocumentURI, URIRefTrait};
+use flams_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive}, GlobalBackend}, settings::Settings};
+use flams_utils::{prelude::TreeChildIter, time::measure};
 use tower::ServiceBuilder;
 use tracing::Level;
-use immt_lsp::async_lsp::lsp_types as lsp;
+use flams_lsp::async_lsp::lsp_types as lsp;
 
 use crate::users::LoginState;
 
@@ -36,7 +36,7 @@ impl STDIOLSPServer {
   }
 }
 
-impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
+impl flams_lsp::FLAMSLSPServer for STDIOLSPServer {
   #[inline]
   fn client_mut(&mut self) -> &mut ClientSocket {
     &mut self.client
@@ -79,9 +79,9 @@ impl immt_lsp::IMMTLSPServer for STDIOLSPServer {
 
 impl STDIOLSPServer {
   #[allow(clippy::let_and_return)]
-  fn new_router(client:ClientSocket,on_port:tokio::sync::watch::Receiver<Option<u16>>) -> Router<immt_lsp::ServerWrapper<Self>> {
+  fn new_router(client:ClientSocket,on_port:tokio::sync::watch::Receiver<Option<u16>>) -> Router<flams_lsp::ServerWrapper<Self>> {
     let _ = GLOBAL_STATE.set(LSPState::default());
-    let server = immt_lsp::ServerWrapper::new(Self {client,on_port,workspaces:Vec::new()});
+    let server = flams_lsp::ServerWrapper::new(Self {client,on_port,workspaces:Vec::new()});
     server.router()
     //let /*mut*/ router = Router::from_language_server();
     //router.event(Self::on_tick);
@@ -97,7 +97,7 @@ impl STDIOLSPServer {
 #[allow(clippy::future_not_send)]
 /// #### Panics
 pub async fn lsp(on_port:tokio::sync::watch::Receiver<Option<u16>>) {
-  let (server,_client) = immt_lsp::async_lsp::MainLoop::new_server(|client| {
+  let (server,_client) = flams_lsp::async_lsp::MainLoop::new_server(|client| {
     /*tokio::spawn({
       let client = client.clone();
       async move {
@@ -119,7 +119,7 @@ pub async fn lsp(on_port:tokio::sync::watch::Receiver<Option<u16>>) {
       .service(STDIOLSPServer::new_router(client,on_port))
   });
 
-  let debug = immt_system::settings::Settings::get().debug;
+  let debug = flams_system::settings::Settings::get().debug;
 
   tracing_subscriber::fmt()
     .with_max_level(Level::INFO)//(if debug {Level::TRACE} else {Level::INFO})
@@ -129,8 +129,8 @@ pub async fn lsp(on_port:tokio::sync::watch::Receiver<Option<u16>>) {
     .init();
   #[cfg(unix)]
   let (stdin,stdout) = (
-    immt_lsp::async_lsp::stdio::PipeStdin::lock_tokio().expect("Failed to lock stdin"),
-    immt_lsp::async_lsp::stdio::PipeStdout::lock_tokio().expect("Failed to lock stdout")
+    flams_lsp::async_lsp::stdio::PipeStdin::lock_tokio().expect("Failed to lock stdin"),
+    flams_lsp::async_lsp::stdio::PipeStdout::lock_tokio().expect("Failed to lock stdout")
   );
   #[cfg(not(unix))]
   let (stdin,stdout) = (
@@ -151,7 +151,7 @@ impl ServerURL {
 }
 impl lsp::notification::Notification for ServerURL {
     type Params = String;
-    const METHOD : &str = "immt/serverURL";
+    const METHOD : &str = "flams/serverURL";
 }
 
 
@@ -160,7 +160,7 @@ struct WSLSPServer {
   state:LSPState
 }
 
-impl immt_lsp::IMMTLSPServer for WSLSPServer {
+impl flams_lsp::FLAMSLSPServer for WSLSPServer {
   #[inline]
   fn client_mut(&mut self) -> &mut ClientSocket {
     &mut self.client
@@ -188,7 +188,7 @@ pub(crate) async fn register(
     }
   };
   match login {
-    LoginState::NoAccounts | LoginState::Admin => immt_lsp::ws::upgrade(ws, |c| WSLSPServer { client: c, state:LSPState::default() }),
+    LoginState::NoAccounts | LoginState::Admin => flams_lsp::ws::upgrade(ws, |c| WSLSPServer { client: c, state:LSPState::default() }),
     _ => {
       let mut res = axum::response::Response::new(axum::body::Body::empty());
       *(res.status_mut()) = http::StatusCode::UNAUTHORIZED;
@@ -201,9 +201,9 @@ pub(crate) async fn register(
 async fn linter() {
   tracing_subscriber::fmt().init();
   let _ce = color_eyre::install();
-  let mut spec = immt_system::settings::SettingsSpec::default();
+  let mut spec = flams_system::settings::SettingsSpec::default();
   spec.lsp = true;
-  immt_system::initialize(spec);
+  flams_system::initialize(spec);
   let state = LSPState::default();
   let _ = GLOBAL_STATE.set(state.clone());
   tracing::info!("Waiting for stex to load...");

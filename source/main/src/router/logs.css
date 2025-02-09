@@ -1,36 +1,36 @@
-.immt-log-list {
+.flams-log-list {
     width: fit-content;
 }
-.immt-log-elem {
+.flams-log-elem {
     text-align: left;
 }
-.immt-log-elem details {
+.flams-log-elem details {
     display: inline-block;
 }
 
-.immt-log-error {
+.flams-log-error {
     color: var(--colorStatusDangerForeground1);
 }
-.immt-log-warn {
+.flams-log-warn {
     color: var(--colorStatusWarningForeground3) ;
 }
-.immt-log-info {
+.flams-log-info {
     color: var(--colorPaletteYellowForeground1);
 }
-.immt-log-debug {
+.flams-log-debug {
     color: var(--colorBrandForeground1);
 }
-.immt-log-trace {
+.flams-log-trace {
     color: var(--colorNeutralStencil1);
 }
-.immt-spinner-inline {
+.flams-spinner-inline {
     display:inline-block;
     vertical-align:middle;
     transform-origin: center;
     transform: scale(0.5);
 }
 
-.immt-log-frame {
+.flams-log-frame {
     font-family: monospace;
     overflow-y: scroll;
     height: 68%;
@@ -41,7 +41,7 @@
     font-size: smaller;
 }
 
-.immt-warn-frame {
+.flams-warn-frame {
     font-family: monospace;
     overflow-y: scroll;
     margin-top: auto;

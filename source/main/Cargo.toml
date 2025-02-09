@@ -1,21 +1,21 @@
 [package]
-name = "immt"
+name = "flams"
 version = "0.0.1"
 edition = "2021"
-description = "iMᴍᴛ - Generic knowledge management system for flexiformal knowledge"
+description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 
 [lib]
 crate-type = ["cdylib","rlib"]
 
 #[[bin]]
-#name = "immt"
+#name = "flams"
 
 [features]
 docs = []
 ssr = [
-  "dep:immt-system", 
-  "dep:immt-stex",
-  "dep:immt-shtml",
+  "dep:flams-system", 
+  "dep:flams-stex",
+  "dep:flams-ftml",
   "dep:tokio", 
   "dep:toml", 
   "dep:color-eyre", 
@@ -37,9 +37,9 @@ ssr = [
   "dep:password-hash",
   "dep:argon2",
   "dep:http",
-  "immt-web-utils/ssr",
-  "shtml-viewer-components/ssr",
-  "dep:immt-lsp",
+  "flams-web-utils/ssr",
+  "ftml-viewer-components/ssr",
+  "dep:flams-lsp",
   "dep:tracing-subscriber",
   "dep:tokio-util",
   "dep:rayon",
@@ -47,8 +47,8 @@ ssr = [
   "dep:image",
   "dep:webp",
   "dep:dashmap",
-  "immt-git/gitlab",
-  "immt-git/git2",
+  "flams-git/gitlab",
+  "flams-git/git2",
 ]
 hydrate = [
   "dep:console_error_panic_hook",
@@ -57,9 +57,9 @@ hydrate = [
   "dep:wasm-bindgen",
   "tracing/release_max_level_info",
   "dep:tracing-wasm",
-  "immt-web-utils/hydrate",
+  "flams-web-utils/hydrate",
   "leptos-dyn-dom/hydrate",
-  "shtml-viewer-components/hydrate",
+  "ftml-viewer-components/hydrate",
 ]
 
 [dev-dependencies]
@@ -79,25 +79,25 @@ thaw = {workspace=true}
 serde = {workspace=true}
 serde_json = {workspace=true}
 tracing = {workspace=true}
-immt-web-utils = {workspace=true}
+flams-web-utils = {workspace=true}
 icondata_bi = {workspace=true}
 icondata_ai = {workspace=true}
-immt-utils = {workspace=true,features=["serde"]}
-immt-ontology = {workspace=true,features=["serde"]}
+flams-utils = {workspace=true,features=["serde"]}
+flams-ontology = {workspace=true,features=["serde"]}
 either = {workspace = true}
 const-str = {workspace = true}
-shtml-viewer-components = {workspace = true, features=["omdoc"]}
+ftml-viewer-components = {workspace = true, features=["omdoc"]}
 leptos-dyn-dom = {workspace = true}
 paste = {workspace=true}
 lazy_static = {workspace=true}
-immt-git = {workspace=true}
+flams-git = {workspace=true}
 urlencoding = {workspace=true}
 
 # ssr
-immt-system = {workspace=true,features=["gitlab"],optional=true}
-immt-lsp = {workspace=true,optional=true, features=["ws"]}
-immt-stex = {workspace=true,optional=true}
-immt-shtml = {workspace=true,optional=true}
+flams-system = {workspace=true,features=["gitlab"],optional=true}
+flams-lsp = {workspace=true,optional=true, features=["ws"]}
+flams-stex = {workspace=true,optional=true}
+flams-ftml = {workspace=true,optional=true}
 tex_engine = {workspace=true,optional=true}
 
 tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}

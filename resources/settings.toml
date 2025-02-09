@@ -1,13 +1,13 @@
 # debug = true
-# log_dir = "~/.immt/log"
-# temp_dir = "~/.immt/tmp"
-# database = "~/.immt/users.sqlite"
+# log_dir = "~/.flams/log"
+# temp_dir = "~/.flams/tmp"
+# database = "~/.flams/users.sqlite"
 
 [server]
 # port = 3000
 # ip = "127.0.0.1"
 # admin_pwd = "foobar"
-# external_url = "https://immt.mathhub.info"
+# external_url = "https://flams.mathhub.info"
 
 [buildqueue]
 # num_threads=6

@@ -1,9 +1,9 @@
-use immt_ontology::languages::Language;
-use immt_ontology::narration::exercises::CognitiveDimension;
-use immt_ontology::narration::LOKind;
-use immt_ontology::rdf::ontologies::ulo2;
-use immt_ontology::rdf::{NamedNode, Quad, Triple};
-use immt_ontology::uris::{ArchiveURIRef, DocumentElementURI, DocumentURI, PathURITrait, SymbolURI, URIOrRefTrait, URIRefTrait, URITrait};
+use flams_ontology::languages::Language;
+use flams_ontology::narration::exercises::CognitiveDimension;
+use flams_ontology::narration::LOKind;
+use flams_ontology::rdf::ontologies::ulo2;
+use flams_ontology::rdf::{NamedNode, Quad, Triple};
+use flams_ontology::uris::{ArchiveURIRef, DocumentElementURI, DocumentURI, PathURITrait, SymbolURI, URIOrRefTrait, URIRefTrait, URITrait};
 use oxigraph::sparql::QuerySolutionIter;
 use oxrdfio::RdfFormat;
 use std::fmt::{Debug, Display};
@@ -15,18 +15,18 @@ use std::string::FromUtf8Error;
 use tracing::instrument;
 
 pub mod sparql {
-    use immt_ontology::{rdf::ontologies::{self, ulo2}, uris::{SymbolURI, URIOrRefTrait}};
+    use flams_ontology::{rdf::ontologies::{self, ulo2}, uris::{SymbolURI, URIOrRefTrait}};
     pub use oxigraph::sparql::*;
     pub use spargebra::{SparqlSyntaxError,Query as QueryBuilder};
     pub struct Var(pub char);
     impl From<Var> for spargebra::term::TermPattern {
         fn from(v:Var) -> Self {
-            Self::Variable(immt_ontology::rdf::Variable::new_unchecked(v.0))
+            Self::Variable(flams_ontology::rdf::Variable::new_unchecked(v.0))
         }
     }
     impl From<Var> for spargebra::term::NamedNodePattern {
         fn from(v:Var) -> Self {
-            Self::Variable(immt_ontology::rdf::Variable::new_unchecked(v.0))
+            Self::Variable(flams_ontology::rdf::Variable::new_unchecked(v.0))
         }
     }
     pub trait TermPattern : Into<spargebra::term::TermPattern> {}
@@ -250,10 +250,10 @@ impl<U:URITrait> Iterator for RetIter<U> {
                 Some(Ok(s)) => s
             };
             //println!("Solution: {s:?}");
-            let [Some(immt_ontology::rdf::RDFTerm::NamedNode(n))] = s.values() else {continue};
+            let [Some(flams_ontology::rdf::RDFTerm::NamedNode(n))] = s.values() else {continue};
             let s = n.as_str();
             //println!("Iri: {s}");
-            let s = immt_utils::escaping::IRI_ESCAPE.unescape(&s).to_string();
+            let s = flams_utils::escaping::IRI_ESCAPE.unescape(&s).to_string();
             if let Ok(s) = s.parse() {
                 //println!("Parsed: {s}");
                 return Some(s)
@@ -268,7 +268,7 @@ pub struct LOIter {
 impl Iterator for LOIter {
     type Item = (DocumentElementURI,LOKind);
     fn next(&mut self) -> Option<Self::Item> {
-        use immt_ontology::rdf::RDFTerm;
+        use flams_ontology::rdf::RDFTerm;
         loop {
             let s = match self.inner.next() {
                 None => return None,
@@ -276,7 +276,7 @@ impl Iterator for LOIter {
                 Some(Ok(s)) => s
             };
             let Some(RDFTerm::NamedNode(n)) = s.get("x") else {continue};
-            let Ok(uri) = immt_utils::escaping::IRI_ESCAPE.unescape(&n.as_str()).to_string().parse() else {continue};
+            let Ok(uri) = flams_utils::escaping::IRI_ESCAPE.unescape(&n.as_str()).to_string().parse() else {continue};
             let n = match s.get("R") {
                 Some(RDFTerm::Literal(l)) if l.value() == "DEF" =>
                     return Some((uri,LOKind::Definition)),
@@ -315,7 +315,7 @@ impl Default for RDFStore {
         let store = oxigraph::store::Store::new().unwrap_or_else(|_| unreachable!());
         store
             .bulk_loader()
-            .load_quads(immt_ontology::rdf::ontologies::ulo2::QUADS.iter().copied())
+            .load_quads(flams_ontology::rdf::ontologies::ulo2::QUADS.iter().copied())
             .unwrap_or_else(|_| unreachable!());
         Self { store }
     }

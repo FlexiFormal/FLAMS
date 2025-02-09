@@ -52,6 +52,31 @@ pub enum SectionLevel {
     Paragraph,
     Subparagraph,
 }
+impl Ord for SectionLevel {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let su : u8 = (*self).into();
+        let ou : u8 = (*other).into();
+        su.cmp(&ou)
+    }
+}
+impl PartialOrd for SectionLevel {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl SectionLevel {
+    pub fn inc(self) -> Self {
+        match self {
+            Self::Part => Self::Chapter,
+            Self::Chapter => Self::Section,
+            Self::Section => Self::Subsection,
+            Self::Subsection => Self::Subsubsection,
+            Self::Subsubsection => Self::Paragraph,
+            _ => Self::Subparagraph,
+        }
+    }
+}
 impl Display for SectionLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use SectionLevel::*;

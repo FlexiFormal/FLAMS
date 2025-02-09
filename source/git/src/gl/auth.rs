@@ -1,5 +1,5 @@
 use gitlab::api::AsyncQuery;
-use immt_ontology::uris::ArchiveId;
+use flams_ontology::uris::ArchiveId;
 use oauth2::{url::Url, TokenResponse};
 pub use oauth2::AccessToken;
 use super::GitLab;

@@ -1,17 +1,17 @@
 [workspace]
 members = [
-  #"api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm", 
+  #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm", 
   "source/main","source/utils", "source/ontology", "source/system", "source/web-utils",
   "source/lsp",
-  "source/stex","source/shtml/system",
-  "source/shtml/viewer", 
-  "source/shtml/viewer-components", "source/shtml/extraction",
+  "source/stex","source/ftml/system",
+  "source/ftml/viewer", 
+  "source/ftml/viewer-components", "source/ftml/extraction",
   "source/git"
   #"source/vscode"
   ]
 resolver = "2"
 exclude = ["old"#"web/graphs","test-plugin","tests","thaw",
-  #"api", "controller", "core", "main", "shtml", "stex", "web/main", "web/orm"
+  #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm"
 ]
 
 [profile.release]
@@ -65,18 +65,18 @@ module_name_repetitions = {level="allow",priority=1}
 enum_glob_use = {level="allow",priority=1}
 
 [workspace.dependencies]
-# immt
-immt-shtml = { path = "source/shtml/system",version="0.0.1"}
-immt-stex = {path = "source/stex",version="0.0.1"}
-immt-utils = { path = "source/utils",version="0.0.1" }
-immt-ontology = { path = "source/ontology",version="0.0.1" }
-immt-system = { path = "source/system",version="0.0.1" }
-immt-lsp = { path = "source/lsp",version="0.0.1" }
-immt-git = { path = "source/git",version="0.0.1" }
-immt-web-utils = { path = "source/web-utils",version="0.0.1" }
-# shtml-viewer = { path = "shtml/viewer",version="0.0.1" }
-shtml-extraction = { path = "source/shtml/extraction",version="0.0.1" }
-shtml-viewer-components = { path = "source/shtml/viewer-components",version="0.0.1" }
+# flams
+flams-ftml = { path = "source/ftml/system",version="0.0.1"}
+flams-stex = {path = "source/stex",version="0.0.1"}
+flams-utils = { path = "source/utils",version="0.0.1" }
+flams-ontology = { path = "source/ontology",version="0.0.1" }
+flams-system = { path = "source/system",version="0.0.1" }
+flams-lsp = { path = "source/lsp",version="0.0.1" }
+flams-git = { path = "source/git",version="0.0.1" }
+flams-web-utils = { path = "source/web-utils",version="0.0.1" }
+# ftml-viewer = { path = "ftml/viewer",version="0.0.1" }
+ftml-extraction = { path = "source/ftml/extraction",version="0.0.1" }
+ftml-viewer-components = { path = "source/ftml/viewer-components",version="0.0.1" }
 
 # utils
 const-str = "0.5"
@@ -105,6 +105,7 @@ async-broadcast = "0.7"
 simple-home-dir = "0.4"
 async-trait = "0.1"
 bincode = { version="2.0.0-rc.3",features = ["derive","serde"] }
+lightningcss = {version="1.0.0-alpha.63"}
 # cfg-if = "1"
 tokio = { version = "1"}#, features = ["fs","io-util","sync","test-util","macros","rt"] }
 tokio-util = { version="0.7", features = ["compat"] }
@@ -184,7 +185,7 @@ tsify-next = {version="0.5", features = ["js"]}
 js-sys = "0.3"
 
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
-#leptos-dyn-dom = { path="../leptos_dyn_dom"}
+# leptos-dyn-dom = { path="../leptos_dyn_dom"}
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
 # RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
@@ -206,9 +207,9 @@ tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithr
 
 [[workspace.metadata.leptos]]
 # project name
-name = "iMMT"
-bin-package = "immt"
-lib-package = "immt"
+name = "flams"
+bin-package = "flams"
+lib-package = "flams"
 bin-features = ["ssr"]
 lib-features = ["hydrate"]
 lib-default-features = false
@@ -216,7 +217,7 @@ lib-profile-release = "wasm-release"
 lib-profile-dev = "wasm-dev"
 bin-default-features = false
 site-root = "target/web"
-output-name = "immt"
+output-name = "flams"
 assets-dir = "resources/assets"
 site-pkg-dir = "pkg"
 style-file = "resources/main.scss"

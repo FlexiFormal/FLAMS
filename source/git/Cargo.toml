@@ -1,19 +1,19 @@
 [package]
-name = "immt-git"
+name = "flams-git"
 version = "0.0.1"
 edition = "2021"
 
 [features]
-git2 = ["dep:git2","dep:walkdir","dep:immt-utils"]
-gitlab = ["dep:gitlab","dep:tokio","dep:parking_lot","dep:oauth2","dep:reqwest","dep:immt-ontology"]
+git2 = ["dep:git2","dep:walkdir","dep:flams-utils"]
+gitlab = ["dep:gitlab","dep:tokio","dep:parking_lot","dep:oauth2","dep:reqwest","dep:flams-ontology"]
 
 [dev-dependencies]
 #tracing-subscriber = {workspace=true}
 
 [dependencies]
-#immt-system = {workspace=true,features=["tokio"]}
-immt-utils = {workspace=true, optional=true}
-immt-ontology = {workspace=true,optional=true}
+#flams-system = {workspace=true,features=["tokio"]}
+flams-utils = {workspace=true, optional=true}
+flams-ontology = {workspace=true,optional=true}
 
 tokio = {workspace=true, optional=true}#,features=["rt","io-util","sync","fs"],optional=true}
 serde = {workspace=true}

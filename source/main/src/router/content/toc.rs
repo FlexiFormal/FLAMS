@@ -1,11 +1,11 @@
-use immt_ontology::uris::NarrativeURITrait;
-use immt_utils::{vecmap::VecSet, CSS};
-use shtml_viewer_components::components::TOCElem;
+use flams_ontology::uris::NarrativeURITrait;
+use flams_utils::{vecmap::VecSet, CSS};
+use ftml_viewer_components::components::TOCElem;
 
 #[cfg(feature="ssr")]
-pub async fn from_document(doc:&immt_ontology::narration::documents::Document) -> (Vec<CSS>,Vec<TOCElem>) {
-  use immt_ontology::narration::{sections::Section, DocumentElement, NarrationTrait};
-  use immt_system::backend::Backend;
+pub async fn from_document(doc:&flams_ontology::narration::documents::Document) -> (Vec<CSS>,Vec<TOCElem>) {
+  use flams_ontology::narration::{sections::Section, DocumentElement, NarrationTrait};
+  use flams_system::backend::Backend;
   let mut curr = doc.children().iter();
   let mut prefix = String::new();
   let mut stack = Vec::new();

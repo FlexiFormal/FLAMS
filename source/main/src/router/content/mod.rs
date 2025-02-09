@@ -2,12 +2,12 @@
 pub mod uris;
 pub mod toc;
 
-use immt_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::{Exercise, ExerciseFeedback, ExerciseResponse, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
-use immt_utils::{vecmap::VecSet, CSS};
-use immt_web_utils::do_css;
+use flams_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::{Exercise, ExerciseFeedback, ExerciseResponse, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
+use flams_utils::{vecmap::VecSet, CSS};
+use flams_web_utils::do_css;
 use leptos::{either::Either, prelude::*};
 use leptos_router::hooks::use_query_map;
-use shtml_viewer_components::components::{documents::{DocumentString, FragmentString, FragmentStringProps}, omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource};
+use ftml_viewer_components::components::{documents::{DocumentString, FragmentString, FragmentStringProps}, omdoc::{narration::{DocumentElementSpec, DocumentSpec}, AnySpec,OMDocSource}, TOCElem, TOCSource};
 use uris::{DocURIComponents, SymURIComponents, URIComponents};
 use crate::{users::Login, utils::from_server_clone};
 
@@ -16,7 +16,7 @@ pub(crate) fn insert_base_url(mut v:Vec<CSS>) -> Vec<CSS> {
   for c in v.iter_mut() {
     if let CSS::Link(lnk) = c {
       if let Some(r) = lnk.strip_prefix("srv:") {
-        *lnk = format!("{}{r}", immt_system::settings::Settings::get().external_url().unwrap_or("")).into_boxed_str()
+        *lnk = format!("{}{r}", flams_system::settings::Settings::get().external_url().unwrap_or("")).into_boxed_str()
       }
     }
   }
@@ -25,45 +25,45 @@ pub(crate) fn insert_base_url(mut v:Vec<CSS>) -> Vec<CSS> {
 
 macro_rules! backend {
   ($fn:ident!($($args:tt)*)) => {
-    if immt_system::settings::Settings::get().lsp {
+    if flams_system::settings::Settings::get().lsp {
       let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
         return Err("no lsp server".to_string().into())
       };
       state.backend().$fn($($args)*)
     } else {
       ::paste::paste!{ 
-        immt_system::backend::GlobalBackend::get().[<$fn _async>]($($args)*).await
+        flams_system::backend::GlobalBackend::get().[<$fn _async>]($($args)*).await
       }
     }
   };
   ($fn:ident SYNC!($($args:tt)*)) => {
-    if immt_system::settings::Settings::get().lsp {
+    if flams_system::settings::Settings::get().lsp {
       let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
         return Err::<_,ServerFnError<String>>("no lsp server".to_string().into())
       };
       state.backend().$fn($($args)*)
     } else {
-        immt_system::backend::GlobalBackend::get().$fn($($args)*)
+        flams_system::backend::GlobalBackend::get().$fn($($args)*)
     }
   };
   ($fn:ident($($args:tt)*)) => {
-    if immt_system::settings::Settings::get().lsp {
+    if flams_system::settings::Settings::get().lsp {
       crate::server::lsp::STDIOLSPServer::global_state().and_then(
         |state| state.backend().$fn($($args)*)
       )
     } else {
-      immt_system::backend::GlobalBackend::get().$fn($($args)*)
+      flams_system::backend::GlobalBackend::get().$fn($($args)*)
     }
   };
   ($b:ident => {$($lsp:tt)*}{$($global:tt)*}) => {
-    if immt_system::settings::Settings::get().lsp {
+    if flams_system::settings::Settings::get().lsp {
       let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
         return Err("no lsp server".to_string().into())
       };
       let $b = state.backend();
       $($lsp)*
     } else {
-      let $b = immt_system::backend::GlobalBackend::get();
+      let $b = flams_system::backend::GlobalBackend::get();
       $($global)*
     }
   };
@@ -85,7 +85,7 @@ pub async fn document(
   l:Option<Language>,
   d:Option<String>
 ) -> Result<(DocumentURI,Vec<CSS>, String),ServerFnError<String>> {
-  use immt_system::backend::Backend;
+  use flams_system::backend::Backend;
   let Result::<DocURIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
@@ -114,7 +114,7 @@ pub async fn toc(
   l:Option<Language>,
   d:Option<String>
 ) -> Result<(Vec<CSS>, Vec<TOCElem>),ServerFnError<String>> {
-  use immt_system::backend::Backend;
+  use flams_system::backend::Backend;
   let Result::<DocURIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
@@ -146,7 +146,7 @@ pub async fn fragment(
   m:Option<String>,
   s:Option<String>
 ) -> Result<(URI,Vec<CSS>, String),ServerFnError<String>> {
-  use immt_system::backend::Backend;
+  use flams_system::backend::Backend;
   let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
@@ -172,7 +172,7 @@ pub async fn fragment(
           };
           Ok((uri,insert_base_url(css),html))
         }
-        DocumentElement::Section(immt_ontology::narration::sections::Section{range,..}) => {
+        DocumentElement::Section(flams_ontology::narration::sections::Section{range,..}) => {
           let Some((css,html)) = backend!(get_html_fragment!(euri.document(),*range)) else {
             return Err("document element not found".to_string().into())
           };
@@ -195,8 +195,8 @@ pub async fn fragment(
 
 #[cfg(feature="ssr")]
 async fn get_definitions(uri:SymbolURI) -> Option<(Vec<CSS>,String)> {
-  use immt_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
-  use immt_system::backend::{rdf::sparql, Backend, GlobalBackend};
+  use flams_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
+  use flams_system::backend::{rdf::sparql, Backend, GlobalBackend};
   let b = GlobalBackend::get();
   let query = sparql::Select { 
     subject: sparql::Var('x'),
@@ -232,8 +232,8 @@ pub async fn los(
   s:Option<String>,
   exercises:bool
 ) -> Result<Vec<(DocumentElementURI,LOKind)>,ServerFnError<String>> {
-  use immt_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
-  use immt_system::backend::{rdf::sparql, Backend, GlobalBackend};
+  use flams_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
+  use flams_system::backend::{rdf::sparql, Backend, GlobalBackend};
   let Result::<SymURIComponents,_>::Ok(comps) = (uri,a,p,m,s).try_into() else {
     return Err("invalid uri components".to_string().into())
   };
@@ -267,8 +267,8 @@ pub async fn notations(
   m:Option<String>,
   s:Option<String>
 ) -> Result<Vec<(DocumentElementURI,Notation)>,ServerFnError<String>> {
-  use immt_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
-  use immt_system::backend::{rdf::sparql, Backend, GlobalBackend};
+  use flams_ontology::{rdf::ontologies::ulo2, uris::DocumentElementURI};
+  use flams_system::backend::{rdf::sparql, Backend, GlobalBackend};
 
   let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
     return Err("invalid uri components".to_string().into())
@@ -308,7 +308,7 @@ pub async fn omdoc(
   m:Option<String>,
   s:Option<String>
 ) -> Result<(Vec<CSS>,AnySpec),ServerFnError<String>> {
-  use immt_system::backend::Backend;
+  use flams_system::backend::Backend;
 
   let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
     return Err("invalid uri components".to_string().into())
@@ -380,7 +380,7 @@ pub async fn omdoc(
 
 #[cfg(feature="ssr")]
 fn get_solution(uri:&DocumentElementURI) -> Result<Solutions,ServerFnError<String>> {
-  use immt_system::backend::Backend;
+  use flams_system::backend::Backend;
   match backend!(get_document_element(&uri)) {
     Some(rf) => {
       let e: &Exercise<Checked> = rf.as_ref();
@@ -439,26 +439,26 @@ pub async fn feedback(response:ExerciseResponse)  -> Result<ExerciseFeedback,Ser
 
 #[component(transparent)]
 pub fn URITop() -> impl IntoView {
-  use immt_web_utils::components::Themer;
+  use flams_web_utils::components::Themer;
   use leptos_meta::Stylesheet;
   use uris::URIComponentsTrait;
-  use shtml_viewer_components::SHTMLGlobalSetup;
+  use ftml_viewer_components::FTMLGlobalSetup;
   use leptos::either::EitherOf3 as Either;
   view!{
-    <Stylesheet id="leptos" href="/pkg/immt.css"/>
-    <Themer><SHTMLGlobalSetup>//<Login>
+    <Stylesheet id="leptos" href="/pkg/flams.css"/>
+    <Themer><FTMLGlobalSetup>//<Login>
       <div style="min-height:100vh;color:black;">{
         use_query_map().with_untracked(|m| m.as_doc().map_or_else(
           || {
             let Some(uri) = m.as_comps() else {
-              return Either::C(immt_web_utils::components::display_error("Invalid URI".into()));
+              return Either::C(flams_web_utils::components::display_error("Invalid URI".into()));
             };
             Either::B(view!(<Fragment uri/>))
           },
           |doc| Either::A(view!(<Document doc/>))
         ))
       }</div>//</Login>
-    </SHTMLGlobalSetup></Themer>
+    </FTMLGlobalSetup></Themer>
   }
 }
 
@@ -491,8 +491,8 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
 
 #[server(prefix="/content/legacy",endpoint="uris")]
 pub async fn uris(uris:Vec<String>) -> Result<Vec<Option<URI>>,ServerFnError<String>> {
-  use immt_ontology::uris::{BaseURI,ArchiveURI,ArchiveURITrait,URIRefTrait,ModuleURI};
-  use immt_system::backend::{GlobalBackend,Backend};
+  use flams_ontology::uris::{BaseURI,ArchiveURI,ArchiveURITrait,URIRefTrait,ModuleURI};
+  use flams_system::backend::{GlobalBackend,Backend};
 
   const MATHHUB: &str = "http://mathhub.info";
   const META: &str = "http://mathhub.info/sTeX/meta";
@@ -500,7 +500,7 @@ pub async fn uris(uris:Vec<String>) -> Result<Vec<Option<URI>>,ServerFnError<Str
 
   lazy_static::lazy_static! {
     static ref MATHHUB_INFO: BaseURI = BaseURI::new_unchecked("http://mathhub.info/:sTeX");
-    static ref META_URI: ArchiveURI = immt_ontology::metatheory::URI.archive_uri().owned();//ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("sTeX/meta-inf"));
+    static ref META_URI: ArchiveURI = flams_ontology::metatheory::URI.archive_uri().owned();//ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("sTeX/meta-inf"));
     static ref UR_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://cds.omdoc.org"),ArchiveId::new("MMT/urtheories"));
     static ref MY_ARCHIVE: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://mathhub.info"),ArchiveId::new("my/archive"));
     static ref INJECTING: ArchiveURI = ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("Papers/22-CICM-Injecting-Formal-Mathematics"));

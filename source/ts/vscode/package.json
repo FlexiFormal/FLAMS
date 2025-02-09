@@ -1,20 +1,21 @@
 {
-  "name": "immt",
-  "displayName": "iMᴍᴛ - Generic knowledge management system for flexiformal knowledge",
-  "description": "todo",
+  "name": "flams",
+  "displayName": "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System",
+  "description": "IDE for the FLAMS system and sTeX",
   "version": "0.0.1",
   "license": "GPL3",
   "publisher": "kwarc",
+  "icon": "img/flams.png",
   "repository": {
     "type": "git",
-    "url": "github:KWARC/iMMT"
+    "url": "github:KWARC/FLAMS"
   },
   "categories": [
     "Programming Languages",
     "Language Packs"
   ],
   "bugs": {
-    "url": "https://github.com/KWARC/iMMT/issues"
+    "url": "https://github.com/KWARC/FLAMS/issues"
   },
   "activationEvents": [
     "workspaceContains:**/*.tex"
@@ -24,43 +25,43 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "immt-viewcontainer",
-          "title": "sTeX Tools",
-          "icon": "img/stex.svg",
-          "when": "immt.loaded"
+          "id": "flams-viewcontainer",
+          "title": "FLAMS Tools",
+          "icon": "img/flams.svg",
+          "when": "flams.loaded"
         }
       ]
     },
     "views": {
-      "immt-viewcontainer": [
+      "flams-viewcontainer": [
         {
-          "id": "immt-mathhub",
+          "id": "flams-mathhub",
           "name": "Math Archives",
-          "icon": "img/stex.svg",
+          "icon": "img/flams.svg",
           "contextualTitle": "Math Archives",
-          "when": "immt.loaded"
+          "when": "flams.loaded"
         },
         {
-          "id": "immt-tools",
+          "id": "flams-tools",
           "type": "webview",
-          "name": "sTeX Tools",
-          "icon": "img/stex.svg",
-          "contextualTitle": "sTeX Functionality",
-          "when": "immt.loaded"
+          "name": "FLAMS Tools",
+          "icon": "img/flams.svg",
+          "contextualTitle": "FLAMS Functionality",
+          "when": "flams.loaded"
         }
       ]
     },
     "commands": [
       {
-        "command": "immt.helloWorld",
+        "command": "flams.helloWorld",
         "title": "Hello World"
       }
     ],
     "configuration": [
       {
-        "title": "iMMT",
+        "title": "FLAMS",
         "properties": {
-          "immt.preview": {
+          "flams.preview": {
             "type": "string",
             "default": "on save",
             "markdownDescription": "When to parse the sTeX document and show the HTML preview window",
@@ -75,15 +76,15 @@
               "Only manually"
             ]
           },
-          "immt.settings_toml": {
+          "flams.settings_toml": {
             "type": "string",
             "default": "",
-            "markdownDescription": "Path to iMMT settings.toml (optional)"
+            "markdownDescription": "Path to FLAMS settings.toml (optional)"
           },
-          "immt.immt_path": {
+          "flams.flams_path": {
             "type": "string",
             "default": "",
-            "markdownDescription": "Path to your immt executable"
+            "markdownDescription": "Path to your flams executable"
           }
         }
       }

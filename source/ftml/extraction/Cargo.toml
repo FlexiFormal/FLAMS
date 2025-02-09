@@ -1,0 +1,21 @@
+[package]
+name = "ftml-extraction"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+full = []
+rdf = ["flams-ontology/rdf"]
+
+[dependencies]
+smallvec = {workspace=true}
+flams-ontology = {workspace=true}
+flams-utils = {workspace=true}
+const_format = {workspace=true}
+paste = {workspace=true}
+tracing = {workspace=true}
+lazy_static = {workspace=true}
+either = {workspace=true}
+
+[lints]
+workspace = true

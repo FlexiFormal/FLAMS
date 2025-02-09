@@ -1,4 +1,4 @@
-use immt_utils::vecmap::VecMap;
+use flams_utils::vecmap::VecMap;
 
 use crate::{
     content::terms::Term, uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI}, Checked, DocumentRange, LocalBackend, MaybeResolved, Unchecked

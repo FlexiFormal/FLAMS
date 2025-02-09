@@ -1,0 +1,23 @@
+.flams-notation-table {
+    width:auto !important;
+}
+.flams-notation-header{
+    font-size:small;
+    font-weight:bold;
+    align-content:center;
+    text-align:center;
+    height:fit-content !important;
+    border:var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+}
+.flams-notation-cell{
+    align-content:center;
+    text-align:center;
+    height:fit-content !important;
+    border:var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+}
+.flams-notation-cell:first-child button {
+    display:contents !important;
+}
+.flams-notation-header:first-child button {
+    display:contents !important;
+}

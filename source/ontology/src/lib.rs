@@ -16,7 +16,7 @@ pub struct Foo<const T:Test>(String);
 use std::borrow::Cow;
 
 use content::{declarations::DeclarationTrait, modules::{Module, Signature}, ContentReference, ModuleLike};
-use immt_utils::sourcerefs::{ByteOffset, SourceRange};
+use flams_utils::sourcerefs::{ByteOffset, SourceRange};
 use languages::Language;
 use narration::documents::Document;
 use uris::{DocumentURI, ModuleURI, SymbolURI};
@@ -31,7 +31,7 @@ pub mod archive_json;
 #[cfg(feature = "rdf")]
 pub mod rdf;
 pub mod uris;
-pub mod shtml;
+pub mod ftml;
 
 mod sealed {
     pub trait Sealed {}
@@ -189,7 +189,7 @@ impl From<DocumentRange> for SourceRange<ByteOffset> {
 /*
 pub enum DecodeError {
     URIParse(URIParseError),
-    Io(immt_utils::binary::DecodeError),
+    Io(flams_utils::binary::DecodeError),
     UnknownDiscriminant,
 }
 impl From<URIParseError> for DecodeError {
@@ -198,9 +198,9 @@ impl From<URIParseError> for DecodeError {
         Self::URIParse(value)
     }
 }
-impl From<immt_utils::binary::DecodeError> for DecodeError {
+impl From<flams_utils::binary::DecodeError> for DecodeError {
     #[inline]
-    fn from(value: immt_utils::binary::DecodeError) -> Self {
+    fn from(value: flams_utils::binary::DecodeError) -> Self {
         Self::Io(value)
     }
 }

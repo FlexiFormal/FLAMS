@@ -1,2 +1,2 @@
-# immt README
+# FLAMS README
 Foo Bar Baz

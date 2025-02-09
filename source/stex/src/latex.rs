@@ -122,7 +122,7 @@ fn run_command<
     let mut process = proc
         .args(args)
         .current_dir(in_path)
-        .env("IMMT_ADMIN_PWD", "NOPE");
+        .env("FLAMS_ADMIN_PWD", "NOPE");
     for (k, v) in with_envs {
         process = process.env(k, v);
     }

@@ -23,11 +23,11 @@ pub fn Block(
     children:Children
 ) -> impl IntoView {
     use thaw::{Card,CardHeader,CardHeaderProps,CardHeaderAction,CardHeaderDescription,Divider,CardPreview,CardFooter};
-    inject_css("immt-block",include_str!("block.css"));
+    inject_css("flams-block",include_str!("block.css"));
     let has_header = header.is_some() || header_right.is_some() || header_left.is_some();
     let has_separator = separator.is_some() || show_separator == Some(true) || (show_separator.is_none() && has_header);
     view!{
-        <Card class="immt-block-card">
+        <Card class="flams-block-card">
             {if has_header {
                 Some(CardHeader(CardHeaderProps{
                     class:Option::<String>::None.into(),
@@ -45,7 +45,7 @@ pub fn Block(
                   |c| view!(<div style="margin:5px;"><Divider>{(c.children)()}</Divider></div>)
                 ))
             } else {None}}
-            <CardPreview class="immt-block-card-inner">
+            <CardPreview class="flams-block-card-inner">
               {children()}
             </CardPreview>
             {footer.map(|h| view!{

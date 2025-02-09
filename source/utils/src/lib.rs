@@ -39,15 +39,6 @@ pub fn hashstr<A: std::hash::Hash>(prefix: &str, a: &A) -> String {
     format!("{prefix}{h:02x}")
 }
 
-#[derive(Debug, Clone,PartialEq,Eq)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum CSS {
-    Link(#[cfg_attr(feature = "wasm", tsify(type = "string"))] Str),
-    Inline(#[cfg_attr(feature = "wasm", tsify(type = "string"))] Str),
-}
-
 #[cfg(feature="tokio")]
 pub fn background<F:FnOnce() + Send + 'static>(f:F) {
     tokio::task::spawn_blocking(f);
@@ -81,5 +72,89 @@ pub mod fs {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone,PartialEq,Eq)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum CSS {
+    Link(#[cfg_attr(feature = "wasm", tsify(type = "string"))] Str),
+    Inline(#[cfg_attr(feature = "wasm", tsify(type = "string"))] Str),
+    Class{
+        #[cfg_attr(feature = "wasm", tsify(type = "string"))] name:Str,
+        #[cfg_attr(feature = "wasm", tsify(type = "string"))] css:Str
+    }
+}
+impl CSS {
+    #[must_use]
+    pub fn split(css:&str) -> Vec<Self> {
+        use lightningcss::{stylesheet::{ParserOptions,StyleSheet},printer::PrinterOptions,rules::CssRule,selector::Component};
+        use lightningcss::traits::ToCss;
+        let Ok(ruleset) = StyleSheet::parse(css, ParserOptions::default()) else {
+            tracing::warn!("Not class-able: {css}");
+            return vec![Self::Inline(css.to_string().into())]
+        };
+        if ruleset.sources.iter().any(|s| !s.is_empty()) {
+            tracing::warn!("Not class-able: {css}");
+            return vec![Self::Inline(css.to_string().into())];
+        }
+        ruleset.rules.0.into_iter().filter_map(|rule| {
+            match rule {
+                CssRule::Style(style) => {
+                    if style.vendor_prefix.is_empty() && style.selectors.0.len() == 1 &&
+                        style.selectors.0[0].len() == 1 && matches!(style.selectors.0[0].iter().next(),Some(Component::Class(_))) {
+                        let Some(Component::Class(class_name)) = style.selectors.0[0].iter().next() else { unreachable!() };
+                        style.to_css_string(PrinterOptions::default()).ok().map(|s| Self::Class{ name: class_name.to_string().into(), css: s.into() })
+                    } else {
+                        style.to_css_string(PrinterOptions::default()).ok().map(|s| {tracing::warn!("Not class-able: {s}");Self::Inline(s.into())})
+                    }
+                }
+                o => {
+                    o.to_css_string(PrinterOptions::default()).ok().map(|s| {tracing::warn!("Not class-able: {s}");Self::Inline(s.into())})
+                }
+            }
+        }).collect()
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[test]
+fn css_things() {
+    use lightningcss::{stylesheet::{ParserOptions,StyleSheet,MinifyOptions},printer::PrinterOptions,rules::CssRule,selector::Component};
+    use lightningcss::traits::ToCss;
+    tracing_subscriber::fmt().init();
+    let css = include_str!("../../../resources/assets/rustex.css");
+    let rules = StyleSheet::parse(css, ParserOptions::default()).unwrap();
+    let roundtrip = rules.to_css(PrinterOptions::default()).unwrap();
+    tracing::info!("{}",roundtrip.code);
+    let test = "
+        .ftml-paragraph {
+            > .ftml-title {
+                font-weight: bold;
+            }
+            margin: 0;
+        }
+    ";
+    let mut ruleset = StyleSheet::parse(test, ParserOptions::default()).unwrap();
+    ruleset.minify(MinifyOptions::default()).unwrap();
+    assert!(ruleset.sources.iter().all(|s| s.is_empty()));
+    tracing::info!("Result: {ruleset:#?}");
+    for rule in ruleset.rules.0.into_iter() {
+        match rule {
+            CssRule::Style(style) => {
+                assert!(style.vendor_prefix.is_empty());
+                assert!(style.selectors.0.len() == 1);
+                assert!(style.selectors.0[0].len() == 1);
+                tracing::info!("Here: {}",style.to_css_string(PrinterOptions::default()).unwrap());
+                let sel = style.selectors.0[0].iter().next().unwrap();
+                assert!(matches!(sel,Component::Class(_)));
+                let Component::Class(cls) = sel else {unreachable!()};
+                let cls_str = &**cls;
+                tracing::info!("Class: {cls_str}");
+            }
+            o => panic!("Unexpected rule: {o:#?}"),
+        }
     }
 }

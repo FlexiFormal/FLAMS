@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-//import { activate as act, greet } from '../pkg/immt_vscode';
+//import { activate as act, greet } from '../pkg/flams_vscode';
 import { register_commands, register_server_commands, Settings } from './ts/commands';
 import { setup } from './ts/setup';
 import { Versions } from './ts/versions';
 import * as language from 'vscode-languageclient/node';
-import { IMMTServer } from './ts/immt/server';
+import { FLAMSServer } from './ts/flams/server';
 //import * as ws from 'ws';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -13,7 +13,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 async function local(context: vscode.ExtensionContext) {
-	const ctx = new IMMTPreContext(context);
+	const ctx = new FLAMSPreContext(context);
 	register_commands(ctx);
 	if (await ctx.versions.isValid()) {
 		launch_local(ctx);
@@ -30,27 +30,27 @@ export function deactivate() {
 	}
 }
 
-export async function launch_local(context:IMMTPreContext) {
+export async function launch_local(context:FLAMSPreContext) {
   let versions = context.versions;
-  let immt = await versions?.immtversion();
-  let stex = await versions?.stexversion();
-  let immt_path = versions?.immt_path;
+  let flams = await versions?.flamsVersion();
+  let stex = await versions?.stexVersion();
+  let flams_path = versions?.flams_path;
   let stex_path = versions?.stex_path;
-  if (!(stex && immt && immt_path && stex_path)) {
-    vscode.window.showErrorMessage(`iMMT: Error initializing`, { modal: true });
+  if (!(stex && flams && flams_path && stex_path)) {
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error initializing`, { modal: true });
     return;
   }
-	context.outputChannel.appendLine(`Using ${immt_path} (version ${immt.toString()})`);
+	context.outputChannel.appendLine(`Using ${flams_path} (version ${flams.toString()})`);
 	context.outputChannel.appendLine(`sTeX at ${stex_path} (version ${stex.toString()})`);
-	context.outputChannel.appendLine("Initializing iMMT LSP Server");
+	context.outputChannel.appendLine("Initializing 𝖥𝖫∀𝖬∫ LSP Server");
   
-  const toml = vscode.workspace.getConfiguration("immt").get<string>(Settings.SettingsToml);
+  const toml = vscode.workspace.getConfiguration("flams").get<string>(Settings.SettingsToml);
   const args = toml ? ["--lsp","-c",toml] : ["--lsp"];
   const serverOptions: language.ServerOptions = {
-		run: { command: immt_path, args: args },
-		debug: { command: immt_path, args: args }
+		run: { command: flams_path, args: args },
+		debug: { command: flams_path, args: args }
 	};
-  context.client = new language.LanguageClient("immt-server","iMMT Language Server",serverOptions,{
+  context.client = new language.LanguageClient("flams-server","𝖥𝖫∀𝖬∫ Language Server",serverOptions,{
 		documentSelector: [{scheme:"file", language:"tex"},{scheme:"file", language:"latex"}],
 		synchronize: {},
     //outputChannel: context.outputChannel,
@@ -66,9 +66,9 @@ export async function launch_local(context:IMMTPreContext) {
         }
     }*/
 	});
-	context.client.onNotification("immt/serverURL",(s:string) => {
-		context.server = new IMMTServer(s);
-    const ctx = new IMMTContext(context);
+	context.client.onNotification("flams/serverURL",(s:string) => {
+		context.server = new FLAMSServer(s);
+    const ctx = new FLAMSContext(context);
     register_server_commands(ctx);
 	});
   context.client.start();
@@ -76,14 +76,14 @@ export async function launch_local(context:IMMTPreContext) {
 
 /*
 async function remote(context: vscode.ExtensionContext) {
-	const ctx = new IMMTPreContext(context);
+	const ctx = new FLAMSPreContext(context);
 	register_commands(ctx);
   launch_remote(ctx);
 }
 
-export async function launch_remote(context: IMMTPreContext) {
+export async function launch_remote(context: FLAMSPreContext) {
   // Initialize server first
-  context.server = new IMMTServer("http://localhost:3000");
+  context.server = new FLAMSServer("http://localhost:3000");
   
   const wsock = new ws.WebSocket("http://localhost:3000/ws/lsp");
   const connection = ws.WebSocket.createWebSocketStream(wsock);
@@ -91,8 +91,8 @@ export async function launch_remote(context: IMMTPreContext) {
   connection.on("data",(chunk) => console.log(new TextDecoder().decode(chunk)));
 
   context.client = new language.LanguageClient(
-    "immt-server",
-    "iMMT Language Server",
+    "flams-server",
+    "𝖥𝖫∀𝖬∫ Language Server",
     () => Promise.resolve({
       reader: connection,
       writer: connection,
@@ -106,34 +106,34 @@ export async function launch_remote(context: IMMTPreContext) {
     }
   );
   await context.client.start().then(() => {
-    const ctx = new IMMTContext(context);
+    const ctx = new FLAMSContext(context);
     ctx.remote_server = undefined;
     register_server_commands(ctx);
   });
 }
 */
 
-let _context : IMMTContext | IMMTPreContext | undefined = undefined;
-export function get_pre_context() : IMMTContext | IMMTPreContext | undefined {
+let _context : FLAMSContext | FLAMSPreContext | undefined = undefined;
+export function get_pre_context() : FLAMSContext | FLAMSPreContext | undefined {
   return _context;
 }
 
-export function get_context() : IMMTContext {
-  if (!(_context instanceof IMMTContext)) { throw new Error("context is undefined"); }
+export function get_context() : FLAMSContext {
+  if (!(_context instanceof FLAMSContext)) { throw new Error("context is undefined"); }
   return _context;
 }
 
 
-export class IMMTPreContext {
+export class FLAMSPreContext {
   outputChannel: vscode.OutputChannel;
   vsc: vscode.ExtensionContext;
   versions: Versions = new Versions();
   client: language.LanguageClient | undefined;
-  server: IMMTServer | undefined;
+  server: FLAMSServer | undefined;
 
   constructor(context: vscode.ExtensionContext) {
 		this.vsc = context;
-    this.outputChannel = vscode.window.createOutputChannel('iMMT');
+    this.outputChannel = vscode.window.createOutputChannel('FLAMS');
     _context = this;
 	}
 
@@ -143,22 +143,22 @@ export class IMMTPreContext {
   }
 }
 
-export class IMMTContext {
+export class FLAMSContext {
   outputChannel: vscode.OutputChannel;
   vsc: vscode.ExtensionContext;
   versions: Versions;
   client: language.LanguageClient;
-  server: IMMTServer;
-  remote_server: IMMTServer | undefined;
+  server: FLAMSServer;
+  remote_server: FLAMSServer | undefined;
 
-  constructor(ctx:IMMTPreContext) {
-    if (!ctx.client || !ctx.server) { throw new Error("iMMT: Client/Server not initialized"); }
+  constructor(ctx:FLAMSPreContext) {
+    if (!ctx.client || !ctx.server) { throw new Error("𝖥𝖫∀𝖬∫: Client/Server not initialized"); }
 		this.vsc = ctx.vsc;
     this.outputChannel = ctx.outputChannel;
     this.versions = ctx.versions;
     this.client = ctx.client;
     this.server = ctx.server;
-    this.remote_server = new IMMTServer("https://mmt.beta.vollki.kwarc.info");
+    this.remote_server = new FLAMSServer("https://mmt.beta.vollki.kwarc.info");
     _context = this;
 	}
 

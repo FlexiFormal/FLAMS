@@ -5,11 +5,11 @@ use leptos::prelude::*;
 #[cfg(feature="hydrate")]
 use std::borrow::Cow;
 //#[cfg(feature="hydrate")]
-//use immt_web_utils::components::error_toast;
+//use flams_web_utils::components::error_toast;
 
 #[server(prefix="/api",endpoint="login")]
 pub async fn login(admin_pwd:Option<String>) -> Result<Option<LoginState>,ServerFnError<LoginError>> {
-    use immt_git::gl::auth::GitLabOAuth;
+    use flams_git::gl::auth::GitLabOAuth;
     use argon2::PasswordVerifier;
     let Some(mut session)= use_context::<axum_login::AuthSession<crate::server::db::DBBackend>>() else {
         return Ok(Some(LoginState::None))
@@ -155,7 +155,7 @@ impl LoginState {
 
 #[component(transparent)]
 pub(crate) fn Login<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-    use immt_web_utils::components::Spinner;
+    use flams_web_utils::components::Spinner;
     let children = children.into_inner();
     let res = Resource::new_blocking(|| (),|()| async {
         login_state().await.unwrap_or_else(|e| {

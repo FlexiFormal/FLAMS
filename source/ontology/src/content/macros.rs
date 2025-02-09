@@ -1,9 +1,9 @@
 #[macro_export]
 macro_rules! oms {
-    (shtml:$i:ident) => {
-        $crate::content::terms::Term::OMID($crate::uris::ContentURI::Symbol($crate::shtml!($i)))
+    (ftml:$i:ident) => {
+        $crate::content::terms::Term::OMID($crate::uris::ContentURI::Symbol($crate::ftml!($i)))
     };
-    (=shtml:$i:ident) => {
+    (=ftml:$i:ident) => {
         $crate::content::terms::Term::OMID($crate::uris::ContentURI::Symbol($crate::metatheory::$i))
     };
     ($s:expr) => {
@@ -30,7 +30,7 @@ macro_rules! omfp {
 }
 
 #[macro_export]
-macro_rules! shtml {
+macro_rules! ftml {
     ($name:ident) => {
         ($crate::metatheory::$name).clone()
     };

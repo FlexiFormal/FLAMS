@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use immt_ontology::narration::documents::{
+use flams_ontology::narration::documents::{
     Document, UncheckedDocument
 };
 

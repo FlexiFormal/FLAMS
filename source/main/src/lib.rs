@@ -20,10 +20,10 @@ pub mod utils;
 pub(crate) mod fns {
     use std::{future::Future, pin::Pin};
 
-    use immt_ontology::{languages::Language, narration::{exercises::Solutions, notations::Notation, LOKind}, uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI}};
-    use immt_utils::CSS;
+    use flams_ontology::{languages::Language, narration::{exercises::Solutions, notations::Notation, LOKind}, uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI}};
+    use flams_utils::CSS;
     use leptos::prelude::ServerFnError;
-    use shtml_viewer_components::components::{omdoc::AnySpec, TOCElem};
+    use ftml_viewer_components::components::{omdoc::AnySpec, TOCElem};
 
     fn fragment(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,m:Option<String>,s:Option<String>)
     -> Pin<Box<dyn Future<Output=Result<(URI,Vec<CSS>,String),ServerFnError<String>>> + Send>> {
@@ -54,7 +54,7 @@ pub(crate) mod fns {
         Box::pin(crate::router::content::solution(uri,rp,a,p,l,d,e))
     }
     pub(super) fn init() {
-        shtml_viewer_components::remote::ServerConfig::initialize(
+        ftml_viewer_components::remote::ServerConfig::initialize(
             fragment,full_doc,toc,omdoc,los,notations,solutions
         );
     }

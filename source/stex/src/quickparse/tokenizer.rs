@@ -1,5 +1,5 @@
 use crate::quickparse::tokens::TeXToken;
-use immt_utils::{
+use flams_utils::{
     parsing::{ParseSource, StringOrStr},
     sourcerefs::SourceRange,
 };
@@ -159,7 +159,7 @@ fn test() {
     );
     let path = PathBuf::from("/home/jazzpirate/work/MathHub/courses/FAU/IWGS/problems/source/regex/prob/regex_scientific.de.tex");
     let str = std::fs::read_to_string(&path).unwrap();
-    let reader = immt_utils::parsing::ParseStr::<immt_utils::sourcerefs::LSPLineCol>::new(&str);
+    let reader = flams_utils::parsing::ParseStr::<flams_utils::sourcerefs::LSPLineCol>::new(&str);
     let tokenizer = TeXTokenizer::new(reader, Some(&path),|e,p| tracing::error!("Error {e} ({p:?})"));
     for tk in tokenizer {
         tracing::info!("{tk:?}");

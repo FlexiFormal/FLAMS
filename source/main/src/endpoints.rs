@@ -24,7 +24,7 @@
  * | [`/api/buildqueue/delete`](buildqueue::delete) | `id=<NonZeroU32>` | |
  * | **Git** | | |
  * | [`/api/gitlab/get_archives`](git::get_archives) |  | [`ProjectTree`](git::ProjectTree) - returns the list of GitLab projects |
- * | [`/api/gitlab/get_branches`](git::get_branches) | `id=<u64>` | `Vec<`[`Branch`](immt_git::Branch)`>` - returns the list of branches for the given GitLab project |
+ * | [`/api/gitlab/get_branches`](git::get_branches) | `id=<u64>` | `Vec<`[`Branch`](flams_git::Branch)`>` - returns the list of branches for the given GitLab project |
  * | **Web Sockets** | | |
  * | [`/ws/log`](crate::router::logging::LogSocket) |  |  |
  * | [`/ws/queue`](crate::router::buildqueue::QueueSocket) |  |  |
@@ -37,17 +37,17 @@
  * | [`/content/toc`](content::toc()) | [DocumentURI] | `(Vec<`[CSS]`>,Vec<`[TOCElem]`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
  * | [`/content/los`](content::los()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
  * | [`/content/notations`](content::notations()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
- * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](immt_ontology::narration::exercises::Solutions) |
+ * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](flams_ontology::narration::exercises::Solutions) |
  * | [`/content/legacy/uris`](content::uris()) | | |
 */
 
 
-use immt_ontology::{narration::{notations::Notation, LOKind}, uris::*};
-use immt_utils::{
+use flams_ontology::{narration::{notations::Notation, LOKind}, uris::*};
+use flams_utils::{
   CSS,
   settings::SettingsSpec
 };
-use shtml_viewer_components::components::{omdoc::AnySpec,TOCElem};
+use ftml_viewer_components::components::{omdoc::AnySpec,TOCElem};
 use crate::{
   users::{login,login_state,LoginState},
   router::{

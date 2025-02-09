@@ -1,11 +1,11 @@
 use std::pin::Pin;
-use super::{IMMTLSPServer,ServerWrapper};
+use super::{FLAMSLSPServer,ServerWrapper};
 use std::{io::{self,ErrorKind},task::{Context,Poll}};
 use async_lsp::{client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer, ClientSocket, LspService, MainLoop};
 use axum::extract::ws::Message;
 use tower::ServiceBuilder;
 
-pub fn upgrade<T:IMMTLSPServer+Send+'static>(ws:axum::extract::WebSocketUpgrade,new:impl FnOnce(ClientSocket) -> T + Send + 'static) -> axum::response::Response {
+pub fn upgrade<T:FLAMSLSPServer+Send+'static>(ws:axum::extract::WebSocketUpgrade,new:impl FnOnce(ClientSocket) -> T + Send + 'static) -> axum::response::Response {
   ws.on_upgrade(|ws| {
     let (server,_) = async_lsp::MainLoop::new_server(|client| {
       //let server = ServerWrapper::new(new(client.clone()));

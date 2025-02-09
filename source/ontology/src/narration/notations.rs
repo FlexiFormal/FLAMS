@@ -1,5 +1,5 @@
 use smallvec::SmallVec;
-use crate::{content::terms::ArgMode, shtml::SHTMLKey, Resourcable};
+use crate::{content::terms::ArgMode, ftml::FTMLKey, Resourcable};
 
 #[derive(Debug,Clone,PartialEq,Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -33,7 +33,7 @@ pub struct OpNotation {
 }
 impl OpNotation {
 
-    pub fn display_shtml<'a>(&'a self,as_variable:bool,uri:impl std::fmt::Display + 'a) -> impl std::fmt::Display + 'a {
+    pub fn display_ftml<'a>(&'a self,as_variable:bool,uri:impl std::fmt::Display + 'a) -> impl std::fmt::Display + 'a {
         struct OpDisplayer<'n,U:std::fmt::Display+'n>{
             op:&'n OpNotation,
             as_variable:bool,
@@ -41,9 +41,9 @@ impl OpNotation {
         }
         impl<U:std::fmt::Display> std::fmt::Display for OpDisplayer<'_,U> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                const TERM :&str = SHTMLKey::Term.attr_name();
-                const HEAD:&str = SHTMLKey::Head.attr_name();
-                const COMP:&str = SHTMLKey::Comp.attr_name();
+                const TERM :&str = FTMLKey::Term.attr_name();
+                const HEAD:&str = FTMLKey::Head.attr_name();
+                const COMP:&str = FTMLKey::Comp.attr_name();
                 let tp = if self.as_variable { "OMV" } else { "OMID" };
                 let uri = &self.uri;
                 let text = &self.op.text;
@@ -80,9 +80,9 @@ pub use presentation::{Presenter,PresentationError,PresenterArgs};
 
 mod presentation {
     use std::fmt::Display;
-    use immt_utils::prelude::HMap;
+    use flams_utils::prelude::HMap;
 
-    use crate::{content::terms::{Arg, ArgMode, Informal, Term, Var}, oma, omsp, shtml::SHTMLKey, uris::{ContentURI, DocumentElementURI, SymbolURI, URITrait}};
+    use crate::{content::terms::{Arg, ArgMode, Informal, Term, Var}, oma, omsp, ftml::FTMLKey, uris::{ContentURI, DocumentElementURI, SymbolURI, URITrait}};
 
     pub type Result = std::result::Result<(),PresentationError>;
 
@@ -236,18 +236,18 @@ mod presentation {
 
     impl<W:std::fmt::Write> PresenterArgs<W> for Displayer {
         fn single(&self,idx:u8,_mode:ArgMode,out:&mut W) -> Result {
-            const TERM :&str = SHTMLKey::Term.attr_name();
-            const HEAD:&str = SHTMLKey::Head.attr_name();
-            const COMP:&str = SHTMLKey::Comp.attr_name();
+            const TERM :&str = FTMLKey::Term.attr_name();
+            const HEAD:&str = FTMLKey::Head.attr_name();
+            const COMP:&str = FTMLKey::Comp.attr_name();
 
             let c = self.args[(idx - 1) as usize];
             write!(out,"<mi {TERM}=\"OMV\" {HEAD}=\"{c}\" {COMP}>{c}</mi>").map_err(Into::into)
         }
         fn sequence(&self,idx:u8,_mode:ArgMode)
                 -> std::result::Result<impl Iterator<Item = impl FnOnce(&mut W) -> Result>,PresentationError> {
-            const TERM :&str = SHTMLKey::Term.attr_name();
-            const HEAD:&str = SHTMLKey::Head.attr_name();
-            const COMP:&str = SHTMLKey::Comp.attr_name();
+            const TERM :&str = FTMLKey::Term.attr_name();
+            const HEAD:&str = FTMLKey::Head.attr_name();
+            const COMP:&str = FTMLKey::Comp.attr_name();
             
             let c = self.args[(idx - 1) as usize];
             Ok([
@@ -283,7 +283,7 @@ mod presentation {
 
     use super::{Notation,NotationComponent};
     impl Notation {
-        pub fn display_shtml<'a>(&'a self,op:bool,as_variable:bool,uri:&'a impl URITrait) -> impl Display + 'a {
+        pub fn display_ftml<'a>(&'a self,op:bool,as_variable:bool,uri:&'a impl URITrait) -> impl Display + 'a {
             let (d,arity,termstr) = Displayer::new(self);
             NotationDisplay {
                 d,
@@ -298,9 +298,9 @@ mod presentation {
 
         #[inline]
         fn default_omid(out:&mut impl std::fmt::Write,tp:&str,uri:impl Display,txt:&str,in_text:bool) -> Result {
-            const TERM :&str = SHTMLKey::Term.attr_name();
-            const HEAD:&str = SHTMLKey::Head.attr_name();
-            const COMP:&str = SHTMLKey::Comp.attr_name();
+            const TERM :&str = FTMLKey::Term.attr_name();
+            const HEAD:&str = FTMLKey::Head.attr_name();
+            const COMP:&str = FTMLKey::Comp.attr_name();
             if in_text {
                 write!(out,"<span {TERM}=\"{tp}\" {HEAD}=\"{uri}\" {COMP}>{txt}</span>")
             } else {
@@ -309,11 +309,11 @@ mod presentation {
         }
 
         fn default_oma(presenter:&mut impl Presenter,tp:&str,uri:impl Display,txt:&str,args:&[Arg]) -> Result {
-            const TERM :&str = SHTMLKey::Term.attr_name();
-            const HEAD:&str = SHTMLKey::Head.attr_name();
-            const COMP:&str = SHTMLKey::Comp.attr_name();
-            const ARG:&str = SHTMLKey::Arg.attr_name();
-            const MODE:&str = SHTMLKey::ArgMode.attr_name();
+            const TERM :&str = FTMLKey::Term.attr_name();
+            const HEAD:&str = FTMLKey::Head.attr_name();
+            const COMP:&str = FTMLKey::Comp.attr_name();
+            const ARG:&str = FTMLKey::Arg.attr_name();
+            const MODE:&str = FTMLKey::ArgMode.attr_name();
             if presenter.in_text() {
                 write!(presenter,"<span {TERM}=\"{tp}\" {HEAD}=\"{uri}\" {COMP}>{txt}</span>").map_err(Into::into)
             } else {
@@ -424,9 +424,9 @@ mod presentation {
             args:&impl PresenterArgs<W>,
             insert_arg_attrs:bool
         ) -> Result {
-            const TERM :&str = SHTMLKey::Term.attr_name();
-            const HEAD:&str = SHTMLKey::Head.attr_name();
-            const NID:&str = SHTMLKey::NotationId.attr_name();
+            const TERM :&str = FTMLKey::Term.attr_name();
+            const HEAD:&str = FTMLKey::Head.attr_name();
+            const NID:&str = FTMLKey::NotationId.attr_name();
             if let Some(opn) = &self.op {
                 let index = opn.attribute_index as usize;
                 let start = &opn.text[0..index];
@@ -442,10 +442,10 @@ mod presentation {
             termstr:&str,
             head:impl Display
         ) -> Result {
-            const TERM :&str = SHTMLKey::Term.attr_name();
-            const HEAD:&str = SHTMLKey::Head.attr_name();
-            const NID:&str = SHTMLKey::NotationId.attr_name();
-            const HEADTERM:&str = SHTMLKey::HeadTerm.attr_name();
+            const TERM :&str = FTMLKey::Term.attr_name();
+            const HEAD:&str = FTMLKey::Head.attr_name();
+            const NID:&str = FTMLKey::NotationId.attr_name();
+            const HEADTERM:&str = FTMLKey::HeadTerm.attr_name();
             if let Some(opn) = &self.op {
                 write!(presenter,"<msub {TERM}=\"{termstr}\" {HEAD}=\"{head}\" {NID}=\"{}\">{}",self.id,opn.text)?;
                 write!(presenter,"<mrow {HEADTERM}>")?;
@@ -480,9 +480,9 @@ mod presentation {
             insert_arg_attrs:bool,
             args:&impl PresenterArgs<W>
         ) -> Result {
-            const TERM :&str = SHTMLKey::Term.attr_name();
-            const HEAD:&str = SHTMLKey::Head.attr_name();
-            const NID:&str = SHTMLKey::NotationId.attr_name();
+            const TERM :&str = FTMLKey::Term.attr_name();
+            const HEAD:&str = FTMLKey::Head.attr_name();
+            const NID:&str = FTMLKey::NotationId.attr_name();
             //println!("Components: {:?}",self.components);
             let mut comps = self.components.iter();
             match comps.next() {
@@ -539,8 +539,8 @@ mod presentation {
         }
 
         fn do_arg<W:std::fmt::Write>(out:&mut W,idx:u8,args:&impl PresenterArgs<W>,mode:ArgMode,in_text:bool,insert_arg_attrs:bool) -> Result {
-            const ARG:&str = SHTMLKey::Arg.attr_name();
-            const MODE:&str = SHTMLKey::ArgMode.attr_name();
+            const ARG:&str = FTMLKey::Arg.attr_name();
+            const MODE:&str = FTMLKey::ArgMode.attr_name();
             match mode {
                 ArgMode::Normal|ArgMode::Binding if !in_text => {
                     if insert_arg_attrs {
@@ -560,8 +560,8 @@ mod presentation {
         }
 
         fn do_term_ls<W:std::fmt::Write>(out:&mut W,mode:ArgMode,idx:u8,args:&impl PresenterArgs<W>,insert_arg_attrs:bool,sep:impl Fn(&mut W) -> Result) -> Result {
-            const ARG:&str = SHTMLKey::Arg.attr_name();
-            const MODE:&str = SHTMLKey::ArgMode.attr_name();
+            const ARG:&str = FTMLKey::Arg.attr_name();
+            const MODE:&str = FTMLKey::ArgMode.attr_name();
             let mut ls = args.sequence(idx,mode)?;
             let mode = match mode {
                 ArgMode::Sequence => ArgMode::Normal,

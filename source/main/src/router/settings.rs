@@ -1,5 +1,5 @@
-use immt_utils::settings::SettingsSpec;
-use immt_web_utils::inject_css;
+use flams_utils::settings::SettingsSpec;
+use flams_web_utils::inject_css;
 use leptos::prelude::*;
 
 use crate::{users::LoginError, utils::from_server_copy};
@@ -11,8 +11,8 @@ use crate::{users::LoginError, utils::from_server_copy};
 )]
 #[allow(clippy::unused_async)]
 pub async fn get_settings() -> Result<(SettingsSpec,usize,bool),ServerFnError<LoginError>> {
-  use immt_system::settings::Settings;
-  use immt_system::backend::GlobalBackend;
+  use flams_system::settings::Settings;
+  use flams_system::backend::GlobalBackend;
   use crate::users::LoginState;
   match LoginState::get_server() {
       LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
@@ -27,7 +27,7 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize,bool),ServerFnError<Lo
               *secret = "********".to_string().into_boxed_str();
           }
           let rels = GlobalBackend::get().triple_store().num_relations();
-          Ok((spec,rels,immt_system::GITLAB.has_loaded()))
+          Ok((spec,rels,flams_system::GITLAB.has_loaded()))
       },
       _ => {
         Err(ServerFnError::WrappedServerError(LoginError::NotLoggedIn))
@@ -40,8 +40,8 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize,bool),ServerFnError<Lo
   output=server_fn::codec::Json
 )]
 pub async fn reload() -> Result<(),ServerFnError<LoginError>> {
-  use immt_system::settings::Settings;
-  use immt_system::backend::GlobalBackend;
+  use flams_system::settings::Settings;
+  use flams_system::backend::GlobalBackend;
   use crate::users::LoginState;
   match LoginState::get_server() {
       LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
@@ -61,32 +61,32 @@ pub async fn reload() -> Result<(),ServerFnError<LoginError>> {
 pub(super) fn Settings() -> impl IntoView {
   use thaw::Table;
 
-  inject_css("immt-settings", r"
-.immt-settings-table {
+  inject_css("flams-settings", r"
+.flams-settings-table {
     width:max-content !important;
 }
-.immt-settings-col {
+.flams-settings-col {
     border:1px solid black;
     padding:3px 10px;
 }
   ");
   from_server_copy(true,get_settings,|(settings,mem,gl)| {
     let loading = RwSignal::new(false);
-    let reload_act = immt_web_utils::components::message_action(
+    let reload_act = flams_web_utils::components::message_action(
       move |()| {loading.set(true);reload()},
       move |()| {loading.set(false);format!("success")}
     );
     view!(
-      <Table class="immt-settings-table"><thead/><tbody>
+      <Table class="flams-settings-table"><thead/><tbody>
         <tr><td><h2>"Status"</h2></td><td/></tr>
           <tr>
-            <td class="immt-settings-col"><b>"Relations"</b></td>
-            <td class="immt-settings-col">{mem.to_string()}</td>
+            <td class="flams-settings-col"><b>"Relations"</b></td>
+            <td class="flams-settings-col">{mem.to_string()}</td>
           </tr>
           <tr>
             <td></td>
             <td>{move || if loading.get() {
-              leptos::either::Either::Left(view!(<immt_web_utils::components::Spinner/>))
+              leptos::either::Either::Left(view!(<flams_web_utils::components::Spinner/>))
             } else {
               leptos::either::Either::Right(view!(<button on:click=move |_| {reload_act.dispatch(());}>"Reload"</button>))
             }
@@ -95,33 +95,33 @@ pub(super) fn Settings() -> impl IntoView {
         <tr><td><h2>"Settings"</h2></td><td/></tr>
           <tr><td><h3>"General"</h3></td><td/></tr>
             <tr>
-              <td class="immt-settings-col"><b>"MathHub"</b></td>
-              <td class="immt-settings-col">{settings.mathhubs.into_iter().map(|m| m.display().to_string() + " ").collect::<Vec<_>>()}</td>
+              <td class="flams-settings-col"><b>"MathHub"</b></td>
+              <td class="flams-settings-col">{settings.mathhubs.into_iter().map(|m| m.display().to_string() + " ").collect::<Vec<_>>()}</td>
             </tr>
             <tr>
-              <td class="immt-settings-col"><b>"Debug Mode"</b></td>
-              <td class="immt-settings-col">{settings.debug}</td>
+              <td class="flams-settings-col"><b>"Debug Mode"</b></td>
+              <td class="flams-settings-col">{settings.debug}</td>
             </tr>
             <tr>
-              <td class="immt-settings-col"><b>"Log Directory"</b></td>
-              <td class="immt-settings-col">{settings.log_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
+              <td class="flams-settings-col"><b>"Log Directory"</b></td>
+              <td class="flams-settings-col">{settings.log_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
             </tr>
             <tr>
-              <td class="immt-settings-col"><b>"Database Path"</b></td>
-              <td class="immt-settings-col">{settings.database.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
+              <td class="flams-settings-col"><b>"Database Path"</b></td>
+              <td class="flams-settings-col">{settings.database.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
             </tr>
             <tr>
-              <td class="immt-settings-col"><b>"Temp Directory"</b></td>
-              <td class="immt-settings-col">{settings.temp_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
+              <td class="flams-settings-col"><b>"Temp Directory"</b></td>
+              <td class="flams-settings-col">{settings.temp_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
             </tr>
           <tr><td><h3>"Server"</h3></td><td/></tr>
             <tr>
-              <td class="immt-settings-col"><b>"IP/Port"</b></td>
-              <td class="immt-settings-col">{settings.server.ip.unwrap_or_else(|| unreachable!())}":"{settings.server.port}</td>
+              <td class="flams-settings-col"><b>"IP/Port"</b></td>
+              <td class="flams-settings-col">{settings.server.ip.unwrap_or_else(|| unreachable!())}":"{settings.server.port}</td>
             </tr>
             <tr>
-              <td class="immt-settings-col"><b>"Gitlab URL"</b></td>
-              <td class="immt-settings-col">{settings.gitlab.url.map_or_else(|| leptos::either::Either::Left("(None)".to_string()),|s| 
+              <td class="flams-settings-col"><b>"Gitlab URL"</b></td>
+              <td class="flams-settings-col">{settings.gitlab.url.map_or_else(|| leptos::either::Either::Left("(None)".to_string()),|s| 
                 leptos::either::Either::Right(view!({s.to_string()}{
                   if gl {
                     leptos::either::Either::Left(view!(" "<div style="color:green;display:inline;"><thaw::Icon icon=icondata_ai::AiCheckOutlined/></div>))
@@ -133,8 +133,8 @@ pub(super) fn Settings() -> impl IntoView {
             </tr>
           <tr><td><h3>"Build Queue"</h3></td><td/></tr>
             <tr>
-              <td class="immt-settings-col"><b>"Threads:"</b></td>
-              <td class="immt-settings-col">{settings.buildqueue.num_threads}</td>
+              <td class="flams-settings-col"><b>"Threads:"</b></td>
+              <td class="flams-settings-col">{settings.buildqueue.num_threads}</td>
             </tr>
         </tbody></Table>
     )

@@ -9,11 +9,11 @@ tracing-indicatif
 /old/**
 /settings.toml
 /resources/migrations/users.sqlite
-/resources/assets/shtml*
+/resources/assets/ftml*
 /.idea
 /.vscode/launch.json
-/source/shtml/viewer/ts
-/source/shtml/viewer/pkg
+/source/ftml/viewer/ts
+/source/ftml/viewer/pkg
 /source/ts/**/pkg
 /source/ts/**/dist
 /source/ts/**/node_modules

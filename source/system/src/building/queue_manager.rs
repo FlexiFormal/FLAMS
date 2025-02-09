@@ -1,5 +1,5 @@
 use std::{fmt::Display, num::NonZeroU32, sync::atomic::AtomicU8};
-use immt_utils::vecmap::VecMap;
+use flams_utils::vecmap::VecMap;
 use crate::backend::{AnyBackend, Backend, GlobalBackend, SandboxedBackend, SandboxedRepository};
 
 use super::queue::{Queue, QueueName, QueueState, RunningQueue};
@@ -62,7 +62,7 @@ impl QueueManager {
             0 => Semaphore::Linear,
             i => Semaphore::Counting {
               inner: std::sync::Arc::new(tokio::sync::Semaphore::new(i as usize)),
-              num: immt_utils::triomphe::Arc::new(AtomicU8::new(i))
+              num: flams_utils::triomphe::Arc::new(AtomicU8::new(i))
             }
           }}
           #[cfg(not(feature="tokio"))] 
@@ -197,6 +197,6 @@ pub(crate) enum Semaphore {
   #[cfg(feature="tokio")]
   Counting {
     inner: std::sync::Arc<tokio::sync::Semaphore>,
-    num: immt_utils::triomphe::Arc<AtomicU8>
+    num: flams_utils::triomphe::Arc<AtomicU8>
   }
 }

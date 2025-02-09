@@ -1,6 +1,6 @@
 use crate::uris::{ContentURI, DocumentElementURI, Name, URIOrRefTrait, URIRef};
 use crate::{oma, oms, omsp};
-use immt_utils::prelude::{DFSContinuation, Indentor, TreeChild, TreeChildIter, TreeLike};
+use flams_utils::prelude::{DFSContinuation, Indentor, TreeChild, TreeChildIter, TreeLike};
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::str::FromStr;
 
@@ -40,7 +40,7 @@ impl Term {
     }
 
     pub fn term_list(i: impl Iterator<Item = Self>) -> Self {
-        oma!(oms!(shtml:SEQUENCE_EXPRESSION),I@N:i)
+        oma!(oms!(ftml:SEQUENCE_EXPRESSION),I@N:i)
     }
 
     #[must_use]

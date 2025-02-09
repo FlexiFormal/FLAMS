@@ -2,8 +2,8 @@ pub mod rules;
 pub mod directives;
 
 use crate::quickparse::tokens::TeXToken;
-use immt_ontology::languages::Language;
-use immt_utils::{
+use flams_ontology::languages::Language;
+use flams_utils::{
     parsing::{ParseSource, ParseStr, StringOrStr},
     prelude::*,
     sourcerefs::{SourcePos, SourceRange},
@@ -1578,7 +1578,7 @@ fn test() {
     );
     let path = PathBuf::from("/home/jazzpirate/work/MathHub/courses/FAU/IWGS/problems/source/regex/prob/regex_scientific.de.tex");
     let str = std::fs::read_to_string(&path).unwrap();
-    let reader = immt_utils::parsing::ParseStr::<immt_utils::sourcerefs::LSPLineCol>::new(&str);
+    let reader = flams_utils::parsing::ParseStr::<flams_utils::sourcerefs::LSPLineCol>::new(&str);
     let parser = LaTeXParser::<'_,_,_,LaTeXToken<'_,_,_>,_>::new(reader, Some(&path),(),|e,p| tracing::error!("Error {e} ({p:?})"));
     for tk in parser {
         tracing::info!("{tk:?}");

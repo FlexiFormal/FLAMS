@@ -24,13 +24,13 @@ jobs:
       - name: vscode extension
         run: cargo make vscode
       - name: ts
-        run: cd source/shtml/viewer && cargo make wasm-pack-ts
+        run: cd source/ftml/viewer && cargo make wasm-pack-ts
       - name: doc
         run: cargo make doc
       - name: Remove lock file
         run: rm target/doc/.lock
       - name: Set executable
-        run: chmod +x bin/immt
+        run: chmod +x bin/flams
       - name: Upload Docs
         uses: actions/upload-pages-artifact@v3
         with:
@@ -44,12 +44,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ts
-          path: source/shtml/viewer/ts
+          path: source/ftml/viewer/ts
       - name: Upload VSCode Extension
         uses: actions/upload-artifact@v4
         with:
           name: vscode
-          path: source/ts/vscode/immt.vsix
+          path: source/ts/vscode/flams.vsix
   windows:
     runs-on: windows-latest
     environment: production
@@ -78,9 +78,9 @@ jobs:
 #      - name: graphs
 #        run: cd web/graphs && CARGO_TARGET_DIR=../../target RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --features=client --release
 #      - name: main
-#        run: IMMT_BUILD_GRAPHS=true cargo leptos build --release
+#        run: FLAMS_BUILD_GRAPHS=true cargo leptos build --release
 #      - name: bundle
-#        run: mkdir out && cp target/release/immt out/immt && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
+#        run: mkdir out && cp target/release/flams out/flams && cp -r target/web out/web && cp main/resources/settings.toml out/settings.toml
 #      - uses: actions/upload-artifact@v4
 #        with:
 #          name: mac_x86
@@ -97,7 +97,7 @@ jobs:
       - name: main
         run: cargo make
       - name: Set executable
-        run: chmod +x bin/immt
+        run: chmod +x bin/flams
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -114,7 +114,7 @@ jobs:
           name: linux
           path: ./linux
       - name: Set executable
-        run: chmod +x ./linux/immt
+        run: chmod +x ./linux/flams
       - uses: actions/download-artifact@v4
         with:
           name: windows
@@ -124,7 +124,7 @@ jobs:
           name: mac_aarch64
           path: ./mac
       - name: Set executable
-        run: chmod +x ./mac/immt
+        run: chmod +x ./mac/flams
       - uses: actions/download-artifact@v4
         with:
           name: ts
@@ -151,8 +151,8 @@ jobs:
           dest: ts.zip
       - uses: vimtor/action-zip@v1
         with:
-          files: ./linux/web/shtml.js ./linux/web/shtml_bg.wasm
-          dest: shtml.zip
+          files: ./linux/web/ftml.js ./linux/web/ftml_bg.wasm
+          dest: ftml.zip
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
@@ -164,8 +164,8 @@ jobs:
             ./windows.zip
             ./mac.zip
             ./ts.zip
-            ./shtml.zip
-            ./vscode/immt.vsix
+            ./ftml.zip
+            ./vscode/flams.vsix
   deploy-docs:
     needs: linux
     permissions:
