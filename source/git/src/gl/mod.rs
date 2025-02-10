@@ -1,12 +1,48 @@
+use flams_ontology::uris::ArchiveId;
+use flams_utils::{prelude::HSet, vecmap::VecSet};
+
 pub mod auth;
 
-#[derive(Debug,Clone)]
-pub struct GitLab {
+lazy_static::lazy_static!{
+  static ref GITLAB: GLInstance = GLInstance::default();
+}
+
+#[derive(Debug)]
+struct ProjectWithId {
+  pub project:super::Project,
+  pub id:Option<Option<ArchiveId>>
+}
+impl std::borrow::Borrow<u64> for ProjectWithId {
+  #[inline]
+  fn borrow(&self) -> &u64 {
+    &self.project.id
+  }
+}
+impl std::hash::Hash for ProjectWithId {
+  #[inline]
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    self.project.id.hash(state);
+  }
+}
+impl PartialEq for ProjectWithId {
+  #[inline]
+  fn eq(&self, other: &Self) -> bool {
+    self.project.id == other.project.id
+  }
+}
+impl Eq for ProjectWithId {}
+
+#[derive(Debug)]
+struct GitLabI {
   inner: gitlab::AsyncGitlab,
 	url:Box<str>,
 	id:Option<Box<str>>,
-	secret:Option<Box<str>>
+	secret:Option<Box<str>>,
+  projects:parking_lot::Mutex<HSet<ProjectWithId>>
 }
+
+#[derive(Debug,Clone)]
+pub struct GitLab(std::sync::Arc<GitLabI>);
 
 #[derive(Debug,Clone,Default)]
 enum MaybeGitlab {
@@ -22,6 +58,10 @@ pub struct GLInstance{
 }
 
 impl GLInstance {
+  #[inline]
+  pub fn global() -> &'static Self {
+    &GITLAB
+  }
 	pub fn load(self,cfg:GitlabConfig) {
 		*self.inner.write() = MaybeGitlab::Loading;
 		tokio::spawn(async move {
@@ -94,12 +134,13 @@ impl GitLab {
 			|token| gitlab::GitlabBuilder::new(split_url,token)
 		);
 		if http { builder.insecure(); }
-		Ok(Self {
+		Ok(Self(std::sync::Arc::new(GitLabI {
 			inner: builder.build_async().await?,
 			url:url.into(),
 			id:app_id.map(Into::into),
-			secret:app_secret.map(Into::into)
-		})
+			secret:app_secret.map(Into::into),
+      projects:parking_lot::Mutex::new(HSet::default())
+		})))
 	}
 
   #[must_use]
@@ -113,7 +154,14 @@ impl GitLab {
   pub async fn get_projects(&self) -> Result<Vec<crate::Project>,Err> {
     use gitlab::api::AsyncQuery;
     let q = gitlab::api::projects::Projects::builder().simple(true).build().unwrap_or_else(|_| unreachable!());
-    Ok(q.query_async(&self.inner).await?)
+    let v: Vec<super::Project> = q.query_async(&self.0.inner).await?;
+    let mut prs = self.0.projects.lock();
+    for p in v.iter() {
+      if !prs.contains(&p.id) {
+        prs.insert(ProjectWithId { project: p.clone(), id: None });
+      }
+    }
+    Ok(v)
     //let raw = gitlab::api::raw(q).query_async(&self.inner).await?;
     //Ok(std::str::from_utf8(raw.as_ref())?.to_string())
   }

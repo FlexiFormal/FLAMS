@@ -134,7 +134,7 @@ async fn gl_cont(
     let oauth = state.oauth.as_ref().unwrap_or_else(|| unreachable!());
     let token = oauth.callback(params).await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let gl = flams_system::GITLAB.get().await.unwrap_or_else(|| unreachable!());
+    let gl = flams_git::gl::GLInstance::global().get().await.unwrap_or_else(|| unreachable!());
     let user = gl.get_oauth_user(&token).await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if let Ok(Some(u)) = state.db.add_user(user, token.secret().clone()).await {
@@ -217,7 +217,7 @@ impl ServerState {
         let leptos_cfg = Self::setup_leptos();
         let redirect = Settings::get().gitlab_redirect_url.as_ref();
         let oauth = if let Some(redirect) = redirect {
-            flams_system::GITLAB.get().await.and_then(|gl|
+            flams_git::gl::GLInstance::global().get().await.and_then(|gl|
                 gl.new_oauth(&format!("{redirect}/gitlab_login")).ok()
             )
         } else { None };

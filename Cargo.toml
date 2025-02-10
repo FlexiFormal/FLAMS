@@ -145,7 +145,7 @@ webp = { version= "0.3"}
 dashmap = { version = "6" }
 
 gitlab = { version="0"}
-git2 = {version="0.20", default-features = false, features = ["vendored-libgit2","vendored-openssl"] }
+git2 = {version="0.20", features = ["vendored-libgit2","vendored-openssl"] }
 
 # leptos
 leptos = { version = "0.7", features=["nightly"]}

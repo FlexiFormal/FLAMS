@@ -16,10 +16,6 @@ use backend::GlobalBackend;
 
 static LOG : std::sync::OnceLock<logging::LogStore> = std::sync::OnceLock::new();
 
-#[cfg(feature="gitlab")]
-lazy_static::lazy_static!{
-    pub static ref GITLAB: flams_git::gl::GLInstance = flams_git::gl::GLInstance::default();
-}
 
 pub fn initialize(settings: SettingsSpec) {
     settings::Settings::initialize(settings);
@@ -42,8 +38,7 @@ pub fn initialize(settings: SettingsSpec) {
                 settings.gitlab_app_id.as_ref().map(ToString::to_string),
                 settings.gitlab_app_secret.as_ref().map(ToString::to_string)
             );
-            GITLAB.clone().load(cfg);
-
+            flams_git::gl::GLInstance::global().clone().load(cfg);
         }
     }
     let backend = GlobalBackend::get().manager();

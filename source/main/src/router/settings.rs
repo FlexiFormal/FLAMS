@@ -27,7 +27,7 @@ pub async fn get_settings() -> Result<(SettingsSpec,usize,bool),ServerFnError<Lo
               *secret = "********".to_string().into_boxed_str();
           }
           let rels = GlobalBackend::get().triple_store().num_relations();
-          Ok((spec,rels,flams_system::GITLAB.has_loaded()))
+          Ok((spec,rels, flams_git::gl::GLInstance::global().has_loaded()))
       },
       _ => {
         Err(ServerFnError::WrappedServerError(LoginError::NotLoggedIn))

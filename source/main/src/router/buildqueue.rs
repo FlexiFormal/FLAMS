@@ -476,7 +476,7 @@ fn repos(queue_id:NonZeroU32,allowed:bool) -> impl IntoView {
                             " from branch: "
                             <div style="display:inline-block;"><Combobox selected_options=branch>{
                               updates.into_iter().map(|(name,commit)| {let vname = name.clone(); view!{
-                                <ComboboxOption text="" value=vname>
+                                <ComboboxOption text=vname.clone() value=vname>
                                   {name}<span style="font-size:x-small">" (Last commit "{commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}")"</span>
                                 </ComboboxOption>
                               }}).collect_view()

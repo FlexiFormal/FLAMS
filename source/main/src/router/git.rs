@@ -452,7 +452,7 @@ fn unmanaged(name:ArchiveId,id:u64,and_then:RwSignal<GitState>,git_url:String) -
           <Button size=ButtonSize::Small on_click=move |_| {act.dispatch(());}>"Add"</Button>
             " from branch: "<div style="display:inline-block;"><Combobox value=branch>{
               branches.into_iter().map(|b| {let name = b.name.clone(); view!{
-                <ComboboxOption value=name text="">
+                <ComboboxOption value=name.clone() text=name>
                   {b.name}<span style="font-size:x-small">" (Last commit "{b.commit.id[..8].to_string()}" at "{b.commit.created_at.to_string()}" by "{b.commit.author_name}")"</span>
                 </ComboboxOption>
               }}).collect_view()

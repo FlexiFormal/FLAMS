@@ -37,33 +37,56 @@ impl GitLabOAuth {
 
   /// #### Errors
   pub async fn get_projects(&self,token:String) -> Result<Vec<crate::Project>,super::Err> {
-    let mut client = gitlab::ImpersonationClient::new(&self.1.inner, token);
+    let mut client = gitlab::ImpersonationClient::new(&self.1.0.inner, token);
     client.oauth2_token();
     let r = gitlab::api::projects::Projects::builder()
       .simple(true).min_access_level(gitlab::api::common::AccessLevel::Developer)
       //.membership(false)
       .build().unwrap_or_else(|_| unreachable!());
-    let r = gitlab::api::paged(r, gitlab::api::Pagination::All)
+    let r:Vec<crate::Project> = gitlab::api::paged(r, gitlab::api::Pagination::All)
       .query_async(&client).await?;
+    let mut vs = self.1.0.projects.lock();
+    for p in &r {
+      if !vs.contains(&p.id) {
+        vs.insert(super::ProjectWithId { project: p.clone(), id: None });
+      }
+    }
     Ok(r)
   }
 
   /// #### Errors
   pub async fn get_archive_id(&self,id:u64,token:String,branch:&str) -> Result<Option<ArchiveId>,super::Err> {
-    let mut client = gitlab::ImpersonationClient::new(&self.1.inner, token);
+    {
+      let vs = self.1.0.projects.lock();
+      if let Some(super::ProjectWithId{id:Some(id),..}) = vs.get(&id) {
+        return Ok(id.clone())
+      }
+    }
+
+    macro_rules! ret {
+      ($v:expr) => {{
+        let mut lock= self.1.0.projects.lock();
+        if let Some(mut v) = lock.take(&id) {
+          v.id = Some($v.clone());
+          lock.insert(v);
+        }
+        return Ok($v);
+      }}
+    }
+    let mut client = gitlab::ImpersonationClient::new(&self.1.0.inner, token);
     client.oauth2_token();
     let r = gitlab::api::projects::repository::TreeBuilder::default()
       .project(id).ref_(branch).recursive(false).build().unwrap_or_else(|_| unreachable!());
     let r:Vec<crate::TreeEntry> = r.query_async(&client).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.path.eq_ignore_ascii_case("meta-inf") && matches!(e.kind, crate::DirOrFile::Dir) { Some(e.path) } else {None}) else {
-      return Ok(None)
+      ret!(None)
     };
 
     let r = gitlab::api::projects::repository::TreeBuilder::default()
       .project(id).ref_(branch).path(p).recursive(false).build().unwrap_or_else(|_| unreachable!());
     let r:Vec<crate::TreeEntry> = r.query_async(&client).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.name.eq_ignore_ascii_case("manifest.mf") && matches!(e.kind,crate::DirOrFile::File) { Some(e.path) } else {None}) else {
-      return Ok(None)
+      ret!(None)
     };
 
     let blob = gitlab::api::projects::repository::files::FileRaw::builder()
@@ -76,12 +99,12 @@ impl GitLabOAuth {
         ArchiveId::new(rest.trim())
       })
     });
-    Ok(r)
+    ret!(r)
   }
 
   /// #### Errors
   pub async fn get_branches(&self,id:u64,token:String) -> Result<Vec<crate::Branch>,super::Err> {
-    let mut client = gitlab::ImpersonationClient::new(&self.1.inner, token);
+    let mut client = gitlab::ImpersonationClient::new(&self.1.0.inner, token);
     client.oauth2_token();
     let r = gitlab::api::projects::repository::branches::Branches::builder().project(id)
       .build().unwrap_or_else(|_| unreachable!())
@@ -94,11 +117,11 @@ impl GitLab {
   /// #### Errors
   pub fn new_oauth(&self,redirect:&str) -> Result<GitLabOAuth,OAuthError> {
     use oauth2::{ClientId,ClientSecret,AuthUrl,TokenUrl,RedirectUrl};
-    let url = &self.url;
-    let Some(app_id) = &self.id else {
+    let url = &self.0.url;
+    let Some(app_id) = &self.0.id else {
       return Err(OAuthError::MissingAppID)
     };
-    let Some(app_secret) = &self.secret else {
+    let Some(app_secret) = &self.0.secret else {
       return Err(OAuthError::MissingAppSecret)
     };
     let Ok(auth_url) = AuthUrl::new(format!("{url}/oauth/authorize")) else {
@@ -121,7 +144,7 @@ impl GitLab {
   /// #### Errors
   pub async fn get_oauth_user(&self,token:&oauth2::AccessToken) -> Result<GitlabUser,reqwest::Error> {
     let client = reqwest::Client::new();
-    let resp = client.get(format!("{}/api/v4/user",self.url))
+    let resp = client.get(format!("{}/api/v4/user",self.0.url))
         .bearer_auth(token.secret())
         .send()
         .await?;
