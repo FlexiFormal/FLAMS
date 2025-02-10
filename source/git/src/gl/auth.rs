@@ -43,7 +43,7 @@ impl GitLabOAuth {
       .simple(true).min_access_level(gitlab::api::common::AccessLevel::Developer)
       //.membership(false)
       .build().unwrap_or_else(|_| unreachable!());
-    gitlab::api::paged(r, gitlab::api::Pagination::All)
+    let r = gitlab::api::paged(r, gitlab::api::Pagination::All)
       .query_async(&client).await?;
     Ok(r)
   }
