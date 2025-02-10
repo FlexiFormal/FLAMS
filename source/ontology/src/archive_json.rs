@@ -59,8 +59,22 @@ pub enum DocumentKind {
     acronym:Option<Box<str>>,
     notes:Box<str>,
     slides:Option<Box<str>>,
+    teaser:Option<Box<str>>,
     thumbnail:Option<Box<str>>,
   },
+}
+impl DocumentKind {
+  #[inline]
+  pub fn teaser(&self) -> Option<&str> {
+    match self {
+      Self::Library{teaser,..} | Self::Book{teaser,..} | Self::Paper{teaser,..} | Self::Course{teaser,..} | Self::SelfStudy{teaser,..} => teaser.as_deref()
+    }
+  }
+  pub fn set_teaser(&mut self,new_teaser:Box<str>) {
+    match self {
+      Self::Library{teaser,..} | Self::Book{teaser,..} | Self::Paper{teaser,..} | Self::Course{teaser,..} | Self::SelfStudy{teaser,..} => *teaser = Some(new_teaser)
+    }
+  }
 }
 
 #[derive(serde::Serialize, serde::Deserialize,Debug,Clone)]
@@ -185,7 +199,21 @@ pub enum ArchiveIndex {
       notes:DocumentURI,
       slides:Option<DocumentURI>,
       thumbnail:Option<Box<str>>,
+      teaser:Option<Box<str>>
     },
+}
+impl ArchiveIndex {
+  #[inline]
+  pub fn teaser(&self) -> Option<&str> {
+    match self {
+      Self::Library{teaser,..} | Self::Book{teaser,..} | Self::Paper{teaser,..} | Self::Course{teaser,..} | Self::SelfStudy{teaser,..} => teaser.as_deref()
+    }
+  }
+  pub fn set_teaser(&mut self,new_teaser:Box<str>) {
+    match self {
+      Self::Library{teaser,..} | Self::Book{teaser,..} | Self::Paper{teaser,..} | Self::Course{teaser,..} | Self::SelfStudy{teaser,..} => *teaser = Some(new_teaser)
+    }
+  }
 }
 impl Eq for ArchiveIndex {}
 impl PartialEq for ArchiveIndex {
@@ -232,8 +260,8 @@ impl ArchiveIndex {
                     instructors:instructors.into_iter().map(|is| is.name).collect(), 
                 }
             }
-            DocumentKind::SelfStudy { title, landing, acronym, notes, slides, thumbnail } => {
-                Self::SelfStudy { title, acronym,
+            DocumentKind::SelfStudy { title, landing, acronym, notes, slides, thumbnail,teaser } => {
+                Self::SelfStudy { title, acronym,teaser,
                     landing:DocumentURI::from_archive_relpath(a.clone(), &landing),
                     thumbnail:if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {None} else { thumbnail.map(images) },
                     notes:DocumentURI::from_archive_relpath(a.clone(), &notes),

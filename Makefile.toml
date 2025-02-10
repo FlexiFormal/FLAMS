@@ -74,9 +74,9 @@ fn main() {
     } else {
       std::fs::copy(Path::new("./target/release/flams.exe"),Path::new("./bin/flams.exe")).unwrap();
     }
-    return
   }
-  std::fs::copy(Path::new("./target/release/flams"),Path::new("./bin/flams")).unwrap();
+  #[cfg(not(target_os="windows"))]
+  {std::fs::copy(Path::new("./target/release/flams"),Path::new("./bin/flams")).unwrap();}
 }
 '''
 
@@ -130,7 +130,7 @@ args = ["leptos","build"]
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
-args = ["leptos","watch","--","--port","3000","-c","/home/jazzpirate/work/Software/sTeX/iMMT/settings.toml"]
+args = ["leptos","watch","--","--port","3000","-c","/home/jazzpirate/work/Software/sTeX/FLAMS/settings.toml"]
 
 [tasks.default]
 workspace = false

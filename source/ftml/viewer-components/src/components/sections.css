@@ -9,9 +9,9 @@ body {
     display:block;
     font-weight: bold;
     font-size:xx-large;
-    margin:20px 0;
+    margin:20px 10px;
     &::before {
-      content: "Part " counter(ftml-part, upper-roman) "\A";
+      content: "Part " counter(ftml-part, upper-roman) "\A \A";
       white-space: pre-wrap;
     }
   }

@@ -46,11 +46,13 @@ pub fn Index() -> impl IntoView {
 }
 
 fn wrap_list<V:IntoView+'static>(ttl:&'static str,i:impl FnOnce() -> V) -> impl IntoView + 'static {
+  use thaw::Divider;
   view!{
-    <h3>{ttl}</h3>
+    <h2 style="color:var(--colorBrandForeground1)">{ttl}</h2>
     <div style="display:flex;flex-flow:wrap;">
     {i()}
     </div>
+    <Divider/>
   }
 }
 
@@ -136,7 +138,7 @@ fn do_self_studies(sss:Vec<ArchiveIndex>) -> impl IntoView {
   Some(wrap_list("Self-Study Courses",move || sss.into_iter().map(self_study).collect_view()))
 }
 fn self_study(ss:ArchiveIndex) -> impl IntoView {
-  let ArchiveIndex::SelfStudy { title, landing, acronym, notes, slides, thumbnail }
+  let ArchiveIndex::SelfStudy { title, landing, acronym, notes, slides, thumbnail,teaser }
     = ss else {unreachable!()};
   view!{<Card class="flams-index-card">
     <CardHeader>
@@ -146,6 +148,7 @@ fn self_study(ss:ArchiveIndex) -> impl IntoView {
     </CardHeader>
     <CardPreview>
       {thumbnail.map(|t| do_img(t.to_string()))}
+      {teaser.map(|t| do_teaser(t.to_string()))}
     </CardPreview>
     <div style="margin-top:auto;"/>
     <CardFooter>

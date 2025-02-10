@@ -273,9 +273,19 @@ fn read_index_file(archive:&ArchiveURI,path:&Path) -> (Box<[Institution]>,Box<[A
     let mut idxs = Vec::new();
     for d in v {
         match d {
-            ArchiveDatum::Document(d) => idxs.push(ArchiveIndex::from_kind(d,archive,
-                |i| format!("{}/img?a={}&rp=source/{i}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
-            )),
+            ArchiveDatum::Document(mut d) => {
+                if d.teaser().is_none() {
+                    let desc = path.with_file_name("desc.html");
+                    if desc.exists() {
+                        if let Ok(s) = std::fs::read_to_string(desc) {
+                            d.set_teaser(s.into_boxed_str());
+                        }
+                    }
+                }
+                idxs.push(ArchiveIndex::from_kind(d,archive,
+                    |i| format!("{}/img?a={}&rp=source/{i}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
+                ))
+            },
             ArchiveDatum::Institution(i) => insts.push(match i {
                 Institution::University { title, place, country, url, acronym, logo }
                     => Institution::University { title, place, country, url, acronym, 

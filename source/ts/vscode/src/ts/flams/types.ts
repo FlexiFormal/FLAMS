@@ -73,8 +73,13 @@ export enum Language {
   Slovenian = "sl",
 }
 
-
 export class DocumentURI {
+  uri:string;
+  constructor(uri:string) {
+    this.uri = uri;
+  }
+}
+export class SymbolURI {
   uri:string;
   constructor(uri:string) {
     this.uri = uri;
@@ -87,6 +92,9 @@ export type DocumentURIParams = DocumentURI |
   { a: string, rp: string } | 
   { a:string, p?:string, d:string, l?:Language }
 ;
+
+export type SymbolURIParams = SymbolURI |
+  { a:string, p?:string, m:string, s:string };
 
 export type URIParams = DocumentURI | 
   { a:string} | // ArchiveURI
@@ -103,6 +111,10 @@ export type ArchiveIndex =
   {type:"book", title:string, authors:string[], file:string, teaser?:string, thumbnail?:string} |
   {type:"paper", title:string, authors:string[], file:string, thumbnail?:string, teaser?:string, venue?:string, venue_url?:string} |
   {type:"course", title:string,landing:string, acronym?:string, instructors:string[], institution:string, notes:string, slides?:string, thumbnail?:string, quizzes:boolean, homeworks:boolean, instances:Instance[], teaser?:string} |
-  {type:"self-study", title:string, landing:string, acronym?:string, notes:string, slides?:string, thumbnail?:string, };
+  {type:"self-study", title:string, landing:string, acronym?:string, notes:string, slides?:string, thumbnail?:string,teaser?:string };
 
 export type Instance = {semester:string, instructors?:string[]};
+
+export type CognitiveDimension = "Remember" | "Understand" | "Apply" | "Analyze" | "Evaluate" | "Create";
+
+export type LOKind = "Definition" | "Example" | { "Exercise": CognitiveDimension } | {"SubExercise": CognitiveDimension };

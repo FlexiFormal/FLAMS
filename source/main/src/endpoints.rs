@@ -9,6 +9,7 @@
  * | [`/api/reload`](settings::reload) | (None) | (requires admin login) |
  * | [`/api/login`](login) | `username=<STRING>`, `password=<STRING>` | log in |
  * | [`/api/login_state`](login_state) | (None) | [LoginState] |
+ * | `/gitlab_login` |  |  |
  * | **Backend** | | |
  * | [`/api/backend/group_entries`](backend::group_entries) | (optional) `in=<STRING>` | `(Vec<`[ArchiveGroupData](crate::router::backend::ArchiveGroupData)`>,Vec<`[ArchiveData](crate::router::backend::ArchiveData)`>)` - the archives and archive groups in the provided archive group (if given) or on the top-level (if None) |
  * | [`/api/backend/archive_entries`](backend::archive_entries) | `archive=<STRING>`, (optional) `path=<STRING>` | `(Vec<`[DirectoryData](crate::router::backend::DirectoryData)`>,Vec<`[FileData](crate::router::backend::FileData)`>)` - the source directories and files in the provided archive, or (if given) the relative path within the provided archive |
