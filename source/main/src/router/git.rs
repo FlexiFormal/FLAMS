@@ -49,10 +49,10 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
     .map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?;
   let mut r2 = Vec::new();
   for p in r {
-    tracing::warn!("temp for remote debugging: {}",p.name);
+    tracing::warn!("temp for remote debugging: {}",p.path);
     if let Some(branch) = &p.default_branch {
       if let Some(id) = oauth.get_archive_id(p.id, secret.clone(), branch).await
-      .map_err(|e| tracing::error!("error obtaining archive ID of {} ({}): {e}",p.name,p.id)).ok().flatten() {
+      .map_err(|e| tracing::error!("error obtaining archive ID of {} ({}): {e}",p.path,p.id)).ok().flatten() {
         r2.push((p,id));
       }
     }
