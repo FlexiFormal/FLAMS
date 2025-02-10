@@ -54,11 +54,8 @@ impl GitLabOAuth {
     client.oauth2_token();
     let r = gitlab::api::projects::repository::TreeBuilder::default()
       .project(id).ref_(branch).recursive(false).build().unwrap_or_else(|_| unreachable!());
-    let r:Vec<crate::TreeEntry> = r.query_async(&client).await.map_err(|e| {
-      tracing::warn!("Could not get root directory");e
-    })?;
+    let r:Vec<crate::TreeEntry> = r.query_async(&client).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.path.eq_ignore_ascii_case("meta-inf") && matches!(e.kind, crate::DirOrFile::Dir) { Some(e.path) } else {None}) else {
-      tracing::warn!("No meta-inf");
       return Ok(None)
     };
 
@@ -66,7 +63,6 @@ impl GitLabOAuth {
       .project(id).ref_(branch).path(p).recursive(false).build().unwrap_or_else(|_| unreachable!());
     let r:Vec<crate::TreeEntry> = r.query_async(&client).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.name.eq_ignore_ascii_case("manifest.mf") && matches!(e.kind,crate::DirOrFile::File) { Some(e.path) } else {None}) else {
-      tracing::warn!("No manifest");
       return Ok(None)
     };
 
