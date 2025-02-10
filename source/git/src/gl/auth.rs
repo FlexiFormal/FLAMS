@@ -41,7 +41,8 @@ impl GitLabOAuth {
     client.oauth2_token();
     let r = gitlab::api::projects::Projects::builder()
       .simple(true).min_access_level(gitlab::api::common::AccessLevel::Developer)
-      .membership(true).build().unwrap_or_else(|_| unreachable!()).query_async(&client).await?;
+      //.membership(false)
+      .build().unwrap_or_else(|_| unreachable!()).query_async(&client).await?;
     Ok(r)
   }
 
