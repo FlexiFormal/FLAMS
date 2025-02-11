@@ -69,10 +69,10 @@ impl GLInstance {
 			match GitLab::new(cfg).await {
 				Ok(gl) => {
 					*self.inner.write() = MaybeGitlab::Loaded(gl.clone());
-          let ps = gl.get_projects().await.unwrap();
+          let Ok(ps) = gl.get_projects().await else {return };
           for p in ps {
             if let Some(d) = p.default_branch {
-              let _ = gl.get_archive_id(p.id, &d);
+              let _ = gl.get_archive_id(p.id, &d).await;
             }
           }
 				}

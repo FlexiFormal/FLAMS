@@ -73,30 +73,25 @@ export enum Language {
   Slovenian = "sl",
 }
 
-export class DocumentURI {
-  uri:string;
-  constructor(uri:string) {
-    this.uri = uri;
-  }
-}
-export class SymbolURI {
-  uri:string;
-  constructor(uri:string) {
-    this.uri = uri;
-  }
-}
+export type DocumentURI = string;
+export type SymbolURI = string;
+export type DocumentElementURI = string;
 
 export type CSS = { Link: string } | { Inline: string };
 
-export type DocumentURIParams = DocumentURI | 
+export type DocumentURIParams = {uri:DocumentURI} | 
   { a: string, rp: string } | 
-  { a:string, p?:string, d:string, l?:Language }
+  { a:string, p?:string, d:string, l:Language }
 ;
 
-export type SymbolURIParams = SymbolURI |
+export type SymbolURIParams = {uri:SymbolURI} |
   { a:string, p?:string, m:string, s:string };
 
-export type URIParams = DocumentURI | 
+export type DocumentElementURIParams = {uri:DocumentElementURI} |
+  {a:string, p?:string, d:string, l:Language, e:string};
+
+
+export type URIParams = {uri:DocumentURI} | 
   { a:string} | // ArchiveURI
   { a: string, rp: string } | // DocumentURI 
   { a:string, p?:string, d:string, l?:Language } | // DocumentURI

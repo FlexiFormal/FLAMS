@@ -51,30 +51,32 @@ export class FLAMSServer {
 
   // Return the TOC of the given document
   async contentToc(uri:flams.DocumentURIParams):Promise<[flams.CSS[],flams.TOCElem[]] | undefined> {
-    const arg = (uri instanceof flams.DocumentURI)? { uri: uri.uri } : uri;
-    return await this.getRequest("content/toc",arg);
+    return await this.getRequest("content/toc",uri);
   }
 
   // Get all learning objects for the given symbol; if exercises === true, this includes Exercises and Subexercises;
   // otherwise, only definitions and examples.
   async learningObjects(uri:flams.SymbolURIParams,exercises?:boolean):Promise<[[string,flams.LOKind]] | undefined> {
     const exc = exercises?exercises:false;
-    const sym = (uri instanceof flams.SymbolURI)? { uri: uri.uri, exercises: exc } : {a:uri.a,p:uri.p,m:uri.m,s:uri.s,exercises:exc};
+    const sym = ("uri" in uri)? { uri: uri.uri, exercises: exc } : {a:uri.a,p:uri.p,m:uri.m,s:uri.s,exercises:exc};
     return await this.getRequest("content/los",sym);
   }
 
-  async contentDocument(uri:flams.DocumentURIParams):Promise<[flams.DocumentURI,flams.CSS[],string] | undefined> {
-    const arg = (uri instanceof flams.DocumentURI)? { uri: uri.uri } : uri;
-    const ret = <[string,flams.CSS[],string] | undefined> await this.getRequest("content/document",arg);
-    if (ret) {
-      const [s,c,h] = ret;
-      return [new flams.DocumentURI(s),c,h];
+  // Get the solution for the problem with the given URI. As string, so it can be
+  // deserialized by the ts binding for the WASM datastructure
+  async solution(uri:flams.DocumentElementURIParams): Promise<string | undefined> {
+    let r = await this.getRequestI("content/solution",uri);
+    if (r) {
+      return await r.text();
     }
   }
 
+  async contentDocument(uri:flams.DocumentURIParams):Promise<[flams.DocumentURI,flams.CSS[],string] | undefined> {
+    return await this.getRequest("content/document",uri);
+  }
+
   async contentFragment(uri:flams.URIParams):Promise<[flams.CSS[],string] | undefined> {
-    const arg = (uri instanceof flams.DocumentURI)? { uri: uri.uri } : uri;
-    return await this.getRequest("content/fragment",arg);
+    return await this.getRequest("content/fragment",uri);
   }
 
 

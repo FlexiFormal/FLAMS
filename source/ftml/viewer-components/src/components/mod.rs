@@ -10,6 +10,7 @@ pub(crate) mod navigation;
 pub mod omdoc;
 
 use flams_ontology::{narration::{exercises::CognitiveDimension, LOKind}, uris::DocumentElementURI};
+use inputref::InInputRef;
 pub use inputref::{InputRef,IfInputref};
 pub use toc::*;
 pub use sections::{OnSectionBegin,OnSectionEnd};
@@ -96,13 +97,15 @@ fn do_components<const MATH:bool>(skip:usize,elements:FTMLElements,orig:Original
       }
       OpenFTMLElement::SetSectionLevel(level) => {
         use leptos::context::Provider;
+        let in_inputref = use_context::<InInputRef>().map(|i| i.0).unwrap_or(false);
         update_context::<SectionCounters,_>(|current| {
-          if !matches!(current.current,LogicalLevel::None) {
+          if matches!(current.current,LogicalLevel::None) { 
+            current.max = *level;
+          } else if !in_inputref {
             tracing::error!("ftml:set-section-level: Section already started");
           }
-          current.max = *level;
         });
-        do_components::<MATH>(skip+1,elements,orig).into_any()
+        ().into_any()
       }
       OpenFTMLElement::Paragraph{kind,inline:false,uri,styles,..} => {
         paragraphs::paragraph(*kind,uri.clone(),styles.clone(),move || do_components::<MATH>(skip+1,elements,orig)).into_any()

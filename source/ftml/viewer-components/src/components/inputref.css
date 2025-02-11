@@ -1,12 +1,13 @@
 .ftml-inputref {
-  margin: 5px 15px 5px 15px;
+  margin: 15px;
   display: block;
-  border: 3px solid blue;
-  cursor:cell;
+  border-bottom: 3px solid blue;
+  cursor:pointer;
   padding: 0 5px;
-  width:auto;
-  font-size:medium;
+  width:fit-content;
+  font-size:larger;
   font-family:serif;
   color:blue;
+  font-weight:bold;
 }
-.ftml-inputref::before { content: "⊞ ";}
+.ftml-inputref::before { content: "▶ ";}
