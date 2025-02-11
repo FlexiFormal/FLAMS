@@ -1,5 +1,6 @@
 use flams_ontology::uris::ArchiveId;
 use flams_utils::{prelude::HSet, vecmap::VecSet};
+use gitlab::api::AsyncQuery;
 
 pub mod auth;
 
@@ -67,7 +68,13 @@ impl GLInstance {
 		tokio::spawn(async move {
 			match GitLab::new(cfg).await {
 				Ok(gl) => {
-					*self.inner.write() = MaybeGitlab::Loaded(gl);
+					*self.inner.write() = MaybeGitlab::Loaded(gl.clone());
+          let ps = gl.get_projects().await.unwrap();
+          for p in ps {
+            if let Some(d) = p.default_branch {
+              let _ = gl.get_archive_id(p.id, &d);
+            }
+          }
 				}
 				Err(e) => {
 					tracing::error!("Failed to load gitlab: {e}");
@@ -164,6 +171,52 @@ impl GitLab {
     Ok(v)
     //let raw = gitlab::api::raw(q).query_async(&self.inner).await?;
     //Ok(std::str::from_utf8(raw.as_ref())?.to_string())
+  }
+
+  /// #### Errors
+  pub async fn get_archive_id(&self,id:u64,branch:&str) -> Result<Option<ArchiveId>,Err> {
+    {
+      let vs = self.0.projects.lock();
+      if let Some(ProjectWithId{id:Some(id),..}) = vs.get(&id) {
+        return Ok(id.clone())
+      }
+    }
+
+    macro_rules! ret {
+      ($v:expr) => {{
+        let mut lock= self.0.projects.lock();
+        if let Some(mut v) = lock.take(&id) {
+          v.id = Some($v.clone());
+          lock.insert(v);
+        }
+        return Ok($v);
+      }}
+    }
+    let r = gitlab::api::projects::repository::TreeBuilder::default()
+      .project(id).ref_(branch).recursive(false).build().unwrap_or_else(|_| unreachable!());
+    let r:Vec<crate::TreeEntry> = r.query_async(&self.0.inner).await?;
+    let Some(p) = r.into_iter().find_map(|e| if e.path.eq_ignore_ascii_case("meta-inf") && matches!(e.kind, crate::DirOrFile::Dir) { Some(e.path) } else {None}) else {
+      ret!(None)
+    };
+
+    let r = gitlab::api::projects::repository::TreeBuilder::default()
+      .project(id).ref_(branch).path(p).recursive(false).build().unwrap_or_else(|_| unreachable!());
+    let r:Vec<crate::TreeEntry> = r.query_async(&self.0.inner).await?;
+    let Some(p) = r.into_iter().find_map(|e| if e.name.eq_ignore_ascii_case("manifest.mf") && matches!(e.kind,crate::DirOrFile::File) { Some(e.path) } else {None}) else {
+      ret!(None)
+    };
+
+    let blob = gitlab::api::projects::repository::files::FileRaw::builder()
+      .project(id).file_path(p).ref_(branch).build().unwrap_or_else(|_| unreachable!());
+    let r  = gitlab::api::raw(blob).query_async(&self.0.inner).await?;
+    let r = std::str::from_utf8(&r)?;
+    let r = r.split('\n').find_map(|line| {
+      let line = line.trim();
+      line.strip_prefix("id:").map(|rest| {
+        ArchiveId::new(rest.trim())
+      })
+    });
+    ret!(r)
   }
 }
 

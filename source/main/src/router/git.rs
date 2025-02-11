@@ -206,6 +206,37 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
   ).await.unwrap_or_else(|e| Err(e.to_string().into()))?//.map_err(Into::into)
 }
 
+#[server(
+  prefix="/api/gitlab",
+  endpoint="get_new_commits",
+)]
+pub async fn get_new_commits(queue:Option<NonZeroU32>,id:ArchiveId) -> Result<Vec<(String,flams_git::Commit)>,ServerFnError<String>> {
+  use flams_system::building::queue_manager::QueueManager;
+  use flams_system::backend::{AnyBackend,SandboxedRepository};
+
+  let (oauth,secret) = get_oauth()?;
+  let login = LoginState::get_server();
+  if matches!(login,LoginState::NoAccounts) {
+    return Err("Only allowed in public mode".to_string().into())
+  }
+  tokio::task::spawn_blocking(move || 
+    login.with_opt_queue(queue, |queue_id,queue| {
+      let AnyBackend::Sandbox(backend) = queue.backend() else { unreachable!()};
+      let path = backend.path_for(&id);
+      let r = flams_git::repos::GitRepo::open(path).ok().and_then(|git| {
+        let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
+        git.get_origin_url().ok().and_then(|url| {
+          if url.starts_with(gitlab_url) {
+            git.get_new_commits_with_oauth(&secret).ok()
+          } else { None }
+        })
+      }).unwrap_or_default();
+      Ok(r)
+    }).map_err(|s| ServerFnError::WrappedServerError(s))
+  ).await.unwrap_or_else(|e| Err(e.to_string().into()))?
+}
+
+
 #[component]
 pub fn Archives() -> impl IntoView {
   let r = Resource::new(|| (),|()| get_archives());

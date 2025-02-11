@@ -22,7 +22,7 @@ pub enum RepoInfo {
     remote:String,
     branch:String,
     commit:flams_git::Commit,
-    updates:Vec<(String,flams_git::Commit)>
+    //updates:Vec<(String,flams_git::Commit)>
   }
 }
 
@@ -131,7 +131,7 @@ pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
         for ri in d { match ri {
           SandboxedRepository::Copy(id) => archives.push(RepoInfo::Copy(id)),
           SandboxedRepository::Git { id, branch, commit, remote } => {
-            let updates = if let Some((oauth,secret)) = &oauth {
+            /*let updates = if let Some((oauth,secret)) = &oauth {
               let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
               let Some(path) = QueueManager::get().with_queue(k, |q| {
                 let q = q?;
@@ -145,9 +145,9 @@ pub async fn get_queues() -> Result<Vec<QueueInfo>,ServerFnError<String>> {
                   } else { None }
                 })
               }).unwrap_or_default()
-            } else { Vec::new()};
+            } else { Vec::new()};*/
             archives.push(RepoInfo::Git { 
-              id,branch:branch.to_string(),commit,remote:remote.to_string(),updates
+              id,branch:branch.to_string(),commit,remote:remote.to_string()//,updates
             })
           }
         }}
@@ -432,13 +432,18 @@ fn repos(queue_id:NonZeroU32,allowed:bool) -> impl IntoView {
               <TableCell><TableCellLayout>"(Copied from MathHub)"</TableCellLayout></TableCell>
             </TableRow>
           }),
-          RepoInfo::Git{id,branch,commit,updates,remote} => leptos::either::Either::Right({
-            let style = if allowed {
-              if updates.is_empty() {
-                "color:green;"
-              } else {
-                "color:yellowgreen;"
-              }
+          RepoInfo::Git{id,branch,commit,remote/*,updates */} => leptos::either::Either::Right({
+            let updates = RwSignal::<Option<Vec<(String,flams_git::Commit)>>>::new(None);
+            let style = move || if allowed {
+              updates.with(|updates| {
+                if let Some(updates) = updates {
+                  if updates.is_empty() {
+                    "color:green;"
+                  } else {
+                    "color:yellowgreen;"
+                  }
+                } else {""}
+              })
             } else {style};
             let idstr = id.to_string();
             view!{
@@ -447,46 +452,65 @@ fn repos(queue_id:NonZeroU32,allowed:bool) -> impl IntoView {
                 <TableCell><TableCellLayout>{branch}</TableCellLayout></TableCell>
                 <TableCell><TableCellLayout>
                   {commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}
-                  {if allowed {Some({
-                    if updates.is_empty() {leptos::either::Either::Left(view!(<span style=style>" (already up-to-date)"</span>))} else {
-                      leptos::either::Either::Right({
-                        use thaw::{Button,ButtonSize,Combobox,ComboboxOption,ToasterInjection};
-                        let first = updates.first().map(|(name,_)| name.clone()).unwrap_or_default();
-                        let branch = RwSignal::new(first.clone());
-                        let _ = Effect::new(move || if branch.with(|s| s.is_empty()) {
-                          branch.set(first.clone());
-                        });
-                        let update : UpdateQueues = expect_context();
-                        let toaster = ToasterInjection::expect_context();
-                        let commit_map:VecMap<_,_> = updates.clone().into();
-                        let archive = id.clone();
-                        let act = flams_web_utils::components::message_action(
-                          move |()| super::git::update_from_branch(Some(queue_id),archive.clone(),remote.clone(),branch.get_untracked()),
-                          move |(i,_)| {
-                            update.0.set(());
-                            format!("{i} jobs queued")
+                  {if allowed {Some(move || updates.with(|up| {
+                    let Some(up) = up else {
+                      let aid = id.clone();
+                      let toaster = thaw::ToasterInjection::expect_context();
+                      let get_updates = Action::new(move |()| {
+                        let id = aid.clone();
+                        async move {
+                          match super::git::get_new_commits(Some(queue_id),id).await {
+                            Ok(v) => updates.set(Some(v)),
+                            Err(e) => flams_web_utils::components::error_with_toaster(e, toaster),
                           }
-                        );
-                        view!{
-                          <span style="color:green">
-                            " Updates available: "
-                          </span>
-                          <div style="margin-left:10px">
-                            <Button size=ButtonSize::Small on_click=move |_| {act.dispatch(());}>"Update"</Button>
-                            " from branch: "
-                            <div style="display:inline-block;"><Combobox selected_options=branch>{
-                              updates.into_iter().map(|(name,commit)| {let vname = name.clone(); view!{
-                                <ComboboxOption text=vname.clone() value=vname>
-                                  {name}<span style="font-size:x-small">" (Last commit "{commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}")"</span>
-                                </ComboboxOption>
-                              }}).collect_view()
-                            }</Combobox></div>
-                          </div>
                         }
-
-                      })
+                      });
+                      return leptos::either::EitherOf3::A(view!{
+                        <button on:click=move |_| {get_updates.dispatch(());}>"Check for updates"</button>
+                      });
+                    };
+                    if up.is_empty() {
+                      return leptos::either::EitherOf3::B(view!(<span style=style>" (already up-to-date)"</span>))
                     }
-                  })} else {None}}
+                    let updates = up.clone();
+
+                    leptos::either::EitherOf3::C({
+                      use thaw::{Button,ButtonSize,Combobox,ComboboxOption,ToasterInjection};
+                      let first = updates.first().map(|(name,_)| name.clone()).unwrap_or_default();
+                      let branch = RwSignal::new(first.clone());
+                      let _ = Effect::new(move || if branch.with(|s| s.is_empty()) {
+                        branch.set(first.clone());
+                      });
+                      let update : UpdateQueues = expect_context();
+                      let toaster = ToasterInjection::expect_context();
+                      let commit_map:VecMap<_,_> = updates.clone().into();
+                      let archive = id.clone();
+                      let remote = remote.clone();
+                      let act = flams_web_utils::components::message_action(
+                        move |()| super::git::update_from_branch(Some(queue_id),archive.clone(),remote.clone(),branch.get_untracked()),
+                        move |(i,_)| {
+                          update.0.set(());
+                          format!("{i} jobs queued")
+                        }
+                      );
+                      view!{
+                        <span style="color:green">
+                          " Updates available: "
+                        </span>
+                        <div style="margin-left:10px">
+                          <Button size=ButtonSize::Small on_click=move |_| {act.dispatch(());}>"Update"</Button>
+                          " from branch: "
+                          <div style="display:inline-block;"><Combobox selected_options=branch>{
+                            updates.into_iter().map(|(name,commit)| {let vname = name.clone(); view!{
+                              <ComboboxOption text=vname.clone() value=vname>
+                                {name}<span style="font-size:x-small">" (Last commit "{commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}")"</span>
+                              </ComboboxOption>
+                            }}).collect_view()
+                          }</Combobox></div>
+                        </div>
+                      }
+                    })
+                  }))} else {None}}
                 </TableCellLayout></TableCell>
               </TableRow>
             }

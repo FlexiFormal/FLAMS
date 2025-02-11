@@ -27,7 +27,7 @@ pub(super) fn inputref(uri:DocumentURI,id:&str) -> impl IntoView {
   });
   let ctrs: SectionCounters = expect_context();
   match ctrs.current {
-    LogicalLevel::Section(lvl) if lvl > SectionLevel::Subsection => (),
+    LogicalLevel::Section(lvl) if lvl >= SectionLevel::Subsection => (),
     _ => replace.set(true)
   }
 

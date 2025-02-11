@@ -26,6 +26,7 @@
  * | **Git** | | |
  * | [`/api/gitlab/get_archives`](git::get_archives) |  | [`ProjectTree`](git::ProjectTree) - returns the list of GitLab projects |
  * | [`/api/gitlab/get_branches`](git::get_branches) | `id=<u64>` | `Vec<`[`Branch`](flams_git::Branch)`>` - returns the list of branches for the given GitLab project |
+ * | [`/api/gitlab/get_new_commits`](git::get_new_commit) | `queue=<u64>&id=ArchiveId` | `Vec<`(String,`[`Commit`](flams_git::Commit)`)`>` |
  * | **Web Sockets** | | |
  * | [`/ws/log`](crate::router::logging::LogSocket) |  |  |
  * | [`/ws/queue`](crate::router::buildqueue::QueueSocket) |  |  |
