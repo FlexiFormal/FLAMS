@@ -43,7 +43,6 @@ pub(crate) struct FTMLConfig {
 }
 
 impl FTMLConfig {
-
   pub fn new() -> Self {
     let owner = Owner::new();//current().expect("Something went horribly wrong");
     Self {
@@ -70,7 +69,7 @@ impl FTMLConfig {
         let uri = uri.clone();
         self.on_clicks.update_value(|map| {map.insert(uri.clone(),signal);});
         let _ = view!{<Dialog open=signal><DialogSurface>{
-                do_onclick(uri)
+            do_onclick(uri)
         }</DialogSurface></Dialog>};
         signal
     })
@@ -79,7 +78,6 @@ impl FTMLConfig {
 
 #[cfg(feature="omdoc")]
 impl FTMLConfig {
-
   pub fn get_forced_notation(&self,uri:&URI) -> RwSignal<Option<DocumentElementURI>> {
     self.owner.with(||
         self.forced_notations

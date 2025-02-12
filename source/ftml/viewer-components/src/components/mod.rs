@@ -55,18 +55,19 @@ fn do_components<const MATH:bool>(skip:usize,elements:FTMLElements,orig:Original
         ).into_any()
       }
       OpenFTMLElement::DefComp =>
-        terms::do_comp::<_,MATH>(true,move|| view!(<DomCont skip_head=true orig cont=crate::iterate/>)).into_any(),
+        terms::do_comp::<_,MATH>(true,move|| view!(<DomCont skip_head=true orig=orig.clone() cont=crate::iterate/>)).into_any(),
       OpenFTMLElement::Comp | OpenFTMLElement::MainComp =>
-        terms::do_comp::<_,MATH>(false,move|| view!(<DomCont skip_head=true orig cont=crate::iterate/>)).into_any(),
+        terms::do_comp::<_,MATH>(false,move|| view!(<DomCont skip_head=true orig=orig.clone() cont=crate::iterate/>)).into_any(),
       OpenFTMLElement::Definiendum(uri) =>
         terms::do_definiendum::<_,MATH>(move || do_components::<MATH>(skip+1,elements,orig)).into_any(),
       OpenFTMLElement::Arg(arg) =>
         terms::do_arg(orig,*arg, move |orig| 
           do_components::<MATH>(skip+1,elements,orig)
         ).into_any(),
-      OpenFTMLElement::Exercise { uri, autogradable, sub_exercise,.. } =>
+      OpenFTMLElement::Exercise { uri, autogradable, sub_exercise,styles,.. } =>
         {
-          exercise::exercise(&uri.clone(), *autogradable, *sub_exercise,
+          let styles = styles.clone();
+          exercise::exercise(&uri.clone(), *autogradable, *sub_exercise,styles,
             move || do_components::<MATH>(skip+1,elements,orig)
           ).into_any()
         },

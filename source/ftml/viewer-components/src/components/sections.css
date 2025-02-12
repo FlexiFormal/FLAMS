@@ -71,3 +71,33 @@ body {
     }
   }
 }
+
+.ftml-paragraph, .ftml-definition, .ftml-assertion, .ftml-example, .ftml-problem, .ftml-subproblem {
+  & .ftml-title {
+    display:inline-block;
+    font-weight: bold;
+    margin:0;
+    font-size: inherit;
+    &::before {
+      content: var(--ftml-paragraph-str);
+    }
+    &::after {
+      content: " ";
+    }
+  }
+}
+.ftml-paragraph, .ftml-subproblem {
+  --ftml-paragraph-str: "";
+}
+.ftml-definition {
+  --ftml-paragraph-str: "Definition ";
+}
+.ftml-assertion {
+  --ftml-paragraph-str: "Assertion ";
+}
+.ftml-example {
+  --ftml-paragraph-str: "Example ";
+}
+.ftml-problem {
+  --ftml-paragraph-str: "Exercise ";
+}

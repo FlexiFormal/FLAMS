@@ -1,12 +1,13 @@
 use flams_ontology::{narration::exercises::{BlockFeedback, CheckedResult, ExerciseFeedback, ExerciseResponse as OrigResponse, FillinFeedback, FillinFeedbackKind, Solutions}, uris::DocumentElementURI};
 use flams_utils::vecmap::VecMap;
+use flams_web_utils::inject_css;
 use leptos::{context::Provider, prelude::*};
 use leptos_dyn_dom::OriginalNode;
 use serde::Serialize;
 use ftml_extraction::prelude::FTMLElements;
 use smallvec::SmallVec;
 
-use crate::{components::documents::ForcedName, ts::{JsFun, JsOrRsF}};
+use crate::{components::documents::ForcedName, config::{LogicalLevel, SectionCounters}, ts::{JsFun, JsOrRsF}};
 
 //use crate::ExerciseOptions;
 
@@ -48,7 +49,21 @@ enum ExerciseResponse {
   Fillinsol(String)
 }
 
-pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:bool,sub_exercise:bool,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:bool,sub_exercise:bool,styles:Box<[Box<str>]>,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+  inject_css("ftml-sections", include_str!("sections.css"));
+  let mut counters : SectionCounters = expect_context();
+  counters.current = LogicalLevel::Paragraph;
+  let cls = {
+    let mut s = String::new();
+    s.push_str("ftml-problem");
+    for style in styles {
+      s.push(' ');
+      s.push_str("ftml-problem-");
+      s.push_str(&style);
+    }
+    s
+  };
+
   let uri = with_context::<ForcedName,_>(|n| n.update(uri)).unwrap_or_else(|| uri.clone());
   let ex = CurrentExercise{
     solutions:RwSignal::new(0),
@@ -72,9 +87,7 @@ pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:
   ).unwrap_or(leptos::either::Either::Left(false));
   let uri = ex.uri.clone();
   view!{
-    <Provider value=ex>
-      <div style="border-left:3px solid red;margin-top:5px;margin-bottom:5px;padding-left:5px;margin-left:-8px">
-        <b>"Exercise"</b>
+    <Provider value=ex><Provider value=counters><div class=cls>
         {//<form>{
           let r = children();
           match is_done {
@@ -98,8 +111,7 @@ pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:
             })
           }
         }//</form>
-      </div>
-    </Provider>
+    </div></Provider></Provider>
   }
 }
 

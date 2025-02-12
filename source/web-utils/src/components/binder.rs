@@ -1,3 +1,4 @@
+/*
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::too_many_lines)]
 
@@ -379,3 +380,4 @@ fn window_inner_height() -> Option<f64> {
     let inner_height = inner_height.as_f64()?;
     Some(inner_height)
 }
+ */

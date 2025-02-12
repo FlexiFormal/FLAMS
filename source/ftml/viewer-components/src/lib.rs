@@ -49,8 +49,9 @@ pub fn FTMLGlobalSetup<Ch:IntoView+'static>(
     let children = children.into_inner();
     #[cfg(any(feature="csr",feature="hydrate"))]
     provide_context(RwSignal::new(DOMExtractor::default()));
-    provide_context(FTMLConfig::new());
     provide_context(SectionCounters::default());
+    provide_context(NarrativeURI::Document(DocumentURI::no_doc()));
+    provide_context(FTMLConfig::new());
     //provide_context(exercises.unwrap_or_default());
     children()
 }

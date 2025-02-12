@@ -1,10 +1,10 @@
 use flams_ontology::{content::terms::ArgMode, uris::{ArchiveURITrait, ContentURI, DocumentElementURI, SymbolURI, URIWithLanguage, URI}};
-use flams_web_utils::{components::{DivOrMrow, Popover, OnClickModal,PopoverSize, PopoverTriggerType}, do_css, inject_css};
+use flams_web_utils::{components::{/*DivOrMrow, */Popover, OnClickModal,PopoverSize, PopoverTriggerType}, do_css, inject_css};
 use leptos::{context::Provider, either::{Either, EitherOf3}, prelude::*};
 use leptos_dyn_dom::OriginalNode;
 use ftml_extraction::open::terms::{OpenArg, OpenTerm, PreVar, VarOrSym};
 
-use crate::{components::{IntoLOs, LOs}, config::FTMLConfig, FTMLString};
+use crate::{components::{IntoLOs, LOs}, config::{FTMLConfig, SectionCounters}, FTMLString};
 
 #[cfg(feature="omdoc")]
 enum DomTermArgs {
@@ -138,7 +138,7 @@ mod term_replacing {
 
     let substituted = RwSignal::new(false);
 
-    let oclone = orig.deep_clone();
+    let oclone = orig;//.deep_clone();
     view!{<Provider value=Some(head)>{move || {
       macro_rules! orig {
         () => {{
@@ -154,7 +154,7 @@ mod term_replacing {
         }};
       }
       if let Some(u) = notation_signal.get() {
-        if substituted.get() {
+        if false {//substituted.get() {
           let rf = NodeRef::new();
           let _ = Effect::new(move ||
             if rf.get().is_some() {
@@ -197,11 +197,11 @@ mod term_replacing {
         } else {
           //tracing::debug!("Applied notation; {elements:?} original:\n{}\nresult:\n{html}",oclone.html_string());
           substituted.update_untracked(|v| *v = true);
-          leptos::either::EitherOf3::C(view!{<mrow class="ftml-comp-replaced"><Provider value=Some(SkipOne)>
+          leptos::either::EitherOf3::C(view!{/*<mrow class="ftml-comp-replaced">*/<Provider value=Some(SkipOne)>
             //{view!(
-              <DomStringContMath html cont=crate::iterate/>
+              <DomStringContMath html cont=crate::iterate class="ftml-comp-replaced"/>
             //)}
-          </Provider></mrow>})
+          </Provider>/*</mrow>*/})
         }
       } else {
         orig!()
@@ -276,8 +276,9 @@ pub(super) fn do_definiendum<V:IntoView+'static,const MATH:bool>(children:impl F
   }
 }
 
-pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(is_defi:bool,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(is_defi:bool,mut children:impl FnMut() -> V + Send + 'static) -> impl IntoView {
   use flams_web_utils::components::PopoverTrigger;
+  inject_css("flams-hover", ".flams-hover {padding:1px !important;}");
   //tracing::info!("comp!");
   let in_term = use_context::<Option<InTermState>>().flatten();
   if let Some(in_term) = in_term {
@@ -300,26 +301,33 @@ pub(super) fn do_comp<V:IntoView+'static,const MATH:bool>(is_defi:bool,children:
     );
     let do_popover = || use_context::<DisablePopover>().is_none();
     let s = in_term.owner;
-    let node_type = if MATH { DivOrMrow::Mrow } else { DivOrMrow::Div };
+    //let node_type = if MATH { DivOrMrow::Mrow } else { DivOrMrow::Div };
     
     if do_popover() {
       let ocp = expect_context::<crate::config::FTMLConfig>().get_on_click(&s);
       //let s_click = s.clone();
       Either::Left(view!(
-        <Popover node_type class 
+        <Popover class="flams-hover" //node_type class 
           size=PopoverSize::Small
           on_click_signal=ocp
           on_open=move || is_hovered.set(true) 
           on_close=move || is_hovered.set(false)
         >
-          <PopoverTrigger class slot>{children()}</PopoverTrigger>
+          <PopoverTrigger /*class*/ slot>{//view!(<>{move || {
+            children().add_any_attr(leptos::tachys::html::class::class(move || class))
+          }//}</>)}
+          </PopoverTrigger>
           //<OnClickModal slot>{do_onclick(s_click)}</OnClickModal>
           //<div style="max-width:600px;">
             {match s {
               VarOrSym::V(v) => EitherOf3::A(view!{<span>"Variable "{v.name().last_name().to_string()}</span>}),
               VarOrSym::S(ContentURI::Symbol(s)) => EitherOf3::B(crate::remote::get!(definition(s.clone()) = (css,s) => {
                 for c in css { do_css(c); }
-                Some(view!(<div style="color:black;background-color:white;padding:3px;"><FTMLString html=s/></div>))
+                Some(view!(
+                  <div style="color:black;background-color:white;padding:3px;max-width:600px;">
+                    <FTMLString html=s/>
+                  </div>
+                ))
               })),
               VarOrSym::S(ContentURI::Module(m)) =>
                 EitherOf3::C(view!{<div>"Module" {m.name().last_name().to_string()}</div>}),

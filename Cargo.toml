@@ -154,11 +154,15 @@ leptos_meta= "0.7"
 leptos_router = { version = "0.7", features=["nightly"]}
 
 #thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-thaw = { version="=0.4.0-beta5",features=["nightly"] }
+#thaw = { version="=0.4.0-beta5",features=["nightly"] }
 #thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-thaw_components = "=0.2.0-beta5"
+#thaw_components = "=0.2.0-beta5"
 #thaw_utils = { features=["nightly"], git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
-thaw_utils = {features=["nightly"],version="=0.1.0-beta5"}
+#thaw_utils = {features=["nightly"],version="=0.1.0-beta5"}
+thaw = { version="0.4.2",features=["nightly"] }
+thaw_components = "0.3"
+thaw_utils = {features=["nightly"],version="0.1"}
+
 
 icondata_bi = "0"
 icondata_ai = "0"

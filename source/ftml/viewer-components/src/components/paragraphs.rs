@@ -6,7 +6,7 @@ use crate::config::{LogicalLevel, SectionCounters};
 
 pub(super) fn paragraph<V:IntoView+'static>(kind:ParagraphKind,uri:DocumentElementURI,styles:Box<[Box<str>]>,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   let mut counters : SectionCounters = expect_context();
-  inject_css("ftml-paragraphs", include_str!("paragraphs.css"));
+  inject_css("ftml-sections", include_str!("sections.css"));
   counters.current = LogicalLevel::Paragraph;
   let prefix = match kind {
     ParagraphKind::Assertion => Some("ftml-assertion"),
