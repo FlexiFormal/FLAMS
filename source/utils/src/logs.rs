@@ -84,7 +84,7 @@ pub struct LogTree {
 impl LogTree {
     fn merge(&mut self,line:LogTreeElem, parent:Option<String>) {
         let mut path = Vec::new();
-        let p = if let Some(p) = parent.and_then(|p| self.open_span_paths.get(&p)) {
+        let p = if let Some(p) = parent.as_ref().and_then(|p| self.open_span_paths.get(p)) {
             path.clone_from(p);
             let mut ls = &mut self.children;
             for i in p {
@@ -95,6 +95,9 @@ impl LogTree {
             }
             ls
         } else {
+           /*  if parent.is_some() {
+                println!("Parent not found: {line:?}!");
+            }*/
             &mut self.children
         };
         if let LogTreeElem::Span(LogSpan { .. }) = &line {
@@ -286,7 +289,7 @@ impl<'a> LogFileLine<&'a str> {
                 target,
                 level,
                 args,
-                parent:spans.into_iter().map(|(name,args)| hashstr("",&(name,args))).last()
+                parent:spans.into_iter().map(|(name,args)| hashstr("",&(name,args))).next_back()
             })
         } else if message == "close" {
             let (name,args) = span?;
@@ -294,7 +297,7 @@ impl<'a> LogFileLine<&'a str> {
             Some(LogFileLine::SpanClose {
                 id,
                 timestamp,
-                parent:spans.into_iter().map(|(name,args)| hashstr("",&(name,args))).last()
+                parent:spans.into_iter().map(|(name,args)| hashstr("",&(name,args))).next_back()
             })
         } else {
             Some(LogFileLine::Message {
@@ -303,7 +306,7 @@ impl<'a> LogFileLine<&'a str> {
                 target,
                 level,
                 args,
-                span:spans.into_iter().map(|(name,args)| hashstr("",&(name,args))).last()
+                span:spans.into_iter().map(|(name,args)| hashstr("",&(name,args))).next_back()
             })
         }
     }

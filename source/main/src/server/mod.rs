@@ -20,22 +20,34 @@ use tracing::{instrument, Instrument};
 
 use crate::{router::Main, utils::ws::WebSocketServer};
 
+lazy_static::lazy_static!{
+    static ref SERVER_SPAN:tracing::Span = {
+        //println!("Here!");
+        tracing::info_span!(target:"server",parent:None,"server")
+    };
+}
+
+#[inline]
+pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
+    run_i(port_channel).instrument(SERVER_SPAN.clone()).await
+}
+
 /// ### Panics
 #[instrument(level = "info",
   target = "server",
   name = "run",
   skip_all
 )]
-pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
+async fn run_i(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let mut state = ServerState::new().in_current_span().await;
     let mut addr = state.options.site_addr.clone();
     let mut changed = false;
     let mut listener = None;
-    let span = tracing::info_span!(target:"server","request");
+    //let span = tracing::info_span!(target:"server","request");
     for p in addr.port()..65535 {
         addr.set_port(p);
         if let Ok(l) = tokio::net::TcpListener::bind(addr.clone())
-            .instrument(span.clone())
+            //.instrument(span.clone())
             .await {
             listener = Some(l);
             break
@@ -104,9 +116,9 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
                 //.allow_credentials(true)
                 .allow_headers([http::header::COOKIE,http::header::SET_COOKIE]),
         )
-        .layer(
+       .layer(
             tower_http::trace::TraceLayer::new_for_http()
-                .make_span_with(SpanLayer(span.clone())),
+                .make_span_with(SpanLayer),
         );
     let app: Router<()> = app.with_state(state);
 
@@ -120,7 +132,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .into_future()
-    .instrument(span)
+    //.instrument(span)
     //.in_current_span()
     .await
     .unwrap_or_else(|e| panic!("{e}"));
@@ -196,11 +208,18 @@ async fn file_and_error_handler(
 }
 
 #[derive(Clone)]
-struct SpanLayer(tracing::Span);
+struct SpanLayer;
 impl<A> tower_http::trace::MakeSpan<A> for SpanLayer {
     fn make_span(&mut self, r: &http::Request<A>) -> tracing::Span {
-        let _e = self.0.enter();
-        tower_http::trace::DefaultMakeSpan::default().make_span(r)
+        //println!("Here: {},{}",r.method(),r.uri());
+        tracing::span!(
+            parent:&*SERVER_SPAN,
+            tracing::Level::INFO,
+            "request",
+            method = %r.method(),
+            uri = %r.uri(),
+            version = ?r.version(),
+        )
     }
 }
 

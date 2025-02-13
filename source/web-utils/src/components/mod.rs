@@ -85,7 +85,7 @@ pub fn Burger<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView 
   use thaw::{Menu,MenuTriggerType,MenuTrigger};
   use icondata_ch::ChMenuHamburger;
   let children = children.into_inner();
-  inject_css("flams-burger", ".flams-burger {position:absolute !important;right:-10px;}");
+  inject_css("flams-burger", ".flams-burger {margin-left:-10%;}");
   view!{<div style="position:fixed;right:10px;position-anchor:inherit;">
     <Menu class="flams-burger" on_select=|_| () trigger_type=MenuTriggerType::Hover>
         <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>

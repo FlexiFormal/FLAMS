@@ -96,6 +96,7 @@ impl LogStore {
       ret
   }
   fn open_span(&self,id:&Id,name:&str,parent:Option<&Id>) {
+    //println!("Here:{id:?}={name},{parent:?}");
       let mut spans = self.0.open_spans.write();
       spans.insert(id.clone(),(name.to_string(),parent.cloned()));
   }

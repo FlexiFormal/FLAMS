@@ -129,19 +129,20 @@ impl QueueManager {
 
   pub fn migrate<R,E:ToString>(&self,id:QueueId,then:impl FnOnce(&SandboxedBackend) -> Result<R,E>) -> Result<(R,usize),String> {
     let mut inner = self.inner.write();
-    if let Some(q) = inner.get(&id) {
-      if !matches!(&*q.0.state.read(),QueueState::Finished{..}) {
+    let r = if let Some(queue) = inner.get(&id) {
+      if !matches!(&*queue.0.state.read(),QueueState::Finished{..}) {
         return Err(format!("Queue {id} not finished"))
       }
-      if !matches!(q.backend(),AnyBackend::Sandbox(_)) {
+      if !matches!(queue.backend(),AnyBackend::Sandbox(_)) {
         return Err(format!("Global Queue can not be migrated"))
       }
+      let AnyBackend::Sandbox(sandbox) = queue.backend() else {unreachable!()};
+      then(&sandbox).map_err(|e| e.to_string())?
     } else {
       return Err(format!("No queue {id} found"))
-    }
+    };
     let Some(queue) = inner.remove(&id) else {unreachable!()};
     let AnyBackend::Sandbox(sandbox) = queue.backend() else {unreachable!()};
-    let r = then(&sandbox).map_err(|e| e.to_string())?;
     Ok((r,sandbox.migrate()))
   }
 
