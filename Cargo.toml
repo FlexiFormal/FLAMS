@@ -17,14 +17,12 @@ exclude = ["old"#"web/graphs","test-plugin","tests","thaw",
 [profile.release]
 opt-level = 2
 lto = "fat"
-codegen-units = 1
-panic = "abort"
+#codegen-units = 1
+overflow-checks = false
+panic = "unwind"
 strip = "symbols"
 
 [profile.bench]
-opt-level = 2
-lto = "fat"
-codegen-units = 1
 strip = "none"
 
 # Defines a size-optimized profile for the WASM bundle in release mode
@@ -42,7 +40,7 @@ overflow-checks = true
 lto = false
 panic = 'unwind'
 incremental = true
-codegen-units = 256
+#codegen-units = 256
 rpath = false
 
 [workspace.metadata.wasm-pack.profile.dev.wasm-bindgen]

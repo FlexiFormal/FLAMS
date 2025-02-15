@@ -71,13 +71,22 @@ impl GLInstance {
 			match GitLab::new(cfg).await {
 				Ok(gl) => {
 					*self.inner.write() = MaybeGitlab::Loaded(gl.clone());
-          let Ok(ps) = gl.get_projects().await else {return };
-          let span2 = tracing::info_span!("lading archive IDs");
+          let Ok(ps) = gl.get_projects().in_current_span().await else {
+            tracing::error!("Failed to load projects");
+            return 
+          };
+          tracing::info!("Loaded {} projects",ps.len());
+          let span2 = tracing::info_span!("loading archive IDs");
+          let mut js = tokio::task::JoinSet::new();
           for p in ps {
             if let Some(d) = p.default_branch {
-              let _ = gl.get_archive_id(p.id, &d).instrument(span2.clone()).await;
+              let gl = gl.clone();
+              let span = span2.clone();
+              let f = async move {gl.get_archive_id(p.id, &d).instrument(span).await};
+              let _ = js.spawn(f.instrument(span2.clone()));
             }
           }
+          let _ = js.join_all().await;
 				}
 				Err(e) => {
 					tracing::error!("Failed to load gitlab: {e}");
@@ -169,7 +178,8 @@ impl GitLab {
   pub async fn get_projects(&self) -> Result<Vec<crate::Project>,Err> {
     use gitlab::api::AsyncQuery;
     let q = gitlab::api::projects::Projects::builder().simple(true).build().unwrap_or_else(|_| unreachable!());
-    let v: Vec<super::Project> = q.query_async(&self.0.inner).await?;
+    let v: Vec<super::Project> = q.query_async(&self.0.inner).await
+      .map_err(|e| {tracing::error!("Failed to load projects: {e}"); e})?;
     let mut prs = self.0.projects.lock();
     for p in v.iter() {
       if !prs.contains(&p.id) {

@@ -24,38 +24,47 @@ use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, 
 
 #[component]
 pub fn Main() -> impl IntoView {
-    provide_meta_context();
-    #[cfg(feature = "ssr")]
-    provide_context(flams_web_utils::CssIds::default());
-    view! {
-        <Title text="𝖥𝖫∀𝖬∫"/>
-        <Router>{
-            let params = use_query_map();
-            let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
-            //provide_context(UseLSP(params.with_untracked(|p|)))
-            view!{<Routes fallback=|| NotFound()>
-                <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
-                    <ParentRoute path=StaticSegment("/dashboard") view=Dashboard>
-                        <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
-                        //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
-                        <Route path=StaticSegment("log") view=|| view!(<MainPage page=Page::Log/>)/>
-                        <Route path=StaticSegment("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
-                        <Route path=StaticSegment("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
-                        <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
-                        <Route path=StaticSegment("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
-                        <Route path=StaticSegment("users") view=|| view!(<MainPage page=Page::Users/>)/>
-                        <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
-                        <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
+    match std::panic::catch_unwind(|| {
+        provide_meta_context();
+        #[cfg(feature = "ssr")]
+        provide_context(flams_web_utils::CssIds::default());
+        view! {
+            <Title text="𝖥𝖫∀𝖬∫"/>
+            <Router>{
+                let params = use_query_map();
+                let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
+                //provide_context(UseLSP(params.with_untracked(|p|)))
+                view!{<Routes fallback=|| NotFound()>
+                    <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
+                        <ParentRoute path=StaticSegment("/dashboard") view=Dashboard>
+                            <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
+                            //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
+                            <Route path=StaticSegment("log") view=|| view!(<MainPage page=Page::Log/>)/>
+                            <Route path=StaticSegment("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
+                            <Route path=StaticSegment("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
+                            <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
+                            <Route path=StaticSegment("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
+                            <Route path=StaticSegment("users") view=|| view!(<MainPage page=Page::Users/>)/>
+                            <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
+                            <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
+                        </ParentRoute>
+                        <Route path=StaticSegment("/") view={move || if has_params() {
+                                Either::Left(view! { <content::URITop/> })
+                            } else {
+                                Either::Right(view! { <Redirect path="/dashboard"/> })
+                            }}
+                        />
                     </ParentRoute>
-                    <Route path=StaticSegment("/") view={move || if has_params() {
-                            Either::Left(view! { <content::URITop/> })
-                        } else {
-                            Either::Right(view! { <Redirect path="/dashboard"/> })
-                        }}
-                    />
-                </ParentRoute>
-            </Routes>}
-        }</Router>
+                </Routes>}
+            }</Router>
+        }
+    }) {
+        Ok(v) => leptos::either::Either::Left(v),
+        Err(_) => leptos::either::Either::Right(view!(
+            <div style="color:red;font-weight:bold;font_size:x-large">
+                "Internal Server Error"
+            </div>
+        ))
     }
 }
 

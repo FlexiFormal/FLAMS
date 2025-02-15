@@ -43,19 +43,100 @@ pub enum GitState {
 pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState)>,ServerFnError<String>> {
   use flams_git::gl::auth::GitLabOAuth;
   use flams_git::gl::auth::AccessToken;
+  use either::Either::{Left,Right};
   use flams_system::backend::{Backend,AnyBackend,GlobalBackend,archives::Archive,SandboxedRepository};
+  async fn get(oauth:GitLabOAuth,secret:String,p:flams_git::Project) -> (flams_git::Project,Result<Option<ArchiveId>,flams_git::gl::Err>) {
+    let id =if let Some(b) = &p.default_branch {
+       oauth.get_archive_id(p.id, secret,b).await
+    } else { return (p,Ok(None))};
+    (p,id)
+  }
   let (oauth,secret) = get_oauth()?;
   let r = oauth.get_projects(secret.clone()).await
     .map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?;
   let mut r2 = Vec::new();
+  let mut js = tokio::task::JoinSet::new();
   for p in r {
-    if let Some(branch) = &p.default_branch {
-      if let Some(id) = oauth.get_archive_id(p.id, secret.clone(), branch).await
-      .map_err(|e| tracing::error!("error obtaining archive ID of {} ({}): {e}",p.path,p.id)).ok().flatten() {
-        r2.push((p,id));
-      }
+    js.spawn(get(oauth.clone(),secret.clone(),p));
+  }
+  while let Some(r) = js.join_next().await {
+    match r {
+      Err(e) => return Err(e.to_string().into()),
+      Ok((p,Err(e))) => tracing::error!("error obtaining archive ID of {} ({}): {e}",p.path,p.id),
+      Ok((p,Ok(Some(id)))) => r2.push((p,id)),
+      Ok((_,Ok(None))) => ()
     }
   }
+  let r = tokio::task::spawn_blocking(move || {
+    use flams_system::building::{queue_manager::QueueManager,QueueName};
+    let mut ret = Vec::new();
+    let backend = GlobalBackend::get();
+    let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
+    for a in backend.all_archives().iter() {
+      if let Archive::Local(a) = a {
+        if let Some((p,id)) = r2.iter().position(|(_,id)| id == a.id()).map(|i| r2.swap_remove(i)) {
+          if let Ok(git) = flams_git::repos::GitRepo::open(a.path()) {
+            if let Ok(url) = git.get_origin_url() {
+              if url.starts_with(gitlab_url) {
+                let bid = &id;
+                let r = QueueManager::get().with_all_queues(move |qs| {
+                  for (qid,q) in qs {
+                    if let AnyBackend::Sandbox(sb) = q.backend() {
+                      if let Some(r) = sb.with_repos(|rs| {
+                        for r in rs {
+                          match r {
+                            SandboxedRepository::Git { id:rid, branch, commit, remote } if rid == bid => {
+                              return Some(GitState::Queued { commit:commit.id.clone(), queue:(*qid).into()})
+                            }
+                            _ => ()
+                          }
+                        }
+                        None
+                      }) { return Right(r) }
+                    }
+                  }
+                  Left(git)
+                });
+                ret.push((p,id,r));
+              } else { ret.push((p,id,Right(GitState::None))) }
+            } else { ret.push((p,id,Right(GitState::None))) }
+          } else { ret.push((p,id,Right(GitState::None))) }
+        }
+      }
+    }
+    ret.extend(r2.into_iter().map(|(p,id)| (p,id,Right(GitState::None))));
+    ret
+  }).await.map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?;
+
+  let mut r2 = Vec::new();
+
+  let mut js = tokio::task::JoinSet::new();
+  for (p,id,e) in r {
+    match e {
+      Right(e) => r2.push((p,id,e)),
+      Left(git) => {let secret = secret.clone(); js.spawn_blocking(move || {
+        if let Ok(rid) = git.release_commit_id() {
+          let newer = git.get_new_commits_with_oauth(&secret).ok().unwrap_or_default();
+          (p,id,GitState::Live { commit:rid,updates:newer })
+        } else {
+          (p,id,GitState::None)
+        }
+      });}
+    }
+  }
+
+  while let Some(r) = js.join_next().await {
+    match r {
+      Err(e) => return Err(e.to_string().into()),
+      Ok((p,id,s)) =>  r2.push((p,id,s)),
+    }
+  }
+
+  Ok(r2)
+
+  /*
+
+
   tokio::task::spawn_blocking(move || {
     let backend = GlobalBackend::get();
     let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
@@ -99,6 +180,7 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
     }).collect();
     Ok(ret)
   }).await.map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?
+   */
 }
 
 #[server(
