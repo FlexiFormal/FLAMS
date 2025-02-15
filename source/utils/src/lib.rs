@@ -41,7 +41,9 @@ pub fn hashstr<A: std::hash::Hash>(prefix: &str, a: &A) -> String {
 
 #[cfg(feature="tokio")]
 pub fn background<F:FnOnce() + Send + 'static>(f:F) {
-    tokio::task::spawn_blocking(f);
+    use tracing::Instrument;
+    let span = tracing::Span::current();
+    tokio::task::spawn_blocking(move || span.in_scope(f));
 }
 
 pub fn in_span<F:FnOnce() -> R,R>(f:F) -> impl FnOnce() -> R {

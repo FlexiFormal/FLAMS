@@ -19,7 +19,7 @@ pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
     /// The element or component that triggers popover.
     popover_trigger: PopoverTrigger<T>,
     /// Configures the position of the Popover.
-    #[prop(optional)]
+    #[prop(optional,default=PopoverPosition::FlexibleTop)]
     position: PopoverPosition,
     #[prop(optional)] max_width:u32,
     #[prop(optional)]

@@ -2,6 +2,8 @@ use std::path::Path;
 
 use git2::RepositoryOpenFlags;
 
+use crate::REMOTE_SPAN;
+
 pub struct GitRepo(git2::Repository);
 
 impl From<git2::Repository> for GitRepo { 
@@ -83,20 +85,22 @@ impl GitRepo {
   /// #### Errors
   pub fn clone(user:&str,password:&str,url:&str,branch:&str,to:&Path,shallow:bool) -> Result<GitRepo,git2::Error> {
     use git2::{RemoteCallbacks,Cred,Repository,FetchOptions,build::RepoBuilder};
-    let _ = std::fs::create_dir_all(&to);
-    let mut cbs = RemoteCallbacks::new();
-    cbs.credentials(|_,_,_| Cred::userpass_plaintext(user, password));
-
-    let mut fetch = FetchOptions::new();
-    fetch.remote_callbacks(cbs);
-    if shallow { fetch.depth(1); }
-
-    let repo = RepoBuilder::new()
-      .fetch_options(fetch)
-      .bare(false)
-      .branch(branch)
-      .clone(url,to)?;
-    Ok(repo.into())
+    crate::in_git!(("git clone",url=url,branch=branch); {
+      let _ = std::fs::create_dir_all(&to);
+      let mut cbs = RemoteCallbacks::new();
+      cbs.credentials(|_,_,_| Cred::userpass_plaintext(user, password));
+  
+      let mut fetch = FetchOptions::new();
+      fetch.remote_callbacks(cbs);
+      if shallow { fetch.depth(1); }
+  
+      let repo = RepoBuilder::new()
+        .fetch_options(fetch)
+        .bare(false)
+        .branch(branch)
+        .clone(url,to)?;
+      Ok(repo.into())
+    })
   }
 
   /// #### Errors
@@ -107,21 +111,23 @@ impl GitRepo {
 
   /// #### Errors
   pub fn fetch_branch(&self,user:&str,password:&str,branch:&str,shallow:bool) -> Result<(),git2::Error> {
-    let mut cbs = git2::RemoteCallbacks::new();
-    cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user, password));
-    let mut fetch = git2::FetchOptions::new();
-    fetch.remote_callbacks(cbs);
-    if shallow { fetch.depth(1); }
-    self.0.find_remote("origin")?
-      .fetch(&[branch,&format!("+{NOTES_NS}:{NOTES_NS}")], Some(&mut fetch), None)?;
-    let remote = self.0.find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)?;
-    let commit = remote.get().peel_to_commit()?;
-    if let Ok(mut local) = self.0.find_branch(branch, git2::BranchType::Local) {
-      local.get_mut().set_target(commit.id(), "fast forward")?;
-      Ok(())
-    } else {
-      self.0.branch(branch, &commit, false)?.set_upstream(Some(&format!("origin/{branch}")))
-    }
+    crate::in_git!(("git fetch",path=%self.0.path().display(),branch=branch); {
+      let mut cbs = git2::RemoteCallbacks::new();
+      cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user, password));
+      let mut fetch = git2::FetchOptions::new();
+      fetch.remote_callbacks(cbs);
+      if shallow { fetch.depth(1); }
+      self.0.find_remote("origin")?
+        .fetch(&[branch,&format!("+{NOTES_NS}:{NOTES_NS}")], Some(&mut fetch), None)?;
+      let remote = self.0.find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)?;
+      let commit = remote.get().peel_to_commit()?;
+      if let Ok(mut local) = self.0.find_branch(branch, git2::BranchType::Local) {
+        local.get_mut().set_target(commit.id(), "fast forward")?;
+        Ok(())
+      } else {
+        self.0.branch(branch, &commit, false)?.set_upstream(Some(&format!("origin/{branch}")))
+      }
+    })
   }
 
   /// #### Errors
@@ -132,21 +138,23 @@ impl GitRepo {
 
   /// #### Errors
   pub fn push(&self,user:&str,password:&str) -> Result<(),git2::Error> {
-    let head = self.0.head()?;
-    if !head.is_branch() { return Err(git2::Error::from_str("no branch checked out")); }
-    let Some(branch_name) = head.shorthand() else {
-      return Err(git2::Error::from_str("no branch checked out"));
-    };
-    let mut remote = self.0.find_remote("origin")?;
-    let mut cbs = git2::RemoteCallbacks::new();
-    cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user, password));
-    let mut opts = git2::PushOptions::new();
-    opts.remote_callbacks(cbs);
-    remote.push(&[
-      format!("+refs/heads/{branch_name}:refs/heads/{branch_name}").as_str(),
-      NOTES_NS
-    ],Some(&mut opts))?;
-    Ok(())
+    crate::in_git!(("git push",path=%self.0.path().display()); {
+      let head = self.0.head()?;
+      if !head.is_branch() { return Err(git2::Error::from_str("no branch checked out")); }
+      let Some(branch_name) = head.shorthand() else {
+        return Err(git2::Error::from_str("no branch checked out"));
+      };
+      let mut remote = self.0.find_remote("origin")?;
+      let mut cbs = git2::RemoteCallbacks::new();
+      cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user, password));
+      let mut opts = git2::PushOptions::new();
+      opts.remote_callbacks(cbs);
+      remote.push(&[
+        format!("+refs/heads/{branch_name}:refs/heads/{branch_name}").as_str(),
+        NOTES_NS
+      ],Some(&mut opts))?;
+      Ok(())
+    })
   }
 
   /// #### Errors
@@ -206,43 +214,45 @@ impl GitRepo {
   /// #### Errors
   pub fn get_new_commits(&self,user:&str,password:&str) -> Result<Vec<(String,super::Commit)>,git2::Error> {
     use flams_utils::prelude::HSet;
-    let mut remote = self.0.find_remote("origin")?;
-    let mut cbs = git2::RemoteCallbacks::new();
-    cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user,password));
+    crate::in_git!(("get new commits",path=%self.0.path().display()); {
+      let mut remote = self.0.find_remote("origin")?;
+      let mut cbs = git2::RemoteCallbacks::new();
+      cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user,password));
 
-    remote.fetch(&[
-        "+refs/heads/*:refs/remotes/origin/*",
-        &format!("{NOTES_NS}:{NOTES_NS}")
-      ],Some(
-        git2::FetchOptions::new().remote_callbacks(cbs)
-      ),None)?;
-    let head = self.0.head()?.peel_to_commit()?;
-    let Some(s) = self.get_managed()? else {
-      return Ok(Vec::new())
-    };
-    let Some((_,managed)) = s.split_once(';') else {
-      return Err(git2::Error::from_str("unexpected git note on release branch"))
-    };
-    let managed_id = git2::Oid::from_str(managed)?;
-    let managed = self.0.find_commit(managed_id)?;
+      remote.fetch(&[
+          "+refs/heads/*:refs/remotes/origin/*",
+          &format!("{NOTES_NS}:{NOTES_NS}")
+        ],Some(
+          git2::FetchOptions::new().remote_callbacks(cbs)
+        ),None)?;
+      let head = self.0.head()?.peel_to_commit()?;
+      let Some(s) = self.get_managed()? else {
+        return Ok(Vec::new())
+      };
+      let Some((_,managed)) = s.split_once(';') else {
+        return Err(git2::Error::from_str("unexpected git note on release branch"))
+      };
+      let managed_id = git2::Oid::from_str(managed)?;
+      let managed = self.0.find_commit(managed_id)?;
 
-    let mut new_commits = Vec::new();
-    for branch in self.0.branches(Some(git2::BranchType::Remote))? {
-      let (branch,_) = branch?;
-      let Some(branch_name) = branch.name()? else {continue};
-      if branch_name == "origin/HEAD" || branch_name == "origin/release" {continue}
-      let branch_name = branch_name.strip_prefix("origin/").unwrap_or(branch_name);
-      let tip_commit = branch.get().peel_to_commit()?;
-      if tip_commit.id() == managed_id { continue }
-      let mut found = false;
-      self.walk(tip_commit.clone(),|id|
-        if managed_id == id {found = true;false} else {true}
-      );
-      if found {
-        new_commits.push((branch_name.to_string(),tip_commit.into()));
+      let mut new_commits = Vec::new();
+      for branch in self.0.branches(Some(git2::BranchType::Remote))? {
+        let (branch,_) = branch?;
+        let Some(branch_name) = branch.name()? else {continue};
+        if branch_name == "origin/HEAD" || branch_name == "origin/release" {continue}
+        let branch_name = branch_name.strip_prefix("origin/").unwrap_or(branch_name);
+        let tip_commit = branch.get().peel_to_commit()?;
+        if tip_commit.id() == managed_id { continue }
+        let mut found = false;
+        self.walk(tip_commit.clone(),|id|
+          if managed_id == id {found = true;false} else {true}
+        );
+        if found {
+          new_commits.push((branch_name.to_string(),tip_commit.into()));
+        }
       }
-    }
-    Ok(new_commits)
+      Ok(new_commits)
+    })
 
     /*
 
@@ -294,84 +304,92 @@ impl GitRepo {
 
   /// #### Errors
   pub fn commit_all(&self,message:&str) -> Result<super::Commit,git2::Error> {
-    let mut index = self.0.index()?;
-    let managed = self.get_managed()?;
-    let id = index.write_tree()?;
-    let tree = self.0.find_tree(id)?;
-    let parent = self.0.head()?.peel_to_commit()?;
-    let sig = self.0.signature()?;
-    let commit = self.0.commit(
-      Some("HEAD"),
-      &sig, &sig, 
-      message, &tree, &[&parent]
-    )?;
-    let commit = self.0.find_commit(commit)?;
-    if let Some(mg) = managed {
-      self.add_note(&mg)?
-    }
-    Ok(commit.into())
+    crate::in_git!(("commit all",path=%self.0.path().display(),commit_message=message); {
+      let mut index = self.0.index()?;
+      let managed = self.get_managed()?;
+      let id = index.write_tree()?;
+      let tree = self.0.find_tree(id)?;
+      let parent = self.0.head()?.peel_to_commit()?;
+      let sig = self.0.signature()?;
+      let commit = self.0.commit(
+        Some("HEAD"),
+        &sig, &sig, 
+        message, &tree, &[&parent]
+      )?;
+      let commit = self.0.find_commit(commit)?;
+      if let Some(mg) = managed {
+        self.add_note(&mg)?
+      }
+      Ok(commit.into())
+    })
   }
 
   /// #### Errors
   pub fn new_branch(&self,name:&str) -> Result<(),git2::Error> {
-    let head = self.0.head()?.peel_to_commit()?;
-    let mut branch = self.0.branch(name,&head,false)?;
-    let _ = self.0.find_remote("origin")?;
-    let _ = self.0.reference(
-      &format!("refs/remotes/origin/{name}"), 
-      head.id(), 
-      false, 
-      "create remote branch"
-    )?;
-    branch.set_upstream(Some(&format!("origin/{name}")))?;
-    let Some(name) = branch.get().name() else {
-      return Err(git2::Error::from_str("failed to create branch"));
-    };
-    self.0.set_head(name)?;
-    self.0.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+    crate::in_git!(("new branch",path=%self.0.path().display(),branch=name); {
+      let head = self.0.head()?.peel_to_commit()?;
+      let mut branch = self.0.branch(name,&head,false)?;
+      let _ = self.0.find_remote("origin")?;
+      let _ = self.0.reference(
+        &format!("refs/remotes/origin/{name}"), 
+        head.id(), 
+        false, 
+        "create remote branch"
+      )?;
+      branch.set_upstream(Some(&format!("origin/{name}")))?;
+      let Some(name) = branch.get().name() else {
+        return Err(git2::Error::from_str("failed to create branch"));
+      };
+      self.0.set_head(name)?;
+      self.0.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+    })
   }
 
   /// #### Errors
   pub fn merge(&self,commit:&str) -> Result<(),git2::Error> {
-    let id = git2::Oid::from_str(commit)?;
-    let a_commit = self.0.find_annotated_commit(id)?;
-    let commit = self.0.find_commit(id)?;
-    let mut merge_options = git2::MergeOptions::new();
-    merge_options.file_favor(git2::FileFavor::Theirs);
-    let mut checkout_options = git2::build::CheckoutBuilder::new();
-    let parent = self.0.head()?.peel_to_commit()?;
-    self.0.merge(
-      &[&a_commit],
-      Some(&mut merge_options),
-      Some(&mut checkout_options),
-    )?;
-    let sig = self.0.signature()?;
-    let tree_id = self.0.index()?.write_tree()?;
-    let tree = self.0.find_tree(tree_id)?;
-    self.0.commit(
-      Some("HEAD"),
-      &sig, &sig, 
-      &format!("Merge commit {}",commit.id().to_string()), 
-      &tree, 
-      &[&parent,&commit]
-    ).map(|_| ())
+    crate::in_git!(("merge",path=%self.0.path().display(),commit=commit); {
+      let id = git2::Oid::from_str(commit)?;
+      let a_commit = self.0.find_annotated_commit(id)?;
+      let commit = self.0.find_commit(id)?;
+      let mut merge_options = git2::MergeOptions::new();
+      merge_options.file_favor(git2::FileFavor::Theirs);
+      let mut checkout_options = git2::build::CheckoutBuilder::new();
+      let parent = self.0.head()?.peel_to_commit()?;
+      self.0.merge(
+        &[&a_commit],
+        Some(&mut merge_options),
+        Some(&mut checkout_options),
+      )?;
+      let sig = self.0.signature()?;
+      let tree_id = self.0.index()?.write_tree()?;
+      let tree = self.0.find_tree(tree_id)?;
+      self.0.commit(
+        Some("HEAD"),
+        &sig, &sig, 
+        &format!("Merge commit {}",commit.id().to_string()), 
+        &tree, 
+        &[&parent,&commit]
+      ).map(|_| ())
+    })
   }
 
   /// #### Errors
   pub fn add_dir(&self,path:&Path) -> Result<(),git2::Error> {
-    let mut index = self.0.index()?;
-    for entry in walkdir::WalkDir::new(path)
-      .min_depth(1)
-      .into_iter()
-      .filter_map(Result::ok)
-      .filter(|e| e.file_type().is_file()) {
-        let relative_path = entry.path().strip_prefix(self.0.path().parent().unwrap_or_else(|| unreachable!()))
-          .map_err(|e| git2::Error::from_str(&e.to_string()))?;
-        if !self.0.is_path_ignored(relative_path)? {
-          index.add_path(relative_path)?;
+    crate::in_git!(("git add",path=%self.0.path().display(),dir=%path.display()); {
+      let mut index = self.0.index()?;
+      for entry in walkdir::WalkDir::new(path)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file()) {
+          let relative_path = entry.path().strip_prefix(self.0.path().parent().unwrap_or_else(|| unreachable!()))
+            .map_err(|e| git2::Error::from_str(&e.to_string()))?;
+          if !self.0.is_path_ignored(relative_path)? {
+            index.add_path(relative_path)?;
+          }
         }
-      }
-    index.write()?;
-    Ok(())
+      index.write()?;
+      Ok(())
+    })
   }
 }

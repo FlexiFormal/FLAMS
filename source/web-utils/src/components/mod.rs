@@ -82,12 +82,12 @@ pub fn LazyCollapsible<Ch:IntoView+'static>(
 
 #[component]
 pub fn Burger<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-  use thaw::{Menu,MenuTriggerType,MenuTrigger};
+  use thaw::{Menu,MenuTriggerType,MenuTrigger,MenuPosition};
   use icondata_ch::ChMenuHamburger;
   let children = children.into_inner();
-  inject_css("flams-burger", ".flams-burger {margin-left:-10%;}");
+  //inject_css("flams-burger", ".flams-burger {margin-left:-10%;}");
   view!{<div style="position:fixed;right:10px;position-anchor:inherit;">
-    <Menu class="flams-burger" on_select=|_| () trigger_type=MenuTriggerType::Hover>
+    <Menu on_select=|_| () trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
         <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
         {children()}
     </Menu>

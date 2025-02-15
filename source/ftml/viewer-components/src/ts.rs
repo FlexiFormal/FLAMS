@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use flams_ontology::{narration::exercises::ExerciseResponse, uris::DocumentElementURI};
-use wasm_bindgen::{prelude::wasm_bindgen,convert::{FromWasmAbi, IntoWasmAbi}, JsValue};
+use wasm_bindgen::{convert::{FromWasmAbi, IntoWasmAbi, OptionFromWasmAbi}, prelude::wasm_bindgen, JsValue};
 use web_sys::HtmlDivElement;
 
 pub trait AsTs {
@@ -249,10 +249,14 @@ macro_rules! ts_function {
 
 #[wasm_bindgen]
 #[derive(Clone)]
-pub struct LeptosContext(std::cell::RefCell<Option<leptos::prelude::Owner>>);
+pub struct LeptosContext{
+  inner:std::sync::Arc<std::sync::Mutex<Option<leptos::prelude::Owner>>>
+}
 impl LeptosContext {
   pub fn with<R>(&self,f:impl FnOnce() -> R) -> R {
-    self.0.borrow().as_ref().expect("Leptos context cleaned up already!").with(f)
+    let o = self.inner.lock().expect("Leptos context cleaned up already!").as_ref().cloned()
+      .expect("Leptos context cleaned up already!");
+    o.with(f)
   } 
 }
 
@@ -261,17 +265,22 @@ impl LeptosContext {
   /// Cleans up the reactive system.
   /// Not calling this is a memory leak
   pub fn cleanup(&self) {
-    if let Some(mount) = self.0.borrow_mut().take() {
+    if let Some(mount) = self.inner.lock().ok().and_then(|mut l| l.take()) {
       mount.cleanup();
       drop(mount);
     }
+  }
+
+  #[inline]
+  pub fn wasm_clone(&self) -> Self {
+    self.clone()
   }
 }
 
 impl From<leptos::prelude::Owner> for LeptosContext {
   #[inline]
   fn from(value: leptos::prelude::Owner) -> Self {
-      Self(std::cell::RefCell::new(Some(value)))
+      Self{inner:std::sync::Arc::new(std::sync::Mutex::new(Some(value)))}
   }
 }
 
