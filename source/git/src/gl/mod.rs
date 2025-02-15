@@ -178,7 +178,7 @@ impl GitLab {
   pub async fn get_projects(&self) -> Result<Vec<crate::Project>,Err> {
     use gitlab::api::AsyncQuery;
     let q = gitlab::api::projects::Projects::builder().simple(true).build().unwrap_or_else(|_| unreachable!());
-    let v: Vec<super::Project> = q.query_async(&self.0.inner).await
+    let v: Vec<super::Project> = gitlab::api::paged(q,gitlab::api::Pagination::All).query_async(&self.0.inner).await
       .map_err(|e| {tracing::error!("Failed to load projects: {e}"); e})?;
     let mut prs = self.0.projects.lock();
     for p in v.iter() {
