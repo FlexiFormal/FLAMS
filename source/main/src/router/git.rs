@@ -507,9 +507,9 @@ fn managed(name:ArchiveId,id:u64,state:&GitState,default_branch:Option<String>,g
           <div style="margin-left:10px">
             <Button size=ButtonSize::Small on_click=move |_| {act.dispatch(());}>"Update"</Button>
             " from branch: "
-            <div style="display:inline-block;"><Combobox selected_options=branch>{
+            <div style="display:inline-block;"><Combobox value=branch>{
               updates.into_iter().map(|(name,commit)| {let vname = name.clone(); view!{
-                <ComboboxOption text="" value=vname>
+                <ComboboxOption text=vname.clone() value=vname>
                   {name}<span style="font-size:x-small">" (Last commit "{commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}")"</span>
                 </ComboboxOption>
               }}).collect_view()

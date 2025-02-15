@@ -218,13 +218,14 @@ impl GitRepo {
       let mut remote = self.0.find_remote("origin")?;
       let mut cbs = git2::RemoteCallbacks::new();
       cbs.credentials(|_,_,_| git2::Cred::userpass_plaintext(user,password));
-
+      tracing::debug!("Fetching new commits");
       remote.fetch(&[
           "+refs/heads/*:refs/remotes/origin/*",
           &format!("{NOTES_NS}:{NOTES_NS}")
         ],Some(
           git2::FetchOptions::new().remote_callbacks(cbs)
         ),None)?;
+      tracing::debug!("Fetching done.");
       let head = self.0.head()?.peel_to_commit()?;
       let Some(s) = self.get_managed()? else {
         return Ok(Vec::new())
