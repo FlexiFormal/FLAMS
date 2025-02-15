@@ -375,7 +375,7 @@ impl GitRepo {
   }
 
   /// #### Errors
-  pub fn add_dir(&self,path:&Path) -> Result<(),git2::Error> {
+  pub fn add_dir(&self,path:&Path,force:bool) -> Result<(),git2::Error> {
     crate::in_git!(("git add",path=%self.0.path().display(),dir=%path.display()); {
       let mut index = self.0.index()?;
       for entry in walkdir::WalkDir::new(path)
@@ -385,7 +385,7 @@ impl GitRepo {
         .filter(|e| e.file_type().is_file()) {
           let relative_path = entry.path().strip_prefix(self.0.path().parent().unwrap_or_else(|| unreachable!()))
             .map_err(|e| git2::Error::from_str(&e.to_string()))?;
-          if !self.0.is_path_ignored(relative_path)? {
+          if force || !self.0.is_path_ignored(relative_path)? {
             index.add_path(relative_path)?;
           }
         }
