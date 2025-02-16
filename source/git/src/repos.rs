@@ -195,11 +195,16 @@ impl GitRepo {
   }
 
   fn walk(&self,commit:git2::Commit,mut f:impl FnMut(git2::Oid) -> bool) {
+    const MAX_DEPTH:u16 = 500;
     // safe walking over commit history; compatible with missing commits,
     // unlike self.0.revwalk()
     let mut todos = smallvec::SmallVec::<_,4>::new();
+    let mut checked = 0;
     todos.push(commit);
     while let Some(next) = todos.pop() {
+      checked += 1;
+      if checked > MAX_DEPTH {return}
+      //tracing::info!("Walking {} {}",next.id(),todos.len());
       let num = next.parent_count();
       for i in 0..next.parent_count() {
         let Ok(id) = next.parent_id(i) else {continue};
@@ -394,3 +399,13 @@ impl GitRepo {
     })
   }
 }
+
+/*
+#[test]
+fn test_new_commits() {
+  tracing_subscriber::fmt().init();
+  let repo = GitRepo::open(Path::new("/home/jazzpirate/work/coursetest")).unwrap();
+  let commit = repo.0.find_branch("main", git2::BranchType::Local).unwrap().get().peel_to_commit().unwrap();
+  repo.walk(commit,|_| true);
+}
+   */

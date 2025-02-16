@@ -78,26 +78,7 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
           if let Ok(git) = flams_git::repos::GitRepo::open(a.path()) {
             if let Ok(url) = git.get_origin_url() {
               if url.starts_with(gitlab_url) {
-                let bid = &id;
-                let r = QueueManager::get().with_all_queues(move |qs| {
-                  for (qid,q) in qs {
-                    if let AnyBackend::Sandbox(sb) = q.backend() {
-                      if let Some(r) = sb.with_repos(|rs| {
-                        for r in rs {
-                          match r {
-                            SandboxedRepository::Git { id:rid, branch, commit, remote } if rid == bid => {
-                              return Some(GitState::Queued { commit:commit.id.clone(), queue:(*qid).into()})
-                            }
-                            _ => ()
-                          }
-                        }
-                        None
-                      }) { return Right(r) }
-                    }
-                  }
-                  Left(git)
-                });
-                ret.push((p,id,r));
+                ret.push((p,id,Left(git)));
               } else { ret.push((p,id,Right(GitState::None))) }
             } else { ret.push((p,id,Right(GitState::None))) }
           } else { ret.push((p,id,Right(GitState::None))) }
@@ -105,6 +86,30 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
       }
     }
     ret.extend(r2.into_iter().map(|(p,id)| (p,id,Right(GitState::None))));
+
+    let r2 = &mut ret;
+
+    QueueManager::get().with_all_queues(|qs| {
+      for (qid,q) in qs {
+        if let AnyBackend::Sandbox(sb) = q.backend() {
+          sb.with_repos(|rs| {
+            for r in rs {
+              match r {
+                SandboxedRepository::Git { id:rid, branch, commit, remote } => {
+                  if let Some(e) = ret.iter_mut().find_map(|(p,id,e)| if id == rid {Some(e)} else { None } ) {
+                    *e = Right(GitState::Queued { commit:commit.id.clone(), queue:(*qid).into() });
+                  }
+                  //return Some(GitState::Queued { commit:commit.id.clone(), queue:(*qid).into()})
+                }
+                _ => ()
+              }
+            }
+          })
+        }
+      }
+    });
+
+
     ret
   }).await.map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?;
 
