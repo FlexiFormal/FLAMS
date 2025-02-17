@@ -7,7 +7,6 @@ pub mod gl;
 #[cfg(feature="git2")]
 pub mod repos;
 
-
 lazy_static::lazy_static!{
 	pub(crate) static ref REMOTE_SPAN:tracing::Span = {
 			//println!("Here!");

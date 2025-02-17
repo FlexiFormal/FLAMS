@@ -47,6 +47,7 @@ ssr = [
   "dep:image",
   "dep:webp",
   "dep:dashmap",
+  "dep:futures",
   "flams-git/gitlab",
   "flams-git/git2",
 ]
@@ -118,6 +119,7 @@ tower-sessions = {workspace = true,optional = true}
 axum-login = {workspace = true,optional = true}
 async-trait = {workspace=true,optional=true}
 http = {workspace=true,optional=true}
+futures = {workspace=true,optional=true}
 
 password-hash = {workspace=true,optional=true}
 argon2 = {workspace=true,optional=true}

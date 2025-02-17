@@ -77,23 +77,27 @@ impl QueueManager {
   }
 
   pub fn new_queue(&self,queue_name:&str) -> QueueId {
-    let mut inner = self.inner.write();
-    let mut count = 0;
-    loop {
-      if inner.0.iter().any(|(_,q)| matches!(q.name(),QueueName::Sandbox{name,idx} if &**name == queue_name && *idx == count)) {
-        count += 1;
-      } else {break}
-    }
-    let sbname = format!("{queue_name}_{count}");
-    let id = QueueId(NonZeroU32::new(inner.0.iter().map(|(k,_)| k.0.get()).max().unwrap_or_default() + 1).unwrap_or_else(|| unreachable!()));
-    let backend = AnyBackend::Sandbox(SandboxedBackend::new(&sbname));
-    inner.insert(id,
-      Queue::new(id,
-        QueueName::Sandbox{name:queue_name.to_string().into(),idx:count},
-        backend
-      )
-    );
-    id
+    super::BUILD_QUEUE_SPAN.in_scope(move || {
+      let mut inner = self.inner.write();
+      let mut count = 0;
+      loop {
+        if inner.0.iter().any(|(_,q)| matches!(q.name(),QueueName::Sandbox{name,idx} if &**name == queue_name && *idx == count)) {
+          count += 1;
+        } else {break}
+      }
+      let sbname = format!("{queue_name}_{count}");
+      tracing::info_span!("Build Queue",name = &sbname).in_scope(|| {
+        let id = QueueId(NonZeroU32::new(inner.0.iter().map(|(k,_)| k.0.get()).max().unwrap_or_default() + 1).unwrap_or_else(|| unreachable!()));
+        let backend = AnyBackend::Sandbox(SandboxedBackend::new(&sbname));
+        inner.insert(id,
+          Queue::new(id,
+            QueueName::Sandbox{name:queue_name.to_string().into(),idx:count},
+            backend
+          )
+        );
+        id
+      })
+    })
   }
 
   pub fn all_queues(&self) -> Vec<(QueueId,QueueName,Option<Vec<SandboxedRepository>>)> {

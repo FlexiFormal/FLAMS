@@ -159,7 +159,8 @@ async fn routes_handler(
     auth_session: axum_login::AuthSession<DBBackend>,
     extract::State(ServerState { db, options,oauth,.. }): extract::State<ServerState>,
     request: http::Request<axum::body::Body>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse,StatusCode> {
+    use futures::future::FutureExt;
     let handler = leptos_axum::render_app_to_stream_with_context(
         move || {
             provide_context(auth_session.clone());
@@ -168,7 +169,7 @@ async fn routes_handler(
         },
         move || shell(options.clone()),
     );
-    handler(request).await//.in_current_span().await
+    std::panic::AssertUnwindSafe(handler(request)).catch_unwind().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 async fn server_fn_handle(

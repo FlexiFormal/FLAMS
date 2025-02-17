@@ -824,6 +824,7 @@ impl SandboxedRepository {
 #[derive(Debug)]
 struct SandboxedBackendI {
     path: Box<Path>,
+    span:tracing::Span,
     repos: parking_lot::RwLock<Vec<SandboxedRepository>>,
     manager: ArchiveManager,
     cache: RwLock<cache::BackendCache>,
@@ -855,6 +856,7 @@ impl SandboxedBackend {
     pub fn new(name:&str) -> Self {
         let p = crate::settings::Settings::get().temp_dir().join(name);
         let i = SandboxedBackendI {
+            span:tracing::info_span!(target:"sandbox","sandbox",path=%p.display()),
             path: p.into(),
             repos: parking_lot::RwLock::new(Vec::new()),
             manager: ArchiveManager::default(),
@@ -864,6 +866,7 @@ impl SandboxedBackend {
     }
 
     #[tracing::instrument(level = "info",
+        parent = &self.0.span,
         target = "sandbox",
         name = "migrating",
         fields(path = %self.0.path.display()),
@@ -932,7 +935,13 @@ impl SandboxedBackend {
         count
     }
 
-    #[inline]
+    #[tracing::instrument(level = "info",
+        parent = &self.0.span,
+        target = "sandbox",
+        name = "adding",
+        fields(repository = ?sb),
+        skip_all
+    )]
     pub fn add(&self,sb:SandboxedRepository,then:impl FnOnce()) {
         let mut repos = self.0.repos.write();
         let id = sb.id();
@@ -1003,6 +1012,7 @@ impl SandboxedBackend {
     }
 
     #[tracing::instrument(level = "info",
+        parent = &self.0.span,
         target = "sandbox",
         name = "require"
     )]

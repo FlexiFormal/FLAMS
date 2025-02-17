@@ -55,6 +55,7 @@ pub(super) struct QueueI {
   backend:AnyBackend,
   name:QueueName,
   pub id:QueueId,
+  span:tracing::Span,
   pub(super) map:RwLock<TaskMap>,
   sender:ChangeSender<QueueMessage>,
   pub(super) state:RwLock<QueueState>
@@ -68,6 +69,7 @@ impl Queue {
     Self(Arc::new(QueueI { 
       id,name,
       backend,
+      span:tracing::Span::current(),
       map:RwLock::default(),
       sender:ChangeSender::new(32),
       state:RwLock::new(QueueState::Idle) 
@@ -82,6 +84,7 @@ impl Queue {
   #[must_use]
   pub fn listener(&self) -> ChangeListener<QueueMessage> { self.0.sender.listener() }
 
+  #[instrument(level="info",parent=&self.0.span,skip_all,name="Collecting queue state")]
   pub fn state_message(&self) -> QueueMessage {
     match &*self.0.state.read() {
       QueueState::Running(RunningQueue{running,queue,blocked,failed,done,..}) => 
@@ -106,9 +109,9 @@ impl Queue {
   pub fn name(&self) -> &QueueName { &self.0.name }
 
   #[instrument(level = "info",
+    parent=&self.0.span,
     target = "buildqueue",
     name = "Running buildqueue",
-    fields(id = %self.0.id),
     skip_all
   )]
   pub fn start(&self,sem:Semaphore) {
@@ -134,7 +137,7 @@ impl Queue {
       Semaphore::Linear => self.run_sync(),
       #[cfg(feature="tokio")]
       Semaphore::Counting { inner:sem, .. } => 
-        {tokio::task::spawn(self.clone().run_async(sem));}//.in_current_span());}
+        {tokio::task::spawn(self.clone().run_async(sem).in_current_span());}//.in_current_span());}
     }
   }
 
@@ -156,7 +159,8 @@ impl Queue {
         break
       };
       let selfclone = self.clone();
-      tokio::task::spawn_blocking(move || selfclone.run_task_async(task,id,permit));
+      let span = tracing::Span::current();
+      tokio::task::spawn_blocking(move || span.in_scope(move || selfclone.run_task_async(task,id,permit)));
     }
     self.finish();
   }
@@ -175,6 +179,7 @@ impl Queue {
   }
 
 
+  #[instrument(level="info",parent=&self.0.span,skip_all,name="Requeueing failed")]
   pub fn requeue_failed(&self) {
     let mut state = self.0.state.write();
     let QueueState::Finished(FinishedQueue { failed,.. }) = &mut *state else {return};
@@ -288,6 +293,7 @@ impl Queue {
   }
 
   #[instrument(level = "info",
+    parent=&self.0.span,
     target = "buildqueue",
     name = "Queueing tasks",
     skip_all
@@ -341,6 +347,7 @@ impl Queue {
   }
 
   #[instrument(level = "info",
+    parent=&self.0.span,
     target = "buildqueue",
     name = "Queueing tasks",
     skip_all

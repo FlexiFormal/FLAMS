@@ -32,7 +32,7 @@ impl GitLabOAuth {
   > {
     use oauth2::AuthorizationCode;
     let code = AuthorizationCode::new(request.code);
-    self.0.exchange_code(code).request_async(oauth2::reqwest::async_http_client).await
+    self.0.exchange_code(code).request_async(oauth2::reqwest::async_http_client).instrument(crate::REMOTE_SPAN.clone()).await
       .map(|token| token.access_token().clone())
   }
 
@@ -173,8 +173,8 @@ impl GitLab {
     let resp = client.get(format!("{}/api/v4/user",self.0.url))
         .bearer_auth(token.secret())
         .send()
-        .await?;
-    resp.json().await
+        .instrument(crate::REMOTE_SPAN.clone()).await?;
+    resp.json().instrument(crate::REMOTE_SPAN.clone()).await
   }
 }
 

@@ -68,7 +68,7 @@ impl GLInstance {
 		*self.inner.write() = MaybeGitlab::Loading;
     let span = tracing::info_span!(target:"git","loading gitlab");
 		tokio::spawn(async move {
-			match GitLab::new(cfg).await {
+			match GitLab::new(cfg).in_current_span().await {
 				Ok(gl) => {
 					*self.inner.write() = MaybeGitlab::Loaded(gl.clone());
           let Ok(ps) = gl.get_projects().in_current_span().await else {
@@ -83,10 +83,10 @@ impl GLInstance {
               let gl = gl.clone();
               let span = span2.clone();
               let f = async move {gl.get_archive_id(p.id, &d).instrument(span).await};
-              let _ = js.spawn(f.instrument(span2.clone()));
+              let _ = js.spawn(f);
             }
           }
-          let _ = js.join_all().await;
+          let _ = js.join_all().in_current_span().await;
 				}
 				Err(e) => {
 					tracing::error!("Failed to load gitlab: {e}");
@@ -154,7 +154,7 @@ impl GitLab {
 		);
 		if http { builder.insecure(); }
 		Ok(Self(std::sync::Arc::new(GitLabI {
-			inner: builder.build_async().await?,
+			inner: builder.build_async().in_current_span().await?,
 			url:url.into(),
 			id:app_id.map(Into::into),
 			secret:app_secret.map(Into::into),

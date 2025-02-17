@@ -12,6 +12,13 @@ mod queue;
 pub use queue::QueueName;
 mod queueing;
 
+lazy_static::lazy_static!{
+	pub(crate) static ref BUILD_QUEUE_SPAN:tracing::Span = {
+			//println!("Here!");
+			tracing::info_span!(target:"build queue",parent:None,"Build Queue")
+	};
+}
+
 #[cfg(all(test,feature="tokio"))]
 mod tests;
 
