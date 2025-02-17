@@ -123,6 +123,7 @@ fn side_menu(page:Page) -> impl IntoView {
 fn user_field() -> impl IntoView {
     use flams_web_utils::components::{Spinner,SpinnerSize};
     use thaw::MenuPosition;
+    use flams_web_utils::components::ClientOnly;
     let theme = expect_context::<RwSignal::<thaw::Theme>>();
     let on_select = move |key: String| match key.as_str() {
         "theme" => {
@@ -142,7 +143,7 @@ fn user_field() -> impl IntoView {
       _ => None
     });
 
-    view!{<div class="flams-user-menu-trigger"><Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
+    view!{<ClientOnly><div class="flams-user-menu-trigger"><Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
         <MenuTrigger slot>
             <thaw::Avatar src />
         </MenuTrigger>
@@ -161,7 +162,7 @@ fn user_field() -> impl IntoView {
             LoginState::User{name,..} => EitherOf4::C(logout_form(name)),
             LoginState::Loading => EitherOf4::D(view!(<Spinner size=SpinnerSize::Tiny/>))
         }}
-    </Menu></div>}
+    </Menu></div></ClientOnly>}
 }
 
 fn logout_form(user:String) -> impl IntoView {

@@ -1014,7 +1014,8 @@ impl SandboxedBackend {
     #[tracing::instrument(level = "info",
         parent = &self.0.span,
         target = "sandbox",
-        name = "require"
+        name = "require",
+        skip(self)
     )]
     pub fn require(&self,id:&ArchiveId) {
         // TODO this can be massively optimized

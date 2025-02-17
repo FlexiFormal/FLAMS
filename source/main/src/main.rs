@@ -14,7 +14,7 @@ fn main() {
     #[allow(clippy::future_not_send)]
     async fn run(settings: SettingsSpec) {
       let lsp = settings.lsp;
-        //let _ce = color_eyre::install();
+        let _ce = color_eyre::install();
         flams_system::initialize(settings);
         if lsp {
             let (sender,recv) = tokio::sync::watch::channel(None);
