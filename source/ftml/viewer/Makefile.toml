@@ -1,22 +1,27 @@
+[env]
+RUSTFLAGS="-C target-feature=+bulk-memory"
+
 [tasks.wasm-pack]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--target","no-modules","--out-name","ftml",
-    "--","--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
+args = ["build","--target","no-modules","--out-name","ftml","--release",
+    "--","--target","wasm32-unknown-unknown",#"-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
 ]
 
 [tasks.wasm-pack-ts]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--out-dir","ts","--","--features","ts,omdoc",
-    "--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
+args = ["build","--out-dir","ts","--","--features","ts,omdoc","--release",
+    "--target","wasm32-unknown-unknown"#,"-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
 ]
 
-[tasks.ts-dev]
+[tasks.wasm-pack-ts-dev]
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = ["build","--dev","--out-dir","ts","--","--features","ts,omdoc"]
 
+[tasks.ts-dev]
+dependencies = ["wasm-pack-ts-dev","copy-flams-to-ts"]
 
 
 [tasks.wasm-pack-dev]

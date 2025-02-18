@@ -7,6 +7,24 @@ pub mod gl;
 #[cfg(feature="git2")]
 pub mod repos;
 
+lazy_static::lazy_static!{
+	pub(crate) static ref REMOTE_SPAN:tracing::Span = {
+			//println!("Here!");
+			tracing::info_span!(target:"git",parent:None,"git")
+	};
+}
+
+macro_rules! in_git {
+	(($($tt:tt)*); $b:block) => {{
+		let span = ::tracing::debug_span!(parent:&*$crate::REMOTE_SPAN,$($tt)*);
+		span.in_scope(|| $b).map_err(|e| {
+			span.in_scope(|| ::tracing::error!("Error: {e}"));
+			e
+		})
+	}};
+}
+pub(crate) use in_git;
+
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 pub struct Project {
 	pub id:u64,

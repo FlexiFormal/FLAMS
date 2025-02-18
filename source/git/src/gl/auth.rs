@@ -2,6 +2,7 @@ use gitlab::api::AsyncQuery;
 use flams_ontology::uris::ArchiveId;
 use oauth2::{url::Url, TokenResponse};
 pub use oauth2::AccessToken;
+use tracing::{Instrument,instrument};
 use super::GitLab;
 
 #[derive(Debug,Clone)]
@@ -31,12 +32,20 @@ impl GitLabOAuth {
   > {
     use oauth2::AuthorizationCode;
     let code = AuthorizationCode::new(request.code);
-    self.0.exchange_code(code).request_async(oauth2::reqwest::async_http_client).await
+    self.0.exchange_code(code).request_async(oauth2::reqwest::async_http_client).instrument(crate::REMOTE_SPAN.clone()).await
       .map(|token| token.access_token().clone())
   }
 
   /// #### Errors
   pub async fn get_projects(&self,token:String) -> Result<Vec<crate::Project>,super::Err> {
+    self.get_projects_i(token).instrument(crate::REMOTE_SPAN.clone()).await
+  }
+  #[instrument(level = "debug",
+    target = "git",
+    name = "getting all projects for user",
+    skip_all
+  )]
+  async fn get_projects_i(&self,token:String) -> Result<Vec<crate::Project>,super::Err> {
     let mut client = gitlab::ImpersonationClient::new(&self.1.0.inner, token);
     client.oauth2_token();
     let r = gitlab::api::projects::Projects::builder()
@@ -56,6 +65,14 @@ impl GitLabOAuth {
 
   /// #### Errors
   pub async fn get_archive_id(&self,id:u64,token:String,branch:&str) -> Result<Option<ArchiveId>,super::Err> {
+    self.get_archive_id_i(id,token,branch).instrument(crate::REMOTE_SPAN.clone()).await
+  }
+  #[instrument(level = "debug",
+    target = "git",
+    name = "getting archive id",
+    skip(self,token)
+  )]
+  pub async fn get_archive_id_i(&self,id:u64,token:String,branch:&str) -> Result<Option<ArchiveId>,super::Err> {
     {
       let vs = self.1.0.projects.lock();
       if let Some(super::ProjectWithId{id:Some(id),..}) = vs.get(&id) {
@@ -65,6 +82,7 @@ impl GitLabOAuth {
 
     macro_rules! ret {
       ($v:expr) => {{
+        tracing::info!("Found {:?}",$v);
         let mut lock= self.1.0.projects.lock();
         if let Some(mut v) = lock.take(&id) {
           v.id = Some($v.clone());
@@ -79,14 +97,14 @@ impl GitLabOAuth {
       .project(id).ref_(branch).recursive(false).build().unwrap_or_else(|_| unreachable!());
     let r:Vec<crate::TreeEntry> = r.query_async(&client).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.path.eq_ignore_ascii_case("meta-inf") && matches!(e.kind, crate::DirOrFile::Dir) { Some(e.path) } else {None}) else {
-      ret!(None)
+      ret!(None::<ArchiveId>)
     };
 
     let r = gitlab::api::projects::repository::TreeBuilder::default()
       .project(id).ref_(branch).path(p).recursive(false).build().unwrap_or_else(|_| unreachable!());
     let r:Vec<crate::TreeEntry> = r.query_async(&client).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.name.eq_ignore_ascii_case("manifest.mf") && matches!(e.kind,crate::DirOrFile::File) { Some(e.path) } else {None}) else {
-      ret!(None)
+      ret!(None::<ArchiveId>)
     };
 
     let blob = gitlab::api::projects::repository::files::FileRaw::builder()
@@ -104,6 +122,14 @@ impl GitLabOAuth {
 
   /// #### Errors
   pub async fn get_branches(&self,id:u64,token:String) -> Result<Vec<crate::Branch>,super::Err> {
+    self.get_branches_i(id,token).instrument(crate::REMOTE_SPAN.clone()).await
+  }
+  #[instrument(level = "debug",
+    target = "git",
+    name = "getting branches for archive",
+    skip(self,token)
+  )]
+  pub async fn get_branches_i(&self,id:u64,token:String) -> Result<Vec<crate::Branch>,super::Err> {
     let mut client = gitlab::ImpersonationClient::new(&self.1.0.inner, token);
     client.oauth2_token();
     let r = gitlab::api::projects::repository::branches::Branches::builder().project(id)
@@ -147,8 +173,8 @@ impl GitLab {
     let resp = client.get(format!("{}/api/v4/user",self.0.url))
         .bearer_auth(token.secret())
         .send()
-        .await?;
-    resp.json().await
+        .instrument(crate::REMOTE_SPAN.clone()).await?;
+    resp.json().instrument(crate::REMOTE_SPAN.clone()).await
   }
 }
 

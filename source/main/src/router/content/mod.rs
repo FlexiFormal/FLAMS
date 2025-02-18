@@ -23,6 +23,19 @@ pub(crate) fn insert_base_url(mut v:Vec<CSS>) -> Vec<CSS> {
   v
 }
 
+pub(crate) fn filter_paras(mut v:Vec<CSS>) -> Vec<CSS> {
+  const CSSS: [&str;11] = [
+    "ftml-part","ftml-chapter","ftml-section","ftml-subsection","ftml-subsubsection",
+    "ftml-paragraph","ftml-definition","ftml-assertion","ftml-example","ftml-problem","ftml-subproblem"
+  ];
+  v.retain(|c| match c {
+    CSS::Class { name, css } =>
+      !CSSS.iter().any(|s| name.starts_with(s)),
+    _ => true
+  });
+  v
+}
+
 macro_rules! backend {
   ($fn:ident!($($args:tt)*)) => {
     if flams_system::settings::Settings::get().lsp {
@@ -158,7 +171,7 @@ pub async fn fragment(
       let Some((css,html)) = backend!(get_html_body!(duri,false)) else {
         return Err("document not found".to_string().into())
       };
-      Ok((uri,insert_base_url(css),html))
+      Ok((uri,insert_base_url(filter_paras(css)),html))
     }
     URI::Narrative(NarrativeURI::Element(euri)) => {
       let Some(e) = backend!(get_document_element!(euri)) else {
@@ -170,13 +183,13 @@ pub async fn fragment(
           let Some((css,html)) = backend!(get_html_fragment!(euri.document(),*range)) else {
             return Err("document element not found".to_string().into())
           };
-          Ok((uri,insert_base_url(css),html))
+          Ok((uri,insert_base_url(filter_paras(css)),html))
         }
         DocumentElement::Section(flams_ontology::narration::sections::Section{range,..}) => {
           let Some((css,html)) = backend!(get_html_fragment!(euri.document(),*range)) else {
             return Err("document element not found".to_string().into())
           };
-          Ok((uri,insert_base_url(css),html))
+          Ok((uri,insert_base_url(filter_paras(css)),html))
         },
         _ => return Err("not a paragraph".to_string().into())
       }
@@ -184,7 +197,7 @@ pub async fn fragment(
     URI::Content(ContentURI::Symbol(suri)) => {
       get_definitions(suri.clone()).await.ok_or_else(||
         "No definition found".to_string().into()
-      ).map(|(css,b)| (uri,insert_base_url(css),b))
+      ).map(|(css,b)| (uri,insert_base_url(filter_paras(css)),b))
     }
     URI::Base(_) => return Err("TODO: base".to_string().into()),
     URI::Archive(_) => return Err("TODO: archive".to_string().into()),
@@ -209,7 +222,7 @@ async fn get_definitions(uri:SymbolURI) -> Option<(Vec<CSS>,String)> {
     if let Some(def) = b.get_document_element_async(&uri).await {
       let LogicalParagraph{range,..} = def.as_ref();
       if let Some((css,r)) = b.get_html_fragment_async(uri.document(), *range).await {
-        return Some((insert_base_url(css),r))
+        return Some((insert_base_url(filter_paras(css)),r))
       }
     }
   }

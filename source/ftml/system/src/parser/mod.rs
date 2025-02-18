@@ -141,7 +141,7 @@ impl TreeSink for HTMLParser<'_> {
     };
     
     let _ = html5ever::serialize(&mut html, &self.document_node, SerializeOpts::default());
-    let html = String::from_utf8_lossy_owned(html);
+    let html = String::from_utf8_lossy(&html).into();
     backend.submit_triples(&uri,self.rel_path,triples.into_iter());
     let (body,inner_offset) = self.body.get();
     Ok((OMDocResult {

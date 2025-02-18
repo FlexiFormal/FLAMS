@@ -1,11 +1,58 @@
 use std::fmt::Display;
-use std::hash::Hash;
+use std::num::NonZeroU64;
 use std::str::FromStr;
 
-use crate::hashstr;
-use crate::parsing::{ParseSource, ParseStr};
 use crate::time::Timestamp;
 use crate::vecmap::VecMap;
+
+#[derive(Clone,Debug)]
+#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
+pub enum LogFileLine {
+    SpanOpen {
+        name:String,
+        id:NonZeroU64,
+        timestamp:Timestamp,
+        target:Option<String>,
+        level:LogLevel,
+        args:VecMap<String, String>,
+        parent:Option<NonZeroU64>
+    },
+    SpanClose {
+        id:NonZeroU64,
+        timestamp:Timestamp
+    },
+    Message {
+        message:String,
+        timestamp:Timestamp,
+        target:Option<String>,
+        level:LogLevel,
+        args:VecMap<String, String>,
+        span: Option<NonZeroU64>
+    },
+}
+
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
+pub struct LogMessage {
+    pub message:String,
+    pub timestamp:Timestamp,
+    pub target:Option<String>,
+    pub level:LogLevel,
+    pub args:VecMap<String, String>,
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
+pub struct LogSpan {
+    pub name:String,
+    pub timestamp:Timestamp,
+    pub target:Option<String>,
+    pub level:LogLevel,
+    pub args:VecMap<String, String>,
+    pub children:Vec<LogTreeElem>,
+    pub closed:Option<Timestamp>
+}
 
 #[derive(Debug,Clone)]
 #[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
@@ -13,16 +60,153 @@ pub enum LogTreeElem {
     Span(LogSpan),
     Message(LogMessage)
 }
-impl LogTreeElem {
-    #[must_use]
-    pub fn id(&self) -> String {
-        match self {
-            Self::Span(LogSpan { name,args,.. }) =>
-                LogFileLine::id_from(name,args),
-            Self::Message(LogMessage { message,args,.. }) =>
-                LogFileLine::id_from(message,args)
+impl From<LogMessage> for LogTreeElem {
+    #[inline]
+    fn from(value: LogMessage) -> Self {
+        Self::Message(value)
+    }
+}
+impl From<LogSpan> for LogTreeElem {
+    #[inline]
+    fn from(value: LogSpan) -> Self {
+        Self::Span(value)
+    }
+}
+
+#[derive(Debug,Clone,Default)]
+#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
+pub struct LogTree {
+    pub children:Vec<LogTreeElem>,
+    pub open_span_paths:VecMap<NonZeroU64,Vec<usize>>
+}
+
+
+impl LogTree {
+    fn merge(&mut self,line:LogTreeElem, parent:Option<NonZeroU64>,is_span:Option<NonZeroU64>) {
+        let mut path = Vec::new();
+        let p = if let Some(p) = parent.as_ref().and_then(|p| self.open_span_paths.get(p)) {
+            if is_span.is_some() {path.clone_from(p);}
+            let mut ls = &mut self.children;
+            for i in p {
+                let LogTreeElem::Span(s) = &mut ls[*i] else {
+                    unreachable!();
+                };
+                ls = &mut s.children;
+            }
+            ls
+        } else {
+            /*if parent.is_some() {
+                println!("Parent not found: {line:?}!");
+            }*/
+            &mut self.children
+        };
+        if let Some(id) = is_span {
+            path.push(p.len());
+            self.open_span_paths.insert(id,path);
+        }
+        p.push(line);
+    }
+    fn close(&mut self,id:NonZeroU64,timestamp:Timestamp) {
+        let e = if let Some(mut path) = self.open_span_paths.remove(&id) {
+            let mut ls = &mut self.children;
+            let last = path.pop().unwrap_or_else(|| unreachable!());
+            for i in path {
+                let LogTreeElem::Span(s) = &mut ls[i] else {
+                    unreachable!();
+                };
+                ls = &mut s.children;
+            }
+            &mut ls[last]
+        } else { return };
+        let LogTreeElem::Span(e) = e else {unreachable!()};
+        e.closed = Some(timestamp);
+    }
+    pub fn add_line(&mut self,line:LogFileLine) {
+        match line {
+            LogFileLine::SpanOpen { name, id, timestamp, target, level, args, parent } => {
+                let span = LogSpan {
+                    name,timestamp,target,level,args,
+                    children: Vec::new(),
+                    closed: None
+                };
+                self.merge(span.into(), parent,Some(id));
+            }
+            LogFileLine::Message { message, timestamp, target, level, args, span } => {
+                let message = LogMessage {
+                    message, timestamp, target, level,args
+                };
+                self.merge(message.into(), span,None);
+            }
+            LogFileLine::SpanClose { timestamp,id, .. } => {
+                self.close(id,timestamp);
+            }
         }
     }
+}
+
+
+#[derive(Debug,Copy,Clone,PartialEq,Eq)]
+#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
+pub enum LogLevel { TRACE, DEBUG, INFO, WARN, ERROR }
+impl FromStr for LogLevel {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "TRACE" => Ok(Self::TRACE),
+            "DEBUG" => Ok(Self::DEBUG),
+            "INFO" => Ok(Self::INFO),
+            "WARN" => Ok(Self::WARN),
+            "ERROR" => Ok(Self::ERROR),
+            _ => Err(())
+        }
+    }
+}
+impl From<tracing::Level> for LogLevel {
+    fn from(l:tracing::Level) -> Self {
+        match l {
+            tracing::Level::TRACE => Self::TRACE,
+            tracing::Level::DEBUG => Self::DEBUG,
+            tracing::Level::INFO => Self::INFO,
+            tracing::Level::WARN => Self::WARN,
+            tracing::Level::ERROR => Self::ERROR
+        }
+    }
+}
+impl PartialOrd for LogLevel {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for LogLevel {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (a,b) if a == b => std::cmp::Ordering::Equal,
+            (Self::TRACE, _) => std::cmp::Ordering::Less,
+            (_, Self::TRACE) => std::cmp::Ordering::Greater,
+            (Self::DEBUG, _) => std::cmp::Ordering::Less,
+            (_, Self::DEBUG) => std::cmp::Ordering::Greater,
+            (Self::INFO, _) => std::cmp::Ordering::Less,
+            (_, Self::INFO) => std::cmp::Ordering::Greater,
+            (Self::WARN, _) => std::cmp::Ordering::Less,
+            (_, Self::WARN) => std::cmp::Ordering::Greater,
+            _ => unreachable!()
+        }
+    }
+}
+impl Display for LogLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TRACE => write!(f,"TRACE"),
+            Self::DEBUG => write!(f,"DEBUG"),
+            Self::INFO =>  write!(f,"INFO "),
+            Self::WARN =>  write!(f,"WARN "),
+            Self::ERROR => write!(f,"ERROR")
+        }
+    }
+}
+
+impl LogTreeElem {
+    
     #[must_use]
     pub const fn timestamp(&self) -> Timestamp {
         match self {
@@ -37,6 +221,10 @@ impl LogTreeElem {
             Self::Message(LogMessage {level,..}) => *level
         }
     }
+}
+
+/*
+
     #[must_use]
     pub fn target(&self) -> Option<&str> {
         match self {
@@ -75,81 +263,6 @@ pub struct LogSpan {
     pub closed:Option<Timestamp>
 }
 
-#[derive(Debug,Clone)]
-#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
-pub struct LogTree {
-    pub children:Vec<LogTreeElem>,
-    pub open_span_paths:VecMap<String,Vec<usize>>
-}
-impl LogTree {
-    fn merge(&mut self,line:LogTreeElem, parent:Option<String>) {
-        let mut path = Vec::new();
-        let p = if let Some(p) = parent.as_ref().and_then(|p| self.open_span_paths.get(p)) {
-            path.clone_from(p);
-            let mut ls = &mut self.children;
-            for i in p {
-                ls = match &mut ls[*i] {
-                    LogTreeElem::Span(LogSpan {children,..}) => children,
-                    LogTreeElem::Message { .. } => unreachable!()
-                };
-            }
-            ls
-        } else {
-           /*  if parent.is_some() {
-                println!("Parent not found: {line:?}!");
-            }*/
-            &mut self.children
-        };
-        if let LogTreeElem::Span(LogSpan { .. }) = &line {
-            path.push(p.len());
-            self.open_span_paths.insert(line.id(),path);
-        }
-        p.push(line);
-    }
-    fn close(&mut self,id:&str,timestamp:Timestamp) {
-        let e = if let Some(mut path) = self.open_span_paths.remove(id) {
-            let mut ls = &mut self.children;
-            let last = path.pop().unwrap_or_else(|| unreachable!());
-            for i in path {
-                ls = match &mut ls[i] {
-                    LogTreeElem::Span(LogSpan {children,..}) => children,
-                    LogTreeElem::Message { .. } => unreachable!()
-                };
-            }
-            &mut ls[last]
-        } else { return };
-        if let LogTreeElem::Span(e) = e { e.closed = Some(timestamp); }
-    }
-    fn add_line<S:ToString+PartialEq<String>>(&mut self,line:LogFileLine<S>) {
-        match line {
-            LogFileLine::SpanOpen { name, timestamp, target, level, args, parent } => {
-                let span = LogSpan {
-                    name: name.to_string(),
-                    timestamp,
-                    target: target.map(|s| s.to_string()),
-                    level,
-                    args: args.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
-                    children: Vec::new(),
-                    closed: None
-                };
-                self.merge(LogTreeElem::Span(span), parent);
-            }
-            LogFileLine::Message { message, timestamp, target, level, args, span } => {
-                let message = LogMessage {
-                    message: message.to_string(),
-                    timestamp,
-                    target: target.map(|s| s.to_string()),
-                    level,
-                    args: args.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
-                };
-                self.merge(LogTreeElem::Message(message), span);
-            }
-            LogFileLine::SpanClose { timestamp,id, .. } => {
-                self.close(&id,timestamp);
-            }
-        }
-    }
-}
 impl<S:ToString+PartialEq<String>,I:IntoIterator<Item = LogFileLine<S>>> From<I> for LogTree {
     fn from(iter: I) -> Self {
         let mut s = Self{children:Vec::new(),open_span_paths:VecMap::default()};
@@ -338,62 +451,5 @@ impl<'a> LogFileLine<&'a str> {
     }
 }
 
-#[derive(Debug,Copy,Clone,PartialEq,Eq)]
-#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
-pub enum LogLevel { TRACE, DEBUG, INFO, WARN, ERROR }
-impl FromStr for LogLevel {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "TRACE" => Ok(Self::TRACE),
-            "DEBUG" => Ok(Self::DEBUG),
-            "INFO" => Ok(Self::INFO),
-            "WARN" => Ok(Self::WARN),
-            "ERROR" => Ok(Self::ERROR),
-            _ => Err(())
-        }
-    }
-}
-impl From<tracing::Level> for LogLevel {
-    fn from(l:tracing::Level) -> Self {
-        match l {
-            tracing::Level::TRACE => Self::TRACE,
-            tracing::Level::DEBUG => Self::DEBUG,
-            tracing::Level::INFO => Self::INFO,
-            tracing::Level::WARN => Self::WARN,
-            tracing::Level::ERROR => Self::ERROR
-        }
-    }
-}
-impl PartialOrd for LogLevel {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for LogLevel {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match (self, other) {
-            (a,b) if a == b => std::cmp::Ordering::Equal,
-            (Self::TRACE, _) => std::cmp::Ordering::Less,
-            (_, Self::TRACE) => std::cmp::Ordering::Greater,
-            (Self::DEBUG, _) => std::cmp::Ordering::Less,
-            (_, Self::DEBUG) => std::cmp::Ordering::Greater,
-            (Self::INFO, _) => std::cmp::Ordering::Less,
-            (_, Self::INFO) => std::cmp::Ordering::Greater,
-            (Self::WARN, _) => std::cmp::Ordering::Less,
-            (_, Self::WARN) => std::cmp::Ordering::Greater,
-            _ => unreachable!()
-        }
-    }
-}
-impl Display for LogLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TRACE => write!(f,"TRACE"),
-            Self::DEBUG => write!(f,"DEBUG"),
-            Self::INFO =>  write!(f,"INFO "),
-            Self::WARN =>  write!(f,"WARN "),
-            Self::ERROR => write!(f,"ERROR")
-        }
-    }
-}
+
+     */

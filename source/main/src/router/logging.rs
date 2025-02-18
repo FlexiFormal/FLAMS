@@ -1,8 +1,9 @@
-use flams_utils::{logs::{LogFileLine, LogLevel, LogMessage, LogTree}, time::Timestamp, vecmap::VecMap};
+use flams_utils::{logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem}, time::Timestamp, vecmap::VecMap};
 use flams_web_utils::{inject_css,components::{Tree,Leaf,LazySubtree,Header}};
 use leptos::{either::Either, prelude::*};
 use thaw::Caption1Strong;
 use flams_web_utils::components::Spinner;
+use std::num::NonZeroU64;
 
 use crate::utils::{needs_login, ws::WebSocket};
 
@@ -14,15 +15,15 @@ async fn full_log() -> Result<flams_utils::logs::LogTree,()> {
 
     let reader = tokio::io::BufReader::new(tokio::fs::File::open(path).await.map_err(|_| ())?);
     let mut lines = reader.lines();
-    let mut parsed = Vec::new();
+    let mut tree = flams_utils::logs::LogTree::default();
     while let Ok(Some(line)) = lines.next_line().await {
         if !line.is_empty() {
-            if let Some(line) = LogFileLine::parse(&line) {
-                parsed.push(line.to_owned());
+            if let Ok(line) = serde_json::from_str(&line) {
+                tree.add_line(line);
             }
         }
     }
-    let tree : LogTree = parsed.into();
+    
     Ok(tree)
 }
 
@@ -32,7 +33,7 @@ pub fn Logger() -> impl IntoView {
         inject_css("flams-logging", include_str!("logs.css"));
         let signals = LogSignals {
             top: RwSignal::new(Vec::new()),
-            open_span_paths: RwSignal::new(VecMap::new()),
+            open_span_paths: RwSignal::new(VecMap::default()),
             warnings: RwSignal::new(Vec::new())
         };
         Effect::new(move |_| {
@@ -55,10 +56,10 @@ pub fn Logger() -> impl IntoView {
             }}</div>
             <div class="flams-warn-frame">
             <Caption1Strong><span style="color:var(--colorPaletteRedForeground1)">"Warnings"</span></Caption1Strong>{ move || {
-                if signals.top.get().is_empty() {
+                if signals.top.with(Vec::is_empty) {
                     Either::Left(view!(<div class="flams-spinner-frame"><Spinner/></div>))
                 } else {Either::Right(view!{<Tree>
-                    <For each=move || signals.warnings.get() key=|e| e.0.clone() children=move |e| view!(
+                    <For each=move || signals.warnings.get() key=|e| e.0 children=move |e| view!(
                         <Leaf><LogLine e=e.1/></Leaf>
                     )/>
                 </Tree>})}
@@ -142,7 +143,7 @@ const fn class_from_level(lvl:LogLevel) -> &'static str {
 }
 pub struct LogSocket {
     #[cfg(feature="ssr")]
-    listener: flams_utils::change_listener::ChangeListener<LogFileLine<String>>,
+    listener: flams_utils::change_listener::ChangeListener<LogFileLine>,
     #[cfg(all(feature="hydrate",not(doc)))]
     socket: leptos::web_sys::WebSocket,
     #[cfg(all(feature="hydrate",doc))]
@@ -205,112 +206,74 @@ impl LogSocket {
         }
     }
 
+    fn convert(e:LogTreeElem,warnings:&mut Vec<(NonZeroU64,LogMessage)>) -> LogEntrySignal {
+        match e {
+            LogTreeElem::Message(e) => {
+                let id = next_id();
+                if e.level >= LogLevel::WARN {
+                    warnings.push((id,e.clone()));
+                }
+                LogEntrySignal::Simple(next_id(),e)
+            },
+            LogTreeElem::Span(e@LogSpan{ closed:None,..}) => LogEntrySignal::Span(next_id(),
+                SpanSignal {
+                    message:RwSignal::new(SpanMessage::Open {name:e.name,timestamp:e.timestamp}),
+                    target:e.target,level:e.level,args:e.args,children:RwSignal::new(
+                        e.children.into_iter().map(|e| Self::convert(e,warnings)).collect()
+                    )
+                }
+            ),
+            LogTreeElem::Span(e) => {
+                let closed = e.closed.unwrap_or_else(|| unreachable!());
+                LogEntrySignal::Span(next_id(),
+                    SpanSignal {
+                        message:RwSignal::new(
+                            SpanMessage::Closed(format!("{} (finished after {})",e.name,closed.since(e.timestamp)))
+                        ),
+                        target:e.target,level:e.level,args:e.args,children:RwSignal::new(
+                            e.children.into_iter().map(|e| Self::convert(e,warnings)).collect()
+                        )
+                    }
+                )
+            }
+        }
+    }
+
     fn populate(signals:LogSignals,tree:LogTree) {
         use flams_utils::logs::{LogTreeElem,LogSpan};
-
-        fn add(signal:&mut Vec<LogEntrySignal>,warnings:RwSignal<Vec<(String,LogMessage)>>,e:LogTreeElem) {
-            let id = e.id();
-            match e {
-                LogTreeElem::Message(LogMessage {message,timestamp,target,level,args}) => {
-                    if level >= LogLevel::WARN {
-                        warnings.try_update(|v| v.push(
-                            (id.clone(),LogMessage {message:message.clone(),timestamp,target:target.clone(),level,args:args.clone()})
-                        ));
-                    }
-                    signal.push(LogEntrySignal::Simple(id,LogMessage {message,timestamp,target,level,args}));
-                }
-                LogTreeElem::Span(LogSpan {name,timestamp,target,level,args,children,closed}) => {
-                    let message = RwSignal::new(if let Some(closed) = closed {
-                        SpanMessage::Closed(format!("{} (finished after {})",name,closed.since(timestamp)))
-                    } else {SpanMessage::Open{name,timestamp}});
-                    let mut nchildren = Vec::new();
-                    for c in children {
-                        add(&mut nchildren,warnings,c);
-                    }
-                    let e = SpanSignal {
-                        message,
-                        target,level,args,children:RwSignal::new(nchildren)
-                    };
-                    signal.push(LogEntrySignal::Span(id,e));
-                }
-            }
-        }
-
         signals.open_span_paths.try_update_untracked(|v| *v = tree.open_span_paths);
-        signals.top.try_update(|v|
-            for e in tree.children {
-                add(v,signals.warnings,e);
-            }
+        signals.warnings.try_update(|ws| 
+            signals.top.try_update(|v|
+                *v = tree.children.into_iter().map(|e| Self::convert(e,ws)).collect()
+            )
         );
     }
-    fn update(signals:LogSignals,update:LogFileLine<String>) {
-        match update {
-            LogFileLine::Message {message,timestamp,target,level,args,span} => {
-                let id = LogFileLine::id_from(&message,&args);
+    fn update(signals:LogSignals,update:LogFileLine) {
+        let (msg,parent,is_span) = match update {
+            LogFileLine::Message { message, timestamp, target, level, args, span } => {
+                let id = next_id();
+                let message = LogMessage {
+                    message, timestamp, target, level,args
+                };
                 if level >= LogLevel::WARN {
-                    signals.warnings.try_update(|v| v.push((id.clone(), LogMessage { message: message.clone(), timestamp, target: target.clone(), level, args: args.clone() })));
+                    signals.warnings.try_update(|v| v.push((id.clone(), message.clone())));
                 }
-                signals.open_span_paths.try_update_untracked(move |spans| {
-                    let mut curr = signals.top;
-                    if let Some(v) = span.and_then(|id| spans.get(&id)) {
-                        signals.top.try_with_untracked(|nv| 
-                            for i in v {
-                                if let Some(LogEntrySignal::Span(_,s)) = nv.get(*i) {
-                                    curr = s.children;
-                                } else {break}
-                            }
-                        );
-                    }
-                    curr.try_update(|v| v.push(LogEntrySignal::Simple(id, LogMessage { message, timestamp, target, level, args })));
-                });
+                (LogEntrySignal::Simple(id, message),span,None)
             }
-            LogFileLine::SpanOpen {name,timestamp,target,level,args,parent} => {
-                signals.open_span_paths.try_update_untracked(move |spans| {
-                    let id = LogFileLine::id_from(&name,&args);
-                    let mut curr = signals.top;
-                    if let Some(v) = parent.and_then(|id| spans.get(&id)) {
-                        signals.top.try_with_untracked(|nv|
-                            for i in v {
-                                if let Some(LogEntrySignal::Span(_, s)) = nv.get(*i) {
-                                    curr = s.children;
-                                } else { break }
-                            }
-                        );
-                    }
-                    curr.try_update(|parent| {
-                        parent.push(LogEntrySignal::Span(id, SpanSignal {
-                            message: RwSignal::new(SpanMessage::Open { name, timestamp }),
-                            target, level, args, children: RwSignal::new(Vec::new())
-                        }));
-                    });
-                });
+            LogFileLine::SpanOpen { name, id, timestamp, target, level, args, parent } => {
+                let span = SpanSignal {
+                    message:RwSignal::new(SpanMessage::Open {name,timestamp}),
+                    target,level,args,
+                    children: RwSignal::new(Vec::new())
+                };
+                (LogEntrySignal::Span(next_id(), span),parent,Some(id))
             }
-            LogFileLine::SpanClose {id,timestamp,..} => {
-                signals.open_span_paths.try_update_untracked(move |spans| {
-                    if let Some(path) = spans.remove(&id) {
-                        fn get(mut iter:std::vec::IntoIter<usize>,ret:&mut Option<(String,RwSignal<SpanMessage>)>,curr:RwSignal<Vec<LogEntrySignal>>) {
-                            if let Some(i) = iter.next() {
-                                curr.try_with_untracked(|v|
-                                    if let Some(LogEntrySignal::Span(id,s)) = v.get(i) {
-                                        *ret = Some((id.clone(),s.message));
-                                        get(iter,ret,s.children);
-                                    } else { *ret = None }
-                                );
-                            }
-                        }
-                        let mut ret = None;
-                        get(path.into_iter(),&mut ret,signals.top);
-                        if let Some((oid,message)) = ret {
-                            if oid == id {
-                                if let Some(SpanMessage::Open { name, timestamp: old }) = message.try_get_untracked() {
-                                    message.try_set(SpanMessage::Closed(format!("{} (finished after {})", name, timestamp.since(old))));
-                                }
-                            }
-                        }
-                    }
-                });
+            LogFileLine::SpanClose { timestamp,id, .. } => {
+                signals.close(id,timestamp);
+                return
             }
-        }
+        };
+        signals.merge(msg,parent,is_span);
     }
 }
 
@@ -318,26 +281,103 @@ impl LogSocket {
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 pub enum Log {
     Initial(LogTree),
-    Update(LogFileLine<String>),
+    Update(LogFileLine),
 }
 
 #[derive(Debug,Copy,Clone,serde::Serialize,serde::Deserialize)]
 struct LogSignals {
     top:RwSignal<Vec<LogEntrySignal>>,
-    open_span_paths:RwSignal<VecMap<String,Vec<usize>>>,
-    warnings:RwSignal<Vec<(String,LogMessage)>>
+    open_span_paths:RwSignal<VecMap<NonZeroU64,Vec<usize>>>,
+    warnings:RwSignal<Vec<(NonZeroU64,LogMessage)>>
 }
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-enum LogEntrySignal {
-    Simple(String,LogMessage),
-    Span(String,SpanSignal)
-}
-impl LogEntrySignal {
-    fn id(&self) -> &str {
-        match self {
-            Self::Simple(id,_) | Self::Span(id,_) => id
+impl LogSignals {
+    fn close(&self,id:NonZeroU64,timestamp:Timestamp) {
+        if let Some(path) = self.open_span_paths.try_update_untracked(|v| v.remove(&id)).flatten() {
+            Self::close_i(self.top,&path,timestamp);
+        };
+    }
+    fn close_i(sigs:RwSignal<Vec<LogEntrySignal>>,path:&[usize],timestamp:Timestamp) {
+        if path.is_empty() { return }
+        let i = path[0];
+        let path = &path[1..];
+        
+        sigs.try_with_untracked(|v| if let Some(LogEntrySignal::Span(_,s)) = v.get(i) {
+            if path.is_empty() {
+                s.message.try_update(|m|
+                    if let SpanMessage::Open { name, timestamp: old } = &m {
+                        let msg = format!("{} (finished after {})", name, timestamp.since(*old));
+                        *m = SpanMessage::Closed(msg);
+                    }
+                );
+            } else {
+                Self::close_i(s.children,path,timestamp);
+            }
+        });
+    }
+
+    fn merge(&self,line:LogEntrySignal, parent:Option<NonZeroU64>,is_span:Option<NonZeroU64>) {
+        match parent {
+            None => {
+                if let Some(id) = is_span {
+                    self.top.try_update(|ch| {
+                        self.open_span_paths.try_update_untracked(|v| v.insert(id,vec![ch.len()]));
+                        ch.push(line);
+                    });
+                } else {
+                    self.top.try_update(|ch| ch.push(line));
+                }
+            }
+            Some(parent) => {
+                let mut path = Vec::new();
+                self.open_span_paths.try_update_untracked(|v| {
+                    if let Some(p) = v.get(&parent) {
+                        path.clone_from(p);
+                    } /*else {
+                        leptos::logging::log!("Parent not found: {line:?}!");
+                    }*/
+                });
+                self.merge_i(self.top,0,path,is_span,line);
+            }
         }
     }
+    fn merge_i(&self,sigs:RwSignal<Vec<LogEntrySignal>>,i:usize,mut path:Vec<usize>,is_span:Option<NonZeroU64>,line:LogEntrySignal) {
+        if i == path.len() { return }
+        let e = path[i];
+        if path.len() == i + 1 {
+            sigs.try_update(|v| {
+                if let Some(s) = is_span {
+                    path.push(v.len());
+                    self.open_span_paths.try_update_untracked(|v| v.insert(s,path));
+                }
+                v.push(line);
+            });
+        } else {
+            sigs.try_with_untracked(|v| {
+                let LogEntrySignal::Span(_,s) = &v[e] else {unreachable!()};
+                self.merge_i(s.children,i+1,path,is_span,line);
+            });
+        }
+    }
+}
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+enum LogEntrySignal {
+    Simple(NonZeroU64,LogMessage),
+    Span(NonZeroU64,SpanSignal)
+}
+impl LogEntrySignal {
+    #[inline]
+    fn id(&self) -> NonZeroU64 { 
+        match self {
+            Self::Simple(id,_) |
+            Self::Span(id,_) => *id
+        }
+     }
+}
+
+const COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+fn next_id() -> NonZeroU64 {
+    NonZeroU64::new(COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)).unwrap_or_else(|| unreachable!())
 }
 
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]

@@ -82,14 +82,27 @@ pub fn LazyCollapsible<Ch:IntoView+'static>(
 
 #[component]
 pub fn Burger<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-  use thaw::{Menu,MenuTriggerType,MenuTrigger};
+  use thaw::{Menu,MenuTriggerType,MenuTrigger,MenuPosition};
   use icondata_ch::ChMenuHamburger;
   let children = children.into_inner();
-  inject_css("flams-burger", ".flams-burger {margin-left:-10%;}");
-  view!{<div style="position:fixed;right:10px;position-anchor:inherit;">
-    <Menu class="flams-burger" on_select=|_| () trigger_type=MenuTriggerType::Hover>
+  //inject_css("flams-burger", ".flams-burger {margin-left:-10%;}");
+  view!{<ClientOnly><div style="position:fixed;right:10px;position-anchor:inherit;">
+    <Menu on_select=|_| () trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
         <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
         {children()}
     </Menu>
-  </div>}
+  </div></ClientOnly>}
+}
+
+#[component]
+pub fn ClientOnly<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
+  let mut children = std::cell::Cell::new(Some(children.into_inner()));
+  let sig = RwSignal::new(false);
+  let rf = NodeRef::new();
+  rf.on_load(move |_| sig.set(true));
+  move || if sig.get() {
+    leptos::either::Either::Left(children.take().map(|c| c()))
+  } else { 
+    leptos::either::Either::Right(view!(<div node_ref = rf/>)) 
+  }
 }

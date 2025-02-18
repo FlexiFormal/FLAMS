@@ -298,23 +298,39 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
   tokio::task::spawn_blocking(move || {
     login.with_queue(queue, |_| ())?;
     let (_,n) = flams_system::building::queue_manager::QueueManager::get().migrate::<(),String>(queue.into(),|sandbox| {
-      if let Some((_,secret)) = oauth.as_ref() {
+      if let Some((_,secret)) = oauth {
+        let mut js = tokio::task::JoinSet::new();
         sandbox.with_repos(|repos| {
           for r in repos {
             if let SandboxedRepository::Git { id,.. } = r {
-              sandbox.with_archive::<Result<_,String>>(id, |a| {
-                let Some(Archive::Local(a)) = a else { return Ok(())};
-                let repo = flams_git::repos::GitRepo::open(a.path()).map_err(|e| e.to_string())?;
-                repo.add_dir(a.path()).map_err(|e| e.to_string())?;
-                let _ = repo.commit_all("migrating").map_err(|e| e.to_string())?;
-                //repo.mark_managed().map_err(|e| e.to_string())?;
-                repo.push_with_oauth(secret).map_err(|e| e.to_string())?;
-                Ok(())
-              })?;
+              sandbox.with_archive(id, |a| {
+                let Some(Archive::Local(a)) = a else { return };
+                let p = a.path().to_path_buf();
+                let secret = secret.clone();
+                let _ = js.spawn_blocking(move || {
+                  let repo = flams_git::repos::GitRepo::open(&p)?;
+                  repo.add_dir(&p,false)?;
+                  repo.add_dir(&p.join(".flams"),true)?;
+                  let _ = repo.commit_all("migrating")?;
+                  repo.push_with_oauth(&secret)
+                  //repo.mark_managed().map_err(|e| e.to_string())?;
+                });//.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;
+                //.map_err(|e| e.to_string())?;
+                //.map_err(|e| e.to_string())?;
+                //Ok(())
+              });
               }
             }
-          Ok(())
-        })
+        });
+        while !js.is_empty() {
+          if let Some(r) = js.try_join_next() {
+            r.map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+          } else {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+          };
+        }
+        Ok(())
       } else { Ok(()) }
     })?;
     Ok(n)

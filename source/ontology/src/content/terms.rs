@@ -47,16 +47,30 @@ impl Term {
     pub fn as_list(&self) -> Option<&[Arg]> {
         match self {
             Self::OMA{
-                head:box Self::OMID(ContentURI::Symbol(s)),
+                head,//:box Self::OMID(ContentURI::Symbol(s)),
                 args
-            } if *s == *crate::metatheory::SEQUENCE_EXPRESSION => Some(&**args),
+            }  if matches!(&**head,Self::OMID(ContentURI::Symbol(s)) if *s == *crate::metatheory::SEQUENCE_EXPRESSION) => Some(&**args), //if *s == *crate::metatheory::SEQUENCE_EXPRESSION => Some(&**args),
             _ => None
         }
     }
 
     #[must_use]
     pub fn is_record_field(&self) -> bool {
-        matches!(self,oma!(omsp!(fp),[N:_,N:_]) if *fp == *crate::metatheory::FIELD_PROJECTION)
+        matches!(self,oma!(hd,args) if matches!(&**hd,omsp!(fp) if *fp == *crate::metatheory::FIELD_PROJECTION) && args.len() == 2)
+    }
+    pub fn into_record_field(self) ->Result<(Self,Name),Self> {
+        match self {
+            oma!(hd,args) if matches!(&*hd,omsp!(fp) if *fp == *crate::metatheory::FIELD_PROJECTION) && args.len() == 2 => {
+                let mut args = args.into_vec().into_iter();
+                let [a,b] = [args.next().unwrap_or_else(|| unreachable!()),args.next().unwrap_or_else(|| unreachable!())];
+                match b {
+                    Arg{term:Self::OML{name,df:None,tp:None},mode:ArgMode::Normal} =>
+                        Ok((a.term,name)),
+                    b => Err(oma!(*hd,[a,b]))
+                }
+            }
+            _ => Err(self)
+        }
     }
     /*
     #[must_use]

@@ -17,19 +17,18 @@ exclude = ["old"#"web/graphs","test-plugin","tests","thaw",
 [profile.release]
 opt-level = 2
 lto = "fat"
-codegen-units = 1
-panic = "abort"
+#codegen-units = 1
+overflow-checks = false
+panic = "unwind"
 strip = "symbols"
 
 [profile.bench]
-opt-level = 2
-lto = "fat"
-codegen-units = 1
 strip = "none"
 
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]
 inherits = "release"
+panic = 'abort'
 opt-level = 'z'
 lto = true
 
@@ -42,7 +41,7 @@ overflow-checks = true
 lto = false
 panic = 'unwind'
 incremental = true
-codegen-units = 256
+#codegen-units = 256
 rpath = false
 
 [workspace.metadata.wasm-pack.profile.dev.wasm-bindgen]
@@ -87,7 +86,7 @@ serde_json = { version="1",features = ["unbounded_depth"] }
 rustc-hash = "2"
 chrono = "0.4"
 oxrdf = "0.2.3"
-smallvec = { version="2.0.0-alpha.7",features = ["specialization"] }
+smallvec = { version="2.0.0-alpha.7"}#,features = ["specialization"] }
 lazy_static = "1.5"
 url = "2"
 either = "1"
@@ -111,13 +110,14 @@ tokio = { version = "1"}#, features = ["fs","io-util","sync","test-util","macros
 tokio-util = { version="0.7", features = ["compat"] }
 tempfile = {version="3"}
 phf = { version = "0.11", default-features = false, features=["macros"] }
+crossbeam-channel = {version = "0.5"}
 
 password-hash = {version="0.5"}
 argon2 = {version="0.5"}
 
 tracing = "0.1"
 tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot","json"] }
-tracing-appender = "0.2"
+# tracing-appender = "0.2"
 tracing-error = "0.2"
 
 toml = "0.8"
@@ -148,20 +148,26 @@ gitlab = { version="0"}
 git2 = {version="0.20", features = ["vendored-libgit2","vendored-openssl"] }
 
 # leptos
-leptos = { version = "0.7", features=["nightly"]}
+leptos = { version = "0.7"}#, features=["nightly"]}
 leptos_axum = "0.7"
 leptos_meta= "0.7"
-leptos_router = { version = "0.7", features=["nightly"]}
+leptos_router = { version = "0.7"}#, features=["nightly"]}
 
+#thaw = { version="0.4.2",features=["nightly"] }
+#thaw_components = "0.3"
+#thaw_utils = {features=["nightly"],version="0.1"}
+#thaw = { path="../thaw/thaw", features=["nightly"] }
+#thaw_components = { path="../thaw/thaw_components" }
+#thaw_utils = { path="../thaw/thaw_utils", features=["nightly"] }
+thaw = { git = "https://github.com/Jazzpirate/thaw"}#, features=["nightly"] }
+thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
+thaw_utils = { git = "https://github.com/Jazzpirate/thaw"}#, features=["nightly"] }
 #thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw = { version="=0.4.0-beta5",features=["nightly"] }
 #thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw_components = "=0.2.0-beta5"
 #thaw_utils = { features=["nightly"], git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw_utils = {features=["nightly"],version="=0.1.0-beta5"}
-thaw = { version="0.4.2",features=["nightly"] }
-thaw_components = "0.3"
-thaw_utils = {features=["nightly"],version="0.1"}
 
 
 icondata_bi = "0"
@@ -226,7 +232,7 @@ assets-dir = "resources/assets"
 site-pkg-dir = "pkg"
 style-file = "resources/main.scss"
 browserquery = "defaults"
-lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
+#lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
 
 # dafuq:
 # https://higherorderco.com/

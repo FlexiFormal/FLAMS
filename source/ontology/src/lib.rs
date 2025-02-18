@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-#![feature(box_patterns)]
+//#![feature(box_patterns)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 /*#![feature(adt_const_params)]
 

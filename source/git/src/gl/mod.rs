@@ -1,6 +1,7 @@
 use flams_ontology::uris::ArchiveId;
 use flams_utils::{prelude::HSet, vecmap::VecSet};
 use gitlab::api::AsyncQuery;
+use tracing::{Instrument,instrument};
 
 pub mod auth;
 
@@ -65,23 +66,34 @@ impl GLInstance {
   }
 	pub fn load(self,cfg:GitlabConfig) {
 		*self.inner.write() = MaybeGitlab::Loading;
+    let span = tracing::info_span!(target:"git","loading gitlab");
 		tokio::spawn(async move {
-			match GitLab::new(cfg).await {
+			match GitLab::new(cfg).in_current_span().await {
 				Ok(gl) => {
 					*self.inner.write() = MaybeGitlab::Loaded(gl.clone());
-          let Ok(ps) = gl.get_projects().await else {return };
+          let Ok(ps) = gl.get_projects().in_current_span().await else {
+            tracing::error!("Failed to load projects");
+            return 
+          };
+          tracing::info!("Loaded {} projects",ps.len());
+          let span2 = tracing::info_span!("loading archive IDs");
+          let mut js = tokio::task::JoinSet::new();
           for p in ps {
             if let Some(d) = p.default_branch {
-              let _ = gl.get_archive_id(p.id, &d).await;
+              let gl = gl.clone();
+              let span = span2.clone();
+              let f = async move {gl.get_archive_id(p.id, &d).instrument(span).await};
+              let _ = js.spawn(f);
             }
           }
+          let _ = js.join_all().in_current_span().await;
 				}
 				Err(e) => {
 					tracing::error!("Failed to load gitlab: {e}");
 					*self.inner.write() = MaybeGitlab::Failed;
 				}
 			}
-		});
+		}.instrument(span));
 	}
 
   pub async fn get(&self) -> Option<GitLab> {
@@ -142,7 +154,7 @@ impl GitLab {
 		);
 		if http { builder.insecure(); }
 		Ok(Self(std::sync::Arc::new(GitLabI {
-			inner: builder.build_async().await?,
+			inner: builder.build_async().in_current_span().await?,
 			url:url.into(),
 			id:app_id.map(Into::into),
 			secret:app_secret.map(Into::into),
@@ -158,10 +170,16 @@ impl GitLab {
   }
 
   /// #### Errors
+#[instrument(level = "debug",
+  target = "git",
+  name = "getting all gitlab projects",
+  skip_all
+)]
   pub async fn get_projects(&self) -> Result<Vec<crate::Project>,Err> {
     use gitlab::api::AsyncQuery;
     let q = gitlab::api::projects::Projects::builder().simple(true).build().unwrap_or_else(|_| unreachable!());
-    let v: Vec<super::Project> = q.query_async(&self.0.inner).await?;
+    let v: Vec<super::Project> = gitlab::api::paged(q,gitlab::api::Pagination::All).query_async(&self.0.inner).await
+      .map_err(|e| {tracing::error!("Failed to load projects: {e}"); e})?;
     let mut prs = self.0.projects.lock();
     for p in v.iter() {
       if !prs.contains(&p.id) {
@@ -174,6 +192,11 @@ impl GitLab {
   }
 
   /// #### Errors
+#[instrument(level = "debug",
+  target = "git",
+  name = "getting archive id",
+  skip(self),
+)]
   pub async fn get_archive_id(&self,id:u64,branch:&str) -> Result<Option<ArchiveId>,Err> {
     {
       let vs = self.0.projects.lock();
@@ -184,6 +207,7 @@ impl GitLab {
 
     macro_rules! ret {
       ($v:expr) => {{
+        tracing::info!("Found {:?}",$v);
         let mut lock= self.0.projects.lock();
         if let Some(mut v) = lock.take(&id) {
           v.id = Some($v.clone());
@@ -196,14 +220,14 @@ impl GitLab {
       .project(id).ref_(branch).recursive(false).build().unwrap_or_else(|_| unreachable!());
     let r:Vec<crate::TreeEntry> = r.query_async(&self.0.inner).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.path.eq_ignore_ascii_case("meta-inf") && matches!(e.kind, crate::DirOrFile::Dir) { Some(e.path) } else {None}) else {
-      ret!(None)
+      ret!(None::<ArchiveId>)
     };
 
     let r = gitlab::api::projects::repository::TreeBuilder::default()
       .project(id).ref_(branch).path(p).recursive(false).build().unwrap_or_else(|_| unreachable!());
     let r:Vec<crate::TreeEntry> = r.query_async(&self.0.inner).await?;
     let Some(p) = r.into_iter().find_map(|e| if e.name.eq_ignore_ascii_case("manifest.mf") && matches!(e.kind,crate::DirOrFile::File) { Some(e.path) } else {None}) else {
-      ret!(None)
+      ret!(None::<ArchiveId>)
     };
 
     let blob = gitlab::api::projects::repository::files::FileRaw::builder()

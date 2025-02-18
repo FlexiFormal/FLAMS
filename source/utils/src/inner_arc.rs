@@ -86,7 +86,7 @@ impl<Outer, Inner> AsRef<Inner> for InnerArc<Outer, Inner> {
         // safe, because data holds an Arc to the Outer this comes from,
         // and no inner mutability is employed that might move the
         // element around, by contract of unsafe Self::new.
-        unsafe { self.elem.as_ref_unchecked() }
+        unsafe { &*self.elem}//.as_ref_unchecked() }
     }
 }
 unsafe impl<Outer: Send, Inner> Send for InnerArc<Outer, Inner> {}

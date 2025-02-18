@@ -82,7 +82,7 @@ mod presentation {
     use std::fmt::Display;
     use flams_utils::prelude::HMap;
 
-    use crate::{content::terms::{Arg, ArgMode, Informal, Term, Var}, oma, omsp, ftml::FTMLKey, uris::{ContentURI, DocumentElementURI, SymbolURI, URITrait}};
+    use crate::{content::terms::{Arg, ArgMode, Informal, Term, Var}, omsp, ftml::FTMLKey, uris::{ContentURI, DocumentElementURI, SymbolURI, URITrait}};
 
     pub type Result = std::result::Result<(),PresentationError>;
 
@@ -356,12 +356,35 @@ mod presentation {
                         Self::default_omid(presenter,"OMV",uri,uri.name().last_name().as_ref(),presenter.in_text())
                     },
                 Term::OMV(Var::Name(name)) => Self::default_omid(presenter,"OMV",name,name.last_name().as_ref(),presenter.in_text()),
-                Term::Field { record, owner:Some(box Term::OMID(ContentURI::Symbol(uri))),.. } => 
-                    if let Some(n) = presenter.get_op_notation(uri) {
-                        n.as_ref().apply_op_this(presenter,record,"COMPLEX",uri)
-                    } else {
-                        Self::default_omid(presenter,"OMID",uri,uri.name().last_name().as_ref(),presenter.in_text())
+                Term::Field { record, owner:Some(itm),..} => //box Term::OMID(ContentURI::Symbol(uri))),.. } =>
+                    match &**itm {
+                        Term::OMID(ContentURI::Symbol(uri)) => 
+                            if let Some(n) = presenter.get_op_notation(uri) {
+                                n.as_ref().apply_op_this(presenter,record,"COMPLEX",uri)
+                            } else {
+                                Self::default_omid(presenter,"OMID",uri,uri.name().last_name().as_ref(),presenter.in_text())
+                            },
+                        _ => write!(presenter,"<mtext>TODO: {term:?}</mtext>").map_err(Into::into)
                     },
+                Term::OMA{head,args} => match &**head {
+                    Term::OMID(ContentURI::Symbol(uri)) => 
+                        if let Some(n) = presenter.get_notation(uri) {
+                            n.as_ref().apply(presenter,None,None,uri,args)
+                        } else {
+                            Self::default_oma(presenter, "OMA", uri, uri.name().last_name().as_ref(), args)
+                        },
+                    Term::OMV(Var::Ref{declaration:uri,is_sequence:_}) => 
+                        if let Some(n) = presenter.get_variable_notation(uri) {
+                            n.as_ref().apply(presenter,None,None,uri,args)
+                        } else {
+                            Self::default_oma(presenter, "OMA", uri, uri.name().last_name().as_ref(), args)
+                        }
+                    Term::OMV(Var::Name(name)) =>
+                        Self::default_oma(presenter, "OMA", name, name.last_name().as_ref(), args),
+                    _ => write!(presenter,"<mtext>TODO: {term:?}</mtext>").map_err(Into::into)
+
+                }
+                    /*
                 oma!(omsp!(uri),args)  => 
                     if let Some(n) = presenter.get_notation(uri) {
                         n.as_ref().apply(presenter,None,None,uri,args)
@@ -376,7 +399,7 @@ mod presentation {
                     }
                 Term::OMA{head:box Term::OMV(Var::Name(name)),args,..} =>
                     Self::default_oma(presenter, "OMA", name, name.last_name().as_ref(), args),
-
+                     */
 
                 Term::Informal { tag, attributes, children, terms,.. } =>
                     Self::informal(presenter,tag,attributes,children,terms),

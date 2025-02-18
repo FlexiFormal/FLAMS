@@ -1,4 +1,4 @@
-#![feature(box_patterns)]
+//#![feature(box_patterns)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod extractor;
