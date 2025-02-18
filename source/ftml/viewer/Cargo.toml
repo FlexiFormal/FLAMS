@@ -9,6 +9,12 @@ crate-type = ["cdylib"]
 [lints]
 workspace = true
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ['-Oz','--enable-bulk-memory','--all-features']
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
 [features]
 ssr = [] # just to make documentation happy
 ts = ["ftml-viewer-components/ts","dep:tsify-next","dep:serde","flams-utils/wasm","dep:wasm-bindgen-futures","flams-ontology/wasm"]

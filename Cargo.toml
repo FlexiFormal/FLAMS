@@ -28,6 +28,7 @@ strip = "none"
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]
 inherits = "release"
+panic = 'abort'
 opt-level = 'z'
 lto = true
 
@@ -85,7 +86,7 @@ serde_json = { version="1",features = ["unbounded_depth"] }
 rustc-hash = "2"
 chrono = "0.4"
 oxrdf = "0.2.3"
-smallvec = { version="2.0.0-alpha.7",features = ["specialization"] }
+smallvec = { version="2.0.0-alpha.7"}#,features = ["specialization"] }
 lazy_static = "1.5"
 url = "2"
 either = "1"
@@ -147,10 +148,10 @@ gitlab = { version="0"}
 git2 = {version="0.20", features = ["vendored-libgit2","vendored-openssl"] }
 
 # leptos
-leptos = { version = "0.7", features=["nightly"]}
+leptos = { version = "0.7"}#, features=["nightly"]}
 leptos_axum = "0.7"
 leptos_meta= "0.7"
-leptos_router = { version = "0.7", features=["nightly"]}
+leptos_router = { version = "0.7"}#, features=["nightly"]}
 
 #thaw = { version="0.4.2",features=["nightly"] }
 #thaw_components = "0.3"
@@ -158,9 +159,9 @@ leptos_router = { version = "0.7", features=["nightly"]}
 #thaw = { path="../thaw/thaw", features=["nightly"] }
 #thaw_components = { path="../thaw/thaw_components" }
 #thaw_utils = { path="../thaw/thaw_utils", features=["nightly"] }
-thaw = { git = "https://github.com/Jazzpirate/thaw", features=["nightly"] }
+thaw = { git = "https://github.com/Jazzpirate/thaw"}#, features=["nightly"] }
 thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
-thaw_utils = { git = "https://github.com/Jazzpirate/thaw", features=["nightly"] }
+thaw_utils = { git = "https://github.com/Jazzpirate/thaw"}#, features=["nightly"] }
 #thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw = { version="=0.4.0-beta5",features=["nightly"] }
 #thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
@@ -231,7 +232,7 @@ assets-dir = "resources/assets"
 site-pkg-dir = "pkg"
 style-file = "resources/main.scss"
 browserquery = "defaults"
-lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
+#lib-cargo-args = ["--target","wasm32-unknown-unknown","-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"]
 
 # dafuq:
 # https://higherorderco.com/

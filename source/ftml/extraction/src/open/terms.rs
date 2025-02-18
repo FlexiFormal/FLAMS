@@ -62,20 +62,19 @@ impl OpenTerm {
             }
             Self::Complex(varorsym) => {
                 let term = extractor.close_complex_term();
-                if let Some(oma!(omsp!(ref fp),[N:ref p,N:Term::OML {ref name,tp:Option::None,df:Option::None}])) = term {
-                    if *fp == *flams_ontology::metatheory::FIELD_PROJECTION {
-                        omfp!((p.clone()).(name.clone()) = (varorsym.resolve(extractor))) // TODO avoid clone here
-                    } else {
-                        term.unwrap_or_else(|| unreachable!())
+                if let Some(term) = term {
+                    match term.into_record_field() {
+                        Ok((p,name)) => {
+                            omfp!((p).(name) = (varorsym.resolve(extractor))) 
+                        }
+                        Err(mut t) => {
+                            if let Term::Field { owner,.. } = &mut t {
+                                *owner = Some(Box::new(varorsym.resolve(extractor)));
+                            }
+                            t
+                        }
                     }
-                }
-                else if let Some(mut t) = term {
-                    if let Term::Field { owner,.. } = &mut t {
-                        *owner = Some(Box::new(varorsym.resolve(extractor)));
-                    }
-                    t
-                }
-                else {
+                } else {
                     extractor.add_error(FTMLError::MissingTermForComplex(varorsym.clone()));
                     varorsym.resolve(extractor)
                 }
@@ -84,6 +83,37 @@ impl OpenTerm {
                 let (args,head_term) = extractor.close_args();
                 let args = args.into_boxed_slice();
                 let mut head = head.resolve(extractor);
+
+                if let Some(head_term) = head_term {
+                    match head_term.into_record_field() {
+                        Ok((p,name)) => {
+                            return omfp!((p).(name) = (head)) 
+                        }
+                        Err(t) => {
+                            head = t
+                        }
+                    }
+                }
+
+                if matches!(&head,omsp!(fp) if *fp == *flams_ontology::metatheory::FIELD_PROJECTION) &&
+                    args.len() == 2 {
+                    let mut args = args.into_vec().into_iter();
+                    let Some(arg1) = args.next() else {unreachable!()};
+                    let Some(arg2) = args.next() else {unreachable!()};
+                    if let Arg{term:Term::OML{name,df:None,tp:None},mode:ArgMode::Normal} = arg2 {
+                        Term::Field {
+                            record:Box::new(arg1.term), // TODO avoid clone here
+                            key:name, // TODO avoid clone here
+                            owner:None
+                        }
+                    } else {
+                        Term::OMA {head:Box::new(head),args:Box::new([arg1,arg2])}
+                    }
+                } else {
+                    Term::OMA {head:Box::new(head),args}
+                }
+
+                /*
                 if let Some(oma!(omsp!(ref fp),[N:ref p,N:Term::OML {ref name,tp:Option::None,df:Option::None}])) = head_term {
                     if *fp == *flams_ontology::metatheory::FIELD_PROJECTION {
                         //println!("Is Field!");
@@ -102,6 +132,7 @@ impl OpenTerm {
                     }
                     (head,args) => Term::OMA {head:Box::new(head),args}
                 }
+                 */
             }
         }
     }

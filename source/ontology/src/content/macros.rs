@@ -44,15 +44,21 @@ macro_rules! oma {
             args:Box::new([$crate::$(oma!(@ARGS $($tt)*)),+])
         }
     };
-    ($head:pat,[$($i:ident:$p:pat),+]) => {
+    ($head:expr,[$($i:ident),+]) => {
         $crate::content::terms::Term::OMA{
-            head:box $head,
-            args:box [$($crate::oma!(@ARGSPAT $i:$p )),+]
+            head:Box::new($head),
+            args:Box::new([$($i),+])
         }
     };
+    /*($head:pat,[$($i:ident:$p:pat),+]) => {
+        $crate::content::terms::Term::OMA{
+            head:$head,
+            args:[$($crate::oma!(@ARGSPAT $i:$p )),+]
+        }
+    };*/
     ($head:pat,$args:pat) => {
         $crate::content::terms::Term::OMA{
-            head:box $head,
+            head:$head,
             args:$args
         }
     };

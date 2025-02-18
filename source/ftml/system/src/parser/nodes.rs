@@ -156,7 +156,7 @@ impl FTMLNode for NodeRef {
             traversal_scope:TraversalScope::IncludeNode,
             ..Default::default()
         });
-        String::from_utf8_lossy_owned(html)
+        String::from_utf8_lossy(&html).into()//from_utf8_lossy_owned(html)
     }
     fn inner_string(&self) -> String {
         let mut html = Vec::new();
@@ -164,7 +164,7 @@ impl FTMLNode for NodeRef {
             traversal_scope:TraversalScope::ChildrenOnly(None),
             ..Default::default()
         });
-        String::from_utf8_lossy_owned(html)
+        String::from_utf8_lossy(&html).into()
     }
 
     #[inline]

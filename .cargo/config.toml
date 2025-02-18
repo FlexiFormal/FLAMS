@@ -1,5 +1,5 @@
-[build]
-rustflags = ["--cfg", "tokio_unstable","--cfg","web_sys_unstable_apis"]
+#[build]
+#rustflags = ["--cfg", "tokio_unstable","--cfg","web_sys_unstable_apis"]
 
 #[target.x86_64-pc-windows-msvc]
 #target-dir = "target"

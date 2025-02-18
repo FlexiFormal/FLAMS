@@ -96,7 +96,8 @@ impl LogStore {
         if let Some(p) = file.parent() {
             let _ = std::fs::create_dir_all(p);
         };
-        let mut f = std::fs::File::create_buffered(file).expect("Failed to create log file");
+        let f = std::fs::File::create(file).expect("Failed to create log file");
+        let mut f = std::io::BufWriter::new(f);//std::fs::File::create_buffered(file).expect("Failed to create log file");
         loop {
           match recv.recv() {
             Err(_) | Ok(Msg::Kill) => break,

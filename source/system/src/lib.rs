@@ -1,6 +1,6 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![feature(file_buffered)]
-#![feature(lazy_type_alias)]
+//#![feature(file_buffered)]
+//#![feature(lazy_type_alias)]
 
 pub mod backend;
 pub mod settings;

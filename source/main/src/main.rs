@@ -35,6 +35,7 @@ fn main() {
     let mut rt = tokio::runtime::Builder::new_multi_thread();
     rt.enable_all();
     //#[cfg(debug_assertions)]
+    if settings.lsp
     { rt.thread_stack_size(4 * 1024 * 1024); }
 
     rt.build()
