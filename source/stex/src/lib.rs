@@ -8,9 +8,14 @@ mod rustex;
 use either::Either;
 use flams_ftml::{HTMLString, FTML_DOC, FTML_OMDOC};
 use flams_system::{
-    backend::AnyBackend, build_result, build_target, building::{BuildResult, BuildResultArtifact, BuildTask}, formats::{CHECK, PDF}, flams_extension, source_format
+    backend::AnyBackend,
+    build_result, build_target,
+    building::{BuildResult, BuildResultArtifact, BuildTask},
+    flams_extension,
+    formats::{CHECK, PDF},
+    source_format,
 };
-pub use rustex::{RusTeX,OutputCont};
+pub use rustex::{OutputCont, RusTeX};
 
 source_format!(stex ["tex","ltx"] [
   PDFLATEX_FIRST => PDFLATEX => RUSTEX => FTML_OMDOC => CHECK]
@@ -24,32 +29,33 @@ build_target!(
   = pdflatex_first
 );
 
-
-fn pdflatex_first(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
-  let Either::Left(path) = task.source() else {
-    return BuildResult {
-      log:Either::Left("Needs a physical file".to_string()),
-      result:Err(Vec::new())
+fn pdflatex_first(backend: &AnyBackend, task: &BuildTask) -> BuildResult {
+    let Either::Left(path) = task.source() else {
+        return BuildResult {
+            log: Either::Left("Needs a physical file".to_string()),
+            result: Err(Vec::new()),
+        };
+    };
+    latex::clean(path);
+    let log = path.with_extension("log");
+    let mh = backend
+        .mathhubs()
+        .into_iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let ret = latex::pdflatex_and_bib(path, [("STEX_WRITESMS", "true"), ("MATHHUB", &mh)]);
+    if ret.is_ok() {
+        BuildResult {
+            log: Either::Right(log),
+            result: Ok(BuildResultArtifact::File(PDF, path.with_extension("pdf"))),
+        }
+    } else {
+        BuildResult {
+            log: Either::Right(log),
+            result: Err(Vec::new()),
+        }
     }
-  };
-  latex::clean(path);
-  let log = path.with_extension("log");
-  let mh = backend.mathhubs().into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(",");
-  let ret = latex::pdflatex_and_bib(
-    path,
-    [("STEX_WRITESMS","true"),("MATHHUB",&mh)],
-  );
-  if ret.is_ok() {
-    BuildResult {
-      log:Either::Right(log),
-      result: Ok(BuildResultArtifact::File(PDF,path.with_extension("pdf")))
-    }
-  } else {
-    BuildResult {
-      log:Either::Right(log),
-      result:Err(Vec::new())
-    }
-  }
 }
 
 build_target!(
@@ -58,30 +64,32 @@ build_target!(
   = pdflatex_second
 );
 
-fn pdflatex_second(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
-  let Either::Left(path) = task.source() else {
-    return BuildResult {
-      log:Either::Left("Needs a physical file".to_string()),
-      result:Err(Vec::new())
+fn pdflatex_second(backend: &AnyBackend, task: &BuildTask) -> BuildResult {
+    let Either::Left(path) = task.source() else {
+        return BuildResult {
+            log: Either::Left("Needs a physical file".to_string()),
+            result: Err(Vec::new()),
+        };
+    };
+    let log = path.with_extension("log");
+    let mh = backend
+        .mathhubs()
+        .into_iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let ret = latex::pdflatex(path, [("STEX_USESMS", "true"), ("MATHHUB", &mh)]);
+    if ret.is_ok() {
+        BuildResult {
+            log: Either::Right(log),
+            result: Ok(BuildResultArtifact::File(PDF, path.with_extension("pdf"))),
+        }
+    } else {
+        BuildResult {
+            log: Either::Right(log),
+            result: Err(Vec::new()),
+        }
     }
-  };
-  let log = path.with_extension("log");
-  let mh = backend.mathhubs().into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(",");
-  let ret = latex::pdflatex(
-    path,
-    [("STEX_USESMS","true"),("MATHHUB",&mh)]
-  );
-  if ret.is_ok() {
-    BuildResult {
-      log:Either::Right(log),
-      result: Ok(BuildResultArtifact::File(PDF,path.with_extension("pdf")))
-    }
-  } else {
-    BuildResult {
-      log:Either::Right(log),
-      result:Err(Vec::new())
-    }
-  }
 }
 
 build_target!(
@@ -90,42 +98,59 @@ build_target!(
   = rustex
 );
 
-fn rustex(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
-  // TODO make work with string as well
-  let Either::Left(path) = task.source() else {
-    return BuildResult {
-      log:Either::Left("Needs a physical file".to_string()),
-      result:Err(Vec::new())
+fn rustex(backend: &AnyBackend, task: &BuildTask) -> BuildResult {
+    // TODO make work with string as well
+    let Either::Left(path) = task.source() else {
+        return BuildResult {
+            log: Either::Left("Needs a physical file".to_string()),
+            result: Err(Vec::new()),
+        };
+    };
+    let out = path.with_extension("rlog");
+    let ocl = out.clone();
+    let mh = backend
+        .mathhubs()
+        .into_iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let run = move || {
+        RusTeX::get().run_with_envs(
+            path,
+            false,
+            [
+                ("STEX_USESMS".to_string(), "true".to_string()),
+                ("MATHHUB".to_string(), mh),
+            ],
+            Some(&ocl),
+        )
+    };
+    #[cfg(debug_assertions)]
+    let ret = {
+        std::thread::scope(move |s| {
+            std::thread::Builder::new()
+                .stack_size(16 * 1024 * 1024)
+                .spawn_scoped(s, run)
+                .expect("foo")
+                .join()
+                .expect("foo")
+        })
+    };
+    #[cfg(not(debug_assertions))]
+    let ret = { run() };
+    match ret {
+        Err(_) => BuildResult {
+            log: Either::Right(out),
+            result: Err(Vec::new()),
+        },
+        Ok(s) => {
+            latex::clean(path);
+            BuildResult {
+                log: Either::Right(out),
+                result: Ok(HTMLString::create(s)),
+            }
+        }
     }
-  };
-  let out = path.with_extension("rlog");
-  let ocl = out.clone();
-  let mh = backend.mathhubs().into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(",");
-  let run = move || RusTeX::get().run_with_envs(
-    path, false,
-    [
-      ("STEX_USESMS".to_string(),"true".to_string()),
-      ("MATHHUB".to_string(),mh)
-    ],
-    Some(&ocl)
-  );
-  #[cfg(debug_assertions)]
-  let ret = { std::thread::scope(move |s| std::thread::Builder::new().stack_size(16 * 1024 * 1024).spawn_scoped(s,run).expect("foo").join().expect("foo")) };
-  #[cfg(not(debug_assertions))]
-  let ret = { run() };
-  match ret {
-    Err(_) => BuildResult {
-      log:Either::Right(out),
-      result:Err(Vec::new())
-    },
-    Ok(s) => {
-      latex::clean(path);
-      BuildResult {
-        log:Either::Right(out),
-        result:Ok(HTMLString::create(s))
-      }
-    }
-  }
 }
 
 build_result!(aux @ "LaTeX aux/bbl/toc files, as generated by pdflatex+bibtex/biber/mkindex");
