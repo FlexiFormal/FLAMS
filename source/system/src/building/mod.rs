@@ -23,6 +23,7 @@ use crate::formats::{BuildArtifactTypeId, BuildTargetId};
 mod queue;
 pub mod queue_manager;
 pub use queue::QueueName;
+mod buildtool;
 mod queueing;
 
 #[cfg(all(test, feature = "tokio"))]
@@ -196,7 +197,8 @@ pub trait BuildArtifact: Any + 'static {
     fn write(&self, path: &Path) -> Result<(), std::io::Error>;
     fn as_any(&self) -> &dyn Any;
 }
-
+/// Build Result Artifact is either a File Constructor which is an output of a build process i.e TEX => PDF
+/// Data Constructor takes any Struct that implements a BuildArtifact Trait
 pub enum BuildResultArtifact {
     File(BuildArtifactTypeId, PathBuf),
     Data(Box<dyn BuildArtifact>),
