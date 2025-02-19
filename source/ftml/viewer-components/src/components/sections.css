@@ -8,10 +8,11 @@ body {
   & .ftml-title {
     display:block;
     font-weight: bold;
+    line-height: initial;
     font-size:xx-large;
     margin:20px 10px;
     &::before {
-      content: "Part " counter(ftml-part, upper-roman) "\A \A";
+      content: "Part " counter(ftml-part, upper-roman) "\A";
       white-space: pre-wrap;
     }
   }
@@ -23,6 +24,7 @@ body {
   & .ftml-title {
     display:block;
     font-weight: bold;
+    line-height: initial;
     font-size:x-large;
     margin:15px 0;
     &::before {
@@ -37,6 +39,7 @@ body {
   & .ftml-title {
     display:block;
     font-weight: bold;
+    line-height: initial;
     font-size:large;
     margin:10px 0;
     &::before {
@@ -51,6 +54,7 @@ body {
   & .ftml-title {
     display:block;
     font-weight: bold;
+    line-height: initial;
     font-size:larger;
     margin:5px 0;
     &::before {
@@ -65,7 +69,7 @@ body {
   & .ftml-title {
     display:block;
     font-weight: bold;
-    font-size:larger;
+    line-height: initial;
     &::before {
       content: counter(ftml-section) "." counter(ftml-subsection) "." counter(ftml-subsubsection) " ";
     }
@@ -78,6 +82,7 @@ body {
     font-weight: bold;
     margin:0;
     font-size: inherit;
+    line-height: inherit;
     &::before {
       content: var(--ftml-paragraph-str);
     }

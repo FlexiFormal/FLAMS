@@ -110,47 +110,48 @@ impl URLFragment {
       #[cfg(not(any(feature="csr",feature="hydrate")))]
       let signal = RwSignal::new(String::new());
 
-      #[cfg(any(feature="csr",feature="hydrate"))]
-      {
-        let on_hash_change = wasm_bindgen::prelude::Closure::wrap(Box::new(move |_e: leptos::web_sys::Event| {
-            let s = window().location().hash().ok().map(|s| 
-                s.strip_prefix('#').map(ToString::to_string).unwrap_or(s)
-            ).unwrap_or_default();
-            tracing::trace!("Updating URL fragment to {s}");
-            signal.set(s);
-        }) as Box<dyn FnMut(_)>);
+        #[cfg(feature="csr")]
+        {
+            let on_hash_change = wasm_bindgen::prelude::Closure::wrap(Box::new(move |_e: leptos::web_sys::Event| {
+                let s = window().location().hash().ok().map(|s| 
+                    s.strip_prefix('#').map(ToString::to_string).unwrap_or(s)
+                ).unwrap_or_default();
+                tracing::trace!("Updating URL fragment to {s}");
+                signal.set(s);
+            }) as Box<dyn FnMut(_)>);
 
-        let on_anchor_click = wasm_bindgen::prelude::Closure::wrap(Box::new(move |e: leptos::web_sys::MouseEvent| {
-            if let Some(e) = e.target().and_then(|t| t.dyn_into::<Element>().ok()) {
-                if let Some(e) = get_anchor(e) {
-                    if let Some(href) = e.get_attribute("href") {
-                        if let Some(href) =  href.strip_prefix('#') {
-                            tracing::trace!("Updating URL fragment as {href}");
-                            signal.set(href.to_string());
+            let on_anchor_click = wasm_bindgen::prelude::Closure::wrap(Box::new(move |e: leptos::web_sys::MouseEvent| {
+                if let Some(e) = e.target().and_then(|t| t.dyn_into::<Element>().ok()) {
+                    if let Some(e) = get_anchor(e) {
+                        if let Some(href) = e.get_attribute("href") {
+                            if let Some(href) =  href.strip_prefix('#') {
+                                tracing::trace!("Updating URL fragment as {href}");
+                                signal.set(href.to_string());
+                            }
                         }
                     }
                 }
-            }
-        }) as Box<dyn FnMut(_)>);
+            }) as Box<dyn FnMut(_)>);
 
-        let _ = window().add_event_listener_with_callback("hashchange", on_hash_change.as_ref().unchecked_ref());
-        let _ = window().add_event_listener_with_callback("popstate", on_hash_change.as_ref().unchecked_ref());
-        let _ = window().add_event_listener_with_callback("click", on_anchor_click.as_ref().unchecked_ref());
-        on_hash_change.forget();
-        on_anchor_click.forget();
+            let _ = window().add_event_listener_with_callback("hashchange", on_hash_change.as_ref().unchecked_ref());
+            let _ = window().add_event_listener_with_callback("popstate", on_hash_change.as_ref().unchecked_ref());
+            let _ = window().add_event_listener_with_callback("click", on_anchor_click.as_ref().unchecked_ref());
+            on_hash_change.forget();
+            on_anchor_click.forget();
         }
-      Self(signal)
+        Self(signal)
   }
 }
 
 #[component]
 pub fn Nav() -> impl IntoView {
-  let fragment = expect_context::<URLFragment>();
-  move || {
-    tracing::trace!("Checking URL fragment");
-    let s = fragment.0.get();
-    if !s.is_empty() {
-        NavElems::with_untracked(|e| e.navigate_to(&s));
-    }
-  }
+    use flams_web_utils::components::ClientOnly;
+    let fragment = expect_context::<URLFragment>();
+    view!(<ClientOnly>{move || {
+        tracing::trace!("Checking URL fragment");
+        let s = fragment.0.get();
+        if !s.is_empty() {
+            NavElems::with_untracked(|e| e.navigate_to(&s));
+        }
+    }}</ClientOnly>)
 }
