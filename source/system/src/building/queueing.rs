@@ -22,8 +22,7 @@ use super::{
 };
 
 impl Queue {
-    //sorting the queue
-    /* RunningQueue,  */
+    /// It sorts the build queue.
     #[allow(clippy::significant_drop_in_scrutinee)]
     pub(super) fn sort(map: &TaskMap, state: &mut RunningQueue) {
         let RunningQueue {
@@ -40,7 +39,7 @@ impl Queue {
             let mut changed = false;
             for t in &tasks {
                 let mut has_failed = false;
-                // here buildstep is coming from the build task
+                // finding the first occurance of the task that is not done. It can be see in the predicate of matches!()
                 let Some(step) = t.steps().iter().find(|s| {
                     let state = s.0.state.read();
                     if *state == TaskState::Failed {
