@@ -7,7 +7,50 @@ use tracing::span::Id;
 use tracing_subscriber::{fmt::{format::FmtSpan, MakeWriter}, layer::Context, Layer};
 
 
-pub(crate) fn tracing(logdir:&Path,level: tracing::Level/*,rotation: tracing_appender::rolling::Rotation */) -> LogStore {
+#[derive(Clone,Debug)]
+pub struct LogStore(Arc<LogStoreI>);
+
+static LOG : std::sync::OnceLock<LogStore> = std::sync::OnceLock::new();
+
+impl LogStore {
+  ///#### Panics
+  pub fn initialize() {
+    use tracing_subscriber::layer::SubscriberExt;
+    if LOG.get().is_some() {
+      return
+    }
+    let logger = Self::new();
+    let level = if crate::settings::Settings::get().debug { tracing::Level::DEBUG } else { tracing::Level::INFO };
+    let subscriber = tracing_subscriber::registry()
+      .with(logger.clone().with_filter(tracing::level_filters::LevelFilter::from(level)))
+      .with(tracing_error::ErrorLayer::default());
+    tracing::subscriber::set_global_default(subscriber).expect(
+      "Error initializing tracing subscriber"
+    );
+  }
+
+  ///#### Panics
+  pub fn new() -> Self {
+    if LOG.get().is_some() { panic!("Logger already initialized") }
+    let settings = crate::settings::Settings::get();
+    let logdir = &settings.log_dir;
+    let filename = chrono::Local::now().format("%Y-%m-%d-%H.%M.%S.log").to_string();
+    let path = logdir.join(&filename);
+    let ret = Self::new_i(/*guard,file_layer,*/path);
+    LOG.set(ret.clone()).expect("Error initializing logger");
+    ret
+  }
+}
+
+
+/// ### Panics
+pub fn logger() -> &'static LogStore {
+  LOG.get().expect("log should be initialized")
+}
+
+
+/*
+pub(crate) fn tracing(logdir:&Path,level: tracing::Level) -> LogStore {
   use tracing::level_filters::LevelFilter;
   //use tracing_subscriber::fmt::writer::MakeWriterExt;
   use tracing_subscriber::layer::SubscriberExt;
@@ -33,7 +76,7 @@ pub(crate) fn tracing(logdir:&Path,level: tracing::Level/*,rotation: tracing_app
   
    */
   
-  let logger = LogStore::new(/*guard,file_layer,*/path);
+  let logger = LogStore::new_i(/*guard,file_layer,*/path);
 
   let subscriber = tracing_subscriber::registry()
       /*.with(
@@ -57,6 +100,7 @@ pub(crate) fn tracing(logdir:&Path,level: tracing::Level/*,rotation: tracing_app
   );
   logger
 }
+   */
 
 #[derive(Clone)]
 enum Msg {
@@ -80,10 +124,8 @@ impl Drop for LogStoreI {
     }
 }
 
-#[derive(Clone,Debug)]
-pub struct LogStore(Arc<LogStoreI>);
 impl LogStore {
-  fn new<P:Into<PathBuf>>(log_file:P) -> Self {
+  fn new_i<P:Into<PathBuf>>(log_file:P) -> Self {
     let (sender,recv) = crossbeam_channel::unbounded();
     let cs = ChangeSender::new(1024);
       let store = Arc::new(LogStoreI {

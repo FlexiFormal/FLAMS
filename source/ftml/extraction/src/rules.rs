@@ -133,10 +133,11 @@ impl<const L:usize,E:FTMLExtractor> RuleSet<E> for [FTMLExtractionRule<E>;L] {
 #[allow(clippy::unnecessary_wraps)]
 pub mod rules {
     use flams_ontology::content::declarations::symbols::{ArgSpec, AssocType};
+    use flams_ontology::narration::documents::{DocumentStyle, SectionCounter};
     use flams_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, FillInSolOption, SolutionData};
     use flams_ontology::narration::paragraphs::ParagraphKind;
     use flams_ontology::ftml::FTMLKey;
-    use flams_ontology::uris::{DocumentElementURI, ModuleURI, Name, SymbolURI};
+    use flams_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI};
     use flams_utils::vecmap::VecSet;
     use smallvec::SmallVec;
     use crate::errors::FTMLError;
@@ -205,6 +206,47 @@ pub mod rules {
             Some(OpenFTMLElement::SetSectionLevel(lvl))
         }
 
+        pub fn style_rule<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+           let Some(style) = attrs.get(FTMLKey::Style) else {
+             unreachable!()
+           };
+           let Ok(mut style) = DocumentStyle::from_str(style.as_ref()) else {
+             extractor.add_error(FTMLError::InvalidURI(style.into()));
+             return None
+           };
+           if let Some(count) = attrs.get(FTMLKey::Counter) {
+                nexts.retain(|e| e.tag != FTMLKey::Counter);
+                if !count.as_ref().is_empty() {
+                    if let Ok(name) = count.as_ref().parse() {
+                        style.counter = Some(name);
+                    } else {
+                        extractor.add_error(FTMLError::InvalidURI(count.into()));
+                        return None;
+                    }
+                }
+           }
+           extractor.styles().styles.push(style);
+           None
+        }
+
+        pub fn counter_parent<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+            let name = if let Some(count) = attrs.get(FTMLKey::Counter) {
+                 nexts.retain(|e| e.tag != FTMLKey::Counter);
+                 if let Ok(name) = count.as_ref().parse() {
+                     name
+                 } else {
+                     extractor.add_error(FTMLError::InvalidURI(count.into()));
+                     return None;
+                 }
+            } else {
+                extractor.add_error(FTMLError::MissingArguments);
+                return None;
+            };
+            let parent = opt!(extractor,attrs.get_section_level(FTMLKey::CounterParent));
+            extractor.styles().counters.push(SectionCounter { name,parent });
+            None
+        }
+
         pub fn importmodule<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
             let uri = err!(extractor,attrs.take_module_uri(FTMLKey::ImportModule, extractor));
             Some(OpenFTMLElement::ImportModule(uri))
@@ -269,6 +311,28 @@ pub mod rules {
             Some(OpenFTMLElement::Section { lvl, uri })
         }
 
+        pub fn slide<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+            let id = attrs.get_id(extractor,Cow::Borrowed("slide"));
+            let uri = match extractor.get_narrative_uri() & &*id {
+                Ok(uri) => uri,
+                Err(e) => {
+                    extractor.add_error(FTMLError::InvalidURI(format!("7: {id}")));
+                    return None
+                }
+            };
+            extractor.open_slide();
+            Some(OpenFTMLElement::Slide(uri))
+        }
+
+        pub fn slide_number<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+            Some(OpenFTMLElement::SlideNumber)
+        }
+
+        pub fn skipsection<E:FTMLExtractor>(extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+            extractor.open_section((DocumentURI::no_doc() & "skip").unwrap_or_else(|_| unreachable!()));
+            Some(OpenFTMLElement::SkipSection)
+        }
+
         pub fn definition<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
             do_paragraph(extractor, attrs, nexts, ParagraphKind::Definition)
         }
@@ -308,11 +372,11 @@ pub mod rules {
                     };
                 }
             }
-            let styles = opt!(extractor,attrs.get_typed(FTMLKey::Styles, 
-                |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
+            let styles = opt!(extractor,attrs.get_typed_vec(FTMLKey::Styles, 
+                |s| s.trim().parse()
             )).unwrap_or_default();
             extractor.open_paragraph(uri.clone(), fors);
-            Some(OpenFTMLElement::Paragraph { kind, inline, styles,uri })
+            Some(OpenFTMLElement::Paragraph { kind, inline, styles:styles.into_boxed_slice(),uri })
         }
 
         pub fn exercise<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
@@ -324,8 +388,8 @@ pub mod rules {
         }
 
         fn do_exercise<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,sub_exercise:bool) -> Option<OpenFTMLElement> {
-            let styles = opt!(extractor,attrs.get_typed(FTMLKey::Styles, 
-                |s| Result::<_,()>::Ok(s.split(',').map(|s| s.trim().to_string().into_boxed_str()).collect::<Vec<_>>().into_boxed_slice())
+            let styles = opt!(extractor,attrs.get_typed_vec(FTMLKey::Styles, 
+                |s| s.trim().parse()
             )).unwrap_or_default();
             let id = attrs.get_id(extractor,Cow::Borrowed("exercise"));
             let uri = match extractor.get_narrative_uri() & &*id {
@@ -340,7 +404,7 @@ pub mod rules {
             let points = attrs.get(FTMLKey::ProblemPoints)
                 .and_then(|s| s.as_ref().parse().ok());
             extractor.open_exercise(uri.clone());
-            Some(OpenFTMLElement::Exercise { sub_exercise, styles, uri, autogradable, points })
+            Some(OpenFTMLElement::Exercise { sub_exercise, styles:styles.into_boxed_slice(), uri, autogradable, points })
         }
 
         pub fn problem_hint<E:FTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {

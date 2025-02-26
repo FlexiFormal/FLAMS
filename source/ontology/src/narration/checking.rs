@@ -1,7 +1,7 @@
 use flams_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term, uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI}, Checked, DocumentRange, LocalBackend, MaybeResolved, Unchecked
+    content::terms::Term, uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI}, Checked, DocumentRange, LocalBackend, MaybeResolved, Unchecked
 };
 
 use super::{
@@ -23,6 +23,11 @@ enum Elem {
         level: SectionLevel,
         title: Option<DocumentRange>,
     },
+    Slide {
+        range: DocumentRange,
+        uri: DocumentElementURI,
+    },
+    SkipSection,
     Module {
         range: DocumentRange,
         module: ModuleURI,
@@ -46,7 +51,7 @@ enum Elem {
         inline: bool,
         title: Option<DocumentRange>,
         range: DocumentRange,
-        styles: Box<[Box<str>]>,
+        styles: Box<[Name]>,
         fors: VecMap<SymbolURI, Option<Term>>,
     },
     Exercise {
@@ -60,7 +65,7 @@ enum Elem {
         hints: Vec<DocumentRange>,
         notes: Vec<LazyDocRef<Box<str>>>,
         title: Option<DocumentRange>,
-        styles: Box<[Box<str>]>,
+        styles: Box<[Name]>,
         preconditions: Vec<(CognitiveDimension, SymbolURI)>,
         objectives: Vec<(CognitiveDimension, SymbolURI)>,
     },
@@ -80,6 +85,10 @@ impl Elem {
                 title,
                 children: v.into_boxed_slice(),
             }),
+            Self::Slide { range, uri } => DocumentElement::Slide{
+                range,uri,children:v.into_boxed_slice()
+            },
+            Self::SkipSection => DocumentElement::SkipSection(v.into_boxed_slice()),
             Self::Module { range, module } => DocumentElement::Module {
                 range,
                 module: MaybeResolved::resolve(module,|m| checker.get_module(m)),
@@ -255,6 +264,13 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 notation,
             },
             DocumentElement::TopTerm { uri, term } => DocumentElement::TopTerm { uri, term },
+            DocumentElement::SkipSection(children) => {
+                let old_in = std::mem::replace(&mut self.curr_in, children.into_iter());
+                let old_out = std::mem::take(&mut self.curr_out);
+                self.stack
+                    .push((Elem::SkipSection, old_in, old_out));
+                return;
+            }
             DocumentElement::Section(Section {
                 range,
                 uri,
@@ -270,6 +286,23 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                         uri,
                         level,
                         title,
+                    },
+                    old_in,
+                    old_out,
+                ));
+                return;
+            }
+            DocumentElement::Slide {
+                range,
+                uri,
+                children,
+            } => {
+                let old_in = std::mem::replace(&mut self.curr_in, children.into_iter());
+                let old_out = std::mem::take(&mut self.curr_out);
+                self.stack.push((
+                    Elem::Slide {
+                        range,
+                        uri,
                     },
                     old_in,
                     old_out,

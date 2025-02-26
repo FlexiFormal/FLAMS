@@ -4,6 +4,7 @@ pub(crate) mod terms;
 pub(crate) mod exercise;
 pub(crate) mod paragraphs;
 pub mod documents;
+pub mod counters;
 mod toc;
 pub(crate) mod navigation;
 #[cfg(feature="omdoc")]
@@ -20,7 +21,7 @@ use leptos_dyn_dom::{DomChildrenCont, DomCont, OriginalNode};
 use ftml_extraction::{open::OpenFTMLElement, prelude::FTMLElements};
 use leptos::tachys::view::any_view::AnyView;
 
-use crate::config::{LogicalLevel, SectionCounters};
+use counters::{LogicalLevel, SectionCounters};
 
 #[component]
 pub fn FTMLComponents(#[prop(optional)] in_math:bool, elements:FTMLElements,orig:OriginalNode) -> impl IntoView {
@@ -36,6 +37,7 @@ fn do_components<const MATH:bool>(skip:usize,elements:FTMLElements,orig:Original
     //tracing::debug!("Doing {next:?} ({:?})",std::thread::current().id());
     match next {
       OpenFTMLElement::Section { uri,.. } => sections::section(uri.clone(),move || do_components::<MATH>(skip+1,elements,orig)).into_any(),
+      OpenFTMLElement::SkipSection => sections::skip(move || do_components::<MATH>(skip+1,elements,orig)).into_any(),
       OpenFTMLElement::Inputref { uri, id } => inputref::inputref(uri.clone(), id).into_any(),
       OpenFTMLElement::IfInputref(b) => inputref::if_inputref(*b,orig).into_any(),
       OpenFTMLElement::OpenTerm { term, .. } => {
@@ -100,7 +102,7 @@ fn do_components<const MATH:bool>(skip:usize,elements:FTMLElements,orig:Original
         use leptos::context::Provider;
         let in_inputref = use_context::<InInputRef>().map(|i| i.0).unwrap_or(false);
         update_context::<SectionCounters,_>(|current| {
-          if matches!(current.current,LogicalLevel::None) { 
+          if matches!(current.current_level(),LogicalLevel::None) { 
             current.max = *level;
           } else if !in_inputref {
             tracing::error!("ftml:set-section-level: Section already started");
@@ -110,6 +112,12 @@ fn do_components<const MATH:bool>(skip:usize,elements:FTMLElements,orig:Original
       }
       OpenFTMLElement::Paragraph{kind,inline:false,uri,styles,..} => {
         paragraphs::paragraph(*kind,uri.clone(),styles.clone(),move || do_components::<MATH>(skip+1,elements,orig)).into_any()
+      }
+      OpenFTMLElement::Slide(uri) => {
+        paragraphs::slide(uri.clone(),move || do_components::<MATH>(skip+1,elements,orig)).into_any()
+      }
+      OpenFTMLElement::SlideNumber => {
+        paragraphs::slide_number().into_any()
       }
       OpenFTMLElement::Paragraph { .. } => do_components::<MATH>(skip+1,elements,orig).into_any(),
       OpenFTMLElement::Title => sections::title(move || view!(<DomChildrenCont orig cont=crate::iterate />)).into_any(),

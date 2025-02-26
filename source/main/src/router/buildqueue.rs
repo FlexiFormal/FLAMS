@@ -299,12 +299,12 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
     login.with_queue(queue, |_| ())?;
     let (_,n) = flams_system::building::queue_manager::QueueManager::get().migrate::<(),String>(queue.into(),|sandbox| {
       if let Some((_,secret)) = oauth {
-        let mut js = tokio::task::JoinSet::new();
+        //let mut js = tokio::task::JoinSet::new();
         sandbox.with_repos(|repos| {
           for r in repos {
             if let SandboxedRepository::Git { id,.. } = r {
               sandbox.with_archive(id, |a| {
-                let Some(Archive::Local(a)) = a else { return };
+                /*let Some(Archive::Local(a)) = a else { return };
                 let p = a.path().to_path_buf();
                 let secret = secret.clone();
                 let _ = js.spawn_blocking(move || {
@@ -314,7 +314,7 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
                   let _ = repo.commit_all("migrating")?;
                   repo.push_with_oauth(&secret)
                   //repo.mark_managed().map_err(|e| e.to_string())?;
-                });//.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;
+                });*///.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;
                 //.map_err(|e| e.to_string())?;
                 //.map_err(|e| e.to_string())?;
                 //Ok(())
@@ -322,14 +322,14 @@ pub async fn migrate(queue:NonZeroU32) -> Result<usize,ServerFnError<String>> {
               }
             }
         });
-        while !js.is_empty() {
+        /*while !js.is_empty() {
           if let Some(r) = js.try_join_next() {
             r.map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;
           } else {
             std::thread::sleep(std::time::Duration::from_millis(100));
           };
-        }
+        }*/
         Ok(())
       } else { Ok(()) }
     })?;

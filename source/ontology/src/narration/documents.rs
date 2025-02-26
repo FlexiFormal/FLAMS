@@ -1,17 +1,53 @@
-use super::{checking::DocumentChecker, DocumentElement, NarrationTrait};
-use crate::{uris::DocumentURI, Checked, CheckingState, Resolvable, Unchecked};
+use super::{checking::DocumentChecker, paragraphs::ParagraphKind, sections::SectionLevel, DocumentElement, NarrationTrait};
+use crate::{uris::{DocumentURI, Name}, Checked, CheckingState, Resolvable, Unchecked};
 use core::str;
-use std::{borrow::Cow, fmt::Debug};
+use std::{borrow::Cow, fmt::Debug, str::FromStr};
 use triomphe::Arc;
+
+#[derive(Debug,Clone,Default)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DocumentStyles {
+    pub counters: Vec<SectionCounter>,
+    pub styles:Vec<DocumentStyle>
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DocumentStyle {
+    pub kind:ParagraphKind,
+    pub name:Option<Name>,
+    pub counter:Option<Name>
+}
+impl FromStr for DocumentStyle {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some((a,b)) = s.split_once('-') {
+            let kind = ParagraphKind::from_str(a)?;
+            let name = Some(Name::from_str(b).map_err(|_| ())?);
+            return Ok(Self { kind, name, counter:None })
+        }
+        let kind = ParagraphKind::from_str(s)?;
+        Ok(Self { kind, name:None, counter:None })
+    }
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SectionCounter {
+    pub name:Name,
+    pub parent:Option<SectionLevel>
+}
+
 
 #[derive(Debug)]
 pub struct OpenDocument<State:CheckingState> {
     pub uri: DocumentURI,
     pub title: Option<Box<str>>,
     pub elements: State::Seq<DocumentElement<State>>,
+    pub styles:DocumentStyles
 }
 crate::serde_impl!{mod serde_doc =
-    struct OpenDocument[uri,title,elements]
+    struct OpenDocument[uri,title,elements,styles]
 }
 
 
@@ -38,6 +74,11 @@ impl Document {
     #[must_use]
     pub fn title(&self) -> Option<&str> {
         self.0.title.as_deref()
+    }
+    #[inline]
+    #[must_use]
+    pub fn styles(&self) -> &DocumentStyles {
+        &self.0.styles
     }
 }
 
@@ -86,6 +127,7 @@ impl UncheckedDocument {
         Document(Arc::new(OpenDocument {
             uri: self.uri,
             title: self.title,
+            styles:self.styles,
             elements,
         }))
     }

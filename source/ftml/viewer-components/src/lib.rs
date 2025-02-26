@@ -13,8 +13,8 @@ pub mod remote;
 pub mod config;
 pub mod ts;
 
-use components::{inputref::InInputRef, FTMLComponents, TOCSource};
-use config::{IdPrefix, FTMLConfig, SectionCounters};
+use components::{counters::SectionCounters, inputref::InInputRef, FTMLComponents, TOCElem, TOCSource};
+use config::{IdPrefix, FTMLConfig};
 use flams_utils::{prelude::HMap, vecmap::VecMap};
 use flams_web_utils::{components::wait, do_css, inject_css};
 use leptos::prelude::*;
@@ -52,6 +52,7 @@ pub fn FTMLGlobalSetup<Ch:IntoView+'static>(
     provide_context(SectionCounters::default());
     provide_context(NarrativeURI::Document(DocumentURI::no_doc()));
     provide_context(FTMLConfig::new());
+    provide_context(RwSignal::new(None::<Vec<TOCElem>>));
     //provide_context(exercises.unwrap_or_default());
     children()
 }
@@ -72,6 +73,7 @@ pub fn FTMLDocumentSetup<Ch:IntoView+'static>(
     provide_context(RwSignal::new(NavElems{ids:HMap::default(),titles:HMap::default()}));
     provide_context(IdPrefix(String::new()));
     provide_context(SectionCounters::default());
+    provide_context(RwSignal::new(None::<Vec<TOCElem>>));
     provide_context(URLFragment::new());
     provide_context(NarrativeURI::Document(uri));
     let r = children();
@@ -90,13 +92,19 @@ pub fn FTMLStringMath(html:String) -> impl IntoView {
     view!(<math><DomStringContMath html cont=iterate/></math>)
 }
 
-pub static RULES:[FTMLExtractionRule<DOMExtractor>;42] = [
+pub static RULES:[FTMLExtractionRule<DOMExtractor>;48] = [
     rule(FTMLTag::Section),
+    rule(FTMLTag::SkipSection),
     rule(FTMLTag::Term),
     rule(FTMLTag::Arg),
 
     rule(FTMLTag::InputRef),
 
+    rule(FTMLTag::Slide),
+
+    rule(FTMLTag::Style),
+    rule(FTMLTag::CounterParent),
+    rule(FTMLTag::Counter),
 
     rule(FTMLTag::Comp),
     rule(FTMLTag::VarComp),
@@ -121,6 +129,8 @@ pub static RULES:[FTMLExtractionRule<DOMExtractor>;42] = [
     rule(FTMLTag::Paragraph),
     rule(FTMLTag::Assertion),
     rule(FTMLTag::Example),
+
+    rule(FTMLTag::SlideNumber),
 
     // ---- no-ops --------
     rule(FTMLTag::ArgMode),

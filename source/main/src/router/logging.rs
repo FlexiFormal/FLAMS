@@ -11,7 +11,7 @@ use crate::utils::{needs_login, ws::WebSocket};
 async fn full_log() -> Result<flams_utils::logs::LogTree,()> {
     use tokio::io::AsyncBufReadExt;
 
-    let path = flams_system::logger().log_file();
+    let path = flams_system::logging::logger().log_file();
 
     let reader = tokio::io::BufReader::new(tokio::fs::File::open(path).await.map_err(|_| ())?);
     let mut lines = reader.lines();
@@ -162,7 +162,7 @@ impl crate::utils::ws::WebSocketServer<(),Log> for LogSocket {
         use crate::users::LoginState;
         match account {
             LoginState::Admin | LoginState::NoAccounts | LoginState::User{is_admin:true,..} => {
-                let listener = flams_system::logger().listener();
+                let listener = flams_system::logging::logger().listener();
                 Some(Self {
                     listener,
                     #[cfg(feature="hydrate")] socket:unreachable!()

@@ -66,7 +66,8 @@ impl PartialOrd for SectionLevel {
     }
 }
 impl SectionLevel {
-    pub fn inc(self) -> Self {
+    #[must_use]
+    pub const fn inc(self) -> Self {
         match self {
             Self::Part => Self::Chapter,
             Self::Chapter => Self::Section,

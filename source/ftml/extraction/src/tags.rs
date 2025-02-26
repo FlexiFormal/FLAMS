@@ -36,6 +36,7 @@ do_tags!{
     MathStructure               @ mathstructure,
     Morphism                    @ morphism,   
     Section                     @ section,
+    SkipSection                 @ skipsection,
 
     Definition                  @ definition,     
     Paragraph                   @ paragraph,
@@ -43,6 +44,8 @@ do_tags!{
     Example                     @ example,
     Problem                     @ exercise,
     SubProblem                  @ subexercise,
+    Slide                       @ slide,
+    SlideNumber                 @ slide_number,
 
     DocTitle                    @ doctitle,
     Title                       @ title,
@@ -74,7 +77,10 @@ do_tags!{
     InputRef                    @ inputref,
 
     SetSectionLevel             @ setsectionlevel,
-    SkipSection                 @ no_op /* TODO */,
+
+    Style                       @ style_rule,
+    CounterParent               @ counter_parent,
+    Counter                     @ counter_parent,
 
 
     Proof                       @ proof,
@@ -131,8 +137,6 @@ do_tags!{
 
     SRef                        @ no_op /* TODO */,
     SRefIn                      @ no_op /* TODO */,
-    Frame                       @ no_op /* TODO */,
-    FrameNumber                 @ no_op /* TODO */,
     Slideshow                   @ no_op /* TODO */,
     SlideshowSlide              @ no_op /* TODO */,
     CurrentSectionLevel         @ no_op /* TODO */,

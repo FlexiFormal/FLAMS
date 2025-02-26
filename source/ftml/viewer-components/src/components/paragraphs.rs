@@ -1,13 +1,15 @@
-use flams_ontology::{narration::paragraphs::ParagraphKind, uris::DocumentElementURI};
+use flams_ontology::{narration::paragraphs::ParagraphKind, uris::{DocumentElementURI, DocumentURI, Name}};
 use flams_web_utils::inject_css;
 use leptos::{prelude::*,context::Provider};
 
-use crate::config::{LogicalLevel, SectionCounters};
+use crate::components::counters::{LogicalLevel, SectionCounters};
 
-pub(super) fn paragraph<V:IntoView+'static>(kind:ParagraphKind,uri:DocumentElementURI,styles:Box<[Box<str>]>,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
-  let mut counters : SectionCounters = expect_context();
+use super::{TOCElem, TOCIter};
+
+pub(super) fn paragraph<V:IntoView+'static>(kind:ParagraphKind,uri:DocumentElementURI,styles:Box<[Name]>,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   inject_css("ftml-sections", include_str!("sections.css"));
-  counters.current = LogicalLevel::Paragraph;
+  let mut counters : SectionCounters = expect_context();
+  let style = counters.get_para(kind,&styles);
   let prefix = match kind {
     ParagraphKind::Assertion => Some("ftml-assertion"),
     ParagraphKind::Definition => Some("ftml-definition"),
@@ -22,14 +24,42 @@ pub(super) fn paragraph<V:IntoView+'static>(kind:ParagraphKind,uri:DocumentEleme
       s.push(' ');
       s.push_str(p);
       s.push('-');
-      s.push_str(&style);
+      s.push_str(style.first_name().as_ref());
     }
     s
   });
 
   view!{
     <Provider value=counters>
-    <div class=cls>{children()}</div>
+    <div class=cls style=style>{children()}</div>
     </Provider>
   }
 }
+
+pub(super) fn slide<V:IntoView+'static>(uri:DocumentElementURI,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+  inject_css("ftml-slide", include_str!("slides.css"));
+  SectionCounters::slide_inc();
+  view!(
+    <div class="ftml-slide">{children()}</div>
+  )
+}
+
+pub(super) fn slide_number() -> impl IntoView {
+  let v = SectionCounters::get_slide();
+  move || v.get()
+}
+/*
+pub(super) fn skip_slides(uri:&DocumentURI,id:&str) -> Option<u32> {
+  let ctw = expect_context::<RwSignal::<Option<Vec<TOCElem>>>>();
+  ctw.with(|v| v.as_ref().and_then(|v| {
+    leptos::logging::log!("TOC: {v:?}");
+    v.iter_elems().find_map(|e| 
+      if let TOCElem::Inputref{uri:u,id:i,children,..} = e {
+        if u == uri && i == id {
+          Some(children.iter_elems().filter(|e| matches!(e ,TOCElem::Slide{..})).count() as u32)
+        } else { None }
+      } else { None }
+    )
+}))
+}
+ */

@@ -378,6 +378,22 @@ impl GlobalBackend {
         &GLOBAL
     }
 
+    pub fn initialize() {
+        let settings = crate::settings::Settings::get();
+        let archives = Self::get().manager();
+        for p in settings.mathhubs.iter().rev() {
+            archives.load(p);
+        }
+        let f = || {
+            let backend = Self::get();
+            backend.triple_store().load_archives(&backend.all_archives());
+        };
+        #[cfg(feature="tokio")]
+        flams_utils::background(f);
+        #[cfg(not(feature="tokio"))]
+        f();
+    }
+
     #[inline]
     pub fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R {
         self.archives.with_tree(f)

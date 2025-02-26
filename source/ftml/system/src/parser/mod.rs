@@ -4,7 +4,7 @@ pub mod termsnotations;
 use std::cell::{Cell, RefCell};
 
 use html5ever::{interface::{NodeOrText, TreeSink}, parse_document, serialize::SerializeOpts, tendril::{SliceExt, StrTendril, TendrilSink}, ParseOpts, QualName};
-use flams_ontology::{languages::Language, narration::{documents::UncheckedDocument, LazyDocRef}, triple, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange};
+use flams_ontology::{languages::Language, narration::{documents::{DocumentStyles, UncheckedDocument}, LazyDocRef}, triple, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange};
 use flams_system::{backend::{AnyBackend, Backend}, formats::{HTMLData, OMDocResult}};
 use flams_utils::{prelude::HSet, CSS};
 use nodes::{ElementData, NodeData, NodeRef};
@@ -132,7 +132,7 @@ impl TreeSink for HTMLParser<'_> {
         result:Err(Vec::new())
       } */
     }
-    let Ok((uri,elems,modules)) = state.take() else {
+    let Ok((uri,elems,modules,styles)) = state.take() else {
       return Err("Unbalanced FTML document".to_string())
       /*return BuildResult {
         log:Either::Left("Unbalanced FTML document".to_string()),
@@ -146,7 +146,7 @@ impl TreeSink for HTMLParser<'_> {
     let (body,inner_offset) = self.body.get();
     Ok((OMDocResult {
       document: UncheckedDocument {
-        uri,title,elements:elems
+        uri,title,styles,elements:elems
       },
       html:HTMLData {
         html,css,refs,
