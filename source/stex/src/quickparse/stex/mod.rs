@@ -38,6 +38,7 @@ pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParse
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum STeXAnnot {
   Module {
     uri:ModuleURI,

@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::hash_map::Entry, num::NonZeroU8, path::{Path
 
 use flams_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
 use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
-use flams_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{VecMap, VecSet}};
+use flams_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{VecMap, VecSet}, CondSerialize};
 use smallvec::SmallVec;
 
 use crate::{quickparse::{latex::{rules::{AnyEnv, AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule}, Environment, FromLaTeXToken, Group, GroupState, Groups, KeyValKind, LaTeXParser, Macro, OptMap, ParsedKeyValue, ParserState}, stex::structs::MorphismKind}, tex};
@@ -314,13 +314,14 @@ macro_rules! optargtype {
     }
   };
   ($parser:ident => $name:ident <T> { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? } @ $iter:ident) => {
-    pub enum $name<Pos:SourcePos,T> {
+    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+    pub enum $name<Pos:SourcePos,T:CondSerialize> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE T $($tp)*)>)
       ),*
       $(, $default(SourceRange<Pos>,Box<str>))?
     }
-    impl<Pos:SourcePos,T> std::fmt::Debug for $name<Pos,T> {
+    impl<Pos:SourcePos,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(stringify!($name))
       }
@@ -342,8 +343,8 @@ macro_rules! optargtype {
         }
     }
 
-    impl<Pos:SourcePos,T1> $name<Pos,T1> {
-      pub fn into_other<T2>(self,mut cont:impl FnMut(Vec<T1>) -> Vec<T2>) -> $name<Pos,T2> {
+    impl<Pos:SourcePos,T1:CondSerialize> $name<Pos,T1> {
+      pub fn into_other<T2:CondSerialize>(self,mut cont:impl FnMut(Vec<T1>) -> Vec<T2>) -> $name<Pos,T2> {
         match self {
           $(
             $name::$fieldname(val) => optargtype!(@TRANSLATE val cont $name $fieldname $($tp)*)
@@ -353,16 +354,16 @@ macro_rules! optargtype {
       }
     }
 
-    pub struct $iter<'a,Pos:SourcePos,T>{
+    pub struct $iter<'a,Pos:SourcePos,T:CondSerialize>{
       current:Option<std::slice::Iter<'a,T>>,
       nexts:std::slice::Iter<'a,$name<Pos,T>>
     }
-    impl<'a,Pos:SourcePos,T> $iter<'a,Pos,T> {
+    impl<'a,Pos:SourcePos,T:CondSerialize> $iter<'a,Pos,T> {
       pub fn new(sn:&'a[$name<Pos,T>]) -> Self {
         Self { current:None,nexts:sn.iter()}
       }
     }
-    impl<'a,Pos:SourcePos,T> Iterator for $iter<'a,Pos,T> {
+    impl<'a,Pos:SourcePos,T:CondSerialize> Iterator for $iter<'a,Pos,T> {
       type Item = &'a T;
       fn next(&mut self) -> Option<Self::Item> {
           if let Some(c) = &mut self.current {
@@ -385,13 +386,15 @@ macro_rules! optargtype {
     }
   };
   (LSP $parser:ident => $name:ident <T> { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? } @ $iter:ident) => {
-    pub enum $name<Pos:SourcePos,T> {
+
+    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+    pub enum $name<Pos:SourcePos,T:CondSerialize> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE T $($tp)*)>)
       ),*
       $(, $default(SourceRange<Pos>,Box<str>))?
     }
-    impl<Pos:SourcePos,T> std::fmt::Debug for $name<Pos,T> {
+    impl<Pos:SourcePos,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(stringify!($name))
       }
@@ -413,8 +416,8 @@ macro_rules! optargtype {
         }
     }
 
-    impl<T1> $name<LSPLineCol,T1> {
-      pub fn into_other<T2>(self,mut cont:impl FnMut(Vec<T1>) -> Vec<T2>) -> $name<LSPLineCol,T2> {
+    impl<T1:CondSerialize> $name<LSPLineCol,T1> {
+      pub fn into_other<T2:CondSerialize>(self,mut cont:impl FnMut(Vec<T1>) -> Vec<T2>) -> $name<LSPLineCol,T2> {
         match self {
           $(
             $name::$fieldname(val) => optargtype!(@TRANSLATE val cont $name $fieldname $($tp)*)
@@ -424,16 +427,16 @@ macro_rules! optargtype {
       }
     }
 
-    pub struct $iter<'a,T>{
+    pub struct $iter<'a,T:CondSerialize>{
       current:Option<std::slice::Iter<'a,T>>,
       nexts:std::slice::Iter<'a,$name<LSPLineCol,T>>
     }
-    impl<'a,T> $iter<'a,T> {
+    impl<'a,T:CondSerialize> $iter<'a,T> {
       pub fn new(sn:&'a[$name<LSPLineCol,T>]) -> Self {
         Self { current:None,nexts:sn.iter()}
       }
     }
-    impl<'a,T> Iterator for $iter<'a,T> {
+    impl<'a,T:CondSerialize> Iterator for $iter<'a,T> {
       type Item = &'a T;
       fn next(&mut self) -> Option<Self::Item> {
           if let Some(c) = &mut self.current {

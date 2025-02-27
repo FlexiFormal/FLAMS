@@ -20,7 +20,7 @@ struct DocumentData {
 pub struct LSPDocument {
   up_to_date:triomphe::Arc<AtomicBool>,
   text:triomphe::Arc<parking_lot::Mutex<LSPText>>,
-  pub(crate) annotations: STeXParseData,
+  pub annotations: STeXParseData,
   data:triomphe::Arc<DocumentData>
 }
 

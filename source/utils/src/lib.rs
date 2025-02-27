@@ -160,3 +160,13 @@ fn css_things() {
         }
     }
 }
+
+#[cfg(feature="serde")]
+pub trait CondSerialize : serde::Serialize { }
+#[cfg(feature="serde")]
+impl<T:serde::Serialize> CondSerialize for T { }
+
+#[cfg(not(feature="serde"))]
+pub trait CondSerialize { }
+#[cfg(not(feature="serde"))]
+impl<T> CondSerialize for T { }
