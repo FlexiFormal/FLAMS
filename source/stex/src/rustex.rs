@@ -118,7 +118,8 @@ struct EngineBase {
     memory: MemoryManager<CompactToken>,
     font_system: Fontsystem,
 }
-static ENGINE_BASE: Mutex<Option<EngineBase>> = Mutex::new(None);
+static ENGINE_BASE: Mutex<Option<Result<EngineBase,()>>> = Mutex::new(None);
+
 impl EngineBase {
     fn into_engine<O:OutputCont+'static,I: IntoIterator<Item = (String, String)>>(mut self, envs: I,out:O) -> RusTeXEngine {
         //use tex_engine::engine::filesystem::FileSystem;
@@ -149,48 +150,59 @@ impl EngineBase {
             stomach,
         }
     }
-    fn get<R, F: FnOnce(&Self) -> R>(f: F) -> R {
+    fn get<R, F: FnOnce(&Self) -> R>(f: F) -> Result<R,()> {
         let mut lock = ENGINE_BASE.lock();
         match &mut *lock {
-            Some(engine) => f(engine),
+            Some(Ok(engine)) => Ok(f(engine)),
+            Some(_) => Err(()),
             o => {
                 *o = Some(Self::initialize());
-                f(o.as_ref().unwrap_or_else(|| unreachable!()))
+                o.as_ref().unwrap_or_else(|| unreachable!()).as_ref().map(f).map_err(|()| ())
             }
         }
     }
 
     #[instrument(level = "info", target = "sTeX", name = "Initializing RusTeX engine")]
-    fn initialize() -> Self {
-        let mut engine = DefaultEngine::<Types>::default();
-        engine.aux.outputs = RusTeXOutput::Cont(Box::new(TracingOutput));
-        register_primitives_preinit(&mut engine);
-        match engine.initialize_pdflatex() {
-            Ok(()) => {}
-            Err(e) => {
-                error!("Error initializing RusTeX engine: {}", e);
+    fn initialize() -> Result<Self,()> {
+        std::panic::catch_unwind(|| {
+            let mut engine = DefaultEngine::<Types>::default();
+            engine.aux.outputs = RusTeXOutput::Cont(Box::new(TracingOutput));
+            register_primitives_preinit(&mut engine);
+            match engine.initialize_pdflatex() {
+                Ok(()) => {}
+                Err(e) => {
+                    error!("Error initializing RusTeX engine: {}", e);
+                }
+            };
+            register_primitives_postinit(&mut engine);
+            Self {
+                state: engine.state.clone(),
+                memory: engine.aux.memory.clone(),
+                font_system: engine.fontsystem.clone(),
             }
-        };
-        register_primitives_postinit(&mut engine);
-        Self {
-            state: engine.state.clone(),
-            memory: engine.aux.memory.clone(),
-            font_system: engine.fontsystem.clone(),
-        }
+        }).map_err(|a| {
+            if let Some(s) = a.downcast_ref::<String>() {
+                tracing::error!("Error initializing RusTeX engine: {}", s);
+            } else if let Some(s) = a.downcast_ref::<&str>() {
+                tracing::error!("Error initializing RusTeX engine: {}", s);
+            } else {
+                tracing::error!("Error initializing RusTeX engine");
+            }
+        })
     }
 }
 
 pub struct RusTeX(Mutex<EngineBase>);
 impl RusTeX {
-    pub fn get() -> Self {
-        Self(
+    pub fn get() -> Result<Self,()> {
+        Ok(Self(
             ENGINE_BASE
                 .lock()
                 .as_ref()
                 .unwrap_or_else(|| unreachable!())
-                .clone()
+                .clone()?
                 .into(),
-        )
+        ))
     }
     pub fn initialize() {
         EngineBase::get(|_| ());

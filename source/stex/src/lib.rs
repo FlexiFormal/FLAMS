@@ -101,24 +101,28 @@ fn rustex(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
   let out = path.with_extension("rlog");
   let ocl = out.clone();
   let mh = backend.mathhubs().into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(",");
-  let run = move || RusTeX::get().run_with_envs(
+  let run = move || RusTeX::get().map(|e| e.run_with_envs(
     path, false,
     [
       ("STEX_USESMS".to_string(),"true".to_string()),
       ("MATHHUB".to_string(),mh)
     ],
     Some(&ocl)
-  );
+  ));
   #[cfg(debug_assertions)]
   let ret = { std::thread::scope(move |s| std::thread::Builder::new().stack_size(16 * 1024 * 1024).spawn_scoped(s,run).expect("foo").join().expect("foo")) };
   #[cfg(not(debug_assertions))]
   let ret = { run() };
   match ret {
-    Err(_) => BuildResult {
+    Err(()) => BuildResult {
+      log:Either::Left("Could not initialize rustex".to_string()),
+      result:Err(Vec::new())
+    },
+    Ok(Err(_)) => BuildResult {
       log:Either::Right(out),
       result:Err(Vec::new())
     },
-    Ok(s) => {
+    Ok(Ok(s)) => {
       latex::clean(path);
       BuildResult {
         log:Either::Right(out),
