@@ -604,7 +604,10 @@ impl<'a, P: SourcePos + 'a> ParseSource<'a> for ParseStr<'a, P> {
         self.input.chars().next()
     }
     fn read_n(&mut self, i: usize) -> Self::Str {
-        let (l, r) = self.input.split_at(i);
+        let (l, mut r) = self.input.split_at(i);
+        if l.ends_with('\r') && r.starts_with('\n') {
+            r = &r[1..];
+        }
         self.input = r;
         self.pos.update_str_maybe_newline(l);
         l
