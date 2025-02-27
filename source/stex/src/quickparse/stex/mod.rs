@@ -485,7 +485,7 @@ pub fn quickparse<'a,S:STeXModuleStore>(uri:&'a DocumentURI,source: &'a str,path
     level,
     message, range
   });
-  let mut parser = if S::FULL  { 
+  let mut parser = if S::FULL  {
     LaTeXParser::with_rules(
       ParseStr::new(source),
       STeXParseState::new(Some(uri.archive_uri()),Some(path),uri,backend,store),

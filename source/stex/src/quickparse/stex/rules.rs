@@ -808,7 +808,7 @@ stex!(LSP: p => symname[mut args:Map]{name:!name} => {
   for (k,v) in args.inner.iter() {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
   }
-  MacroResult::Success(STeXToken::SymName { 
+  MacroResult::Success(STeXToken::SymName {
     uri:s, full_range: symname.range, token_range: symname.token_range,
     name_range: name.1, 
     mode: super::structs::SymnameMode::PrePost{ pre, post }

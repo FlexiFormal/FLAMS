@@ -65,7 +65,7 @@ pub extern "C" fn initialize_lspstate() {
     rt.enable_all();
     rt.thread_stack_size(4 * 1024 * 1024);
     rt.build().expect("Failed to initialize Tokio runtime").block_on(linter());
-    println!("FINISHED");
+    tracing::info!("FINISHED");
 }
 
 async fn linter() {
@@ -73,7 +73,10 @@ async fn linter() {
     let _ce = color_eyre::install();
     let mut spec = flams_system::settings::SettingsSpec::default();
     spec.lsp = true;
-    flams_system::initialize(spec);
+    flams_system::settings::Settings::initialize(spec);
+    GlobalBackend::initialize();
+    // println!("Mathhubs: {:?}", spec.mathhubs);
+    // flams_system::initialize(spec);
     let state = LSPState::default();
     let _ = GLOBAL_STATE.set(state.clone());
     let (_,t) = measure(move || {
