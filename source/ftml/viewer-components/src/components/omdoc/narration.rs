@@ -66,6 +66,37 @@ impl From<SectionSpec> for DocumentElementSpec {
 }
 
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
+pub struct SlideSpec {
+  pub uri:DocumentElementURI,
+  pub uses:VecSet<ModuleURI>,
+  pub children:Vec<DocumentElementSpec>
+}
+impl super::Spec for SlideSpec {
+  fn into_view(self) -> impl IntoView {
+    view!{
+      <Block>
+        <Header slot><b style="font-size:larger">"Slide"</b></Header>
+        <HeaderLeft slot>{super::uses("Uses",self.uses.0)}</HeaderLeft>
+        {self.children.into_iter().map(super::Spec::into_view).collect_view()}
+      </Block>
+    }
+  }
+}
+
+impl From<SlideSpec> for AnySpec {
+  #[inline]
+  fn from(value: SlideSpec) -> Self {
+    Self::Slide(value)
+  }
+}
+impl From<SlideSpec> for DocumentElementSpec {
+  #[inline]
+  fn from(value: SlideSpec) -> Self {
+    Self::Slide(value)
+  }
+}
+
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
 pub struct VariableSpec {
   pub uri:DocumentElementURI,
   pub arity:ArgSpec,
@@ -224,6 +255,7 @@ impl From<ExerciseSpec> for DocumentElementSpec {
 
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
 pub enum DocumentElementSpec {
+  Slide(SlideSpec),
   Section(SectionSpec),
   Module(ModuleSpec<Self>),
   Morphism(MorphismSpec<Self>),
@@ -244,6 +276,7 @@ impl super::SpecDecl for DocumentElementSpec {}
 impl super::Spec for DocumentElementSpec {
   fn into_view(self) -> impl IntoView {
       match self {
+        Self::Slide(s) => s.into_view().into_any(),
         Self::Section(s) => s.into_view().into_any(),
         Self::Module(m) => m.into_view().into_any(),
         Self::Morphism(m) => m.into_view().into_any(),
@@ -295,6 +328,7 @@ pub(crate) fn doc_ref(uri:DocumentURI,title:Option<String>) -> impl IntoView {
 impl From<DocumentElementSpec> for AnySpec {
   fn from(value: DocumentElementSpec) -> Self {
     match value {
+      DocumentElementSpec::Slide(s) => Self::Slide(s),
       DocumentElementSpec::Section(s) => Self::Section(s),
       DocumentElementSpec::Module(m) => Self::DocModule(m),
       DocumentElementSpec::Morphism(m) => Self::DocMorphism(m),
@@ -314,11 +348,11 @@ impl From<DocumentElementSpec> for AnySpec {
 
 #[cfg(feature="ssr")]
 mod froms {
-  use flams_ontology::{content::{declarations::{structures::Extension, OpenDeclaration}, ContentReference, ModuleLike}, narration::{documents::Document, exercises::Exercise, paragraphs::LogicalParagraph, sections::Section, variables::Variable, DocumentElement, NarrationTrait}, uris::{DocumentURI, ModuleURI, SymbolURI}, Checked, DocumentRange};
+  use flams_ontology::{content::{declarations::{structures::Extension, OpenDeclaration}, ContentReference, ModuleLike}, narration::{documents::Document, exercises::Exercise, paragraphs::LogicalParagraph, sections::Section, variables::Variable, DocumentElement, NarrationTrait}, uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI}, Checked, DocumentRange};
   use flams_system::backend::{Backend, StringPresenter};
 use flams_utils::{vecmap::VecSet, CSS};
   use crate::components::omdoc::content::{ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec, SymbolSpec};
-  use super::{DocumentElementSpec, DocumentSpec, ExerciseSpec, ParagraphSpec, SectionSpec, VariableSpec};
+  use super::{DocumentElementSpec, DocumentSpec, ExerciseSpec, ParagraphSpec, SectionSpec, SlideSpec, VariableSpec};
 
   impl SectionSpec {
     pub fn from_section<B:Backend>(
@@ -336,6 +370,19 @@ use flams_utils::{vecmap::VecSet, CSS};
       } else {None});
       let children = DocumentElementSpec::do_children(backend,children,&mut uses,&mut imports,css);
       Self { title, uri:uri.clone(), uses, children }
+    }
+  }
+
+  impl SlideSpec {
+    pub fn from_slide<B:Backend>(
+      children:&[DocumentElement<Checked>],uri:&DocumentElementURI,
+      backend:&B,//&mut StringPresenter<'_,B>,
+      css:&mut VecSet<CSS>
+    ) -> Self {
+      let mut uses = VecSet::new();
+      let mut imports = VecSet::new();
+      let children = DocumentElementSpec::do_children(backend,children,&mut uses,&mut imports,css);
+      Self { uri:uri.clone(), uses, children }
     }
   }
 
@@ -432,8 +479,14 @@ use flams_utils::{vecmap::VecSet, CSS};
     ) -> Vec<Self> {
       let mut ret = Vec::new();
       for c in children {match c {
+        DocumentElement::SkipSection(s) => {
+          ret.extend(Self::do_children(backend,s,uses,imports,css).into_iter())
+        }
         DocumentElement::Section(s) => {
           ret.push(SectionSpec::from_section(s,backend,css).into());
+        }
+        DocumentElement::Slide{children,uri,..} => {
+          ret.push(SlideSpec::from_slide(children,uri,backend,css).into())
         }
         DocumentElement::Paragraph(p) => {
           ret.push(ParagraphSpec::from_paragraph(p,backend,css).into());

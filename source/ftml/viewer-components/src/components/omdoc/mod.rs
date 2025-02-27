@@ -71,6 +71,7 @@ pub trait SpecDecl: sealed::Sealed + Spec + std::fmt::Debug+Clone+Send+Sync+'sta
 
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
 pub enum AnySpec {
+  Slide(narration::SlideSpec),
   Document(narration::DocumentSpec),
   Section(narration::SectionSpec),
   DocModule(content::ModuleSpec<DocumentElementSpec>),
@@ -95,6 +96,7 @@ pub enum AnySpec {
 impl Spec for AnySpec {
   fn into_view(self) -> impl leptos::IntoView {
       match self {
+        Self::Slide(d) => d.into_view().into_any(),
         Self::Document(d) => d.into_view().into_any(),
         Self::Section(d) => d.into_view().into_any(),
         Self::DocModule(d) => d.into_view().into_any(),
@@ -225,7 +227,7 @@ pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,tit
   view!{
     //<div style="display:inline-block;">
       <div style="display:inline-block;"><Popover>
-        <PopoverTrigger slot>{kind.map(|k| view!({k}" "))}<span class="ftml-comp"><FTMLString html=title/></span></PopoverTrigger>
+        <PopoverTrigger slot><span>{kind.map(|k| view!({k}" "))}<span class="ftml-comp"><FTMLString html=title/></span></span></PopoverTrigger>
         <div style="font-size:small;">{uristring}</div>
         <div style="margin-bottom:5px;"><thaw::Divider/></div>
         <div style="background-color:white;color:black;">

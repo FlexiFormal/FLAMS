@@ -4,7 +4,7 @@ use leptos::{context::Provider, either::{Either, EitherOf3}, prelude::*};
 use leptos_dyn_dom::OriginalNode;
 use ftml_extraction::open::terms::{OpenArg, OpenTerm, PreVar, VarOrSym};
 
-use crate::{components::{IntoLOs, LOs}, config::{FTMLConfig, SectionCounters}, FTMLString};
+use crate::{components::{IntoLOs, LOs}, config::FTMLConfig, FTMLString};
 
 #[cfg(feature="omdoc")]
 enum DomTermArgs {

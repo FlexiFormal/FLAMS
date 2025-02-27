@@ -56,7 +56,7 @@ impl ImageData {
 }
 
 
-pub async fn img_handler(
+pub(crate) async fn img_handler(
   uri: http::Uri,
   axum::extract::State(ServerState {images:_,..}): axum::extract::State<ServerState>,
   //request: http::Request<axum::body::Body>,

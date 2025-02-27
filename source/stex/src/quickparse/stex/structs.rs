@@ -130,7 +130,7 @@ pub enum STeXToken<Pos:SourcePos> {
     token_range: SourceRange<Pos>
   },
   Notation {
-    uri:SymbolReference<Pos>,
+    uri:SmallVec<SymbolReference<Pos>,1>,
     token_range: SourceRange<Pos>,
     name_range:SourceRange<Pos>,
     notation_args:Vec<NotationArg<Pos,Self>>,
@@ -189,20 +189,20 @@ pub enum STeXToken<Pos:SourcePos> {
     token_range: SourceRange<Pos>
   },
   SymName {
-    uri:SymbolReference<Pos>,
+    uri:SmallVec<SymbolReference<Pos>,1>,
     full_range: SourceRange<Pos>,
     token_range: SourceRange<Pos>,
     name_range:SourceRange<Pos>,
     mode:SymnameMode<Pos>
   },
   Symuse {
-    uri:SymbolReference<Pos>,
+    uri:SmallVec<SymbolReference<Pos>,1>,
     full_range: SourceRange<Pos>,
     token_range: SourceRange<Pos>,
     name_range:SourceRange<Pos>,
   },
   Definiens {
-    uri:SymbolReference<Pos>,
+    uri:SmallVec<SymbolReference<Pos>,1>,
     full_range: SourceRange<Pos>,
     token_range: SourceRange<Pos>,
     name_range:Option<SourceRange<Pos>>,
@@ -216,7 +216,7 @@ pub enum STeXToken<Pos:SourcePos> {
     arg_range:SourceRange<Pos>,
   },
   Symref {
-    uri:SymbolReference<Pos>,
+    uri:SmallVec<SymbolReference<Pos>,1>,
     full_range: SourceRange<Pos>,
     token_range: SourceRange<Pos>,
     name_range:SourceRange<Pos>,
@@ -758,16 +758,17 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
     }
   }
 
-  fn get_symbol_macro_or_name<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,groups:&Groups<'a,'_,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>,namestr:&str) -> Option<SymbolReference<LSPLineCol>> {
+  fn get_symbol_macro_or_name<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,groups:&Groups<'a,'_,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>,namestr:&str) -> Option<SmallVec<SymbolReference<LSPLineCol>,1>> {
+    let mut ret = SmallVec::new();
     for g in groups.groups.iter().rev() {
       for r in g.semantic_rules.iter().rev() {
         match r {
           SemanticRule::Symbol(r) | SemanticRule::Structure{symbol:r,..} => {
             if r.macroname.as_ref().is_some_and(|n| &**n == namestr) {
-              return Some(r.uri.clone())
+              if !ret.contains(&r.uri) {ret.push(r.uri.clone());} continue
             }
             if r.uri.uri.name().last_name().as_ref() == namestr {
-              return Some(r.uri.clone())
+              if !ret.contains(&r.uri) {ret.push(r.uri.clone());}
             }
           }
           SemanticRule::Module(_,r) | SemanticRule::StructureImport(_,r) => {
@@ -775,10 +776,10 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
               match r {
                 ModuleRule::Symbol(r) | ModuleRule::Structure{symbol:r,..} => {
                   if r.macroname.as_ref().is_some_and(|n| &**n == namestr) {
-                    return Some(r.uri.clone())
+                    if !ret.contains(&r.uri) {ret.push(r.uri.clone());} continue
                   }
                   if r.uri.uri.name().last_name().as_ref() == namestr {
-                    return Some(r.uri.clone())
+                    if !ret.contains(&r.uri) {ret.push(r.uri.clone());}
                   }
                 }
                 _ => ()
@@ -790,10 +791,10 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
               match r {
                 ModuleRule::Symbol(r) | ModuleRule::Structure{symbol:r,..} => {
                   if r.macroname.as_ref().is_some_and(|n| &**n == namestr) {
-                    return Some(r.uri.clone())
+                    if !ret.contains(&r.uri) {ret.push(r.uri.clone());} continue
                   }
                   if r.uri.uri.name().last_name().as_ref() == namestr {
-                    return Some(r.uri.clone())
+                    if !ret.contains(&r.uri) {ret.push(r.uri.clone());}
                   }
                 }
                 _ => ()
@@ -804,7 +805,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
         }
       }
     }
-    None
+    if ret.is_empty() {None } else { Some(ret) }
   }
 
   fn get_structure_macro_or_name<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,
@@ -888,18 +889,19 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
   fn get_symbol_complex<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,
     groups:&Groups<'a,'_,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>,
     symbol:&str,module:&str,path:Option<&str>
-  ) -> Option<SymbolReference<LSPLineCol>> {
+  ) -> Option<SmallVec<SymbolReference<LSPLineCol>,1>> {
+    let mut ret = SmallVec::new();
     for g in groups.groups.iter().rev() {
       for r in g.semantic_rules.iter().rev() {
         match r {
           SemanticRule::Symbol(r) | SemanticRule::Structure{symbol:r,..} if Self::compare(symbol,module,path,&r.uri.uri) => {
-            return Some(r.uri.clone())
+            if !ret.contains(&r.uri) {ret.push(r.uri.clone());}
           }
           SemanticRule::Module(_,r) | SemanticRule::StructureImport(_,r) => {
             for r in r.rules.iter().rev() {
               match r {
                 ModuleRule::Symbol(r) | ModuleRule::Structure{symbol:r,..} if Self::compare(symbol,module,path,&r.uri.uri) => {
-                  return Some(r.uri.clone())
+                  if !ret.contains(&r.uri) {ret.push(r.uri.clone());}
                 }
                 _ => ()
               }
@@ -909,7 +911,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
             for r in rls.rules.iter().rev() {
               match r {
                 ModuleRule::Symbol(r) | ModuleRule::Structure{symbol:r,..} if Self::compare(symbol,module,path,&r.uri.uri) => {
-                  return Some(r.uri.clone())
+                  if !ret.contains(&r.uri) {ret.push(r.uri.clone());}
                 }
                 _ => ()
               }
@@ -919,7 +921,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
         }
       }
     }
-    None
+    if ret.is_empty() { None } else { Some(ret) }
   }
 
   fn get_structure_uri<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,
@@ -976,21 +978,30 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
     None
   }
 
-  pub fn get_symbol<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,groups:&Groups<'a,'_,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>,namestr:&str) -> Option<SymbolReference<LSPLineCol>> {
+  pub fn get_symbol<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,start:LSPLineCol,groups:&mut Groups<'a,'_,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>,namestr:&str) -> Option<SmallVec<SymbolReference<LSPLineCol>,1>> {
     //let realname = namestr.trim().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
     let mut steps = namestr.split('?').rev();//realname.split('?').rev();
     let name = steps.next()?;
     
     let module = if let Some(module) = steps.next() {module} else {
       if !name.contains('/') {
-        return self.get_symbol_macro_or_name(groups,name);
+        //return self.get_symbol_macro_or_name(groups,name);
+        let r = self.get_symbol_macro_or_name(groups,name)?;
+        if r.len() > 1 {
+          groups.tokenizer.problem(start,"Ambiguous symbol reference", DiagnosticLevel::Warning);
+        }
+        return Some(r);
       } else { "" }
     };
     let path = if steps.next().is_none() { None } else {
       let i = namestr.len() - (name.len() + 1 + module.len() + 1);
       Some(&namestr[..i])
     };
-    self.get_symbol_complex(groups, name, module, path)
+    let r = self.get_symbol_complex(groups, name, module, path)?;
+    if r.len() > 1 {
+      groups.tokenizer.problem(start,"Ambiguous symbol reference", DiagnosticLevel::Warning);
+    }
+    Some(r)
   }
 
   pub fn get_structure<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(&self,
@@ -1091,10 +1102,12 @@ impl<'a,Pos:SourcePos,MS:STeXModuleStore> STeXParseState<'a,Pos,MS> {
   #[inline]#[must_use]
   pub fn new(archive:Option<ArchiveURIRef<'a>>,in_path:Option<&'a Path>,uri:&'a DocumentURI,backend:&'a AnyBackend,on_module:MS) -> Self {
     let language = in_path.map(Language::from_file).unwrap_or_default();
+    let mut name_counter = HMap::default();
+    name_counter.insert(Cow::Borrowed("EXTSTRUCT"),0);
     Self { 
       archive, in_path:in_path.map(Into::into), doc_uri:uri, 
       language, backend, modules:SmallVec::new(), module_store: on_module,
-      name_counter:HMap::default(),
+      name_counter,
       dependencies:Vec::new()
     }
   }

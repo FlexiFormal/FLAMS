@@ -1,7 +1,7 @@
 use crate::{state::{LSPState, UrlOrFile}, IsLSPRange, LSPStore, ProgressCallbackClient};
 use async_lsp::lsp_types as lsp;
-use flams_ontology::{narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURI, ArchiveURITrait}};
-use flams_stex::quickparse::{latex::ParsedKeyValue, stex::{rules::{MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, structs::{InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymnameMode}, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI}};
+use flams_ontology::{narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, PathURITrait, SymbolURI}};
+use flams_stex::quickparse::{latex::ParsedKeyValue, stex::{rules::{MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, structs::{InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymbolReference, SymnameMode}, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI}};
 use smallvec::SmallVec;
 use futures::FutureExt;
 use crate::capabilities::STeXSemanticTokens;
@@ -15,6 +15,7 @@ trait AnnotExt:Sized {
     fn semantic_tokens(&self,cont:&mut impl FnMut(SourceRange<LSPLineCol>,u32));
     fn hover(&self,pos:LSPLineCol) -> Option<lsp::Hover>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
+    fn code_action(&self,pos:LSPLineCol,url:&lsp::Url) -> lsp::CodeActionResponse;
 }
 
 fn uri_from_archive_relpath(id:&ArchiveId,relpath:&str) -> Option<lsp::Url> {
@@ -289,12 +290,21 @@ impl AnnotExt for STeXAnnot {
                 }
                 None
             }
-            Self::SemanticMacro{ uri,token_range:range,.. } |
             Self::SymName{ uri,name_range:range,.. } |
             Self::Symref{ uri,name_range:range,.. } |
             Self::Notation{ uri,name_range:range,.. } |
             Self::Symuse{ uri,name_range:range,.. } |
-            Self::Definiens{ uri,name_range:Some(range),.. } |
+            Self::Definiens{ uri,name_range:Some(range),.. } => {
+                if !range.contains(pos) {return None};
+                let Some(p) = &uri.first().unwrap_or_else(|| unreachable!()).filepath else {return None};
+                let Ok(url) = lsp::Url::from_file_path(p) else {return None};
+                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: url,
+                    range:SourceRange::into_range(uri.first().unwrap_or_else(|| unreachable!()).range)
+                }))
+            }
+            Self::SemanticMacro{ uri,token_range:range,.. } |
             Self::UseStructure{ structure:uri,structure_range:range,..} |
             Self::RenameDecl{uri,orig_range:range,..} |
             Self::Assign{uri,orig_range:range,..} => {
@@ -314,12 +324,12 @@ impl AnnotExt for STeXAnnot {
                         if val_range.contains(pos) {
                             for (s,r) in val {
                                 if r.contains(pos) {
-                                    let Some(p) = &s.filepath else {return None};
+                                    let Some(p) = &s.first().unwrap_or_else(|| unreachable!()).filepath else {return None};
                                     let Ok(url) = lsp::Url::from_file_path(p) else {return None};
                                     //tracing::info!("Going to definition for {}: {}@{:?}",s.uri,url,range);
                                     return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                                         uri: url,
-                                        range:SourceRange::into_range(s.range)
+                                        range:SourceRange::into_range(s.first().unwrap_or_else(|| unreachable!()).range)
                                     }))
                                 }
                             }
@@ -781,12 +791,19 @@ impl AnnotExt for STeXAnnot {
         }
         //tracing::info!("Here: {self:?}");
         match self {
-            Self::SemanticMacro { uri, full_range:range,.. } |
             Self::SymName {uri,name_range:range,.. } |
             Self::Symref{ uri, name_range:range,.. } |
             Self::Notation{uri,name_range:range,.. } |
             Self::Symuse{uri,name_range:range,.. } |
-            Self::Definiens{uri,name_range:Some(range),.. } |
+            Self::Definiens{uri,name_range:Some(range),.. }
+                => Some(lsp::Hover {
+                    range: Some(SourceRange::into_range(*range)),
+                    contents:lsp::HoverContents::Markup(lsp::MarkupContent {
+                    kind: lsp::MarkupKind::Markdown,
+                    value: uriname("",&uri.first().unwrap_or_else(|| unreachable!()).uri)
+                    })
+                }),
+            Self::SemanticMacro { uri, full_range:range,.. } |
             Self::ConservativeExt { uri, ext_range:range, .. } |
             Self::UseStructure{structure:uri,structure_range:range,..} |
             Self::MorphismEnv{domain:ModuleOrStruct::Struct(uri),domain_range:range,..} |
@@ -858,7 +875,7 @@ impl AnnotExt for STeXAnnot {
                                         range: Some(SourceRange::into_range(*r)),
                                         contents:lsp::HoverContents::Markup(lsp::MarkupContent {
                                             kind: lsp::MarkupKind::Markdown,
-                                            value: uriname("",&s.uri)
+                                            value: uriname("",&s.first().unwrap_or_else(|| unreachable!()).uri)
                                         })
                                     });
                                 }
@@ -880,7 +897,7 @@ impl AnnotExt for STeXAnnot {
     fn inlay_hint(&self) -> Option<lsp::InlayHint> {
         match self {
             Self::SymName { uri, full_range, token_range, name_range, mode: mod_ } => {
-                let name = uri.uri.name().last_name();
+                let name = uri.first().unwrap_or_else(|| unreachable!()).uri.name().last_name();
                 let name = name.as_ref();
                 let name = match mod_ {
                     SymnameMode::Cap { post:Some((_,_,post)) } => {
@@ -916,7 +933,7 @@ impl AnnotExt for STeXAnnot {
             Self::Definiens{uri,name_range:None,full_range,..} => 
                 Some(lsp::InlayHint {
                     position: SourceRange::into_range(*full_range).end,
-                    label:lsp::InlayHintLabel::String(format!("[{}]",uri.uri.name())),
+                    label:lsp::InlayHintLabel::String(format!("[{}]",uri.first().unwrap_or_else(|| unreachable!()).uri.name())),
                     kind: Some(lsp::InlayHintKind::PARAMETER),
                     text_edits:None,
                     tooltip:None,
@@ -925,6 +942,121 @@ impl AnnotExt for STeXAnnot {
                     data:None
                 }),
             _ => None
+        }
+    }
+    fn code_action(&self,pos:LSPLineCol,url:&lsp::Url) -> lsp::CodeActionResponse {
+        fn from_syms(url:&lsp::Url,v:&[SymbolReference<LSPLineCol>],r:SourceRange<LSPLineCol>) -> lsp::CodeActionResponse {
+            fn disamb(uri:&SymbolURI,all:&[String]) -> String {
+                let mut ret = format!("?{}",uri.name());
+                if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+                    return ret;
+                }
+                ret = format!("?{}{ret}",uri.module().name());
+                if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+                    return ret;
+                }
+                if let Some(path) = uri.path() {
+                    for s in path.steps() {
+                        ret = format!("{s}/{ret}");
+                        if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+                            return ret;
+                        }
+                    }
+                }
+                for i in uri.archive_id().steps() {
+                    ret = format!("{i}/{ret}");
+                    if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+                        return ret;
+                    }
+                }
+                ret
+            }
+            let all_strs: SmallVec<_,2> = v.iter().map(|u| {
+                let mut ret = u.uri.archive_id().to_string();
+                if let Some(p) = u.uri.path() {
+                    ret.push('/');
+                    ret.push_str(&p.to_string());
+                }
+                ret.push_str(&format!("?{}?{}",u.uri.module().name(),u.uri.name()));
+                ret
+            }).collect();
+            v.iter().map(|u| {
+                let disam = disamb(&u.uri,&all_strs);
+                let mut edits = std::collections::HashMap::default();
+                edits.insert(url.clone(),vec![
+                    lsp::TextEdit {
+                        range:SourceRange::into_range(r),
+                        new_text:disam.clone()
+                    }
+                ]);
+                lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
+                    title: disam,
+                    kind:Some(lsp::CodeActionKind::QUICKFIX),
+                    diagnostics:None,
+                    edit:Some(lsp::WorkspaceEdit {
+                        document_changes:None,
+                        changes:Some(edits),
+                        change_annotations:None
+                    }),
+                    command:None,
+                    is_preferred:None,
+                    disabled:None,
+                    data:None
+                })
+            }).collect()
+        }
+        match self {
+            Self::Notation{ uri, name_range,.. } |
+            Self::SymName{ uri, name_range, .. } |
+            Self::Symuse{ uri, name_range,.. } |
+            Self::Symref{ uri, name_range,.. } |
+            Self::Definiens{ uri, name_range:Some(name_range),.. } => {
+                if !name_range.contains(pos) { return Vec::new() }
+                if uri.len() > 1 {
+                    from_syms(url,uri,*name_range)
+                } else { Vec::new() }
+            }
+
+            Self::Paragraph{ parsed_args,..} |
+            Self::InlineParagraph{ parsed_args,..} => {
+                let fors = parsed_args.iter().find_map(|a| if let ParagraphArg::Fors(ls) = a { Some(ls) } else {None});
+                if let Some(fors) = fors {
+                    for (s,r) in &fors.val {
+                        if !r.contains(pos) { continue }
+                        if s.len() > 1 {
+                            return from_syms(url,s,*r);
+                        }
+                        return Vec::new()
+                    }
+                    Vec::new()
+                } else { Vec::new() }
+            }
+
+
+
+            Self::Module{..} |
+            Self::MathStructure{..} |
+            Self::ConservativeExt { .. } |
+            Self::MorphismEnv{..} |
+            Self::InlineMorphism{..} |
+            Self::SemanticMacro{..} |
+            Self::VariableMacro{..} |
+            Self::Svar{ .. } |
+            Self::ImportModule{ .. } |
+            Self::UseModule{ .. } |
+            Self::UseStructure { .. } |
+            Self::SetMetatheory{ .. } |
+            Self::Inputref{ .. } |
+            Self::Symdecl{ .. } |
+            Self::TextSymdecl{ .. } |
+            Self::RenameDecl{ .. } |
+            Self::Assign{ .. } |
+            Self::Symdef{ .. } |
+            Self::Vardef{ .. } |
+            Self::Varseq{ .. } |
+            Self::Defnotation{..} |
+            Self::Definiens{..} |
+            Self::Assign { .. } => Vec::new()
         }
     }
 }
@@ -1025,6 +1157,21 @@ impl LSPState {
         };
         Some(d.with_annots(self.clone(),move |data| {
             at_position(data,pos).and_then(|e| e.hover(pos))
+        }).map(|o| o.flatten()))
+    }
+
+    #[must_use]
+    pub fn get_codeaction(&self,uri:UrlOrFile,range:lsp::Range,_context:lsp::CodeActionContext,progress:Option<ProgressCallbackClient>) -> Option<impl std::future::Future<Output=Option<lsp::CodeActionResponse>>> {
+        let d = self.get(&uri)?;
+        let pos = LSPLineCol {
+            line:range.start.line,
+            col:range.start.character
+        };
+        let url = uri.into();
+        Some(d.with_annots(self.clone(),move |data| {
+            at_position(data,pos).map(|e| {
+                e.code_action(pos,&url)
+            })
         }).map(|o| o.flatten()))
     }
 

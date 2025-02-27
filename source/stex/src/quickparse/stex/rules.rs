@@ -673,8 +673,8 @@ optargtype!{parser =>
 
 stex!(LSP: p => notation('*'?star){name:!name}[args:type NotationArg<LSPLineCol,STeXToken<LSPLineCol>>] => {
   let args = args.unwrap_or_default();
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(notation);
   };
@@ -745,8 +745,8 @@ stex!(p => symdef{name:!name}[args:type SymdefArg<Pos,STeXToken<Pos>>] => {
 );
 
 stex!(LSP: p => symref[mut args:Map]{name:!name}{text:T} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(symref);
   };
@@ -761,8 +761,8 @@ stex!(LSP: p => symref[mut args:Map]{name:!name}{text:T} => {
 });
 
 stex!(LSP: p => symname[mut args:Map]{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(symname);
   };
@@ -783,8 +783,8 @@ stex!(LSP: p => symname[mut args:Map]{name:!name} => {
 });
 
 stex!(LSP: p => Symname[mut args:Map]{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(Symname);
   };
@@ -803,8 +803,8 @@ stex!(LSP: p => Symname[mut args:Map]{name:!name} => {
 
 
 stex!(LSP: p => symnames[mut args:Map]{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(symnames);
   };
@@ -822,8 +822,8 @@ stex!(LSP: p => symnames[mut args:Map]{name:!name} => {
 });
 
 stex!(LSP: p => Symnames{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(Symnames);
   };
@@ -836,8 +836,8 @@ stex!(LSP: p => Symnames{name:!name} => {
 
 
 stex!(LSP: p => definame[mut args:Map]{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(definame);
   };
@@ -859,8 +859,8 @@ stex!(LSP: p => definame[mut args:Map]{name:!name} => {
 });
 
 stex!(LSP: p => Definame[mut args:Map]{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(Definame);
   };
@@ -879,8 +879,8 @@ stex!(LSP: p => Definame[mut args:Map]{name:!name} => {
 
 
 stex!(LSP: p => definames[mut args:Map]{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(definames);
   };
@@ -898,8 +898,8 @@ stex!(LSP: p => definames[mut args:Map]{name:!name} => {
 });
 
 stex!(LSP: p => Definames{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(Definames);
   };
@@ -911,8 +911,8 @@ stex!(LSP: p => Definames{name:!name} => {
 });
 
 stex!(LSP: p => symuse{name:!name} => {
-  let (state,groups) = p.split();
-  let Some(s) = state.get_symbol(&groups,&name.0) else {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(symuse);
   };
@@ -930,9 +930,9 @@ stex!(LSP: p => definiens[name_opt:!name] => {
   let (state,mut groups) = p.split();
   let (s,rng) = if let Some(name) = name_opt {
     if let Some((s,_)) = get_in_morphism(&mut groups.groups, &name.0) {
-      (s.uri.clone(),Some(name.1))
+      (smallvec::smallvec![s.uri.clone()],Some(name.1))
     } else {
-      let Some(s) = state.get_symbol(&groups,&name.0) else {
+      let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
         p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
         return MacroResult::Simple(definiens);
       };
@@ -947,9 +947,9 @@ stex!(LSP: p => definiens[name_opt:!name] => {
       p.tokenizer.problem(definiens.range.start, "No definition found".to_string(),DiagnosticLevel::Error);
       return MacroResult::Simple(definiens);
     };
-    (s,None)
+    (smallvec::smallvec![s],None)
   };
-  set_defined(&s, definiens.range, &mut groups.groups);
+  set_defined(s.first().unwrap_or_else(|| unreachable!()), definiens.range, &mut groups.groups);
   MacroResult::Success(STeXToken::Definiens { 
     uri:s, full_range: definiens.range, token_range: definiens.token_range,
     name_range: rng
@@ -1476,13 +1476,13 @@ optargtype!{LSP parser =>
     {Argtypes = "argtypes": T*}
     {Reorder = "reorder": ()}
     {Judgment = "judgment": ()}
-    {Fors = "for": {Vec<(SymbolReference<LSPLineCol>,SourceRange<LSPLineCol>)> =>
+    {Fors = "for": {Vec<(SmallVec<SymbolReference<Pos>,1>,SourceRange<LSPLineCol>)> =>
       let strs = parser.read_value_strs_normalized();
       let (state,mut groups) = parser.parser.split();
       let ret = strs.into_iter().filter_map(|(name,range)|
         if let Some((symbol,_)) = get_in_morphism(&mut groups.groups, &name) {
-          Some((symbol.uri.clone(),range))
-        } else if let Some(symbol) = state.get_symbol(&groups, &name) {
+          Some((smallvec::smallvec![symbol.uri.clone()],range))
+        } else if let Some(symbol) = state.get_symbol(range.start,&mut groups, &name) {
           Some((symbol,range))
         } else {
           groups.tokenizer.problem(range.start,format!("Unknown symbol: {name}"),DiagnosticLevel::Error);
@@ -1586,7 +1586,7 @@ fn do_paragraph<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>,D
     if MS::FULL {do_def_macros(p); }
   }
 
-  let mut v: Vec<_> = fors.iter().map(|(v,_)| v.clone()).collect();
+  let mut v: Vec<_> = fors.iter().map(|(v,_)| v.first().unwrap_or_else(|| unreachable!()).clone()).collect();
   if let Some(s) = &sym {
     v.push(s.clone());
   }
@@ -1850,12 +1850,12 @@ fn elaborate_morphism<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLine
   let mut old_end = std::mem::replace(&mut p.tokenizer.reader.pos,range.end);
   let Some(name) = Name::from_str(name).ok() else {
     p.tokenizer.problem(range.start, format!("Invalid name: {name}"), DiagnosticLevel::Error);
-    std::mem::replace(&mut p.tokenizer.reader.pos,old_end);
+    p.tokenizer.reader.pos = old_end;
     return
   };
   let Some((in_module,_)) = get_module(p) else {
     p.tokenizer.problem(range.start, format!("Morphism only allowed in module"), DiagnosticLevel::Error);
-    std::mem::replace(&mut p.tokenizer.reader.pos,old_end);
+    p.tokenizer.reader.pos = old_end;
     return
   };
   let (state,mut groups) = p.split();
@@ -1885,7 +1885,7 @@ fn elaborate_morphism<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLine
       }
     }
   }
-  std::mem::replace(&mut p.tokenizer.reader.pos,old_end);
+  p.tokenizer.reader.pos = old_end;
 }
 
 // TODO dependency!

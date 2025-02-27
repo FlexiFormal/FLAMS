@@ -3,7 +3,7 @@ use leptos::{context::Provider, either::Either, prelude::*};
 use flams_web_utils::{do_css, inject_css};
 use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
 
-use crate::{components::navigation::{NavElems, SectionOrInputref}, config::{IdPrefix, LogicalLevel, SectionCounters}, extractor::DOMExtractor};
+use crate::{components::{counters::{LogicalLevel, SectionCounters}, navigation::{NavElems, SectionOrInputref}}, config::IdPrefix, extractor::DOMExtractor};
 
 #[derive(Copy,Clone)]
 pub struct InInputRef(pub bool);
@@ -26,14 +26,22 @@ pub(super) fn inputref(uri:DocumentURI,id:&str) -> impl IntoView {
     ne.ids.insert(id.clone(), SectionOrInputref::Inputref(replace,replaced));
     ne.get_title(uri.clone())
   });
-  let ctrs: SectionCounters = expect_context();
-  match ctrs.current {
+  let ctrs = SectionCounters::inputref(uri.clone(),id.to_string());// = expect_context();
+  /*let slides = ctrs.slides.get_untracked();
+  let oldslides = ctrs.slides;
+  if let Some(i) = super::paragraphs::skip_slides(&uri,&id) {
+    oldslides.update_untracked(|u| *u += i);
+  }
+  // TODO updates oldslides based on TOC
+  ctrs.slides = RwSignal::new(slides);
+  */
+  match ctrs.current_level() {
     LogicalLevel::Section(lvl) if lvl < SectionLevel::Subsection => (),
     o => replace.set(true),
   }
 
   view!{
-    <Provider value=InInputRef(true)><Provider value=IdPrefix(id.clone())> {
+    <Provider value=InInputRef(true)><Provider value=IdPrefix(id.clone())><Provider value=ctrs> {
       move || if replace.get() { Either::Left(do_inputref(uri.clone(),replaced)) } else {
         Either::Right(view!(<div id=id.clone() on:click=on_click class="ftml-inputref">{
           move || {
@@ -43,7 +51,7 @@ pub(super) fn inputref(uri:DocumentURI,id:&str) -> impl IntoView {
             }
           }
         }</div>))
-    }}</Provider></Provider>
+    }}</Provider></Provider></Provider>
   }
 }
 

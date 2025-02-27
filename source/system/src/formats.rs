@@ -283,6 +283,22 @@ macro_rules! flams_extension {
   }
 }
 
+impl FLAMSExtension {
+  pub fn initialize() {
+    for e in Self::all() {
+      let f = move || {
+          tracing::info_span!("Initializing",extension=e.name()).in_scope(||
+              (e.on_start())()
+          );
+      };
+      #[cfg(feature="tokio")]
+      flams_utils::background(f);
+      #[cfg(not(feature="tokio"))]
+      f();
+    }
+  }
+}
+
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum FormatOrTargets<'a> {
   Format(SourceFormatId),

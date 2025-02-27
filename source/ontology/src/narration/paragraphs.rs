@@ -1,9 +1,9 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 use flams_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term, ftml::FTMLKey, uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
+    content::terms::Term, ftml::FTMLKey, uris::{DocumentElementURI, Name, SymbolURI}, Checked, CheckingState, DocumentRange
 };
 
 use super::{DocumentElement, NarrationTrait};
@@ -15,7 +15,7 @@ pub struct LogicalParagraph<State:CheckingState> {
     pub inline: bool,
     pub title: Option<DocumentRange>,
     pub range: DocumentRange,
-    pub styles: Box<[Box<str>]>,
+    pub styles: Box<[Name]>,
     pub children: State::Seq<DocumentElement<State>>,
     pub fors: VecMap<SymbolURI, Option<Term>>,
 }
@@ -65,12 +65,12 @@ impl ParagraphKind {
             _ => return None,
         })
     }
-    pub fn is_definition_like<S: AsRef<str>>(&self, styles: &[S]) -> bool {
+    pub fn is_definition_like(&self, styles: &[Name]) -> bool {
         match &self {
             Self::Definition | Self::Assertion => true,
             _ => styles
                 .iter()
-                .any(|s| s.as_ref() == "symdoc" || s.as_ref() == "decl"),
+                .any(|s| s.first_name().as_ref() == "symdoc" || s.first_name().as_ref() == "decl"),
         }
     }
     #[cfg(feature = "rdf")]
@@ -116,5 +116,20 @@ impl Display for ParagraphKind {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_display_str())
+    }
+}
+impl FromStr for ParagraphKind {
+    type Err = ();
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "definition" => Ok(Self::Definition),
+            "assertion" => Ok(Self::Assertion),
+            "paragraph" => Ok(Self::Paragraph),
+            "proof" => Ok(Self::Proof),
+            "subproof" => Ok(Self::SubProof),
+            "example" => Ok(Self::Example),
+            _ => Err(()),
+        }
     }
 }

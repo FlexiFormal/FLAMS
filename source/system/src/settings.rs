@@ -39,7 +39,7 @@ impl Debug for Settings {
 impl Settings {
     pub fn port(&self) -> u16 { self.port.load(std::sync::atomic::Ordering::Relaxed) }
     #[allow(clippy::missing_panics_doc)]
-    pub(crate) fn initialize(settings: SettingsSpec) {
+    pub fn initialize(settings: SettingsSpec) {
         SETTINGS
             .set(settings.into())
             .expect("Error initializing settings");

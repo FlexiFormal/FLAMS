@@ -1,4 +1,4 @@
-use flams_ontology::{narration::sections::SectionLevel, uris::{DocumentElementURI, URI}};
+use flams_ontology::uris::{DocumentElementURI, URI};
 use leptos::prelude::*;
 use ftml_extraction::open::terms::VarOrSym;
 
@@ -11,26 +11,6 @@ impl IdPrefix {
         } else {
             format!("{}/{s}",self.0)
         }
-    }
-}
-
-#[derive(Debug,Clone,Copy,serde::Serialize,serde::Deserialize)]
-pub enum LogicalLevel {
-    None,
-    Section(SectionLevel),
-    Paragraph,
-    BeamerSlide
-}
-
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub struct SectionCounters {
-    pub current: LogicalLevel,
-    pub max: SectionLevel
-}
-impl Default for SectionCounters {
-    #[inline]
-    fn default() -> Self {
-        Self { current: LogicalLevel::None, max: SectionLevel::Part }
     }
 }
 

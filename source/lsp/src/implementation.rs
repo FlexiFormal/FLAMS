@@ -24,7 +24,7 @@ macro_rules! impl_request {
   (! $name:ident = $struct:ident => ($default:expr)) => {
       #[must_use]
       fn $name(&mut self, params: <lsp::request::$struct as lsp::request::Request>::Params) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
-          tracing::info!("LSP: {params:?}");
+          tracing::debug!("LSP: {params:?}");
           Box::pin(std::future::ready(Ok($default)))
       }
   };
@@ -34,7 +34,7 @@ macro_rules! impl_notification {
   (! $name:ident = $struct:ident) => {
       #[must_use]
       fn $name(&mut self, params: <lsp::notification::$struct as lsp::notification::Notification>::Params) -> Self::NotifyResult {
-          tracing::info!("LSP: {params:?}");
+          tracing::debug!("LSP: {params:?}");
           ControlFlow::Continue(())
       }
   };
@@ -424,7 +424,33 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(inlay_hint_resolve = InlayHintResolveRequest);
 
 
-    impl_request!(! code_action = CodeActionRequest => (None));
+    //impl_request!(! code_action = CodeActionRequest => (None));
+    #[must_use]
+    fn code_action(&mut self, params: lsp::CodeActionParams) -> Res<Option<lsp::CodeActionResponse>> {
+        tracing::trace_span!("code_action").in_scope(move || {
+            tracing::trace!("uri: {},work_done_progress_params: {:?}; range: {:?}; context:{:?}",
+                params.text_document.uri,//.text_document_position_params.text_document.uri,
+                params.work_done_progress_params,
+                params.range,
+                params.context
+            );
+            let p = params.work_done_progress_params.work_done_token.map(
+                |tk| self.get_progress(tk)
+            );
+            self.inner.state().get_codeaction(
+                params.text_document.uri.into(),
+                params.range,
+                params.context,
+                p
+            )
+                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
+                |f| Box::pin(f.map(Result::Ok)) as _
+                )
+        })
+    }
+
+
+
     impl_request!(! document_highlight = DocumentHighlightRequest => (None));
     impl_request!(! folding_range = FoldingRangeRequest => (None));
     
