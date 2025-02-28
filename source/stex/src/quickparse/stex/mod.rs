@@ -37,7 +37,7 @@ impl STeXParseDataI {
 pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParseDataI>>;
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum STeXAnnot {
   Module {
     uri:ModuleURI,

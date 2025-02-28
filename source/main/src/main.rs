@@ -34,9 +34,9 @@ fn main() {
     let settings = settings::get_settings();
     let mut rt = tokio::runtime::Builder::new_multi_thread();
     rt.enable_all();
-    //#[cfg(debug_assertions)]
-    if settings.lsp
-    { rt.thread_stack_size(4 * 1024 * 1024); }
+    if settings.lsp { rt.thread_stack_size(4 * 1024 * 1024); }
+    #[cfg(debug_assertions)]
+    {rt.thread_stack_size(if settings.lsp {6} else {4} * 1024 * 1024);}
 
     rt.build()
       .expect("Failed to initialize Tokio runtime")

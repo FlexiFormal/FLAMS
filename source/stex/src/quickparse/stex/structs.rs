@@ -253,7 +253,7 @@ pub enum MorphismKind {
   CopyModule,InterpretModule
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum SymnameMode<Pos:SourcePos> {
   Cap {
     post:Option<(SourceRange<Pos>,SourceRange<Pos>,String)>,
