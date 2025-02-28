@@ -385,10 +385,12 @@ impl SectionCounters {
     counters.init_paras();
     counters.slides.memo(|i| i)
   }
-  pub fn slide_inc() {
-    let counters : Self = expect_context();
+  pub fn slide_inc() -> Self {
+    let mut counters : Self = expect_context();
     counters.init_paras();
     counters.slides.inc();
+    counters.current = LogicalLevel::BeamerSlide;
+    counters
   }
 
   pub fn inputref(uri:DocumentURI,id:String) -> Self {

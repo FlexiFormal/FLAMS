@@ -38,10 +38,10 @@ pub(super) fn paragraph<V:IntoView+'static>(kind:ParagraphKind,uri:DocumentEleme
 
 pub(super) fn slide<V:IntoView+'static>(uri:DocumentElementURI,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   inject_css("ftml-slide", include_str!("slides.css"));
-  SectionCounters::slide_inc();
-  view!(
-    <div class="ftml-slide">{children()}</div>
-  )
+  let counters = SectionCounters::slide_inc();
+  view!(<Provider value=counters>
+      <div class="ftml-slide">{children()}</div>
+  </Provider>)
 }
 
 pub(super) fn slide_number() -> impl IntoView {

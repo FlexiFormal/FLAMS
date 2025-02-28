@@ -126,6 +126,7 @@ tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot","json"
 tracing-error = "0.2"
 
 toml = "0.8"
+# eyre = "0.6"
 color-eyre = "0.6"
 clap = { version="4.5",features=["derive"] }
 
@@ -157,6 +158,7 @@ leptos = { version = "0.7"}#, features=["nightly"]}
 leptos_axum = "0.7"
 leptos_meta= "0.7"
 leptos_router = { version = "0.7"}#, features=["nightly"]}
+# leptos_use = {version="0.15", default-features = false}
 
 #thaw = { version="0.4.2",features=["nightly"] }
 #thaw_components = "0.3"
