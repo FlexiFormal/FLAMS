@@ -26,14 +26,14 @@ impl From<ThemeType> for thaw::Theme {
 #[cfg(feature="ssr")]
 #[component(transparent)]
 pub fn Themer<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-    use thaw::{ConfigProvider,Theme};
+    use thaw::{ConfigProvider,ToasterProvider,Theme};
     let signal = RwSignal::<thaw::Theme>::new(Theme::light());
     let children = children.into_inner();
     provide_context(signal);
     view!{
-      <ConfigProvider theme=signal>
-        {children()}
-      </ConfigProvider>
+        <ConfigProvider theme=signal>
+          <ToasterProvider>{children()}</ToasterProvider>
+        </ConfigProvider>
     }
 }
 
