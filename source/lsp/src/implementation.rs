@@ -21,6 +21,13 @@ macro_rules! impl_request {
           )))
       }
   };
+  (? $name:ident = $struct:ident => ($default:expr)) => {
+      #[must_use]
+      fn $name(&mut self, params: <lsp::request::$struct as lsp::request::Request>::Params) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
+          tracing::info!("LSP: {params:?}");
+          Box::pin(std::future::ready(Ok($default)))
+      }
+  };
   (! $name:ident = $struct:ident => ($default:expr)) => {
       #[must_use]
       fn $name(&mut self, params: <lsp::request::$struct as lsp::request::Request>::Params) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
@@ -266,8 +273,8 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     }
 
     //#[must_use]
-    impl_request!(! references = References => (None));
-    /*fn references(&mut self, params: lsp::ReferenceParams) -> Res<Option<Vec<lsp::Location>>> {
+    //impl_request!(? references = References => (None));
+    fn references(&mut self, params: lsp::ReferenceParams) -> Res<Option<Vec<lsp::Location>>> {
         tracing::trace_span!("references").in_scope(move || {
             tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, position: {:?}, context: {:?}",
                 params.work_done_progress_params,
@@ -275,15 +282,17 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
                 params.text_document_position,
                 params.context
             );
-            if let Some(p) = params.work_done_progress_params.work_done_token {
-                self.get_progress(p).finish();
-            }
-            if let Some(p) = params.partial_result_params.partial_result_token {
-                self.get_progress(p).finish();
-            }
-            Box::pin(std::future::ready(Ok(Some(Vec::new()))))
+            let p = params.work_done_progress_params.work_done_token.map(
+                |tk| self.get_progress(tk)
+            );
+            self.inner.state().get_references(
+                params.text_document_position.text_document.uri.into(),
+                params.text_document_position.position,p
+            ).map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
+                |f| Box::pin(f.map(Result::Ok)) as _
+                )
         })
-    }*/
+    }
 
 
     #[must_use]
@@ -449,6 +458,57 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
+    //impl_request!(prepare_call_hierarchy = CallHierarchyPrepare);
+    #[must_use]
+    fn prepare_call_hierarchy(&mut self, params: lsp::CallHierarchyPrepareParams) -> Res<Option<Vec<lsp::CallHierarchyItem>>> {
+        tracing::trace_span!("prepare_call_hierarchy").in_scope(move || {
+            tracing::trace!("uri: {},work_done_progress_params: {:?}; position: {:?}",
+                params.text_document_position_params.text_document.uri,
+                params.work_done_progress_params,
+                params.text_document_position_params.position
+            );
+            let p = params.work_done_progress_params.work_done_token.map(
+                |tk| self.get_progress(tk)
+            );
+            self.inner.state().prepare_module_hierarchy(
+                params.text_document_position_params.text_document.uri.into(),
+                p
+            )
+                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
+                |f| Box::pin(f.map(Result::Ok)) as _
+                )
+        })
+    }
+
+    // callHierarchy/
+    //impl_request!(incoming_calls = CallHierarchyIncomingCalls);
+    #[must_use]
+    fn incoming_calls(&mut self, params: lsp::CallHierarchyIncomingCallsParams) -> Res<Option<Vec<lsp::CallHierarchyIncomingCall>>> {
+        tracing::trace_span!("incoming_call_hierarchy").in_scope(move || {
+            tracing::trace!("uri: {},work_done_progress_params: {:?};",
+                params.item.uri,
+                params.work_done_progress_params,
+            );
+            let p = params.work_done_progress_params.work_done_token.map(
+                |tk| self.get_progress(tk)
+            );
+            if let Some(d) = params.item.data.and_then(|d| d.as_str().and_then(|d| d.parse().ok())) {
+                self.inner.state().module_hierarchy_imports(
+                    params.item.uri,
+                    params.item.kind,
+                    d,
+                    p
+                )
+                    .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _
+                    )
+            } else {
+                Box::pin(std::future::ready(Ok(None))) as _
+            }
+        })
+    }
+    impl_request!(outgoing_calls = CallHierarchyOutgoingCalls);
+
 
 
     impl_request!(! document_highlight = DocumentHighlightRequest => (None));
@@ -473,7 +533,8 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
 
     impl_request!(signature_help = SignatureHelpRequest);
     impl_request!(linked_editing_range = LinkedEditingRange);
-    impl_request!(prepare_call_hierarchy = CallHierarchyPrepare);
+
+
         // semanticTokens/
         #[must_use]
         // impl_request!(semantic_tokens_full = SemanticTokensFullRequest);
@@ -527,10 +588,6 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
                 Box::pin(std::future::ready(Ok(None)))
             })
         }
-
-    // callHierarchy/
-    impl_request!(incoming_calls = CallHierarchyIncomingCalls);
-    impl_request!(outgoing_calls = CallHierarchyOutgoingCalls);
 
     // workspace/
     impl_request!(will_create_files = WillCreateFiles);
