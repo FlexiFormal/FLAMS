@@ -1050,14 +1050,20 @@ impl AnnotExt for STeXAnnot {
                     return ret;
                 }
                 if let Some(path) = uri.path() {
-                    for s in path.steps() {
-                        ret = format!("{s}/{ret}");
+                    let mut had_path = false;
+                    for s in path.steps().iter().rev() {
+                        if had_path {
+                            ret = format!("{s}/{ret}");
+                        } else {
+                            had_path = true;
+                            ret = format!("{s}{ret}");
+                        }
                         if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
                             return ret;
                         }
                     }
                 }
-                for i in uri.archive_id().steps() {
+                for i in uri.archive_id().steps().rev() {
                     ret = format!("{i}/{ret}");
                     if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
                         return ret;
