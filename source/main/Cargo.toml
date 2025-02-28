@@ -103,7 +103,7 @@ urlencoding = {workspace=true}
 # ssr
 flams-system = {workspace=true,features=["gitlab"],optional=true}
 flams-lsp = {workspace=true,optional=true, features=["ws"]}
-flams-stex = {workspace=true,optional=true}
+flams-stex = {workspace=true,optional=true, features=["serde"]}
 flams-ftml = {workspace=true,optional=true}
 tex_engine = {workspace=true,optional=true}
 
