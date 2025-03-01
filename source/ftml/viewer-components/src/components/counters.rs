@@ -54,7 +54,7 @@ impl std::ops::Add<Self> for AllSections {
     let mut changed = false;
     AllSections([
       {if rhs.0[0]>0 {changed = true}; self.0[0]+rhs.0[0]},
-      {if changed {0} else {if rhs.0[1]>0 {changed=true} self.0[1]+rhs.0[1] }},
+      {/*if changed {0} else*/ {if rhs.0[1]>0 {changed=true} self.0[1]+rhs.0[1] }},
       {if changed {0} else {if rhs.0[2]>0 {changed=true} self.0[2]+rhs.0[2] }},
       {if changed {0} else {if rhs.0[3]>0 {changed=true} self.0[3]+rhs.0[3] }},
       {if changed {0} else {if rhs.0[4]>0 {changed=true} self.0[4]+rhs.0[4] }},
@@ -68,7 +68,7 @@ impl std::ops::AddAssign<Self> for AllSections {
   fn add_assign(&mut self, rhs: Self) {
     let mut changed = false;
     if rhs.0[0] > 0 {changed=true}; self.0[0]+=rhs.0[0];
-    if changed {self.0[1] = 0} else {if rhs.0[1] > 0 {changed=true;} self.0[1]+=rhs.0[1];}
+    /*if changed {self.0[1] = 0} else*/ {if rhs.0[1] > 0 {changed=true;} self.0[1]+=rhs.0[1];}
     if changed {self.0[2] = 0} else {if rhs.0[2] > 0 {changed=true;} self.0[2]+=rhs.0[2];}
     if changed {self.0[3] = 0} else {if rhs.0[3] > 0 {changed=true;} self.0[3]+=rhs.0[3];}
     if changed {self.0[4] = 0} else {if rhs.0[4] > 0 {changed=true;} self.0[4]+=rhs.0[4];}

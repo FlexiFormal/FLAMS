@@ -687,7 +687,7 @@ tex!(p => textrm{t:T} => { MacroResult::Other(t.1) });
 tex!(p => textbf{t:T} => { MacroResult::Other(t.1) });
 tex!(p => scalebox{_}{t:T} => { MacroResult::Other(t.1) });
 tex!(p => raisebox{_}{t:T} => { MacroResult::Other(t.1) });
-tex!(p => ensuremath{_}{t:M} => { MacroResult::Other(t.1) });
+tex!(p => ensuremath{t:M} => { MacroResult::Other(t.1) });
 
 
 tex!(p => def => {

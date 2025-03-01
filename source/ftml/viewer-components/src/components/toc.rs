@@ -49,6 +49,7 @@ pub enum TOCElem {
     children:Vec<TOCElem>
   },
   Paragraph{
+    #[cfg_attr(feature="ts", tsify(type = "string[]"))]
     styles:Vec<Name>,
     kind:ParagraphKind,
   },

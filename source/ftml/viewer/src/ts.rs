@@ -316,3 +316,18 @@ pub mod server {
   }
 
 }
+
+
+fn react_wrapper<T:IntoView>(get:impl FnOnce() -> Option<TsCont>,children:TypedChildren<T>) -> impl IntoView {
+  let children = children.into_inner();
+  if let Some(cont) = get() {
+    let owner = leptos::prelude::Owner::current().expect("Not in a leptos reactive context!").into();
+    let rf = NodeRef::new();
+    rf.on_load(move |elem| if let Err(err) = cont.apply(&(elem,owner)) {
+      tracing::error!("Error calling continuation: {err}");
+    });
+    leptos::either::Either::Left(view!{<div node_ref=rf>{children()}</div>})
+  } else { 
+    leptos::either::Either::Right(children())
+  }
+}

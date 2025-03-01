@@ -204,9 +204,9 @@ js-sys = "0.3"
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
 # leptos-dyn-dom = { path="../leptos_dyn_dom"}
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
-# RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
-# tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
+#RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
+#tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
 
 #leptos_hot_reload = {version="=0.7.0-rc0"}
 #leptos_server = {version="=0.7.0-beta5"}
