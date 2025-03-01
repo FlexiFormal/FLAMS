@@ -252,7 +252,7 @@ impl Queue {
           }
         }
         state.failed.push(task.clone());
-        drop(state);drop(lock);
+        drop(lock);
 
         self.0.backend.with_archive(task.archive().archive_id(), |a| {
           let Some(a) = a else {return};
@@ -277,7 +277,7 @@ impl Queue {
         }
         if requeue { state.queue.push_front(task.clone());}
         else {state.done.push(task.clone());}
-        drop(state);drop(lock);
+        drop(lock);
 
         self.0.backend.with_archive(task.archive().archive_id(), |a| {
           let Some(a) = a else {return};
