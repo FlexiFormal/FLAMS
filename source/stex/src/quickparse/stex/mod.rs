@@ -37,7 +37,7 @@ impl STeXParseDataI {
 pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParseDataI>>;
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum STeXAnnot {
   Module {
     uri:ModuleURI,
@@ -157,7 +157,7 @@ pub enum STeXAnnot {
     full_range: SourceRange<LSPLineCol>
   },
   Notation {
-    uri:SymbolReference<LSPLineCol>,
+    uri:SmallVec<SymbolReference<LSPLineCol>,1>,
     token_range: SourceRange<LSPLineCol>,
     name_range:SourceRange<LSPLineCol>,
     notation_args:Vec<NotationArg<LSPLineCol,Self>>,
@@ -202,27 +202,27 @@ pub enum STeXAnnot {
     full_range: SourceRange<LSPLineCol>
   },
   SymName {
-    uri:SymbolReference<LSPLineCol>,
+    uri:SmallVec<SymbolReference<LSPLineCol>,1>,
     full_range: SourceRange<LSPLineCol>,
     token_range: SourceRange<LSPLineCol>,
     name_range: SourceRange<LSPLineCol>,
     mode:SymnameMode<LSPLineCol>
   },
   Symuse {
-    uri:SymbolReference<LSPLineCol>,
+    uri:SmallVec<SymbolReference<LSPLineCol>,1>,
     full_range: SourceRange<LSPLineCol>,
     token_range: SourceRange<LSPLineCol>,
     name_range: SourceRange<LSPLineCol>,
   },
   Symref {
-    uri:SymbolReference<LSPLineCol>,
+    uri:SmallVec<SymbolReference<LSPLineCol>,1>,
     full_range: SourceRange<LSPLineCol>,
     token_range: SourceRange<LSPLineCol>,
     name_range: SourceRange<LSPLineCol>,
     text:(SourceRange<LSPLineCol>,Vec<Self>)
   },
   Definiens {
-    uri:SymbolReference<LSPLineCol>,
+    uri:SmallVec<SymbolReference<LSPLineCol>,1>,
     full_range: SourceRange<LSPLineCol>,
     token_range: SourceRange<LSPLineCol>,
     name_range: Option<SourceRange<LSPLineCol>>,

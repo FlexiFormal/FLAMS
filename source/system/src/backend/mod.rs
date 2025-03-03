@@ -378,6 +378,22 @@ impl GlobalBackend {
         &GLOBAL
     }
 
+    pub fn initialize() {
+        let settings = crate::settings::Settings::get();
+        let archives = Self::get().manager();
+        for p in settings.mathhubs.iter().rev() {
+            archives.load(p);
+        }
+        let f = || {
+            let backend = Self::get();
+            backend.triple_store().load_archives(&backend.all_archives());
+        };
+        #[cfg(feature="tokio")]
+        flams_utils::background(f);
+        #[cfg(not(feature="tokio"))]
+        f();
+    }
+
     #[inline]
     pub fn with_archive_tree<R>(&self,f:impl FnOnce(&ArchiveTree) -> R) -> R {
         self.archives.with_tree(f)
@@ -1044,6 +1060,7 @@ impl SandboxedBackend {
     fn copy_archive(&self,a:&LocalArchive) {
         let path = a.path();
         let target = self.0.path.join(a.id().as_ref());
+        if target.exists() { return }
         tracing::info!("copying archive {} to {}",a.id(),target.display());
         if let Err(e) = flams_utils::fs::copy_dir_all(path,&target) {
             tracing::error!("could not copy archive {}: {e}",a.id());

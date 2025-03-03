@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use either::Either;
-use flams_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::{ArgSpec, AssocType, Symbol}, OpenDeclaration}, modules::{NestedModule, OpenModule}, terms::{Term, Var}}, languages::Language, narration::{exercises::{ChoiceBlock, Exercise, FillInSol, FillInSolOption, GradingNote, SolutionData, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, sections::{Section, SectionLevel}, variables::Variable, DocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, SymbolURI, URIOrRefTrait}};
+use flams_ontology::{content::{declarations::{morphisms::Morphism, structures::{Extension, MathStructure}, symbols::{ArgSpec, AssocType, Symbol}, OpenDeclaration}, modules::{NestedModule, OpenModule}, terms::{Term, Var}}, languages::Language, narration::{exercises::{ChoiceBlock, Exercise, FillInSol, FillInSolOption, GradingNote, SolutionData, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, sections::{Section, SectionLevel}, variables::Variable, DocumentElement}, uris::{ContentURI, DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI, URIOrRefTrait}};
 use smallvec::SmallVec;
 use terms::{OpenArg, PreVar, VarOrSym};
 
@@ -18,6 +18,8 @@ pub enum OpenFTMLElement {
     SetSectionLevel(SectionLevel),
     ImportModule(ModuleURI),
     UseModule(ModuleURI),
+    Slide(DocumentElementURI),
+    SlideNumber,
     Module {
         uri:ModuleURI,
         meta:Option<ModuleURI>,
@@ -37,15 +39,16 @@ pub enum OpenFTMLElement {
         lvl:SectionLevel,
         uri:DocumentElementURI
     },
+    SkipSection,
     Paragraph {
         uri:DocumentElementURI,
         kind: ParagraphKind,
         inline: bool,
-        styles: Box<[Box<str>]>,
+        styles: Box<[Name]>,
     },
     Exercise {
         uri:DocumentElementURI,
-        styles: Box<[Box<str>]>,
+        styles: Box<[Name]>,
         autogradable: bool,
         points: Option<f32>,
         sub_exercise:bool
@@ -139,8 +142,30 @@ impl OpenFTMLElement {
                 }
                 // TODO
             }
+            Self::SkipSection => {
+                if let Some((_,_,children)) = extractor.close_section() {
+                    extractor.add_document_element(
+                        DocumentElement::SkipSection(children)
+                    );
+                } else {
+                    extractor.add_error(FTMLError::NotInNarrative);
+                };
+            }
 
             Self::Section { lvl,  uri } => Self::close_section(extractor, node, lvl, uri),
+            Self::Slide(uri) => {
+                if let Some(children) = extractor.close_slide() {
+                    extractor.add_document_element(
+                        DocumentElement::Slide {
+                            range:node.range(),
+                            uri,
+                            children
+                        }
+                    );
+                } else {
+                    extractor.add_error(FTMLError::NotInNarrative);
+                };
+            }
             Self::Paragraph { kind, inline, styles, uri } => Self::close_paragraph(extractor, node, kind, inline, styles, uri),
             Self::Exercise { uri, styles, autogradable, points, sub_exercise } => Self::close_exercise(extractor, node, uri, styles, autogradable, points, sub_exercise),
 
@@ -402,7 +427,7 @@ impl OpenFTMLElement {
             }
             Self::IfInputref(_) | Self::Definiendum(_) | Self::Comp | Self::MainComp | 
             Self::DefComp | Self::AnswerClass |
-            Self::ProblemChoice => (),
+            Self::ProblemChoice | Self::SlideNumber => (),
         }
         None
     }
@@ -599,7 +624,7 @@ impl OpenFTMLElement {
         );
     }
 
-    fn close_paragraph<E:FTMLExtractor,N:FTMLNode>(extractor:&mut E,node:&N,kind:ParagraphKind,inline:bool,styles:Box<[Box<str>]>,uri:DocumentElementURI) {
+    fn close_paragraph<E:FTMLExtractor,N:FTMLNode>(extractor:&mut E,node:&N,kind:ParagraphKind,inline:bool,styles:Box<[Name]>,uri:DocumentElementURI) {
         let Some(ParagraphState{children,fors,title,..}) = extractor.close_paragraph() else {
             extractor.add_error(FTMLError::NotInParagraph);
             return
@@ -638,7 +663,7 @@ impl OpenFTMLElement {
         ));
     }
 
-    fn close_exercise<E:FTMLExtractor,N:FTMLNode>(extractor:&mut E,node:&N,uri:DocumentElementURI,styles:Box<[Box<str>]>,autogradable:bool,points:Option<f32>,sub_exercise:bool) {
+    fn close_exercise<E:FTMLExtractor,N:FTMLNode>(extractor:&mut E,node:&N,uri:DocumentElementURI,styles:Box<[Name]>,autogradable:bool,points:Option<f32>,sub_exercise:bool) {
         let Some(ExerciseState{solutions,hints,notes,gnotes,title,children,preconditions,objectives,..}) = extractor.close_exercise() else {
             extractor.add_error(FTMLError::NotInExercise("l"));
             return

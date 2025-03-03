@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use flams_ontology::{narration::exercises::ExerciseResponse, uris::DocumentElementURI};
+use flams_ontology::{narration::{exercises::ExerciseResponse, paragraphs::ParagraphKind}, uris::{DocumentElementURI, DocumentURI}};
 use wasm_bindgen::{convert::{FromWasmAbi, IntoWasmAbi, OptionFromWasmAbi}, prelude::wasm_bindgen, JsValue};
 use web_sys::HtmlDivElement;
 
@@ -31,6 +31,30 @@ impl AsTs for DocumentElementURI {
   }
 }
 impl FromTs for DocumentElementURI {
+  #[inline]
+  fn from_ts(v:JsValue) -> Result<Self,JsValue> {
+      v.as_string().and_then(|s| s.parse().ok()).map_or(Err(v),Ok)
+  }
+}
+impl AsTs for DocumentURI {
+  #[inline]
+  fn as_ts(&self) -> JsValue {
+      JsValue::from_str(self.to_string().as_str())
+  }
+}
+impl FromTs for DocumentURI {
+  #[inline]
+  fn from_ts(v:JsValue) -> Result<Self,JsValue> {
+      v.as_string().and_then(|s| s.parse().ok()).map_or(Err(v),Ok)
+  }
+}
+impl AsTs for ParagraphKind {
+  #[inline]
+  fn as_ts(&self) -> JsValue {
+      JsValue::from_str(self.as_str())
+  }
+}
+impl FromTs for ParagraphKind {
   #[inline]
   fn from_ts(v:JsValue) -> Result<Self,JsValue> {
       v.as_string().and_then(|s| s.parse().ok()).map_or(Err(v),Ok)
@@ -293,8 +317,9 @@ impl AsTs for LeptosContext {
  
 #[wasm_bindgen(typescript_custom_section)]
 const TS_CONT_FUN: &'static str = r#"export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;"#;
-
 pub type TsCont = JsOrRsF<(HtmlDivElement,LeptosContext),()>;
+
+
 
 ts_function!{
   TsTopCont @ "LeptosContinuation"
@@ -338,4 +363,14 @@ impl TsCont {
 ts_function!{
   SectionContinuation @ "(uri: string) => (LeptosContinuation | undefined)"
   = DocumentElementURI => Option<TsCont>
+}
+
+ts_function!{
+  ParagraphContinuation @ "(uri: string,kind:ParagraphKind) => (LeptosContinuation | undefined)"
+  = (DocumentElementURI,ParagraphKind) => Option<TsCont>
+}
+
+ts_function!{
+  InputRefContinuation @ "(uri: string) => (LeptosContinuation | undefined)"
+  = DocumentURI => Option<TsCont>
 }

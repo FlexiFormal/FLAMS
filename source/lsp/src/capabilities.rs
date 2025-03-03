@@ -236,7 +236,7 @@ pub fn capabilities() -> lsp::ServerCapabilities { lsp::ServerCapabilities {
   document_range_formatting_provider: None,
   document_on_type_formatting_provider: None,
   color_provider:None,
-  call_hierarchy_provider:None,
+  call_hierarchy_provider:Some(lsp::CallHierarchyServerCapability::Simple(true)),
   //inline_completion_provider:None,
   experimental:None
 }}

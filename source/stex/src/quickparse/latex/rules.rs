@@ -677,17 +677,18 @@ tex!(p => provideenvironment{_}[_][_]{_}{_}!);
 tex!(p => NewDocumentEnvironment{_}{_}{_}{_}!);
 tex!(p => DeclareDocumentEnvironment{_}{_}{_}{_}!);
 
-tex!(p => hbox{_:T}!);
-tex!(p => vbox{_:T}!);
-tex!(p => fbox{_:T}!);
-tex!(p => mvbox{_:T}!);
-tex!(p => text{_:T}!);
-tex!(p => texttt{_:T}!);
-tex!(p => textrm{_:T}!);
-tex!(p => textbf{_:T}!);
-tex!(p => ensuremath{_:M}!);
-tex!(p => scalebox{_}{_:T}!);
-tex!(p => raisebox{_}{_:T}!);
+tex!(p => hbox{t:T} => { MacroResult::Other(t.1) });
+tex!(p => vbox{t:T} => { MacroResult::Other(t.1) });
+tex!(p => fbox{t:T} => { MacroResult::Other(t.1) });
+tex!(p => mvbox{t:T} => { MacroResult::Other(t.1) });
+tex!(p => text{t:T} => { MacroResult::Other(t.1) });
+tex!(p => texttt{t:T} => { MacroResult::Other(t.1) });
+tex!(p => textrm{t:T} => { MacroResult::Other(t.1) });
+tex!(p => textbf{t:T} => { MacroResult::Other(t.1) });
+tex!(p => scalebox{_}{t:T} => { MacroResult::Other(t.1) });
+tex!(p => raisebox{_}{t:T} => { MacroResult::Other(t.1) });
+tex!(p => ensuremath{t:M} => { MacroResult::Other(t.1) });
+
 
 tex!(p => def => {
     p.tokenizer.reader.read_until(|c| c == '{');

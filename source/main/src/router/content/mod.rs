@@ -457,19 +457,18 @@ pub fn URITop() -> impl IntoView {
   use uris::URIComponentsTrait;
   use ftml_viewer_components::FTMLGlobalSetup;
   use leptos::either::EitherOf3 as Either;
+  #[cfg(not(feature="ssr"))]
   let qm = leptos_router::hooks::use_location();
-  Effect::new(move |_| {
-    #[cfg(not(feature="ssr"))]
-    {
-      let url = format!("{}{}{}{}",window().location().origin().expect("Getting URL origin failed"),
-        qm.pathname.get(),
-        qm.query.get().to_query_string(),
-        qm.hash.get()
-      );
-      let js_url = window().location().href().expect("Getting URL failed");
-      if url != js_url {
-        window().location().set_href(&url).expect("Updating url failed");
-      }
+  #[cfg(not(feature="ssr"))]
+  let _ = Effect::new(move |_| {
+    let url = format!("{}{}{}{}",window().location().origin().expect("Getting URL origin failed"),
+      qm.pathname.get(),
+      qm.query.get().to_query_string(),
+      qm.hash.get()
+    );
+    let js_url = window().location().href().expect("Getting URL failed");
+    if url != js_url {
+      window().location().set_href(&url).expect("Updating url failed");
     }
   });
   view!{

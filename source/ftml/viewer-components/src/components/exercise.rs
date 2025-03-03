@@ -1,4 +1,4 @@
-use flams_ontology::{narration::exercises::{BlockFeedback, CheckedResult, ExerciseFeedback, ExerciseResponse as OrigResponse, FillinFeedback, FillinFeedbackKind, Solutions}, uris::DocumentElementURI};
+use flams_ontology::{narration::exercises::{BlockFeedback, CheckedResult, ExerciseFeedback, ExerciseResponse as OrigResponse, FillinFeedback, FillinFeedbackKind, Solutions}, uris::{DocumentElementURI, Name}};
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::inject_css;
 use leptos::{context::Provider, prelude::*};
@@ -7,7 +7,7 @@ use serde::Serialize;
 use ftml_extraction::prelude::FTMLElements;
 use smallvec::SmallVec;
 
-use crate::{components::documents::ForcedName, config::{LogicalLevel, SectionCounters}, ts::{JsFun, JsOrRsF}};
+use crate::{components::documents::ForcedName, components::counters::{LogicalLevel, SectionCounters}, ts::{JsFun, JsOrRsF}};
 
 //use crate::ExerciseOptions;
 
@@ -49,17 +49,17 @@ enum ExerciseResponse {
   Fillinsol(String)
 }
 
-pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:bool,sub_exercise:bool,styles:Box<[Box<str>]>,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:bool,sub_exercise:bool,styles:Box<[Name]>,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   inject_css("ftml-sections", include_str!("sections.css"));
   let mut counters : SectionCounters = expect_context();
-  counters.current = LogicalLevel::Paragraph;
+  let style = counters.get_exercise(&styles);
   let cls = {
     let mut s = String::new();
     s.push_str("ftml-problem");
     for style in styles {
       s.push(' ');
       s.push_str("ftml-problem-");
-      s.push_str(&style);
+      s.push_str(style.first_name().as_ref());
     }
     s
   };
@@ -87,7 +87,7 @@ pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:
   ).unwrap_or(leptos::either::Either::Left(false));
   let uri = ex.uri.clone();
   view!{
-    <Provider value=ex><Provider value=counters><div class=cls>
+    <Provider value=ex><Provider value=counters><div class=cls style=style>
         {//<form>{
           let r = children();
           match is_done {

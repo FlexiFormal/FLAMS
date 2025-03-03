@@ -3,7 +3,7 @@ use std::{fmt::Display, str::FromStr};
 use smallvec::SmallVec;
 
 use crate::{
-    uris::{DocumentElementURI, SymbolURI}, Checked, CheckingState, DocumentRange
+    uris::{DocumentElementURI, Name, SymbolURI}, Checked, CheckingState, DocumentRange
 };
 
 use super::{DocumentElement, LazyDocRef, NarrationTrait};
@@ -24,7 +24,7 @@ pub struct Exercise<State:CheckingState> {
     pub notes: State::Seq<LazyDocRef<Box<str>>>,
     pub title: Option<DocumentRange>,
     pub children: State::Seq<DocumentElement<State>>,
-    pub styles:Box<[Box<str>]>,
+    pub styles:Box<[Name]>,
     pub preconditions: State::Seq<(CognitiveDimension, SymbolURI)>,
     pub objectives: State::Seq<(CognitiveDimension, SymbolURI)>,
 }

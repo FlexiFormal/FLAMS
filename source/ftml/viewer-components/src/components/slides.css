@@ -1,0 +1,10 @@
+.ftml-slide {
+    background-color:#ffffffe8;
+    margin:5px 0;
+    border:2px solid #000;
+    border-radius:5px;
+    padding:5px;
+    padding-right:10px;
+    width: 100%;
+    display:block;
+}

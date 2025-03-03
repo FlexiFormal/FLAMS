@@ -1,6 +1,6 @@
 //#![allow(non_local_definitions)]
 
-use flams_ontology::uris::{DocumentElementURI, DocumentURI, NarrativeURI};
+use flams_ontology::{narration::paragraphs::ParagraphKind, uris::{DocumentElementURI, DocumentURI, Name, NarrativeURI}};
 use flams_utils::CSS;
 use flams_web_utils::do_css;
 use leptos::{either::{Either, EitherOf4}, prelude::*};
@@ -23,7 +23,7 @@ pub enum TOC {
 }
 
 
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize,PartialEq)]
 #[cfg_attr(feature="ts", derive(tsify_next::Tsify))]
 /// An entry in a table of contents. Either:
 /// 1. a section; the title is assumed to be an HTML string, or
@@ -47,7 +47,13 @@ pub enum TOCElem {
     title:Option<String>,
     id:String,
     children:Vec<TOCElem>
-  }
+  },
+  Paragraph{
+    #[cfg_attr(feature="ts", tsify(type = "string[]"))]
+    styles:Vec<Name>,
+    kind:ParagraphKind,
+  },
+  Slide
 }
 
 pub trait TOCIter<'a> {
@@ -64,7 +70,8 @@ pub trait TOCIter<'a> {
           if let Some(elem) = self.curr.next() {
             let children: &'b [_] = match elem {
               TOCElem::Section{children,..} |
-              TOCElem::Inputref{children,..} => children
+              TOCElem::Inputref{children,..} => children,
+              _ => return Some(elem)
             };
             self.stack.push(std::mem::replace(&mut self.curr,children.iter()));
             return Some(elem)
@@ -102,19 +109,20 @@ impl TOCElem {
     match self {
       Self::Section{title:Some(title),id,children,..} => {
         let id = format!("#{id}");
-        Either::Left(view!{
+        Some(Either::Left(view!{
           <AnchorLink href=id>
             <Header slot>
               <DomStringCont html=title cont=crate::iterate/>
             </Header>
             {children.into_iter().map(Self::into_view).collect_view()}
           </AnchorLink>
-        })
+        }))
       }
       Self::Section{title:None,children,..} |
         Self::Inputref{children,..} => {
-        Either::Right(children.into_iter().map(Self::into_view).collect_view().into_any())
+        Some(Either::Right(children.into_iter().map(Self::into_view).collect_view().into_any()))
       }
+      _ => None
     }
   }
 }
@@ -144,16 +152,22 @@ pub fn do_toc<V:IntoView+'static>(toc:TOCSource,wrap:impl FnOnce(Option<AnyView>
     use TOCIter;
     match toc {
         TOCSource::None => EitherOf4::A(wrap(None)),
-        TOCSource::Ready(toc) => EitherOf4::B(view!{
-            {toc.as_slice().do_titles()}
-            {wrap(Some(view!(<Toc toc/>).into_any()))}
-        }),
+        TOCSource::Ready(toc) => {
+          let ctw = expect_context::<RwSignal::<Option<Vec<TOCElem>>>>();
+          ctw.set(Some(toc.clone()));
+          EitherOf4::B(view!{
+              {toc.as_slice().do_titles()}
+              {wrap(Some(view!(<Toc toc/>).into_any()))}
+          })
+        }
         TOCSource::Get => match expect_context() {
             NarrativeURI::Document(uri) => {
                 let r = Resource::new(|| (),move |()| crate::remote::server_config.get_toc(uri.clone()));
                 EitherOf4::C(view!{
                     {move || r.with(|r| if let Some(Ok((_,toc))) = r {
                         toc.as_slice().do_titles();
+                        let ctw = expect_context::<RwSignal::<Option<Vec<TOCElem>>>>();
+                        ctw.set(Some(toc.clone()));
                     })}
                     {wrap(Some((move || r.get().map_or_else(
                         || Either::Left(view!(<flams_web_utils::components::Spinner/>)),

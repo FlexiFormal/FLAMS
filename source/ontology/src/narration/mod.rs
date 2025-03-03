@@ -164,6 +164,11 @@ impl<T: NarrationTrait + std::fmt::Debug> std::fmt::Debug for NarrativeReference
 pub enum DocumentElement<State:CheckingState> {
     SetSectionLevel(SectionLevel),
     Section(Section<State>),
+    Slide {
+        range:DocumentRange,
+        uri:DocumentElementURI,
+        children:State::Seq<DocumentElement<State>>
+    },
     Module {
         range: DocumentRange,
         module: State::ModuleLike,
@@ -224,6 +229,7 @@ pub enum DocumentElement<State:CheckingState> {
     ImportModule(State::ModuleLike),
     Paragraph(LogicalParagraph<State>),
     Exercise(Exercise<State>),
+    SkipSection(State::Seq<DocumentElement<State>>),
 }
 
 crate::serde_impl! {
@@ -247,6 +253,8 @@ crate::serde_impl! {
         {16 = ImportModule(m)}
         {17 = Paragraph(p)}
         {18 = Exercise(e)}
+        {19 = SkipSection(children)}
+        {20 = Slide{ uri, range, children}}
     }
 }
 
@@ -263,7 +271,9 @@ impl NarrationTrait for DocumentElement<Checked> {
             Self::Module { children, .. } |
             Self::Morphism { children, .. } |
             Self::MathStructure { children, .. } |
-            Self::Extension { children, .. } => children,
+            Self::Extension { children, .. } |
+            Self::SkipSection(children) |
+            Self::Slide{children,..} => children,
             _ => &[],
         }
     }
@@ -291,6 +301,8 @@ impl<State:CheckingState> std::fmt::Debug for DocumentElement<State> {
             Self::ImportModule(module) => f.debug_tuple("ImportModule").field(module).finish(),
             Self::Paragraph(paragraph) => f.debug_tuple("Paragraph").field(paragraph).finish(),
             Self::Exercise(exercise) => f.debug_tuple("Exercise").field(exercise).finish(),
+            Self::SkipSection(children) => f.debug_tuple("SkipSection").field(children).finish(),
+            Self::Slide{uri,range,children} => f.debug_struct("Slide").field("uri", uri).field("range", range).field("children", children).finish(),
         }
     }
 }
@@ -304,7 +316,9 @@ impl DocumentElement<Unchecked> {
             Self::Exercise(e) => e.children = new_children,
             Self::Module { children, .. }
             | Self::Morphism { children, .. }
-            | Self::MathStructure { children, .. } => *children = new_children,
+            | Self::MathStructure { children, .. }
+            | Self::SkipSection(children) 
+            | Self::Slide{children,..} => *children = new_children,
             _ => return Err(ElementHasNoChildren),
         }
         Ok(())

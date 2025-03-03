@@ -40,7 +40,7 @@ macro_rules! do_keys {
 }
 
 
-do_keys!{114:
+do_keys!{117:
     Module                      = "module"
     MathStructure               = "feature-structure"
     Morphism                    = "feature-morphism"
@@ -52,6 +52,13 @@ do_keys!{114:
     Example                     = "example"
     Problem                     = "problem"
     SubProblem                  = "subproblem"
+
+    Slide                       = "slide"
+    SlideNumber                 = "slide-number"
+
+    Style                       = "style"
+    Counter                     = "counter"
+    CounterParent               = "counter-parent"
 
     DocTitle                    = "doctitle"
     Title                       = "title"
@@ -84,7 +91,6 @@ do_keys!{114:
 
     SetSectionLevel             = "sectionlevel"
     SkipSection                 = "skipsection"
-
 
     Proof                       = "proof"
     SubProof                    = "subproof"
@@ -136,8 +142,6 @@ do_keys!{114:
 
     SRef                        = "sref"
     SRefIn                      = "srefin"
-    Frame                       = "frame"
-    FrameNumber                 = "framenumber"
     Slideshow                   = "slideshow"
     SlideshowSlide              = "slideshow-slide"
     CurrentSectionLevel         = "currentsectionlevel"

@@ -5,6 +5,7 @@ use flams_ontology::content::declarations::OpenDeclaration;
 use flams_ontology::content::modules::OpenModule;
 use flams_ontology::content::terms::{Arg, ArgMode, Term, Var};
 use flams_ontology::languages::Language;
+use flams_ontology::narration::documents::DocumentStyles;
 use flams_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, CognitiveDimension, FillInSol, FillInSolOption, GradingNote, SolutionData};
 use flams_ontology::narration::notations::{NotationComponent, OpNotation};
 use flams_ontology::narration::sections::SectionLevel;
@@ -20,11 +21,289 @@ use crate::open::terms::TermOrList;
 use crate::rules::FTMLElements;
 use std::str::FromStr;
 
-pub struct NotationSpec {
-    pub attribute_index: u8,
-    pub inner_index: u16,
-    pub is_text:bool,
-    pub components:Box<[NotationComponent]>
+
+pub trait FTMLExtractor {
+    type Attr<'a>:Attributes;
+
+    #[cfg(feature="rdf")]
+    const RDF: bool;
+
+    fn styles(&mut self) -> &mut DocumentStyles; 
+
+    #[cfg(feature="rdf")]
+    fn add_triples<const N:usize>(&mut self, triples:[flams_ontology::rdf::Triple;N]);
+
+    fn get_narrative_uri(&self) -> NarrativeURI;
+    fn get_content_uri(&self) -> Option<&ModuleURI>;
+
+    #[cfg(feature="rdf")]
+    fn get_document_iri(&self) -> flams_ontology::rdf::NamedNode {
+        use flams_ontology::uris::URIOrRefTrait;
+        self.get_narrative_uri().to_iri()
+    }
+
+    #[cfg(feature="rdf")]
+    fn get_content_iri(&self) -> Option<flams_ontology::rdf::NamedNode> {
+        use flams_ontology::uris::URIOrRefTrait;
+        self.get_content_uri().map(URIOrRefTrait::to_iri)
+    }
+
+    fn with_exercise<R>(&mut self,then:impl FnOnce(&mut ExerciseState) -> R) -> Option<R>;
+
+    fn resolve_variable_name(&self,name:Name) -> Var;
+    fn add_error(&mut self,err:FTMLError);
+    fn add_module(&mut self,module:OpenModule<Unchecked>);
+    fn new_id(&mut self,prefix:Cow<'static,str>) -> Box<str>;
+    fn in_notation(&self) -> bool;
+    fn in_term(&self) -> bool;
+    fn set_in_term(&mut self,b:bool);
+    fn add_document_element(&mut self,elem:DocumentElement<Unchecked>);
+    /// ### Errors
+    fn add_content_element(&mut self,elem:OpenDeclaration<Unchecked>) -> Result<(),OpenDeclaration<Unchecked>>;
+
+    fn open_content(&mut self,uri:ModuleURI);
+    fn open_narrative(&mut self,uri:Option<NarrativeURI>);
+    fn open_complex_term(&mut self);
+    fn close_content(&mut self) -> Option<(ModuleURI,Vec<OpenDeclaration<Unchecked>>)>;
+    fn close_narrative(&mut self) -> Option<(NarrativeURI,Vec<DocumentElement<Unchecked>>)>;
+    fn close_complex_term(&mut self) -> Option<Term>;
+    fn open_section(&mut self,uri:DocumentElementURI);
+    fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<DocumentElement<Unchecked>>)>;
+    fn open_slide(&mut self);
+    fn close_slide(&mut self) -> Option<Vec<DocumentElement<Unchecked>>>;
+    fn open_paragraph(&mut self,uri:DocumentElementURI,fors:VecSet<SymbolURI>);
+    fn close_paragraph(&mut self) -> Option<ParagraphState>;
+    fn open_exercise(&mut self,uri:DocumentElementURI);
+    fn close_exercise(&mut self) -> Option<ExerciseState>;
+    fn open_gnote(&mut self);
+    fn close_gnote(&mut self) -> Option<GnoteState>;
+    fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>);
+    fn close_choice_block(&mut self) -> Option<ChoiceBlockState>;
+    fn open_fillinsol(&mut self,width:Option<f32>);
+    fn close_fillinsol(&mut self) -> Option<FillinsolState>;
+    fn push_fillinsol_case(&mut self,case:FillInSolOption);
+    fn push_answer_class(&mut self,id:Box<str>,kind:AnswerKind);
+    fn push_problem_choice(&mut self,correct:bool);
+
+    fn set_document_title(&mut self,title:Box<str>);
+    /// #### Errors
+    fn add_title(&mut self,title:DocumentRange) -> Result<(),DocumentRange>;
+    fn open_decl(&mut self);
+    fn close_decl(&mut self) -> Option<(Option<Term>,Option<Term>)>;
+    fn open_notation(&mut self);
+    fn close_notation(&mut self) -> Option<NotationState>;
+    fn open_args(&mut self);
+    fn close_args(&mut self) -> (Vec<Arg>,Option<Term>);
+
+    fn add_precondition(&mut self,uri:SymbolURI,dim:CognitiveDimension);
+    fn add_objective(&mut self,uri:SymbolURI,dim:CognitiveDimension);
+    /// #### Errors
+    #[allow(clippy::result_unit_err)]
+    fn add_arg(&mut self,pos:(u8,Option<u8>),tm:Term,mode:ArgMode) -> Result<(),()>;
+
+    fn add_definiendum(&mut self,uri:SymbolURI);
+
+    fn add_resource<T:Resourcable>(&mut self,t:&T) -> LazyDocRef<T>;
+    /// #### Errors
+    fn add_notation(&mut self,spec:NotationSpec) -> Result<(),NotationSpec>;
+    /// #### Errors
+    fn add_op_notation(&mut self,op:OpNotation) -> Result<(),OpNotation>;
+    /// #### Errors
+    fn add_type(&mut self,tm:Term) -> Result<(),Term>;
+    /// #### Errors
+    fn add_term(&mut self,symbol:Option<SymbolURI>,tm:Term) -> Result<(),Term>;
+}
+
+pub trait Attributes {
+    type KeyIter<'a>:Iterator<Item=&'a str> where Self:'a;
+    type Value<'a>:AsRef<str> + Into<Cow<'a,str>>+Into<String> where Self:'a;
+    fn keys(&self) -> Self::KeyIter<'_>;
+    fn value(&self,key:&str) -> Option<Self::Value<'_>>;
+    fn set(&mut self,key:&str,value:&str);
+    fn take(&mut self,key:&str) -> Option<String>;
+
+    #[inline]
+    fn get(&self,tag:FTMLKey) -> Option<Self::Value<'_>> {
+        self.value(tag.attr_name())
+    }
+    #[inline]
+    fn remove(&mut self,tag:FTMLKey) -> Option<String> {
+        self.take(tag.attr_name())
+    }
+
+    /// #### Errors
+    fn get_typed<E,T>(&self,key:FTMLKey,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,FTMLError> {
+        let Some(v) = self.get(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        f(v.as_ref()).map_err(|_| FTMLError::InvalidKeyFor(key.as_str(), Some(v.into())))
+    }
+
+    /// #### Errors
+    fn get_typed_vec<E,T>(&self,key:FTMLKey,mut f:impl FnMut(&str) -> Result<T,E>) -> Result<Vec<T>,FTMLError> {
+        let Some(v) = self.get(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        let mut vec = Vec::new();
+        for e in v.as_ref().split(',') {
+            match f(e) {
+                Ok(v) => vec.push(v),
+                Err(_) => return Err(FTMLError::InvalidKeyFor(key.as_str(), Some(v.into())))
+
+            }
+        }
+        Ok(vec)
+    }
+
+    /// #### Errors
+    fn take_typed<E,T>(&mut self,key:FTMLKey,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,FTMLError> {
+        let Some(v) = self.remove(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        f(v.as_ref()).map_err(|_| FTMLError::InvalidKeyFor(key.as_str(), Some(v)))
+    }
+
+    /// #### Errors
+    fn get_section_level(&self,key:FTMLKey) -> Result<SectionLevel,FTMLError> {
+        use std::str::FromStr;
+        let Some(v) = self.get(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        let Ok(u) = u8::from_str(v.as_ref()) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), Some(v.into())))
+        };
+        SectionLevel::try_from(u).map_err(|()| FTMLError::InvalidKeyFor(key.as_str(), Some(v.into())))
+    }
+
+    /// #### Errors
+    fn take_section_level(&mut self,key:FTMLKey) -> Result<SectionLevel,FTMLError> {
+        use std::str::FromStr;
+        let Some(v) = self.remove(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        let Ok(u) = u8::from_str(v.as_ref()) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), Some(v)))
+        };
+        SectionLevel::try_from(u).map_err(|()| FTMLError::InvalidKeyFor(key.as_str(), Some(v)))
+    }
+
+    /// #### Errors
+    #[inline]
+    fn get_language(&self,key:FTMLKey) -> Result<Language,FTMLError> {
+        self.get_typed(key,Language::from_str)
+    }
+
+    /// #### Errors
+    #[inline]
+    fn take_language(&mut self,key:FTMLKey) -> Result<Language,FTMLError> {
+        self.take_typed(key,Language::from_str)
+    }
+
+    /// #### Errors
+    #[inline]
+    fn get_module_uri<E:FTMLExtractor>(&self,key:FTMLKey,_extractor:&mut E) -> Result<ModuleURI,FTMLError> {
+        self.get_typed(key,ModuleURI::from_str)
+    }
+
+    /// #### Errors
+    fn get_new_module_uri<E:FTMLExtractor>(&self,key:FTMLKey,extractor:&mut E) -> Result<ModuleURI,FTMLError> {
+        let Some(v) = self.get(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        extractor.get_content_uri().map_or_else(
+            || extractor.get_narrative_uri().document().module_uri_from(v.as_ref()),
+            |m| m.clone() / v.as_ref()
+        ).map_err(|_| FTMLError::InvalidURI(format!("1: {}",v.as_ref())))
+    }
+
+    /// #### Errors
+    #[inline]
+    fn take_module_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,_extractor:&mut E) -> Result<ModuleURI,FTMLError> {
+        self.take_typed(key, ModuleURI::from_str)
+    }
+
+    /// #### Errors
+    fn take_new_module_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,extractor:&mut E) -> Result<ModuleURI,FTMLError> {
+        let Some(v) = self.remove(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        extractor.get_content_uri().map_or_else(
+            || extractor.get_narrative_uri().document().module_uri_from(&v),
+            |m| m.clone() / v.as_str()
+        ).map_err(|_| FTMLError::InvalidURI(format!("2: {v}")))
+    }
+
+    /// #### Errors
+    #[inline]
+    fn get_symbol_uri<E:FTMLExtractor>(&self,key:FTMLKey,_extractor:&mut E) -> Result<SymbolURI,FTMLError> {
+        self.get_typed(key,SymbolURI::from_str)
+    }
+
+    /// #### Errors
+    fn get_new_symbol_uri<E:FTMLExtractor>(&self,key:FTMLKey,extractor:&mut E) -> Result<SymbolURI,FTMLError> {
+        let Some(v) = self.get(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        let Some(module) = extractor.get_content_uri() else {
+            return Err(FTMLError::NotInContent)
+        };
+        (module.owned() | v.as_ref()).map_err(|_| FTMLError::InvalidURI(format!("3: {}",v.as_ref())))
+    }
+
+    /// #### Errors
+    #[inline]
+    fn take_symbol_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,_extractor:&mut E) -> Result<SymbolURI,FTMLError> {
+        self.take_typed(key,SymbolURI::from_str)
+    }
+
+    /// #### Errors
+    fn take_new_symbol_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,extractor:&mut E) -> Result<SymbolURI,FTMLError> {
+        let Some(v) = self.remove(key) else {
+            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
+        };
+        let Some(module) = extractor.get_content_uri() else {
+            return Err(FTMLError::NotInContent)
+        };
+        (module.owned() | v.as_str()).map_err(|_| FTMLError::InvalidURI(format!("4: {v}")))
+    }
+
+    /// #### Errors
+    #[inline]
+    fn get_document_uri<E:FTMLExtractor>(&self,key:FTMLKey,_extractor:&mut E) -> Result<DocumentURI,FTMLError> {
+        self.get_typed(key, DocumentURI::from_str)
+    }
+
+    /// #### Errors
+    #[inline]
+    fn take_document_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,_extractor:&mut E) -> Result<DocumentURI,FTMLError> {
+        self.take_typed(key, DocumentURI::from_str)
+    }
+
+    fn get_id<E:FTMLExtractor>(&self,extractor:&mut E,prefix:Cow<'static,str>) -> Box<str> {
+        self.get(FTMLKey::Id).map_or_else(
+            || extractor.new_id(prefix),
+            |v| {
+                let v = v.as_ref();
+                if v.starts_with("http") && v.contains('?') {
+                    v.rsplit_once('?').unwrap_or_else(|| unreachable!()).1.into()
+                } else {
+                    Into::<String>::into(v).into_boxed_str()
+                }
+            }
+        )
+    }
+
+    fn get_bool(&self,key:FTMLKey) -> bool {
+        self.get(key)
+            .and_then(|s| s.as_ref().parse().ok())
+            .unwrap_or_default()
+    }
+
+    fn take_bool(&mut self,key:FTMLKey) -> bool {
+        self.remove(key)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default()
+    }
 }
 
 pub trait FTMLNode {
@@ -107,6 +386,13 @@ pub struct FillinsolState {
     pub cases:Vec<FillInSolOption>
 }
 
+pub struct NotationSpec {
+    pub attribute_index: u8,
+    pub inner_index: u16,
+    pub is_text:bool,
+    pub components:Box<[NotationComponent]>
+}
+
 #[cfg(feature="full")]
 #[derive(Debug)]
 pub enum Narrative {
@@ -115,6 +401,9 @@ pub enum Narrative {
     Section{
         uri:DocumentElementURI,
         title:Option<DocumentRange>,
+        children:Vec<DocumentElement<Unchecked>>
+    },
+    Slide{
         children:Vec<DocumentElement<Unchecked>>
     },
     Exercise(ExerciseState),
@@ -142,6 +431,7 @@ pub struct ExtractorState {
     pub(crate) narrative:Vec<Narrative>,
     pub(crate) content:Vec<Content>,
     pub(crate) modules:Vec<OpenModule<Unchecked>>,
+    pub(crate) styles:DocumentStyles,
 }
 #[cfg(feature="full")]
 impl ExtractorState {
@@ -159,16 +449,17 @@ impl ExtractorState {
             ids:HMap::default(),
             narrative:vec![Narrative::Container(document.into(),Vec::new())],
             content:Vec::new(),
+            styles:DocumentStyles::default(),
             modules:Vec::new()
         }
     }
     /// #### Errors
     #[allow(clippy::result_unit_err)]
-    pub fn take(mut self) -> Result<(DocumentURI,Vec<DocumentElement<Unchecked>>,Vec<OpenModule<Unchecked>>),()> {
+    pub fn take(mut self) -> Result<(DocumentURI,Vec<DocumentElement<Unchecked>>,Vec<OpenModule<Unchecked>>,DocumentStyles),()> {
         if self.narrative.len() == 1 {
             let Some(Narrative::Container(document,elements)) = self.narrative.pop() else { unreachable!() };
             match document {
-                NarrativeURI::Document(d) => Ok((d,elements,self.modules)),
+                NarrativeURI::Document(d) => Ok((d,elements,self.modules,self.styles)),
                 NarrativeURI::Element(_) => Err(())
             }
         } else {Err(())}
@@ -213,6 +504,10 @@ impl<E:StatefulExtractor> FTMLExtractor for E {
         <Self as StatefulExtractor>::add_error(self,err);
     }
 
+    fn styles(&mut self) -> &mut DocumentStyles {
+        &mut self.state_mut().styles
+    }
+
     #[inline]
     fn set_document_title(&mut self,title:Box<str>) {
         <Self as StatefulExtractor>::set_document_title(self, title);
@@ -230,7 +525,8 @@ impl<E:StatefulExtractor> FTMLExtractor for E {
                 Narrative::Container(_,c) => c,
                 Narrative::Exercise(ExerciseState { children, .. }) |
                 Narrative::Section { children, .. } |
-                Narrative::Paragraph(ParagraphState { children, .. }) => children,
+                Narrative::Paragraph(ParagraphState { children, .. }) |
+                Narrative::Slide{children,..} => children,
                 Narrative::Notation(_) => continue
             };
             for c in ch.iter().rev() {
@@ -336,6 +632,18 @@ impl<E:StatefulExtractor> FTMLExtractor for E {
     fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<DocumentElement<Unchecked>>)> {
         match self.state_mut().narrative.pop() {
             Some(Narrative::Section { title, children,uri }) => return Some((uri,title,children)),
+            Some(o) => self.state_mut().narrative.push(o),
+            None => {}
+        }
+        None
+    }
+
+    fn open_slide(&mut self) {
+        self.state_mut().narrative.push(Narrative::Slide { children: Vec::new() });
+    }
+    fn close_slide(&mut self) -> Option<Vec<DocumentElement<Unchecked>>> {
+        match self.state_mut().narrative.pop() {
+            Some(Narrative::Slide { children }) => return Some(children),
             Some(o) => self.state_mut().narrative.push(o),
             None => {}
         }
@@ -494,8 +802,9 @@ impl<E:StatefulExtractor> FTMLExtractor for E {
             Narrative::Container(uri,_) => Some(uri.as_narrative().owned()),
             Narrative::Paragraph(ParagraphState { uri, .. }) | 
             Narrative::Exercise(ExerciseState { uri,.. }) |
+            //Narrative::Slide{uri,..} |
             Narrative::Section{uri,..} => Some(uri.as_narrative().owned()),
-            Narrative::Notation(_) => None
+            Narrative::Notation(_) | Narrative::Slide{..} => None
         }).unwrap_or_else(|| unreachable!())
     }
 
@@ -652,268 +961,4 @@ impl<E:StatefulExtractor> FTMLExtractor for E {
         } else {Err(())}
     }
 
-}
-
-pub trait FTMLExtractor {
-    type Attr<'a>:Attributes;
-
-    #[cfg(feature="rdf")]
-    const RDF: bool;
-
-    #[cfg(feature="rdf")]
-    fn add_triples<const N:usize>(&mut self, triples:[flams_ontology::rdf::Triple;N]);
-
-    fn get_narrative_uri(&self) -> NarrativeURI;
-    fn get_content_uri(&self) -> Option<&ModuleURI>;
-
-    #[cfg(feature="rdf")]
-    fn get_document_iri(&self) -> flams_ontology::rdf::NamedNode {
-        use flams_ontology::uris::URIOrRefTrait;
-        self.get_narrative_uri().to_iri()
-    }
-
-    #[cfg(feature="rdf")]
-    fn get_content_iri(&self) -> Option<flams_ontology::rdf::NamedNode> {
-        use flams_ontology::uris::URIOrRefTrait;
-        self.get_content_uri().map(URIOrRefTrait::to_iri)
-    }
-
-    fn with_exercise<R>(&mut self,then:impl FnOnce(&mut ExerciseState) -> R) -> Option<R>;
-
-    fn resolve_variable_name(&self,name:Name) -> Var;
-    fn add_error(&mut self,err:FTMLError);
-    fn add_module(&mut self,module:OpenModule<Unchecked>);
-    fn new_id(&mut self,prefix:Cow<'static,str>) -> Box<str>;
-    fn in_notation(&self) -> bool;
-    fn in_term(&self) -> bool;
-    fn set_in_term(&mut self,b:bool);
-    fn add_document_element(&mut self,elem:DocumentElement<Unchecked>);
-    /// ### Errors
-    fn add_content_element(&mut self,elem:OpenDeclaration<Unchecked>) -> Result<(),OpenDeclaration<Unchecked>>;
-
-    fn open_content(&mut self,uri:ModuleURI);
-    fn open_narrative(&mut self,uri:Option<NarrativeURI>);
-    fn open_complex_term(&mut self);
-    fn close_content(&mut self) -> Option<(ModuleURI,Vec<OpenDeclaration<Unchecked>>)>;
-    fn close_narrative(&mut self) -> Option<(NarrativeURI,Vec<DocumentElement<Unchecked>>)>;
-    fn close_complex_term(&mut self) -> Option<Term>;
-    fn open_section(&mut self,uri:DocumentElementURI);
-    fn close_section(&mut self) -> Option<(DocumentElementURI,Option<DocumentRange>,Vec<DocumentElement<Unchecked>>)>;
-    fn open_paragraph(&mut self,uri:DocumentElementURI,fors:VecSet<SymbolURI>);
-    fn close_paragraph(&mut self) -> Option<ParagraphState>;
-    fn open_exercise(&mut self,uri:DocumentElementURI);
-    fn close_exercise(&mut self) -> Option<ExerciseState>;
-    fn open_gnote(&mut self);
-    fn close_gnote(&mut self) -> Option<GnoteState>;
-    fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>);
-    fn close_choice_block(&mut self) -> Option<ChoiceBlockState>;
-    fn open_fillinsol(&mut self,width:Option<f32>);
-    fn close_fillinsol(&mut self) -> Option<FillinsolState>;
-    fn push_fillinsol_case(&mut self,case:FillInSolOption);
-    fn push_answer_class(&mut self,id:Box<str>,kind:AnswerKind);
-    fn push_problem_choice(&mut self,correct:bool);
-
-    fn set_document_title(&mut self,title:Box<str>);
-    /// #### Errors
-    fn add_title(&mut self,title:DocumentRange) -> Result<(),DocumentRange>;
-    fn open_decl(&mut self);
-    fn close_decl(&mut self) -> Option<(Option<Term>,Option<Term>)>;
-    fn open_notation(&mut self);
-    fn close_notation(&mut self) -> Option<NotationState>;
-    fn open_args(&mut self);
-    fn close_args(&mut self) -> (Vec<Arg>,Option<Term>);
-
-    fn add_precondition(&mut self,uri:SymbolURI,dim:CognitiveDimension);
-    fn add_objective(&mut self,uri:SymbolURI,dim:CognitiveDimension);
-    /// #### Errors
-    #[allow(clippy::result_unit_err)]
-    fn add_arg(&mut self,pos:(u8,Option<u8>),tm:Term,mode:ArgMode) -> Result<(),()>;
-
-    fn add_definiendum(&mut self,uri:SymbolURI);
-
-    fn add_resource<T:Resourcable>(&mut self,t:&T) -> LazyDocRef<T>;
-    /// #### Errors
-    fn add_notation(&mut self,spec:NotationSpec) -> Result<(),NotationSpec>;
-    /// #### Errors
-    fn add_op_notation(&mut self,op:OpNotation) -> Result<(),OpNotation>;
-    /// #### Errors
-    fn add_type(&mut self,tm:Term) -> Result<(),Term>;
-    /// #### Errors
-    fn add_term(&mut self,symbol:Option<SymbolURI>,tm:Term) -> Result<(),Term>;
-}
-
-pub trait Attributes {
-    type KeyIter<'a>:Iterator<Item=&'a str> where Self:'a;
-    type Value<'a>:AsRef<str> + Into<Cow<'a,str>>+Into<String> where Self:'a;
-    fn keys(&self) -> Self::KeyIter<'_>;
-    fn value(&self,key:&str) -> Option<Self::Value<'_>>;
-    fn set(&mut self,key:&str,value:&str);
-    fn take(&mut self,key:&str) -> Option<String>;
-
-    #[inline]
-    fn get(&self,tag:FTMLKey) -> Option<Self::Value<'_>> {
-        self.value(tag.attr_name())
-    }
-    #[inline]
-    fn remove(&mut self,tag:FTMLKey) -> Option<String> {
-        self.take(tag.attr_name())
-    }
-
-    /// #### Errors
-    fn get_typed<E,T>(&self,key:FTMLKey,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,FTMLError> {
-        let Some(v) = self.get(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        f(v.as_ref()).map_err(|_| FTMLError::InvalidKeyFor(key.as_str(), Some(v.into())))
-    }
-
-    /// #### Errors
-    fn take_typed<E,T>(&mut self,key:FTMLKey,f:impl FnOnce(&str) -> Result<T,E>) -> Result<T,FTMLError> {
-        let Some(v) = self.remove(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        f(v.as_ref()).map_err(|_| FTMLError::InvalidKeyFor(key.as_str(), Some(v)))
-    }
-
-    /// #### Errors
-    fn get_section_level(&self,key:FTMLKey) -> Result<SectionLevel,FTMLError> {
-        use std::str::FromStr;
-        let Some(v) = self.get(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        let Ok(u) = u8::from_str(v.as_ref()) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), Some(v.into())))
-        };
-        SectionLevel::try_from(u).map_err(|()| FTMLError::InvalidKeyFor(key.as_str(), Some(v.into())))
-    }
-
-    /// #### Errors
-    fn take_section_level(&mut self,key:FTMLKey) -> Result<SectionLevel,FTMLError> {
-        use std::str::FromStr;
-        let Some(v) = self.remove(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        let Ok(u) = u8::from_str(v.as_ref()) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), Some(v)))
-        };
-        SectionLevel::try_from(u).map_err(|()| FTMLError::InvalidKeyFor(key.as_str(), Some(v)))
-    }
-
-    /// #### Errors
-    #[inline]
-    fn get_language(&self,key:FTMLKey) -> Result<Language,FTMLError> {
-        self.get_typed(key,Language::from_str)
-    }
-
-    /// #### Errors
-    #[inline]
-    fn take_language(&mut self,key:FTMLKey) -> Result<Language,FTMLError> {
-        self.take_typed(key,Language::from_str)
-    }
-
-    /// #### Errors
-    #[inline]
-    fn get_module_uri<E:FTMLExtractor>(&self,key:FTMLKey,_extractor:&mut E) -> Result<ModuleURI,FTMLError> {
-        self.get_typed(key,ModuleURI::from_str)
-    }
-
-    /// #### Errors
-    fn get_new_module_uri<E:FTMLExtractor>(&self,key:FTMLKey,extractor:&mut E) -> Result<ModuleURI,FTMLError> {
-        let Some(v) = self.get(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        extractor.get_content_uri().map_or_else(
-            || extractor.get_narrative_uri().document().module_uri_from(v.as_ref()),
-            |m| m.clone() / v.as_ref()
-        ).map_err(|_| FTMLError::InvalidURI(format!("1: {}",v.as_ref())))
-    }
-
-    /// #### Errors
-    #[inline]
-    fn take_module_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,_extractor:&mut E) -> Result<ModuleURI,FTMLError> {
-        self.take_typed(key, ModuleURI::from_str)
-    }
-
-    /// #### Errors
-    fn take_new_module_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,extractor:&mut E) -> Result<ModuleURI,FTMLError> {
-        let Some(v) = self.remove(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        extractor.get_content_uri().map_or_else(
-            || extractor.get_narrative_uri().document().module_uri_from(&v),
-            |m| m.clone() / v.as_str()
-        ).map_err(|_| FTMLError::InvalidURI(format!("2: {v}")))
-    }
-
-    /// #### Errors
-    #[inline]
-    fn get_symbol_uri<E:FTMLExtractor>(&self,key:FTMLKey,_extractor:&mut E) -> Result<SymbolURI,FTMLError> {
-        self.get_typed(key,SymbolURI::from_str)
-    }
-
-    /// #### Errors
-    fn get_new_symbol_uri<E:FTMLExtractor>(&self,key:FTMLKey,extractor:&mut E) -> Result<SymbolURI,FTMLError> {
-        let Some(v) = self.get(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        let Some(module) = extractor.get_content_uri() else {
-            return Err(FTMLError::NotInContent)
-        };
-        (module.owned() | v.as_ref()).map_err(|_| FTMLError::InvalidURI(format!("3: {}",v.as_ref())))
-    }
-
-    /// #### Errors
-    #[inline]
-    fn take_symbol_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,_extractor:&mut E) -> Result<SymbolURI,FTMLError> {
-        self.take_typed(key,SymbolURI::from_str)
-    }
-
-    /// #### Errors
-    fn take_new_symbol_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,extractor:&mut E) -> Result<SymbolURI,FTMLError> {
-        let Some(v) = self.remove(key) else {
-            return Err(FTMLError::InvalidKeyFor(key.as_str(), None))
-        };
-        let Some(module) = extractor.get_content_uri() else {
-            return Err(FTMLError::NotInContent)
-        };
-        (module.owned() | v.as_str()).map_err(|_| FTMLError::InvalidURI(format!("4: {v}")))
-    }
-
-    /// #### Errors
-    #[inline]
-    fn get_document_uri<E:FTMLExtractor>(&self,key:FTMLKey,_extractor:&mut E) -> Result<DocumentURI,FTMLError> {
-        self.get_typed(key, DocumentURI::from_str)
-    }
-
-    /// #### Errors
-    #[inline]
-    fn take_document_uri<E:FTMLExtractor>(&mut self,key:FTMLKey,_extractor:&mut E) -> Result<DocumentURI,FTMLError> {
-        self.take_typed(key, DocumentURI::from_str)
-    }
-
-    fn get_id<E:FTMLExtractor>(&self,extractor:&mut E,prefix:Cow<'static,str>) -> Box<str> {
-        self.get(FTMLKey::Id).map_or_else(
-            || extractor.new_id(prefix),
-            |v| {
-                let v = v.as_ref();
-                if v.starts_with("http") && v.contains('?') {
-                    v.rsplit_once('?').unwrap_or_else(|| unreachable!()).1.into()
-                } else {
-                    Into::<String>::into(v).into_boxed_str()
-                }
-            }
-        )
-    }
-
-    fn get_bool(&self,key:FTMLKey) -> bool {
-        self.get(key)
-            .and_then(|s| s.as_ref().parse().ok())
-            .unwrap_or_default()
-    }
-
-    fn take_bool(&mut self,key:FTMLKey) -> bool {
-        self.remove(key)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_default()
-    }
 }

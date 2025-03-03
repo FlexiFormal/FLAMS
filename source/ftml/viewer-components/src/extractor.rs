@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use flams_ontology::{uris::NarrativeURI, Unchecked};
+use flams_ontology::{narration::documents::DocumentStyles, uris::NarrativeURI, Unchecked};
 use flams_utils::{prelude::HMap, vecmap::VecSet};
 use smallvec::SmallVec;
 use ftml_extraction::prelude::{Attributes, GnoteState, FTMLExtractor};
@@ -9,6 +9,7 @@ use leptos::{prelude::{expect_context, UpdateValue}, web_sys::Element};
 pub struct DOMExtractor {
     in_notation:bool,
     in_term:bool,
+    pub(crate) styles:DocumentStyles,
     id_counter:HMap<Cow<'static,str>,u32>
 }
 
@@ -18,6 +19,10 @@ impl FTMLExtractor for DOMExtractor {
     #[inline(always)]
     fn add_error(&mut self, err: ftml_extraction::errors::FTMLError) {
         tracing::error!("{err}");
+    }
+
+    fn styles(&mut self) -> &mut DocumentStyles {
+        &mut self.styles
     }
 
 
@@ -145,6 +150,9 @@ impl FTMLExtractor for DOMExtractor {
     fn close_fillinsol(&mut self) -> Option<ftml_extraction::prelude::FillinsolState> {
         todo!()
     }
+    fn close_slide(&mut self) -> Option<Vec<flams_ontology::narration::DocumentElement<Unchecked>>> {
+        todo!()
+    }
 
     fn add_definiendum(&mut self,_uri:flams_ontology::uris::SymbolURI) {}
     fn push_fillinsol_case(&mut self,case:flams_ontology::narration::exercises::FillInSolOption) {}
@@ -160,6 +168,7 @@ impl FTMLExtractor for DOMExtractor {
     fn open_exercise(&mut self,_uri:flams_ontology::uris::DocumentElementURI) {}
     fn open_narrative(&mut self,_uri:Option<flams_ontology::uris::NarrativeURI>) {}
     fn open_notation(&mut self) {}
+    fn open_slide(&mut self) {}
     fn open_paragraph(&mut self,_uri:flams_ontology::uris::DocumentElementURI,_fors:VecSet<flams_ontology::uris::SymbolURI>) {}
     fn open_section(&mut self,_uri:flams_ontology::uris::DocumentElementURI) {}
     fn set_document_title(&mut self,_title:Box<str>) {}

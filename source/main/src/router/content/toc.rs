@@ -4,7 +4,7 @@ use ftml_viewer_components::components::TOCElem;
 
 #[cfg(feature="ssr")]
 pub async fn from_document(doc:&flams_ontology::narration::documents::Document) -> (Vec<CSS>,Vec<TOCElem>) {
-  use flams_ontology::narration::{sections::Section, DocumentElement, NarrationTrait};
+  use flams_ontology::narration::{exercises::Exercise, sections::Section, DocumentElement, NarrationTrait};
   use flams_system::backend::Backend;
   let mut curr = doc.children().iter();
   let mut prefix = String::new();
@@ -14,6 +14,9 @@ pub async fn from_document(doc:&flams_ontology::narration::documents::Document) 
   loop {
     while let Some(elem) = curr.next() {
       match elem {
+        DocumentElement::Slide { .. } => {
+          ret.push(TOCElem::Slide)
+        }
         DocumentElement::Section(Section{ uri, title,children,.. }) => {
           let old = std::mem::replace(&mut curr, children.iter());
           let title = if let Some(title) = title {
@@ -42,13 +45,25 @@ pub async fn from_document(doc:&flams_ontology::narration::documents::Document) 
           })));
           prefix = if prefix.is_empty() {id.name().last_name().to_string()} else { format!("{prefix}/{}",id.name().last_name()) };
         }
+        DocumentElement::Paragraph(p) => {
+          ret.push(TOCElem::Paragraph{styles:p.styles.clone().into_vec(),kind:p.kind})
+        }
         DocumentElement::Module {  children,.. } |
         DocumentElement::Morphism {children,..} |
-        DocumentElement::MathStructure {children,..} => {
+        DocumentElement::MathStructure {children,..} |
+        DocumentElement::Extension{children,..} |
+        DocumentElement::Exercise(Exercise{children,..}) |
+        DocumentElement::SkipSection(children) => {
           let old = std::mem::replace(&mut curr, children.iter());
           stack.push((old,None));
         }
-        _ => ()
+        DocumentElement::SetSectionLevel(_) | DocumentElement::SymbolDeclaration(_) |
+        DocumentElement::SymbolReference { .. } | DocumentElement::Notation { .. } |
+        DocumentElement::VariableNotation{ .. } | DocumentElement::Variable(_) |
+        DocumentElement::Definiendum { .. } | DocumentElement::VariableReference { .. } |
+        DocumentElement::TopTerm { .. } | DocumentElement::UseModule { .. } |
+        DocumentElement::ImportModule { .. } | DocumentElement::DocumentReference { .. } => ()
+        //_ => ()
     }}
     match stack.pop() {
       None => break,
@@ -68,7 +83,7 @@ pub async fn from_document(doc:&flams_ontology::narration::documents::Document) 
           ret.push(TOCElem::Section{id,uri,title,children});
         }
       }
-      Some((iter,None)) => curr = iter
+      Some((iter,_)) => curr = iter
     }
   }
   (super::insert_base_url(css.0),ret)

@@ -4,7 +4,6 @@ use flams_ontology::uris::{DocumentURI, URIRefTrait};
 use flams_system::{backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive}, GlobalBackend}, settings::Settings};
 use flams_utils::{prelude::TreeChildIter, time::measure};
 use tower::ServiceBuilder;
-use tracing::Level;
 use flams_lsp::async_lsp::lsp_types as lsp;
 
 use crate::users::LoginState;
@@ -119,14 +118,6 @@ pub async fn lsp(on_port:tokio::sync::watch::Receiver<Option<u16>>) {
       .service(STDIOLSPServer::new_router(client,on_port))
   });
 
-  let debug = flams_system::settings::Settings::get().debug;
-
-  tracing_subscriber::fmt()
-    .with_max_level(Level::INFO)//(if debug {Level::TRACE} else {Level::INFO})
-    .with_ansi(false)
-    .with_target(true)
-    .with_writer(std::io::stderr)
-    .init();
   #[cfg(unix)]
   let (stdin,stdout) = (
     flams_lsp::async_lsp::stdio::PipeStdin::lock_tokio().expect("Failed to lock stdin"),
@@ -203,11 +194,13 @@ async fn linter() {
   let _ce = color_eyre::install();
   let mut spec = flams_system::settings::SettingsSpec::default();
   spec.lsp = true;
-  flams_system::initialize(spec);
+  flams_system::settings::Settings::initialize(spec);
+  flams_system::backend::GlobalBackend::initialize();
+  //flams_system::initialize(spec);
   let state = LSPState::default();
   let _ = GLOBAL_STATE.set(state.clone());
   tracing::info!("Waiting for stex to load...");
-  std::thread::sleep(std::time::Duration::from_secs(6));
+  std::thread::sleep(std::time::Duration::from_secs(3));
   tracing::info!("Go!");
   let (_,t) = measure(move || {
     tracing::info!("Loading all archives");

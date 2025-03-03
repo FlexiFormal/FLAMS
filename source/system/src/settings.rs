@@ -39,7 +39,7 @@ impl Debug for Settings {
 impl Settings {
     pub fn port(&self) -> u16 { self.port.load(std::sync::atomic::Ordering::Relaxed) }
     #[allow(clippy::missing_panics_doc)]
-    pub(crate) fn initialize(settings: SettingsSpec) {
+    pub fn initialize(settings: SettingsSpec) {
         SETTINGS
             .set(settings.into())
             .expect("Error initializing settings");
@@ -134,7 +134,7 @@ impl From<SettingsSpec> for Settings {
                 .server
                 .ip
                 .unwrap_or_else(|| "127.0.0.1".parse().unwrap_or_else(|_| unreachable!())),
-            admin_pwd: spec.server.admin_pwd.map(String::into_boxed_str),
+            admin_pwd: if spec.lsp {None} else {spec.server.admin_pwd.map(String::into_boxed_str)},
             database: spec.database.unwrap_or_else(|| {
                 CONFIG_DIR
                     .as_ref()

@@ -34,6 +34,53 @@ pub fn message_action<
   })
 }
 
+pub fn waiting_message_action<
+I: Clone+Send+Sync+'static,
+O,
+E:std::fmt::Display + Send + 'static,
+V: std::fmt::Display + Send + 'static,
+Fut: std::future::Future<Output = Result<O,E>> + Send + 'static
+>(
+run:impl Fn(&I) -> Fut + Send + Sync + Clone + 'static,
+msg:impl Fn(O) -> V + Send + Sync + Clone + 'static
+) -> (Action<I,()>,impl IntoView) {
+  let toaster = ToasterInjection::expect_context();
+  waiting_action(run,move |o| success_with_toaster(msg(o),toaster))
+}
+
+pub fn waiting_action<
+I: Clone+Send+Sync+'static,
+O,
+E:std::fmt::Display + Send + 'static,
+Fut: std::future::Future<Output = Result<O,E>> + Send + 'static
+>(
+run:impl Fn(&I) -> Fut + Send + Sync + Clone + 'static,
+msg:impl Fn(O) + Send + Sync + Clone + 'static
+) -> (Action<I,()>,impl IntoView) {
+  use thaw::{Dialog,DialogSurface,DialogBody};
+  use crate::components::Spinner;
+  let toaster = ToasterInjection::expect_context();
+  let open = RwSignal::new(false);
+  let a = Action::new(move |args:&I| {
+    let r = run(args);
+    open.set(true);
+    let msg = msg.clone();
+    async move {
+      match r.await {
+        Ok(r) => {
+          open.set(false);
+          msg(r);
+        }
+        Err(e) => {
+          open.set(false);
+          error_with_toaster(e,toaster)
+        }
+      }
+    }
+  });
+  (a,view!{<Dialog mask_closeable=false close_on_esc=false open=open ><DialogSurface><DialogBody><Spinner/></DialogBody></DialogSurface></Dialog>})
+}
+
 #[inline]
 pub fn error_toast(err:impl std::fmt::Display + Send + 'static) {
   let toaster = ToasterInjection::expect_context();

@@ -2,7 +2,7 @@ use flams_ontology::{narration::sections::SectionLevel, uris::{DocumentElementUR
 use flams_web_utils::inject_css;
 use leptos::{prelude::*,context::Provider};
 use web_sys::HtmlDivElement;
-use crate::{config::{IdPrefix, LogicalLevel, SectionCounters}, ts::{JsFun, JsOrRsF, NamedJsFunction, SectionContinuation, TsCont}};
+use crate::{components::counters::{LogicalLevel, SectionCounters}, config::IdPrefix, ts::{JsFun, JsOrRsF, NamedJsFunction, SectionContinuation, TsCont}};
 use super::navigation::{NavElems, SectionOrInputref};
 
 
@@ -16,10 +16,10 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
 
   let end = use_context::<OnSectionEnd>().map(|s| s.view(&uri));
   let mut counters : SectionCounters = expect_context();
-  let (style,cls) = match &mut counters.current {
+  let (style,cls) = counters.next_section() /* match counters.current_level() {
     LogicalLevel::Section(l) => {
-      *l = l.inc();
-      (None,Some(match *l {
+      counters.set_section(l.inc());
+      (None,Some(match l {
         SectionLevel::Part => "ftml-part",
         SectionLevel::Chapter => "ftml-chapter",
         SectionLevel::Section => "ftml-section",
@@ -30,7 +30,7 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
       }))
     }
     LogicalLevel::None => {
-      counters.current = LogicalLevel::Section(counters.max);
+      counters.set_section(counters.max);
       (None,Some(match counters.max {
         SectionLevel::Part => "ftml-part",
         SectionLevel::Chapter => "ftml-chapter",
@@ -42,7 +42,7 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
       }))
     }
     _ => (Some("display:content"),None)
-  };
+  } */;
 
   view!{
     <Provider value=IdPrefix(id.clone())>
@@ -87,7 +87,7 @@ impl OnSectionEnd {
 
 pub(super) fn title<V:IntoView+'static>(children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   let counters : SectionCounters = expect_context();
-  let begin = match counters.current {
+  let begin = match counters.current_level() {
     LogicalLevel::Section(l) => {
       if let Some(NarrativeURI::Element(uri)) = use_context() {
         use_context::<OnSectionBegin>().map(|s| s.view(&uri))
@@ -101,5 +101,26 @@ pub(super) fn title<V:IntoView+'static>(children:impl FnOnce() -> V + Send + 'st
   view!{
     <div class="ftml-title">{children()}</div>
     {begin}
+  }
+}
+
+
+
+pub(super) fn skip<V:IntoView+'static>(children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+  let mut counters : SectionCounters = expect_context();
+  match counters.current_level() {
+    LogicalLevel::Section(l) => {
+      counters.set_section(l.inc());
+    }
+    LogicalLevel::None => {
+      counters.set_section(counters.max);
+    }
+    _ => ()
+  };
+
+  view!{
+      <Provider value=counters>
+        {children()}
+    </Provider>
   }
 }

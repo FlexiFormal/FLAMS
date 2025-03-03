@@ -4,7 +4,6 @@ body {
 
 .ftml-part {
   counter-reset: ftml-chapter ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
-  counter-increment: ftml-part;
   & .ftml-title {
     display:block;
     font-weight: bold;
@@ -20,7 +19,6 @@ body {
 
 .ftml-chapter {
   counter-reset: ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
-  counter-increment: ftml-chapter;
   & .ftml-title {
     display:block;
     font-weight: bold;
@@ -35,7 +33,6 @@ body {
 
 .ftml-section {
   counter-reset: ftml-subsection ftml-subsubsection ftml-paragraph;
-  counter-increment: ftml-section;
   & .ftml-title {
     display:block;
     font-weight: bold;
@@ -50,7 +47,6 @@ body {
 
 .ftml-subsection {
   counter-reset: ftml-subsubsection ftml-paragraph;
-  counter-increment: ftml-subsection;
   & .ftml-title {
     display:block;
     font-weight: bold;
@@ -65,7 +61,6 @@ body {
 
 .ftml-subsubsection {
   counter-reset: ftml-paragraph;
-  counter-increment: ftml-subsubsection;
   & .ftml-title {
     display:block;
     font-weight: bold;
