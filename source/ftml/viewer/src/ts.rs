@@ -1,7 +1,7 @@
 #![allow(non_local_definitions)]
 
 use flams_utils::vecmap::VecMap;
-use ftml_viewer_components::{components::{documents::{DocumentFromURI, DocumentString, FragmentFromURI, FragmentString, FragmentStringProps}, TOCElem, TOCSource}, ts::{InputRefContinuation, JInputRefCont, JOnSectTtl, JParaCont, JSectCont, JSectContB, JSlideCont, SlideContinuation, LeptosContext, NamedJsFunction, OnSectionTitle, ParagraphContinuation, SectionContinuation, SectionContinuationB, TsCont, TsTopCont}, ExerciseOptions};
+use ftml_viewer_components::{components::{documents::{DocumentFromURI, DocumentString, FragmentFromURI, FragmentString, FragmentStringProps}, TOCElem, TOCSource}, ts::{InputRefContinuation, JInputRefCont, JOnSectTtl, JParaCont, JSectCont, JSlideCont, SlideContinuation, LeptosContext, NamedJsFunction, OnSectionTitle, ParagraphContinuation, SectionContinuation, TsCont, TsTopCont}, ExerciseOptions};
 use flams_ontology::{narration::exercises::{self, ExerciseFeedback, ExerciseResponse, Solutions}, uris::{DocumentElementURI, DocumentURI}};
 use wasm_bindgen::prelude::wasm_bindgen;
 use leptos::{context::Provider, either::Either, prelude::*};
