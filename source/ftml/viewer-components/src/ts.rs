@@ -390,11 +390,6 @@ impl TsCont {
 }
 
 ts_function!{
-  JSectContB SectionContinuationB @ "(uri: DocumentElementURI) => (LeptosContinuation | undefined)"
-  = DocumentElementURI => Option<TsCont>
-}
-
-ts_function!{
   JSectCont SectionContinuationFn @ "(uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined)"
   = (DocumentElementURI,SectionLevel) => Option<TsCont>
 }

@@ -28,7 +28,7 @@ use flams_ontology::{narration::exercises::{CognitiveDimension, ExerciseResponse
 pub use components::exercise::ExerciseOptions;
 
 
-use crate::ts::{SectionContinuationB,OnSectionTitle,ParagraphContinuation,InputRefContinuation,SlideContinuation};
+use crate::ts::{SectionContinuation,OnSectionTitle,ParagraphContinuation,InputRefContinuation,SlideContinuation};
 
 #[inline]
 pub fn is_in_ftml() -> bool {
@@ -38,7 +38,7 @@ pub fn is_in_ftml() -> bool {
 #[component(transparent)]
 pub fn FTMLGlobalSetup<Ch:IntoView+'static>(
     //#[prop(optional)] exercises:Option<ExerciseOptions>,
-    #[prop(default=None)] on_section:Option<SectionContinuationB>,
+    #[prop(default=None)] on_section:Option<SectionContinuation>,
     #[prop(default=None)] on_section_title:Option<OnSectionTitle>,
     #[prop(default=None)] on_paragraph:Option<ParagraphContinuation>,
     #[prop(default=None)] on_inpuref:Option<InputRefContinuation>,
@@ -66,7 +66,7 @@ pub fn FTMLGlobalSetup<Ch:IntoView+'static>(
 #[component]
 pub fn FTMLDocumentSetup<Ch:IntoView+'static>(
     uri:DocumentURI, 
-    #[prop(default=None)] on_section:Option<SectionContinuationB>,
+    #[prop(default=None)] on_section:Option<SectionContinuation>,
     #[prop(default=None)] on_section_title:Option<OnSectionTitle>,
     #[prop(default=None)] on_paragraph:Option<ParagraphContinuation>,
     #[prop(default=None)] on_inpuref:Option<InputRefContinuation>,
