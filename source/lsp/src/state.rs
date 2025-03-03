@@ -108,7 +108,10 @@ impl LSPState {
 
   #[must_use]#[inline]
   pub fn rustex(&self) -> &RusTeX {
-    self.rustex.get_or_init(RusTeX::get)
+    self.rustex.get_or_init(|| RusTeX::get().unwrap_or_else(|()| {
+      tracing::error!("Could not initialize RusTeX");
+      panic!("Could not initialize RusTeX")
+    }))
   }
 
   pub fn build_html(&self,uri:&UrlOrFile,client:&mut ClientSocket) -> Option<DocumentURI> {

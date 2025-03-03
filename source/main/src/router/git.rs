@@ -495,7 +495,7 @@ fn managed(name:ArchiveId,id:u64,state:&GitState,default_branch:Option<String>,g
         let QueueSignal(queue,get_queues) = expect_context();
         let commit_map:VecMap<_,_> = updates.clone().into();
         let namecl = name.clone();
-        let act = flams_web_utils::components::message_action(
+        let (act,v) = flams_web_utils::components::waiting_message_action(
           move |()| update_from_branch(queue.get_untracked(),namecl.clone(),git_url.clone(),branch.get_untracked()),
           move |(i,q)| {
             let commit = commit_map.get(&branch.get_untracked()).unwrap_or_else(|| unreachable!()).clone();
@@ -506,6 +506,7 @@ fn managed(name:ArchiveId,id:u64,state:&GitState,default_branch:Option<String>,g
         );
 
         view!{
+          {v}
           <span style="color:green">{name.to_string()}
             " (commit "{commit[..8].to_string()}") Updates available: "
           </span>
@@ -557,7 +558,7 @@ fn unmanaged(name:ArchiveId,id:u64,and_then:RwSignal<GitState>,git_url:String) -
           let name = name.clone();
           let git_url = git_url.clone();
           let commit_map : VecMap<_,_> = branches.iter().map(|b| (b.name.clone(),b.commit.clone())).collect();
-          let act = flams_web_utils::components::message_action(
+          let (act,v) = flams_web_utils::components::waiting_message_action(
             move |()| clone_to_queue(queue.get_untracked(),name.clone(),git_url.clone(),branch.get_untracked(),has_release),
             move |(i,q)| {
               let commit = commit_map.get(&branch.get_untracked()).unwrap_or_else(|| unreachable!()).clone();
@@ -566,7 +567,7 @@ fn unmanaged(name:ArchiveId,id:u64,and_then:RwSignal<GitState>,git_url:String) -
               format!("{i} jobs queued")
             }
           );
-          view!{<div style="margin-left:10px">
+          view!{<div style="margin-left:10px">{v}
           <Button size=ButtonSize::Small on_click=move |_| {act.dispatch(());}>"Add"</Button>
             " from branch: "<div style="display:inline-block;"><Combobox value=branch>{
               branches.into_iter().map(|b| {let name = b.name.clone(); view!{

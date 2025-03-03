@@ -21,6 +21,8 @@ tracing-indicatif
 /source/ts/**/package-lock.json
 /source/ts/**/*.ignore
 /source/ts/**/tsconfig.tsbuildinfo
+source/ts/**/src/stories/*
 source/ts/editor/old/**
 /rustc-ice-*
 .sqlx
+*storybook.log

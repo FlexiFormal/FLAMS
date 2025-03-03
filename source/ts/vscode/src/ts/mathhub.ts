@@ -1,10 +1,33 @@
 import * as vscode from 'vscode';
 import { get_context, FLAMSContext } from '../extension';
-import * as flams from './flams/types';
-import { FLAMSServer } from './flams/server';
+import * as FLAMS from '@kwarc/flams';
 import path from 'path';
 import * as fs from 'fs';
 import { log } from 'console';
+
+type FLAMSServer = FLAMS.FLAMSServer;
+
+export interface Settings {
+  mathhubs: string[],
+  debug:boolean,
+  server: {
+    port:number,
+    ip:string
+    database?:string
+  },
+  log_dir:string,
+  buildqueue: {
+    num_threads:number
+  }
+}
+
+async function apiSettings(server:FLAMSServer): Promise<Settings | undefined> {
+    const ret = await server.rawPostRequest<{},[Settings,any,any] | undefined>("api/settings",{});
+    if (ret) {
+      const [settings,_] = ret;
+      return settings;
+    }
+  }
 
 export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   primary_server:FLAMSServer;
@@ -19,7 +42,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   }
   async getChildren(element?: AnyMH | undefined): Promise<AnyMH[]> {
     if (!this.mathhubs) {
-      const mhs = await this.primary_server.apiSettings();
+      const mhs = await apiSettings(this.primary_server);
       if (!mhs) {
         this.mathhubs = [];
       } else {
@@ -161,7 +184,7 @@ enum LRB {
 class ArchiveGroup extends vscode.TreeItem {
   id:string;
   lr:LRB;
-  constructor(group:flams.ArchiveGroup,lr:LRB) {
+  constructor(group:FLAMS.ArchiveGroup,lr:LRB) {
     const name = group.id.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid archive group name");
@@ -178,7 +201,7 @@ class ArchiveGroup extends vscode.TreeItem {
 class Archive extends vscode.TreeItem {
   id:string;
   local:boolean;
-  constructor(archive:flams.Archive,local:boolean,mhs?:string[]) {
+  constructor(archive:FLAMS.Archive,local:boolean,mhs?:string[]) {
     const name = archive.id.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid archive name");
@@ -207,7 +230,7 @@ class Dir extends vscode.TreeItem {
   archive:Archive;
   rel_path:string;
 
-  constructor(archive:Archive,dir:flams.Directory) {
+  constructor(archive:Archive,dir:FLAMS.Directory) {
     const name = dir.rel_path.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid directory name");
@@ -232,7 +255,7 @@ class Dir extends vscode.TreeItem {
 class File extends vscode.TreeItem {
   archive:Archive;
   rel_path:string;
-  constructor(archive:Archive,file:flams.File) {
+  constructor(archive:Archive,file:FLAMS.File) {
     const name = path.basename(file.rel_path);
     super(name,vscode.TreeItemCollapsibleState.None);
     this.archive = archive;

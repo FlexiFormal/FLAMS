@@ -186,7 +186,7 @@ struct Cache<
 
 impl<
     T:ServerFunArgs,
-    V:Clone+for<'de> serde::Deserialize<'de>
+    V:Clone+std::fmt::Debug+for<'de> serde::Deserialize<'de>
 > Cache<T,V> {
 
     #[allow(unused_variables)]

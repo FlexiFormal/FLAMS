@@ -13,6 +13,10 @@ use std::fmt::Display;
 use std::str::{FromStr, Split};
 use triomphe::Arc;
 
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+const TS_ARCHIVE_ID: &str = "export type ArchiveId = string;";
+
 lazy_static! {
     static ref ARCHIVE_IDS: Arc<Mutex<TArcInterner<str, 4, 100>>> =
         Arc::new(Mutex::new(TArcInterner::default()));

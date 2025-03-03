@@ -162,6 +162,11 @@ impl Queue {
       let span = tracing::Span::current();
       tokio::task::spawn_blocking(move || span.in_scope(move || selfclone.run_task_async(task,id,permit)));
     }
+    loop {
+      if matches!(&*self.0.state.read(),QueueState::Running(RunningQueue{running,..}) if !running.is_empty()) {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+      } else { break }
+    }
     self.finish();
   }
 
@@ -232,15 +237,11 @@ impl Queue {
     let (idx,_) = task.steps().iter().enumerate().find(|(_,s)| s.0.target == target).unwrap_or_else(|| unreachable!());
     let mut lock = self.0.state.write();
     let QueueState::Running(ref mut state) = &mut *lock else {unreachable!()};
+    state.running.retain(|t| *t != task);
+    let eta = state.timer.update(1);
 
     match result {
       Err(_deps) => { // TODO: handle dependencies
-        self.0.backend.with_archive(task.archive().archive_id(), |a| {
-          let Some(a) = a else {return};
-          a.save(task.rel_path(), log, target,None);
-        });
-        let num = (task.steps().len() - idx) as u8;
-        state.running.retain(|t| *t != task);
         let mut found = false;
         for s in task.steps() {
           if s.0.target == target {
@@ -250,19 +251,18 @@ impl Queue {
             *s.0.state.write() = TaskState::Failed;
           }
         }
-        let eta = state.timer.update(num);
+        state.failed.push(task.clone());
+        drop(lock);
+
+        self.0.backend.with_archive(task.archive().archive_id(), |a| {
+          let Some(a) = a else {return};
+          a.save(task.rel_path(), log, target,None);
+        });
         self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
           id:task.0.id,target,eta
         });
-        state.failed.push(task);
       }
       Ok(data) => {
-        self.0.backend.with_archive(task.archive().archive_id(), |a| {
-          let Some(a) = a else {return};
-          a.save(task.rel_path(), log,target, Some(data));
-        });
-        state.running.retain(|t| *t != task);
-
         let mut found = false;
         let mut requeue = false;
         for s in task.steps() {
@@ -275,14 +275,22 @@ impl Queue {
             break
           }
         }
-        let eta = state.timer.update(1);
+        if requeue { state.queue.push_front(task.clone());}
+        else {state.done.push(task.clone());}
+        drop(lock);
+
+        self.0.backend.with_archive(task.archive().archive_id(), |a| {
+          let Some(a) = a else {return};
+          a.save(task.rel_path(), log,target, Some(data));
+        });
+
+        
         self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
           id:task.0.id,target,eta
         });
-        if requeue { state.queue.push_front(task);}
-        else {state.done.push(task);}
       }
     }
+
   }
 
   fn maybe_restart(&self) {

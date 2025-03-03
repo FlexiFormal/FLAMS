@@ -58,19 +58,19 @@ pub mod fs {
     use std::path::Path;
 
     /// #### Errors
-    pub fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-        std::fs::create_dir_all(dst)?;
-        for entry in std::fs::read_dir(src)? {
-            let entry = entry?;
-            let ty = entry.file_type()?;
+    pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(),String> {
+        std::fs::create_dir_all(dst).map_err(|e| format!("{e} ({})",dst.display()) )?;
+        for entry in std::fs::read_dir(src).map_err(|e| format!("{e} ({})",src.display()))? {
+            let entry = entry.map_err(|e| format!("{e} ({})",src.display()))?;
+            let ty = entry.file_type().map_err(|e| format!("{e} ({})",entry.path().display()))?;
             let target = dst.join(entry.file_name());
             if ty.is_dir() {
                 copy_dir_all(&entry.path(), &target)?;
             } else {
-                let md = entry.metadata()?;
-                std::fs::copy(entry.path(), &target)?;
+                let md = entry.metadata().map_err(|e| format!("{e} ({})",entry.path().display()))?;
+                std::fs::copy(entry.path(), &target).map_err(|e| format!("{e} ({} => {})",entry.path().display(),target.display()))?;
                 let mtime = filetime::FileTime::from_last_modification_time(&md);
-                filetime::set_file_mtime(&target, mtime)?;
+                filetime::set_file_mtime(&target, mtime).map_err(|e| format!("{e} ({})",target.display()))?;
             }
         }
         Ok(())

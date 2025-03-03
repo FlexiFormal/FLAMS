@@ -14,7 +14,6 @@ use flams_ontology::{narration::{exercises::CognitiveDimension, LOKind}, uris::D
 use inputref::InInputRef;
 pub use inputref::{InputRef,IfInputref};
 pub use toc::*;
-pub use sections::{OnSectionBegin,OnSectionEnd};
 
 use leptos::prelude::*;
 use leptos_dyn_dom::{DomChildrenCont, DomCont, OriginalNode};

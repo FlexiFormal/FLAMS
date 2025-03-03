@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
-
-use flams_ontology::{narration::exercises::ExerciseResponse, uris::DocumentElementURI};
-use wasm_bindgen::{convert::{FromWasmAbi, IntoWasmAbi, OptionFromWasmAbi}, prelude::wasm_bindgen, JsValue};
+use leptos::prelude::*;
+use flams_ontology::{narration::{exercises::ExerciseResponse, paragraphs::ParagraphKind, sections::SectionLevel}, uris::{DocumentElementURI, DocumentURI}};
+use wasm_bindgen::{convert::{FromWasmAbi, OptionFromWasmAbi}, prelude::wasm_bindgen, JsValue};
 use web_sys::HtmlDivElement;
 
 pub trait AsTs {
@@ -34,6 +34,37 @@ impl FromTs for DocumentElementURI {
   #[inline]
   fn from_ts(v:JsValue) -> Result<Self,JsValue> {
       v.as_string().and_then(|s| s.parse().ok()).map_or(Err(v),Ok)
+  }
+}
+impl AsTs for DocumentURI {
+  #[inline]
+  fn as_ts(&self) -> JsValue {
+      JsValue::from_str(self.to_string().as_str())
+  }
+}
+impl FromTs for DocumentURI {
+  #[inline]
+  fn from_ts(v:JsValue) -> Result<Self,JsValue> {
+      v.as_string().and_then(|s| s.parse().ok()).map_or(Err(v),Ok)
+  }
+}
+impl AsTs for ParagraphKind {
+  #[inline]
+  fn as_ts(&self) -> JsValue {
+      JsValue::from_str(self.as_str())
+  }
+}
+impl FromTs for ParagraphKind {
+  #[inline]
+  fn from_ts(v:JsValue) -> Result<Self,JsValue> {
+      v.as_string().and_then(|s| s.parse().ok()).map_or(Err(v),Ok)
+  }
+}
+
+impl AsTs for SectionLevel {
+  #[inline]
+  fn as_ts(&self) -> JsValue {
+    serde_wasm_bindgen::to_value(self).expect("unreachable")
   }
 }
 
@@ -87,6 +118,8 @@ impl<T:FromTs> FromTs for Option<T> {
       }
   }
 }
+
+
 pub trait JsFunArgable:Sized {
   fn call_js<R:FromTs>(&self,j:&JsFun<Self,R>) -> Result<JsValue,JsValue>;
 }
@@ -216,7 +249,7 @@ pub use send_wrapper::SendWrapper as SendWrapperReexported;
 
 #[macro_export]
 macro_rules! ts_function {
-  ($name:ident @ $ts_type:literal = $args:ty => $ret:ty) => {
+  ($name:ident $nameB:ident @ $ts_type:literal = $args:ty => $ret:ty) => {
 
       #[cfg(feature="ts")]
       #[::wasm_bindgen::prelude::wasm_bindgen]
@@ -243,6 +276,7 @@ macro_rules! ts_function {
         }
       }
     }
+    pub type $nameB = $crate::ts::JsOrRsF<$args,$ret>;
     
   };
 }
@@ -250,7 +284,7 @@ macro_rules! ts_function {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct LeptosContext{
-  inner:std::sync::Arc<std::sync::Mutex<Option<leptos::prelude::Owner>>>
+  inner:std::sync::Arc<std::sync::Mutex<Option<Owner>>>
 }
 impl LeptosContext {
   pub fn with<R>(&self,f:impl FnOnce() -> R) -> R {
@@ -277,9 +311,9 @@ impl LeptosContext {
   }
 }
 
-impl From<leptos::prelude::Owner> for LeptosContext {
+impl From<Owner> for LeptosContext {
   #[inline]
-  fn from(value: leptos::prelude::Owner) -> Self {
+  fn from(value: Owner) -> Self {
       Self{inner:std::sync::Arc::new(std::sync::Mutex::new(Some(value)))}
   }
 }
@@ -293,11 +327,34 @@ impl AsTs for LeptosContext {
  
 #[wasm_bindgen(typescript_custom_section)]
 const TS_CONT_FUN: &'static str = r#"export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;"#;
-
 pub type TsCont = JsOrRsF<(HtmlDivElement,LeptosContext),()>;
 
+impl<Args:JsFunArgable+'static> JsOrRsF<Args,Option<TsCont>> {
+  pub fn wrap<T:IntoView>(args:&Args,children:T) -> impl IntoView {
+    if let Some(slf) = expect_context::<Option<Self>>() {
+      match slf.apply(args) {
+        Ok(Some(cont)) => {
+          let owner = Owner::current().expect("Not in a leptos reactive context!").into();
+          let rf = NodeRef::new();
+          rf.on_load(move |elem| if let Err(err) = cont.apply(&(elem,owner)) {
+            tracing::error!("Error calling continuation: {err}");
+          });
+          leptos::either::Either::Left(view!{<div node_ref=rf>{children}</div>})
+        }
+        Ok(None) => leptos::either::Either::Right(children),
+        Err(e) => {
+          tracing::error!("Error calling continuation: {e}");
+          leptos::either::Either::Right(children)
+        }
+      }
+    } else {
+      leptos::either::Either::Right(children)
+    }
+  }
+}
+
 ts_function!{
-  TsTopCont @ "LeptosContinuation"
+  TsTopCont LCont @ "LeptosContinuation"
   = (HtmlDivElement,LeptosContext) => ()
 }
 
@@ -310,20 +367,17 @@ impl TsTopCont {
 }
 
 impl TsCont {
-  pub fn view(self) -> impl leptos::prelude::IntoView {
-    use leptos::prelude::*;
+  pub fn view(self) -> impl IntoView {
     let ret = NodeRef::new();
-    let _f = Effect::new(move || 
-      if let Some(e) = ret.get() {
-        let owner = leptos::prelude::Owner::current().expect("Not in a leptos reactive context!");
-        if let Err(e) = self.apply(&(e,owner.into())) {
-          tracing::error!("Error calling continuation: {e}");
-        }
+    ret.on_load(move |e| {
+      let owner = Owner::current().expect("Not in a leptos reactive context!");
+      if let Err(e) = self.apply(&(e,owner.into())) {
+        tracing::error!("Error calling continuation: {e}");
       }
-    );
+    });
     view!(<div node_ref = ret/>)
   }
-  pub fn res_into_view(f:Result<Option<Self>,String>) -> impl leptos::prelude::IntoView {
+  pub fn res_into_view(f:Result<Option<Self>,String>) -> impl IntoView {
     match f {
       Err(e) => {
         tracing::error!("Error getting continuation: {e}");
@@ -336,6 +390,60 @@ impl TsCont {
 }
 
 ts_function!{
-  SectionContinuation @ "(uri: string) => (LeptosContinuation | undefined)"
+  JSectContB SectionContinuationB @ "(uri: DocumentElementURI) => (LeptosContinuation | undefined)"
   = DocumentElementURI => Option<TsCont>
+}
+
+ts_function!{
+  JSectCont SectionContinuationFn @ "(uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined)"
+  = (DocumentElementURI,SectionLevel) => Option<TsCont>
+}
+
+ts_function!{
+  JOnSectTtl OnSectionTitleFn @ "(uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined)"
+  = (DocumentElementURI,SectionLevel) => Option<TsCont>
+}
+
+ts_function!{
+  JParaCont ParagraphContinuation @ "(uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined)"
+  = (DocumentElementURI,ParagraphKind) => Option<TsCont>
+}
+
+ts_function!{
+  JInputRefCont InputRefContinuation @ "(uri: DocumentURI) => (LeptosContinuation | undefined)"
+  = DocumentURI => Option<TsCont>
+}
+
+ts_function!{
+  JSlideCont SlideContinuation @ "(uri: DocumentElementURI) => (LeptosContinuation | undefined)"
+  = DocumentElementURI => Option<TsCont>
+}
+
+#[derive(Clone)]
+pub struct OnSectionTitle(pub OnSectionTitleFn);
+#[derive(Clone)]
+pub struct SectionContinuation(pub SectionContinuationFn);
+
+impl SectionContinuation {
+  pub fn wrap<T:IntoView>(args:&(DocumentElementURI,SectionLevel),children:T) -> impl IntoView {
+    if let Some(slf) = expect_context::<Option<Self>>() {
+      match slf.0.apply(args) {
+        Ok(Some(cont)) => {
+          let owner = Owner::current().expect("Not in a leptos reactive context!").into();
+          let rf = NodeRef::new();
+          rf.on_load(move |elem| if let Err(err) = cont.apply(&(elem,owner)) {
+            tracing::error!("Error calling continuation: {err}");
+          });
+          leptos::either::Either::Left(view!{<div node_ref=rf>{children}</div>})
+        }
+        Ok(None) => leptos::either::Either::Right(children),
+        Err(e) => {
+          tracing::error!("Error calling continuation: {e}");
+          leptos::either::Either::Right(children)
+        }
+      }
+    } else {
+      leptos::either::Either::Right(children)
+    }
+  }
 }

@@ -2,7 +2,7 @@ use flams_ontology::{narration::paragraphs::ParagraphKind, uris::{DocumentElemen
 use flams_web_utils::inject_css;
 use leptos::{prelude::*,context::Provider};
 
-use crate::components::counters::{LogicalLevel, SectionCounters};
+use crate::{components::counters::{LogicalLevel, SectionCounters}, ts::{ParagraphContinuation, SlideContinuation}};
 
 use super::{TOCElem, TOCIter};
 
@@ -31,17 +31,17 @@ pub(super) fn paragraph<V:IntoView+'static>(kind:ParagraphKind,uri:DocumentEleme
 
   view!{
     <Provider value=counters>
-    <div class=cls style=style>{children()}</div>
+    <div class=cls style=style>{ParagraphContinuation::wrap(&(uri,kind) ,children())}</div>
     </Provider>
   }
 }
 
 pub(super) fn slide<V:IntoView+'static>(uri:DocumentElementURI,children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   inject_css("ftml-slide", include_str!("slides.css"));
-  SectionCounters::slide_inc();
-  view!(
-    <div class="ftml-slide">{children()}</div>
-  )
+  let counters = SectionCounters::slide_inc();
+  view!(<Provider value=counters>
+      <div class="ftml-slide">{SlideContinuation::wrap(&uri ,children())}</div>
+  </Provider>)
 }
 
 pub(super) fn slide_number() -> impl IntoView {

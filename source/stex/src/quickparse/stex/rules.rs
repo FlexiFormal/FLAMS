@@ -297,6 +297,15 @@ macro_rules! optargtype {
         f.write_str(stringify!($name))
       }
     }
+    impl<Pos:SourcePos> Clone for $name<Pos> {
+      fn clone(&self) -> Self {
+        match self {
+          $(
+            Self::$fieldname(v) => Self::$fieldname(v.clone())
+          ),*
+        }
+      }
+    }
     impl<'a,Pos:SourcePos,Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),MS:STeXModuleStore> 
       KeyValKind<'a,Pos,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>> for $name<Pos> {
         fn next_val(
@@ -324,6 +333,18 @@ macro_rules! optargtype {
     impl<Pos:SourcePos,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(stringify!($name))
+      }
+    }
+    impl<Pos:SourcePos,T:Clone> Clone for $name<Pos,T> {
+      fn clone(&self) -> Self {
+        match self {
+          $(
+            Self::$fieldname(v) => Self::$fieldname(v.clone())
+          ),*
+          $(, 
+            Self::$default(r,s) => Self::$default(*r,s.clone())
+          )?
+        }
       }
     }
 
@@ -397,6 +418,18 @@ macro_rules! optargtype {
     impl<Pos:SourcePos,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(stringify!($name))
+      }
+    }
+    impl<Pos:SourcePos,T:Clone> Clone for $name<Pos,T> {
+      fn clone(&self) -> Self {
+        match self {
+          $(
+            Self::$fieldname(v) => Self::$fieldname(v.clone())
+          ),*
+          $(, 
+            Self::$default(r,s) => Self::$default(*r,s.clone())
+          )?
+        }
       }
     }
 

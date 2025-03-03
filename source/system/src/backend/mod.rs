@@ -1060,6 +1060,7 @@ impl SandboxedBackend {
     fn copy_archive(&self,a:&LocalArchive) {
         let path = a.path();
         let target = self.0.path.join(a.id().as_ref());
+        if target.exists() { return }
         tracing::info!("copying archive {} to {}",a.id(),target.display());
         if let Err(e) = flams_utils::fs::copy_dir_all(path,&target) {
             tracing::error!("could not copy archive {}: {e}",a.id());

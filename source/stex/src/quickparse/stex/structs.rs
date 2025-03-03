@@ -255,7 +255,7 @@ pub enum MorphismKind {
   CopyModule,InterpretModule
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum SymnameMode<Pos:SourcePos> {
   Cap {
@@ -988,7 +988,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
         //return self.get_symbol_macro_or_name(groups,name);
         let r = self.get_symbol_macro_or_name(groups,name)?;
         if r.len() > 1 {
-          groups.tokenizer.problem(start,"Ambiguous symbol reference", DiagnosticLevel::Warning);
+          groups.tokenizer.problem(start,format!("Ambiguous symbol reference: {namestr}"), DiagnosticLevel::Warning);
         }
         return Some(r);
       } else { "" }
@@ -999,7 +999,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
     };
     let r = self.get_symbol_complex(groups, name, module, path)?;
     if r.len() > 1 {
-      groups.tokenizer.problem(start,"Ambiguous symbol reference", DiagnosticLevel::Warning);
+      groups.tokenizer.problem(start,format!("Ambiguous symbol reference: {namestr}"), DiagnosticLevel::Warning);
     }
     Some(r)
   }

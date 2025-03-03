@@ -23,7 +23,6 @@ panic = "unwind"
 strip = "symbols"
 
 [profile.dev]
-#codegen-units = 16
 split-debuginfo="unpacked"
 debug=1
 
@@ -37,10 +36,12 @@ panic = 'abort'
 opt-level = 'z'
 lto = true
 
+
 [profile.wasm-dev]
 inherits = "dev"
 opt-level = 2
 debug = true
+split-debuginfo="off"
 debug-assertions = true
 overflow-checks = true
 lto = false
@@ -87,6 +88,7 @@ const-str = "0.5"
 triomphe = "0.1"
 parking_lot = "0.12"
 serde = { version = "1", features = ["derive", "rc"] }
+serde-wasm-bindgen = "0.6"
 serde_json = { version="1",features = ["unbounded_depth"] }
 rustc-hash = "2"
 chrono = "0.4"
@@ -126,6 +128,7 @@ tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot","json"
 tracing-error = "0.2"
 
 toml = "0.8"
+# eyre = "0.6"
 color-eyre = "0.6"
 clap = { version="4.5",features=["derive"] }
 
@@ -157,6 +160,7 @@ leptos = { version = "0.7"}#, features=["nightly"]}
 leptos_axum = "0.7"
 leptos_meta= "0.7"
 leptos_router = { version = "0.7"}#, features=["nightly"]}
+# leptos_use = {version="0.15", default-features = false}
 
 #thaw = { version="0.4.2",features=["nightly"] }
 #thaw_components = "0.3"
@@ -202,9 +206,9 @@ js-sys = "0.3"
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
 # leptos-dyn-dom = { path="../leptos_dyn_dom"}
 RusTeX = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
-# RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 tex_engine = {git = "https://github.com/Jazzpirate/RusTeX",features = ["multithreaded"]}
-# tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
+#RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
+#tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
 
 #leptos_hot_reload = {version="=0.7.0-rc0"}
 #leptos_server = {version="=0.7.0-beta5"}

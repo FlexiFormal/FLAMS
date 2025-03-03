@@ -2,7 +2,7 @@ use flams_ontology::{narration::sections::SectionLevel, uris::{DocumentElementUR
 use flams_web_utils::inject_css;
 use leptos::{prelude::*,context::Provider};
 use web_sys::HtmlDivElement;
-use crate::{components::counters::{LogicalLevel, SectionCounters}, config::IdPrefix, ts::{JsFun, JsOrRsF, NamedJsFunction, SectionContinuation, TsCont}};
+use crate::{components::counters::{LogicalLevel, SectionCounters}, config::IdPrefix, ts::{JsFun, JsOrRsF, NamedJsFunction, OnSectionTitle, SectionContinuation, TsCont}};
 use super::navigation::{NavElems, SectionOrInputref};
 
 
@@ -14,43 +14,24 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
   });
   inject_css("ftml-sections", include_str!("sections.css"));
 
-  let end = use_context::<OnSectionEnd>().map(|s| s.view(&uri));
+  //let end = use_context::<OnSectionEnd>().map(|s| s.view(&uri));
   let mut counters : SectionCounters = expect_context();
-  let (style,cls) = counters.next_section() /* match counters.current_level() {
-    LogicalLevel::Section(l) => {
-      counters.set_section(l.inc());
-      (None,Some(match l {
-        SectionLevel::Part => "ftml-part",
-        SectionLevel::Chapter => "ftml-chapter",
-        SectionLevel::Section => "ftml-section",
-        SectionLevel::Subsection => "ftml-subsection",
-        SectionLevel::Subsubsection => "ftml-subsubsection",
-        SectionLevel::Paragraph => "ftml-paragraph",
-        SectionLevel::Subparagraph => "ftml-subparagraph",
-      }))
-    }
-    LogicalLevel::None => {
-      counters.set_section(counters.max);
-      (None,Some(match counters.max {
-        SectionLevel::Part => "ftml-part",
-        SectionLevel::Chapter => "ftml-chapter",
-        SectionLevel::Section => "ftml-section",
-        SectionLevel::Subsection => "ftml-subsection",
-        SectionLevel::Subsubsection => "ftml-subsubsection",
-        SectionLevel::Paragraph => "ftml-paragraph",
-        SectionLevel::Subparagraph => "ftml-subparagraph",
-      }))
-    }
-    _ => (Some("display:content"),None)
-  } */;
+  let (style,cls) = counters.next_section();
+  let lvl = counters.current_level();
 
   view!{
     <Provider value=IdPrefix(id.clone())>
-      <Provider value=NarrativeURI::Element(uri)>
+      <Provider value=NarrativeURI::Element(uri.clone())>
       <Provider value=counters>
       <div id=id style=style class=cls>
-        {children()}
-        {end}
+        {
+          if let LogicalLevel::Section(lvl) = lvl {
+            leptos::either::Either::Left(SectionContinuation::wrap(&(uri,lvl) ,children()))
+          } else {
+            leptos::either::Either::Right(children())
+          }
+        }
+        //{end}
       </div>
       </Provider>
       </Provider>
@@ -58,39 +39,14 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
   }
 }
 
-type SectCont = JsOrRsF<DocumentElementURI,Option<TsCont>>;
-
-#[derive(Clone)]
-pub struct OnSectionBegin(SectCont);
-impl OnSectionBegin {
-    pub fn view(&self,uri:&DocumentElementURI) -> impl IntoView {
-      TsCont::res_into_view(self.0.apply(uri))
-    }
-  
-    pub fn set(f:SectCont) {
-        //let f = Self(StoredValue::new(send_wrapper::SendWrapper::new(f)));
-        provide_context(Self(f));
-    }
-}
-#[derive(Clone)]
-pub struct OnSectionEnd(SectCont);
-impl OnSectionEnd {
-    pub fn view(&self,uri:&DocumentElementURI) -> impl IntoView {
-      TsCont::res_into_view(self.0.apply(uri))
-    }
-
-    pub fn set(f:SectCont) {
-        //let f = Self(StoredValue::new(send_wrapper::SendWrapper::new(f)));
-        provide_context(Self(f));
-    }
-}
-
 pub(super) fn title<V:IntoView+'static>(children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   let counters : SectionCounters = expect_context();
   let begin = match counters.current_level() {
     LogicalLevel::Section(l) => {
       if let Some(NarrativeURI::Element(uri)) = use_context() {
-        use_context::<OnSectionBegin>().map(|s| s.view(&uri))
+        expect_context::<Option<OnSectionTitle>>().map(|s| 
+          TsCont::res_into_view(s.0.apply(&(uri,l)))
+        )
       } else {
         tracing::error!("Sectioning error");
         None
