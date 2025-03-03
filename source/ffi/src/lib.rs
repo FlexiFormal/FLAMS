@@ -11,45 +11,58 @@ use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::ops::Deref;
 use std::path::Path;
-use std::process::exit;
+use std::sync::Arc;
 use flams_lsp::documents::LSPDocument;
 use flams_lsp::state::DocData::{Data, Doc};
 use flams_lsp::state::UrlOrFile::File;
+
+use serde::Serialize;
 
 extern crate tokio;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn hello_world(arg: usize) {
+    // use this as a test to see if the FFI works
     println!("Hi from Rust! arg: {}", arg);
 }
 
 static GLOBAL_STATE: std::sync::OnceLock<LSPState> = std::sync::OnceLock::new();
 
+pub fn to_json<T: Serialize>(data: &T) -> *const libc::c_char {
+    CString::new(serde_json::to_string(data).unwrap()).unwrap().into_raw()
+}
+
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn get_file_json(path: *const libc::c_char) -> *const libc::c_char {
-    let path_str: &str = std::ffi::CStr::from_ptr(path).to_str().unwrap();
+    let path_str: &str = unsafe { CStr::from_ptr(path).to_str().unwrap() };
     let state = GLOBAL_STATE.get().unwrap();
     let binding = state.documents.read();
     let doc = binding.get(&File(Path::new(path_str).into()));
     match doc {
         Some(Data(data, _)) => {
-            // lspdoc.compute_annots(state.clone());
-            CString::new(serde_json::to_string(&data.lock().annotations).unwrap()).unwrap().into_raw()
+            to_json(&data.lock().annotations)
         }
-        Some(Doc(lspdoc)) => {
-            // println!("is doc");
-            CString::new("").unwrap().into_raw()
-        }
-        None => {
-            // println!("No document found for {:?}", path_str);
-            CString::new("").unwrap().into_raw()
-        }
+        Some(Doc(_lspdoc)) => { CString::new("").unwrap().into_raw() }
+        None => { CString::new("").unwrap().into_raw() }
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn free_string(s: *mut libc::c_char) {
+pub unsafe extern "C" fn get_all_files() -> *const libc::c_char {
+    let state = GLOBAL_STATE.get().unwrap();
+    let binding = state.documents.read();
+    let paths: Vec<&str> = binding.keys().map(|k| {
+        match k {
+            File(p) => p.as_ref().to_str().unwrap(),
+            _ => ""
+        }
+    }).filter(|s| !s.is_empty()).collect();
+    to_json(&paths)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_string(s: *mut libc::c_char) {
     unsafe {
         if s.is_null() {
             return;
@@ -68,6 +81,15 @@ pub extern "C" fn initialize_lspstate() {
     tracing::info!("FINISHED");
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn reload_document(path: *const libc::c_char) {
+    let path_str: &str = unsafe { CStr::from_ptr(path) }.to_str().unwrap();
+    let state = GLOBAL_STATE.get().unwrap();
+    let lspdoc = LSPDocument::new("".to_string(), File(Path::new(path_str).into()));
+    state.load_all(
+        vec!((Path::new(path_str).into(), lspdoc.document_uri().unwrap().clone())).into_iter(), |_,_| {});
+}
+
 async fn linter() {
     tracing_subscriber::fmt().init();
     let _ce = color_eyre::install();
@@ -75,8 +97,6 @@ async fn linter() {
     spec.lsp = true;
     flams_system::settings::Settings::initialize(spec);
     GlobalBackend::initialize();
-    // println!("Mathhubs: {:?}", spec.mathhubs);
-    // flams_system::initialize(spec);
     let state = LSPState::default();
     let _ = GLOBAL_STATE.set(state.clone());
     let (_,t) = measure(move || {
@@ -101,36 +121,3 @@ async fn linter() {
     });
     tracing::info!("initialized after {t}");
 }
-
-
-/*
-#[unsafe(no_mangle)]
-pub extern "C" fn print_docs() {
-    let state = GLOBAL_STATE.get().unwrap();
-    for (uri,doc) in state.documents.read().iter() {
-        println!("{:?} -> ...",uri);
-        match state.documents.read().get(uri) {
-            Some(lspdoc) => {
-                println!("  YES1");
-            }
-            None => {
-                println!("  NO1");
-            }
-        }
-        match doc {
-            Doc(lspdoc) => {
-                println!("  (doc) ");
-            }
-            Data(stpd, _) => {
-                println!("  (data)");
-                // println!("      {:?}", serde_json::json!(stpd.lock().annotations[0]).to_string())
-                // println!("      {:?}", stpd.lock().annotations[0])
-                /*{
-                    println!("    {:?}",a);
-                }*/
-            }
-        }
-    }
-    // println!("{:?}", state.get(File(Cow::Borrowed("file:///home/alex/Downloads/Flams/Flams/flams-system/src/settings.rs"))).);
-}
-*/
