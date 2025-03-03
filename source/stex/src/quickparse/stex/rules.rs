@@ -335,7 +335,7 @@ macro_rules! optargtype {
         f.write_str(stringify!($name))
       }
     }
-    impl<Pos:SourcePos,T:Clone> Clone for $name<Pos,T> {
+    impl<Pos:SourcePos,T:Clone+CondSerialize> Clone for $name<Pos,T> {
       fn clone(&self) -> Self {
         match self {
           $(
@@ -420,7 +420,7 @@ macro_rules! optargtype {
         f.write_str(stringify!($name))
       }
     }
-    impl<Pos:SourcePos,T:Clone> Clone for $name<Pos,T> {
+    impl<Pos:SourcePos,T:Clone+CondSerialize> Clone for $name<Pos,T> {
       fn clone(&self) -> Self {
         match self {
           $(
