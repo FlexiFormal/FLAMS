@@ -8,6 +8,10 @@ use std::num::NonZeroUsize;
 use std::str::FromStr;
 use triomphe::Arc;
 
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+const TS_NAME: &str = "export type Name = string;";
+
 lazy_static! {
     pub(super) static ref NAMES: Arc<Mutex<TArcInterner<str, 4, 100_000>>> =
         Arc::new(Mutex::new(TArcInterner::default()));

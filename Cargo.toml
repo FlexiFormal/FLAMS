@@ -23,7 +23,6 @@ panic = "unwind"
 strip = "symbols"
 
 [profile.dev]
-#codegen-units = 16
 split-debuginfo="unpacked"
 debug=1
 
@@ -37,10 +36,12 @@ panic = 'abort'
 opt-level = 'z'
 lto = true
 
+
 [profile.wasm-dev]
 inherits = "dev"
 opt-level = 2
 debug = true
+split-debuginfo="off"
 debug-assertions = true
 overflow-checks = true
 lto = false
@@ -87,6 +88,7 @@ const-str = "0.5"
 triomphe = "0.1"
 parking_lot = "0.12"
 serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
 serde_json = { version="1",features = ["unbounded_depth"] }
 rustc-hash = "2"
 chrono = "0.4"

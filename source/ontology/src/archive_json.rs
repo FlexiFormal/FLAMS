@@ -79,6 +79,8 @@ impl DocumentKind {
 
 #[derive(serde::Serialize, serde::Deserialize,Debug,Clone)]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum Institution {
   #[serde(rename = "university")]
   University {
@@ -147,6 +149,8 @@ pub struct PreInstance {
 }
 
 #[derive(serde::Serialize,serde::Deserialize,Clone,Debug)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type")]
 pub enum ArchiveIndex {
     #[serde(rename = "library")]
@@ -273,6 +277,8 @@ impl ArchiveIndex {
 }
 
 #[derive(serde::Serialize,serde::Deserialize,Clone,Debug)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Instance {
     semester:Box<str>,
     instructors:Option<Box<[Box<str>]>>,

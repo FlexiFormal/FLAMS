@@ -4,18 +4,30 @@ use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[non_exhaustive]
 pub enum Language {
     #[default]
+    #[cfg_attr(feature = "serde", serde(rename = "en"))]
     English,
+    #[cfg_attr(feature = "serde", serde(rename = "de"))]
     German,
+    #[cfg_attr(feature = "serde", serde(rename = "fr"))]
     French,
+    #[cfg_attr(feature = "serde", serde(rename = "ro"))]
     Romanian,
+    #[cfg_attr(feature = "serde", serde(rename = "ar"))]
     Arabic,
+    #[cfg_attr(feature = "serde", serde(rename = "bg"))]
     Bulgarian,
+    #[cfg_attr(feature = "serde", serde(rename = "ru"))]
     Russian,
+    #[cfg_attr(feature = "serde", serde(rename = "fi"))]
     Finnish,
+    #[cfg_attr(feature = "serde", serde(rename = "tr"))]
     Turkish,
+    #[cfg_attr(feature = "serde", serde(rename = "sl"))]
     Slovenian,
 }
 impl Language {

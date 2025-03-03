@@ -23,8 +23,8 @@ jobs:
         run: cargo make
       - name: vscode extension
         run: cargo make vscode
-      - name: ts
-        run: cd source/ftml/viewer && cargo make wasm-pack-ts
+  #    - name: ts
+  #      run: cd source/ftml/viewer && cargo make wasm-pack-ts
       - name: doc
         run: cargo make doc
       - name: Remove lock file
@@ -40,11 +40,11 @@ jobs:
         with:
           name: linux
           path: bin
-      - name: Upload Typescript
-        uses: actions/upload-artifact@v4
-        with:
-          name: ts
-          path: source/ftml/viewer/ts
+  #    - name: Upload Typescript
+  #      uses: actions/upload-artifact@v4
+  #      with:
+  #        name: ts
+  #        path: source/ftml/viewer/ts
       - name: Upload VSCode Extension
         uses: actions/upload-artifact@v4
         with:
@@ -125,10 +125,10 @@ jobs:
           path: ./mac
       - name: Set executable
         run: chmod +x ./mac/flams
-      - uses: actions/download-artifact@v4
-        with:
-          name: ts
-          path: ./ts
+    #  - uses: actions/download-artifact@v4
+    #    with:
+    #      name: ts
+    #      path: ./ts
       - uses: actions/download-artifact@v4
         with:
           name: vscode
@@ -145,10 +145,10 @@ jobs:
         with:
           files: mac/
           dest: mac.zip
-      - uses: vimtor/action-zip@v1
-        with:
-          files: ts/
-          dest: ts.zip
+    #  - uses: vimtor/action-zip@v1
+    #    with:
+    #      files: ts/
+    #      dest: ts.zip
       - uses: vimtor/action-zip@v1
         with:
           files: ./linux/web/ftml.js ./linux/web/ftml_bg.wasm
@@ -163,9 +163,9 @@ jobs:
             ./linux.zip
             ./windows.zip
             ./mac.zip
-            ./ts.zip
             ./ftml.zip
             ./vscode/flams.vsix
+    #        ./ts.zip
   deploy-docs:
     needs: linux
     permissions:

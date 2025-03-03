@@ -429,7 +429,6 @@ pub enum CheckedResult {
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 //#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct ExerciseResponse {
-    #[cfg_attr(feature="wasm", tsify(type = "string"))]
     pub uri:DocumentElementURI,
     #[cfg_attr(feature="wasm", tsify(type = "ExerciseResponseType[]"))]
     pub responses:SmallVec<ExerciseResponseType,4>
@@ -501,6 +500,8 @@ impl NarrationTrait for Exercise<Checked> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum CognitiveDimension {
     Remember,
     Understand,

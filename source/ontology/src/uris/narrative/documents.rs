@@ -11,6 +11,11 @@ lazy_static::lazy_static! {
     static ref NO_DOCUMENT:DocumentURI = "http://unknown.source?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
 }
 
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+const TS_URI: &str = "export type DocumentURI = string;";
+
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct DocumentURI {
     pub(in crate::uris) path: PathURI,
