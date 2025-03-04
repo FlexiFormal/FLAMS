@@ -7,6 +7,6 @@
     "ssr" // "hydrate"//
   ], // "all"
   "search.useIgnoreFiles": false,
-  "rust-analyzer.rustfmt.overrideCommand":["leptosfmt"],
+  //"rust-analyzer.rustfmt.overrideCommand":["leptosfmt"],
   "dependi.rust.lockFileEnabled": true
 }

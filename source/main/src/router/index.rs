@@ -19,7 +19,7 @@ tokio::task::spawn_blocking(|| {
 
 #[component]
 pub fn Index() -> impl IntoView {
-  flams_web_utils::inject_css("flams-index-card", ".flams-index-card{max-width:400px;margin:10px;}");
+  flams_web_utils::inject_css("flams-index-card", ".flams-index-card{max-width:400px !important;margin:10px !important;}");
   from_server_fnonce(false, index, |(is,idxs)| {
     let mut libraries = Vec::new();
     let mut books = Vec::new();
