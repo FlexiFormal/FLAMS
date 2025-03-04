@@ -9,7 +9,6 @@ pub mod formats;
 #[cfg(feature = "tokio")]
 pub mod logging;
 pub mod settings;
-pub mod settings;
 
 use backend::GlobalBackend;
 use building::queue_manager::QueueManager;
