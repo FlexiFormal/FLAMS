@@ -4,7 +4,7 @@ import { register_commands, register_server_commands, Settings } from './ts/comm
 import { setup } from './ts/setup';
 import { Versions } from './ts/versions';
 import * as language from 'vscode-languageclient/node';
-import { FLAMSServer } from './ts/flams/server';
+import { FLAMSServer } from '@kwarc/flams';
 //import * as ws from 'ws';
 
 export async function activate(context: vscode.ExtensionContext) {

@@ -15,6 +15,11 @@ wasm-opt = ['-Oz','--enable-bulk-memory','--all-features']
 [package.metadata.wasm-pack.profile.dev]
 wasm-opt = false
 
+[package.metadata.wasm-pack.profile.dev.wasm-bindgen]
+debug-js-glue = true
+demangle-name-section = true
+dwarf-debug-info = true
+
 [features]
 ssr = [] # just to make documentation happy
 ts = ["ftml-viewer-components/ts","dep:tsify-next","dep:serde","flams-utils/wasm","dep:wasm-bindgen-futures","flams-ontology/wasm"]

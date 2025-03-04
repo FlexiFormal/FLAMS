@@ -16,6 +16,15 @@ pub enum ExerciseOptions {
   WithFeedback(VecMap<DocumentElementURI,ExerciseFeedback>),
   WithSolutions(VecMap<DocumentElementURI,Solutions>)
 }
+impl std::fmt::Debug for ExerciseOptions {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      ExerciseOptions::OnResponse(_) => write!(f,"OnResponse"),
+      ExerciseOptions::WithFeedback(v) => write!(f,"WithFeedback({})",v.0.len()),
+      ExerciseOptions::WithSolutions(v) => write!(f,"WithSolutions({})",v.0.len()),
+    } 
+  }
+}
 
 #[derive(Clone,Debug)]
 pub struct CurrentExercise {
@@ -75,14 +84,20 @@ pub(super) fn exercise<V:IntoView+'static>(uri:&DocumentElementURI,autogradable:
   let is_done = with_context(|opt:&ExerciseOptions|
     match opt { 
       ExerciseOptions::WithFeedback(m) => {
+        tracing::debug!("Exercise: Reusing feedback");
         if let Some(fb) = m.get(&ex.uri) {
           ex.feedback.update_untracked(|v| *v = Some(fb.clone()));
           leptos::either::Either::Left(true)
         } else { leptos::either::Either::Left(false) }
       }
-      ExerciseOptions::OnResponse(f) =>
-        leptos::either::Either::Right(f.clone()),
-      ExerciseOptions::WithSolutions(_) => leptos::either::Either::Left(false)
+      ExerciseOptions::OnResponse(f) => {
+        tracing::debug!("Exercise: Using onResponse callback");
+        leptos::either::Either::Right(f.clone())
+      }
+      ExerciseOptions::WithSolutions(_) => {
+        tracing::debug!("Exercise: Reusing solution");
+        leptos::either::Either::Left(false)
+      }
     }
   ).unwrap_or(leptos::either::Either::Left(false));
   let uri = ex.uri.clone();

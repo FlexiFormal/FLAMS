@@ -27,14 +27,8 @@ use crate::extractor::NodeAttrs;
 use flams_ontology::{narration::exercises::{CognitiveDimension, ExerciseResponse, Solutions}, uris::{DocumentElementURI, DocumentURI, NarrativeURI, URI}};
 pub use components::exercise::ExerciseOptions;
 
-/*
-#[derive(Debug,Clone,Default,serde::Serialize,serde::Deserialize)]
-#[cfg_attr(feature="ts",derive(tsify_next::Tsify))]
-#[cfg_attr(feature="ts",tsify(into_wasm_abi, from_wasm_abi))]
-pub struct ExerciseOptions {
-  pub responses:VecMap<DocumentElementURI,(Solutions,ExerciseResponse)>
-}
-*/
+
+use crate::ts::{SectionContinuation,OnSectionTitle,ParagraphContinuation,InputRefContinuation,SlideContinuation};
 
 #[inline]
 pub fn is_in_ftml() -> bool {
@@ -44,6 +38,12 @@ pub fn is_in_ftml() -> bool {
 #[component(transparent)]
 pub fn FTMLGlobalSetup<Ch:IntoView+'static>(
     //#[prop(optional)] exercises:Option<ExerciseOptions>,
+    #[prop(default=None)] on_section:Option<SectionContinuation>,
+    #[prop(default=None)] on_section_title:Option<OnSectionTitle>,
+    #[prop(default=None)] on_paragraph:Option<ParagraphContinuation>,
+    #[prop(default=None)] on_inpuref:Option<InputRefContinuation>,
+    #[prop(default=None)] on_slide:Option<SlideContinuation>,
+    #[prop(default=None)] exercise_opts:Option<ExerciseOptions>,
     children: TypedChildren<Ch>
 ) -> impl IntoView {
     let children = children.into_inner();
@@ -53,6 +53,12 @@ pub fn FTMLGlobalSetup<Ch:IntoView+'static>(
     provide_context(NarrativeURI::Document(DocumentURI::no_doc()));
     provide_context(FTMLConfig::new());
     provide_context(RwSignal::new(None::<Vec<TOCElem>>));
+    provide_context(on_section);
+    provide_context(on_section_title);
+    provide_context(on_paragraph);
+    provide_context(on_inpuref);
+    provide_context(on_slide);
+    if let Some(exercise_opts) = exercise_opts { provide_context(exercise_opts); }
     //provide_context(exercises.unwrap_or_default());
     children()
 }
@@ -60,6 +66,12 @@ pub fn FTMLGlobalSetup<Ch:IntoView+'static>(
 #[component]
 pub fn FTMLDocumentSetup<Ch:IntoView+'static>(
     uri:DocumentURI, 
+    #[prop(default=None)] on_section:Option<SectionContinuation>,
+    #[prop(default=None)] on_section_title:Option<OnSectionTitle>,
+    #[prop(default=None)] on_paragraph:Option<ParagraphContinuation>,
+    #[prop(default=None)] on_inpuref:Option<InputRefContinuation>,
+    #[prop(default=None)] on_slide:Option<SlideContinuation>,
+    #[prop(default=None)] exercise_opts:Option<ExerciseOptions>,
     children: TypedChildren<Ch>
 ) -> impl IntoView {
     use crate::components::navigation::{Nav,NavElems,URLFragment};
@@ -76,6 +88,12 @@ pub fn FTMLDocumentSetup<Ch:IntoView+'static>(
     provide_context(RwSignal::new(None::<Vec<TOCElem>>));
     provide_context(URLFragment::new());
     provide_context(NarrativeURI::Document(uri));
+    if let Some(on_section) = on_section { provide_context(Some(on_section));}
+    if let Some(on_section_title) = on_section_title { provide_context(Some(on_section_title));}
+    if let Some(on_paragraph) = on_paragraph { provide_context(Some(on_paragraph));}
+    if let Some(on_inpuref) = on_inpuref { provide_context(Some(on_inpuref));}
+    if let Some(on_slide) = on_slide { provide_context(Some(on_slide));}
+    if let Some(exercise_opts) = exercise_opts { provide_context(exercise_opts);}
     let r = children();
     view! {
         <Nav/>
@@ -153,6 +171,8 @@ pub static RULES:[FTMLExtractionRule<DOMExtractor>;48] = [
 ];
 
 #[cfg_attr(all(feature="csr",not(feature="ts")),wasm_bindgen::prelude::wasm_bindgen)]
+#[cfg_attr(any(not(feature="csr"),feature="ts"),wasm_bindgen::prelude::wasm_bindgen(module="/ftml-top.js"))]
+/*
 #[cfg_attr(all(not(feature="csr"),not(feature="ts")),wasm_bindgen::prelude::wasm_bindgen(module="/ftml-top.js"))]
 #[cfg_attr(feature="ts",wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
 export function hasFtmlAttribute(node) {
@@ -185,6 +205,7 @@ export function setServerUrl(url) {
   set_server_url(url);
 }
 "#))]
+ */
 extern "C" {
     #[wasm_bindgen::prelude::wasm_bindgen(js_name = "hasFtmlAttribute")]
     fn has_ftml_attribute(node: &leptos::web_sys::Node) -> bool;

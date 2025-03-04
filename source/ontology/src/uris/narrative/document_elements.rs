@@ -8,6 +8,11 @@ use std::str::{FromStr, Split};
 
 use super::NarrativeURI;
 
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+const TS_URI: &str = "export type DocumentElementURI = string;";
+
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct DocumentElementURI {
     pub(in crate::uris) document: DocumentURI,

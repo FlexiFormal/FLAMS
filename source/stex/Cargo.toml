@@ -3,6 +3,9 @@ name = "flams-stex"
 version = "0.0.1"
 edition = "2021"
 
+[features]
+serde = ["dep:serde"]
+
 [dev-dependencies]
 tracing-subscriber = {workspace = true}
 
@@ -22,6 +25,7 @@ paste = {workspace = true}
 either = {workspace = true}
 lazy_static = { workspace = true }
 smallvec = {workspace = true}
+serde = {workspace = true, optional = true}
 
 [lints]
 workspace = true

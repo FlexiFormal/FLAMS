@@ -3,11 +3,7 @@ pub mod directives;
 
 use crate::quickparse::tokens::TeXToken;
 use flams_ontology::languages::Language;
-use flams_utils::{
-    parsing::{ParseSource, ParseStr, StringOrStr},
-    prelude::*,
-    sourcerefs::{SourcePos, SourceRange},
-};
+use flams_utils::{parsing::{ParseSource, ParseStr, StringOrStr}, prelude::*, sourcerefs::{SourcePos, SourceRange}, CondSerialize};
 use rules::{AnyEnv, AnyMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule};
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry};
@@ -927,7 +923,7 @@ impl<'a,
 
 pub trait KeyValValues<'a,
     Pos:SourcePos,
-    T:FromLaTeXToken<'a,Pos,&'a str>,
+    T: FromLaTeXToken<'a,Pos,&'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State:ParserState<'a,ParseStr<'a,Pos>,T,Err>
 >:Sized+Default {
@@ -1010,7 +1006,7 @@ pub trait KeyValValues<'a,
 
 pub trait KeyValKind<'a,
     Pos:SourcePos,
-    T:FromLaTeXToken<'a,Pos,&'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State:ParserState<'a,ParseStr<'a,Pos>,T,Err>
 >:Sized {
@@ -1021,7 +1017,7 @@ pub trait KeyValKind<'a,
 }
 impl<'a,
     Pos:SourcePos,
-    T:FromLaTeXToken<'a,Pos,&'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State:ParserState<'a,ParseStr<'a,Pos>,T,Err>,
     K:KeyValKind<'a,Pos,T,Err,State>
@@ -1042,20 +1038,22 @@ impl<'a,
 }
 
 #[derive(Clone,Debug)]
-pub struct ParsedKeyValue<Pos:SourcePos,T> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ParsedKeyValue<Pos:SourcePos, T: CondSerialize> {
     pub key_range: SourceRange<Pos>,
     pub val_range: SourceRange<Pos>,
     pub val: T
 }
+
 pub trait KeyValParsable<'a,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
->:Sized+'a {
+>:Sized+'a+CondSerialize {
     fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
-        -> Option<Self>;
-    fn parse_key_val(parser:&mut KeyValParser<'a,'_,Pos,T,Err,State>) -> Option<ParsedKeyValue<Pos,Self>> {
+                           -> Option<Self>;
+    fn parse_key_val(parser:&mut KeyValParser<'a,'_,Pos,T,Err,State>) -> Option<ParsedKeyValue<Pos, Self>> {
         Self::parse_key_val_inner(parser).map(|val| ParsedKeyValue {
             key_range:parser.key_range,
             val_range:SourceRange{start:parser.start,end:parser.value_end},
@@ -1064,9 +1062,10 @@ pub trait KeyValParsable<'a,
     }
 }
 
+
 impl<'a,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > KeyValParsable<'a,Pos,T,Err,State> for () {
@@ -1080,7 +1079,7 @@ impl<'a,
 
 impl<'a,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > KeyValParsable<'a,Pos,T,Err,State> for Language {
@@ -1101,7 +1100,7 @@ impl<'a,
 
 impl<'a,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > KeyValParsable<'a,Pos,T,Err,State> for Box<str> {
@@ -1115,7 +1114,7 @@ impl<'a,
 }
 impl<'a,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str> + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize + 'a,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > KeyValParsable<'a,Pos,T,Err,State> for Vec<T> {
@@ -1128,7 +1127,7 @@ impl<'a,
 }
 impl<'a,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str> + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > KeyValParsable<'a,Pos,T,Err,State> for u8 {
@@ -1140,7 +1139,7 @@ impl<'a,
 
 pub struct KeyValParser<'a,'b,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 >{
@@ -1153,16 +1152,17 @@ pub struct KeyValParser<'a,'b,
 }
 impl<'a,'b,
     Pos:SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > KeyValParser<'a,'b,Pos,T,Err,State> {
     #[inline]
-    pub fn parse<R:KeyValParsable<'a,Pos,T,Err,State>>(&mut self) -> Option<ParsedKeyValue<Pos,R>> {
+    pub fn parse<R:KeyValParsable<'a,Pos,T,Err,State> + CondSerialize>(&mut self) -> Option<ParsedKeyValue<Pos,R>> {
         R::parse_key_val(self)
     }
-    #[inline] 
-    pub fn to_key_value<Tp>(&self,val:Tp) -> ParsedKeyValue<Pos,Tp> {
+
+    #[inline]
+    pub fn to_key_value<Tp: CondSerialize>(&self,val:Tp) -> ParsedKeyValue<Pos,Tp> {
         ParsedKeyValue {
             key_range:self.key_range,
             val_range:SourceRange{start:self.start,end:self.value_end},
@@ -1284,7 +1284,7 @@ impl<'a,'b,
 
 impl<'a,
     Pos:SourcePos,
-    T: FromLaTeXToken<'a, Pos, &'a str>,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
     State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
 > LaTeXParser<'a, ParseStr<'a,Pos>,T,Err,State> {
@@ -1547,7 +1547,7 @@ fn join_strs(first:&str,rest:SmallVec<&str,2>) -> String {
 
 impl<'a,
     Pa: ParseSource<'a>,
-    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
+    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str> + CondSerialize,
     Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel),
     State: ParserState<'a,Pa,T,Err>
 > Iterator

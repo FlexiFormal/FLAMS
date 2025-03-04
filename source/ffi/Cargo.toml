@@ -1,0 +1,26 @@
+[package]
+name = "flams-ffi"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+tracing-subscriber = {workspace=true}
+color-eyre = {workspace=true}
+tracing = {workspace=true}
+tokio = {workspace=true,features = ["full","rt","rt-multi-thread"]}
+
+flams-system = {workspace=true}
+flams-lsp = {workspace=true}
+flams-utils = {workspace=true,features=["serde"]}
+flams-ontology = {workspace=true,features = ["serde"]}
+serde = {workspace=true}
+serde_json = {workspace = true}
+flams-stex = {workspace=true, features = ["serde"]}
+libc = "0.2.170"
+
+
+[lints]
+workspace = true

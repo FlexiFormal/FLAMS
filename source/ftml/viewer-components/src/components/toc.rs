@@ -10,6 +10,7 @@ use crate::components::navigation::NavElems;
 
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 #[cfg_attr(feature="ts", derive(tsify_next::Tsify))]
+#[serde(untagged)]
 /// A Table of contents; Either:
 /// 1. an already known TOC, consisting of a list of [`TOCElem`]s, or
 /// 2. the URI of a Document. In that case, the relevant FLAMS server
@@ -17,7 +18,6 @@ use crate::components::navigation::NavElems;
 pub enum TOC {
     Full(Vec<TOCElem>),
     Get(
-      #[cfg_attr(feature="ts", tsify(type = "string"))]
       DocumentURI
     )
 }
@@ -25,6 +25,7 @@ pub enum TOC {
 
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize,PartialEq)]
 #[cfg_attr(feature="ts", derive(tsify_next::Tsify))]
+#[serde(tag = "type")]
 /// An entry in a table of contents. Either:
 /// 1. a section; the title is assumed to be an HTML string, or
 /// 2. an inputref to some other document; the URI is the one for the
@@ -34,7 +35,6 @@ pub enum TOCElem {
   /// A section; the title is assumed to be an HTML string
   Section{
     title:Option<String>,
-    #[cfg_attr(feature="ts", tsify(type = "string"))]
     uri:DocumentElementURI,
     id:String,
     children:Vec<TOCElem>
@@ -42,14 +42,12 @@ pub enum TOCElem {
   /// An inputref to some other document; the URI is the one for the
   /// referenced Document.
   Inputref{
-    #[cfg_attr(feature="ts", tsify(type = "string"))]
     uri:DocumentURI,
     title:Option<String>,
     id:String,
     children:Vec<TOCElem>
   },
   Paragraph{
-    #[cfg_attr(feature="ts", tsify(type = "string[]"))]
     styles:Vec<Name>,
     kind:ParagraphKind,
   },

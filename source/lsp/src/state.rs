@@ -95,7 +95,7 @@ impl std::fmt::Display for UrlOrFile {
 
 #[derive(Default,Clone)]
 pub struct LSPState {
-  pub(crate) documents: triomphe::Arc<parking_lot::RwLock<HMap<UrlOrFile,DocData>>>,
+  pub documents: triomphe::Arc<parking_lot::RwLock<HMap<UrlOrFile,DocData>>>,
   rustex: triomphe::Arc<std::sync::OnceLock<RusTeX>>,
   backend:TemporaryBackend
 }

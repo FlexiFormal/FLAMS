@@ -93,7 +93,7 @@ fn side_menu(page:Page) -> impl IntoView {
             <NavItem value="home" href="/">"Home"</NavItem>
             <NavItem value="mathhub" href="/dashboard/mathhub">"MathHub"</NavItem>
             <NavItem value="query" href="/dashboard/query">"Queries"</NavItem>
-            {move || match LoginState::get() {
+            {move || {let s = LoginState::get(); match s {
                 LoginState::NoAccounts => leptos::either::EitherOf5::A(view!{
                     <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                     <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
@@ -115,7 +115,7 @@ fn side_menu(page:Page) -> impl IntoView {
                     <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
                 }),
                 LoginState::None | LoginState::Loading => leptos::either::EitherOf5::E(())
-            }}
+            }}}
         </NavDrawer>
     }
 }

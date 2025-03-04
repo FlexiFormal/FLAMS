@@ -97,7 +97,7 @@ impl<'a,const FULL:bool> LSPStore<'a,FULL> {
     }
   }
 
-  fn load(&mut self,p:&Path,uri:&DocumentURI) -> Option<STeXParseData> {
+  pub fn load(&mut self, p:&Path, uri:&DocumentURI) -> Option<STeXParseData> {
     let text = std::fs::read_to_string(p).ok()?;
     let r = flams_stex::quickparse::stex::quickparse(
       uri,&text, p,

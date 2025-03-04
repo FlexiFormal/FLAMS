@@ -123,6 +123,7 @@ workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
 args = ["leptos","build"]
+dependencies = ["db"]
 # dependencies = ["build-viewer","copy-viewer","db"]
 
 [tasks.watch]

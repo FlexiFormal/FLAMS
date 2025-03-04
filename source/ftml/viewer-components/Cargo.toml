@@ -31,6 +31,7 @@ urlencoding = {workspace=true}
 send_wrapper = {workspace=true}
 wasm-bindgen = {workspace=true}
 serde = {workspace = true,features=["derive"]}
+serde-wasm-bindgen = {workspace=true}
 either = {workspace = true, features=["serde"]}
 icondata_bi = {workspace = true}
 icondata_ai = {workspace = true}

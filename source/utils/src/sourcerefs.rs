@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
+use crate::CondSerialize;
 
-pub trait SourcePos: Clone + Copy + Default + Debug + PartialOrd + Ord + 'static {
+pub trait SourcePos: Clone + Copy + Default + Debug + PartialOrd + Ord + 'static + CondSerialize {
     fn update(&mut self, c: char);
     fn update_newline(&mut self, rn: bool);
     fn update_str_no_newline(&mut self, s: &str);
