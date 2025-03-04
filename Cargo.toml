@@ -6,7 +6,7 @@ members = [
   "source/stex","source/ftml/system",
   "source/ftml/viewer", 
   "source/ftml/viewer-components", "source/ftml/extraction",
-  "source/git","source/experiments"
+  "source/git"#,"source/experiments"
   #"source/vscode"
   ]
 resolver = "2"
