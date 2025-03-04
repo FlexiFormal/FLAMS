@@ -285,8 +285,8 @@ impl ServerState {
 fn shell(options: LeptosOptions) -> impl IntoView {
     use thaw::ssr::SSRMountStyleProvider;
     view! {
-        <!DOCTYPE html>
         <SSRMountStyleProvider>
+            <!DOCTYPE html>
             <html lang="en">
                 <head>
                     <meta charset="utf-8"/>

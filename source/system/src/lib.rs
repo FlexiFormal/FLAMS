@@ -4,6 +4,7 @@
 
 pub mod backend;
 pub mod settings;
+#[cfg(feature="tokio")]
 pub mod logging;
 pub mod formats;
 pub mod building;
@@ -22,6 +23,7 @@ pub fn initialize(settings: SettingsSpec) {
         use tracing_subscriber::layer::SubscriberExt;
         use tracing_subscriber::Layer;
         use tracing::Level;
+        #[cfg(feature="tokio")]
         let logger = logging::LogStore::new();
         let debug = settings.debug;
         let level = if debug {Level::TRACE} else {Level::INFO};
@@ -33,13 +35,17 @@ pub fn initialize(settings: SettingsSpec) {
           .with_writer(std::io::stderr)
           .with_filter(tracing::level_filters::LevelFilter::from(Level::INFO))
           ;//.init();
+        #[cfg(feature="tokio")]
         let sub = tracing_subscriber::registry()
           .with(logger.with_filter(tracing::level_filters::LevelFilter::from(level)))
           .with(l);
+        #[cfg(not(feature="tokio"))]
+        let sub = tracing_subscriber::registry().with(l);
         tracing::subscriber::set_global_default(sub).expect(
           "Failed to set global default logging subscriber"
         );
     } else {
+        #[cfg(feature="tokio")]
         logging::LogStore::initialize();
     }
     tracing::info_span!(target:"initializing",parent:None,"initializing").in_scope(move || {
