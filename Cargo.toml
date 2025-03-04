@@ -6,7 +6,7 @@ members = [
   "source/stex","source/ftml/system",
   "source/ftml/viewer", 
   "source/ftml/viewer-components", "source/ftml/extraction",
-  "source/git"
+  "source/git","source/experiments"
   #"source/vscode"
   ]
 resolver = "2"
@@ -83,6 +83,8 @@ flams-web-utils = { path = "source/web-utils",version="0.0.1" }
 ftml-extraction = { path = "source/ftml/extraction",version="0.0.1" }
 ftml-viewer-components = { path = "source/ftml/viewer-components",version="0.0.1" }
 
+rstest= {version="0.25"}
+
 # utils
 const-str = "0.5"
 triomphe = "0.1"
@@ -139,7 +141,6 @@ oxrdfio = { version = "0.1"}#, features = ["async-tokio"] }
 
 sqlx = {version="0.8", features=["sqlite","macros","runtime-tokio"]}
 libsqlite3-sys = {version="*",features=["bundled"]}
-rstest = "0.24"
 html5ever = "0.29.0"
 
 async-lsp = {version="0.2",features=["tokio","async-io"]}

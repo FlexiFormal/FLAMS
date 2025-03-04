@@ -366,7 +366,7 @@ impl GitRepo {
         Some(&mut merge_options),
         Some(&mut checkout_options),
       )?;
-      /*let sig = self.0.signature()?;
+      let sig = self.0.signature()?;
       let tree_id = self.0.index()?.write_tree()?;
       let tree = self.0.find_tree(tree_id)?;
       self.0.commit(
@@ -375,8 +375,7 @@ impl GitRepo {
         &format!("Merge commit {}",commit.id().to_string()), 
         &tree, 
         &[&parent,&commit]
-      ).map(|_| ())*/
-      Ok(())
+      ).map(|_| ())
     })
   }
 
