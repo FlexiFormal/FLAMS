@@ -101,7 +101,7 @@ fn do_components<const MATH:bool>(skip:usize,elements:FTMLElements,orig:Original
         use leptos::context::Provider;
         let in_inputref = use_context::<InInputRef>().map(|i| i.0).unwrap_or(false);
         update_context::<SectionCounters,_>(|current| {
-          if matches!(current.current_level(),LogicalLevel::None) { 
+          if !in_inputref && matches!(current.current_level(),LogicalLevel::None) { 
             current.max = *level;
           } else if !in_inputref {
             tracing::error!("ftml:set-section-level: Section already started");

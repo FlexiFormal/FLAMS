@@ -6,9 +6,10 @@ members = [
   "source/stex","source/ftml/system",
   "source/ftml/viewer", 
   "source/ftml/viewer-components", "source/ftml/extraction",
-  "source/git"#,"source/experiments"
-  #"source/vscode"
-  , "source/ffi"]
+  "source/git",#"experiments"
+  #"source/vscode",
+  "source/ffi"
+]
 resolver = "2"
 exclude = ["old"#"web/graphs","test-plugin","tests","thaw",
   #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm"

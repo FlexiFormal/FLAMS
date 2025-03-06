@@ -2,6 +2,7 @@ use super::{checking::DocumentChecker, paragraphs::ParagraphKind, sections::Sect
 use crate::{uris::{DocumentURI, Name}, Checked, CheckingState, Resolvable, Unchecked};
 use core::str;
 use std::{borrow::Cow, fmt::Debug, str::FromStr};
+use flams_utils::prelude::{TreeChild, TreeChildIter, TreeLike};
 use triomphe::Arc;
 
 #[derive(Debug,Clone,Default)]
@@ -80,6 +81,10 @@ impl Document {
     pub fn styles(&self) -> &DocumentStyles {
         &self.0.styles
     }
+    #[inline]
+    pub fn dfs(&self) -> impl Iterator<Item=&DocumentElement<Checked>> {
+        <_ as TreeChildIter<Self>>::dfs(NarrationTrait::children(self).iter())
+    }
 }
 
 impl NarrationTrait for Document {
@@ -118,6 +123,19 @@ mod serde_impl {
 }
 
 pub type UncheckedDocument = OpenDocument<Unchecked>;
+
+impl TreeLike for Document {
+    type Child<'a> = &'a DocumentElement<Checked>;
+    type RefIter<'a> = std::slice::Iter<'a,DocumentElement<Checked>>;
+    fn children(&self) -> Option<Self::RefIter<'_>> {
+        Some(NarrationTrait::children(self).iter())
+    }
+}
+impl<'a> TreeChild<Document> for &'a DocumentElement<Checked> {
+    fn children<'b>(&self) -> Option<std::slice::Iter<'a,DocumentElement<Checked>>> where Self:'b {
+        Some(NarrationTrait::children(*self).iter())
+    }
+}
 
 
 impl UncheckedDocument {
