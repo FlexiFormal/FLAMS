@@ -39,7 +39,7 @@ impl Queue {
             let mut changed = false;
             for t in &tasks {
                 let mut has_failed = false;
-                // finding the first occurance of the task that is not done. It can be see in the predicate of matches!()
+                // finding the first occurance of the task that is not done and task that is not failed
                 let Some(step) = t.steps().iter().find(|s| {
                     let state = s.0.state.read();
                     if *state == TaskState::Failed {
