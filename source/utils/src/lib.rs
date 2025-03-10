@@ -126,13 +126,13 @@ macro_rules! impossible {
         #[cfg(debug_assertions)]
         { unreachable!() }
         #[cfg(not(debug_assertions))]
-        { unsafe{ std::hin::unreachable_unchecked() } }
+        { unsafe{ std::hint::unreachable_unchecked() } }
     };
     ($s:literal) => {
         #[cfg(debug_assertions)]
         { panic!($s) }
         #[cfg(not(debug_assertions))]
-        { unsafe{ std::hin::unreachable_unchecked() } }
+        { unsafe{ std::hint::unreachable_unchecked() } }
     };
     (?) => { unreachable!() };
     (? $s:literal) => {
