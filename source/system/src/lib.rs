@@ -8,6 +8,8 @@ pub mod settings;
 pub mod logging;
 pub mod formats;
 pub mod building;
+#[cfg(feature="tantivy")]
+pub mod search;
 
 use building::queue_manager::QueueManager;
 use formats::FLAMSExtension;

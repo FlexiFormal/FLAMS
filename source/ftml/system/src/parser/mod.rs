@@ -225,18 +225,21 @@ impl TreeSink for HTMLParser<'_> {
               if let Some(newsrc) = self.extractor.borrow().backend.archive_of(path, |a,rp| {
                 format!("srv:/img?a={}&rp={}",a.id(),&rp[1..])
               }) {
-                attributes.set("src",&newsrc);
+                attributes.set("src","");
+                attributes.new_attr("data-flams-src",newsrc);
               } else {
                 let kpsewhich = &*tex_engine::engine::filesystem::kpathsea::KPATHSEA;
                 let last = src.rsplit_once('/').map_or(src,|(_,p)| p);
                 if let Some(file) = kpsewhich.which(last) {
                   if file == path {
                     let file = format!("srv:/img?kpse={last}");
-                    attributes.set("src",&file);
+                    attributes.set("src","");
+                    attributes.new_attr("data-flams-src",file);
                   }
                 } else {
                   let file = format!("srv:/img?file={src}");
-                  attributes.set("src",&file);
+                  attributes.set("src","");
+                  attributes.new_attr("data-flams-src",file);
                 }
                 // TODO
               };

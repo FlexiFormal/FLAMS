@@ -166,11 +166,11 @@ pub mod froms {
 }
 
 #[inline]
-pub(crate) fn uses(header:&'static str,uses:Vec<ModuleURI>) -> impl IntoView {
+pub fn uses(header:&'static str,uses:Vec<ModuleURI>) -> impl IntoView {
   comma_sep(header,uses.into_iter().map(|m|module_name(&m)))
 }
 
-pub(crate) fn comma_sep<V:IntoView>(header:&'static str,mut elems:impl Iterator<Item=V>) -> impl IntoView {
+pub fn comma_sep<V:IntoView>(header:&'static str,mut elems:impl Iterator<Item=V>) -> impl IntoView {
   let first = elems.next()?;
   Some(view!{
     <div style="display:inline-block;width:max-content;">
@@ -179,7 +179,7 @@ pub(crate) fn comma_sep<V:IntoView>(header:&'static str,mut elems:impl Iterator<
   })
 }
 
-pub(crate) fn module_name(uri:&ModuleURI) -> impl IntoView {
+pub fn module_name(uri:&ModuleURI) -> impl IntoView {
   use flams_web_utils::components::{Popover,OnClickModal,PopoverTrigger};
   use thaw::Scrollbar;
   let name = uri.name().last_name().to_string();
@@ -209,7 +209,7 @@ pub(crate) fn module_name(uri:&ModuleURI) -> impl IntoView {
   }
 }
 
-pub(crate) fn doc_name(uri:&DocumentURI,title:String) -> impl IntoView {
+pub fn doc_name(uri:&DocumentURI,title:String) -> impl IntoView {
   use flams_web_utils::components::{Popover,PopoverTrigger};
   let uristring = uri.to_string();
   view!{
@@ -221,7 +221,7 @@ pub(crate) fn doc_name(uri:&DocumentURI,title:String) -> impl IntoView {
     </div>
   }
 }
-pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,title:String) -> impl IntoView {
+pub fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,title:String) -> impl IntoView {
   use flams_web_utils::components::{Popover,PopoverTrigger};
   let uristring = uri.to_string();
   view!{
@@ -243,7 +243,7 @@ pub(crate) fn doc_elem_name(uri:DocumentElementURI,kind:Option<&'static str>,tit
 }
 
 #[inline]
-pub(crate) fn symbol_name(uri:&SymbolURI,title:&str) -> impl IntoView {
+pub fn symbol_name(uri:&SymbolURI,title:&str) -> impl IntoView {
   const TERM:&str = FTMLKey::Term.attr_name();
   const HEAD:&str = FTMLKey::Head.attr_name();
   const COMP:&str = FTMLKey::Comp.attr_name();

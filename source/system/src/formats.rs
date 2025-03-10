@@ -147,6 +147,41 @@ impl OMDocResult {
     }
   }
 
+  #[cfg(feature="tokio")]
+  pub(crate) async fn load_html_full_async(path:std::path::PathBuf) -> Option<String> {
+    use std::io::SeekFrom;
+    use tokio::io::{AsyncSeekExt,AsyncReadExt};
+    //println!("loading {path:?}");
+    let file = tokio::fs::File::open(path).await.ok()?;
+    let mut file = tokio::io::BufReader::new(file);
+    let mut buf = [0;20];
+    file.read_exact(&mut buf).await.ok()?;
+    let css_offset = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]);
+    let css_len = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]);
+    let html_start = 20 + css_offset + css_len;
+    
+    file.seek(SeekFrom::Start(u64::from(html_start))).await.ok()?;
+    let mut ret = String::new();
+    file.read_to_string(&mut ret).await.ok()?;
+    Some(ret)
+  }
+
+  pub(crate) fn load_html_full(path:std::path::PathBuf) -> Option<String> {
+    use std::io::{Seek,SeekFrom};
+    let file = std::fs::File::open(path).ok()?;
+    let mut file = std::io::BufReader::new(file);
+    let mut buf = [0;20];
+    file.read_exact(&mut buf).ok()?;
+    let css_offset = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]);
+    let css_len = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]);
+    let html_start = 20 + css_offset + css_len;
+    
+    file.seek(SeekFrom::Start(u64::from(html_start))).ok()?;
+    let mut ret = String::new();
+    file.read_to_string(&mut ret).ok()?;
+    Some(ret)
+  }
+
   pub(crate) fn load_html_fragment(path:&Path,range:DocumentRange) -> Option<(Vec<CSS>,String)> {
     use std::io::{Seek,SeekFrom};
     let file = std::fs::File::open(path).ok()?;

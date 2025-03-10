@@ -190,6 +190,162 @@ macro_rules! rdft {
 }
 
 pub mod ontologies {
+    /*! # RDF Ontology Summary
+     * 
+     * #### [`Document`](crate::narration::documents::Document) `D`
+     * | struct | field | triple |
+     * | -----  | ----- | ------ |
+     * |   |    | `D` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#document>`](ulo2::DOCUMENT) |
+     * |   | language `l` | `D` [`<dc:#language>`](dc::LANGUAGE) `l` |
+     * |   | archive `A`  | `A` [`<ulo:#contains>`](ulo2::CONTAINS) `D` |
+     * | [`DocumentReference`](crate::narration::DocumentElement::DocumentReference) | [`.target`](crate::narration::DocumentElement::DocumentReference::target)`=D2` | `D` [`<dc:#hasPart>`](dc::HAS_PART) `D2` |
+     * | [`UseModule`](crate::narration::DocumentElement::UseModule) | `(M)` | `D` [`<dc:#requires>`](dc::REQUIRES) `M` |
+     * 
+     * #### [`Module`](crate::content::modules::Module) `M`
+     * | struct | field | triple |
+     * | -----  | ----- | ------ |
+     * |   |    | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `M` |
+     * |   |    | `M` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#theory>`](ulo2::THEORY) |
+     * | [`Import`](crate::content::declarations::OpenDeclaration::Import) | `(M2)` | `M` [`<ulo:#imports>`](ulo2::IMPORTS) `M2` |
+     * | [`NestedModule`](crate::content::declarations::OpenDeclaration::NestedModule) | `(M2)` | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `M2` |
+     * |   |    | `M` [`<ulo:#contains>`](ulo2::CONTAINS) `M2` |
+     * |   |    | `M2` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#theory>`](ulo2::THEORY) |
+     * | [`MathStructure`](crate::content::declarations::OpenDeclaration::MathStructure) | `(S)` | `M` [`<ulo:#contains>`](ulo2::CONTAINS) `S` |
+     * |   |    | `S` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#structure>`](ulo2::STRUCTURE) |
+     * |   | [`Import`](crate::content::declarations::OpenDeclaration::Import)(`S2`)   | `S` [`<ulo:#extends>`](ulo2::EXTENDS) `S2` |
+     * | [`Morphism`](crate::content::declarations::OpenDeclaration::Morphism) | `(F)` | `M` [`<ulo:#contains>`](ulo2::CONTAINS) `F` |
+     * |   |    | `F` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#morphism>`](ulo2::MORPHISM) |
+     * |   | [`.domain`](crate::content::declarations::morphisms::Morphism)`=M2`   | `F` [`<rdfs:#domain>`](rdfs::DOMAIN) `M2` |
+     * 
+     */
+
+     /*
+    use crate::content::declarations::OpenDeclaration;
+    use crate::narration::DocumentElement::Paragraph;
+    use crate::content::declarations::morphisms::Morphism;
+
+    paragraph:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let doc =  extractor.get_document_iri();
+        let iri = uri.to_iri();
+        if kind.is_definition_like(&styles) {
+            for (f,_) in fors.iter() {
+                extractor.add_triples([
+                    triple!(<(iri.clone())> ulo:DEFINES <(f.to_iri())>)
+                ]);
+
+            }
+        } else if kind == ParagraphKind::Example {
+            for (f,_) in fors.iter() {
+                extractor.add_triples([
+                    triple!(<(iri.clone())> ulo:EXAMPLE_FOR <(f.to_iri())>)
+                ]);
+
+            }
+        }
+        extractor.add_triples([
+            triple!(<(iri.clone())> : <(kind.rdf_type().into_owned())>),
+            triple!(<(doc)> ulo:CONTAINS <(iri)>)
+        ]);
+    }
+
+    extractor.add_document_element(DocumentElement::Paragraph(
+        LogicalParagraph {
+            range: node.range(),kind,inline,styles,
+            fors,uri,children,title
+        }
+    ));
+
+    exercise:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let doc =  extractor.get_document_iri();
+        let iri = uri.to_iri();
+        for (d,s) in &preconditions {
+            let b = flams_ontology::rdf::BlankNode::default();
+            extractor.add_triples([
+                triple!(<(iri.clone())> ulo:PRECONDITION (b.clone())!),
+                triple!((b.clone())! ulo:COGDIM <(d.to_iri().into_owned())>),
+                triple!((b)! ulo:POSYMBOL <(s.to_iri())>)
+            ]);
+        }
+        for (d,s) in &objectives {
+            let b = flams_ontology::rdf::BlankNode::default();
+            extractor.add_triples([
+                triple!(<(iri.clone())> ulo:OBJECTIVE (b.clone())!),
+                triple!((b.clone())! ulo:COGDIM <(d.to_iri().into_owned())>),
+                triple!((b)! ulo:POSYMBOL <(s.to_iri())>)
+            ]);
+        }
+
+        extractor.add_triples([
+            if sub_exercise {
+                triple!(<(iri.clone())> : ulo:SUBPROBLEM)
+            } else {
+                triple!(<(iri.clone())> : ulo:PROBLEM)
+            },
+            triple!(<(doc)> ulo:CONTAINS <(iri)>)
+        ]);
+    }
+
+    symdecl:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        if let Some(m) = extractor.get_content_iri() {
+            let iri = uri.to_iri();
+            extractor.add_triples([
+                triple!(<(iri.clone())> : ulo:DECLARATION),
+                triple!(<(m)> ulo:DECLARES <(iri)>),
+            ]);
+        }
+    }
+
+    vardecl:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let iri = uri.to_iri();
+        extractor.add_triples([
+            triple!(<(iri.clone())> : ulo:VARIABLE),
+            triple!(<(extractor.get_document_iri())> ulo:DECLARES <(iri)>),
+        ]);
+    }
+
+    notation:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let iri = uri.to_iri();
+        extractor.add_triples([
+            triple!(<(iri.clone())> : ulo:NOTATION),
+            triple!(<(iri.clone())> ulo:NOTATION_FOR <(symbol.to_iri())>),
+            triple!(<(extractor.get_document_iri())> ulo:DECLARES <(iri)>),
+        ]);
+    }
+
+    symref:
+    #[cfg(feature="rdf")]
+    if E::RDF { 
+        let iri = extractor.get_document_iri();
+        extractor.add_triples([
+            triple!(<(iri)> ulo:CROSSREFS <(uri.to_iri())>)
+        ]);
+    }
+
+    varref:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let iri = extractor.get_document_iri();
+        extractor.add_triples([
+            triple!(<(iri)> ulo:CROSSREFS <(uri.to_iri())>)
+        ]);
+    }
+
+
+
+    
+
+     */
+
     pub mod rdf {
         pub use oxrdf::vocab::rdf::*;
     }
@@ -344,9 +500,12 @@ pub mod ontologies {
             $($($quad:tt)*;)*
         ) => {
             pub mod $name {
+                #![doc=concat!("`",$uri,"`")]
                 use super::super::terms::*;
+                #[doc=concat!("`",$uri,"`")]
                 pub const NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
                 $(
+                    #[doc=concat!("`",$uri,"#",$l,"`")]
                     pub const $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
                 )*
 
@@ -358,9 +517,12 @@ pub mod ontologies {
             $($sub:expr,$pred:expr,$obj:expr;)*
         ) => {
             pub mod $name {
+                #![doc=concat!("`",$uri,"`")]
                 use super::super::*;
+                #[doc=concat!("`",$uri,"`")]
                 pub const NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
                 $(
+                    #[doc=concat!("`",$uri,"#",$l,"`")]
                     pub const $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
                 )*
 

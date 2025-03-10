@@ -96,7 +96,7 @@ pub fn Burger<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView 
 
 #[component]
 pub fn ClientOnly<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-  let mut children = std::cell::Cell::new(Some(children.into_inner()));
+  let children = std::cell::Cell::new(Some(children.into_inner()));
   let sig = RwSignal::new(false);
   let rf = NodeRef::new();
   rf.on_load(move |_| sig.set(true));

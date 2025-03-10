@@ -60,6 +60,7 @@ impl GitLabOAuth {
         vs.insert(super::ProjectWithId { project: p.clone(), id: None });
       }
     }
+    drop(vs);
     Ok(r)
   }
 
@@ -88,6 +89,7 @@ impl GitLabOAuth {
           v.id = Some($v.clone());
           lock.insert(v);
         }
+        drop(lock);
         return Ok($v);
       }}
     }

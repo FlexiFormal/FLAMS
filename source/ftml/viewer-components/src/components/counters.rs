@@ -52,7 +52,7 @@ impl std::ops::Add<Self> for AllSections {
   type Output = Self;
   fn add(self, rhs: Self) -> Self::Output {
     let mut changed = false;
-    AllSections([
+    let r= AllSections([
       {if rhs.0[0]>0 {changed = true}; self.0[0]+rhs.0[0]},
       {if rhs.0[1]>0 {changed=true}; self.0[1]+rhs.0[1] },
       {if changed {0} else {if rhs.0[2]>0 {changed=true} self.0[2]+rhs.0[2] }},
@@ -60,12 +60,15 @@ impl std::ops::Add<Self> for AllSections {
       {if changed {0} else {if rhs.0[4]>0 {changed=true} self.0[4]+rhs.0[4] }},
       {if changed {0} else {if rhs.0[5]>0 {changed=true} self.0[5]+rhs.0[5] }},
       {if changed {0} else {if rhs.0[6]>0 {changed=true} self.0[6]+rhs.0[6] }},
-    ])
+    ]);
+    //tracing::warn!("updating {self:?}+{rhs:?}={r:?}");
+    r
   }
 }
 
 impl std::ops::AddAssign<Self> for AllSections {
   fn add_assign(&mut self, rhs: Self) {
+    //tracing::warn!("updating {self:?}+{rhs:?}");
     let mut changed = false;
     if rhs.0[0] > 0 {changed=true}; self.0[0]+=rhs.0[0];
     if rhs.0[1] > 0 {changed=true;} self.0[1]+=rhs.0[1];
@@ -74,6 +77,7 @@ impl std::ops::AddAssign<Self> for AllSections {
     if changed {self.0[4] = 0} else {if rhs.0[4] > 0 {changed=true;} self.0[4]+=rhs.0[4];}
     if changed {self.0[5] = 0} else {if rhs.0[5] > 0 {changed=true;} self.0[5]+=rhs.0[5];}
     if changed {self.0[6] = 0} else {if rhs.0[6] > 0 {changed=true;} self.0[6]+=rhs.0[6];}
+    //tracing::warn!(" = {self:?}");
   }
 }
 
@@ -277,6 +281,7 @@ impl SectionCounters {
     } else if self.current == LogicalLevel::None { self.max } else {
       return ((Some(Memo::new(|_| "display:content;".into())),None));
     };
+    //tracing::warn!("New section at level {lvl:?}");
     self.set_section(lvl);
     let sections = self.sections.0.get_untracked();
     (match lvl {
@@ -471,6 +476,8 @@ fn update(ch:&[TOCElem],
   let mut n_sections = AllSections::default();
   let mut n_counters = old_paras.0.iter().map(|(n,(_,i))| (n.clone(),*i)).collect::<VecMap<_,_>>();
 
+  //tracing::warn!("Updating inputref: {ch:?} in level {current:?}");
+
   loop {
     if let Some(c) = curr.next() {
       match c {
@@ -486,8 +493,8 @@ fn update(ch:&[TOCElem],
           stack.push((std::mem::replace(&mut curr,children.iter()),old)); 
         }
         TOCElem::Inputref { children,.. } => {
-          let old = std::mem::replace(&mut current,LogicalLevel::Paragraph);
-          stack.push((std::mem::replace(&mut curr,children.iter()),old));
+          //let old = std::mem::replace(&mut current,LogicalLevel::Paragraph);
+          stack.push((std::mem::replace(&mut curr,children.iter()),current));
         }
         TOCElem::Paragraph { styles, kind } => {
           if let Some(n) = SectionCounters::get_counter(para_map,*kind,styles) {
@@ -503,6 +510,7 @@ fn update(ch:&[TOCElem],
     } else { break }
   }
 
+  //tracing::warn!("Seting inpuref sections to {n_sections:?}");
   //leptos::logging::log!("Setting cutoffs");
   old_slides.set(n_slides);
   old_sections.set(n_sections);

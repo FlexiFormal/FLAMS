@@ -164,6 +164,16 @@ pub enum URIComponents {
     s:String
   }
 }
+impl From<DocURIComponents> for URIComponents {
+  fn from(value: DocURIComponents) -> Self {
+      match value {
+        DocURIComponents::Uri(u) => URIComponents::Uri(URI::Narrative(u.into())),
+        DocURIComponents::RelPath(a,rp) => URIComponents::RelPath(a,rp),
+        DocURIComponents::Comps { a, p, l, d } =>
+          URIComponents::DocComps{ a, p, l, d}
+      }
+  }
+}
 
 impl URIComponents {
   #[cfg(feature="ssr")]

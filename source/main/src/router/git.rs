@@ -120,9 +120,9 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
     match e {
       Right(e) => r2.push((p,id,e)),
       Left(git) => {let secret = secret.clone(); js.spawn_blocking(move || {
-        if let Ok(rid) = git.release_commit_id() {
+        if let Ok(rid) = git.current_commit() {
           let newer = git.get_new_commits_with_oauth(&secret).ok().unwrap_or_default();
-          (p,id,GitState::Live { commit:rid,updates:newer })
+          (p,id,GitState::Live { commit:rid.id,updates:newer })
         } else {
           (p,id,GitState::None)
         }
@@ -138,54 +138,6 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
   }
 
   Ok(r2)
-
-  /*
-
-
-  tokio::task::spawn_blocking(move || {
-    let backend = GlobalBackend::get();
-    let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
-    let mut manageds = backend.all_archives().iter().filter_map(|a| {
-      let Archive::Local(a) = a else {return None};
-      if !r2.iter().any(|(_,id)| id == a.id()) { return None }
-      flams_git::repos::GitRepo::open(a.path()).ok().and_then(|git| {
-        git.get_origin_url().ok().and_then(|url| {
-          if url.starts_with(gitlab_url) {
-            let newer = git.get_new_commits_with_oauth(&secret).ok().unwrap_or_default();
-            git.release_commit_id().ok().map(|id| 
-              (a.id().clone(),(url,id,newer))
-            )
-          } else {None}
-        })
-      })
-    }).collect::<VecMap<_,_>>();
-
-    use flams_system::building::{queue_manager::QueueManager,QueueName};
-    let mut building = VecMap::new();
-    QueueManager::get().with_all_queues(|qs| {
-      for (qid,q) in qs {
-        if let AnyBackend::Sandbox(sb) = q.backend() {
-          sb.with_repos(|rp| 
-            for rep in rp {
-              if let SandboxedRepository::Git { id, commit,remote,.. } = rep {
-                building.insert(id.clone(),(remote.to_string(),(*qid).into(),commit.id.clone()));
-              }
-            }
-          )
-        }
-      }
-    });
-    let ret = r2.into_iter().map(|(p,id)| {
-      let state = building.remove(&id).map(|(_,id,commit)|
-        GitState::Queued { commit, queue:id }
-      ).or_else(|| manageds.remove(&id).map(|(_,commit,updates)|
-        GitState::Live { commit,updates }
-      )).unwrap_or(GitState::None);
-      (p,id,state)
-    }).collect();
-    Ok(ret)
-  }).await.map_err(|e| ServerFnError::WrappedServerError(e.to_string()))?
-   */
 }
 
 #[server(
@@ -222,8 +174,8 @@ pub async fn update_from_branch(id:Option<NonZeroU32>,archive:ArchiveId,url:Stri
         .map_err(|e| e.to_string())?;
       repo.fetch_branch_from_oauth(&secret,&branch,false).map_err(|e| e.to_string())?;
       let commit = repo.current_commit_on(&branch).map_err(|e| e.to_string())?;
-      repo.merge(&commit.id).map_err(|e| e.to_string())?;
-      repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
+      repo.force_checkout(&commit.id).map_err(|e| e.to_string())?;
+      //repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
       backend.add(SandboxedRepository::Git { id:archive.clone(),commit,branch:branch.into(),remote:url.into() },|| ());
       let formats = backend.with_archive(&archive, |a| {
         let Some(Archive::Local(a)) = a else {
@@ -261,7 +213,7 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
       if path.exists() {
         let _ = std::fs::remove_dir_all(&path);
       }
-      let commit = if has_release {
+      let commit = /*if has_release {
         let repo = flams_git::repos::GitRepo::clone_from_oauth(&secret, &url, "release", &path, false)
           .map_err(|e| e.to_string())?;
         repo.fetch_branch_from_oauth(&secret,&branch,false).map_err(|e| e.to_string())?;
@@ -269,12 +221,12 @@ pub async fn clone_to_queue(id:Option<NonZeroU32>,archive:ArchiveId,url:String,b
         repo.merge(&commit.id).map_err(|e| e.to_string())?;
         repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
         repo.current_commit().map_err(|e| e.to_string())?
-      } else {
+      } else*/ {
         let repo = flams_git::repos::GitRepo::clone_from_oauth(&secret,&url, &branch, &path,false)
           .map_err(|e| e.to_string())?;
         let commit = repo.current_commit().map_err(|e| e.to_string())?;
-        repo.new_branch("release").map_err(|e| e.to_string())?;
-        repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
+        //repo.new_branch("release").map_err(|e| e.to_string())?;
+        //repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
         commit
       };
       backend.add(SandboxedRepository::Git { id:archive.clone(),commit,branch:branch.into(),remote:url.into() },|| ());

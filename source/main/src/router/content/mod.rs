@@ -513,6 +513,17 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
     }</div>})
 }
 
+#[component]
+pub fn DocumentInner(doc:DocURIComponents) -> impl IntoView {
+  let doc : URIComponents = doc.into();
+  from_server_clone(false,
+    move || doc.clone().into_args(fragment), 
+    |(uri,css,html)| view!{<div>{
+        for css in css { do_css(css); }
+        FragmentString(FragmentStringProps{html,uri:None})
+    }</div>})
+}
+
 // -------------------------------------------------------------
 
 

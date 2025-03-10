@@ -479,20 +479,22 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
     }
   }
 
-  fn load_rules<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(
+  fn load_rules<'b,Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(
     mod_ref:ModuleReference,
     irules:ModuleRules<LSPLineCol>,
     prev:&[STeXGroup<'a,MS,LSPLineCol,Err>],
     current:&mut HMap<Cow<'a,str>,AnyMacro<'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>>,
     changes:&mut HMap<Cow<'a,str>,Option<AnyMacro<'a,ParseStr<'a,LSPLineCol>,STeXToken<LSPLineCol>,Err,Self>>>,
     semantic_rules:&mut Vec<SemanticRule<LSPLineCol>>,
-    f: &mut impl FnMut(&ModuleReference) -> Option<ModuleRules<LSPLineCol>>
-  ) {
-    if Self::has_module(prev, semantic_rules, &mod_ref) { return }
+    f: &mut impl FnMut(&ModuleReference) -> Option<ModuleRules<LSPLineCol>>,
+    cycles_count:u16,
+  ) -> Result<(),()> {
+    if cycles_count >= 500 { return Err(()) }
+    if Self::has_module(prev, semantic_rules, &mod_ref) { return Ok(()) }
     for rule in irules.rules.iter() {
       match rule {
         ModuleRule::Import(m) => if let Some(rls) = f(m) {
-          Self::load_rules(m.clone(),rls.clone(),prev,current,changes,semantic_rules,f);
+          Self::load_rules(m.clone(),rls.clone(),prev,current,changes,semantic_rules,f,cycles_count + 1)?;
         },
         ModuleRule::Symbol(rule) if MS::FULL => {
           //symbols.push(rule.clone());
@@ -523,7 +525,8 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
         _ => ()
       }
     }
-    semantic_rules.push(SemanticRule::Module(mod_ref,irules))
+    semantic_rules.push(SemanticRule::Module(mod_ref,irules));
+    Ok(())
   }
 
   fn has_module<Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(
@@ -535,6 +538,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
       matches!(e,SemanticRule::Module(r,_) if r.uri == mod_ref.uri)
     ) { return true }
     for p in prev.iter().rev() {
+      if matches!(&p.kind,GroupKind::Module { uri, .. } if *uri == mod_ref.uri) { return true }
       if p.semantic_rules.iter().any(|e| 
         matches!(e,SemanticRule::Module(r,_) if r.uri == mod_ref.uri)
       ) { return true }
@@ -550,7 +554,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
     let prev = &*prev;
     let g = &mut after[0];
     match self.load_module(module) {
-      Ok(irules) => Self::load_rules(module.clone(),irules,
+      Ok(irules) => if Self::load_rules(module.clone(),irules,
         prev,
       groups.rules,&mut g.inner.macro_rule_changes,
         &mut g.semantic_rules,
@@ -560,8 +564,10 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
             groups.tokenizer.problem(range.start, e,DiagnosticLevel::Error);
             None
           }
-        }
-      ),
+        },0
+      ).is_err() {
+        groups.tokenizer.problem(range.start, "Import cycle",DiagnosticLevel::Error)
+      },
       Err(e) =>
         groups.tokenizer.problem(range.start, e,DiagnosticLevel::Error)
     }
@@ -741,7 +747,7 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
     }
     rules.push(ModuleRule::Import(module.clone()));
     match self.load_module(module) {
-      Ok(irules) => Self::load_rules(module.clone(),irules,
+      Ok(irules) => if Self::load_rules(module.clone(),irules,
         prev,
       groups.rules,&mut g.inner.macro_rule_changes,
         &mut g.semantic_rules,
@@ -751,8 +757,10 @@ impl<'a,MS:STeXModuleStore> STeXParseState<'a,LSPLineCol,MS> {
             groups.tokenizer.problem(range.start, e,DiagnosticLevel::Error);
             None
           }
-        }
-      ),
+        },0
+      ).is_err() {
+        groups.tokenizer.problem(range.start, "Import cycle",DiagnosticLevel::Error)
+      },
       Err(e) =>
         groups.tokenizer.problem(range.start, e,DiagnosticLevel::Error)
     }

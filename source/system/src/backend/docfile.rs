@@ -4,11 +4,7 @@ use std::{
     path::Path,
 };
 
-use flams_ontology::narration::documents::{
-    Document, UncheckedDocument
-};
-
-use super::GlobalFlattener;
+use flams_ontology::narration::documents::UncheckedDocument;
 
 /*
 #[derive(Debug)]

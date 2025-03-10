@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use either::Either;
 use ignore_regex::IgnoreSource;
 use flams_ontology::{
-    archive_json::{Institution, ArchiveIndex}, content::modules::OpenModule, file_states::FileStateSummary, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep, PathURITrait, URIOrRefTrait, URIRefTrait, URIWithLanguage}, DocumentRange, Unchecked
+    archive_json::{Institution, ArchiveIndex}, content::modules::OpenModule, file_states::FileStateSummary, languages::Language, narration::documents::UncheckedDocument, uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep, PathURITrait, URIOrRefTrait, URIRefTrait}, DocumentRange, Unchecked
 };
 use flams_utils::{
     change_listener::ChangeSender,
@@ -36,18 +36,96 @@ pub(super) struct RepositoryData {
     pub(super) index:Box<[ArchiveIndex]>
 }
 
+#[cfg(feature="zip")]
+#[derive(Debug)]
+pub(super) struct ZipFile {
+    path:Option<std::path::PathBuf>
+}
+
+#[cfg(feature="zip")]
+impl Drop for ZipFile {
+    fn drop(&mut self) {
+        if let Some(p) = self.path.take() {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct LocalArchive {
     pub(super) data: RepositoryData,
     pub(super) out_path: std::sync::Arc<Path>,
     pub(super) ignore: IgnoreSource,
     pub(super) file_state: parking_lot::RwLock<SourceDir>,
+    #[cfg(feature="gitlab")]
+    pub(super) is_managed: std::sync::OnceLock<Option<Box<str>>>,
+    #[cfg(feature="zip")]
+    pub(super) zip_file: std::sync::Arc<std::sync::OnceLock<Option<ZipFile>>>
 }
 impl LocalArchive {
     #[inline]
     #[must_use]
     pub fn out_dir_of(p: &Path) -> PathBuf {
         p.join(".flams")
+    }
+
+    #[cfg(not(feature="gitlab"))] #[inline]
+    pub fn is_managed(&self) -> Option<&str> { None }
+
+    #[cfg(feature="zip")]
+    #[allow(clippy::cognitive_complexity)]
+    pub fn zip(&self) -> impl std::future::Future<Output=Option<PathBuf>> {
+        use flams_utils::unwrap;
+
+        if let Some(v) = self.zip_file.get() {
+            return tokio_util::either::Either::Left(std::future::ready(v.as_ref().and_then(|f| f.path.clone())))
+        }
+        let zip = self.zip_file.clone();
+        let zip2 = zip.clone();
+        let dir_path = unwrap!(self.out_path.parent()).to_path_buf();
+        tokio_util::either::Either::Right(async move {
+            let _ = tokio::task::spawn_blocking(move || {zip.get_or_init(|| {
+                let file_path = dir_path.join("zipped.tar.gz");
+                let f = std::fs::File::create(&file_path).ok()?;
+                let nf = std::io::BufWriter::new(f);
+                let nf = flate2::write::GzEncoder::new(nf, flate2::Compression::best());
+                let mut tar_file = tar::Builder::new(nf);
+                for e in std::fs::read_dir(&dir_path).ok()?.flatten() {
+                    let path = e.path();
+                    let Some(name) = path.iter().next_back() else { continue };
+                    let name = Path::new(name);
+                    if path.is_symlink() || path == file_path { continue }
+                    if path.is_dir() {
+                        if let Err(e) = tar_file.append_dir_all(name,&path) {
+                            tracing::error!("Error: {e}");
+                        }
+                    } else {
+                        let Ok(mut file) = std::fs::File::open(&path) else { continue };
+                        if let Err(e) = tar_file.append_file(name, &mut file) {
+                            tracing::error!("Error: {e}");
+                        }
+                    }
+                }
+                if let Err(e) = tar_file.finish() {
+                    tracing::error!("Error: {e}");
+                    return None
+                }
+                Some(ZipFile { path:Some(file_path)})
+            });}).await;
+            unwrap!(? zip2.get()).as_ref().and_then(|f| f.path.clone())
+        })
+    }
+
+    #[cfg(feature="gitlab")]
+    pub fn is_managed(&self) -> Option<&str> {
+        self.is_managed.get_or_init(|| {
+            let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
+            let Ok(repo) = flams_git::repos::GitRepo::open(self.path()) else { return None };
+            let Ok(url) = repo.get_origin_url() else { return None };
+            if url.starts_with(&**gl) {
+                Some(url.into())
+            } else { None }
+        }).as_deref()
     }
 
     #[inline]
@@ -259,6 +337,26 @@ impl LocalArchive {
         Some(OMDocResult::load_html_body_async(p,full))
     }
 
+    #[cfg(feature="tokio")]
+    pub fn load_html_full_async<'a>(&self,
+        path: Option<&'a Name>,
+        name: &'a NameStep,
+        language: Language
+    ) -> Option<impl std::future::Future<Output=Option<String>> + 'a> {
+        let p = self.get_filepath(path, name, language, "ftml")?;
+        Some(OMDocResult::load_html_full_async(p))
+    }
+
+    pub fn load_html_full(&self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language
+    ) -> Option<String> {
+        let p = self.get_filepath(path, name, language, "ftml")?;
+        OMDocResult::load_html_full(p)
+    }
+
+
     pub fn load_html_fragment(&self,
         path: Option<&Name>,
         name: &NameStep,
@@ -322,13 +420,22 @@ impl LocalArchive {
         }
         let p = top.join("ftml");
         result.write(&p);
-        let OMDocResult {document,modules,..} = result;
+        let OMDocResult {document,modules,html} = result;
         let p = top.join("doc");
         let file = err!(std::fs::File::create(&p));
         let mut buf = std::io::BufWriter::new(file);
 
         er!(bincode::serde::encode_into_std_write(document, &mut buf, bincode::config::standard()));
         //er!(document.into_byte_stream(&mut buf));
+
+        #[cfg(feature="tantivy")]
+        {
+            let p = top.join("tantivy");
+            let file = err!(std::fs::File::create(&p));
+            let mut buf = std::io::BufWriter::new(file);
+            let ret = document.all_searches(&html.html);
+            er!(bincode::serde::encode_into_std_write(ret,&mut buf,bincode::config::standard()));
+        }
 
         for m in modules {
             let path = m.uri.path();
@@ -483,6 +590,25 @@ impl Archive {
             Self::Local(a) => a.load_html_body_async(path, name, language,full),
         }
     }
+    #[cfg(feature="tokio")]
+    pub fn load_html_full_async<'a>(&self,
+        path: Option<&'a Name>,
+        name: &'a NameStep,
+        language: Language
+    ) -> Option<impl std::future::Future<Output=Option<String>>+'a> {
+        match self {
+            Self::Local(a) => a.load_html_full_async(path, name, language),
+        }
+    }
+    pub fn load_html_full(&self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language
+    ) -> Option<String> {
+        match self {
+            Self::Local(a) => a.load_html_full(path, name, language),
+        }
+    }
 
     pub fn load_html_fragment(&self,
         path: Option<&Name>,
@@ -629,9 +755,7 @@ impl ArchiveTree {
         let mut steps = id.steps().peekable();
         let mut curr = &self.groups;
         while let Some(step) = steps.next() {
-            let Some(e) = curr.iter().find(|e| e.id().last_name() == step) else {
-                return None
-            };
+            let e = curr.iter().find(|e| e.id().last_name() == step)?;
             /*let Ok(i) = curr.binary_search_by_key(&step, |v| v.id().last_name()) else {
                 return None;
             };*/
@@ -643,6 +767,7 @@ impl ArchiveTree {
         None
     }
 
+    #[must_use]
     pub fn get(&self,id:&ArchiveId) -> Option<&Archive> {
         self.archives.iter().find(|a| a.uri().archive_id() == id)
         //self.archives.binary_search_by_key(&id, Archive::id).ok()
@@ -679,7 +804,7 @@ impl ArchiveTree {
                 drop(lock);
                 // todo
             });
-        let (old, new, _) = old_new_f.into_inner();
+        let (_old, new, _) = old_new_f.into_inner();
         //news.sort_by_key(|a| a.id()); <- alternative
         *self = new;
         for a in &self.archives {
@@ -705,7 +830,7 @@ impl ArchiveTree {
         }
     }
 
-    fn remove(&mut self, id: &ArchiveId) -> Option<Archive> {
+    fn _remove(&mut self, id: &ArchiveId) -> Option<Archive> {
         let mut curr = &mut self.groups;
         let mut steps = id.steps();
         while let Some(step) = steps.next() {
@@ -738,7 +863,7 @@ impl ArchiveTree {
 
     #[allow(clippy::needless_pass_by_ref_mut)]
     #[allow(irrefutable_let_patterns)]
-    fn insert(&mut self, archive: Archive, f: &mut impl MaybeQuads) {
+    fn insert(&mut self, archive: Archive, _f: &mut impl MaybeQuads) {
         let id = archive.id().clone();
         let steps = if let Some((group, _)) = id.as_ref().rsplit_once('/') {
             group.split('/')

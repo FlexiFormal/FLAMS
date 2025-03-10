@@ -1,7 +1,7 @@
 /*! slightly adapted from [Kuchikiki](https://github.com/brave/kuchikiki) */
 
 use std::{borrow::Borrow, cell::{Cell, RefCell}, fmt::Debug, ops::Deref, rc::{Rc, Weak}};
-use html5ever::{interface::{ElemName, QuirksMode}, local_name, ns, serialize::{Serialize, SerializeOpts, TraversalScope}, tendril::StrTendril, QualName};
+use html5ever::{interface::{ElemName, QuirksMode}, local_name, ns, serialize::{Serialize, SerializeOpts, TraversalScope}, tendril::StrTendril, LocalName, Namespace, QualName};
 use flams_ontology::{narration::notations::OpNotation, DocumentRange};
 use flams_utils::vecmap::VecMap;
 use ftml_extraction::prelude::{NotationSpec, FTMLElements, FTMLNode, FTMLTag};
@@ -21,6 +21,14 @@ impl Attributes {
         if let Some((_,a)) = self.0.0.iter_mut().find(|(k,_)| *k.local == *tag.attr_name()) {
             *a = v.to_string().into();
         }
+    }
+
+    pub(crate) fn new_attr(&mut self,key:&str,value:String) {
+        use html5ever::namespace_url;
+        self.0.insert(
+            QualName::new(None,Namespace::from(""),LocalName::from(key.to_string())),
+            value.into()
+        )
     }
 }
 

@@ -1,4 +1,4 @@
-use flams_ontology::{archive_json::{ArchiveDatum, Institution}, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI}};
+use flams_ontology::{archive_json::{ArchiveDatum, Institution}, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI}};
 use flams_utils::vecmap::{VecMap, VecSet};
 use parking_lot::RwLock;
 use std::{
@@ -56,7 +56,7 @@ impl<'a> ArchiveIterator<'a> {
 
             //let _span = tracing::debug_span!(target:"archives","checking","{}",path.display()).entered();
             if md.is_dir() {
-                if d.file_name().to_str().map_or(true, |s| s.starts_with('.')) {
+                if d.file_name().to_str().is_none_or(|s| s.starts_with('.')) {
                     continue;
                 } else if d.file_name().eq_ignore_ascii_case("meta-inf") {
                     if let Some(path) = Self::find_manifest(&path) {
@@ -144,6 +144,7 @@ impl<'a> ArchiveIterator<'a> {
     }
 
     #[allow(clippy::cognitive_complexity)]
+    #[allow(clippy::too_many_lines)]
     fn do_manifest(path: &Path, id: &str) -> Option<LocalArchive> {
         use std::io::BufRead;
         let Some(top_dir) = path.parent().and_then(Path::parent) else {
@@ -239,6 +240,10 @@ impl<'a> ArchiveIterator<'a> {
             out_path: out_path.into(),
             ignore,
             file_state: RwLock::new(SourceDir::default()),
+            #[cfg(feature="gitlab")]
+            is_managed: std::sync::OnceLock::new(),
+            #[cfg(feature="zip")]
+            zip_file: std::sync::Arc::new(std::sync::OnceLock::new()),
             data: RepositoryData {
                 uri,
                 attributes,
@@ -284,7 +289,7 @@ fn read_index_file(archive:&ArchiveURI,path:&Path) -> (Box<[Institution]>,Box<[A
                 }
                 idxs.push(ArchiveIndex::from_kind(d,archive,
                     |i| format!("{}/img?a={}&rp=source/{i}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
-                ))
+                ));
             },
             ArchiveDatum::Institution(i) => insts.push(match i {
                 Institution::University { title, place, country, url, acronym, logo }

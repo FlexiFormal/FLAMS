@@ -180,11 +180,10 @@ export function hasFtmlAttribute(node) {
     // replace "srv:" by server url
     const attributes = node.attributes;
     for (let i = 0; i < attributes.length; i++) {
-        if (attributes[i].name === 'src') {
+        if (attributes[i].name === 'data-flams-src') {
             const src = attributes[i].value;
-            if (src.startsWith('srv:')) {
-                attributes[i].value = src.replace('srv:', window.FLAMS_SERVER_URL);
-            }
+            node.setAttribute('src',src.replace('srv:', window.FLAMS_SERVER_URL));
+            break;
         }
     }
   }
@@ -198,7 +197,7 @@ export function hasFtmlAttribute(node) {
   return false;
 }
 
-window.FLAMS_SERVER_URL = "https://flams.mathhub.info";
+window.FLAMS_SERVER_URL = "";
 
 export function setServerUrl(url) {
   window.FLAMS_SERVER_URL = url;

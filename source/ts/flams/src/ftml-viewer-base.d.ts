@@ -48,30 +48,80 @@ export type ExerciseResponseType = boolean[] | number | string;
 
 export type CognitiveDimension = "Remember" | "Understand" | "Apply" | "Analyze" | "Evaluate" | "Create";
 
+export type SymbolURI = string;
+
 export type DocumentElementURI = string;
-
-export type DocumentURI = string;
-
-export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Exercise" } & CognitiveDimension) | ({ type: "SubExercise" } & CognitiveDimension);
-
-export interface Instance {
-    semester: string;
-    instructors: string[] | undefined;
-}
-
-export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string; teaser: string | undefined; thumbnail: string | undefined } | { type: "book"; title: string; authors: string[]; file: DocumentURI; teaser: string | undefined; thumbnail: string | undefined } | { type: "paper"; title: string; authors: string[]; file: DocumentURI; thumbnail: string | undefined; teaser: string | undefined; venue: string | undefined; venue_url: string | undefined } | { type: "course"; title: string; landing: DocumentURI; acronym: string | undefined; instructors: string[]; institution: string; notes: DocumentURI; slides: DocumentURI | undefined; thumbnail: string | undefined; quizzes?: boolean; homeworks?: boolean; instances: Instance[]; teaser: string | undefined } | { type: "self-study"; title: string; landing: DocumentURI; acronym: string | undefined; notes: DocumentURI; slides: DocumentURI | undefined; thumbnail: string | undefined; teaser: string | undefined };
-
-export type Institution = { type: "university"; title: string; place: string; country: string; url: string; acronym: string; logo: string } | { type: "school"; title: string; place: string; country: string; url: string; acronym: string; logo: string };
-
-export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
 
 export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
 
+export interface FileData {
+    rel_path: string;
+    format: string;
+}
+
+export interface DirectoryData {
+    rel_path: string;
+    summary?: FileStateSummary | undefined;
+}
+
+export interface ArchiveGroupData {
+    id: ArchiveId;
+    summary?: FileStateSummary | undefined;
+}
+
+export interface ArchiveData {
+    id: ArchiveId;
+    git?: string | undefined;
+    summary?: FileStateSummary | undefined;
+}
+
+export interface Instance {
+    semester: string;
+    instructors?: string[] | undefined;
+}
+
+export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string; teaser?: string | undefined; thumbnail?: string | undefined } | { type: "book"; title: string; authors: string[]; file: DocumentURI; teaser?: string | undefined; thumbnail?: string | undefined } | { type: "paper"; title: string; authors: string[]; file: DocumentURI; thumbnail?: string | undefined; teaser?: string | undefined; venue?: string | undefined; venue_url?: string | undefined } | { type: "course"; title: string; landing: DocumentURI; acronym: string | undefined; instructors: string[]; institution: string; instances: Instance[]; notes: DocumentURI; slides?: DocumentURI | undefined; thumbnail?: string | undefined; quizzes?: boolean; homeworks?: boolean; teaser?: string | undefined } | { type: "self-study"; title: string; landing: DocumentURI; notes: DocumentURI; acronym?: string | undefined; slides?: DocumentURI | undefined; thumbnail?: string | undefined; teaser?: string | undefined };
+
+export type Institution = { type: "university"; title: string; place: string; country: string; url: string; acronym: string; logo: string } | { type: "school"; title: string; place: string; country: string; url: string; acronym: string; logo: string };
+
+export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Exercise" } & CognitiveDimension) | ({ type: "SubExercise" } & CognitiveDimension);
+
 export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
+
+export type DocumentURI = string;
+
+export interface FileStateSummary {
+    new: number;
+    stale: number;
+    deleted: number;
+    up_to_date: number;
+    last_built: Timestamp;
+    last_changed: Timestamp;
+}
 
 export type ArchiveId = string;
 
 export type Name = string;
+
+export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Exercise";
+
+export type SearchResult = { Document: DocumentURI } | { Paragraph: { uri: DocumentElementURI; fors: SymbolURI[]; def_like: boolean; kind: SearchResultKind } };
+
+export interface FragmentQueryOpts {
+    allow_documents?: boolean;
+    allow_paragraphs?: boolean;
+    allow_definitions?: boolean;
+    allow_examples?: boolean;
+    allow_assertions?: boolean;
+    allow_exercises?: boolean;
+    definition_like_only?: boolean;
+}
+
+export type QueryFilter = "Symbols" | { Fragments: FragmentQueryOpts };
+
+export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
+
+export type Timestamp = number;
 
 export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
 
@@ -104,6 +154,8 @@ export type TOCOptions = "GET" | { Predefined: TOCElem[] };
 
 export type ExerciseOption = { WithFeedback: [DocumentElementURI, ExerciseFeedback][] } | { WithSolutions: [DocumentElementURI, Solutions][] };
 
+export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
+
 /**
  * An entry in a table of contents. Either:
  * 1. a section; the title is assumed to be an HTML string, or
@@ -120,8 +172,6 @@ export type TOCElem = { type: "Section"; title: string | undefined; uri: Documen
  *    will be requested to obtain the TOC for that document.
  */
 export type TOC = TOCElem[] | DocumentURI;
-
-export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
 
 export class ExerciseFeedback {
   private constructor();

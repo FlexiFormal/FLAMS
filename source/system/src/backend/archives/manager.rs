@@ -33,11 +33,11 @@ impl ArchiveManager {
 
     pub fn reinit<'a,R>(&self,f:impl FnOnce(&mut ArchiveTree) -> R,paths:impl IntoIterator<Item = &'a Path,IntoIter : DoubleEndedIterator>) -> R {
         let mut tree = self.tree.write();
-        let r = f(&mut *tree);
+        let r = f(&mut tree);
         tree.archives.clear();
         tree.groups.clear();
         for p in paths.into_iter().rev() {
-            tree.load(p,&self.change_sender,())
+            tree.load(p,&self.change_sender,());
         }
         r
     }

@@ -124,21 +124,12 @@ mod serde_impl {
 
 pub type UncheckedDocument = OpenDocument<Unchecked>;
 
-impl TreeLike for Document {
-    type Child<'a> = &'a DocumentElement<Checked>;
-    type RefIter<'a> = std::slice::Iter<'a,DocumentElement<Checked>>;
-    fn children(&self) -> Option<Self::RefIter<'_>> {
-        Some(NarrationTrait::children(self).iter())
-    }
-}
-impl<'a> TreeChild<Document> for &'a DocumentElement<Checked> {
-    fn children<'b>(&self) -> Option<std::slice::Iter<'a,DocumentElement<Checked>>> where Self:'b {
-        Some(NarrationTrait::children(*self).iter())
-    }
-}
-
-
 impl UncheckedDocument {
+
+    #[inline]
+    pub fn dfs(&self) -> impl Iterator<Item=&DocumentElement<Unchecked>> {
+        <_ as TreeChildIter<Self>>::dfs(self.elements.iter())
+    }
     pub fn check(self, checker: &mut impl DocumentChecker) -> Document {
         let elements = super::checking::DocumentCheckIter::go(self.elements, checker, &self.uri)
             .into_boxed_slice();
@@ -165,6 +156,43 @@ impl UncheckedDocument {
         })
     }
      */
+}
+
+impl TreeLike for Document {
+    type Child<'a> = &'a DocumentElement<Checked>;
+    type RefIter<'a> = std::slice::Iter<'a,DocumentElement<Checked>>;
+    fn children(&self) -> Option<Self::RefIter<'_>> {
+        Some(NarrationTrait::children(self).iter())
+    }
+}
+impl<'a> TreeChild<Document> for &'a DocumentElement<Checked> {
+    fn children<'b>(&self) -> Option<std::slice::Iter<'a,DocumentElement<Checked>>> where Self:'b {
+        Some(NarrationTrait::children(*self).iter())
+    }
+}
+
+impl TreeLike for UncheckedDocument {
+    type Child<'a> = &'a DocumentElement<Unchecked>;
+    type RefIter<'a> = std::slice::Iter<'a,DocumentElement<Unchecked>>;
+    fn children(&self) -> Option<Self::RefIter<'_>> {
+        Some(self.elements.iter())
+    }
+}
+impl<'a> TreeChild<UncheckedDocument> for &'a DocumentElement<Unchecked> {
+    fn children<'b>(&self) -> Option<std::slice::Iter<'a,DocumentElement<Unchecked>>> where Self:'b {
+        match self {
+            DocumentElement::Section(s) => Some(s.children.iter()),
+            DocumentElement::Paragraph(p) => Some(p.children.iter()),
+            DocumentElement::Exercise(e) => Some(e.children.iter()),
+            DocumentElement::Module { children, .. } |
+            DocumentElement::Morphism { children, .. } |
+            DocumentElement::MathStructure { children, .. } |
+            DocumentElement::Extension { children, .. } |
+            DocumentElement::SkipSection(children) |
+            DocumentElement::Slide{children,..} => Some(children.iter()),
+            _ => None,
+        }
+    }
 }
 
 /*

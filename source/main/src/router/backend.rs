@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use flams_ontology::{file_states::FileStateSummary, uris::ArchiveId};
+use flams_ontology::{archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData}, file_states::FileStateSummary, uris::ArchiveId};
 use flams_utils::{time::Timestamp, vecmap::VecMap};
 use leptos::prelude::*;
 use flams_web_utils::{components::{Header, Leaf, LazySubtree, Tree}, inject_css};
@@ -8,29 +8,6 @@ use flams_web_utils::{components::{Header, Leaf, LazySubtree, Tree}, inject_css}
 use crate::{users::LoginState, utils::{from_server_clone, from_server_copy}};
 
 use super::buildqueue::FormatOrTarget;
-
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub struct ArchiveData {
-  pub id:ArchiveId,
-  pub summary:Option<FileStateSummary>,
-}
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub struct ArchiveGroupData {
-  pub id:ArchiveId,
-  pub summary:Option<FileStateSummary>,
-}
-
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub struct DirectoryData {
-  pub rel_path:String,
-  pub summary:Option<FileStateSummary>,
-}
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub struct FileData {
-  pub rel_path:String,
-  pub format:String
-  //pub summary:Option<FileStateSummary>,
-}
 
 #[server(prefix="/api/backend",endpoint="group_entries")]
 #[allow(clippy::unused_async)]
@@ -55,14 +32,19 @@ pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupDa
       for a in v {
         match a {
           AoG::Archive(id) => {
-            let summary = if allowed {
-              tree.get(id).and_then(|a| 
+            let (summary,git) = if !allowed && !flams_system::settings::Settings::get().gitlab_url.is_none() {
+              (None,None)
+            } else {
+              tree.get(id).map(|a| 
                 if let Archive::Local(a) = a {
-                  Some(a.state_summary())
-                } else { None }
-              )
-            } else {None};
-            archives.push(ArchiveData{id: id.clone(),summary});
+                  (
+                    if allowed {Some(a.state_summary())} else {None},
+                    a.is_managed().map(ToString::to_string)
+                  )
+                } else { (None,None) }
+              ).unwrap_or_default()
+            };
+            archives.push(ArchiveData{id: id.clone(),summary,git});
           }
           AoG::Group(g) => {
             let summary = if allowed {
@@ -206,6 +188,40 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
   }).await
     .unwrap_or_else(|e| Err(e.to_string().into()))
 }
+
+//use flate2::*;
+//use tar::*;
+//use tokio::stream::
+//GARBL
+
+#[server(prefix="/api/backend",endpoint="download",
+  output=server_fn::codec::Streaming
+)]
+pub async fn archive_stream(id:ArchiveId) -> Result<leptos::server_fn::codec::ByteStream,ServerFnError> {
+    use flams_system::backend::Backend;  
+    struct Wrap<R:tokio::io::AsyncRead>(tokio_util::io::ReaderStream<R>);
+    impl<R:tokio::io::AsyncRead> futures::Stream for Wrap<R> {
+      type Item = Result<tokio_util::bytes::Bytes,ServerFnError>;
+      fn poll_next(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
+          <_ as futures::Stream>::poll_next(unsafe{self.map_unchecked_mut(|f| &mut f.0)},cx).map_err(|e| ServerFnError::new(e.to_string()))
+      }
+    }
+
+  let fut = flams_system::backend::GlobalBackend::get().with_local_archive(&id, |a| {
+    a.map(|a| a.zip())
+  }).ok_or_else(|| ServerFnError::new(format!("No archive with id {id} found!")))?
+    .await.ok_or_else(|| ServerFnError::new(format!("Error bundling {id}")))?;
+
+  let f = tokio::fs::File::open(&fut).await.map_err(|e| ServerFnError::new(format!("Error reading file: {e}")))?;
+  
+  Ok(leptos::server_fn::codec::ByteStream::new(
+    Wrap(tokio_util::io::ReaderStream::new(
+      tokio::io::BufReader::new(f)
+    ))
+  ))
+  //use tokio_util::io::ReaderStream;
+  //tar::Builder::new(w);
+} 
 
 
 #[component]

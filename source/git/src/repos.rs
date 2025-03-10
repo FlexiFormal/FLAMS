@@ -2,8 +2,6 @@ use std::path::Path;
 
 use git2::RepositoryOpenFlags;
 
-use crate::REMOTE_SPAN;
-
 pub struct GitRepo(git2::Repository);
 
 impl From<git2::Repository> for GitRepo { 
@@ -11,15 +9,16 @@ impl From<git2::Repository> for GitRepo {
 	fn from(r:git2::Repository) -> Self { Self(r) } 
 }
 impl From<git2::Commit<'_>> for super::Commit {
+  #[allow(clippy::cast_lossless)]
   fn from(commit: git2::Commit) -> Self {
     let time = commit.time();
-    let author_name = commit.author().name().map(|s| s.to_string()).unwrap_or_default();
+    let author_name = commit.author().name().map(ToString::to_string).unwrap_or_default();
     Self {
       id: commit.id().to_string(),
       created_at: chrono::DateTime::from_timestamp(time.seconds() + (time.offset_minutes() as i64 * 60), 0).unwrap_or_else(|| unreachable!()),
-      title: commit.summary().map(|s| s.to_string()).unwrap_or_default(),
+      title: commit.summary().map(ToString::to_string).unwrap_or_default(),
       parent_ids: commit.parent_ids().map(|p| p.to_string()).collect(),
-      message: commit.message().map(|s| s.to_string()).unwrap_or_default(),
+      message: commit.message().map(ToString::to_string).unwrap_or_default(),
       author_name
     }
   }
@@ -41,7 +40,7 @@ impl GitRepo {
   /// #### Errors
   pub fn get_origin_url(&self) -> Result<String,git2::Error> {
     let remote = self.0.find_remote("origin")?;
-    remote.url().map(|s| s.to_string()).ok_or_else(|| git2::Error::from_str("No origin"))
+    remote.url().map(ToString::to_string).ok_or_else(|| git2::Error::from_str("No origin"))
   }
 
   /// #### Errors
@@ -72,21 +71,21 @@ impl GitRepo {
   /// #### Errors
   #[inline]
   pub fn get_managed(&self) -> Result<Option<String>,git2::Error> {
-    self.with_latest_note(|s| s.to_string())
+    self.with_latest_note(ToString::to_string)
       //.map(|b| b.is_some_and(|b| b))
   }
 
   /// #### Errors
   #[inline]
-  pub fn clone_from_oauth(token:&str,url:&str,branch:&str,to:&Path,shallow:bool) -> Result<GitRepo,git2::Error> {
+  pub fn clone_from_oauth(token:&str,url:&str,branch:&str,to:&Path,shallow:bool) -> Result<Self,git2::Error> {
     Self::clone("oauth2", token, url, branch, to,shallow)
   }
 
   /// #### Errors
-  pub fn clone(user:&str,password:&str,url:&str,branch:&str,to:&Path,shallow:bool) -> Result<GitRepo,git2::Error> {
-    use git2::{RemoteCallbacks,Cred,Repository,FetchOptions,build::RepoBuilder};
+  pub fn clone(user:&str,password:&str,url:&str,branch:&str,to:&Path,shallow:bool) -> Result<Self,git2::Error> {
+    use git2::{RemoteCallbacks,Cred,FetchOptions,build::RepoBuilder};
     crate::in_git!(("git clone",url=url,branch=branch); {
-      let _ = std::fs::create_dir_all(&to);
+      let _ = std::fs::create_dir_all(to);
       let mut cbs = RemoteCallbacks::new();
       cbs.credentials(|_,_,_| Cred::userpass_plaintext(user, password));
   
@@ -163,6 +162,7 @@ impl GitRepo {
     self.get_new_commits("oauth2", token)
   }
 
+  #[allow(dead_code)]
   fn print_history(&self,commit:&git2::Commit) {
     println!("commit {:.8}",commit.id());
     self.walk(commit.clone(), |id| {println!(" - {id:.8}");true});
@@ -205,12 +205,12 @@ impl GitRepo {
       checked += 1;
       if checked > MAX_DEPTH {return}
       //tracing::info!("Walking {} {}",next.id(),todos.len());
-      let num = next.parent_count();
+      //let num = next.parent_count();
       for i in 0..next.parent_count() {
         let Ok(id) = next.parent_id(i) else {continue};
         if !f(id) {return}
         if let Ok(commit) = self.0.find_commit(id) {
-          todos.push(commit)
+          todos.push(commit);
         }
       }
     }
@@ -218,7 +218,6 @@ impl GitRepo {
 
   /// #### Errors
   pub fn get_new_commits(&self,user:&str,password:&str) -> Result<Vec<(String,super::Commit)>,git2::Error> {
-    use flams_utils::prelude::HSet;
     crate::in_git!(("get new commits",path=%self.0.path().display()); {
       let mut remote = self.0.find_remote("origin")?;
       let mut cbs = git2::RemoteCallbacks::new();
@@ -232,26 +231,26 @@ impl GitRepo {
         ),None)?;
       tracing::debug!("Fetching done.");
       let head = self.0.head()?.peel_to_commit()?;
-      let Some(s) = self.get_managed()? else {
+      /*let Some(s) = self.get_managed()? else {
         return Ok(Vec::new())
       };
       let Some((_,managed)) = s.split_once(';') else {
         return Err(git2::Error::from_str("unexpected git note on release branch"))
       };
       let managed_id = git2::Oid::from_str(managed)?;
-      let managed = self.0.find_commit(managed_id)?;
-
+      let managed = self.0.find_commit(managed_id)?;*/
+        let head_id = head.id();
       let mut new_commits = Vec::new();
       for branch in self.0.branches(Some(git2::BranchType::Remote))? {
         let (branch,_) = branch?;
         let Some(branch_name) = branch.name()? else {continue};
-        if branch_name == "origin/HEAD" || branch_name == "origin/release" {continue}
+        if branch_name == "origin/HEAD" /*|| branch_name == "origin/release"*/ {continue}
         let branch_name = branch_name.strip_prefix("origin/").unwrap_or(branch_name);
         let tip_commit = branch.get().peel_to_commit()?;
-        if tip_commit.id() == managed_id { continue }
+        if tip_commit.id() == head_id/*managed_id*/ { continue }
         let mut found = false;
         self.walk(tip_commit.clone(),|id|
-          if managed_id == id {found = true;false} else {true}
+          if id == head_id {found = true;false} else {true}
         );
         if found {
           new_commits.push((branch_name.to_string(),tip_commit.into()));
@@ -287,6 +286,7 @@ impl GitRepo {
      */
   }
 
+  /*
   /// #### Errors
   pub fn release_commit_id(&self) -> Result<String,git2::Error> {
     let head = self.0.head()?.peel_to_commit()?;
@@ -294,6 +294,7 @@ impl GitRepo {
     if head.id() == release.id() { Ok(head.id().to_string()) }
     else { Err(git2::Error::from_str("not on release branch")) }
   }
+   */
 
   /// #### Errors
   pub fn current_commit(&self) -> Result<super::Commit,git2::Error> {
@@ -312,7 +313,7 @@ impl GitRepo {
   pub fn commit_all(&self,message:&str) -> Result<super::Commit,git2::Error> {
     crate::in_git!(("commit all",path=%self.0.path().display(),commit_message=message); {
       let mut index = self.0.index()?;
-      let managed = self.get_managed()?;
+      //let managed = self.get_managed()?;
       let id = index.write_tree()?;
       let tree = self.0.find_tree(id)?;
       let parent = self.0.head()?.peel_to_commit()?;
@@ -323,9 +324,9 @@ impl GitRepo {
         message, &tree, &[&parent]
       )?;
       let commit = self.0.find_commit(commit)?;
-      if let Some(mg) = managed {
+      /*if let Some(mg) = managed {
         self.add_note(&mg)?
-      }
+      }*/
       Ok(commit.into())
     })
   }
@@ -352,6 +353,56 @@ impl GitRepo {
   }
 
   /// #### Errors
+  pub fn force_checkout(&self,commit:&str) -> Result<(),git2::Error> {
+    crate::in_git!(("checkout",path=%self.0.path().display(),commit=commit); {
+      let id = git2::Oid::from_str(commit)?;
+      let a_commit = self.0.find_annotated_commit(id)?;
+      let commit = self.0.find_commit(id)?;
+      let head = self.0.head()?.peel_to_commit()?;
+      if head.id() == commit.id() || self.0.graph_descendant_of(head.id(), commit.id())? { return Ok(()) }
+      
+      let mut merge_options = git2::MergeOptions::new();
+      merge_options
+        .file_favor(git2::FileFavor::Theirs)
+        .fail_on_conflict(false);
+      self.0.merge(
+        &[&a_commit],
+        Some(&mut merge_options),
+        Some(&mut git2::build::CheckoutBuilder::new()),
+      )?;
+      let mut index = self.0.index()?;
+      if index.has_conflicts() {
+        let mut entries = Vec::new();
+        for conflict in index.conflicts()? {
+          let conflict = conflict?;
+          if let Some(entry) = conflict.their {
+            entries.push(entry);
+          }
+        }
+        for e in entries {
+          index.add(&e)?;
+        }
+        index.write()?;
+      }
+
+      if index.has_conflicts() || self.0.state() == git2::RepositoryState::Merge {
+        let sig = self.0.signature()?;
+        let tree_id = index.write_tree()?;
+        let tree = self.0.find_tree(tree_id)?;
+        self.0.commit(
+          Some("HEAD"),
+          &sig, &sig, 
+          &format!("Merge commit {}",commit.id()), 
+          &tree, 
+          &[&head,&commit]
+        )?;
+      }
+      self.0.cleanup_state()?;
+      Ok(())
+    })
+  }
+
+  /// #### Errors
   pub fn merge(&self,commit:&str) -> Result<(),git2::Error> {
     crate::in_git!(("merge",path=%self.0.path().display(),commit=commit); {
       let id = git2::Oid::from_str(commit)?;
@@ -372,7 +423,7 @@ impl GitRepo {
       self.0.commit(
         Some("HEAD"),
         &sig, &sig, 
-        &format!("Merge commit {}",commit.id().to_string()), 
+        &format!("Merge commit {}",commit.id()), 
         &tree, 
         &[&parent,&commit]
       ).map(|_| ())

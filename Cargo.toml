@@ -6,7 +6,7 @@ members = [
   "source/stex","source/ftml/system",
   "source/ftml/viewer", 
   "source/ftml/viewer-components", "source/ftml/extraction",
-  "source/git",#"experiments"
+  "source/git","experiments",
   #"source/vscode",
   "source/ffi"
 ]
@@ -121,6 +121,8 @@ tokio-util = { version="0.7", features = ["compat"] }
 tempfile = {version="3"}
 phf = { version = "0.11", default-features = false, features=["macros"] }
 crossbeam-channel = {version = "0.5"}
+flate2 = {version="1.0"}
+tar = {version="0.4"}
 
 password-hash = {version="0.5"}
 argon2 = {version="0.5"}
@@ -204,6 +206,11 @@ gloo-storage = "0.3"
 web-sys = { version = "0.3" }
 tsify-next = {version="0.5", features = ["js"]}
 js-sys = "0.3"
+
+# search
+
+html2text = "0.14"
+tantivy = "0.22"
 
 leptos-dyn-dom = {git = "https://github.com/Jazzpirate/leptos-dyn-dom"}
 # leptos-dyn-dom = { path="../leptos_dyn_dom"}

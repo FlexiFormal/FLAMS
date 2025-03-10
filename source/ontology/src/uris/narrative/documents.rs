@@ -34,10 +34,9 @@ impl DocumentURI {
         name = name.rsplit_once('.').map_or_else(|| name,|(name,_)| name);
         let lang = Language::from_rel_path(name);
         name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
-        ((a % path).unwrap_or_else(|e| unreachable!()) & (name,lang)).unwrap_or_else(|_| unreachable!())
+        ((a % path).unwrap_or_else(|_| unreachable!()) & (name,lang)).unwrap_or_else(|_| unreachable!())
     }
 
-    #[must_use]
     /// #### Errors
     pub fn module_uri_from(&self,name:&str) -> Result<ModuleURI,InvalidURICharacter> {
         if self.name.last_name().as_ref() == name {
@@ -196,3 +195,12 @@ mod serde_impl {
     use crate::uris::{serialize, DocumentURI};
     serialize!(DE DocumentURI);
 }
+
+#[cfg(feature="tantivy")]
+impl tantivy::schema::document::ValueDeserialize for DocumentURI {
+    fn deserialize<'de, D>(deserializer: D) -> Result<Self, tantivy::schema::document::DeserializeError>
+        where D: tantivy::schema::document::ValueDeserializer<'de> {
+        deserializer.deserialize_string()?.parse()
+          .map_err(|_| tantivy::schema::document::DeserializeError::custom(""))
+    }
+  }

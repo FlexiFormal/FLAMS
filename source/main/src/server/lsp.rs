@@ -188,7 +188,20 @@ pub(crate) async fn register(
   }
 }
 
+/*
+#[test]
+fn linter() {
+  let mut rt = tokio::runtime::Builder::new_multi_thread();
+  rt.enable_all();
+  rt.thread_stack_size(16 * 1024 * 1024);
+  rt.build()
+    .expect("Failed to initialize Tokio runtime")
+    .block_on(linter_i());
+}
+     */
+
 #[tokio::test]
+//#[cfg(test)]
 async fn linter() {
   tracing_subscriber::fmt().init();
   let _ce = color_eyre::install();

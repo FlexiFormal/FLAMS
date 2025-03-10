@@ -32,6 +32,10 @@ export class FLAMSServer {
     return await this.rawPostRequest("api/index",{});
   }
 
+  async search(query:string,filter:FLAMS.QueryFilter,numResults:number): Promise<[number,FLAMS.SearchResult][] | undefined> {
+    return await this.rawPostRequest("api/search",{query:query,opts:filter,num_results:numResults});
+  }
+
   /** 
    * SPARQL query
    */

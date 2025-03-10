@@ -1,5 +1,5 @@
 use flams_ontology::uris::ArchiveId;
-use flams_utils::{prelude::HSet, vecmap::VecSet};
+use flams_utils::prelude::HSet;
 use gitlab::api::AsyncQuery;
 use tracing::{Instrument,instrument};
 
@@ -12,6 +12,7 @@ lazy_static::lazy_static!{
 #[derive(Debug)]
 struct ProjectWithId {
   pub project:super::Project,
+  #[allow(clippy::option_option)]
   pub id:Option<Option<ArchiveId>>
 }
 impl std::borrow::Borrow<u64> for ProjectWithId {
@@ -60,7 +61,7 @@ pub struct GLInstance{
 }
 
 impl GLInstance {
-  #[inline]
+  #[inline]#[must_use]
   pub fn global() -> &'static Self {
     &GITLAB
   }
@@ -181,11 +182,12 @@ impl GitLab {
     let v: Vec<super::Project> = gitlab::api::paged(q,gitlab::api::Pagination::All).query_async(&self.0.inner).await
       .map_err(|e| {tracing::error!("Failed to load projects: {e}"); e})?;
     let mut prs = self.0.projects.lock();
-    for p in v.iter() {
+    for p in &v {
       if !prs.contains(&p.id) {
         prs.insert(ProjectWithId { project: p.clone(), id: None });
       }
     }
+    drop(prs);
     Ok(v)
     //let raw = gitlab::api::raw(q).query_async(&self.inner).await?;
     //Ok(std::str::from_utf8(raw.as_ref())?.to_string())
@@ -208,11 +210,12 @@ impl GitLab {
     macro_rules! ret {
       ($v:expr) => {{
         tracing::info!("Found {:?}",$v);
-        let mut lock= self.0.projects.lock();
+        let mut lock = self.0.projects.lock();
         if let Some(mut v) = lock.take(&id) {
           v.id = Some($v.clone());
           lock.insert(v);
         }
+        drop(lock);
         return Ok($v);
       }}
     }

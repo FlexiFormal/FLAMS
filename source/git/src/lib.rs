@@ -1,6 +1,3 @@
-use std::path::Path;
-
-
 #[cfg(feature="gitlab")]
 pub mod gl;
 

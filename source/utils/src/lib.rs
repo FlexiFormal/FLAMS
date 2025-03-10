@@ -41,7 +41,6 @@ pub fn hashstr<A: std::hash::Hash>(prefix: &str, a: &A) -> String {
 
 #[cfg(feature="tokio")]
 pub fn background<F:FnOnce() + Send + 'static>(f:F) {
-    use tracing::Instrument;
     let span = tracing::Span::current();
     tokio::task::spawn_blocking(move || span.in_scope(f));
 }
@@ -121,7 +120,48 @@ impl CSS {
     }
 }
 
+#[macro_export]
+macro_rules! impossible {
+    () => {
+        #[cfg(debug_assertions)]
+        { unreachable!() }
+        #[cfg(not(debug_assertions))]
+        { unsafe{ std::hin::unreachable_unchecked() } }
+    };
+    ($s:literal) => {
+        #[cfg(debug_assertions)]
+        { panic!($s) }
+        #[cfg(not(debug_assertions))]
+        { unsafe{ std::hin::unreachable_unchecked() } }
+    };
+    (?) => { unreachable!() };
+    (? $s:literal) => {
+        { panic!($s) }
+    };
+}
+
+#[macro_export]
+macro_rules! unwrap {
+    ($e: expr) => { $e.unwrap_or_else(|| {$crate::impossible!();}) };
+    (? $e: expr) => { $e.unwrap_or_else(|| {$crate::impossible!(?);}) };
+    ($e: expr;$l:literal) => { $e.unwrap_or_else(|| {$crate::impossible!($l);}) };
+    (? $e: expr;$l:literal) => { $e.unwrap_or_else(|| {$crate::impossible!(? $l);}) };
+}
+
+#[cfg(feature="serde")]
+pub trait CondSerialize : serde::Serialize { }
+#[cfg(feature="serde")]
+impl<T:serde::Serialize> CondSerialize for T { }
+
+#[cfg(not(feature="serde"))]
+pub trait CondSerialize { }
+#[cfg(not(feature="serde"))]
+impl<T> CondSerialize for T { }
+
+
 #[allow(clippy::unwrap_used)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::similar_names)]
 #[test]
 fn css_things() {
     use lightningcss::{stylesheet::{ParserOptions,StyleSheet,MinifyOptions},printer::PrinterOptions,rules::CssRule,selector::Component};
@@ -141,9 +181,9 @@ fn css_things() {
     ";
     let mut ruleset = StyleSheet::parse(test, ParserOptions::default()).unwrap();
     ruleset.minify(MinifyOptions::default()).unwrap();
-    assert!(ruleset.sources.iter().all(|s| s.is_empty()));
+    assert!(ruleset.sources.iter().all(String::is_empty));
     tracing::info!("Result: {ruleset:#?}");
-    for rule in ruleset.rules.0.into_iter() {
+    for rule in ruleset.rules.0 {
         match rule {
             CssRule::Style(style) => {
                 assert!(style.vendor_prefix.is_empty());
@@ -160,13 +200,3 @@ fn css_things() {
         }
     }
 }
-
-#[cfg(feature="serde")]
-pub trait CondSerialize : serde::Serialize { }
-#[cfg(feature="serde")]
-impl<T:serde::Serialize> CondSerialize for T { }
-
-#[cfg(not(feature="serde"))]
-pub trait CondSerialize { }
-#[cfg(not(feature="serde"))]
-impl<T> CondSerialize for T { }

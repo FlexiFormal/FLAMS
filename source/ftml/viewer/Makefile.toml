@@ -29,12 +29,10 @@ args = ["build","--out-dir","ts","--dev","--out-name","ftml-viewer-base","--","-
 [tasks.ts-dev]
 dependencies = ["wasm-pack-ts-dev","update-package-json"]#,"copy-flams-to-ts"]
 
-
 [tasks.wasm-pack-dev]
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = ["build","--target","no-modules","--dev"]
-
 
 [tasks.update-js]
 env = { "CARGO_MAKE_RUST_SCRIPT_PROVIDER" = "rust-script" }
@@ -73,7 +71,6 @@ ftml_start();
 }
 '''
 
-
 [tasks.copy-flams-to-ts]
 workspace = false
 script_runner = "@rust"
@@ -99,8 +96,14 @@ fn main() {
 }
 '''
 
+[tasks.copy-d-ts]
+script_runner = "@shell"
+script = '''
+cp ./ts/ftml-viewer-base.d.ts ../../ts/flams/src/ftml-viewer-base.d.ts
+'''
+
 [tasks.ts]
-dependencies = ["wasm-pack-ts","update-package-json"]#,"copy-flams-to-ts"]
+dependencies = ["wasm-pack-ts","update-package-json","copy-d-ts"]#,"copy-flams-to-ts"]
 
 [tasks.clean]
 command = "cargo"

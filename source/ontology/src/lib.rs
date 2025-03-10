@@ -30,6 +30,7 @@ pub mod file_states;
 pub mod archive_json;
 #[cfg(feature = "rdf")]
 pub mod rdf;
+pub mod search;
 pub mod uris;
 pub mod ftml;
 
