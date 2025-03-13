@@ -1,11 +1,7 @@
-use std::{fmt::Display, io::Write ,path::{Path, PathBuf}};
-
+use std::{fmt::Display ,path::PathBuf};
 use flams_utils::{change_listener::{ChangeListener, ChangeSender}, logs::LogFileLine, time::Timestamp, triomphe::Arc, vecmap::VecMap};
-use parking_lot::RwLock;
 use tracing::span::Id;
-//use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{fmt::{format::FmtSpan, MakeWriter}, layer::Context, Layer};
-
+use tracing_subscriber::{layer::Context, Layer};
 
 #[derive(Clone,Debug)]
 pub struct LogStore(Arc<LogStoreI>);
@@ -22,16 +18,17 @@ impl LogStore {
     let logger = Self::new();
     let level = if crate::settings::Settings::get().debug { tracing::Level::DEBUG } else { tracing::Level::INFO };
     let subscriber = tracing_subscriber::registry()
-      .with(logger.clone().with_filter(tracing::level_filters::LevelFilter::from(level)))
+      .with(logger.with_filter(tracing::level_filters::LevelFilter::from(level)))
       .with(tracing_error::ErrorLayer::default());
     tracing::subscriber::set_global_default(subscriber).expect(
       "Error initializing tracing subscriber"
     );
   }
 
+  #[allow(clippy::new_without_default)]
   ///#### Panics
   pub fn new() -> Self {
-    if LOG.get().is_some() { panic!("Logger already initialized") }
+    assert!(LOG.get().is_none(),"Logger already initialized");
     let settings = crate::settings::Settings::get();
     let logdir = &settings.log_dir;
     let filename = chrono::Local::now().format("%Y-%m-%d-%H.%M.%S.log").to_string();
@@ -42,65 +39,10 @@ impl LogStore {
   }
 }
 
-
 /// ### Panics
 pub fn logger() -> &'static LogStore {
   LOG.get().expect("log should be initialized")
 }
-
-
-/*
-pub(crate) fn tracing(logdir:&Path,level: tracing::Level) -> LogStore {
-  use tracing::level_filters::LevelFilter;
-  //use tracing_subscriber::fmt::writer::MakeWriterExt;
-  use tracing_subscriber::layer::SubscriberExt;
-
-  let filename = chrono::Local::now().format("%Y-%m-%d-%H.%M.%S.log").to_string();
-  let path = logdir.join(&filename);
-/*
-  let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
-      .rotation(rotation)
-      .filename_prefix(filename)
-      .build(logdir)
-      .expect("failed to initialize file logging");
-  let (file_layer,guard) = tracing_appender::non_blocking(file_appender);
-   */
-    //file_layer.write(buf)
-  //let file_layer = file_layer.with_max_level(level);
-
-  /*
-  let l = Logger(Arc::new(RwLock::new(LoggerI {
-      _guard: guard,
-      layers : vec![]
-  })));
-  
-   */
-  
-  let logger = LogStore::new_i(/*guard,file_layer,*/path);
-
-  let subscriber = tracing_subscriber::registry()
-      /*.with(
-          tracing_subscriber::fmt::Layer::default()
-              .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-              .with_writer(file_layer)
-              .with_ansi(false)
-              .with_file(false)
-              .with_line_number(false)
-              .json()
-              .flatten_event(true)
-              .with_current_span(true)
-              .with_span_list(true)
-              //.map_fmt_fields(|f| )
-          ,
-      ) */
-      .with(logger.clone().with_filter(LevelFilter::from(level)))
-      .with(tracing_error::ErrorLayer::default());
-  let _ = tracing::subscriber::set_global_default(subscriber).expect(
-    "Error initializing tracing subscriber"
-  );
-  logger
-}
-   */
 
 #[derive(Clone)]
 enum Msg {
@@ -112,10 +54,7 @@ enum Msg {
 struct LogStoreI {
   notifier:ChangeListener<LogFileLine>,
   sender:crossbeam_channel::Sender<Msg>,
-  //inner:NonBlocking,
-  //_guard:WorkerGuard,
   log_file:PathBuf,
-  //open_spans:RwLock<VecMap<Id,(String,Option<Id>)>>
 }
 
 impl Drop for LogStoreI {
@@ -125,6 +64,7 @@ impl Drop for LogStoreI {
 }
 
 impl LogStore {
+  #[allow(clippy::let_underscore_future)]
   fn new_i<P:Into<PathBuf>>(log_file:P) -> Self {
     let (sender,recv) = crossbeam_channel::unbounded();
     let cs = ChangeSender::new(1024);
@@ -145,7 +85,7 @@ impl LogStore {
             Err(_) | Ok(Msg::Kill) => break,
             Ok(Msg::Line(msg)) => {
                 let _ = serde_json::to_writer(&mut f, &msg);
-                std::io::Write::write(&mut f, "\n".as_bytes());
+                let _ = std::io::Write::write(&mut f, b"\n");
                 cs.send(msg);
             }
           }
@@ -165,13 +105,13 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
   fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
     let mut visitor = StringVisitor::default();
     event.record(&mut visitor);
-    let mut args = visitor.0;
+    let args = visitor.0;
     let message = visitor.1;
     let timestamp = Timestamp::now();
     let parent = if event.is_root() { None }
     else {
         event.parent().map_or_else(
-            || ctx.current_span().id().map(|i| i.into_non_zero_u64()),
+            || ctx.current_span().id().map(tracing::Id::into_non_zero_u64),
             |i| Some(i.into_non_zero_u64())
         )
     };
@@ -193,7 +133,7 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
   fn on_new_span(&self, md: &tracing::span::Attributes<'_>, thisid: &Id, ctx: Context<'_, S>) {
     let mut visitor = StringVisitor::default();
     md.record(&mut visitor);
-    let mut args = visitor.0;
+    let args = visitor.0;
     let name = md.metadata().name().to_string();
     let target: Option<String> = {
         let tg = md.metadata().target();
@@ -202,7 +142,7 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
     let parent = if md.is_root() { None }
     else {
         md.parent().map_or_else(
-            || ctx.current_span().id().map(|i| i.into_non_zero_u64()),
+            || ctx.current_span().id().map(tracing::Id::into_non_zero_u64),
             |i| Some(i.into_non_zero_u64())
         )
     };
@@ -215,8 +155,6 @@ impl<S: tracing::Subscriber> Layer<S> for LogStore {
     let _ = self.0.sender.send(Msg::Line(LogFileLine::SpanClose { id: id.into_non_zero_u64(), timestamp:Timestamp::now() }));
   }
 }
-
-
 
 #[derive(Default)]
 struct StringVisitor(VecMap<String, String>,String);
@@ -244,6 +182,5 @@ impl tracing::field::Visit for StringVisitor {
       self.0
           .insert(field.name().to_string(), format!("{value:?}"));
     }
-  }
-  
+  } 
 }

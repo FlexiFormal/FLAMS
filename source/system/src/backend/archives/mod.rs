@@ -36,6 +36,7 @@ pub(super) struct RepositoryData {
     pub(super) index:Box<[ArchiveIndex]>
 }
 
+/*
 #[cfg(feature="zip")]
 #[derive(Debug)]
 pub(super) struct ZipFile {
@@ -50,6 +51,43 @@ impl Drop for ZipFile {
         }
     }
 }
+*/
+
+#[cfg(feature="zip")]
+mod zip {
+    use std::path::PathBuf;
+
+    pub(super) struct ZipStream {
+        handle:tokio::task::JoinHandle<()>,
+        stream: tokio_util::io::ReaderStream<tokio::io::DuplexStream>
+    }
+    impl ZipStream {
+        pub(super) fn new(p:PathBuf) -> Self {
+            let (writer, reader) = tokio::io::duplex(256 * 1024);
+            let stream = tokio_util::io::ReaderStream::new(reader);
+            let handle = tokio::task::spawn(Self::zip(p,writer));
+            Self { handle, stream }
+        }
+        async fn zip(p:PathBuf,writer:tokio::io::DuplexStream) {
+            let comp = async_compression::tokio::write::GzipEncoder::new(writer);
+            let mut tar = tokio_tar::Builder::new(comp);
+            let _ = tar.append_dir_all(".",&p).await;
+            let _ = tar.finish().await;
+        }
+    }
+    impl Drop for ZipStream {
+        fn drop(&mut self) {
+            self.handle.abort();
+        }
+    }
+    impl futures::Stream for ZipStream {
+        type Item = std::io::Result<tokio_util::bytes::Bytes>;
+        #[inline]
+        fn poll_next(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
+            unsafe{ self.map_unchecked_mut(|f| &mut f.stream).poll_next(cx)}
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct LocalArchive {
@@ -59,8 +97,8 @@ pub struct LocalArchive {
     pub(super) file_state: parking_lot::RwLock<SourceDir>,
     #[cfg(feature="gitlab")]
     pub(super) is_managed: std::sync::OnceLock<Option<Box<str>>>,
-    #[cfg(feature="zip")]
-    pub(super) zip_file: std::sync::Arc<std::sync::OnceLock<Option<ZipFile>>>
+    //#[cfg(feature="zip")]
+    //pub(super) zip_file: std::sync::Arc<std::sync::OnceLock<Option<ZipFile>>>
 }
 impl LocalArchive {
     #[inline]
@@ -69,52 +107,51 @@ impl LocalArchive {
         p.join(".flams")
     }
 
-    #[cfg(not(feature="gitlab"))] #[inline]
-    pub fn is_managed(&self) -> Option<&str> { None }
+    #[cfg(feature="zip")]
+    /// #### Errors
+    pub async fn unzip_from_remote(id:ArchiveId,url:&str) -> Result<(),()> {
+        use futures::TryStreamExt;
+        let resp = match reqwest::get(url).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("Error: {e}");
+                return Err(())
+            }
+        };
+        let stream = resp.bytes_stream().map_err(std::io::Error::other);
+        let stream = tokio_util::io::StreamReader::new(stream);
+        let decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
+        let mut tar = tokio_tar::Archive::new(decomp);
+        let dest = crate::settings::Settings::get().temp_dir().join(
+            flams_utils::hashstr("download", &id)
+        );
+        if let Err(e) = tokio::fs::create_dir_all(&dest).await {
+            tracing::error!("Error: {e}");
+            return Err(())
+        }
+        if let Err(e) = tar.unpack(&dest).await {
+            tracing::error!("Error: {e}");
+            let _ = tokio::fs::remove_dir_all(dest).await;
+            return Err(())
+        };
+        let mh = flams_utils::unwrap!(crate::settings::Settings::get().mathhubs.first());
+        let path = mh.join(id.as_ref());
+        if path.exists() {
+            let _ = tokio::fs::remove_dir_all(&path).await;
+        }
+        let _ = tokio::fs::rename(dest,&path).await;
+        Ok(())
+    }
+
 
     #[cfg(feature="zip")]
-    #[allow(clippy::cognitive_complexity)]
-    pub fn zip(&self) -> impl std::future::Future<Output=Option<PathBuf>> {
-        use flams_utils::unwrap;
-
-        if let Some(v) = self.zip_file.get() {
-            return tokio_util::either::Either::Left(std::future::ready(v.as_ref().and_then(|f| f.path.clone())))
-        }
-        let zip = self.zip_file.clone();
-        let zip2 = zip.clone();
-        let dir_path = unwrap!(self.out_path.parent()).to_path_buf();
-        tokio_util::either::Either::Right(async move {
-            let _ = tokio::task::spawn_blocking(move || {zip.get_or_init(|| {
-                let file_path = dir_path.join("zipped.tar.gz");
-                let f = std::fs::File::create(&file_path).ok()?;
-                let nf = std::io::BufWriter::new(f);
-                let nf = flate2::write::GzEncoder::new(nf, flate2::Compression::best());
-                let mut tar_file = tar::Builder::new(nf);
-                for e in std::fs::read_dir(&dir_path).ok()?.flatten() {
-                    let path = e.path();
-                    let Some(name) = path.iter().next_back() else { continue };
-                    let name = Path::new(name);
-                    if path.is_symlink() || path == file_path { continue }
-                    if path.is_dir() {
-                        if let Err(e) = tar_file.append_dir_all(name,&path) {
-                            tracing::error!("Error: {e}");
-                        }
-                    } else {
-                        let Ok(mut file) = std::fs::File::open(&path) else { continue };
-                        if let Err(e) = tar_file.append_file(name, &mut file) {
-                            tracing::error!("Error: {e}");
-                        }
-                    }
-                }
-                if let Err(e) = tar_file.finish() {
-                    tracing::error!("Error: {e}");
-                    return None
-                }
-                Some(ZipFile { path:Some(file_path)})
-            });}).await;
-            unwrap!(? zip2.get()).as_ref().and_then(|f| f.path.clone())
-        })
+    pub fn zip(&self) -> impl futures::Stream<Item=std::io::Result<tokio_util::bytes::Bytes>> {
+        let dir_path = flams_utils::unwrap!(self.out_path.parent()).to_path_buf();
+        zip::ZipStream::new(dir_path)
     }
+     
+    #[cfg(not(feature="gitlab"))] #[inline]
+    pub fn is_managed(&self) -> Option<&str> { None }
 
     #[cfg(feature="gitlab")]
     pub fn is_managed(&self) -> Option<&str> {

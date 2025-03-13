@@ -204,6 +204,7 @@ impl OMDocResult {
     String::from_utf8(html).ok().map(|html| (css,html))
   }
 
+  #[allow(clippy::cast_possible_wrap)]
   pub(crate) fn load_reference<T:flams_ontology::Resourcable>(path:&Path,range:DocumentRange) -> Option<T> {
     use std::io::{Seek,SeekFrom};
     let file = std::fs::File::open(path).ok()?;

@@ -1,5 +1,5 @@
 use flams_ontology::{narration::{documents::DocumentStyles, paragraphs::ParagraphKind, sections::SectionLevel}, uris::{DocumentURI, Name}};
-use flams_utils::vecmap::{VecMap, VecSet};
+use flams_utils::{impossible, unwrap, vecmap::{VecMap, VecSet}};
 use leptos::prelude::*;
 use smallvec::SmallVec;
 
@@ -222,7 +222,7 @@ impl<N:CounterTrait> SmartCounter<N> {
 
 #[derive(Debug,Clone)]
 pub struct SectionCounters {
-    current: LogicalLevel,
+    pub current: LogicalLevel,
     pub max: SectionLevel,
     sections:SmartCounter<AllSections>,
     initialized:RwSignal<bool>,
@@ -371,7 +371,7 @@ impl SectionCounters {
     });
     if let Some(cntname) = cnt {
       let Some(cnt) = self.counters.with_untracked(|cntrs| cntrs.get(&cntname).copied()) else {
-        unreachable!()
+        impossible!()
       };
       cnt.inc_memo(move |i| format!("counter-set:ftml-{cntname} {i};"))
     } else {
@@ -402,15 +402,15 @@ impl SectionCounters {
     let mut counters : Self = expect_context();
     counters.init_paras();
 
-    //leptos::logging::log!("Here: {uri}@{id}");
+    //tracing::warn!("inputref: {uri}@{id}");
 
     let old_slides = counters.slides;//.0.get_untracked();
     counters.slides = counters.slides.split();
-    let old_slides = old_slides.0.get_untracked().cutoff.unwrap_or_else(|| unreachable!()).set;
+    let old_slides = unwrap!(old_slides.0.get_untracked().cutoff).set;
 
     let old_sections = counters.sections;
     counters.sections = counters.sections.split();
-    let old_sections = old_sections.0.get_untracked().cutoff.unwrap_or_else(|| unreachable!()).set;
+    let old_sections = unwrap!(old_sections.0.get_untracked().cutoff).set;
 
     let mut new_paras = VecMap::default();
 
@@ -420,7 +420,7 @@ impl SectionCounters {
         let mut r = *e;
         let since = r.0.update_untracked(|e| {let r = e.since; e.since = 0;r});
         new_paras.insert(n.clone(),e.split());
-        (n.clone(),(r.0.get_untracked().cutoff.unwrap_or_else(|| unreachable!()).set,since))
+        (n.clone(),(unwrap!(r.0.get_untracked().cutoff).set,since))
       }).collect::<VecMap<_,_>>()
     );
     counters.counters = RwSignal::new(new_paras);
@@ -449,13 +449,15 @@ impl SectionCounters {
     Effect::new(move || 
       children.with(|ch|
         if let Some(ch) = ch.as_ref(){ 
-          //leptos::logging::log!("Updating {uri}@{id}");
+          //tracing::warn!("Updating {uri}@{id}");
           para_map.with_untracked(|m|
             update(ch,current,max,&old_slides,&old_sections,&old_paras,m)
           )
         }
       )
     );
+
+    //tracing::warn!("Returning {counters:?}");
 
     counters
   }
@@ -482,6 +484,15 @@ fn update(ch:&[TOCElem],
     if let Some(c) = curr.next() {
       match c {
         TOCElem::Slide => n_slides += 1,
+        TOCElem::SkippedSection { children } => {
+          let lvl = if let LogicalLevel::Section(s) = current {
+            s.inc()
+          } else if current == LogicalLevel::None { max } else {
+            continue
+          };
+          let old = std::mem::replace(&mut current,LogicalLevel::Section(lvl));
+          stack.push((std::mem::replace(&mut curr,children.iter()),old)); 
+        }
         TOCElem::Section{children,..} => {
           let lvl = if let LogicalLevel::Section(s) = current {
             s.inc()
@@ -510,7 +521,7 @@ fn update(ch:&[TOCElem],
     } else { break }
   }
 
-  //tracing::warn!("Seting inpuref sections to {n_sections:?}");
+  //tracing::warn!("Setting inpuref sections to {n_sections:?}");
   //leptos::logging::log!("Setting cutoffs");
   old_slides.set(n_slides);
   old_sections.set(n_sections);

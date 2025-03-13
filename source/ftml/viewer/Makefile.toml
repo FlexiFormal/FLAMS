@@ -1,5 +1,5 @@
-[env]
-RUSTFLAGS="-C target-feature=+bulk-memory"
+#[env]
+#RUSTFLAGS="-C target-feature=+bulk-memory"
 
 [tasks.wasm-pack]
 install_crate = "wasm-pack"

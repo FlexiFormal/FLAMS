@@ -6,6 +6,7 @@ use ftml_viewer_components::components::TOCElem;
 pub async fn from_document(doc:&flams_ontology::narration::documents::Document) -> (Vec<CSS>,Vec<TOCElem>) {
   use flams_ontology::narration::{exercises::Exercise, sections::Section, DocumentElement, NarrationTrait};
   use flams_system::backend::Backend;
+use flams_utils::unwrap;
   let mut curr = doc.children().iter();
   let mut prefix = String::new();
   let mut stack = Vec::new();
@@ -34,7 +35,7 @@ pub async fn from_document(doc:&flams_ontology::narration::documents::Document) 
           prefix = if prefix.is_empty() {uri.name().last_name().to_string()} else { format!("{prefix}/{}",uri.name().last_name()) };
         }
         DocumentElement::DocumentReference { id, target,.. } if target.is_resolved() => {
-          let Some(d) = target.get() else { unreachable!() };
+          let d = unwrap!(target.get());
           let title = d.title().map(ToString::to_string);
           let uri = d.uri().clone();
           let old = std::mem::replace(&mut curr, d.children().iter());
@@ -55,7 +56,7 @@ pub async fn from_document(doc:&flams_ontology::narration::documents::Document) 
         DocumentElement::Exercise(Exercise{children,..}) |
         DocumentElement::SkipSection(children) => {
           let old = std::mem::replace(&mut curr, children.iter());
-          stack.push((old,None));
+          stack.push((old,Some(TOCElem::SkippedSection { children: std::mem::take(&mut ret) })));
         }
         DocumentElement::SetSectionLevel(_) | DocumentElement::SymbolDeclaration(_) |
         DocumentElement::SymbolReference { .. } | DocumentElement::Notation { .. } |
@@ -81,6 +82,13 @@ pub async fn from_document(doc:&flams_ontology::narration::documents::Document) 
         std::mem::swap(&mut ret,&mut children);
         if title.is_some() || !children.is_empty() {
           ret.push(TOCElem::Section{id,uri,title,children});
+        }
+      }
+      Some((iter,Some(TOCElem::SkippedSection{mut children}))) => {
+        curr = iter;
+        std::mem::swap(&mut ret,&mut children);
+        if !children.is_empty() {
+          ret.push(TOCElem::SkippedSection { children });
         }
       }
       Some((iter,_)) => curr = iter

@@ -197,9 +197,25 @@ pub mod ontologies {
      * | -----  | ----- | ------ |
      * |   |    | `D` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#document>`](ulo2::DOCUMENT) |
      * |   | language `l` | `D` [`<dc:#language>`](dc::LANGUAGE) `l` |
-     * |   | archive `A`  | `A` [`<ulo:#contains>`](ulo2::CONTAINS) `D` |
+     * |   | in archive `A`  | `A` [`<ulo:#contains>`](ulo2::CONTAINS) `D` |
      * | [`DocumentReference`](crate::narration::DocumentElement::DocumentReference) | [`.target`](crate::narration::DocumentElement::DocumentReference::target)`=D2` | `D` [`<dc:#hasPart>`](dc::HAS_PART) `D2` |
      * | [`UseModule`](crate::narration::DocumentElement::UseModule) | `(M)` | `D` [`<dc:#requires>`](dc::REQUIRES) `M` |
+     * | [`Paragraph`](crate::narration::paragraphs::LogicalParagraph) |   | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `P` |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Definition`](crate::narration::paragraphs::ParagraphKind::Definition) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#definition>`](ulo2::DEFINITION) |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Assertion`](crate::narration::paragraphs::ParagraphKind::Assertion) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#proposition>`](ulo2::PROPOSITION) |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Paragraph`](crate::narration::paragraphs::ParagraphKind::Paragraph) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#para>`](ulo2::PARA) |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Example`](crate::narration::paragraphs::ParagraphKind::Example) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#example>`](ulo2::EXAMPLE) |
+     * |   | is [`Example`](crate::narration::paragraphs::ParagraphKind::Example) and `_`[`.fors`](crate::narration::paragraphs::LogicalParagraph::fors)`.contains(S)`  | `P` [`<ulo:#example-for>`](ulo2::EXAMPLE_FOR) `S` |
+     * |   | [`is_definition_like`](crate::narration::paragraphs::ParagraphKind::is_definition_like) and  `_`[`.fors`](crate::narration::paragraphs::LogicalParagraph::fors)`.contains(S)`  | `P` [`<ulo:#defines>`](ulo2::DEFINES) `S` |
+     * | [`Exercise`](crate::narration::exercises::Exercise) `E` |   | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `E` |
+     * |   | [`.sub_exercise`](crate::narration::exercises::Exercise::sub_exercise)`==false`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#problem>`](ulo2::PROBLEM) |
+     * |   | [`.sub_exercise`](crate::narration::exercises::Exercise::sub_exercise)`==true`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#subproblem>`](ulo2::SUBPROBLEM) |
+     * |   | `_`[`.preconditions`](crate::narration::exercises::Exercise::preconditions)`.contains(d,S)`  | `E` [`<ulo:#precondition>`](ulo2::PRECONDITION) `<BLANK>` |
+     * |   |    | `<BLANK>` [`<ulo:#cognitive-dimension>`](ulo2::COGDIM) `d`, where `d=`[`<ulo:#cs-remember>`](ulo2::REMEMBER)⏐[`<ulo:#cs-understand>`](ulo2::UNDERSTAND)⏐[`<ulo:#cs-apply>`](ulo2::APPLY)⏐[`<ulo:#cs-analyze>`](ulo2::ANALYZE)⏐[`<ulo:#cs-evaluate>`](ulo2::EVALUATE)⏐[`<ulo:#cs-create>`](ulo2::CREATE) |
+     * |   |    | `<BLANK>` [`<ulo:#po-symbol>`](ulo2::POSYMBOL) `S` |
+     * |   | `_`[`.objectives`](crate::narration::exercises::Exercise::objectives)`.contains(d,S)`  | `E` [`<ulo:#objective>`](ulo2::OBJECTIVE) `<BLANK>` |
+     * |   |    | `<BLANK>` [`<ulo:#cognitive-dimension>`](ulo2::COGDIM) `d`, where `d=`[`<ulo:#cs-remember>`](ulo2::REMEMBER)⏐[`<ulo:#cs-understand>`](ulo2::UNDERSTAND)⏐[`<ulo:#cs-apply>`](ulo2::APPLY)⏐[`<ulo:#cs-analyze>`](ulo2::ANALYZE)⏐[`<ulo:#cs-evaluate>`](ulo2::EVALUATE)⏐[`<ulo:#cs-create>`](ulo2::CREATE) |
+     * |   |    | `<BLANK>` [`<ulo:#po-symbol>`](ulo2::POSYMBOL) `S` |
      * 
      * #### [`Module`](crate::content::modules::Module) `M`
      * | struct | field | triple |
@@ -219,75 +235,13 @@ pub mod ontologies {
      * 
      */
 
+
      /*
-    use crate::content::declarations::OpenDeclaration;
-    use crate::narration::DocumentElement::Paragraph;
-    use crate::content::declarations::morphisms::Morphism;
 
-    paragraph:
-    #[cfg(feature="rdf")]
-    if E::RDF {
-        let doc =  extractor.get_document_iri();
-        let iri = uri.to_iri();
-        if kind.is_definition_like(&styles) {
-            for (f,_) in fors.iter() {
-                extractor.add_triples([
-                    triple!(<(iri.clone())> ulo:DEFINES <(f.to_iri())>)
-                ]);
-
-            }
-        } else if kind == ParagraphKind::Example {
-            for (f,_) in fors.iter() {
-                extractor.add_triples([
-                    triple!(<(iri.clone())> ulo:EXAMPLE_FOR <(f.to_iri())>)
-                ]);
-
-            }
-        }
-        extractor.add_triples([
-            triple!(<(iri.clone())> : <(kind.rdf_type().into_owned())>),
-            triple!(<(doc)> ulo:CONTAINS <(iri)>)
-        ]);
-    }
-
-    extractor.add_document_element(DocumentElement::Paragraph(
-        LogicalParagraph {
-            range: node.range(),kind,inline,styles,
-            fors,uri,children,title
-        }
-    ));
-
-    exercise:
-    #[cfg(feature="rdf")]
-    if E::RDF {
-        let doc =  extractor.get_document_iri();
-        let iri = uri.to_iri();
-        for (d,s) in &preconditions {
-            let b = flams_ontology::rdf::BlankNode::default();
-            extractor.add_triples([
-                triple!(<(iri.clone())> ulo:PRECONDITION (b.clone())!),
-                triple!((b.clone())! ulo:COGDIM <(d.to_iri().into_owned())>),
-                triple!((b)! ulo:POSYMBOL <(s.to_iri())>)
-            ]);
-        }
-        for (d,s) in &objectives {
-            let b = flams_ontology::rdf::BlankNode::default();
-            extractor.add_triples([
-                triple!(<(iri.clone())> ulo:OBJECTIVE (b.clone())!),
-                triple!((b.clone())! ulo:COGDIM <(d.to_iri().into_owned())>),
-                triple!((b)! ulo:POSYMBOL <(s.to_iri())>)
-            ]);
-        }
-
-        extractor.add_triples([
-            if sub_exercise {
-                triple!(<(iri.clone())> : ulo:SUBPROBLEM)
-            } else {
-                triple!(<(iri.clone())> : ulo:PROBLEM)
-            },
-            triple!(<(doc)> ulo:CONTAINS <(iri)>)
-        ]);
-    }
+     use crate::content::declarations::OpenDeclaration::Symbol;
+     use crate::narration::exercises::Exercise;
+     use crate::narration::paragraphs::ParagraphKind::Definition;
+     use crate::content::declarations::morphisms::Morphism;
 
     symdecl:
     #[cfg(feature="rdf")]

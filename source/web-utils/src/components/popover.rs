@@ -21,7 +21,6 @@ pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
     /// Configures the position of the Popover.
     #[prop(optional,default=PopoverPosition::FlexibleTop)]
     position: PopoverPosition,
-    #[prop(optional)] max_width:u32,
     #[prop(optional)]
     on_click_modal:Option<OnClickModal>,
     #[prop(optional)]

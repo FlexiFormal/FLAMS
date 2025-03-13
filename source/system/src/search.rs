@@ -1,4 +1,5 @@
-use flams_ontology::search::{QueryFilter, SearchIndex, SearchResult, SearchSchema};
+use flams_ontology::{search::{QueryFilter, SearchIndex, SearchResult, SearchSchema}, uris::SymbolURI};
+use flams_utils::vecmap::VecMap;
 
 use crate::backend::{archives::Archive, GlobalBackend};
 
@@ -118,6 +119,35 @@ impl Searcher {
       for (s,a) in searcher.search(&*query, &tantivy::collector::TopDocs::with_limit(top_num)).ok()? {
         let r = searcher.doc(a).ok()?;
         ret.push((s,r));
+      }
+      Some(ret)
+    })
+  }
+  pub fn query_symbols(&self,s:&str,num_results:usize) -> Option<VecMap<SymbolURI,Vec<(f32,SearchResult)>>> {
+    SPAN.in_scope(move || {
+      const FILTER:QueryFilter = QueryFilter {
+        allow_documents:false,
+        allow_paragraphs:true,
+        allow_definitions:true,
+        allow_examples:false,
+        allow_assertions:true,
+        allow_exercises:false,
+        definition_like_only:true
+      };
+      let searcher = self.reader.read().searcher();
+      let query = FILTER.to_query( s, &self.index.read())?;
+      let top_num = if num_results == 0 { usize::MAX / 2} else { num_results};
+      let mut ret = VecMap::new();
+      for (s,a) in searcher.search(&*query, &tantivy::collector::TopDocs::with_limit(top_num * 2)).ok()? {
+        let r:SearchResult = searcher.doc(a).ok()?;
+        if let SearchResult::Paragraph{fors,..} = &r {
+          for sym in fors {
+            ret.get_or_insert_mut(sym.clone(), Vec::new).push((s,r.clone()));
+          }
+        }
+      }
+      if ret.0.len() > num_results {
+        let _ = ret.0.split_off(num_results);
       }
       Some(ret)
     })

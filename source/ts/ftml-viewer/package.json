@@ -1,6 +1,6 @@
 {
   "name": "@kwarc/ftml-viewer",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "Typescript bindings for the ftml-viewer",
   "homepage": "https://github.com/KWARC/FLAMS#readme",
   "bugs": {
@@ -25,7 +25,7 @@
     "typescript": "^5.8.2"
   },
   "dependencies": {
-    "@kwarc/ftml-viewer-base": "=0.0.15",
-    "@kwarc/flams": "^0.0.5"
+    "@kwarc/ftml-viewer-base": "=0.0.16",
+    "@kwarc/flams": "^0.0.6"
   }
 }

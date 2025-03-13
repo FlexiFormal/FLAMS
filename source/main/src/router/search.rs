@@ -1,5 +1,6 @@
-use flams_ontology::{search::{FragmentQueryOpts, QueryFilter, SearchResult, SearchResultKind}, uris::{ArchiveURITrait, DocumentElementURI, DocumentURI, SymbolURI, URI}};
-use flams_web_utils::components::error_with_toaster;
+use flams_ontology::{search::{QueryFilter, SearchResult, SearchResultKind}, uris::{ArchiveURITrait, DocumentElementURI, DocumentURI, SymbolURI, URI}};
+use flams_utils::{impossible, vecmap::VecMap};
+use flams_web_utils::{components::error_with_toaster, inject_css};
 use leptos::prelude::*;
 
 use crate::router::content::uris::{DocURIComponents, URIComponents};
@@ -15,12 +16,23 @@ pub async fn search_query(query:String,opts:QueryFilter,num_results:usize) -> Re
     )
   }).await.map_err(|e| ServerFnError::ServerError(e.to_string()))?
 }
+#[server(prefix="/api",endpoint="search_symbols")]
+#[allow(clippy::unused_async)]
+pub async fn search_symbols(query:String,num_results:usize) -> Result<VecMap<SymbolURI,Vec<(f32,SearchResult)>>,ServerFnError<String>> {
+  use flams_system::search::Searcher;
+  tokio::task::spawn_blocking(move || {
+    Searcher::get().query_symbols(&query, num_results).ok_or_else(
+      || ServerFnError::ServerError("Search error".to_string())
+    )
+  }).await.map_err(|e| ServerFnError::ServerError(e.to_string()))?
+}
 
 #[derive(Debug,Clone)]
 enum SearchState {
   None,
   Loading,
-  Results(bool,Vec<(f32,SearchResult)>)
+  Results(Vec<(f32,SearchResult)>),
+  SymResults(VecMap<SymbolURI,Vec<(f32,SearchResult)>>)
 }
 
 #[derive(Copy,Clone,PartialEq,Eq)]
@@ -70,16 +82,18 @@ impl Filter {
 
 #[component]
 pub fn SearchTop() -> impl IntoView {
-  use thaw::{Layout,LayoutHeader,Flex,Input,InputPrefix,Icon,Divider,ToasterInjection,FlexAlign,Tag,TagPicker,TagPickerControl,TagPickerGroup,TagPickerInput,TagPickerOption};//,Combobox,ComboboxOption
+  use thaw::{Layout,LayoutHeader,Flex,Input,InputPrefix,Icon,Divider,ToasterInjection,FlexAlign,
+    Tag,TagPicker,TagPickerControl,TagPickerGroup,TagPickerInput,TagPickerOption,
+    RadioGroup,Radio
+  };//,Combobox,ComboboxOption
   use flams_web_utils::components::ClientOnly;
-  
   let query = RwSignal::new(String::new());
   let search_kind = RwSignal::new(vec![
     Filter::Def.value_str().to_string(),
     Filter::Par.value_str().to_string()
   ]);
   let query_opts = Memo::new(move |_| search_kind.with(|v| {
-    let mut ret = FragmentQueryOpts::default();
+    let mut ret = QueryFilter::default();
     ret.allow_documents = false;
     ret.allow_paragraphs = false;
     ret.allow_definitions = false;
@@ -104,10 +118,9 @@ pub fn SearchTop() -> impl IntoView {
     results.set(SearchState::Loading);
     let s = query.get_untracked();
     let opts = query_opts.get_untracked();
-    let symbols = false;
     async move {
-      match search_query(s,QueryFilter::Fragments(opts),20).await {
-        Ok(r) => results.set(SearchState::Results(symbols,r)),
+      match search_query(s,opts,20).await {
+        Ok(r) => results.set(SearchState::Results(r)),
         Err(e) => {
           results.set(SearchState::None);
           error_with_toaster(e,toaster);
@@ -115,11 +128,37 @@ pub fn SearchTop() -> impl IntoView {
       }
     }
   });
+  let sym_action = Action::new(move |args:&()| {
+    results.set(SearchState::Loading);
+    let s = query.get_untracked();
+    async move {
+      match search_symbols(s,20).await {
+        Ok(r) => results.set(SearchState::SymResults(r)),
+        Err(e) => {
+          results.set(SearchState::None);
+          error_with_toaster(e,toaster);
+        }
+      }
+    }
+  });
+  let radio_value = RwSignal::new("X".to_string());
   Effect::new(move || {
     if query.with(|q| q.is_empty()) { return };
-    let opts = query_opts.get();
-    action.dispatch(());
+    if radio_value.with(|s| s == "S") {
+      sym_action.dispatch(());
+    } else {
+      let opts = query_opts.get();
+      action.dispatch(());
+    }
   });
+  inject_css("flams-search-picker", ".flams-search-picker{} .flams-search-picker-disabled { display:none; }");
+  let cls = Memo::new(move |_|
+    match radio_value.get().as_str() {
+      "X" => "flams-search-picker".to_string(),
+      "S" => "flams-search-picker-disabled".to_string(),
+      _ => impossible!()
+    }
+  );
   view!{
     <Layout>
       <LayoutHeader><Flex>
@@ -128,8 +167,12 @@ pub fn SearchTop() -> impl IntoView {
                 <Icon icon=icondata_ai::AiSearchOutlined/>
             </InputPrefix>
         </Input>
+        <RadioGroup value=radio_value>
+          <Radio value="S" label="Symbols"/>
+          <Radio value="X" label="Documents/Paragraphs"/>
+        </RadioGroup>
         <ClientOnly>
-          <TagPicker selected_options=search_kind>
+          <TagPicker selected_options=search_kind class=cls>
               <TagPickerControl slot>
               <TagPickerGroup>
                 {move ||
@@ -157,13 +200,6 @@ pub fn SearchTop() -> impl IntoView {
                     })
               }
           </TagPicker>
-          /*<Combobox selected_options=search_kind>
-            <ComboboxOption value="doc" text="Full Documents"/>
-            <ComboboxOption value="def" text="Definitions"/>
-            <ComboboxOption value="ex" text="Examples"/>
-            <ComboboxOption value="ass" text="Assertions (Theorems, Lemmata, etc.)"/>
-            <ComboboxOption value="par" text="Other Paragraphs"/>
-          </Combobox>*/
         </ClientOnly>
       </Flex></LayoutHeader>
       <Layout>
@@ -178,15 +214,49 @@ fn do_results(results:RwSignal<SearchState>) -> impl IntoView {
   use leptos::either::EitherOf5::*;
   results.with(|r| match r {
     SearchState::None => A(()),
-    SearchState::Results(_,v) if v.is_empty() => B("(No results)"),
+    SearchState::Results(v) if v.is_empty() => B("(No results)"),
     SearchState::Loading => C(view!(<flams_web_utils::components::Spinner/>)),
-    SearchState::Results(true,v) => {
-      D(view!{"TODO: "{format!("{v:?}")}})
+    SearchState::SymResults(v) => {
+      D(v.iter().map(|(sym,res)| do_sym_result(sym,res.clone())).collect_view())
     }
-    SearchState::Results(symbols,v) => {
+    SearchState::Results(v) => {
       E(v.iter().map(|(score,res)| do_result(*score,res)).collect_view())
     }
   })
+}
+
+fn do_sym_result(sym:&SymbolURI,res:Vec<(f32,SearchResult)>) -> impl IntoView {
+  use thaw::{Body1,Card,CardPreview,CardHeader,Caption1,CardHeaderAction,Scrollbar};
+  use leptos::either::Either::*;
+  use super::content::Fragment;
+
+  let name = ftml_viewer_components::components::omdoc::symbol_name(sym,&sym.to_string());
+  view! {
+    <Card>
+        <CardHeader>
+            <Body1>
+                <b>{name}</b>
+            </Body1>
+        </CardHeader>
+        <CardPreview>
+          <div style="padding:0 5px;max-width:100%">
+            <div style="width:100%;color:black;background-color:white;">
+              <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">{
+                res.into_iter().map(|(_,r)| {
+                  let SearchResult::Paragraph { uri, fors, def_like, kind } = r else { impossible!()};
+                  view!(<Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) />)
+                }).collect_view()
+              }
+              </Scrollbar>
+            </div>
+          </div>
+        </CardPreview>
+        /*<CardFooter>
+            "sTeX:"<pre></pre>
+        </CardFooter>*/
+    </Card>
+  }
+  
 }
 
 fn do_result(score:f32,res:&SearchResult) -> impl IntoView {
@@ -197,7 +267,6 @@ fn do_result(score:f32,res:&SearchResult) -> impl IntoView {
     SearchResult::Paragraph { uri, fors,kind,.. } => 
       Right(do_para(score,uri.clone(),*kind,fors.clone()))
   }
-  
 }
 
 fn do_doc(score:f32,uri:DocumentURI) -> impl IntoView {

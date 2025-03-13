@@ -122,7 +122,7 @@ impl TreeSink for HTMLParser<'_> {
     }
     let mut html = Vec::new();
     let Extractor {
-      errors,css,refs,title,triples,state,backend,..
+      errors,mut css,refs,title,triples,state,backend,..
     } = self.extractor.into_inner();
     if !errors.is_empty() {
       return Err(errors);
@@ -132,6 +132,7 @@ impl TreeSink for HTMLParser<'_> {
         result:Err(Vec::new())
       } */
     }
+    css.sort();
     let Ok((uri,elems,modules,styles)) = state.take() else {
       return Err("Unbalanced FTML document".to_string())
       /*return BuildResult {

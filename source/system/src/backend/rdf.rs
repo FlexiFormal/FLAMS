@@ -61,6 +61,7 @@ pub mod sparql {
         }
     }
 
+    #[must_use]
     pub fn lo_query(s:&SymbolURI,exercises:bool) -> Query {
         /* 
 SELECT DISTINCT ?x ?R ?t ?s WHERE {
@@ -95,7 +96,7 @@ SELECT DISTINCT ?x ?R ?t ?s WHERE {
                         }
                     ] 
                 }), 
-                variable: var("R").into(), 
+                variable: var("R"), 
                 expression: Expression::Literal(
                     "DEF".into()
                 )
@@ -110,7 +111,7 @@ SELECT DISTINCT ?x ?R ?t ?s WHERE {
                         }
                     ] 
                 }), 
-                variable: var("R").into(), 
+                variable: var("R"), 
                 expression: Expression::Literal(
                     "EX".into()
                 )
@@ -149,10 +150,10 @@ SELECT DISTINCT ?x ?R ?t ?s WHERE {
                             ] })
                         }
                     } else {defs_and_exs}),
-                    variables:if(exercises) {
-                        vec![var("x").into(),var("R").into(),var("t").into()]
+                    variables: if exercises {
+                        vec![var("x"),var("R"),var("t")]
                     } else {
-                        vec![var("x").into(),var("R").into()]
+                        vec![var("x"),var("R")]
                     }
                 })
             }
@@ -324,7 +325,7 @@ impl Default for RDFStore {
 impl RDFStore {
     #[inline]
     pub fn clear(&self) {
-        self.store.clear();
+        let _ = self.store.clear();
     }
     #[inline]
     #[must_use]
@@ -336,6 +337,7 @@ impl RDFStore {
         let _ = loader.load_quads(iter);
     }
 
+    #[must_use]
     pub fn los(&self,s:&SymbolURI,exercises:bool) -> Option<LOIter> {
         let q = sparql::lo_query(s,exercises);
         self.query(q).ok().and_then(|s|

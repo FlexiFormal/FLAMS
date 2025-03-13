@@ -32,8 +32,12 @@ export class FLAMSServer {
     return await this.rawPostRequest("api/index",{});
   }
 
-  async search(query:string,filter:FLAMS.QueryFilter,numResults:number): Promise<[number,FLAMS.SearchResult][] | undefined> {
+  async searchDocs(query:string,filter:FLAMS.QueryFilter,numResults:number): Promise<[number,FLAMS.SearchResult][] | undefined> {
     return await this.rawPostRequest("api/search",{query:query,opts:filter,num_results:numResults});
+  }
+
+  async searchSymbols(query:string,numResults:number): Promise<[FLAMS.SymbolURI,[number,FLAMS.SearchResult][]][] | undefined> {
+    return await this.rawPostRequest("api/search_symbols",{query:query,num_results:numResults});
   }
 
   /** 

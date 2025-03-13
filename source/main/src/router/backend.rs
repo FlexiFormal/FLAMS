@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use flams_ontology::{archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData}, file_states::FileStateSummary, uris::ArchiveId};
-use flams_utils::{time::Timestamp, vecmap::VecMap};
+use flams_utils::{time::Timestamp, unwrap, vecmap::VecMap};
 use leptos::prelude::*;
 use flams_web_utils::{components::{Header, Leaf, LazySubtree, Tree}, inject_css};
 
@@ -198,7 +198,9 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
   output=server_fn::codec::Streaming
 )]
 pub async fn archive_stream(id:ArchiveId) -> Result<leptos::server_fn::codec::ByteStream,ServerFnError> {
-    use flams_system::backend::Backend;  
+    use flams_system::backend::Backend; 
+    use futures::TryStreamExt;
+    /*
     struct Wrap<R:tokio::io::AsyncRead>(tokio_util::io::ReaderStream<R>);
     impl<R:tokio::io::AsyncRead> futures::Stream for Wrap<R> {
       type Item = Result<tokio_util::bytes::Bytes,ServerFnError>;
@@ -206,19 +208,22 @@ pub async fn archive_stream(id:ArchiveId) -> Result<leptos::server_fn::codec::By
           <_ as futures::Stream>::poll_next(unsafe{self.map_unchecked_mut(|f| &mut f.0)},cx).map_err(|e| ServerFnError::new(e.to_string()))
       }
     }
-
-  let fut = flams_system::backend::GlobalBackend::get().with_local_archive(&id, |a| {
+ */
+  let stream = flams_system::backend::GlobalBackend::get().with_local_archive(&id, |a| {
     a.map(|a| a.zip())
-  }).ok_or_else(|| ServerFnError::new(format!("No archive with id {id} found!")))?
-    .await.ok_or_else(|| ServerFnError::new(format!("Error bundling {id}")))?;
-
-  let f = tokio::fs::File::open(&fut).await.map_err(|e| ServerFnError::new(format!("Error reading file: {e}")))?;
-  
+  }).ok_or_else(|| ServerFnError::new(format!("No archive with id {id} found!")))?;
+    //.await.ok_or_else(|| ServerFnError::new(format!("Error bundling {id}")))?;
   Ok(leptos::server_fn::codec::ByteStream::new(
+    stream.map_err(|e| ServerFnError::new(e.to_string()))
+  ))
+
+  //let f = tokio::fs::File::open(&fut).await.map_err(|e| ServerFnError::new(format!("Error reading file: {e}")))?;
+  
+  /*Ok(leptos::server_fn::codec::ByteStream::new(
     Wrap(tokio_util::io::ReaderStream::new(
       tokio::io::BufReader::new(f)
     ))
-  ))
+  ))*/
   //use tokio_util::io::ReaderStream;
   //tar::Builder::new(w);
 } 
@@ -308,7 +313,7 @@ fn dirs_and_files(archive:&ArchiveId,dirs:Vec<DirectoryData>,files:Vec<FileData>
 
 
 fn dir(archive:ArchiveId,d:DirectoryData) -> impl IntoView {
-  let pathstr = d.rel_path.split('/').last().unwrap_or_else(|| unreachable!()).to_string();
+  let pathstr = unwrap!(d.rel_path.split('/').last()).to_string();
   let id = archive.clone();
   let rel_path = d.rel_path.clone();
   let header = view!(
@@ -349,7 +354,7 @@ fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
   let button = format!("[{archive}]/{}",f.rel_path);
   let comps = crate::router::content::uris::DocURIComponents::RelPath(archive.clone(),f.rel_path.clone());
 
-  let pathstr = f.rel_path.split('/').last().unwrap_or_else(|| unreachable!()).to_string();
+  let pathstr = unwrap!(f.rel_path.split('/').last()).to_string();
   let header = view!(
     <Drawer lazy=true>
       <Trigger slot>
@@ -511,15 +516,15 @@ fn do_queues(queue_id:RwSignal<Option<NonZeroU32>>,v:Vec<super::buildqueue::Queu
   } else {
     v.into_iter().map(|q| (q.id.get(),q.name)).chain(std::iter::once((0u32,"New Build Queue".to_string()))).collect()
   };
-  let value = RwSignal::new(queues.first().unwrap_or_else(|| unreachable!()).clone().1);
+  let value = RwSignal::new(unwrap!(queues.first()).clone().1);
   let qc = queues.clone();
   let _ = Effect::new(move |_| {
     let queue = value.get();
     if queue == "New Build Queue" {
       queue_id.update_untracked(|v| *v = None);
     } else {
-      let idx = qc.iter().find_map(|(id,name)| if *name == queue {Some(*id)} else {None}).unwrap_or_else(|| unreachable!());
-      queue_id.update_untracked(|v| *v = Some(NonZeroU32::new(idx).unwrap_or_else(|| unreachable!())));
+      let idx = unwrap!(? qc.iter().find_map(|(id,name)| if *name == queue {Some(*id)} else {None}));
+      queue_id.update_untracked(|v| *v = Some(unwrap!(NonZeroU32::new(idx))));
     }
   });
   view!{

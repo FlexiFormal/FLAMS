@@ -35,6 +35,35 @@ export function get_server_url(): string;
  * *This API requires the following crate features to be activated: `ReadableStreamType`*
  */
 type ReadableStreamType = "bytes";
+/**
+ * Options for rendering an FTML document
+ * - `FromBackend`: calls the backend for the document
+ *     uri: the URI of the document (as string)
+ *     toc: if defined, will render a table of contents for the document
+ * - `HtmlString`: render the provided HTML String
+ *     html: the HTML String
+ *     toc: if defined, will render a table of contents for the document
+ */
+export type DocumentOptions = { uri: DocumentURI; toc: TOCOptions | undefined } | { html: string; toc: TOCElem[] | undefined };
+
+/**
+ * Options for rendering an FTML document fragment
+ * - `FromBackend`: calls the backend for the document fragment
+ *     uri: the URI of the document fragment (as string)
+ * - `HtmlString`: render the provided HTML String
+ *     html: the HTML String
+ */
+export type FragmentOptions = { uri: DocumentElementURI } | { uri: DocumentElementURI | undefined; html: string };
+
+/**
+ * Options for rendering a table of contents
+ * `GET` will retrieve it from the remote backend
+ * `TOCElem[]` will render the provided TOC
+ */
+export type TOCOptions = "GET" | { Predefined: TOCElem[] };
+
+export type ExerciseOption = { WithFeedback: [DocumentElementURI, ExerciseFeedback][] } | { WithSolutions: [DocumentElementURI, Solutions][] };
+
 export interface ExerciseResponse {
     uri: DocumentElementURI;
     responses: ExerciseResponseType[];
@@ -53,6 +82,8 @@ export type SymbolURI = string;
 export type DocumentElementURI = string;
 
 export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
+
+export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
 
 export interface FileData {
     rel_path: string;
@@ -86,7 +117,7 @@ export type Institution = { type: "university"; title: string; place: string; co
 
 export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Exercise" } & CognitiveDimension) | ({ type: "SubExercise" } & CognitiveDimension);
 
-export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
+export type ArchiveId = string;
 
 export type DocumentURI = string;
 
@@ -99,15 +130,13 @@ export interface FileStateSummary {
     last_changed: Timestamp;
 }
 
-export type ArchiveId = string;
-
 export type Name = string;
 
 export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Exercise";
 
 export type SearchResult = { Document: DocumentURI } | { Paragraph: { uri: DocumentElementURI; fors: SymbolURI[]; def_like: boolean; kind: SearchResultKind } };
 
-export interface FragmentQueryOpts {
+export interface QueryFilter {
     allow_documents?: boolean;
     allow_paragraphs?: boolean;
     allow_definitions?: boolean;
@@ -117,42 +146,11 @@ export interface FragmentQueryOpts {
     definition_like_only?: boolean;
 }
 
-export type QueryFilter = "Symbols" | { Fragments: FragmentQueryOpts };
-
 export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
-
-export type Timestamp = number;
 
 export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
 
-/**
- * Options for rendering an FTML document
- * - `FromBackend`: calls the backend for the document
- *     uri: the URI of the document (as string)
- *     toc: if defined, will render a table of contents for the document
- * - `HtmlString`: render the provided HTML String
- *     html: the HTML String
- *     toc: if defined, will render a table of contents for the document
- */
-export type DocumentOptions = { uri: DocumentURI; toc: TOCOptions | undefined } | { html: string; toc: TOCElem[] | undefined };
-
-/**
- * Options for rendering an FTML document fragment
- * - `FromBackend`: calls the backend for the document fragment
- *     uri: the URI of the document fragment (as string)
- * - `HtmlString`: render the provided HTML String
- *     html: the HTML String
- */
-export type FragmentOptions = { uri: DocumentElementURI } | { uri: DocumentElementURI | undefined; html: string };
-
-/**
- * Options for rendering a table of contents
- * `GET` will retrieve it from the remote backend
- * `TOCElem[]` will render the provided TOC
- */
-export type TOCOptions = "GET" | { Predefined: TOCElem[] };
-
-export type ExerciseOption = { WithFeedback: [DocumentElementURI, ExerciseFeedback][] } | { WithSolutions: [DocumentElementURI, Solutions][] };
+export type Timestamp = number;
 
 export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
 
@@ -163,7 +161,7 @@ export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
  *    inputref itself; not the referenced Document. For the TOC,
  *    which document is inputrefed is actually irrelevant.
  */
-export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementURI; id: string; children: TOCElem[] } | { type: "Inputref"; uri: DocumentURI; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: Name[]; kind: ParagraphKind } | { type: "Slide" };
+export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementURI; id: string; children: TOCElem[] } | { type: "SkippedSection"; children: TOCElem[] } | { type: "Inputref"; uri: DocumentURI; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: Name[]; kind: ParagraphKind } | { type: "Slide" };
 
 /**
  * A Table of contents; Either:

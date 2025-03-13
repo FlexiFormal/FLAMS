@@ -39,6 +39,9 @@ pub enum TOCElem {
     id:String,
     children:Vec<TOCElem>
   },
+  SkippedSection {
+    children:Vec<TOCElem>
+  },
   /// An inputref to some other document; the URI is the one for the
   /// referenced Document.
   Inputref{
@@ -68,7 +71,8 @@ pub trait TOCIter<'a> {
           if let Some(elem) = self.curr.next() {
             let children: &'b [_] = match elem {
               TOCElem::Section{children,..} |
-              TOCElem::Inputref{children,..} => children,
+              TOCElem::Inputref{children,..} |
+              TOCElem::SkippedSection { children } => children,
               _ => return Some(elem)
             };
             self.stack.push(std::mem::replace(&mut self.curr,children.iter()));
@@ -117,7 +121,8 @@ impl TOCElem {
         }))
       }
       Self::Section{title:None,children,..} |
-        Self::Inputref{children,..} => {
+        Self::Inputref{children,..} |
+        Self::SkippedSection{children} => {
         Some(Either::Right(children.into_iter().map(Self::into_view).collect_view().into_any()))
       }
       _ => None

@@ -2,27 +2,13 @@
 
 use crate::{narration::paragraphs::ParagraphKind, uris::{DocumentURI, SymbolURI,DocumentElementURI}};
 
-#[derive(Copy,Clone,Debug)]
-#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-pub enum QueryFilter {
-  Symbols,
-  Fragments(FragmentQueryOpts)
-}
-impl Default for QueryFilter {
-  fn default() -> Self {
-      Self::Fragments(FragmentQueryOpts::default())
-  }
-}
-
 const fn get_true() -> bool {true}
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 #[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct FragmentQueryOpts {
+pub struct QueryFilter {
   #[cfg_attr(feature="serde",serde(default="get_true"))]
   pub allow_documents:bool,
   #[cfg_attr(feature="serde",serde(default="get_true"))]
@@ -39,7 +25,7 @@ pub struct FragmentQueryOpts {
   pub definition_like_only:bool
 }
 
-impl Default for FragmentQueryOpts {
+impl Default for QueryFilter {
   fn default() -> Self {
       Self {
         allow_documents:true,
@@ -198,19 +184,20 @@ mod tantivy_i {
     };
   }
 
-  impl QueryFilter {
+  /*impl QueryFilter {
     #[must_use]
     pub fn to_query(self,query:&str,index:&tantivy::Index) -> Option<Box<dyn tantivy::query::Query>> {
       match self {
         Self::Fragments(f) => f.to_query(query,index),
-        Self::Symbols => FragmentQueryOpts{ allow_documents:false, allow_paragraphs:true, allow_definitions:true, allow_examples:false, allow_assertions:true, allow_exercises:false, definition_like_only:true}
+        Self::Symbols => QueryFilter{ allow_documents:false, allow_paragraphs:true, allow_definitions:true, allow_examples:false, allow_assertions:true, allow_exercises:false, definition_like_only:true}
           .to_query(query,index)
       }
     }
-  }
+  }*/
 
-  impl FragmentQueryOpts {
-    fn to_query(self,query:&str,index:&tantivy::Index) -> Option<Box<dyn tantivy::query::Query>> {
+  impl QueryFilter {
+    #[must_use]
+    pub fn to_query(self,query:&str,index:&tantivy::Index) -> Option<Box<dyn tantivy::query::Query>> {
       use std::fmt::Write;
       let Self {allow_documents,allow_paragraphs,allow_definitions,allow_examples,allow_assertions,allow_exercises,definition_like_only} = self;
       let mut s = String::new();

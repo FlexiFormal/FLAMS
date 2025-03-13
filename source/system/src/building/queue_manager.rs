@@ -62,7 +62,7 @@ impl QueueManager {
             0 => Semaphore::Linear,
             i => Semaphore::Counting {
               inner: std::sync::Arc::new(tokio::sync::Semaphore::new(i as usize)),
-              num: flams_utils::triomphe::Arc::new(AtomicU8::new(i))
+              _num: flams_utils::triomphe::Arc::new(AtomicU8::new(i))
             }
           }}
           #[cfg(not(feature="tokio"))] 
@@ -116,7 +116,7 @@ impl QueueManager {
   pub fn queues_for_user(&self,user_name:&str) -> Vec<(QueueId,QueueName,Option<Vec<SandboxedRepository>>)> {
     let inner = self.inner.read();
     inner.iter().filter_map(|(k,v)| {
-      if let QueueName::Sandbox{name,idx} = v.name() {
+      if let QueueName::Sandbox{name,..} = v.name() {
         if &**name == user_name {Some((*k,v.name().clone(),
           if let AnyBackend::Sandbox(sb) = v.backend() {
             Some(sb.get_repos())
@@ -131,6 +131,8 @@ impl QueueManager {
     f(inner.get(&id))
   }
 
+  /// #### Errors
+  #[allow(clippy::significant_drop_tightening)]
   pub fn migrate<R,E:ToString>(&self,id:QueueId,then:impl FnOnce(&SandboxedBackend) -> Result<R,E>) -> Result<(R,usize),String> {
     let mut inner = self.inner.write();
     let r = if let Some(queue) = inner.get(&id) {
@@ -138,10 +140,10 @@ impl QueueManager {
         return Err(format!("Queue {id} not finished"))
       }
       if !matches!(queue.backend(),AnyBackend::Sandbox(_)) {
-        return Err(format!("Global Queue can not be migrated"))
+        return Err("Global Queue can not be migrated".to_string())
       }
       let AnyBackend::Sandbox(sandbox) = queue.backend() else {unreachable!()};
-      then(&sandbox).map_err(|e| e.to_string())?
+      then(sandbox).map_err(|e| e.to_string())?
     } else {
       return Err(format!("No queue {id} found"))
     };
@@ -149,17 +151,15 @@ impl QueueManager {
     let AnyBackend::Sandbox(sandbox) = queue.backend() else {unreachable!()};
     Ok((r,sandbox.migrate()))
   }
-
+  
+  #[allow(clippy::significant_drop_tightening)]
   pub fn delete(&self,id:QueueId) {
     let mut inner = self.inner.write();
     if let Some(q) = inner.remove(&id) {
       let mut s = q.0.state.write();
-      match &mut *s {
-        QueueState::Running(RunningQueue{queue,blocked,..}) => {
-          queue.clear();
-          blocked.clear();
-        }
-        _ => ()
+      if let QueueState::Running(RunningQueue{queue,blocked,..}) = &mut *s {
+        queue.clear();
+        blocked.clear();
       }
       if matches!(q.name(),QueueName::Global) {
         inner.insert(id, Queue::new(id,QueueName::Global,GlobalBackend::get().to_any()));
@@ -202,6 +202,6 @@ pub(crate) enum Semaphore {
   #[cfg(feature="tokio")]
   Counting {
     inner: std::sync::Arc<tokio::sync::Semaphore>,
-    num: flams_utils::triomphe::Arc<AtomicU8>
+    _num: flams_utils::triomphe::Arc<AtomicU8>
   }
 }

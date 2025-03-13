@@ -1,4 +1,5 @@
 export function hasFtmlAttribute(node) {
+  if (typeof window === "undefined") { return false; }
   if (node.tagName.toLowerCase() === "img") {
     // replace "srv:" by server url
     const attributes = node.attributes;
@@ -20,9 +21,10 @@ export function hasFtmlAttribute(node) {
   return false;
 }
 
-window.FLAMS_SERVER_URL = "";
-
+if (typeof window !== "undefined") {
+  window.FLAMS_SERVER_URL = "";
+}
 export function setServerUrl(url) {
-  window.FLAMS_SERVER_URL = url;
+  if (typeof window !== "undefined") { window.FLAMS_SERVER_URL = url; }
   set_server_url(url);
 }

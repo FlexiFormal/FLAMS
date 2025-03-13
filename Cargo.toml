@@ -21,7 +21,7 @@ lto = "fat"
 #codegen-units = 1
 overflow-checks = false
 panic = "unwind"
-strip = "symbols"
+strip = true
 
 [profile.dev]
 split-debuginfo="unpacked"
@@ -123,6 +123,8 @@ phf = { version = "0.11", default-features = false, features=["macros"] }
 crossbeam-channel = {version = "0.5"}
 flate2 = {version="1.0"}
 tar = {version="0.4"}
+async-compression = {version="0.4", features=["tokio","gzip"] }
+astral-tokio-tar = "0.5.1"
 
 password-hash = {version="0.5"}
 argon2 = {version="0.5"}
@@ -144,7 +146,7 @@ oxrdfio = { version = "0.1"}#, features = ["async-tokio"] }
 
 sqlx = {version="0.8", features=["sqlite","macros","runtime-tokio"]}
 libsqlite3-sys = {version="*",features=["bundled"]}
-html5ever = "0.29.0"
+html5ever = "=0.29.1" # TODO updae once html2text updates markup5ever dependency
 
 async-lsp = {version="0.2",features=["tokio","async-io"]}
 futures = {version="0.3"}

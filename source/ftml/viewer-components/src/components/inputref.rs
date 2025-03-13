@@ -67,6 +67,10 @@ fn do_inputref(uri:DocumentURI,on_load:RwSignal<bool>) -> impl IntoView {
     },
     move |(_,css,html)| {
       for c in css { do_css(c); }
+      /*{
+        let sects = expect_context::<SectionCounters>();
+        tracing::warn!("Expanding inputref {sects:?}");
+      }*/
       view!(<span style="display:contents">
       <Provider value=NarrativeURI::Document(uricl.clone())>
       <Provider value = RwSignal::new(DOMExtractor::default())>

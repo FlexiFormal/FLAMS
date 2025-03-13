@@ -13,6 +13,7 @@ use crate::{users::Login, utils::from_server_clone};
 
 #[cfg(feature="ssr")]
 pub(crate) fn insert_base_url(mut v:Vec<CSS>) -> Vec<CSS> {
+  //v.sort();
   for c in v.iter_mut() {
     if let CSS::Link(lnk) = c {
       if let Some(r) = lnk.strip_prefix("srv:") {

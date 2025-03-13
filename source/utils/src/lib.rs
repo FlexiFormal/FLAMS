@@ -88,6 +88,40 @@ pub enum CSS {
         #[cfg_attr(feature = "wasm", tsify(type = "string"))] css:Str
     }
 }
+impl PartialOrd for CSS {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for CSS {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        fn classnum(s:&str) -> u8 {
+            match s {
+                s if s.starts_with("ftml-subproblem") => 1,
+                s if s.starts_with("ftml-problem") => 2,
+                s if s.starts_with("ftml-example") => 3,
+                s if s.starts_with("ftml-definition") => 4,
+                s if s.starts_with("ftml-paragraph") => 5,
+                "ftml-subsubsection" => 6,
+                "ftml-subsection" => 7,
+                "ftml-section" => 8,
+                "ftml-chapter" => 9,
+                "ftml-part" => 10,
+                _ => 0
+            }
+        }
+        use std::cmp::Ordering;
+        match (self,other) {
+            (Self::Link(l1),Self::Link(l2)) |
+            (Self::Inline(l1),Self::Inline(l2)) => l1.cmp(l2),
+            (Self::Link(_),Self::Inline(_))|(Self::Link(_)|Self::Inline(_),Self::Class{..}) => Ordering::Less,
+            (Self::Inline(_),Self::Link(_))|(Self::Class{..},Self::Inline(_)|Self::Link(_)) => Ordering::Greater,
+            (Self::Class{name:n1,css:c1},Self::Class{name:n2,css:c2}) => {
+                (classnum(n1),n1,c1).cmp(&(classnum(n2),n2,c2))
+            } 
+        }
+    }
+}
 impl CSS {
     #[must_use]
     pub fn split(css:&str) -> Vec<Self> {
@@ -106,7 +140,7 @@ impl CSS {
                 CssRule::Style(style) => {
                     if style.vendor_prefix.is_empty() && style.selectors.0.len() == 1 &&
                         style.selectors.0[0].len() == 1 && matches!(style.selectors.0[0].iter().next(),Some(Component::Class(_))) {
-                        let Some(Component::Class(class_name)) = style.selectors.0[0].iter().next() else { unreachable!() };
+                        let Some(Component::Class(class_name)) = style.selectors.0[0].iter().next() else { impossible!() };
                         style.to_css_string(PrinterOptions::default()).ok().map(|s| Self::Class{ name: class_name.to_string().into(), css: s.into() })
                     } else {
                         style.to_css_string(PrinterOptions::default()).ok().map(|s| {tracing::warn!("Not class-able: {s}");Self::Inline(s.into())})
@@ -122,12 +156,12 @@ impl CSS {
 
 #[macro_export]
 macro_rules! impossible {
-    () => {
+    () => {{
         #[cfg(debug_assertions)]
         { unreachable!() }
         #[cfg(not(debug_assertions))]
         { unsafe{ std::hint::unreachable_unchecked() } }
-    };
+    }};
     ($s:literal) => {
         #[cfg(debug_assertions)]
         { panic!($s) }
@@ -192,7 +226,7 @@ fn css_things() {
                 tracing::info!("Here: {}",style.to_css_string(PrinterOptions::default()).unwrap());
                 let sel = style.selectors.0[0].iter().next().unwrap();
                 assert!(matches!(sel,Component::Class(_)));
-                let Component::Class(cls) = sel else {unreachable!()};
+                let Component::Class(cls) = sel else {impossible!()};
                 let cls_str = &**cls;
                 tracing::info!("Class: {cls_str}");
             }

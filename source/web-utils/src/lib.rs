@@ -80,6 +80,18 @@ pub fn inject_css(id: &'static str, content: &'static str) {
     do_inject_css(Cow::Borrowed(id), Cow::Borrowed(content));
 }
 
+#[macro_export]
+macro_rules! console_log {
+    () => {};
+    ($arg:expr) => { ::web_sys::console::log_1(&::web_sys::js_sys::JsValue::from($l))};
+    ($arg1:expr,$arg2:expr) => { 
+        ::web_sys::console::log_2(
+            &::web_sys::js_sys::JsValue::from($l),
+            &::web_sys::js_sys::JsValue::from($l)
+        )
+    };
+}
+
 #[allow(clippy::missing_const_for_fn)]
 #[allow(clippy::needless_pass_by_value)]
 fn do_inject_css(id: Cow<'static, str>, content: Cow<'static, str>) {

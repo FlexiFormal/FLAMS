@@ -242,8 +242,8 @@ impl<'a> ArchiveIterator<'a> {
             file_state: RwLock::new(SourceDir::default()),
             #[cfg(feature="gitlab")]
             is_managed: std::sync::OnceLock::new(),
-            #[cfg(feature="zip")]
-            zip_file: std::sync::Arc::new(std::sync::OnceLock::new()),
+            //#[cfg(feature="zip")]
+            //zip_file: std::sync::Arc::new(std::sync::OnceLock::new()),
             data: RepositoryData {
                 uri,
                 attributes,

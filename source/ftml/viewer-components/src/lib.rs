@@ -176,6 +176,7 @@ pub static RULES:[FTMLExtractionRule<DOMExtractor>;48] = [
 #[cfg_attr(all(not(feature="csr"),not(feature="ts")),wasm_bindgen::prelude::wasm_bindgen(module="/ftml-top.js"))]
 #[cfg_attr(feature="ts",wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
 export function hasFtmlAttribute(node) {
+  if (typeof window === "undefined") { return false; }
   if (node.tagName.toLowerCase() === "img") {
     // replace "srv:" by server url
     const attributes = node.attributes;
@@ -197,10 +198,11 @@ export function hasFtmlAttribute(node) {
   return false;
 }
 
-window.FLAMS_SERVER_URL = "";
-
+if (typeof window !== "undefined") {
+  window.FLAMS_SERVER_URL = "";
+}
 export function setServerUrl(url) {
-  window.FLAMS_SERVER_URL = url;
+  if (typeof window !== "undefined") { window.FLAMS_SERVER_URL = url; }
   set_server_url(url);
 }
 "#))]

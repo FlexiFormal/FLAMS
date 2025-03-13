@@ -13,11 +13,10 @@ pub mod search;
 
 use building::queue_manager::QueueManager;
 use formats::FLAMSExtension;
-#[cfg(feature="tokio")]
-use flams_utils::background;
 use settings::SettingsSpec;
 use backend::GlobalBackend;
 
+/// #### Panics
 pub fn initialize(settings: SettingsSpec) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
@@ -66,5 +65,5 @@ pub fn initialize(settings: SettingsSpec) {
         GlobalBackend::initialize();
         QueueManager::initialize(settings.num_threads);
         FLAMSExtension::initialize();
-    })
+    });
 }
