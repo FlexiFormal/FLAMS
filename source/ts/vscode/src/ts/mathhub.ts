@@ -96,7 +96,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   }
 
   async install(item:Archive|ArchiveGroup):Promise<void> {
-    const downloads = (item instanceof Archive)? [item] : filter_things(item);
+    const downloads = (item instanceof Archive)? [item.id] : filter_things(item);
     vscode.window.showInformationMessage(`𝖥𝖫∀𝖬∫: Installing archives: ${downloads}`);
     const context = get_context();
     const remote_url = context.remote_server? context.remote_server.url : undefined;

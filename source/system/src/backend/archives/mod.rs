@@ -73,10 +73,12 @@ mod zip {
             let mut tar = tokio_tar::Builder::new(comp);
             let _ = tar.append_dir_all(".",&p).await;
             let _ = tar.finish().await;
+            tracing::info!("Finished zipping {}",p.display());
         }
     }
     impl Drop for ZipStream {
         fn drop(&mut self) {
+            tracing::info!("Dropping");
             self.handle.abort();
         }
     }
@@ -114,23 +116,45 @@ impl LocalArchive {
         let resp = match reqwest::get(url).await {
             Ok(r) => r,
             Err(e) => {
-                tracing::error!("Error: {e}");
+                tracing::error!("Error 1: {e}");
                 return Err(())
             }
         };
         let stream = resp.bytes_stream().map_err(std::io::Error::other);
-        let stream = tokio_util::io::StreamReader::new(stream);
-        let decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
-        let mut tar = tokio_tar::Archive::new(decomp);
+        let mut stream = tokio_util::io::StreamReader::new(stream);
         let dest = crate::settings::Settings::get().temp_dir().join(
             flams_utils::hashstr("download", &id)
         );
         if let Err(e) = tokio::fs::create_dir_all(&dest).await {
-            tracing::error!("Error: {e}");
+            tracing::error!("Error 2: {e}");
             return Err(())
         }
+        tracing::info!("Extracting to {}",dest.display());
+
+
+        let mut tmpdest = match tokio::fs::File::create(dest.join("tmp")).await {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::error!("Error 4: {e}");
+                let _ = tokio::fs::remove_dir_all(dest).await;
+                return Err(())
+            }
+        };
+        if let Err(e) = tokio::io::copy(&mut stream,&mut tmpdest).await {
+            tracing::error!("Error 5: {e}");
+            let _ = tokio::fs::remove_dir_all(dest).await;
+            return Err(());
+        }
+        return Ok(());
+
+
+
+
+
+        let decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
+        let mut tar = tokio_tar::Archive::new(decomp);
         if let Err(e) = tar.unpack(&dest).await {
-            tracing::error!("Error: {e}");
+            tracing::error!("Error 3: {e}");
             let _ = tokio::fs::remove_dir_all(dest).await;
             return Err(())
         };
