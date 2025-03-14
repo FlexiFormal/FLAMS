@@ -97,9 +97,10 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
         let _ = tokio::task::spawn(async move {
             let crate::InstallParams { mut archives,remote_url } = params;
             for a in archives {
-                tracing::info!("Installing archive {a}");
+                let url = format!("{remote_url}/api/backend/download?id={a}");
+                tracing::info!("Installing archive {a} from {url}");
                 progress.update(a.to_string(), None);
-                if LocalArchive::unzip_from_remote(a.clone(), &format!("{remote_url}/api/backend/download?id={a}")).await.is_err() {
+                if LocalArchive::unzip_from_remote(a.clone(), &url).await.is_err() {
                     tracing::error!("Failed to install archive {a}");
                 }
             }

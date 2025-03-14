@@ -195,6 +195,7 @@ pub async fn build_status(archive:ArchiveId,path:Option<String>) -> Result<FileS
 //GARBL
 
 #[server(prefix="/api/backend",endpoint="download",
+  input=server_fn::codec::GetUrl,
   output=server_fn::codec::Streaming
 )]
 pub async fn archive_stream(id:ArchiveId) -> Result<leptos::server_fn::codec::ByteStream,ServerFnError> {
