@@ -81,7 +81,7 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
             ret.push((p,id,Right(GitState::None)));
           } */ 
           if let Ok(git) = flams_git::repos::GitRepo::open(a.path()) {
-            if gitlab_url.host_str().is_some_and(|s| git.is_managed(s)) {
+            if gitlab_url.host_str().is_some_and(|s| git.is_managed(s).is_some()) {
               ret.push((p,id,Left(git)));
             } else {
               ret.push((p,id,Right(GitState::None)));
