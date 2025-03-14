@@ -269,7 +269,7 @@ pub async fn get_new_commits(queue:Option<NonZeroU32>,id:ArchiveId) -> Result<Ve
       let path = backend.path_for(&id);
       let r = flams_git::repos::GitRepo::open(path).ok().and_then(|git| {
         let gitlab_url = unwrap!(flams_system::settings::Settings::get().gitlab_url.as_ref());
-        if gitlab_url.host_str().is_some_and(|s| git.is_managed(s)){ 
+        if gitlab_url.host_str().is_some_and(|s| git.is_managed(s).is_some()){ 
           git.get_new_commits_with_oauth(&secret).ok()
         } else {
           None
