@@ -23,7 +23,7 @@ pub struct Settings {
     external_url:Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
     pub num_threads: u8,
-    pub gitlab_url: Option<git_url_parse::GitUrl>,
+    pub gitlab_url: Option<url::Url>,
     pub gitlab_token: Option<Box<str>>,
     pub gitlab_app_id:Option<Box<str>>,
     pub gitlab_app_secret:Option<Box<str>>,
@@ -89,7 +89,7 @@ impl Settings {
                 num_threads: Some(self.num_threads),
             },
             gitlab: GitlabSettings {
-                url: self.gitlab_url.as_ref().map(|s| s.to_string().into_boxed_str()),
+                url: self.gitlab_url.clone(),
                 token: self.gitlab_token.clone(),
                 app_id: self.gitlab_app_id.clone(),
                 app_secret: self.gitlab_app_secret.clone(),
@@ -157,13 +157,7 @@ impl From<SettingsSpec> for Settings {
             }),
             lsp: spec.lsp,
             gitlab_token: spec.gitlab.token,
-            gitlab_url: spec.gitlab.url.and_then(|s| match git_url_parse::GitUrl::parse(&s) {
-                Ok(u) => Some(u),
-                Err(e) => {
-                    tracing::error!("Error: {e}");
-                    None
-                }
-            }),
+            gitlab_url: spec.gitlab.url,
             gitlab_app_id: spec.gitlab.app_id,
             gitlab_app_secret: spec.gitlab.app_secret,
             gitlab_redirect_url: spec.gitlab.redirect_url

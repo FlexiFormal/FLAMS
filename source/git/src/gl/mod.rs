@@ -38,7 +38,7 @@ impl Eq for ProjectWithId {}
 #[derive(Debug)]
 struct GitLabI {
   inner: gitlab::AsyncGitlab,
-	url:git_url_parse::GitUrl,
+	url:url::Url,
 	id:Option<Box<str>>,
 	secret:Option<Box<str>>,
   projects:parking_lot::Mutex<HSet<ProjectWithId>>
@@ -122,14 +122,14 @@ impl GLInstance {
 
 #[derive(Debug,Clone)]
 pub struct GitlabConfig {
-	url:git_url_parse::GitUrl,
+	url:url::Url,
 	token:Option<String>,
 	app_id:Option<String>,
 	app_secret:Option<String>
 }
 impl GitlabConfig {
 	#[inline]#[must_use]
-	pub const fn new(url:git_url_parse::GitUrl,token:Option<String>,app_id:Option<String>,app_secret:Option<String>) -> Self {
+	pub const fn new(url:url::Url,token:Option<String>,app_id:Option<String>,app_secret:Option<String>) -> Self {
 		Self { url, token, app_id, app_secret }
 	}
 
@@ -155,7 +155,7 @@ impl GitLab {
     } else {
       gitlab::GitlabBuilder::new_unauthenticated(url_str)
     };
-		if matches!(url.scheme,git_url_parse::Scheme::Http) { builder.insecure(); }
+		if matches!(url.scheme(),"http") { builder.insecure(); }
 		Ok(Self(std::sync::Arc::new(GitLabI {
 			inner: builder.build_async().in_current_span().await?,
 			url,

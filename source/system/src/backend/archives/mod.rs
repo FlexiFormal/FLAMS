@@ -158,17 +158,7 @@ impl LocalArchive {
         self.is_managed.get_or_init(|| {
             let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
             let Ok(repo) = flams_git::repos::GitRepo::open(self.path()) else { return None };
-            let url = match repo.get_origin_url() { 
-                Ok(url) => url,
-                Err(e) => {
-                    tracing::error!("Error getting origin url: {e}");
-                    return None
-                } 
-            };
-            tracing::info!("Comparing {url:?} with {gl:?}");
-            if gl.host.as_ref().is_some_and(|h| url.host.as_ref().is_some_and(|h2| h == h2)) {
-                Some(url)
-            } else {None}
+            gl.host_str().and_then(|s| repo.is_managed(s))
         }).as_ref()
     }
 

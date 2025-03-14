@@ -81,11 +81,11 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
             ret.push((p,id,Right(GitState::None)));
           } */ 
           if let Ok(git) = flams_git::repos::GitRepo::open(a.path()) {
-            if let Ok(url) = git.get_origin_url() {
-              if url.host.as_ref().is_some_and(|h| gitlab_url.host.as_ref().is_some_and(|h2| h == h2)) {
-                ret.push((p,id,Left(git)));
-              } else { ret.push((p,id,Right(GitState::None))) }
-            } else { ret.push((p,id,Right(GitState::None))) }
+            if gitlab_url.host_str().is_some_and(|s| git.is_managed(s)) {
+              ret.push((p,id,Left(git)));
+            } else {
+              ret.push((p,id,Right(GitState::None)));
+            }
           } else { ret.push((p,id,Right(GitState::None))) }
         }
       }
@@ -269,11 +269,11 @@ pub async fn get_new_commits(queue:Option<NonZeroU32>,id:ArchiveId) -> Result<Ve
       let path = backend.path_for(&id);
       let r = flams_git::repos::GitRepo::open(path).ok().and_then(|git| {
         let gitlab_url = unwrap!(flams_system::settings::Settings::get().gitlab_url.as_ref());
-        git.get_origin_url().ok().and_then(|url| {
-          if url.host.as_ref().is_some_and(|h| gitlab_url.host.as_ref().is_some_and(|h2| h == h2)) {
-            git.get_new_commits_with_oauth(&secret).ok()
-          } else { None }
-        })
+        if gitlab_url.host_str().is_some_and(|s| git.is_managed(s)){ 
+          git.get_new_commits_with_oauth(&secret).ok()
+        } else {
+          None
+        }
       }).unwrap_or_default();
       Ok(r)
     }).map_err(|s| ServerFnError::WrappedServerError(s))

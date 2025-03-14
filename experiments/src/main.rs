@@ -13,6 +13,12 @@ pub fn main() {
   let url2 = GitUrl::parse("git@gl.mathhub.info:smglom/foo.git")
     .expect("Failed to parse URL");
   tracing::info!("HTTPS: {url2}\n{url2:?}");
+  let gl = url::Url::parse("https://gl.mathhub.info").unwrap();
+  tracing::info!("Top: {gl:?}\n = {}",gl.host_str().unwrap());
+  let url3 = GitUrl::parse("http://192.168.1.1:7070/smglom/foo").unwrap();
+  tracing::info!("local HTTPS: {url3:?}");
+  let gl = url::Url::parse("http://192.168.1.1:7070").unwrap();
+  tracing::info!("local top: {gl:?}\n = {}",gl.host_str().unwrap());
 
 }
 

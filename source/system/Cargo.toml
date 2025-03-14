@@ -38,7 +38,8 @@ tokio = {workspace=true,features=["rt","io-util","sync","fs"],optional=true}
 tokio-util = {workspace = true,optional=true}
 chrono = {workspace=true}
 serde_json = {workspace=true}
-git-url-parse = {workspace=true}
+url = {workspace=true}
+git-url-parse = { workspace = true }
 
 oxigraph = { workspace=true }
 spargebra = { workspace=true,features=["rdf-star"] }

@@ -27,6 +27,7 @@ walkdir = {workspace = true, optional=true}
 lazy_static = {workspace = true}
 tracing = {workspace = true}
 smallvec = {workspace = true}
+url = {workspace = true}
 git-url-parse = {workspace = true, optional=true}
 
 [lints]

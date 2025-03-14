@@ -37,6 +37,15 @@ impl GitRepo {
     Ok(Self(repo))
   }
 
+  #[must_use]
+  pub fn is_managed(&self,gl_host:&str) -> Option<git_url_parse::GitUrl> {
+    self.get_origin_url().ok().and_then(|url| {
+      if url.host.as_ref().is_some_and(|h| h == gl_host) {
+        Some(url)
+      } else { None }
+    })
+  }
+
   /// #### Errors
   pub fn get_origin_url(&self) -> Result<git_url_parse::GitUrl,git2::Error> {
     let remote = self.0.find_remote("origin")?;
@@ -65,18 +74,6 @@ impl GitRepo {
     )
   }
 
-  /// #### Errors
-  #[inline]
-  pub fn mark_managed(&self,branch:&str,base_commit:&str) -> Result<(),git2::Error> {
-    self.add_note(&format!("{branch};{base_commit}"))
-  }
-
-  /// #### Errors
-  #[inline]
-  pub fn get_managed(&self) -> Result<Option<String>,git2::Error> {
-    self.with_latest_note(ToString::to_string)
-      //.map(|b| b.is_some_and(|b| b))
-  }
 
   /// #### Errors
   #[inline]
