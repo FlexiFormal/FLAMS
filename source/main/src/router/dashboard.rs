@@ -205,5 +205,5 @@ async fn do_login(pw:String,login:RwSignal<LoginState>) {
       display_error(Cow::Owned(format!("Error: {e}")));
     }
   }
-  let _ = view!(<Redirect path="/"/>);
+  let _ = view!(<Redirect path="/dashboard"/>);
 }
