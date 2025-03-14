@@ -55,7 +55,8 @@ impl lsp::notification::Notification for Reload {
 
 #[derive(serde::Serialize,serde::Deserialize)]
 struct InstallParams {
-  pub archives:Vec<ArchiveId>
+  pub archives:Vec<ArchiveId>,
+  pub remote_url:String
 }
 struct InstallArchives;
 impl lsp::notification::Notification for InstallArchives {

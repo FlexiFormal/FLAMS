@@ -21,7 +21,8 @@ export interface Settings {
 }
 
 interface InstallParams {
-  archives:string[]
+  archives:string[],
+  remote_url:string
 }
 
 async function apiSettings(server:FLAMSServer): Promise<Settings | undefined> {
@@ -97,7 +98,9 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   async install(item:Archive|ArchiveGroup):Promise<void> {
     const downloads = (item instanceof Archive)? [item] : filter_things(item);
     vscode.window.showInformationMessage(`𝖥𝖫∀𝖬∫: Installing archives: ${downloads}`);
-    get_context().client.sendRequest<void>("flams/install",<InstallParams>{archives:downloads});
+    const context = get_context();
+    const remote_url = context.remote_server? context.remote_server.url : undefined;
+    get_context().client.sendNotification("flams/install",<InstallParams>{archives:downloads,remote_url:remote_url});
   }
 
   private async df_from_server(a:Archive,rp?:string): Promise<[Dir[],File[]] | undefined> {

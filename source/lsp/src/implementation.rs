@@ -2,10 +2,11 @@
 
 use std::ops::ControlFlow;
 
-use crate::{annotations::to_diagnostic, LSPStore};
+use crate::{annotations::to_diagnostic, LSPStore, ProgressCallbackClient, ProgressCallbackServer};
 
 use super::{FLAMSLSPServer,ServerWrapper};
 use async_lsp::{lsp_types::{self as lsp}, LanguageClient, LanguageServer, ResponseError};
+use flams_system::backend::archives::LocalArchive;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
 macro_rules! impl_request {
@@ -89,7 +90,24 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
     }
 
     pub(crate) fn install(&mut self,params:crate::InstallParams) -> <Self as LanguageServer>::NotifyResult {
-        tracing::info!("Todo: install {:?}",params.archives);
+        let state = self.inner.state().clone();
+        let client = self.inner.client().clone();
+        tracing::info!("Here");
+        let progress = ProgressCallbackServer::new(client, "Installing".to_string(), None);
+        let _ = tokio::task::spawn(async move {
+            let crate::InstallParams { mut archives,remote_url } = params;
+            for a in archives {
+                tracing::info!("Installing archive {a}");
+                progress.update(a.to_string(), None);
+                if LocalArchive::unzip_from_remote(a.clone(), &format!("{remote_url}/api/backend/download?id={a}")).await.is_err() {
+                    tracing::error!("Failed to install archive {a}");
+                }
+            }
+            let client = progress.client().clone();
+            drop(progress);
+            state.backend().reset();
+            state.load_mathhubs(client);
+        });
         ControlFlow::Continue(())
     }
 }
