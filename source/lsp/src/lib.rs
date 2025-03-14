@@ -10,7 +10,7 @@ use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
 pub use async_lsp;
-use flams_ontology::uris::{DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
+use flams_ontology::uris::{ArchiveId, DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
 use flams_stex::quickparse::stex::{structs::{GetModuleError, ModuleReference, STeXModuleStore}, STeXParseData};
 use flams_system::backend::{AnyBackend, GlobalBackend};
 use flams_utils::{prelude::HMap, sourcerefs::{LSPLineCol, SourceRange}};
@@ -53,6 +53,16 @@ impl lsp::notification::Notification for Reload {
   const METHOD: &str = "flams/reload";
 }
 
+#[derive(serde::Serialize,serde::Deserialize)]
+struct InstallParams {
+  pub archives:Vec<ArchiveId>
+}
+struct InstallArchives;
+impl lsp::notification::Notification for InstallArchives {
+  type Params = InstallParams;
+  const METHOD: &str = "flams/install";
+}
+
 pub struct ServerWrapper<T:FLAMSLSPServer> {
   pub inner:T
 }
@@ -66,6 +76,7 @@ impl <T:FLAMSLSPServer> ServerWrapper<T> {
     let mut r = async_lsp::router::Router::from_language_server(self);
     r.request::<HTMLRequest,_>(Self::html_request);
     r.notification::<Reload>(Self::reload);
+    r.notification::<InstallArchives>(Self::install);
     //r.request(handler)
     r
   }

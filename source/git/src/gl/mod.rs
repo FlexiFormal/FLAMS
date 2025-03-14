@@ -149,12 +149,13 @@ impl GitLab {
 	pub async fn new(cfg:GitlabConfig) -> Result<Self,gitlab::GitlabError> {
 		let GitlabConfig { url, token, app_id, app_secret } = cfg;
 		//let (split_url,http) = GitlabConfig::split(&url);
-    let url_str = url.to_string(); 
-		let mut builder = if let Some(token) = token {
-      gitlab::GitlabBuilder::new(url_str,token)
-    } else {
-      gitlab::GitlabBuilder::new_unauthenticated(url_str)
-    };
+    let Some(url_str) = url.host_str() else {
+      return Err(gitlab::GitlabError::UrlParse{source:url::ParseError::EmptyHost});
+    }; 
+		let mut builder = token.map_or_else(
+      || gitlab::GitlabBuilder::new_unauthenticated(url_str),
+      |token| gitlab::GitlabBuilder::new(url_str,token)
+    );
 		if matches!(url.scheme(),"http") { builder.insecure(); }
 		Ok(Self(std::sync::Arc::new(GitLabI {
 			inner: builder.build_async().in_current_span().await?,

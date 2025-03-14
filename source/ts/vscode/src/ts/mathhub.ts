@@ -20,6 +20,10 @@ export interface Settings {
   }
 }
 
+interface InstallParams {
+  archives:string[]
+}
+
 async function apiSettings(server:FLAMSServer): Promise<Settings | undefined> {
     const ret = await server.rawPostRequest<{},[Settings,any,any] | undefined>("api/settings",{});
     if (ret) {
@@ -90,9 +94,10 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     return [];
   }
 
-  async install(item:AnyMH):Promise<void> {
-    // TODO
-
+  async install(item:Archive|ArchiveGroup):Promise<void> {
+    const downloads = (item instanceof Archive)? [item] : filter_things(item);
+    vscode.window.showInformationMessage(`𝖥𝖫∀𝖬∫: Installing archives: ${downloads}`);
+    get_context().client.sendRequest<void>("flams/install",<InstallParams>{archives:downloads});
   }
 
   private async df_from_server(a:Archive,rp?:string): Promise<[Dir[],File[]] | undefined> {
@@ -143,9 +148,9 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
       vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No remote server set`);
       return;
     }
-    const entries = await this.remote_server.backendGroupEntries(in_group.id);
+    const entries = await this.remote_server.backendGroupEntries(in_group.id).catch(() => undefined);
     if (!entries) {
-      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
+      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found in ",in_group.id);
       return;
     }
     const [groups,archives] = entries;
@@ -166,7 +171,11 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   private async ga_from_both_servers(in_group?:ArchiveGroup): Promise<[ArchiveGroup[],Archive[]] | undefined> {
     const entries = await this.primary_server.backendGroupEntries(in_group?.id);
     if (!entries) {
-      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
+      if (in_group) {
+        vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found in ",in_group.id);
+      } else {
+        vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
+      }
       return;
     }
     const [groups,archives] = entries;
@@ -197,6 +206,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
             const [group_entries,archive_entries] = children;
             merge(old.children,(<(ArchiveGroup|Archive)[]>group_entries).concat(archive_entries));
           }
+          old.update();
         } else {
           const ng = new ArchiveGroup(g,LRB.Remote,in_group);
           const children = await this.ga_from_remote_server(ng);
@@ -216,6 +226,18 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     }
     return [group_entries,archive_entries];
   }
+}
+
+function filter_things(item:ArchiveGroup): string[] {
+  var ret: string[] = [];
+  for (const child of item.children) {
+    if (child instanceof Archive && child.downloadable) {
+      ret.push(child.id);
+    } else if (child instanceof ArchiveGroup) {
+      ret = ret.concat(filter_things(child));
+    }
+  }
+  return ret;
 }
 
 type AnyMH = ArchiveGroup | Archive | Dir | File;
@@ -240,6 +262,7 @@ class ArchiveGroup extends vscode.TreeItem {
   lr:LRB;
   parent:ArchiveGroup|undefined;
   children:(ArchiveGroup | Archive)[];
+  downloadable=false;
   constructor(group:FLAMS.ArchiveGroup,lr:LRB,parent?:ArchiveGroup) {
     const name = group.id.split("/").pop();
     if (!name) {
@@ -254,7 +277,14 @@ class ArchiveGroup extends vscode.TreeItem {
       new vscode.ThemeIcon("library") : 
       vscode.Uri.joinPath(get_context().vsc.extensionUri,"img","MathHub.svg")
     ;
+    if (lr === LRB.Remote) {this.downloadable = true;}
     this.contextValue = (lr === LRB.Remote || lr === LRB.Both) ? "remote" : "local";
+  }
+
+  update() {
+    if (this.lr === LRB.Both && this.children.map(c => c.downloadable).includes(true)) {
+      this.contextValue = "remote";
+    }
   }
 }
 class Archive extends vscode.TreeItem {
@@ -271,7 +301,6 @@ class Archive extends vscode.TreeItem {
     this.id = archive.id;
     this.local = local;
     this.downloadable = downloadable;
-    console.log(this.id,this.local,this.downloadable);
     this.parent = parent;
     this.iconPath = local ? 
       new vscode.ThemeIcon("book") : 
@@ -314,7 +343,6 @@ class Dir extends vscode.TreeItem {
       );
     }
   }
-
 }
 
 class File extends vscode.TreeItem {

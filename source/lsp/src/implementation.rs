@@ -87,6 +87,11 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
         });
         ControlFlow::Continue(())
     }
+
+    pub(crate) fn install(&mut self,params:crate::InstallParams) -> <Self as LanguageServer>::NotifyResult {
+        tracing::info!("Todo: install {:?}",params.archives);
+        ControlFlow::Continue(())
+    }
 }
 
 type Res<T> = BoxFuture<'static,Result<T,ResponseError>>;
