@@ -3,13 +3,28 @@ use flams_ontology::uris::{DocumentURI, URIRefTrait};
 use flams_system::backend::{archives::{source_files::{SourceDir, SourceEntry}, Archive}, GlobalBackend};
 use flams_utils::{prelude::TreeChildIter, time::measure};
 
+
 pub fn main() {
+  tracing_subscriber::fmt().init();
+  use git_url_parse::GitUrl;
+  let url = GitUrl::parse("https://gl.mathhub.info/smglom/foo")
+    .expect("Failed to parse URL");
+  tracing::info!("HTTPS: {url}\n{url:?}");
+  let url2 = GitUrl::parse("git@gl.mathhub.info:smglom/foo.git")
+    .expect("Failed to parse URL");
+  tracing::info!("HTTPS: {url2}\n{url2:?}");
+
+}
+
+pub fn linter() {
+  /*
   let mut rt = tokio::runtime::Builder::new_multi_thread();
   rt.enable_all();
   rt.thread_stack_size(2 * 1024 * 1024);
   rt.build()
     .expect("Failed to initialize Tokio runtime")
     .block_on(linter_i());
+   */
 }
 
 async fn linter_i() {

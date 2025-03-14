@@ -4,8 +4,8 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-git2 = ["dep:git2","dep:walkdir","dep:flams-utils"]
-gitlab = ["dep:gitlab","dep:tokio","dep:parking_lot","dep:oauth2","dep:reqwest","dep:flams-ontology","dep:flams-utils"]
+git2 = ["dep:git2","dep:walkdir","dep:flams-utils","dep:git-url-parse"]
+gitlab = ["dep:gitlab","dep:tokio","dep:parking_lot","dep:oauth2","dep:reqwest","dep:flams-ontology","dep:flams-utils","dep:git-url-parse"]
 
 [dev-dependencies]
 tracing-subscriber = {workspace=true}
@@ -27,6 +27,7 @@ walkdir = {workspace = true, optional=true}
 lazy_static = {workspace = true}
 tracing = {workspace = true}
 smallvec = {workspace = true}
+git-url-parse = {workspace = true, optional=true}
 
 [lints]
 workspace = true

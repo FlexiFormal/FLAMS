@@ -33,3 +33,6 @@ color-eyre = {workspace=true}
 
 html2text = {workspace = true}
 tantivy = {workspace = true}
+url = {workspace = true}
+
+git-url-parse = {workspace=true}

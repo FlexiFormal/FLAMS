@@ -38,7 +38,7 @@ impl Eq for ProjectWithId {}
 #[derive(Debug)]
 struct GitLabI {
   inner: gitlab::AsyncGitlab,
-	url:Box<str>,
+	url:git_url_parse::GitUrl,
 	id:Option<Box<str>>,
 	secret:Option<Box<str>>,
   projects:parking_lot::Mutex<HSet<ProjectWithId>>
@@ -122,18 +122,18 @@ impl GLInstance {
 
 #[derive(Debug,Clone)]
 pub struct GitlabConfig {
-	url:String,
+	url:git_url_parse::GitUrl,
 	token:Option<String>,
 	app_id:Option<String>,
 	app_secret:Option<String>
 }
 impl GitlabConfig {
 	#[inline]#[must_use]
-	pub const fn new(url:String,token:Option<String>,app_id:Option<String>,app_secret:Option<String>) -> Self {
+	pub const fn new(url:git_url_parse::GitUrl,token:Option<String>,app_id:Option<String>,app_secret:Option<String>) -> Self {
 		Self { url, token, app_id, app_secret }
 	}
 
-  fn split(url:&str) -> (&str,bool) {
+  /*fn split(url:&str) -> (&str,bool) {
     if let Some(r) = url.strip_prefix("https://") {
       return (r,false)
     }
@@ -141,22 +141,24 @@ impl GitlabConfig {
       return (r,true)
     }
     (url,false)
-  }
+  }*/
 }
 
 impl GitLab {
   /// #### Errors
 	pub async fn new(cfg:GitlabConfig) -> Result<Self,gitlab::GitlabError> {
 		let GitlabConfig { url, token, app_id, app_secret } = cfg;
-		let (split_url,http) = GitlabConfig::split(&url);
-		let mut builder = token.map_or_else(
-			|| gitlab::GitlabBuilder::new_unauthenticated(split_url),
-			|token| gitlab::GitlabBuilder::new(split_url,token)
-		);
-		if http { builder.insecure(); }
+		//let (split_url,http) = GitlabConfig::split(&url);
+    let url_str = url.to_string(); 
+		let mut builder = if let Some(token) = token {
+      gitlab::GitlabBuilder::new(url_str,token)
+    } else {
+      gitlab::GitlabBuilder::new_unauthenticated(url_str)
+    };
+		if matches!(url.scheme,git_url_parse::Scheme::Http) { builder.insecure(); }
 		Ok(Self(std::sync::Arc::new(GitLabI {
 			inner: builder.build_async().in_current_span().await?,
-			url:url.into(),
+			url,
 			id:app_id.map(Into::into),
 			secret:app_secret.map(Into::into),
       projects:parking_lot::Mutex::new(HSet::default())

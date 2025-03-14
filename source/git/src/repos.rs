@@ -38,9 +38,12 @@ impl GitRepo {
   }
 
   /// #### Errors
-  pub fn get_origin_url(&self) -> Result<String,git2::Error> {
+  pub fn get_origin_url(&self) -> Result<git_url_parse::GitUrl,git2::Error> {
     let remote = self.0.find_remote("origin")?;
-    remote.url().map(ToString::to_string).ok_or_else(|| git2::Error::from_str("No origin"))
+    let Some(url) = remote.url() else {
+      return Err(git2::Error::from_str("No origin"));
+    };
+    git_url_parse::GitUrl::parse(url).map_err(|e| git2::Error::from_str(&e.to_string()))
   }
 
   /// #### Errors

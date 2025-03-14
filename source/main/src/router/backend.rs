@@ -32,7 +32,7 @@ pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupDa
       for a in v {
         match a {
           AoG::Archive(id) => {
-            let (summary,git) = if !allowed && !flams_system::settings::Settings::get().gitlab_url.is_none() {
+            let (summary,git) = if !allowed && flams_system::settings::Settings::get().gitlab_url.is_none() {
               (None,None)
             } else {
               tree.get(id).map(|a| 

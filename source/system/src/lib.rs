@@ -54,7 +54,7 @@ pub fn initialize(settings: SettingsSpec) {
         {
             if let Some(url) = &settings.gitlab_url {
                 let cfg = flams_git::gl::GitlabConfig::new(
-                    url.to_string(),
+                    url.clone(),
                     settings.gitlab_token.as_ref().map(ToString::to_string),
                     settings.gitlab_app_id.as_ref().map(ToString::to_string),
                     settings.gitlab_app_secret.as_ref().map(ToString::to_string)

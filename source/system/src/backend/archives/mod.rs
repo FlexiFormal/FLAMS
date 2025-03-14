@@ -96,7 +96,7 @@ pub struct LocalArchive {
     pub(super) ignore: IgnoreSource,
     pub(super) file_state: parking_lot::RwLock<SourceDir>,
     #[cfg(feature="gitlab")]
-    pub(super) is_managed: std::sync::OnceLock<Option<Box<str>>>,
+    pub(super) is_managed: std::sync::OnceLock<Option<git_url_parse::GitUrl>>,
     //#[cfg(feature="zip")]
     //pub(super) zip_file: std::sync::Arc<std::sync::OnceLock<Option<ZipFile>>>
 }
@@ -154,15 +154,15 @@ impl LocalArchive {
     pub fn is_managed(&self) -> Option<&str> { None }
 
     #[cfg(feature="gitlab")]
-    pub fn is_managed(&self) -> Option<&str> {
+    pub fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
         self.is_managed.get_or_init(|| {
             let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
             let Ok(repo) = flams_git::repos::GitRepo::open(self.path()) else { return None };
             let Ok(url) = repo.get_origin_url() else { return None };
-            if url.starts_with(&**gl) {
-                Some(url.into())
-            } else { None }
-        }).as_deref()
+            if gl.host.as_ref().is_some_and(|h| url.host.as_ref().is_some_and(|h2| h == h2)) {
+                Some(url)
+            } else {None}
+        }).as_ref()
     }
 
     #[inline]

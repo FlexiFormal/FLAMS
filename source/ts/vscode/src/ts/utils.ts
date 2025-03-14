@@ -7,6 +7,36 @@ import * as yauzl from 'yauzl';
 import path from 'path';
 import * as mkdirp from 'mkdirp';
 
+export function insertUsemodule(doc:vscode.TextDocument,archive:string|undefined,path:string) {
+  let insertline = 0;
+  let lastemptyline = 0;
+  let inbody = false;
+  let done = false;
+  while (insertline < doc.lineCount && !done) {
+    let line = doc.lineAt(insertline).text;
+    if (!inbody) {
+      insertline += 1;
+      if (line.indexOf("\\begin{document") !== -1) {
+        inbody = true;
+        lastemptyline = insertline;
+      }
+    } else if (line.trim() === "") {
+      insertline += 1;
+    } else if (line.indexOf("\\usemodule") !== -1 || line.indexOf("\\importmodule") !== -1) {
+      insertline += 1;
+      lastemptyline = insertline;
+    } else { done = true;}
+  }
+  const pos = new vscode.Position(lastemptyline,0);
+  const edit = new vscode.WorkspaceEdit();
+  if (archive) {
+    edit.insert(doc.uri,pos,`\\usemodule[${archive}]{${path}}\n`);
+  } else {
+    edit.insert(doc.uri,pos,`\\usemodule{${path}}\n`);
+  }
+  vscode.workspace.applyEdit(edit);
+}
+
 const execPromise = promisify(exec);
 
 export async function call_cmd(cmd:string,args:string[]) : Promise<string | undefined> {

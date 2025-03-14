@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use flams_ontology::uris::ArchiveId;
-use flams_utils::vecmap::VecMap;
+use flams_utils::{unwrap, vecmap::VecMap};
 use leptos::prelude::*;
 use either::Either;
 
@@ -71,13 +71,18 @@ pub async fn get_archives() -> Result<Vec<(flams_git::Project,ArchiveId,GitState
     use flams_system::building::{queue_manager::QueueManager,QueueName};
     let mut ret = Vec::new();
     let backend = GlobalBackend::get();
-    let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
+    let gitlab_url = unwrap!(flams_system::settings::Settings::get().gitlab_url.as_ref());
     for a in backend.all_archives().iter() {
       if let Archive::Local(a) = a {
         if let Some((p,id)) = r2.iter().position(|(_,id)| id == a.id()).map(|i| r2.swap_remove(i)) {
+         /*if a.is_managed().is_some() {
+            ret.push((p,id,Left(git)));
+          } else {
+            ret.push((p,id,Right(GitState::None)));
+          } */ 
           if let Ok(git) = flams_git::repos::GitRepo::open(a.path()) {
             if let Ok(url) = git.get_origin_url() {
-              if url.starts_with(gitlab_url) {
+              if url.host.as_ref().is_some_and(|h| gitlab_url.host.as_ref().is_some_and(|h2| h == h2)) {
                 ret.push((p,id,Left(git)));
               } else { ret.push((p,id,Right(GitState::None))) }
             } else { ret.push((p,id,Right(GitState::None))) }
@@ -263,9 +268,9 @@ pub async fn get_new_commits(queue:Option<NonZeroU32>,id:ArchiveId) -> Result<Ve
       let AnyBackend::Sandbox(backend) = queue.backend() else { unreachable!()};
       let path = backend.path_for(&id);
       let r = flams_git::repos::GitRepo::open(path).ok().and_then(|git| {
-        let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
+        let gitlab_url = unwrap!(flams_system::settings::Settings::get().gitlab_url.as_ref());
         git.get_origin_url().ok().and_then(|url| {
-          if url.starts_with(gitlab_url) {
+          if url.host.as_ref().is_some_and(|h| gitlab_url.host.as_ref().is_some_and(|h2| h == h2)) {
             git.get_new_commits_with_oauth(&secret).ok()
           } else { None }
         })

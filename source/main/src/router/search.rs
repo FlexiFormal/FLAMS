@@ -234,9 +234,7 @@ fn do_sym_result(sym:&SymbolURI,res:Vec<(f32,SearchResult)>) -> impl IntoView {
   view! {
     <Card>
         <CardHeader>
-            <Body1>
-                <b>{name}</b>
-            </Body1>
+            <Body1><b>{name}</b></Body1>
         </CardHeader>
         <CardPreview>
           <div style="padding:0 5px;max-width:100%">
@@ -251,9 +249,6 @@ fn do_sym_result(sym:&SymbolURI,res:Vec<(f32,SearchResult)>) -> impl IntoView {
             </div>
           </div>
         </CardPreview>
-        /*<CardFooter>
-            "sTeX:"<pre></pre>
-        </CardFooter>*/
     </Card>
   }
   

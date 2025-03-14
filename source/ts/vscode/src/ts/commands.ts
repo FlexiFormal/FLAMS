@@ -66,7 +66,12 @@ export function register_server_commands(context:FLAMSContext) {
       }
     })
   );
-	vscode.window.registerTreeDataProvider("flams-mathhub",new MathHubTreeProvider(context));
+
+  const mathhub = new MathHubTreeProvider(context);
+	vscode.window.registerTreeDataProvider("flams-mathhub",mathhub);
+  
+	context.vsc.subscriptions.push(vscode.commands.registerCommand("flams.mathhub.install", mathhub.install));
+
   context.client.onNotification("flams/htmlResult",(s:string) => {
     openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s.split("&d=")[1]);
 	});
