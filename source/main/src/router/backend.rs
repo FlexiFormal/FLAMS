@@ -229,7 +229,6 @@ pub async fn archive_stream(id:ArchiveId) -> Result<leptos::server_fn::codec::By
   //tar::Builder::new(w);
 } 
 
-
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
   from_server_copy(false, || group_entries(None), |(groups,archives)|

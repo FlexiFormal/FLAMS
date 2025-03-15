@@ -61,17 +61,17 @@ mod zip {
 
     pub(super) struct ZipStream {
         handle:tokio::task::JoinHandle<()>,
-        stream: tokio_util::io::ReaderStream<tokio::io::DuplexStream>
+        stream: tokio_util::io::ReaderStream<tokio::io::ReadHalf<tokio::io::SimplexStream>>
     }
     impl ZipStream {
         pub(super) fn new(p:PathBuf) -> Self {
-            let (writer, reader) = tokio::io::duplex(256 * 1024);
+            let (reader, writer) = tokio::io::simplex(1024);
             let stream = tokio_util::io::ReaderStream::new(reader);
             let handle = tokio::task::spawn(Self::zip(p,writer));
             Self { handle, stream }
         }
-        async fn zip(p:PathBuf,writer:tokio::io::DuplexStream) {
-            let comp = async_compression::tokio::write::GzipEncoder::new(writer);
+        async fn zip(p:PathBuf,writer:tokio::io::WriteHalf<tokio::io::SimplexStream>) {
+            let comp = writer;//async_compression::tokio::write::GzipEncoder::new(writer);
             let mut tar = tokio_tar::Builder::new(comp);
             let _ = tar.append_dir_all(".",&p).await;
             let mut comp = match tar.into_inner().await {
@@ -96,6 +96,10 @@ mod zip {
         #[inline]
         fn poll_next(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
             unsafe{ self.map_unchecked_mut(|f| &mut f.stream).poll_next(cx)}
+        }
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.stream.size_hint()
         }
     }
 }
@@ -129,9 +133,14 @@ impl LocalArchive {
                 return Err(())
             }
         };
+        let status = resp.status().as_u16();
+        if (400..=599).contains(&status) {
+            let text = resp.text().await;
+            tracing::error!("Error 6: {text:?}");
+            return Err(());
+        }
         let stream = resp.bytes_stream().map_err(std::io::Error::other);
-        let stream = tokio_util::io::StreamReader::new(stream);
-        let mut decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
+        let mut stream = tokio_util::io::StreamReader::new(stream);
         let dest = crate::settings::Settings::get().temp_dir().join(
             flams_utils::hashstr("download", &id)
         );
@@ -150,7 +159,7 @@ impl LocalArchive {
                 return Err(())
             }
         };
-        if let Err(e) = tokio::io::copy(&mut decomp,&mut tmpdest).await {
+        if let Err(e) = tokio::io::copy(&mut stream,&mut tmpdest).await {
             tracing::error!("Error 5: {e}");
             let _ = tokio::fs::remove_dir_all(dest).await;
             return Err(());
@@ -161,6 +170,7 @@ impl LocalArchive {
 
 
 
+        let mut decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
         let mut tar = tokio_tar::Archive::new(decomp);
         if let Err(e) = tar.unpack(&dest).await {
             tracing::error!("Error 3: {e}");
