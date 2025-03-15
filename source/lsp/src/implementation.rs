@@ -92,22 +92,30 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
     pub(crate) fn install(&mut self,params:crate::InstallParams) -> <Self as LanguageServer>::NotifyResult {
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
-        tracing::info!("Here");
-        let progress = ProgressCallbackServer::new(client, "Installing".to_string(), None);
+        let mut progress = ProgressCallbackServer::new(client, "Installing".to_string(), None);
         let _ = tokio::task::spawn(async move {
             let crate::InstallParams { mut archives,remote_url } = params;
+            let mut rescan = false;
             for a in archives {
                 let url = format!("{remote_url}/api/backend/download?id={a}");
-                tracing::info!("Installing archive {a} from {url}");
                 progress.update(a.to_string(), None);
                 if LocalArchive::unzip_from_remote(a.clone(), &url).await.is_err() {
-                    tracing::error!("Failed to install archive {a}");
+                    let _ = progress.client_mut().show_message(lsp::ShowMessageParams {
+                        message:format!("Failed to install archive {a}"),
+                        typ:lsp::MessageType::ERROR
+                    });
+                } else {
+                    rescan = true;
                 }
             }
-            let client = progress.client().clone();
-            drop(progress);
-            state.backend().reset();
-            state.load_mathhubs(client);
+            if rescan {
+                let client = progress.client().clone();
+                drop(progress);
+                state.backend().reset();
+                state.load_mathhubs(client);
+            } else {
+                drop(progress)
+            }
         });
         ControlFlow::Continue(())
     }

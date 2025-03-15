@@ -130,14 +130,14 @@ impl LocalArchive {
         let resp = match reqwest::get(url).await {
             Ok(r) => r,
             Err(e) => {
-                tracing::error!("Error 1: {e}");
+                tracing::error!("Error contacting remote: {e}");
                 return Err(())
             }
         };
         let status = resp.status().as_u16();
         if (400..=599).contains(&status) {
             let text = resp.text().await;
-            tracing::error!("Error 6: {text:?}");
+            tracing::error!("Error response from remote: {text:?}");
             return Err(());
         }
         let stream = resp.bytes_stream().map_err(std::io::Error::other);
@@ -146,41 +146,26 @@ impl LocalArchive {
         let dest = crate::settings::Settings::get().temp_dir().join(
             flams_utils::hashstr("download", &id)
         );
-        if let Err(e) = tokio::fs::create_dir_all(&dest).await {
-            tracing::error!("Error 2: {e}");
-            return Err(())
-        }
-        tracing::info!("Extracting to {}",dest.display());
-/*
-
-        let mut tmpdest = match tokio::fs::File::create(dest.join("tmp")).await {
-            Ok(f) => f,
-            Err(e) => {
-                tracing::error!("Error 4: {e}");
-                let _ = tokio::fs::remove_dir_all(dest).await;
-                return Err(())
-            }
-        };
-        if let Err(e) = tokio::io::copy(&mut decomp,&mut tmpdest).await {
-            tracing::error!("Error 5: {e}");
-            let _ = tokio::fs::remove_dir_all(dest).await;
-            return Err(());
-        }
-        return Ok(());
-*/
 
         let mut tar = tokio_tar::Archive::new(decomp);
         if let Err(e) = tar.unpack(&dest).await {
-            tracing::error!("Error 3: {e}");
+            tracing::error!("Error unpacking stream: {e}");
             let _ = tokio::fs::remove_dir_all(dest).await;
             return Err(())
         };
         let mh = flams_utils::unwrap!(crate::settings::Settings::get().mathhubs.first());
-        let path = mh.join(id.as_ref());
-        if path.exists() {
-            let _ = tokio::fs::remove_dir_all(&path).await;
+        let mhdest = mh.join(id.as_ref());
+        if let Err(e) = tokio::fs::create_dir_all(&mhdest).await {
+            tracing::error!("Error moving to MathHub: {e}");
+            return Err(())
         }
-        let _ = tokio::fs::rename(dest,&path).await;
+        if mhdest.exists() {
+            let _ = tokio::fs::remove_dir_all(&mhdest).await;
+        }
+        if let Err(e) = tokio::fs::rename(dest,&mhdest).await {
+            tracing::error!("Error moving to MathHub: {e}");
+            return Err(())
+        };
         Ok(())
     }
 
