@@ -71,7 +71,7 @@ mod zip {
             Self { handle, stream }
         }
         async fn zip(p:PathBuf,writer:tokio::io::WriteHalf<tokio::io::SimplexStream>) {
-            let comp = async_compression::tokio::write::GzipEncoder::new(writer);
+            let comp = async_compression::tokio::write::GzipEncoder::with_quality(writer,async_compression::Level::Best);
             let mut tar = tokio_tar::Builder::new(comp);
             let _ = tar.append_dir_all(".",&p).await;
             let mut comp = match tar.into_inner().await {
@@ -142,7 +142,7 @@ impl LocalArchive {
         }
         let stream = resp.bytes_stream().map_err(std::io::Error::other);
         let stream = tokio_util::io::StreamReader::new(stream);
-        let mut decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
+        let decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
         let dest = crate::settings::Settings::get().temp_dir().join(
             flams_utils::hashstr("download", &id)
         );
@@ -151,7 +151,7 @@ impl LocalArchive {
             return Err(())
         }
         tracing::info!("Extracting to {}",dest.display());
-
+/*
 
         let mut tmpdest = match tokio::fs::File::create(dest.join("tmp")).await {
             Ok(f) => f,
@@ -167,10 +167,7 @@ impl LocalArchive {
             return Err(());
         }
         return Ok(());
-
-
-
-
+*/
 
         let mut tar = tokio_tar::Archive::new(decomp);
         if let Err(e) = tar.unpack(&dest).await {
