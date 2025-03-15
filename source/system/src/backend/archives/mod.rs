@@ -57,6 +57,8 @@ impl Drop for ZipFile {
 mod zip {
     use std::path::PathBuf;
 
+    use tokio::io::AsyncWriteExt;
+
     pub(super) struct ZipStream {
         handle:tokio::task::JoinHandle<()>,
         stream: tokio_util::io::ReaderStream<tokio::io::DuplexStream>
@@ -72,7 +74,14 @@ mod zip {
             let comp = async_compression::tokio::write::GzipEncoder::new(writer);
             let mut tar = tokio_tar::Builder::new(comp);
             let _ = tar.append_dir_all(".",&p).await;
-            let _ = tar.finish().await;
+            let mut comp = match tar.into_inner().await {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::error!("Failed to zip: {e}");
+                    return
+                }
+            };
+            let _ = comp.flush().await;
             tracing::info!("Finished zipping {}",p.display());
         }
     }
@@ -121,7 +130,8 @@ impl LocalArchive {
             }
         };
         let stream = resp.bytes_stream().map_err(std::io::Error::other);
-        let mut stream = tokio_util::io::StreamReader::new(stream);
+        let stream = tokio_util::io::StreamReader::new(stream);
+        let mut decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
         let dest = crate::settings::Settings::get().temp_dir().join(
             flams_utils::hashstr("download", &id)
         );
@@ -140,7 +150,7 @@ impl LocalArchive {
                 return Err(())
             }
         };
-        if let Err(e) = tokio::io::copy(&mut stream,&mut tmpdest).await {
+        if let Err(e) = tokio::io::copy(&mut decomp,&mut tmpdest).await {
             tracing::error!("Error 5: {e}");
             let _ = tokio::fs::remove_dir_all(dest).await;
             return Err(());
@@ -151,7 +161,6 @@ impl LocalArchive {
 
 
 
-        let decomp = async_compression::tokio::bufread::GzipDecoder::new(stream);
         let mut tar = tokio_tar::Archive::new(decomp);
         if let Err(e) = tar.unpack(&dest).await {
             tracing::error!("Error 3: {e}");
