@@ -26,21 +26,53 @@ interface InstallParams {
 }
 
 async function apiSettings(server:FLAMSServer): Promise<Settings | undefined> {
-    const ret = await server.rawPostRequest<{},[Settings,any,any] | undefined>("api/settings",{});
-    if (ret) {
-      const [settings,_] = ret;
-      return settings;
-    }
+  const ret = await server.rawPostRequest<{},[Settings,any,any] | undefined>("api/settings",{});
+  if (ret) {
+    const [settings,_] = ret;
+    return settings;
   }
+}
 
 export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   primary_server:FLAMSServer;
   remote_server:FLAMSServer | undefined;
   mathhubs:string[] | undefined;
+  roots:AnyMH[] | undefined;
+
   constructor(context:FLAMSContext) {
     this.primary_server = context.server;
     this.remote_server = context.remote_server;
   }
+
+
+
+  onUpdated = new vscode.EventEmitter<void>();
+  onDidChangeTreeDataI = new vscode.EventEmitter<AnyMH | undefined | null | void>();
+  onDidChangeTreeData?: vscode.Event<void | AnyMH | AnyMH[] | null | undefined> | undefined =
+      this.onDidChangeTreeDataI.event;
+
+  async install(item:Archive|ArchiveGroup):Promise<void> {
+    if (!this) {
+      throw new Error("MathHubTreeProvider not initialized");
+    }
+    const downloads = (item instanceof Archive)? [item.id] : filter_things(item);
+    vscode.window.withProgress({ location: { viewId: "flams-mathhub" } }, () => new Promise((r) => this.onUpdated.event(r)));
+    const context = get_context();
+    const remote_url = context.remote_server? context.remote_server.url : undefined;
+    get_context().client.sendNotification("flams/install",<InstallParams>{archives:downloads,remote_url:remote_url});;
+    /*this.roots?.forEach((mhti: AnyMH) => {
+      mhti.contextValue = "disabled";
+    });*/
+    this.onDidChangeTreeDataI.fire();
+  }
+
+  async update() {
+    this.roots = undefined;
+    this.onDidChangeTreeDataI.fire();
+    this.onUpdated.fire();
+  }
+
+
   getTreeItem(element: AnyMH): vscode.TreeItem | Thenable<vscode.TreeItem> {
     return element;
   }
@@ -58,8 +90,10 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
       if (ret) {
         const [group_entries,archive_entries] = ret;
         const entries = (<AnyMH[]>group_entries).concat(archive_entries);
+        this.roots = entries;
         return entries;
       } else {
+        this.roots = [];
         return [];
       }
     }
@@ -93,14 +127,6 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
       }
     }
     return [];
-  }
-
-  async install(item:Archive|ArchiveGroup):Promise<void> {
-    const downloads = (item instanceof Archive)? [item.id] : filter_things(item);
-    vscode.window.showInformationMessage(`𝖥𝖫∀𝖬∫: Installing archives: ${downloads}`);
-    const context = get_context();
-    const remote_url = context.remote_server? context.remote_server.url : undefined;
-    get_context().client.sendNotification("flams/install",<InstallParams>{archives:downloads,remote_url:remote_url});
   }
 
   private async df_from_server(a:Archive,rp?:string): Promise<[Dir[],File[]] | undefined> {
@@ -359,12 +385,18 @@ class File extends vscode.TreeItem {
     this.rel_path = file.rel_path;
     this.iconPath = new vscode.ThemeIcon("file");
     if (archive.resourceUri) {
+      this.contextValue = "file";
       this.resourceUri = vscode.Uri.file(
         this.rel_path.split("/").reduce(
           (p,seg) => path.join(p,seg),
           path.join(archive.resourceUri.fsPath,"source")
         )
       );
+      this.command = {
+          command:"flams.openFile",
+          title:"Open File",
+          arguments:[this.resourceUri]
+      };
     }
   }
 }

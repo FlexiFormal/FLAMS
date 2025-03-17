@@ -2,7 +2,7 @@
 
 use std::ops::ControlFlow;
 
-use crate::{annotations::to_diagnostic, LSPStore, ProgressCallbackClient, ProgressCallbackServer};
+use crate::{annotations::to_diagnostic, ClientExt, HtmlRequestParams, LSPStore, ProgressCallbackClient, ProgressCallbackServer};
 
 use super::{FLAMSLSPServer,ServerWrapper};
 use async_lsp::{lsp_types::{self as lsp}, LanguageClient, LanguageServer, ResponseError};
@@ -58,18 +58,6 @@ macro_rules! impl_notification {
   }
 }
 
-#[derive(serde::Serialize,serde::Deserialize)]
-pub struct HtmlRequestParams {
-    pub uri: lsp::Url
-}
-
-pub(crate) struct HTMLRequest;
-impl lsp::request::Request for HTMLRequest {
-    type Params = HtmlRequestParams;
-    type Result = Option<String>;
-    const METHOD: &'static str = "flams/htmlRequest";
-}
-
 impl<T:FLAMSLSPServer> ServerWrapper<T> {
     pub(crate) fn html_request(&mut self,params:HtmlRequestParams) -> Res<Option<String>> {
         let mut client = self.inner.client().clone();
@@ -84,7 +72,8 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
         let _ = tokio::task::spawn_blocking(move || {
             tracing::info!("LSP: reload");
             state.backend().reset();
-            state.load_mathhubs(client);
+            state.load_mathhubs(client.clone());
+            client.update_mathhub();
         });
         ControlFlow::Continue(())
     }
@@ -108,13 +97,16 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
                     rescan = true;
                 }
             }
+            let client = progress.client().clone();
+            drop(progress);
             if rescan {
-                let client = progress.client().clone();
-                drop(progress);
-                state.backend().reset();
-                state.load_mathhubs(client);
+                let _ = tokio::task::spawn_blocking(move || { // <- necessary, but I don't quite understand why
+                    state.backend().reset();
+                    state.load_mathhubs(client.clone());
+                    client.update_mathhub();
+                });
             } else {
-                drop(progress)
+                client.update_mathhub();
             }
         });
         ControlFlow::Continue(())

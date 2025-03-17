@@ -243,6 +243,9 @@ pub mod ontologies {
      use crate::narration::paragraphs::ParagraphKind::Definition;
      use crate::content::declarations::morphisms::Morphism;
 
+    section:
+    
+
     symdecl:
     #[cfg(feature="rdf")]
     if E::RDF {

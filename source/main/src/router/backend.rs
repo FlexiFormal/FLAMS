@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use flams_ontology::{archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData}, file_states::FileStateSummary, uris::ArchiveId};
+use flams_ontology::{archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData}, file_states::FileStateSummary, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, URIOrRefTrait}};
 use flams_utils::{time::Timestamp, unwrap, vecmap::VecMap};
 use leptos::prelude::*;
 use flams_web_utils::{components::{Header, Leaf, LazySubtree, Tree}, inject_css};
@@ -62,7 +62,6 @@ pub async fn group_entries(r#in:Option<ArchiveId>) -> Result<(Vec<ArchiveGroupDa
 
 
 #[server(prefix="/api/backend",endpoint="archive_entries")]
-#[allow(clippy::unused_async)]
 pub async fn archive_entries(archive:ArchiveId,path:Option<String>) -> Result<(Vec<DirectoryData>,Vec<FileData>),ServerFnError<String>> {
   use crate::users::LoginState;
   use either::Either;
@@ -100,6 +99,57 @@ pub async fn archive_entries(archive:ArchiveId,path:Option<String>) -> Result<(V
     })
   }).await
     .unwrap_or_else(|e| Err(e.to_string().into()))
+}
+
+
+#[server(prefix="/api/backend",endpoint="archive_dependencies")]
+pub async fn archive_dependencies(archive:ArchiveId) -> Result<Vec<ArchiveId>,ServerFnError<String>> {
+  use flams_system::backend::{Backend,rdf::sparql::{QueryBuilder,GraphPattern,TriplePattern,Var}};
+  use flams_ontology::rdf::ontologies::{ulo2,rdf,dc};
+  tokio::task::spawn_blocking(move || {
+    let Some(iri) = flams_system::backend::GlobalBackend::get().with_archive(&archive,|a| a.map(|a| a.uri().to_iri())) else {
+      return Err(format!("Archive {archive} not found"))
+    };
+    /*
+    SELECT DISTINCT ?a WHERE {
+      <https://mathhub.info?a=Papers/22-CICM-Injecting-Formal-Mathematics> ulo:contains ?d.
+      ?d rdf:type ulo:document .
+      ?d ulo:contains* ?x.
+      ?x (dc:requires|ulo:imports|dc:hasPart) ?m. 
+      ?e ulo:contains? ?m.
+      ?e rdf:type ulo:document.
+      ?a ulo:contains ?e.
+    }
+    macro_rules! triple {
+      ($subject:expr;$predicate:expr;$object:expr) => {
+        TriplePattern { subject:$subject.into(),predicate:$predicate.into(),object:$object.into() }
+      }
+    }
+    let q = QueryBuilder::Select {
+      dataset:None,base_iri:None,
+      pattern:GraphPattern::Distinct { inner: Box::new(
+        GraphPattern::Bgp { patterns: vec![
+          triple! { iri; ulo2::CONTAINS; Var('d') },
+          triple! { Var('d'); rdf::TYPE; ulo2::DOCUMENT },
+          triple! { Var('d'); ulo2::CONTAINS; Var('x') },
+        ]}
+      )}
+    };
+     */
+    let res = flams_system::backend::GlobalBackend::get().triple_store().query_str(format!(
+      "SELECT DISTINCT ?a WHERE {{
+      <{}> ulo:contains ?d.
+      ?d rdf:type ulo:document .
+      ?d ulo:contains* ?x.
+      ?x (dc:requires|ulo:imports|dc:hasPart) ?m. 
+      ?e ulo:contains? ?m.
+      ?e rdf:type ulo:document.
+      ?a ulo:contains ?e.
+    }}",iri.as_str())).map_err(|e| e.to_string())?;
+    
+    Ok(res.into_uris::<ArchiveURI>().map(|uri| uri.archive_id().clone()).collect())
+  }).await
+    .unwrap_or_else(|e| Err(e.to_string().into())).map_err(Into::into)
 }
 
 

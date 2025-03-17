@@ -6,7 +6,7 @@ use flams_ontology::content::modules::OpenModule;
 use flams_ontology::content::terms::{Arg, ArgMode, Term, Var};
 use flams_ontology::languages::Language;
 use flams_ontology::narration::documents::DocumentStyles;
-use flams_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, CognitiveDimension, FillInSol, FillInSolOption, GradingNote, SolutionData};
+use flams_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, CognitiveDimension, FillInSolOption, GradingNote, SolutionData};
 use flams_ontology::narration::notations::{NotationComponent, OpNotation};
 use flams_ontology::narration::sections::SectionLevel;
 use flams_ontology::narration::variables::Variable;
@@ -395,6 +395,7 @@ pub struct NotationSpec {
 
 #[cfg(feature="full")]
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Narrative {
     Container(NarrativeURI,Vec<DocumentElement<Unchecked>>),
     Paragraph(ParagraphState),
@@ -455,6 +456,7 @@ impl ExtractorState {
     }
     /// #### Errors
     #[allow(clippy::result_unit_err)]
+    #[allow(clippy::type_complexity)]
     pub fn take(mut self) -> Result<(DocumentURI,Vec<DocumentElement<Unchecked>>,Vec<OpenModule<Unchecked>>,DocumentStyles),()> {
         if self.narrative.len() == 1 {
             let Some(Narrative::Container(document,elements)) = self.narrative.pop() else { unreachable!() };
@@ -700,7 +702,7 @@ impl<E:StatefulExtractor> FTMLExtractor for E {
 
     fn open_choice_block(&mut self,multiple:bool,styles:Box<[Box<str>]>) {
         if !self.with_exercise(|e| {
-            if let Some(g) = &e.choice_block {
+            if e.choice_block.is_some() {
                 false
             } else {
                 e.choice_block = Some(ChoiceBlockState { 

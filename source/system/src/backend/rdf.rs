@@ -17,7 +17,7 @@ use tracing::instrument;
 pub mod sparql {
     use flams_ontology::{rdf::ontologies::{self, ulo2}, uris::{SymbolURI, URIOrRefTrait}};
     pub use oxigraph::sparql::*;
-    pub use spargebra::{SparqlSyntaxError,Query as QueryBuilder};
+    pub use spargebra::{SparqlSyntaxError,Query as QueryBuilder,algebra::GraphPattern,term::TriplePattern};
     pub struct Var(pub char);
     impl From<Var> for spargebra::term::TermPattern {
         fn from(v:Var) -> Self {
@@ -383,14 +383,15 @@ impl RDFStore {
       ",
         );
         query_str.push_str(s.as_ref());
-        let mut query: Query = query_str.as_str().try_into()?;
-        query.dataset_mut().set_default_graph_as_union();
-        Ok(self.store.query(query).map(QueryResult)?)
+        let query: Query = query_str.as_str().try_into()?;
+        self.query(query)
     }
 
     /// ### Errors
     pub fn query(&self, mut q: Query) -> Result<QueryResult,QueryError> {
         q.dataset_mut().set_default_graph_as_union();
+
+        // THIS NEEDS TO BE TIMEOUTED!!
         Ok(self.store.query(q).map(QueryResult)?)
     }
 

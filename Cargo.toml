@@ -266,6 +266,9 @@ browserquery = "defaults"
 # https://cse.sc.edu/~pfu/document/papers/rta-tlca.pdf
 
 
+## https://www.arroyo.dev/blog/rust-plugin-systems
+
+
 # utils:
 # https://docs.rs/inventory/latest/inventory/ <- cross-project collecting of things
 # https://crates.io/crates/lol_html <- HTML parsing/rewriting

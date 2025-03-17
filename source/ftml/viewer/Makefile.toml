@@ -17,7 +17,8 @@ cp ./package.json-real ./ts/package.json
 [tasks.wasm-pack-ts]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--out-dir","ts","--out-name","ftml-viewer-base","--","--features","ts,omdoc",
+args = ["build","--out-dir","ts","--out-name","ftml-viewer-base",#"--target","web",
+    "--","--features","ts,omdoc",
     "--target","wasm32-unknown-unknown"#,"-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
 ]
 

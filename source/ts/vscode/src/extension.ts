@@ -5,6 +5,7 @@ import { setup } from './ts/setup';
 import { Versions } from './ts/versions';
 import * as language from 'vscode-languageclient/node';
 import { FLAMSServer } from '@kwarc/flams';
+import { MathHubTreeProvider } from './ts/mathhub';
 //import * as ws from 'ws';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -50,27 +51,24 @@ export async function launch_local(context:FLAMSPreContext) {
 		run: { command: flams_path, args: args },
 		debug: { command: flams_path, args: args }
 	};
-  context.client = new language.LanguageClient("flams-server","𝖥𝖫∀𝖬∫ Language Server",serverOptions,{
+  context.client = new language.LanguageClient("flams","𝖥𝖫∀𝖬∫ Language Server",serverOptions,{
 		documentSelector: [{scheme:"file", language:"tex"},{scheme:"file", language:"latex"}],
 		synchronize: {},
-    //outputChannel: context.outputChannel,
-    //traceOutputChannel: context.outputChannel,
+    traceOutputChannel: context.outputChannel,
     markdown: {
         isTrusted: true,
         supportHtml: true
-    }
-    /*trace: {
-        server: {
-            verbosity: language.Trace.Verbose,
-            format: language.TraceFormat.Text
-        }
-    }*/
-	});
+    },
+	}
+  );
 	context.client.onNotification("flams/serverURL",(s:string) => {
 		context.server = new FLAMSServer(s);
     const ctx = new FLAMSContext(context);
     register_server_commands(ctx);
 	});
+
+  // Setting "flams.trace.server":"verbose"
+
   context.client.start();
 }
 
@@ -150,6 +148,7 @@ export class FLAMSContext {
   client: language.LanguageClient;
   server: FLAMSServer;
   remote_server: FLAMSServer | undefined;
+  mathhub:MathHubTreeProvider | undefined;
 
   constructor(ctx:FLAMSPreContext) {
     if (!ctx.client || !ctx.server) { throw new Error("𝖥𝖫∀𝖬∫: Client/Server not initialized"); }

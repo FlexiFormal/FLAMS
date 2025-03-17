@@ -613,6 +613,18 @@ impl OpenFTMLElement {
             extractor.add_error(FTMLError::NotInNarrative);
             return
         };
+
+
+        #[cfg(feature="rdf")]
+        if E::RDF {
+            let doc =  extractor.get_document_iri();
+            let iri = uri.to_iri();
+            extractor.add_triples([
+                triple!(<(iri.clone())> : ulo:SECTION),
+                triple!(<(doc)> ulo:CONTAINS <(iri)>)
+            ]);
+        }
+
         extractor.add_document_element(
             DocumentElement::Section(Section {
                 range:node.range(),
