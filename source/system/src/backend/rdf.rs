@@ -391,7 +391,7 @@ impl RDFStore {
     pub fn query(&self, mut q: Query) -> Result<QueryResult,QueryError> {
         q.dataset_mut().set_default_graph_as_union();
 
-        // THIS NEEDS TO BE TIMEOUTED!!
+        // TODO THIS NEEDS TO BE TIMEOUTED!!
         Ok(self.store.query(q).map(QueryResult)?)
     }
 

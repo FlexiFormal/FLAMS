@@ -1,13 +1,13 @@
 use std::{borrow::Cow, collections::hash_map::Entry, path::{Path, PathBuf}};
 
-use flams_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, ContentURI, ContentURIRef, ContentURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait}};
+use flams_ontology::{languages::Language, narration::{exercises::CognitiveDimension, paragraphs::ParagraphKind}, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, ContentURI, ContentURIRef, ContentURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait}};
 use flams_system::backend::{AnyBackend, Backend};
 use flams_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{OrdSet, VecMap, VecSet}};
 use smallvec::SmallVec;
 
 use crate::quickparse::latex::{rules::{AnyEnv, AnyMacro, DynMacro}, Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState};
 
-use super::{rules::{MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, DiagnosticLevel, STeXParseData};
+use super::{rules::{ExerciseArg, MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, DiagnosticLevel, STeXParseData};
 
 
 #[allow(clippy::large_enum_variant)]
@@ -102,6 +102,13 @@ pub enum STeXToken<Pos:SourcePos> {
     name_range:SourceRange<Pos>,
     symbol:Option<SymbolReference<Pos>>,
     parsed_args:Vec<ParagraphArg<Pos,STeXToken<Pos>>>,
+    children:Vec<STeXToken<Pos>>,
+  },
+  Exercise{
+    sub:bool,
+    full_range:SourceRange<Pos>,
+    name_range:SourceRange<Pos>,
+    parsed_args:Vec<ExerciseArg<Pos,STeXToken<Pos>>>,
     children:Vec<STeXToken<Pos>>,
   },
   InlineParagraph{
@@ -221,6 +228,22 @@ pub enum STeXToken<Pos:SourcePos> {
     token_range: SourceRange<Pos>,
     name_range:SourceRange<Pos>,
     text:(SourceRange<Pos>,Vec<STeXToken<Pos>>),
+  },
+  Precondition {
+    uri:SmallVec<SymbolReference<Pos>,1>,
+    full_range: SourceRange<Pos>,
+    token_range: SourceRange<Pos>,
+    dim_range:SourceRange<Pos>,
+    symbol_range:SourceRange<Pos>,
+    dim:CognitiveDimension
+  },
+  Objective {
+    uri:SmallVec<SymbolReference<Pos>,1>,
+    full_range: SourceRange<Pos>,
+    token_range: SourceRange<Pos>,
+    dim_range:SourceRange<Pos>,
+    symbol_range:SourceRange<Pos>,
+    dim:CognitiveDimension
   },
   Vec(Vec<STeXToken<Pos>>),
 }
@@ -1437,6 +1460,7 @@ impl<'a,Pos:SourcePos,MS:STeXModuleStore> STeXParseState<'a,Pos,MS> {
 pub enum GroupKind<Pos:SourcePos> {
   #[default]
   None,
+  Exercise,
   Module{
     uri:ModuleURI,
     rules: Vec<ModuleRule<Pos>>

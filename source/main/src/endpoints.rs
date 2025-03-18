@@ -17,6 +17,7 @@
  * | [`/api/backend/archive_entries`](backend::archive_entries) | `archive=<STRING>`, (optional) `path=<STRING>` | `(Vec<`[DirectoryData](crate::router::backend::DirectoryData)`>,Vec<`[FileData](crate::router::backend::FileData)`>)` - the source directories and files in the provided archive, or (if given) the relative path within the provided archive |
  * | [`/api/backend/build_status`](backend::build_status) | `archive=<STRING>`, (optional) `path=<STRING>` | [FileStates](crate::router::backend::FileStates) - the build status of the provided archive, or (if given) the relative path within the provided archive (requires admin login) |
  * | [`/api/backend/query`](query_api) | `query=<STRING>` | `STRING` - SPARQL query endpoint; returns SPARQL JSON |
+ * | [`/api/backend/archive_dependencies`](query_api) | `archive=<STRING>` | `Vec<`[`ArchiveId`]`>` |
  * | **Build Queue** | | |
  * | [`/api/buildqueue/enqueue`](buildqueue::enqueue) | `archive=<STRING>`,  `target=<`[FormatOrTarget](crate::router::backend::FormatOrTarget)`>`, (optional) `path=STRING`, (optional) `stale_only=<BOOL>` (default:true) | `usize` - enqueue a new build job. Returns number of jobs queued (requires admin login)|
  * | [`/api/buildqueue/get_queues`](buildqueue::get_queues) |  | `Vec<(NonZeroU32,String)>` - return the list of all (waiting or running) build queues as (id,name) pairs (requires admin login)|

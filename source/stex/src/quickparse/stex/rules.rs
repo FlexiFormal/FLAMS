@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::hash_map::Entry, num::NonZeroU8, path::{Path
 
 use flams_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage}};
 use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
-use flams_utils::{parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{VecMap, VecSet}, CondSerialize};
+use flams_utils::{impossible, parsing::ParseStr, prelude::HMap, sourcerefs::{LSPLineCol, SourcePos, SourceRange}, vecmap::{VecMap, VecSet}, CondSerialize};
 use smallvec::SmallVec;
 
 use crate::{quickparse::{latex::{rules::{AnyEnv, AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule}, Environment, FromLaTeXToken, Group, GroupState, Groups, KeyValKind, LaTeXParser, Macro, OptMap, ParsedKeyValue, ParserState}, stex::structs::MorphismKind}, tex};
@@ -24,7 +24,7 @@ pub fn all_rules<'a,
   STeXToken<LSPLineCol>,
   Err,
   STeXParseState<'a,LSPLineCol,MS>,
->);37] {[
+>);39] {[
   ("importmodule",importmodule as _),
   ("setmetatheory",setmetatheory as _),
   ("usemodule",usemodule as _),
@@ -62,6 +62,8 @@ pub fn all_rules<'a,
   ("inlineex",inlineex as _),
   ("copymod",copymod as _),
   ("interpretmod",interpretmod as _),
+  ("precondition",precondition as _),
+  ("objective",objective as _),
 ]}
 
 #[must_use]
@@ -102,7 +104,7 @@ pub fn all_env_rules<'a,
     STeXToken<LSPLineCol>,
     Err,
     STeXParseState<'a,LSPLineCol,MS>
->);14] {[
+>);16] {[
   ("smodule",(smodule_open as _, smodule_close as _)),
   ("mathstructure",(mathstructure_open as _,mathstructure_close as _)),
   ("extstructure",(extstructure_open as _,extstructure_close as _)),
@@ -117,6 +119,8 @@ pub fn all_env_rules<'a,
   ("copymodule*",(copymodule_ast_open as _,copymodule_ast_close as _)),
   ("interpretmodule",(interpretmodule_open as _,interpretmodule_close as _)),
   ("interpretmodule*",(interpretmodule_ast_open as _,interpretmodule_ast_close as _)),
+  ("sproblem",(sproblem_open as _,sproblem_close as _)),
+  ("subproblem",(subproblem_open as _,subproblem_close as _)),
 ]}
 
 #[must_use]
@@ -531,6 +535,28 @@ macro_rules! optargtype {
     optargtype!(@DOITER $e $name {$($tks)*} { $($rest)* })
   };
 
+  (@TYPE $(T)? f32) => {f32};
+  (@PARSE $(+)? $parser:ident $fieldname:ident f32 ) => {$parser.parse().map(Self::$fieldname)};
+  (@TRANSLATE $val:ident $cont:ident $name:ident $fieldname:ident f32) => {
+    $name::$fieldname($val)
+  };
+  (@DOITER $e:ident $name:ident {$($tks:tt)*} {$fieldname:ident f32; $($rest:tt)* }) => {
+    optargtype!(@DOITER $e $name {$($tks)*} { $($rest)* })
+  };
+
+  (@TYPE $(T)? bool?) => {bool};
+  (@PARSE $(+)? $parser:ident $fieldname:ident bool? ) => {
+    if $parser.has_value {$parser.parse().map(Self::$fieldname)} else { Some(Self::$fieldname(
+      ParsedKeyValue{key_range:$parser.key_range,val_range:SourceRange{start:$parser.start,end:$parser.start},val:true}
+    )) }
+  };
+  (@TRANSLATE $val:ident $cont:ident $name:ident $fieldname:ident bool?) => {
+    $name::$fieldname($val)
+  };
+  (@DOITER $e:ident $name:ident {$($tks:tt)*} {$fieldname:ident bool?; $($rest:tt)* }) => {
+    optargtype!(@DOITER $e $name {$($tks)*} { $($rest)* })
+  };
+
   (@TYPE $(T)? !) => {()};
   (@PARSE $(+)? $parser:ident $fieldname:ident ! ) => {{
     if $parser.has_value {
@@ -776,6 +802,45 @@ stex!(p => symdef{name:!name}[args:type SymdefArg<Pos,STeXToken<Pos>>] => {
   }
 }
 );
+
+
+stex!(LSP: p => precondition{dim:!name}{symbol:!name} => {
+  let Ok(cogdim) = dim.0.parse() else {
+    p.tokenizer.problem(dim.1.start,format!("Invalid cognitive dimension {}",dim.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(precondition);
+  };
+  let (state,mut groups) = p.split();
+  if !groups.groups.iter().rev().any(|g| matches!(g.kind,GroupKind::Exercise)) {
+    groups.tokenizer.problem(symbol.1.start, "\\precondition is only allowed in a problem",DiagnosticLevel::Error);
+  }
+  let Some(s) = state.get_symbol(symbol.1.start,&mut groups,&symbol.0) else {
+    groups.tokenizer.problem(symbol.1.start, format!("Unknown symbol {}",symbol.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(precondition);
+  };
+  MacroResult::Success(STeXToken::Precondition {
+    uri:s, full_range: precondition.range, token_range: precondition.token_range, dim_range:dim.1,
+    symbol_range:symbol.1,dim:cogdim
+  })
+});
+
+stex!(LSP: p => objective{dim:!name}{symbol:!name} => {
+  let Ok(cogdim) = dim.0.parse() else {
+    p.tokenizer.problem(dim.1.start,format!("Invalid cognitive dimension {}",dim.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(objective);
+  };
+  let (state,mut groups) = p.split();
+  if !groups.groups.iter().rev().any(|g| matches!(g.kind,GroupKind::Exercise)) {
+    groups.tokenizer.problem(symbol.1.start, "\\objective is only allowed in a problem",DiagnosticLevel::Error);
+  }
+  let Some(s) = state.get_symbol(symbol.1.start,&mut groups,&symbol.0) else {
+    groups.tokenizer.problem(symbol.1.start, format!("Unknown symbol {}",symbol.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(objective);
+  };
+  MacroResult::Success(STeXToken::Objective {
+    uri:s, full_range: objective.range, token_range: objective.token_range, dim_range:dim.1,
+    symbol_range:symbol.1,dim:cogdim
+  })
+});
 
 stex!(LSP: p => symref[mut args:Map]{name:!name}{text:T} => {
   let (state,mut groups) = p.split();
@@ -1667,7 +1732,7 @@ fn close_paragraph<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol
     Some(STeXToken::Paragraph{..}) => {
       let mut ch = env.children.drain(..);
       let Some(STeXToken::Paragraph { kind, mut full_range, name_range, symbol, parsed_args,mut children }) = ch.next() else {
-        unreachable!()
+        impossible!()
       };
       children.extend(ch);
       if let Some(end) =env.end.as_ref() {
@@ -1719,6 +1784,58 @@ stex!(LSP: p => inlinepara => {
 
 stex!(LSP: p => inlineex => {
   inline_paragraph(ParagraphKind::Example, p, inlineex)
+});
+
+optargtype!{LSP parser =>
+  ExerciseArg<T> {
+    {Id = "id": ()}
+    {Title = "title": T*}
+    {Style = "style": str}
+    {Pts = "pts": f32}
+    {Min = "min": f32}
+    //{Name = "name": str}
+    {Autogradable = "autogradable": bool?}
+
+  } @ ExerciseArgIter
+}
+
+fn open_problem<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(
+  sub:bool,
+  p: &mut LaTeXParser<'a, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, STeXParseState<'a, LSPLineCol, MS>>,
+  env:&mut Environment<'a, LSPLineCol, &'a str, STeXToken<LSPLineCol>>,
+) {
+  let args = <Vec<ExerciseArg<_,_>> as crate::quickparse::latex::KeyValValues<_,_,_,_>>::parse_opt(p).unwrap_or_default();
+  p.groups.last_mut().unwrap_or_else(|| unreachable!()).kind = GroupKind::Exercise;
+  env.children.push(STeXToken::Exercise{ sub, full_range:env.begin.range,name_range:env.name_range,parsed_args:args,children:Vec::new()});
+}
+fn close_problem<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(
+  p: &mut LaTeXParser<'a, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, STeXParseState<'a, LSPLineCol, MS>>,
+  mut env:Environment<'a, LSPLineCol, &'a str, STeXToken<LSPLineCol>>,
+) -> EnvironmentResult<'a, LSPLineCol, &'a str, STeXToken<LSPLineCol>> {
+  if let Some(STeXToken::Exercise{..}) = env.children.first() {
+    let mut ch = env.children.drain(..);
+    let Some(STeXToken::Exercise { sub, mut full_range, parsed_args,name_range, mut children }) = ch.next() else {
+      impossible!()
+    };
+    children.extend(ch);
+    if let Some(end) = env.end.as_ref() {
+      full_range.end = end.range.end;
+    }
+    EnvironmentResult::Success(STeXToken::Exercise { 
+      sub, full_range, name_range,parsed_args,children 
+    })
+  } else { EnvironmentResult::Simple(env) }
+}
+
+stex!(LSP: p => @begin{sproblem}(){
+  open_problem(false,p,sproblem)
+}{
+  close_problem(p,sproblem)
+});
+stex!(LSP: p => @begin{subproblem}(){
+  open_problem(true,p,subproblem)
+}{
+  close_problem(p,subproblem)
 });
 
 fn get_in_morphism<'a,'b,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>,DiagnosticLevel)>(
@@ -1784,6 +1901,7 @@ fn set_defined<'a,MS:STeXModuleStore,Err:FnMut(String,SourceRange<LSPLineCol>,Di
     }
   }
 }
+
 
 stex!(LSP: p => renamedecl{orig:!name}[name:!name]{macroname:!name} => {
   let (_,mut groups) = p.split();

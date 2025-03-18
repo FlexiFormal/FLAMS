@@ -1097,6 +1097,54 @@ impl<'a,
         Some(l)
     }
 }
+impl<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParsable<'a,Pos,T,Err,State> for bool {
+    #[inline]
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+            -> Option<Self> {
+        let Some(s) = parser.read_value_str_normalized() else {
+            parser.problem("Missing value",DiagnosticLevel::Error);
+            return None
+        };
+        let Ok(l) = s.parse() else {
+            parser.problem("Invalid boolean",DiagnosticLevel::Error);
+            return None
+        };
+        Some(l)
+    }
+}
+impl<'a,
+    Pos:SourcePos + 'a,
+    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
+    Err:FnMut(String,SourceRange<Pos>,DiagnosticLevel),
+    State: ParserState<'a,ParseStr<'a,Pos>,T,Err>
+> KeyValParsable<'a,Pos,T,Err,State> for f32 {
+    #[inline]
+    fn parse_key_val_inner(parser:&mut KeyValParser<'a, '_,Pos,T,Err,State>)
+            -> Option<Self> {
+        let Some(s) = parser.read_value_str_normalized() else {
+            parser.problem("Missing value",DiagnosticLevel::Error);
+            return None
+        };
+        if s.contains('.') {
+            let Ok(l) = s.parse() else {
+                parser.problem("Invalid boolean",DiagnosticLevel::Error);
+                return None
+            };
+            Some(l)
+        } else {
+            let Ok(l) = s.parse::<i32>() else {
+                parser.problem("Invalid boolean",DiagnosticLevel::Error);
+                return None
+            };
+            Some(l as _)
+        }
+    }
+}
 
 impl<'a,
     Pos:SourcePos + 'a,

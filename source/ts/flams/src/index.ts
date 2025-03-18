@@ -12,6 +12,27 @@ export class FLAMSServer {
   }
 
   /** 
+   * All institutions and `archive.json`-registered documents
+   */
+  async index(): Promise<[FLAMS.Institution[],FLAMS.ArchiveIndex[]] | undefined> {
+    return await this.rawPostRequest("api/index",{});
+  }
+
+  /**
+   * Full-text search for documents, assuming the given filter
+   */
+  async searchDocs(query:string,filter:FLAMS.QueryFilter,numResults:number): Promise<[number,FLAMS.SearchResult][] | undefined> {
+    return await this.rawPostRequest("api/search",{query:query,opts:filter,num_results:numResults});
+  }
+
+  /**
+   * Full-text search for (definitions of) symbols
+   */
+  async searchSymbols(query:string,numResults:number): Promise<[FLAMS.SymbolURI,[number,FLAMS.SearchResult][]][] | undefined> {
+    return await this.rawPostRequest("api/search_symbols",{query:query,num_results:numResults});
+  }
+
+  /** 
    * List all archives/groups in the given group (or at top-level, if undefined)
    */
   async backendGroupEntries(in_entry?:string): Promise<[FLAMS.ArchiveGroup[],FLAMS.Archive[]] | undefined> {
@@ -25,26 +46,19 @@ export class FLAMSServer {
     return await this.rawPostRequest("api/backend/archive_entries",{archive:archive,path:in_path});
   }
 
-  /** 
-   * All institutions and `archive.json`-registered documents
-   */
-  async index(): Promise<[FLAMS.Institution[],FLAMS.ArchiveIndex[]] | undefined> {
-    return await this.rawPostRequest("api/index",{});
-  }
-
-  async searchDocs(query:string,filter:FLAMS.QueryFilter,numResults:number): Promise<[number,FLAMS.SearchResult][] | undefined> {
-    return await this.rawPostRequest("api/search",{query:query,opts:filter,num_results:numResults});
-  }
-
-  async searchSymbols(query:string,numResults:number): Promise<[FLAMS.SymbolURI,[number,FLAMS.SearchResult][]][] | undefined> {
-    return await this.rawPostRequest("api/search_symbols",{query:query,num_results:numResults});
-  }
 
   /** 
    * SPARQL query
    */
   async query(sparql:String): Promise<any> {
     return await this.rawPostRequest("api/backend/query",{query:sparql});
+  }
+
+  /** 
+   * Get all dependencies of the given archive (excluding meta-inf archives)
+   */
+  async archiveDependencies(archive:string): Promise<any> {
+    return await this.rawPostRequest("api/backend/archive_dependencies",{archive:archive});
   }
 
   /** 

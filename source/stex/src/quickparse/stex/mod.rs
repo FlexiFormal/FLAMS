@@ -3,10 +3,10 @@ pub mod structs;
 
 use std::path::Path;
 
-use flams_ontology::{languages::Language, narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURITrait, DocumentURI, ModuleURI, Name, SymbolURI}};
+use flams_ontology::{languages::Language, narration::{exercises::CognitiveDimension, paragraphs::ParagraphKind}, uris::{ArchiveId, ArchiveURITrait, DocumentURI, ModuleURI, Name, SymbolURI}};
 use flams_system::backend::AnyBackend;
 use flams_utils::{parsing::ParseStr, prelude::{TreeChild, TreeLike}, sourcerefs::{LSPLineCol, SourceRange}, vecmap::{OrdSet, VecSet}};
-use rules::{MathStructureArg, MathStructureArgIter, NotationArg, NotationArgIter, ParagraphArg, ParagraphArgIter, SModuleArg, SModuleArgIter, SymdeclArg, SymdeclArgIter, SymdefArg, SymdefArgIter, TextSymdeclArg, TextSymdeclArgIter, VardefArg, VardefArgIter};
+use rules::{ExerciseArg, ExerciseArgIter, MathStructureArg, MathStructureArgIter, NotationArg, NotationArgIter, ParagraphArg, ParagraphArgIter, SModuleArg, SModuleArgIter, SymdeclArg, SymdeclArgIter, SymdefArg, SymdefArgIter, TextSymdeclArg, TextSymdeclArgIter, VardefArg, VardefArgIter};
 use smallvec::SmallVec;
 use structs::{InlineMorphAssIter, InlineMorphAssign, ModuleOrStruct, ModuleReference, ModuleRules, MorphismKind, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode};
 
@@ -237,6 +237,29 @@ pub enum STeXAnnot {
     parsed_args:Vec<ParagraphArg<LSPLineCol,Self>>,
     children:Vec<Self>,
   },
+  Exercise{
+    sub:bool,
+    full_range:SourceRange<LSPLineCol>,
+    name_range:SourceRange<LSPLineCol>,
+    parsed_args:Vec<ExerciseArg<LSPLineCol,Self>>,
+    children:Vec<Self>,
+  },
+  Precondition {
+    uri:SmallVec<SymbolReference<LSPLineCol>,1>,
+    full_range: SourceRange<LSPLineCol>,
+    token_range: SourceRange<LSPLineCol>,
+    dim_range:SourceRange<LSPLineCol>,
+    symbol_range:SourceRange<LSPLineCol>,
+    dim:CognitiveDimension
+  },
+  Objective {
+    uri:SmallVec<SymbolReference<LSPLineCol>,1>,
+    full_range: SourceRange<LSPLineCol>,
+    token_range: SourceRange<LSPLineCol>,
+    dim_range:SourceRange<LSPLineCol>,
+    symbol_range:SourceRange<LSPLineCol>,
+    dim:CognitiveDimension
+  },
   InlineParagraph{
     kind:ParagraphKind,
     full_range:SourceRange<LSPLineCol>,
@@ -322,12 +345,21 @@ impl STeXAnnot {
           v.push(STeXAnnot::Symref { uri, full_range, token_range, name_range, 
             text:(text.0,Self::from_tokens(text.1,None))
           }),
+        STeXToken::Precondition { uri, full_range, token_range, dim_range, symbol_range, dim } => 
+          v.push(STeXAnnot::Precondition { uri,full_range,token_range,dim_range,symbol_range,dim}),
+        STeXToken::Objective { uri, full_range, token_range, dim_range, symbol_range, dim } => 
+          v.push(STeXAnnot::Objective { uri,full_range,token_range,dim_range,symbol_range,dim}),
         STeXToken::SymName { uri, full_range, token_range, name_range, mode: mod_ } =>
           v.push(STeXAnnot::SymName { uri, full_range, token_range, name_range, mode: mod_ }),
         STeXToken::Symuse { uri, full_range, token_range, name_range } =>
           v.push(STeXAnnot::Symuse { uri, full_range, token_range, name_range }),
         STeXToken::Paragraph { kind, full_range, name_range, symbol, parsed_args, children } =>
           v.push(STeXAnnot::Paragraph { symbol,kind,full_range, name_range, 
+            parsed_args:cont!(parsed_args),
+            children:Self::from_tokens(children,None)
+          }),
+        STeXToken::Exercise { sub, full_range, name_range,parsed_args, children } =>
+          v.push(STeXAnnot::Exercise { sub, full_range, name_range,
             parsed_args:cont!(parsed_args),
             children:Self::from_tokens(children,None)
           }),
@@ -369,6 +401,7 @@ impl STeXAnnot {
       Self::Defnotation { full_range } |
       Self::ConservativeExt { full_range,.. } |
       Self::Paragraph{ full_range,..} |
+      Self::Exercise{ full_range,..} |
       Self::UseStructure { full_range, .. } |
       Self::InlineParagraph { full_range, .. } |
       Self::MorphismEnv{ full_range,.. } |
@@ -376,6 +409,8 @@ impl STeXAnnot {
       Self::Assign{ full_range,.. } |
       Self::Inputref { range:full_range,.. } |
       Self::InlineMorphism{full_range,..} |
+      Self::Precondition { full_range,.. } |
+      Self::Objective { full_range,.. } |
       Self::TextSymdecl { full_range,.. } => *full_range
     }
   }
@@ -388,6 +423,7 @@ pub enum AnnotIter<'a> {
   InlineAss(InlineMorphAssIter<'a,LSPLineCol,STeXAnnot>),
   Slice(std::slice::Iter<'a,STeXAnnot>),
   Paragraph(std::iter::Chain<ParagraphArgIter<'a,STeXAnnot>,std::slice::Iter<'a,STeXAnnot>>),
+  Exercise(std::iter::Chain<ExerciseArgIter<'a,STeXAnnot>,std::slice::Iter<'a,STeXAnnot>>),
   Structure(std::iter::Chain<MathStructureArgIter<'a,LSPLineCol,STeXAnnot>,std::slice::Iter<'a,STeXAnnot>>),
   Symdecl(SymdeclArgIter<'a,LSPLineCol,STeXAnnot>),
   TextSymdecl(TextSymdeclArgIter<'a,LSPLineCol,STeXAnnot>),
@@ -408,6 +444,7 @@ impl<'a> Iterator for AnnotIter<'a> {
       Self::Structure(i) => i.next(),
       Self::InlineAss(i) => i.next(),
       Self::Paragraph(i) => i.next(),
+      Self::Exercise(i) => i.next(),
       Self::Symdecl(i) => i.next(),
       Self::TextSymdecl(i) => i.next(),
       Self::Notation(i) => i.next(),
@@ -432,6 +469,8 @@ impl TreeLike for STeXAnnot {
       Self::Paragraph { parsed_args,children, .. } |
       Self::InlineParagraph{parsed_args,children,..} =>
         Some(AnnotIter::Paragraph(ParagraphArgIter::new(parsed_args).chain(children.iter()))),
+      Self::Exercise{parsed_args,children,..} =>
+        Some(AnnotIter::Exercise(ExerciseArgIter::new(parsed_args).chain(children.iter()))),
       Self::Symdecl{parsed_args,..} =>
         Some(AnnotIter::Symdecl(SymdeclArgIter::new(parsed_args))),
       Self::TextSymdecl { parsed_args,.. } =>
@@ -452,6 +491,7 @@ impl TreeLike for STeXAnnot {
       Self::Inputref{ .. } | Self::SymName{ .. } | Self::Symref{ .. } |
       Self::Symuse{ .. } | Self::Svar{ .. } | Self::Definiens{ .. } |
       Self::Defnotation{ .. } | Self::UseStructure{ .. } |
+      Self::Precondition{..} | Self::Objective{..} |
       Self::RenameDecl{ .. } | Self::Assign{ .. } => None
     }
   }

@@ -1,7 +1,7 @@
 use crate::{state::{DocData, LSPState, UrlOrFile}, IsLSPRange, LSPStore, ProgressCallbackClient};
 use async_lsp::lsp_types as lsp;
 use flams_ontology::{narration::paragraphs::ParagraphKind, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, ContentURI, ContentURITrait, ModuleURI, PathURITrait, SymbolURI, URIWithLanguage, URI}};
-use flams_stex::quickparse::{latex::ParsedKeyValue, stex::{rules::{MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, structs::{InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymbolReference, SymnameMode}, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI}};
+use flams_stex::quickparse::{latex::ParsedKeyValue, stex::{rules::{ExerciseArg, MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg, SymdefArg, TextSymdeclArg, VardefArg}, structs::{InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymbolReference, SymnameMode}, AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI}};
 use smallvec::SmallVec;
 use futures::FutureExt;
 use crate::capabilities::STeXSemanticTokens;
@@ -95,6 +95,17 @@ impl AnnotExt for STeXAnnot {
                     children:None
                 },&children))
             }
+            Self::Exercise{full_range,name_range,children,..} =>
+                Some((lsp::DocumentSymbol {
+                    name:"problem".to_string(),
+                    detail:None,
+                    kind:lsp::SymbolKind::PACKAGE,
+                    tags:None,
+                    deprecated:None,
+                    range:full_range.into_range(),
+                    selection_range:name_range.into_range(),
+                    children:None
+                },&children)),
             Self::Symdecl { uri, main_name_range, full_range,.. } |
             Self::TextSymdecl { uri, main_name_range, full_range,.. } |
             Self::Symdef { uri,main_name_range, full_range,.. } =>
@@ -192,6 +203,7 @@ impl AnnotExt for STeXAnnot {
             Self::Symref{ .. } | Self::Notation{ .. } | Self::Svar{ .. } |
             Self::Symuse{ .. } | Self::Definiens{ .. } | 
             Self::Defnotation { .. } | Self::RenameDecl{ .. } |
+            Self::Precondition{ .. } | Self::Objective{ .. } |
             Self::Assign{ .. } => None
         }
     }
@@ -222,8 +234,9 @@ impl AnnotExt for STeXAnnot {
             Self::Paragraph{..} | Self::Symuse{ .. } | Self::Svar{ .. } |
             Self::Varseq{ .. } | Self::Definiens{ .. } |
             Self::Defnotation { .. } | Self::ConservativeExt{..} |
-            Self::UseStructure{ .. } | Self::InlineParagraph{..} |
+            Self::UseStructure{ .. } | Self::InlineParagraph{..} | Self::Exercise{..} |
             Self::MorphismEnv{ .. } | Self::RenameDecl{ .. } |
+            Self::Precondition{..} | Self::Objective{..} |
             Self::Assign{ .. } | Self::InlineMorphism{ .. } => ()
         }
     }
@@ -424,6 +437,8 @@ impl AnnotExt for STeXAnnot {
             Self::Symref{ uri,name_range:range,.. } |
             Self::Notation{ uri,name_range:range,.. } |
             Self::Symuse{ uri,name_range:range,.. } |
+            Self::Precondition{ uri,symbol_range:range,.. } |
+            Self::Objective{ uri,symbol_range:range,.. } |
             Self::Definiens{ uri,name_range:Some(range),.. } => {
                 if !range.contains(pos) {return None};
                 let Some(p) = &uri.first().unwrap_or_else(|| unreachable!()).filepath else {return None};
@@ -453,7 +468,7 @@ impl AnnotExt for STeXAnnot {
                     range:SourceRange::into_range(*orig)
                 }))
             }
-            Self::Svar{ .. } | Self::Inputref{ .. } |
+            Self::Svar{ .. } | Self::Inputref{ .. } | Self::Exercise{..} |
             Self::Definiens{ .. } | Self::Defnotation { .. } => None
         }
     }
@@ -608,6 +623,37 @@ impl AnnotExt for STeXAnnot {
                 cont(*token_range,STeXSemanticTokens::SYMBOL),
             Self::VariableMacro{ token_range,.. } =>
                 cont(*token_range,STeXSemanticTokens::VARIABLE),
+            Self::Exercise { sub, full_range, name_range, parsed_args, children } => {
+                cont(*name_range,STeXSemanticTokens::REF_MACRO);
+                for e in parsed_args { match e {
+                    /*ExerciseArg::Name(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::NAME);
+                    }*/
+                    ExerciseArg::Autogradable(ParsedKeyValue{key_range,val_range,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        cont(*val_range,STeXSemanticTokens::KEYWORD);
+                    }
+                    ExerciseArg::Style(ParsedKeyValue{key_range,..}) |
+                    ExerciseArg::Pts(ParsedKeyValue{key_range,..}) |
+                    ExerciseArg::Min(ParsedKeyValue{key_range,..}) |
+                    ExerciseArg::Id(ParsedKeyValue{key_range,..}) =>
+                        cont(*key_range,STeXSemanticTokens::KEYWORD),
+                    ExerciseArg::Title(ParsedKeyValue{key_range,val,..}) => {
+                        cont(*key_range,STeXSemanticTokens::KEYWORD);
+                        for c in val {
+                            c.semantic_tokens(cont);
+                        }
+                    }
+                }}
+                for c in children {
+                    c.semantic_tokens(cont);
+                }
+                let mut end_range = *full_range;
+                end_range.end.col -= 1;
+                end_range.start.line = end_range.end.line;
+                cont(end_range,STeXSemanticTokens::REF_MACRO);
+            }
             Self::Paragraph{kind, symbol,name_range,parsed_args,children,full_range,..} => {
                 if symbol.is_some() {
                     cont(*name_range,STeXSemanticTokens::DECLARATION);
@@ -870,6 +916,12 @@ impl AnnotExt for STeXAnnot {
                 cont(*token_range,STeXSemanticTokens::REF_MACRO);
                 cont(*name_range,STeXSemanticTokens::SYMBOL);
             }
+            Self::Precondition{token_range,dim_range,symbol_range,..} |
+            Self::Objective{token_range,dim_range,symbol_range,..} => {
+                cont(*token_range,STeXSemanticTokens::REF_MACRO);
+                cont(*dim_range,STeXSemanticTokens::KEYWORD);
+                cont(*symbol_range,STeXSemanticTokens::SYMBOL);
+            }
             Self::Definiens{ token_range,name_range,..} => {
                 cont(*token_range,STeXSemanticTokens::REF_MACRO);
                 if let Some(r) = name_range {
@@ -889,6 +941,8 @@ impl AnnotExt for STeXAnnot {
             Self::Symref{ uri, name_range:range,.. } |
             Self::Notation{uri,name_range:range,.. } |
             Self::Symuse{uri,name_range:range,.. } |
+            Self::Precondition{uri,symbol_range:range,.. } |
+            Self::Objective{uri,symbol_range:range,.. } |
             Self::Definiens{uri,name_range:Some(range),.. }
                 => Some(lsp::Hover {
                     range: Some(SourceRange::into_range(*range)),
@@ -984,7 +1038,7 @@ impl AnnotExt for STeXAnnot {
             Self::UseModule{..} | Self::SetMetatheory{..} | Self::Inputref{..} |
             Self::Symdecl{..} | Self::Symdef{..} | Self::Vardef{ .. } |
             Self::Varseq{ .. } | Self::Definiens{..} |
-            Self::TextSymdecl{ .. } |
+            Self::TextSymdecl{ .. } | Self::Exercise{..} |
             Self::Defnotation { .. } | Self::MorphismEnv{..} => None
         }
     }
@@ -1110,6 +1164,8 @@ impl AnnotExt for STeXAnnot {
             Self::SymName{ uri, name_range, .. } |
             Self::Symuse{ uri, name_range,.. } |
             Self::Symref{ uri, name_range,.. } |
+            Self::Precondition{uri,symbol_range:name_range,.. } |
+            Self::Objective{uri,symbol_range:name_range,.. } |
             Self::Definiens{ uri, name_range:Some(name_range),.. } => {
                 if !name_range.contains(pos) { return Vec::new() }
                 if uri.len() > 1 {
@@ -1132,8 +1188,7 @@ impl AnnotExt for STeXAnnot {
                 } else { Vec::new() }
             }
 
-
-
+            Self::Exercise{..} |
             Self::Module{..} |
             Self::MathStructure{..} |
             Self::ConservativeExt { .. } |
@@ -1494,6 +1549,8 @@ impl LSPState {
                             STeXAnnot::SymName{uri,name_range:range,..} |
                             STeXAnnot::Symuse{uri,name_range:range,..} |
                             STeXAnnot::Symref{uri,name_range:range,..} |
+                            STeXAnnot::Precondition{uri,symbol_range:range,.. } |
+                            STeXAnnot::Objective{uri,symbol_range:range,.. } |
                             STeXAnnot::Definiens{uri,full_range:range,..} => {
                                 for u in uri {
                                     if u.uri == suri { ret.push(here!(*range)) }
@@ -1513,7 +1570,6 @@ impl LSPState {
                             _ => ()
                         })
                     }
-                    _ => ()
                 }
                 ret
             }).await.ok()
