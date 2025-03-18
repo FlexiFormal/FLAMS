@@ -17,7 +17,7 @@ use tracing::instrument;
 pub mod sparql {
     use flams_ontology::{rdf::ontologies::{self, ulo2}, uris::{SymbolURI, URIOrRefTrait}};
     pub use oxigraph::sparql::*;
-    pub use spargebra::{SparqlSyntaxError,Query as QueryBuilder};
+    pub use spargebra::{SparqlSyntaxError,Query as QueryBuilder,algebra::GraphPattern,term::TriplePattern};
     pub struct Var(pub char);
     impl From<Var> for spargebra::term::TermPattern {
         fn from(v:Var) -> Self {
@@ -61,6 +61,7 @@ pub mod sparql {
         }
     }
 
+    #[must_use]
     pub fn lo_query(s:&SymbolURI,exercises:bool) -> Query {
         /* 
 SELECT DISTINCT ?x ?R ?t ?s WHERE {
@@ -95,7 +96,7 @@ SELECT DISTINCT ?x ?R ?t ?s WHERE {
                         }
                     ] 
                 }), 
-                variable: var("R").into(), 
+                variable: var("R"), 
                 expression: Expression::Literal(
                     "DEF".into()
                 )
@@ -110,7 +111,7 @@ SELECT DISTINCT ?x ?R ?t ?s WHERE {
                         }
                     ] 
                 }), 
-                variable: var("R").into(), 
+                variable: var("R"), 
                 expression: Expression::Literal(
                     "EX".into()
                 )
@@ -149,10 +150,10 @@ SELECT DISTINCT ?x ?R ?t ?s WHERE {
                             ] })
                         }
                     } else {defs_and_exs}),
-                    variables:if(exercises) {
-                        vec![var("x").into(),var("R").into(),var("t").into()]
+                    variables: if exercises {
+                        vec![var("x"),var("R"),var("t")]
                     } else {
-                        vec![var("x").into(),var("R").into()]
+                        vec![var("x"),var("R")]
                     }
                 })
             }
@@ -324,7 +325,7 @@ impl Default for RDFStore {
 impl RDFStore {
     #[inline]
     pub fn clear(&self) {
-        self.store.clear();
+        let _ = self.store.clear();
     }
     #[inline]
     #[must_use]
@@ -336,6 +337,7 @@ impl RDFStore {
         let _ = loader.load_quads(iter);
     }
 
+    #[must_use]
     pub fn los(&self,s:&SymbolURI,exercises:bool) -> Option<LOIter> {
         let q = sparql::lo_query(s,exercises);
         self.query(q).ok().and_then(|s|
@@ -381,14 +383,15 @@ impl RDFStore {
       ",
         );
         query_str.push_str(s.as_ref());
-        let mut query: Query = query_str.as_str().try_into()?;
-        query.dataset_mut().set_default_graph_as_union();
-        Ok(self.store.query(query).map(QueryResult)?)
+        let query: Query = query_str.as_str().try_into()?;
+        self.query(query)
     }
 
     /// ### Errors
     pub fn query(&self, mut q: Query) -> Result<QueryResult,QueryError> {
         q.dataset_mut().set_default_graph_as_union();
+
+        // THIS NEEDS TO BE TIMEOUTED!!
         Ok(self.store.query(q).map(QueryResult)?)
     }
 

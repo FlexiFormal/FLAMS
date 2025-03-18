@@ -5,6 +5,7 @@ use std::{
 };
 
 use either::Either;
+<<<<<<< HEAD
 use flams_ontology::{
     languages::Language,
     uris::{
@@ -16,6 +17,10 @@ use flams_utils::{
     triomphe::Arc,
     vecmap::{VecMap, VecSet},
 };
+=======
+use flams_ontology::uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, URIRefTrait};
+use flams_utils::{time::Eta, triomphe::Arc, vecmap::{VecMap, VecSet}};
+>>>>>>> origin/devel
 use parking_lot::RwLock;
 
 use crate::formats::{BuildArtifactTypeId, BuildTargetId};

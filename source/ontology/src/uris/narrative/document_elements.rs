@@ -175,3 +175,12 @@ mod serde_impl {
     use crate::uris::{serialize, DocumentElementURI};
     serialize!(DE DocumentElementURI);
 }
+
+#[cfg(feature="tantivy")]
+impl tantivy::schema::document::ValueDeserialize for DocumentElementURI {
+    fn deserialize<'de, D>(deserializer: D) -> Result<Self, tantivy::schema::document::DeserializeError>
+        where D: tantivy::schema::document::ValueDeserializer<'de> {
+        deserializer.deserialize_string()?.parse()
+          .map_err(|_| tantivy::schema::document::DeserializeError::custom(""))
+    }
+  }

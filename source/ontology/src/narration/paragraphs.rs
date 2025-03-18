@@ -67,6 +67,7 @@ impl ParagraphKind {
             _ => return None,
         })
     }
+    #[must_use]
     pub fn is_definition_like(&self, styles: &[Name]) -> bool {
         match &self {
             Self::Definition | Self::Assertion => true,

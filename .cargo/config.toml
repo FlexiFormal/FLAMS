@@ -1,5 +1,15 @@
-#[build]
-#rustflags = ["--cfg", "tokio_unstable","--cfg","web_sys_unstable_apis"]
+
+#[unstable]
+#codegen-backend=true
+
+#[profile.server-dev]
+#codegen-backend = "cranelift"
+
+#[target.x86_64-unknown-linux-gnu]
+#linker="clang"
+#rustflags = ["-C","link-arg=-fuse-ld=/usr/bin/mold"]
+
+# ---------------------------------------------------------
 
 #[target.x86_64-pc-windows-msvc]
 #target-dir = "target"
@@ -7,3 +17,6 @@
 #[unstable]
 #build-std = ["std", "panic_abort", "core", "alloc"]
 #build-std-features = ["panic_immediate_abort"]
+
+#[build]
+#rustflags = ["--cfg", "tokio_unstable","--cfg","web_sys_unstable_apis"]

@@ -73,7 +73,7 @@ msg:impl Fn(O) + Send + Sync + Clone + 'static
         }
         Err(e) => {
           open.set(false);
-          error_with_toaster(e,toaster)
+          error_with_toaster(e,toaster);
         }
       }
     }

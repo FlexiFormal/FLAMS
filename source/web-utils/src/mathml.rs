@@ -61,7 +61,7 @@ pub fn MathMLTag<Ch:IntoView+'static>(tag: &'static str, children: TypedChildren
         "mpadded" => view!(<mpadded>{children()}</mpadded>).into_any(),
         "mphantom" => view!(<mphantom>{children()}</mphantom>).into_any(),
         "mroot" => view!(<mroot>{children()}</mroot>).into_any(),
-        "mrow" => view!(<mrow>{children()}</mrow>).into_any(),
+        //"mrow" => view!(<mrow>{children()}</mrow>).into_any(),
         "msqrt" => view!(<msqrt>{children()}</msqrt>).into_any(),
         "mstyle" => view!(<mstyle>{children()}</mstyle>).into_any(),
         "mmultiscripts" => view!(<mmultiscripts>{children()}</mmultiscripts>).into_any(),

@@ -110,7 +110,7 @@ export const FTMLDocument: React.FC<FTMLDocumentArgs> = (args) => {
   const context = useContext(FTMLContext);
 
   useEffect(() => {
-    if (!mountRef.current) return;
+    if (mountRef.current === null) return;
     const cont = context?context.wasm_clone():context;
     const handle = FTMLT.renderDocument(
       mountRef.current,

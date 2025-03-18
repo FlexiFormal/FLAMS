@@ -7,6 +7,7 @@ pub mod backend;
 pub mod query;
 pub mod git;
 pub mod index;
+pub mod search;
 pub(crate) mod buildqueue;
 pub(crate) mod logging;
 pub(crate) mod users;
@@ -44,6 +45,7 @@ pub fn Main() -> impl IntoView {
                         <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
                         <Route path=StaticSegment("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
                         <Route path=StaticSegment("users") view=|| view!(<MainPage page=Page::Users/>)/>
+                        <Route path=StaticSegment("search") view=|| view!(<MainPage page=Page::Search/>)/>
                         <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
                         <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
                     </ParentRoute>
@@ -79,6 +81,7 @@ enum Page {
     Settings,
     Login,
     Query,
+    Search,
     MyArchives,
     Users
 }
@@ -95,6 +98,7 @@ impl Page {
             Settings => "settings",
             Query => "query",
             MyArchives => "archives",
+            Search => "search",
             Users => "users",
             NotFound => "notfound"
         }

@@ -20,6 +20,9 @@ export function register_commands(context:FLAMSPreContext) {
   /*context.register_command(Commands.HelloWorld, () => {
     vscode.window.showInformationMessage(greet("Dude"));
   });*/
+	context.vsc.subscriptions.push(vscode.commands.registerCommand("flams.openFile", arg => {
+		vscode.window.showTextDocument(arg);
+	}));
 }
 
 interface HtmlRequestParams {
@@ -66,10 +69,16 @@ export function register_server_commands(context:FLAMSContext) {
       }
     })
   );
-	vscode.window.registerTreeDataProvider("flams-mathhub",new MathHubTreeProvider(context));
+
+  context.mathhub = new MathHubTreeProvider(context);
+	vscode.window.registerTreeDataProvider("flams-mathhub",context.mathhub);
+  
+	context.vsc.subscriptions.push(vscode.commands.registerCommand("flams.mathhub.install", (e) => context.mathhub?.install(e)));
+
   context.client.onNotification("flams/htmlResult",(s:string) => {
     openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s.split("&d=")[1]);
 	});
+	context.client.onNotification("flams/updateMathHub", context.mathhub?.update);
 }
 
 export function openIframe(url:string,title:string): vscode.WebviewPanel {

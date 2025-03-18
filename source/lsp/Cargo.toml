@@ -10,7 +10,7 @@ workspace = true
 ws = ["dep:axum","dep:serde_json"]
 
 [dependencies]
-flams-system = {workspace=true,features=["tokio"]}
+flams-system = {workspace=true,features=["tokio","zip"]}
 flams-ftml = {workspace=true}
 flams-ontology = {workspace=true}
 flams-utils = {workspace = true}

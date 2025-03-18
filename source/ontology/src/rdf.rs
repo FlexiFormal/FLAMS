@@ -190,6 +190,119 @@ macro_rules! rdft {
 }
 
 pub mod ontologies {
+    /*! # RDF Ontology Summary
+     * 
+     * #### [`Document`](crate::narration::documents::Document) `D`
+     * | struct | field | triple |
+     * | -----  | ----- | ------ |
+     * |   |    | `D` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#document>`](ulo2::DOCUMENT) |
+     * |   | language `l` | `D` [`<dc:#language>`](dc::LANGUAGE) `l` |
+     * |   | in archive `A`  | `A` [`<ulo:#contains>`](ulo2::CONTAINS) `D` |
+     * | [`DocumentReference`](crate::narration::DocumentElement::DocumentReference) | [`.target`](crate::narration::DocumentElement::DocumentReference::target)`=D2` | `D` [`<dc:#hasPart>`](dc::HAS_PART) `D2` |
+     * | [`UseModule`](crate::narration::DocumentElement::UseModule) | `(M)` | `D` [`<dc:#requires>`](dc::REQUIRES) `M` |
+     * | [`Paragraph`](crate::narration::paragraphs::LogicalParagraph) |   | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `P` |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Definition`](crate::narration::paragraphs::ParagraphKind::Definition) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#definition>`](ulo2::DEFINITION) |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Assertion`](crate::narration::paragraphs::ParagraphKind::Assertion) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#proposition>`](ulo2::PROPOSITION) |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Paragraph`](crate::narration::paragraphs::ParagraphKind::Paragraph) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#para>`](ulo2::PARA) |
+     * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Example`](crate::narration::paragraphs::ParagraphKind::Example) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#example>`](ulo2::EXAMPLE) |
+     * |   | is [`Example`](crate::narration::paragraphs::ParagraphKind::Example) and `_`[`.fors`](crate::narration::paragraphs::LogicalParagraph::fors)`.contains(S)`  | `P` [`<ulo:#example-for>`](ulo2::EXAMPLE_FOR) `S` |
+     * |   | [`is_definition_like`](crate::narration::paragraphs::ParagraphKind::is_definition_like) and  `_`[`.fors`](crate::narration::paragraphs::LogicalParagraph::fors)`.contains(S)`  | `P` [`<ulo:#defines>`](ulo2::DEFINES) `S` |
+     * | [`Exercise`](crate::narration::exercises::Exercise) `E` |   | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `E` |
+     * |   | [`.sub_exercise`](crate::narration::exercises::Exercise::sub_exercise)`==false`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#problem>`](ulo2::PROBLEM) |
+     * |   | [`.sub_exercise`](crate::narration::exercises::Exercise::sub_exercise)`==true`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#subproblem>`](ulo2::SUBPROBLEM) |
+     * |   | `_`[`.preconditions`](crate::narration::exercises::Exercise::preconditions)`.contains(d,S)`  | `E` [`<ulo:#precondition>`](ulo2::PRECONDITION) `<BLANK>` |
+     * |   |    | `<BLANK>` [`<ulo:#cognitive-dimension>`](ulo2::COGDIM) `d`, where `d=`[`<ulo:#cs-remember>`](ulo2::REMEMBER)⏐[`<ulo:#cs-understand>`](ulo2::UNDERSTAND)⏐[`<ulo:#cs-apply>`](ulo2::APPLY)⏐[`<ulo:#cs-analyze>`](ulo2::ANALYZE)⏐[`<ulo:#cs-evaluate>`](ulo2::EVALUATE)⏐[`<ulo:#cs-create>`](ulo2::CREATE) |
+     * |   |    | `<BLANK>` [`<ulo:#po-symbol>`](ulo2::POSYMBOL) `S` |
+     * |   | `_`[`.objectives`](crate::narration::exercises::Exercise::objectives)`.contains(d,S)`  | `E` [`<ulo:#objective>`](ulo2::OBJECTIVE) `<BLANK>` |
+     * |   |    | `<BLANK>` [`<ulo:#cognitive-dimension>`](ulo2::COGDIM) `d`, where `d=`[`<ulo:#cs-remember>`](ulo2::REMEMBER)⏐[`<ulo:#cs-understand>`](ulo2::UNDERSTAND)⏐[`<ulo:#cs-apply>`](ulo2::APPLY)⏐[`<ulo:#cs-analyze>`](ulo2::ANALYZE)⏐[`<ulo:#cs-evaluate>`](ulo2::EVALUATE)⏐[`<ulo:#cs-create>`](ulo2::CREATE) |
+     * |   |    | `<BLANK>` [`<ulo:#po-symbol>`](ulo2::POSYMBOL) `S` |
+     * 
+     * #### [`Module`](crate::content::modules::Module) `M`
+     * | struct | field | triple |
+     * | -----  | ----- | ------ |
+     * |   |    | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `M` |
+     * |   |    | `M` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#theory>`](ulo2::THEORY) |
+     * | [`Import`](crate::content::declarations::OpenDeclaration::Import) | `(M2)` | `M` [`<ulo:#imports>`](ulo2::IMPORTS) `M2` |
+     * | [`NestedModule`](crate::content::declarations::OpenDeclaration::NestedModule) | `(M2)` | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `M2` |
+     * |   |    | `M` [`<ulo:#contains>`](ulo2::CONTAINS) `M2` |
+     * |   |    | `M2` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#theory>`](ulo2::THEORY) |
+     * | [`MathStructure`](crate::content::declarations::OpenDeclaration::MathStructure) | `(S)` | `M` [`<ulo:#contains>`](ulo2::CONTAINS) `S` |
+     * |   |    | `S` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#structure>`](ulo2::STRUCTURE) |
+     * |   | [`Import`](crate::content::declarations::OpenDeclaration::Import)(`S2`)   | `S` [`<ulo:#extends>`](ulo2::EXTENDS) `S2` |
+     * | [`Morphism`](crate::content::declarations::OpenDeclaration::Morphism) | `(F)` | `M` [`<ulo:#contains>`](ulo2::CONTAINS) `F` |
+     * |   |    | `F` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#morphism>`](ulo2::MORPHISM) |
+     * |   | [`.domain`](crate::content::declarations::morphisms::Morphism)`=M2`   | `F` [`<rdfs:#domain>`](rdfs::DOMAIN) `M2` |
+     * 
+     */
+
+
+     /*
+
+     use crate::content::declarations::OpenDeclaration::Symbol;
+     use crate::narration::exercises::Exercise;
+     use crate::narration::paragraphs::ParagraphKind::Definition;
+     use crate::content::declarations::morphisms::Morphism;
+
+    section:
+    
+
+    symdecl:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        if let Some(m) = extractor.get_content_iri() {
+            let iri = uri.to_iri();
+            extractor.add_triples([
+                triple!(<(iri.clone())> : ulo:DECLARATION),
+                triple!(<(m)> ulo:DECLARES <(iri)>),
+            ]);
+        }
+    }
+
+    vardecl:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let iri = uri.to_iri();
+        extractor.add_triples([
+            triple!(<(iri.clone())> : ulo:VARIABLE),
+            triple!(<(extractor.get_document_iri())> ulo:DECLARES <(iri)>),
+        ]);
+    }
+
+    notation:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let iri = uri.to_iri();
+        extractor.add_triples([
+            triple!(<(iri.clone())> : ulo:NOTATION),
+            triple!(<(iri.clone())> ulo:NOTATION_FOR <(symbol.to_iri())>),
+            triple!(<(extractor.get_document_iri())> ulo:DECLARES <(iri)>),
+        ]);
+    }
+
+    symref:
+    #[cfg(feature="rdf")]
+    if E::RDF { 
+        let iri = extractor.get_document_iri();
+        extractor.add_triples([
+            triple!(<(iri)> ulo:CROSSREFS <(uri.to_iri())>)
+        ]);
+    }
+
+    varref:
+    #[cfg(feature="rdf")]
+    if E::RDF {
+        let iri = extractor.get_document_iri();
+        extractor.add_triples([
+            triple!(<(iri)> ulo:CROSSREFS <(uri.to_iri())>)
+        ]);
+    }
+
+
+
+    
+
+     */
+
     pub mod rdf {
         pub use oxrdf::vocab::rdf::*;
     }
@@ -344,9 +457,12 @@ pub mod ontologies {
             $($($quad:tt)*;)*
         ) => {
             pub mod $name {
+                #![doc=concat!("`",$uri,"`")]
                 use super::super::terms::*;
+                #[doc=concat!("`",$uri,"`")]
                 pub const NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
                 $(
+                    #[doc=concat!("`",$uri,"#",$l,"`")]
                     pub const $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
                 )*
 
@@ -358,9 +474,12 @@ pub mod ontologies {
             $($sub:expr,$pred:expr,$obj:expr;)*
         ) => {
             pub mod $name {
+                #![doc=concat!("`",$uri,"`")]
                 use super::super::*;
+                #[doc=concat!("`",$uri,"`")]
                 pub const NS : NamedNodeRef = NamedNodeRef::new_unchecked($uri);
                 $(
+                    #[doc=concat!("`",$uri,"#",$l,"`")]
                     pub const $i : NamedNodeRef = NamedNodeRef::new_unchecked(concat!($uri,"#",$l));
                 )*
 

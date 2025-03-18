@@ -10,15 +10,47 @@ use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
 pub use async_lsp;
-use flams_ontology::uris::{DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
+use flams_ontology::uris::{ArchiveId, DocumentURI, PathURITrait, URIRefTrait, URIWithLanguage};
 use flams_stex::quickparse::stex::{structs::{GetModuleError, ModuleReference, STeXModuleStore}, STeXParseData};
 use flams_system::backend::{AnyBackend, GlobalBackend};
 use flams_utils::{prelude::HMap, sourcerefs::{LSPLineCol, SourceRange}};
-use implementation::HTMLRequest;
 use state::{DocData, LSPState, UrlOrFile};
 
-pub trait ClientExt {
-  fn html_result(&self,uri:&DocumentURI);
+#[derive(serde::Serialize,serde::Deserialize)]
+struct ReloadParams {}
+struct Reload;
+impl lsp::notification::Notification for Reload {
+  type Params = ReloadParams;
+  const METHOD: &str = "flams/reload";
+}
+
+#[derive(serde::Serialize,serde::Deserialize)]
+struct InstallParams {
+  pub archives:Vec<ArchiveId>,
+  pub remote_url:String
+}
+struct InstallArchives;
+impl lsp::notification::Notification for InstallArchives {
+  type Params = InstallParams;
+  const METHOD: &str = "flams/install";
+}
+
+#[derive(serde::Serialize,serde::Deserialize)]
+pub struct HtmlRequestParams {
+    pub uri: lsp::Url
+}
+
+pub(crate) struct HTMLRequest;
+impl lsp::request::Request for HTMLRequest {
+    type Params = HtmlRequestParams;
+    type Result = Option<String>;
+    const METHOD: &'static str = "flams/htmlRequest";
+}
+
+struct UpdateMathHub;
+impl lsp::notification::Notification for UpdateMathHub {
+  type Params = ();
+  const METHOD: &str = "flams/updateMathHub";
 }
 
 struct HTMLResult;
@@ -26,11 +58,28 @@ impl lsp::notification::Notification for HTMLResult {
     type Params = String;
     const METHOD : &str = "flams/htmlResult";
 }
+pub struct ServerURL;
+impl lsp::notification::Notification for ServerURL {
+    type Params = String;
+    const METHOD : &str = "flams/serverURL";
+}
 
+
+
+pub trait ClientExt {
+  fn html_result(&self,uri:&DocumentURI);
+  fn update_mathhub(&self);
+}
 impl ClientExt for ClientSocket {
   #[inline]
   fn html_result(&self,uri:&DocumentURI) {
     let _ = self.notify::<HTMLResult>(uri.to_string());
+  }
+  #[inline]
+  fn update_mathhub(&self) {
+    if let Err(e) = self.notify::<UpdateMathHub>(()) {
+      tracing::error!("failed to send notification: {}", e);return
+    }
   }
 }
 
@@ -43,14 +92,6 @@ pub trait FLAMSLSPServer:'static {
   fn initialized(&mut self) {}
   #[inline]
   fn initialize<I:Iterator<Item=(String,lsp::Url)> + Send + 'static>(&mut self,_workspaces:I) {}
-}
-
-#[derive(serde::Serialize,serde::Deserialize)]
-struct ReloadParams {}
-struct Reload;
-impl lsp::notification::Notification for Reload {
-  type Params = ReloadParams;
-  const METHOD: &str = "flams/reload";
 }
 
 pub struct ServerWrapper<T:FLAMSLSPServer> {
@@ -66,6 +107,7 @@ impl <T:FLAMSLSPServer> ServerWrapper<T> {
     let mut r = async_lsp::router::Router::from_language_server(self);
     r.request::<HTMLRequest,_>(Self::html_request);
     r.notification::<Reload>(Self::reload);
+    r.notification::<InstallArchives>(Self::install);
     //r.request(handler)
     r
   }

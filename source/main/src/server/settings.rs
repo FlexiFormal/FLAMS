@@ -72,6 +72,7 @@ struct Cli {
     pub(crate) gitlab_redirect_url: Option<String>
 }
 impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
+    /// #### Panics
     fn from(cli: Cli) -> Self {
         let settings = SettingsSpec {
             mathhubs: cli
@@ -96,7 +97,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
                 num_threads: cli.threads,
             },
             gitlab: GitlabSettings {
-                url: cli.gitlab_url.map(Into::into),
+                url: cli.gitlab_url.map(|s| s.parse().expect("Illegal url")),
                 token: cli.gitlab_token.map(Into::into),
                 app_id: cli.gitlab_app_id.map(Into::into),
                 app_secret: cli.gitlab_app_secret.map(Into::into),

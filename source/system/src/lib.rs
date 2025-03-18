@@ -8,15 +8,21 @@ pub mod building;
 pub mod formats;
 #[cfg(feature = "tokio")]
 pub mod logging;
+#[cfg(feature = "tantivy")]
+pub mod search;
 pub mod settings;
 
 use backend::GlobalBackend;
 use building::queue_manager::QueueManager;
+use building::queue_manager::QueueManager;
 #[cfg(feature = "tokio")]
 use flams_utils::background;
 use formats::FLAMSExtension;
+use formats::FLAMSExtension;
+use settings::SettingsSpec;
 use settings::SettingsSpec;
 
+/// #### Panics
 pub fn initialize(settings: SettingsSpec) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
@@ -52,7 +58,7 @@ pub fn initialize(settings: SettingsSpec) {
         {
             if let Some(url) = &settings.gitlab_url {
                 let cfg = flams_git::gl::GitlabConfig::new(
-                    url.to_string(),
+                    url.clone(),
                     settings.gitlab_token.as_ref().map(ToString::to_string),
                     settings.gitlab_app_id.as_ref().map(ToString::to_string),
                     settings.gitlab_app_secret.as_ref().map(ToString::to_string),
@@ -90,5 +96,5 @@ pub fn initialize(settings: SettingsSpec) {
         GlobalBackend::initialize();
         QueueManager::initialize(settings.num_threads);
         FLAMSExtension::initialize();
-    })
+    });
 }

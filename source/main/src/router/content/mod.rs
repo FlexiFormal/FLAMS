@@ -13,6 +13,7 @@ use crate::{users::Login, utils::from_server_clone};
 
 #[cfg(feature="ssr")]
 pub(crate) fn insert_base_url(mut v:Vec<CSS>) -> Vec<CSS> {
+  //v.sort();
   for c in v.iter_mut() {
     if let CSS::Link(lnk) = c {
       if let Some(r) = lnk.strip_prefix("srv:") {
@@ -510,6 +511,17 @@ pub fn Document(doc:DocURIComponents) -> impl IntoView {
     |(uri,css,html)| view!{<div>{
         for css in css { do_css(css); }
         view!(<DocumentString html uri toc=TOCSource::Get omdoc=OMDocSource::Get/>)
+    }</div>})
+}
+
+#[component]
+pub fn DocumentInner(doc:DocURIComponents) -> impl IntoView {
+  let doc : URIComponents = doc.into();
+  from_server_clone(false,
+    move || doc.clone().into_args(fragment), 
+    |(uri,css,html)| view!{<div>{
+        for css in css { do_css(css); }
+        FragmentString(FragmentStringProps{html,uri:None})
     }</div>})
 }
 

@@ -1,4 +1,4 @@
-use leptos::{either::{Either, EitherOf4, EitherOf7, EitherOf9}, prelude::*};
+use leptos::{either::{Either, EitherOf4, EitherOf7}, prelude::*};
 use leptos_meta::Stylesheet;
 use leptos_router::{components::{Outlet, Redirect}, hooks::use_navigate};
 use crate::users::{Login,LoginState};
@@ -15,17 +15,19 @@ use std::borrow::Cow;
 use flams_web_utils::components::display_error;
 
 fn do_main(page:Page) -> impl IntoView {
+  use leptos::either::EitherOf10::*;
   let inner =  || match page {
-    Page::Home => EitherOf9::A(view!(<super::index::Index/>)),
-    Page::MathHub => EitherOf9::B(view!{<super::backend::ArchivesTop/>}),
+    Page::Home => A(view!(<super::index::Index/>)),
+    Page::MathHub => B(view!{<super::backend::ArchivesTop/>}),
     //Page::Graphs => view!{<GraphTest/>},
-    Page::Log => EitherOf9::C(view!{<super::logging::Logger/>}),
-    Page::Queue => EitherOf9::D(view!{<super::buildqueue::QueuesTop/>}),
-    Page::Query => EitherOf9::E(view!{<super::query::Query/>}),
-    Page::Settings => EitherOf9::F(view!{<super::settings::Settings/>}),
-    Page::MyArchives => EitherOf9::G(view!{<super::git::Archives/>}),
-    Page::Users => EitherOf9::H(view!{<super::users::Users/>}),
-    _ => EitherOf9::I(view!(<span>"TODO"</span>)),
+    Page::Log => C(view!{<super::logging::Logger/>}),
+    Page::Queue => D(view!{<super::buildqueue::QueuesTop/>}),
+    Page::Query => E(view!{<super::query::Query/>}),
+    Page::Settings => F(view!{<super::settings::Settings/>}),
+    Page::MyArchives => G(view!{<super::git::Archives/>}),
+    Page::Search => H(view!{<super::search::SearchTop/>}),
+    Page::Users => I(view!{<super::users::Users/>}),
+    _ => J(view!(<span>"TODO"</span>)),
     //Page::Login => view!{<LoginPage/>}
   };
   view!(<main style="height:100%">{inner()}</main>)
@@ -93,6 +95,7 @@ fn side_menu(page:Page) -> impl IntoView {
             <NavItem value="home" href="/">"Home"</NavItem>
             <NavItem value="mathhub" href="/dashboard/mathhub">"MathHub"</NavItem>
             <NavItem value="query" href="/dashboard/query">"Queries"</NavItem>
+            <NavItem value="search" href="/dashboard/search">"Search Content"</NavItem>
             {move || {let s = LoginState::get(); match s {
                 LoginState::NoAccounts => leptos::either::EitherOf5::A(view!{
                     <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
@@ -202,5 +205,5 @@ async fn do_login(pw:String,login:RwSignal<LoginState>) {
       display_error(Cow::Owned(format!("Error: {e}")));
     }
   }
-  let _ = view!(<Redirect path="/"/>);
+  let _ = view!(<Redirect path="/dashboard"/>);
 }

@@ -1,7 +1,7 @@
 import * as FTML from "./ftml-viewer-base";
 
 export type DocumentURI = FTML.DocumentURI;
-export type SymbolURI = string;
+export type SymbolURI = FTML.SymbolURI;
 export type DocumentElementURI = FTML.DocumentElementURI;
 export type Name = FTML.Name;
 
@@ -21,49 +21,12 @@ export type Instance = FTML.Instance;
 export type Language = FTML.Language;
 export type CognitiveDimension = FTML.CognitiveDimension;
 export type LOKind = FTML.LOKind;
-
-export interface Settings {
-  mathhubs: string[],
-  debug:boolean,
-  server: {
-    port:number,
-    ip:string
-    database?:string
-  },
-  log_dir:string,
-  buildqueue: {
-    num_threads:number
-  }
-}
-
-export interface BuildState {
-  new:number,
-  stale:number,
-  deleted:number,
-  up_to_date:number,
-  last_built:number,
-  last_changed:number
-}
-
-export interface ArchiveGroup {
-  id: string,
-  summary?: BuildState
-}
-
-export interface Archive {
-  id: string,
-  summary?: BuildState
-}
-
-export interface Directory {
-  rel_path: string,
-  summary?: BuildState
-}
-
-export interface File {
-  rel_path: string,
-  format: string
-}
+export type ArchiveGroup = FTML.ArchiveGroupData;
+export type Archive = FTML.ArchiveData;
+export type Directory = FTML.DirectoryData;
+export type File = FTML.FileData;
+export type SearchResult = FTML.SearchResult;
+export type QueryFilter = FTML.QueryFilter;
 
 export type DocumentURIParams = {uri:DocumentURI} | 
   { a: string, rp: string } | 

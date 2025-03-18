@@ -23,7 +23,7 @@ pub struct Settings {
     external_url:Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
     pub num_threads: u8,
-    pub gitlab_url: Option<Box<str>>,
+    pub gitlab_url: Option<url::Url>,
     pub gitlab_token: Option<Box<str>>,
     pub gitlab_app_id:Option<Box<str>>,
     pub gitlab_app_secret:Option<Box<str>>,
@@ -52,19 +52,22 @@ impl Settings {
 
     #[inline]
     pub fn external_url(&self) -> Option<&str> {
-        self.external_url.as_ref().map(|v| &**v)
+        self.external_url.as_deref()
     }
 
+    /// #### Panics
     pub fn temp_dir(&self) -> PathBuf {
         self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf()
     }
 
+    #[allow(clippy::significant_drop_in_scrutinee)]
     pub fn close(&self) {
         if let Some(td) = self.temp_dir.write().take() {
             let _ = td.close();
         }
     }
 
+    /// #### Panics
     #[must_use]
     pub fn as_spec(&self) -> SettingsSpec {
         let port = self.port();
@@ -120,7 +123,7 @@ impl From<SettingsSpec> for Settings {
             temp_dir: parking_lot::RwLock::new(Some(spec.temp_dir.map_or_else(
                 || tempfile::TempDir::new().expect("Could not create temp dir"),
                 |p| {
-                    std::fs::create_dir_all(&p);
+                    let _ = std::fs::create_dir_all(&p);
                     tempfile::Builder::new().tempdir_in(p).expect("Could not create temp dir")
                 },
             ))),

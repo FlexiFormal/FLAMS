@@ -19,7 +19,7 @@ crate-type = ["cdylib","rlib"]
 [features]
 docs = []
 ssr = [
-  "dep:flams-system", 
+  "dep:flams-system",
   "dep:flams-stex",
   "dep:flams-ftml",
   "dep:tokio", 
@@ -101,7 +101,7 @@ flams-git = {workspace=true}
 urlencoding = {workspace=true}
 
 # ssr
-flams-system = {workspace=true,features=["gitlab"],optional=true}
+flams-system = {workspace=true,features=["zip","gitlab","tantivy"],optional=true}
 flams-lsp = {workspace=true,optional=true, features=["ws"]}
 flams-stex = {workspace=true,optional=true, features=["serde"]}
 flams-ftml = {workspace=true,optional=true}

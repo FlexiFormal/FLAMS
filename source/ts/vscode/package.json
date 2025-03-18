@@ -51,11 +51,24 @@
         }
       ]
     },
+		"menus": {
+			"view/item/context": [
+				{
+					"command": "flams.mathhub.install",
+					"group": "inline",
+					"when": "view == flams-mathhub && viewItem == remote"
+				}
+      ]
+    },
     "commands": [
-      {
-        "command": "flams.helloWorld",
-        "title": "Hello World"
-      }
+			{
+				"command": "flams.mathhub.install",
+				"title": "Install",
+				"icon": {
+					"light": "img/cloud-download-light.svg",
+					"dark": "img/cloud-download-dark.svg"
+				}
+			}
     ],
     "configuration": [
       {
@@ -132,7 +145,7 @@
     "@octokit/rest": "^21.1.0",
     "@vscode-elements/elements": "^1.11.0",
     "@vscode/codicons": "^0.0.36",
-    "@kwarc/flams": "^0.0.4",
+    "@kwarc/flams": "^0.0.6",
     "child_process": "^1.0.2",
     "follow-redirects": "^1.15.9",
     "fs": "^0.0.2",

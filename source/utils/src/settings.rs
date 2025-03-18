@@ -103,7 +103,10 @@ impl SettingsSpec {
             gitlab: GitlabSettings {
                 url:std::env::var("FLAMS_GITLAB_URL")
                     .ok()
-                    .map(Into::into),
+                    .map( |s| {
+                        s.parse()
+                            .expect("Could not parse URL (environment variable FLAMS_GITLAB_URL)")
+                    }),
                 token:std::env::var("FLAMS_GITLAB_TOKEN")
                     .ok()
                     .map(Into::into),
@@ -185,7 +188,7 @@ impl AddAssign for BuildQueueSettings {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GitlabSettings {
     #[cfg_attr(feature = "serde", serde(default))]
-    pub url: Option<Box<str>>,
+    pub url: Option<url::Url>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub token: Option<Box<str>>,
     #[cfg_attr(feature = "serde", serde(default))]

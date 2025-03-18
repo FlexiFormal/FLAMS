@@ -48,7 +48,7 @@ impl IgnoreSource {
     }
     pub fn ignores(&self, p: &Path) -> bool {
         let Some(p) = p.to_str() else { return false };
-        self.0.as_ref().map_or(false, |r| r.is_match(p))
+        self.0.as_ref().is_some_and(|r| r.is_match(p))
     }
 }
 

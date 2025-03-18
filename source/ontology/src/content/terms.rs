@@ -55,9 +55,12 @@ impl Term {
     }
 
     #[must_use]
+    #[allow(clippy::result_large_err)]
     pub fn is_record_field(&self) -> bool {
         matches!(self,oma!(hd,args) if matches!(&**hd,omsp!(fp) if *fp == *crate::metatheory::FIELD_PROJECTION) && args.len() == 2)
     }
+
+    /// #### Errors
     pub fn into_record_field(self) ->Result<(Self,Name),Self> {
         match self {
             oma!(hd,args) if matches!(&*hd,omsp!(fp) if *fp == *crate::metatheory::FIELD_PROJECTION) && args.len() == 2 => {
@@ -441,21 +444,21 @@ mod tests {
         static ref NAMESPACE: BaseURI = BaseURI::new_unchecked("http://example.com/");
         static ref ARCHIVE1: ArchiveURI = NAMESPACE.clone() & "some/archive";
         static ref ARCHIVE2: ArchiveURI = NAMESPACE.clone() & "some/other/archive";
-        static ref MODULE1: ModuleURI = (ARCHIVE1.clone() | "some/module").unwrap();
-        static ref MODULE2: ModuleURI = (ARCHIVE2.clone() | "some/module").unwrap();
-        static ref SYM1: SymbolURI = (MODULE1.clone() | "some symbol").unwrap();
-        static ref SYM2: SymbolURI = (MODULE2.clone() | "other symbol").unwrap();
-        static ref FUNC1: SymbolURI = (MODULE1.clone() | "some function").unwrap();
-        static ref FUNC2: SymbolURI = (MODULE2.clone() | "other function").unwrap();
+        static ref MODULE1: ModuleURI = (ARCHIVE1.clone() | "some/module").expect("impossible");
+        static ref MODULE2: ModuleURI = (ARCHIVE2.clone() | "some/module").expect("impossible");
+        static ref SYM1: SymbolURI = (MODULE1.clone() | "some symbol").expect("impossible");
+        static ref SYM2: SymbolURI = (MODULE2.clone() | "other symbol").expect("impossible");
+        static ref FUNC1: SymbolURI = (MODULE1.clone() | "some function").expect("impossible");
+        static ref FUNC2: SymbolURI = (MODULE2.clone() | "other function").expect("impossible");
         static ref TERM: Term = oma!(oms!(FUNC1.clone()),[
             {N:oma!(oms!(FUNC2.clone()),[
                 {N:oms!(SYM1.clone())},
                 {N:oms!(SYM2.clone())}
             ])},
             {N:oma!(oms!(FUNC1.clone()),[
-                {N:oml!("some name".parse().unwrap(); := oms!(SYM2.clone()))},
+                {N:oml!("some name".parse().expect("impossible"); := oms!(SYM2.clone()))},
                 {N:oms!(SYM1.clone())},
-                {N:omv!("some var".parse().unwrap();)}
+                {N:omv!("some var".parse().expect("impossible");)}
             ])}
         ]);
     }

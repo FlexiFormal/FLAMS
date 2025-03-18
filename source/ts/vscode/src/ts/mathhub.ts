@@ -3,7 +3,6 @@ import { get_context, FLAMSContext } from '../extension';
 import * as FLAMS from '@kwarc/flams';
 import path from 'path';
 import * as fs from 'fs';
-import { log } from 'console';
 
 type FLAMSServer = FLAMS.FLAMSServer;
 
@@ -21,22 +20,59 @@ export interface Settings {
   }
 }
 
+interface InstallParams {
+  archives:string[],
+  remote_url:string
+}
+
 async function apiSettings(server:FLAMSServer): Promise<Settings | undefined> {
-    const ret = await server.rawPostRequest<{},[Settings,any,any] | undefined>("api/settings",{});
-    if (ret) {
-      const [settings,_] = ret;
-      return settings;
-    }
+  const ret = await server.rawPostRequest<{},[Settings,any,any] | undefined>("api/settings",{});
+  if (ret) {
+    const [settings,_] = ret;
+    return settings;
   }
+}
 
 export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   primary_server:FLAMSServer;
   remote_server:FLAMSServer | undefined;
   mathhubs:string[] | undefined;
+  roots:AnyMH[] | undefined;
+
   constructor(context:FLAMSContext) {
     this.primary_server = context.server;
     this.remote_server = context.remote_server;
   }
+
+
+
+  onUpdated = new vscode.EventEmitter<void>();
+  onDidChangeTreeDataI = new vscode.EventEmitter<AnyMH | undefined | null | void>();
+  onDidChangeTreeData?: vscode.Event<void | AnyMH | AnyMH[] | null | undefined> | undefined =
+      this.onDidChangeTreeDataI.event;
+
+  async install(item:Archive|ArchiveGroup):Promise<void> {
+    if (!this) {
+      throw new Error("MathHubTreeProvider not initialized");
+    }
+    const downloads = (item instanceof Archive)? [item.id] : filter_things(item);
+    vscode.window.withProgress({ location: { viewId: "flams-mathhub" } }, () => new Promise((r) => this.onUpdated.event(r)));
+    const context = get_context();
+    const remote_url = context.remote_server? context.remote_server.url : undefined;
+    get_context().client.sendNotification("flams/install",<InstallParams>{archives:downloads,remote_url:remote_url});;
+    /*this.roots?.forEach((mhti: AnyMH) => {
+      mhti.contextValue = "disabled";
+    });*/
+    this.onDidChangeTreeDataI.fire();
+  }
+
+  async update() {
+    this.roots = undefined;
+    this.onDidChangeTreeDataI.fire();
+    this.onUpdated.fire();
+  }
+
+
   getTreeItem(element: AnyMH): vscode.TreeItem | Thenable<vscode.TreeItem> {
     return element;
   }
@@ -54,12 +90,16 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
       if (ret) {
         const [group_entries,archive_entries] = ret;
         const entries = (<AnyMH[]>group_entries).concat(archive_entries);
+        this.roots = entries;
         return entries;
       } else {
+        this.roots = [];
         return [];
       }
     }
     if (element instanceof ArchiveGroup) {
+      return element.children;
+      /*
       const ret = await this.ga_from_server(element);
       if (ret) {
         const [group_entries,archive_entries] = ret;
@@ -68,6 +108,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
       } else {
         return [];
       }
+        */
     }
     if (element instanceof Archive) {
       const ret = await this.df_from_server(element);
@@ -102,75 +143,130 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
 
   private async ga_from_server(in_group?:ArchiveGroup): Promise<[ArchiveGroup[],Archive[]] | undefined> {
     if (!in_group || in_group.lr === LRB.Both) {
-      return await this.ga_from_both_servers(in_group?.id);
+      return await this.ga_from_both_servers(in_group);
     }
     if (in_group.lr === LRB.Local) {
-      return await this.ga_from_local_server(in_group.id);
+      return await this.ga_from_local_server(in_group);
     }
-    return await this.ga_from_remote_server(in_group.id);
+    return await this.ga_from_remote_server(in_group);
   }
 
-  private async ga_from_local_server(id:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
-    const entries = await this.primary_server.backendGroupEntries(id);
+  private async ga_from_local_server(in_group:ArchiveGroup): Promise<[ArchiveGroup[],Archive[]] | undefined> {
+    const entries = await this.primary_server.backendGroupEntries(in_group.id);
     if (!entries) {
       vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       return;
     }
     const [groups,archives] = entries;
-    const group_entries = groups.map(g => new ArchiveGroup(g,LRB.Local));
-    const archive_entries = archives.map(a => new Archive(a,true,this.mathhubs));
+    const igroup_entries = groups.map(async g => {
+      const ng = new ArchiveGroup(g,LRB.Local,in_group);
+      const children = await this.ga_from_local_server(ng);
+      if (children) {
+        const [group_entries,archive_entries] = children;
+        ng.children = (<(ArchiveGroup|Archive)[]>group_entries).concat(archive_entries);
+      }
+      return ng;
+    });
+    const group_entries= await Promise.all(igroup_entries);
+    const archive_entries = archives.map(a => new Archive(a,true,false,in_group,this.mathhubs));
     return [group_entries,archive_entries];
   }
 
-  private async ga_from_remote_server(id:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
+  private async ga_from_remote_server(in_group:ArchiveGroup): Promise<[ArchiveGroup[],Archive[]] | undefined> {
     if (!this.remote_server) {
       vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No remote server set`);
       return;
     }
-    const entries = await this.remote_server.backendGroupEntries(id);
+    const entries = await this.remote_server.backendGroupEntries(in_group.id).catch(() => undefined);
     if (!entries) {
-      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
+      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found in ",in_group.id);
       return;
     }
     const [groups,archives] = entries;
-    const group_entries = groups.map(g => new ArchiveGroup(g,LRB.Remote));
-    const archive_entries = archives.map(a => new Archive(a,false));
+    const igroup_entries = groups.map(async g => {
+      const ng = new ArchiveGroup(g,LRB.Remote,in_group);
+      const children = await this.ga_from_remote_server(ng);
+      if (children) {
+        const [group_entries,archive_entries] = children;
+        ng.children = (<(ArchiveGroup|Archive)[]>group_entries).concat(archive_entries);
+      }
+      return ng;
+    });
+    const group_entries= await Promise.all(igroup_entries);
+    const archive_entries = archives.map(a => new Archive(a,false,a.git?true:false,in_group));
     return [group_entries,archive_entries];
   }
 
-  private async ga_from_both_servers(id?:string): Promise<[ArchiveGroup[],Archive[]] | undefined> {
-    const entries = await this.primary_server.backendGroupEntries(id);
+  private async ga_from_both_servers(in_group?:ArchiveGroup): Promise<[ArchiveGroup[],Archive[]] | undefined> {
+    const entries = await this.primary_server.backendGroupEntries(in_group?.id);
     if (!entries) {
-      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
+      if (in_group) {
+        vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found in ",in_group.id);
+      } else {
+        vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
+      }
       return;
     }
     const [groups,archives] = entries;
-    const group_entries = groups.map(g => new ArchiveGroup(g,LRB.Local));
-    const archive_entries = archives.map(a => new Archive(a,true,this.mathhubs));
+    const igroup_entries = groups.map(async g => {
+      const ng = new ArchiveGroup(g,LRB.Local);
+      const children = await this.ga_from_local_server(ng);
+      if (children) {
+        const [group_entries,archive_entries] = children;
+        ng.children = (<(ArchiveGroup|Archive)[]>group_entries).concat(archive_entries);
+      }
+      return ng;
+    });
+    const group_entries= await Promise.all(igroup_entries);
+    const archive_entries = archives.map(a => new Archive(a,true,false,in_group,this.mathhubs));
     if (this.remote_server) {
-      const remote_entries = await this.remote_server.backendGroupEntries(id);
+      const remote_entries = await this.remote_server.backendGroupEntries(in_group?.id).catch(() => undefined);
       if (!remote_entries) {
         vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Failed to query remote server at ${this.remote_server.url}`);
         return [group_entries,archive_entries];
       }
       const [remote_groups,remote_archives] = remote_entries;
-      remote_groups.forEach(g => {
+      await Promise.all(remote_groups.map(async g => {
         const old = group_entries.find(o => o.id === g.id);
         if (old) {
           old.lr = LRB.Both;
+          const children = await this.ga_from_remote_server(old);
+          if (children) {
+            const [group_entries,archive_entries] = children;
+            merge(old.children,(<(ArchiveGroup|Archive)[]>group_entries).concat(archive_entries));
+          }
+          old.update();
         } else {
-          group_entries.push(new ArchiveGroup(g,LRB.Remote));
+          const ng = new ArchiveGroup(g,LRB.Remote,in_group);
+          const children = await this.ga_from_remote_server(ng);
+          if (children) {
+            const [group_entries,archive_entries] = children;
+            ng.children = (<(ArchiveGroup|Archive)[]>group_entries).concat(archive_entries);
+          }
+          group_entries.push(ng);
         }
-      });
+      }));
       remote_archives.forEach(a => {
         const old = archive_entries.find(o => o.id === a.id);
         if (!old) {
-          archive_entries.push(new Archive(a,false));
+          archive_entries.push(new Archive(a,false,a.git?true:false,in_group));
         }
       });
     }
     return [group_entries,archive_entries];
   }
+}
+
+function filter_things(item:ArchiveGroup): string[] {
+  var ret: string[] = [];
+  for (const child of item.children) {
+    if (child instanceof Archive && child.downloadable) {
+      ret.push(child.id);
+    } else if (child instanceof ArchiveGroup) {
+      ret = ret.concat(filter_things(child));
+    }
+  }
+  return ret;
 }
 
 type AnyMH = ArchiveGroup | Archive | Dir | File;
@@ -181,27 +277,51 @@ enum LRB {
   Both = 2
 }
 
+function merge(target:(ArchiveGroup|Archive)[],from:(ArchiveGroup|Archive)[]) {
+  from.forEach(f => {
+    const old = target.find(o => o.id === f.id);
+    if (!old) {
+      target.push(f);
+    }
+  });
+}
+
 class ArchiveGroup extends vscode.TreeItem {
   id:string;
   lr:LRB;
-  constructor(group:FLAMS.ArchiveGroup,lr:LRB) {
+  parent:ArchiveGroup|undefined;
+  children:(ArchiveGroup | Archive)[];
+  downloadable=false;
+  constructor(group:FLAMS.ArchiveGroup,lr:LRB,parent?:ArchiveGroup) {
     const name = group.id.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid archive group name");
     }
     super(name,vscode.TreeItemCollapsibleState.Collapsed);
     this.id = group.id;
+    this.parent = parent;
+    this.children = [];
     this.lr = lr;
     this.iconPath = (lr === LRB.Local || lr === LRB.Both) ? 
       new vscode.ThemeIcon("library") : 
       vscode.Uri.joinPath(get_context().vsc.extensionUri,"img","MathHub.svg")
     ;
+    if (lr === LRB.Remote) {this.downloadable = true;}
+    this.contextValue = (lr === LRB.Remote || lr === LRB.Both) ? "remote" : "local";
+  }
+
+  update() {
+    if (this.lr === LRB.Both && this.children.map(c => c.downloadable).includes(true)) {
+      this.contextValue = "remote";
+    }
   }
 }
 class Archive extends vscode.TreeItem {
   id:string;
   local:boolean;
-  constructor(archive:FLAMS.Archive,local:boolean,mhs?:string[]) {
+  parent:ArchiveGroup|undefined;
+  downloadable:boolean;
+  constructor(archive:FLAMS.Archive,local:boolean,downloadable:boolean,parent?:ArchiveGroup,mhs?:string[]) {
     const name = archive.id.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid archive name");
@@ -209,10 +329,13 @@ class Archive extends vscode.TreeItem {
     super(name,vscode.TreeItemCollapsibleState.Collapsed);
     this.id = archive.id;
     this.local = local;
+    this.downloadable = downloadable;
+    this.parent = parent;
     this.iconPath = local ? 
       new vscode.ThemeIcon("book") : 
       vscode.Uri.joinPath(get_context().vsc.extensionUri,"img","MathHub.svg")
     ;
+    this.contextValue = downloadable ? "remote" : "local";
     if (local && mhs) {
       mhs.find(mh => {
         const fp = archive.id.split("/").reduce((p,seg) => path.join(p,seg),mh);
@@ -249,7 +372,6 @@ class Dir extends vscode.TreeItem {
       );
     }
   }
-
 }
 
 class File extends vscode.TreeItem {
@@ -263,12 +385,18 @@ class File extends vscode.TreeItem {
     this.rel_path = file.rel_path;
     this.iconPath = new vscode.ThemeIcon("file");
     if (archive.resourceUri) {
+      this.contextValue = "file";
       this.resourceUri = vscode.Uri.file(
         this.rel_path.split("/").reduce(
           (p,seg) => path.join(p,seg),
           path.join(archive.resourceUri.fsPath,"source")
         )
       );
+      this.command = {
+          command:"flams.openFile",
+          title:"Open File",
+          arguments:[this.resourceUri]
+      };
     }
   }
 }

@@ -9,6 +9,8 @@
  * | [`/api/reload`](settings::reload) | (None) | (requires admin login) |
  * | [`/api/login`](login) | `username=<STRING>`, `password=<STRING>` | log in |
  * | [`/api/login_state`](login_state) | (None) | [LoginState] |
+ * | [`/api/search`](crate::router::search::search_query) | `query=<STRING>&opts=`[`QueryFilter`](flams_ontology::search::QueryFilter)`&num_results=<INT>` | `Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>` |
+ * | [`/api/search_symbols`](crate::router::search::search_symbols) | `query=<STRING>&num_results=<INT>` | `Vec<(`[`SymbolURI`]`Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>)>` |
  * | `/gitlab_login` |  |  |
  * | **Backend** | | |
  * | [`/api/backend/group_entries`](backend::group_entries) | (optional) `in=<STRING>` | `(Vec<`[ArchiveGroupData](crate::router::backend::ArchiveGroupData)`>,Vec<`[ArchiveData](crate::router::backend::ArchiveData)`>)` - the archives and archive groups in the provided archive group (if given) or on the top-level (if None) |
@@ -42,7 +44,6 @@
  * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](flams_ontology::narration::exercises::Solutions) |
  * | [`/content/legacy/uris`](content::uris()) | | |
 */
-
 
 use flams_ontology::{narration::{notations::Notation, LOKind}, uris::*};
 use flams_utils::{

@@ -1,5 +1,5 @@
 use flams_ontology::uris::ArchiveId;
-use flams_utils::{prelude::HSet, vecmap::VecSet};
+use flams_utils::prelude::HSet;
 use gitlab::api::AsyncQuery;
 use tracing::{Instrument,instrument};
 
@@ -12,6 +12,7 @@ lazy_static::lazy_static!{
 #[derive(Debug)]
 struct ProjectWithId {
   pub project:super::Project,
+  #[allow(clippy::option_option)]
   pub id:Option<Option<ArchiveId>>
 }
 impl std::borrow::Borrow<u64> for ProjectWithId {
@@ -37,7 +38,7 @@ impl Eq for ProjectWithId {}
 #[derive(Debug)]
 struct GitLabI {
   inner: gitlab::AsyncGitlab,
-	url:Box<str>,
+	url:url::Url,
 	id:Option<Box<str>>,
 	secret:Option<Box<str>>,
   projects:parking_lot::Mutex<HSet<ProjectWithId>>
@@ -60,7 +61,7 @@ pub struct GLInstance{
 }
 
 impl GLInstance {
-  #[inline]
+  #[inline]#[must_use]
   pub fn global() -> &'static Self {
     &GITLAB
   }
@@ -121,18 +122,18 @@ impl GLInstance {
 
 #[derive(Debug,Clone)]
 pub struct GitlabConfig {
-	url:String,
+	url:url::Url,
 	token:Option<String>,
 	app_id:Option<String>,
 	app_secret:Option<String>
 }
 impl GitlabConfig {
 	#[inline]#[must_use]
-	pub const fn new(url:String,token:Option<String>,app_id:Option<String>,app_secret:Option<String>) -> Self {
+	pub const fn new(url:url::Url,token:Option<String>,app_id:Option<String>,app_secret:Option<String>) -> Self {
 		Self { url, token, app_id, app_secret }
 	}
 
-  fn split(url:&str) -> (&str,bool) {
+  /*fn split(url:&str) -> (&str,bool) {
     if let Some(r) = url.strip_prefix("https://") {
       return (r,false)
     }
@@ -140,22 +141,25 @@ impl GitlabConfig {
       return (r,true)
     }
     (url,false)
-  }
+  }*/
 }
 
 impl GitLab {
   /// #### Errors
 	pub async fn new(cfg:GitlabConfig) -> Result<Self,gitlab::GitlabError> {
 		let GitlabConfig { url, token, app_id, app_secret } = cfg;
-		let (split_url,http) = GitlabConfig::split(&url);
+		//let (split_url,http) = GitlabConfig::split(&url);
+    let Some(url_str) = url.host_str() else {
+      return Err(gitlab::GitlabError::UrlParse{source:url::ParseError::EmptyHost});
+    }; 
 		let mut builder = token.map_or_else(
-			|| gitlab::GitlabBuilder::new_unauthenticated(split_url),
-			|token| gitlab::GitlabBuilder::new(split_url,token)
-		);
-		if http { builder.insecure(); }
+      || gitlab::GitlabBuilder::new_unauthenticated(url_str),
+      |token| gitlab::GitlabBuilder::new(url_str,token)
+    );
+		if matches!(url.scheme(),"http") { builder.insecure(); }
 		Ok(Self(std::sync::Arc::new(GitLabI {
 			inner: builder.build_async().in_current_span().await?,
-			url:url.into(),
+			url,
 			id:app_id.map(Into::into),
 			secret:app_secret.map(Into::into),
       projects:parking_lot::Mutex::new(HSet::default())
@@ -181,11 +185,12 @@ impl GitLab {
     let v: Vec<super::Project> = gitlab::api::paged(q,gitlab::api::Pagination::All).query_async(&self.0.inner).await
       .map_err(|e| {tracing::error!("Failed to load projects: {e}"); e})?;
     let mut prs = self.0.projects.lock();
-    for p in v.iter() {
+    for p in &v {
       if !prs.contains(&p.id) {
         prs.insert(ProjectWithId { project: p.clone(), id: None });
       }
     }
+    drop(prs);
     Ok(v)
     //let raw = gitlab::api::raw(q).query_async(&self.inner).await?;
     //Ok(std::str::from_utf8(raw.as_ref())?.to_string())
@@ -208,11 +213,12 @@ impl GitLab {
     macro_rules! ret {
       ($v:expr) => {{
         tracing::info!("Found {:?}",$v);
-        let mut lock= self.0.projects.lock();
+        let mut lock = self.0.projects.lock();
         if let Some(mut v) = lock.take(&id) {
           v.id = Some($v.clone());
           lock.insert(v);
         }
+        drop(lock);
         return Ok($v);
       }}
     }

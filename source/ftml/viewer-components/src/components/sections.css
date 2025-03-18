@@ -4,7 +4,7 @@ body {
 
 .ftml-part {
   counter-reset: ftml-chapter ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
-  & .ftml-title {
+  & .ftml-title-part {
     display:block;
     font-weight: bold;
     line-height: initial;
@@ -19,7 +19,7 @@ body {
 
 .ftml-chapter {
   counter-reset: ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
-  & .ftml-title {
+  & .ftml-title-chapter {
     display:block;
     font-weight: bold;
     line-height: initial;
@@ -33,7 +33,7 @@ body {
 
 .ftml-section {
   counter-reset: ftml-subsection ftml-subsubsection ftml-paragraph;
-  & .ftml-title {
+  & .ftml-title-section {
     display:block;
     font-weight: bold;
     line-height: initial;
@@ -47,7 +47,7 @@ body {
 
 .ftml-subsection {
   counter-reset: ftml-subsubsection ftml-paragraph;
-  & .ftml-title {
+  & .ftml-title-subsection {
     display:block;
     font-weight: bold;
     line-height: initial;
@@ -61,7 +61,7 @@ body {
 
 .ftml-subsubsection {
   counter-reset: ftml-paragraph;
-  & .ftml-title {
+  & .ftml-title-subsubsection {
     display:block;
     font-weight: bold;
     line-height: initial;
@@ -72,7 +72,7 @@ body {
 }
 
 .ftml-paragraph, .ftml-definition, .ftml-assertion, .ftml-example, .ftml-problem, .ftml-subproblem {
-  & .ftml-title {
+  & .ftml-title-paragraph {
     display:inline-block;
     font-weight: bold;
     margin:0;

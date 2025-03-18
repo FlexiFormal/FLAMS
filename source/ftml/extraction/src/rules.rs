@@ -4,8 +4,6 @@ use crate::extractor::{Attributes, FTMLExtractor};
 use crate::open::OpenFTMLElement;
 use crate::prelude::FTMLNode;
 
-pub use super::tags::{rule,all_rules};
-
 #[allow(type_alias_bounds)]
 pub type Call<E:FTMLExtractor> = for <'a> fn(&mut E,&mut E::Attr<'a>,&mut SmallVec<FTMLExtractionRule<E>,4>) -> Option<OpenFTMLElement>;
 
@@ -134,7 +132,7 @@ impl<const L:usize,E:FTMLExtractor> RuleSet<E> for [FTMLExtractionRule<E>;L] {
 pub mod rules {
     use flams_ontology::content::declarations::symbols::{ArgSpec, AssocType};
     use flams_ontology::narration::documents::{DocumentStyle, SectionCounter};
-    use flams_ontology::narration::exercises::{AnswerClass, AnswerKind, Choice, FillInSolOption, SolutionData};
+    use flams_ontology::narration::exercises::{AnswerKind, FillInSolOption};
     use flams_ontology::narration::paragraphs::ParagraphKind;
     use flams_ontology::ftml::FTMLKey;
     use flams_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI};
@@ -300,31 +298,25 @@ pub mod rules {
         pub fn section<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
             let lvl = err!(extractor,attrs.get_section_level(FTMLKey::Section));
             let id = attrs.get_id(extractor,Cow::Borrowed("section"));
-            let uri = match extractor.get_narrative_uri() & &*id {
-                Ok(uri) => uri,
-                Err(e) => {
-                    extractor.add_error(FTMLError::InvalidURI(format!("7: {id}")));
-                    return None
-                }
+            let Ok(uri) = extractor.get_narrative_uri() & &*id  else {
+                extractor.add_error(FTMLError::InvalidURI(format!("7: {id}")));
+                return None
             };
             extractor.open_section(uri.clone());
             Some(OpenFTMLElement::Section { lvl, uri })
         }
 
-        pub fn slide<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+        pub fn slide<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
             let id = attrs.get_id(extractor,Cow::Borrowed("slide"));
-            let uri = match extractor.get_narrative_uri() & &*id {
-                Ok(uri) => uri,
-                Err(e) => {
-                    extractor.add_error(FTMLError::InvalidURI(format!("7: {id}")));
-                    return None
-                }
+            let Ok(uri) = extractor.get_narrative_uri() & &*id else {
+                extractor.add_error(FTMLError::InvalidURI(format!("7: {id}")));
+                return None
             };
             extractor.open_slide();
             Some(OpenFTMLElement::Slide(uri))
         }
 
-        pub fn slide_number<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+        pub fn slide_number<E:FTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
             Some(OpenFTMLElement::SlideNumber)
         }
 
@@ -354,12 +346,9 @@ pub mod rules {
 
         fn do_paragraph<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,kind:ParagraphKind) -> Option<OpenFTMLElement> {
             let id = attrs.get_id(extractor,Cow::Borrowed(kind.as_str()));
-            let uri = match extractor.get_narrative_uri() & &*id {
-                Ok(uri) => uri,
-                Err(e) => {
-                    extractor.add_error(FTMLError::InvalidURI(format!("8: {id}")));
-                    return None
-                }
+            let Ok(uri) = extractor.get_narrative_uri() & &*id else {
+                extractor.add_error(FTMLError::InvalidURI(format!("8: {id}")));
+                return None
             };
             let inline = attrs.get_bool(FTMLKey::Inline);
             let mut fors = VecSet::new();
@@ -392,12 +381,9 @@ pub mod rules {
                 |s| s.trim().parse()
             )).unwrap_or_default();
             let id = attrs.get_id(extractor,Cow::Borrowed("exercise"));
-            let uri = match extractor.get_narrative_uri() & &*id {
-                Ok(uri) => uri,
-                Err(e) => {
-                    extractor.add_error(FTMLError::InvalidURI(format!("9: {id}")));
-                    return None
-                }
+            let Ok(uri) = extractor.get_narrative_uri() & &*id else {
+                extractor.add_error(FTMLError::InvalidURI(format!("9: {id}")));
+                return None
             };
             let _ = attrs.take_language(FTMLKey::Language);
             let autogradable = attrs.get_bool(FTMLKey::Autogradable);
@@ -412,6 +398,7 @@ pub mod rules {
             Some(OpenFTMLElement::ProblemHint)
         }
 
+        #[allow(clippy::borrowed_box)]
         pub fn solution<E:FTMLExtractor>(_extractor:&mut E,attrs:&mut E::Attr<'_>,nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
             // TODO Check if in problem!
             let mut id = attrs.remove(FTMLKey::AnswerClass).map(Into::into);
@@ -432,7 +419,7 @@ pub mod rules {
             Some(OpenFTMLElement::AnswerClass)
         }
 
-        pub fn ac_feedback<E:FTMLExtractor>(extractor:&mut E,attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
+        pub fn ac_feedback<E:FTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>) -> Option<OpenFTMLElement> {
             Some(OpenFTMLElement::AnswerClassFeedback)
         }
 
@@ -685,13 +672,10 @@ pub mod rules {
             let notation = attrs.value(FTMLKey::NotationId.attr_name()).and_then(|n| {
                 let asr = n.as_ref().trim();
                 if asr.is_empty() {return None }
-                match asr.parse::<Name>() {
-                    Ok(n) => Some(n),
-                    Err(e) => {
-                        extractor.add_error(FTMLError::InvalidURI(format!("12: {}",n.as_ref())));
-                        Some(ERROR.clone())
-                    }
-                }
+                Some(asr.parse::<Name>().unwrap_or_else(|_| {
+                    extractor.add_error(FTMLError::InvalidURI(format!("12: {}",n.as_ref())));
+                    ERROR.clone()
+                }))
             });
             let head = match attrs.value(FTMLKey::Head.attr_name()) {
                 None => {
@@ -707,13 +691,13 @@ pub mod rules {
                                             if v.contains('?') {
                                                 tracing::warn!("Suspicious variable name containing '?': {v}");
                                             }
-                                            match v.parse() {
-                                                Ok(v) => Some(VarOrSym::V(PreVar::Unresolved(v))),
-                                                Err(e) => {
+                                            v.parse().ok().map_or_else(
+                                                || {
                                                     extractor.add_error(FTMLError::InvalidURI(format!("13: {v}")));
                                                     None
-                                                }
-                                            }
+                                                },
+                                                |v| Some(VarOrSym::V(PreVar::Unresolved(v)))
+                                            )
                                         },
                                         |d| Some(VarOrSym::V(PreVar::Resolved(d)))
                               ),

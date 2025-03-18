@@ -1,4 +1,4 @@
-use crate::uris::{ArchiveId, ArchiveURI, ArchiveURITrait, DocumentURI};
+use crate::{uris::{ArchiveId, ArchiveURI, ArchiveURITrait, DocumentURI},file_states::FileStateSummary};
 
 #[derive(serde::Serialize, serde::Deserialize,Debug,Clone)]
 #[serde(untagged)]
@@ -64,7 +64,7 @@ pub enum DocumentKind {
   },
 }
 impl DocumentKind {
-  #[inline]
+  #[inline]#[must_use]
   pub fn teaser(&self) -> Option<&str> {
     match self {
       Self::Library{teaser,..} | Self::Book{teaser,..} | Self::Paper{teaser,..} | Self::Course{teaser,..} | Self::SelfStudy{teaser,..} => teaser.as_deref()
@@ -157,7 +157,9 @@ pub enum ArchiveIndex {
     Library {
         archive:ArchiveId,
         title:Box<str>,
+        #[serde(default)]
         teaser:Option<Box<str>>,
+        #[serde(default)]
         thumbnail:Option<Box<str>>,
     },
     #[serde(rename = "book")]
@@ -165,7 +167,9 @@ pub enum ArchiveIndex {
         title:Box<str>,
         authors:Box<[Box<str>]>,
         file:DocumentURI,
+        #[serde(default)]
         teaser:Option<Box<str>>,
+        #[serde(default)]
         thumbnail:Option<Box<str>>,
     },
     #[serde(rename = "paper")]
@@ -173,9 +177,13 @@ pub enum ArchiveIndex {
       title:Box<str>,
       authors:Box<[Box<str>]>,
       file:DocumentURI,
+      #[serde(default)]
       thumbnail:Option<Box<str>>,
+      #[serde(default)]
       teaser:Option<Box<str>>,
+      #[serde(default)]
       venue:Option<Box<str>>,
+      #[serde(default)]
       venue_url:Option<Box<str>>
     },
     #[serde(rename = "course")]
@@ -185,29 +193,36 @@ pub enum ArchiveIndex {
       acronym:Option<Box<str>>,
       instructors:Box<[Box<str>]>,
       institution:Box<str>,
+      instances:Box<[Instance]>,
       notes:DocumentURI,
+      #[serde(default)]
       slides:Option<DocumentURI>,
+      #[serde(default)]
       thumbnail:Option<Box<str>>,
       #[serde(default)]
       quizzes:bool,
       #[serde(default)]
       homeworks:bool,
-      instances:Box<[Instance]>,
+      #[serde(default)]
       teaser:Option<Box<str>>
     },
     #[serde(rename = "self-study")]
     SelfStudy {
       title:Box<str>,
       landing:DocumentURI,
-      acronym:Option<Box<str>>,
       notes:DocumentURI,
+      #[serde(default)]
+      acronym:Option<Box<str>>,
+      #[serde(default)]
       slides:Option<DocumentURI>,
+      #[serde(default)]
       thumbnail:Option<Box<str>>,
+      #[serde(default)]
       teaser:Option<Box<str>>
     },
 }
 impl ArchiveIndex {
-  #[inline]
+  #[inline]#[must_use]
   pub fn teaser(&self) -> Option<&str> {
     match self {
       Self::Library{teaser,..} | Self::Book{teaser,..} | Self::Paper{teaser,..} | Self::Course{teaser,..} | Self::SelfStudy{teaser,..} => teaser.as_deref()
@@ -281,6 +296,7 @@ impl ArchiveIndex {
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Instance {
     semester:Box<str>,
+    #[serde(default)]
     instructors:Option<Box<[Box<str>]>>,
 }
 
@@ -308,3 +324,41 @@ fn test() {
     }
   }
 } 
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct ArchiveData {
+  pub id:ArchiveId,
+  #[serde(default)]
+  pub git: Option<String>,
+  #[serde(default)]
+  pub summary:Option<FileStateSummary>,
+}
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct ArchiveGroupData {
+  pub id:ArchiveId,
+  #[serde(default)]
+  pub summary:Option<FileStateSummary>,
+}
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct DirectoryData {
+  pub rel_path:String,
+  #[serde(default)]
+  pub summary:Option<FileStateSummary>,
+}
+
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct FileData {
+  pub rel_path:String,
+  pub format:String
+  //pub summary:Option<FileStateSummary>,
+}

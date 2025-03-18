@@ -10,6 +10,11 @@ use crate::uris::{
 use super::modules::ModuleURIRef;
 use super::ContentURI;
 
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+const TS_URI: &str = "export type SymbolURI = string;";
+
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SymbolURI {
     pub(in crate::uris) module: ModuleURI,
@@ -223,3 +228,12 @@ mod serde_impl {
     serialize!(DE SymbolURI);
     //serialize!(SymbolURIRef<'_>);
 }
+
+#[cfg(feature="tantivy")]
+impl tantivy::schema::document::ValueDeserialize for SymbolURI {
+    fn deserialize<'de, D>(deserializer: D) -> Result<Self, tantivy::schema::document::DeserializeError>
+        where D: tantivy::schema::document::ValueDeserializer<'de> {
+        deserializer.deserialize_string()?.parse()
+          .map_err(|_| tantivy::schema::document::DeserializeError::custom(""))
+    }
+  }

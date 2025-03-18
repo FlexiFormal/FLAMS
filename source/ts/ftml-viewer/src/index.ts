@@ -1,9 +1,7 @@
 import * as FTML from "@kwarc/ftml-viewer-base"; // "./ftml-viewer-base"; //
 import * as FLAMS from "@kwarc/flams";
 
-declare global {
-  interface Window { FLAMS_SERVER_URL:string }
-}
+const Window:{FLAMS_SERVER_URL:string} = typeof window !== "undefined" ? ((window as unknown) as {FLAMS_SERVER_URL:string}) : {FLAMS_SERVER_URL:""};
 
 /** 
  * Turns on debugging messages on the console
@@ -14,14 +12,14 @@ export function setDebugLog() { FTML.set_debug_log(); }
  * Get the FLAMS server used globally
  */
 export function getFlamsServer(): FLAMS.FLAMSServer {
-  return new FLAMS.FLAMSServer(window.FLAMS_SERVER_URL);
+  return new FLAMS.FLAMSServer(Window.FLAMS_SERVER_URL);
 }
 
 /** 
  * Set the FLAMS server used globally 
  */
 export function setServerUrl(s:string) {
-  window.FLAMS_SERVER_URL = s;
+  Window.FLAMS_SERVER_URL = s;
   FTML.set_server_url(s);
 }
 
@@ -29,7 +27,7 @@ export function setServerUrl(s:string) {
  * Get the FLAMS server URL used globally 
  */
 export function getServerUrl(): string {
-  return window.FLAMS_SERVER_URL;
+  return Window.FLAMS_SERVER_URL;
 }
 
 /** 

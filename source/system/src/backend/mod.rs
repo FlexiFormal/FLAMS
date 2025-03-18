@@ -5,7 +5,6 @@ pub mod rdf;
 
 use archives::{manager::ArchiveManager, source_files::FileState, Archive, ArchiveGroup, ArchiveOrGroup, ArchiveTree, LocalArchive};
 use cache::BackendCache;
-use docfile::PreDocFile;
 use flams_ontology::{
     content::{
         checking::ModuleChecker, declarations::{Declaration, DeclarationTrait, OpenDeclaration}, modules::Module, terms::Term, ContentReference, ModuleLike
@@ -91,6 +90,8 @@ pub trait Backend {
         d:&DocumentURI,full:bool
     ) -> Option<(Vec<CSS>,String)>;
 
+    fn get_html_full(&self,d:&DocumentURI) -> Option<String>;
+
     fn get_html_fragment(&self,
         d:&DocumentURI,range:DocumentRange
     ) -> Option<(Vec<CSS>,String)>;
@@ -127,7 +128,7 @@ pub trait Backend {
                 let DocumentElement::Notation{notation,..} = elem.as_ref() else {
                     return None
                 };
-                self.get_reference(&notation).map(|n| (uri,n))
+                self.get_reference(notation).map(|n| (uri,n))
             })
             .collect();
         if ret.is_empty() { None } else {Some(ret)}
@@ -162,7 +163,7 @@ pub trait Backend {
                 DocumentElement::VariableNotation { variable, id, notation } if variable == uri => (id,notation),
                 _ => continue
             };
-            let Some(r) = self.get_reference(&not) else { continue };
+            let Some(r) = self.get_reference(not) else { continue };
             ret.insert((uri.clone(),r));
         }
         if ret.is_empty() { None } else {Some(ret)}
@@ -186,12 +187,12 @@ pub enum AnyBackend{
     Sandbox(SandboxedBackend)
 }
 impl AnyBackend {
+    #[must_use]
     pub fn mathhubs(&self) -> Vec<PathBuf> {
         let mut global: Vec<PathBuf> = Settings::get().mathhubs.iter().map(|p| p.to_path_buf()).collect();
         match self {
-            AnyBackend::Global(g) => global,
-            AnyBackend::Temp(t) => global,
-            AnyBackend::Sandbox(s) => {
+            Self::Global(_) | Self::Temp(_) => global,
+            Self::Sandbox(s) => {
                 global.insert(0,s.0.path.to_path_buf());
                 global
             },
@@ -259,6 +260,15 @@ impl Backend for AnyBackend {
             Self::Global(b) => b.get_html_body(d,full),
             Self::Temp(b) => b.get_html_body(d,full),
             Self::Sandbox(b) => b.get_html_body(d,full),
+        }
+    }
+
+    #[inline]
+    fn get_html_full(&self,d:&DocumentURI) -> Option<String> {
+        match self {
+            Self::Global(b) => b.get_html_full(d),
+            Self::Temp(b) => b.get_html_full(d),
+            Self::Sandbox(b) => b.get_html_full(d),
         }
     }
 
@@ -392,6 +402,13 @@ impl GlobalBackend {
         flams_utils::background(f);
         #[cfg(not(feature="tokio"))]
         f();
+        #[cfg(feature="tantivy")]
+        {
+            #[cfg(feature="tokio")]
+            flams_utils::background(|| crate::search::Searcher::get().reload());
+            #[cfg(not(feature="tokio"))]
+            crate::search::Searcher::get().reload();
+        }
     }
 
     #[inline]
@@ -403,10 +420,21 @@ impl GlobalBackend {
         self.cache.write().clear();
         self.archives.reinit(|_| (), crate::settings::Settings::get().mathhubs.iter().map(|b| &**b));
         self.triple_store.clear();
-        flams_utils::background(|| {
-            let global = GlobalBackend::get();
+        let f = || {
+            let global = Self::get();
             global.triple_store.load_archives(&global.all_archives());
-        });
+        };
+        #[cfg(feature="tokio")]
+        flams_utils::background(f);
+        #[cfg(not(feature="tokio"))]
+        f();
+        #[cfg(feature="tantivy")]
+        {
+            #[cfg(feature="tokio")]
+            flams_utils::background(|| crate::search::Searcher::get().reload());
+            #[cfg(not(feature="tokio"))]
+            crate::search::Searcher::get().reload();
+        }
     }
 
     #[cfg(feature="tokio")]
@@ -415,6 +443,16 @@ impl GlobalBackend {
     ) -> Option<(Vec<CSS>,String)> {
         let f = self.manager().with_archive(d.archive_id(), move |a|
             a.map(move |a| a.load_html_body_async(d.path(), d.name().first_name(), d.language(),full))
+        )??;
+        f.await
+    }
+
+    #[cfg(feature="tokio")]
+    pub async fn get_html_full_async(&self,
+        d:&DocumentURI
+    ) -> Option<String> {
+        let f = self.manager().with_archive(d.archive_id(), move |a|
+            a.map(move |a| a.load_html_full_async(d.path(), d.name().first_name(), d.language()))
         )??;
         f.await
     }
@@ -523,6 +561,11 @@ impl Backend for &'static GlobalBackend {
     }
 
     #[inline]
+    fn get_html_full(&self,d:&DocumentURI) -> Option<String> {
+        GlobalBackend::get_html_full(self, d)
+    }
+
+    #[inline]
     fn get_html_fragment(&self,
             d:&DocumentURI,range:DocumentRange
         ) -> Option<(Vec<CSS>,String)> {
@@ -611,6 +654,13 @@ impl Backend for GlobalBackend {
     ) -> Option<(Vec<CSS>,String)> {
         self.archives.with_archive(d.archive_id(), |a|
             a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(),full))
+        )
+    }
+
+    #[inline]
+    fn get_html_full(&self,d:&DocumentURI) -> Option<String> {
+        self.archives.with_archive(d.archive_id(), |a|
+            a.and_then(|a| a.load_html_full(d.path(), d.name().first_name(), d.language()))
         )
     }
 
@@ -756,6 +806,14 @@ impl Backend for TemporaryBackend {
         )
     }
 
+    #[inline]
+    fn get_html_full(&self,d:&DocumentURI) -> Option<String> {
+        self.inner.html.lock().get(d).map_or_else(
+            || self.inner.parent.get_html_full(d),
+            |html| Some(html.html.clone())
+        )
+    }
+
     fn get_html_fragment(&self,
             d:&DocumentURI,range:DocumentRange
         ) -> Option<(Vec<CSS>,String)> {
@@ -828,11 +886,10 @@ pub enum SandboxedRepository {
     }
 }
 impl SandboxedRepository {
-    #[inline]
-    pub fn id(&self) -> &ArchiveId {
+    #[inline]#[must_use]
+    pub const fn id(&self) -> &ArchiveId {
         match self {
-            SandboxedRepository::Copy(id) => id,
-            SandboxedRepository::Git{id,..} => id
+            Self::Copy(id) | Self::Git{id,..} => id
         }
     }
 }
@@ -849,11 +906,11 @@ struct SandboxedBackendI {
 pub struct SandboxedBackend(triomphe::Arc<SandboxedBackendI>);
 impl Drop for SandboxedBackendI {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.path);
+        let _ = std::fs::remove_dir_all(&self.path);
     }
 }
 impl SandboxedBackend {
-    #[inline]
+    #[inline]#[must_use]
     pub fn get_repos(&self) -> Vec<SandboxedRepository> {
         self.0.repos.read().clone()
     }
@@ -864,7 +921,7 @@ impl SandboxedBackend {
         f(inner.as_slice())
     }
 
-    #[inline]
+    #[inline]#[must_use]
     pub fn path_for(&self,id:&ArchiveId) -> PathBuf {
         self.0.path.join(id.as_ref())
     }
@@ -878,7 +935,7 @@ impl SandboxedBackend {
             manager: ArchiveManager::default(),
             cache: RwLock::new(cache::BackendCache::default()),
         };
-        SandboxedBackend(triomphe::Arc::new(i))
+        Self(triomphe::Arc::new(i))
     }
 
     #[tracing::instrument(level = "info",
@@ -911,16 +968,17 @@ impl SandboxedBackend {
             md1.dev() == md2.dev()
         }
         let mut count = 0;
-        let mut cnt = &mut count;
+        let cnt = &mut count;
         let global = GlobalBackend::get();
         let mut global_cache = global.cache.write();
         let mut sandbox_cache = self.0.cache.write();
         self.0.manager.reinit(move |sandbox| 
-            global.archives.reinit(|global| {
+            global.archives.reinit(|_| {
                 sandbox.groups.clear();
                 let Some(main) = Settings::get().mathhubs.first() else {unreachable!()};
                 for a in std::mem::take(&mut sandbox.archives) {
                     *cnt += 1;
+                    #[allow(irrefutable_let_patterns)]
                     let Archive::Local(a) = a else { unreachable!()};
                     let source = a.path();
                     let target = main.join(a.id().as_ref());
@@ -964,7 +1022,7 @@ impl SandboxedBackend {
         if let Some(i) = repos.iter().position(|r| r.id() == id) {
             repos.remove(i);
         }
-        self.require_meta_infs(id,&mut *repos,
+        self.require_meta_infs(id,&mut repos,
             |_,_| {},
             |_,_,_| {
                 tracing::error!(target:"sandbox","A group with id {id} already exists!");
@@ -996,7 +1054,7 @@ impl SandboxedBackend {
                     else_(); return
                 };
                 match a {
-                    ArchiveOrGroup::Archive(a) => {
+                    ArchiveOrGroup::Archive(_) => {
                         if steps.next().is_some() {
                             else_(); return
                         }
@@ -1036,7 +1094,7 @@ impl SandboxedBackend {
     pub fn require(&self,id:&ArchiveId) {
         // TODO this can be massively optimized
         let mut repos = self.0.repos.write();
-        self.require_meta_infs(id, &mut *repos, 
+        self.require_meta_infs(id, &mut repos, 
             |a,repos| {
                 repos.push(SandboxedRepository::Copy(id.clone()));
                 self.copy_archive(a);
@@ -1106,6 +1164,13 @@ impl Backend for SandboxedBackend {
         )
     }
 
+    #[inline]
+    fn get_html_full(&self,d:&DocumentURI) -> Option<String> {
+        self.with_archive(d.archive_id(), |a|
+            a.and_then(|a| a.load_html_full(d.path(), d.name().first_name(), d.language()))
+        )
+    }
+
     fn submit_triples(&self,in_doc:&DocumentURI,rel_path:&str,iter:impl Iterator<Item=flams_ontology::rdf::Triple>) {
         self.0.manager.with_archive(in_doc.archive_id(), |a| {
             if let Some(a) = a {
@@ -1147,7 +1212,9 @@ impl Backend for SandboxedBackend {
         }
         let mut cache = self.0.cache.write();
         let mut flattener = SandboxFlattener(&mut cache, &self.0.manager,&GlobalBackend::get().archives);
-        flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name())
+        let r = flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name());
+        drop(cache);
+        r
     }
 
     #[allow(clippy::significant_drop_tightening)]
@@ -1402,8 +1469,8 @@ impl<'a,W:std::fmt::Write,B:Backend> TermPresenter<'a,W,B> {
     pub fn close(self) -> W { self.out }
 
     #[inline]
-    pub fn backend(&self) -> &'a B {
-        &self.backend
+    pub const fn backend(&self) -> &'a B {
+        self.backend
     }
 
     fn load_notation(backend:&B,uri:&SymbolURI,needs_op:bool) -> Option<Notation> {
@@ -1422,7 +1489,7 @@ impl<'a,W:std::fmt::Write,B:Backend> TermPresenter<'a,W,B> {
                 return None
             };
             //println!("Found notation {notation:?}");
-            let r = backend.get_reference(&notation)?;
+            let r = backend.get_reference(notation)?;
             if r.is_op() || !needs_op { Some(r) } else { None }
         })
     }
@@ -1453,22 +1520,22 @@ impl<'a,W:std::fmt::Write,B:Backend> TermPresenter<'a,W,B> {
                     stack.push(old);
                     continue
                 }
-                DocumentElement::VariableNotation { variable, id, notation } if variable == uri => notation,
+                DocumentElement::VariableNotation { variable, notation,.. } if variable == uri => notation,
                 _ => continue
             };
-            let Some(r) = backend.get_reference(&not) else { continue };
+            let Some(r) = backend.get_reference(not) else { continue };
             if r.is_op() || !needs_op { return Some(r) }
         }
     }
 }
 
-impl<'a,W:std::fmt::Write,B:Backend> std::fmt::Write for TermPresenter<'a,W,B> {
+impl<W:std::fmt::Write,B:Backend> std::fmt::Write for TermPresenter<'_,W,B> {
     #[inline]
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.out.write_str(s)
     }
 }
-impl<'a,W:std::fmt::Write,B:Backend> Presenter for TermPresenter<'a,W,B> {
+impl<W:std::fmt::Write,B:Backend> Presenter for TermPresenter<'_,W,B> {
     type N = Rc<Notation>;
     #[inline]
     fn cont(&mut self,tm:&flams_ontology::content::terms::Term) -> Result<(),PresentationError> {
@@ -1530,7 +1597,7 @@ impl<'a,W:std::fmt::Write,B:Backend> Presenter for TermPresenter<'a,W,B> {
     }
 }
 
-pub type StringPresenter<'a,B:Backend> = TermPresenter<'a,String,B>;
+pub type StringPresenter<'a,B> = TermPresenter<'a,String,B>;
 
 impl<'a,B:Backend> StringPresenter<'a,B> {
     #[inline]
@@ -1542,12 +1609,13 @@ impl<'a,B:Backend> StringPresenter<'a,B> {
         std::mem::take(&mut self.out)
     }
 
+    /// #### Errors
     pub fn present(&mut self,term:&Term) -> Result<String,PresentationError> {
         self.out.clear();
         //println!("Presenting: {term}");
         let r = term.present(self);
         let s = std::mem::take(&mut self.out);
         //println!("Returning: {s}");
-        r.map(|_|s)
+        r.map(|()|s)
     }
 }

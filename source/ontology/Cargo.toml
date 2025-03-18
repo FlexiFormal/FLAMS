@@ -14,6 +14,7 @@ rdf = ["dep:oxrdf"]
 tokio = ["dep:tokio"]
 serde = ["dep:serde","flams-utils/serde","smallvec/serde"]
 wasm = ["serde","dep:wasm-bindgen","dep:tsify-next","dep:serde_json"]
+tantivy = ["dep:tantivy","dep:html2text","dep:tracing"]
 
 [dependencies]
 oxrdf = {workspace=true,optional=true}
@@ -32,6 +33,9 @@ tokio = {workspace=true,optional=true,features=["io-util"]}
 wasm-bindgen = {workspace=true,optional=true}
 tsify-next = {workspace=true,optional=true}
 serde_json = {workspace=true,optional=true}
+tracing = {workspace = true,optional=true}
+tantivy = {workspace = true,optional=true}
+html2text = {workspace = true,optional=true}
 
 [lints]
 workspace = true

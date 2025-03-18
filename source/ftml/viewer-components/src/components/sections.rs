@@ -41,21 +41,31 @@ pub(super) fn section<V:IntoView+'static>(uri:DocumentElementURI,children:impl F
 
 pub(super) fn title<V:IntoView+'static>(children:impl FnOnce() -> V + Send + 'static) -> impl IntoView {
   let counters : SectionCounters = expect_context();
-  let begin = match counters.current_level() {
+  let (begin,cls) = match counters.current_level() {
     LogicalLevel::Section(l) => {
-      if let Some(NarrativeURI::Element(uri)) = use_context() {
+      (if let Some(NarrativeURI::Element(uri)) = use_context() {
         expect_context::<Option<OnSectionTitle>>().map(|s| 
           TsCont::res_into_view(s.0.apply(&(uri,l)))
         )
       } else {
         tracing::error!("Sectioning error");
         None
-      }
+      },match l {
+        SectionLevel::Part => "ftml-title-part",
+        SectionLevel::Chapter => "ftml-title-chapter",
+        SectionLevel::Section => "ftml-title-section",
+        SectionLevel::Subsection => "ftml-title-subsection",
+        SectionLevel::Subsubsection => "ftml-title-subsubsection",
+        SectionLevel::Paragraph => "ftml-title-paragraph",
+        SectionLevel::Subparagraph => "ftml-title-subparagraph",
+      })
     }
-    _ => None
+    LogicalLevel::BeamerSlide => (None,"ftml-title-slide"),
+    LogicalLevel::Paragraph => (None,"ftml-title-paragraph"),
+    _ => (None,"ftml-title")
   };
   view!{
-    <div class="ftml-title">{children()}</div>
+    <div class=cls>{children()}</div>
     {begin}
   }
 }
@@ -66,10 +76,10 @@ pub(super) fn skip<V:IntoView+'static>(children:impl FnOnce() -> V + Send + 'sta
   let mut counters : SectionCounters = expect_context();
   match counters.current_level() {
     LogicalLevel::Section(l) => {
-      counters.set_section(l.inc());
+      counters.current = LogicalLevel::Section(l.inc());//.set_section(l.inc());
     }
     LogicalLevel::None => {
-      counters.set_section(counters.max);
+      counters.current = LogicalLevel::Section(counters.max);//.set_section(counters.max);
     }
     _ => ()
   };
