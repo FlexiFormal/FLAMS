@@ -51,10 +51,11 @@ pub enum TOCElem {
     children:Vec<TOCElem>
   },
   Paragraph{
+    //uri:DocumentElementURI,
     styles:Vec<Name>,
     kind:ParagraphKind,
   },
-  Slide
+  Slide//{uri:DocumentElementURI}
 }
 
 pub trait TOCIter<'a> {

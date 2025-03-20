@@ -414,7 +414,7 @@ fn file(archive:ArchiveId,f:FileData) -> impl IntoView {
       <Header slot><a href=link target="_blank">
         <Button appearance=ButtonAppearance::Subtle>{button}</Button>
       </a></Header>
-      <crate::router::content::Document doc=comps.clone()/>
+      <div style="width:min-content"><crate::router::content::Document doc=comps.clone()/></div>
     </Drawer>
     {dialog(move |signal| if signal.get() {
       let id = archive.clone();

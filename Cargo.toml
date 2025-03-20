@@ -141,7 +141,7 @@ tracing-subscriber = { version="0.3",features = ["smallvec","parking_lot","json"
 tracing-error = "0.2"
 
 toml = "0.8"
-# eyre = "0.6"
+eyre = "0.6"
 color-eyre = "0.6"
 clap = { version="4.5",features=["derive"] }
 

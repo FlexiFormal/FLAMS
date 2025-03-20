@@ -15,8 +15,8 @@ use flams_utils::unwrap;
   loop {
     while let Some(elem) = curr.next() {
       match elem {
-        DocumentElement::Slide { .. } => {
-          ret.push(TOCElem::Slide)
+        DocumentElement::Slide { /*uri,*/.. } => {
+          ret.push(TOCElem::Slide/*{uri:uri.clone()}*/);
         }
         DocumentElement::Section(Section{ uri, title,children,.. }) => {
           let old = std::mem::replace(&mut curr, children.iter());
@@ -47,7 +47,7 @@ use flams_utils::unwrap;
           prefix = if prefix.is_empty() {id.name().last_name().to_string()} else { format!("{prefix}/{}",id.name().last_name()) };
         }
         DocumentElement::Paragraph(p) => {
-          ret.push(TOCElem::Paragraph{styles:p.styles.clone().into_vec(),kind:p.kind})
+          ret.push(TOCElem::Paragraph{styles:p.styles.clone().into_vec(),kind:p.kind/*,uri:p.uri.clone()*/});
         }
         DocumentElement::Module {  children,.. } |
         DocumentElement::Morphism {children,..} |

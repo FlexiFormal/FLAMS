@@ -1,5 +1,5 @@
-use std::{fmt::Display, str::FromStr};
-
+use std::{collections::HashMap, fmt::Display, str::FromStr};
+use flams_utils::CSS;
 use smallvec::SmallVec;
 
 use crate::{
@@ -45,18 +45,25 @@ pub struct Solutions(
     pub Box<[SolutionData]>
 );
 
+#[cfg(feature = "wasm")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+const TS_SOLUTION: &str = "export type SolutionString = string;";
+
 #[cfg(feature="wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Solutions{
     #[inline]
     #[must_use]
-    pub fn from_json(json:&str) -> Option<Self> {
-        serde_json::from_str(json).ok()
+    pub fn from_jstring(s:&str) -> Option<Self> {
+        use flams_utils::Hexable;
+        Self::from_hex(s).ok()
     }
+    #[cfg(feature="serde")]
     #[inline]
     #[must_use]
-    pub fn to_json(&self) -> Option<String> {
-        serde_json::to_string(self).ok()
+    pub fn to_jstring(&self) -> Option<String> {
+        use flams_utils::Hexable;
+        self.as_hex().ok()
     }
 
     #[inline]
@@ -82,11 +89,14 @@ impl Solutions {
             }
         }
         let mut correct = true;
+        let mut pts: f32 = 0.0;
+        let mut total: f32 = 0.0;
         let mut solutions = SmallVec::new();
         let mut data = SmallVec::new();
         let mut datas = self.0.iter();
 
         for response in &response.responses {
+            total += 1.0;
             let sol = next_sol(&mut solutions,&mut datas)?;
             match (response,sol) {
                 (ExerciseResponseType::SingleChoice(selected),SolutionData::ChoiceBlock(ChoiceBlock {multiple:false,choices,..})) => 
@@ -95,6 +105,7 @@ impl Solutions {
                         choices:choices.iter().enumerate().map(|(i,Choice{correct:cr,verdict,feedback})| {
                             if *selected as usize == i {
                                 correct = correct && *cr;
+                                if *cr { pts += 1.0 }
                             }
                             BlockFeedback { is_correct: *cr, verdict_str: verdict.to_string(), feedback: feedback.to_string() }
                         }).collect()
@@ -103,15 +114,19 @@ impl Solutions {
                     if selected.len() != choices.len() {
                         return None
                     }
+                    let mut corrects = 0;
+                    let mut falses = 0;
                     data.push(CheckedResult::MultipleChoice { 
                         selected: selected.clone(), 
                         choices: choices.iter().enumerate().map(|(i,Choice{correct:cr,verdict,feedback})| {
+                            if *cr { corrects += 1; } else { falses += 1; }
                             correct = correct && (selected[i] == *cr);
                             BlockFeedback {
                                 is_correct: *cr, verdict_str: verdict.to_string(), feedback: feedback.to_string() 
                             }
                         }).collect()
                     });
+                    pts += ((corrects as f32 - falses as f32) / choices.len() as f32).max(0.0);
                 }
                 (ExerciseResponseType::Fillinsol(s),SolutionData::FillInSol(f)) => {
                     let mut fill_correct = None;
@@ -121,6 +136,7 @@ impl Solutions {
                         match o {
                             FillInSolOption::Exact { value: string, verdict, feedback } => {
                                 if fill_correct.is_none() && &**string == s.as_str() {
+                                    if *verdict { pts += 1.0; }
                                     fill_correct = Some(*verdict);
                                     matching = Some(i);
                                 }
@@ -137,6 +153,7 @@ impl Solutions {
                                     };
                                     if let Some(f) = num {
                                         if !from.is_some_and(|v| f < v) && !to.is_some_and(|v| f > v) {
+                                            if *verdict { pts += 1.0; }
                                             fill_correct = Some(*verdict);
                                             matching = Some(i);
                                         }
@@ -150,6 +167,7 @@ impl Solutions {
                             }
                             FillInSolOption::Regex { regex, verdict, feedback } => {
                                 if fill_correct.is_none() && regex.0.is_match(s) {
+                                    if *verdict { pts += 1.0; }
                                     fill_correct = Some(*verdict);
                                     matching = Some(i);
                                 }
@@ -175,7 +193,7 @@ impl Solutions {
         }
 
         Some(ExerciseFeedback {
-            correct,solutions,data
+            correct,solutions,data,score_fraction: pts / total
         })
     }
 }
@@ -351,7 +369,8 @@ pub struct ExerciseFeedback {
     pub solutions:SmallVec<Box<str>,1>,
     //#[cfg_attr(feature="wasm", tsify(type = "CheckedResult[]"))]
     #[wasm_bindgen(skip)]
-    pub data:SmallVec<CheckedResult,4>
+    pub data:SmallVec<CheckedResult,4>,
+    pub score_fraction:f32
 }
 
 #[cfg(feature="wasm")]
@@ -359,13 +378,16 @@ pub struct ExerciseFeedback {
 impl ExerciseFeedback {
     #[inline]
     #[must_use]
-    pub fn from_json(json:&str) -> Option<Self> {
-        serde_json::from_str(json).ok()
+    pub fn from_jstring(s:&str) -> Option<Self> {
+        use flams_utils::Hexable;
+        Self::from_hex(s).ok()
     }
+    #[cfg(feature="serde")]
     #[inline]
     #[must_use]
-    pub fn to_json(&self) -> Option<String> {
-        serde_json::to_string(self).ok()
+    pub fn to_jstring(&self) -> Option<String> {
+        use flams_utils::Hexable;
+        self.as_hex().ok()
     }
 }
 
@@ -557,4 +579,46 @@ impl FromStr for CognitiveDimension {
             _ => return Err(()),
         })
     }
+}
+
+
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct Quiz {
+    pub css:Vec<CSS>,
+    pub title:Option<String>,
+    pub elements:Vec<QuizElement>,
+    pub solutions: HashMap<DocumentElementURI,String>
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub enum QuizElement {
+    Section{
+        title:String,
+        elements:Vec<QuizElement>
+    },
+    Question(QuizQuestion),
+    Paragraph{
+        html:String
+    }
+}
+
+#[derive(Debug,Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct QuizQuestion {
+    pub html:String,
+    pub uri:DocumentElementURI,
+    //pub solution:String,//Solutions,
+    pub total_points:f32,
+    //pub is_sub_exercise:bool,
+    pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
+    pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
 }

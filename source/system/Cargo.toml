@@ -51,6 +51,7 @@ html2text = {workspace = true,optional=true}
 
 serde = {workspace=true}
 bincode = {workspace=true}
+eyre = {workspace=true}
 
 #flate2 = {workspace=true,optional=true}
 #tar = {workspace=true,optional=true}

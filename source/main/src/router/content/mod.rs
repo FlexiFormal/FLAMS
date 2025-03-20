@@ -2,8 +2,8 @@
 pub mod uris;
 pub mod toc;
 
-use flams_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::{Exercise, ExerciseFeedback, ExerciseResponse, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
-use flams_utils::{vecmap::VecSet, CSS};
+use flams_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::{Exercise, ExerciseFeedback, ExerciseResponse, Quiz, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
+use flams_utils::{vecmap::VecSet, Hexable, CSS};
 use flams_web_utils::do_css;
 use leptos::{either::Either, prelude::*};
 use leptos_router::hooks::use_query_map;
@@ -409,6 +409,50 @@ fn get_solution(uri:&DocumentElementURI) -> Result<Solutions,ServerFnError<Strin
 
 #[server(
   prefix="/content",
+  endpoint="quiz",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
+)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn get_quiz(
+  uri:Option<DocumentURI>,
+  rp:Option<String>,
+  a:Option<ArchiveId>,
+  p:Option<String>,
+  l:Option<Language>,
+  d:Option<String>
+) -> Result<Quiz,ServerFnError<String>> {
+  use flams_system::backend::Backend;
+  use flams_system::backend::docfile::QuizExtension;
+  let Result::<DocURIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d).try_into() else {
+    return Err("invalid uri components".to_string().into())
+  };
+  let Some(uri) = comps.parse() else {
+    return Err("invalid uri".to_string().into())
+  };
+  let Some(doc) = backend!(get_document!(&uri)) else {
+    return Err("document not found".to_string().into())
+  };
+  tokio::task::spawn_blocking(move || {
+    let be = if flams_system::settings::Settings::get().lsp {
+      let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
+        return Err::<_,ServerFnError<String>>("no lsp server".to_string().into())
+      };
+      doc.as_quiz(state.backend())
+    } else {
+      doc.as_quiz(flams_system::backend::GlobalBackend::get())
+    };
+    let mut be = be.map_err(|e| e.to_string().into())?;
+    be.css = insert_base_url(std::mem::take(&mut be.css));
+    Ok(be)
+  }).await.map_err(|e| e.to_string())?
+}
+
+
+
+#[server(
+  prefix="/content",
   endpoint="solution",
   input=server_fn::codec::GetUrl,
   output=server_fn::codec::Json
@@ -423,7 +467,7 @@ pub async fn solution(
   l:Option<Language>,
   d:Option<String>,
   e:Option<String>,
-) -> Result<Solutions,ServerFnError<String>> {
+) -> Result<String,ServerFnError<String>> {
   tokio::task::spawn_blocking(move || {
     let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,None,None).try_into() else {
       return Err("invalid uri components".to_string().into())
@@ -431,9 +475,8 @@ pub async fn solution(
     let Some(URI::Narrative(NarrativeURI::Element(uri))) = comps.parse() else {
       return Err("invalid uri".to_string().into())
     };
-    get_solution(&uri).map_err(|e| {
-      e
-    })
+    let s = get_solution(&uri)?;
+    s.as_hex().map_err(|e| e.to_string().into())
   }).await.map_err(|e| e.to_string())?
 }
 
@@ -475,7 +518,7 @@ pub fn URITop() -> impl IntoView {
   view!{
     <Stylesheet id="leptos" href="/pkg/flams.css"/>
     <Themer><FTMLGlobalSetup>//<Login>
-      <div style="min-height:100vh;color:black;">{
+      <div style="min-height:100vh;color:black;width:min-content">{
         use_query_map().with_untracked(|m| m.as_doc().map_or_else(
           || {
             let Some(uri) = m.as_comps() else {

@@ -46,6 +46,8 @@ pub struct Trigger { children:leptos::prelude::Children }
 
 use leptos::prelude::*;
 
+use crate::inject_css;
+
 #[component]
 pub fn Collapsible<Ch:IntoView+'static>(
     #[prop(optional)] header:Option<Header>,
@@ -82,13 +84,14 @@ pub fn LazyCollapsible<Ch:IntoView+'static>(
 pub fn Burger<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
   use thaw::{Menu,MenuTriggerType,MenuTrigger,MenuPosition};
   use icondata_ch::ChMenuHamburger;
+  inject_css("burger",include_str!("burger.css"));
   let children = children.into_inner();
-  view!{<ClientOnly><div style="position:fixed;right:10px;position-anchor:inherit;">
+  view!{<ClientOnly><div class="ftml-burger-outer"><div class="ftml-burger">
     <Menu on_select=|_| () trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
         <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
         {children()}
     </Menu>
-  </div></ClientOnly>}
+  </div></div></ClientOnly>}
 }
 
 #[component]

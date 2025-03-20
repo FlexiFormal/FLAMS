@@ -1,0 +1,16 @@
+.ftml-burger {
+  /*position:fixed;right:10px;position-anchor:inherit;*/
+  right:0;
+  height:0;
+  width:min-content;
+  margin-left:auto;
+  z-index: 1000;
+  color:black;
+  background-color:white;
+}
+
+.ftml-burger-outer {
+  width:100%;
+  position:sticky;
+  top:0;
+}

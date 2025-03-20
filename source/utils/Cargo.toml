@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-serde = ["dep:serde"]
+serde = ["dep:serde","dep:bincode"]
 rayon = ["dep:rayon","dep:spliter"]
 async = ["dep:async-broadcast"]
 tokio = ["dep:tokio"]
@@ -31,6 +31,8 @@ async-broadcast={workspace=true,optional=true}
 rayon={workspace=true,optional=true}
 spliter={workspace=true,optional=true}
 serde = {workspace=true,optional=true}
+bincode = {workspace=true,optional=true}
+eyre = {workspace=true}
 tokio = {workspace=true,optional=true,features=["io-util"]}
 url = {workspace=true,features=["serde"]}
 

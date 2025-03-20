@@ -32,6 +32,7 @@ pub async fn run(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
     run_i(port_channel).instrument(SERVER_SPAN.clone()).await
 }
 
+
 /// ### Panics
 #[instrument(level = "info",
   target = "server",
@@ -56,6 +57,9 @@ async fn run_i(port_channel:Option<tokio::sync::watch::Sender<Option<u16>>>) {
         }
     }
     let listener = listener.expect("Could not bind to any port");
+
+    // avoid error: reactive_graph-0.1.7/src/owner/arena.rs:60:29, the `sandboxed-arenas` feature is active, but no Arena is active
+    leptos::prelude::Owner::new().set();
 
     if changed {
         if port_channel.is_some() {

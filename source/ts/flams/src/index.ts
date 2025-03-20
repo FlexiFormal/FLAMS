@@ -79,6 +79,13 @@ export class FLAMSServer {
   }
 
   /** 
+   * Get the quiz in the given document. 
+   */
+  async quiz(uri:FLAMS.DocumentURIParams):Promise<FLAMS.Quiz | undefined> {
+    return await this.rawGetRequest("content/quiz",uri);
+  }
+
+  /** 
    * Get the solution for the problem with the given URI. As string, so it can be
    * deserialized by the ts binding for the WASM datastructure 
    */

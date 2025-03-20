@@ -53,6 +53,39 @@ pub fn in_span<F:FnOnce() -> R,R>(f:F) -> impl FnOnce() -> R {
     }
 }
 
+#[cfg(feature="serde")]
+pub trait Hexable:Sized {
+    /// #### Errors
+    fn as_hex(&self) -> eyre::Result<String>;
+    /// #### Errors
+    fn from_hex(s:&str) -> eyre::Result<Self>;
+}
+#[cfg(feature="serde")]
+impl<T:Sized + serde::Serialize + for<'de> serde::Deserialize<'de>> Hexable for T {
+    fn as_hex(&self) -> eyre::Result<String> {
+        use std::fmt::Write;
+        let bc = bincode::serde::encode_to_vec(self, bincode::config::standard())?;
+        let mut ret = String::with_capacity(bc.len() * 2);
+        for b in bc {
+            write!(ret,"{b:02X}")?;
+        }
+        Ok(ret)
+    }
+    fn from_hex(s:&str) -> eyre::Result<Self> {
+        let bytes: Result<Vec<_>,_> = if s.len() % 2 == 0 {
+            (0..s.len())
+                .step_by(2)
+                .filter_map(|i| s.get(i..i + 2))
+                .map(|sub| u8::from_str_radix(sub, 16))
+                .collect()
+        } else {
+            return Err(eyre::eyre!("Incompatible string length"))
+        };
+        bincode::serde::decode_from_slice(&bytes?, bincode::config::standard())
+            .map(|(r,_)| r).map_err(Into::into)
+    }
+} 
+
 pub mod fs {
     use std::path::Path;
 

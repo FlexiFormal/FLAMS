@@ -69,26 +69,6 @@ pub fn DocumentFromURI(
     )
 }
 
-#[cfg(feature="omdoc")]
-#[component]
-pub fn DocumentString(
-    html:String,
-    #[prop(optional)] uri:Option<DocumentURI>,
-    #[prop(optional,into)] toc:TOCSource,
-    #[prop(optional)] omdoc:crate::components::omdoc::OMDocSource
-) -> impl IntoView {
-
-    let uri = uri.unwrap_or_else(DocumentURI::no_doc);
-    let burger = !matches!((&toc,&omdoc),(TOCSource::None,crate::components::omdoc::OMDocSource::None));
-    view! {<FTMLDocumentSetup uri>
-        {if burger {Some(
-            do_burger(toc,omdoc)
-        )} 
-        else { None }}
-        <DomStringCont html cont=iterate/>
-    </FTMLDocumentSetup>}
-}
-
 #[component]
 pub fn FragmentString(
     html:String,
@@ -122,6 +102,25 @@ impl ForcedName {
     }
 }
 
+#[cfg(feature="omdoc")]
+#[component]
+pub fn DocumentString(
+    html:String,
+    #[prop(optional)] uri:Option<DocumentURI>,
+    #[prop(optional,into)] toc:TOCSource,
+    #[prop(optional)] omdoc:crate::components::omdoc::OMDocSource
+) -> impl IntoView {
+
+    let uri = uri.unwrap_or_else(DocumentURI::no_doc);
+    let burger = !matches!((&toc,&omdoc),(TOCSource::None,crate::components::omdoc::OMDocSource::None));
+    view! {<FTMLDocumentSetup uri>
+        {if burger {Some(
+            do_burger(toc,omdoc)
+        )} 
+        else { None }}
+        <DomStringCont html cont=iterate/>
+    </FTMLDocumentSetup>}
+}
 
 #[cfg(not(feature="omdoc"))]
 #[component]

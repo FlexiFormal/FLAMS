@@ -1,6 +1,6 @@
 pub mod archives;
 mod cache;
-mod docfile;
+pub mod docfile;
 pub mod rdf;
 
 use archives::{manager::ArchiveManager, source_files::FileState, Archive, ArchiveGroup, ArchiveOrGroup, ArchiveTree, LocalArchive};

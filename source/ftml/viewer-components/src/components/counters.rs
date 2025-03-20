@@ -507,7 +507,7 @@ fn update(ch:&[TOCElem],
           //let old = std::mem::replace(&mut current,LogicalLevel::Paragraph);
           stack.push((std::mem::replace(&mut curr,children.iter()),current));
         }
-        TOCElem::Paragraph { styles, kind } => {
+        TOCElem::Paragraph { styles, kind,.. } => {
           if let Some(n) = SectionCounters::get_counter(para_map,*kind,styles) {
             //leptos::logging::log!("Increasing counter {n}");
             *n_counters.get_or_insert_mut(n, || 0) += 1;

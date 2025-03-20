@@ -20,7 +20,7 @@ pub mod utils;
 pub(crate) mod fns {
     use std::{future::Future, pin::Pin};
 
-    use flams_ontology::{languages::Language, narration::{exercises::Solutions, notations::Notation, LOKind}, uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI}};
+    use flams_ontology::{languages::Language, narration::{notations::Notation, LOKind}, uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI}};
     use flams_utils::CSS;
     use leptos::prelude::ServerFnError;
     use ftml_viewer_components::components::{omdoc::AnySpec, TOCElem};
@@ -50,7 +50,7 @@ pub(crate) mod fns {
         Box::pin(crate::router::content::notations(uri,rp,a,p,l,d,e,m,s))
     }
     fn solutions(uri:Option<URI>,rp:Option<String>,a:Option<ArchiveId>,p:Option<String>,l:Option<Language>,d:Option<String>,e:Option<String>,_m:Option<String>,_s:Option<String>)
-    -> Pin<Box<dyn Future<Output=Result<Solutions,ServerFnError<String>>> + Send>> {
+    -> Pin<Box<dyn Future<Output=Result<String,ServerFnError<String>>> + Send>> {
         Box::pin(crate::router::content::solution(uri,rp,a,p,l,d,e))
     }
     pub(super) fn init() {

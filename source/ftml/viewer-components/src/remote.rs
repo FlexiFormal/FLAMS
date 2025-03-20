@@ -271,7 +271,7 @@ pub struct ServerConfig {
     get_los:Cache<LOArgs,Vec<(DocumentElementURI,LOKind)>>,
     #[cfg(feature="omdoc")]
     get_notations:Cache<URIArgs,Vec<(DocumentElementURI,flams_ontology::narration::notations::Notation)>>,
-    get_solution:Cache<URIArgs,flams_ontology::narration::exercises::Solutions>,
+    get_solution:Cache<URIArgs,String>,
 }
 
 impl ServerConfig {
@@ -337,7 +337,9 @@ impl ServerConfig {
     /// #### Panics
     #[inline]
     pub async fn solution(&self,uri:flams_ontology::uris::DocumentElementURI) -> Result<flams_ontology::narration::exercises::Solutions,String> {
-        self.get_solution.call(URI::Narrative(uri.into()),()).await
+        use flams_utils::Hexable;
+        let r = self.get_solution.call(URI::Narrative(uri.into()),()).await?;
+        flams_ontology::narration::exercises::Solutions::from_hex(&r).map_err(|e| e.to_string())
     }
 
     /// #### Errors
@@ -449,7 +451,7 @@ impl ServerConfig {
       omdoc:server_fun!(@URI => (Vec<CSS>,AnySpec)),
       los:server_fun!(@SYMURI,bool => Vec<(DocumentElementURI,LOKind)>),
       notations:server_fun!(@URI => Vec<(DocumentElementURI,flams_ontology::narration::notations::Notation)>),
-      solutions:server_fun!(@URI => flams_ontology::narration::exercises::Solutions),
+      solutions:server_fun!(@URI => String),
     ) {
       let _ = server_config.get_fragment.getter.set(fragment);
       let _ = server_config.get_omdoc.getter.set(omdoc);
