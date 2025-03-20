@@ -2,7 +2,7 @@
 pub mod uris;
 pub mod toc;
 
-use flams_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::{Exercise, ExerciseFeedback, ExerciseResponse, Quiz, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked};
+use flams_ontology::{content::{declarations::{structures::Extension, Declaration}, ContentReference}, languages::Language, narration::{exercises::{Exercise, ExerciseFeedback, ExerciseResponse, Quiz, Solutions}, notations::Notation, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, LOKind, NarrationTrait, NarrativeReference}, uris::{ArchiveId, ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URIOrRefTrait, URI}, Checked, SlideElement};
 use flams_utils::{vecmap::VecSet, Hexable, CSS};
 use flams_web_utils::do_css;
 use leptos::{either::Either, prelude::*};
@@ -443,13 +443,11 @@ pub async fn get_quiz(
     } else {
       doc.as_quiz(flams_system::backend::GlobalBackend::get())
     };
-    let mut be = be.map_err(|e| e.to_string().into())?;
+    let mut be = be.map_err(|e| e.to_string())?;
     be.css = insert_base_url(std::mem::take(&mut be.css));
     Ok(be)
   }).await.map_err(|e| e.to_string())?
 }
-
-
 
 #[server(
   prefix="/content",
@@ -480,19 +478,125 @@ pub async fn solution(
   }).await.map_err(|e| e.to_string())?
 }
 
-/*
 #[server(
   prefix="/content",
-  endpoint="feedback"
+  endpoint="slides",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
 )]
-pub async fn feedback(response:ExerciseResponse)  -> Result<ExerciseFeedback,ServerFnError<String>> {
-  tokio::task::spawn_blocking(move || {
-    let solution = get_solution(&response.uri)?;
-    solution.check(&response).ok_or_else(|| "Solution does not match Exercise".to_string().into())
-  }).await.map_err(|e| e.to_string())?
-}
- */
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn slides_view(
+  uri:Option<URI>,
+  rp:Option<String>,
+  a:Option<ArchiveId>,
+  p:Option<String>,
+  l:Option<Language>,
+  d:Option<String>,
+  e:Option<String>,
+  m:Option<String>,
+  s:Option<String>
+) -> Result<(Vec<CSS>,Vec<SlideElement>),ServerFnError<String>> {
+  use flams_system::backend::Backend;
+  use flams_ontology::{narration::DocumentElement,Checked};
+  
+  fn from_children(top:&DocumentURI,children:&[DocumentElement<Checked>],css:&mut VecSet<CSS>,backend:&impl Backend) -> Result<Vec<SlideElement>,String> {
+      let mut stack = smallvec::SmallVec::<_,2>::default();
+      let mut ret = Vec::new();
+      let mut curr = children.iter();
 
+      loop {
+          let Some(next) = curr.next() else {
+              if let Some((a,b,c)) = stack.pop() {
+                curr = a;
+                if let Some(mut b) = b {
+                  std::mem::swap(&mut ret,&mut b);
+                  ret.push(SlideElement::Section { title:c,children:b });
+                }
+                continue
+              }
+              break
+          };
+          match next {
+              DocumentElement::Slide { range,uri, .. } => {
+                let Some((c,html)) = backend.get_html_fragment(top, *range) else {
+                  return Err(format!("Missing fragment for slide {uri}"));
+                };
+                for c in c { css.insert(c); }
+                ret.push(SlideElement::Slide { html });
+              }
+              DocumentElement::Paragraph(p) => {
+                let Some((c,html)) = backend.get_html_fragment(top, p.range) else {
+                  return Err(format!("Missing fragment for paragraph {}",p.uri));
+                };
+                for c in c { css.insert(c); }
+                ret.push(SlideElement::Paragraph { html });
+              }
+              DocumentElement::DocumentReference { target,.. } =>  {
+                ret.push(SlideElement::Inputref { uri: target.id().into_owned()  })
+              }
+              DocumentElement::Section(s) => {
+                let title = if let Some(t) = s.title {
+                  let Some((c,html)) = backend.get_html_fragment(top, t) else {
+                    return Err(format!("Missing title for section {}",s.uri));
+                  };
+                  for c in c { css.insert(c); }
+                  Some(html)
+                } else { None };
+                stack.push((
+                  std::mem::replace(&mut curr,s.children().iter()),
+                  Some(std::mem::replace(&mut ret,Vec::new())),
+                  title
+                ));
+              }
+              o => {
+                let chs = o.children();
+                if !chs.is_empty() {
+                  stack.push((std::mem::replace(&mut curr,chs.iter()),None,None));
+                }
+              }
+          }
+      }
+
+      Ok(ret)
+  }
+
+
+
+  let Result::<URIComponents,_>::Ok(comps) = (uri,rp,a,p,l,d,e,m,s).try_into() else {
+    return Err("invalid uri components".to_string().into())
+  };
+  let Some(uri) = comps.parse() else {
+    return Err("invalid uri".to_string().into())
+  };
+  let Some(doe) = (match uri {
+    URI::Narrative(NarrativeURI::Document(uri)) => backend!(get_document!(&uri)).map(either::Either::Left),
+    URI::Narrative(NarrativeURI::Element(uri)) => backend!(get_document_element!(&uri)).map(either::Either::Right),
+    _ => return Err("Not a narrative URI".to_string().into())
+  }) else {
+    return Err("Element not found".to_string().into())
+  };
+  tokio::task::spawn_blocking(move || {
+    let (chs,top) = match &doe {
+      either::Either::Left(d) => (d.children(),d.uri()),
+      either::Either::Right(e) => {
+        let e : &NarrativeReference<DocumentElement<Checked>> = e;
+        (e.as_ref().children(),e.top().uri())
+      }
+    };
+    let mut css = VecSet::default();
+
+    let r = if flams_system::settings::Settings::get().lsp {
+      let Some(state) = crate::server::lsp::STDIOLSPServer::global_state() else {
+        return Err("no lsp server".to_string())
+      };
+      from_children(top,chs,&mut css,state.backend())
+    } else {
+      from_children(top,chs,&mut css,flams_system::backend::GlobalBackend::get())
+    }?;
+    Ok((insert_base_url(css.0),r))
+  }).await.map_err(|e| e.to_string())?.map_err(Into::into)
+}
 
 #[component(transparent)]
 pub fn URITop() -> impl IntoView {

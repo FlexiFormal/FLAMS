@@ -246,6 +246,20 @@ pub trait Resourcable {}
 
 impl Resourcable for Box<str> {}
 
+#[derive(Debug,Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature="serde",serde(tag = "type"))]
+pub enum SlideElement {
+    Slide { html:String },
+    Paragraph { html: String },
+    Inputref { uri:DocumentURI },
+    Section {
+        title:Option<String>,
+        children: Vec<SlideElement>
+    }
+}
 
 macro_rules! serde_impl {
     (@i_count ) => { 0 };

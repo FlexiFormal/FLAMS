@@ -29,6 +29,7 @@ either = {workspace=true}
 const_format = {workspace=true}
 paste = {workspace=true}
 regex = {workspace=true}
+eyre = {workspace=true}
 
 tokio = {workspace=true,optional=true,features=["io-util"]}
 wasm-bindgen = {workspace=true,optional=true}

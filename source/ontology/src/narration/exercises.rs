@@ -45,10 +45,6 @@ pub struct Solutions(
     pub Box<[SolutionData]>
 );
 
-#[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
-const TS_SOLUTION: &str = "export type SolutionString = string;";
-
 #[cfg(feature="wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Solutions{

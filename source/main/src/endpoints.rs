@@ -44,6 +44,7 @@
  * | [`/content/notations`](content::notations()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
  * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](flams_ontology::narration::exercises::Solutions) |
  * | [`/content/quiz`](content::get_quiz()) | [DocumentURI] | [`Quiz`](flams_ontology::narration::exercises::Quiz) |
+ * | [`/content/slides`](content::slides_view()) | [DocumentURI] or [DocumentElementURI] | `(Vec<CSS>,Vec<SlideElement>)` |
  * | [`/content/legacy/uris`](content::uris()) | | |
 */
 

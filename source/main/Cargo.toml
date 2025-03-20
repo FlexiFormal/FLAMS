@@ -99,6 +99,7 @@ paste = {workspace=true}
 lazy_static = {workspace=true}
 flams-git = {workspace=true}
 urlencoding = {workspace=true}
+smallvec = {workspace=true}
 
 # ssr
 flams-system = {workspace=true,features=["zip","gitlab","tantivy"],optional=true}

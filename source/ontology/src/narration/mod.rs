@@ -147,6 +147,10 @@ impl<T: NarrationTrait> NarrativeReference<T> {
             ).ok().map(Self)
         }
     }
+    #[must_use]#[inline]
+    pub const fn top(&self) -> &Document {
+        self.0.outer()
+    }
 }
 
 impl<T: NarrationTrait> AsRef<T> for NarrativeReference<T> {
