@@ -161,7 +161,7 @@ impl QuizExtension for Document {
                 }
             }
         }
-        if let [QuizElement::Section { .. }] = elements.as_slice() {
+        if elements.len() == 1 && matches!(elements.first(),Some(QuizElement::Section { .. })) {
             let Some(QuizElement::Section{ elements:es,.. }) = elements.pop() else { impossible!()};
             elements = es;
         }
