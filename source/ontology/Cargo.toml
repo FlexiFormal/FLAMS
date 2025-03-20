@@ -17,8 +17,9 @@ wasm = ["serde","dep:wasm-bindgen","dep:tsify-next","dep:serde_json"]
 tantivy = ["dep:tantivy","dep:html2text","dep:tracing"]
 
 [dependencies]
-oxrdf = {workspace=true,optional=true}
 flams-utils = {workspace=true}
+
+oxrdf = {workspace=true,optional=true}
 lazy_static = {workspace=true}
 triomphe = {workspace=true}
 parking_lot = {workspace=true}

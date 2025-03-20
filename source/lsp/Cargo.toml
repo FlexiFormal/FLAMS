@@ -14,6 +14,8 @@ flams-system = {workspace=true,features=["tokio","zip"]}
 flams-ftml = {workspace=true}
 flams-ontology = {workspace=true}
 flams-utils = {workspace = true}
+flams-stex = {workspace = true}
+
 tracing={workspace=true}
 async-lsp = {workspace=true}
 futures = {workspace=true}
@@ -27,5 +29,3 @@ axum = {workspace=true,optional=true}
 serde_json = {workspace=true,optional=true}
 lazy_static = {workspace=true}
 smallvec = {workspace = true}
-
-flams-stex = {workspace = true}

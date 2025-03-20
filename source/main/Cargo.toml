@@ -77,6 +77,15 @@ hydrate = [
 workspace = true
 
 [dependencies]
+flams-web-utils = {workspace=true}
+flams-utils = {workspace=true,features=["serde"]}
+flams-ontology = {workspace=true,features=["serde"]}
+ftml-viewer-components = {workspace = true, features=["omdoc"]}
+flams-git = {workspace=true}
+flams-system = {workspace=true,features=["zip","gitlab","tantivy"],optional=true}
+flams-lsp = {workspace=true,optional=true, features=["ws"]}
+flams-stex = {workspace=true,optional=true, features=["serde"]}
+flams-ftml = {workspace=true,optional=true}
 
 # common
 leptos = {workspace=true}
@@ -86,26 +95,17 @@ thaw = {workspace=true}
 serde = {workspace=true}
 serde_json = {workspace=true}
 tracing = {workspace=true}
-flams-web-utils = {workspace=true}
 icondata_bi = {workspace=true}
 icondata_ai = {workspace=true}
-flams-utils = {workspace=true,features=["serde"]}
-flams-ontology = {workspace=true,features=["serde"]}
 either = {workspace = true}
 const-str = {workspace = true}
-ftml-viewer-components = {workspace = true, features=["omdoc"]}
 leptos-dyn-dom = {workspace = true}
 paste = {workspace=true}
 lazy_static = {workspace=true}
-flams-git = {workspace=true}
 urlencoding = {workspace=true}
 smallvec = {workspace=true}
 
 # ssr
-flams-system = {workspace=true,features=["zip","gitlab","tantivy"],optional=true}
-flams-lsp = {workspace=true,optional=true, features=["ws"]}
-flams-stex = {workspace=true,optional=true, features=["serde"]}
-flams-ftml = {workspace=true,optional=true}
 tex_engine = {workspace=true,optional=true}
 
 tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}

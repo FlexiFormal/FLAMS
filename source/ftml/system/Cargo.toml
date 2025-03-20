@@ -8,6 +8,7 @@ flams-ontology = {workspace=true,features=["serde"]}
 flams-system = {workspace=true}
 flams-utils = {workspace=true}
 ftml-extraction = {workspace=true,features = ["rdf","full"]}
+
 either = {workspace=true}
 html5ever = {workspace=true}
 lazy_static = {workspace=true}

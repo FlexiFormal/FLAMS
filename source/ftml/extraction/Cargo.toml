@@ -8,9 +8,10 @@ full = []
 rdf = ["flams-ontology/rdf"]
 
 [dependencies]
-smallvec = {workspace=true}
 flams-ontology = {workspace=true}
 flams-utils = {workspace=true}
+
+smallvec = {workspace=true}
 const_format = {workspace=true}
 paste = {workspace=true}
 tracing = {workspace=true}

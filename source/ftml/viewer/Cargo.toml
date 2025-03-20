@@ -28,6 +28,9 @@ omdoc = ["ftml-viewer-components/omdoc"]
 [dependencies]
 ftml-viewer-components = {workspace=true,features = ["csr"]}
 flams-web-utils = {workspace=true,features=["csr"]}
+flams-utils = {workspace=true}
+flams-ontology = {workspace=true}
+
 leptos-dyn-dom = {workspace=true,features = ["csr"]}
 leptos = {workspace=true,features = ["csr"]}
 leptos_meta = {workspace=true}
@@ -37,10 +40,8 @@ thaw = {workspace=true}
 tracing-wasm = {workspace=true}
 tracing = {workspace=true,features=["release_max_level_info"]}
 
-flams-utils = {workspace=true}
 tsify-next = {workspace=true,optional = true}
 serde = {workspace=true,optional=true}
-flams-ontology = {workspace=true}
 wasm-bindgen-futures = {workspace=true,optional=true}
 
 

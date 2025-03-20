@@ -15,18 +15,19 @@ hydrate= ["omdoc","leptos-dyn-dom/hydrate","leptos/hydrate","flams-web-utils/hyd
 ssr = ["leptos/ssr","rdf","flams-web-utils/ssr","dep:flams-system","dep:tokio"]
 
 [dependencies]
-leptos-dyn-dom = {workspace=true}
-leptos = {workspace=true}
-thaw = {workspace=true}
 ftml-extraction = {workspace=true}
 flams-ontology = {workspace=true,features=["wasm"]}
 flams-system = {workspace=true, optional=true}
-tokio = {workspace = true,optional=true}
 flams-utils = {workspace=true,features=["wasm"]}
+flams-web-utils = {workspace=true}
+
+leptos-dyn-dom = {workspace=true}
+leptos = {workspace=true}
+thaw = {workspace=true}
+tokio = {workspace = true,optional=true}
 smallvec = {workspace=true}
 tracing = {workspace=true}
 lazy_static = {workspace=true}
-flams-web-utils = {workspace=true}
 urlencoding = {workspace=true}
 send_wrapper = {workspace=true}
 wasm-bindgen = {workspace=true}
