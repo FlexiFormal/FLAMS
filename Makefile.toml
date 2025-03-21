@@ -1,42 +1,57 @@
 [env]
-DATABASE_URL="sqlite:./resources/migrations/users.sqlite?mode=rwc"
-LEPTOS_WASM_OPT_VERSION="version_122"
-LEPTOS_SASS_VERSION="1.71.0"
-RUSTDOCFLAGS="--enable-index-page -Zunstable-options --generate-link-to-definition --cfg docsrs"
+DATABASE_URL = "sqlite:./resources/migrations/users.sqlite?mode=rwc"
+LEPTOS_WASM_OPT_VERSION = "version_122"
+LEPTOS_SASS_VERSION = "1.71.0"
+RUSTDOCFLAGS = "--enable-index-page -Zunstable-options --generate-link-to-definition --cfg docsrs"
 
 [tasks.db-create]
 workspace = false
 install_crate = "sqlx-cli"
 command = "cargo"
-args = ["sqlx","database","create"]
+args = ["sqlx", "database", "create"]
 
 [tasks.db-migrate]
 workspace = false
 install_crate = "sqlx-cli"
 command = "cargo"
-args = ["sqlx","migrate","run","--source","resources/migrations"]
+args = ["sqlx", "migrate", "run", "--source", "resources/migrations"]
 
 [tasks.db-setup]
 workspace = false
 install_crate = "sqlx-cli"
 command = "cargo"
-args = ["sqlx","prepare","--workspace","--","--features=ssr","--package=flams"]
+args = [
+    "sqlx",
+    "prepare",
+    "--workspace",
+    "--",
+    "--features=backend",
+    "--package=flams-database",
+]
 
 [tasks.db]
 workspace = false
-dependencies = ["db-create","db-migrate","db-setup"]
+dependencies = ["db-create", "db-migrate", "db-setup"]
 
 [tasks.leptos-release]
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
-args = ["leptos","build","--release"]
+args = ["leptos", "build", "--release"]
 
 [tasks.doc]
 workspace = false
 install_crate = false
 command = "cargo"
-args = ["+nightly","doc","--workspace","--no-deps","--all-features","--release","--document-private-items"]
+args = [
+    "+nightly",
+    "doc",
+    "--workspace",
+    "--no-deps",
+    "--all-features",
+    "--release",
+    "--document-private-items",
+]
 
 
 [tasks.docs]
@@ -95,14 +110,14 @@ args = ["install"]
 workspace = false
 cwd = "./source/ts/vscode"
 command = "npm"
-args = ["run","build"]
+args = ["run", "build"]
 dependencies = ["vscode-npm-install"]
 
 [tasks.vscode]
 workspace = false
 cwd = "./source/ts/vscode"
 command = "vsce"
-args = ["package","--out","./flams.vsix"]
+args = ["package", "--out", "./flams.vsix"]
 dependencies = ["vscode-build"]
 
 [tasks.copy-viewer]
@@ -110,19 +125,25 @@ workspace = false
 dependencies = ["build-viewer"]
 script_runner = "@shell"
 script = '''
-cp ./source/ftml/viewer/pkg/ftml.js ./resources/assets/ftml.js 
+cp ./source/ftml/viewer/pkg/ftml.js ./resources/assets/ftml.js
 cp ./source/ftml/viewer/pkg/ftml_bg.wasm ./resources/assets/ftml_bg.wasm
 '''
 
 [tasks.all-release]
 workspace = false
-dependencies = ["build-viewer","copy-viewer","db","leptos-release","copy-to-bin"]
+dependencies = [
+    "build-viewer",
+    "copy-viewer",
+    "db",
+    "leptos-release",
+    "copy-to-bin",
+]
 
 [tasks.dev]
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
-args = ["leptos","build"]
+args = ["leptos", "build"]
 # dependencies = ["db"]
 # dependencies = ["build-viewer","copy-viewer","db"]
 
@@ -130,7 +151,15 @@ args = ["leptos","build"]
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
-args = ["leptos","watch","--","--port","3000","-c","/home/jazzpirate/work/Software/sTeX/FLAMS/settings.toml"]
+args = [
+    "leptos",
+    "watch",
+    "--",
+    "--port",
+    "3000",
+    "-c",
+    "/home/jazzpirate/work/Software/sTeX/FLAMS/settings.toml",
+]
 
 [tasks.default]
 workspace = false
