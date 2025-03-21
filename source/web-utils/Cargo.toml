@@ -8,23 +8,25 @@ workspace = true
 
 [features]
 csr = ["leptos/csr", "thaw/csr"]
-ssr = ["leptos/ssr", "thaw/ssr"]
-hydrate = ["leptos/hydrate", "thaw/hydrate","dep:gloo-storage"]
+ssr = ["leptos/ssr", "thaw/ssr", "dep:tokio"]
+hydrate = ["leptos/hydrate", "thaw/hydrate", "dep:gloo-storage"]
 
 [dependencies]
-flams-utils = {workspace=true,features=["serde"]}
+flams-utils = { workspace = true, features = ["serde"] }
 
-leptos-dyn-dom = {workspace=true}
-leptos = {workspace=true}
-leptos_meta = {workspace=true}
-thaw = {workspace=true}
-thaw_utils = {workspace=true}
-thaw_components = {workspace=true}
-serde = {workspace=true}
-gloo-storage = {workspace=true,optional=true}
-send_wrapper = {workspace=true}
-icondata_ch = {workspace=true}
-tracing = {workspace=true}
+leptos-dyn-dom = { workspace = true }
+leptos = { workspace = true }
+leptos_meta = { workspace = true }
+thaw = { workspace = true }
+thaw_utils = { workspace = true }
+thaw_components = { workspace = true }
+serde = { workspace = true }
+gloo-storage = { workspace = true, optional = true }
+send_wrapper = { workspace = true }
+icondata_ch = { workspace = true }
+tracing = { workspace = true }
+
+tokio = { workspace = true, optional = true, features = ["rt"] }
 
 #tachys = {workspace = true}
 #leptos_macro = {workspace = true}

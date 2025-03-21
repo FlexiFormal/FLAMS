@@ -12,8 +12,9 @@ use axum::{
 };
 use axum_login::AuthManagerLayerBuilder;
 use axum_macros::FromRef;
+use flams_database::DBBackend;
 use flams_git::gl::auth::GitLabOAuth;
-use flams_router_login::db::DBBackend;
+use flams_router_base::ws::WebSocketServer;
 use flams_system::settings::Settings;
 use http::{StatusCode, Uri};
 use leptos::prelude::*;
@@ -22,7 +23,7 @@ use tower::ServiceBuilder;
 use tower_sessions::{Expiry, MemoryStore};
 use tracing::{instrument, Instrument};
 
-use crate::{router::Main, utils::ws::WebSocketServer};
+use crate::{router::Main, utils::ws::WebSocketServer as WSS};
 
 lazy_static::lazy_static! {
     static ref SERVER_SPAN:tracing::Span = {
@@ -98,7 +99,7 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
         )
         .route(
             "/ws/queue",
-            axum::routing::get(crate::router::buildqueue::QueueSocket::ws_handler),
+            axum::routing::get(flams_router_buildqueue_components::QueueSocket::ws_handler),
         )
         .route("/ws/lsp", axum::routing::get(crate::server::lsp::register));
 

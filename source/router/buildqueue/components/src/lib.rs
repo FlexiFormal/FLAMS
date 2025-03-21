@@ -1,430 +1,18 @@
-use std::num::NonZeroU32;
+#![allow(clippy::must_use_candidate)]
 
 use flams_ontology::uris::ArchiveId;
-use flams_router_login::LoginState;
-use flams_utils::{
-    time::{Delta, Eta},
-    vecmap::VecMap,
-};
-use flams_web_utils::inject_css;
+use flams_router_base::ws;
+use flams_router_base::{LoginState, require_login, ws::WebSocket};
+#[cfg(feature = "hydrate")]
+use flams_router_buildqueue_base::server_fns::get_log;
+use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
+use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
+use flams_utils::time::{Delta, Eta};
+use flams_utils::vecmap::VecMap;
+use flams_web_utils::{components::wait_and_then, inject_css};
 use leptos::{either::EitherOf4, prelude::*};
 use leptos_router::hooks::use_params_map;
-
-use crate::utils::{from_server_clone, from_server_copy, ws::WebSocket};
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct QueueInfo {
-    pub id: NonZeroU32,
-    pub name: String,
-    pub archives: Option<Vec<RepoInfo>>,
-}
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum RepoInfo {
-    Copy(ArchiveId),
-    Git {
-        id: ArchiveId,
-        remote: String,
-        branch: String,
-        commit: flams_git::Commit,
-        //updates:Vec<(String,flams_git::Commit)>
-    },
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum FormatOrTarget {
-    Format(String),
-    Targets(Vec<String>),
-}
-
-#[cfg(feature = "ssr")]
-pub(crate) trait LoginQueue {
-    fn with_queue<R>(
-        &self,
-        id: NonZeroU32,
-        f: impl FnOnce(&flams_system::building::Queue) -> R,
-    ) -> Result<R, String>;
-
-    fn with_opt_queue<R>(
-        &self,
-        id: Option<NonZeroU32>,
-        f: impl FnOnce(
-            flams_system::building::queue_manager::QueueId,
-            &flams_system::building::Queue,
-        ) -> R,
-    ) -> Result<R, String>;
-}
-#[cfg(feature = "ssr")]
-impl LoginQueue for LoginState {
-    fn with_queue<R>(
-        &self,
-        id: NonZeroU32,
-        f: impl FnOnce(&flams_system::building::Queue) -> R,
-    ) -> Result<R, String> {
-        use flams_system::building::QueueName;
-        let qm = flams_system::building::queue_manager::QueueManager::get();
-        match self {
-            LoginState::None | LoginState::Loading => {
-                return Err(format!("Not logged in: {self:?}"))
-            }
-            LoginState::Admin
-            | LoginState::NoAccounts
-            | LoginState::User { is_admin: true, .. } => (),
-            LoginState::User { name, .. } => {
-                return qm.with_queue(id.into(), move |q| {
-                    if let Some(q) = q {
-                        if matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name)
-                        {
-                            Ok(f(q))
-                        } else {
-                            Err(format!("Not allowed to run queue {id}"))
-                        }
-                    } else {
-                        Err(format!("Queue {id} not found"))
-                    }
-                });
-            }
-        }
-        qm.with_queue(id.into(), move |q| {
-            if let Some(q) = q {
-                Ok(f(q))
-            } else {
-                Err(format!("Queue {id} not found"))
-            }
-        })
-    }
-
-    fn with_opt_queue<R>(
-        &self,
-        id: Option<NonZeroU32>,
-        f: impl FnOnce(
-            flams_system::building::queue_manager::QueueId,
-            &flams_system::building::Queue,
-        ) -> R,
-    ) -> Result<R, String> {
-        use flams_system::building::QueueName;
-        let qm = flams_system::building::queue_manager::QueueManager::get();
-        match (self, id) {
-            (LoginState::None | LoginState::Loading, _) => {
-                return Err(format!("Not logged in: {self:?}"))
-            }
-            (LoginState::User { name, .. }, Some(id)) => qm.with_queue(id.into(), move |q| {
-                if let Some(q) = q {
-                    if matches!(q.name(),QueueName::Sandbox{name:qname,..} if &**qname == name) {
-                        Ok(f(id.into(), q))
-                    } else {
-                        Err(format!("Not allowed to run queue {id}"))
-                    }
-                } else {
-                    Err(format!("Queue {id} not found"))
-                }
-            }),
-            (LoginState::Admin, Some(id)) => qm.with_queue(id.into(), |q| {
-                if let Some(q) = q {
-                    Ok(f(id.into(), q))
-                } else {
-                    Err(format!("Queue {id} not found"))
-                }
-            }),
-            (LoginState::User { name, .. }, _) => {
-                let queue = qm.new_queue(name);
-                qm.with_queue(queue, |q| {
-                    let Some(q) = q else { unreachable!() };
-                    Ok(f(queue, q))
-                })
-            }
-            (LoginState::Admin, _) => {
-                let queue = qm.new_queue("admin");
-                qm.with_queue(queue, |q| {
-                    let Some(q) = q else { unreachable!() };
-                    Ok(f(queue, q))
-                })
-            }
-            (LoginState::NoAccounts, _) => qm.with_global(|q| {
-                Ok(f(
-                    flams_system::building::queue_manager::QueueId::global(),
-                    q,
-                ))
-            }),
-        }
-    }
-}
-
-#[server(prefix = "/api/buildqueue", endpoint = "get_queues")]
-#[allow(clippy::unused_async)]
-pub async fn get_queues() -> Result<Vec<QueueInfo>, ServerFnError<String>> {
-    use flams_system::backend::{AnyBackend, SandboxedRepository};
-    use flams_system::building::queue_manager::QueueManager;
-    let login = LoginState::get_server();
-    let oauth = super::git::get_oauth().ok();
-    tokio::task::spawn_blocking(move || {
-        let ls = match login {
-            LoginState::None | LoginState::Loading => {
-                return Err(format!("Not logged in: {login:?}").into())
-            }
-            LoginState::NoAccounts
-            | LoginState::Admin
-            | LoginState::User { is_admin: true, .. } => QueueManager::get().all_queues(),
-            LoginState::User { name, .. } => QueueManager::get().queues_for_user(&name),
-        };
-        let mut ret = Vec::new();
-        for (k, v, d) in ls {
-            let archives = if let Some(d) = d {
-                let mut archives = Vec::new();
-                for ri in d {
-                    match ri {
-                        SandboxedRepository::Copy(id) => archives.push(RepoInfo::Copy(id)),
-                        SandboxedRepository::Git {
-                            id,
-                            branch,
-                            commit,
-                            remote,
-                        } => {
-                            /*let updates = if let Some((oauth,secret)) = &oauth {
-                              let gitlab_url = &**flams_system::settings::Settings::get().gitlab_url.as_ref().unwrap_or_else(|| unreachable!());
-                              let Some(path) = QueueManager::get().with_queue(k, |q| {
-                                let q = q?;
-                                let AnyBackend::Sandbox(be) = q.backend() else {return None};
-                                Some(be.path_for(&id))
-                              }) else {continue};
-                              flams_git::repos::GitRepo::open(path).ok().and_then(|git| {
-                                git.get_origin_url().ok().and_then(|url| {
-                                  if url.starts_with(gitlab_url) {
-                                    git.get_new_commits_with_oauth(secret).ok()
-                                  } else { None }
-                                })
-                              }).unwrap_or_default()
-                            } else { Vec::new()};*/
-                            archives.push(RepoInfo::Git {
-                                id,
-                                branch: branch.to_string(),
-                                commit,
-                                remote: remote.to_string(), //,updates
-                            })
-                        }
-                    }
-                }
-                Some(archives)
-            } else {
-                None
-            };
-
-            ret.push(QueueInfo {
-                id: k.into(),
-                name: v.to_string(),
-                archives,
-            })
-        }
-        Ok(ret)
-    })
-    .await
-    .unwrap_or_else(|e| Err(e.to_string().into()))
-}
-
-#[server(prefix = "/api/buildqueue", endpoint = "run")]
-#[allow(clippy::unused_async)]
-pub async fn run(id: NonZeroU32) -> Result<(), ServerFnError<String>> {
-    use flams_system::building::{queue_manager::QueueManager, QueueName};
-    let login = LoginState::get_server();
-    tokio::task::spawn_blocking(move || {
-        login.with_queue(id, |_| ())?;
-        QueueManager::get()
-            .start_queue(id.into())
-            .map_err(|()| "Queue does not exist".to_string())?;
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[server(prefix = "/api/buildqueue", endpoint = "requeue")]
-#[allow(clippy::unused_async)]
-pub async fn requeue(id: NonZeroU32) -> Result<(), ServerFnError<String>> {
-    use flams_system::building::{queue_manager::QueueManager, QueueName};
-    let login = LoginState::get_server();
-    tokio::task::spawn_blocking(move || login.with_queue(id, |q| q.requeue_failed()))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(Into::into)
-}
-
-#[server(prefix = "/api/buildqueue", endpoint = "enqueue")]
-#[allow(clippy::unused_async)]
-pub async fn enqueue(
-    archive: ArchiveId,
-    target: FormatOrTarget,
-    path: Option<String>,
-    stale_only: Option<bool>,
-    queue: Option<NonZeroU32>,
-) -> Result<usize, ServerFnError<String>> {
-    use flams_system::backend::archives::ArchiveOrGroup as AoG;
-    use flams_system::formats::{BuildTarget, SourceFormat};
-    use flams_system::{building::queue_manager::QueueManager, formats::FormatOrTargets};
-
-    let login = LoginState::get_server();
-
-    tokio::task::spawn_blocking(move || {
-        login.with_opt_queue::<Result<_, ServerFnError<String>>>(queue, |id, queue| {
-            let stale_only = stale_only.unwrap_or(true);
-
-            #[allow(clippy::option_if_let_else)]
-            let tgts: Vec<_> = match &target {
-                FormatOrTarget::Targets(t) => {
-                    let Some(v) = t
-                        .iter()
-                        .map(|s| BuildTarget::get_from_str(s))
-                        .collect::<Option<Vec<_>>>()
-                    else {
-                        return Err(ServerFnError::MissingArg("Invalid target".into()));
-                    };
-                    v
-                }
-                FormatOrTarget::Format(_) => Vec::new(),
-            };
-
-            let fot = match target {
-                FormatOrTarget::Format(f) => {
-                    FormatOrTargets::Format(SourceFormat::get_from_str(&f).map_or_else(
-                        || Err(ServerFnError::MissingArg("Invalid format".into())),
-                        Ok,
-                    )?)
-                }
-                FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice()),
-            };
-
-            let group = flams_system::backend::GlobalBackend::get().with_archive_tree(
-                |tree| -> Result<bool, ServerFnError<String>> {
-                    match tree.find(&archive) {
-                        Some(AoG::Archive(_)) => Ok(false),
-                        Some(AoG::Group(_)) => Ok(true),
-                        None => Err(format!("Archive {archive} not found").into()),
-                    }
-                },
-            )?;
-
-            if group && path.is_some() {
-                return Err(ServerFnError::MissingArg(
-                    "Must specify either an archive with optional path or a group".into(),
-                ));
-            }
-
-            if group {
-                Ok(queue.enqueue_group(&archive, fot, stale_only))
-            } else {
-                Ok(queue.enqueue_archive(&archive, fot, stale_only, path.as_deref()))
-            }
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())??
-}
-
-#[server(prefix = "/api/buildqueue", endpoint = "log")]
-#[allow(clippy::unused_async)]
-pub async fn get_log(
-    queue: NonZeroU32,
-    archive: ArchiveId,
-    rel_path: String,
-    target: String,
-) -> Result<String, ServerFnError<String>> {
-    use flams_system::backend::{Backend, GlobalBackend};
-    use flams_system::{
-        building::{queue_manager::QueueManager, QueueName},
-        formats::FormatOrTargets,
-    };
-    use std::path::PathBuf;
-
-    let Some(target) = flams_system::formats::BuildTarget::get_from_str(&target) else {
-        return Err(format!("Target {target} not found").into());
-    };
-    let login = LoginState::get_server();
-    let id = archive.clone();
-    let Some(path) = tokio::task::spawn_blocking(move || {
-        login.with_queue(queue, |q| {
-            q.backend()
-                .with_archive(&id, |a| a.map(|a| a.get_log(&rel_path, target)))
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())??
-    else {
-        return Err(format!("Archive {archive} not found").into());
-    };
-    let v = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&v).to_string())
-}
-
-#[server(prefix = "/api/buildqueue", endpoint = "migrate")]
-#[allow(clippy::unused_async)]
-pub async fn migrate(queue: NonZeroU32) -> Result<usize, ServerFnError<String>> {
-    use flams_system::backend::{archives::Archive, Backend, SandboxedRepository};
-    use flams_system::building::{queue_manager::QueueManager, QueueName};
-    let login = LoginState::get_server();
-    if matches!(login, LoginState::NoAccounts) {
-        return Err("Migration only makes sense in public mode"
-            .to_string()
-            .into());
-    }
-    let oauth = super::git::get_oauth().ok();
-    tokio::task::spawn_blocking(move || {
-        login.with_queue(queue, |_| ())?;
-        let (_, n) = flams_system::building::queue_manager::QueueManager::get()
-            .migrate::<(), String>(queue.into(), |sandbox| {
-                if let Some((_, secret)) = oauth {
-                    //let mut js = tokio::task::JoinSet::new();
-                    sandbox.with_repos(|repos| {
-                        for r in repos {
-                            if let SandboxedRepository::Git { id, .. } = r {
-                                sandbox.with_archive(id, |a| {
-                                    /*let Some(Archive::Local(a)) = a else { return };
-                                    let p = a.path().to_path_buf();
-                                    let secret = secret.clone();
-                                    let _ = js.spawn_blocking(move || {
-                                      let repo = flams_git::repos::GitRepo::open(&p)?;
-                                      repo.add_dir(&p,false)?;
-                                      repo.add_dir(&p.join(".flams"),true)?;
-                                      let _ = repo.commit_all("migrating")?;
-                                      repo.push_with_oauth(&secret)
-                                      //repo.mark_managed().map_err(|e| e.to_string())?;
-                                    });*///.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;.map_err(|e| e.to_string())?;
-                                    //.map_err(|e| e.to_string())?;
-                                    //.map_err(|e| e.to_string())?;
-                                    //Ok(())
-                                });
-                            }
-                        }
-                    });
-                    /*while !js.is_empty() {
-                      if let Some(r) = js.try_join_next() {
-                        r.map_err(|e| e.to_string())?
-                        .map_err(|e| e.to_string())?;
-                      } else {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                      };
-                    }*/
-                    Ok(())
-                } else {
-                    Ok(())
-                }
-            })?;
-        Ok(n)
-    })
-    .await
-    .unwrap_or_else(|e| Err(e.to_string().into()))
-}
-
-#[server(prefix = "/api/buildqueue", endpoint = "delete")]
-#[allow(clippy::unused_async)]
-pub async fn delete(queue: NonZeroU32) -> Result<(), ServerFnError<String>> {
-    use flams_system::building::{queue_manager::QueueManager, QueueName};
-    let login = LoginState::get_server();
-    tokio::task::spawn_blocking(move || {
-        login.with_queue(queue, |_| ())?;
-        QueueManager::get().delete(queue.into());
-        Ok(())
-    })
-    .await
-    .unwrap_or_else(|e| Err(e.to_string().into()))
-}
+use std::num::NonZeroU32;
 
 #[derive(Copy, Clone)]
 struct UpdateQueues(RwSignal<()>);
@@ -437,68 +25,71 @@ pub fn QueuesTop() -> impl IntoView {
     let update = UpdateQueues(RwSignal::new(()));
     provide_context(update);
     move || {
-        let _ = update.0.get();
+        let () = update.0.get();
         let params = use_params_map();
         let id = move || params.read().get("queue");
 
-        from_server_copy(true, get_queues, move |v| {
-            if v.is_empty() {
-                return leptos::either::Either::Left(view!(<div>"(No running queues)"</div>));
-            }
-            let queues = AllQueues::new(v);
-            if let Some(id) = id() {
-                if let Ok(id) = id.parse() {
-                    queues.selected.update_untracked(|v| *v = id);
+        require_login(move || {
+            wait_and_then(server_fns::get_queues, move |v| {
+                if v.is_empty() {
+                    return leptos::either::Either::Left(view!(<div>"(No running queues)"</div>));
                 }
-            }
-            provide_context(queues);
-            let selected_value = RwSignal::new(queues.selected.get_untracked().to_string());
-            let _ = Effect::new(move |_| {
-                let value = selected_value.get();
-                let selected = queues.selected.get_untracked();
-                let value = value.parse().unwrap_or_else(|_| unreachable!());
-                if selected != value {
-                    queues.selected.set(value);
-                }
-            });
-            inject_css(
-                "flams-fullscreen",
-                ".flams-fullscreen { width:100%; height:calc(100% - 44px - 21px) }",
-            );
-            leptos::either::Either::Right(view! {
-              <TabList selected_value>
-                <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
-                  <Tab value=i.to_string()>{
-                    queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
-                  }</Tab>
-                }/>
-              </TabList>
-              <div style="margin:10px"><Divider/></div>
-              <Layout class="flams-fullscreen">{move || {
-                let curr = queues.selected.get();
-                queues.show.update_untracked(|v| *v = false);
-                QueueSocket::run(queues);
-                move || view! {
-                  <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
-                    let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
-                    move || match ls.get() {
-                      QueueData::Idle(v) => {
-                          EitherOf4::A(idle(curr,v))
-                      },
-                      QueueData::Running(r) => {
-                          EitherOf4::B(running(curr,r))
-                      },
-                      QueueData::Finished(failed,done) => EitherOf4::C(finished(curr,failed,done)),
-                      QueueData::Empty => EitherOf4::D(view!(<div>"Other"</div>))
+                let queues = AllQueues::new(v);
+                if let Some(id) = id() {
+                    if let Ok(id) = id.parse() {
+                        queues.selected.update_untracked(|v| *v = id);
                     }
-                  }</Show>
                 }
-              }}</Layout>
+                provide_context(queues);
+                let selected_value = RwSignal::new(queues.selected.get_untracked().to_string());
+                let _ = Effect::new(move |_| {
+                    let value = selected_value.get();
+                    let selected = queues.selected.get_untracked();
+                    let value = value.parse().unwrap_or_else(|_| unreachable!());
+                    if selected != value {
+                        queues.selected.set(value);
+                    }
+                });
+                inject_css(
+                    "flams-fullscreen",
+                    ".flams-fullscreen { width:100%; height:calc(100% - 44px - 21px) }",
+                );
+                leptos::either::Either::Right(view! {
+                  <TabList selected_value>
+                    <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
+                      <Tab value=i.to_string()>{
+                        queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
+                      }</Tab>
+                    }/>
+                  </TabList>
+                  <div style="margin:10px"><Divider/></div>
+                  <Layout class="flams-fullscreen">{move || {
+                    let curr = queues.selected.get();
+                    queues.show.update_untracked(|v| *v = false);
+                    QueueSocket::run(queues);
+                    move || view! {
+                      <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
+                        let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
+                        move || match ls.get() {
+                          QueueData::Idle(v) => {
+                              EitherOf4::A(idle(curr,v))
+                          },
+                          QueueData::Running(r) => {
+                              EitherOf4::B(running(curr,r))
+                          },
+                          QueueData::Finished(failed,done) => EitherOf4::C(finished(curr,failed,done)),
+                          QueueData::Empty => EitherOf4::D(view!(<div>"Other"</div>))
+                        }
+                      }</Show>
+                    }
+                  }}</Layout>
+                })
             })
         })
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
     use flams_web_utils::components::{Collapsible, Header};
     use thaw::{
@@ -512,8 +103,7 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
     let repos = queues
         .queue_repos
         .with_untracked(|v| v.get(&queue_id).cloned())
-        .flatten();
-    let Some(repos) = repos else { return None };
+        .flatten()?;
     if repos.is_empty() {
         return None;
     }
@@ -539,15 +129,11 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
                 RepoInfo::Git{id,branch,commit,remote/*,updates */} => leptos::either::Either::Right({
                   let updates = RwSignal::<Option<Vec<(String,flams_git::Commit)>>>::new(None);
                   let style = move || if allowed {
-                    updates.with(|updates| {
-                      if let Some(updates) = updates {
-                        if updates.is_empty() {
-                          "color:green;"
-                        } else {
-                          "color:yellowgreen;"
-                        }
-                      } else {""}
-                    })
+                    updates.with(|updates| updates.as_ref().map_or("",|updates| if updates.is_empty() {
+                      "color:green;"
+                    } else {
+                      "color:yellowgreen;"
+                    }))
                   } else {style};
                   let idstr = id.to_string();
                   view!{
@@ -563,7 +149,7 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
                             let get_updates = Action::new(move |()| {
                               let id = aid.clone();
                               async move {
-                                match super::git::get_new_commits(Some(queue_id),id).await {
+                                match get_new_commits(Some(queue_id),id).await {
                                   Ok(v) => updates.set(Some(v)),
                                   Err(e) => flams_web_utils::components::error_with_toaster(e, toaster),
                                 }
@@ -579,19 +165,19 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
                           let updates = up.clone();
 
                           leptos::either::EitherOf3::C({
-                            use thaw::{Button,ButtonSize,Combobox,ComboboxOption,ToasterInjection};
+                            use thaw::{Button,ButtonSize,Combobox,ComboboxOption};
                             let first = updates.first().map(|(name,_)| name.clone()).unwrap_or_default();
                             let branch = RwSignal::new(first.clone());
-                            let _ = Effect::new(move || if branch.with(|s| s.is_empty()) {
+                            let _ = Effect::new(move || if branch.with(String::is_empty) {
                               branch.set(first.clone());
                             });
                             let update : UpdateQueues = expect_context();
-                            let toaster = ToasterInjection::expect_context();
-                            let commit_map:VecMap<_,_> = updates.clone().into();
+                            //let toaster = ToasterInjection::expect_context();
+                            //let commit_map:VecMap<_,_> = updates.clone().into();
                             let archive = id.clone();
                             let remote = remote.clone();
                             let act = flams_web_utils::components::message_action(
-                              move |()| super::git::update_from_branch(Some(queue_id),archive.clone(),remote.clone(),branch.get_untracked()),
+                              move |()| update_from_branch(Some(queue_id),archive.clone(),remote.clone(),branch.get_untracked()),
                               move |(i,_)| {
                                 update.0.set(());
                                 format!("{i} jobs queued")
@@ -631,7 +217,7 @@ fn delete_action(id: NonZeroU32) -> Action<(), ()> {
     let update: UpdateQueues = expect_context();
     let toaster = ToasterInjection::expect_context();
     Action::new(move |()| async move {
-        match delete(id).await {
+        match flams_router_buildqueue_base::server_fns::delete(id).await {
             Ok(()) => update.0.set(()),
             Err(e) => flams_web_utils::components::error_with_toaster(e.to_string(), toaster),
         }
@@ -640,7 +226,9 @@ fn delete_action(id: NonZeroU32) -> Action<(), ()> {
 
 fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> impl IntoView {
     use thaw::Button;
-    let act = Action::<(), Result<(), ServerFnError<String>>>::new(move |()| run(id));
+    let act = Action::<(), Result<(), ServerFnError<String>>>::new(move |()| {
+        flams_router_buildqueue_base::server_fns::run(id)
+    });
     let del = delete_action(id);
     view! {
       <div style="width:100%"><div style="position:fixed;right:20px">
@@ -697,7 +285,7 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> impl IntoView {
 fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> impl IntoView {
     use flams_web_utils::components::{Anchor, AnchorLink, Header};
     use thaw::{Button, Layout};
-    let requeue = Action::new(move |()| requeue(id));
+    let requeue = Action::new(move |()| flams_router_buildqueue_base::server_fns::requeue(id));
     let num_failed = failed.len();
     let num_done = done.len();
     let del = delete_action(id);
@@ -735,7 +323,7 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> impl IntoView {
     }
     let update: UpdateQueues = expect_context();
     let migrate = flams_web_utils::components::message_action(
-        move |()| migrate(id),
+        move |()| flams_router_buildqueue_base::server_fns::migrate(id),
         move |i| {
             update.0.set(());
             format!("{i} archives migrated")
@@ -783,8 +371,8 @@ impl WebSocket<NonZeroU32, QueueMessage> for QueueSocket {
 #[cfg(feature = "ssr")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
 #[async_trait::async_trait]
-impl crate::utils::ws::WebSocketServer<NonZeroU32, QueueMessage> for QueueSocket {
-    async fn new(account: LoginState, _db: flams_router_login::db::DBBackend) -> Option<Self> {
+impl ws::WebSocketServer<NonZeroU32, QueueMessage> for QueueSocket {
+    async fn new(account: LoginState, _db: ws::DBBackend) -> Option<Self> {
         match account {
             LoginState::Admin
             | LoginState::NoAccounts
@@ -815,12 +403,12 @@ impl crate::utils::ws::WebSocketServer<NonZeroU32, QueueMessage> for QueueSocket
         self.listener = Some(lst);
         Some(msg.into())
     }
-    async fn on_start(&mut self, _: &mut axum::extract::ws::WebSocket) {}
+    async fn on_start(&mut self, _: &mut ws::AxumWS) {}
 }
 
 #[cfg(feature = "hydrate")]
 #[cfg_attr(docsrs, doc(cfg(feature = "hydrate")))]
-impl crate::utils::ws::WebSocketClient<NonZeroU32, QueueMessage> for QueueSocket {
+impl ws::WebSocketClient<NonZeroU32, QueueMessage> for QueueSocket {
     fn new(ws: leptos::web_sys::WebSocket) -> Self {
         Self {
             #[cfg(not(doc))]
@@ -835,6 +423,7 @@ impl crate::utils::ws::WebSocketClient<NonZeroU32, QueueMessage> for QueueSocket
     fn socket(&mut self) -> &mut leptos::web_sys::WebSocket {
         &mut self.socket
     }
+    #[allow(clippy::used_underscore_binding)]
     fn on_open(&self) -> Option<Box<dyn FnMut()>> {
         let running = self._running;
         Some(Box::new(move || {
@@ -853,7 +442,7 @@ impl QueueSocket {
 #[cfg(feature = "hydrate")]
 impl QueueSocket {
     fn run(queues: AllQueues) {
-        use crate::utils::ws::WebSocketClient;
+        use ws::WebSocketClient;
         Self::force_start_client(
             move |msg| {
                 //tracing::warn!("Starting!");
@@ -871,6 +460,7 @@ impl QueueSocket {
                 None
             },
             move |mut socket| {
+                #[allow(clippy::used_underscore_binding)]
                 Effect::new(move |_| {
                     if socket._running.get() {
                         let current = queues.selected.get_untracked();
@@ -984,7 +574,7 @@ impl AllQueues {
         let mut queue_repos = VecMap::default();
         for d in ids {
             queue_names.insert(d.id, d.name);
-            queue_repos.insert(d.id, d.archives)
+            queue_repos.insert(d.id, d.archives);
         }
         Self {
             show: RwSignal::new(false),
@@ -1017,7 +607,7 @@ struct RunningQueue {
 }
 
 #[derive(Clone, Copy)]
-struct WrappedEta(RwSignal<Eta>);
+struct WrappedEta(RwSignal<flams_utils::time::Eta>);
 
 #[allow(clippy::cast_precision_loss)]
 impl WrappedEta {
@@ -1062,14 +652,14 @@ pub struct Entry {
 
 impl Entry {
     #[cfg(not(feature = "hydrate"))]
-    fn as_view(&self) -> impl IntoView {
+    fn as_view(&self) -> impl IntoView + use<> {
         view! {
           <li>{format!("[{}]{}",self.archive,self.rel_path)}</li>
         }
     }
 
     #[cfg(feature = "hydrate")]
-    fn as_view(&self) -> impl IntoView {
+    fn as_view(&self) -> impl IntoView + use<> {
         use flams_web_utils::components::{Collapsible, Header};
         let title = format!("[{}]{}", self.archive, self.rel_path);
         let total = self.steps.with_untracked(|v| v.0.len());
@@ -1138,7 +728,8 @@ pub enum TaskState {
     None,
 }
 impl TaskState {
-    fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> impl IntoView {
+    #[cfg(feature = "hydrate")]
+    fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> impl IntoView + use<> {
         use flams_web_utils::components::{Header, LazyCollapsible};
         use thaw::Scrollbar;
         match self {
@@ -1158,11 +749,15 @@ impl TaskState {
                       let rel_path = rel_path.clone();
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      from_server_clone(true, move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()), |s| {
-                      view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                        <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                      </Scrollbar>}
-                    })}
+                      require_login(move || wait_and_then(
+                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
+                          |s| {
+                            view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
+                                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+                            </Scrollbar>}
+                            }
+                      ))
+                    }
                   </LazyCollapsible>
                 })
             }
@@ -1178,11 +773,15 @@ impl TaskState {
                       let rel_path = rel_path.clone();
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      from_server_clone(true, move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()), |s| {
-                      view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                        <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                      </Scrollbar>}
-                    })}
+                      require_login(move || wait_and_then(
+                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
+                          |s| {
+                                view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
+                                    <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+                                </Scrollbar>}
+                            }
+                      ))
+                    }
                   </LazyCollapsible>
                 })
             }

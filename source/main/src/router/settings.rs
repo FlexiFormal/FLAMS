@@ -1,4 +1,5 @@
-use flams_router_login::{LoginError, LoginState};
+use flams_database::LoginError;
+use flams_router_base::LoginState;
 use flams_utils::settings::SettingsSpec;
 use flams_web_utils::inject_css;
 use leptos::prelude::*;

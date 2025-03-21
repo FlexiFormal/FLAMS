@@ -287,7 +287,7 @@ impl Queue {
           rel_path = %task.0.rel_path,
           format = %target
         )
-        .in_scope(|| (target.run())(&self.0.backend, &task));
+        .in_scope(|| (target.run())(&self.0.backend, task));
         let (idx, _) = task
             .steps()
             .iter()

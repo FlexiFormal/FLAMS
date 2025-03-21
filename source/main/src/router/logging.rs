@@ -1,3 +1,4 @@
+use flams_router_base::LoginState;
 use flams_utils::{
     logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem},
     time::Timestamp,
@@ -172,11 +173,7 @@ impl WebSocket<(), Log> for LogSocket {
 #[cfg(feature = "ssr")]
 #[async_trait::async_trait]
 impl crate::utils::ws::WebSocketServer<(), Log> for LogSocket {
-    async fn new(
-        account: flams_router_login::LoginState,
-        _db: flams_router_login::db::DBBackend,
-    ) -> Option<Self> {
-        use flams_router_login::LoginState;
+    async fn new(account: LoginState, _db: flams_database::DBBackend) -> Option<Self> {
         match account {
             LoginState::Admin
             | LoginState::NoAccounts

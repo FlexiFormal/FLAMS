@@ -9,7 +9,6 @@ pub mod components;
 pub mod server_fns;
 #[cfg(feature = "ssr")]
 mod toc;
-pub mod uris;
 
 #[cfg(feature = "ssr")]
 mod ssr {
@@ -49,7 +48,7 @@ mod ssr {
       ($fn:ident SYNC!($($args:tt)*)) => {
         if flams_system::settings::Settings::get().lsp {
           let Some(state) = ::flams_lsp::STDIOLSPServer::global_state() else {
-            return Err::<_,ServerFnError<String>>("no lsp server".to_string().into())
+            return Err("no lsp server".to_string())
           };
           state.backend().$fn($($args)*)
         } else {

@@ -1,4 +1,4 @@
-use flams_router_login::LoginState;
+use flams_router_base::LoginState;
 use leptos::{
     either::{Either, EitherOf4, EitherOf7},
     prelude::*,
@@ -26,13 +26,13 @@ fn do_main(page: Page) -> impl IntoView {
     use leptos::either::EitherOf10::*;
     let inner = || match page {
         Page::Home => A(view!(<super::index::Index/>)),
-        Page::MathHub => B(view! {<super::backend::ArchivesTop/>}),
+        Page::MathHub => B(view! {<flams_router_backend::components::ArchivesTop/>}),
         //Page::Graphs => view!{<GraphTest/>},
         Page::Log => C(view! {<super::logging::Logger/>}),
-        Page::Queue => D(view! {<super::buildqueue::QueuesTop/>}),
+        Page::Queue => D(view! {<flams_router_buildqueue_components::QueuesTop/>}),
         Page::Query => E(view! {<super::query::Query/>}),
         Page::Settings => F(view! {<super::settings::Settings/>}),
-        Page::MyArchives => G(view! {<super::git::Archives/>}),
+        Page::MyArchives => G(view! {<flams_router_git_components::Archives/>}),
         Page::Search => H(view! {<super::search::SearchTop/>}),
         Page::Users => I(view! {<flams_router_login::components::Users/>}),
         _ => J(view!(<span>"TODO"</span>)),

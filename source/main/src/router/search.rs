@@ -6,7 +6,7 @@ use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::{components::error_with_toaster, inject_css};
 use leptos::prelude::*;
 
-use flams_router_content::uris::{DocURIComponents, URIComponents};
+use flams_router_base::uris::{DocURIComponents, URIComponents};
 
 #[server(prefix = "/api", endpoint = "search")]
 #[allow(clippy::unused_async)]

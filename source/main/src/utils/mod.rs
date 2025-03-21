@@ -1,6 +1,7 @@
 pub(crate) mod ws;
 
-use flams_router_login::{LoginError, LoginState};
+use flams_database::LoginError;
+use flams_router_base::LoginState;
 use leptos::{
     either::{Either, EitherOf3},
     prelude::*,

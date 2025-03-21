@@ -1,5 +1,6 @@
+use flams_database::{DBBackend, DBUser};
 use flams_lsp::{async_lsp::ClientSocket, state::LSPState};
-use flams_router_login::{db::DBBackend, LoginState};
+use flams_router_base::LoginState;
 
 struct WSLSPServer {
     client: ClientSocket,
@@ -29,7 +30,7 @@ pub(crate) async fn register(
         None => LoginState::NoAccounts,
         Some(_) => match auth_session.user {
             None => LoginState::None,
-            Some(flams_router_login::users::ServerUser {
+            Some(DBUser {
                 id: 0, username, ..
             }) if username == "admin" => LoginState::Admin,
             Some(u) => LoginState::User {

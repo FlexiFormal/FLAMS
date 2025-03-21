@@ -1,9 +1,6 @@
 #![allow(clippy::must_use_candidate)]
 
-pub mod backend;
-pub(crate) mod buildqueue;
 mod dashboard;
-pub mod git;
 pub mod index;
 pub(crate) mod logging;
 pub mod query;

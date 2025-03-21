@@ -1,4 +1,7 @@
-use crate::{LoginState, users::UserData};
+#![allow(clippy::must_use_candidate)]
+
+use flams_database::UserData;
+use flams_router_base::LoginState;
 use flams_web_utils::components::{Spinner, display_error};
 use leptos::{either::EitherOf4, prelude::*};
 
@@ -15,10 +18,10 @@ pub fn LoginProvider<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> imp
         },
     );
     let sig = RwSignal::new(LoginState::Loading);
-    let _ = view! {<Suspense>{move || {res.get();()}}</Suspense>};
+    let _ = view! {<Suspense>{move || {res.get();}}</Suspense>};
     let _ = Effect::new(move |_| {
         if let Some(r) = res.get() {
-            sig.set(r)
+            sig.set(r);
         }
     });
     provide_context(sig);
@@ -58,7 +61,7 @@ fn user_table(v: Vec<UserData>) -> impl IntoView {
         let is_admin = RwSignal::new(is_admin);
         let a = ArcAction::new(move |()| async move {
           let nv = !is_admin.get_untracked();
-          if let Ok(_) = super::server_fns::set_admin(id,nv).await {
+          if super::server_fns::set_admin(id,nv).await.is_ok() {
             is_admin.set(nv);
           }
         });

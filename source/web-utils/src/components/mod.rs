@@ -2,27 +2,27 @@
 
 mod r#await;
 mod binder;
-mod popover;
-mod trees;
 mod drawer;
+mod popover;
 mod spinner;
+mod trees;
 
 mod errors;
 pub use errors::*;
 
-#[cfg(any(feature="ssr",feature="hydrate"))]
+#[cfg(any(feature = "ssr", feature = "hydrate"))]
 pub use theming::*;
-#[cfg(any(feature="ssr",feature="hydrate"))]
-mod theming;
 mod anchors;
 mod block;
+#[cfg(any(feature = "ssr", feature = "hydrate"))]
+mod theming;
 
-#[cfg(not(any(feature="ssr",feature="hydrate")))]
+#[cfg(not(any(feature = "ssr", feature = "hydrate")))]
 #[component(transparent)]
-pub fn Themer<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-    use thaw::ConfigProvider;//,ToasterProvider,Theme};
+pub fn Themer<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoView {
+    use thaw::ConfigProvider; //,ToasterProvider,Theme};
     let children = children.into_inner();
-    view!{
+    view! {
       <ConfigProvider>
         {children()}
         //<ToasterProvider>{children()}</ToasterProvider>
@@ -30,32 +30,35 @@ pub fn Themer<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView 
     }
 }
 
-
+pub use anchors::*;
+pub use block::*;
+pub use drawer::*;
 pub use popover::*;
 pub use r#await::*;
-pub use trees::*;
-pub use drawer::*;
-pub use anchors::*;
 pub use spinner::*;
-pub use block::*;
+pub use trees::*;
 
 #[leptos::prelude::slot]
-pub struct Header { children:leptos::prelude::Children }
+pub struct Header {
+    children: leptos::prelude::Children,
+}
 #[leptos::prelude::slot]
-pub struct Trigger { children:leptos::prelude::Children }
+pub struct Trigger {
+    children: leptos::prelude::Children,
+}
 
 use leptos::prelude::*;
 
 use crate::inject_css;
 
 #[component]
-pub fn Collapsible<Ch:IntoView+'static>(
-    #[prop(optional)] header:Option<Header>,
-    children:TypedChildren<Ch>
+pub fn Collapsible<Ch: IntoView + 'static>(
+    #[prop(optional)] header: Option<Header>,
+    children: TypedChildren<Ch>,
 ) -> impl IntoView {
-  let children = children.into_inner();
+    let children = children.into_inner();
     let expanded = RwSignal::new(false);
-    view!{<details>
+    view! {<details>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
             header.map(|c| (c.children)())
         }</summary>
@@ -64,13 +67,13 @@ pub fn Collapsible<Ch:IntoView+'static>(
 }
 
 #[component]
-pub fn LazyCollapsible<Ch:IntoView+'static>(
-    #[prop(optional)] header:Option<Header>,
-    children:TypedChildrenMut<Ch>
+pub fn LazyCollapsible<Ch: IntoView + 'static>(
+    #[prop(optional)] header: Option<Header>,
+    children: TypedChildrenMut<Ch>,
 ) -> impl IntoView {
-  let mut children = children.into_inner();
+    let mut children = children.into_inner();
     let expanded = RwSignal::new(false);
-    view!{<details>
+    view! {<details>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
             header.map(|c| (c.children)())
         }</summary>
@@ -81,28 +84,30 @@ pub fn LazyCollapsible<Ch:IntoView+'static>(
 }
 
 #[component]
-pub fn Burger<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-  use thaw::{Menu,MenuTriggerType,MenuTrigger,MenuPosition};
-  use icondata_ch::ChMenuHamburger;
-  inject_css("burger",include_str!("burger.css"));
-  let children = children.into_inner();
-  view!{<ClientOnly><div class="ftml-burger-outer"><div class="ftml-burger">
-    <Menu on_select=|_| () trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
-        <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
-        {children()}
-    </Menu>
-  </div></div></ClientOnly>}
+pub fn Burger<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoView {
+    use icondata_ch::ChMenuHamburger;
+    use thaw::{Menu, MenuPosition, MenuTrigger, MenuTriggerType};
+    inject_css("burger", include_str!("burger.css"));
+    let children = children.into_inner();
+    view! {<ClientOnly><div class="ftml-burger-outer"><div class="ftml-burger">
+      <Menu on_select=|_| () trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
+          <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
+          {children()}
+      </Menu>
+    </div></div></ClientOnly>}
 }
 
 #[component]
-pub fn ClientOnly<Ch:IntoView+'static>(children:TypedChildren<Ch>) -> impl IntoView {
-  let children = std::cell::Cell::new(Some(children.into_inner()));
-  let sig = RwSignal::new(false);
-  let rf = NodeRef::new();
-  rf.on_load(move |_| sig.set(true));
-  move || if sig.get() {
-    leptos::either::Either::Left(children.take().map(|c| c()))
-  } else { 
-    leptos::either::Either::Right(view!(<div node_ref = rf/>)) 
-  }
+pub fn ClientOnly<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoView {
+    let children = std::cell::Cell::new(Some(children.into_inner()));
+    let sig = RwSignal::new(false);
+    let rf = NodeRef::new();
+    rf.on_load(move |_| sig.set(true));
+    move || {
+        if sig.get() {
+            leptos::either::Either::Left(children.take().map(|c| c()))
+        } else {
+            leptos::either::Either::Right(view!(<div node_ref = rf/>))
+        }
+    }
 }

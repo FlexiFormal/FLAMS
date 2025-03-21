@@ -3,9 +3,6 @@ pub use axum::extract::ws::WebSocket as AxumWS;
 #[cfg(feature = "ssr")]
 pub use flams_database::DBBackend;
 
-#[cfg(feature = "ssr")]
-use flams_router_base::LoginState;
-
 #[cfg(feature = "hydrate")]
 fn js_to_string(e: leptos::wasm_bindgen::JsValue) -> String {
     use leptos::web_sys::js_sys::Object;
@@ -69,8 +66,8 @@ pub trait WebSocketClient<
     }
 
     fn start(mut handle: impl (FnMut(ServerMsg) -> Option<ClientMsg>) + 'static) -> Option<Self> {
-        use leptos::wasm_bindgen::prelude::Closure;
         use leptos::wasm_bindgen::JsCast;
+        use leptos::wasm_bindgen::prelude::Closure;
         let ws = match leptos::web_sys::WebSocket::new(Self::SERVER_ENDPOINT) {
             Ok(ws) => ws,
             Err(e) => {
@@ -110,7 +107,7 @@ pub trait WebSocketServer<
     ServerMsg: serde::Serialize + std::fmt::Debug + for<'a> serde::Deserialize<'a> + Send,
 >: WebSocket<ClientMsg, ServerMsg>
 {
-    async fn new(account: LoginState, db: flams_database::DBBackend) -> Option<Self>;
+    async fn new(account: crate::LoginState, db: flams_database::DBBackend) -> Option<Self>;
     async fn next(&mut self) -> Option<ServerMsg>;
     async fn handle_message(&mut self, msg: ClientMsg) -> Option<ServerMsg>;
     async fn on_start(&mut self, _socket: &mut axum::extract::ws::WebSocket) {}
@@ -123,13 +120,13 @@ pub trait WebSocketServer<
         Self: Send,
     {
         let login = match &auth_session.backend.admin {
-            None => LoginState::NoAccounts,
+            None => crate::LoginState::NoAccounts,
             Some(_) => match auth_session.user {
-                None => LoginState::None,
+                None => crate::LoginState::None,
                 Some(flams_database::DBUser {
                     id: 0, username, ..
-                }) if username == "admin" => LoginState::Admin,
-                Some(u) => LoginState::User {
+                }) if username == "admin" => crate::LoginState::Admin,
+                Some(u) => crate::LoginState::User {
                     name: u.username,
                     avatar: u.avatar_url.unwrap_or_default(),
                     is_admin: u.is_admin,

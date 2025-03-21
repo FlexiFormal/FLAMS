@@ -1,5 +1,6 @@
+
 [package]
-name = "flams-router-content"
+name = "flams-router-buildqueue-base"
 version = "0.0.1"
 edition = "2024"
 
@@ -10,37 +11,28 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "thaw/ssr",
-    "ftml-viewer-components/ssr",
+    "flams-router-base/ssr",
     "flams-web-utils/ssr",
     "dep:flams-system",
-    "dep:flams-lsp",
     "dep:tokio",
-    "dep:paste",
-    "dep:smallvec",
 ]
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
-    "ftml-viewer-components/hydrate",
     "flams-web-utils/hydrate",
+    "flams-router-base/hydrate",
 ]
 
 [dependencies]
-flams-ontology = { workspace = true, features = ["serde"] }
 flams-utils = { workspace = true }
-ftml-viewer-components = { workspace = true }
+flams-git = { workspace = true }
 flams-web-utils = { workspace = true }
+flams-ontology = { workspace = true, features = ["serde"] }
+flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-router-base = { workspace = true }
-flams-system = { workspace = true, optional = true }
-flams-lsp = { workspace = true, optional = true }
 
 leptos = { workspace = true }
-leptos_meta = { workspace = true }
 leptos_router = { workspace = true }
 thaw = { workspace = true }
 serde = { workspace = true }
-either = { workspace = true }
-
 tokio = { workspace = true, optional = true }
-paste = { workspace = true, optional = true }
-smallvec = { workspace = true, optional = true }

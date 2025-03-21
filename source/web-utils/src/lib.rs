@@ -16,6 +16,17 @@ pub struct CssIds(
     >,
 );
 
+#[cfg(feature = "ssr")]
+/// #### Errors
+pub async fn blocking_server_fn<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, leptos::prelude::ServerFnError<String>> {
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(Into::into)
+}
+
 pub fn do_css(css: CSS) {
     match css {
         CSS::Inline(s) => {

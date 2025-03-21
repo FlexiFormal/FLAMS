@@ -1,0 +1,46 @@
+
+[package]
+name = "flams-router-git-components"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "thaw/ssr",
+    "flams-router-git-base/ssr",
+    #"flams-router-base/ssr",
+    "flams-web-utils/ssr",
+    #"flams-git/git2",
+    #"dep:flams-system",
+    "flams-router-buildqueue-base/ssr",
+    #"dep:tokio",
+]
+hydrate = [
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "flams-router-git-base/hydrate",
+    "flams-web-utils/hydrate",
+    "flams-router-buildqueue-base/hydrate",
+    #"flams-router-base/hydrate",
+]
+
+[dependencies]
+flams-router-git-base = { workspace = true }
+flams-utils = { workspace = true }
+flams-git = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-ontology = { workspace = true, features = ["serde"] }
+#flams-router-base = { workspace = true }
+#flams-system = { workspace = true, optional = true }
+flams-router-buildqueue-base = { workspace = true }
+
+leptos = { workspace = true }
+#leptos_router = { workspace = true }
+thaw = { workspace = true }
+#serde = { workspace = true }
+#tracing = { workspace = true }
+#tokio = { workspace = true, optional = true }

@@ -3,6 +3,7 @@ members = [
     "source/main",
     "source/utils",
     "source/ontology",
+    "source/database",
     "source/system",
     "source/web-utils",
     "source/lsp",
@@ -12,8 +13,13 @@ members = [
     "source/ftml/viewer-components",
     "source/ftml/extraction",
     "source/git",
+    "source/router/base",
     "source/router/content",
     "source/router/backend",
+    "source/router/buildqueue/base",
+    "source/router/buildqueue/components",
+    "source/router/git/base",
+    "source/router/git/components",
     "source/router/login",
     "experiments",
     "source/ffi",
@@ -91,11 +97,18 @@ flams-stex = { path = "source/stex", version = "0.0.1" }
 flams-utils = { path = "source/utils", version = "0.0.1" }
 flams-ontology = { path = "source/ontology", version = "0.0.1" }
 flams-system = { path = "source/system", version = "0.0.1" }
+flams-database = { path = "source/database", version = "0.0.1" }
 flams-lsp = { path = "source/lsp", version = "0.0.1" }
 flams-git = { path = "source/git", version = "0.0.1" }
 flams-web-utils = { path = "source/web-utils", version = "0.0.1" }
+
+flams-router-base = { path = "source/router/base", version = "0.0.1" }
 flams-router-content = { path = "source/router/content", version = "0.0.1" }
 flams-router-backend = { path = "source/router/backend", version = "0.0.1" }
+flams-router-buildqueue-base = { path = "source/router/buildqueue/base", version = "0.0.1" }
+flams-router-buildqueue-components = { path = "source/router/buildqueue/components", version = "0.0.1" }
+flams-router-git-base = { path = "source/router/git/base", version = "0.0.1" }
+flams-router-git-components = { path = "source/router/git/components", version = "0.0.1" }
 flams-router-login = { path = "source/router/login", version = "0.0.1" }
 
 # ftml-viewer = { path = "ftml/viewer",version="0.0.1" }
@@ -143,6 +156,7 @@ flate2 = { version = "1.0" }
 tar = { version = "0.4" }
 async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 astral-tokio-tar = "0.5.1"
+strum = { version = "0.27", features = ["derive"] }
 git-url-parse = { version = "0.4.5" }
 
 password-hash = { version = "0.5" }

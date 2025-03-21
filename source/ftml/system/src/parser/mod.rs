@@ -427,7 +427,7 @@ impl TreeSink for HTMLParser<'_> {
         }
         elem.closed.set(true);
         for c in node.children() {
-            self.pop(&c)
+            self.pop(&c);
         }
         if &elem.name.local == "body" {
             let range = DocumentRange {
@@ -447,7 +447,7 @@ impl TreeSink for HTMLParser<'_> {
                                     if let Some(lnk) = attrs.value("href") {
                                         let val = CSS_SUBSTS.get(lnk).map_or_else(
                                             || lnk.to_string().into_boxed_str(),
-                                            |v| v.to_string().into_boxed_str(),
+                                            |v| (*v).to_string().into_boxed_str(),
                                         );
                                         self.extractor.borrow_mut().css.push(CSS::Link(val));
                                         node.delete();

@@ -1,6 +1,6 @@
 #![allow(clippy::must_use_candidate)]
-use crate::uris::{DocURIComponents, URIComponents, URIComponentsTrait};
 use flams_ontology::uris::{NarrativeURI, URI};
+use flams_router_base::uris::{DocURIComponents, URIComponents, URIComponentsTrait};
 use flams_web_utils::{components::wait_and_then, do_css};
 use ftml_viewer_components::components::{
     TOCSource,

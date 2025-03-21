@@ -1,12 +1,33 @@
 use argon2::PasswordHasher;
-use axum_login::{AuthUser, AuthnBackend, tracing::Instrument};
+use axum_login::{AuthUser, AuthnBackend, tower_sessions, tracing::Instrument};
 use flams_git::gl::auth::GitlabUser;
 use flams_system::settings::Settings;
-use leptos::prelude::ServerFnError;
+use flams_utils::unwrap;
 use password_hash::{SaltString, rand_core::OsRng};
 use sqlx::{SqlitePool, prelude::FromRow};
 
-use crate::{LoginError, users::ServerUser};
+#[derive(Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DBUser {
+    pub id: i64,
+    pub username: String,
+    pub session_auth_hash: Vec<u8>,
+    pub avatar_url: Option<String>,
+    pub is_admin: bool,
+    pub secret: String,
+}
+
+impl DBUser {
+    fn admin(hash: Vec<u8>) -> Self {
+        Self {
+            id: 0,
+            username: "admin".to_string(),
+            session_auth_hash: hash,
+            secret: String::new(),
+            is_admin: true,
+            avatar_url: None,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct DBBackend {
@@ -45,7 +66,7 @@ impl DBBackend {
             .in_current_span()
             .await
             .expect("Failed to connect to database");
-        sqlx::migrate!("../../../resources/migrations")
+        sqlx::migrate!("../../resources/migrations")
             .run(&pool)
             .in_current_span()
             .await
@@ -53,6 +74,7 @@ impl DBBackend {
         Self { pool, admin }
     }
 
+    /// #### Errors
     pub async fn all_users(&self) -> Result<Vec<SqlUser>, UserError> {
         sqlx::query_as!(SqlUser, "SELECT * FROM users")
             .fetch_all(&self.pool)
@@ -61,6 +83,7 @@ impl DBBackend {
             .map_err(Into::into)
     }
 
+    /// #### Errors
     pub async fn set_admin(&self, id: i64, is_admin: bool) -> Result<(), UserError> {
         sqlx::query!("UPDATE users SET is_admin=$2 WHERE id=$1", id, is_admin)
             .execute(&self.pool)
@@ -75,7 +98,7 @@ impl DBBackend {
         &self,
         user: GitlabUser,
         secret: String,
-    ) -> Result<Option<ServerUser>, UserError> {
+    ) -> Result<Option<DBUser>, UserError> {
         #[derive(Debug)]
         struct InsertUser {
             pub id: i64,
@@ -114,7 +137,7 @@ impl DBBackend {
             RETURNING id,is_admin",
             gitlab_id,name,username,email,avatar_url,can_create_group,can_create_project,secret,hash_bytes,false//,salt
         ).fetch_one(&self.pool).await?;
-        let u = ServerUser {
+        let u = DBUser {
             id: new_id.id,
             username,
             session_auth_hash: hash_bytes,
@@ -124,11 +147,27 @@ impl DBBackend {
         };
         Ok(Some(u))
     }
+
+    /// #### Errors
+    pub async fn login_as_admin(
+        pwd: &str,
+        mut session: axum_login::AuthSession<Self>,
+    ) -> Result<(), UserError> {
+        use argon2::PasswordVerifier;
+        let (pass_hash, salt) = unwrap!(session.backend.admin.as_ref());
+        let hash = password_hash::PasswordHash::parse(pass_hash, password_hash::Encoding::B64)?;
+        let hasher = argon2::Argon2::default();
+        hasher.verify_password(pwd.as_bytes(), &hash)?;
+        session
+            .login(&DBUser::admin(salt.as_bytes().to_owned()))
+            .await?;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
 impl AuthnBackend for DBBackend {
-    type User = ServerUser;
+    type User = DBUser;
     type Credentials = (i64, String);
     type Error = UserError;
 
@@ -139,16 +178,12 @@ impl AuthnBackend for DBBackend {
         let Some(user) =
             sqlx::query_as!(SqlUser, "SELECT * FROM users WHERE gitlab_id=$1", gitlab_id)
                 .fetch_optional(&self.pool)
-                //.in_current_span()
                 .await?
         else {
             return Ok(None);
         };
-        //let hash = PasswordHash::parse(&user.secret_hash, password_hash::Encoding::B64)?;
-        //let hasher = argon2::Argon2::default();
         if user.secret == secret {
-            //hasher.verify_password(secret.as_bytes(), &hash).is_ok() {
-            Ok(Some(user.into_user()?))
+            Ok(Some(user.try_into()?))
         } else {
             Ok(None)
         }
@@ -156,7 +191,7 @@ impl AuthnBackend for DBBackend {
 
     async fn get_user(&self, user_id: &i64) -> Result<Option<Self::User>, Self::Error> {
         if *user_id == 0 {
-            return Ok(Some(ServerUser::admin(
+            return Ok(Some(DBUser::admin(
                 self.admin
                     .as_ref()
                     .unwrap_or_else(|| unreachable!())
@@ -172,11 +207,11 @@ impl AuthnBackend for DBBackend {
         else {
             return Ok(None);
         };
-        Ok(Some(res.into_user()?))
+        Ok(Some(res.try_into()?))
     }
 }
 
-impl AuthUser for ServerUser {
+impl AuthUser for DBUser {
     type Id = i64;
 
     #[inline]
@@ -192,59 +227,76 @@ impl AuthUser for ServerUser {
 
 #[derive(Clone, PartialEq, Eq, Debug, FromRow)]
 pub struct SqlUser {
-    pub(crate) id: i64,
+    id: i64,
     gitlab_id: i64,
-    pub(crate) name: String,
-    pub(crate) username: String,
-    pub(crate) email: String,
-    pub(crate) avatar_url: String,
+    name: String,
+    username: String,
+    email: String,
+    avatar_url: String,
     can_create_group: bool,
     can_create_project: bool,
     secret: String,
     secret_hash: Vec<u8>,
-    pub(crate) is_admin: bool, //salt: String,
+    is_admin: bool, //salt: String,
 }
-impl SqlUser {
-    fn into_user(self) -> Result<ServerUser, UserError> {
-        Ok(ServerUser {
-            id: self.id,
-            username: self.username,
-            session_auth_hash: self.secret_hash,
-            secret: self.secret,
-            is_admin: self.is_admin,
-            avatar_url: Some(self.avatar_url),
+
+impl TryFrom<SqlUser> for DBUser {
+    type Error = UserError;
+    fn try_from(value: SqlUser) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id,
+            username: value.username,
+            session_auth_hash: value.secret_hash,
+            secret: value.secret,
+            is_admin: value.is_admin,
+            avatar_url: Some(value.avatar_url),
         })
     }
 }
 
-#[derive(Debug)]
-pub enum UserError {
-    PasswordHashNone,
-    PasswordHash(password_hash::errors::Error),
-    Sqlx(sqlx::Error),
-    InvalidUserName,
-    InvalidPassword,
-}
-impl std::error::Error for UserError {}
-impl std::fmt::Display for UserError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::PasswordHashNone => f.write_str("Invalid password hash"),
-            Self::PasswordHash(e) => e.fmt(f),
-            Self::Sqlx(e) => e.fmt(f),
-            Self::InvalidUserName => {
-                f.write_str("Invalid username: needs to be at least two characters")
-            }
-            Self::InvalidPassword => {
-                f.write_str("Invalid password: needs to be at least two characters")
-            }
+impl From<SqlUser> for super::UserData {
+    fn from(u: SqlUser) -> Self {
+        Self {
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            avatar_url: u.avatar_url,
+            is_admin: u.is_admin,
         }
     }
 }
+
+#[derive(Debug, strum::Display)]
+pub enum UserError {
+    #[strum(to_string = "Invalid password hash")]
+    PasswordHashNone,
+    #[strum(to_string = "{0}")]
+    PasswordHash(password_hash::errors::Error),
+    #[strum(to_string = "{0}")]
+    Sqlx(sqlx::Error),
+    #[strum(to_string = "{0}")]
+    Session(tower_sessions::session::Error),
+    #[strum(to_string = "Invalid username: needs to be at least two characters")]
+    InvalidUserName,
+    #[strum(to_string = "Invalid password: needs to be at least two characters")]
+    InvalidPassword,
+}
+impl std::error::Error for UserError {}
 impl From<password_hash::errors::Error> for UserError {
     #[inline]
     fn from(e: password_hash::errors::Error) -> Self {
         Self::PasswordHash(e)
+    }
+}
+
+impl From<axum_login::Error<DBBackend>> for UserError {
+    #[inline]
+    fn from(e: axum_login::Error<DBBackend>) -> Self {
+        match e {
+            axum_login::Error::Session(e) => Self::Session(e),
+            axum_login::Error::Backend(e) => e,
+        }
     }
 }
 
@@ -255,19 +307,19 @@ impl From<sqlx::Error> for UserError {
     }
 }
 
-impl From<UserError> for ServerFnError<LoginError> {
+impl From<UserError> for super::LoginError {
     #[inline]
     fn from(_: UserError) -> Self {
-        Self::WrappedServerError(LoginError::WrongUsernameOrPassword)
+        Self::WrongUsernameOrPassword
     }
 }
-impl From<password_hash::Error> for LoginError {
+impl From<password_hash::Error> for super::LoginError {
     #[inline]
     fn from(_: password_hash::Error) -> Self {
         Self::WrongUsernameOrPassword
     }
 }
-impl From<axum_login::Error<DBBackend>> for LoginError {
+impl From<axum_login::Error<DBBackend>> for super::LoginError {
     fn from(_: axum_login::Error<DBBackend>) -> Self {
         Self::InternalError
     }

@@ -54,9 +54,16 @@ ssr = [
     "dep:webp",
     "dep:dashmap",
     "dep:futures",
+    "flams-database/backend",
     "flams-git/gitlab",
     "flams-git/git2",
+    "flams-router-base/ssr",
     "flams-router-content/ssr",
+    "flams-router-backend/ssr",
+    "flams-router-buildqueue-base/ssr",
+    "flams-router-buildqueue-components/ssr",
+    "flams-router-git-base/ssr",
+    "flams-router-git-components/ssr",
     "flams-router-login/ssr",
 ]
 hydrate = [
@@ -69,7 +76,13 @@ hydrate = [
     "flams-web-utils/hydrate",
     "leptos-dyn-dom/hydrate",
     "ftml-viewer-components/hydrate",
+    "flams-router-base/hydrate",
     "flams-router-content/hydrate",
+    "flams-router-backend/hydrate",
+    "flams-router-buildqueue-base/hydrate",
+    "flams-router-buildqueue-components/hydrate",
+    "flams-router-git-base/hydrate",
+    "flams-router-git-components/hydrate",
     "flams-router-login/hydrate",
 ]
 
@@ -81,7 +94,13 @@ hydrate = [
 workspace = true
 
 [dependencies]
+flams-router-base = { workspace = true }
 flams-router-content = { workspace = true }
+flams-router-backend = { workspace = true }
+flams-router-buildqueue-base = { workspace = true }
+flams-router-buildqueue-components = { workspace = true }
+flams-router-git-base = { workspace = true }
+flams-router-git-components = { workspace = true }
 flams-router-login = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-utils = { workspace = true, features = ["serde"] }
@@ -96,6 +115,7 @@ flams-system = { workspace = true, features = [
 flams-lsp = { workspace = true, optional = true, features = ["ws"] }
 flams-stex = { workspace = true, optional = true, features = ["serde"] }
 flams-ftml = { workspace = true, optional = true }
+flams-database = { workspace = true }
 
 # common
 leptos = { workspace = true }

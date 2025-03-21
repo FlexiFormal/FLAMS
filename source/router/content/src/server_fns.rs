@@ -9,7 +9,7 @@ use ftml_viewer_components::components::{TOCElem, omdoc::AnySpec};
 use leptos::prelude::*;
 
 #[cfg(feature = "ssr")]
-use crate::uris::{DocURIComponents, SymURIComponents, URIComponents};
+use flams_router_base::uris::{DocURIComponents, SymURIComponents, URIComponents};
 
 #[server(
   prefix="/content",
@@ -210,6 +210,7 @@ pub async fn solution(
 ) -> Result<String, ServerFnError<String>> {
     use flams_ontology::uris::NarrativeURI;
     use flams_utils::Hexable;
+    use flams_web_utils::blocking_server_fn;
     let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, None, None).try_into()
     else {
         return Err("invalid uri components".to_string().into());
@@ -217,12 +218,11 @@ pub async fn solution(
     let Some(URI::Narrative(NarrativeURI::Element(uri))) = comps.parse() else {
         return Err("invalid uri".to_string().into());
     };
-    tokio::task::spawn_blocking(move || {
+    blocking_server_fn(move || {
         let s = server::get_solution(&uri)?;
-        s.as_hex().map_err(|e| e.to_string().into())
+        s.as_hex().map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[server(
@@ -273,6 +273,7 @@ mod server {
     };
     use flams_system::backend::{Backend, GlobalBackend, rdf::sparql};
     use flams_utils::{CSS, vecmap::VecSet};
+    use flams_web_utils::blocking_server_fn;
     use ftml_viewer_components::components::{
         TOCElem,
         omdoc::{
@@ -356,41 +357,34 @@ mod server {
         uri: SymbolURI,
         exercises: bool,
     ) -> Result<Vec<(DocumentElementURI, LOKind)>, ServerFnError<String>> {
-        let Ok(v) = tokio::task::spawn_blocking(move || {
-            GlobalBackend::get()
+        blocking_server_fn(move || {
+            Ok(GlobalBackend::get()
                 .triple_store()
                 .los(&uri, exercises)
                 .map(|i| i.collect())
-                .unwrap_or_default()
+                .unwrap_or_default())
         })
         .await
-        else {
-            return Err("internal error".to_string().into());
-        };
-        Ok(v)
     }
 
     pub async fn notations(
         uri: URI,
     ) -> Result<Vec<(DocumentElementURI, Notation)>, ServerFnError<String>> {
-        let r = match uri {
+        let v = match uri {
             URI::Content(ContentURI::Symbol(uri)) => {
-                tokio::task::spawn_blocking(move || {
+                blocking_server_fn(move || {
                     Ok(backend!(get_notations SYNC!(&uri)).unwrap_or_default())
                 })
                 .await
             }
             URI::Narrative(NarrativeURI::Element(uri)) => {
-                tokio::task::spawn_blocking(move || {
+                blocking_server_fn(move || {
                     Ok(backend!(get_var_notations SYNC!(&uri)).unwrap_or_default())
                 })
                 .await
             }
             _ => return Err(format!("Not a symbol or variable URI: {uri}").into()),
-        };
-        let Ok(Ok(v)) = r else {
-            return Err("internal error".to_string().into());
-        };
+        }?;
         Ok(v.0)
     }
 
@@ -408,10 +402,10 @@ mod server {
                   let r = DocumentSpec::from_document(&doc, backend,&mut css);
                   (css,r)
                 }{
-                  tokio::task::spawn_blocking(move || {
+                  blocking_server_fn(move || {
                     let r = DocumentSpec::from_document(&doc, backend,&mut css);
-                    (css,r)
-                  }).await.map_err(|e| e.to_string())?
+                    Ok((css,r))
+                  }).await?
                 });
                 Ok((insert_base_url(css.0), r.into()))
             }
@@ -425,10 +419,10 @@ mod server {
                   let r = DocumentElementSpec::from_element(e.as_ref(),backend, &mut css);
                   (css,r)
                 }{
-                  tokio::task::spawn_blocking(move || {
+                  blocking_server_fn(move || {
                     let r = DocumentElementSpec::from_element(e.as_ref(),backend,&mut css);
-                    (css,r)
-                  }).await.map_err(|e| e.to_string())?
+                    Ok((css,r))
+                  }).await?
                 });
                 let Some(r) = r else {
                     return Err("element not found".to_string().into());
@@ -442,9 +436,9 @@ mod server {
                 let r = backend!(backend => {
                   AnySpec::from_module_like(&m, backend)
                 }{
-                  tokio::task::spawn_blocking(move || {
-                    AnySpec::from_module_like(&m, backend)
-                  }).await.map_err(|e| e.to_string())?
+                  blocking_server_fn(move || {
+                    Ok(AnySpec::from_module_like(&m, backend))
+                  }).await?
                 });
                 Ok((Vec::new(), r))
             }
@@ -464,10 +458,10 @@ mod server {
         let Some(doc) = backend!(get_document!(&uri)) else {
             return Err("document not found".to_string().into());
         };
-        tokio::task::spawn_blocking(move || {
+        blocking_server_fn(move || {
             let be = if flams_system::settings::Settings::get().lsp {
                 let Some(state) = flams_lsp::STDIOLSPServer::global_state() else {
-                    return Err::<_, ServerFnError<String>>("no lsp server".to_string().into());
+                    return Err("no lsp server".to_string());
                 };
                 doc.as_quiz(state.backend())
             } else {
@@ -478,7 +472,6 @@ mod server {
             Ok(be)
         })
         .await
-        .map_err(|e| e.to_string())?
     }
 
     pub async fn slides(uri: URI) -> Result<(Vec<CSS>, Vec<SlideElement>), ServerFnError<String>> {
@@ -571,7 +564,7 @@ mod server {
         }) else {
             return Err("Element not found".to_string().into());
         };
-        tokio::task::spawn_blocking(move || {
+        blocking_server_fn(move || {
             let (chs, top) = match &doe {
                 either::Either::Left(d) => (d.children(), d.uri()),
                 either::Either::Right(e) => {
@@ -597,21 +590,19 @@ mod server {
             Ok((insert_base_url(css.0), r))
         })
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(Into::into)
     }
 
-    pub fn get_solution(uri: &DocumentElementURI) -> Result<Solutions, ServerFnError<String>> {
+    pub fn get_solution(uri: &DocumentElementURI) -> Result<Solutions, String> {
         use flams_system::backend::Backend;
         match backend!(get_document_element(&uri)) {
             Some(rf) => {
                 let e: &Exercise<Checked> = rf.as_ref();
                 let Some(sol) = backend!(get_reference(&e.solutions)) else {
-                    return Err("solutions not found".to_string().into());
+                    return Err("solutions not found".to_string());
                 };
                 Ok(sol)
             }
-            _ => Err(format!("Exercise {uri} not found").into()),
+            _ => Err(format!("Exercise {uri} not found")),
         }
     }
 

@@ -1,0 +1,43 @@
+
+[package]
+name = "flams-router-base"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "thaw/ssr",
+    "flams-database/backend",
+    "flams-web-utils/ssr",
+    "dep:flams-git",
+    "dep:flams-system",
+    "dep:axum-login",
+    "dep:tokio",
+    "dep:axum",
+]
+hydrate = ["leptos/hydrate", "thaw/hydrate", "flams-web-utils/hydrate"]
+
+[dependencies]
+flams-database = { workspace = true }
+flams-git = { workspace = true, optional = true, features = ["gitlab"] }
+flams-web-utils = { workspace = true }
+flams-utils = { workspace = true }
+flams-ontology = { workspace = true, features = ["serde"] }
+flams-system = { workspace = true, optional = true }
+
+leptos = { workspace = true }
+thaw = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+const-str = { workspace = true }
+leptos_router = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+axum-login = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }

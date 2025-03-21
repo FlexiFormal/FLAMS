@@ -28,7 +28,7 @@
  * | [`/api/buildqueue/migrate`](buildqueue::migrate) | `id=<NonZeroU32>` | |
  * | [`/api/buildqueue/delete`](buildqueue::delete) | `id=<NonZeroU32>` | |
  * | **Git** | | |
- * | [`/api/gitlab/get_archives`](git::get_archives) |  | [`ProjectTree`](git::ProjectTree) - returns the list of GitLab projects |
+ * | [`/api/gitlab/get_archives`](git::get_archives) |  |  - returns the list of GitLab projects |
  * | [`/api/gitlab/get_branches`](git::get_branches) | `id=<u64>` | `Vec<`[`Branch`](flams_git::Branch)`>` - returns the list of branches for the given GitLab project |
  * | [`/api/gitlab/get_new_commits`](git::get_new_commit) | `queue=<u64>&id=ArchiveId` | `Vec<`(String,`[`Commit`](flams_git::Commit)`)`>` |
  * | **Web Sockets** | | |
@@ -50,17 +50,18 @@
 */
 
 use crate::{
-    router::{backend, buildqueue, git, query::query_api, settings},
+    router::{query::query_api, settings},
     server::img::img_handler,
 };
 use flams_ontology::{
     narration::{notations::Notation, LOKind},
     uris::*,
 };
+use flams_router_backend::server_fns as backend;
+use flams_router_base::LoginState;
+use flams_router_buildqueue_base::server_fns as buildqueue;
 use flams_router_content::server_fns as content;
-use flams_router_login::{
-    server_fns::{login, login_state},
-    LoginState,
-};
+use flams_router_git_base::server_fns as git;
+use flams_router_login::server_fns::{login, login_state};
 use flams_utils::{settings::SettingsSpec, CSS};
 use ftml_viewer_components::components::{omdoc::AnySpec, TOCElem};
