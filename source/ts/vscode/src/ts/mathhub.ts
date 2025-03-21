@@ -55,11 +55,17 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     if (!this) {
       throw new Error("MathHubTreeProvider not initialized");
     }
-    const downloads = (item instanceof Archive)? [item.id] : filter_things(item);
+    const nodeps_downloads = (item instanceof Archive)? [item.id] : filter_things(item);
     vscode.window.withProgress({ location: { viewId: "flams-mathhub" } }, () => new Promise((r) => this.onUpdated.event(r)));
     const context = get_context();
-    const remote_url = context.remote_server? context.remote_server.url : undefined;
-    get_context().client.sendNotification("flams/install",<InstallParams>{archives:downloads,remote_url:remote_url});;
+    if (!context.remote_server) {
+      return;
+    }
+    const downloads = await context.remote_server.archiveDependencies(nodeps_downloads);
+    if (!downloads) { return; }
+
+    const remote_url = context.remote_server.url;
+    get_context().client.sendNotification("flams/install",<InstallParams>{archives:nodeps_downloads.concat(downloads),remote_url:remote_url});;
     /*this.roots?.forEach((mhti: AnyMH) => {
       mhti.contextValue = "disabled";
     });*/

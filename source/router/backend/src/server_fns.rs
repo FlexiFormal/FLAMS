@@ -25,9 +25,9 @@ pub async fn archive_entries(
 
 #[server(prefix = "/api/backend", endpoint = "archive_dependencies")]
 pub async fn archive_dependencies(
-    archive: ArchiveId,
+    archives: Vec<ArchiveId>,
 ) -> Result<Vec<ArchiveId>, ServerFnError<String>> {
-    server::archive_dependencies(archive).await
+    server::archive_dependencies(archives).await
 }
 
 #[server(prefix = "/api/backend", endpoint = "build_status")]
@@ -73,6 +73,7 @@ mod server {
         Backend, GlobalBackend,
         archives::{Archive, ArchiveOrGroup as AoG},
     };
+    use flams_utils::vecmap::VecSet;
     use flams_web_utils::blocking_server_fn;
     use leptos::prelude::*;
 
@@ -206,35 +207,72 @@ mod server {
     }
 
     pub async fn archive_dependencies(
-        archive: ArchiveId,
+        archives: Vec<ArchiveId>,
     ) -> Result<Vec<ArchiveId>, ServerFnError<String>> {
-        use flams_system::backend::Backend;
+        use flams_system::backend::archives::ArchiveOrGroup;
+        let mut archives: VecSet<_> = archives.into_iter().collect();
         blocking_server_fn(move || {
-            let Some(iri) = flams_system::backend::GlobalBackend::get()
-                .with_archive(&archive, |a| a.map(|a| a.uri().to_iri()))
-            else {
-                return Err(format!("Archive {archive} not found"));
-            };
-            let res = flams_system::backend::GlobalBackend::get()
-                .triple_store()
-                .query_str(format!(
-                    "SELECT DISTINCT ?a WHERE {{
-          <{}> ulo:contains ?d.
-          ?d rdf:type ulo:document .
-          ?d ulo:contains* ?x.
-          ?x (dc:requires|ulo:imports|dc:hasPart) ?m.
-          ?e ulo:contains? ?m.
-          ?e rdf:type ulo:document.
-          ?a ulo:contains ?e.
-        }}",
-                    iri.as_str()
-                ))
-                .map_err(|e| e.to_string())?;
-
-            Ok(res
-                .into_uris::<ArchiveURI>()
-                .map(|uri| uri.archive_id().clone())
-                .collect())
+            let mut ret = VecSet::new();
+            let mut dones = VecSet::new();
+            let backend = flams_system::backend::GlobalBackend::get();
+            while let Some(archive) = archives.0.pop() {
+                if dones.0.contains(&archive) {
+                    continue;
+                }
+                dones.insert(archive.clone());
+                let Some(iri) = backend.with_archive_tree(|tree| {
+                    let mut steps = archive.steps();
+                    if let Some(mut n) = steps.next() {
+                        let mut curr = tree.groups.as_slice();
+                        while let Some(g) = curr.iter().find_map(|a| match a {
+                            ArchiveOrGroup::Group(g) if g.id.last_name() == n => Some(g),
+                            _ => None,
+                        }) {
+                            curr = g.children.as_slice();
+                            if let Some(a) = curr.iter().find_map(|a| match a {
+                                ArchiveOrGroup::Archive(a) if a.is_meta() => Some(a),
+                                _ => None,
+                            }) {
+                                if !ret.0.contains(a) {
+                                    ret.insert(a.clone());
+                                    archives.insert(a.clone());
+                                }
+                            }
+                            if let Some(m) = steps.next() {
+                                n = m;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    tree.get(&archive).map(|a| a.uri().to_iri())
+                }) else {
+                    return Err(format!("Archive {archive} not found"));
+                };
+                let res = flams_system::backend::GlobalBackend::get()
+                    .triple_store()
+                    .query_str(format!(
+                        "SELECT DISTINCT ?a WHERE {{
+                            <{}> ulo:contains ?d.
+                            ?d rdf:type ulo:document .
+                            ?d ulo:contains* ?x.
+                            ?x (dc:requires|ulo:imports|dc:hasPart) ?m.
+                            ?e ulo:contains? ?m.
+                            ?e rdf:type ulo:document.
+                            ?a ulo:contains ?e.
+                        }}",
+                        iri.as_str()
+                    ))
+                    .map_err(|e| e.to_string())?;
+                for i in res.into_uris::<ArchiveURI>() {
+                    let id = i.archive_id();
+                    if !ret.0.contains(&id) {
+                        archives.insert(id.clone());
+                        ret.insert(id.clone());
+                    }
+                }
+            }
+            Ok(ret.0)
         })
         .await
     }

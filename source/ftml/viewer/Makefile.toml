@@ -4,8 +4,19 @@
 [tasks.wasm-pack]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--target","no-modules","--out-name","ftml",
-    "--","--target","wasm32-unknown-unknown",#"-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
+args = [
+    "build",
+    "--target",
+    "no-modules",
+    "--out-name",
+    "ftml",
+    "--",
+    "--target",
+    "wasm32-unknown-unknown",
+    #"-Z",
+    #"build-std=std,panic_abort,core,alloc",
+    #"-Z",
+    #"build-std-features=optimize_for_size,panic_immediate_abort",
 ]
 
 [tasks.update-package-json]
@@ -17,23 +28,45 @@ cp ./package.json-real ./ts/package.json
 [tasks.wasm-pack-ts]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--out-dir","ts","--out-name","ftml-viewer-base",#"--target","web",
-    "--","--features","ts,omdoc",
-    "--target","wasm32-unknown-unknown"#,"-Z","build-std=std,panic_abort,core,alloc","-Z","build-std-features=optimize_for_size,panic_immediate_abort"
+args = [
+    "build",
+    "--out-dir",
+    "ts",
+    "--out-name",
+    "ftml-viewer-base",       #"--target","web",
+    "--",
+    "--features",
+    "ts,omdoc",
+    "--target",
+    "wasm32-unknown-unknown",
+    #"-Z",
+    #"build-std=std,panic_abort,core,alloc",
+    #"-Z",
+    #"build-std-features=optimize_for_size,panic_immediate_abort",
 ]
 
 [tasks.wasm-pack-ts-dev]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--out-dir","ts","--dev","--out-name","ftml-viewer-base","--","--features","ts,omdoc"]
+args = [
+    "build",
+    "--out-dir",
+    "ts",
+    "--dev",
+    "--out-name",
+    "ftml-viewer-base",
+    "--",
+    "--features",
+    "ts,omdoc",
+]
 
 [tasks.ts-dev]
-dependencies = ["wasm-pack-ts-dev","update-package-json"]#,"copy-flams-to-ts"]
+dependencies = ["wasm-pack-ts-dev", "update-package-json"] #,"copy-flams-to-ts"]
 
 [tasks.wasm-pack-dev]
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build","--target","no-modules","--dev"]
+args = ["build", "--target", "no-modules", "--dev"]
 
 [tasks.update-js]
 env = { "CARGO_MAKE_RUST_SCRIPT_PROVIDER" = "rust-script" }
@@ -104,17 +137,21 @@ cp ./ts/ftml-viewer-base.d.ts ../../ts/flams/src/ftml-viewer-base.d.ts
 '''
 
 [tasks.ts]
-dependencies = ["wasm-pack-ts","update-package-json","copy-d-ts"]#,"copy-flams-to-ts"]
+dependencies = [
+    "wasm-pack-ts",
+    "update-package-json",
+    "copy-d-ts",
+] #,"copy-flams-to-ts"]
 
 [tasks.clean]
 command = "cargo"
 args = ["clean"]
 
 [tasks.build]
-dependencies = ["wasm-pack","update-js"]
+dependencies = ["wasm-pack", "update-js"]
 
 [tasks.build-dev]
-dependencies = ["wasm-pack-dev","update-js"]
+dependencies = ["wasm-pack-dev", "update-js"]
 
 [tasks.default]
 alias = "build"

@@ -57,8 +57,8 @@ export class FLAMSServer {
   /** 
    * Get all dependencies of the given archive (excluding meta-inf archives)
    */
-  async archiveDependencies(archive:string): Promise<any> {
-    return await this.rawPostRequest("api/backend/archive_dependencies",{archive:archive});
+  async archiveDependencies(archives:FLAMS.ArchiveId[]): Promise<FLAMS.ArchiveId[] | undefined> {
+    return await this.rawPostRequest("api/backend/archive_dependencies",{archives:archives});
   }
 
   /** 

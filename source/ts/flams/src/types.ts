@@ -29,6 +29,7 @@ export type SearchResult = FTML.SearchResult;
 export type QueryFilter = FTML.QueryFilter;
 export type Quiz = FTML.Quiz;
 export type SlideElement = FTML.SlideElement;
+export type ArchiveId = FTML.ArchiveId;
 
 export type DocumentURIParams = {uri:DocumentURI} | 
   { a: string, rp: string } | 
