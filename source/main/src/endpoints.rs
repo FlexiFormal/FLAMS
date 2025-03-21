@@ -5,13 +5,13 @@
  * | Path         | Arguments | Description / Return Value |
  * | ------------ | --------- | ----------- |
  * | **API** | <!--<hr>--> | POST requests with arguments being `application/x-www-form-urlencoded`-encoded  |
- * | [`/api/index`](crate::router::index::index()) | (None) |  |
- * | [`/api/settings`](settings::get_settings) | (None) | [Settings](SettingsSpec) (requires admin login) |
- * | [`/api/reload`](settings::reload) | (None) | (requires admin login) |
+ * | [`/api/index`](backend::index()) | (None) |  |
+ * | [`/api/settings`](server_fns::settings) | (None) | [Settings](SettingsSpec) (requires admin login) |
+ * | [`/api/reload`](server_fns::reload) | (None) | (requires admin login) |
  * | [`/api/login`](login) | `username=<STRING>`, `password=<STRING>` | log in |
  * | [`/api/login_state`](login_state) | (None) | [LoginState] |
- * | [`/api/search`](crate::router::search::search_query) | `query=<STRING>&opts=`[`QueryFilter`](flams_ontology::search::QueryFilter)`&num_results=<INT>` | `Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>` |
- * | [`/api/search_symbols`](crate::router::search::search_symbols) | `query=<STRING>&num_results=<INT>` | `Vec<(`[`SymbolURI`]`Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>)>` |
+ * | [`/api/search`](server_fns::search) | `query=<STRING>&opts=`[`QueryFilter`](flams_ontology::search::QueryFilter)`&num_results=<INT>` | `Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>` |
+ * | [`/api/search_symbols`](server_fns::search_symbols) | `query=<STRING>&num_results=<INT>` | `Vec<(`[`SymbolURI`]`Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>)>` |
  * | `/gitlab_login` |  |  |
  * | **Backend** | | |
  * | [`/api/backend/group_entries`](backend::group_entries) | (optional) `in=<STRING>` | `(Vec<`[ArchiveGroupData](crate::router::backend::ArchiveGroupData)`>,Vec<`[ArchiveData](crate::router::backend::ArchiveData)`>)` - the archives and archive groups in the provided archive group (if given) or on the top-level (if None) |
@@ -49,19 +49,18 @@
  * | [`/content/legacy/uris`](content::uris()) | | |
 */
 
-use crate::{
-    router::{query::query_api, settings},
-    server::img::img_handler,
-};
+use crate::server::img::img_handler;
+
 use flams_ontology::{
     narration::{notations::Notation, LOKind},
     uris::*,
 };
-use flams_router_backend::server_fns as backend;
-use flams_router_base::LoginState;
-use flams_router_buildqueue_base::server_fns as buildqueue;
-use flams_router_content::server_fns as content;
-use flams_router_git_base::server_fns as git;
-use flams_router_login::server_fns::{login, login_state};
+use flams_router_dashboard::{
+    server_fns::{
+        self, backend, buildqueue, content, git,
+        login::{login, login_state},
+    },
+    LoginState,
+};
 use flams_utils::{settings::SettingsSpec, CSS};
 use ftml_viewer_components::components::{omdoc::AnySpec, TOCElem};

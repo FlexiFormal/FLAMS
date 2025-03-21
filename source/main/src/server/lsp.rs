@@ -1,6 +1,6 @@
 use flams_database::{DBBackend, DBUser};
 use flams_lsp::{async_lsp::ClientSocket, state::LSPState};
-use flams_router_base::LoginState;
+use flams_router_dashboard::LoginState;
 
 struct WSLSPServer {
     client: ClientSocket,

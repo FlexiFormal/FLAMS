@@ -8,6 +8,7 @@
           }
         },
         "cargo": {
+          "targetDir": "target/analyzer",
           "features": [
             "ts",
             "ws",

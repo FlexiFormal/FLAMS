@@ -7,17 +7,16 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+/*
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(doc)),
     not(any(feature = "ssr", feature = "hydrate"))
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
+ */
 
 #[cfg(feature = "ssr")]
 pub mod server;
-
-pub mod router;
-pub mod utils;
 
 pub(crate) mod fns {
     use std::{future::Future, pin::Pin};
@@ -43,7 +42,7 @@ pub(crate) mod fns {
         s: Option<String>,
     ) -> Pin<Box<dyn Future<Output = Result<(URI, Vec<CSS>, String), ServerFnError<String>>> + Send>>
     {
-        Box::pin(flams_router_content::server_fns::fragment(
+        Box::pin(flams_router_dashboard::server_fns::content::fragment(
             uri, rp, a, p, l, d, e, m, s,
         ))
     }
@@ -60,7 +59,7 @@ pub(crate) mod fns {
                 + Send,
         >,
     > {
-        Box::pin(flams_router_content::server_fns::document(
+        Box::pin(flams_router_dashboard::server_fns::content::document(
             uri, rp, a, p, l, d,
         ))
     }
@@ -73,7 +72,9 @@ pub(crate) mod fns {
         d: Option<String>,
     ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, Vec<TOCElem>), ServerFnError<String>>> + Send>>
     {
-        Box::pin(flams_router_content::server_fns::toc(uri, rp, a, p, l, d))
+        Box::pin(flams_router_dashboard::server_fns::content::toc(
+            uri, rp, a, p, l, d,
+        ))
     }
     fn los(
         uri: Option<SymbolURI>,
@@ -88,7 +89,7 @@ pub(crate) mod fns {
                 + Send,
         >,
     > {
-        Box::pin(flams_router_content::server_fns::los(
+        Box::pin(flams_router_dashboard::server_fns::content::los(
             uri, a, p, m, s, exercises,
         ))
     }
@@ -104,7 +105,7 @@ pub(crate) mod fns {
         s: Option<String>,
     ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, AnySpec), ServerFnError<String>>> + Send>>
     {
-        Box::pin(flams_router_content::server_fns::omdoc(
+        Box::pin(flams_router_dashboard::server_fns::content::omdoc(
             uri, rp, a, p, l, d, e, m, s,
         ))
     }
@@ -124,7 +125,7 @@ pub(crate) mod fns {
                 + Send,
         >,
     > {
-        Box::pin(flams_router_content::server_fns::notations(
+        Box::pin(flams_router_dashboard::server_fns::content::notations(
             uri, rp, a, p, l, d, e, m, s,
         ))
     }
@@ -139,7 +140,7 @@ pub(crate) mod fns {
         _m: Option<String>,
         _s: Option<String>,
     ) -> Pin<Box<dyn Future<Output = Result<String, ServerFnError<String>>> + Send>> {
-        Box::pin(flams_router_content::server_fns::solution(
+        Box::pin(flams_router_dashboard::server_fns::content::solution(
             uri, rp, a, p, l, d, e,
         ))
     }
@@ -153,11 +154,10 @@ pub(crate) mod fns {
 #[cfg(feature = "hydrate")]
 #[leptos::wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
-    //use router::*;
     console_error_panic_hook::set_once();
     tracing_wasm::set_as_global_default();
     fns::init();
-    leptos::mount::hydrate_body(router::Main);
+    leptos::mount::hydrate_body(flams_router_dashboard::Main);
 }
 
 #[cfg(any(doc, feature = "docs"))]

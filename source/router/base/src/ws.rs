@@ -1,4 +1,6 @@
 #[cfg(feature = "ssr")]
+pub use axum::extract::ws::Message as WSMessage;
+#[cfg(feature = "ssr")]
 pub use axum::extract::ws::WebSocket as AxumWS;
 #[cfg(feature = "ssr")]
 pub use flams_database::DBBackend;

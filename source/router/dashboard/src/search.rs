@@ -255,7 +255,7 @@ fn do_results(results: RwSignal<SearchState>) -> impl IntoView {
     })
 }
 
-fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoView {
+fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoView + use<> {
     use flams_router_content::components::Fragment;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
@@ -270,7 +270,7 @@ fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoVie
               <div style="width:100%;color:black;background-color:white;">
                 <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">{
                   res.into_iter().map(|(_,r)| {
-                    let SearchResult::Paragraph { uri, fors, def_like, kind } = r else { impossible!()};
+                    let SearchResult::Paragraph { uri, .. } = r else { impossible!()};
                     view!(<Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) />)
                   }).collect_view()
                 }
@@ -282,7 +282,7 @@ fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoVie
     }
 }
 
-fn do_result(score: f32, res: &SearchResult) -> impl IntoView {
+fn do_result(score: f32, res: &SearchResult) -> impl IntoView + use<> {
     use leptos::either::Either::*;
     match res {
         SearchResult::Document(d) => Left(do_doc(score, d.clone())),

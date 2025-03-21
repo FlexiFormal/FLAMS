@@ -1,5 +1,7 @@
 use flams_ontology::{
-    archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
+    archive_json::{
+        ArchiveData, ArchiveGroupData, ArchiveIndex, DirectoryData, FileData, Institution,
+    },
     uris::ArchiveId,
 };
 use leptos::prelude::*;
@@ -44,6 +46,20 @@ pub async fn archive_stream(
     id: ArchiveId,
 ) -> Result<leptos::server_fn::codec::ByteStream, ServerFnError> {
     server::archive_stream(id).await
+}
+
+#[server(
+  prefix="/api",
+  endpoint="index",
+  output=server_fn::codec::Json
+)]
+pub async fn index() -> Result<(Vec<Institution>, Vec<ArchiveIndex>), ServerFnError<String>> {
+    use flams_system::backend::GlobalBackend;
+    flams_web_utils::blocking_server_fn(|| {
+        let (a, b) = GlobalBackend::get().with_archive_tree(|t| t.index.clone());
+        Ok((a.0, b.0))
+    })
+    .await
 }
 
 #[cfg(feature = "ssr")]

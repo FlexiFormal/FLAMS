@@ -1,19 +1,25 @@
+#![allow(clippy::must_use_candidate)]
+
+#[cfg(any(
+    all(feature = "ssr", feature = "hydrate", not(doc)),
+    not(any(feature = "ssr", feature = "hydrate"))
+))]
+compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
+
+#[cfg(feature = "ssr")]
 use flams_router_base::LoginState;
-use flams_utils::{
-    logs::{LogFileLine, LogLevel, LogMessage, LogSpan, LogTree, LogTreeElem},
-    time::Timestamp,
-    vecmap::VecMap,
-};
-use flams_web_utils::components::Spinner;
+use flams_router_base::require_login;
+use flams_router_base::ws;
+use flams_utils::logs::{LogFileLine, LogLevel, LogMessage, LogTree};
+use flams_utils::time::Timestamp;
+use flams_utils::vecmap::VecMap;
 use flams_web_utils::{
-    components::{Header, LazySubtree, Leaf, Tree},
+    components::{Header, LazySubtree, Leaf, Spinner, Tree},
     inject_css,
 };
 use leptos::{either::Either, prelude::*};
 use std::num::NonZeroU64;
 use thaw::Caption1Strong;
-
-use crate::utils::{needs_login, ws::WebSocket};
 
 #[cfg(feature = "ssr")]
 async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
@@ -37,7 +43,7 @@ async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
 
 #[component]
 pub fn Logger() -> impl IntoView {
-    needs_login(|| {
+    require_login(|| {
         inject_css("flams-logging", include_str!("logs.css"));
         let signals = LogSignals {
             top: RwSignal::new(Vec::new()),
@@ -47,7 +53,7 @@ pub fn Logger() -> impl IntoView {
         Effect::new(move |_| {
             #[cfg(feature = "hydrate")]
             {
-                use crate::utils::ws::WebSocketClient;
+                use ws::WebSocketClient;
                 let _ = LogSocket::start(move |msg| {
                     LogSocket::ws(signals, msg);
                     None
@@ -166,14 +172,14 @@ pub struct LogSocket {
 }
 
 //#[async_trait]
-impl WebSocket<(), Log> for LogSocket {
+impl ws::WebSocket<(), Log> for LogSocket {
     const SERVER_ENDPOINT: &'static str = "/ws/log";
 }
 
 #[cfg(feature = "ssr")]
 #[async_trait::async_trait]
-impl crate::utils::ws::WebSocketServer<(), Log> for LogSocket {
-    async fn new(account: LoginState, _db: flams_database::DBBackend) -> Option<Self> {
+impl ws::WebSocketServer<(), Log> for LogSocket {
+    async fn new(account: LoginState, _db: ws::DBBackend) -> Option<Self> {
         match account {
             LoginState::Admin
             | LoginState::NoAccounts
@@ -194,10 +200,10 @@ impl crate::utils::ws::WebSocketServer<(), Log> for LogSocket {
     async fn handle_message(&mut self, _msg: ()) -> Option<Log> {
         None
     }
-    async fn on_start(&mut self, socket: &mut axum::extract::ws::WebSocket) {
+    async fn on_start(&mut self, socket: &mut ws::AxumWS) {
         if let Ok(init) = full_log().await {
             let _ = socket
-                .send(axum::extract::ws::Message::Text({
+                .send(ws::WSMessage::Text({
                     let Ok(s) = serde_json::to_string(&Log::Initial(init)) else {
                         return;
                     };
@@ -209,7 +215,7 @@ impl crate::utils::ws::WebSocketServer<(), Log> for LogSocket {
 }
 
 #[cfg(feature = "hydrate")]
-impl crate::utils::ws::WebSocketClient<(), Log> for LogSocket {
+impl ws::WebSocketClient<(), Log> for LogSocket {
     fn new(ws: leptos::web_sys::WebSocket) -> Self {
         Self {
             #[cfg(not(doc))]
@@ -234,7 +240,11 @@ impl LogSocket {
         }
     }
 
-    fn convert(e: LogTreeElem, warnings: &mut Vec<(NonZeroU64, LogMessage)>) -> LogEntrySignal {
+    fn convert(
+        e: flams_utils::logs::LogTreeElem,
+        warnings: &mut Vec<(NonZeroU64, LogMessage)>,
+    ) -> LogEntrySignal {
+        use flams_utils::logs::{LogSpan, LogTreeElem};
         match e {
             LogTreeElem::Message(e) => {
                 let id = next_id();
@@ -287,7 +297,6 @@ impl LogSocket {
     }
 
     fn populate(signals: LogSignals, tree: LogTree) {
-        use flams_utils::logs::{LogSpan, LogTreeElem};
         signals
             .open_span_paths
             .try_update_untracked(|v| *v = tree.open_span_paths);
@@ -297,7 +306,7 @@ impl LogSocket {
                     .children
                     .into_iter()
                     .map(|e| Self::convert(e, ws))
-                    .collect()
+                    .collect();
             })
         });
     }
@@ -322,7 +331,7 @@ impl LogSocket {
                 if level >= LogLevel::WARN {
                     signals
                         .warnings
-                        .try_update(|v| v.push((id.clone(), message.clone())));
+                        .try_update(|v| v.push((id, message.clone())));
                 }
                 (LogEntrySignal::Simple(id, message), span, None)
             }
@@ -365,6 +374,8 @@ struct LogSignals {
     open_span_paths: RwSignal<VecMap<NonZeroU64, Vec<usize>>>,
     warnings: RwSignal<Vec<(NonZeroU64, LogMessage)>>,
 }
+
+#[cfg(feature = "hydrate")]
 impl LogSignals {
     fn close(&self, id: NonZeroU64, timestamp: Timestamp) {
         if let Some(path) = self
@@ -422,8 +433,8 @@ impl LogSignals {
                     if let Some(p) = v.get(&parent) {
                         path.clone_from(p);
                     } /*else {
-                          leptos::logging::log!("Parent not found: {line:?}!");
-                      }*/
+                    leptos::logging::log!("Parent not found: {line:?}!");
+                    }*/
                 });
                 self.merge_i(self.top, 0, path, is_span, line);
             }
@@ -468,14 +479,16 @@ enum LogEntrySignal {
 }
 impl LogEntrySignal {
     #[inline]
-    fn id(&self) -> NonZeroU64 {
+    const fn id(&self) -> NonZeroU64 {
         match self {
             Self::Simple(id, _) | Self::Span(id, _) => *id,
         }
     }
 }
 
-const COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+#[cfg(feature = "hydrate")]
+static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+#[cfg(feature = "hydrate")]
 fn next_id() -> NonZeroU64 {
     NonZeroU64::new(COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
         .unwrap_or_else(|| unreachable!())

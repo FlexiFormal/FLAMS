@@ -8,6 +8,7 @@ use flams_utils::vecmap::VecMap;
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
 pub mod components;
+pub mod index_components;
 pub mod server_fns;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]

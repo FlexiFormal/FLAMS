@@ -14,8 +14,10 @@ members = [
     "source/ftml/extraction",
     "source/git",
     "source/router/base",
+    "source/router/dashboard",
     "source/router/content",
     "source/router/backend",
+    "source/router/logging",
     "source/router/buildqueue/base",
     "source/router/buildqueue/components",
     "source/router/git/base",
@@ -103,6 +105,7 @@ flams-git = { path = "source/git", version = "0.0.1" }
 flams-web-utils = { path = "source/web-utils", version = "0.0.1" }
 
 flams-router-base = { path = "source/router/base", version = "0.0.1" }
+flams-router-dashboard = { path = "source/router/dashboard", version = "0.0.1" }
 flams-router-content = { path = "source/router/content", version = "0.0.1" }
 flams-router-backend = { path = "source/router/backend", version = "0.0.1" }
 flams-router-buildqueue-base = { path = "source/router/buildqueue/base", version = "0.0.1" }
@@ -110,6 +113,7 @@ flams-router-buildqueue-components = { path = "source/router/buildqueue/componen
 flams-router-git-base = { path = "source/router/git/base", version = "0.0.1" }
 flams-router-git-components = { path = "source/router/git/components", version = "0.0.1" }
 flams-router-login = { path = "source/router/login", version = "0.0.1" }
+flams-router-logging = { path = "source/router/logging", version = "0.0.1" }
 
 # ftml-viewer = { path = "ftml/viewer",version="0.0.1" }
 ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }

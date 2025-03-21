@@ -57,14 +57,7 @@ ssr = [
     "flams-database/backend",
     "flams-git/gitlab",
     "flams-git/git2",
-    "flams-router-base/ssr",
-    "flams-router-content/ssr",
-    "flams-router-backend/ssr",
-    "flams-router-buildqueue-base/ssr",
-    "flams-router-buildqueue-components/ssr",
-    "flams-router-git-base/ssr",
-    "flams-router-git-components/ssr",
-    "flams-router-login/ssr",
+    "flams-router-dashboard/ssr",
 ]
 hydrate = [
     "dep:console_error_panic_hook",
@@ -76,14 +69,7 @@ hydrate = [
     "flams-web-utils/hydrate",
     "leptos-dyn-dom/hydrate",
     "ftml-viewer-components/hydrate",
-    "flams-router-base/hydrate",
-    "flams-router-content/hydrate",
-    "flams-router-backend/hydrate",
-    "flams-router-buildqueue-base/hydrate",
-    "flams-router-buildqueue-components/hydrate",
-    "flams-router-git-base/hydrate",
-    "flams-router-git-components/hydrate",
-    "flams-router-login/hydrate",
+    "flams-router-dashboard/hydrate",
 ]
 
 [dev-dependencies]
@@ -94,14 +80,7 @@ hydrate = [
 workspace = true
 
 [dependencies]
-flams-router-base = { workspace = true }
-flams-router-content = { workspace = true }
-flams-router-backend = { workspace = true }
-flams-router-buildqueue-base = { workspace = true }
-flams-router-buildqueue-components = { workspace = true }
-flams-router-git-base = { workspace = true }
-flams-router-git-components = { workspace = true }
-flams-router-login = { workspace = true }
+flams-router-dashboard = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-utils = { workspace = true, features = ["serde"] }
 flams-ontology = { workspace = true, features = ["serde"] }

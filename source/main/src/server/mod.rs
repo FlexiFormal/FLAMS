@@ -14,7 +14,6 @@ use axum_login::AuthManagerLayerBuilder;
 use axum_macros::FromRef;
 use flams_database::DBBackend;
 use flams_git::gl::auth::GitLabOAuth;
-use flams_router_base::ws::WebSocketServer;
 use flams_system::settings::Settings;
 use http::{StatusCode, Uri};
 use leptos::prelude::*;
@@ -23,7 +22,10 @@ use tower::ServiceBuilder;
 use tower_sessions::{Expiry, MemoryStore};
 use tracing::{instrument, Instrument};
 
-use crate::{router::Main, utils::ws::WebSocketServer as WSS};
+use flams_router_dashboard::{
+    ws::{self, WebSocketServer},
+    Main,
+};
 
 lazy_static::lazy_static! {
     static ref SERVER_SPAN:tracing::Span = {
@@ -93,14 +95,8 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let has_gl = state.oauth.is_some();
 
     let mut app = axum::Router::<ServerState>::new()
-        .route(
-            "/ws/log",
-            axum::routing::get(crate::router::logging::LogSocket::ws_handler),
-        )
-        .route(
-            "/ws/queue",
-            axum::routing::get(flams_router_buildqueue_components::QueueSocket::ws_handler),
-        )
+        .route("/ws/log", axum::routing::get(ws::LogSocket::ws_handler))
+        .route("/ws/queue", axum::routing::get(ws::QueueSocket::ws_handler))
         .route("/ws/lsp", axum::routing::get(crate::server::lsp::register));
 
     if has_gl {

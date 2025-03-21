@@ -1,44 +1,137 @@
-use flams_router_base::LoginState;
+#![recursion_limit = "256"]
+
+#[cfg(any(
+    all(feature = "ssr", feature = "hydrate", not(doc)),
+    not(any(feature = "ssr", feature = "hydrate"))
+))]
+compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
+
+mod query;
+mod search;
+mod settings;
+
+pub mod ws {
+    pub use flams_router_base::ws::*;
+    pub use flams_router_buildqueue_components::QueueSocket;
+    pub use flams_router_logging::LogSocket;
+}
+
+pub mod server_fns {
+    pub mod content {
+        pub use flams_router_content::server_fns::*;
+    }
+    pub mod backend {
+        pub use flams_router_backend::server_fns::*;
+    }
+    pub mod buildqueue {
+        pub use flams_router_buildqueue_base::server_fns::*;
+    }
+    pub mod git {
+        pub use flams_router_git_base::server_fns::*;
+    }
+    pub mod login {
+        pub use flams_router_login::server_fns::*;
+    }
+    pub use super::query::query_api as query;
+    pub use super::search::{search_query as search, search_symbols};
+    pub use super::settings::{get_settings as settings, reload};
+}
+
+pub use flams_router_base::LoginState;
 use leptos::{
-    either::{Either, EitherOf4, EitherOf7},
+    either::{Either, EitherOf4},
     prelude::*,
 };
-use leptos_meta::Stylesheet;
+use leptos_meta::{Stylesheet, Title, provide_meta_context};
 use leptos_router::{
-    components::{Outlet, Redirect},
-    hooks::use_navigate,
+    StaticSegment,
+    components::{Outlet, ParentRoute, Redirect, Route, Router, Routes},
+    hooks::use_query_map,
 };
+use thaw::{Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider};
 
-use super::Page;
-use flams_web_utils::components::Themer;
+#[component]
+pub fn Main() -> impl IntoView {
+    provide_meta_context();
+    #[cfg(feature = "ssr")]
+    provide_context(flams_web_utils::CssIds::default());
+    view! {
+        <Title text="𝖥𝖫∀𝖬∫"/>
+        <Router>{
+            let params = use_query_map();
+            let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
+            //provide_context(UseLSP(params.with_untracked(|p|)))
+            view!{<Routes fallback=|| NotFound()>
+                <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
+                    <ParentRoute path=StaticSegment("/dashboard") view=Dashboard>
+                        <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
+                        //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
+                        <Route path=StaticSegment("log") view=|| view!(<MainPage page=Page::Log/>)/>
+                        <Route path=StaticSegment("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
+                        <Route path=StaticSegment("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
+                        <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
+                        <Route path=StaticSegment("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
+                        <Route path=StaticSegment("users") view=|| view!(<MainPage page=Page::Users/>)/>
+                        <Route path=StaticSegment("search") view=|| view!(<MainPage page=Page::Search/>)/>
+                        <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
+                        <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
+                    </ParentRoute>
+                    <Route path=StaticSegment("/") view={move || if has_params() {
+                            Either::Left(view! { <flams_router_content::components::URITop/> })
+                        } else {
+                            Either::Right(view! { <Redirect path="/dashboard"/> })
+                        }}
+                    />
+                </ParentRoute>
+            </Routes>}
+        }</Router>
+    }
+}
 
-use thaw::{
-    Caption1, Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider, Menu,
-    MenuItem, MenuTrigger, MenuTriggerType, NavDrawer, NavItem, ToasterInjection,
-};
+#[component(transparent)]
+fn Top() -> impl IntoView {
+    use flams_router_login::components::LoginProvider;
+    view! {<LoginProvider><leptos_router::components::Outlet/></LoginProvider>}
+}
 
-#[cfg(feature = "hydrate")]
-use flams_web_utils::components::display_error;
-#[cfg(feature = "hydrate")]
-use std::borrow::Cow;
-
-fn do_main(page: Page) -> impl IntoView {
-    use leptos::either::EitherOf10::*;
-    let inner = || match page {
-        Page::Home => A(view!(<super::index::Index/>)),
-        Page::MathHub => B(view! {<flams_router_backend::components::ArchivesTop/>}),
-        //Page::Graphs => view!{<GraphTest/>},
-        Page::Log => C(view! {<super::logging::Logger/>}),
-        Page::Queue => D(view! {<flams_router_buildqueue_components::QueuesTop/>}),
-        Page::Query => E(view! {<super::query::Query/>}),
-        Page::Settings => F(view! {<super::settings::Settings/>}),
-        Page::MyArchives => G(view! {<flams_router_git_components::Archives/>}),
-        Page::Search => H(view! {<super::search::SearchTop/>}),
-        Page::Users => I(view! {<flams_router_login::components::Users/>}),
-        _ => J(view!(<span>"TODO"</span>)),
-        //Page::Login => view!{<LoginPage/>}
-    };
-    view!(<main style="height:100%">{inner()}</main>)
+#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+enum Page {
+    Home,
+    MathHub,
+    //Graphs,
+    Log,
+    NotFound,
+    Queue,
+    Settings,
+    Login,
+    Query,
+    Search,
+    MyArchives,
+    Users,
+}
+impl Page {
+    pub const fn key(self) -> &'static str {
+        use Page::*;
+        match self {
+            Home => "home",
+            MathHub => "mathhub",
+            //Graphs => "graphs",
+            Log => "log",
+            Login => "login",
+            Queue => "queue",
+            Settings => "settings",
+            Query => "query",
+            MyArchives => "archives",
+            Search => "search",
+            Users => "users",
+            NotFound => "notfound",
+        }
+    }
+}
+impl std::fmt::Display for Page {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.key())
+    }
 }
 
 #[component(transparent)]
@@ -49,7 +142,9 @@ pub fn Dashboard() -> impl IntoView {
     }
 }
 
-fn do_dashboard<V: IntoView + 'static>(f: impl FnOnce() -> V + Send + 'static) -> impl IntoView {
+#[component]
+fn MainPage(page: Page) -> impl IntoView {
+    use flams_web_utils::components::Themer;
     use ftml_viewer_components::FTMLGlobalSetup;
     view! {
       <Themer><FTMLGlobalSetup>
@@ -74,32 +169,56 @@ fn do_dashboard<V: IntoView + 'static>(f: impl FnOnce() -> V + Send + 'static) -
                 <Divider/>
               </div>
             </LayoutHeader>
-            {f()}
+            <Layout position=LayoutPosition::Absolute class="flams-main" content_style="height:100%" has_sider=true>
+                <LayoutSider class="flams-menu" content_style="width:100%;height:100%">
+                  {side_menu(page)}
+                </LayoutSider>
+                <Layout>
+                  <div style="width:calc(100% - 10px);padding-left:5px;height:calc(100vh - 67px)">
+                    {do_main(page)}
+                    </div>
+                </Layout>
+              </Layout>
           //</Login>
         </Layout>
       </FTMLGlobalSetup></Themer>
     }
 }
 
+fn do_main(page: Page) -> impl IntoView {
+    use leptos::either::EitherOf10::*;
+    let inner = || match page {
+        Page::Home => A(view!(<flams_router_backend::index_components::Index/>)),
+        Page::MathHub => B(view! {<flams_router_backend::components::ArchivesTop/>}),
+        //Page::Graphs => view!{<GraphTest/>},
+        Page::Log => C(view! {<flams_router_logging::Logger/>}),
+        Page::Queue => D(view! {<flams_router_buildqueue_components::QueuesTop/>}),
+        Page::Query => E(view! {<query::Query/>}),
+        Page::Settings => F(view! {<settings::Settings/>}),
+        Page::MyArchives => G(view! {<flams_router_git_components::Archives/>}),
+        Page::Search => H(view! {<search::SearchTop/>}),
+        Page::Users => I(view! {<flams_router_login::components::Users/>}),
+        _ => J(view!(<span>"TODO"</span>)),
+        //Page::Login => view!{<LoginPage/>}
+    };
+    view!(<main style="height:100%">{inner()}</main>)
+}
+
 #[component]
-pub fn MainPage(page: Page) -> impl IntoView {
-    do_dashboard(move || {
-        view!(
-          <Layout position=LayoutPosition::Absolute class="flams-main" content_style="height:100%" has_sider=true>
-            <LayoutSider class="flams-menu" content_style="width:100%;height:100%">
-              {side_menu(page)}
-            </LayoutSider>
-            <Layout>
-              <div style="width:calc(100% - 10px);padding-left:5px;height:calc(100vh - 67px)">
-                {do_main(page)}
-                </div>
-            </Layout>
-          </Layout>
-        )
-    })
+fn NotFound() -> impl IntoView {
+    #[cfg(feature = "ssr")]
+    {
+        let resp = expect_context::<leptos_axum::ResponseOptions>();
+        resp.set_status(axum::http::StatusCode::NOT_FOUND);
+    }
+
+    view! {
+        <h3>"Not Found"</h3>
+    }
 }
 
 fn side_menu(page: Page) -> impl IntoView {
+    use thaw::{NavDrawer, NavItem};
     view! {
         <NavDrawer selected_value=page.to_string() class="flams-menu-inner">
             <NavItem value="home" href="/">"Home"</NavItem>
@@ -136,7 +255,7 @@ fn side_menu(page: Page) -> impl IntoView {
 fn user_field() -> impl IntoView {
     use flams_web_utils::components::ClientOnly;
     use flams_web_utils::components::{Spinner, SpinnerSize};
-    use thaw::MenuPosition;
+    use thaw::{Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType};
     let theme = expect_context::<RwSignal<thaw::Theme>>();
     let on_select = move |key: String| match key.as_str() {
         "theme" => {
@@ -179,7 +298,7 @@ fn user_field() -> impl IntoView {
 }
 
 fn logout_form(user: String) -> impl IntoView {
-    use thaw::{Button, Input, InputType};
+    use thaw::Button;
     let login = expect_context::<RwSignal<LoginState>>();
     let action = Action::new(move |_| {
         login.set(LoginState::None);
@@ -190,7 +309,6 @@ fn logout_form(user: String) -> impl IntoView {
 
 fn login_form() -> impl IntoView {
     use thaw::{Button, Input, InputType};
-    let pw = NodeRef::<leptos::html::Input>::new();
     let login = expect_context();
     let action = Action::new(move |pwd: &String| do_login(pwd.clone(), login));
     let value = RwSignal::<String>::new(String::new());
@@ -208,7 +326,9 @@ async fn do_login(pw: String, login: RwSignal<LoginState>) {
         Ok(_) => (),
         Err(e) => {
             #[cfg(feature = "hydrate")]
-            display_error(Cow::Owned(format!("Error: {e}")));
+            flams_web_utils::components::display_error(std::borrow::Cow::Owned(format!(
+                "Error: {e}"
+            )));
         }
     }
     let _ = view!(<Redirect path="/dashboard"/>);

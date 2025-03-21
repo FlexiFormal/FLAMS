@@ -1,11 +1,14 @@
 {
   "rust-analyzer.runnables.extraEnv": {
-    "DATABASE_URL":"sqlite:./main/migrations/users.sqlite?mode=rwc"
+    "DATABASE_URL": "sqlite:./main/migrations/users.sqlite?mode=rwc"
   },
   "rust-analyzer.cargo.features": [
-    "ts","ws","docs",
-    "ssr" //"hydrate"// 
+    "ts",
+    "ws",
+    "docs",
+    "ssr" //"hydrate"//
   ], // "all"
+  "rust-analyzer.cargo.targetDir": "target/analyzer",
   "search.useIgnoreFiles": false,
   //"rust-analyzer.rustfmt.overrideCommand":["leptosfmt"],
   "dependi.rust.lockFileEnabled": true

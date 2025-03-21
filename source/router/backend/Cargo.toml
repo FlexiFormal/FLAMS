@@ -41,5 +41,6 @@ serde = { workspace = true }
 either = { workspace = true }
 icondata_ai = { workspace = true }
 icondata_bi = { workspace = true }
+urlencoding = { workspace = true }
 
 futures = { workspace = true, optional = true }

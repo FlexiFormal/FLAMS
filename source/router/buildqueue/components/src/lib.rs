@@ -1,5 +1,11 @@
 #![allow(clippy::must_use_candidate)]
 
+#[cfg(any(
+    all(feature = "ssr", feature = "hydrate", not(doc)),
+    not(any(feature = "ssr", feature = "hydrate"))
+))]
+compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
+
 use flams_ontology::uris::ArchiveId;
 use flams_router_base::ws;
 use flams_router_base::{LoginState, require_login, ws::WebSocket};
