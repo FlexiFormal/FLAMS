@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use flams_ontology::file_states::FileStateSummary;
 use flams_utils::vecmap::VecMap;
 
