@@ -1,0 +1,20 @@
+[package]
+name = "flams-router-backend"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = ["leptos/ssr", "thaw/ssr", "dep:flams-system"]
+hydrate = ["leptos/hydrate", "thaw/hydrate", "flams-web-utils/hydrate"]
+
+[dependencies]
+flams-ontology = { workspace = true, features = ["serde"] }
+flams-utils = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-system = { workspace = true, optional = true }
+
+leptos = { workspace = true }
+thaw = { workspace = true }

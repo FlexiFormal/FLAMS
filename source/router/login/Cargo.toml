@@ -1,0 +1,44 @@
+[package]
+name = "flams-router-login"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "thaw/ssr",
+    "flams-web-utils/ssr",
+    "dep:flams-system",
+    "dep:flams-git",
+    "dep:argon2",
+    "dep:axum-login",
+    "dep:leptos_axum",
+    "dep:sqlx",
+    "dep:password-hash",
+    "dep:tokio",
+    "dep:async-trait",
+]
+hydrate = ["leptos/hydrate", "flams-web-utils/hydrate", "thaw/hydrate"]
+
+[dependencies]
+#flams-ontology = { workspace = true, features = ["serde"] }
+#flams-utils = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-system = { workspace = true, optional = true }
+flams-git = { workspace = true, optional = true, features = ["gitlab"] }
+
+leptos = { workspace = true }
+thaw = { workspace = true }
+
+serde = { workspace = true }
+
+argon2 = { workspace = true, optional = true }
+leptos_axum = { workspace = true, optional = true }
+axum-login = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+password-hash = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }

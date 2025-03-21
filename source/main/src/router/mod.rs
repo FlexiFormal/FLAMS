@@ -1,27 +1,27 @@
 #![allow(clippy::must_use_candidate)]
 
-mod dashboard;
-pub mod content;
-pub mod settings;
 pub mod backend;
-pub mod query;
+pub(crate) mod buildqueue;
+mod dashboard;
 pub mod git;
 pub mod index;
-pub mod search;
-pub(crate) mod buildqueue;
 pub(crate) mod logging;
-pub(crate) mod users;
+pub mod query;
+pub mod search;
+pub mod settings;
 
-use dashboard::{Dashboard,MainPage};
+use dashboard::{Dashboard, MainPage};
 
 use leptos::{either::Either, prelude::*};
 use leptos_meta::{provide_meta_context, Title};
-use leptos_router::{components::{ParentRoute, Redirect, Route, Router, Routes}, hooks::use_query_map, SsrMode, StaticSegment};
+use leptos_router::{
+    components::{ParentRoute, Redirect, Route, Router, Routes},
+    hooks::use_query_map,
+    StaticSegment,
+};
 
 //#[derive(Copy,Clone,Debug,serde::Serialize,serde::Deserialize)]
 //pub struct UseLSP(pub bool);
-
-
 
 #[component]
 pub fn Main() -> impl IntoView {
@@ -50,7 +50,7 @@ pub fn Main() -> impl IntoView {
                         <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
                     </ParentRoute>
                     <Route path=StaticSegment("/") view={move || if has_params() {
-                            Either::Left(view! { <content::URITop/> })
+                            Either::Left(view! { <flams_router_content::components::URITop/> })
                         } else {
                             Either::Right(view! { <Redirect path="/dashboard"/> })
                         }}
@@ -63,14 +63,11 @@ pub fn Main() -> impl IntoView {
 
 #[component(transparent)]
 fn Top() -> impl IntoView {
-    use crate::users::Login;
-    //use flams_web_utils::components::Themer;
-    //use ftml_viewer_components::FTMLGlobalSetup;
-    //use crate::users::Login;
-    view!{<Login><leptos_router::components::Outlet/></Login>}
+    use flams_router_login::components::LoginProvider;
+    view! {<LoginProvider><leptos_router::components::Outlet/></LoginProvider>}
 }
 
-#[derive(Copy,Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 enum Page {
     Home,
     MathHub,
@@ -83,7 +80,7 @@ enum Page {
     Query,
     Search,
     MyArchives,
-    Users
+    Users,
 }
 impl Page {
     pub const fn key(self) -> &'static str {
@@ -100,7 +97,7 @@ impl Page {
             MyArchives => "archives",
             Search => "search",
             Users => "users",
-            NotFound => "notfound"
+            NotFound => "notfound",
         }
     }
 }

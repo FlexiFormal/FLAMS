@@ -1,14 +1,16 @@
 use flams_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term, uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI}, Checked, DocumentRange, LocalBackend, MaybeResolved, Unchecked
+    content::terms::Term,
+    uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI},
+    Checked, DocumentRange, LocalBackend, MaybeResolved, Unchecked,
 };
 
 use super::{
     exercises::{CognitiveDimension, Exercise, GradingNote, Solutions},
     paragraphs::{LogicalParagraph, ParagraphKind},
     sections::{Section, SectionLevel},
-    DocumentElement, LazyDocRef
+    DocumentElement, LazyDocRef,
 };
 
 pub trait DocumentChecker: LocalBackend {
@@ -43,7 +45,7 @@ enum Elem {
     Extension {
         range: DocumentRange,
         extension: SymbolURI,
-        target:SymbolURI
+        target: SymbolURI,
     },
     Paragraph {
         kind: ParagraphKind,
@@ -71,7 +73,11 @@ enum Elem {
     },
 }
 impl Elem {
-    fn close(self, v: Vec<DocumentElement<Checked>>, checker: &mut impl DocumentChecker) -> DocumentElement<Checked> {
+    fn close(
+        self,
+        v: Vec<DocumentElement<Checked>>,
+        checker: &mut impl DocumentChecker,
+    ) -> DocumentElement<Checked> {
         match self {
             Self::Section {
                 range,
@@ -85,29 +91,35 @@ impl Elem {
                 title,
                 children: v.into_boxed_slice(),
             }),
-            Self::Slide { range, uri } => DocumentElement::Slide{
-                range,uri,children:v.into_boxed_slice()
+            Self::Slide { range, uri } => DocumentElement::Slide {
+                range,
+                uri,
+                children: v.into_boxed_slice(),
             },
             Self::SkipSection => DocumentElement::SkipSection(v.into_boxed_slice()),
             Self::Module { range, module } => DocumentElement::Module {
                 range,
-                module: MaybeResolved::resolve(module,|m| checker.get_module(m)),
+                module: MaybeResolved::resolve(module, |m| checker.get_module(m)),
                 children: v.into_boxed_slice(),
             },
             Self::Morphism { range, morphism } => DocumentElement::Morphism {
                 range,
-                morphism: MaybeResolved::resolve(morphism,|m| checker.get_declaration(m)),
+                morphism: MaybeResolved::resolve(morphism, |m| checker.get_declaration(m)),
                 children: v.into_boxed_slice(),
             },
             Self::MathStructure { range, structure } => DocumentElement::MathStructure {
                 range,
-                structure:MaybeResolved::resolve(structure,|m| checker.get_declaration(m)),
+                structure: MaybeResolved::resolve(structure, |m| checker.get_declaration(m)),
                 children: v.into_boxed_slice(),
             },
-            Self::Extension { range, extension,target } => DocumentElement::Extension {
+            Self::Extension {
                 range,
-                extension:MaybeResolved::resolve(extension,|m| checker.get_declaration(m)),
-                target:MaybeResolved::resolve(target,|m| checker.get_declaration(m)),
+                extension,
+                target,
+            } => DocumentElement::Extension {
+                range,
+                extension: MaybeResolved::resolve(extension, |m| checker.get_declaration(m)),
+                target: MaybeResolved::resolve(target, |m| checker.get_declaration(m)),
                 children: v.into_boxed_slice(),
             },
             Self::Paragraph {
@@ -172,6 +184,7 @@ pub(super) struct DocumentCheckIter<'a, Check: DocumentChecker> {
     curr_in: std::vec::IntoIter<DocumentElement<Unchecked>>,
     curr_out: Vec<DocumentElement<Checked>>,
     checker: &'a mut Check,
+    #[allow(dead_code)]
     uri: &'a DocumentURI,
 }
 
@@ -210,15 +223,15 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
         let mut ret = match e {
             DocumentElement::SetSectionLevel(lvl) => DocumentElement::SetSectionLevel(lvl),
             DocumentElement::DocumentReference { id, range, target } => {
-                let target = MaybeResolved::resolve(target,|m| self.checker.get_document(m));
+                let target = MaybeResolved::resolve(target, |m| self.checker.get_document(m));
                 DocumentElement::DocumentReference { id, range, target }
             }
             DocumentElement::SymbolDeclaration(uri) => {
-                let symbol = MaybeResolved::resolve(uri,|m| self.checker.get_declaration(m));
+                let symbol = MaybeResolved::resolve(uri, |m| self.checker.get_declaration(m));
                 DocumentElement::SymbolDeclaration(symbol)
             }
             DocumentElement::UseModule(module) => {
-                let module = MaybeResolved::resolve(module,|m| self.checker.get_module(m));
+                let module = MaybeResolved::resolve(module, |m| self.checker.get_module(m));
                 DocumentElement::UseModule(module)
             }
             DocumentElement::ImportModule(module) => {
@@ -244,7 +257,9 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 notation,
             },
             DocumentElement::Variable(v) => DocumentElement::Variable(v),
-            DocumentElement::Definiendum { range, uri } => DocumentElement::Definiendum { range, uri },
+            DocumentElement::Definiendum { range, uri } => {
+                DocumentElement::Definiendum { range, uri }
+            }
             DocumentElement::SymbolReference {
                 range,
                 uri,
@@ -267,8 +282,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
             DocumentElement::SkipSection(children) => {
                 let old_in = std::mem::replace(&mut self.curr_in, children.into_iter());
                 let old_out = std::mem::take(&mut self.curr_out);
-                self.stack
-                    .push((Elem::SkipSection, old_in, old_out));
+                self.stack.push((Elem::SkipSection, old_in, old_out));
                 return;
             }
             DocumentElement::Section(Section {
@@ -299,14 +313,8 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
             } => {
                 let old_in = std::mem::replace(&mut self.curr_in, children.into_iter());
                 let old_out = std::mem::take(&mut self.curr_out);
-                self.stack.push((
-                    Elem::Slide {
-                        range,
-                        uri,
-                    },
-                    old_in,
-                    old_out,
-                ));
+                self.stack
+                    .push((Elem::Slide { range, uri }, old_in, old_out));
                 return;
             }
             DocumentElement::Module {
@@ -350,8 +358,15 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
             } => {
                 let old_in = std::mem::replace(&mut self.curr_in, children.into_iter());
                 let old_out = std::mem::take(&mut self.curr_out);
-                self.stack
-                    .push((Elem::Extension { range, extension,target }, old_in, old_out));
+                self.stack.push((
+                    Elem::Extension {
+                        range,
+                        extension,
+                        target,
+                    },
+                    old_in,
+                    old_out,
+                ));
                 return;
             }
             DocumentElement::Paragraph(LogicalParagraph {

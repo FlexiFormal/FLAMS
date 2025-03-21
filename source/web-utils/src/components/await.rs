@@ -1,7 +1,11 @@
 use std::future::Future;
 
-use leptos::{either::Either, prelude::*};
-use crate::components::Spinner;
+use crate::components::{display_error, Spinner};
+use flams_utils::parking_lot;
+use leptos::{
+    either::{Either, EitherOf3},
+    prelude::*,
+};
 
 pub fn wait<
     V: IntoView + 'static,
@@ -21,5 +25,35 @@ pub fn wait<
           |res| Either::Right(children(res))
         )
       }}</Suspense>
+    }
+}
+
+pub fn wait_and_then<E, Fut, F, T, V: IntoView + 'static>(
+    f: F,
+    r: impl FnOnce(T) -> V + Send + 'static,
+) -> impl IntoView
+where
+    Fut: Future<Output = Result<T, ServerFnError<E>>> + Send + 'static,
+    F: Fn() -> Fut + Send + Sync + 'static,
+    T: Send + Sync + Clone + 'static + serde::Serialize + for<'de> serde::Deserialize<'de>,
+    E: std::fmt::Display
+        + Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + Send
+        + Sync
+        + 'static,
+{
+    let r = std::sync::Arc::new(parking_lot::Mutex::new(Some(r)));
+    let res = Resource::new(|| (), move |()| f());
+    view! {
+        <Suspense fallback = || view!(<Spinner/>)>{move ||
+            match res.get() {
+              Some(Ok(t)) =>
+                EitherOf3::A(r.lock().take().map(|r| r(t))),
+              Some(Err(e)) => EitherOf3::B(display_error(e.to_string().into())),
+              None => EitherOf3::C(view!(<Spinner/>)),
+            }
+        }</Suspense>
     }
 }

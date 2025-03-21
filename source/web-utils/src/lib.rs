@@ -9,25 +9,25 @@ use std::borrow::Cow;
 use flams_utils::{hashstr, CSS};
 
 #[cfg(feature = "ssr")]
-#[derive(Default,Clone)]
-pub struct CssIds(flams_utils::triomphe::Arc< 
-    flams_utils::parking_lot::Mutex<
-        flams_utils::vecmap::VecSet<Cow<'static,str>>
-    >
->);
+#[derive(Default, Clone)]
+pub struct CssIds(
+    flams_utils::triomphe::Arc<
+        flams_utils::parking_lot::Mutex<flams_utils::vecmap::VecSet<Cow<'static, str>>>,
+    >,
+);
 
 pub fn do_css(css: CSS) {
     match css {
         CSS::Inline(s) => {
             let id = hashstr("id_", &s);
-            #[cfg(feature="ssr")]
+            #[cfg(not(target_family = "wasm"))]
             let s = String::from(s);
             do_inject_css(id.into(), s.into());
         }
-        CSS::Class{name,css} => {
-            #[cfg(feature="ssr")]
+        CSS::Class { name, css } => {
+            #[cfg(not(target_family = "wasm"))]
             let name = String::from(name);
-            #[cfg(feature="ssr")]
+            #[cfg(not(target_family = "wasm"))]
             let css = String::from(css);
             do_inject_css(name.into(), css.into());
         }
@@ -35,8 +35,8 @@ pub fn do_css(css: CSS) {
             let id = hashstr("id_", &s);
             #[cfg(feature = "ssr")]
             {
-                use leptos_meta::Stylesheet;
                 use leptos::prelude::expect_context;
+                use leptos_meta::Stylesheet;
                 let ids = expect_context::<CssIds>();
                 let mut ids = ids.0.lock();
                 if !ids.0.contains(&std::borrow::Cow::Borrowed(&id)) {
@@ -83,11 +83,13 @@ pub fn inject_css(id: &'static str, content: &'static str) {
 #[macro_export]
 macro_rules! console_log {
     () => {};
-    ($arg:expr) => { ::web_sys::console::log_1(&::web_sys::js_sys::JsValue::from($l))};
-    ($arg1:expr,$arg2:expr) => { 
+    ($arg:expr) => {
+        ::web_sys::console::log_1(&::web_sys::js_sys::JsValue::from($l))
+    };
+    ($arg1:expr,$arg2:expr) => {
         ::web_sys::console::log_2(
             &::web_sys::js_sys::JsValue::from($l),
-            &::web_sys::js_sys::JsValue::from($l)
+            &::web_sys::js_sys::JsValue::from($l),
         )
     };
 }

@@ -9,49 +9,61 @@ workspace = true
 [features]
 omdoc = ["dep:gloo-storage"]
 ts = ["dep:tsify-next"]
-rdf = ["flams-ontology/rdf","ftml-extraction/rdf"]
-csr = ["leptos-dyn-dom/csr","leptos/csr","dep:reqwasm"]
-hydrate= ["omdoc","leptos-dyn-dom/hydrate","leptos/hydrate","flams-web-utils/hydrate"]
-ssr = ["leptos/ssr","rdf","flams-web-utils/ssr","dep:flams-system","dep:tokio"]
+rdf = ["flams-ontology/rdf", "ftml-extraction/rdf"]
+csr = ["leptos-dyn-dom/csr", "leptos/csr", "dep:reqwasm"]
+hydrate = [
+    "omdoc",
+    "leptos-dyn-dom/hydrate",
+    "leptos/hydrate",
+    "flams-web-utils/hydrate",
+]
+ssr = [
+    "omdoc",
+    "leptos/ssr",
+    "rdf",
+    "flams-web-utils/ssr",
+    "dep:flams-system",
+    "dep:tokio",
+]
 
 [dependencies]
-ftml-extraction = {workspace=true}
-flams-ontology = {workspace=true,features=["wasm"]}
-flams-system = {workspace=true, optional=true}
-flams-utils = {workspace=true,features=["wasm"]}
-flams-web-utils = {workspace=true}
+ftml-extraction = { workspace = true }
+flams-ontology = { workspace = true, features = ["wasm"] }
+flams-system = { workspace = true, optional = true }
+flams-utils = { workspace = true, features = ["wasm"] }
+flams-web-utils = { workspace = true }
 
-leptos-dyn-dom = {workspace=true}
-leptos = {workspace=true}
-thaw = {workspace=true}
-tokio = {workspace = true,optional=true}
-smallvec = {workspace=true}
-tracing = {workspace=true}
-lazy_static = {workspace=true}
-urlencoding = {workspace=true}
-send_wrapper = {workspace=true}
-wasm-bindgen = {workspace=true}
-serde = {workspace = true,features=["derive"]}
-serde-wasm-bindgen = {workspace=true}
-either = {workspace = true, features=["serde"]}
-icondata_bi = {workspace = true}
-icondata_ai = {workspace = true}
-gloo-storage = {workspace = true,optional=true}
+leptos-dyn-dom = { workspace = true }
+leptos = { workspace = true }
+thaw = { workspace = true }
+tokio = { workspace = true, optional = true }
+smallvec = { workspace = true }
+tracing = { workspace = true }
+lazy_static = { workspace = true }
+urlencoding = { workspace = true }
+send_wrapper = { workspace = true }
+wasm-bindgen = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde-wasm-bindgen = { workspace = true }
+either = { workspace = true, features = ["serde"] }
+icondata_bi = { workspace = true }
+icondata_ai = { workspace = true }
+gloo-storage = { workspace = true, optional = true }
 # const_format = {workspace = true}
 # paste = {workspace = true}
 
-serde_json = {workspace=true}
+serde_json = { workspace = true }
 
-web-sys = {workspace = true,features=["ScrollIntoViewOptions","ScrollLogicalPosition"]} 
+web-sys = { workspace = true, features = [
+    "ScrollIntoViewOptions",
+    "ScrollLogicalPosition",
+] }
 
 # csr
-reqwasm = {workspace=true,optional=true}
+reqwasm = { workspace = true, optional = true }
 #reqwest = {workspace=true,optional=true}
 
-tsify-next = {workspace = true,optional=true}
-
-
-
+tsify-next = { workspace = true, optional = true }
 
 
 #tachys = {workspace = true}

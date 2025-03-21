@@ -34,7 +34,10 @@ pub enum Term {
 impl Term {
     /// #### Errors
     #[inline]
-    pub fn present(&self,presenter:&mut impl crate::narration::notations::Presenter) -> Result<(),crate::narration::notations::PresentationError> {
+    pub fn present(
+        &self,
+        presenter: &mut impl crate::narration::notations::Presenter,
+    ) -> Result<(), crate::narration::notations::PresentationError> {
         //println!("presenting {self}");
         crate::narration::notations::Notation::present_term(self, presenter)
     }
@@ -46,11 +49,13 @@ impl Term {
     #[must_use]
     pub fn as_list(&self) -> Option<&[Arg]> {
         match self {
-            Self::OMA{
-                head,//:box Self::OMID(ContentURI::Symbol(s)),
-                args
-            }  if matches!(&**head,Self::OMID(ContentURI::Symbol(s)) if *s == *crate::metatheory::SEQUENCE_EXPRESSION) => Some(&**args), //if *s == *crate::metatheory::SEQUENCE_EXPRESSION => Some(&**args),
-            _ => None
+            Self::OMA {
+                head, //:box Self::OMID(ContentURI::Symbol(s)),
+                args,
+            } if matches!(&**head,Self::OMID(ContentURI::Symbol(s)) if *s == *crate::metatheory::SEQUENCE_EXPRESSION) => {
+                Some(&**args)
+            } //if *s == *crate::metatheory::SEQUENCE_EXPRESSION => Some(&**args),
+            _ => None,
         }
     }
 
@@ -61,18 +66,32 @@ impl Term {
     }
 
     /// #### Errors
-    pub fn into_record_field(self) ->Result<(Self,Name),Self> {
+    #[allow(clippy::result_large_err)]
+    pub fn into_record_field(self) -> Result<(Self, Name), Self> {
         match self {
-            oma!(hd,args) if matches!(&*hd,omsp!(fp) if *fp == *crate::metatheory::FIELD_PROJECTION) && args.len() == 2 => {
+            oma!(hd, args)
+                if matches!(&*hd,omsp!(fp) if *fp == *crate::metatheory::FIELD_PROJECTION)
+                    && args.len() == 2 =>
+            {
                 let mut args = args.into_vec().into_iter();
-                let [a,b] = [args.next().unwrap_or_else(|| unreachable!()),args.next().unwrap_or_else(|| unreachable!())];
+                let [a, b] = [
+                    args.next().unwrap_or_else(|| unreachable!()),
+                    args.next().unwrap_or_else(|| unreachable!()),
+                ];
                 match b {
-                    Arg{term:Self::OML{name,df:None,tp:None},mode:ArgMode::Normal} =>
-                        Ok((a.term,name)),
-                    b => Err(oma!(*hd,[a,b]))
+                    Arg {
+                        term:
+                            Self::OML {
+                                name,
+                                df: None,
+                                tp: None,
+                            },
+                        mode: ArgMode::Normal,
+                    } => Ok((a.term, name)),
+                    b => Err(oma!(*hd, [a, b])),
                 }
             }
-            _ => Err(self)
+            _ => Err(self),
         }
     }
     /*
@@ -153,7 +172,7 @@ impl Term {
                 Ok(DFSContinuation::SkipChildren)
             }
             Self::Informal { .. } => {
-                write!(f,"TODO: Display for Term::Informal")?;
+                write!(f, "TODO: Display for Term::Informal")?;
                 Ok(DFSContinuation::SkipChildren)
             }
         }
@@ -168,18 +187,16 @@ impl Term {
     }
 
     #[inline]
-    pub fn subterm_iter(&self) -> impl Iterator<Item=&'_ Self> {
-        <TermChildrenIter as TreeChildIter<Self>>::dfs(
-            TermChildrenIter::One(self)
-        )
+    pub fn subterm_iter(&self) -> impl Iterator<Item = &'_ Self> {
+        <TermChildrenIter as TreeChildIter<Self>>::dfs(TermChildrenIter::One(self))
     }
 
     #[inline]
-    pub fn uri_iter(&self) -> impl Iterator<Item=URIRef<'_>> {
+    pub fn uri_iter(&self) -> impl Iterator<Item = URIRef<'_>> {
         self.subterm_iter().filter_map(|t| match t {
             Self::OMID(uri) => Some(uri.as_uri()),
-            Self::OMV(Var::Ref { declaration,.. }) => Some(declaration.as_uri()),
-            _ => None
+            Self::OMV(Var::Ref { declaration, .. }) => Some(declaration.as_uri()),
+            _ => None,
         })
     }
 }
@@ -295,7 +312,8 @@ pub enum ArgMode {
     BindingSequence,
 }
 impl ArgMode {
-    #[inline]#[must_use]
+    #[inline]
+    #[must_use]
     pub const fn as_char(self) -> char {
         match self {
             Self::Normal => 'i',
@@ -374,32 +392,30 @@ pub enum Informal {
 
 impl Informal {
     #[must_use]
-    pub fn iter_opt(&self) -> Option<impl Iterator<Item=&Self>> {
+    pub fn iter_opt(&self) -> Option<impl Iterator<Item = &Self>> {
         match self {
             Self::Term(_) | Self::Text(_) => None,
-            Self::Node{children,..} => Some(
-                InformalIter {
-                    curr: children.iter(),
-                    stack: Vec::new()
-                })
+            Self::Node { children, .. } => Some(InformalIter {
+                curr: children.iter(),
+                stack: Vec::new(),
+            }),
         }
     }
     #[must_use]
-    pub fn iter_mut_opt(&mut self) -> Option<impl Iterator<Item=&mut Self>> {
+    pub fn iter_mut_opt(&mut self) -> Option<impl Iterator<Item = &mut Self>> {
         match self {
             Self::Term(_) | Self::Text(_) => None,
-            Self::Node{children,..} => Some(
-                InformalIterMut {
-                    curr: children.iter_mut(),
-                    stack: Vec::new()
-                })
+            Self::Node { children, .. } => Some(InformalIterMut {
+                curr: children.iter_mut(),
+                stack: Vec::new(),
+            }),
         }
     }
 }
 
 struct InformalIter<'a> {
-    curr:std::slice::Iter<'a,Informal>,
-    stack:Vec<std::slice::Iter<'a,Informal>>
+    curr: std::slice::Iter<'a, Informal>,
+    stack: Vec<std::slice::Iter<'a, Informal>>,
 }
 impl<'a> Iterator for InformalIter<'a> {
     type Item = &'a Informal;
@@ -408,15 +424,16 @@ impl<'a> Iterator for InformalIter<'a> {
             self.curr = self.stack.pop()?;
             self.curr.next()
         });
-        if let Some(Informal::Node{children,..}) = r {
-            self.stack.push(std::mem::replace(&mut self.curr,children.iter()));
+        if let Some(Informal::Node { children, .. }) = r {
+            self.stack
+                .push(std::mem::replace(&mut self.curr, children.iter()));
         }
         r
     }
 }
 struct InformalIterMut<'a> {
-    curr:std::slice::IterMut<'a,Informal>,
-    stack:Vec<std::slice::IterMut<'a,Informal>>
+    curr: std::slice::IterMut<'a, Informal>,
+    stack: Vec<std::slice::IterMut<'a, Informal>>,
 }
 impl<'a> Iterator for InformalIterMut<'a> {
     type Item = &'a mut Informal;
@@ -427,9 +444,10 @@ impl<'a> Iterator for InformalIterMut<'a> {
                 self.curr.next()
             });
             if let Some(Informal::Node { children, .. }) = r {
-                self.stack.push(std::mem::replace(&mut self.curr, children.iter_mut()));
+                self.stack
+                    .push(std::mem::replace(&mut self.curr, children.iter_mut()));
             } else {
-                return r
+                return r;
             }
         }
     }

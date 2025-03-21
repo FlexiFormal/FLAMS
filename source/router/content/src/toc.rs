@@ -1,27 +1,29 @@
-use flams_ontology::uris::NarrativeURITrait;
-use flams_utils::{vecmap::VecSet, CSS};
+use crate::ssr::insert_base_url;
+
+use super::ssr::backend;
+use flams_ontology::narration::{
+    DocumentElement, NarrationTrait, documents::Document, exercises::Exercise, sections::Section,
+};
+use flams_system::backend::Backend;
+use flams_utils::{CSS, unwrap, vecmap::VecSet};
 use ftml_viewer_components::components::TOCElem;
 
-#[cfg(feature="ssr")]
-pub async fn from_document(doc:&flams_ontology::narration::documents::Document) -> (Vec<CSS>,Vec<TOCElem>) {
-  use flams_ontology::narration::{exercises::Exercise, sections::Section, DocumentElement, NarrationTrait};
-  use flams_system::backend::Backend;
-use flams_utils::unwrap;
-  let mut curr = doc.children().iter();
-  let mut prefix = String::new();
-  let mut stack = Vec::new();
-  let mut ret = Vec::new();
-  let mut css = VecSet::new();
-  loop {
-    while let Some(elem) = curr.next() {
-      match elem {
+pub async fn from_document(doc: &Document) -> (Vec<CSS>, Vec<TOCElem>) {
+    let mut curr = doc.children().iter();
+    let mut prefix = String::new();
+    let mut stack = Vec::new();
+    let mut ret = Vec::new();
+    let mut css = VecSet::new();
+    loop {
+        while let Some(elem) = curr.next() {
+            match elem {
         DocumentElement::Slide { /*uri,*/.. } => {
           ret.push(TOCElem::Slide/*{uri:uri.clone()}*/);
         }
         DocumentElement::Section(Section{ uri, title,children,.. }) => {
           let old = std::mem::replace(&mut curr, children.iter());
           let title = if let Some(title) = title {
-            if let Some((c,h)) = super::backend!(get_html_fragment(uri.document(), *title)) {
+            if let Some((c,h)) = backend!(get_html_fragment(uri.document(), *title)) {
               for c in c {css.insert(c);}
               Some(h)
             } else {None}
@@ -65,34 +67,61 @@ use flams_utils::unwrap;
         DocumentElement::TopTerm { .. } | DocumentElement::UseModule { .. } |
         DocumentElement::ImportModule { .. } | DocumentElement::DocumentReference { .. } => ()
         //_ => ()
-    }}
-    match stack.pop() {
-      None => break,
-      Some((iter,Some(TOCElem::Inputref{mut id,uri,title,mut children}))) => {
-        curr = iter;
-        std::mem::swap(&mut prefix,&mut id);
-        std::mem::swap(&mut ret,&mut children);
-        if !children.is_empty() {
-          ret.push(TOCElem::Inputref{id,uri,title,children});
-        }
-      }
-      Some((iter,Some(TOCElem::Section{mut id,uri,title,mut children}))) => {
-        curr = iter;
-        std::mem::swap(&mut prefix,&mut id);
-        std::mem::swap(&mut ret,&mut children);
-        if title.is_some() || !children.is_empty() {
-          ret.push(TOCElem::Section{id,uri,title,children});
-        }
-      }
-      Some((iter,Some(TOCElem::SkippedSection{mut children}))) => {
-        curr = iter;
-        std::mem::swap(&mut ret,&mut children);
-        if !children.is_empty() {
-          ret.push(TOCElem::SkippedSection { children });
-        }
-      }
-      Some((iter,_)) => curr = iter
     }
-  }
-  (super::insert_base_url(css.0),ret)
+        }
+        match stack.pop() {
+            None => break,
+            Some((
+                iter,
+                Some(TOCElem::Inputref {
+                    mut id,
+                    uri,
+                    title,
+                    mut children,
+                }),
+            )) => {
+                curr = iter;
+                std::mem::swap(&mut prefix, &mut id);
+                std::mem::swap(&mut ret, &mut children);
+                if !children.is_empty() {
+                    ret.push(TOCElem::Inputref {
+                        id,
+                        uri,
+                        title,
+                        children,
+                    });
+                }
+            }
+            Some((
+                iter,
+                Some(TOCElem::Section {
+                    mut id,
+                    uri,
+                    title,
+                    mut children,
+                }),
+            )) => {
+                curr = iter;
+                std::mem::swap(&mut prefix, &mut id);
+                std::mem::swap(&mut ret, &mut children);
+                if title.is_some() || !children.is_empty() {
+                    ret.push(TOCElem::Section {
+                        id,
+                        uri,
+                        title,
+                        children,
+                    });
+                }
+            }
+            Some((iter, Some(TOCElem::SkippedSection { mut children }))) => {
+                curr = iter;
+                std::mem::swap(&mut ret, &mut children);
+                if !children.is_empty() {
+                    ret.push(TOCElem::SkippedSection { children });
+                }
+            }
+            Some((iter, _)) => curr = iter,
+        }
+    }
+    (insert_base_url(css.0), ret)
 }

@@ -4,37 +4,37 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-serde = ["dep:serde","dep:bincode"]
-rayon = ["dep:rayon","dep:spliter"]
+serde = ["dep:serde", "dep:bincode"]
+rayon = ["dep:rayon", "dep:spliter"]
 async = ["dep:async-broadcast"]
 tokio = ["dep:tokio"]
-wasm = ["dep:wasm-bindgen","serde","dep:tsify-next"]
+wasm = ["dep:wasm-bindgen", "serde", "dep:tsify-next"]
 
 [dev-dependencies]
-tracing-subscriber = {workspace=true}
+tracing-subscriber = { workspace = true }
 
 [dependencies]
-triomphe = {workspace=true}
-parking_lot = {workspace=true}
-rustc-hash = {workspace=true}
-chrono = {workspace=true}
-smallvec={workspace=true}
-tracing={workspace=true}
-inventory = {workspace=true}
-paste = {workspace=true}
-filetime = {workspace=true}
-lightningcss = {workspace=true}
+triomphe = { workspace = true }
+parking_lot = { workspace = true }
+rustc-hash = { workspace = true }
+chrono = { workspace = true }
+smallvec = { workspace = true }
+tracing = { workspace = true }
+inventory = { workspace = true }
+paste = { workspace = true }
+filetime = { workspace = true }
+lightningcss = { workspace = true }
 
-wasm-bindgen = {workspace=true,optional=true}
-tsify-next = {workspace=true,optional=true}
-async-broadcast={workspace=true,optional=true}
-rayon={workspace=true,optional=true}
-spliter={workspace=true,optional=true}
-serde = {workspace=true,optional=true}
-bincode = {workspace=true,optional=true}
-eyre = {workspace=true}
-tokio = {workspace=true,optional=true,features=["io-util"]}
-url = {workspace=true,features=["serde"]}
+wasm-bindgen = { workspace = true, optional = true }
+tsify-next = { workspace = true, optional = true }
+async-broadcast = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
+spliter = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+bincode = { workspace = true, optional = true }
+eyre = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["io-util", "rt"] }
+url = { workspace = true, features = ["serde"] }
 
 [lints]
 workspace = true
