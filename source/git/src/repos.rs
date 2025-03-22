@@ -178,6 +178,7 @@ impl GitRepo {
           if shallow { fetch.depth(1); }
           self.0.find_remote("origin")?
             .fetch(&[branch,&format!("+{NOTES_NS}:{NOTES_NS}")], Some(&mut fetch), None)?;
+          /*
           let remote = self.0.find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)?;
           let commit = remote.get().peel_to_commit()?;
           if let Ok(mut local) = self.0.find_branch(branch, git2::BranchType::Local) {
@@ -185,7 +186,8 @@ impl GitRepo {
             Ok(())
           } else {
             self.0.branch(branch, &commit, false)?.set_upstream(Some(&format!("origin/{branch}")))
-          }
+          }*/
+          Ok(())
         })
     }
 
@@ -381,6 +383,15 @@ impl GitRepo {
         let commit = self
             .0
             .find_branch(branch, git2::BranchType::Local)?
+            .get()
+            .peel_to_commit()?;
+        Ok(commit.into())
+    }
+    /// #### Errors
+    pub fn current_remote_commit_on(&self, branch: &str) -> Result<super::Commit, git2::Error> {
+        let commit = self
+            .0
+            .find_branch(branch, git2::BranchType::Remote)?
             .get()
             .peel_to_commit()?;
         Ok(commit.into())

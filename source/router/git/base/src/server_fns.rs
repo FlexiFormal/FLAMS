@@ -229,7 +229,9 @@ mod server {
                 let repo = flams_git::repos::GitRepo::open(&path).map_err(|e| e.to_string())?;
                 repo.fetch_branch_from_oauth(&secret, &branch, false)
                     .map_err(|e| e.to_string())?;
-                let commit = repo.current_commit_on(&branch).map_err(|e| e.to_string())?;
+                let commit = repo
+                    .current_remote_commit_on(&branch)
+                    .map_err(|e| e.to_string())?;
                 repo.force_checkout(&commit.id).map_err(|e| e.to_string())?;
                 //repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
                 backend.add(
