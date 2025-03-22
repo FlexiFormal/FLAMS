@@ -178,7 +178,6 @@ impl GitRepo {
           if shallow { fetch.depth(1); }
           self.0.find_remote("origin")?
             .fetch(&[branch,&format!("+{NOTES_NS}:{NOTES_NS}")], Some(&mut fetch), None)?;
-          /*
           let remote = self.0.find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)?;
           let commit = remote.get().peel_to_commit()?;
           if let Ok(mut local) = self.0.find_branch(branch, git2::BranchType::Local) {
@@ -186,7 +185,7 @@ impl GitRepo {
             Ok(())
           } else {
             self.0.branch(branch, &commit, false)?.set_upstream(Some(&format!("origin/{branch}")))
-          } */
+          }
           Ok(())
         })
     }
@@ -438,10 +437,10 @@ impl GitRepo {
           let a_commit = self.0.find_annotated_commit(id)?;
           let commit = self.0.find_commit(id)?;
           let head = self.0.head()?.peel_to_commit()?;
-          /*if head.id() == commit.id() || self.0.graph_descendant_of(head.id(), commit.id())? {
+          if /*head.id() == commit.id() ||*/ self.0.graph_descendant_of(head.id(), commit.id())? {
               tracing::debug!("HEAD is descendant of commit!");
               return Ok(())
-          }*/
+          }
 
           let mut merge_options = git2::MergeOptions::new();
           merge_options
