@@ -391,7 +391,7 @@ impl GitRepo {
     pub fn current_remote_commit_on(&self, branch: &str) -> Result<super::Commit, git2::Error> {
         let commit = self
             .0
-            .find_branch(branch, git2::BranchType::Remote)?
+            .find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)?
             .get()
             .peel_to_commit()?;
         Ok(commit.into())
