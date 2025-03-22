@@ -186,7 +186,6 @@ impl GitRepo {
           } else {
             self.0.branch(branch, &commit, false)?.set_upstream(Some(&format!("origin/{branch}")))
           }
-          Ok(())
         })
     }
 
