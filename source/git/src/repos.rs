@@ -436,12 +436,16 @@ impl GitRepo {
           let a_commit = self.0.find_annotated_commit(id)?;
           let commit = self.0.find_commit(id)?;
           let head = self.0.head()?.peel_to_commit()?;
-          if head.id() == commit.id() || self.0.graph_descendant_of(head.id(), commit.id())? { return Ok(()) }
+          if head.id() == commit.id() || self.0.graph_descendant_of(head.id(), commit.id())? {
+              tracing::debug!("HEAD is descendant of commit!");
+              return Ok(())
+          }
 
           let mut merge_options = git2::MergeOptions::new();
           merge_options
             .file_favor(git2::FileFavor::Theirs)
             .fail_on_conflict(false);
+          tracing::debug!("Merging");
           self.0.merge(
             &[&a_commit],
             Some(&mut merge_options),
@@ -449,6 +453,7 @@ impl GitRepo {
           )?;
           let mut index = self.0.index()?;
           if index.has_conflicts() {
+            tracing::debug!("Index has conflicts now");
             let mut entries = Vec::new();
             for conflict in index.conflicts()? {
               let conflict = conflict?;
@@ -460,9 +465,12 @@ impl GitRepo {
               index.add(&e)?;
             }
             index.write()?;
+          } {
+              tracing::debug!("No conflicts");
           }
 
           if index.has_conflicts() || self.0.state() == git2::RepositoryState::Merge {
+            tracing::debug!("In merge state; commit necessary");
             let sig = self.0.signature()?;
             let tree_id = index.write_tree()?;
             let tree = self.0.find_tree(tree_id)?;
@@ -475,6 +483,7 @@ impl GitRepo {
             )?;
           }
           self.0.cleanup_state()?;
+          tracing::debug!("Checking out HEAD");
           self.0.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
           Ok(())
         })
