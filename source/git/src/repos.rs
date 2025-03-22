@@ -83,6 +83,7 @@ impl GitRepo {
         };
         let mut url =
             git_url_parse::GitUrl::parse(url).map_err(|e| git2::Error::from_str(&e.to_string()))?;
+        // enforce HTTPS (because oauth; for now)
         if matches!(
             url.scheme,
             git_url_parse::Scheme::Ssh | git_url_parse::Scheme::GitSsh
@@ -474,6 +475,7 @@ impl GitRepo {
             )?;
           }
           self.0.cleanup_state()?;
+          self.0.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
           Ok(())
         })
     }
