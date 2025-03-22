@@ -230,7 +230,7 @@ mod server {
                 repo.fetch_branch_from_oauth(&secret, &branch, false)
                     .map_err(|e| e.to_string())?;
                 let commit = repo
-                    .current_commit_on(&format!("remote/{branch}"))
+                    .current_commit_on(&format!("origin/{branch}"))
                     .map_err(|e| e.to_string())?;
                 repo.force_checkout(&commit.id).map_err(|e| e.to_string())?;
                 //repo.mark_managed(&branch,&commit.id).map_err(|e| e.to_string())?;
