@@ -1,7 +1,7 @@
 pub use oxrdf::{
     BlankNode, GraphName, GraphNameRef, Literal, LiteralRef, NamedNode, NamedNodeRef, Quad,
     QuadRef, Subject, SubjectRef, Term as RDFTerm, TermRef as RDFTermRef, Triple, TripleRef,
-    Variable
+    Variable,
 };
 
 #[macro_export]
@@ -191,7 +191,7 @@ macro_rules! rdft {
 
 pub mod ontologies {
     /*! # RDF Ontology Summary
-     * 
+     *
      * #### [`Document`](crate::narration::documents::Document) `D`
      * | struct | field | triple |
      * | -----  | ----- | ------ |
@@ -216,7 +216,7 @@ pub mod ontologies {
      * |   | `_`[`.objectives`](crate::narration::exercises::Exercise::objectives)`.contains(d,S)`  | `E` [`<ulo:#objective>`](ulo2::OBJECTIVE) `<BLANK>` |
      * |   |    | `<BLANK>` [`<ulo:#cognitive-dimension>`](ulo2::COGDIM) `d`, where `d=`[`<ulo:#cs-remember>`](ulo2::REMEMBER)⏐[`<ulo:#cs-understand>`](ulo2::UNDERSTAND)⏐[`<ulo:#cs-apply>`](ulo2::APPLY)⏐[`<ulo:#cs-analyze>`](ulo2::ANALYZE)⏐[`<ulo:#cs-evaluate>`](ulo2::EVALUATE)⏐[`<ulo:#cs-create>`](ulo2::CREATE) |
      * |   |    | `<BLANK>` [`<ulo:#po-symbol>`](ulo2::POSYMBOL) `S` |
-     * 
+     *
      * #### [`Module`](crate::content::modules::Module) `M`
      * | struct | field | triple |
      * | -----  | ----- | ------ |
@@ -232,11 +232,63 @@ pub mod ontologies {
      * | [`Morphism`](crate::content::declarations::OpenDeclaration::Morphism) | `(F)` | `M` [`<ulo:#contains>`](ulo2::CONTAINS) `F` |
      * |   |    | `F` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#morphism>`](ulo2::MORPHISM) |
      * |   | [`.domain`](crate::content::declarations::morphisms::Morphism)`=M2`   | `F` [`<rdfs:#domain>`](rdfs::DOMAIN) `M2` |
-     * 
+     *
+     *
+     *
+     * # Some Example Queries
+     *
+     * #### Unused files in `ARCHIVE`:
+     * All elements contained in the archive that are neither inputrefed elsewhere
+     * nor (transitively) contain an element that is required or imported (=> is a module)
+     * by another document:
+     * ```sparql
+     * SELECT DISTINCT ?f WHERE {
+     *   <ARCHIVE> ulo:contains ?f .
+     *   MINUS { ?d dc:hasPart ?f }
+     *   MINUS {
+     *     ?f ulo:contains+ ?m.
+     *     ?d (dc:requires|ulo:imports) ?m.
+     *   }
+     * }
+     * ```
+     *
+     * #### All referenced symbols in `DOCUMENT`:
+     * All symbols referenced in an element that is transitively contained or inputrefed in
+     * the document:
+     * ```sparql
+     * SELECT DISTINCT ?s WHERE {
+     *   <DOCUMENT> (ulo:contains|dc:hasPart)* ?p.
+     *   ?p ulo:crossrefs ?s.
+     * }
+     * ```
+     *
+     * #### All symbols defined in a `DOCUMENT`:
+     * All symbols defined by a paragraph `p` that is transitively contained or inputrefed in
+     * the document:
+     * ```sparql
+     * SELECT DISTINCT ?s WHERE {
+     *   <DOCUMENT> (ulo:contains|dc:hasPart)* ?p.
+     *   ?p ulo:defines ?s.
+     * }
+     * ```
+     *
+     * #### All "prerequisite" concepts in a `DOCUMENT`:
+     * All symbols references in the document that are not also defined in it:
+     * ```sparql
+     * SELECT DISTINCT ?s WHERE {
+     *   <DOCUMENT> (ulo:contains|dc:hasPart)* ?p.
+     *   ?p ulo:crossrefs ?s.
+     *   MINUS {
+     *     <DOCUMENT> (ulo:contains|dc:hasPart)* ?p.
+     *     ?p ulo:defines ?s.
+     *   }
+     * }
+     * ```
+     *
+     *
      */
 
-
-     /*
+    /*
 
      use crate::content::declarations::OpenDeclaration::Symbol;
      use crate::narration::exercises::Exercise;
@@ -244,7 +296,7 @@ pub mod ontologies {
      use crate::content::declarations::morphisms::Morphism;
 
     section:
-    
+
 
     symdecl:
     #[cfg(feature="rdf")]
@@ -281,7 +333,7 @@ pub mod ontologies {
 
     symref:
     #[cfg(feature="rdf")]
-    if E::RDF { 
+    if E::RDF {
         let iri = extractor.get_document_iri();
         extractor.add_triples([
             triple!(<(iri)> ulo:CROSSREFS <(uri.to_iri())>)
@@ -299,7 +351,7 @@ pub mod ontologies {
 
 
 
-    
+
 
      */
 

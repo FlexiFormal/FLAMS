@@ -1,6 +1,8 @@
 #![allow(rustdoc::private_intra_doc_links)]
 #![allow(unused_imports)]
-/*! # Public API Endpoints
+/*!
+ *
+ * # Public API Endpoints
  *
  * | Path         | Arguments | Description / Return Value |
  * | ------------ | --------- | ----------- |

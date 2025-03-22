@@ -11,6 +11,23 @@ lazy_static::lazy_static! {
     };
 }
 
+#[cfg(any(feature = "git2", feature = "gitlab"))]
+pub trait GitUrlExt {
+    fn into_https(self) -> Self;
+}
+#[cfg(any(feature = "git2", feature = "gitlab"))]
+impl GitUrlExt for git_url_parse::GitUrl {
+    fn into_https(mut self) -> Self {
+        self = self.trim_auth();
+        self.scheme = git_url_parse::Scheme::Https;
+        self.scheme_prefix = true;
+        if !self.path.starts_with('/') {
+            self.path = format!("/{}", self.path);
+        }
+        self
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Project {
     pub id: u64,

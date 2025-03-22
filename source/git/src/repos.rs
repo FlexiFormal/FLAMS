@@ -1,6 +1,8 @@
 use git2::RepositoryOpenFlags;
 use std::path::Path;
 
+use crate::GitUrlExt;
+
 macro_rules! in_git {
 	(($($tt:tt)*); $b:block) => {{
 		let span = ::tracing::debug_span!(parent:&*$crate::REMOTE_SPAN,$($tt)*);
@@ -79,7 +81,17 @@ impl GitRepo {
         let Some(url) = remote.url() else {
             return Err(git2::Error::from_str("No origin"));
         };
-        git_url_parse::GitUrl::parse(url).map_err(|e| git2::Error::from_str(&e.to_string()))
+        let mut url =
+            git_url_parse::GitUrl::parse(url).map_err(|e| git2::Error::from_str(&e.to_string()))?;
+        if matches!(
+            url.scheme,
+            git_url_parse::Scheme::Ssh | git_url_parse::Scheme::GitSsh
+        ) {
+            url = url.into_https();
+            self.0.remote_set_url("origin", &url.to_string())?;
+        }
+
+        Ok(url)
     }
 
     /// #### Errors

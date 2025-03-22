@@ -202,9 +202,9 @@ impl LocalArchive {
 
     #[cfg(feature = "gitlab")]
     pub fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
+        let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
         self.is_managed
             .get_or_init(|| {
-                let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
                 let Ok(repo) = flams_git::repos::GitRepo::open(self.path()) else {
                     return None;
                 };
