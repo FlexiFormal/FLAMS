@@ -451,6 +451,8 @@ impl GitRepo {
             Some(&mut merge_options),
             Some(&mut git2::build::CheckoutBuilder::new()),
           )?;
+          tracing::debug!("Checking out HEAD");
+          self.0.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
           let mut index = self.0.index()?;
           if index.has_conflicts() {
             tracing::debug!("Index has conflicts now");
@@ -483,8 +485,6 @@ impl GitRepo {
             )?;
           }
           self.0.cleanup_state()?;
-          tracing::debug!("Checking out HEAD");
-          self.0.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
           Ok(())
         })
     }
