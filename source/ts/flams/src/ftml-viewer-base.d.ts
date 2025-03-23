@@ -65,15 +65,17 @@ export interface QuizQuestion {
     objectives: [CognitiveDimension, SymbolURI][];
 }
 
+export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Exercise" } & CognitiveDimension) | ({ type: "SubExercise" } & CognitiveDimension);
+
+export type SymbolURI = string;
+
+export type DocumentElementURI = string;
+
 export type DocumentURI = string;
 
-export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
-
-export type Name = string;
+export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
 
 export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
-
-export type ArchiveId = string;
 
 export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Exercise";
 
@@ -88,8 +90,6 @@ export interface QueryFilter {
     allow_exercises?: boolean;
     definition_like_only?: boolean;
 }
-
-export type SlideElement = { type: "Slide"; html: string } | { type: "Paragraph"; html: string } | { type: "Inputref"; uri: DocumentURI } | { type: "Section"; title: string | undefined; children: SlideElement[] };
 
 export interface FileData {
     rel_path: string;
@@ -121,10 +121,6 @@ export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string;
 
 export type Institution = { type: "university"; title: string; place: string; country: string; url: string; acronym: string; logo: string } | { type: "school"; title: string; place: string; country: string; url: string; acronym: string; logo: string };
 
-export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Exercise" } & CognitiveDimension) | ({ type: "SubExercise" } & CognitiveDimension);
-
-export type DocumentElementURI = string;
-
 export interface FileStateSummary {
     new: number;
     stale: number;
@@ -134,13 +130,17 @@ export interface FileStateSummary {
     last_changed: Timestamp;
 }
 
-export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
+export type SlideElement = { type: "Slide"; html: string } | { type: "Paragraph"; html: string } | { type: "Inputref"; uri: DocumentURI } | { type: "Section"; title: string | undefined; children: SlideElement[] };
 
-export type SymbolURI = string;
+export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
 
-export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
+export type ArchiveId = string;
+
+export type Name = string;
 
 export type Timestamp = number;
+
+export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
 
 /**
  * Options for rendering an FTML document

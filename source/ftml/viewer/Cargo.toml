@@ -22,27 +22,34 @@ dwarf-debug-info = true
 
 [features]
 ssr = [] # just to make documentation happy
-ts = ["ftml-viewer-components/ts","dep:tsify-next","dep:serde","flams-utils/wasm","dep:wasm-bindgen-futures","flams-ontology/wasm"]
+ts = [
+    "ftml-viewer-components/ts",
+    "dep:tsify-next",
+    "dep:serde",
+    "flams-utils/wasm",
+    "dep:wasm-bindgen-futures",
+    "flams-ontology/wasm",
+]
 omdoc = ["ftml-viewer-components/omdoc"]
 
 [dependencies]
-ftml-viewer-components = {workspace=true,features = ["csr"]}
-flams-web-utils = {workspace=true,features=["csr"]}
-flams-utils = {workspace=true}
-flams-ontology = {workspace=true}
+ftml-viewer-components = { workspace = true, features = ["csr"] }
+flams-web-utils = { workspace = true, features = ["csr"] }
+flams-utils = { workspace = true }
+flams-ontology = { workspace = true }
 
-leptos-dyn-dom = {workspace=true,features = ["csr"]}
-leptos = {workspace=true,features = ["csr"]}
-leptos_meta = {workspace=true}
-wasm-bindgen = {workspace=true}
-console_error_panic_hook = {workspace=true}
-thaw = {workspace=true}
-tracing-wasm = {workspace=true}
-tracing = {workspace=true,features=["release_max_level_info"]}
+leptos-dyn-dom = { workspace = true, features = ["csr"] }
+leptos = { workspace = true, features = ["csr"] }
+leptos_meta = { workspace = true }
+wasm-bindgen = { workspace = true }
+console_error_panic_hook = { workspace = true }
+thaw = { workspace = true }
+tracing-wasm = { workspace = true }
+tracing = { workspace = true, features = ["release_max_level_info"] }
 
-tsify-next = {workspace=true,optional = true}
-serde = {workspace=true,optional=true}
-wasm-bindgen-futures = {workspace=true,optional=true}
+tsify-next = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 
 #tachys = {workspace = true}
@@ -52,4 +59,3 @@ wasm-bindgen-futures = {workspace=true,optional=true}
 #leptos_macro = {version="=0.7.0-beta5"}
 #hydration_context = {version="=0.2.0-beta5"}
 #leptos_config = {version="=0.7.0-beta5"}
-

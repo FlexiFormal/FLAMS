@@ -1,5 +1,5 @@
-#[env]
-#RUSTFLAGS="-C target-feature=+bulk-memory"
+[env]
+RUSTFLAGS = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext"
 
 [tasks.wasm-pack]
 install_crate = "wasm-pack"
@@ -13,10 +13,10 @@ args = [
     "--",
     "--target",
     "wasm32-unknown-unknown",
-    #"-Z",
-    #"build-std=std,panic_abort,core,alloc",
-    #"-Z",
-    #"build-std-features=optimize_for_size,panic_immediate_abort",
+    "-Z",
+    "build-std=std,panic_abort,core,alloc",
+    "-Z",
+    "build-std-features=optimize_for_size,panic_immediate_abort",
 ]
 
 [tasks.update-package-json]
@@ -33,16 +33,16 @@ args = [
     "--out-dir",
     "ts",
     "--out-name",
-    "ftml-viewer-base",       #"--target","web",
+    "ftml-viewer-base",                                           #"--target","web",
     "--",
     "--features",
     "ts,omdoc",
     "--target",
     "wasm32-unknown-unknown",
-    #"-Z",
-    #"build-std=std,panic_abort,core,alloc",
-    #"-Z",
-    #"build-std-features=optimize_for_size,panic_immediate_abort",
+    "-Z",
+    "build-std=std,panic_abort,core,alloc",
+    "-Z",
+    "build-std-features=optimize_for_size,panic_immediate_abort",
 ]
 
 [tasks.wasm-pack-ts-dev]

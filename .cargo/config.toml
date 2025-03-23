@@ -1,3 +1,8 @@
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-Ctarget-cpu=mvp",
+    "-Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext",
+]
 
 #[unstable]
 #codegen-backend=true
