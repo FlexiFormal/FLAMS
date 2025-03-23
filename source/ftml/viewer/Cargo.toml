@@ -51,7 +51,6 @@ tsify-next = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 
-
 #tachys = {workspace = true}
 #leptos_macro = {workspace = true}
 #tachys = {version="=0.1.0-beta5"}

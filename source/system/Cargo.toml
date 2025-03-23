@@ -4,61 +4,73 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-tokio = ["dep:tokio","flams-utils/tokio","flams-ontology/tokio"]
-gitlab = ["flams-git/gitlab","tokio"]
-tantivy = ["dep:tantivy","dep:html2text","flams-ontology/tantivy"]
-zip = ["tokio","dep:reqwest","dep:async-compression","dep:astral-tokio-tar","dep:tokio-util","dep:futures"]#["dep:flate2","dep:tar","tokio","dep:tokio-util","dep:reqwest","dep:async-compression"]
+tokio = ["dep:tokio", "flams-utils/tokio", "flams-ontology/tokio"]
+gitlab = ["flams-git/gitlab", "tokio"]
+tantivy = ["dep:tantivy", "dep:html2text", "flams-ontology/tantivy"]
+zip = [
+    "tokio",
+    "dep:reqwest",
+    "dep:async-compression",
+    "dep:astral-tokio-tar",
+    "dep:tokio-util",
+    "dep:futures",
+] #["dep:flate2","dep:tar","tokio","dep:tokio-util","dep:reqwest","dep:async-compression"]
 
 [dev-dependencies]
-tracing-subscriber = {workspace=true}
+tracing-subscriber = { workspace = true }
 
 [dependencies]
-flams-utils = {workspace=true, features=["rayon","async","serde"]}
-flams-ontology = {workspace=true, features = ["rdf","serde"]}
-flams-git = {workspace=true}
+flams-utils = { workspace = true, features = ["rayon", "async", "serde"] }
+flams-ontology = { workspace = true, features = ["rdf", "serde"] }
+flams-git = { workspace = true }
 
-tracing = {workspace=true}
-tracing-subscriber = {workspace=true}
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 # tracing-appender = {workspace=true}
-tracing-error = {workspace=true}
-tempfile = {workspace=true}
-crossbeam-channel = {workspace=true}
+tracing-error = { workspace = true }
+tempfile = { workspace = true }
+crossbeam-channel = { workspace = true }
 
-rayon = {workspace=true}
-spliter={workspace=true}
-walkdir = {workspace=true}
-regex = {workspace=true}
-either = {workspace=true}
-parking_lot = {workspace=true}
-smallvec = {workspace = true}
-const_format = {workspace=true}
-lazy_static = {workspace=true}
-simple-home-dir = {workspace=true}
-tokio = {workspace=true,features=["rt","io-util","sync","fs"],optional=true}
-tokio-util = {workspace = true,optional=true}
-chrono = {workspace=true}
-serde_json = {workspace=true}
-url = {workspace=true}
+rayon = { workspace = true }
+spliter = { workspace = true }
+walkdir = { workspace = true }
+#regex = {workspace=true}
+either = { workspace = true }
+parking_lot = { workspace = true }
+smallvec = { workspace = true }
+const_format = { workspace = true }
+lazy_static = { workspace = true }
+simple-home-dir = { workspace = true }
+tokio = { workspace = true, features = [
+    "rt",
+    "io-util",
+    "sync",
+    "fs",
+], optional = true }
+tokio-util = { workspace = true, optional = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
 git-url-parse = { workspace = true }
 
-oxigraph = { workspace=true }
-spargebra = { workspace=true,features=["rdf-star"] }
-sparesults = {workspace=true,features=["rdf-star"]}
-oxrdfio = { workspace=true }
+oxigraph = { workspace = true }
+spargebra = { workspace = true, features = ["rdf-star"] }
+sparesults = { workspace = true, features = ["rdf-star"] }
+oxrdfio = { workspace = true }
 
-tantivy = {workspace = true,optional=true}
-html2text = {workspace = true,optional=true}
+tantivy = { workspace = true, optional = true }
+html2text = { workspace = true, optional = true }
 
-serde = {workspace=true}
-bincode = {workspace=true}
-eyre = {workspace=true}
+serde = { workspace = true }
+bincode = { workspace = true }
+eyre = { workspace = true }
 
 #flate2 = {workspace=true,optional=true}
 #tar = {workspace=true,optional=true}
-futures = {workspace = true,optional=true}
-reqwest = {workspace=true,optional=true,features=["stream"]}
-async-compression = {workspace=true,optional=true}
-astral-tokio-tar = {workspace=true,optional=true}
+futures = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true, features = ["stream"] }
+async-compression = { workspace = true, optional = true }
+astral-tokio-tar = { workspace = true, optional = true }
 
 [lints]
 workspace = true

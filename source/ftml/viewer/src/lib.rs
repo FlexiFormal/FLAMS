@@ -1,8 +1,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-
 use wasm_bindgen::prelude::*;
-
 
 #[wasm_bindgen]
 /// sets the server url used to the provided one; by default `https://flams.mathhub.info`.
@@ -13,15 +11,15 @@ pub fn set_server_url(server_url: String) {
 
 pub use ftml_viewer_components::remote::get_server_url;
 
-#[cfg(any(doc,not(feature="ts")))]
+#[cfg(any(doc, not(feature = "ts")))]
 #[cfg_attr(docsrs, doc(cfg(not(feature = "ts"))))]
 #[wasm_bindgen(start)]
 pub fn run() {
     use flams_ontology::uris::DocumentURI;
     use flams_web_utils::components::Themer;
+    use ftml_viewer_components::{FTMLDocumentSetup, FTMLGlobalSetup};
     use leptos::prelude::*;
     use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
-    use ftml_viewer_components::{FTMLDocumentSetup,FTMLGlobalSetup};
     #[allow(unused_mut)]
     let mut config = tracing_wasm::WASMLayerConfigBuilder::new();
     //#[cfg(not(debug_assertions))]
@@ -37,11 +35,11 @@ pub fn run() {
     });
 }
 
-#[cfg(feature="ts")]
+#[cfg(feature = "ts")]
 mod ts;
-#[cfg(feature="ts")]
+#[cfg(feature = "ts")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ts")))]
 pub use ts::*;
 
-#[cfg(all(feature="ts",doc))]
-pub use ftml_viewer_components::components::{TOC,TOCElem};
+#[cfg(all(feature = "ts", doc))]
+pub use ftml_viewer_components::components::TOCElem;

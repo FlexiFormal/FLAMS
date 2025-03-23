@@ -36,5 +36,8 @@ eyre = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["io-util", "rt"] }
 url = { workspace = true, features = ["serde"] }
 
+regex = { workspace = true }
+js-regexp = { workspace = true }
+
 [lints]
 workspace = true

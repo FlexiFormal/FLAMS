@@ -122,7 +122,7 @@ ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.
 rstest = { version = "0.25" }
 
 # utils
-const-str = "0.5"
+const-str = "0.6"
 triomphe = "0.1"
 parking_lot = "0.12"
 serde-wasm-bindgen = "0.6"
@@ -131,7 +131,7 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 rustc-hash = "2"
 chrono = "0.4"
 oxrdf = "0.2.3"
-smallvec = { version = "2.0.0-alpha.7" }                             #,features = ["specialization"] }
+smallvec = { version = "2.0.0-alpha.11", features = ["specialization"] }
 lazy_static = "1.5"
 url = "2"
 either = "1"
@@ -146,7 +146,7 @@ walkdir = "2.5"
 filetime = "0.2"
 regex = "1.10"
 async-broadcast = "0.7"
-simple-home-dir = "0.4"
+simple-home-dir = "0.5"
 async-trait = "0.1"
 bincode = { version = "2.0.0-rc.3", features = ["derive", "serde"] }
 lightningcss = { version = "1.0.0-alpha.63" }
@@ -203,10 +203,10 @@ gitlab = { version = "0" }
 git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 # leptos
-leptos = { version = "0.7" }        #, features=["nightly"]}
+leptos = { version = "0.7", features = ["nightly"] }
 leptos_axum = "0.7"
 leptos_meta = "0.7"
-leptos_router = { version = "0.7" } #, features=["nightly"]}
+leptos_router = { version = "0.7", features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
 
 #thaw = { version="0.4.2",features=["nightly"] }
@@ -215,9 +215,11 @@ leptos_router = { version = "0.7" } #, features=["nightly"]}
 #thaw = { path="../thaw/thaw", features=["nightly"] }
 #thaw_components = { path="../thaw/thaw_components" }
 #thaw_utils = { path="../thaw/thaw_utils", features=["nightly"] }
-thaw = { git = "https://github.com/Jazzpirate/thaw" }            #, features=["nightly"] }
+thaw = { git = "https://github.com/Jazzpirate/thaw", features = ["nightly"] }
 thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
-thaw_utils = { git = "https://github.com/Jazzpirate/thaw" }      #, features=["nightly"] }
+thaw_utils = { git = "https://github.com/Jazzpirate/thaw", features = [
+    "nightly",
+] }
 #thaw = { features=["nightly"],git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw = { version="=0.4.0-beta5",features=["nightly"] }
 #thaw_components = { git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
@@ -249,6 +251,7 @@ gloo-storage = "0.3"
 web-sys = { version = "0.3" }
 tsify-next = { version = "0.5", features = ["js"] }
 js-sys = "0.3"
+js-regexp = "0.2"
 
 # search
 

@@ -332,7 +332,7 @@ pub struct FillInSol {
 //#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct FillinRegex(
     //#[cfg_attr(feature="wasm", tsify(type = "string"))]
-    regex::Regex,
+    flams_utils::regex::Regex,
 );
 
 #[cfg(feature = "serde")]
@@ -353,7 +353,7 @@ mod regex_serde {
             D: serde::Deserializer<'de>,
         {
             let s = String::deserialize(deserializer)?;
-            regex::Regex::new(&s)
+            flams_utils::regex::Regex::new(&s)
                 .map(FillinRegex)
                 .map_err(serde::de::Error::custom)
         }
@@ -425,7 +425,7 @@ impl FillInSolOption {
             }
             "regex" => Some(Self::Regex {
                 regex: FillinRegex(
-                    regex::Regex::new(
+                    flams_utils::regex::Regex::new(
                         value, //&format!("^{value}?")
                     )
                     .ok()?,

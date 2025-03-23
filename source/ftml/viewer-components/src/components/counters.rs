@@ -1,5 +1,5 @@
 use flams_ontology::{
-    narration::{documents::DocumentStyles, paragraphs::ParagraphKind, sections::SectionLevel},
+    narration::{paragraphs::ParagraphKind, sections::SectionLevel},
     uris::{DocumentURI, Name},
 };
 use flams_utils::{
@@ -130,9 +130,6 @@ impl std::ops::Add<Self> for AllSections {
                 if changed {
                     0
                 } else {
-                    if rhs.0[6] > 0 {
-                        changed = true
-                    }
                     self.0[6] + rhs.0[6]
                 }
             },
@@ -189,9 +186,6 @@ impl std::ops::AddAssign<Self> for AllSections {
         if changed {
             self.0[6] = 0
         } else {
-            if rhs.0[6] > 0 {
-                changed = true;
-            }
             self.0[6] += rhs.0[6];
         }
         //tracing::warn!(" = {self:?}");
@@ -558,7 +552,7 @@ impl SectionCounters {
         }
     }
 
-    pub fn get_exercise(&mut self, styles: &[Name]) -> Memo<String> {
+    pub fn get_exercise(&mut self, _styles: &[Name]) -> Memo<String> {
         self.init_paras();
         self.current = LogicalLevel::Paragraph;
         Memo::new(|_| String::new())
@@ -597,7 +591,7 @@ impl SectionCounters {
             v.0.iter()
                 .map(|(n, e)| {
                     //leptos::logging::log!("Cloning {n}");
-                    let mut r = *e;
+                    let r = *e;
                     let since = r.0.update_untracked(|e| {
                         let r = e.since;
                         e.since = 0;

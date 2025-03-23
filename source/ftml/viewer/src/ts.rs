@@ -1,53 +1,69 @@
 #![allow(non_local_definitions)]
 
-use flams_utils::vecmap::VecMap;
-use ftml_viewer_components::{components::{documents::{DocumentFromURI, DocumentString, FragmentFromURI, FragmentString, FragmentStringProps}, TOCElem, TOCSource}, ts::{InputRefContinuation, JInputRefCont, JOnSectTtl, JParaCont, JSectCont, JSlideCont, SlideContinuation, LeptosContext, NamedJsFunction, OnSectionTitle, ParagraphContinuation, SectionContinuation, TsCont, TsTopCont}, ExerciseOptions};
-use flams_ontology::{narration::exercises::{self, ExerciseFeedback, ExerciseResponse, Solutions}, uris::{DocumentElementURI, DocumentURI}};
+use flams_ontology::{
+    narration::exercises::{ExerciseFeedback, ExerciseResponse, Solutions},
+    uris::{DocumentElementURI, DocumentURI},
+};
+use ftml_viewer_components::{
+    components::{
+        documents::{
+            DocumentFromURI, DocumentString, FragmentFromURI, FragmentString, FragmentStringProps,
+        },
+        Gotto, TOCElem, TOCSource,
+    },
+    ts::{
+        InputRefContinuation, JInputRefCont, JOnSectTtl, JParaCont, JSectCont, JSlideCont,
+        LeptosContext, NamedJsFunction, OnSectionTitle, ParagraphContinuation, SectionContinuation,
+        SlideContinuation, TsTopCont,
+    },
+    ExerciseOptions,
+};
+use leptos::{either::Either, prelude::*};
 use wasm_bindgen::prelude::wasm_bindgen;
-use leptos::{context::Provider, either::Either, prelude::*};
 
-
-#[wasm_bindgen]//(js_name = setDebugLog)]
+#[wasm_bindgen] //(js_name = setDebugLog)]
 /// activates debug logging
 pub fn set_debug_log() {
     let _ = tracing_wasm::try_set_as_global_default();
 }
-
 
 #[wasm_bindgen]
 /// sets up a leptos context for rendering FTML documents or fragments.
 /// If a context already exists, does nothing, so is cheap to call
 /// [render_document] and [render_fragment] also inject a context
 /// iff none already exists, so this is optional in every case.
-pub fn ftml_setup(to:leptos::web_sys::HtmlElement,
-  children:TsTopCont,
-  on_section:Option<JSectCont>,
-  on_section_title:Option<JOnSectTtl>,
-  on_paragraph:Option<JParaCont>,
-  on_inputref:Option<JInputRefCont>,
-  on_slide:Option<JSlideCont>,
-  exercise_opts:Option<ExerciseOption>,
-  on_exercise:Option<JExerciseCont>,
+pub fn ftml_setup(
+    to: leptos::web_sys::HtmlElement,
+    children: TsTopCont,
+    on_section: Option<JSectCont>,
+    on_section_title: Option<JOnSectTtl>,
+    on_paragraph: Option<JParaCont>,
+    on_inputref: Option<JInputRefCont>,
+    on_slide: Option<JSlideCont>,
+    exercise_opts: Option<ExerciseOption>,
+    on_exercise: Option<JExerciseCont>,
 ) -> FTMLMountHandle {
-  let children = children.to_cont();
-  let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
-  let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
-  let on_paragraph = on_paragraph.map(|f| f.get().into());
-  let on_inputref = on_inputref.map(|f| f.get().into());
-  let on_slide = on_slide.map(|f| f.get().into());
+    let children = children.to_cont();
+    let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
+    let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
+    let on_paragraph = on_paragraph.map(|f| f.get().into());
+    let on_inputref = on_inputref.map(|f| f.get().into());
+    let on_slide = on_slide.map(|f| f.get().into());
 
-  FTMLMountHandle::new(to,move || view! {
-    <GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise>{
-      let ret = NodeRef::new();
-      ret.on_load(move |e| {
-        let owner = Owner::current().expect("Not in a leptos reactive context!");
-        if let Err(e) = children.apply(&(e,owner.into())) {
-          tracing::error!("Error calling continuation: {e}");
+    FTMLMountHandle::new(to, move || {
+        view! {
+          <GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise>{
+            let ret = NodeRef::new();
+            ret.on_load(move |e| {
+              let owner = Owner::current().expect("Not in a leptos reactive context!");
+              if let Err(e) = children.apply(&(e,owner.into())) {
+                tracing::error!("Error calling continuation: {e}");
+              }
+            });
+            view!(<div node_ref = ret/>)
+          }</GlobalSetup>
         }
-      });
-      view!(<div node_ref = ret/>)
-    }</GlobalSetup>
-  })
+    })
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -55,55 +71,80 @@ pub fn ftml_setup(to:leptos::web_sys::HtmlElement,
 /// render an FTML document to the provided element
 /// #### Errors
 pub fn render_document(
-  to:leptos::web_sys::HtmlElement,
-  document:DocumentOptions,
-  context:Option<LeptosContext>,
-  on_section:Option<JSectCont>,
-  on_section_title:Option<JOnSectTtl>,
-  on_paragraph:Option<JParaCont>,
-  on_inputref:Option<JInputRefCont>,
-  on_slide:Option<JSlideCont>,
-  exercise_opts:Option<ExerciseOption>,
-  on_exercise:Option<JExerciseCont>
-) -> Result<FTMLMountHandle,String> {
-  fn inner(
-    to:leptos::web_sys::HtmlElement,
-    document:DocumentOptions,
-    on_section:Option<JSectCont>,
-    on_section_title:Option<JOnSectTtl>,
-    on_paragraph:Option<JParaCont>,
-    on_inputref:Option<JInputRefCont>,
-    on_slide:Option<JSlideCont>,
-    exercise_opts:Option<ExerciseOption>,
-    on_exercise:Option<JExerciseCont>
-  ) -> Result<FTMLMountHandle,String> {
-    use ftml_viewer_components::FTMLGlobalSetup;
-    use flams_web_utils::components::Themer;
+    to: leptos::web_sys::HtmlElement,
+    document: DocumentOptions,
+    context: Option<LeptosContext>,
+    on_section: Option<JSectCont>,
+    on_section_title: Option<JOnSectTtl>,
+    on_paragraph: Option<JParaCont>,
+    on_inputref: Option<JInputRefCont>,
+    on_slide: Option<JSlideCont>,
+    exercise_opts: Option<ExerciseOption>,
+    on_exercise: Option<JExerciseCont>,
+) -> Result<FTMLMountHandle, String> {
+    fn inner(
+        to: leptos::web_sys::HtmlElement,
+        document: DocumentOptions,
+        on_section: Option<JSectCont>,
+        on_section_title: Option<JOnSectTtl>,
+        on_paragraph: Option<JParaCont>,
+        on_inputref: Option<JInputRefCont>,
+        on_slide: Option<JSlideCont>,
+        exercise_opts: Option<ExerciseOption>,
+        on_exercise: Option<JExerciseCont>,
+    ) -> Result<FTMLMountHandle, String> {
+        let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
+        let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
+        let on_paragraph = on_paragraph.map(|f| f.get().into());
+        let on_inputref = on_inputref.map(|f| f.get().into());
+        let on_slide = on_slide.map(|f| f.get().into());
 
-    let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
-    let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
-    let on_paragraph = on_paragraph.map(|f| f.get().into());
-    let on_inputref = on_inputref.map(|f| f.get().into());
-    let on_slide = on_slide.map(|f| f.get().into());
+        let comp = move || match document {
+            DocumentOptions::HtmlString { html, gottos, toc } => {
+                let toc = toc.map_or(TOCSource::None, TOCSource::Ready);
+                let gottos = gottos.unwrap_or_default();
+                Either::Left(
+                    view! {<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise><DocumentString html gottos toc/></GlobalSetup>},
+                )
+            }
+            DocumentOptions::FromBackend { uri, gottos, toc } => {
+                let toc = toc.map_or(TOCSource::None, Into::into);
+                let gottos = gottos.unwrap_or_default();
+                Either::Right(
+                    view! {<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise><DocumentFromURI uri gottos toc/></GlobalSetup>},
+                )
+            }
+        };
 
-    let comp = move || match document {
-      DocumentOptions::HtmlString{html,toc} => {
-        let toc = toc.map_or(TOCSource::None,TOCSource::Ready);
-        Either::Left(view!{<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise><DocumentString html toc/></GlobalSetup>})
-      }
-      DocumentOptions::FromBackend{uri,toc} => {
-        let toc = toc.map_or(TOCSource::None,Into::into);
-        Either::Right(view!{<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise><DocumentFromURI uri toc/></GlobalSetup>})
-      }
-    };
-
-    Ok(FTMLMountHandle::new(to,move || comp()))
-  }
-  if let Some(context) = context {
-    context.with(move || inner(to,document,on_section,on_section_title,on_paragraph,on_inputref,on_slide,exercise_opts,on_exercise))
-  } else {
-    inner(to,document,on_section,on_section_title,on_paragraph,on_inputref,on_slide,exercise_opts,on_exercise)
-  }
+        Ok(FTMLMountHandle::new(to, move || comp()))
+    }
+    if let Some(context) = context {
+        context.with(move || {
+            inner(
+                to,
+                document,
+                on_section,
+                on_section_title,
+                on_paragraph,
+                on_inputref,
+                on_slide,
+                exercise_opts,
+                on_exercise,
+            )
+        })
+    } else {
+        inner(
+            to,
+            document,
+            on_section,
+            on_section_title,
+            on_paragraph,
+            on_inputref,
+            on_slide,
+            exercise_opts,
+            on_exercise,
+        )
+    }
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -111,120 +152,137 @@ pub fn render_document(
 /// render an FTML document fragment to the provided element
 /// #### Errors
 pub fn render_fragment(
-  to:leptos::web_sys::HtmlElement,
-  fragment:FragmentOptions,
-  context:Option<LeptosContext>,
-  on_section:Option<JSectCont>,
-  on_section_title:Option<JOnSectTtl>,
-  on_paragraph:Option<JParaCont>,
-  on_inputref:Option<JInputRefCont>,
-  on_slide:Option<JSlideCont>,
-  exercise_opts:Option<ExerciseOption>,
-  on_exercise:Option<JExerciseCont>
-) -> Result<FTMLMountHandle,String> {
-  fn inner(
-    to:leptos::web_sys::HtmlElement,
-    fragment:FragmentOptions,
-    on_section:Option<JSectCont>,
-    on_section_title:Option<JOnSectTtl>,
-    on_paragraph:Option<JParaCont>,
-    on_inputref:Option<JInputRefCont>,
-    on_slide:Option<JSlideCont>,
-    exercise_opts:Option<ExerciseOption>,
-    on_exercise:Option<JExerciseCont>
-  ) -> Result<FTMLMountHandle,String> {
-    use ftml_viewer_components::FTMLGlobalSetup;
-    use flams_web_utils::components::Themer;
+    to: leptos::web_sys::HtmlElement,
+    fragment: FragmentOptions,
+    context: Option<LeptosContext>,
+    on_section: Option<JSectCont>,
+    on_section_title: Option<JOnSectTtl>,
+    on_paragraph: Option<JParaCont>,
+    on_inputref: Option<JInputRefCont>,
+    on_slide: Option<JSlideCont>,
+    exercise_opts: Option<ExerciseOption>,
+    on_exercise: Option<JExerciseCont>,
+) -> Result<FTMLMountHandle, String> {
+    fn inner(
+        to: leptos::web_sys::HtmlElement,
+        fragment: FragmentOptions,
+        on_section: Option<JSectCont>,
+        on_section_title: Option<JOnSectTtl>,
+        on_paragraph: Option<JParaCont>,
+        on_inputref: Option<JInputRefCont>,
+        on_slide: Option<JSlideCont>,
+        exercise_opts: Option<ExerciseOption>,
+        on_exercise: Option<JExerciseCont>,
+    ) -> Result<FTMLMountHandle, String> {
+        let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
+        let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
+        let on_paragraph = on_paragraph.map(|f| f.get().into());
+        let on_inputref = on_inputref.map(|f| f.get().into());
+        let on_slide = on_slide.map(|f| f.get().into());
 
-    let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
-    let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
-    let on_paragraph = on_paragraph.map(|f| f.get().into());
-    let on_inputref = on_inputref.map(|f| f.get().into());
-    let on_slide = on_slide.map(|f| f.get().into());
-
-    let comp = move || match fragment {
-      FragmentOptions::HtmlString{html,uri} => {
-        Either::Left(FragmentString(FragmentStringProps {html,uri}))
-      }
-      FragmentOptions::FromBackend{uri} => {
-        Either::Right(view!{<FragmentFromURI uri/>})
-      }
-    };
-    Ok(FTMLMountHandle::new(to,move || 
-      view!{<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise>{comp()}</GlobalSetup>}
-    ))
-  }
-  if let Some(context) = context {
-    context.with(move || inner(to,fragment,on_section,on_section_title,on_paragraph,on_inputref,on_slide,exercise_opts,on_exercise))
-  } else {
-    inner(to,fragment,on_section,on_section_title,on_paragraph,on_inputref,on_slide,exercise_opts,on_exercise)
-  }
+        let comp = move || match fragment {
+            FragmentOptions::HtmlString { html, uri } => {
+                Either::Left(FragmentString(FragmentStringProps { html, uri }))
+            }
+            FragmentOptions::FromBackend { uri } => Either::Right(view! {<FragmentFromURI uri/>}),
+        };
+        Ok(FTMLMountHandle::new(
+            to,
+            move || view! {<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise>{comp()}</GlobalSetup>},
+        ))
+    }
+    if let Some(context) = context {
+        context.with(move || {
+            inner(
+                to,
+                fragment,
+                on_section,
+                on_section_title,
+                on_paragraph,
+                on_inputref,
+                on_slide,
+                exercise_opts,
+                on_exercise,
+            )
+        })
+    } else {
+        inner(
+            to,
+            fragment,
+            on_section,
+            on_section_title,
+            on_paragraph,
+            on_inputref,
+            on_slide,
+            exercise_opts,
+            on_exercise,
+        )
+    }
 }
-
-
 
 #[component]
-fn GlobalSetup<V:IntoView+'static>(
-  #[prop(default=None)] on_section:Option<SectionContinuation>,
-  #[prop(default=None)] on_section_title:Option<OnSectionTitle>,
-  #[prop(default=None)] on_paragraph:Option<ParagraphContinuation>,
-  #[prop(default=None)] on_inputref:Option<InputRefContinuation>,
-  #[prop(default=None)] on_slide:Option<SlideContinuation>,
-  #[prop(default=None)] exercise_opts:Option<ExerciseOption>,
-  #[prop(default=None)] on_exercise:Option<JExerciseCont>,
-  children:TypedChildren<V>
+fn GlobalSetup<V: IntoView + 'static>(
+    #[prop(default=None)] on_section: Option<SectionContinuation>,
+    #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
+    #[prop(default=None)] on_paragraph: Option<ParagraphContinuation>,
+    #[prop(default=None)] on_inputref: Option<InputRefContinuation>,
+    #[prop(default=None)] on_slide: Option<SlideContinuation>,
+    #[prop(default=None)] exercise_opts: Option<ExerciseOption>,
+    #[prop(default=None)] on_exercise: Option<JExerciseCont>,
+    children: TypedChildren<V>,
 ) -> impl IntoView {
-  use ftml_viewer_components::FTMLGlobalSetup;
-  use flams_web_utils::components::Themer;
-  //use leptos::either::Either as E;
-  use leptos::either::Either::{Left,Right};
-  let exercise_opts = if let Some(on_exercise) = on_exercise { 
-    Some(ExerciseOptions::OnResponse(on_exercise.get().into()))
-  } else { exercise_opts.map(Into::into) };
-  let children = children.into_inner();
-  let owner = Owner::new();
-  let children = move || {
-      if let Some(on_section) = on_section { 
-        provide_context(Some(on_section));
-      }
-      if let Some(on_section_title) = on_section_title {
-        provide_context(Some(on_section_title));
-      }
-      if let Some(on_paragraph) = on_paragraph { 
-        provide_context(Some(on_paragraph));
-      }
-      if let Some(on_inputref) = on_inputref { 
-        provide_context(Some(on_inputref));
-      }
-      if let Some(on_slide) = on_slide { 
-        provide_context(Some(on_slide));
-      }
-      if let Some(exercise_opts) = exercise_opts {
-        provide_context(exercise_opts);
-      }
-      children()
-  };
-    
-  let children = move || if ftml_viewer_components::is_in_ftml() {
-    Left(children())
-  } else {
-    Right(view!(<FTMLGlobalSetup>{children()}</FTMLGlobalSetup>))
-  };
-
-  //let r = owner.with(move || {
-    if with_context::<thaw::ConfigInjection,_>(|_| ()).is_none() {
-      Left(view!(<Themer>{children()}</Themer>))
+    use flams_web_utils::components::Themer;
+    use ftml_viewer_components::FTMLGlobalSetup;
+    //use leptos::either::Either as E;
+    use leptos::either::Either::{Left, Right};
+    let exercise_opts = if let Some(on_exercise) = on_exercise {
+        Some(ExerciseOptions::OnResponse(on_exercise.get().into()))
     } else {
-      Right(children())
+        exercise_opts.map(Into::into)
+    };
+    let children = children.into_inner();
+    let children = move || {
+        if let Some(on_section) = on_section {
+            provide_context(Some(on_section));
+        }
+        if let Some(on_section_title) = on_section_title {
+            provide_context(Some(on_section_title));
+        }
+        if let Some(on_paragraph) = on_paragraph {
+            provide_context(Some(on_paragraph));
+        }
+        if let Some(on_inputref) = on_inputref {
+            provide_context(Some(on_inputref));
+        }
+        if let Some(on_slide) = on_slide {
+            provide_context(Some(on_slide));
+        }
+        if let Some(exercise_opts) = exercise_opts {
+            provide_context(exercise_opts);
+        }
+        children()
+    };
+
+    let children = move || {
+        if ftml_viewer_components::is_in_ftml() {
+            Left(children())
+        } else {
+            Right(view!(<FTMLGlobalSetup>{children()}</FTMLGlobalSetup>))
+        }
+    };
+
+    //let r = owner.with(move || {
+    if with_context::<thaw::ConfigInjection, _>(|_| ()).is_none() {
+        Left(view!(<Themer>{children()}</Themer>))
+    } else {
+        Right(children())
     }
-  //});
-  //on_cleanup(move || drop(owner));
-  //r
+    //});
+    //on_cleanup(move || drop(owner));
+    //r
 }
 
-
-
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(untagged)]
 /// Options for rendering an FTML document
@@ -237,17 +295,23 @@ fn GlobalSetup<V:IntoView+'static>(
 ///     toc: if defined, will render a table of contents for the document
 pub enum DocumentOptions {
     FromBackend {
-        uri:DocumentURI,
-        toc:Option<TOCOptions>
+        uri: DocumentURI,
+        #[serde(default)]
+        gottos: Option<Vec<Gotto>>,
+        //#[serde(default)] <- this breaks toc:"GET" for some reason
+        toc: Option<TOCOptions>,
     },
     //Prerendered,
     HtmlString {
-        html:String,
-        toc:Option<Vec<TOCElem>>
-    }
+        html: String,
+        #[serde(default)]
+        gottos: Option<Vec<Gotto>>,
+        //#[serde(default)] <- this breaks toc:"GET" for some reason
+        toc: Option<Vec<TOCElem>>,
+    },
 }
 
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(untagged)]
 /// Options for rendering an FTML document fragment
@@ -258,17 +322,17 @@ pub enum DocumentOptions {
 ///     html: the HTML String
 pub enum FragmentOptions {
     FromBackend {
-        uri:DocumentElementURI,
+        uri: DocumentElementURI,
     },
     //Prerendered,
     HtmlString {
-        uri:Option<DocumentElementURI>,
-        html:String,
-    }
+        html: String,
+        #[serde(default)]
+        uri: Option<DocumentElementURI>,
+    },
 }
 
-
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 /// Options for rendering a table of contents
 /// `GET` will retrieve it from the remote backend
@@ -277,68 +341,65 @@ pub enum TOCOptions {
     #[serde(rename = "GET")]
     GET,
     #[serde(untagged)]
-    Predefined(Vec<TOCElem>)
+    Predefined(Vec<TOCElem>),
 }
 
 impl From<TOCOptions> for TOCSource {
-  fn from(value: TOCOptions) -> Self {
-      match value {
-          TOCOptions::GET =>Self::Get,
-          TOCOptions::Predefined(toc) => Self::Ready(toc)
-      }
-  }
+    fn from(value: TOCOptions) -> Self {
+        match value {
+            TOCOptions::GET => Self::Get,
+            TOCOptions::Predefined(toc) => Self::Ready(toc),
+        }
+    }
 }
 
-
-ftml_viewer_components::ts_function!{
+ftml_viewer_components::ts_function! {
   JExerciseCont ExerciseCont @ "(r:ExerciseResponse) => void"
-  = (ExerciseResponse) => ()
+  = ExerciseResponse => ()
 }
 
-
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize,tsify_next::Tsify)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ExerciseOption {
-  //OnResponse( #[tsify(type = "(r:ExerciseResponse) => void")] ExerciseCont),
-  WithFeedback(Vec<(DocumentElementURI,ExerciseFeedback)>),
-  WithSolutions(Vec<(DocumentElementURI,Solutions)>)
+    //OnResponse( #[tsify(type = "(r:ExerciseResponse) => void")] ExerciseCont),
+    WithFeedback(Vec<(DocumentElementURI, ExerciseFeedback)>),
+    WithSolutions(Vec<(DocumentElementURI, Solutions)>),
 }
 impl Into<ExerciseOptions> for ExerciseOption {
-  fn into(self) -> ExerciseOptions {
-    match self {
-      Self::WithFeedback(v) => ExerciseOptions::WithFeedback(v.into()),
-      Self::WithSolutions(s) => ExerciseOptions::WithSolutions(s.into())
+    fn into(self) -> ExerciseOptions {
+        match self {
+            Self::WithFeedback(v) => ExerciseOptions::WithFeedback(v.into()),
+            Self::WithSolutions(s) => ExerciseOptions::WithSolutions(s.into()),
+        }
     }
-  }
 }
 
-
-
-
 #[wasm_bindgen]
-pub struct FTMLMountHandle{
-  mount:std::cell::Cell<Option<leptos::prelude::UnmountHandle<leptos::tachys::view::any_view::AnyViewState>>>
+pub struct FTMLMountHandle {
+    mount: std::cell::Cell<
+        Option<leptos::prelude::UnmountHandle<leptos::tachys::view::any_view::AnyViewState>>,
+    >,
 }
 
 #[wasm_bindgen]
 impl FTMLMountHandle {
-  /// unmounts the view and cleans up the reactive system.
-  /// Not calling this is a memory leak
-  pub fn unmount(&self) {
-    if let Some(mount) = self.mount.take() {
-      drop(mount);
+    /// unmounts the view and cleans up the reactive system.
+    /// Not calling this is a memory leak
+    pub fn unmount(&self) {
+        if let Some(mount) = self.mount.take() {
+            drop(mount);
+        }
     }
-  }
-  fn new<V:IntoView+'static>(div:leptos::web_sys::HtmlElement,f:impl FnOnce() -> V + 'static) -> Self {
-    let handle = leptos::prelude::mount_to(div,move || {
-      f().into_any()
-    });
-    Self {
-      mount:std::cell::Cell::new(Some(handle))
+    fn new<V: IntoView + 'static>(
+        div: leptos::web_sys::HtmlElement,
+        f: impl FnOnce() -> V + 'static,
+    ) -> Self {
+        let handle = leptos::prelude::mount_to(div, move || f().into_any());
+        Self {
+            mount: std::cell::Cell::new(Some(handle)),
+        }
     }
-  }
 }
-
 
 /*
 pub mod server {
@@ -356,7 +417,7 @@ pub mod server {
 
   #[wasm_bindgen]
   /// #### Errors
-  pub async fn get_document_html(doc:&str) -> Result<HTMLFragment,String> { 
+  pub async fn get_document_html(doc:&str) -> Result<HTMLFragment,String> {
     let doc = doc.parse().map_err(|e| "invalid document URI".to_string())?;
     server_config.inputref(doc).await.map(|(_,css,html)|
       HTMLFragment {css, html}
@@ -365,7 +426,7 @@ pub mod server {
 
   #[wasm_bindgen]
   /// #### Errors
-  pub async fn get_paragraph_html(elem:&str) -> Result<HTMLFragment,String> { 
+  pub async fn get_paragraph_html(elem:&str) -> Result<HTMLFragment,String> {
     let doc = elem.parse().map_err(|e| "invalid document URI".to_string())?;
     server_config.paragraph(doc).await.map(|(_,css,html)|
       HTMLFragment {css, html}

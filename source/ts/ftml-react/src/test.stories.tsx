@@ -11,7 +11,6 @@ export default {
 export const Complete = () => {
   setDebugLog();
   setServerUrl("https://mmt.beta.vollki.kwarc.info");
-  console.log("Server URL:",window.FLAMS_SERVER_URL);
   console.log("Server URL according to leptos:",getServerUrl());
   const doc = {
     uri:"https://stexmmt.mathhub.info/:sTeX?a=sTeX/MathTutorial&d=textbook&l=en",

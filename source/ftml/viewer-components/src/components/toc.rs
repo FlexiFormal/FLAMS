@@ -1,28 +1,25 @@
 //#![allow(non_local_definitions)]
 
+use crate::components::navigation::NavElems;
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
     uris::{DocumentElementURI, DocumentURI, Name, NarrativeURI},
 };
-use flams_utils::CSS;
+use flams_utils::{time::Timestamp, CSS};
 use flams_web_utils::do_css;
 use leptos::{
     either::{Either, EitherOf4},
     prelude::*,
 };
 
-use crate::components::navigation::NavElems;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
-#[serde(untagged)]
-/// A Table of contents; Either:
-/// 1. an already known TOC, consisting of a list of [`TOCElem`]s, or
-/// 2. the URI of a Document. In that case, the relevant FLAMS server
-///    will be requested to obtain the TOC for that document.
-pub enum TOC {
-    Full(Vec<TOCElem>),
-    Get(DocumentURI),
+/// A section that has been "covered" at the specified timestamp; will be marked accordingly
+/// in the TOC.
+pub struct Gotto {
+    pub uri: DocumentElementURI,
+    #[serde(default)]
+    pub timestamp: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -127,54 +124,117 @@ impl<'a> TOCIter<'a> for &'a [TOCElem] {
 }
 
 impl TOCElem {
-    fn into_view(self) -> impl IntoView {
+    fn into_view(self, gottos: &mut Gottos) -> impl IntoView + use<> {
         use flams_web_utils::components::{AnchorLink, Header};
         use leptos_dyn_dom::DomStringCont;
+        let style = if gottos.current.is_some() {
+            "background-color:var(--colorPaletteYellowBorder1);"
+        } else {
+            ""
+        };
+        let after = gottos.current.as_ref().and_then(|e| e.timestamp).map(|ts| {
+            view! {
+                <sup><i>" Covered: "{ts.into_date().to_string()}</i></sup>
+            }
+        });
         match self {
             Self::Section {
                 title: Some(title),
                 id,
                 children,
+                uri,
                 ..
             } => {
+                gottos.next(&uri);
                 let id = format!("#{id}");
+                let ch = children
+                    .into_iter()
+                    .map(|e| e.into_view(gottos))
+                    .collect_view();
                 Some(Either::Left(view! {
                   <AnchorLink href=id>
                     <Header slot>
-                      <DomStringCont html=title cont=crate::iterate/>
+                      <div style=style><DomStringCont html=title cont=crate::iterate/>{after}</div>
                     </Header>
-                    {children.into_iter().map(Self::into_view).collect_view()}
+                    {ch}
                   </AnchorLink>
                 }))
             }
             Self::Section {
                 title: None,
                 children,
+                uri,
                 ..
+            } => {
+                gottos.next(&uri);
+                Some(Either::Right(
+                    children
+                        .into_iter()
+                        .map(|e| e.into_view(gottos))
+                        .collect_view()
+                        .into_any(),
+                ))
             }
-            | Self::Inputref { children, .. }
-            | Self::SkippedSection { children } => Some(Either::Right(
-                children
-                    .into_iter()
-                    .map(Self::into_view)
-                    .collect_view()
-                    .into_any(),
-            )),
+            Self::Inputref { children, .. } | Self::SkippedSection { children } => {
+                Some(Either::Right(
+                    children
+                        .into_iter()
+                        .map(|e| e.into_view(gottos))
+                        .collect_view()
+                        .into_any(),
+                ))
+            }
             _ => None,
         }
     }
 }
 
+struct Gottos {
+    current: Option<Gotto>,
+    iter: std::vec::IntoIter<Gotto>,
+}
+impl Gottos {
+    fn next(&mut self, uri: &DocumentElementURI) {
+        if let Some(c) = self.current.as_ref() {
+            if c.uri == *uri {
+                self.current = self.iter.next();
+            }
+        }
+    }
+}
+
 #[component]
-pub fn Toc(#[prop(optional)] css: Vec<CSS>, toc: Vec<TOCElem>) -> impl IntoView {
+pub fn Toc(
+    #[prop(optional)] css: Vec<CSS>,
+    toc: Vec<TOCElem>,
+    mut gottos: Vec<Gotto>,
+) -> impl IntoView {
     use flams_web_utils::components::Anchor;
     use thaw::Scrollbar;
     for css in css {
         do_css(css);
     }
+    //let max = with_context::<SectionCounters>(|ctrs| ctrs.max).unwrap_or(SectionLevel::Section);
+
+    gottos.retain(|e| {
+        toc.as_slice().iter_elems().any(|s| {
+            if let TOCElem::Section { uri, .. } = s {
+                *uri == e.uri
+            } else {
+                false
+            }
+        })
+    });
+    //gottos.sort_by_key(|k| k.timestamp.unwrap_or_default());
+    let mut gottos = gottos.into_iter();
+    let current = gottos.next();
+    let mut gottos = Gottos {
+        current,
+        iter: gottos,
+    };
     view! {
-      <div /*style="position:fixed;right:20px;z-index:5;background-color:inherit;"*/><Scrollbar style="max-height: 400px;"><Anchor>{
-        toc.into_iter().map(TOCElem::into_view).collect_view()
+      <div><Scrollbar style="max-height: 400px;"><Anchor>{
+        toc.into_iter().map(|e| e.into_view(&mut gottos)).collect_view()
       }</Anchor></Scrollbar></div>
     }
 }
@@ -191,9 +251,19 @@ pub enum TOCSource {
 #[allow(clippy::match_wildcard_for_single_variants)]
 pub fn do_toc<V: IntoView + 'static>(
     toc: TOCSource,
+    gottos: Vec<Gotto>,
     wrap: impl FnOnce(Option<AnyView>) -> V,
 ) -> impl IntoView {
     use TOCIter;
+
+    /* ------------------------
+    let gottos = vec![Gotto {
+        uri: "https://mathhub.info?a=courses/FAU/AI/course&p=course/sec&d=ml&l=en&e=section"
+            .parse()
+            .unwrap(),
+        timestamp: Some(Timestamp::now()),
+    }];
+    // ------------------------ */
     match toc {
         TOCSource::None => EitherOf4::A(wrap(None)),
         TOCSource::Ready(toc) => {
@@ -201,7 +271,7 @@ pub fn do_toc<V: IntoView + 'static>(
             ctw.set(Some(toc.clone()));
             EitherOf4::B(view! {
                 {toc.as_slice().do_titles()}
-                {wrap(Some(view!(<Toc toc/>).into_any()))}
+                {wrap(Some(view!(<Toc toc gottos/>).into_any()))}
             })
         }
         TOCSource::Get => match expect_context() {
@@ -221,7 +291,7 @@ pub fn do_toc<V: IntoView + 'static>(
                         |r| Either::Right(match r {
                             Ok((css,toc)) => {
                                 for c in css { do_css(c); }
-                                Some(view!(<Toc toc/>))
+                                Some(view!(<Toc toc gottos=gottos.clone()/>))
                             }
                             Err(e) => {
                                 tracing::error!(e);

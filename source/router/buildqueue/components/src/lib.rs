@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(clippy::must_use_candidate)]
 
 #[cfg(any(

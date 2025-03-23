@@ -1,7 +1,8 @@
-[env]
-RUSTFLAGS = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext"
+#[env]
+#RUSTFLAGS = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext"
 
 [tasks.wasm-pack]
+env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -26,6 +27,7 @@ cp ./package.json-real ./ts/package.json
 '''
 
 [tasks.wasm-pack-ts]
+env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -46,6 +48,7 @@ args = [
 ]
 
 [tasks.wasm-pack-ts-dev]
+env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -64,12 +67,14 @@ args = [
 dependencies = ["wasm-pack-ts-dev", "update-package-json"] #,"copy-flams-to-ts"]
 
 [tasks.wasm-pack-dev]
+env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = ["build", "--target", "no-modules", "--dev"]
 
 [tasks.update-js]
-env = { "CARGO_MAKE_RUST_SCRIPT_PROVIDER" = "rust-script" }
+env = { "RUSTFLAGS" = "" }
+#env = { "CARGO_MAKE_RUST_SCRIPT_PROVIDER" = "cargo-script" }
 script_runner = "@rust"
 script = '''
 use std::{io::Write, path::PathBuf};
@@ -106,6 +111,7 @@ ftml_start();
 '''
 
 [tasks.copy-flams-to-ts]
+env = { "RUSTFLAGS" = "" }
 workspace = false
 script_runner = "@rust"
 script = '''
