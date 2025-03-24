@@ -3,6 +3,7 @@ import { FLAMSContext, FLAMSPreContext } from '../extension';
 import { CancellationToken } from 'vscode-languageclient';
 import * as language from 'vscode-languageclient';
 import { MathHubTreeProvider } from './mathhub';
+import { Clipboard } from 'vscode';
 
 export enum Commands {
   HelloWorld = "flams.helloWorld",
@@ -29,6 +30,10 @@ interface HtmlRequestParams {
   uri: language.URI
 }
 
+interface QuizRequestParams {
+  uri: language.URI
+}
+
 interface ReloadParams {}
 
 export function register_server_commands(context:FLAMSContext) {
@@ -48,6 +53,21 @@ export function register_server_commands(context:FLAMSContext) {
                 vscode.window.showInformationMessage("No preview available; building possibly failed");
               }
             });
+          } else {
+            vscode.window.showInformationMessage("(No sTeX file in focus)");
+          }
+          break;
+        case "quiz":
+          if (doc) {
+            context.client.sendRequest<string | undefined>("flams/quizRequest",<QuizRequestParams>{uri:doc.uri.toString()}).then(s => {
+              if (s) {
+                vscode.env.clipboard.writeText(s).then(() => {
+                  vscode.window.showInformationMessage("Copied to clipboard");
+                });
+              }
+            });
+          } else {
+            vscode.window.showInformationMessage("(No sTeX file in focus)");
           }
           break;
         case "reload":

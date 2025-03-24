@@ -247,7 +247,7 @@ extern "C" {
 #[allow(unreachable_code)]
 #[allow(clippy::needless_return)]
 pub fn iterate(e: &Element) -> Option<impl FnOnce() -> AnyView> {
-    //tracing::trace!("iterating {}",e.outer_html());
+    //tracing::info!("iterating {}", e.outer_html());
     #[cfg(any(feature = "csr", feature = "hydrate"))]
     {
         if !has_ftml_attribute(e) {

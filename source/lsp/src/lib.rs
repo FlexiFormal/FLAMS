@@ -170,12 +170,22 @@ impl lsp::notification::Notification for InstallArchives {
 pub struct HtmlRequestParams {
     pub uri: lsp::Url,
 }
-
 pub(crate) struct HTMLRequest;
 impl lsp::request::Request for HTMLRequest {
     type Params = HtmlRequestParams;
     type Result = Option<String>;
     const METHOD: &'static str = "flams/htmlRequest";
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct QuizRequestParams {
+    pub uri: lsp::Url,
+}
+pub(crate) struct QuizRequest;
+impl lsp::request::Request for QuizRequest {
+    type Params = QuizRequestParams;
+    type Result = String;
+    const METHOD: &'static str = "flams/quizRequest";
 }
 
 struct UpdateMathHub;
@@ -189,6 +199,7 @@ impl lsp::notification::Notification for HTMLResult {
     type Params = String;
     const METHOD: &str = "flams/htmlResult";
 }
+
 pub struct ServerURL;
 impl ServerURL {
     fn get() -> String {
@@ -245,6 +256,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
     pub fn router(self) -> async_lsp::router::Router<Self> {
         let mut r = async_lsp::router::Router::from_language_server(self);
         r.request::<HTMLRequest, _>(Self::html_request);
+        r.request::<QuizRequest, _>(Self::quiz_request);
         r.notification::<Reload>(Self::reload);
         r.notification::<InstallArchives>(Self::install);
         //r.request(handler)

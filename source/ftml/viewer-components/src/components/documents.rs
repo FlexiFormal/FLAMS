@@ -114,16 +114,19 @@ pub fn DocumentString(
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
+    use flams_web_utils::components::ClientOnly;
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(
         (&toc, &omdoc),
         (TOCSource::None, crate::components::omdoc::OMDocSource::None)
     );
     view! {<FTMLDocumentSetup uri>
-        {if burger {Some(
-            do_burger(toc,gottos,omdoc)
-        )}
-        else { None }}
+        {
+            if burger {Some(
+                do_burger(toc,gottos,omdoc)
+            )}
+            else { None }
+        }
         <DomStringCont html cont=iterate/>
     </FTMLDocumentSetup>}
 }

@@ -2,14 +2,19 @@
 
 use std::ops::ControlFlow;
 
-use crate::{annotations::to_diagnostic, ClientExt, HtmlRequestParams, ProgressCallbackServer};
+use crate::{
+    annotations::to_diagnostic,
+    state::{LSPState, UrlOrFile},
+    ClientExt, HtmlRequestParams, ProgressCallbackServer, QuizRequestParams,
+};
 
 use super::{FLAMSLSPServer, ServerWrapper};
 use async_lsp::{
     lsp_types::{self as lsp},
     LanguageClient, LanguageServer, ResponseError,
 };
-use flams_system::backend::{archives::LocalArchive, GlobalBackend};
+use flams_ontology::uris::DocumentURI;
+use flams_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
 macro_rules! impl_request {
@@ -50,7 +55,6 @@ macro_rules! impl_request {
 
 macro_rules! impl_notification {
     (! $name:ident = $struct:ident) => {
-        #[must_use]
         fn $name(
             &mut self,
             params: <lsp::notification::$struct as lsp::notification::Notification>::Params,
@@ -60,7 +64,6 @@ macro_rules! impl_notification {
         }
     };
     ($name:ident = $struct:ident) => {
-        #[must_use]
         fn $name(
             &mut self,
             params: <lsp::notification::$struct as lsp::notification::Notification>::Params,
@@ -87,6 +90,35 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string())),
         )
     }
+
+    pub(crate) fn quiz_request(&mut self, params: QuizRequestParams) -> Res<String> {
+        use flams_system::backend::docfile::QuizExtension;
+        fn get_res(url: UrlOrFile, state: LSPState) -> Result<String, String> {
+            let doc = state
+                .get(&url)
+                .ok_or_else(|| "Document not found".to_string())?;
+            let uri = doc
+                .document_uri()
+                .ok_or_else(|| "Document URI not found".to_string())?;
+            let doc = state
+                .backend()
+                .get_document(uri)
+                .ok_or_else(|| "Document not found".to_string())?;
+            let quiz = doc.as_quiz(state.backend()).map_err(|e| e.to_string())?;
+            serde_json::to_string(&quiz).map_err(|e| e.to_string())
+        }
+        let state = self.inner.state().clone();
+        Box::pin(async move {
+            let url: UrlOrFile = params.uri.into();
+            tokio::task::spawn_blocking(move || {
+                get_res(url, state)
+                    .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e))
+            })
+            .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string()))
+            .await?
+        })
+    }
+
     pub(crate) fn reload(
         &mut self,
         _: crate::ReloadParams,
@@ -177,7 +209,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         }))
     }
 
-    #[must_use]
     fn shutdown(&mut self, (): ()) -> Res<()> {
         tracing::info!("LSP: shutdown");
         Box::pin(std::future::ready(Ok(())))
@@ -185,7 +216,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
 
     // Notifications -------------------------------------------
 
-    #[must_use]
     //impl_notification!(! initialized = Initialized);
     fn initialized(&mut self, _params: lsp::InitializedParams) -> Self::NotifyResult {
         tracing::info!("LSP: initialized");
@@ -206,7 +236,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_notification!(!did_delete_files = DidDeleteFiles);
 
     // textDocument/
-    #[must_use]
     //impl_notification!(! did_open = DidOpenTextDocument);
     fn did_open(&mut self, params: lsp::DidOpenTextDocumentParams) -> Self::NotifyResult {
         let document = params.text_document;
@@ -222,7 +251,7 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
             .insert(document.uri.into(), document.text);
         ControlFlow::Continue(())
     }
-    #[must_use]
+
     #[allow(clippy::let_underscore_future)]
     //impl_notification!(! did_change = DidChangeTextDocument);
     fn did_change(&mut self, params: lsp::DidChangeTextDocumentParams) -> Self::NotifyResult {
@@ -254,7 +283,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         ControlFlow::Continue(())
     }
 
-    #[must_use]
     #[allow(clippy::let_underscore_future)]
     //impl_notification!(! did_save = DidSaveTextDocument);
     fn did_save(&mut self, params: lsp::DidSaveTextDocumentParams) -> Self::NotifyResult {
@@ -289,7 +317,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
 
     // textDocument/
 
-    #[must_use]
     // impl_request!(document_symbol = DocumentSymbolRequest);
     fn document_symbol(
         &mut self,
@@ -316,7 +343,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    #[must_use]
     // impl_request!(! document_diagnostic = DocumentDiagnosticRequest => (lsp::DocumentDiagnosticReportResult::Report(lsp::DocumentDiagnosticReport::Full(lsp::RelatedFullDocumentDiagnosticReport::default()))));
     fn document_diagnostic(
         &mut self,
@@ -345,7 +371,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    //#[must_use]
     //impl_request!(? references = References => (None));
     fn references(&mut self, params: lsp::ReferenceParams) -> Res<Option<Vec<lsp::Location>>> {
         tracing::trace_span!("references").in_scope(move || {
@@ -367,7 +392,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    #[must_use]
     //impl_request!(! document_link = DocumentLinkRequest => (None));
     fn document_link(
         &mut self,
@@ -394,7 +418,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    #[must_use]
     // impl_request!(! hover = HoverRequest => (None));
     fn hover(&mut self, params: lsp::HoverParams) -> Res<Option<lsp::Hover>> {
         tracing::trace_span!("hover").in_scope(move || {
@@ -426,7 +449,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    #[must_use]
     // impl_request!(! definition = GotoDefinition => (None));
     fn definition(
         &mut self,
@@ -510,7 +532,7 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
             })
         }
     */
-    #[must_use]
+
     //impl_request!(! inlay_hint = InlayHintRequest => (None));
     fn inlay_hint(&mut self, params: lsp::InlayHintParams) -> Res<Option<Vec<lsp::InlayHint>>> {
         tracing::trace_span!("inlay hint").in_scope(move || {
@@ -536,7 +558,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(inlay_hint_resolve = InlayHintResolveRequest);
 
     //impl_request!(! code_action = CodeActionRequest => (None));
-    #[must_use]
     fn code_action(
         &mut self,
         params: lsp::CodeActionParams,
@@ -569,7 +590,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     }
 
     //impl_request!(prepare_call_hierarchy = CallHierarchyPrepare);
-    #[must_use]
     fn prepare_call_hierarchy(
         &mut self,
         params: lsp::CallHierarchyPrepareParams,
@@ -604,7 +624,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
 
     // callHierarchy/
     //impl_request!(incoming_calls = CallHierarchyIncomingCalls);
-    #[must_use]
     fn incoming_calls(
         &mut self,
         params: lsp::CallHierarchyIncomingCallsParams,
@@ -662,7 +681,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(linked_editing_range = LinkedEditingRange);
 
     // semanticTokens/
-    #[must_use]
     // impl_request!(semantic_tokens_full = SemanticTokensFullRequest);
     fn semantic_tokens_full(
         &mut self,
@@ -689,7 +707,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    #[must_use]
     // impl_request!(semantic_tokens_range = SemanticTokensRangeRequest);
     fn semantic_tokens_range(
         &mut self,
@@ -717,7 +734,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    #[must_use]
     // impl_request!(semantic_tokens_full_delta = SemanticTokensFullDeltaRequest);
     fn semantic_tokens_full_delta(
         &mut self,

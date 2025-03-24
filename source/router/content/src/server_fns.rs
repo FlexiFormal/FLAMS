@@ -289,7 +289,6 @@ mod server {
         let Some((css, doc)) = backend!(get_html_body!(&uri, true)) else {
             return Err("document not found".to_string().into());
         };
-
         let html = format!(
             "<div{}</div>",
             doc.strip_prefix("<body")

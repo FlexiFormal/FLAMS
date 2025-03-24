@@ -297,7 +297,22 @@ impl ServerState {
         if std::env::var("LEPTOS_OUTPUT_NAME").is_err() {
             unsafe { std::env::set_var("LEPTOS_OUTPUT_NAME", "flams") };
         }
-        "target/web".to_string()
+        if Settings::get().lsp {
+            let Ok(p) = std::env::current_exe()
+                .expect("Error setting current web-dir path")
+                .parent()
+                .expect("Error setting current web-dir path")
+                .parent()
+                .expect("Error setting current web-dir path")
+                .join("web")
+                .canonicalize()
+            else {
+                panic!("Failed to canonicalize path");
+            };
+            p.display().to_string()
+        } else {
+            "target/web".to_string()
+        }
     }
     #[cfg(not(debug_assertions))]
     fn get_basepath() -> String {

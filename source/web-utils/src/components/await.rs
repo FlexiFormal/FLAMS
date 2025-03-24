@@ -57,3 +57,29 @@ where
         }</Suspense>
     }
 }
+
+pub fn wait_and_then_fn<E, Fut, F, T, V: IntoView + 'static>(f: F, r: fn(T) -> V) -> impl IntoView
+where
+    Fut: Future<Output = Result<T, ServerFnError<E>>> + Send + 'static,
+    F: Fn() -> Fut + 'static + Send + Sync,
+    T: Send + Sync + Clone + 'static + serde::Serialize + for<'de> serde::Deserialize<'de>,
+    E: std::fmt::Display
+        + Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + Send
+        + Sync
+        + 'static,
+{
+    let res = Resource::new(|| (), move |()| f());
+    view! {
+        <Suspense fallback = || view!(<Spinner/>)>{move ||
+            match res.get() {
+              Some(Ok(t)) =>
+                EitherOf3::A(r(t)),
+              Some(Err(e)) => EitherOf3::B(display_error(e.to_string().into())),
+              None => EitherOf3::C(view!(<Spinner/>)),
+            }
+        }</Suspense>
+    }
+}

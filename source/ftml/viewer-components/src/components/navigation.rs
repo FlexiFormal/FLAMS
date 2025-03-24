@@ -163,9 +163,9 @@ impl URLFragment {
 #[component]
 pub fn Nav() -> impl IntoView {
     use flams_web_utils::components::ClientOnly;
-    let fragment = expect_context::<URLFragment>();
     view!(<ClientOnly>{move || {
         tracing::trace!("Checking URL fragment");
+        let fragment = expect_context::<URLFragment>();
         let s = fragment.0.get();
         if !s.is_empty() {
             NavElems::with_untracked(|e| e.navigate_to(&s));

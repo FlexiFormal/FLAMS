@@ -1,63 +1,75 @@
-use super::{checking::DocumentChecker, paragraphs::ParagraphKind, sections::SectionLevel, DocumentElement, NarrationTrait};
-use crate::{uris::{DocumentURI, Name}, Checked, CheckingState, Resolvable, Unchecked};
+use super::{
+    checking::DocumentChecker, paragraphs::ParagraphKind, sections::SectionLevel, DocumentElement,
+    NarrationTrait,
+};
+use crate::{
+    uris::{DocumentURI, Name},
+    Checked, CheckingState, Resolvable, Unchecked,
+};
 use core::str;
-use std::{borrow::Cow, fmt::Debug, str::FromStr};
 use flams_utils::prelude::{TreeChild, TreeChildIter, TreeLike};
+use std::{borrow::Cow, fmt::Debug, str::FromStr};
 use triomphe::Arc;
 
-#[derive(Debug,Clone,Default)]
-#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentStyles {
     pub counters: Vec<SectionCounter>,
-    pub styles:Vec<DocumentStyle>
+    pub styles: Vec<DocumentStyle>,
 }
 
-#[derive(Debug,Clone)]
-#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentStyle {
-    pub kind:ParagraphKind,
-    pub name:Option<Name>,
-    pub counter:Option<Name>
+    pub kind: ParagraphKind,
+    pub name: Option<Name>,
+    pub counter: Option<Name>,
 }
 impl FromStr for DocumentStyle {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some((a,b)) = s.split_once('-') {
+        if let Some((a, b)) = s.split_once('-') {
             let kind = ParagraphKind::from_str(a)?;
             let name = Some(Name::from_str(b).map_err(|_| ())?);
-            return Ok(Self { kind, name, counter:None })
+            return Ok(Self {
+                kind,
+                name,
+                counter: None,
+            });
         }
         let kind = ParagraphKind::from_str(s)?;
-        Ok(Self { kind, name:None, counter:None })
+        Ok(Self {
+            kind,
+            name: None,
+            counter: None,
+        })
     }
 }
 
-#[derive(Debug,Clone)]
-#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SectionCounter {
-    pub name:Name,
-    pub parent:Option<SectionLevel>
+    pub name: Name,
+    pub parent: Option<SectionLevel>,
 }
 
-
 #[derive(Debug)]
-pub struct OpenDocument<State:CheckingState> {
+pub struct OpenDocument<State: CheckingState> {
     pub uri: DocumentURI,
     pub title: Option<Box<str>>,
     pub elements: State::Seq<DocumentElement<State>>,
-    pub styles:DocumentStyles
+    pub styles: DocumentStyles,
 }
-crate::serde_impl!{mod serde_doc =
+crate::serde_impl! {mod serde_doc =
     struct OpenDocument[uri,title,elements,styles]
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Document(pub(super) Arc<OpenDocument<Checked>>);
 impl Resolvable for Document {
     type From = DocumentURI;
     #[inline]
-    fn id(&self) -> Cow<'_,Self::From> {
+    fn id(&self) -> Cow<'_, Self::From> {
         Cow::Borrowed(&self.0.uri)
     }
 }
@@ -82,41 +94,46 @@ impl Document {
         &self.0.styles
     }
     #[inline]
-    pub fn dfs(&self) -> impl Iterator<Item=&DocumentElement<Checked>> {
+    pub fn dfs(&self) -> impl Iterator<Item = &DocumentElement<Checked>> {
         <_ as TreeChildIter<Self>>::dfs(NarrationTrait::children(self).iter())
     }
 }
 
 impl NarrationTrait for Document {
     #[inline]
-    #[must_use]
     fn children(&self) -> &[DocumentElement<Checked>] {
         &self.0.elements
     }
     #[inline]
-    fn from_element(_: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+    fn from_element(_: &DocumentElement<Checked>) -> Option<&Self>
+    where
+        Self: Sized,
+    {
         None
     }
 }
 
 impl NarrationTrait for OpenDocument<Checked> {
     #[inline]
-    #[must_use]
     fn children(&self) -> &[DocumentElement<Checked>] {
         &self.elements
     }
     #[inline]
-    fn from_element(_: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
+    fn from_element(_: &DocumentElement<Checked>) -> Option<&Self>
+    where
+        Self: Sized,
+    {
         None
     }
 }
 
-#[cfg(feature="serde")]
+#[cfg(feature = "serde")]
 mod serde_impl {
     impl serde::Serialize for super::Document {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer {
+        where
+            S: serde::Serializer,
+        {
             self.0.serialize(serializer)
         }
     }
@@ -125,9 +142,8 @@ mod serde_impl {
 pub type UncheckedDocument = OpenDocument<Unchecked>;
 
 impl UncheckedDocument {
-
     #[inline]
-    pub fn dfs(&self) -> impl Iterator<Item=&DocumentElement<Unchecked>> {
+    pub fn dfs(&self) -> impl Iterator<Item = &DocumentElement<Unchecked>> {
         <_ as TreeChildIter<Self>>::dfs(self.elements.iter())
     }
     pub fn check(self, checker: &mut impl DocumentChecker) -> Document {
@@ -136,7 +152,7 @@ impl UncheckedDocument {
         Document(Arc::new(OpenDocument {
             uri: self.uri,
             title: self.title,
-            styles:self.styles,
+            styles: self.styles,
             elements,
         }))
     }
@@ -160,36 +176,42 @@ impl UncheckedDocument {
 
 impl TreeLike for Document {
     type Child<'a> = &'a DocumentElement<Checked>;
-    type RefIter<'a> = std::slice::Iter<'a,DocumentElement<Checked>>;
+    type RefIter<'a> = std::slice::Iter<'a, DocumentElement<Checked>>;
     fn children(&self) -> Option<Self::RefIter<'_>> {
         Some(NarrationTrait::children(self).iter())
     }
 }
 impl<'a> TreeChild<Document> for &'a DocumentElement<Checked> {
-    fn children<'b>(&self) -> Option<std::slice::Iter<'a,DocumentElement<Checked>>> where Self:'b {
+    fn children<'b>(&self) -> Option<std::slice::Iter<'a, DocumentElement<Checked>>>
+    where
+        Self: 'b,
+    {
         Some(NarrationTrait::children(*self).iter())
     }
 }
 
 impl TreeLike for UncheckedDocument {
     type Child<'a> = &'a DocumentElement<Unchecked>;
-    type RefIter<'a> = std::slice::Iter<'a,DocumentElement<Unchecked>>;
+    type RefIter<'a> = std::slice::Iter<'a, DocumentElement<Unchecked>>;
     fn children(&self) -> Option<Self::RefIter<'_>> {
         Some(self.elements.iter())
     }
 }
 impl<'a> TreeChild<UncheckedDocument> for &'a DocumentElement<Unchecked> {
-    fn children<'b>(&self) -> Option<std::slice::Iter<'a,DocumentElement<Unchecked>>> where Self:'b {
+    fn children<'b>(&self) -> Option<std::slice::Iter<'a, DocumentElement<Unchecked>>>
+    where
+        Self: 'b,
+    {
         match self {
             DocumentElement::Section(s) => Some(s.children.iter()),
             DocumentElement::Paragraph(p) => Some(p.children.iter()),
             DocumentElement::Exercise(e) => Some(e.children.iter()),
-            DocumentElement::Module { children, .. } |
-            DocumentElement::Morphism { children, .. } |
-            DocumentElement::MathStructure { children, .. } |
-            DocumentElement::Extension { children, .. } |
-            DocumentElement::SkipSection(children) |
-            DocumentElement::Slide{children,..} => Some(children.iter()),
+            DocumentElement::Module { children, .. }
+            | DocumentElement::Morphism { children, .. }
+            | DocumentElement::MathStructure { children, .. }
+            | DocumentElement::Extension { children, .. }
+            | DocumentElement::SkipSection(children)
+            | DocumentElement::Slide { children, .. } => Some(children.iter()),
             _ => None,
         }
     }
@@ -279,7 +301,7 @@ impl<State:CheckingState> OpenDocument<State> {
         }
         Ok(())
     }
-} 
+}
 */
 /*
 #[allow(clippy::type_complexity)]
