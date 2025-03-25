@@ -41,3 +41,4 @@ tracing = { workspace = true }
 axum-login = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+icondata_tb = { workspace = true }

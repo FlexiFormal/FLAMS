@@ -45,14 +45,10 @@ impl Entry {
 
     #[cfg(feature = "hydrate")]
     fn as_view(&self) -> impl IntoView + use<> {
+        use flams_router_base::vscode_link;
         use flams_web_utils::components::{Collapsible, Header};
-        use icondata_tb::TbBrandVscode as Vscode;
-        use thaw::Icon;
 
-        let link = format!(
-            "vscode://kwarc.flams/open?a={}&rp={}",
-            self.archive, self.rel_path
-        );
+        let vscode = vscode_link(&self.archive, &self.rel_path);
 
         let title = format!("[{}]{}", self.archive, self.rel_path);
         let total = self.steps.with_untracked(|v| v.0.len());
@@ -79,7 +75,7 @@ impl Entry {
               <b>
                 {title}
                 {move || {let (i,s) = current(); format!(" ({i}/{total}) {s}")}}
-                " "<a href=link><Icon icon=Vscode/></a>
+                " "{vscode}
               </b>
             </Header>
             <ol>

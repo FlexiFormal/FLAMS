@@ -13,6 +13,16 @@ pub mod ws;
 
 use leptos::{either::EitherOf3, prelude::*};
 
+pub fn vscode_link(
+    archive: &flams_ontology::uris::ArchiveId,
+    rel_path: &str,
+) -> impl IntoView + use<> {
+    let href = format!("vscode://kwarc.flams/open?a={archive}&rp={rel_path}");
+    view! {
+        <a href=href><thaw::Icon icon=icondata_tb::TbBrandVscode/></a>
+    }
+}
+
 #[component]
 pub fn RequireLogin<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoView {
     require_login(children.into_inner())
