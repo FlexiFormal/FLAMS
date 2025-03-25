@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 #[cfg(feature = "backend")]
 mod db;
 #[cfg(feature = "backend")]

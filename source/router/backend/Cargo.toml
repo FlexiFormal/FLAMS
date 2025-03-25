@@ -25,6 +25,7 @@ hydrate = [
     "flams-router-content/hydrate",
     "flams-router-buildqueue-base/hydrate",
 ]
+docs-only = []
 
 [dependencies]
 flams-ontology = { workspace = true, features = ["serde"] }

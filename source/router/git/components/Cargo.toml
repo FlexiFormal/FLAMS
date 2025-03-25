@@ -27,6 +27,7 @@ hydrate = [
     "flams-router-buildqueue-base/hydrate",
     #"flams-router-base/hydrate",
 ]
+docs-only = []
 
 [dependencies]
 flams-router-git-base = { workspace = true }

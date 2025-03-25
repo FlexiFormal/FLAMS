@@ -1,7 +1,8 @@
 #![allow(clippy::must_use_candidate)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 #[cfg(any(
-    all(feature = "ssr", feature = "hydrate", not(doc)),
+    all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
     not(any(feature = "ssr", feature = "hydrate"))
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
@@ -165,9 +166,9 @@ const fn class_from_level(lvl: LogLevel) -> &'static str {
 pub struct LogSocket {
     #[cfg(feature = "ssr")]
     listener: flams_utils::change_listener::ChangeListener<LogFileLine>,
-    #[cfg(all(feature = "hydrate", not(doc)))]
+    #[cfg(all(feature = "hydrate", not(feature = "docs-only")))]
     socket: leptos::web_sys::WebSocket,
-    #[cfg(all(feature = "hydrate", doc))]
+    #[cfg(all(feature = "hydrate", feature = "docs-only"))]
     socket: (),
 }
 
@@ -218,16 +219,23 @@ impl ws::WebSocketServer<(), Log> for LogSocket {
 impl ws::WebSocketClient<(), Log> for LogSocket {
     fn new(ws: leptos::web_sys::WebSocket) -> Self {
         Self {
-            #[cfg(not(doc))]
+            #[cfg(not(feature = "docs-only"))]
             socket: ws,
-            #[cfg(doc)]
+            #[cfg(feature = "docs-only")]
             socket: (),
             #[cfg(feature = "ssr")]
             listener: unreachable!(),
         }
     }
     fn socket(&mut self) -> &mut leptos::web_sys::WebSocket {
-        &mut self.socket
+        #[cfg(not(feature = "docs-only"))]
+        {
+            &mut self.socket
+        }
+        #[cfg(feature = "docs-only")]
+        {
+            unreachable!()
+        }
     }
 }
 

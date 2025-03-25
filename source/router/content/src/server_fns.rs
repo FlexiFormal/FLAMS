@@ -652,3 +652,146 @@ mod server {
         v
     }
 }
+
+#[server(prefix = "/content/legacy", endpoint = "uris")]
+pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<String>> {
+    use flams_ontology::uris::{
+        ArchiveURI, ArchiveURITrait, BaseURI, ModuleURI, URIOrRefTrait, URIRefTrait,
+    };
+    use flams_system::backend::{Backend, GlobalBackend};
+
+    const MATHHUB: &str = "http://mathhub.info";
+    const META: &str = "http://mathhub.info/sTeX/meta";
+    const URTHEORIES: &str = "http://cds.omdoc.org/urtheories";
+
+    lazy_static::lazy_static! {
+      static ref MATHHUB_INFO: BaseURI = BaseURI::new_unchecked("http://mathhub.info/:sTeX");
+      static ref META_URI: ArchiveURI = flams_ontology::metatheory::URI.archive_uri().owned();//ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("sTeX/meta-inf"));
+      static ref UR_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://cds.omdoc.org"),ArchiveId::new("MMT/urtheories"));
+      static ref MY_ARCHIVE: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://mathhub.info"),ArchiveId::new("my/archive"));
+      static ref INJECTING: ArchiveURI = ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("Papers/22-CICM-Injecting-Formal-Mathematics"));
+      static ref TUG: ArchiveURI = ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("Papers/22-TUG-sTeX"));
+    }
+
+    fn split(p: &str) -> Option<(ArchiveURI, usize)> {
+        if p.starts_with(META) {
+            return Some((META_URI.clone(), 29));
+        }
+        if p == URTHEORIES {
+            return Some((UR_URI.clone(), 31));
+        }
+        if p == "http://mathhub.info/my/archive" {
+            return Some((MY_ARCHIVE.clone(), 30));
+        }
+        if p == "http://kwarc.info/Papers/stex-mmt/paper" {
+            return Some((INJECTING.clone(), 34));
+        }
+        if p == "http://kwarc.info/Papers/tug/paper" {
+            return Some((TUG.clone(), 34));
+        }
+        if p.starts_with("file://") {
+            return Some((ArchiveURI::no_archive(), 7));
+        }
+        if let Some(mut p) = p.strip_prefix(MATHHUB) {
+            let mut i = MATHHUB.len();
+            if let Some(s) = p.strip_prefix('/') {
+                p = s;
+                i += 1;
+            }
+            return split_old(p, i);
+        }
+        GlobalBackend::get().with_archives(|mut tree| {
+            tree.find_map(|a| {
+                let base = a.uri();
+                let base = base.base().as_ref();
+                if p.starts_with(base) {
+                    let l = base.len();
+                    let np = &p[l..];
+                    let id = a.id().as_ref();
+                    if np.starts_with(id) {
+                        Some((a.uri().owned(), l + id.len()))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
+    fn split_old(p: &str, len: usize) -> Option<(ArchiveURI, usize)> {
+        GlobalBackend::get().with_archives(|mut tree| {
+            tree.find_map(|a| {
+                if p.starts_with(a.id().as_ref()) {
+                    let mut l = a.id().as_ref().len();
+                    let np = &p[l..];
+                    if np.starts_with('/') {
+                        l += 1;
+                    }
+                    Some((a.uri().owned(), len + l))
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
+    fn get_doc_uri(pathstr: &str) -> Option<DocumentURI> {
+        let pathstr = pathstr.strip_suffix(".tex").unwrap_or(pathstr);
+        let (p, mut m) = pathstr.rsplit_once('/')?;
+        let (a, l) = split(p)?;
+        let mut path = if l < p.len() { &p[l..] } else { "" };
+        if path.starts_with('/') {
+            path = &path[1..];
+        }
+        let lang = Language::from_rel_path(m);
+        m = m.strip_suffix(&format!(".{lang}")).unwrap_or(m);
+        ((a % path).ok()? & (m, lang)).ok()
+    }
+
+    fn get_mod_uri(pathstr: &str) -> Option<ModuleURI> {
+        let (mut p, mut m) = pathstr.rsplit_once('?')?;
+        m = m.strip_suffix("-module").unwrap_or(m);
+        if p.bytes().last() == Some(b'/') {
+            p = &p[..p.len() - 1];
+        }
+        let (a, l) = split(p)?;
+        let mut path = if l < p.len() { &p[l..] } else { "" };
+        if path.starts_with('/') {
+            path = &path[1..];
+        }
+        ((a % path).ok()? | m).ok()
+    }
+
+    fn get_sym_uri(pathstr: &str) -> Option<SymbolURI> {
+        let (m, s) = match pathstr.split_once('[') {
+            Some((m, s)) => {
+                let (m, _) = m.rsplit_once('?')?;
+                let (a, b) = s.rsplit_once(']')?;
+                let am = get_mod_uri(a)?;
+                let name = (am.name().clone() / b).ok()?;
+                let module = get_mod_uri(m)?;
+                return Some(module | name);
+            }
+            None => pathstr.rsplit_once('?')?,
+        };
+        let m = get_mod_uri(m)?;
+        (m | s).ok()
+    }
+
+    Ok(uris
+        .into_iter()
+        .map(|s| {
+            get_sym_uri(&s).map_or_else(
+                || {
+                    get_mod_uri(&s).map_or_else(
+                        || get_doc_uri(&s).map(|d| URI::Narrative(d.into())),
+                        |s| Some(URI::Content(s.into())),
+                    )
+                },
+                |s| Some(URI::Content(s.into())),
+            )
+        })
+        .collect())
+}

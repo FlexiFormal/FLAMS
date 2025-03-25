@@ -20,6 +20,7 @@ ssr = [
     "dep:axum",
 ]
 hydrate = ["leptos/hydrate", "thaw/hydrate", "flams-web-utils/hydrate"]
+docs-only = []
 
 [dependencies]
 flams-database = { workspace = true }

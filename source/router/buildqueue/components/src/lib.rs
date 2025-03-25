@@ -1,8 +1,9 @@
 #![recursion_limit = "256"]
 #![allow(clippy::must_use_candidate)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 #[cfg(any(
-    all(feature = "ssr", feature = "hydrate", not(doc)),
+    all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
     not(any(feature = "ssr", feature = "hydrate"))
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
@@ -606,12 +607,11 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> impl IntoView {
 #[derive(Clone)]
 pub struct QueueSocket {
     #[cfg(feature = "ssr")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
     listener:
         Option<flams_utils::change_listener::ChangeListener<flams_system::building::QueueMessage>>,
-    #[cfg(all(not(doc), feature = "hydrate"))]
+    #[cfg(all(not(feature = "docs-only"), feature = "hydrate"))]
     socket: leptos::web_sys::WebSocket,
-    #[cfg(doc)]
+    #[cfg(feature = "docs-only")]
     socket: (),
     #[cfg(feature = "hydrate")]
     _running: RwSignal<bool>,
@@ -621,7 +621,6 @@ impl WebSocket<NonZeroU32, QueueMessage> for QueueSocket {
 }
 
 #[cfg(feature = "ssr")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
 #[async_trait::async_trait]
 impl ws::WebSocketServer<NonZeroU32, QueueMessage> for QueueSocket {
     async fn new(account: LoginState, _db: ws::DBBackend) -> Option<Self> {
@@ -659,13 +658,12 @@ impl ws::WebSocketServer<NonZeroU32, QueueMessage> for QueueSocket {
 }
 
 #[cfg(feature = "hydrate")]
-#[cfg_attr(docsrs, doc(cfg(feature = "hydrate")))]
 impl ws::WebSocketClient<NonZeroU32, QueueMessage> for QueueSocket {
     fn new(ws: leptos::web_sys::WebSocket) -> Self {
         Self {
-            #[cfg(not(doc))]
+            #[cfg(not(feature = "docs-only"))]
             socket: ws,
-            #[cfg(doc)]
+            #[cfg(feature = "docs-only")]
             socket: (),
             _running: RwSignal::new(false),
             #[cfg(feature = "ssr")]
@@ -673,7 +671,14 @@ impl ws::WebSocketClient<NonZeroU32, QueueMessage> for QueueSocket {
         }
     }
     fn socket(&mut self) -> &mut leptos::web_sys::WebSocket {
-        &mut self.socket
+        #[cfg(not(feature = "docs-only"))]
+        {
+            &mut self.socket
+        }
+        #[cfg(feature = "docs-only")]
+        {
+            unreachable!()
+        }
     }
     #[allow(clippy::used_underscore_binding)]
     fn on_open(&self) -> Option<Box<dyn FnMut()>> {

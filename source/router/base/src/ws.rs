@@ -206,7 +206,6 @@ pub trait WebSocket<
     const SERVER_ENDPOINT: &'static str;
 
     #[cfg(feature = "ssr")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
     fn force_start_server() {
         //let (signal_read,_) = signal(false);
         //let _res = Effect::new(move |_| {
@@ -215,7 +214,6 @@ pub trait WebSocket<
     }
 
     #[cfg(feature = "hydrate")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hydrate")))]
     fn force_start_client(
         handle: impl (FnMut(ServerMsg) -> Option<ClientMsg>) + 'static + Clone,
         mut on_start: impl FnMut(Self) + 'static,

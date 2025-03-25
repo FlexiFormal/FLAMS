@@ -1,4 +1,4 @@
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use wasm_bindgen::prelude::*;
 
@@ -12,7 +12,6 @@ pub fn set_server_url(server_url: String) {
 pub use ftml_viewer_components::remote::get_server_url;
 
 #[cfg(any(doc, not(feature = "ts")))]
-#[cfg_attr(docsrs, doc(cfg(not(feature = "ts"))))]
 #[wasm_bindgen(start)]
 pub fn run() {
     use flams_ontology::uris::DocumentURI;
@@ -38,7 +37,6 @@ pub fn run() {
 #[cfg(feature = "ts")]
 mod ts;
 #[cfg(feature = "ts")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ts")))]
 pub use ts::*;
 
 #[cfg(all(feature = "ts", doc))]

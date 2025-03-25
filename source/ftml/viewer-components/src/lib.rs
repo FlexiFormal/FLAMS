@@ -1,6 +1,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::module_name_repetitions)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //#![feature(generic_const_exprs)]
 //#![feature(let_chains)]
 #![recursion_limit = "256"]

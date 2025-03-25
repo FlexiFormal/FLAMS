@@ -13,7 +13,7 @@ jobs:
       - name: rustups
         run: rustup update && rustup target add x86_64-unknown-linux-gnu && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-unknown-linux-gnu && rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - name: cargo
-        run: cargo install --force cargo-make && cargo install wasm-pack && cargo install --locked cargo-leptos
+        run: cargo install --force cargo-make && cargo install wasm-pack && cargo install wasm-bindgen-cli && cargo install --locked cargo-leptos
       - name: npm
         uses: actions/setup-node@v4
         with:
@@ -58,7 +58,7 @@ jobs:
       - name: rustups
         run: rustup update && rustup target add x86_64-pc-windows-msvc && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-pc-windows-msvc && rustup component add rust-src --toolchain nightly-x86_64-pc-windows-msvc && rustup default nightly-x86_64-pc-windows-msvc
       - name: cargo
-        run: cargo install --force cargo-make && cargo install wasm-pack && cargo install --locked cargo-leptos
+        run: cargo install --force cargo-make && cargo install wasm-pack && cargo install wasm-bindgen-cli && cargo install --locked cargo-leptos
       - name: main
         run: cargo make
       - name: Upload Binaries
@@ -93,7 +93,7 @@ jobs:
       - name: rustups
         run: rustup update && rustup target add aarch64-apple-darwin && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-aarch64-apple-darwin && rustup component add rust-src --toolchain nightly-aarch64-apple-darwin && rustup default nightly-aarch64-apple-darwin
       - name: cargo
-        run: cargo install --force cargo-make && cargo install wasm-pack && cargo install --locked cargo-leptos
+        run: cargo install --force cargo-make && cargo install wasm-pack && cargo install wasm-bindgen-cli && cargo install --locked cargo-leptos
       - name: main
         run: cargo make
       - name: Set executable

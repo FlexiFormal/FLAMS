@@ -22,6 +22,7 @@ hydrate = [
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
 ]
+docs-only = []
 
 [dependencies]
 flams-utils = { workspace = true }

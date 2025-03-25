@@ -24,6 +24,7 @@ hydrate = [
     "ftml-viewer-components/hydrate",
     "flams-web-utils/hydrate",
 ]
+docs-only = []
 
 [dependencies]
 flams-ontology = { workspace = true, features = ["serde"] }
@@ -45,3 +46,4 @@ tracing = { workspace = true }
 tokio = { workspace = true, optional = true }
 paste = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
+lazy_static = { workspace = true }

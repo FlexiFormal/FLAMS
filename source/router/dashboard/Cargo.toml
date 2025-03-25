@@ -43,6 +43,7 @@ hydrate = [
     "flams-router-git-components/hydrate",
     "flams-router-login/hydrate",
 ]
+docs-only = []
 
 [dependencies]
 flams-utils = { workspace = true }
