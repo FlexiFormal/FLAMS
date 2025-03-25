@@ -2,7 +2,7 @@ use flams_ontology::{
     archive_json::{ArchiveIndex, Institution},
     uris::DocumentURI,
 };
-use flams_web_utils::components::wait_and_then;
+use flams_web_utils::components::wait_and_then_fn;
 use leptos::prelude::*;
 use thaw::{
     Body1, Caption1, Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription,
@@ -15,7 +15,7 @@ pub fn Index() -> impl IntoView {
         "flams-index-card",
         ".flams-index-card{max-width:400px !important;margin:10px !important;}",
     );
-    wait_and_then(super::server_fns::index, |(is, idxs)| {
+    wait_and_then_fn(super::server_fns::index, |(is, idxs)| {
         let mut libraries = Vec::new();
         let mut books = Vec::new();
         let mut papers = Vec::new();

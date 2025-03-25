@@ -9,7 +9,9 @@ use flams_router_base::LoginState;
 use flams_router_buildqueue_base::{FormatOrTarget, select_queue, server_fns::enqueue};
 use flams_utils::{time::Timestamp, unwrap};
 use flams_web_utils::{
-    components::{Header, LazySubtree, Leaf, Tree, message_action, wait_and_then},
+    components::{
+        Header, LazySubtree, Leaf, Tree, message_action, wait_and_then, wait_and_then_fn,
+    },
     inject_css,
 };
 use leptos::prelude::*;
@@ -18,7 +20,7 @@ use crate::FileStates;
 
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
-    wait_and_then(
+    wait_and_then_fn(
         || super::server_fns::group_entries(None),
         |(groups, archives)| view!(<Tree><ArchivesAndGroups archives groups/></Tree>),
     )
@@ -163,14 +165,15 @@ fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
         <div style="width:min-content"><flams_router_content::components::Document doc=comps.clone()/></div>
       </Drawer>
       {dialog(move |signal| if signal.get() {
+
         let id = archive.clone();
-        let title = archive.clone();
         let rel_path = f.rel_path.clone();
+        let title = archive.clone();
         let rp = rel_path.clone();
         let fmt = f.format.clone();
-        Some(wait_and_then(
+        Some(wait_and_then_fn(
           move || super::server_fns::build_status(id.clone(),Some(rp.clone())),
-          move |state| modal(title,Some(rel_path),state,Some(fmt))
+          move |state| modal(title.clone(),Some(rel_path.clone()),state,Some(fmt.clone()))
         ))
       } else {None})}
     );

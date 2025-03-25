@@ -7,7 +7,7 @@ use leptos::{
     prelude::*,
 };
 
-pub fn wait<
+pub fn wait_local<
     V: IntoView + 'static,
     Out: 'static + Send + Sync + Clone,
     Fut: Future<Output = Option<Out>> + 'static + Send,
@@ -58,7 +58,10 @@ where
     }
 }
 
-pub fn wait_and_then_fn<E, Fut, F, T, V: IntoView + 'static>(f: F, r: fn(T) -> V) -> impl IntoView
+pub fn wait_and_then_fn<E, Fut, F, T, V: IntoView + 'static>(
+    f: F,
+    r: impl Fn(T) -> V + 'static + Send,
+) -> impl IntoView
 where
     Fut: Future<Output = Result<T, ServerFnError<E>>> + Send + 'static,
     F: Fn() -> Fut + 'static + Send + Sync,

@@ -25,7 +25,7 @@ use flams_ontology::{
     uris::{DocumentElementURI, DocumentURI, NarrativeURI, URI},
 };
 use flams_utils::{prelude::HMap, vecmap::VecMap};
-use flams_web_utils::{components::wait, do_css, inject_css};
+use flams_web_utils::{components::wait_local, do_css, inject_css};
 use ftml_extraction::{open::terms::VarOrSym, prelude::*};
 use leptos::prelude::*;
 use leptos::tachys::view::any_view::AnyView;

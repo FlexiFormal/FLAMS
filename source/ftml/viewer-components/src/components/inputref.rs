@@ -81,10 +81,10 @@ pub(super) fn inputref(uri: DocumentURI, id: &str) -> impl IntoView {
 }
 
 fn do_inputref(uri: DocumentURI, on_load: RwSignal<bool>) -> impl IntoView {
-    use flams_web_utils::components::wait;
+    use flams_web_utils::components::wait_local;
     use leptos_dyn_dom::DomStringCont;
     let uricl = uri.clone();
-    wait(
+    wait_local(
         move || {
             let uri = uri.clone();
             async move { crate::remote::server_config.inputref(uri).await.ok() }

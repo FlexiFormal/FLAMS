@@ -3,7 +3,7 @@ use super::TOCSource;
 use crate::iterate;
 use crate::FTMLDocumentSetup;
 use flams_ontology::uris::{DocumentElementURI, DocumentURI, NameStep};
-use flams_web_utils::components::wait;
+use flams_web_utils::components::wait_local;
 use flams_web_utils::do_css;
 use leptos::prelude::*;
 use leptos_dyn_dom::DomStringCont;
@@ -16,7 +16,7 @@ pub fn DocumentFromURI(
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
-    wait(
+    wait_local(
         move || {
             tracing::info!("fetching {uri}");
             let fut = crate::remote::server_config.full_doc(uri.clone());
@@ -35,7 +35,7 @@ pub fn DocumentFromURI(
 #[component]
 pub fn FragmentFromURI(uri: DocumentElementURI) -> impl IntoView {
     let uricl = uri.clone();
-    wait(
+    wait_local(
         move || {
             tracing::info!("fetching {uri}");
             let fut = crate::remote::server_config.paragraph(uri.clone());
@@ -58,7 +58,7 @@ pub fn DocumentFromURI(
     #[prop(optional, into)] toc: TOCSource,
     #[prop(optional, into)] gottos: Vec<Gotto>,
 ) -> impl IntoView {
-    wait(
+    wait_local(
         move || {
             tracing::info!("fetching {uri}");
             let fut = crate::remote::server_config.full_doc(uri.clone());

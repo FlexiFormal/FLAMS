@@ -1,6 +1,6 @@
 use flams_router_base::require_login;
 use flams_utils::settings::SettingsSpec;
-use flams_web_utils::{components::wait_and_then, inject_css};
+use flams_web_utils::{components::wait_and_then_fn, inject_css};
 use leptos::prelude::*;
 
 #[server(
@@ -53,7 +53,7 @@ pub(super) fn Settings() -> impl IntoView {
     use thaw::Table;
     inject_css("flams-settings", include_str!("settings.css"));
     require_login(|| {
-        wait_and_then(get_settings, |(settings, mem, gl)| {
+        wait_and_then_fn(get_settings, |(settings, mem, gl)| {
             let loading = RwSignal::new(false);
             let reload_act = flams_web_utils::components::message_action(
                 move |()| {

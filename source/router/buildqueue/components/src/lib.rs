@@ -16,7 +16,7 @@ use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
 use flams_utils::time::{Delta, Eta};
 use flams_utils::vecmap::VecMap;
-use flams_web_utils::{components::wait_and_then, inject_css};
+use flams_web_utils::{components::wait_and_then_fn, inject_css};
 use leptos::{either::EitherOf4, prelude::*};
 use leptos_router::hooks::use_params_map;
 use std::num::NonZeroU32;
@@ -37,7 +37,7 @@ pub fn QueuesTop() -> impl IntoView {
         let id = move || params.read().get("queue");
 
         require_login(move || {
-            wait_and_then(server_fns::get_queues, move |v| {
+            wait_and_then_fn(server_fns::get_queues, move |v| {
                 if v.is_empty() {
                     return leptos::either::Either::Left(view!(<div>"(No running queues)"</div>));
                 }
@@ -756,7 +756,7 @@ impl TaskState {
                       let rel_path = rel_path.clone();
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      require_login(move || wait_and_then(
+                      require_login(move || wait_and_then_fn(
                           move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
                           |s| {
                             view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
@@ -780,7 +780,7 @@ impl TaskState {
                       let rel_path = rel_path.clone();
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      require_login(move || wait_and_then(
+                      require_login(move || wait_and_then_fn(
                           move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
                           |s| {
                                 view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">

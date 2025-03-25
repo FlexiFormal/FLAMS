@@ -1,10 +1,7 @@
 #![allow(clippy::must_use_candidate)]
 use flams_ontology::uris::{NarrativeURI, URI};
 use flams_router_base::uris::{DocURIComponents, URIComponents, URIComponentsTrait};
-use flams_web_utils::{
-    components::{wait_and_then, wait_and_then_fn},
-    do_css,
-};
+use flams_web_utils::{components::wait_and_then_fn, do_css};
 use ftml_viewer_components::components::{
     TOCSource,
     documents::{DocumentString, FragmentString, FragmentStringProps},
@@ -64,7 +61,7 @@ pub fn URITop() -> impl IntoView {
 
 #[component]
 pub fn Fragment(uri: URIComponents) -> impl IntoView {
-    wait_and_then(
+    wait_and_then_fn(
         move || uri.clone().into_args(super::server_fns::fragment),
         move |(uri, css, html)| {
             let uri = if let URI::Narrative(NarrativeURI::Element(uri)) = uri {
