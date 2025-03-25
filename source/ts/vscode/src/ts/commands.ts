@@ -8,6 +8,7 @@ import { Clipboard } from 'vscode';
 export enum Commands {
   HelloWorld = "flams.helloWorld",
   FlamsMissing = "flams.flams_missing",
+  openFile = "flams.openFile"
 }
 
 export enum Settings {
@@ -21,7 +22,7 @@ export function register_commands(context:FLAMSPreContext) {
   /*context.register_command(Commands.HelloWorld, () => {
     vscode.window.showInformationMessage(greet("Dude"));
   });*/
-	context.vsc.subscriptions.push(vscode.commands.registerCommand("flams.openFile", arg => {
+	context.vsc.subscriptions.push(vscode.commands.registerCommand(Commands.openFile, arg => {
 		vscode.window.showTextDocument(arg);
 	}));
 }
@@ -100,6 +101,8 @@ export function register_server_commands(context:FLAMSContext) {
 	});
 	context.client.onNotification("flams/updateMathHub", context.mathhub?.update);
 }
+
+
 
 export function openIframe(url:string,title:string): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel('webviewPanel',title,vscode.ViewColumn.Beside,{

@@ -10,6 +10,10 @@ use flams_system::backend::{
 use flams_utils::{prelude::TreeChildIter, time::measure};
 
 pub fn main() {
+    linter();
+}
+
+fn git_urls() {
     tracing_subscriber::fmt().init();
     use git_url_parse::GitUrl;
     let url = GitUrl::parse("https://gl.mathhub.info/smglom/foo.git").expect("Failed to parse URL");
@@ -33,14 +37,12 @@ pub fn main() {
 }
 
 pub fn linter() {
-    /*
     let mut rt = tokio::runtime::Builder::new_multi_thread();
     rt.enable_all();
     rt.thread_stack_size(2 * 1024 * 1024);
     rt.build()
-      .expect("Failed to initialize Tokio runtime")
-      .block_on(linter_i());
-     */
+        .expect("Failed to initialize Tokio runtime")
+        .block_on(linter_i());
 }
 
 async fn linter_i() {

@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import { get_context, FLAMSContext } from '../extension';
+import { getContext, FLAMSContext, awaitContext } from '../extension';
 import * as FLAMS from '@kwarc/flams';
 import path from 'path';
 import * as fs from 'fs';
+import { Commands } from './commands';
 
 type FLAMSServer = FLAMS.FLAMSServer;
 
@@ -19,6 +20,15 @@ export interface Settings {
     num_threads:number
   }
 }
+
+let settings : Settings | undefined;
+export async function getSettings() : Promise<Settings | undefined> {
+  if (!settings) {
+    const context = await awaitContext();
+    settings = await apiSettings(context.server);
+  }
+  return settings;
+} 
 
 interface InstallParams {
   archives:string[],
@@ -57,7 +67,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     }
     const nodeps_downloads = (item instanceof Archive)? [item.id] : filter_things(item);
     vscode.window.withProgress({ location: { viewId: "flams-mathhub" } }, () => new Promise((r) => this.onUpdated.event(r)));
-    const context = get_context();
+    const context = getContext();
     if (!context.remote_server) {
       return;
     }
@@ -65,7 +75,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     if (!downloads) { return; }
 
     const remote_url = context.remote_server.url;
-    get_context().client.sendNotification("flams/install",<InstallParams>{archives:nodeps_downloads.concat(downloads),remote_url:remote_url});;
+    getContext().client.sendNotification("flams/install",<InstallParams>{archives:nodeps_downloads.concat(downloads),remote_url:remote_url});;
     /*this.roots?.forEach((mhti: AnyMH) => {
       mhti.contextValue = "disabled";
     });*/
@@ -84,7 +94,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
   }
   async getChildren(element?: AnyMH | undefined): Promise<AnyMH[]> {
     if (!this.mathhubs) {
-      const mhs = await apiSettings(this.primary_server);
+      const mhs = await getSettings();
       if (!mhs) {
         this.mathhubs = [];
       } else {
@@ -310,7 +320,7 @@ class ArchiveGroup extends vscode.TreeItem {
     this.lr = lr;
     this.iconPath = (lr === LRB.Local || lr === LRB.Both) ? 
       new vscode.ThemeIcon("library") : 
-      vscode.Uri.joinPath(get_context().vsc.extensionUri,"img","MathHub.svg")
+      vscode.Uri.joinPath(getContext().vsc.extensionUri,"img","MathHub.svg")
     ;
     if (lr === LRB.Remote) {this.downloadable = true;}
     this.contextValue = (lr === LRB.Remote || lr === LRB.Both) ? "remote" : "local";
@@ -339,7 +349,7 @@ class Archive extends vscode.TreeItem {
     this.parent = parent;
     this.iconPath = local ? 
       new vscode.ThemeIcon("book") : 
-      vscode.Uri.joinPath(get_context().vsc.extensionUri,"img","MathHub.svg")
+      vscode.Uri.joinPath(getContext().vsc.extensionUri,"img","MathHub.svg")
     ;
     this.contextValue = downloadable ? "remote" : "local";
     if (local && mhs) {
@@ -399,7 +409,7 @@ class File extends vscode.TreeItem {
         )
       );
       this.command = {
-          command:"flams.openFile",
+          command:Commands.openFile,
           title:"Open File",
           arguments:[this.resourceUri]
       };

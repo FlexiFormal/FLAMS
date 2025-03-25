@@ -1,17 +1,74 @@
 import * as vscode from 'vscode';
 //import { activate as act, greet } from '../pkg/flams_vscode';
-import { register_commands, register_server_commands, Settings } from './ts/commands';
+import { Commands, register_commands, register_server_commands, Settings } from './ts/commands';
 import { setup } from './ts/setup';
 import { Versions } from './ts/versions';
 import * as language from 'vscode-languageclient/node';
 import { FLAMSServer } from '@kwarc/flams';
-import { MathHubTreeProvider } from './ts/mathhub';
+import { getSettings, MathHubTreeProvider } from './ts/mathhub';
+import path from 'path';
+import * as fs from 'fs';
 //import * as ws from 'ws';
 
 export async function activate(context: vscode.ExtensionContext) {
+  context.subscriptions.push(vscode.window.registerUriHandler(new FlamsUriHandler()));
   await local(context);
   //await remote(context);
 }
+
+// Our implementation of a UriHandler.
+class FlamsUriHandler implements vscode.UriHandler {
+	// This function will get run when something redirects to VS Code
+	// with your extension id as the authority.
+	handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
+    return handleFlamsUri(uri);
+	}
+}
+
+async function handleFlamsUri(uri:vscode.Uri) {
+  // "vscode://flams/open?a={}&rp={}"
+  if (uri.path !== "/open") { 
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Unknown URI path ${uri.path}`);
+    return; 
+  }
+  const query = decodeURIComponent(uri.query);
+  const args = query.split("&");
+  if (args.length < 2) { 
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Invalid number of query parameters`);
+    return; 
+  }
+  const a0 = args[0];
+  if (a0.split("=")[0] !== "a") { 
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Missing query parameter a`);
+    return; 
+  }
+  const a = args[0].split("=")[1];
+  const rp0 = args[1];
+  if (rp0.split("=")[0] !== "rp") { 
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Missing query parameter rp`);
+    return; 
+  }
+  const rp = args[1].split("=")[1];
+  const mathhubs = (await getSettings())?.mathhubs;
+  if (!mathhubs) { 
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No mathhubs`);
+    return; 
+  }
+  const mh = mathhubs.find(mh => 
+    // check if mh/a exists
+    fs.existsSync(a.split("/").reduce((p,seg) => path.join(p,seg),mh))
+  );
+  if (!mh) {
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Archive ${a} not found`);
+    return;
+  }
+  const p1 = a.split("/").reduce((p,seg) => path.join(p,seg),mh);
+  const p2 = path.join(p1,"source");
+  const p3 = rp.split("/").reduce((p,seg) => path.join(p,seg),p2);
+  
+  vscode.window.showTextDocument(vscode.Uri.file(p3));
+}
+
 
 async function local(context: vscode.ExtensionContext) {
 	const ctx = new FLAMSPreContext(context);
@@ -25,7 +82,7 @@ async function local(context: vscode.ExtensionContext) {
 
 
 export function deactivate() {
-  const context = get_pre_context();
+  const context = getPreContext();
 	if (context?.client) {
 		context.client.stop();
 	}
@@ -112,13 +169,27 @@ export async function launch_remote(context: FLAMSPreContext) {
 */
 
 let _context : FLAMSContext | FLAMSPreContext | undefined = undefined;
-export function get_pre_context() : FLAMSContext | FLAMSPreContext | undefined {
+export function getPreContext() : FLAMSContext | FLAMSPreContext | undefined {
   return _context;
 }
 
-export function get_context() : FLAMSContext {
+export function getContext() : FLAMSContext {
   if (!(_context instanceof FLAMSContext)) { throw new Error("context is undefined"); }
   return _context;
+}
+
+async function wait(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve,100));
+}
+
+export async function awaitContext() : Promise<FLAMSContext> {
+  let waited = 0;
+  while (!(_context instanceof FLAMSContext)) { 
+    waited += 1;
+    if (waited > 10) { throw new Error("context is undefined"); }
+    await wait();
+  }
+  return Promise.resolve(_context);
 }
 
 

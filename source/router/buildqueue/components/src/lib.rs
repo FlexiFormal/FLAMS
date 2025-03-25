@@ -24,6 +24,255 @@ use std::num::NonZeroU32;
 #[derive(Copy, Clone)]
 struct UpdateQueues(RwSignal<()>);
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct Entry {
+    id: u32,
+    archive: ArchiveId,
+    rel_path: String,
+    #[cfg(feature = "hydrate")]
+    steps: RwSignal<VecMap<String, TaskState>>,
+    #[cfg(not(feature = "hydrate"))]
+    steps: VecMap<String, TaskState>,
+}
+
+impl Entry {
+    #[cfg(not(feature = "hydrate"))]
+    fn as_view(&self) -> impl IntoView + use<> {
+        view! {
+          <li>{format!("[{}]{}",self.archive,self.rel_path)}</li>
+        }
+    }
+
+    #[cfg(feature = "hydrate")]
+    fn as_view(&self) -> impl IntoView + use<> {
+        use flams_web_utils::components::{Collapsible, Header};
+        use icondata_tb::TbBrandVscode as Vscode;
+        use thaw::Icon;
+
+        let link = format!(
+            "vscode://kwarc.flams/open?a={}&rp={}",
+            self.archive, self.rel_path
+        );
+
+        let title = format!("[{}]{}", self.archive, self.rel_path);
+        let total = self.steps.with_untracked(|v| v.0.len());
+        let steps = self.steps;
+        let current = move || {
+            steps.with(|v| {
+                v.iter()
+                    .enumerate()
+                    .find_map(|(i, (e, s))| {
+                        if *s == TaskState::Done {
+                            None
+                        } else {
+                            Some((i + 1, e.clone()))
+                        }
+                    })
+                    .unwrap_or_else(|| (total, "Done".to_string()))
+            })
+        };
+        let rel_path = self.rel_path.clone();
+        let archive = self.archive.clone();
+        view! {
+          <li><Collapsible>
+            <Header slot>
+              <b>
+                {title}
+                {move || {let (i,s) = current(); format!(" ({i}/{total}) {s}")}}
+                " "<a href=link><Icon icon=Vscode/></a>
+              </b>
+            </Header>
+            <ol>
+            {let rel_path = rel_path.clone();
+              let archive = archive.clone();
+              move || steps.get().iter().map(|(t,e)|
+              view!(<li>{e.into_view(t.clone(),&archive,&rel_path)}</li>)
+            ).collect_view()}
+            </ol>
+          </Collapsible></li>
+        }
+    }
+}
+
+#[cfg(feature = "ssr")]
+impl From<flams_system::building::QueueEntry> for Entry {
+    fn from(e: flams_system::building::QueueEntry) -> Self {
+        #[cfg(feature = "hydrate")]
+        {
+            unreachable!()
+        }
+        #[cfg(not(feature = "hydrate"))]
+        Self {
+            id: e.id.into(),
+            archive: e.archive,
+            rel_path: e.rel_path.to_string(),
+            steps: e
+                .steps
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.into()))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TaskState {
+    Running,
+    Queued,
+    Blocked,
+    Done,
+    Failed,
+    None,
+}
+impl TaskState {
+    #[cfg(feature = "hydrate")]
+    fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> impl IntoView + use<> {
+        use flams_web_utils::components::{Header, LazyCollapsible};
+        use thaw::Scrollbar;
+        match self {
+            Self::Running => EitherOf4::A(view! {<i style="color:yellow">{t}" (Running)"</i>}),
+            Self::Queued | Self::Blocked | Self::None => {
+                EitherOf4::B(view! {<span style="color:gray">{t}" (...)"</span>})
+            }
+            Self::Done => {
+                let archive = archive.clone();
+                let rel_path = rel_path.to_string();
+                let tc = t.clone();
+                EitherOf4::C(view! {
+                  <LazyCollapsible>
+                    <Header slot><span style="color:green">{t}" (Done)"</span></Header>
+                    {
+                      let archive = archive.clone();
+                      let rel_path = rel_path.clone();
+                      let tc = tc.clone();
+                      let queue = expect_context::<AllQueues>().selected.get_untracked();
+                      require_login(move || wait_and_then_fn(
+                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
+                          |s| {
+                            view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
+                                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+                            </Scrollbar>}
+                            }
+                      ))
+                    }
+                  </LazyCollapsible>
+                })
+            }
+            Self::Failed => {
+                let archive = archive.clone();
+                let rel_path = rel_path.to_string();
+                let tc = t.clone();
+                EitherOf4::D(view! {
+                  <LazyCollapsible>
+                    <Header slot><span style="color:red">{t}" (Failed)"</span></Header>
+                    {
+                      let archive = archive.clone();
+                      let rel_path = rel_path.clone();
+                      let tc = tc.clone();
+                      let queue = expect_context::<AllQueues>().selected.get_untracked();
+                      require_login(move || wait_and_then_fn(
+                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
+                          |s| {
+                                view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
+                                    <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+                                </Scrollbar>}
+                            }
+                      ))
+                    }
+                  </LazyCollapsible>
+                })
+            }
+        }
+    }
+}
+
+#[cfg(feature = "ssr")]
+impl From<flams_system::building::TaskState> for TaskState {
+    fn from(e: flams_system::building::TaskState) -> Self {
+        use flams_system::building::TaskState;
+        match e {
+            TaskState::Running => Self::Running,
+            TaskState::Queued => Self::Queued,
+            TaskState::Blocked => Self::Blocked,
+            TaskState::Done => Self::Done,
+            TaskState::Failed => Self::Failed,
+            TaskState::None => Self::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum QueueMessage {
+    Idle(Vec<Entry>),
+    Started {
+        running: Vec<Entry>,
+        queue: Vec<Entry>,
+        blocked: Vec<Entry>,
+        failed: Vec<Entry>,
+        done: Vec<Entry>,
+    },
+    Finished {
+        failed: Vec<Entry>,
+        done: Vec<Entry>,
+    },
+    TaskStarted {
+        id: u32,
+        target: String,
+    },
+    TaskSuccess {
+        id: u32,
+        target: String,
+        eta: Eta,
+    },
+    TaskFailed {
+        id: u32,
+        target: String,
+        eta: Eta,
+    },
+}
+#[cfg(feature = "ssr")]
+impl From<flams_system::building::QueueMessage> for QueueMessage {
+    fn from(e: flams_system::building::QueueMessage) -> Self {
+        use flams_system::building::QueueMessage;
+        match e {
+            QueueMessage::Idle(v) => Self::Idle(v.into_iter().map(Into::into).collect()),
+            QueueMessage::Started {
+                running,
+                queue,
+                blocked,
+                failed,
+                done,
+            } => Self::Started {
+                running: running.into_iter().map(Into::into).collect(),
+                queue: queue.into_iter().map(Into::into).collect(),
+                blocked: blocked.into_iter().map(Into::into).collect(),
+                failed: failed.into_iter().map(Into::into).collect(),
+                done: done.into_iter().map(Into::into).collect(),
+            },
+            QueueMessage::Finished { failed, done } => Self::Finished {
+                failed: failed.into_iter().map(Into::into).collect(),
+                done: done.into_iter().map(Into::into).collect(),
+            },
+            QueueMessage::TaskStarted { id, target } => Self::TaskStarted {
+                id: id.into(),
+                target: target.to_string(),
+            },
+            QueueMessage::TaskSuccess { id, target, eta } => Self::TaskSuccess {
+                id: id.into(),
+                target: target.to_string(),
+                eta,
+            },
+            QueueMessage::TaskFailed { id, target, eta } => Self::TaskFailed {
+                id: id.into(),
+                target: target.to_string(),
+                eta,
+            },
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------------
+
 #[component]
 pub fn QueuesTop() -> impl IntoView {
     use flams_web_utils::components::Spinner;
@@ -642,240 +891,6 @@ impl WrappedEta {
           <div style="width:500px;"><ProgressBar class="flams-progress-bar" value=pctg/>
             {move || (pctg.get() * 100.0).to_string().chars().take(4).collect::<String>()} "%; ca. "{time_left}" remaining"
           </div>
-        }
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct Entry {
-    id: u32,
-    archive: ArchiveId,
-    rel_path: String,
-    #[cfg(feature = "hydrate")]
-    steps: RwSignal<VecMap<String, TaskState>>,
-    #[cfg(not(feature = "hydrate"))]
-    steps: VecMap<String, TaskState>,
-}
-
-impl Entry {
-    #[cfg(not(feature = "hydrate"))]
-    fn as_view(&self) -> impl IntoView + use<> {
-        view! {
-          <li>{format!("[{}]{}",self.archive,self.rel_path)}</li>
-        }
-    }
-
-    #[cfg(feature = "hydrate")]
-    fn as_view(&self) -> impl IntoView + use<> {
-        use flams_web_utils::components::{Collapsible, Header};
-        let title = format!("[{}]{}", self.archive, self.rel_path);
-        let total = self.steps.with_untracked(|v| v.0.len());
-        let steps = self.steps;
-        let current = move || {
-            steps.with(|v| {
-                v.iter()
-                    .enumerate()
-                    .find_map(|(i, (e, s))| {
-                        if *s == TaskState::Done {
-                            None
-                        } else {
-                            Some((i + 1, e.clone()))
-                        }
-                    })
-                    .unwrap_or_else(|| (total, "Done".to_string()))
-            })
-        };
-        let rel_path = self.rel_path.clone();
-        let archive = self.archive.clone();
-        view! {
-          <li><Collapsible>
-            <Header slot>
-              <b>{title}{move || {let (i,s) = current(); format!(" ({i}/{total}) {s}")}}</b>
-            </Header>
-            <ol>
-            {let rel_path = rel_path.clone();
-              let archive = archive.clone();
-              move || steps.get().iter().map(|(t,e)|
-              view!(<li>{e.into_view(t.clone(),&archive,&rel_path)}</li>)
-            ).collect_view()}
-            </ol>
-          </Collapsible></li>
-        }
-    }
-}
-
-#[cfg(feature = "ssr")]
-impl From<flams_system::building::QueueEntry> for Entry {
-    fn from(e: flams_system::building::QueueEntry) -> Self {
-        #[cfg(feature = "hydrate")]
-        {
-            unreachable!()
-        }
-        #[cfg(not(feature = "hydrate"))]
-        Self {
-            id: e.id.into(),
-            archive: e.archive,
-            rel_path: e.rel_path.to_string(),
-            steps: e
-                .steps
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v.into()))
-                .collect(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum TaskState {
-    Running,
-    Queued,
-    Blocked,
-    Done,
-    Failed,
-    None,
-}
-impl TaskState {
-    #[cfg(feature = "hydrate")]
-    fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> impl IntoView + use<> {
-        use flams_web_utils::components::{Header, LazyCollapsible};
-        use thaw::Scrollbar;
-        match self {
-            Self::Running => EitherOf4::A(view! {<i style="color:yellow">{t}" (Running)"</i>}),
-            Self::Queued | Self::Blocked | Self::None => {
-                EitherOf4::B(view! {<span style="color:gray">{t}" (...)"</span>})
-            }
-            Self::Done => {
-                let archive = archive.clone();
-                let rel_path = rel_path.to_string();
-                let tc = t.clone();
-                EitherOf4::C(view! {
-                  <LazyCollapsible>
-                    <Header slot><span style="color:green">{t}" (Done)"</span></Header>
-                    {
-                      let archive = archive.clone();
-                      let rel_path = rel_path.clone();
-                      let tc = tc.clone();
-                      let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      require_login(move || wait_and_then_fn(
-                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
-                          |s| {
-                            view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                            </Scrollbar>}
-                            }
-                      ))
-                    }
-                  </LazyCollapsible>
-                })
-            }
-            Self::Failed => {
-                let archive = archive.clone();
-                let rel_path = rel_path.to_string();
-                let tc = t.clone();
-                EitherOf4::D(view! {
-                  <LazyCollapsible>
-                    <Header slot><span style="color:red">{t}" (Failed)"</span></Header>
-                    {
-                      let archive = archive.clone();
-                      let rel_path = rel_path.clone();
-                      let tc = tc.clone();
-                      let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      require_login(move || wait_and_then_fn(
-                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
-                          |s| {
-                                view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                                    <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                                </Scrollbar>}
-                            }
-                      ))
-                    }
-                  </LazyCollapsible>
-                })
-            }
-        }
-    }
-}
-#[cfg(feature = "ssr")]
-impl From<flams_system::building::TaskState> for TaskState {
-    fn from(e: flams_system::building::TaskState) -> Self {
-        use flams_system::building::TaskState;
-        match e {
-            TaskState::Running => Self::Running,
-            TaskState::Queued => Self::Queued,
-            TaskState::Blocked => Self::Blocked,
-            TaskState::Done => Self::Done,
-            TaskState::Failed => Self::Failed,
-            TaskState::None => Self::None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum QueueMessage {
-    Idle(Vec<Entry>),
-    Started {
-        running: Vec<Entry>,
-        queue: Vec<Entry>,
-        blocked: Vec<Entry>,
-        failed: Vec<Entry>,
-        done: Vec<Entry>,
-    },
-    Finished {
-        failed: Vec<Entry>,
-        done: Vec<Entry>,
-    },
-    TaskStarted {
-        id: u32,
-        target: String,
-    },
-    TaskSuccess {
-        id: u32,
-        target: String,
-        eta: Eta,
-    },
-    TaskFailed {
-        id: u32,
-        target: String,
-        eta: Eta,
-    },
-}
-#[cfg(feature = "ssr")]
-impl From<flams_system::building::QueueMessage> for QueueMessage {
-    fn from(e: flams_system::building::QueueMessage) -> Self {
-        use flams_system::building::QueueMessage;
-        match e {
-            QueueMessage::Idle(v) => Self::Idle(v.into_iter().map(Into::into).collect()),
-            QueueMessage::Started {
-                running,
-                queue,
-                blocked,
-                failed,
-                done,
-            } => Self::Started {
-                running: running.into_iter().map(Into::into).collect(),
-                queue: queue.into_iter().map(Into::into).collect(),
-                blocked: blocked.into_iter().map(Into::into).collect(),
-                failed: failed.into_iter().map(Into::into).collect(),
-                done: done.into_iter().map(Into::into).collect(),
-            },
-            QueueMessage::Finished { failed, done } => Self::Finished {
-                failed: failed.into_iter().map(Into::into).collect(),
-                done: done.into_iter().map(Into::into).collect(),
-            },
-            QueueMessage::TaskStarted { id, target } => Self::TaskStarted {
-                id: id.into(),
-                target: target.to_string(),
-            },
-            QueueMessage::TaskSuccess { id, target, eta } => Self::TaskSuccess {
-                id: id.into(),
-                target: target.to_string(),
-                eta,
-            },
-            QueueMessage::TaskFailed { id, target, eta } => Self::TaskFailed {
-                id: id.into(),
-                target: target.to_string(),
-                eta,
-            },
         }
     }
 }

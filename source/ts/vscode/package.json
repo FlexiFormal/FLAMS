@@ -18,7 +18,8 @@
     "url": "https://github.com/KWARC/FLAMS/issues"
   },
   "activationEvents": [
-    "workspaceContains:**/*.tex"
+    "workspaceContains:**/*.tex",
+    "onUri"
   ],
   "editor.semanticHighlighting.enabled": true,
   "contributes": {

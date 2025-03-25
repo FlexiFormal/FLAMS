@@ -44,3 +44,4 @@ serde = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true, optional = true }
+icondata_tb = { workspace = true }

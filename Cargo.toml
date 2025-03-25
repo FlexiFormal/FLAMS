@@ -231,6 +231,7 @@ thaw_utils = { git = "https://github.com/Jazzpirate/thaw", features = [
 icondata_bi = "0"
 icondata_ai = "0"
 icondata_ch = "0"
+icondata_tb = "0"
 
 axum = { version = "=0.7", features = ["ws"] }
 axum-macros = { version = "0.5" }
