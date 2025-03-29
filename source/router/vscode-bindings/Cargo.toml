@@ -1,0 +1,38 @@
+[package]
+name = "flams-router-vscode"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "leptos_router/ssr",
+    "ftml-viewer-components/ssr",
+    "flams-web-utils/ssr",
+    "flams-router-login/ssr",
+    "dep:flams-system",
+]
+hydrate = [
+    "leptos/hydrate",
+    "ftml-viewer-components/hydrate",
+    "flams-router-login/hydrate",
+    "flams-web-utils/hydrate",
+    "dep:wasm-bindgen",
+    "dep:serde-wasm-bindgen",
+]
+docs-only = []
+
+[dependencies]
+ftml-viewer-components = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-router-login = { workspace = true }
+flams-utils = { workspace = true }
+flams-system = { workspace = true, optional = true }
+
+leptos = { workspace = true }
+leptos_router = { workspace = true }
+wasm-bindgen = { workspace = true, optional = true }
+serde-wasm-bindgen = { workspace = true, optional = true }

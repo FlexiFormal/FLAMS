@@ -7,7 +7,6 @@
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
 mod query;
-mod search;
 mod settings;
 
 pub mod ws {
@@ -33,8 +32,8 @@ pub mod server_fns {
         pub use flams_router_login::server_fns::*;
     }
     pub use super::query::query_api as query;
-    pub use super::search::{search_query as search, search_symbols};
     pub use super::settings::{get_settings as settings, reload};
+    pub use flams_router_search::{search_query as search, search_symbols};
 }
 
 pub use flams_router_base::LoginState;
@@ -44,9 +43,9 @@ use leptos::{
 };
 use leptos_meta::{Stylesheet, Title, provide_meta_context};
 use leptos_router::{
-    StaticSegment,
     components::{Outlet, ParentRoute, Redirect, Route, Router, Routes},
     hooks::use_query_map,
+    path,
 };
 use thaw::{Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider};
 
@@ -63,20 +62,23 @@ pub fn Main() -> impl IntoView {
             //provide_context(UseLSP(params.with_untracked(|p|)))
             view!{<Routes fallback=|| NotFound()>
                 <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
-                    <ParentRoute path=StaticSegment("/dashboard") view=Dashboard>
-                        <Route path=StaticSegment("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
+                    <ParentRoute path=path!("/dashboard") view=Dashboard>
+                        <Route path=path!("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
                         //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
-                        <Route path=StaticSegment("log") view=|| view!(<MainPage page=Page::Log/>)/>
-                        <Route path=StaticSegment("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
-                        <Route path=StaticSegment("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
-                        <Route path=StaticSegment("query") view=|| view!(<MainPage page=Page::Query/>)/>
-                        <Route path=StaticSegment("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
-                        <Route path=StaticSegment("users") view=|| view!(<MainPage page=Page::Users/>)/>
-                        <Route path=StaticSegment("search") view=|| view!(<MainPage page=Page::Search/>)/>
-                        <Route path=StaticSegment("") view=|| view!(<MainPage page=Page::Home/>)/>
-                        <Route path=StaticSegment("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
+                        <Route path=path!("log") view=|| view!(<MainPage page=Page::Log/>)/>
+                        <Route path=path!("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
+                        <Route path=path!("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
+                        <Route path=path!("query") view=|| view!(<MainPage page=Page::Query/>)/>
+                        <Route path=path!("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
+                        <Route path=path!("users") view=|| view!(<MainPage page=Page::Users/>)/>
+                        <Route path=path!("search") view=|| view!(<MainPage page=Page::Search/>)/>
+                        <Route path=path!("") view=|| view!(<MainPage page=Page::Home/>)/>
+                        <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
                     </ParentRoute>
-                    <Route path=StaticSegment("/") view={move || if has_params() {
+                    <ParentRoute path=path!("/vscode") view= flams_router_vscode::VSCodeWrap>
+                        <Route path=path!("search") view=flams_router_search::vscode::VSCodeSearch/>
+                    </ParentRoute>
+                    <Route path=path!("/") view={move || if has_params() {
                             Either::Left(view! { <flams_router_content::components::URITop/> })
                         } else {
                             Either::Right(view! { <Redirect path="/dashboard"/> })
@@ -196,7 +198,7 @@ fn do_main(page: Page) -> impl IntoView {
         Page::Query => E(view! {<query::Query/>}),
         Page::Settings => F(view! {<settings::Settings/>}),
         Page::MyArchives => G(view! {<flams_router_git_components::Archives/>}),
-        Page::Search => H(view! {<search::SearchTop/>}),
+        Page::Search => H(view! {<flams_router_search::components::SearchTop/>}),
         Page::Users => I(view! {<flams_router_login::components::Users/>}),
         _ => J(view!(<span>"TODO"</span>)),
         //Page::Login => view!{<LoginPage/>}

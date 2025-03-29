@@ -2,46 +2,13 @@ use flams_ontology::{
     search::{QueryFilter, SearchResult, SearchResultKind},
     uris::{DocumentElementURI, DocumentURI, SymbolURI, URI},
 };
+use flams_router_base::uris::{DocURIComponents, URIComponents};
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::{components::error_with_toaster, inject_css};
 use leptos::prelude::*;
 
-use flams_router_base::uris::{DocURIComponents, URIComponents};
-
-#[server(prefix = "/api", endpoint = "search")]
-#[allow(clippy::unused_async)]
-pub async fn search_query(
-    query: String,
-    opts: QueryFilter,
-    num_results: usize,
-) -> Result<Vec<(f32, SearchResult)>, ServerFnError<String>> {
-    use flams_system::search::Searcher;
-    tokio::task::spawn_blocking(move || {
-        Searcher::get()
-            .query(&query, opts, num_results)
-            .ok_or_else(|| ServerFnError::ServerError("Search error".to_string()))
-    })
-    .await
-    .map_err(|e| ServerFnError::ServerError(e.to_string()))?
-}
-#[server(prefix = "/api", endpoint = "search_symbols")]
-#[allow(clippy::unused_async)]
-pub async fn search_symbols(
-    query: String,
-    num_results: usize,
-) -> Result<VecMap<SymbolURI, Vec<(f32, SearchResult)>>, ServerFnError<String>> {
-    use flams_system::search::Searcher;
-    tokio::task::spawn_blocking(move || {
-        Searcher::get()
-            .query_symbols(&query, num_results)
-            .ok_or_else(|| ServerFnError::ServerError("Search error".to_string()))
-    })
-    .await
-    .map_err(|e| ServerFnError::ServerError(e.to_string()))?
-}
-
 #[derive(Debug, Clone)]
-enum SearchState {
+pub(crate) enum SearchState {
     None,
     Loading,
     Results(Vec<(f32, SearchResult)>),
@@ -49,7 +16,7 @@ enum SearchState {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum Filter {
+pub(crate) enum Filter {
     Doc,
     Def,
     Par,
@@ -71,7 +38,7 @@ impl Filter {
             "par" => Self::Par,
             "ex" => Self::Ex,
             "ass" => Self::Ass,
-            _ => unreachable!(),
+            _ => impossible!(),
         }
     }
     fn value_str(self) -> &'static str {
@@ -144,7 +111,7 @@ pub fn SearchTop() -> impl IntoView {
         let s = query.get_untracked();
         let opts = query_opts.get_untracked();
         async move {
-            match search_query(s, opts, 20).await {
+            match super::search_query(s, opts, 20).await {
                 Ok(r) => results.set(SearchState::Results(r)),
                 Err(e) => {
                     results.set(SearchState::None);
@@ -157,7 +124,7 @@ pub fn SearchTop() -> impl IntoView {
         results.set(SearchState::Loading);
         let s = query.get_untracked();
         async move {
-            match search_symbols(s, 20).await {
+            match super::search_symbols(s, 20).await {
                 Ok(r) => results.set(SearchState::SymResults(r)),
                 Err(e) => {
                     results.set(SearchState::None);

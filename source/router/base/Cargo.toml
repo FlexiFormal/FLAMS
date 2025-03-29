@@ -19,7 +19,14 @@ ssr = [
     "dep:tokio",
     "dep:axum",
 ]
-hydrate = ["leptos/hydrate", "thaw/hydrate", "flams-web-utils/hydrate"]
+hydrate = [
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "flams-web-utils/hydrate",
+    "dep:bytes",
+    "dep:futures",
+    "dep:wasm-streams",
+]
 docs-only = []
 
 [dependencies]
@@ -43,3 +50,7 @@ axum-login = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 icondata_tb = { workspace = true }
+send_wrapper = { workspace = true }
+bytes = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+wasm-streams = { workspace = true, optional = true }

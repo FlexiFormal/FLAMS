@@ -23,6 +23,8 @@ members = [
     "source/router/git/base",
     "source/router/git/components",
     "source/router/login",
+    "source/router/search",
+    "source/router/vscode-bindings",
     "experiments",
     "source/ffi",
 ]
@@ -114,6 +116,8 @@ flams-router-git-base = { path = "source/router/git/base", version = "0.0.1" }
 flams-router-git-components = { path = "source/router/git/components", version = "0.0.1" }
 flams-router-login = { path = "source/router/login", version = "0.0.1" }
 flams-router-logging = { path = "source/router/logging", version = "0.0.1" }
+flams-router-search = { path = "source/router/search", version = "0.0.1" }
+flams-router-vscode = { path = "source/router/vscode-bindings", version = "0.0.1" }
 
 # ftml-viewer = { path = "ftml/viewer",version="0.0.1" }
 ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
@@ -227,6 +231,8 @@ thaw_utils = { git = "https://github.com/Jazzpirate/thaw", features = [
 #thaw_utils = { features=["nightly"], git = "https://github.com/thaw-ui/thaw", rev = "cc4f87091b6e8973ed31899e1bbe8988c48d00ed"}
 #thaw_utils = {features=["nightly"],version="=0.1.0-beta5"}
 
+bytes = "1.10"
+
 
 icondata_bi = "0"
 icondata_ai = "0"
@@ -253,6 +259,8 @@ web-sys = { version = "0.3" }
 tsify-next = { version = "0.5", features = ["js"] }
 js-sys = "0.3"
 js-regexp = "0.2"
+wasm-streams = "0.4"
+futures-util = "0.3"
 
 # search
 

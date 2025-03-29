@@ -27,6 +27,8 @@ ssr = [
     "flams-router-git-base/ssr",
     "flams-router-git-components/ssr",
     "flams-router-login/ssr",
+    "flams-router-vscode/ssr",
+    "flams-router-search/ssr",
 ]
 hydrate = [
     "leptos/hydrate",
@@ -42,6 +44,8 @@ hydrate = [
     "flams-router-git-base/hydrate",
     "flams-router-git-components/hydrate",
     "flams-router-login/hydrate",
+    "flams-router-vscode/hydrate",
+    "flams-router-search/hydrate",
 ]
 docs-only = []
 
@@ -58,6 +62,8 @@ flams-router-buildqueue-components = { workspace = true }
 flams-router-git-base = { workspace = true }
 flams-router-git-components = { workspace = true }
 flams-router-login = { workspace = true }
+flams-router-vscode = { workspace = true }
+flams-router-search = { workspace = true }
 ftml-viewer-components = { workspace = true, features = ["omdoc"] }
 flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }

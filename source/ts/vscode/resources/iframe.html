@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html style="height:100%">
+  <head>
+    <script>
+      const vscode = acquireVsCodeApi();
+      var origin = window.origin;
+      // URL escape origin:
+      origin = encodeURIComponent(origin);
+      var eventMethod = window.addEventListener ? "addEventListener" : "attachEvent";
+      var eventer = window[eventMethod];
+      var messageEvent = eventMethod == "attachEvent" ? "onmessage" : "message";
+      eventer(messageEvent,function(e) {
+          console.log(e.data);
+          vscode.postMessage(e.data);
+      },false);
+    </script>
+  </head>
+  <body style="padding:0;width:100%;height:100%;overflow:hidden;">
+    <iframe style="width:100%;height:100%;overflow:hidden;border:0" id ="iframe" src="${context.server._url}/vscode/search${remote}" style="background:white"></iframe>
+    <script>
+      document.getElementById("iframe").src = "%%URL%%?origin="+origin+"%%QUERY%%";
+    </script>
+  </body>
+</html>

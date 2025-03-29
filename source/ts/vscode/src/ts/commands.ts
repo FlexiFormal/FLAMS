@@ -4,6 +4,7 @@ import { CancellationToken } from 'vscode-languageclient';
 import * as language from 'vscode-languageclient';
 import { MathHubTreeProvider } from './mathhub';
 import { Clipboard } from 'vscode';
+import { insertUsemodule } from './utils';
 
 export enum Commands {
   HelloWorld = "flams.helloWorld",
@@ -37,57 +38,29 @@ interface QuizRequestParams {
 
 interface ReloadParams {}
 
+interface Usemodule {
+  archive:string,
+  path:string
+}
+
 export function register_server_commands(context:FLAMSContext) {
   vscode.commands.executeCommand('setContext', 'flams.loaded', true);
+
 	vscode.window.registerWebviewViewProvider("flams-tools",
-    webview(context,"stex-tools",msg => {
-      const doc = vscode.window.activeTextEditor?.document;
-      switch (msg.command) {
-        case "dashboard":
-          openIframe(context.server.url + "/dashboard","Dashboard");
-          break;
-        case "preview":
-          if (doc) {
-            context.client.sendRequest<string | undefined>("flams/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
-              if (s) {openIframe(context.server.url + "?uri=" + encodeURIComponent(s),doc.fileName); }
-              else {
-                vscode.window.showInformationMessage("No preview available; building possibly failed");
-              }
-            });
-          } else {
-            vscode.window.showInformationMessage("(No sTeX file in focus)");
-          }
-          break;
-        case "quiz":
-          if (doc) {
-            context.client.sendRequest<string | undefined>("flams/quizRequest",<QuizRequestParams>{uri:doc.uri.toString()}).then(s => {
-              if (s) {
-                vscode.env.clipboard.writeText(s).then(() => {
-                  vscode.window.showInformationMessage("Copied to clipboard");
-                });
-              }
-            });
-          } else {
-            vscode.window.showInformationMessage("(No sTeX file in focus)");
-          }
-          break;
-        case "reload":
-          context.client.sendNotification("flams/reload",<ReloadParams>{});
-          break;
-        case "browser":
-          if (doc) {
-            context.client.sendRequest<string | undefined>("flams/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
-              if (s) {
-                const uri = vscode.Uri.parse(context.server.url).with({query:"uri=" + encodeURIComponent(s)});
-                vscode.env.openExternal(uri);
-              }
-              else {
-                vscode.window.showInformationMessage("No preview available; building possibly failed");
-              }
-            });
-          }
-          break;
+    webview(context,"stex-tools",msg => flamsTools(msg,context))
+  );
+
+  const remote = context.remote_server?"&remote="+encodeURIComponent(context.remote_server.url):"";
+	vscode.window.registerWebviewViewProvider("flams-search",
+    webview_iframe(context,`${context.server._url}/vscode/search`,remote,msg => {
+      if ('archive' in msg && 'path' in msg) {
+        if (vscode.window.activeTextEditor?.document) {
+          let doc = vscode.window.activeTextEditor.document;
+          return insertUsemodule(doc,msg.archive,msg.path);
+        }
+        vscode.window.showInformationMessage("No sTeX file in focus");
       }
+      vscode.window.showErrorMessage(`Unknown message: ${msg}`);
     })
   );
 
@@ -120,6 +93,28 @@ export function openIframe(url:string,title:string): vscode.WebviewPanel {
   return panel;
 }
 
+export function webview_iframe(flamscontext:FLAMSContext,url:string,query?:string,onMessage?: (e:any) => any) : vscode.WebviewViewProvider {
+  return <vscode.WebviewViewProvider> {
+    resolveWebviewView(webviewView: vscode.WebviewView, context: vscode.WebviewViewResolveContext, token: CancellationToken): Thenable<void> | void {
+      webviewView.webview.options = {
+        enableScripts: true,
+        enableForms:true     
+      };
+      if (onMessage) {
+        webviewView.webview.onDidReceiveMessage(onMessage);
+      }
+      const file = vscode.Uri.joinPath(flamscontext.vsc.extensionUri,"resources","iframe.html");
+      vscode.workspace.fs.readFile(file).then((c) => {
+        let s = Buffer.from(c).toString().replace("%%URL%%",url);
+        if (query) {
+          s = s.replace("%%QUERY%%",query);
+        }
+        webviewView.webview.html = s;
+      });
+    }
+  };
+}
+
 export function webview(flamscontext:FLAMSContext,html_file:string,onMessage?: (e:any) => any) : vscode.WebviewViewProvider {
   return <vscode.WebviewViewProvider> {
     resolveWebviewView(webviewView: vscode.WebviewView, context: vscode.WebviewViewResolveContext, token: CancellationToken): Thenable<void> | void {
@@ -148,4 +143,54 @@ export function webview(flamscontext:FLAMSContext,html_file:string,onMessage?: (
       });
     }
   };
+}
+
+function flamsTools(msg:any,context:FLAMSContext) {
+  const doc = vscode.window.activeTextEditor?.document;
+  switch (msg.command) {
+    case "dashboard":
+      openIframe(context.server.url + "/dashboard","Dashboard");
+      break;
+    case "preview":
+      if (doc) {
+        context.client.sendRequest<string | undefined>("flams/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
+          if (s) {openIframe(context.server.url + "?uri=" + encodeURIComponent(s),doc.fileName); }
+          else {
+            vscode.window.showInformationMessage("No preview available; building possibly failed");
+          }
+        });
+      } else {
+        vscode.window.showInformationMessage("(No sTeX file in focus)");
+      }
+      break;
+    case "quiz":
+      if (doc) {
+        context.client.sendRequest<string | undefined>("flams/quizRequest",<QuizRequestParams>{uri:doc.uri.toString()}).then(s => {
+          if (s) {
+            vscode.env.clipboard.writeText(s).then(() => {
+              vscode.window.showInformationMessage("Copied to clipboard");
+            });
+          }
+        });
+      } else {
+        vscode.window.showInformationMessage("(No sTeX file in focus)");
+      }
+      break;
+    case "reload":
+      context.client.sendNotification("flams/reload",<ReloadParams>{});
+      break;
+    case "browser":
+      if (doc) {
+        context.client.sendRequest<string | undefined>("flams/htmlRequest",<HtmlRequestParams>{uri:doc.uri.toString()}).then(s => {
+          if (s) {
+            const uri = vscode.Uri.parse(context.server.url).with({query:"uri=" + encodeURIComponent(s)});
+            vscode.env.openExternal(uri);
+          }
+          else {
+            vscode.window.showInformationMessage("No preview available; building possibly failed");
+          }
+        });
+      }
+      break;
+  }
 }

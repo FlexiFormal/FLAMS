@@ -1,0 +1,7 @@
+.flams-search-block {
+    border: 5px double;
+    margin-bottom: -5px;
+    padding: 5px;
+    border-color: var(--vscode-editorWidget-border);
+    display: block;
+}

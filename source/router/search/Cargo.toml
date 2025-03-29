@@ -1,0 +1,54 @@
+[package]
+name = "flams-router-search"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "leptos_router/ssr",
+    "thaw/ssr",
+    "ftml-viewer-components/ssr",
+    "flams-web-utils/ssr",
+    "flams-router-vscode/ssr",
+    "flams-router-content/ssr",
+    "dep:flams-system",
+    "dep:tokio",
+    #"dep:paste",
+    #"dep:smallvec",
+]
+hydrate = [
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "ftml-viewer-components/hydrate",
+    "flams-router-vscode/hydrate",
+    "flams-router-content/hydrate",
+    "flams-web-utils/hydrate",
+    "dep:reqwasm",
+]
+docs-only = []
+
+[dependencies]
+flams-ontology = { workspace = true, features = ["serde"] }
+flams-utils = { workspace = true }
+ftml-viewer-components = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-router-base = { workspace = true }
+flams-router-vscode = { workspace = true }
+flams-router-content = { workspace = true }
+flams-system = { workspace = true, optional = true, features = ["tantivy"] }
+
+leptos = { workspace = true }
+leptos_router = { workspace = true }
+thaw = { workspace = true }
+serde = { workspace = true }
+icondata_ai = { workspace = true }
+
+tokio = { workspace = true, optional = true }
+reqwasm = { workspace = true, optional = true }
+#paste = { workspace = true, optional = true }
+#smallvec = { workspace = true, optional = true }
+#lazy_static = { workspace = true }

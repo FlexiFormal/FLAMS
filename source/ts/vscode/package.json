@@ -49,6 +49,14 @@
           "icon": "img/flams.svg",
           "contextualTitle": "FLAMS Functionality",
           "when": "flams.loaded"
+        },
+        {
+          "id": "flams-search",
+          "type": "webview",
+          "name": "Search",
+          "icon": "img/flams.svg",
+          "contextualTitle": "FLAMS Search",
+          "when": "flams.loaded"
         }
       ]
     },
