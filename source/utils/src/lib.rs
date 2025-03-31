@@ -7,6 +7,7 @@ pub mod change_listener;
 pub mod escaping;
 pub mod gc;
 pub mod globals;
+pub mod id_counters;
 mod inner_arc;
 pub mod logs;
 pub mod parsing;
