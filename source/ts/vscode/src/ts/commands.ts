@@ -72,7 +72,7 @@ export function register_server_commands(context:FLAMSContext) {
   context.client.onNotification("flams/htmlResult",(s:string) => {
     openIframe(context.server.url + "?uri=" + encodeURIComponent(s),s.split("&d=")[1]);
 	});
-	context.client.onNotification("flams/updateMathHub", context.mathhub?.update);
+	context.client.onNotification("flams/updateMathHub", (_) => context.mathhub?.update());
 }
 
 

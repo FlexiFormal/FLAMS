@@ -195,7 +195,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     }
     const entries = await this.remote_server.backendGroupEntries(in_group.id).catch(() => undefined);
     if (!entries) {
-      vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found in ",in_group.id);
+      vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No archives found in ${in_group.id}`);
       return;
     }
     const [groups,archives] = entries;
@@ -217,7 +217,7 @@ export class MathHubTreeProvider implements vscode.TreeDataProvider<AnyMH> {
     const entries = await this.primary_server.backendGroupEntries(in_group?.id);
     if (!entries) {
       if (in_group) {
-        vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found in ",in_group.id);
+        vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No archives found in ${in_group.id}`);
       } else {
         vscode.window.showErrorMessage("𝖥𝖫∀𝖬∫: No archives found");
       }
@@ -296,7 +296,11 @@ enum LRB {
 function merge(target:(ArchiveGroup|Archive)[],from:(ArchiveGroup|Archive)[]) {
   from.forEach(f => {
     const old = target.find(o => o.id === f.id);
-    if (!old) {
+    if (old && old instanceof ArchiveGroup && f instanceof ArchiveGroup) {
+      merge(old.children,f.children);
+      old.lr = LRB.Both;
+      old.update();
+    } else if (!old) {
       target.push(f);
     }
   });
@@ -328,6 +332,7 @@ class ArchiveGroup extends vscode.TreeItem {
 
   update() {
     if (this.lr === LRB.Both && this.children.map(c => c.downloadable).includes(true)) {
+      this.downloadable = true;
       this.contextValue = "remote";
     }
   }
