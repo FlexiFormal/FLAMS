@@ -48,6 +48,7 @@ struct Project {
     pub id: u64,
     pub name: ArchiveId,
     pub url: String,
+    pub path: String,
     pub state: RwSignal<GitState>,
     pub default_branch: Option<String>,
 }
@@ -78,6 +79,7 @@ impl ProjectTree {
                             Either::Left(Project {
                                 url: repo.url,
                                 id: repo.id,
+                                path: repo.path,
                                 name: id,
                                 default_branch: repo.default_branch,
                                 state: RwSignal::new(state),
@@ -140,9 +142,9 @@ fn do_projects(vec: Vec<(flams_git::Project, ArchiveId, GitState)>) -> impl Into
         Either::Left(project) => Either::Left(view!{<Leaf><div>{move || project.state.with(|state| {
           if matches!(state,GitState::None){
             let state = project.state;
-            Either::Right(unmanaged(project.name.clone(),project.id,state,project.url.clone()))
+            Either::Right(unmanaged(project.name.clone(),project.id,state,project.path.clone(),project.url.clone()))
           } else {
-            Either::Left(managed(project.name.clone(),project.id,state,project.default_branch.clone(),project.url.clone(),project.state))
+            Either::Left(managed(project.name.clone(),project.id,state,project.default_branch.clone(),project.path.clone(),project.url.clone(),project.state))
           }
         })
       }</div></Leaf>}),
@@ -165,18 +167,19 @@ fn managed(
     _id: u64,
     state: &GitState,
     default_branch: Option<String>,
+    path: String,
     git_url: String,
     and_then: RwSignal<GitState>,
 ) -> impl IntoView + use<> {
     use thaw::{Button, ButtonSize, Combobox, ComboboxOption};
     match state {
         GitState::Queued { commit, .. } => leptos::either::EitherOf3::A(view! {
-          {name.to_string()}
+          {path}
           " (commit "{commit[..8].to_string()}" currently queued)"
         }),
         GitState::Live { commit, updates } if updates.is_empty() => {
             leptos::either::EitherOf3::B(view! {
-              {name.to_string()}
+              {path}
               " (commit "{commit[..8].to_string()}" up to date)"
             })
         }
@@ -226,7 +229,7 @@ fn managed(
 
             view! {
               {v}
-              <span style="color:green">{name.to_string()}
+              <span style="color:green">{path}
                 " (commit "{commit[..8].to_string()}") Updates available: "
               </span>
               <div style="margin-left:10px">
@@ -250,10 +253,10 @@ fn unmanaged(
     name: ArchiveId,
     id: u64,
     and_then: RwSignal<GitState>,
+    path: String,
     git_url: String,
 ) -> impl IntoView {
     use thaw::{Button, ButtonSize, Combobox, ComboboxOption};
-    let name_str = name.to_string();
     let r = Resource::new(
         || (),
         move |()| async move {
@@ -270,7 +273,7 @@ fn unmanaged(
         },
     );
     view! {
-      <span style="color:grey">{name_str}" (unmanaged) "</span>
+      <span style="color:grey">{path}" (unmanaged) "</span>
       <Suspense fallback=|| view!(<flams_web_utils::components::Spinner/>)>{move ||
         match r.get() {
           Some(Err(e)) => leptos::either::EitherOf3::B(flams_web_utils::components::display_error(e.to_string().into())),
