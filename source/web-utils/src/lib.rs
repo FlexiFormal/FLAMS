@@ -149,3 +149,16 @@ fn do_inject_css(id: Cow<'static, str>, content: Cow<'static, str>) {
         _ = head.prepend_with_node_1(&style);
     }
 }
+
+//#[cfg(any(feature = "csr", feature = "ssr"))]
+pub fn try_catch<R>(run: impl FnOnce() -> R) -> Result<R, leptos::wasm_bindgen::JsError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).map_err(|e| {
+        if let Some(s) = e.downcast_ref::<&str>() {
+            return leptos::wasm_bindgen::JsError::new(*s);
+        }
+        if let Some(s) = e.downcast_ref::<String>() {
+            return leptos::wasm_bindgen::JsError::new(s);
+        }
+        leptos::wasm_bindgen::JsError::new("Box<dyn Error>")
+    })
+}

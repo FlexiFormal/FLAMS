@@ -4,6 +4,7 @@ use flams_ontology::{
     narration::exercises::{ExerciseFeedback, ExerciseResponse, Solutions},
     uris::{DocumentElementURI, DocumentURI},
 };
+use flams_web_utils::try_catch;
 use ftml_viewer_components::{
     components::{
         documents::{
@@ -385,10 +386,11 @@ pub struct FTMLMountHandle {
 impl FTMLMountHandle {
     /// unmounts the view and cleans up the reactive system.
     /// Not calling this is a memory leak
-    pub fn unmount(&self) {
+    pub fn unmount(&self) -> Result<(), wasm_bindgen::JsError> {
         if let Some(mount) = self.mount.take() {
-            drop(mount);
+            try_catch(move || drop(mount))?;
         }
+        Ok(())
     }
     fn new<V: IntoView + 'static>(
         div: leptos::web_sys::HtmlElement,

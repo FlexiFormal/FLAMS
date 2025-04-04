@@ -12,8 +12,8 @@ tracing-indicatif
 /resources/assets/ftml*
 /.idea
 /.vscode/launch.json
-/source/ftml/viewer/ts
-/source/ftml/viewer/pkg
+/ftml-viewer/ts
+/ftml-viewer/pkg
 /source/ts/**/pkg
 /source/ts/**/dist
 /source/ts/**/node_modules

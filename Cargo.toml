@@ -9,7 +9,6 @@ members = [
     "source/lsp",
     "source/stex",
     "source/ftml/system",
-    "source/ftml/viewer",
     "source/ftml/viewer-components",
     "source/ftml/extraction",
     "source/git",
@@ -30,7 +29,8 @@ members = [
 ]
 resolver = "2"
 exclude = [
-    "old", #"web/graphs","test-plugin","tests","thaw",
+    "old",
+    "ftml-viewer", #"web/graphs","test-plugin","tests","thaw",
     #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm"
 ]
 
@@ -119,7 +119,6 @@ flams-router-logging = { path = "source/router/logging", version = "0.0.1" }
 flams-router-search = { path = "source/router/search", version = "0.0.1" }
 flams-router-vscode = { path = "source/router/vscode-bindings", version = "0.0.1" }
 
-# ftml-viewer = { path = "ftml/viewer",version="0.0.1" }
 ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
 ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
 
@@ -324,7 +323,7 @@ lib-cargo-args = [
 # https://cse.sc.edu/~pfu/document/papers/rta-tlca.pdf
 
 
-## https://www.arroyo.dev/blog/rust-plugin-systems
+## https://www.arroyo.dev/blog/rust-plugins
 
 
 # utils:

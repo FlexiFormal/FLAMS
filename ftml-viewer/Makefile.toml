@@ -17,7 +17,7 @@ args = [
     "-Z",
     "build-std=std,panic_abort,core,alloc",
     "-Z",
-    "build-std-features=optimize_for_size,panic_immediate_abort",
+    "build-std-features=optimize_for_size", #,panic_immediate_abort",
 ]
 
 [tasks.update-package-json]
@@ -35,7 +35,7 @@ args = [
     "--out-dir",
     "ts",
     "--out-name",
-    "ftml-viewer-base",                                           #"--target","web",
+    "ftml-viewer-base",                     #"--target","web",
     "--",
     "--features",
     "ts,omdoc",
@@ -44,7 +44,7 @@ args = [
     "-Z",
     "build-std=std,panic_abort,core,alloc",
     "-Z",
-    "build-std-features=optimize_for_size,panic_immediate_abort",
+    "build-std-features=optimize_for_size", #,panic_immediate_abort",
 ]
 
 [tasks.wasm-pack-ts-dev]
@@ -104,7 +104,7 @@ async function ftml_start() {{
 }}
 ftml_start();
     "#,
-    include_str!("../../../../source/ftml/viewer-components/ftml-top.js")
+    include_str!("../../../../../source/ftml/viewer-components/ftml-top.js")
         .replace("export function","function")
     ).as_bytes()).unwrap();
 }
@@ -132,14 +132,14 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
 fn main() {
   let _ = std::fs::remove_dir_all(Path::new("./ts/flams"));
   std::fs::create_dir_all(Path::new("./ts/flams")).unwrap();
-  copy_dir_all(&Path::new("../../ts/vscode/src/ts/flams"),&Path::new("./ts/flams")).unwrap();
+  copy_dir_all(&Path::new("../source/ts/vscode/src/ts/flams"),&Path::new("./ts/flams")).unwrap();
 }
 '''
 
 [tasks.copy-d-ts]
 script_runner = "@shell"
 script = '''
-cp ./ts/ftml-viewer-base.d.ts ../../ts/flams/src/ftml-viewer-base.d.ts
+cp ./ts/ftml-viewer-base.d.ts ../source/ts/flams/src/ftml-viewer-base.d.ts
 '''
 
 [tasks.ts]

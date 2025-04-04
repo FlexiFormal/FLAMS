@@ -312,15 +312,31 @@ impl LeptosContext {
     }
 }
 
+/*
+std::panic::catch_unwind
+leptos::web_sys::js_sys::JsString::try_from(&wasm_bindgen::JSValue)
+leptos::web_sys::js_sys::JSON::stringify()
+fn() -> Result<T, wasm_bindgen::JsError> <- will throw js error
+"For more complex error handling, JsError implements From<T> where T: std::error::Error"
+
+let msg = match info.payload().downcast_ref::<&'static str>() {
+    Some(s) => *s,
+    None => match info.payload().downcast_ref::<String>() {
+        Some(s) => &s[..],
+        None => "Box<dyn Any>",
+    },
+};
+*/
+
 #[wasm_bindgen]
 impl LeptosContext {
     /// Cleans up the reactive system.
     /// Not calling this is a memory leak
-    pub fn cleanup(&self) {
+    pub fn cleanup(&self) -> Result<(), wasm_bindgen::JsError> {
         if let Some(mount) = self.inner.lock().ok().and_then(|mut l| l.take()) {
-            mount.cleanup();
-            drop(mount);
+            flams_web_utils::try_catch(move || mount.cleanup())?;
         }
+        Ok(())
     }
 
     #[inline]

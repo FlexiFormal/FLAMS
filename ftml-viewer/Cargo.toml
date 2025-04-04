@@ -1,0 +1,86 @@
+[package]
+name = "ftml-viewer"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+
+[profile.release]
+overflow-checks = false
+strip = true
+panic = 'unwind'
+opt-level = 'z'
+lto = true
+
+[profile.dev]
+opt-level = 2
+debug = true
+split-debuginfo = "off"
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+#codegen-units = 256
+rpath = false
+
+[lints.clippy]
+pedantic = "deny"
+nursery = "deny"
+unwrap_used = "deny"
+module_name_repetitions = { level = "allow", priority = 1 }
+enum_glob_use = { level = "allow", priority = 1 }
+
+#[package.metadata.wasm-pack.profile.release]
+#wasm-opt = ['-Oz','--enable-bulk-memory','--all-features']
+
+#[package.metadata.wasm-pack.profile.dev]
+#wasm-opt = false
+
+#[package.metadata.wasm-pack.profile.dev.wasm-bindgen]
+#debug-js-glue = true
+#demangle-name-section = true
+#dwarf-debug-info = true
+
+[features]
+ssr = [] # just to make documentation happy
+ts = [
+    "ftml-viewer-components/ts",
+    "dep:tsify-next",
+    "dep:serde",
+    "flams-utils/wasm",
+    "dep:wasm-bindgen-futures",
+    "flams-ontology/wasm",
+]
+omdoc = ["ftml-viewer-components/omdoc"]
+
+[dependencies]
+ftml-viewer-components = { path = "../source/ftml/viewer-components", features = [
+    "csr",
+] }
+flams-web-utils = { path = "../source/web-utils", features = ["csr"] }
+flams-utils = { path = "../source/utils" }
+flams-ontology = { path = "../source/ontology" }
+
+leptos_meta = "*"
+wasm-bindgen = "*"
+console_error_panic_hook = "*"
+thaw = { git = "https://github.com/Jazzpirate/thaw", features = ["nightly"] }
+tracing-wasm = "*"
+tracing = { version = "*", features = ["release_max_level_info"] }
+leptos-dyn-dom = { version = "*", git = "https://github.com/Jazzpirate/leptos-dyn-dom" }
+leptos = { version = "*", features = ["csr"] }
+
+tsify-next = { version = "*", optional = true }
+serde = { version = "*", optional = true }
+wasm-bindgen-futures = { version = "*", optional = true }
+
+#tachys = {workspace = true}
+#leptos_macro = {workspace = true}
+#tachys = {version="=0.1.0-beta5"}
+#reactive_graph = {version="=0.1.0-beta5"}
+#leptos_macro = {version="=0.7.0-beta5"}
+#hydration_context = {version="=0.2.0-beta5"}
+#leptos_config = {version="=0.7.0-beta5"}

@@ -1,0 +1,17 @@
+{
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "runnables": {
+          "extraEnv": {
+            "DATABASE_URL": "sqlite:../main/migrations/users.sqlite?mode=rwc"
+          }
+        },
+        "cargo": {
+          "targetDir": "target/analyzer",
+          "features": ["ts", "omdoc"] // "all"
+        }
+      }
+    }
+  }
+}
