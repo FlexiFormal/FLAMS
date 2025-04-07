@@ -44,21 +44,18 @@ pub struct Solutions(#[wasm_bindgen(skip)] pub Box<[SolutionData]>);
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Solutions {
     #[cfg(feature = "serde")]
-    #[inline]
     #[must_use]
     pub fn from_jstring(s: &str) -> Option<Self> {
         use flams_utils::Hexable;
         Self::from_hex(s).ok()
     }
     #[cfg(feature = "serde")]
-    #[inline]
     #[must_use]
     pub fn to_jstring(&self) -> Option<String> {
         use flams_utils::Hexable;
         self.as_hex().ok()
     }
 
-    #[inline]
     #[must_use]
     pub fn check_response(&self, response: &ExerciseResponse) -> Option<ExerciseFeedback> {
         self.check(response)
@@ -473,14 +470,13 @@ pub struct ExerciseFeedback {
 #[cfg(feature = "wasm")]
 #[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 impl ExerciseFeedback {
-    #[inline]
     #[must_use]
     pub fn from_jstring(s: &str) -> Option<Self> {
         use flams_utils::Hexable;
         Self::from_hex(s).ok()
     }
+
     #[cfg(feature = "serde")]
-    #[inline]
     #[must_use]
     pub fn to_jstring(&self) -> Option<String> {
         use flams_utils::Hexable;

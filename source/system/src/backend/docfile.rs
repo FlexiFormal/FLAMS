@@ -61,7 +61,7 @@ impl QuizExtension for Document {
         let mut css = VecSet::default();
         let mut elements = Vec::new();
         let mut solutions = HashMap::default();
-        let mut answer_classes = HashMap::default();
+        let mut answer_classes: HashMap<_, Vec<_>> = HashMap::default();
         let mut in_problem = false;
 
         let mut stack: SmallVec<_, 2> = SmallVec::new();
