@@ -334,7 +334,7 @@ impl LeptosContext {
     /// Not calling this is a memory leak
     pub fn cleanup(&self) -> Result<(), wasm_bindgen::JsError> {
         if let Some(mount) = self.inner.lock().ok().and_then(|mut l| l.take()) {
-            flams_web_utils::try_catch(move || mount.cleanup())?;
+            mount.cleanup(); //flams_web_utils::try_catch(move || mount.cleanup())?;
         }
         Ok(())
     }

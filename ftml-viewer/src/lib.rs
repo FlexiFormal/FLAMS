@@ -5,6 +5,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 /// sets the server url used to the provided one; by default `https://flams.mathhub.info`.
 pub fn set_server_url(server_url: String) {
+    console_error_panic_hook::set_once();
     tracing::debug!("setting server url: {server_url}");
     ftml_viewer_components::remote::set_server_url(server_url);
 }
@@ -21,6 +22,8 @@ pub fn run() {
     use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
     #[allow(unused_mut)]
     let mut config = tracing_wasm::WASMLayerConfigBuilder::new();
+
+    console_error_panic_hook::set_once();
     //#[cfg(not(debug_assertions))]
     //config.set_max_level(tracing::Level::INFO);
     tracing_wasm::set_as_global_default_with_config(config.build());

@@ -239,7 +239,7 @@ fn do_sym_result(
                 {
                     usemodule.map(|u| {
                         let on_click = move |_| {
-                            vs.post_message(u.clone());
+                            let _ = vs.post_message(u.clone());
                         };
                         view!{
                             <div style="width:100%"><div style="margin-left:auto;width:fit-content;" on:click=on_click>
@@ -296,7 +296,6 @@ fn do_para(
 ) -> impl IntoView {
     use thaw::Scrollbar;
     let uristr = uri.to_string();
-    let namestr = uri.name().to_string();
     let name = uristr;
     let desc = comma_sep(
         "For",
@@ -323,7 +322,6 @@ fn do_para(
 
 fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl IntoView {
     use flams_router_content::components::Fragment;
-    use ftml_viewer_components::components::documents::{FragmentString, FragmentStringProps};
     use leptos::either::Either;
     move || {
         let uri = uri.clone();
@@ -332,6 +330,9 @@ fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl I
                 #[cfg(feature = "hydrate")]
                 {
                     use flams_router_base::ServerFnExt;
+                    use ftml_viewer_components::components::documents::{
+                        FragmentString, FragmentStringProps,
+                    };
                     wait_and_then_fn(
                         move || {
                             flams_router_content::server_fns::Fragment {

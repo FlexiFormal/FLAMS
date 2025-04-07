@@ -1057,7 +1057,8 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             }
             if let Narrative::Paragraph(ParagraphState { children, .. })
             | Narrative::Exercise(ExerciseState { children, .. })
-            | Narrative::Section { children, .. } = narr
+            | Narrative::Section { children, .. }
+            | Narrative::Slide { children, .. } = narr
             {
                 children.push(elem);
                 return;

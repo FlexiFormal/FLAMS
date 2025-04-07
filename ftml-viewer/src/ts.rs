@@ -26,6 +26,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 /// activates debug logging
 pub fn set_debug_log() {
     let _ = tracing_wasm::try_set_as_global_default();
+    console_error_panic_hook::set_once();
 }
 
 #[wasm_bindgen]
@@ -236,6 +237,7 @@ fn GlobalSetup<V: IntoView + 'static>(
     use ftml_viewer_components::FTMLGlobalSetup;
     //use leptos::either::Either as E;
     use leptos::either::Either::{Left, Right};
+    console_error_panic_hook::set_once();
     let exercise_opts = if let Some(on_exercise) = on_exercise {
         Some(ExerciseOptions::OnResponse(on_exercise.get().into()))
     } else {
@@ -388,7 +390,7 @@ impl FTMLMountHandle {
     /// Not calling this is a memory leak
     pub fn unmount(&self) -> Result<(), wasm_bindgen::JsError> {
         if let Some(mount) = self.mount.take() {
-            try_catch(move || drop(mount))?;
+            drop(mount); //try_catch(move || drop(mount))?;
         }
         Ok(())
     }

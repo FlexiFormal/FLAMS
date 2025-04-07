@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 
 [profile.release]
@@ -14,9 +14,15 @@ panic = 'unwind'
 opt-level = 'z'
 lto = true
 
+#debug = true
+#split-debuginfo = "off"
+#strip = "none"
+#opt-level = 2
+
 [profile.dev]
 opt-level = 2
 debug = true
+strip = "none"
 split-debuginfo = "off"
 debug-assertions = true
 overflow-checks = true
@@ -36,8 +42,11 @@ enum_glob_use = { level = "allow", priority = 1 }
 #[package.metadata.wasm-pack.profile.release]
 #wasm-opt = ['-Oz','--enable-bulk-memory','--all-features']
 
-#[package.metadata.wasm-pack.profile.dev]
+#[package.metadata.wasm-pack.profile.release]
 #wasm-opt = false
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
 
 #[package.metadata.wasm-pack.profile.dev.wasm-bindgen]
 #debug-js-glue = true
