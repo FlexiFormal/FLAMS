@@ -8,9 +8,81 @@ use flams_system::backend::{
     GlobalBackend,
 };
 use flams_utils::{prelude::TreeChildIter, time::measure};
+use git2::build::CheckoutBuilder;
 
 pub fn main() {
-    linter();
+    git_pull();
+}
+
+fn git_pull() {
+    let path = std::path::Path::new("/home/jazzpirate/work/mh2/logic");
+    let branch = "stex4";
+    const NOTES_NS: &str = "refs/notes/flams";
+
+    let repo = git2::Repository::open_ext(
+        path,
+        git2::RepositoryOpenFlags::NO_SEARCH.intersection(git2::RepositoryOpenFlags::NO_DOTGIT),
+        std::iter::empty::<&std::ffi::OsStr>(),
+    )
+    .unwrap();
+
+    // fetch
+    let mut fetch = git2::FetchOptions::new();
+    repo.find_remote("origin")
+        .unwrap()
+        .fetch(
+            &[branch, &format!("+{NOTES_NS}:{NOTES_NS}")],
+            Some(&mut fetch),
+            None,
+        )
+        .unwrap();
+
+    // latest commit
+    let commit = repo
+        .find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)
+        .unwrap()
+        .get()
+        .peel_to_commit()
+        .unwrap();
+    let fcomm: flams_git::Commit = commit.clone().into();
+    println!("{fcomm:?}");
+    let a_commit = repo.find_annotated_commit(commit.id()).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    let is_descendant = repo.graph_descendant_of(head.id(), commit.id()).unwrap();
+    println!("Is descendant: {is_descendant}");
+
+    let is_descendant = repo.graph_descendant_of(commit.id(), head.id()).unwrap();
+    println!("Is descendant reverse: {is_descendant}");
+
+    let anal = repo.merge_analysis(&[&a_commit]).unwrap();
+    println!("Can fast-forward: {}", anal.0.is_fast_forward());
+    if anal.0.is_fast_forward() {
+        let headref = repo.reference(
+            repo.head().unwrap().name().unwrap(),
+            commit.id(),
+            true,
+            "Fast-forward",
+        );
+        repo.checkout_head(Some(CheckoutBuilder::new().force()))
+            .unwrap();
+        return;
+    }
+
+    /*
+    // merge
+    let mut merge_options = git2::MergeOptions::new();
+    let mut checkout = git2::build::CheckoutBuilder::new();
+    merge_options
+        .file_favor(git2::FileFavor::Theirs)
+        .fail_on_conflict(false);
+
+    repo.merge(
+        &[&a_commit],
+        Some(&mut merge_options),
+        Some(&mut git2::build::CheckoutBuilder::new()),
+    )
+    .unwrap();
+     */
 }
 
 fn git_urls() {

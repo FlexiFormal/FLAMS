@@ -87,7 +87,7 @@ const {{ run, set_server_url }} = wasm_bindgen;
 
 {}
 
-window.FLAMS_SERVER_URL = "https://flams.mathhub.info";
+window.FLAMS_SERVER_URL = "https://mathhub.info";
 
 var PRIVATE__do_ftml_on_start = () => {{}};
 function ftml_on_start(f) {{

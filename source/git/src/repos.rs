@@ -1,4 +1,4 @@
-use git2::RepositoryOpenFlags;
+use git2::{build::CheckoutBuilder, RepositoryOpenFlags};
 use std::path::Path;
 
 use crate::GitUrlExt;
@@ -450,6 +450,14 @@ impl GitRepo {
           if /*head.id() == commit.id() ||*/ self.0.graph_descendant_of(head.id(), commit.id())? {
               tracing::debug!("HEAD is descendant of commit!");
               return Ok(())
+          }
+          let (analysis,_) = self.0.merge_analysis(&[&a_commit])?;
+          if analysis.is_up_to_date() { return Ok(())}
+          if analysis.is_fast_forward() {
+              let head = self.0.head()?;
+              let name = head.name().ok_or_else(|| git2::Error::from_str("No name for HEAD reference"))?;
+              let _ = self.0.reference(name,id,true,"Fast-forward");
+              return self.0.checkout_head(Some(CheckoutBuilder::new().force()));
           }
 
           let mut merge_options = git2::MergeOptions::new();

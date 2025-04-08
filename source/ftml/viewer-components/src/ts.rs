@@ -301,14 +301,12 @@ pub struct LeptosContext {
 }
 impl LeptosContext {
     pub fn with<R>(&self, f: impl FnOnce() -> R) -> R {
-        let o = self
-            .inner
-            .lock()
-            .expect("Leptos context cleaned up already!")
-            .as_ref()
-            .cloned()
-            .expect("Leptos context cleaned up already!");
-        o.with(f)
+        if let Some(Some(o)) = self.inner.lock().ok().as_deref().cloned() {
+            o.with(f)
+        } else {
+            tracing::warn!("Leptos context already cleaned up!");
+            f()
+        }
     }
 }
 
@@ -333,7 +331,7 @@ impl LeptosContext {
     /// Cleans up the reactive system.
     /// Not calling this is a memory leak
     pub fn cleanup(&self) -> Result<(), wasm_bindgen::JsError> {
-        if let Some(mount) = self.inner.lock().ok().and_then(|mut l| l.take()) {
+        if let Some(mount) = self.inner.try_lock().ok().and_then(|mut l| l.take()) {
             mount.cleanup(); //flams_web_utils::try_catch(move || mount.cleanup())?;
         }
         Ok(())

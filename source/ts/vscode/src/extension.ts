@@ -1,128 +1,148 @@
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 //import { activate as act, greet } from '../pkg/flams_vscode';
-import { Commands, register_commands, register_server_commands, Settings } from './ts/commands';
-import { setup } from './ts/setup';
-import { Versions } from './ts/versions';
-import * as language from 'vscode-languageclient/node';
-import { FLAMSServer } from '@kwarc/flams';
-import { getSettings, MathHubTreeProvider } from './ts/mathhub';
-import path from 'path';
-import * as fs from 'fs';
+import {
+  Commands,
+  register_commands,
+  register_server_commands,
+  Settings,
+} from "./ts/commands";
+import { setup } from "./ts/setup";
+import { Versions } from "./ts/versions";
+import * as language from "vscode-languageclient/node";
+import { FLAMSServer } from "@kwarc/flams";
+import { getSettings, MathHubTreeProvider } from "./ts/mathhub";
+import path from "path";
+import * as fs from "fs";
 //import * as ws from 'ws';
 
 export async function activate(context: vscode.ExtensionContext) {
-  context.subscriptions.push(vscode.window.registerUriHandler(new FlamsUriHandler()));
+  context.subscriptions.push(
+    vscode.window.registerUriHandler(new FlamsUriHandler()),
+  );
   await local(context);
   //await remote(context);
 }
 
 // Our implementation of a UriHandler.
 class FlamsUriHandler implements vscode.UriHandler {
-	// This function will get run when something redirects to VS Code
-	// with your extension id as the authority.
-	handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
+  // This function will get run when something redirects to VS Code
+  // with your extension id as the authority.
+  handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
     return handleFlamsUri(uri);
-	}
+  }
 }
 
-async function handleFlamsUri(uri:vscode.Uri) {
+async function handleFlamsUri(uri: vscode.Uri) {
   // "vscode://flams/open?a={}&rp={}"
-  if (uri.path !== "/open") { 
+  if (uri.path !== "/open") {
     vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Unknown URI path ${uri.path}`);
-    return; 
+    return;
   }
   const query = decodeURIComponent(uri.query);
   const args = query.split("&");
-  if (args.length < 2) { 
+  if (args.length < 2) {
     vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Invalid number of query parameters`);
-    return; 
+    return;
   }
   const a0 = args[0];
-  if (a0.split("=")[0] !== "a") { 
+  if (a0.split("=")[0] !== "a") {
     vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Missing query parameter a`);
-    return; 
+    return;
   }
   const a = args[0].split("=")[1];
   const rp0 = args[1];
-  if (rp0.split("=")[0] !== "rp") { 
+  if (rp0.split("=")[0] !== "rp") {
     vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Missing query parameter rp`);
-    return; 
+    return;
   }
   const rp = args[1].split("=")[1];
   const mathhubs = (await getSettings())?.mathhubs;
-  if (!mathhubs) { 
+  if (!mathhubs) {
     vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: No mathhubs`);
-    return; 
+    return;
   }
-  const mh = mathhubs.find(mh => 
+  const mh = mathhubs.find((mh) =>
     // check if mh/a exists
-    fs.existsSync(a.split("/").reduce((p,seg) => path.join(p,seg),mh))
+    fs.existsSync(a.split("/").reduce((p, seg) => path.join(p, seg), mh)),
   );
   if (!mh) {
     vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Archive ${a} not found`);
     return;
   }
-  const p1 = a.split("/").reduce((p,seg) => path.join(p,seg),mh);
-  const p2 = path.join(p1,"source");
-  const p3 = rp.split("/").reduce((p,seg) => path.join(p,seg),p2);
-  
+  const p1 = a.split("/").reduce((p, seg) => path.join(p, seg), mh);
+  const p2 = path.join(p1, "source");
+  const p3 = rp.split("/").reduce((p, seg) => path.join(p, seg), p2);
+
   vscode.window.showTextDocument(vscode.Uri.file(p3));
 }
 
-
 async function local(context: vscode.ExtensionContext) {
-	const ctx = new FLAMSPreContext(context);
-	register_commands(ctx);
-	if (await ctx.versions.isValid()) {
-		launch_local(ctx);
-	} else {
-		setup(ctx);
-	}
+  const ctx = new FLAMSPreContext(context);
+  register_commands(ctx);
+  if (await ctx.versions.isValid()) {
+    launch_local(ctx);
+  } else {
+    setup(ctx);
+  }
 }
-
 
 export function deactivate() {
   const context = getPreContext();
-	if (context?.client) {
-		context.client.stop();
-	}
+  if (context?.client) {
+    context.client.stop();
+  }
 }
 
-export async function launch_local(context:FLAMSPreContext) {
+export async function launch_local(context: FLAMSPreContext) {
   let versions = context.versions;
   let flams = await versions?.flamsVersion();
   let stex = await versions?.stexVersion();
   let flams_path = versions?.flams_path;
   let stex_path = versions?.stex_path;
   if (!(stex && flams && flams_path && stex_path)) {
-    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error initializing`, { modal: true });
+    vscode.window.showErrorMessage(`𝖥𝖫∀𝖬∫: Error initializing`, {
+      modal: true,
+    });
     return;
   }
-	context.outputChannel.appendLine(`Using ${flams_path} (version ${flams.toString()})`);
-	context.outputChannel.appendLine(`sTeX at ${stex_path} (version ${stex.toString()})`);
-	context.outputChannel.appendLine("Initializing 𝖥𝖫∀𝖬∫ LSP Server");
-  
-  const toml = vscode.workspace.getConfiguration("flams").get<string>(Settings.SettingsToml);
-  const args = toml ? ["--lsp","-c",toml] : ["--lsp"];
-  const serverOptions: language.ServerOptions = {
-		run: { command: flams_path, args: args },
-		debug: { command: flams_path, args: args }
-	};
-  context.client = new language.LanguageClient("flams","𝖥𝖫∀𝖬∫ Language Server",serverOptions,{
-		documentSelector: [{scheme:"file", language:"tex"},{scheme:"file", language:"latex"}],
-		synchronize: {},
-    traceOutputChannel: context.outputChannel,
-    markdown: {
-        isTrusted: true,
-        supportHtml: true
-    },
-	}
+  context.outputChannel.appendLine(
+    `Using ${flams_path} (version ${flams.toString()})`,
   );
-	context.client.onNotification("flams/serverURL",(s:string) => {
-		context.server = new FLAMSServer(s);
+  context.outputChannel.appendLine(
+    `sTeX at ${stex_path} (version ${stex.toString()})`,
+  );
+  context.outputChannel.appendLine("Initializing 𝖥𝖫∀𝖬∫ LSP Server");
+
+  const toml = vscode.workspace
+    .getConfiguration("flams")
+    .get<string>(Settings.SettingsToml);
+  const args = toml ? ["--lsp", "-c", toml] : ["--lsp"];
+  const serverOptions: language.ServerOptions = {
+    run: { command: flams_path, args: args },
+    debug: { command: flams_path, args: args },
+  };
+  context.client = new language.LanguageClient(
+    "flams",
+    "𝖥𝖫∀𝖬∫ Language Server",
+    serverOptions,
+    {
+      documentSelector: [
+        { scheme: "file", language: "tex" },
+        { scheme: "file", language: "latex" },
+      ],
+      synchronize: {},
+      traceOutputChannel: context.outputChannel,
+      markdown: {
+        isTrusted: true,
+        supportHtml: true,
+      },
+    },
+  );
+  context.client.onNotification("flams/serverURL", (s: string) => {
+    context.server = new FLAMSServer(s);
     const ctx = new FLAMSContext(context);
     register_server_commands(ctx);
-	});
+  });
 
   // Setting "flams.trace.server":"verbose"
 
@@ -139,7 +159,7 @@ async function remote(context: vscode.ExtensionContext) {
 export async function launch_remote(context: FLAMSPreContext) {
   // Initialize server first
   context.server = new FLAMSServer("http://localhost:3000");
-  
+
   const wsock = new ws.WebSocket("http://localhost:3000/ws/lsp");
   const connection = ws.WebSocket.createWebSocketStream(wsock);
 
@@ -168,30 +188,33 @@ export async function launch_remote(context: FLAMSPreContext) {
 }
 */
 
-let _context : FLAMSContext | FLAMSPreContext | undefined = undefined;
-export function getPreContext() : FLAMSContext | FLAMSPreContext | undefined {
+let _context: FLAMSContext | FLAMSPreContext | undefined = undefined;
+export function getPreContext(): FLAMSContext | FLAMSPreContext | undefined {
   return _context;
 }
 
-export function getContext() : FLAMSContext {
-  if (!(_context instanceof FLAMSContext)) { throw new Error("context is undefined"); }
+export function getContext(): FLAMSContext {
+  if (!(_context instanceof FLAMSContext)) {
+    throw new Error("context is undefined");
+  }
   return _context;
 }
 
 async function wait(): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve,100));
+  return new Promise((resolve) => setTimeout(resolve, 100));
 }
 
-export async function awaitContext() : Promise<FLAMSContext> {
+export async function awaitContext(): Promise<FLAMSContext> {
   let waited = 0;
-  while (!(_context instanceof FLAMSContext)) { 
+  while (!(_context instanceof FLAMSContext)) {
     waited += 1;
-    if (waited > 10) { throw new Error("context is undefined"); }
+    if (waited > 10) {
+      throw new Error("context is undefined");
+    }
     await wait();
   }
   return Promise.resolve(_context);
 }
-
 
 export class FLAMSPreContext {
   outputChannel: vscode.OutputChannel;
@@ -201,12 +224,16 @@ export class FLAMSPreContext {
   server: FLAMSServer | undefined;
 
   constructor(context: vscode.ExtensionContext) {
-		this.vsc = context;
-    this.outputChannel = vscode.window.createOutputChannel('FLAMS');
+    this.vsc = context;
+    this.outputChannel = vscode.window.createOutputChannel("FLAMS");
     _context = this;
-	}
+  }
 
-  register_command(name:string,callback: (...args: any[]) => any, thisArg?: any) {
+  register_command(
+    name: string,
+    callback: (...args: any[]) => any,
+    thisArg?: any,
+  ) {
     const disposable = vscode.commands.registerCommand(name, callback, thisArg);
     this.vsc.subscriptions.push(disposable);
   }
@@ -219,20 +246,26 @@ export class FLAMSContext {
   client: language.LanguageClient;
   server: FLAMSServer;
   remote_server: FLAMSServer | undefined;
-  mathhub:MathHubTreeProvider | undefined;
+  mathhub: MathHubTreeProvider | undefined;
 
-  constructor(ctx:FLAMSPreContext) {
-    if (!ctx.client || !ctx.server) { throw new Error("𝖥𝖫∀𝖬∫: Client/Server not initialized"); }
-		this.vsc = ctx.vsc;
+  constructor(ctx: FLAMSPreContext) {
+    if (!ctx.client || !ctx.server) {
+      throw new Error("𝖥𝖫∀𝖬∫: Client/Server not initialized");
+    }
+    this.vsc = ctx.vsc;
     this.outputChannel = ctx.outputChannel;
     this.versions = ctx.versions;
     this.client = ctx.client;
     this.server = ctx.server;
-    this.remote_server = new FLAMSServer("https://mmt.beta.vollki.kwarc.info");
+    this.remote_server = new FLAMSServer("https://mathhub.info");
     _context = this;
-	}
+  }
 
-  register_command(name:string,callback: (...args: any[]) => any, thisArg?: any) {
+  register_command(
+    name: string,
+    callback: (...args: any[]) => any,
+    thisArg?: any,
+  ) {
     const disposable = vscode.commands.registerCommand(name, callback, thisArg);
     this.vsc.subscriptions.push(disposable);
   }

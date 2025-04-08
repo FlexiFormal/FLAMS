@@ -17,7 +17,7 @@ use flams_ontology::{
 
 use crate::components::TOCElem;
 
-pub const DEFAULT_SERVER_URL: &str = "https://flams.mathhub.info";
+pub const DEFAULT_SERVER_URL: &str = "https://mathhub.info";
 
 macro_rules! get {
     ($fn:ident($($arg:expr),*) = $res:pat => { $($code:tt)*}) => {{

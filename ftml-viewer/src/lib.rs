@@ -3,7 +3,7 @@
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-/// sets the server url used to the provided one; by default `https://flams.mathhub.info`.
+/// sets the server url used to the provided one; by default `https://mathhub.info`.
 pub fn set_server_url(server_url: String) {
     console_error_panic_hook::set_once();
     tracing::debug!("setting server url: {server_url}");
