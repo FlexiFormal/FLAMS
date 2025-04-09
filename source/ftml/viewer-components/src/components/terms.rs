@@ -1,9 +1,9 @@
 use flams_ontology::{
     content::terms::ArgMode,
-    uris::{ArchiveURITrait, ContentURI, DocumentElementURI, SymbolURI, URIWithLanguage, URI},
+    uris::{ArchiveURITrait, ContentURI, DocumentElementURI, URIWithLanguage, URI},
 };
 use flams_web_utils::{
-    components::{OnClickModal, /*DivOrMrow, */ Popover, PopoverSize, PopoverTriggerType},
+    components::{Popover, PopoverSize},
     do_css, inject_css,
 };
 use ftml_extraction::open::terms::{OpenArg, OpenTerm, PreVar, VarOrSym};
@@ -63,7 +63,7 @@ mod term_replacing {
         uris::{DocumentElementURI, URI},
     };
     use ftml_extraction::prelude::FTMLElements;
-    use leptos::{context::Provider, either::Either, prelude::*};
+    use leptos::{context::Provider, prelude::*};
     use leptos_dyn_dom::{DomStringContMath, OriginalNode};
 
     pub(crate) const DO_REPLACEMENTS: bool = true;
@@ -74,7 +74,7 @@ mod term_replacing {
         fn single(
             &self,
             idx: u8,
-            mode: ArgMode,
+            _mode: ArgMode,
             out: &mut String,
         ) -> Result<(), PresentationError> {
             self.0.with_untracked(|args| {
@@ -91,7 +91,7 @@ mod term_replacing {
         fn sequence(
             &self,
             idx: u8,
-            mode: ArgMode,
+            _mode: ArgMode,
         ) -> std::result::Result<
             impl Iterator<Item = impl FnOnce(&mut String) -> Result<(), PresentationError>>,
             PresentationError,
@@ -353,7 +353,6 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
     mut children: impl FnMut() -> V + Send + 'static,
 ) -> impl IntoView {
     use flams_web_utils::components::PopoverTrigger;
-    inject_css("flams-hover", ".flams-hover {padding:1px !important;}");
     //tracing::info!("comp!");
     let in_term = use_context::<Option<InTermState>>().flatten();
     if let Some(in_term) = in_term {
@@ -384,9 +383,16 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
 
         if do_popover() {
             let ocp = expect_context::<crate::config::FTMLConfig>().get_on_click(&s);
+            let top_class = Memo::new(move |_| {
+                if is_hovered.get() {
+                    "ftml-symbol-hover ftml-symbol-hover-hovered".to_string()
+                } else {
+                    "ftml-symbol-hover ftml-symbol-hover-hidden".to_string()
+                }
+            });
             //let s_click = s.clone();
             Either::Left(view!(
-              <Popover class="flams-hover" //node_type class
+              <Popover class=top_class //node_type class
                 size=PopoverSize::Small
                 on_click_signal=ocp
                 on_open=move || is_hovered.set(true)

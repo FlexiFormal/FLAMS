@@ -1,16 +1,35 @@
 .ftml-comp {
-  /* -webkit-text-stroke: 0.04ex cyan */
-  color:dodgerblue;
+    /* -webkit-text-stroke: 0.04ex cyan */
+    color: dodgerblue;
 }
 .ftml-var-comp {
-  color:gray;
+    color: gray;
 }
 .ftml-def-comp {
-  color: mediumvioletred;
+    color: mediumvioletred;
 }
 .ftml-comp-hover {
-  background-color:rgba(238, 255, 47, 0.702);
+    background-color: rgba(238, 255, 47, 0.702);
 }
 .ftml-comp-replaced {
-  border:1px dotted red;
+    border: 1px dotted red;
+}
+
+.ftml-symbol-hover {
+    padding: 1px !important;
+    transition-property: opacity;
+    transition-duration: 0.3s;
+    @starting-style {
+        opacity: 0;
+    }
+}
+.ftml-symbol-hover-hovered {
+    opacity: 1;
+    transition-duration: 0.5s;
+    @starting-style {
+        opacity: 0;
+    }
+}
+.ftml-symbol-hover-hidden {
+    opacity: 0;
 }
