@@ -39,6 +39,12 @@ export function getServerUrl(): string {
  * Configuration for rendering FTML content
  */
 export interface FTMLConfig {
+
+  /**
+   * whether to allow hovers
+   */
+  allowHovers?: boolean;
+
   /**
    * callback for wrapping sections
    */
@@ -115,6 +121,7 @@ export function ftmlSetup(
   return FTML.ftml_setup(
     to,
     then,
+    cfg?.allowHovers,
     cfg?.onSection,
     cfg?.onSectionTitle,
     cfg?.onParagraph,
@@ -145,6 +152,7 @@ export function renderDocument(
     to,
     document,
     context,
+    cfg?.allowHovers,
     cfg?.onSection,
     cfg?.onSectionTitle,
     cfg?.onParagraph,
@@ -175,6 +183,7 @@ export function renderFragment(
     to,
     fragment,
     context,
+    cfg?.allowHovers,
     cfg?.onSection,
     cfg?.onSectionTitle,
     cfg?.onParagraph,

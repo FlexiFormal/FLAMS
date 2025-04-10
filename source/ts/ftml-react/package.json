@@ -25,7 +25,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "@kwarc/ftml-viewer": "=0.0.25",
+    "@kwarc/ftml-viewer": "=0.0.27",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   },
