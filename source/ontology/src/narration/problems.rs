@@ -728,7 +728,7 @@ pub enum QuizElement {
         title: String,
         elements: Vec<QuizElement>,
     },
-    Question(QuizQuestion),
+    Problem(QuizProblem),
     Paragraph {
         html: String,
     },
@@ -738,7 +738,7 @@ pub enum QuizElement {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct QuizQuestion {
+pub struct QuizProblem {
     pub html: String,
     pub title_html: Option<String>,
     pub uri: DocumentElementURI,

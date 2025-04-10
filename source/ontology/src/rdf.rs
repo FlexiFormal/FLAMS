@@ -588,7 +588,7 @@ pub mod ontologies {
         CLASS SUBPROOF = "subproof" <: PARA @ "A logical paragraph that serves as a justification of an\
          intermediate proposition within a proof.";
         CLASS PROPOSITION = "proposition" <: PARA @ "A statement of a mathematical object or some relation between some." ;
-        CLASS PROBLEM = "problem" <: PARA @ "A logical paragraph posing a problem/question/problem for the reader.";
+        CLASS PROBLEM = "problem" <: PARA @ "A logical paragraph posing an exercise/question/problem for the reader.";
         CLASS SUBPROBLEM = "subproblem" <: PARA @ "A logical paragraph posing a subproblem in some problem/question/problem for the reader.";
 
 

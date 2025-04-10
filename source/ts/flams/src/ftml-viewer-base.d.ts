@@ -10,17 +10,17 @@ export function set_debug_log(): void;
  * [render_document] and [render_fragment] also inject a context
  * iff none already exists, so this is optional in every case.
  */
-export function ftml_setup(to: HTMLElement, children: LeptosContinuation, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, problem_opts?: ProblemOption | null, on_problem?: (r:ProblemResponse) => void | null): FTMLMountHandle;
+export function ftml_setup(to: HTMLElement, children: LeptosContinuation, allow_hovers?: boolean | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, problem_opts?: ProblemOption | null, on_problem?: (r:ProblemResponse) => void | null): FTMLMountHandle;
 /**
  * render an FTML document to the provided element
  * #### Errors
  */
-export function render_document(to: HTMLElement, document: DocumentOptions, context?: LeptosContext | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, problem_opts?: ProblemOption | null, on_problem?: (r:ProblemResponse) => void | null): FTMLMountHandle;
+export function render_document(to: HTMLElement, document: DocumentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, problem_opts?: ProblemOption | null, on_problem?: (r:ProblemResponse) => void | null): FTMLMountHandle;
 /**
  * render an FTML document fragment to the provided element
  * #### Errors
  */
-export function render_fragment(to: HTMLElement, fragment: FragmentOptions, context?: LeptosContext | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, problem_opts?: ProblemOption | null, on_problem?: (r:ProblemResponse) => void | null): FTMLMountHandle;
+export function render_fragment(to: HTMLElement, fragment: FragmentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, problem_opts?: ProblemOption | null, on_problem?: (r:ProblemResponse) => void | null): FTMLMountHandle;
 /**
  * sets the server url used to the provided one; by default `https://mathhub.info`.
  */
@@ -159,9 +159,9 @@ export interface Quiz {
     answer_classes: Map<DocumentElementURI, AnswerClass[]>;
 }
 
-export type QuizElement = { Section: { title: string; elements: QuizElement[] } } | { Question: QuizQuestion } | { Paragraph: { html: string } };
+export type QuizElement = { Section: { title: string; elements: QuizElement[] } } | { Problem: QuizProblem } | { Paragraph: { html: string } };
 
-export interface QuizQuestion {
+export interface QuizProblem {
     html: string;
     title_html: string | undefined;
     uri: DocumentElementURI;

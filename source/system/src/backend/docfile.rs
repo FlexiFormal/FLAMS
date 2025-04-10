@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
 use eyre::eyre;
 use flams_ontology::narration::{
     documents::{Document, UncheckedDocument},
-    problems::{Quiz, QuizElement, QuizQuestion},
+    problems::{Quiz, QuizElement, QuizProblem},
     DocumentElement, NarrationTrait,
 };
 use flams_utils::{impossible, vecmap::VecSet};
@@ -182,7 +182,7 @@ impl QuizExtension for Document {
                             .extend(gnote.answer_classes);
                     }
                     solutions.insert(e.uri.clone(), solution);
-                    elements.push(QuizElement::Question(QuizQuestion {
+                    elements.push(QuizElement::Problem(QuizProblem {
                         html, //solution,
                         title_html,
                         uri: e.uri.clone(),
