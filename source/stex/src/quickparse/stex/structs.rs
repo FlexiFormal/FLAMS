@@ -6,7 +6,7 @@ use std::{
 
 use flams_ontology::{
     languages::Language,
-    narration::{exercises::CognitiveDimension, paragraphs::ParagraphKind},
+    narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
     uris::{
         ArchiveId, ArchiveURIRef, ArchiveURITrait, ContentURI, ContentURITrait, DocumentURI,
         ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait,
@@ -30,8 +30,8 @@ use crate::quickparse::latex::{
 
 use super::{
     rules::{
-        ExerciseArg, MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg,
-        SymdefArg, TextSymdeclArg, VardefArg,
+        MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg, SymdefArg,
+        TextSymdeclArg, VardefArg,
     },
     DiagnosticLevel, STeXParseData,
 };
@@ -130,11 +130,11 @@ pub enum STeXToken<Pos: SourcePos> {
         parsed_args: Vec<ParagraphArg<Pos, STeXToken<Pos>>>,
         children: Vec<STeXToken<Pos>>,
     },
-    Exercise {
+    Problem {
         sub: bool,
         full_range: SourceRange<Pos>,
         name_range: SourceRange<Pos>,
-        parsed_args: Vec<ExerciseArg<Pos, STeXToken<Pos>>>,
+        parsed_args: Vec<ProblemArg<Pos, STeXToken<Pos>>>,
         children: Vec<STeXToken<Pos>>,
     },
     InlineParagraph {
@@ -1895,7 +1895,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 pub enum GroupKind<Pos: SourcePos> {
     #[default]
     None,
-    Exercise,
+    Problem,
     Module {
         uri: ModuleURI,
         rules: Vec<ModuleRule<Pos>>,

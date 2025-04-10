@@ -1,6 +1,7 @@
 use flams_ontology::{
+    languages::Language,
     narration::LOKind,
-    uris::{DocumentElementURI, DocumentURI, SymbolURI},
+    uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
 };
 use flams_utils::CSS;
 use leptos::prelude::*;
@@ -9,11 +10,6 @@ use std::borrow::Cow;
 
 #[cfg(feature = "omdoc")]
 use crate::components::omdoc::AnySpec;
-
-use flams_ontology::{
-    languages::Language,
-    uris::{ArchiveId, URI},
-};
 
 use crate::components::TOCElem;
 
@@ -202,7 +198,7 @@ impl ServerFunArgs for LOArgs {
     type Extra = bool;
     #[cfg(feature = "csr")]
     fn as_params(b: &Self::Extra) -> Cow<'static, str> {
-        format!("&exercises={b}").into()
+        format!("&problems={b}").into()
     }
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     #[inline]
@@ -387,9 +383,9 @@ impl ServerConfig {
     pub async fn get_los(
         &self,
         uri: SymbolURI,
-        exercises: bool,
+        problems: bool,
     ) -> Result<Vec<(DocumentElementURI, LOKind)>, String> {
-        self.get_los.call(uri, exercises).await
+        self.get_los.call(uri, problems).await
     }
 
     /// #### Errors
@@ -409,13 +405,13 @@ impl ServerConfig {
     pub async fn solution(
         &self,
         uri: flams_ontology::uris::DocumentElementURI,
-    ) -> Result<flams_ontology::narration::exercises::Solutions, String> {
+    ) -> Result<flams_ontology::narration::problems::Solutions, String> {
         use flams_utils::Hexable;
         let r = self
             .get_solution
             .call(URI::Narrative(uri.into()), ())
             .await?;
-        flams_ontology::narration::exercises::Solutions::from_hex(&r).map_err(|e| e.to_string())
+        flams_ontology::narration::problems::Solutions::from_hex(&r).map_err(|e| e.to_string())
     }
 
     /// #### Errors

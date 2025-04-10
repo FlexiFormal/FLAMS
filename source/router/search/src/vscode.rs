@@ -42,7 +42,7 @@ pub fn VSCodeSearch() -> impl IntoView {
         ret.allow_definitions = defs.get();
         ret.allow_examples = exs.get();
         ret.allow_assertions = asss.get();
-        ret.allow_exercises = probs.get();
+        ret.allow_problems = probs.get();
         ret
     });
     let local_results = RwSignal::new(SearchState::None);
@@ -152,7 +152,7 @@ pub fn VSCodeSearch() -> impl IntoView {
                 <VSCodeCheckbox checked=defs disabled>"Definitions"</VSCodeCheckbox>
                 <VSCodeCheckbox checked=exs disabled>"Examples"</VSCodeCheckbox>
                 <VSCodeCheckbox checked=asss disabled>"Assertions"</VSCodeCheckbox>
-                <VSCodeCheckbox checked=probs disabled>"Exercises"</VSCodeCheckbox>
+                <VSCodeCheckbox checked=probs disabled>"Problems"</VSCodeCheckbox>
                 <Themer><FTMLGlobalSetup>
                 {do_results("Local Results",None,local_results)}
                 <div style="margin-top:25px;"></div>

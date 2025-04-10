@@ -30,20 +30,19 @@ macro_rules! do_tags {
     (@FUN $tag:ident ) => {|a,b,c| todo(a,b,c,FTMLTag::$tag)}
 }
 
-
-do_tags!{
+do_tags! {
     Module                      @ module,
     MathStructure               @ mathstructure,
-    Morphism                    @ morphism,   
+    Morphism                    @ morphism,
     Section                     @ section,
     SkipSection                 @ skipsection,
 
-    Definition                  @ definition,     
+    Definition                  @ definition,
     Paragraph                   @ paragraph,
     Assertion                   @ assertion,
     Example                     @ example,
-    Problem                     @ exercise,
-    SubProblem                  @ subexercise,
+    Problem                     @ problem,
+    SubProblem                  @ subproblem,
     Slide                       @ slide,
     SlideNumber                 @ slide_number,
 
@@ -88,9 +87,9 @@ do_tags!{
     ProofMethod                 @ no_op /* TODO */,
     ProofSketch                 @ no_op /* TODO */,
     ProofTerm                   @ no_op /* TODO */,
-    ProofBody                   @ no_op /* TODO */,
+    ProofBody                   @ proofbody,
     ProofAssumption             @ no_op /* TODO */,
-    ProofHide                   @ no_op /* TODO */,
+    ProofHide                   @ proofhide,
     ProofStep                   @ no_op /* TODO */,
     ProofStepName               @ no_op /* TODO */,
     ProofEqStep                 @ no_op /* TODO */,
@@ -110,9 +109,9 @@ do_tags!{
     ProblemFillinsolCaseVerdict @ no_op,
 
     ProblemNote                 @ no_op /* TODO */,
-    ExerciseSolution            @ solution,
-    ExerciseHint                @ problem_hint,
-    ExerciseGradingNote         @ gnote,
+    ProblemSolution            @ solution,
+    ProblemHint                @ problem_hint,
+    ProblemGradingNote         @ gnote,
 
     ProblemMultipleChoiceBlock  @ multiple_choice_block,
     ProblemSingleChoiceBlock    @ single_choice_block,
@@ -141,7 +140,7 @@ do_tags!{
     SlideshowSlide              @ no_op /* TODO */,
     CurrentSectionLevel         @ no_op /* TODO */,
     Capitalize                  @ no_op /* TODO */,
-    
+
     Assign                      @ assign,
     Rename                      @ no_op /* TODO */,
     RenameTo                    @ no_op /* TODO */,
@@ -174,12 +173,22 @@ do_tags!{
     Argprecs                    @ no_op
 }
 
-
-pub const fn ignore<E:FTMLExtractor>(key:FTMLKey) -> FTMLExtractionRule<E> {
-    FTMLExtractionRule::new(key,key.attr_name(),super::rules::rules::no_op)
+pub const fn ignore<E: FTMLExtractor>(key: FTMLKey) -> FTMLExtractionRule<E> {
+    FTMLExtractionRule::new(key, key.attr_name(), super::rules::rules::no_op)
 }
-pub const fn no_op<E:FTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut super::rules::rules::SV<E>) -> Option<OpenFTMLElement> { None }
+pub const fn no_op<E: FTMLExtractor>(
+    _extractor: &mut E,
+    _attrs: &mut E::Attr<'_>,
+    _nexts: &mut super::rules::rules::SV<E>,
+) -> Option<OpenFTMLElement> {
+    None
+}
 
-pub fn todo<E:FTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut super::rules::rules::SV<E>,tag:FTMLKey) -> Option<OpenFTMLElement> {
-    todo!("Tag {}",tag.as_str()) 
+pub fn todo<E: FTMLExtractor>(
+    _extractor: &mut E,
+    _attrs: &mut E::Attr<'_>,
+    _nexts: &mut super::rules::rules::SV<E>,
+    tag: FTMLKey,
+) -> Option<OpenFTMLElement> {
+    todo!("Tag {}", tag.as_str())
 }

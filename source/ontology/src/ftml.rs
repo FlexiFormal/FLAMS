@@ -1,6 +1,10 @@
-pub const PREFIX:&str = "data-ftml-";
+pub const PREFIX: &str = "data-ftml-";
 
-macro_rules! ftml { ($l:literal) => {concat!("data-ftml-",$l)} }
+macro_rules! ftml {
+    ($l:literal) => {
+        concat!("data-ftml-", $l)
+    };
+}
 
 macro_rules! do_keys {
     ($count:literal: $($tag:ident =$val:literal)*) => {
@@ -39,8 +43,7 @@ macro_rules! do_keys {
     }
 }
 
-
-do_keys!{117:
+do_keys! {117:
     Module                      = "module"
     MathStructure               = "feature-structure"
     Morphism                    = "feature-morphism"
@@ -124,10 +127,10 @@ do_keys!{117:
     ProblemFillinsolCase        = "fillin-case"
     ProblemFillinsolCaseValue   = "fillin-case-value"
     ProblemFillinsolCaseVerdict = "fillin-case-verdict"
-    ExerciseSolution            = "solution"
-    ExerciseHint                = "problemhint"
+    ProblemSolution            = "solution"
+    ProblemHint                = "problemhint"
     ProblemNote                 = "problemnote"
-    ExerciseGradingNote         = "problemgnote"
+    ProblemGradingNote         = "problemgnote"
 
     Comp                        = "comp"
     VarComp                     = "varcomp"
@@ -146,7 +149,7 @@ do_keys!{117:
     SlideshowSlide              = "slideshow-slide"
     CurrentSectionLevel         = "currentsectionlevel"
     Capitalize                  = "capitalize"
-    
+
     Assign                      = "assign"
     Rename                      = "rename"
     RenameTo                    = "to"

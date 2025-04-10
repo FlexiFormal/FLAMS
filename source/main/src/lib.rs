@@ -79,7 +79,7 @@ pub(crate) mod fns {
         p: Option<String>,
         m: Option<String>,
         s: Option<String>,
-        exercises: bool,
+        problems: bool,
     ) -> Pin<
         Box<
             dyn Future<Output = Result<Vec<(DocumentElementURI, LOKind)>, ServerFnError<String>>>
@@ -87,7 +87,7 @@ pub(crate) mod fns {
         >,
     > {
         Box::pin(flams_router_dashboard::server_fns::content::los(
-            uri, a, p, m, s, exercises,
+            uri, a, p, m, s, problems,
         ))
     }
     fn omdoc(

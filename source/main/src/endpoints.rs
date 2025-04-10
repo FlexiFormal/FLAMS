@@ -45,8 +45,8 @@
  * | [`/content/toc`](content::toc()) | [DocumentURI] | `(Vec<`[CSS]`>,Vec<`[TOCElem]`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
  * | [`/content/los`](content::los()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
  * | [`/content/notations`](content::notations()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
- * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](flams_ontology::narration::exercises::Solutions) |
- * | [`/content/quiz`](content::get_quiz()) | [DocumentURI] | [`Quiz`](flams_ontology::narration::exercises::Quiz) |
+ * | [`/content/solution`](content::solution()) | [DocumentElementURI] | [`Solutions`](flams_ontology::narration::problems::Solutions) |
+ * | [`/content/quiz`](content::get_quiz()) | [DocumentURI] | [`Quiz`](flams_ontology::narration::problems::Quiz) |
  * | [`/content/slides`](content::slides_view()) | [DocumentURI] or [DocumentElementURI] | `(Vec<CSS>,Vec<SlideElement>)` |
  * | [`/content/legacy/uris`](content::uris()) | | |
 */

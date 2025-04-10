@@ -2,7 +2,7 @@ use crate::ssr::insert_base_url;
 
 use super::ssr::backend;
 use flams_ontology::narration::{
-    DocumentElement, NarrationTrait, documents::Document, exercises::Exercise, sections::Section,
+    DocumentElement, NarrationTrait, documents::Document, problems::Problem, sections::Section,
 };
 use flams_system::backend::Backend;
 use flams_utils::{CSS, unwrap, vecmap::VecSet};
@@ -88,7 +88,7 @@ pub async fn from_document(doc: &Document) -> (Vec<CSS>, Vec<TOCElem>) {
                 | DocumentElement::Morphism { children, .. }
                 | DocumentElement::MathStructure { children, .. }
                 | DocumentElement::Extension { children, .. }
-                | DocumentElement::Exercise(Exercise { children, .. }) => {
+                | DocumentElement::Problem(Problem { children, .. }) => {
                     let old = std::mem::replace(&mut curr, children.iter());
                     stack.push((old, None));
                 }

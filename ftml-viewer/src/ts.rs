@@ -1,7 +1,7 @@
 #![allow(non_local_definitions)]
 
 use flams_ontology::{
-    narration::exercises::{ExerciseFeedback, ExerciseResponse, Solutions},
+    narration::problems::{ProblemFeedback, ProblemResponse, Solutions},
     uris::{DocumentElementURI, DocumentURI},
 };
 use flams_web_utils::try_catch;
@@ -17,7 +17,7 @@ use ftml_viewer_components::{
         LeptosContext, NamedJsFunction, OnSectionTitle, ParagraphContinuation, SectionContinuation,
         SlideContinuation, TsTopCont,
     },
-    ExerciseOptions,
+    AllowHovers, ProblemOptions,
 };
 use leptos::{either::Either, prelude::*};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -37,14 +37,16 @@ pub fn set_debug_log() {
 pub fn ftml_setup(
     to: leptos::web_sys::HtmlElement,
     children: TsTopCont,
+    allow_hovers: Option<bool>,
     on_section: Option<JSectCont>,
     on_section_title: Option<JOnSectTtl>,
     on_paragraph: Option<JParaCont>,
     on_inputref: Option<JInputRefCont>,
     on_slide: Option<JSlideCont>,
-    exercise_opts: Option<ExerciseOption>,
-    on_exercise: Option<JExerciseCont>,
+    problem_opts: Option<ProblemOption>,
+    on_problem: Option<JProblemCont>,
 ) -> FTMLMountHandle {
+    let allow_hovers = allow_hovers.unwrap_or(true);
     let children = children.to_cont();
     let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
     let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
@@ -54,7 +56,7 @@ pub fn ftml_setup(
 
     FTMLMountHandle::new(to, move || {
         view! {
-          <GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise>{
+          <GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts on_problem>{
             let ret = NodeRef::new();
             ret.on_load(move |e| {
               let owner = Owner::current().expect("Not in a leptos reactive context!");
@@ -76,24 +78,26 @@ pub fn render_document(
     to: leptos::web_sys::HtmlElement,
     document: DocumentOptions,
     context: Option<LeptosContext>,
+    allow_hovers: Option<bool>,
     on_section: Option<JSectCont>,
     on_section_title: Option<JOnSectTtl>,
     on_paragraph: Option<JParaCont>,
     on_inputref: Option<JInputRefCont>,
     on_slide: Option<JSlideCont>,
-    exercise_opts: Option<ExerciseOption>,
-    on_exercise: Option<JExerciseCont>,
+    problem_opts: Option<ProblemOption>,
+    on_problem: Option<JProblemCont>,
 ) -> Result<FTMLMountHandle, String> {
     fn inner(
         to: leptos::web_sys::HtmlElement,
         document: DocumentOptions,
+        allow_hovers: bool,
         on_section: Option<JSectCont>,
         on_section_title: Option<JOnSectTtl>,
         on_paragraph: Option<JParaCont>,
         on_inputref: Option<JInputRefCont>,
         on_slide: Option<JSlideCont>,
-        exercise_opts: Option<ExerciseOption>,
-        on_exercise: Option<JExerciseCont>,
+        problem_opts: Option<ProblemOption>,
+        on_problem: Option<JProblemCont>,
     ) -> Result<FTMLMountHandle, String> {
         let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
         let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
@@ -106,45 +110,48 @@ pub fn render_document(
                 let toc = toc.map_or(TOCSource::None, TOCSource::Ready);
                 let gottos = gottos.unwrap_or_default();
                 Either::Left(
-                    view! {<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise><DocumentString html gottos toc/></GlobalSetup>},
+                    view! {<GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts on_problem><DocumentString html gottos toc/></GlobalSetup>},
                 )
             }
             DocumentOptions::FromBackend { uri, gottos, toc } => {
                 let toc = toc.map_or(TOCSource::None, Into::into);
                 let gottos = gottos.unwrap_or_default();
                 Either::Right(
-                    view! {<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise><DocumentFromURI uri gottos toc/></GlobalSetup>},
+                    view! {<GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts on_problem><DocumentFromURI uri gottos toc/></GlobalSetup>},
                 )
             }
         };
 
         Ok(FTMLMountHandle::new(to, move || comp()))
     }
+    let allow_hovers = allow_hovers.unwrap_or(true);
     if let Some(context) = context {
         context.with(move || {
             inner(
                 to,
                 document,
+                allow_hovers,
                 on_section,
                 on_section_title,
                 on_paragraph,
                 on_inputref,
                 on_slide,
-                exercise_opts,
-                on_exercise,
+                problem_opts,
+                on_problem,
             )
         })
     } else {
         inner(
             to,
             document,
+            allow_hovers,
             on_section,
             on_section_title,
             on_paragraph,
             on_inputref,
             on_slide,
-            exercise_opts,
-            on_exercise,
+            problem_opts,
+            on_problem,
         )
     }
 }
@@ -157,24 +164,26 @@ pub fn render_fragment(
     to: leptos::web_sys::HtmlElement,
     fragment: FragmentOptions,
     context: Option<LeptosContext>,
+    allow_hovers: Option<bool>,
     on_section: Option<JSectCont>,
     on_section_title: Option<JOnSectTtl>,
     on_paragraph: Option<JParaCont>,
     on_inputref: Option<JInputRefCont>,
     on_slide: Option<JSlideCont>,
-    exercise_opts: Option<ExerciseOption>,
-    on_exercise: Option<JExerciseCont>,
+    problem_opts: Option<ProblemOption>,
+    on_problem: Option<JProblemCont>,
 ) -> Result<FTMLMountHandle, String> {
     fn inner(
         to: leptos::web_sys::HtmlElement,
         fragment: FragmentOptions,
+        allow_hovers: bool,
         on_section: Option<JSectCont>,
         on_section_title: Option<JOnSectTtl>,
         on_paragraph: Option<JParaCont>,
         on_inputref: Option<JInputRefCont>,
         on_slide: Option<JSlideCont>,
-        exercise_opts: Option<ExerciseOption>,
-        on_exercise: Option<JExerciseCont>,
+        problem_opts: Option<ProblemOption>,
+        on_problem: Option<JProblemCont>,
     ) -> Result<FTMLMountHandle, String> {
         let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
         let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
@@ -190,47 +199,51 @@ pub fn render_fragment(
         };
         Ok(FTMLMountHandle::new(
             to,
-            move || view! {<GlobalSetup on_section on_section_title on_paragraph on_inputref on_slide exercise_opts on_exercise>{comp()}</GlobalSetup>},
+            move || view! {<GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts on_problem>{comp()}</GlobalSetup>},
         ))
     }
+    let allow_hovers = allow_hovers.unwrap_or(true);
     if let Some(context) = context {
         context.with(move || {
             inner(
                 to,
                 fragment,
+                allow_hovers,
                 on_section,
                 on_section_title,
                 on_paragraph,
                 on_inputref,
                 on_slide,
-                exercise_opts,
-                on_exercise,
+                problem_opts,
+                on_problem,
             )
         })
     } else {
         inner(
             to,
             fragment,
+            allow_hovers,
             on_section,
             on_section_title,
             on_paragraph,
             on_inputref,
             on_slide,
-            exercise_opts,
-            on_exercise,
+            problem_opts,
+            on_problem,
         )
     }
 }
 
 #[component]
 fn GlobalSetup<V: IntoView + 'static>(
+    #[prop(default = true)] allow_hovers: bool,
     #[prop(default=None)] on_section: Option<SectionContinuation>,
     #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
     #[prop(default=None)] on_paragraph: Option<ParagraphContinuation>,
     #[prop(default=None)] on_inputref: Option<InputRefContinuation>,
     #[prop(default=None)] on_slide: Option<SlideContinuation>,
-    #[prop(default=None)] exercise_opts: Option<ExerciseOption>,
-    #[prop(default=None)] on_exercise: Option<JExerciseCont>,
+    #[prop(default=None)] problem_opts: Option<ProblemOption>,
+    #[prop(default=None)] on_problem: Option<JProblemCont>,
     children: TypedChildren<V>,
 ) -> impl IntoView {
     use flams_web_utils::components::Themer;
@@ -238,10 +251,10 @@ fn GlobalSetup<V: IntoView + 'static>(
     //use leptos::either::Either as E;
     use leptos::either::Either::{Left, Right};
     console_error_panic_hook::set_once();
-    let exercise_opts = if let Some(on_exercise) = on_exercise {
-        Some(ExerciseOptions::OnResponse(on_exercise.get().into()))
+    let problem_opts = if let Some(on_problem) = on_problem {
+        Some(ProblemOptions::OnResponse(on_problem.get().into()))
     } else {
-        exercise_opts.map(Into::into)
+        problem_opts.map(Into::into)
     };
     let children = children.into_inner();
     let children = move || {
@@ -260,9 +273,10 @@ fn GlobalSetup<V: IntoView + 'static>(
         if let Some(on_slide) = on_slide {
             provide_context(Some(on_slide));
         }
-        if let Some(exercise_opts) = exercise_opts {
-            provide_context(exercise_opts);
+        if let Some(problem_opts) = problem_opts {
+            provide_context(problem_opts);
         }
+        provide_context(AllowHovers(allow_hovers));
         children()
     };
 
@@ -357,22 +371,22 @@ impl From<TOCOptions> for TOCSource {
 }
 
 ftml_viewer_components::ts_function! {
-  JExerciseCont ExerciseCont @ "(r:ExerciseResponse) => void"
-  = ExerciseResponse => ()
+  JProblemCont ProblemCont @ "(r:ProblemResponse) => void"
+  = ProblemResponse => ()
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum ExerciseOption {
-    //OnResponse( #[tsify(type = "(r:ExerciseResponse) => void")] ExerciseCont),
-    WithFeedback(Vec<(DocumentElementURI, ExerciseFeedback)>),
+pub enum ProblemOption {
+    //OnResponse( #[tsify(type = "(r:ProblemResponse) => void")] ProblemCont),
+    WithFeedback(Vec<(DocumentElementURI, ProblemFeedback)>),
     WithSolutions(Vec<(DocumentElementURI, Solutions)>),
 }
-impl Into<ExerciseOptions> for ExerciseOption {
-    fn into(self) -> ExerciseOptions {
+impl Into<ProblemOptions> for ProblemOption {
+    fn into(self) -> ProblemOptions {
         match self {
-            Self::WithFeedback(v) => ExerciseOptions::WithFeedback(v.into()),
-            Self::WithSolutions(s) => ExerciseOptions::WithSolutions(s.into()),
+            Self::WithFeedback(v) => ProblemOptions::WithFeedback(v.into()),
+            Self::WithSolutions(s) => ProblemOptions::WithSolutions(s.into()),
         }
     }
 }
@@ -510,13 +524,13 @@ pub fn render_fragment_with_cont_b(
   to:leptos::web_sys::HtmlElement,
   fragment:FragmentOptions,
   context:Option<LeptosContext>,
-  exercise_cont:JExerciseCont
+  problem_cont:JProblemCont
 ) -> Result<FTMLMountHandle,String> {
-  let cont = ExerciseOptions::OnResponse(exercise_cont.get().into());
+  let cont = ProblemOptions::OnResponse(problem_cont.get().into());
   fn inner(
     to:leptos::web_sys::HtmlElement,
     fragment:FragmentOptions,
-    cont:ExerciseOptions
+    cont:ProblemOptions
   ) -> Result<FTMLMountHandle,String> {
     use ftml_viewer_components::FTMLGlobalSetup;
     use flams_web_utils::components::Themer;
@@ -549,12 +563,12 @@ pub fn render_fragment_b(
   to:leptos::web_sys::HtmlElement,
   fragment:FragmentOptions,
   context:Option<LeptosContext>,
-  exercise_options:Option<ExerciseOption>
+  problem_options:Option<ProblemOption>
 ) -> Result<FTMLMountHandle,String> {
   fn inner(
     to:leptos::web_sys::HtmlElement,
     fragment:FragmentOptions,
-    exercise_options:Option<ExerciseOption>
+    problem_options:Option<ProblemOption>
   ) -> Result<FTMLMountHandle,String> {
     use ftml_viewer_components::FTMLGlobalSetup;
     use flams_web_utils::components::Themer;
@@ -568,8 +582,8 @@ pub fn render_fragment_b(
       }
     };
 
-    let comp = move || if let Some(opt) = exercise_options {
-      let opt: ExerciseOptions = opt.into();
+    let comp = move || if let Some(opt) = problem_options {
+      let opt: ProblemOptions = opt.into();
       Either::Left(view!{<GlobalSetup><Provider value=opt>{comp()}</Provider></GlobalSetup>})
     } else {
       Either::Right(view!{<GlobalSetup>{comp()}</GlobalSetup>})
@@ -578,9 +592,9 @@ pub fn render_fragment_b(
     Ok(FTMLMountHandle::new(to,move || comp()))
   }
   if let Some(context) = context {
-    context.with(move || inner(to,fragment,exercise_options))
+    context.with(move || inner(to,fragment,problem_options))
   } else {
-    inner(to,fragment,exercise_options)
+    inner(to,fragment,problem_options)
   }
 }
  */

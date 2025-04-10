@@ -9,10 +9,10 @@ use flams_ontology::content::terms::{Arg, ArgMode, Term, Var};
 use flams_ontology::ftml::FTMLKey;
 use flams_ontology::languages::Language;
 use flams_ontology::narration::documents::DocumentStyles;
-use flams_ontology::narration::exercises::{
+use flams_ontology::narration::notations::{NotationComponent, OpNotation};
+use flams_ontology::narration::problems::{
     AnswerClass, AnswerKind, Choice, CognitiveDimension, FillInSolOption, GradingNote, SolutionData,
 };
-use flams_ontology::narration::notations::{NotationComponent, OpNotation};
 use flams_ontology::narration::sections::SectionLevel;
 use flams_ontology::narration::variables::Variable;
 use flams_ontology::narration::{DocumentElement, LazyDocRef};
@@ -52,7 +52,7 @@ pub trait FTMLExtractor {
         self.get_content_uri().map(URIOrRefTrait::to_iri)
     }
 
-    fn with_exercise<R>(&mut self, then: impl FnOnce(&mut ExerciseState) -> R) -> Option<R>;
+    fn with_problem<R>(&mut self, then: impl FnOnce(&mut ProblemState) -> R) -> Option<R>;
 
     fn resolve_variable_name(&self, name: Name) -> Var;
     fn add_error(&mut self, err: FTMLError);
@@ -86,8 +86,8 @@ pub trait FTMLExtractor {
     fn close_slide(&mut self) -> Option<Vec<DocumentElement<Unchecked>>>;
     fn open_paragraph(&mut self, uri: DocumentElementURI, fors: VecSet<SymbolURI>);
     fn close_paragraph(&mut self) -> Option<ParagraphState>;
-    fn open_exercise(&mut self, uri: DocumentElementURI);
-    fn close_exercise(&mut self) -> Option<ExerciseState>;
+    fn open_problem(&mut self, uri: DocumentElementURI);
+    fn close_problem(&mut self) -> Option<ProblemState>;
     fn open_gnote(&mut self);
     fn close_gnote(&mut self) -> Option<GnoteState>;
     fn open_choice_block(&mut self, multiple: bool, styles: Box<[Box<str>]>);
@@ -425,7 +425,7 @@ pub struct NotationState {
 }
 
 #[derive(Debug)]
-pub struct ExerciseState {
+pub struct ProblemState {
     pub uri: DocumentElementURI,
     pub solutions: Vec<SolutionData>,
     pub gnote: Option<GnoteState>,
@@ -439,7 +439,7 @@ pub struct ExerciseState {
     pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
     pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
 }
-impl ExerciseState {
+impl ProblemState {
     #[must_use]
     pub const fn new(uri: DocumentElementURI) -> Self {
         Self {
@@ -498,7 +498,7 @@ pub enum Narrative {
     Slide {
         children: Vec<DocumentElement<Unchecked>>,
     },
-    Exercise(ExerciseState),
+    Problem(ProblemState),
     Notation(NotationState),
 }
 
@@ -631,7 +631,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         for n in self.state().narrative.iter().rev() {
             let ch = match n {
                 Narrative::Container(_, c) => c,
-                Narrative::Exercise(ExerciseState { children, .. })
+                Narrative::Problem(ProblemState { children, .. })
                 | Narrative::Section { children, .. }
                 | Narrative::Paragraph(ParagraphState { children, .. })
                 | Narrative::Slide { children, .. } => children,
@@ -688,10 +688,10 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         }
     }
 
-    fn with_exercise<R>(&mut self, then: impl FnOnce(&mut ExerciseState) -> R) -> Option<R> {
+    fn with_problem<R>(&mut self, then: impl FnOnce(&mut ProblemState) -> R) -> Option<R> {
         let state = self.state_mut();
         for e in state.narrative.iter_mut().rev() {
-            if let Narrative::Exercise(e) = e {
+            if let Narrative::Problem(e) = e {
                 return Some(then(e));
             }
         }
@@ -700,7 +700,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
 
     fn push_answer_class(&mut self, id: Box<str>, kind: AnswerKind) {
         if !self
-            .with_exercise(|e| {
+            .with_problem(|e| {
                 if let Some(gnote) = e.gnote.as_mut() {
                     gnote.answer_classes.push(AnswerClass {
                         id,
@@ -714,13 +714,13 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             })
             .unwrap_or_default()
         {
-            self.add_error(FTMLError::NotInExercise("1"));
+            self.add_error(FTMLError::NotInProblem("1"));
         }
     }
 
     fn push_problem_choice(&mut self, correct: bool) {
         if !self
-            .with_exercise(|ex| {
+            .with_problem(|ex| {
                 if let Some(block) = &mut ex.choice_block {
                     block.choices.push(Choice {
                         correct,
@@ -734,13 +734,13 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             })
             .unwrap_or_default()
         {
-            self.add_error(FTMLError::NotInExercise("2"));
+            self.add_error(FTMLError::NotInProblem("2"));
         }
     }
 
     fn push_fillinsol_case(&mut self, case: FillInSolOption) {
         if !self
-            .with_exercise(|ex| {
+            .with_problem(|ex| {
                 if let Some(fillin) = &mut ex.fillinsol {
                     fillin.cases.push(case);
                     true
@@ -750,7 +750,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             })
             .unwrap_or_default()
         {
-            self.add_error(FTMLError::NotInExercise("3"));
+            self.add_error(FTMLError::NotInProblem("3"));
         }
     }
 
@@ -824,7 +824,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
     }
     fn open_gnote(&mut self) {
         if !self
-            .with_exercise(|e| {
+            .with_problem(|e| {
                 if e.gnote.is_some() {
                     false
                 } else {
@@ -836,17 +836,17 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             })
             .unwrap_or_default()
         {
-            self.add_error(FTMLError::NotInExercise("4"));
+            self.add_error(FTMLError::NotInProblem("4"));
         }
     }
 
     fn close_gnote(&mut self) -> Option<GnoteState> {
-        self.with_exercise(|e| e.gnote.take()).flatten()
+        self.with_problem(|e| e.gnote.take()).flatten()
     }
 
     fn open_fillinsol(&mut self, _width: Option<f32>) {
         if !self
-            .with_exercise(|ex| {
+            .with_problem(|ex| {
                 if ex.fillinsol.is_some() {
                     false
                 } else {
@@ -856,17 +856,17 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             })
             .unwrap_or_default()
         {
-            self.add_error(FTMLError::NotInExercise("5"));
+            self.add_error(FTMLError::NotInProblem("5"));
         }
     }
 
     fn close_fillinsol(&mut self) -> Option<FillinsolState> {
-        self.with_exercise(|e| e.fillinsol.take()).flatten()
+        self.with_problem(|e| e.fillinsol.take()).flatten()
     }
 
     fn open_choice_block(&mut self, multiple: bool, styles: Box<[Box<str>]>) {
         if !self
-            .with_exercise(|e| {
+            .with_problem(|e| {
                 if e.choice_block.is_some() {
                     false
                 } else {
@@ -881,21 +881,21 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             })
             .unwrap_or_default()
         {
-            self.add_error(FTMLError::NotInExercise("6"));
+            self.add_error(FTMLError::NotInProblem("6"));
         }
     }
     fn close_choice_block(&mut self) -> Option<ChoiceBlockState> {
-        self.with_exercise(|e| e.choice_block.take()).flatten()
+        self.with_problem(|e| e.choice_block.take()).flatten()
     }
 
-    fn open_exercise(&mut self, uri: DocumentElementURI) {
+    fn open_problem(&mut self, uri: DocumentElementURI) {
         self.state_mut()
             .narrative
-            .push(Narrative::Exercise(ExerciseState::new(uri)));
+            .push(Narrative::Problem(ProblemState::new(uri)));
     }
-    fn close_exercise(&mut self) -> Option<ExerciseState> {
+    fn close_problem(&mut self) -> Option<ProblemState> {
         match self.state_mut().narrative.pop() {
-            Some(Narrative::Exercise(state)) => return Some(state),
+            Some(Narrative::Problem(state)) => return Some(state),
             Some(o) => self.state_mut().narrative.push(o),
             None => {}
         }
@@ -903,7 +903,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
     }
     fn add_precondition(&mut self, uri: SymbolURI, dim: CognitiveDimension) {
         let e = self.state_mut().narrative.iter_mut().rev().find_map(|e| {
-            if let Narrative::Exercise(e) = e {
+            if let Narrative::Problem(e) = e {
                 Some(e)
             } else {
                 None
@@ -917,7 +917,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
     }
     fn add_objective(&mut self, uri: SymbolURI, dim: CognitiveDimension) {
         let e = self.state_mut().narrative.iter_mut().rev().find_map(|e| {
-            if let Narrative::Exercise(e) = e {
+            if let Narrative::Problem(e) = e {
                 Some(e)
             } else {
                 None
@@ -1001,7 +1001,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             .find_map(|t| match t {
             Narrative::Container(uri,_) => Some(uri.as_narrative().owned()),
             Narrative::Paragraph(ParagraphState { uri, .. }) |
-            Narrative::Exercise(ExerciseState { uri,.. }) |
+            Narrative::Problem(ProblemState { uri,.. }) |
             //Narrative::Slide{uri,..} |
             Narrative::Section{uri,..} => Some(uri.as_narrative().owned()),
             Narrative::Notation(_) | Narrative::Slide{..} => None
@@ -1056,7 +1056,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
                 return;
             }
             if let Narrative::Paragraph(ParagraphState { children, .. })
-            | Narrative::Exercise(ExerciseState { children, .. })
+            | Narrative::Problem(ProblemState { children, .. })
             | Narrative::Section { children, .. }
             | Narrative::Slide { children, .. } = narr
             {
@@ -1069,7 +1069,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
     fn add_title(&mut self, ttl: DocumentRange) -> Result<(), DocumentRange> {
         for narr in self.state_mut().narrative.iter_mut().rev() {
             if let Narrative::Paragraph(ParagraphState { title, .. })
-            | Narrative::Exercise(ExerciseState { title, .. })
+            | Narrative::Problem(ProblemState { title, .. })
             | Narrative::Section { title, .. } = narr
             {
                 *title = Some(ttl);

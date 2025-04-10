@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
 use eyre::eyre;
 use flams_ontology::narration::{
     documents::{Document, UncheckedDocument},
-    exercises::{Quiz, QuizElement, QuizQuestion},
+    problems::{Quiz, QuizElement, QuizQuestion},
     DocumentElement, NarrationTrait,
 };
 use flams_utils::{impossible, vecmap::VecSet};
@@ -142,7 +142,7 @@ impl QuizExtension for Document {
                     }
                     elements.push(QuizElement::Paragraph { html });
                 }
-                DocumentElement::Exercise(e) if in_problem => {
+                DocumentElement::Problem(e) if in_problem => {
                     let Some(solution) = backend.get_reference(&e.solutions) else {
                         return Err(eyre!("Missing solutions for {}", e.uri));
                     };
@@ -151,7 +151,7 @@ impl QuizExtension for Document {
                     };
                     solutions.insert(e.uri.clone(), solution);
                 }
-                DocumentElement::Exercise(e) => {
+                DocumentElement::Problem(e) => {
                     let Some((c, html)) = backend.get_html_fragment(self.uri(), e.range) else {
                         return Err(eyre!("Missing FTML fragment for {}", e.uri));
                     };
@@ -160,6 +160,14 @@ impl QuizExtension for Document {
                     }
                     let Some(solution) = backend.get_reference(&e.solutions) else {
                         return Err(eyre!("Missing solutions for {}", e.uri));
+                    };
+                    let title_html = if let Some(ttl) = e.title {
+                        let Some(t) = backend.get_html_fragment(self.uri(), ttl) else {
+                            return Err(eyre!("Missing FTML fragment for title of {}", e.uri));
+                        };
+                        Some(t.1)
+                    } else {
+                        None
                     };
                     let Some(solution) = solution.to_jstring() else {
                         return Err(eyre!("Invalid solutions for {}", e.uri));
@@ -176,10 +184,11 @@ impl QuizExtension for Document {
                     solutions.insert(e.uri.clone(), solution);
                     elements.push(QuizElement::Question(QuizQuestion {
                         html, //solution,
+                        title_html,
                         uri: e.uri.clone(),
                         preconditions: e.preconditions.to_vec(),
                         objectives: e.objectives.to_vec(),
-                        total_points: e.points.unwrap_or_default(),
+                        total_points: e.points,
                     }));
                     push!(e.children().iter();Some(either::Either::Right(in_problem)));
                     in_problem = true;

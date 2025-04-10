@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use crate::errors::FTMLError;
-use flams_ontology::{oma, omfp, omsp};
+use flams_ontology::{omfp, omsp};
 #[cfg(feature = "rdf")]
 use flams_ontology::{triple, uris::URIOrRefTrait};
 

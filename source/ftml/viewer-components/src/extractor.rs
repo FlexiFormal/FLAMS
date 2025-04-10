@@ -63,14 +63,14 @@ impl FTMLExtractor for DOMExtractor {
     fn add_objective(
         &mut self,
         _uri: flams_ontology::uris::SymbolURI,
-        _dim: flams_ontology::narration::exercises::CognitiveDimension,
+        _dim: flams_ontology::narration::problems::CognitiveDimension,
     ) {
         todo!()
     }
     fn add_precondition(
         &mut self,
         _uri: flams_ontology::uris::SymbolURI,
-        _dim: flams_ontology::narration::exercises::CognitiveDimension,
+        _dim: flams_ontology::narration::problems::CognitiveDimension,
     ) {
         todo!()
     }
@@ -169,7 +169,7 @@ impl FTMLExtractor for DOMExtractor {
     )> {
         todo!()
     }
-    fn close_exercise(&mut self) -> Option<ftml_extraction::prelude::ExerciseState> {
+    fn close_problem(&mut self) -> Option<ftml_extraction::prelude::ProblemState> {
         todo!()
     }
     fn close_narrative(
@@ -201,9 +201,9 @@ impl FTMLExtractor for DOMExtractor {
     fn get_narrative_uri(&self) -> flams_ontology::uris::NarrativeURI {
         expect_context::<NarrativeURI>()
     }
-    fn with_exercise<R>(
+    fn with_problem<R>(
         &mut self,
-        _then: impl FnOnce(&mut ftml_extraction::prelude::ExerciseState) -> R,
+        _then: impl FnOnce(&mut ftml_extraction::prelude::ProblemState) -> R,
     ) -> Option<R> {
         todo!()
     }
@@ -223,16 +223,13 @@ impl FTMLExtractor for DOMExtractor {
     }
 
     fn add_definiendum(&mut self, _uri: flams_ontology::uris::SymbolURI) {}
-    fn push_fillinsol_case(
-        &mut self,
-        _case: flams_ontology::narration::exercises::FillInSolOption,
-    ) {
+    fn push_fillinsol_case(&mut self, _case: flams_ontology::narration::problems::FillInSolOption) {
     }
     fn open_fillinsol(&mut self, _width: Option<f32>) {}
     fn push_answer_class(
         &mut self,
         _id: Box<str>,
-        _kind: flams_ontology::narration::exercises::AnswerKind,
+        _kind: flams_ontology::narration::problems::AnswerKind,
     ) {
     }
     fn push_problem_choice(&mut self, _correct: bool) {}
@@ -242,7 +239,7 @@ impl FTMLExtractor for DOMExtractor {
     fn open_complex_term(&mut self) {}
     fn open_content(&mut self, _uri: flams_ontology::uris::ModuleURI) {}
     fn open_decl(&mut self) {}
-    fn open_exercise(&mut self, _uri: flams_ontology::uris::DocumentElementURI) {}
+    fn open_problem(&mut self, _uri: flams_ontology::uris::DocumentElementURI) {}
     fn open_narrative(&mut self, _uri: Option<flams_ontology::uris::NarrativeURI>) {}
     fn open_notation(&mut self) {}
     fn open_slide(&mut self) {}

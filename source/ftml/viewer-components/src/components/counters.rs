@@ -552,7 +552,7 @@ impl SectionCounters {
         }
     }
 
-    pub fn get_exercise(&mut self, _styles: &[Name]) -> Memo<String> {
+    pub fn get_problem(&mut self, _styles: &[Name]) -> Memo<String> {
         self.init_paras();
         self.current = LogicalLevel::Paragraph;
         Memo::new(|_| String::new())

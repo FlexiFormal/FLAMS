@@ -55,10 +55,11 @@ use crate::inject_css;
 pub fn Collapsible<Ch: IntoView + 'static>(
     #[prop(optional)] header: Option<Header>,
     children: TypedChildren<Ch>,
+    #[prop(optional, into)] expanded: Option<RwSignal<bool>>,
 ) -> impl IntoView {
     let children = children.into_inner();
-    let expanded = RwSignal::new(false);
-    view! {<details>
+    let expanded = expanded.unwrap_or_else(|| RwSignal::new(false));
+    view! {<details open=move || expanded.get()>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
             header.map(|c| (c.children)())
         }</summary>

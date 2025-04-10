@@ -8,6 +8,8 @@ use regex::Regex as IRegex;
 pub struct Regex(IRegex);
 #[cfg(target_family = "wasm")]
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Regex(String);
 
 impl std::fmt::Display for Regex {

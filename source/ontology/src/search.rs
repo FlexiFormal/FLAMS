@@ -27,7 +27,7 @@ pub struct QueryFilter {
     #[cfg_attr(feature = "serde", serde(default = "get_true"))]
     pub allow_assertions: bool,
     #[cfg_attr(feature = "serde", serde(default = "get_true"))]
-    pub allow_exercises: bool,
+    pub allow_problems: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     pub definition_like_only: bool,
 }
@@ -40,7 +40,7 @@ impl Default for QueryFilter {
             allow_definitions: true,
             allow_examples: true,
             allow_assertions: true,
-            allow_exercises: true,
+            allow_problems: true,
             definition_like_only: false,
         }
     }
@@ -70,7 +70,7 @@ pub enum SearchResultKind {
     Definition = 2,
     Example = 3,
     Assertion = 4,
-    Exercise = 5,
+    Problem = 5,
 }
 impl SearchResultKind {
     #[must_use]
@@ -81,7 +81,7 @@ impl SearchResultKind {
             Self::Definition => "Definition",
             Self::Example => "Example",
             Self::Assertion => "Assertion",
-            Self::Exercise => "Exercise",
+            Self::Problem => "Problem",
         }
     }
 }
@@ -94,7 +94,7 @@ impl From<SearchResultKind> for u64 {
             SearchResultKind::Definition => 2,
             SearchResultKind::Example => 3,
             SearchResultKind::Assertion => 4,
-            SearchResultKind::Exercise => 5,
+            SearchResultKind::Problem => 5,
         }
     }
 }
@@ -108,7 +108,7 @@ impl TryFrom<u64> for SearchResultKind {
             2 => Self::Definition,
             3 => Self::Example,
             4 => Self::Assertion,
-            5 => Self::Exercise,
+            5 => Self::Problem,
             _ => return Err(()),
         })
     }
@@ -204,7 +204,7 @@ mod tantivy_i {
       pub fn to_query(self,query:&str,index:&tantivy::Index) -> Option<Box<dyn tantivy::query::Query>> {
         match self {
           Self::Fragments(f) => f.to_query(query,index),
-          Self::Symbols => QueryFilter{ allow_documents:false, allow_paragraphs:true, allow_definitions:true, allow_examples:false, allow_assertions:true, allow_exercises:false, definition_like_only:true}
+          Self::Symbols => QueryFilter{ allow_documents:false, allow_paragraphs:true, allow_definitions:true, allow_examples:false, allow_assertions:true, allow_problems:false, definition_like_only:true}
             .to_query(query,index)
         }
       }
@@ -224,7 +224,7 @@ mod tantivy_i {
                 allow_definitions,
                 allow_examples,
                 allow_assertions,
-                allow_exercises,
+                allow_problems,
                 definition_like_only,
             } = self;
             let mut s = String::new();
@@ -233,7 +233,7 @@ mod tantivy_i {
                 || !allow_definitions
                 || !allow_examples
                 || !allow_assertions
-                || !allow_exercises
+                || !allow_problems
             {
                 s.push('(');
                 let mut had_first = false;
@@ -257,7 +257,7 @@ mod tantivy_i {
                     s.push_str(if had_first { " OR kind:4" } else { "kind:4" });
                     had_first = true;
                 }
-                if allow_exercises {
+                if allow_problems {
                     s.push_str(if had_first { " OR kind:5" } else { "kind:5" });
                 }
                 s.push_str(") AND ");

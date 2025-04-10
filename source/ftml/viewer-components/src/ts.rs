@@ -1,5 +1,5 @@
 use flams_ontology::{
-    narration::{exercises::ExerciseResponse, paragraphs::ParagraphKind, sections::SectionLevel},
+    narration::{paragraphs::ParagraphKind, problems::ProblemResponse, sections::SectionLevel},
     uris::{DocumentElementURI, DocumentURI},
 };
 use leptos::prelude::*;
@@ -102,7 +102,7 @@ impl FromTs for HtmlDivElement {
     }
 }
 
-impl AsTs for ExerciseResponse {
+impl AsTs for ProblemResponse {
     fn as_ts(&self) -> JsValue {
         self.clone().into()
     }

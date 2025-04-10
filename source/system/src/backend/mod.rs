@@ -24,9 +24,9 @@ use flams_ontology::{
     narration::{
         checking::DocumentChecker,
         documents::Document,
-        exercises::Exercise,
         notations::{Notation, PresentationError, Presenter},
         paragraphs::LogicalParagraph,
+        problems::Problem,
         sections::Section,
         DocumentElement, LazyDocRef, NarrationTrait, NarrativeReference,
     },
@@ -233,7 +233,7 @@ pub trait Backend {
                 | DocumentElement::MathStructure { children, .. }
                 | DocumentElement::Extension { children, .. }
                 | DocumentElement::Paragraph(LogicalParagraph { children, .. })
-                | DocumentElement::Exercise(Exercise { children, .. }) => {
+                | DocumentElement::Problem(Problem { children, .. }) => {
                     let old = std::mem::replace(&mut ch, children.iter());
                     stack.push(old);
                     continue;
@@ -1806,7 +1806,7 @@ impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
                 | DocumentElement::MathStructure { children, .. }
                 | DocumentElement::Extension { children, .. }
                 | DocumentElement::Paragraph(LogicalParagraph { children, .. })
-                | DocumentElement::Exercise(Exercise { children, .. }) => {
+                | DocumentElement::Problem(Problem { children, .. }) => {
                     let old = std::mem::replace(&mut ch, children.iter());
                     stack.push(old);
                     continue;

@@ -207,13 +207,13 @@ pub mod ontologies {
      * |   | `P`[`.kind`](crate::narration::paragraphs::LogicalParagraph::kind)`=`[`Example`](crate::narration::paragraphs::ParagraphKind::Example) | `P` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#example>`](ulo2::EXAMPLE) |
      * |   | is [`Example`](crate::narration::paragraphs::ParagraphKind::Example) and `_`[`.fors`](crate::narration::paragraphs::LogicalParagraph::fors)`.contains(S)`  | `P` [`<ulo:#example-for>`](ulo2::EXAMPLE_FOR) `S` |
      * |   | [`is_definition_like`](crate::narration::paragraphs::ParagraphKind::is_definition_like) and  `_`[`.fors`](crate::narration::paragraphs::LogicalParagraph::fors)`.contains(S)`  | `P` [`<ulo:#defines>`](ulo2::DEFINES) `S` |
-     * | [`Exercise`](crate::narration::exercises::Exercise) `E` |   | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `E` |
-     * |   | [`.sub_exercise`](crate::narration::exercises::Exercise::sub_exercise)`==false`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#problem>`](ulo2::PROBLEM) |
-     * |   | [`.sub_exercise`](crate::narration::exercises::Exercise::sub_exercise)`==true`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#subproblem>`](ulo2::SUBPROBLEM) |
-     * |   | `_`[`.preconditions`](crate::narration::exercises::Exercise::preconditions)`.contains(d,S)`  | `E` [`<ulo:#precondition>`](ulo2::PRECONDITION) `<BLANK>` |
+     * | [`Problem`](crate::narration::problems::Problem) `E` |   | `D` [`<ulo:#contains>`](ulo2::CONTAINS) `E` |
+     * |   | [`.sub_problem`](crate::narration::problems::Problem::sub_problem)`==false`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#problem>`](ulo2::PROBLEM) |
+     * |   | [`.sub_problem`](crate::narration::problems::Problem::sub_problem)`==true`   | `E` [`<rdf:#type>`](rdf::TYPE) [`<ulo:#subproblem>`](ulo2::SUBPROBLEM) |
+     * |   | `_`[`.preconditions`](crate::narration::problems::Problem::preconditions)`.contains(d,S)`  | `E` [`<ulo:#precondition>`](ulo2::PRECONDITION) `<BLANK>` |
      * |   |    | `<BLANK>` [`<ulo:#cognitive-dimension>`](ulo2::COGDIM) `d`, where `d=`[`<ulo:#cs-remember>`](ulo2::REMEMBER)⏐[`<ulo:#cs-understand>`](ulo2::UNDERSTAND)⏐[`<ulo:#cs-apply>`](ulo2::APPLY)⏐[`<ulo:#cs-analyze>`](ulo2::ANALYZE)⏐[`<ulo:#cs-evaluate>`](ulo2::EVALUATE)⏐[`<ulo:#cs-create>`](ulo2::CREATE) |
      * |   |    | `<BLANK>` [`<ulo:#po-symbol>`](ulo2::POSYMBOL) `S` |
-     * |   | `_`[`.objectives`](crate::narration::exercises::Exercise::objectives)`.contains(d,S)`  | `E` [`<ulo:#objective>`](ulo2::OBJECTIVE) `<BLANK>` |
+     * |   | `_`[`.objectives`](crate::narration::problems::Problem::objectives)`.contains(d,S)`  | `E` [`<ulo:#objective>`](ulo2::OBJECTIVE) `<BLANK>` |
      * |   |    | `<BLANK>` [`<ulo:#cognitive-dimension>`](ulo2::COGDIM) `d`, where `d=`[`<ulo:#cs-remember>`](ulo2::REMEMBER)⏐[`<ulo:#cs-understand>`](ulo2::UNDERSTAND)⏐[`<ulo:#cs-apply>`](ulo2::APPLY)⏐[`<ulo:#cs-analyze>`](ulo2::ANALYZE)⏐[`<ulo:#cs-evaluate>`](ulo2::EVALUATE)⏐[`<ulo:#cs-create>`](ulo2::CREATE) |
      * |   |    | `<BLANK>` [`<ulo:#po-symbol>`](ulo2::POSYMBOL) `S` |
      *
@@ -291,7 +291,7 @@ pub mod ontologies {
     /*
 
      use crate::content::declarations::OpenDeclaration::Symbol;
-     use crate::narration::exercises::Exercise;
+     use crate::narration::problems::Problem;
      use crate::narration::paragraphs::ParagraphKind::Definition;
      use crate::content::declarations::morphisms::Morphism;
 
@@ -588,8 +588,8 @@ pub mod ontologies {
         CLASS SUBPROOF = "subproof" <: PARA @ "A logical paragraph that serves as a justification of an\
          intermediate proposition within a proof.";
         CLASS PROPOSITION = "proposition" <: PARA @ "A statement of a mathematical object or some relation between some." ;
-        CLASS PROBLEM = "problem" <: PARA @ "A logical paragraph posing a problem/question/exercise for the reader.";
-        CLASS SUBPROBLEM = "subproblem" <: PARA @ "A logical paragraph posing a subexercise in some problem/question/exercise for the reader.";
+        CLASS PROBLEM = "problem" <: PARA @ "A logical paragraph posing a problem/question/problem for the reader.";
+        CLASS SUBPROBLEM = "subproblem" <: PARA @ "A logical paragraph posing a subproblem in some problem/question/problem for the reader.";
 
 
         // -----------------------------------------------------------------------------

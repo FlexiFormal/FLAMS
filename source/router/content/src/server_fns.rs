@@ -1,7 +1,7 @@
 use flams_ontology::{
     SlideElement,
     languages::Language,
-    narration::{LOKind, exercises::Quiz, notations::Notation},
+    narration::{LOKind, notations::Notation, problems::Quiz},
     uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
 };
 use flams_utils::CSS;
@@ -99,7 +99,7 @@ pub async fn los(
     p: Option<String>,
     m: Option<String>,
     s: Option<String>,
-    exercises: bool,
+    problems: bool,
 ) -> Result<Vec<(DocumentElementURI, LOKind)>, ServerFnError<String>> {
     let Result::<SymURIComponents, _>::Ok(comps) = (uri, a, p, m, s).try_into() else {
         return Err("invalid uri components".to_string().into());
@@ -107,7 +107,7 @@ pub async fn los(
     let Some(uri) = comps.parse() else {
         return Err("invalid uri".to_string().into());
     };
-    server::los(uri, exercises).await
+    server::los(uri, problems).await
 }
 
 #[server(
@@ -261,9 +261,9 @@ mod server {
         content::{ContentReference, declarations::Declaration},
         narration::{
             DocumentElement, LOKind, NarrationTrait, NarrativeReference,
-            exercises::{Exercise, Quiz, Solutions},
             notations::Notation,
             paragraphs::LogicalParagraph,
+            problems::{Problem, Quiz, Solutions},
         },
         rdf::ontologies::ulo2,
         uris::{
@@ -319,7 +319,7 @@ mod server {
                 };
                 match e.as_ref() {
                     DocumentElement::Paragraph(LogicalParagraph { range, .. })
-                    | DocumentElement::Exercise(Exercise { range, .. }) => {
+                    | DocumentElement::Problem(Problem { range, .. }) => {
                         let Some((css, html)) =
                             backend!(get_html_fragment!(euri.document(), *range))
                         else {
@@ -354,12 +354,12 @@ mod server {
 
     pub async fn los(
         uri: SymbolURI,
-        exercises: bool,
+        problems: bool,
     ) -> Result<Vec<(DocumentElementURI, LOKind)>, ServerFnError<String>> {
         blocking_server_fn(move || {
             Ok(GlobalBackend::get()
                 .triple_store()
-                .los(&uri, exercises)
+                .los(&uri, problems)
                 .map(|i| i.collect())
                 .unwrap_or_default())
         })
@@ -595,13 +595,13 @@ mod server {
         use flams_system::backend::Backend;
         match backend!(get_document_element(&uri)) {
             Some(rf) => {
-                let e: &Exercise<Checked> = rf.as_ref();
+                let e: &Problem<Checked> = rf.as_ref();
                 let Some(sol) = backend!(get_reference(&e.solutions)) else {
                     return Err("solutions not found".to_string());
                 };
                 Ok(sol)
             }
-            _ => Err(format!("Exercise {uri} not found")),
+            _ => Err(format!("Problem {uri} not found")),
         }
     }
 

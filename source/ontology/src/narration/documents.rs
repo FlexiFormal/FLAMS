@@ -205,7 +205,7 @@ impl<'a> TreeChild<UncheckedDocument> for &'a DocumentElement<Unchecked> {
         match self {
             DocumentElement::Section(s) => Some(s.children.iter()),
             DocumentElement::Paragraph(p) => Some(p.children.iter()),
-            DocumentElement::Exercise(e) => Some(e.children.iter()),
+            DocumentElement::Problem(e) => Some(e.children.iter()),
             DocumentElement::Module { children, .. }
             | DocumentElement::Morphism { children, .. }
             | DocumentElement::MathStructure { children, .. }
@@ -293,7 +293,7 @@ impl<State:CheckingState> OpenDocument<State> {
                     // 16
                     todo!()
                 }
-                DocumentElement::Exercise(e) => {
+                DocumentElement::Problem(e) => {
                     // 17
                     todo!()
                 }
@@ -354,7 +354,7 @@ impl<'a, B: BinaryReader> ByteReadState<'a, B> {
       14 /*UseModule*/ => todo!(),
       15 /*ImportModule*/ => todo!(),
       16 /*Paragraph*/ => todo!(),
-      17 /*Exercise*/ => todo!(),
+      17 /*Problem*/ => todo!(),
       _ => Err(DecodeError::UnknownDiscriminant)
     }
     }

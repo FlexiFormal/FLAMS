@@ -14,14 +14,14 @@ pub mod remote;
 pub mod ts;
 
 use crate::extractor::NodeAttrs;
-pub use components::exercise::ExerciseOptions;
+pub use components::problem::ProblemOptions;
 use components::{
     counters::SectionCounters, inputref::InInputRef, FTMLComponents, TOCElem, TOCSource,
 };
 use config::{FTMLConfig, IdPrefix};
 use extractor::DOMExtractor;
 use flams_ontology::{
-    narration::exercises::{CognitiveDimension, ExerciseResponse, Solutions},
+    narration::problems::{CognitiveDimension, ProblemResponse, Solutions},
     uris::{DocumentElementURI, DocumentURI, NarrativeURI, URI},
 };
 use flams_utils::{prelude::HMap, vecmap::VecMap};
@@ -42,18 +42,30 @@ pub fn is_in_ftml() -> bool {
     with_context::<FTMLConfig, _>(|_| ()).is_some()
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct AllowHovers(pub bool);
+impl AllowHovers {
+    pub fn get() -> bool {
+        use_context::<Self>().map(|s| s.0).unwrap_or(true)
+    }
+}
+
 #[component(transparent)]
 pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
-    //#[prop(optional)] exercises:Option<ExerciseOptions>,
+    //#[prop(optional)] problems:Option<ProblemOptions>,
+    #[prop(default=None)] allow_hovers: Option<bool>,
     #[prop(default=None)] on_section: Option<SectionContinuation>,
     #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
     #[prop(default=None)] on_paragraph: Option<ParagraphContinuation>,
     #[prop(default=None)] on_inpuref: Option<InputRefContinuation>,
     #[prop(default=None)] on_slide: Option<SlideContinuation>,
-    #[prop(default=None)] exercise_opts: Option<ExerciseOptions>,
+    #[prop(default=None)] problem_opts: Option<ProblemOptions>,
     children: TypedChildren<Ch>,
 ) -> impl IntoView {
     let children = children.into_inner();
+    if allow_hovers.is_some_and(|e| !e) {
+        provide_context(AllowHovers(false))
+    }
     #[cfg(any(feature = "csr", feature = "hydrate"))]
     provide_context(RwSignal::new(DOMExtractor::default()));
     provide_context(SectionCounters::default());
@@ -65,22 +77,23 @@ pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
     provide_context(on_paragraph);
     provide_context(on_inpuref);
     provide_context(on_slide);
-    if let Some(exercise_opts) = exercise_opts {
-        provide_context(exercise_opts);
+    if let Some(problem_opts) = problem_opts {
+        provide_context(problem_opts);
     }
-    //provide_context(exercises.unwrap_or_default());
+    //provide_context(problems.unwrap_or_default());
     children()
 }
 
 #[component]
 pub fn FTMLDocumentSetup<Ch: IntoView + 'static>(
     uri: DocumentURI,
+    #[prop(default=None)] allow_hovers: Option<bool>,
     #[prop(default=None)] on_section: Option<SectionContinuation>,
     #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
     #[prop(default=None)] on_paragraph: Option<ParagraphContinuation>,
     #[prop(default=None)] on_inpuref: Option<InputRefContinuation>,
     #[prop(default=None)] on_slide: Option<SlideContinuation>,
-    #[prop(default=None)] exercise_opts: Option<ExerciseOptions>,
+    #[prop(default=None)] problem_opts: Option<ProblemOptions>,
     children: TypedChildren<Ch>,
 ) -> impl IntoView {
     use crate::components::navigation::{Nav, NavElems, URLFragment};
@@ -90,6 +103,9 @@ pub fn FTMLDocumentSetup<Ch: IntoView + 'static>(
     //provide_context(config);
     #[cfg(any(feature = "csr", feature = "hydrate"))]
     provide_context(RwSignal::new(DOMExtractor::default()));
+    if allow_hovers.is_some_and(|e| !e) {
+        provide_context(AllowHovers(false))
+    }
     provide_context(InInputRef(false));
     provide_context(RwSignal::new(NavElems {
         ids: HMap::default(),
@@ -116,8 +132,8 @@ pub fn FTMLDocumentSetup<Ch: IntoView + 'static>(
     if let Some(on_slide) = on_slide {
         provide_context(Some(on_slide));
     }
-    if let Some(exercise_opts) = exercise_opts {
-        provide_context(exercise_opts);
+    if let Some(problem_opts) = problem_opts {
+        provide_context(problem_opts);
     }
     let r = children();
     view! {
@@ -135,7 +151,7 @@ pub fn FTMLStringMath(html: String) -> impl IntoView {
     view!(<math><DomStringContMath html cont=iterate/></math>)
 }
 
-pub static RULES: [FTMLExtractionRule<DOMExtractor>; 48] = [
+pub static RULES: [FTMLExtractionRule<DOMExtractor>; 50] = [
     rule(FTMLTag::Section),
     rule(FTMLTag::SkipSection),
     rule(FTMLTag::Term),
@@ -153,9 +169,9 @@ pub static RULES: [FTMLExtractionRule<DOMExtractor>; 48] = [
     rule(FTMLTag::IfInputref),
     rule(FTMLTag::Problem),
     rule(FTMLTag::SubProblem),
-    rule(FTMLTag::ExerciseHint),
-    rule(FTMLTag::ExerciseSolution),
-    rule(FTMLTag::ExerciseGradingNote),
+    rule(FTMLTag::ProblemHint),
+    rule(FTMLTag::ProblemSolution),
+    rule(FTMLTag::ProblemGradingNote),
     rule(FTMLTag::ProblemMultipleChoiceBlock),
     rule(FTMLTag::ProblemSingleChoiceBlock),
     rule(FTMLTag::ProblemChoice),
@@ -185,6 +201,8 @@ pub static RULES: [FTMLExtractionRule<DOMExtractor>; 48] = [
     rule(FTMLTag::Argprecs),
     rule(FTMLTag::Autogradable),
     rule(FTMLTag::AnswerClassPts),
+    rule(FTMLTag::ProofHide),
+    rule(FTMLTag::ProofBody),
 ];
 
 #[cfg_attr(
@@ -246,6 +264,7 @@ extern "C" {
 #[allow(clippy::missing_const_for_fn)]
 #[allow(unreachable_code)]
 #[allow(clippy::needless_return)]
+#[allow(unused_variables)]
 pub fn iterate(e: &Element) -> Option<impl FnOnce() -> AnyView> {
     //tracing::info!("iterating {}", e.outer_html());
     #[cfg(any(feature = "csr", feature = "hydrate"))]

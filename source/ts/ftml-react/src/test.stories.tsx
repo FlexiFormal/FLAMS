@@ -17,10 +17,10 @@ export const Complete = () => {
     toc: "GET",
   };
   const frag1 = {
-    uri: "https://mathhub.info/:sTeX?a=sTeX/DemoExamples&d=problemtest&l=en&e=exercise_1",
+    uri: "https://mathhub.info/:sTeX?a=sTeX/DemoExamples&d=problemtest&l=en&e=problem_1",
   };
   const frag2 = {
-    uri: "https://mathhub.info/:sTeX?a=sTeX/DemoExamples&d=problemtest&l=en&e=exercise_3",
+    uri: "https://mathhub.info/:sTeX?a=sTeX/DemoExamples&d=problemtest&l=en&e=problem_3",
   };
   return (
     <div className="NARF">
@@ -32,7 +32,7 @@ export const Complete = () => {
         <p>Here is a problem:</p>
         <FTMLFragment fragment={frag1} />
         <p>And here is one that logs every interaction to the console:</p>
-        <FTMLFragment fragment={frag2} exercises={(e) => console.log(e)} />
+        <FTMLFragment fragment={frag2} problems={(e) => console.log(e)} />
         <p> And here is a full document:</p>
         <FTMLDocument
           document={doc}

@@ -7,8 +7,8 @@ use crate::{
 };
 
 use super::{
-    exercises::{CognitiveDimension, Exercise, GradingNote, Solutions},
     paragraphs::{LogicalParagraph, ParagraphKind},
+    problems::{CognitiveDimension, GradingNote, Problem, Solutions},
     sections::{Section, SectionLevel},
     DocumentElement, LazyDocRef,
 };
@@ -56,8 +56,8 @@ enum Elem {
         styles: Box<[Name]>,
         fors: VecMap<SymbolURI, Option<Term>>,
     },
-    Exercise {
-        sub_exercise: bool,
+    Problem {
+        sub_problem: bool,
         uri: DocumentElementURI,
         autogradable: bool,
         range: DocumentRange,
@@ -140,8 +140,8 @@ impl Elem {
                 fors,
                 children: v.into_boxed_slice(),
             }),
-            Self::Exercise {
-                sub_exercise: sub_problem,
+            Self::Problem {
+                sub_problem,
                 range,
                 uri,
                 autogradable,
@@ -154,8 +154,8 @@ impl Elem {
                 preconditions,
                 styles,
                 objectives,
-            } => DocumentElement::Exercise(Exercise {
-                sub_exercise: sub_problem,
+            } => DocumentElement::Problem(Problem {
+                sub_problem,
                 uri,
                 autogradable,
                 points,
@@ -396,8 +396,8 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 ));
                 return;
             }
-            DocumentElement::Exercise(Exercise {
-                sub_exercise,
+            DocumentElement::Problem(Problem {
+                sub_problem,
                 uri,
                 autogradable,
                 points,
@@ -415,8 +415,8 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                 let old_in = std::mem::replace(&mut self.curr_in, children.into_iter());
                 let old_out = std::mem::take(&mut self.curr_out);
                 self.stack.push((
-                    Elem::Exercise {
-                        sub_exercise,
+                    Elem::Problem {
+                        sub_problem,
                         uri,
                         range,
                         autogradable,

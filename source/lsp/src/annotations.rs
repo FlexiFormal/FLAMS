@@ -15,7 +15,7 @@ use flams_stex::quickparse::{
     latex::ParsedKeyValue,
     stex::{
         rules::{
-            ExerciseArg, MathStructureArg, NotationArg, ParagraphArg, SModuleArg, SymdeclArg,
+            MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg,
             SymdefArg, TextSymdeclArg, VardefArg,
         },
         structs::{
@@ -177,7 +177,7 @@ impl AnnotExt for STeXAnnot {
                 },
                 &children,
             )),
-            Self::Exercise {
+            Self::Problem {
                 full_range,
                 name_range,
                 children,
@@ -410,7 +410,7 @@ impl AnnotExt for STeXAnnot {
             | Self::ConservativeExt { .. }
             | Self::UseStructure { .. }
             | Self::InlineParagraph { .. }
-            | Self::Exercise { .. }
+            | Self::Problem { .. }
             | Self::MorphismEnv { .. }
             | Self::RenameDecl { .. }
             | Self::Precondition { .. }
@@ -847,7 +847,7 @@ impl AnnotExt for STeXAnnot {
             }
             Self::Svar { .. }
             | Self::Inputref { .. }
-            | Self::Exercise { .. }
+            | Self::Problem { .. }
             | Self::Definiens { .. }
             | Self::Defnotation { .. } => None,
         }
@@ -1078,7 +1078,7 @@ impl AnnotExt for STeXAnnot {
             Self::VariableMacro { token_range, .. } => {
                 cont(*token_range, STeXSemanticTokens::VARIABLE)
             }
-            Self::Exercise {
+            Self::Problem {
                 sub,
                 full_range,
                 name_range,
@@ -1088,11 +1088,11 @@ impl AnnotExt for STeXAnnot {
                 cont(*name_range, STeXSemanticTokens::REF_MACRO);
                 for e in parsed_args {
                     match e {
-                        /*ExerciseArg::Name(ParsedKeyValue{key_range,val_range,..}) => {
+                        /*ProblemArg::Name(ParsedKeyValue{key_range,val_range,..}) => {
                             cont(*key_range,STeXSemanticTokens::KEYWORD);
                             cont(*val_range,STeXSemanticTokens::NAME);
                         }*/
-                        ExerciseArg::Autogradable(ParsedKeyValue {
+                        ProblemArg::Autogradable(ParsedKeyValue {
                             key_range,
                             val_range,
                             ..
@@ -1100,13 +1100,13 @@ impl AnnotExt for STeXAnnot {
                             cont(*key_range, STeXSemanticTokens::KEYWORD);
                             cont(*val_range, STeXSemanticTokens::KEYWORD);
                         }
-                        ExerciseArg::Style(ParsedKeyValue { key_range, .. })
-                        | ExerciseArg::Pts(ParsedKeyValue { key_range, .. })
-                        | ExerciseArg::Min(ParsedKeyValue { key_range, .. })
-                        | ExerciseArg::Id(ParsedKeyValue { key_range, .. }) => {
+                        ProblemArg::Style(ParsedKeyValue { key_range, .. })
+                        | ProblemArg::Pts(ParsedKeyValue { key_range, .. })
+                        | ProblemArg::Min(ParsedKeyValue { key_range, .. })
+                        | ProblemArg::Id(ParsedKeyValue { key_range, .. }) => {
                             cont(*key_range, STeXSemanticTokens::KEYWORD)
                         }
-                        ExerciseArg::Title(ParsedKeyValue { key_range, val, .. }) => {
+                        ProblemArg::Title(ParsedKeyValue { key_range, val, .. }) => {
                             cont(*key_range, STeXSemanticTokens::KEYWORD);
                             for c in val {
                                 c.semantic_tokens(cont);
@@ -1725,7 +1725,7 @@ impl AnnotExt for STeXAnnot {
             | Self::Varseq { .. }
             | Self::Definiens { .. }
             | Self::TextSymdecl { .. }
-            | Self::Exercise { .. }
+            | Self::Problem { .. }
             | Self::Defnotation { .. }
             | Self::MorphismEnv { .. } => None,
         }
@@ -1950,7 +1950,7 @@ impl AnnotExt for STeXAnnot {
                 }
             }
 
-            Self::Exercise { .. }
+            Self::Problem { .. }
             | Self::Module { .. }
             | Self::MathStructure { .. }
             | Self::ConservativeExt { .. }

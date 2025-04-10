@@ -1,103 +1,117 @@
 body {
-  counter-reset: ftml-part ftml-chapter ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
+    counter-reset: ftml-part ftml-chapter ftml-section ftml-subsection
+        ftml-subsubsection ftml-paragraph;
 }
 
 .ftml-part {
-  counter-reset: ftml-chapter ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
-  & .ftml-title-part {
-    display:block;
-    font-weight: bold;
-    line-height: initial;
-    font-size:xx-large;
-    margin:20px 10px;
-    &::before {
-      content: "Part " counter(ftml-part, upper-roman) "\A";
-      white-space: pre-wrap;
+    counter-reset: ftml-chapter ftml-section ftml-subsection ftml-subsubsection
+        ftml-paragraph;
+    & .ftml-title-part {
+        display: block;
+        font-weight: bold;
+        line-height: initial;
+        font-size: xx-large;
+        margin: 20px 10px;
+        &::before {
+            content: "Part " counter(ftml-part, upper-roman) "\A";
+            white-space: pre-wrap;
+        }
     }
-  }
 }
 
 .ftml-chapter {
-  counter-reset: ftml-section ftml-subsection ftml-subsubsection ftml-paragraph;
-  & .ftml-title-chapter {
-    display:block;
-    font-weight: bold;
-    line-height: initial;
-    font-size:x-large;
-    margin:15px 0;
-    &::before {
-      content: "Chapter " counter(ftml-chapter) " - ";
+    counter-reset: ftml-section ftml-subsection ftml-subsubsection
+        ftml-paragraph;
+    & .ftml-title-chapter {
+        display: block;
+        font-weight: bold;
+        line-height: initial;
+        font-size: x-large;
+        margin: 15px 0;
+        &::before {
+            content: "Chapter " counter(ftml-chapter) " - ";
+        }
     }
-  }
 }
 
 .ftml-section {
-  counter-reset: ftml-subsection ftml-subsubsection ftml-paragraph;
-  & .ftml-title-section {
-    display:block;
-    font-weight: bold;
-    line-height: initial;
-    font-size:large;
-    margin:10px 0;
-    &::before {
-      content: counter(ftml-section) " ";
+    counter-reset: ftml-subsection ftml-subsubsection ftml-paragraph;
+    & .ftml-title-section {
+        display: block;
+        font-weight: bold;
+        line-height: initial;
+        font-size: large;
+        margin: 10px 0;
+        &::before {
+            content: counter(ftml-section) " ";
+        }
     }
-  }
 }
 
 .ftml-subsection {
-  counter-reset: ftml-subsubsection ftml-paragraph;
-  & .ftml-title-subsection {
-    display:block;
-    font-weight: bold;
-    line-height: initial;
-    font-size:larger;
-    margin:5px 0;
-    &::before {
-      content: counter(ftml-section) "." counter(ftml-subsection) " ";
+    counter-reset: ftml-subsubsection ftml-paragraph;
+    & .ftml-title-subsection {
+        display: block;
+        font-weight: bold;
+        line-height: initial;
+        font-size: larger;
+        margin: 5px 0;
+        &::before {
+            content: counter(ftml-section) "." counter(ftml-subsection) " ";
+        }
     }
-  }
 }
 
 .ftml-subsubsection {
-  counter-reset: ftml-paragraph;
-  & .ftml-title-subsubsection {
-    display:block;
-    font-weight: bold;
-    line-height: initial;
-    &::before {
-      content: counter(ftml-section) "." counter(ftml-subsection) "." counter(ftml-subsubsection) " ";
+    counter-reset: ftml-paragraph;
+    & .ftml-title-subsubsection {
+        display: block;
+        font-weight: bold;
+        line-height: initial;
+        &::before {
+            content: counter(ftml-section) "." counter(ftml-subsection) "."
+                counter(ftml-subsubsection) " ";
+        }
     }
-  }
 }
 
-.ftml-paragraph, .ftml-definition, .ftml-assertion, .ftml-example, .ftml-problem, .ftml-subproblem {
-  & .ftml-title-paragraph {
-    display:inline-block;
-    font-weight: bold;
-    margin:0;
-    font-size: inherit;
-    line-height: inherit;
-    &::before {
-      content: var(--ftml-paragraph-str);
+.ftml-paragraph,
+.ftml-definition,
+.ftml-assertion,
+.ftml-example,
+.ftml-problem,
+.ftml-subproblem {
+    & .ftml-title-paragraph {
+        display: inline-block;
+        font-weight: bold;
+        margin: 0;
+        font-size: inherit;
+        line-height: inherit;
+        &::before {
+            content: var(--ftml-paragraph-str);
+        }
+        &::after {
+            content: " ";
+        }
     }
-    &::after {
-      content: " ";
-    }
-  }
 }
-.ftml-paragraph, .ftml-subproblem {
-  --ftml-paragraph-str: "";
+.ftml-paragraph,
+.ftml-subproblem {
+    --ftml-paragraph-str: "";
 }
 .ftml-definition {
-  --ftml-paragraph-str: "Definition ";
+    --ftml-paragraph-str: "Definition ";
 }
 .ftml-assertion {
-  --ftml-paragraph-str: "Assertion ";
+    --ftml-paragraph-str: "Assertion ";
 }
 .ftml-example {
-  --ftml-paragraph-str: "Example ";
+    --ftml-paragraph-str: "Example ";
 }
 .ftml-problem {
-  --ftml-paragraph-str: "Exercise ";
+    --ftml-paragraph-str: "Problem ";
+}
+
+.ftml-title {
+    display: contents;
 }

@@ -91,7 +91,7 @@ pub fn SearchTop() -> impl IntoView {
             ret.allow_definitions = false;
             ret.allow_examples = false;
             ret.allow_assertions = false;
-            ret.allow_exercises = false;
+            ret.allow_problems = false;
             for s in v {
                 match Filter::from_value(s.as_str()) {
                     Filter::Doc => ret.allow_documents = true,
