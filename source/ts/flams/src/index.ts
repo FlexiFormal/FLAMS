@@ -132,6 +132,20 @@ export class FLAMSServer {
   }
 
   /**
+   * Batch grade an arrray of <solution,response[]> pairs.
+   * Each of the responses will be graded against the corresponding solution, and the resulting
+   * feedback returned at the same position. If *any* of the responses is malformed,
+   * the whole batch will fail.
+   * A SolutionData[] can be obtained from Solutions.to_solutions(). A ProblemFeedbackJson
+   * can be turned into a "proper" ProblemFeedback using ProblemFeedback.from_json().
+   */
+  async batchGrade(
+    ...submissions: [FLAMS.SolutionData[],FLAMS.ProblemResponse[]][]
+  ): Promise<(FLAMS.ProblemFeedbackJson[])[] | undefined> {
+    return await this.rawPostRequest("content/grade", {submissions: submissions});
+  }
+
+  /**
    * Get the solution for the problem with the given URI. As string, so it can be
    * deserialized by the ts binding for the WASM datastructure
    */

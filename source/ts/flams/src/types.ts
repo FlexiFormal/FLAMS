@@ -29,6 +29,8 @@ export type QueryFilter = FTML.QueryFilter;
 export type Quiz = FTML.Quiz;
 export type SlideElement = FTML.SlideElement;
 export type ArchiveId = FTML.ArchiveId;
+export type SolutionData = FTML.SolutionData;
+export type ProblemFeedbackJson = FTML.ProblemFeedbackJson;
 
 export type DocumentURIParams =
   | { uri: DocumentURI }

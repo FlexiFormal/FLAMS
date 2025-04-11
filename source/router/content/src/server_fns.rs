@@ -1,7 +1,11 @@
 use flams_ontology::{
     SlideElement,
     languages::Language,
-    narration::{LOKind, notations::Notation, problems::Quiz},
+    narration::{
+        LOKind,
+        notations::Notation,
+        problems::{ProblemFeedbackJson, ProblemResponse, Quiz, SolutionData},
+    },
     uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
 };
 use flams_utils::CSS;
@@ -189,6 +193,29 @@ pub async fn get_quiz(
         return Err("invalid uri".to_string().into());
     };
     server::get_quiz(uri).await
+}
+
+#[server(prefix = "/content", endpoint = "grade")]
+pub async fn grade(
+    submissions: Vec<(Box<[SolutionData]>, Vec<ProblemResponse>)>,
+) -> Result<Vec<Vec<ProblemFeedbackJson>>, ServerFnError<String>> {
+    tokio::task::spawn_blocking(move || {
+        let mut ret = Vec::new();
+        for (sol, resps) in submissions {
+            let mut ri = Vec::new();
+            let sol = flams_ontology::narration::problems::Solutions::from_solutions(sol);
+            for resp in resps {
+                let r = sol.check_response(&resp).ok_or_else(|| {
+                    "Response {resp:?} does not match solution {sol:?}".to_string()
+                })?;
+                ri.push(r.to_json());
+            }
+            ret.push(ri)
+        }
+        Ok(ret)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[server(
