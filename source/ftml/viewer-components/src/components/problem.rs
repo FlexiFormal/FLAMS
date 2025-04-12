@@ -1,14 +1,18 @@
 use flams_ontology::{
     narration::problems::{
         BlockFeedback, CheckedResult, FillinFeedback, FillinFeedbackKind, ProblemFeedback,
-        ProblemResponse as OrigResponse, Solutions,
+        ProblemResponse as OrigResponse, ProblemResponseType, Solutions,
     },
     uris::{DocumentElementURI, Name},
 };
-use flams_utils::vecmap::VecMap;
+use flams_utils::{prelude::HMap, vecmap::VecMap};
 use flams_web_utils::inject_css;
 use ftml_extraction::prelude::FTMLElements;
-use leptos::{context::Provider, prelude::*};
+use leptos::{
+    context::Provider,
+    either::Either::{Left, Right},
+    prelude::*,
+};
 use leptos_dyn_dom::OriginalNode;
 use serde::Serialize;
 use smallvec::SmallVec;
@@ -21,18 +25,31 @@ use crate::{
 
 //use crate::ProblemOptions;
 
-pub enum ProblemOptions {
-    OnResponse(JsOrRsF<OrigResponse, ()>),
-    WithFeedback(VecMap<DocumentElementURI, ProblemFeedback>),
-    WithSolutions(VecMap<DocumentElementURI, Solutions>),
+#[derive(Debug, Clone)]
+pub enum ProblemState {
+    Interactive {
+        current_response: Option<OrigResponse>,
+        solution: Option<Solutions>,
+    },
+    Finished {
+        current_response: Option<OrigResponse>,
+    },
+    Graded {
+        feedback: ProblemFeedback,
+    },
 }
+
+pub struct ProblemOptions {
+    pub on_response: Option<JsOrRsF<OrigResponse, ()>>,
+    pub states: HMap<DocumentElementURI, ProblemState>,
+}
+
 impl std::fmt::Debug for ProblemOptions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProblemOptions::OnResponse(_) => write!(f, "OnResponse"),
-            ProblemOptions::WithFeedback(v) => write!(f, "WithFeedback({})", v.0.len()),
-            ProblemOptions::WithSolutions(v) => write!(f, "WithSolutions({})", v.0.len()),
-        }
+        f.debug_struct("ProblemOptions")
+            .field("on_response", &self.on_response.is_some())
+            .field("states", &self.states)
+            .finish()
     }
 }
 
@@ -40,7 +57,9 @@ impl std::fmt::Debug for ProblemOptions {
 pub struct CurrentProblem {
     uri: DocumentElementURI,
     solutions: RwSignal<u8>,
+    initial: Option<OrigResponse>,
     responses: RwSignal<SmallVec<ProblemResponse, 4>>,
+    interactive: bool,
     feedback: RwSignal<Option<ProblemFeedback>>,
 }
 impl CurrentProblem {
@@ -101,42 +120,50 @@ pub(super) fn problem<V: IntoView + 'static>(
     };
 
     let uri = with_context::<ForcedName, _>(|n| n.update(uri)).unwrap_or_else(|| uri.clone());
-    let ex = CurrentProblem {
+    let mut ex = CurrentProblem {
         solutions: RwSignal::new(0),
         uri,
+        initial: None,
+        interactive: true,
         responses: RwSignal::new(SmallVec::new()),
         feedback: RwSignal::new(None),
     };
     let responses = ex.responses;
-    let is_done = with_context(|opt: &ProblemOptions| match opt {
-        ProblemOptions::WithFeedback(m) => {
-            tracing::debug!("Problem: Reusing feedback");
-            if let Some(fb) = m.get(&ex.uri) {
-                ex.feedback.update_untracked(|v| *v = Some(fb.clone()));
-                leptos::either::Either::Left(true)
-            } else {
-                leptos::either::Either::Left(false)
+    let is_done = with_context(|opt: &ProblemOptions| {
+        match opt.states.get(&ex.uri) {
+            Some(ProblemState::Graded { feedback }) => {
+                ex.feedback
+                    .update_untracked(|v| *v = Some(feedback.clone()));
+                return Left(true);
             }
+            Some(ProblemState::Interactive {
+                current_response: Some(resp),
+                ..
+            }) => ex.initial = Some(resp.clone()),
+            Some(ProblemState::Finished {
+                current_response: Some(resp),
+            }) => {
+                ex.initial = Some(resp.clone());
+                ex.interactive = false;
+            }
+            _ => (),
         }
-        ProblemOptions::OnResponse(f) => {
+        if let Some(f) = &opt.on_response {
             tracing::debug!("Problem: Using onResponse callback");
-            leptos::either::Either::Right(f.clone())
-        }
-        ProblemOptions::WithSolutions(_) => {
-            tracing::debug!("Problem: Reusing solution");
-            leptos::either::Either::Left(false)
+            Right(f.clone())
+        } else {
+            Left(false)
         }
     })
-    .unwrap_or(leptos::either::Either::Left(false));
+    .unwrap_or(Left(false));
     let uri = ex.uri.clone();
     view! {
       <Provider value=ex><Provider value=counters><div class=cls style=style>
           {//<form>{
             let r = children();
             match is_done {
-              leptos::either::Either::Left(true) =>
-                leptos::either::Either::Left(r),
-              leptos::either::Either::Right(f) => {
+              Left(true) => Left(r),
+              Right(f) => {
                 let _ = Effect::new(move |_| {
                   if let Some(resp) = responses.try_with(|resp|
                     CurrentProblem::to_response(&uri, resp)
@@ -144,11 +171,11 @@ pub(super) fn problem<V: IntoView + 'static>(
                     let _ = f.apply(&resp);
                   }
                 });
-                leptos::either::Either::Left(r)
+                Left(r)
               }
               _ if responses.get_untracked().is_empty() =>
-                leptos::either::Either::Left(r),
-              _ => leptos::either::Either::Right(view!{
+                Left(r),
+              _ => Right(view!{
                 {r}
                 {submit_answer()}
               })
@@ -177,14 +204,12 @@ fn submit_answer() -> impl IntoView {
                 };
                 let uri = uri.clone();
                 let foract = if let Some(s) = with_context(|opt: &ProblemOptions| {
-                    if let ProblemOptions::WithSolutions(m) = opt {
-                        if let Some(sol) = m.get(&uri) {
-                            Some(sol.clone())
-                            //let sol = sol.clone();
-                            //Some(leptos::either::Either::Left(move || do_solution(&sol)))
-                        } else {
-                            None
-                        }
+                    if let Some(ProblemState::Interactive {
+                        solution: Some(sol),
+                        ..
+                    }) = opt.states.get(&uri)
+                    {
+                        Some(sol.clone())
                     } else {
                         None
                     }
@@ -329,7 +354,6 @@ pub(super) fn choice_block<V: IntoView + 'static>(
 pub(super) fn problem_choice<V: IntoView + 'static>(
     children: impl Fn() -> V + Send + 'static + Clone,
 ) -> impl IntoView {
-    use leptos::either::Either;
     let Some(CurrentChoice(block)) = use_context() else {
         tracing::error!("choice outside of choice block!");
         return None;
@@ -345,12 +369,12 @@ pub(super) fn problem_choice<V: IntoView + 'static>(
                 ProblemResponse::MultipleChoice(inline, sigs) => {
                     let idx = sigs.len();
                     sigs.push(false);
-                    Some((Either::Left(idx), *inline))
+                    Some((Left(idx), *inline))
                 }
                 ProblemResponse::SingleChoice(inline, sig, total) => {
                     let val = *total;
                     *total += 1;
-                    Some((Either::Right(val), *inline))
+                    Some((Right(val), *inline))
                 }
                 ProblemResponse::Fillinsol(_) => None,
             })
@@ -361,19 +385,35 @@ pub(super) fn problem_choice<V: IntoView + 'static>(
         tracing::error!("choice outside of choice block!");
         return None;
     };
+    let selected = if let Some(init) = ex.initial.as_ref().and_then(|i| i.responses.get(block)) {
+        match (init, multiple) {
+            (ProblemResponseType::MultipleChoice(v), Left(idx)) => {
+                v.get(idx).copied().unwrap_or_default()
+            }
+            (ProblemResponseType::SingleChoice(v), Right(val)) => *v == val,
+            _ => false,
+        }
+    } else {
+        false
+    };
+    let disabled = !ex.interactive;
     Some(match multiple {
-        Either::Left(idx) => Either::Left(multiple_choice(
+        Left(idx) => Left(multiple_choice(
             idx,
             block,
             inline,
+            selected,
+            disabled,
             ex.responses,
             ex.feedback,
             children,
         )),
-        Either::Right(idx) => Either::Right(single_choice(
+        Right(idx) => Right(single_choice(
             idx,
             block,
             inline,
+            selected,
+            disabled,
             ex.responses,
             ex.uri,
             ex.feedback,
@@ -386,6 +426,8 @@ fn multiple_choice<V: IntoView + 'static>(
     idx: usize,
     block: usize,
     inline: bool,
+    orig_selected: bool,
+    disabled: bool,
     responses: RwSignal<SmallVec<ProblemResponse, 4>>,
     feedback: RwSignal<Option<ProblemFeedback>>,
     children: impl Fn() -> V + Send + 'static + Clone,
@@ -438,7 +480,7 @@ fn multiple_choice<V: IntoView + 'static>(
         };
         Either::A(
           view!{
-            <div style="display:inline;margin-right:5px;"><input node_ref=rf type="checkbox" on:change=on_change/>{children()}</div>
+            <div style="display:inline;margin-right:5px;"><input node_ref=rf type="checkbox" on:change=on_change checked=orig_selected disabled=disabled/>{children()}</div>
           }
         )
       }
@@ -450,6 +492,8 @@ fn single_choice<V: IntoView + 'static>(
     idx: u16,
     block: usize,
     inline: bool,
+    orig_selected: bool,
+    disabled: bool,
     responses: RwSignal<SmallVec<ProblemResponse, 4>>,
     uri: DocumentElementURI,
     feedback: RwSignal<Option<ProblemFeedback>>,
@@ -501,7 +545,7 @@ fn single_choice<V: IntoView + 'static>(
           if ip.checked() { sig.set(()); }
         };
         Either::A(view!{
-          <div style="display:inline;margin-right:5px;"><input node_ref=rf type="radio" name=name on:change=on_change/>{children()}</div>
+          <div style="display:inline;margin-right:5px;"><input node_ref=rf type="radio" name=name on:change=on_change checked=orig_selected disabled=disabled/>{children()}</div>
         })
       }
     })
@@ -573,8 +617,13 @@ pub(super) fn fillinsol(wd: Option<f32>) -> impl IntoView {
           *s = val;
         }
       );
+      let txt = if let Some(ProblemResponseType::Fillinsol(s)) = ex.initial.as_ref().and_then(|i| i.responses.get(choice)) {
+          sig.set(s.clone());
+          s.clone()
+      } else {String::new()};
+      let disabled = !ex.interactive;
       Either::A(view!{
-        <input type="text" style=style on:input:target=move |ev| {sig.set(ev.target().value());}/>
+        <input type="text" style=style value=txt disabled=disabled on:input:target=move |ev| {sig.set(ev.target().value());}/>
       })
     }
   )

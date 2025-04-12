@@ -63,8 +63,6 @@ pub fn proof_body(orig: OriginalNode) -> impl IntoView {
         */
     } else {
         let none = None::<ProofHidable>;
-        Either::Right(
-            view!(<Provider value=none><DomChildrenCont orig cont=crate::iterate /></Provider>),
-        )
+        Either::Right(view!(<Provider value=none><DomCont orig cont=crate::iterate /></Provider>))
     }
 }

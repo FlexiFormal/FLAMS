@@ -5,7 +5,7 @@ pub(crate) mod navigation;
 #[cfg(feature = "omdoc")]
 pub mod omdoc;
 pub(crate) mod paragraphs;
-pub(crate) mod problem;
+pub mod problem;
 pub(crate) mod proofs;
 pub(crate) mod sections;
 pub(crate) mod terms;
@@ -168,6 +168,9 @@ fn do_components<const MATH: bool>(
             OpenFTMLElement::Title => {
                 sections::title(move || view!(<DomChildrenCont orig cont=crate::iterate />))
                     .into_any()
+            }
+            OpenFTMLElement::ProofTitle => {
+                view!(<DomCont skip_head=true orig cont=crate::iterate/>).into_any()
             }
             OpenFTMLElement::ProofHide(b) => proofs::proof_hide(
                 *b,

@@ -85,7 +85,7 @@ impl AsTs for () {
 }
 impl FromTs for () {
     #[inline]
-    fn from_ts(v: JsValue) -> Result<Self, JsValue> {
+    fn from_ts(_: JsValue) -> Result<Self, JsValue> {
         Ok(())
     }
 }
@@ -337,7 +337,6 @@ impl LeptosContext {
         Ok(())
     }
 
-    #[inline]
     pub fn wasm_clone(&self) -> Self {
         self.clone()
     }

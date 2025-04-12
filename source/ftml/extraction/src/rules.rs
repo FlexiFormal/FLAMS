@@ -787,6 +787,14 @@ pub mod rules {
         Some(OpenFTMLElement::Title)
     }
 
+    pub fn prooftitle<E: FTMLExtractor>(
+        _extractor: &mut E,
+        _attrs: &mut E::Attr<'_>,
+        _nexts: &mut SV<E>,
+    ) -> Option<OpenFTMLElement> {
+        Some(OpenFTMLElement::ProofTitle)
+    }
+
     pub fn precondition<E: FTMLExtractor>(
         extractor: &mut E,
         attrs: &mut E::Attr<'_>,

@@ -32,7 +32,7 @@ export const Complete = () => {
         <p>Here is a problem:</p>
         <FTMLFragment fragment={frag1} />
         <p>And here is one that logs every interaction to the console:</p>
-        <FTMLFragment fragment={frag2} problems={(e) => console.log(e)} />
+        <FTMLFragment fragment={frag2} onProblem={(e) => console.log(e)} />
         <p> And here is a full document:</p>
         <FTMLDocument
           document={doc}

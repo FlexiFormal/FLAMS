@@ -151,7 +151,7 @@ pub fn FTMLStringMath(html: String) -> impl IntoView {
     view!(<math><DomStringContMath html cont=iterate/></math>)
 }
 
-pub static RULES: [FTMLExtractionRule<DOMExtractor>; 50] = [
+pub static RULES: [FTMLExtractionRule<DOMExtractor>; 51] = [
     rule(FTMLTag::Section),
     rule(FTMLTag::SkipSection),
     rule(FTMLTag::Term),
@@ -178,6 +178,7 @@ pub static RULES: [FTMLExtractionRule<DOMExtractor>; 50] = [
     rule(FTMLTag::ProblemFillinsol),
     rule(FTMLTag::SetSectionLevel),
     rule(FTMLTag::Title),
+    rule(FTMLTag::ProofTitle),
     rule(FTMLTag::Definition),
     rule(FTMLTag::Paragraph),
     rule(FTMLTag::Assertion),

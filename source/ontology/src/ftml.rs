@@ -43,7 +43,7 @@ macro_rules! do_keys {
     }
 }
 
-do_keys! {117:
+do_keys! {118:
     Module                      = "module"
     MathStructure               = "feature-structure"
     Morphism                    = "feature-morphism"
@@ -65,6 +65,7 @@ do_keys! {117:
 
     DocTitle                    = "doctitle"
     Title                       = "title"
+    ProofTitle                  = "prooftitle"
 
     Symdecl                     = "symdecl"
     Vardef                      = "vardef"

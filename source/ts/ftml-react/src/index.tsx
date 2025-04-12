@@ -66,10 +66,9 @@ export interface FTMLConfig {
   onSlide?: (
     uri: FTML.DocumentElementURI,
   ) => ((ch: ReactNode) => ReactNode) | undefined;
-  /**
-   * How to handle problems
-   */
-  problems?: FTMLT.ProblemConfig;
+  
+  problemStates?: FTML.ProblemStates | undefined;
+  onProblem?: ((response: FTML.ProblemResponse) => void) | undefined;
 }
 
 /**
@@ -275,6 +274,7 @@ function toConfig(
     onSectionTitle: onSectionTitle,
     onParagraph: onParagraph,
     onSlide: onSlide,
-    problems: config.problems,
+    problemStates: config.problemStates,
+    onProblem: config.onProblem
   };
 }

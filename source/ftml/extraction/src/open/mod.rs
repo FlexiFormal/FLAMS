@@ -86,6 +86,7 @@ pub enum OpenFTMLElement {
     },
     Doctitle,
     Title,
+    ProofTitle,
     Symdecl {
         uri: SymbolURI,
         arity: ArgSpec,
@@ -575,6 +576,7 @@ impl OpenFTMLElement {
             | Self::ProblemChoice
             | Self::SlideNumber
             | Self::ProofBody
+            | Self::ProofTitle
             | Self::ProofHide(_) => (),
         }
         None

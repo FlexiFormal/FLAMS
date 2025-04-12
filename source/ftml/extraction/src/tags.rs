@@ -1,5 +1,3 @@
-use std::fmt::{Debug, Display};
-
 use crate::extractor::FTMLExtractor;
 use crate::open::OpenFTMLElement;
 use crate::rules::FTMLExtractionRule;
@@ -48,6 +46,7 @@ do_tags! {
 
     DocTitle                    @ doctitle,
     Title                       @ title,
+    ProofTitle                  @ prooftitle,
 
     Symdecl                     @ symdecl,
     Vardef                      @ vardecl,
@@ -172,10 +171,11 @@ do_tags! {
     Styles                      @ no_op,
     Argprecs                    @ no_op
 }
-
+#[allow(dead_code)]
 pub const fn ignore<E: FTMLExtractor>(key: FTMLKey) -> FTMLExtractionRule<E> {
     FTMLExtractionRule::new(key, key.attr_name(), super::rules::rules::no_op)
 }
+#[allow(dead_code)]
 pub const fn no_op<E: FTMLExtractor>(
     _extractor: &mut E,
     _attrs: &mut E::Attr<'_>,
@@ -184,6 +184,7 @@ pub const fn no_op<E: FTMLExtractor>(
     None
 }
 
+#[allow(dead_code)]
 pub fn todo<E: FTMLExtractor>(
     _extractor: &mut E,
     _attrs: &mut E::Attr<'_>,

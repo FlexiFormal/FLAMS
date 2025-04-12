@@ -1,6 +1,6 @@
 {
   "name": "@kwarc/ftml-react",
-  "version": "0.0.9",
+  "version": "0.0.11",
   "description": "React components for integrating FTML viewer functionality in react",
   "homepage": "https://github.com/KWARC/FLAMS#readme",
   "bugs": {
