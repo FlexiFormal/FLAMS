@@ -60,19 +60,118 @@ impl Solutions {
     pub fn from_solutions(solutions: Box<[SolutionData]>) -> Self {
         Self(solutions)
     }
+
     #[inline]
     pub fn to_solutions(&self) -> Box<[SolutionData]> {
         self.0.clone()
     }
 
     #[must_use]
+    #[inline]
     pub fn check_response(&self, response: &ProblemResponse) -> Option<ProblemFeedback> {
         self.check(response)
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn default_feedback(&self) -> ProblemFeedback {
+        self.default()
     }
 }
 
 impl crate::Resourcable for Solutions {}
 impl Solutions {
+    #[must_use]
+    pub fn default(&self) -> ProblemFeedback {
+        let mut solutions = SmallVec::new();
+        let mut data = SmallVec::new();
+        for sol in self.0.iter() {
+            match sol {
+                SolutionData::Solution { html, .. } => solutions.push(html.clone()),
+                SolutionData::ChoiceBlock(ChoiceBlock {
+                    multiple: false,
+                    choices,
+                    ..
+                }) => data.push(CheckedResult::SingleChoice {
+                    selected: 0,
+                    choices: choices
+                        .iter()
+                        .enumerate()
+                        .map(|(_, c)| BlockFeedback {
+                            is_correct: c.correct,
+                            verdict_str: c.verdict.to_string(),
+                            feedback: c.feedback.to_string(),
+                        })
+                        .collect(),
+                }),
+                SolutionData::ChoiceBlock(ChoiceBlock { choices, .. }) => {
+                    data.push(CheckedResult::MultipleChoice {
+                        selected: choices.iter().map(|_| false).collect(),
+                        choices: choices
+                            .iter()
+                            .enumerate()
+                            .map(|(_, c)| BlockFeedback {
+                                is_correct: c.correct,
+                                verdict_str: c.verdict.to_string(),
+                                feedback: c.feedback.to_string(),
+                            })
+                            .collect(),
+                    })
+                }
+                SolutionData::FillInSol(f) => {
+                    let mut options = SmallVec::new();
+                    for o in f.opts.iter() {
+                        match o {
+                            FillInSolOption::Exact {
+                                value,
+                                verdict,
+                                feedback,
+                            } => options.push(FillinFeedback {
+                                is_correct: *verdict,
+                                feedback: feedback.to_string(),
+                                kind: FillinFeedbackKind::Exact(value.to_string()),
+                            }),
+                            FillInSolOption::NumericalRange {
+                                from,
+                                to,
+                                verdict,
+                                feedback,
+                            } => options.push(FillinFeedback {
+                                is_correct: *verdict,
+                                feedback: feedback.to_string(),
+                                kind: FillinFeedbackKind::NumRange {
+                                    from: *from,
+                                    to: *to,
+                                },
+                            }),
+                            FillInSolOption::Regex {
+                                regex,
+                                verdict,
+                                feedback,
+                            } => options.push(FillinFeedback {
+                                is_correct: *verdict,
+                                feedback: feedback.to_string(),
+                                kind: FillinFeedbackKind::Regex(regex.as_str().to_string()),
+                            }),
+                        }
+                    }
+                    data.push(CheckedResult::FillinSol {
+                        matching: None,
+                        options,
+                        text: String::new(),
+                    });
+                }
+            }
+        }
+
+        ProblemFeedback {
+            correct: false,
+            solutions,
+            data,
+            score_fraction: 0.0,
+        }
+    }
+
     #[must_use]
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::cast_precision_loss)]

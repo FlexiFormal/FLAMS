@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export function injectCss(css: CSS): void;
 /**
  * activates debug logging
  */
@@ -175,34 +176,6 @@ export interface QuizProblem {
     objectives: [CognitiveDimension, SymbolURI][];
 }
 
-export type Name = string;
-
-export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
-
-export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
-
-export type SymbolURI = string;
-
-export type DocumentURI = string;
-
-export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
-
-export interface FileStateSummary {
-    new: number;
-    stale: number;
-    deleted: number;
-    up_to_date: number;
-    last_built: Timestamp;
-    last_changed: Timestamp;
-}
-
-export type SlideElement = { type: "Slide"; html: string } | { type: "Paragraph"; html: string } | { type: "Inputref"; uri: DocumentURI } | { type: "Section"; title: string | undefined; children: SlideElement[] };
-
-export interface DocumentRange {
-    start: number;
-    end: number;
-}
-
 export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Problem";
 
 export type SearchResult = { Document: DocumentURI } | { Paragraph: { uri: DocumentElementURI; fors: SymbolURI[]; def_like: boolean; kind: SearchResultKind } };
@@ -215,6 +188,17 @@ export interface QueryFilter {
     allow_assertions?: boolean;
     allow_problems?: boolean;
     definition_like_only?: boolean;
+}
+
+export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
+
+export type DocumentElementURI = string;
+
+export type SlideElement = { type: "Slide"; html: string } | { type: "Paragraph"; html: string } | { type: "Inputref"; uri: DocumentURI } | { type: "Section"; title: string | undefined; children: SlideElement[] };
+
+export interface DocumentRange {
+    start: number;
+    end: number;
 }
 
 export interface FileData {
@@ -247,11 +231,28 @@ export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string;
 
 export type Institution = { type: "university"; title: string; place: string; country: string; url: string; acronym: string; logo: string } | { type: "school"; title: string; place: string; country: string; url: string; acronym: string; logo: string };
 
-export type DocumentElementURI = string;
+export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
+
+export type SymbolURI = string;
+
+export type DocumentURI = string;
+
+export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
+
+export interface FileStateSummary {
+    new: number;
+    stale: number;
+    deleted: number;
+    up_to_date: number;
+    last_built: Timestamp;
+    last_changed: Timestamp;
+}
 
 export type ArchiveId = string;
 
 export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
+
+export type Name = string;
 
 export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
 
@@ -318,4 +319,5 @@ export class Solutions {
   static from_solutions(solutions: SolutionData[]): Solutions;
   to_solutions(): SolutionData[];
   check_response(response: ProblemResponse): ProblemFeedback | undefined;
+  default_feedback(): ProblemFeedback;
 }

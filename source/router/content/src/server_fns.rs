@@ -197,7 +197,7 @@ pub async fn get_quiz(
 
 #[server(prefix = "/content", endpoint = "grade")]
 pub async fn grade(
-    submissions: Vec<(Box<[SolutionData]>, Vec<ProblemResponse>)>,
+    submissions: Vec<(Box<[SolutionData]>, Vec<Option<ProblemResponse>>)>,
 ) -> Result<Vec<Vec<ProblemFeedbackJson>>, ServerFnError<String>> {
     tokio::task::spawn_blocking(move || {
         let mut ret = Vec::new();
@@ -205,9 +205,13 @@ pub async fn grade(
             let mut ri = Vec::new();
             let sol = flams_ontology::narration::problems::Solutions::from_solutions(sol);
             for resp in resps {
-                let r = sol.check_response(&resp).ok_or_else(|| {
-                    "Response {resp:?} does not match solution {sol:?}".to_string()
-                })?;
+                let r = if let Some(resp) = resp {
+                    sol.check_response(&resp).ok_or_else(|| {
+                        "Response {resp:?} does not match solution {sol:?}".to_string()
+                    })?
+                } else {
+                    sol.default_feedback()
+                };
                 ri.push(r.to_json());
             }
             ret.push(ri)

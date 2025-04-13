@@ -10,6 +10,11 @@ import { FTMLContext, useLeptosTunnel, useLeptosTunnels } from "./leptos";
 export const setServerUrl = FTMLT.setServerUrl;
 
 /**
+ * Injects the given CSS rule into the header of the DOM (if adequate and not duplicate)
+ */
+export const injectCss = FTMLT.injectCss;
+
+/**
  * Get the FLAMS server URL used globally
  */
 export const getServerUrl = FTMLT.getServerUrl;

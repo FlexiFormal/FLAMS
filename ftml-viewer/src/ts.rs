@@ -26,6 +26,11 @@ use ftml_viewer_components::{
 use leptos::{either::Either, prelude::*};
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[wasm_bindgen(js_name = injectCss)]
+pub fn inject_css(css: flams_utils::CSS) {
+    flams_web_utils::do_css(css)
+}
+
 #[wasm_bindgen] //(js_name = setDebugLog)]
 /// activates debug logging
 pub fn set_debug_log() {

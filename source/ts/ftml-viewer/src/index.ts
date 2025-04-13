@@ -14,6 +14,13 @@ export function setDebugLog() {
 }
 
 /**
+ * Injects the given CSS rule into the header of the DOM (if adequate and not duplicate)
+ */
+export function injectCss(css:FTML.CSS) {
+  FTML.injectCss(css);
+}
+
+/**
  * Get the FLAMS server used globally
  */
 export function getFlamsServer(): FLAMS.FLAMSServer {

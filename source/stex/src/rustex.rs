@@ -1,24 +1,24 @@
+use ::RusTeX::engine::{CompilationResult, RusTeXEngineExt};
 use flams_utils::binary::BinaryWriter;
 use parking_lot::Mutex;
-use tex_engine::prelude::Mouth;
-use ::RusTeX::engine::{CompilationResult, RusTeXEngineExt};
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
+use tex_engine::prelude::Mouth;
 
 #[allow(clippy::module_inception)]
 mod rustex {
-    pub use RusTeX as rustex_crate;
     pub use tex_engine::commands::{Macro, MacroSignature, TeXCommand};
+    pub use tex_engine::engine::filesystem::FileSystem;
     pub use tex_engine::engine::gullet::DefaultGullet;
     pub use tex_engine::engine::mouth::DefaultMouth;
-    pub use tex_engine::engine::filesystem::FileSystem;
     pub use tex_engine::engine::{DefaultEngine, EngineAux};
-    pub use tex_engine::pdflatex::{PDFTeXEngine,nodes::PDFExtension};
+    pub use tex_engine::pdflatex::{nodes::PDFExtension, PDFTeXEngine};
     pub use tex_engine::prelude::{CSName, InternedCSName, Token, TokenList};
     pub use tex_engine::tex::tokens::control_sequences::CSInterner;
     pub use tex_engine::tex::tokens::StandardToken;
     pub use tex_engine::{engine::utils::memory::MemoryManager, tex::tokens::CompactToken};
     pub use tracing::{debug, error, instrument, trace, warn};
+    pub use RusTeX as rustex_crate;
     pub use RusTeX::engine::commands::{register_primitives_postinit, register_primitives_preinit};
     pub use RusTeX::engine::files::RusTeXFileSystem;
     pub use RusTeX::engine::output::{OutputCont, RusTeXOutput};
@@ -28,13 +28,13 @@ mod rustex {
     pub type RTSettings = RusTeX::engine::Settings;
     pub use RusTeX::ImageOptions;
 }
+pub use rustex::OutputCont;
 #[allow(clippy::wildcard_imports)]
 use rustex::*;
-pub use rustex::OutputCont;
 
 struct FileOutput(std::cell::RefCell<std::io::BufWriter<std::fs::File>>);
 impl FileOutput {
-    fn new(path:&Path) -> Self {
+    fn new(path: &Path) -> Self {
         let f = std::fs::File::create(path).expect("This should not happen!");
         let buf = std::io::BufWriter::new(f);
         Self(std::cell::RefCell::new(buf))
@@ -43,37 +43,36 @@ impl FileOutput {
 
 impl OutputCont for FileOutput {
     fn message(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"{text}");
+        let _ = writeln!(self.0.borrow_mut(), "{text}");
     }
     fn errmessage(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"{text}");
+        let _ = writeln!(self.0.borrow_mut(), "{text}");
     }
     fn file_open(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"({text}");
+        let _ = writeln!(self.0.borrow_mut(), "({text}");
     }
     fn file_close(&self, _text: String) {
         let _ = self.0.borrow_mut().write_string(")\n");
     }
     fn write_18(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"{text}");
+        let _ = writeln!(self.0.borrow_mut(), "{text}");
     }
     fn write_17(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"{text}");
+        let _ = writeln!(self.0.borrow_mut(), "{text}");
     }
     fn write_16(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"{text}");
+        let _ = writeln!(self.0.borrow_mut(), "{text}");
     }
     fn write_neg1(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"{text}");
+        let _ = writeln!(self.0.borrow_mut(), "{text}");
     }
     fn write_other(&self, text: String) {
-        let _ = writeln!(self.0.borrow_mut(),"{text}");
+        let _ = writeln!(self.0.borrow_mut(), "{text}");
     }
     #[inline]
-    fn as_any(self:Box<Self>) -> Box<dyn std::any::Any> {
+    fn as_any(self: Box<Self>) -> Box<dyn std::any::Any> {
         self
     }
-
 }
 
 struct TracingOutput;
@@ -107,7 +106,7 @@ impl OutputCont for TracingOutput {
     }
 
     #[inline]
-    fn as_any(self:Box<Self>) -> Box<dyn std::any::Any> {
+    fn as_any(self: Box<Self>) -> Box<dyn std::any::Any> {
         self
     }
 }
@@ -118,10 +117,14 @@ struct EngineBase {
     memory: MemoryManager<CompactToken>,
     font_system: Fontsystem,
 }
-static ENGINE_BASE: Mutex<Option<Result<EngineBase,()>>> = Mutex::new(None);
+static ENGINE_BASE: Mutex<Option<Result<EngineBase, ()>>> = Mutex::new(None);
 
 impl EngineBase {
-    fn into_engine<O:OutputCont+'static,I: IntoIterator<Item = (String, String)>>(mut self, envs: I,out:O) -> RusTeXEngine {
+    fn into_engine<O: OutputCont + 'static, I: IntoIterator<Item = (String, String)>>(
+        mut self,
+        envs: I,
+        out: O,
+    ) -> RusTeXEngine {
         //use tex_engine::engine::filesystem::FileSystem;
         use tex_engine::engine::gullet::Gullet;
         use tex_engine::engine::stomach::Stomach;
@@ -150,20 +153,24 @@ impl EngineBase {
             stomach,
         }
     }
-    fn get<R, F: FnOnce(&Self) -> R>(f: F) -> Result<R,()> {
+    fn get<R, F: FnOnce(&Self) -> R>(f: F) -> Result<R, ()> {
         let mut lock = ENGINE_BASE.lock();
         match &mut *lock {
             Some(Ok(engine)) => Ok(f(engine)),
             Some(_) => Err(()),
             o => {
                 *o = Some(Self::initialize());
-                o.as_ref().unwrap_or_else(|| unreachable!()).as_ref().map(f).map_err(|()| ())
+                o.as_ref()
+                    .unwrap_or_else(|| unreachable!())
+                    .as_ref()
+                    .map(f)
+                    .map_err(|()| ())
             }
         }
     }
 
     #[instrument(level = "info", target = "sTeX", name = "Initializing RusTeX engine")]
-    fn initialize() -> Result<Self,()> {
+    fn initialize() -> Result<Self, ()> {
         std::panic::catch_unwind(|| {
             let mut engine = DefaultEngine::<Types>::default();
             engine.aux.outputs = RusTeXOutput::Cont(Box::new(TracingOutput));
@@ -180,7 +187,8 @@ impl EngineBase {
                 memory: engine.aux.memory.clone(),
                 font_system: engine.fontsystem.clone(),
             }
-        }).map_err(|a| {
+        })
+        .map_err(|a| {
             if let Some(s) = a.downcast_ref::<String>() {
                 tracing::error!("Error initializing RusTeX engine: {}", s);
             } else if let Some(s) = a.downcast_ref::<&str>() {
@@ -194,7 +202,7 @@ impl EngineBase {
 
 pub struct RusTeX(Mutex<EngineBase>);
 impl RusTeX {
-    pub fn get() -> Result<Self,()> {
+    pub fn get() -> Result<Self, ()> {
         Ok(Self(
             ENGINE_BASE
                 .lock()
@@ -205,28 +213,28 @@ impl RusTeX {
         ))
     }
     pub fn initialize() {
-        EngineBase::get(|_| ());
+        let _ = EngineBase::get(|_| ());
     }
     /// ### Errors
-    pub fn run(&self, file: &Path, memorize: bool,out:Option<&Path>) -> Result<String, String> {
+    pub fn run(&self, file: &Path, memorize: bool, out: Option<&Path>) -> Result<String, String> {
         self.run_with_envs(
             file,
             memorize,
             std::iter::once(("FLAMS_ADMIN_PWD".to_string(), "NOPE".to_string())),
-            out
+            out,
         )
     }
-    
+
     /// ### Errors
     fn set_up<I: IntoIterator<Item = (String, String)>>(
         &self,
         envs: I,
-        out:Option<&Path>
-    ) -> (DefaultEngine<Types>,RTSettings) {
+        out: Option<&Path>,
+    ) -> (DefaultEngine<Types>, RTSettings) {
         let e = self.0.lock().clone();
         let engine = match out {
-            None => e.into_engine(envs,TracingOutput),
-            Some(f) => e.into_engine(envs,FileOutput::new(f)),
+            None => e.into_engine(envs, TracingOutput),
+            Some(f) => e.into_engine(envs, FileOutput::new(f)),
         };
         let settings = RTSettings {
             verbose: false,
@@ -234,7 +242,7 @@ impl RusTeX {
             log: true,
             image_options: ImageOptions::AsIs,
         };
-        (engine,settings)
+        (engine, settings)
     }
 
     /// ### Errors
@@ -243,11 +251,11 @@ impl RusTeX {
         file: &Path,
         memorize: bool,
         envs: I,
-        out:Option<&Path>
+        out: Option<&Path>,
     ) -> Result<String, String> {
-        let (mut engine,settings) = self.set_up(envs, out);
+        let (mut engine, settings) = self.set_up(envs, out);
         let res = engine.run(file.to_str().unwrap_or_else(|| unreachable!()), settings);
-        
+
         res.error.as_ref().map_or_else(
             || {
                 if memorize {
@@ -256,40 +264,40 @@ impl RusTeX {
                 }
                 Ok(res.to_string())
             },
-            |(e,_)| Err(e.to_string()),
+            |(e, _)| Err(e.to_string()),
         )
     }
 
     pub fn builder(&self) -> RusTeXRunBuilder<false> {
-        RusTeXRunBuilder{
+        RusTeXRunBuilder {
             inner: self.0.lock().clone().into_engine(
-                std::iter::once(("FLAMS_ADMIN_PWD".to_string(), "NOPE".to_string())), 
-                TracingOutput
+                std::iter::once(("FLAMS_ADMIN_PWD".to_string(), "NOPE".to_string())),
+                TracingOutput,
             ),
             settings: RTSettings {
                 verbose: false,
                 sourcerefs: false,
                 log: true,
                 image_options: ImageOptions::AsIs,
-            }
+            },
         }
     }
 }
 
-pub struct RusTeXRunBuilder<const HAS_PATH:bool> {
+pub struct RusTeXRunBuilder<const HAS_PATH: bool> {
     inner: DefaultEngine<Types>,
-    settings:RTSettings
+    settings: RTSettings,
 }
-impl<const HAS_PATH:bool> RusTeXRunBuilder<HAS_PATH> {
-    pub fn set_output<O:OutputCont>(mut self,output:O) -> Self {
+impl<const HAS_PATH: bool> RusTeXRunBuilder<HAS_PATH> {
+    pub fn set_output<O: OutputCont>(mut self, output: O) -> Self {
         self.inner.aux.outputs = RusTeXOutput::Cont(Box::new(output));
         self
     }
-    pub const fn set_sourcerefs(mut self,b:bool) -> Self {
+    pub const fn set_sourcerefs(mut self, b: bool) -> Self {
         self.settings.sourcerefs = b;
         self
     }
-    pub fn set_envs<I:IntoIterator<Item = (String,String)>>(mut self,envs:I) -> Self {
+    pub fn set_envs<I: IntoIterator<Item = (String, String)>>(mut self, envs: I) -> Self {
         self.inner.filesystem.add_envs(envs);
         self
     }
@@ -298,60 +306,73 @@ impl<const HAS_PATH:bool> RusTeXRunBuilder<HAS_PATH> {
 pub struct EngineRemnants(DefaultEngine<Types>);
 
 impl EngineRemnants {
-    pub fn memorize(self,global:&RusTeX) {
+    pub fn memorize(self, global: &RusTeX) {
         let mut base = global.0.lock();
         give_back(self.0, &mut base);
     }
-    pub fn take_output<O:OutputCont>(&mut self) -> Option<O> {
-        match std::mem::replace(&mut self.0.aux.outputs,RusTeXOutput::None) {
-            RusTeXOutput::Cont(o) => o.as_any().downcast().ok().map(|b:Box<O>| *b),
-            _ => None
+    pub fn take_output<O: OutputCont>(&mut self) -> Option<O> {
+        match std::mem::replace(&mut self.0.aux.outputs, RusTeXOutput::None) {
+            RusTeXOutput::Cont(o) => o.as_any().downcast().ok().map(|b: Box<O>| *b),
+            _ => None,
         }
     }
 }
 
 impl RusTeXRunBuilder<true> {
-    pub fn run(mut self) -> (CompilationResult,EngineRemnants) {
+    pub fn run(mut self) -> (CompilationResult, EngineRemnants) {
         *self.inner.aux.extension.elapsed() = std::time::Instant::now();
-        let res = match tex_engine::engine::TeXEngine::run(&mut self.inner,rustex::rustex_crate::shipout::shipout) {
+        let res = match tex_engine::engine::TeXEngine::run(
+            &mut self.inner,
+            rustex::rustex_crate::shipout::shipout,
+        ) {
             Ok(()) => None,
             Err(e) => {
-                self.inner.aux.outputs.errmessage(
-                    format!("{}\n\nat {}",e,self.inner.mouth.current_sourceref().display(&self.inner.filesystem))
-                );
+                self.inner.aux.outputs.errmessage(format!(
+                    "{}\n\nat {}",
+                    e,
+                    self.inner
+                        .mouth
+                        .current_sourceref()
+                        .display(&self.inner.filesystem)
+                ));
                 Some(e)
             }
         };
         let res = self.inner.do_result(res, self.settings);
-        (res,EngineRemnants(self.inner))
+        (res, EngineRemnants(self.inner))
     }
 }
 impl RusTeXRunBuilder<false> {
-    pub fn set_path(mut self,p:&Path) -> Option<RusTeXRunBuilder<true>> {
+    pub fn set_path(mut self, p: &Path) -> Option<RusTeXRunBuilder<true>> {
         let parent = p.parent()?;
         self.inner.filesystem.set_pwd(parent.to_path_buf());
         self.inner.aux.jobname = p.with_extension("").file_name()?.to_str()?.to_string();
         let f = self.inner.filesystem.get(p.as_os_str().to_str()?);
         self.inner.mouth.push_file(f);
         Some(RusTeXRunBuilder {
-            inner:self.inner,
-            settings:self.settings
+            inner: self.inner,
+            settings: self.settings,
         })
     }
-    pub fn set_string(mut self,in_path:&Path,content:&str) -> Option<RusTeXRunBuilder<true>> {
+    pub fn set_string(mut self, in_path: &Path, content: &str) -> Option<RusTeXRunBuilder<true>> {
         let parent = in_path.parent()?;
         self.inner.filesystem.set_pwd(parent.to_path_buf());
-        self.inner.aux.jobname = in_path.with_extension("").file_name()?.to_str()?.to_string();
-        self.inner.filesystem.add_file(in_path.to_path_buf(), content);
+        self.inner.aux.jobname = in_path
+            .with_extension("")
+            .file_name()?
+            .to_str()?
+            .to_string();
+        self.inner
+            .filesystem
+            .add_file(in_path.to_path_buf(), content);
         let f = self.inner.filesystem.get(in_path.file_name()?.to_str()?);
         self.inner.mouth.push_file(f);
         Some(RusTeXRunBuilder {
-            inner:self.inner,
-            settings:self.settings
+            inner: self.inner,
+            settings: self.settings,
         })
     }
 }
-
 
 fn save_macro(
     name: InternedCSName<u8>,
@@ -422,13 +443,13 @@ fn give_back(engine: RusTeXEngine, base: &mut EngineBase) {
     *font_system = engine.fontsystem;
     let oldinterner = engine.aux.memory.cs_interner();
     let iter = CommandIterator {
-        prefixes: &[b"c_stex_module_",b"c_stex_mathhub_"],
+        prefixes: &[b"c_stex_module_", b"c_stex_mathhub_"],
         cmds: engine.state.destruct().into_iter(),
         interner: oldinterner,
     };
     for (n, c) in iter.filter_map(|(a, b)| match b {
         TeXCommand::Macro(m) => Some((a, m)),
-        _ => None
+        _ => None,
     }) {
         save_macro(n, &c, oldinterner, memory.cs_interner_mut(), state);
     }
