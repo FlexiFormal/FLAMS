@@ -75,6 +75,43 @@ body {
     }
 }
 
+.ftml-proof-title-collapsed {
+    cursor: context-menu;
+    &::before {
+        content: "▸ ";
+        margin-left: -0.45em;
+    }
+}
+.ftml-proof-title-expanded {
+    cursor: n-resize;
+    &::before {
+        content: "▾ ";
+        margin-left: -0.45em;
+    }
+}
+
+.ftml-proof-title {
+    display: inline-block;
+}
+.ftml-subproof-title {
+    display: inline-flex;
+}
+
+.ftml-proof-title.ftml-proof-title-expanded {
+    &::before {
+        font-style: italic;
+        content: "▾ Proof. ";
+        margin-left: -0.45em;
+    }
+}
+.ftml-proof-title.ftml-proof-title-collapsed {
+    &::before {
+        font-style: italic;
+        content: "▸ Proof. ";
+        margin-left: -0.45em;
+    }
+}
+
 .ftml-paragraph,
 .ftml-definition,
 .ftml-assertion,

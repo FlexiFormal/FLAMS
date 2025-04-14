@@ -1,7 +1,10 @@
 use crate::{components::omdoc::Spec, FTMLString, FTMLStringMath};
 use flams_ontology::{
     content::{declarations::symbols::ArgSpec, terms::Term},
-    narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
+    narration::{
+        paragraphs::{ParagraphFormatting, ParagraphKind},
+        problems::CognitiveDimension,
+    },
     uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI, URI},
 };
 use flams_utils::vecmap::{VecMap, VecSet};
@@ -178,7 +181,7 @@ impl From<VariableSpec> for DocumentElementSpec {
 pub struct ParagraphSpec {
     pub uri: DocumentElementURI,
     pub kind: ParagraphKind,
-    pub inline: bool,
+    pub formatting: ParagraphFormatting,
     pub uses: VecSet<ModuleURI>,
     pub fors: VecMap<SymbolURI, Option<Term>>, //Option<String>>,
     pub title: Option<String>,
@@ -251,7 +254,6 @@ impl super::Spec for ProblemSpec {
             uri,
             title,
             uses,
-            preconditions,
             objectives,
             children,
             ..
@@ -321,7 +323,7 @@ impl super::Spec for DocumentElementSpec {
             Self::Variable(v) => v.into_view().into_any(),
             Self::Paragraph(p) => p.into_view().into_any(),
             Self::Problem(e) => e.into_view().into_any(),
-            Self::TopTerm(uri, t) => view! {
+            Self::TopTerm(_, t) => view! {
               <Block show_separator=false>
                 <Header slot><span><b>"Term "</b>{
                   crate::remote::get!(present(t.clone()) = html => {
@@ -395,18 +397,15 @@ mod froms {
         ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec, SymbolSpec,
     };
     use flams_ontology::{
-        content::{
-            declarations::{structures::Extension, OpenDeclaration},
-            ContentReference, ModuleLike,
-        },
+        content::{declarations::OpenDeclaration, ModuleLike},
         narration::{
             documents::Document, paragraphs::LogicalParagraph, problems::Problem,
             sections::Section, variables::Variable, DocumentElement, NarrationTrait,
         },
-        uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI},
-        Checked, DocumentRange,
+        uris::{DocumentElementURI, ModuleURI},
+        Checked,
     };
-    use flams_system::backend::{Backend, StringPresenter};
+    use flams_system::backend::Backend;
     use flams_utils::{vecmap::VecSet, CSS};
 
     impl SectionSpec {
@@ -471,7 +470,7 @@ mod froms {
             LogicalParagraph {
                 uri,
                 kind,
-                inline,
+                formatting,
                 fors,
                 title,
                 children,
@@ -502,7 +501,7 @@ mod froms {
                 DocumentElementSpec::do_children(backend, children, &mut uses, &mut imports, css);
             Self {
                 kind: *kind,
-                inline: *inline,
+                formatting: *formatting,
                 fors: fors.clone(), //.0.iter().map(|(k,v)| (k.clone(),v.as_ref().and_then(|t| backend.present(t).ok()))).collect(),
                 title,
                 uri: uri.clone(),
@@ -521,9 +520,6 @@ mod froms {
                 sub_problem,
                 autogradable,
                 points,
-                solutions,
-                hints,
-                notes,
                 title,
                 preconditions,
                 objectives,
@@ -576,7 +572,7 @@ mod froms {
                 is_seq,
                 ..
             }: &Variable,
-            backend: &B, //&mut StringPresenter<'_,B>,
+            _backend: &B, //&mut StringPresenter<'_,B>,
         ) -> Self {
             Self {
                 uri: uri.clone(),

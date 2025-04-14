@@ -49,8 +49,6 @@ either = { workspace = true, features = ["serde"] }
 icondata_bi = { workspace = true }
 icondata_ai = { workspace = true }
 gloo-storage = { workspace = true, optional = true }
-# const_format = {workspace = true}
-# paste = {workspace = true}
 
 serde_json = { workspace = true }
 

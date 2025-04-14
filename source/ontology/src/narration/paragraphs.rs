@@ -3,16 +3,29 @@ use std::{fmt::Display, str::FromStr};
 use flams_utils::vecmap::VecMap;
 
 use crate::{
-    content::terms::Term, ftml::FTMLKey, uris::{DocumentElementURI, Name, SymbolURI}, Checked, CheckingState, DocumentRange
+    content::terms::Term,
+    ftml::FTMLKey,
+    uris::{DocumentElementURI, Name, SymbolURI},
+    Checked, CheckingState, DocumentRange,
 };
 
 use super::{DocumentElement, NarrationTrait};
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub enum ParagraphFormatting {
+    Block,
+    Inline,
+    Collapsed,
+}
+
 #[derive(Debug)]
-pub struct LogicalParagraph<State:CheckingState> {
+pub struct LogicalParagraph<State: CheckingState> {
     pub kind: ParagraphKind,
     pub uri: DocumentElementURI,
-    pub inline: bool,
+    pub formatting: ParagraphFormatting,
     pub title: Option<DocumentRange>,
     pub range: DocumentRange,
     pub styles: Box<[Name]>,
@@ -20,8 +33,8 @@ pub struct LogicalParagraph<State:CheckingState> {
     pub fors: VecMap<SymbolURI, Option<Term>>,
 }
 
-crate::serde_impl!{
-    struct LogicalParagraph[kind,uri,inline,title,range,styles,children,fors]
+crate::serde_impl! {
+    struct LogicalParagraph[kind,uri,formatting,title,range,styles,children,fors]
 }
 
 impl NarrationTrait for LogicalParagraph<Checked> {
@@ -30,8 +43,15 @@ impl NarrationTrait for LogicalParagraph<Checked> {
         &self.children
     }
     #[inline]
-    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
-        if let DocumentElement::Paragraph(e) = e {Some(e)} else {None}
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self>
+    where
+        Self: Sized,
+    {
+        if let DocumentElement::Paragraph(e) = e {
+            Some(e)
+        } else {
+            None
+        }
     }
 }
 
@@ -50,14 +70,13 @@ pub enum ParagraphKind {
 }
 
 impl ParagraphKind {
-    const DEF:&str = FTMLKey::Definition.attr_name();
-    const ASS:&str = FTMLKey::Assertion.attr_name();
-    const PAR:&str = FTMLKey::Paragraph.attr_name();
-    const PRO:&str = FTMLKey::Proof.attr_name();
-    const SUB:&str = FTMLKey::SubProof.attr_name();
+    const DEF: &str = FTMLKey::Definition.attr_name();
+    const ASS: &str = FTMLKey::Assertion.attr_name();
+    const PAR: &str = FTMLKey::Paragraph.attr_name();
+    const PRO: &str = FTMLKey::Proof.attr_name();
+    const SUB: &str = FTMLKey::SubProof.attr_name();
     #[must_use]
     pub fn from_ftml(s: &str) -> Option<Self> {
-        
         Some(match s {
             Self::DEF => Self::Definition,
             Self::ASS => Self::Assertion,

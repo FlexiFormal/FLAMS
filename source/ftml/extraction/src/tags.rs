@@ -47,6 +47,7 @@ do_tags! {
     DocTitle                    @ doctitle,
     Title                       @ title,
     ProofTitle                  @ prooftitle,
+    SubproofTitle               @ subprooftitle,
 
     Symdecl                     @ symdecl,
     Vardef                      @ vardecl,
@@ -88,7 +89,7 @@ do_tags! {
     ProofTerm                   @ no_op /* TODO */,
     ProofBody                   @ proofbody,
     ProofAssumption             @ no_op /* TODO */,
-    ProofHide                   @ proofhide,
+    ProofHide                   @ no_op,
     ProofStep                   @ no_op /* TODO */,
     ProofStepName               @ no_op /* TODO */,
     ProofEqStep                 @ no_op /* TODO */,

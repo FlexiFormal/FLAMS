@@ -12,7 +12,11 @@ pub(crate) mod terms;
 mod toc;
 
 use flams_ontology::{
-    narration::{problems::CognitiveDimension, LOKind},
+    narration::{
+        paragraphs::{ParagraphFormatting, ParagraphKind},
+        problems::CognitiveDimension,
+        LOKind,
+    },
     uris::DocumentElementURI,
 };
 use inputref::InInputRef;
@@ -147,9 +151,38 @@ fn do_components<const MATH: bool>(
                 });
                 ().into_any()
             }
+            OpenFTMLElement::Slide(uri) => paragraphs::slide(uri.clone(), move || {
+                do_components::<MATH>(skip + 1, elements, orig)
+            })
+            .into_any(),
+            OpenFTMLElement::SlideNumber => paragraphs::slide_number().into_any(),
+            OpenFTMLElement::Paragraph {
+                uri,
+                kind: ParagraphKind::Proof,
+                formatting:
+                    formatting @ (ParagraphFormatting::Block | ParagraphFormatting::Collapsed),
+                ..
+            } => proofs::proof(
+                uri.clone(),
+                *formatting == ParagraphFormatting::Collapsed,
+                move || view!(<DomChildrenCont orig cont=crate::iterate />),
+            )
+            .into_any(),
+            OpenFTMLElement::Paragraph {
+                kind: ParagraphKind::SubProof,
+                uri,
+                formatting:
+                    formatting @ (ParagraphFormatting::Block | ParagraphFormatting::Collapsed),
+                ..
+            } => proofs::subproof(
+                uri.clone(),
+                *formatting == ParagraphFormatting::Collapsed,
+                move || view!(<DomChildrenCont orig cont=crate::iterate />),
+            )
+            .into_any(),
             OpenFTMLElement::Paragraph {
                 kind,
-                inline: false,
+                formatting: ParagraphFormatting::Block,
                 uri,
                 styles,
                 ..
@@ -157,11 +190,6 @@ fn do_components<const MATH: bool>(
                 do_components::<MATH>(skip + 1, elements, orig)
             })
             .into_any(),
-            OpenFTMLElement::Slide(uri) => paragraphs::slide(uri.clone(), move || {
-                do_components::<MATH>(skip + 1, elements, orig)
-            })
-            .into_any(),
-            OpenFTMLElement::SlideNumber => paragraphs::slide_number().into_any(),
             OpenFTMLElement::Paragraph { .. } => {
                 do_components::<MATH>(skip + 1, elements, orig).into_any()
             }
@@ -169,14 +197,17 @@ fn do_components<const MATH: bool>(
                 sections::title(move || view!(<DomChildrenCont orig cont=crate::iterate />))
                     .into_any()
             }
-            OpenFTMLElement::ProofTitle => {
-                view!(<DomCont skip_head=true orig cont=crate::iterate/>).into_any()
-            }
-            OpenFTMLElement::ProofHide(b) => proofs::proof_hide(
+            OpenFTMLElement::ProofTitle => proofs::proof_title(orig).into_any(),
+            OpenFTMLElement::SubproofTitle => proofs::subproof_title(orig).into_any(),
+            /*OpenFTMLElement::ProofHide(b) =>
+            proofs::proof_hide(
                 *b,
                 move || view!(<DomChildrenCont orig cont=crate::iterate />),
             )
             .into_any(),
+            {
+                view!(<DomCont skip_head=true orig cont=crate::iterate/>).into_any()
+            }*/
             OpenFTMLElement::ProofBody => proofs::proof_body(orig).into_any(),
             _ => todo!(),
         }

@@ -11,17 +11,17 @@ export function set_debug_log(): void;
  * [render_document] and [render_fragment] also inject a context
  * iff none already exists, so this is optional in every case.
  */
-export function ftml_setup(to: HTMLElement, children: LeptosContinuation, allow_hovers?: boolean | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
+export function ftml_setup(to: HTMLElement, children: LeptosContinuation, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementURI,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
 /**
  * render an FTML document to the provided element
  * #### Errors
  */
-export function render_document(to: HTMLElement, document: DocumentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
+export function render_document(to: HTMLElement, document: DocumentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementURI,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
 /**
  * render an FTML document fragment to the provided element
  * #### Errors
  */
-export function render_fragment(to: HTMLElement, fragment: FragmentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_paragraph?: (uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_slide?: (uri: DocumentElementURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
+export function render_fragment(to: HTMLElement, fragment: FragmentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementURI,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
 /**
  * sets the server url used to the provided one; by default `https://mathhub.info`.
  */
@@ -70,8 +70,6 @@ export type FragmentOptions = { uri: DocumentElementURI } | { html: string; uri?
  */
 export type TOCOptions = "GET" | { Predefined: TOCElem[] };
 
-export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
-
 /**
  * An entry in a table of contents. Either:
  * 1. a section; the title is assumed to be an HTML string, or
@@ -89,6 +87,10 @@ export interface Gotto {
     uri: DocumentElementURI;
     timestamp?: Timestamp | undefined;
 }
+
+export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
+
+export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
 
 export type SolutionData = { html: string; answer_class: string | undefined } | ChoiceBlock | FillInSol;
 
@@ -176,6 +178,23 @@ export interface QuizProblem {
     objectives: [CognitiveDimension, SymbolURI][];
 }
 
+export type SymbolURI = string;
+
+export type DocumentURI = string;
+
+export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
+
+export type ParagraphFormatting = "Block" | "Inline" | "Collapsed";
+
+export interface FileStateSummary {
+    new: number;
+    stale: number;
+    deleted: number;
+    up_to_date: number;
+    last_built: Timestamp;
+    last_changed: Timestamp;
+}
+
 export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Problem";
 
 export type SearchResult = { Document: DocumentURI } | { Paragraph: { uri: DocumentElementURI; fors: SymbolURI[]; def_like: boolean; kind: SearchResultKind } };
@@ -193,6 +212,10 @@ export interface QueryFilter {
 export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
 
 export type DocumentElementURI = string;
+
+export type ArchiveId = string;
+
+export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
 
 export type SlideElement = { type: "Slide"; html: string } | { type: "Paragraph"; html: string } | { type: "Inputref"; uri: DocumentURI } | { type: "Section"; title: string | undefined; children: SlideElement[] };
 
@@ -232,25 +255,6 @@ export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string;
 export type Institution = { type: "university"; title: string; place: string; country: string; url: string; acronym: string; logo: string } | { type: "school"; title: string; place: string; country: string; url: string; acronym: string; logo: string };
 
 export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
-
-export type SymbolURI = string;
-
-export type DocumentURI = string;
-
-export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
-
-export interface FileStateSummary {
-    new: number;
-    stale: number;
-    deleted: number;
-    up_to_date: number;
-    last_built: Timestamp;
-    last_changed: Timestamp;
-}
-
-export type ArchiveId = string;
-
-export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
 
 export type Name = string;
 

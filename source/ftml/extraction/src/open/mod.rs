@@ -15,7 +15,7 @@ use flams_ontology::{
     languages::Language,
     narration::{
         notations::Notation,
-        paragraphs::{LogicalParagraph, ParagraphKind},
+        paragraphs::{LogicalParagraph, ParagraphFormatting, ParagraphKind},
         problems::{
             ChoiceBlock, FillInSol, FillInSolOption, GradingNote, Problem, SolutionData, Solutions,
         },
@@ -49,7 +49,6 @@ pub enum OpenFTMLElement {
     UseModule(ModuleURI),
     Slide(DocumentElementURI),
     SlideNumber,
-    ProofHide(bool),
     ProofBody,
     Module {
         uri: ModuleURI,
@@ -74,7 +73,7 @@ pub enum OpenFTMLElement {
     Paragraph {
         uri: DocumentElementURI,
         kind: ParagraphKind,
-        inline: bool,
+        formatting: ParagraphFormatting,
         styles: Box<[Name]>,
     },
     Problem {
@@ -87,6 +86,7 @@ pub enum OpenFTMLElement {
     Doctitle,
     Title,
     ProofTitle,
+    SubproofTitle,
     Symdecl {
         uri: SymbolURI,
         arity: ArgSpec,
@@ -220,10 +220,10 @@ impl OpenFTMLElement {
             }
             Self::Paragraph {
                 kind,
-                inline,
+                formatting,
                 styles,
                 uri,
-            } => Self::close_paragraph(extractor, node, kind, inline, styles, uri),
+            } => Self::close_paragraph(extractor, node, kind, formatting, styles, uri),
             Self::Problem {
                 uri,
                 styles,
@@ -577,7 +577,7 @@ impl OpenFTMLElement {
             | Self::SlideNumber
             | Self::ProofBody
             | Self::ProofTitle
-            | Self::ProofHide(_) => (),
+            | Self::SubproofTitle => (),
         }
         None
     }
@@ -841,7 +841,7 @@ impl OpenFTMLElement {
         extractor: &mut E,
         node: &N,
         kind: ParagraphKind,
-        inline: bool,
+        formatting: ParagraphFormatting,
         styles: Box<[Name]>,
         uri: DocumentElementURI,
     ) {
@@ -879,7 +879,7 @@ impl OpenFTMLElement {
         extractor.add_document_element(DocumentElement::Paragraph(LogicalParagraph {
             range: node.range(),
             kind,
-            inline,
+            formatting,
             styles,
             fors,
             uri,

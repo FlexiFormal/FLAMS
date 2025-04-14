@@ -2,7 +2,7 @@ use super::navigation::{NavElems, SectionOrInputref};
 use crate::{
     components::counters::{LogicalLevel, SectionCounters},
     config::IdPrefix,
-    ts::{OnSectionTitle, SectionContinuation, TsCont},
+    ts::{FragmentContinuation, OnSectionTitle, TsCont},
 };
 use flams_ontology::{
     narration::sections::SectionLevel,
@@ -33,7 +33,7 @@ pub(super) fn section<V: IntoView + 'static>(
         <div id=id style=style class=cls>
           {
             if let LogicalLevel::Section(lvl) = lvl {
-              leptos::either::Either::Left(SectionContinuation::wrap(&(uri,lvl) ,children()))
+              leptos::either::Either::Left(FragmentContinuation::wrap(&(uri,lvl.into()) ,children()))
             } else {
               leptos::either::Either::Right(children())
             }

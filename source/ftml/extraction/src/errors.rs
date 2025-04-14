@@ -1,8 +1,5 @@
 use crate::open::terms::{OpenTermKind, VarOrSym};
-use flams_ontology::{
-    ftml::FTMLKey,
-    uris::{InvalidURICharacter, Name},
-};
+use flams_ontology::{ftml::FTMLKey, uris::Name};
 use std::fmt::Display;
 
 #[derive(Clone, Debug)]

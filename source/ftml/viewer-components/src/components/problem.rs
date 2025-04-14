@@ -5,7 +5,7 @@ use flams_ontology::{
     },
     uris::{DocumentElementURI, Name},
 };
-use flams_utils::{prelude::HMap, vecmap::VecMap};
+use flams_utils::prelude::HMap;
 use flams_web_utils::inject_css;
 use ftml_extraction::prelude::FTMLElements;
 use leptos::{
@@ -14,13 +14,12 @@ use leptos::{
     prelude::*,
 };
 use leptos_dyn_dom::OriginalNode;
-use serde::Serialize;
 use smallvec::SmallVec;
 
 use crate::{
-    components::counters::{LogicalLevel, SectionCounters},
-    components::documents::ForcedName,
-    ts::{JsFun, JsOrRsF},
+    components::{counters::SectionCounters, documents::ForcedName},
+    ts::{FragmentContinuation, JsOrRsF},
+    FragmentKind,
 };
 
 //use crate::ProblemOptions;
@@ -63,7 +62,7 @@ pub struct CurrentProblem {
     feedback: RwSignal<Option<ProblemFeedback>>,
 }
 impl CurrentProblem {
-    pub fn to_response(
+    fn to_response(
         uri: &DocumentElementURI,
         responses: &SmallVec<ProblemResponse, 4>,
     ) -> OrigResponse {
@@ -105,6 +104,10 @@ pub(super) fn problem<V: IntoView + 'static>(
     styles: Box<[Name]>,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
+    let kind = FragmentKind::Problem {
+        is_sub_problem: sub_problem,
+        is_autogradable: autogradable,
+    };
     inject_css("ftml-sections", include_str!("sections.css"));
     let mut counters: SectionCounters = expect_context();
     let style = counters.get_problem(&styles);
@@ -157,32 +160,35 @@ pub(super) fn problem<V: IntoView + 'static>(
     })
     .unwrap_or(Left(false));
     let uri = ex.uri.clone();
-    view! {
-      <Provider value=ex><Provider value=counters><div class=cls style=style>
-          {//<form>{
-            let r = children();
-            match is_done {
-              Left(true) => Left(r),
-              Right(f) => {
-                let _ = Effect::new(move |_| {
-                  if let Some(resp) = responses.try_with(|resp|
-                    CurrentProblem::to_response(&uri, resp)
-                  ) {
-                    let _ = f.apply(&resp);
+    FragmentContinuation::wrap(
+        &(uri.clone(), kind),
+        view! {
+          <Provider value=ex><Provider value=counters><div class=cls style=style>
+              {//<form>{
+                let r = children();
+                match is_done {
+                  Left(true) => Left(r),
+                  Right(f) => {
+                    let _ = Effect::new(move |_| {
+                      if let Some(resp) = responses.try_with(|resp|
+                        CurrentProblem::to_response(&uri, resp)
+                      ) {
+                        let _ = f.apply(&resp);
+                      }
+                    });
+                    Left(r)
                   }
-                });
-                Left(r)
-              }
-              _ if responses.get_untracked().is_empty() =>
-                Left(r),
-              _ => Right(view!{
-                {r}
-                {submit_answer()}
-              })
-            }
-          }//</form>
-      </div></Provider></Provider>
-    }
+                  _ if responses.get_untracked().is_empty() =>
+                    Left(r),
+                  _ => Right(view!{
+                    {r}
+                    {submit_answer()}
+                  })
+                }
+              }//</form>
+          </div></Provider></Provider>
+        },
+    )
 }
 
 fn submit_answer() -> impl IntoView {
@@ -260,6 +266,7 @@ pub(super) fn hint<V: IntoView + 'static>(
 }
 
 #[allow(clippy::needless_pass_by_value)]
+#[allow(unused_variables)]
 pub(super) fn solution(
     _skip: usize,
     _elements: FTMLElements,
@@ -305,6 +312,7 @@ pub(super) fn solution(
 }
 
 #[allow(clippy::needless_pass_by_value)]
+#[allow(unused_variables)]
 pub(super) fn gnote(_skip: usize, _elements: FTMLElements, orig: OriginalNode) -> impl IntoView {
     #[cfg(any(feature = "csr", feature = "hydrate"))]
     {
@@ -371,7 +379,7 @@ pub(super) fn problem_choice<V: IntoView + 'static>(
                     sigs.push(false);
                     Some((Left(idx), *inline))
                 }
-                ProblemResponse::SingleChoice(inline, sig, total) => {
+                ProblemResponse::SingleChoice(inline, _, total) => {
                     let val = *total;
                     *total += 1;
                     Some((Right(val), *inline))
@@ -473,7 +481,7 @@ fn multiple_choice<V: IntoView + 'static>(
           }
         );
         let rf = NodeRef::<leptos::html::Input>::new();
-        let on_change = move |ev| {
+        let on_change = move |_| {
           let Some(ip) = rf.get_untracked() else {return};
           let nv = ip.checked();
           sig.set(nv);
@@ -540,7 +548,7 @@ fn single_choice<V: IntoView + 'static>(
           }
         );
         let rf = NodeRef::<leptos::html::Input>::new();
-        let on_change = move |ev| {
+        let on_change = move |_| {
           let Some(ip) = rf.get_untracked() else {return};
           if ip.checked() { sig.set(()); }
         };
@@ -563,7 +571,7 @@ fn single_choice<V: IntoView + 'static>(
 */
 
 pub(super) fn fillinsol(wd: Option<f32>) -> impl IntoView {
-    use leptos::either::{Either::Left, Either::Right, EitherOf3 as Either};
+    use leptos::either::EitherOf3 as Either;
     use thaw::Icon;
     let Some(ex) = use_context::<CurrentProblem>() else {
         tracing::error!("choice outside of problem!");
@@ -588,7 +596,7 @@ pub(super) fn fillinsol(wd: Option<f32>) -> impl IntoView {
       };
       let Some(CheckedResult::FillinSol { matching, text, options }) = feedback.data.get(choice) else {return err()};
       let (correct,feedback) = if let Some(m) = matching {
-        let Some(FillinFeedback{is_correct,kind,feedback}) = options.get(*m) else {return err()};
+        let Some(FillinFeedback{is_correct,feedback,..}) = options.get(*m) else {return err()};
 
         (*is_correct,Some(feedback.clone()))
       } else {(false,None)};

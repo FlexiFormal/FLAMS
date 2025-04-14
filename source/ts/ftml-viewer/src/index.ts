@@ -53,36 +53,24 @@ export interface FTMLConfig {
   allowHovers?: boolean;
 
   /**
-   * callback for wrapping sections
-   */
-  onSection?: (
-    uri: FTML.DocumentElementURI,
-    lvl: FTML.SectionLevel,
-  ) => FTML.LeptosContinuation | undefined;
-  /**
    * callback for *inserting* elements immediately after a section's title
    */
   onSectionTitle?: (
     uri: FTML.DocumentElementURI,
     lvl: FTML.SectionLevel,
   ) => FTML.LeptosContinuation | undefined;
+
   /**
-   * callback for wrapping logical paragraphs (Definitions, Theorems, Examples, etc.)
+   * callback for wrapping fragments (sections, paragraphs, problems, etc.)
    */
-  onParagraph?: (
+  onFragment?: (
     uri: FTML.DocumentElementURI,
-    kind: FTML.ParagraphKind,
+    kind: FTML.FragmentKind,
   ) => FTML.LeptosContinuation | undefined;
   /**
    * callback for wrapping inputreferences (i.e. lazily loaded document fragments)
    */
   onInputref?: (uri: FTML.DocumentURI) => FTML.LeptosContinuation | undefined;
-  /**
-   * callback for wrapping (beamer presentation) slides
-   */
-  onSlide?: (
-    uri: FTML.DocumentElementURI,
-  ) => FTML.LeptosContinuation | undefined;
   
   problemStates?: FTML.ProblemStates | undefined,
   onProblem?: ((response: FTML.ProblemResponse) => void) | undefined,
@@ -111,11 +99,9 @@ export function ftmlSetup(
     to,
     then,
     cfg?.allowHovers,
-    cfg?.onSection,
     cfg?.onSectionTitle,
-    cfg?.onParagraph,
+    cfg?.onFragment,
     cfg?.onInputref,
-    cfg?.onSlide,
     cfg?.onProblem,
     cfg?.problemStates
   );
@@ -141,11 +127,9 @@ export function renderDocument(
     document,
     context,
     cfg?.allowHovers,
-    cfg?.onSection,
     cfg?.onSectionTitle,
-    cfg?.onParagraph,
+    cfg?.onFragment,
     cfg?.onInputref,
-    cfg?.onSlide,
     cfg?.onProblem,
     cfg?.problemStates
   );
@@ -171,11 +155,9 @@ export function renderFragment(
     fragment,
     context,
     cfg?.allowHovers,
-    cfg?.onSection,
     cfg?.onSectionTitle,
-    cfg?.onParagraph,
+    cfg?.onFragment,
     cfg?.onInputref,
-    cfg?.onSlide,
     cfg?.onProblem,
     cfg?.problemStates
   );

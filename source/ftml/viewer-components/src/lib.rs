@@ -21,7 +21,11 @@ use components::{
 use config::{FTMLConfig, IdPrefix};
 use extractor::DOMExtractor;
 use flams_ontology::{
-    narration::problems::{CognitiveDimension, ProblemResponse, Solutions},
+    narration::{
+        paragraphs::ParagraphKind,
+        problems::{CognitiveDimension, ProblemResponse, Solutions},
+        sections::SectionLevel,
+    },
     uris::{DocumentElementURI, DocumentURI, NarrativeURI, URI},
 };
 use flams_utils::{prelude::HMap, vecmap::VecMap};
@@ -31,11 +35,9 @@ use leptos::prelude::*;
 use leptos::tachys::view::any_view::AnyView;
 use leptos::web_sys::Element;
 use leptos_dyn_dom::{DomStringCont, DomStringContMath};
+use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::ts::{
-    InputRefContinuation, OnSectionTitle, ParagraphContinuation, SectionContinuation,
-    SlideContinuation,
-};
+use crate::ts::{FragmentContinuation, InputRefContinuation, OnSectionTitle};
 
 #[inline]
 pub fn is_in_ftml() -> bool {
@@ -54,11 +56,9 @@ impl AllowHovers {
 pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
     //#[prop(optional)] problems:Option<ProblemOptions>,
     #[prop(default=None)] allow_hovers: Option<bool>,
-    #[prop(default=None)] on_section: Option<SectionContinuation>,
     #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
-    #[prop(default=None)] on_paragraph: Option<ParagraphContinuation>,
+    #[prop(default=None)] on_fragment: Option<FragmentContinuation>,
     #[prop(default=None)] on_inpuref: Option<InputRefContinuation>,
-    #[prop(default=None)] on_slide: Option<SlideContinuation>,
     #[prop(default=None)] problem_opts: Option<ProblemOptions>,
     children: TypedChildren<Ch>,
 ) -> impl IntoView {
@@ -72,11 +72,9 @@ pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
     provide_context(NarrativeURI::Document(DocumentURI::no_doc()));
     provide_context(FTMLConfig::new());
     provide_context(RwSignal::new(None::<Vec<TOCElem>>));
-    provide_context(on_section);
+    provide_context(on_fragment);
     provide_context(on_section_title);
-    provide_context(on_paragraph);
     provide_context(on_inpuref);
-    provide_context(on_slide);
     if let Some(problem_opts) = problem_opts {
         provide_context(problem_opts);
     }
@@ -88,11 +86,9 @@ pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
 pub fn FTMLDocumentSetup<Ch: IntoView + 'static>(
     uri: DocumentURI,
     #[prop(default=None)] allow_hovers: Option<bool>,
-    #[prop(default=None)] on_section: Option<SectionContinuation>,
     #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
-    #[prop(default=None)] on_paragraph: Option<ParagraphContinuation>,
+    #[prop(default=None)] on_fragment: Option<FragmentContinuation>,
     #[prop(default=None)] on_inpuref: Option<InputRefContinuation>,
-    #[prop(default=None)] on_slide: Option<SlideContinuation>,
     #[prop(default=None)] problem_opts: Option<ProblemOptions>,
     children: TypedChildren<Ch>,
 ) -> impl IntoView {
@@ -117,20 +113,14 @@ pub fn FTMLDocumentSetup<Ch: IntoView + 'static>(
     provide_context(RwSignal::new(None::<Vec<TOCElem>>));
     provide_context(URLFragment::new());
     provide_context(NarrativeURI::Document(uri));
-    if let Some(on_section) = on_section {
-        provide_context(Some(on_section));
-    }
     if let Some(on_section_title) = on_section_title {
         provide_context(Some(on_section_title));
     }
-    if let Some(on_paragraph) = on_paragraph {
-        provide_context(Some(on_paragraph));
+    if let Some(on_fragment) = on_fragment {
+        provide_context(Some(on_fragment));
     }
     if let Some(on_inpuref) = on_inpuref {
         provide_context(Some(on_inpuref));
-    }
-    if let Some(on_slide) = on_slide {
-        provide_context(Some(on_slide));
     }
     if let Some(problem_opts) = problem_opts {
         provide_context(problem_opts);
@@ -151,7 +141,7 @@ pub fn FTMLStringMath(html: String) -> impl IntoView {
     view!(<math><DomStringContMath html cont=iterate/></math>)
 }
 
-pub static RULES: [FTMLExtractionRule<DOMExtractor>; 51] = [
+pub static RULES: [FTMLExtractionRule<DOMExtractor>; 54] = [
     rule(FTMLTag::Section),
     rule(FTMLTag::SkipSection),
     rule(FTMLTag::Term),
@@ -178,11 +168,16 @@ pub static RULES: [FTMLExtractionRule<DOMExtractor>; 51] = [
     rule(FTMLTag::ProblemFillinsol),
     rule(FTMLTag::SetSectionLevel),
     rule(FTMLTag::Title),
-    rule(FTMLTag::ProofTitle),
     rule(FTMLTag::Definition),
     rule(FTMLTag::Paragraph),
     rule(FTMLTag::Assertion),
     rule(FTMLTag::Example),
+    rule(FTMLTag::Proof),
+    rule(FTMLTag::SubProof),
+    rule(FTMLTag::ProofHide),
+    rule(FTMLTag::ProofBody),
+    rule(FTMLTag::ProofTitle),
+    rule(FTMLTag::SubproofTitle),
     rule(FTMLTag::SlideNumber),
     // ---- no-ops --------
     rule(FTMLTag::ArgMode),
@@ -202,8 +197,6 @@ pub static RULES: [FTMLExtractionRule<DOMExtractor>; 51] = [
     rule(FTMLTag::Argprecs),
     rule(FTMLTag::Autogradable),
     rule(FTMLTag::AnswerClassPts),
-    rule(FTMLTag::ProofHide),
-    rule(FTMLTag::ProofBody),
 ];
 
 #[cfg_attr(
@@ -293,18 +286,26 @@ pub fn iterate(e: &Element) -> Option<impl FnOnce() -> AnyView> {
     }
 }
 
-/*
-#[cfg(feature="ts")]
-#[wasm_bindgen::prelude::wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(extends = web_sys::js_sys::Function)]
-    #[wasm_bindgen::prelude::wasm_bindgen(typescript_type = "(uri: string) => (((HTMLDivElement) => void) | undefined)")]
-    pub type SectionContinuation;
-
-    //#[wasm_bindgen::prelude::wasm_bindgen(method, structural, js_name = call)]
-    //fn call(this: &SectionContinuation, uri: wasm_bindgen::JsValue) -> wasm_bindgen::JsValue;
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(tag = "type")]
+pub enum FragmentKind {
+    Section(SectionLevel),
+    Paragraph(ParagraphKind),
+    Slide,
+    Problem {
+        is_sub_problem: bool,
+        is_autogradable: bool,
+    },
 }
-
-#[cfg(not(feature="ts"))]
-pub struct SectionContinuation;
- */
+impl From<ParagraphKind> for FragmentKind {
+    fn from(value: ParagraphKind) -> Self {
+        Self::Paragraph(value)
+    }
+}
+impl From<SectionLevel> for FragmentKind {
+    fn from(value: SectionLevel) -> Self {
+        Self::Section(value)
+    }
+}

@@ -174,7 +174,7 @@ pub mod rules {
     use flams_ontology::content::declarations::symbols::{ArgSpec, AssocType};
     use flams_ontology::ftml::FTMLKey;
     use flams_ontology::narration::documents::{DocumentStyle, SectionCounter};
-    use flams_ontology::narration::paragraphs::ParagraphKind;
+    use flams_ontology::narration::paragraphs::{ParagraphFormatting, ParagraphKind};
     use flams_ontology::narration::problems::{AnswerKind, FillInSolOption};
     use flams_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI};
     use flams_utils::vecmap::VecSet;
@@ -530,21 +530,24 @@ pub mod rules {
         )
         .unwrap_or_default();
         extractor.open_paragraph(uri.clone(), fors);
+        let formatting = if inline {
+            ParagraphFormatting::Inline
+        } else if matches!(kind, ParagraphKind::Proof | ParagraphKind::SubProof) {
+            let hide = attrs.get_bool(FTMLKey::ProofHide);
+            if hide {
+                ParagraphFormatting::Collapsed
+            } else {
+                ParagraphFormatting::Block
+            }
+        } else {
+            ParagraphFormatting::Block
+        };
         Some(OpenFTMLElement::Paragraph {
             kind,
-            inline,
+            formatting,
             styles: styles.into_boxed_slice(),
             uri,
         })
-    }
-
-    pub fn proofhide<E: FTMLExtractor>(
-        _extractor: &mut E,
-        attrs: &mut E::Attr<'_>,
-        _nexts: &mut SV<E>,
-    ) -> Option<OpenFTMLElement> {
-        let hide = attrs.get_bool(FTMLKey::ProofHide);
-        Some(OpenFTMLElement::ProofHide(hide))
     }
 
     pub fn proofbody<E: FTMLExtractor>(
@@ -793,6 +796,14 @@ pub mod rules {
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
         Some(OpenFTMLElement::ProofTitle)
+    }
+
+    pub fn subprooftitle<E: FTMLExtractor>(
+        _extractor: &mut E,
+        _attrs: &mut E::Attr<'_>,
+        _nexts: &mut SV<E>,
+    ) -> Option<OpenFTMLElement> {
+        Some(OpenFTMLElement::SubproofTitle)
     }
 
     pub fn precondition<E: FTMLExtractor>(

@@ -17,9 +17,8 @@ use ftml_viewer_components::{
         Gotto, TOCElem, TOCSource,
     },
     ts::{
-        InputRefContinuation, JInputRefCont, JOnSectTtl, JParaCont, JSectCont, JSlideCont, JsOrRsF,
-        LeptosContext, NamedJsFunction, OnSectionTitle, ParagraphContinuation, SectionContinuation,
-        SlideContinuation, TsTopCont,
+        FragmentContinuation, InputRefContinuation, JFragCont, JInputRefCont, JOnSectTtl, JsOrRsF,
+        LeptosContext, NamedJsFunction, OnSectionTitle, TsTopCont,
     },
     AllowHovers, ProblemOptions,
 };
@@ -108,26 +107,22 @@ pub fn ftml_setup(
     to: leptos::web_sys::HtmlElement,
     children: TsTopCont,
     allow_hovers: Option<bool>,
-    on_section: Option<JSectCont>,
     on_section_title: Option<JOnSectTtl>,
-    on_paragraph: Option<JParaCont>,
+    on_fragment: Option<JFragCont>,
     on_inputref: Option<JInputRefCont>,
-    on_slide: Option<JSlideCont>,
     on_problem: Option<JProblemCont>,
     problem_states: Option<ProblemStates>,
 ) -> FTMLMountHandle {
     let allow_hovers = allow_hovers.unwrap_or(true);
     let children = children.to_cont();
-    let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
     let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
-    let on_paragraph = on_paragraph.map(|f| f.get().into());
+    let on_fragment = on_fragment.map(|f| f.get().into());
     let on_inputref = on_inputref.map(|f| f.get().into());
-    let on_slide = on_slide.map(|f| f.get().into());
     let problem_opts = convert(on_problem, problem_states);
 
     FTMLMountHandle::new(to, move || {
         view! {
-          <GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts>{
+          <GlobalSetup allow_hovers on_fragment on_section_title on_inputref problem_opts>{
             let ret = NodeRef::new();
             ret.on_load(move |e| {
               let owner = Owner::current().expect("Not in a leptos reactive context!");
@@ -150,11 +145,9 @@ pub fn render_document(
     document: DocumentOptions,
     context: Option<LeptosContext>,
     allow_hovers: Option<bool>,
-    on_section: Option<JSectCont>,
     on_section_title: Option<JOnSectTtl>,
-    on_paragraph: Option<JParaCont>,
+    on_fragment: Option<JFragCont>,
     on_inputref: Option<JInputRefCont>,
-    on_slide: Option<JSlideCont>,
     on_problem: Option<JProblemCont>,
     problem_states: Option<ProblemStates>,
 ) -> Result<FTMLMountHandle, String> {
@@ -162,32 +155,28 @@ pub fn render_document(
         to: leptos::web_sys::HtmlElement,
         document: DocumentOptions,
         allow_hovers: bool,
-        on_section: Option<JSectCont>,
         on_section_title: Option<JOnSectTtl>,
-        on_paragraph: Option<JParaCont>,
+        on_fragment: Option<JFragCont>,
         on_inputref: Option<JInputRefCont>,
-        on_slide: Option<JSlideCont>,
         problem_opts: Option<ProblemOptions>,
     ) -> Result<FTMLMountHandle, String> {
-        let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
         let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
-        let on_paragraph = on_paragraph.map(|f| f.get().into());
+        let on_fragment = on_fragment.map(|f| f.get().into());
         let on_inputref = on_inputref.map(|f| f.get().into());
-        let on_slide = on_slide.map(|f| f.get().into());
 
         let comp = move || match document {
             DocumentOptions::HtmlString { html, gottos, toc } => {
                 let toc = toc.map_or(TOCSource::None, TOCSource::Ready);
                 let gottos = gottos.unwrap_or_default();
                 Either::Left(
-                    view! {<GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts><DocumentString html gottos toc/></GlobalSetup>},
+                    view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts><DocumentString html gottos toc/></GlobalSetup>},
                 )
             }
             DocumentOptions::FromBackend { uri, gottos, toc } => {
                 let toc = toc.map_or(TOCSource::None, Into::into);
                 let gottos = gottos.unwrap_or_default();
                 Either::Right(
-                    view! {<GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts><DocumentFromURI uri gottos toc/></GlobalSetup>},
+                    view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts><DocumentFromURI uri gottos toc/></GlobalSetup>},
                 )
             }
         };
@@ -202,11 +191,9 @@ pub fn render_document(
                 to,
                 document,
                 allow_hovers,
-                on_section,
                 on_section_title,
-                on_paragraph,
+                on_fragment,
                 on_inputref,
-                on_slide,
                 problem_opts,
             )
         })
@@ -215,11 +202,9 @@ pub fn render_document(
             to,
             document,
             allow_hovers,
-            on_section,
             on_section_title,
-            on_paragraph,
+            on_fragment,
             on_inputref,
-            on_slide,
             problem_opts,
         )
     }
@@ -234,11 +219,9 @@ pub fn render_fragment(
     fragment: FragmentOptions,
     context: Option<LeptosContext>,
     allow_hovers: Option<bool>,
-    on_section: Option<JSectCont>,
     on_section_title: Option<JOnSectTtl>,
-    on_paragraph: Option<JParaCont>,
+    on_fragment: Option<JFragCont>,
     on_inputref: Option<JInputRefCont>,
-    on_slide: Option<JSlideCont>,
     on_problem: Option<JProblemCont>,
     problem_states: Option<ProblemStates>,
 ) -> Result<FTMLMountHandle, String> {
@@ -246,18 +229,14 @@ pub fn render_fragment(
         to: leptos::web_sys::HtmlElement,
         fragment: FragmentOptions,
         allow_hovers: bool,
-        on_section: Option<JSectCont>,
         on_section_title: Option<JOnSectTtl>,
-        on_paragraph: Option<JParaCont>,
+        on_fragment: Option<JFragCont>,
         on_inputref: Option<JInputRefCont>,
-        on_slide: Option<JSlideCont>,
         problem_opts: Option<ProblemOptions>,
     ) -> Result<FTMLMountHandle, String> {
-        let on_section = on_section.map(|f| SectionContinuation(f.get().into()));
         let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
-        let on_paragraph = on_paragraph.map(|f| f.get().into());
+        let on_fragment = on_fragment.map(|f| f.get().into());
         let on_inputref = on_inputref.map(|f| f.get().into());
-        let on_slide = on_slide.map(|f| f.get().into());
 
         let comp = move || match fragment {
             FragmentOptions::HtmlString { html, uri } => {
@@ -267,7 +246,7 @@ pub fn render_fragment(
         };
         Ok(FTMLMountHandle::new(
             to,
-            move || view! {<GlobalSetup allow_hovers on_section on_section_title on_paragraph on_inputref on_slide problem_opts>{comp()}</GlobalSetup>},
+            move || view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts>{comp()}</GlobalSetup>},
         ))
     }
     let allow_hovers = allow_hovers.unwrap_or(true);
@@ -278,11 +257,9 @@ pub fn render_fragment(
                 to,
                 fragment,
                 allow_hovers,
-                on_section,
                 on_section_title,
-                on_paragraph,
+                on_fragment,
                 on_inputref,
-                on_slide,
                 problem_opts,
             )
         })
@@ -291,11 +268,9 @@ pub fn render_fragment(
             to,
             fragment,
             allow_hovers,
-            on_section,
             on_section_title,
-            on_paragraph,
+            on_fragment,
             on_inputref,
-            on_slide,
             problem_opts,
         )
     }
@@ -304,11 +279,9 @@ pub fn render_fragment(
 #[component]
 fn GlobalSetup<V: IntoView + 'static>(
     #[prop(default = true)] allow_hovers: bool,
-    #[prop(default=None)] on_section: Option<SectionContinuation>,
     #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
-    #[prop(default=None)] on_paragraph: Option<ParagraphContinuation>,
+    #[prop(default=None)] on_fragment: Option<FragmentContinuation>,
     #[prop(default=None)] on_inputref: Option<InputRefContinuation>,
-    #[prop(default=None)] on_slide: Option<SlideContinuation>,
     #[prop(default=None)] problem_opts: Option<ProblemOptions>,
     children: TypedChildren<V>,
 ) -> impl IntoView {
@@ -319,20 +292,14 @@ fn GlobalSetup<V: IntoView + 'static>(
     console_error_panic_hook::set_once();
     let children = children.into_inner();
     let children = move || {
-        if let Some(on_section) = on_section {
-            provide_context(Some(on_section));
-        }
         if let Some(on_section_title) = on_section_title {
             provide_context(Some(on_section_title));
         }
-        if let Some(on_paragraph) = on_paragraph {
-            provide_context(Some(on_paragraph));
+        if let Some(on_fragment) = on_fragment {
+            provide_context(Some(on_fragment));
         }
         if let Some(on_inputref) = on_inputref {
             provide_context(Some(on_inputref));
-        }
-        if let Some(on_slide) = on_slide {
-            provide_context(Some(on_slide));
         }
         if let Some(problem_opts) = problem_opts {
             provide_context(problem_opts);

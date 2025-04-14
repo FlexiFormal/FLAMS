@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    paragraphs::{LogicalParagraph, ParagraphKind},
+    paragraphs::{LogicalParagraph, ParagraphFormatting, ParagraphKind},
     problems::{CognitiveDimension, GradingNote, Problem, Solutions},
     sections::{Section, SectionLevel},
     DocumentElement, LazyDocRef,
@@ -50,7 +50,7 @@ enum Elem {
     Paragraph {
         kind: ParagraphKind,
         uri: DocumentElementURI,
-        inline: bool,
+        formatting: ParagraphFormatting,
         title: Option<DocumentRange>,
         range: DocumentRange,
         styles: Box<[Name]>,
@@ -125,7 +125,7 @@ impl Elem {
             Self::Paragraph {
                 kind,
                 uri,
-                inline,
+                formatting,
                 title,
                 fors,
                 range,
@@ -133,7 +133,7 @@ impl Elem {
             } => DocumentElement::Paragraph(LogicalParagraph {
                 kind,
                 uri,
-                inline,
+                formatting,
                 title,
                 range,
                 styles,
@@ -372,7 +372,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
             DocumentElement::Paragraph(LogicalParagraph {
                 kind,
                 uri,
-                inline,
+                formatting,
                 title,
                 fors,
                 range,
@@ -385,7 +385,7 @@ impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
                     Elem::Paragraph {
                         kind,
                         uri,
-                        inline,
+                        formatting,
                         title,
                         fors,
                         range,
