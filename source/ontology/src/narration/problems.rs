@@ -392,7 +392,6 @@ crate::serde_impl! {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-#[cfg_attr(feature = "serde", serde(untagged))]
 pub enum SolutionData {
     Solution {
         html: Box<str>,
