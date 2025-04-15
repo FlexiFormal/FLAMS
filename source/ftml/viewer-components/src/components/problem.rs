@@ -480,6 +480,7 @@ fn multiple_choice<V: IntoView + 'static>(
             v[idx] = val;
           }
         );
+        sig.set(orig_selected);
         let rf = NodeRef::<leptos::html::Input>::new();
         let on_change = move |_| {
           let Some(ip) = rf.get_untracked() else {return};
@@ -547,6 +548,7 @@ fn single_choice<V: IntoView + 'static>(
             *i = idx;
           }
         );
+        if orig_selected {sig.set(());}
         let rf = NodeRef::<leptos::html::Input>::new();
         let on_change = move |_| {
           let Some(ip) = rf.get_untracked() else {return};

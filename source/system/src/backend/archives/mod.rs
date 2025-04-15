@@ -472,9 +472,11 @@ impl LocalArchive {
         name: &NameStep,
         language: Language,
         range: DocumentRange,
-    ) -> Option<T> {
-        self.get_filepath(path, name, language, "ftml")
-            .and_then(|p| OMDocResult::load_reference(&p, range))
+    ) -> eyre::Result<T> {
+        let Some(p) = self.get_filepath(path, name, language, "ftml") else {
+            return Err(eyre::eyre!("File not found"));
+        };
+        OMDocResult::load_reference(&p, range)
     }
 
     #[cfg(feature = "tokio")]
@@ -774,7 +776,7 @@ impl Archive {
         name: &NameStep,
         language: Language,
         range: DocumentRange,
-    ) -> Option<T> {
+    ) -> eyre::Result<T> {
         match self {
             Self::Local(a) => a.load_reference(path, name, language, range),
         }

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
 
-use eyre::eyre;
+use eyre::{eyre, Context};
 use flams_ontology::narration::{
     documents::{Document, UncheckedDocument},
     problems::{Quiz, QuizElement, QuizProblem},
@@ -143,9 +143,9 @@ impl QuizExtension for Document {
                     elements.push(QuizElement::Paragraph { html });
                 }
                 DocumentElement::Problem(e) if in_problem => {
-                    let Some(solution) = backend.get_reference(&e.solutions) else {
-                        return Err(eyre!("Missing solutions for {}", e.uri));
-                    };
+                    let solution = backend
+                        .get_reference(&e.solutions)
+                        .wrap_err_with(|| format!("Missing solutions for {}", e.uri))?;
                     let Some(solution) = solution.to_jstring() else {
                         return Err(eyre!("Invalid solutions for {}", e.uri));
                     };
@@ -158,9 +158,9 @@ impl QuizExtension for Document {
                     for c in c {
                         css.insert(c);
                     }
-                    let Some(solution) = backend.get_reference(&e.solutions) else {
-                        return Err(eyre!("Missing solutions for {}", e.uri));
-                    };
+                    let solution = backend
+                        .get_reference(&e.solutions)
+                        .wrap_err_with(|| format!("Missing solutions for {}", e.uri))?;
                     let title_html = if let Some(ttl) = e.title {
                         let Some(t) = backend.get_html_fragment(self.uri(), ttl) else {
                             return Err(eyre!("Missing FTML fragment for title of {}", e.uri));
@@ -173,9 +173,9 @@ impl QuizExtension for Document {
                         return Err(eyre!("Invalid solutions for {}", e.uri));
                     };
                     for note in &e.gnotes {
-                        let Some(gnote) = backend.get_reference(note) else {
-                            return Err(eyre!("Missing gnote for {}", e.uri));
-                        };
+                        let gnote = backend
+                            .get_reference(note)
+                            .wrap_err_with(|| format!("Missing gnote for {}", e.uri))?;
                         answer_classes
                             .entry(e.uri.clone())
                             .or_default()

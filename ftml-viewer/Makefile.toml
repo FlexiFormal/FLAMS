@@ -164,3 +164,99 @@ dependencies = ["wasm-pack-dev", "update-js"]
 
 [tasks.default]
 alias = "build"
+
+
+# -----------------------------------------------------------------------
+
+[tasks.ts-test-build]
+env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = [
+    "build",
+    "--out-dir",
+    "../../nextwasm/inline/src/base",
+    "--out-name",
+    "ftml-viewer-base",
+    "--target",
+    "web",
+    "--",
+    "--features",
+    "ts,omdoc",
+    "--target",
+    "wasm32-unknown-unknown",
+    "-Z",
+    "build-std=std,panic_abort,core,alloc",
+    "-Z",
+    "build-std-features=optimize_for_size", #,panic_immediate_abort",
+]
+
+[tasks.ts-test-update-js]
+env = { "RUSTFLAGS" = "" }
+#env = { "CARGO_MAKE_RUST_SCRIPT_PROVIDER" = "cargo-script" }
+script_runner = "@rust"
+script = '''
+use std::{io::Write, path::Path};
+fn main() {
+    let js_file = Path::new(
+        "../../nextwasm/inline/src/base/ftml-viewer-base.js",
+    );
+    let ts_file = Path::new(
+        "../../nextwasm/inline/src/base/ftml-viewer-base.d.ts",
+    );
+
+    const TOP_JS: &str =
+        include_str!("../../../../../source/ftml/viewer-components/ftml-top.js");
+    let js_str = std::fs::read_to_string(js_file).unwrap();
+    let js_str = js_str.split('\n').skip(1).collect::<Vec<_>>().join("\n");
+
+    let ts_str = std::fs::read_to_string(ts_file).unwrap();
+
+    std::fs::File::create(js_file)
+        .unwrap()
+        .write_all(
+            format!(
+                "{js_str}\n{}",
+                TOP_JS.replace("export function", "function")
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+
+    std::fs::File::create(ts_file)
+            .unwrap()
+            .write_all(
+                format!(
+                    "{ts_str}\nexport async function init();"
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+}
+'''
+
+[tasks.ts-test-clean]
+script_runner = "@shell"
+script = '''
+cd ../../nextwasm/inline/src/base
+rm .gitignore
+rm package.json
+rm -rf snippets
+'''
+
+[tasks.ts-test-patch]
+script_runner = "@shell"
+script = '''
+./ts-patch.sh -i ../../nextwasm/inline/src/base/ftml-viewer-base_bg.wasm -js ../../nextwasm/inline/src/base/ftml-viewer-base.js -o ../../nextwasm/inline/src/base/ftml-viewer-base.js
+cd ../../nextwasm/inline/src/base
+rm ftml-viewer-base_bg.wasm
+rm ftml-viewer-base_bg.wasm.d.ts
+'''
+
+[tasks.ts-test]
+dependencies = [
+    "ts-test-build",
+    "ts-test-update-js",
+    "ts-test-clean",
+    "ts-test-patch",
+]

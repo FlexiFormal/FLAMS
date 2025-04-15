@@ -497,7 +497,7 @@ mod server {
             } else {
                 doc.as_quiz(flams_system::backend::GlobalBackend::get())
             };
-            let mut be = be.map_err(|e| e.to_string())?;
+            let mut be = be.map_err(|e| format!("{e:#}"))?;
             be.css = insert_base_url(std::mem::take(&mut be.css));
             Ok(be)
         })
@@ -627,8 +627,9 @@ mod server {
         match backend!(get_document_element(&uri)) {
             Some(rf) => {
                 let e: &Problem<Checked> = rf.as_ref();
-                let Some(sol) = backend!(get_reference(&e.solutions)) else {
-                    return Err("solutions not found".to_string());
+                let sol = match backend!(get_reference(&e.solutions)) {
+                    Ok(sol) => sol,
+                    Err(e) => return Err(format!("solutions not found: {e}")),
                 };
                 Ok(sol)
             }

@@ -157,7 +157,7 @@ pub trait Backend {
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)>;
 
-    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> Option<T>
+    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> eyre::Result<T>
     where
         Self: Sized;
 
@@ -196,7 +196,7 @@ pub trait Backend {
                 let DocumentElement::Notation { notation, .. } = elem.as_ref() else {
                     return None;
                 };
-                self.get_reference(notation).map(|n| (uri, n))
+                self.get_reference(notation).ok().map(|n| (uri, n))
             })
             .collect();
         if ret.is_empty() {
@@ -245,7 +245,7 @@ pub trait Backend {
                 } if variable == uri => (id, notation),
                 _ => continue,
             };
-            let Some(r) = self.get_reference(not) else {
+            let Some(r) = self.get_reference(not).ok() else {
                 continue;
             };
             ret.insert((uri.clone(), r));
@@ -345,7 +345,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> eyre::Result<T> {
         match self {
             Self::Global(b) => b.get_reference(rf),
             Self::Temp(b) => b.get_reference(rf),
@@ -712,7 +712,7 @@ impl Backend for &'static GlobalBackend {
     }
 
     #[inline]
-    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> eyre::Result<T> {
         GlobalBackend::get_reference(self, rf)
     }
 
@@ -792,19 +792,20 @@ impl Backend for GlobalBackend {
         })
     }
 
-    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> eyre::Result<T> {
         self.archives.with_archive(rf.in_doc.archive_id(), |a| {
-            a.and_then(|a| {
-                a.load_reference(
-                    rf.in_doc.path(),
-                    rf.in_doc.name().first_name(),
-                    rf.in_doc.language(),
-                    DocumentRange {
-                        start: rf.start,
-                        end: rf.end,
-                    },
-                )
-            })
+            let Some(a) = a else {
+                return Err(eyre::eyre!("Archive {} not found", rf.in_doc.archive_id()));
+            };
+            a.load_reference(
+                rf.in_doc.path(),
+                rf.in_doc.name().first_name(),
+                rf.in_doc.language(),
+                DocumentRange {
+                    start: rf.start,
+                    end: rf.end,
+                },
+            )
         })
     }
 
@@ -1011,16 +1012,16 @@ impl Backend for TemporaryBackend {
         )
     }
 
-    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> Option<T> {
-        self.inner.html.lock().get(&rf.in_doc).map_or_else(
-            || self.inner.parent.get_reference(rf),
-            |html| {
-                let bytes = html.refs.as_slice().get(rf.start..rf.end)?;
-                bincode::serde::decode_from_slice(bytes, bincode::config::standard())
-                    .ok()
-                    .map(|(a, _)| a)
-            },
-        )
+    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> eyre::Result<T> {
+        let lock = self.inner.html.lock();
+        let Some(html) = lock.get(&rf.in_doc) else {
+            return self.inner.parent.get_reference(rf);
+        };
+        let Some(bytes) = html.refs.as_slice().get(rf.start..rf.end) else {
+            return Err(eyre::eyre!("reference has invalid start/end points"));
+        };
+        let (r, _) = bincode::serde::decode_from_slice(bytes, bincode::config::standard())?;
+        Ok(r)
     }
 
     fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
@@ -1391,19 +1392,20 @@ impl Backend for SandboxedBackend {
             })
         })
     }
-    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> Option<T> {
+    fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> eyre::Result<T> {
         self.with_archive(rf.in_doc.archive_id(), |a| {
-            a.and_then(|a| {
-                a.load_reference(
-                    rf.in_doc.path(),
-                    rf.in_doc.name().first_name(),
-                    rf.in_doc.language(),
-                    DocumentRange {
-                        start: rf.start,
-                        end: rf.end,
-                    },
-                )
-            })
+            let Some(a) = a else {
+                return Err(eyre::eyre!("Archive {} not found", rf.in_doc.archive_id()));
+            };
+            a.load_reference(
+                rf.in_doc.path(),
+                rf.in_doc.name().first_name(),
+                rf.in_doc.language(),
+                DocumentRange {
+                    start: rf.start,
+                    end: rf.end,
+                },
+            )
         })
     }
 
@@ -1772,7 +1774,7 @@ impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
                 return None;
             };
             //println!("Found notation {notation:?}");
-            let r = backend.get_reference(notation)?;
+            let r = backend.get_reference(notation).ok()?;
             if r.is_op() || !needs_op {
                 Some(r)
             } else {
@@ -1816,7 +1818,7 @@ impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
                 } if variable == uri => notation,
                 _ => continue,
             };
-            let Some(r) = backend.get_reference(not) else {
+            let Some(r) = backend.get_reference(not).ok() else {
                 continue;
             };
             if r.is_op() || !needs_op {

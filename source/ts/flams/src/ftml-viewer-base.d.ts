@@ -70,6 +70,10 @@ export type FragmentOptions = { uri: DocumentElementURI } | { html: string; uri?
  */
 export type TOCOptions = "GET" | { Predefined: TOCElem[] };
 
+export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
+
+export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
+
 /**
  * An entry in a table of contents. Either:
  * 1. a section; the title is assumed to be an HTML string, or
@@ -87,10 +91,6 @@ export interface Gotto {
     uri: DocumentElementURI;
     timestamp?: Timestamp | undefined;
 }
-
-export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
-
-export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
 
 export type SolutionData = { html: string; answer_class: string | undefined } | ChoiceBlock | FillInSol;
 

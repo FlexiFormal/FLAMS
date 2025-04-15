@@ -32,7 +32,7 @@ pub async fn from_document(doc: &Document) -> (Vec<CSS>, Vec<TOCElem>) {
                 }) => {
                     let old = std::mem::replace(&mut curr, children.iter());
                     let title = if let Some(title) = title {
-                        if let Some((c, h)) = backend!(get_html_fragment(uri.document(), *title)) {
+                        if let Some((c, h)) = backend!(!get_html_fragment(uri.document(), *title)) {
                             for c in c {
                                 css.insert(c);
                             }

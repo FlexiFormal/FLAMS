@@ -59,9 +59,18 @@ mod ssr {
       };
       ($fn:ident($($args:tt)*)) => {
         if flams_system::settings::Settings::get().lsp {
-          ::flams_lsp::STDIOLSPServer::global_state().and_then(
-            |state| state.backend().$fn($($args)*)
-          )
+            let Some(state) = ::flams_lsp::STDIOLSPServer::global_state() else {
+                return Err("no lsp server".to_string())
+              };
+            state.backend().$fn($($args)*)
+        } else {
+          flams_system::backend::GlobalBackend::get().$fn($($args)*)
+        }
+      };
+      (! $fn:ident($($args:tt)*)) => {
+        if flams_system::settings::Settings::get().lsp {
+            let state = ::flams_utils::unwrap!(::flams_lsp::STDIOLSPServer::global_state());
+            state.backend().$fn($($args)*)
         } else {
           flams_system::backend::GlobalBackend::get().$fn($($args)*)
         }

@@ -33,13 +33,13 @@ pub struct Problem<State: CheckingState> {
 #[cfg(not(feature = "wasm"))]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Solutions(pub Box<[SolutionData]>);
+pub struct Solutions(Box<[SolutionData]>);
 
 #[cfg(feature = "wasm")]
 #[allow(clippy::unsafe_derive_deserialize)]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[wasm_bindgen]
-pub struct Solutions(#[wasm_bindgen(skip)] pub Box<[SolutionData]>);
+pub struct Solutions(Box<[SolutionData]>);
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Solutions {

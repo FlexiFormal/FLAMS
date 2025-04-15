@@ -67,7 +67,7 @@ impl From<ProblemState> for OrigState {
                 solution,
             } => Self::Interactive {
                 current_response,
-                solution: solution.map(Solutions),
+                solution: solution.map(Solutions::from_solutions),
             },
             ProblemState::Finished { current_response } => Self::Finished { current_response },
             ProblemState::Graded { feedback } => Self::Graded {

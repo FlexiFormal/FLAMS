@@ -943,7 +943,8 @@ impl OpenFTMLElement {
                 triple!(<(doc)> ulo:CONTAINS <(iri)>),
             ]);
         }
-        let solutions = extractor.add_resource(&Solutions(solutions.into_boxed_slice()));
+        let solutions =
+            extractor.add_resource(&Solutions::from_solutions(solutions.into_boxed_slice()));
 
         extractor.add_document_element(DocumentElement::Problem(Problem {
             range: node.range(),
