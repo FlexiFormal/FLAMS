@@ -314,11 +314,20 @@ mod server {
     };
     use leptos::prelude::*;
 
+    macro_rules! not_found{
+        (! $($e:tt)*) => { {
+            let response = expect_context::<::leptos_axum::ResponseOptions>();
+            response.set_status(::http::StatusCode::NOT_FOUND);
+            format!($($e)*).into()
+        }};
+        ($($e:tt)*) => { return Err(not_found!(! $($e)*))};
+    }
+
     pub async fn document(
         uri: DocumentURI,
     ) -> Result<(DocumentURI, Vec<CSS>, String), ServerFnError<String>> {
         let Some((css, doc)) = backend!(get_html_body!(&uri, true)) else {
-            return Err("document not found".to_string().into());
+            not_found!("Document {uri} not found");
         };
         let html = format!(
             "<div{}</div>",
@@ -331,7 +340,7 @@ mod server {
 
     pub async fn toc(uri: DocumentURI) -> Result<(Vec<CSS>, Vec<TOCElem>), ServerFnError<String>> {
         let Some(doc) = backend!(get_document!(&uri)) else {
-            return Err("document not found".to_string().into());
+            not_found!("Document {uri} not found");
         };
         Ok(crate::toc::from_document(&doc).await)
     }
@@ -340,13 +349,13 @@ mod server {
         match &uri {
             URI::Narrative(NarrativeURI::Document(duri)) => {
                 let Some((css, html)) = backend!(get_html_body!(duri, false)) else {
-                    return Err("document not found".to_string().into());
+                    not_found!("Document {duri} not found");
                 };
                 Ok((uri, insert_base_url(filter_paras(css)), html))
             }
             URI::Narrative(NarrativeURI::Element(euri)) => {
                 let Some(e) = backend!(get_document_element!(euri)) else {
-                    return Err("element not found".to_string().into());
+                    not_found!("Document Element {euri} not found");
                 };
                 match e.as_ref() {
                     DocumentElement::Paragraph(LogicalParagraph { range, .. })
@@ -354,7 +363,7 @@ mod server {
                         let Some((css, html)) =
                             backend!(get_html_fragment!(euri.document(), *range))
                         else {
-                            return Err("document element not found".to_string().into());
+                            not_found!("Document Element {euri} not found");
                         };
                         Ok((uri, insert_base_url(filter_paras(css)), html))
                     }
@@ -365,7 +374,7 @@ mod server {
                         let Some((css, html)) =
                             backend!(get_html_fragment!(euri.document(), *range))
                         else {
-                            return Err("document element not found".to_string().into());
+                            not_found!("Document Element {euri} not found");
                         };
                         Ok((uri, insert_base_url(filter_paras(css)), html))
                     }
@@ -374,7 +383,7 @@ mod server {
             }
             URI::Content(ContentURI::Symbol(suri)) => get_definitions(suri.clone())
                 .await
-                .ok_or_else(|| "No definition found".to_string().into())
+                .ok_or_else(|| not_found!(! "No definition for {suri} not found"))
                 .map(|(css, b)| (uri, insert_base_url(filter_paras(css)), b)),
             URI::Base(_) => return Err("TODO: base".to_string().into()),
             URI::Archive(_) => return Err("TODO: archive".to_string().into()),
@@ -426,7 +435,7 @@ mod server {
             }
             URI::Narrative(NarrativeURI::Document(uri)) => {
                 let Some(doc) = backend!(get_document!(&uri)) else {
-                    return Err("document not found".to_string().into());
+                    not_found!("Document {uri} not found");
                 };
                 let (css, r) = backend!(backend => {
                   let r = DocumentSpec::from_document(&doc, backend,&mut css);
@@ -443,7 +452,7 @@ mod server {
                 let Some(e): Option<NarrativeReference<DocumentElement<Checked>>> =
                     backend!(get_document_element!(&uri))
                 else {
-                    return Err("document element not found".to_string().into());
+                    not_found!("Document Element {uri} not found");
                 };
                 let (css, r) = backend!(backend => {
                   let r = DocumentElementSpec::from_element(e.as_ref(),backend, &mut css);
@@ -455,13 +464,13 @@ mod server {
                   }).await?
                 });
                 let Some(r) = r else {
-                    return Err("element not found".to_string().into());
+                    not_found!("Document Element {uri} not found");
                 };
                 Ok((insert_base_url(css.0), r.into()))
             }
             URI::Content(ContentURI::Module(uri)) => {
                 let Some(m) = backend!(get_module!(&uri)) else {
-                    return Err("module not found".to_string().into());
+                    not_found!("Module {uri} not found");
                 };
                 let r = backend!(backend => {
                   AnySpec::from_module_like(&m, backend)
@@ -476,7 +485,7 @@ mod server {
                 let Some(s): Option<ContentReference<Declaration>> =
                     backend!(get_declaration!(&uri))
                 else {
-                    return Err("declaration not found".to_string().into());
+                    not_found!("Declaration {uri} not found");
                 };
                 return Err(format!("TODO: {uri}").into());
             }
@@ -486,7 +495,7 @@ mod server {
     pub async fn get_quiz(uri: DocumentURI) -> Result<Quiz, ServerFnError<String>> {
         use flams_system::backend::docfile::QuizExtension;
         let Some(doc) = backend!(get_document!(&uri)) else {
-            return Err("document not found".to_string().into());
+            not_found!("Document {uri} not found");
         };
         blocking_server_fn(move || {
             let be = if flams_system::settings::Settings::get().lsp {
@@ -583,16 +592,16 @@ mod server {
             Ok(ret)
         }
 
-        let Some(doe) = (match uri {
+        let Some(doe) = (match &uri {
             URI::Narrative(NarrativeURI::Document(uri)) => {
-                backend!(get_document!(&uri)).map(either::Either::Left)
+                backend!(get_document!(uri)).map(either::Either::Left)
             }
             URI::Narrative(NarrativeURI::Element(uri)) => {
-                backend!(get_document_element!(&uri)).map(either::Either::Right)
+                backend!(get_document_element!(uri)).map(either::Either::Right)
             }
             _ => return Err("Not a narrative URI".to_string().into()),
         }) else {
-            return Err("Element not found".to_string().into());
+            not_found!("Element {uri} not found");
         };
         blocking_server_fn(move || {
             let (chs, top) = match &doe {
@@ -633,7 +642,7 @@ mod server {
                 };
                 Ok(sol)
             }
-            _ => Err(format!("Problem {uri} not found")),
+            _ => not_found!("Problem {uri} not found")
         }
     }
 

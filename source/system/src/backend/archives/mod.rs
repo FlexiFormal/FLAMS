@@ -145,6 +145,7 @@ impl LocalArchive {
     #[cfg(feature = "zip")]
     /// #### Errors
     pub async fn unzip_from_remote(id: ArchiveId, url: &str) -> Result<(), ()> {
+        use flams_utils::PathExt;
         use futures::TryStreamExt;
         let resp = match reqwest::get(url).await {
             Ok(r) => r,
@@ -181,11 +182,17 @@ impl LocalArchive {
         if mhdest.exists() {
             let _ = tokio::fs::remove_dir_all(&mhdest).await;
         }
-        if let Err(e) = tokio::fs::rename(dest, &mhdest).await {
-            tracing::error!("Error moving to MathHub: {e}");
-            return Err(());
-        };
-        Ok(())
+        match tokio::task::spawn_blocking(move || dest.rename_safe(&mhdest)).await {
+            Ok(Ok(())) => Ok(()),
+            Err(e) => {
+                tracing::error!("Error moving to MathHub: {e}");
+                Err(())
+            }
+            Ok(Err(e)) => {
+                tracing::error!("Error moving to MathHub: {e:#}");
+                Err(())
+            }
+        }
     }
 
     #[cfg(feature = "zip")]

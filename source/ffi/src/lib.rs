@@ -69,13 +69,16 @@ pub extern "C" fn load_all_files() {
             a.with_sources(|d| {
                 for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
                     match e {
-                        SourceEntry::File(f) => files.push((
-                            f.relative_path
-                                .split('/')
-                                .fold(a.source_dir(), |p, s| p.join(s))
-                                .into(),
-                            DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path),
-                        )),
+                        SourceEntry::File(f) => {
+                            let Ok(uri) = DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path) else { continue};
+                            files.push((
+                                f.relative_path
+                                    .split('/')
+                                    .fold(a.source_dir(), |p, s| p.join(s))
+                                    .into(),
+                                uri
+                            ));
+                        }
                         _ => {}
                     }
                 }

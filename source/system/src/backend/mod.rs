@@ -1158,31 +1158,8 @@ impl SandboxedBackend {
         skip_all
     )]
     pub fn migrate(&self) -> usize {
-        #[cfg(target_os = "windows")]
-        fn same_fs(p1: &Path, p2: &Path) -> bool {
-            let Some(p1) = p1.components().next().and_then(|c| c.as_os_str().to_str()) else {
-                return false;
-            };
-            let Some(p2) = p2.components().next().and_then(|c| c.as_os_str().to_str()) else {
-                return false;
-            };
-            p1 == p2
-        }
-        #[cfg(not(target_os = "windows"))]
-        fn same_fs(p1: &Path, p2: &Path) -> bool {
-            use std::os::unix::fs::MetadataExt;
-            fn existent_parent(p: &Path) -> &Path {
-                if p.exists() {
-                    return p;
-                }
-                existent_parent(p.parent().unwrap_or_else(|| unreachable!()))
-            }
-            let p1 = existent_parent(p1);
-            let p2 = existent_parent(p2);
-            let md1 = p1.metadata().unwrap_or_else(|_| unreachable!());
-            let md2 = p2.metadata().unwrap_or_else(|_| unreachable!());
-            md1.dev() == md2.dev()
-        }
+        use flams_utils::PathExt;
+
         let mut count = 0;
         let cnt = &mut count;
         let global = GlobalBackend::get();
@@ -1211,11 +1188,7 @@ impl SandboxedBackend {
                             if let Some(p) = target.parent() {
                                 let _ = std::fs::create_dir_all(p);
                             }
-                            if same_fs(source, &target) {
-                                let _ = std::fs::rename(source, target);
-                            } else {
-                                let _ = flams_utils::fs::copy_dir_all(source, &target);
-                            }
+                            let _ = source.rename_safe(&target);
                         }
                     },
                     Settings::get().mathhubs.iter().map(|p| &**p),

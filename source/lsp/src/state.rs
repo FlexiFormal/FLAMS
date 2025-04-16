@@ -267,10 +267,19 @@ impl LSPState {
           let mut v = Vec::new();
           a.with_sources(|d| for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
             match e {
-              SourceEntry::File(f) => v.push((
-                f.relative_path.split('/').fold(a.source_dir(),|p,s| p.join(s)).into(),
-                DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path)
-            )),
+              SourceEntry::File(f) => {
+                let uri = match DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path) {
+                  Ok(u) => u,
+                  Err(e) => {
+                    tracing::error!("{e}");
+                    continue
+                  }
+                };
+                v.push((
+                  f.relative_path.split('/').fold(a.source_dir(),|p,s| p.join(s)).into(),
+                  uri
+              ))
+            },
               _ => {}
             }
           });

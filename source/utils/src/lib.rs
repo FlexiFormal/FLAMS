@@ -92,27 +92,29 @@ impl<T: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>> Hexable for
 pub mod fs {
     use std::path::Path;
 
+    use eyre::Context;
+
     /// #### Errors
-    pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
-        std::fs::create_dir_all(dst).map_err(|e| format!("{e} ({})", dst.display()))?;
-        for entry in std::fs::read_dir(src).map_err(|e| format!("{e} ({})", src.display()))? {
-            let entry = entry.map_err(|e| format!("{e} ({})", src.display()))?;
+    pub fn copy_dir_all(src: &Path, dst: &Path) -> eyre::Result<()> {
+        std::fs::create_dir_all(dst).wrap_err_with(|| format!("Error creating {}", dst.display()))?;
+        for entry in std::fs::read_dir(src).wrap_err_with(|| format!("Error reading {}", src.display()))? {
+            let entry = entry.wrap_err_with(|| format!("Error getting file entry for {}", src.display()))?;
             let ty = entry
                 .file_type()
-                .map_err(|e| format!("{e} ({})", entry.path().display()))?;
+                .wrap_err_with(|| format!("Error determining file type of {}", entry.path().display()))?;
             let target = dst.join(entry.file_name());
             if ty.is_dir() {
                 copy_dir_all(&entry.path(), &target)?;
             } else {
                 let md = entry
                     .metadata()
-                    .map_err(|e| format!("{e} ({})", entry.path().display()))?;
-                std::fs::copy(entry.path(), &target).map_err(|e| {
-                    format!("{e} ({} => {})", entry.path().display(), target.display())
+                    .wrap_err_with(|| format!("Error obtaining metatada for {}", entry.path().display()))?;
+                std::fs::copy(entry.path(), &target).wrap_err_with(|| {
+                    format!("Error copying {} to {}", entry.path().display(), target.display())
                 })?;
                 let mtime = filetime::FileTime::from_last_modification_time(&md);
                 filetime::set_file_mtime(&target, mtime)
-                    .map_err(|e| format!("{e} ({})", target.display()))?;
+                    .wrap_err_with(|| format!("Error setting file modification time for {}", target.display()))?;
             }
         }
         Ok(())
@@ -327,5 +329,57 @@ fn css_things() {
             }
             o => panic!("Unexpected rule: {o:#?}"),
         }
+    }
+}
+
+pub trait PathExt {
+    fn as_slash_str(&self) -> String;
+    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool;
+    fn rename_safe<P:AsRef<std::path::Path>>(&self,target:&P) -> eyre::Result<()>;
+}
+impl<T:AsRef<std::path::Path>> PathExt for T {
+    fn as_slash_str(&self) -> String {
+        if cfg!(windows) {
+            unwrap!(self.as_ref().as_os_str().to_str()).replace('\\',"/")
+        } else {
+            unwrap!(self.as_ref().as_os_str().to_str()).to_string()
+        }
+    }
+    #[cfg(target_os = "windows")]
+    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool {
+        let Some(p1) = self.as_ref().components().next().and_then(|c| c.as_os_str().to_str()) else {
+            return false;
+        };
+        let Some(p2) = other.as_ref().components().next().and_then(|c| c.as_os_str().to_str()) else {
+            return false;
+        };
+        p1 == p2
+    }
+    #[cfg(target_arch="wasm32")]
+    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool {
+        impossible!()
+    }
+
+    #[cfg(not(any(target_os = "windows",target_arch="wasm32")))]
+    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        fn existent_parent(p: &std::path::Path) -> &std::path::Path {
+            if p.exists() {
+                return p;
+            }
+            existent_parent(p.parent().unwrap_or_else(|| unreachable!()))
+        }
+        let p1 = existent_parent(self.as_ref());
+        let p2 = existent_parent(other.as_ref());
+        let md1 = p1.metadata().unwrap_or_else(|_| unreachable!());
+        let md2 = p2.metadata().unwrap_or_else(|_| unreachable!());
+        md1.dev() == md2.dev()
+    }
+    fn rename_safe<P:AsRef<std::path::Path>>(&self,target:&P) -> eyre::Result<()> {
+        Ok(if self.same_fs_as(target) {
+            std::fs::rename(self.as_ref(), target.as_ref())?
+        } else {
+            crate::fs::copy_dir_all(self.as_ref(), target.as_ref())?
+        })
     }
 }

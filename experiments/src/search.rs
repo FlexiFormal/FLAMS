@@ -1,6 +1,6 @@
 use flams_ontology::{narration::{documents::Document, paragraphs::{LogicalParagraph, ParagraphKind}, DocumentElement, NarrationTrait}, search::{QueryFilter, SearchResult, SearchResultKind}, uris::{DocumentElementURI, DocumentURI, SymbolURI, URIRefTrait}, Checked};
 use flams_system::{backend::{archives::{source_files::SourceDir, Archive}, Backend, GlobalBackend}, search::Searcher};
-use flams_utils::prelude::TreeChildIter;
+use flams_utils::{prelude::TreeChildIter, unwrap};
 use rstest::{fixture,rstest};
 
 #[fixture]
@@ -25,7 +25,7 @@ fn all_documents() -> Vec<DocumentURI> {
   ) {
     a.with_sources(|f| {
       for c in <_ as TreeChildIter<SourceDir>>::dfs(f.children.iter()) {
-        uris.push(DocumentURI::from_archive_relpath(a.uri().owned(),&c.relative_path()));
+        uris.push(unwrap!(DocumentURI::from_archive_relpath(a.uri().owned(),&c.relative_path()).ok()));
       }
     })
   }
@@ -39,7 +39,7 @@ fn stex_documents() -> Vec<DocumentURI> {
   ) {
     a.with_sources(|f| {
       for c in <_ as TreeChildIter<SourceDir>>::dfs(f.children.iter()) {
-        uris.push(DocumentURI::from_archive_relpath(a.uri().owned(),&c.relative_path()));
+        uris.push(unwrap!(DocumentURI::from_archive_relpath(a.uri().owned(),&c.relative_path()).ok()));
       }
     })
   }

@@ -4,6 +4,7 @@ use crate::uris::{
     debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURI, PathURIRef, PathURITrait, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URIWithLanguage
 };
 use const_format::concatcp;
+use eyre::Context;
 use std::fmt::Display;
 use std::str::{FromStr, Split};
 
@@ -28,13 +29,13 @@ impl DocumentURI {
     pub fn no_doc() -> Self { NO_DOCUMENT.clone()}
 
     #[must_use]
-    pub fn from_archive_relpath(a:ArchiveURI,rel_path:&str) -> Self {
+    pub fn from_archive_relpath(a:ArchiveURI,rel_path:&str) -> eyre::Result<Self> {
         let (path,mut name) = rel_path.rsplit_once('/')
             .unwrap_or(("",rel_path));
         name = name.rsplit_once('.').map_or_else(|| name,|(name,_)| name);
         let lang = Language::from_rel_path(name);
         name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
-        ((a % path).unwrap_or_else(|_| unreachable!()) & (name,lang)).unwrap_or_else(|_| unreachable!())
+        ((a % path).wrap_err_with(|| format!("Error in path component `{path}`"))? & (name,lang)).wrap_err_with(|| format!("Error in name component `{name}`"))
     }
 
     /// #### Errors

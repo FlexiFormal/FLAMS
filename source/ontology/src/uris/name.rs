@@ -115,14 +115,9 @@ impl Debug for Name {
 
 pub const INVALID_CHARS: [char;3] = ['\\','{','}'];
 
-#[derive(Debug)]
+#[derive(Debug,thiserror::Error)]
+#[error("Invalid URI character")]
 pub struct InvalidURICharacter;
-impl Display for InvalidURICharacter {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid URI character")
-    }
-}
 
 impl FromStr for Name {
     type Err = InvalidURICharacter;

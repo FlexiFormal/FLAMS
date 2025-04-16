@@ -32,6 +32,7 @@ paste = { workspace = true }
 #regex = { workspace = true }
 #js_regexp = { workspace = true }
 eyre = { workspace = true }
+thiserror = { workspace = true }
 
 tokio = { workspace = true, optional = true, features = ["io-util"] }
 wasm-bindgen = { workspace = true, optional = true }

@@ -66,7 +66,7 @@ pub struct BuildTask(Arc<BuildTaskI>);
 impl BuildTask {
     #[must_use]
     #[inline]
-    pub fn document_uri(&self) -> DocumentURI {
+    pub fn document_uri(&self) -> eyre::Result<DocumentURI> {
         DocumentURI::from_archive_relpath(self.archive().owned(), self.rel_path())
     }
     #[must_use]
@@ -175,6 +175,7 @@ pub struct BuildResult {
 }
 impl BuildResult {
     #[must_use]
+    #[inline]
     pub const fn empty() -> Self {
         Self {
             log:Either::Left(String::new()),
@@ -182,9 +183,18 @@ impl BuildResult {
         }
     }
     #[must_use]
+    #[inline]
     pub const fn err() -> Self {
         Self {
             log:Either::Left(String::new()),
+            result:Err(Vec::new())
+        }
+    }
+    
+    #[inline]
+    pub fn with_err(s:String) -> Self {
+        Self {
+            log:Either::Left(s),
             result:Err(Vec::new())
         }
     }

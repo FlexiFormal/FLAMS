@@ -248,8 +248,8 @@ impl PartialEq for ArchiveIndex {
   }
 }
 impl ArchiveIndex {
-    pub fn from_kind(d:DocumentKind,a:&ArchiveURI,images:impl FnMut(Box<str>) -> Box<str>) -> Self {
-        match d {
+    pub fn from_kind(d:DocumentKind,a:&ArchiveURI,images:impl FnMut(Box<str>) -> Box<str>) -> eyre::Result<Self> {
+        Ok(match d {
             DocumentKind::Library { title, teaser,thumbnail } => {
                 Self::Library { archive: a.archive_id().clone(), title, teaser,
                   thumbnail:if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {None} else { thumbnail.map(images) },
@@ -257,37 +257,37 @@ impl ArchiveIndex {
             }
             DocumentKind::Book { title, authors, file, teaser,thumbnail } => {
                 Self::Book { title, teaser,
-                    file:DocumentURI::from_archive_relpath(a.clone(), &file),
+                    file:DocumentURI::from_archive_relpath(a.clone(), &file)?,
                     authors:authors.into_iter().map(|is| is.name).collect(),
                     thumbnail:if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {None} else { thumbnail.map(images) } 
                 }
             }
             DocumentKind::Paper { title, authors, file, teaser,thumbnail,venue,venue_url } => {
                 Self::Paper { title, teaser,venue,venue_url,
-                    file:DocumentURI::from_archive_relpath(a.clone(), &file),
+                    file:DocumentURI::from_archive_relpath(a.clone(), &file)?,
                     authors:authors.into_iter().map(|is| is.name).collect(),
                     thumbnail:if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {None} else { thumbnail.map(images) } ,
                 }
             }
             DocumentKind::Course { title, landing, acronym, instructors, institution, notes, slides, thumbnail, quizzes, homeworks, instances, teaser } => {
                 Self::Course { title, acronym, institution, quizzes, homeworks, teaser,
-                    landing:DocumentURI::from_archive_relpath(a.clone(), &landing),
+                    landing:DocumentURI::from_archive_relpath(a.clone(), &landing)?,
                     thumbnail:if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {None} else { thumbnail.map(images) }, 
-                    notes:DocumentURI::from_archive_relpath(a.clone(), &notes),
-                    slides:if slides.as_ref().is_some_and(|s| s.is_empty()) {None} else { slides.map(|s| DocumentURI::from_archive_relpath(a.clone(), &s)) },
+                    notes:DocumentURI::from_archive_relpath(a.clone(), &notes)?,
+                    slides:if slides.as_ref().is_some_and(|s| s.is_empty()) {None} else { slides.map(|s| DocumentURI::from_archive_relpath(a.clone(), &s)).transpose()? },
                     instances:instances.into_iter().map(|i| Instance { semester:i.semester, instructors:i.instructors.map(|is| is.into_iter().map(|i| i.name).collect()) }).collect(),
                     instructors:instructors.into_iter().map(|is| is.name).collect(), 
                 }
             }
             DocumentKind::SelfStudy { title, landing, acronym, notes, slides, thumbnail,teaser } => {
                 Self::SelfStudy { title, acronym,teaser,
-                    landing:DocumentURI::from_archive_relpath(a.clone(), &landing),
+                    landing:DocumentURI::from_archive_relpath(a.clone(), &landing)?,
                     thumbnail:if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {None} else { thumbnail.map(images) },
-                    notes:DocumentURI::from_archive_relpath(a.clone(), &notes),
-                    slides:if slides.as_ref().is_some_and(|s| s.is_empty()) {None} else { slides.map(|s| DocumentURI::from_archive_relpath(a.clone(), &s)) },
+                    notes:DocumentURI::from_archive_relpath(a.clone(), &notes)?,
+                    slides:if slides.as_ref().is_some_and(|s| s.is_empty()) {None} else { slides.map(|s| DocumentURI::from_archive_relpath(a.clone(), &s)).transpose()? },
                 }
             }
-        }
+        })
     }
 }
 
@@ -301,7 +301,7 @@ pub struct Instance {
 }
 
 
-
+#[cfg(unix)]
 #[test]
 fn test() {
   use std::os::unix::ffi::OsStrExt;

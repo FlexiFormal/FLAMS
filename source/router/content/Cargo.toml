@@ -13,6 +13,8 @@ ssr = [
     "ftml-viewer-components/ssr",
     "flams-web-utils/ssr",
     "dep:flams-system",
+    "dep:leptos_axum",
+    "dep:http",
     "dep:flams-lsp",
     "dep:tokio",
     "dep:paste",
@@ -42,8 +44,10 @@ thaw = { workspace = true }
 serde = { workspace = true }
 either = { workspace = true }
 tracing = { workspace = true }
+lazy_static = { workspace = true }
 
 tokio = { workspace = true, optional = true }
 paste = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
-lazy_static = { workspace = true }
+leptos_axum = { workspace = true,optional=true }
+http = { workspace = true,optional=true }

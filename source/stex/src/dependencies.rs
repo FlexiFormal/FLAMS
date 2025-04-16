@@ -134,7 +134,7 @@ impl Iterator for DepParser<'_> {
 #[allow(clippy::too_many_lines)]
 pub fn get_deps(backend: &AnyBackend, task: &BuildTask) {
     let Either::Left(path) = task.source() else {return};
-    let uri = task.document_uri();
+    let Ok(uri) = task.document_uri() else {return};
     let source = std::fs::read_to_string(path);
     if let Ok(source) = source {
         //let mut yields = Vec::new();

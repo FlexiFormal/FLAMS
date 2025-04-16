@@ -4,7 +4,7 @@ use async_lsp::{lsp_types::{Position, Range, Url}, ClientSocket};
 use flams_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
-use flams_utils::time::measure;
+use flams_utils::{time::measure, PathExt};
 
 use crate::{state::{LSPState, UrlOrFile}, LSPStore};
 
@@ -27,12 +27,11 @@ pub struct LSPDocument {
 
 impl LSPDocument {
   #[allow(clippy::cast_possible_truncation)]
-  #[allow(clippy::borrowed_box)]
   #[must_use]
   pub fn new(text:String,lsp_uri:UrlOrFile) -> Self {
     let path = if let UrlOrFile::File(p) = lsp_uri {Some(p)} else {None}; //lsp_uri.to_file_path().ok().map(Into::into);
     let default = || {
-      let path = path.as_ref()?.as_os_str().to_str()?.into();
+      let path = path.as_ref()?.as_slash_str().into();
       Some((ArchiveURI::no_archive(),Some(path)))
     };
     let ap = path.as_ref().and_then(|path|
@@ -44,7 +43,15 @@ impl LSPDocument {
     ).or_else(default);
     let (archive,rel_path) = ap.map_or((None,None),|(a,p)| (Some(a),p));
     let r = LSPText { text , html_up_to_date: false };
-    let doc_uri = archive.as_ref().and_then(|a| rel_path.as_ref().map(|rp:&Box<str>| DocumentURI::from_archive_relpath(a.clone(), rp)));
+    let doc_uri = archive.as_ref().and_then(|a| rel_path.as_deref().and_then(|rp:&str| {
+      match DocumentURI::from_archive_relpath(a.clone(), rp) {
+        Ok(u) => Some(u),
+        Err(e) => {
+          tracing::error!("Error in URI {rp} in {a}: {e}");
+          None
+        }
+      }
+    }));
     //tracing::info!("Document: {lsp_uri}\n - {doc_uri:?}\n - [{archive:?}]{{{rel_path:?}}}");
     let data = DocumentData {
       path,archive,rel_path,doc_uri

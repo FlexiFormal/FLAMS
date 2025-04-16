@@ -7,7 +7,7 @@ use flams_system::backend::{
     },
     GlobalBackend,
 };
-use flams_utils::{prelude::TreeChildIter, time::measure};
+use flams_utils::{prelude::TreeChildIter, time::measure, unwrap};
 use git2::build::CheckoutBuilder;
 
 pub fn main() {
@@ -142,10 +142,10 @@ async fn linter_i() {
                                     .split('/')
                                     .fold(a.source_dir(), |p, s| p.join(s))
                                     .into(),
-                                DocumentURI::from_archive_relpath(
+                                unwrap!(DocumentURI::from_archive_relpath(
                                     a.uri().owned(),
                                     &f.relative_path,
-                                ),
+                                ).ok()),
                             )),
                             _ => {}
                         }
