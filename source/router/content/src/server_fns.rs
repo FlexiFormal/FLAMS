@@ -363,7 +363,7 @@ mod server {
                         let Some((css, html)) =
                             backend!(get_html_fragment!(euri.document(), *range))
                         else {
-                            not_found!("Document Element {euri} not found");
+                            not_found!("Paragraph HTML fragment {euri} not found");
                         };
                         Ok((uri, insert_base_url(filter_paras(css)), html))
                     }
@@ -374,7 +374,7 @@ mod server {
                         let Some((css, html)) =
                             backend!(get_html_fragment!(euri.document(), *range))
                         else {
-                            not_found!("Document Element {euri} not found");
+                            not_found!("Section HTML fragment {euri} not found");
                         };
                         Ok((uri, insert_base_url(filter_paras(css)), html))
                     }
@@ -383,7 +383,7 @@ mod server {
             }
             URI::Content(ContentURI::Symbol(suri)) => get_definitions(suri.clone())
                 .await
-                .ok_or_else(|| not_found!(! "No definition for {suri} not found"))
+                .ok_or_else(|| not_found!(!"No definition for {suri} not found"))
                 .map(|(css, b)| (uri, insert_base_url(filter_paras(css)), b)),
             URI::Base(_) => return Err("TODO: base".to_string().into()),
             URI::Archive(_) => return Err("TODO: archive".to_string().into()),
@@ -642,7 +642,7 @@ mod server {
                 };
                 Ok(sol)
             }
-            _ => not_found!("Problem {uri} not found")
+            _ => not_found!("Problem {uri} not found"),
         }
     }
 

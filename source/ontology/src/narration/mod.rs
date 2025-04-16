@@ -137,9 +137,15 @@ pub trait NarrationTrait {
                         curr = I::One(children.iter());
                         continue 'outer;
                     }
+                    DocumentElement::Slide { uri, .. }
+                        if uri.name().last_name() == step && steps.is_empty() =>
+                    {
+                        return T::from_element(c);
+                    }
                     DocumentElement::Module { children, .. }
                     | DocumentElement::Morphism { children, .. }
                     | DocumentElement::MathStructure { children, .. }
+                    | DocumentElement::Slide { children, .. }
                     | DocumentElement::Extension { children, .. } => curr.push(children),
                     DocumentElement::Notation { id: uri, .. }
                     | DocumentElement::VariableNotation { id: uri, .. }
@@ -152,7 +158,22 @@ pub trait NarrationTrait {
                         }
                         return None;
                     }
-                    _ => (),
+                    DocumentElement::Section(_)
+                    | DocumentElement::Paragraph(_)
+                    | DocumentElement::Problem(_)
+                    | DocumentElement::SetSectionLevel(_)
+                    | DocumentElement::SymbolDeclaration(_)
+                    | DocumentElement::UseModule(_)
+                    | DocumentElement::ImportModule(_)
+                    | DocumentElement::SkipSection(_)
+                    | DocumentElement::Variable(_)
+                    | DocumentElement::Definiendum { .. }
+                    | DocumentElement::SymbolReference { .. }
+                    | DocumentElement::VariableReference { .. }
+                    | DocumentElement::DocumentReference { .. }
+                    | DocumentElement::Notation { .. }
+                    | DocumentElement::VariableNotation { .. }
+                    | DocumentElement::TopTerm { .. } => (),
                 }
             }
         }
