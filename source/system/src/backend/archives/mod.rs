@@ -307,17 +307,17 @@ impl LocalArchive {
     }
 
     fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>> {
-        let out = path
-            .map_or_else(
-                || self.out_dir().join(".modules"),
-                |n| {
-                    n.steps()
-                        .iter()
-                        .fold(self.out_dir().to_path_buf(), |p, n| p.join(n.as_ref()))
-                        .join(".modules")
-                },
-            )
-            .join(name.as_ref());
+        let out = path.map_or_else(
+            || self.out_dir().join(".modules"),
+            |n| {
+                n.steps()
+                    .iter()
+                    .fold(self.out_dir().to_path_buf(), |p, n| p.join(n.as_ref()))
+                    .join(".modules")
+            },
+        );
+
+        let out = Self::escape_module_name(&out, name);
         //.join(Into::<&'static str>::into(language));
         macro_rules! err {
             ($e:expr) => {
@@ -511,6 +511,12 @@ impl LocalArchive {
         }
     }
 
+    fn escape_module_name(in_path: &Path, name: &NameStep) -> PathBuf {
+        static REPLACER: flams_utils::escaping::Escaper<u8, 1> =
+            flams_utils::escaping::Escaper([(b'*', "__AST__")]);
+        in_path.join(REPLACER.escape(name).to_string())
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cognitive_complexity)]
     fn save_omdoc_result(&self, top: &Path, result: &OMDocResult) {
@@ -579,7 +585,7 @@ impl LocalArchive {
             );
             //.join(name.to_string());
             err!(std::fs::create_dir_all(&out));
-            let out = out.join(name.first_name().as_ref());
+            let out = Self::escape_module_name(&out, name.first_name());
             let file = err!(std::fs::File::create(&out));
             let mut buf = std::io::BufWriter::new(file);
             //er!(m.into_byte_stream(&mut buf));
