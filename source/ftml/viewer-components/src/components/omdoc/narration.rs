@@ -1,4 +1,4 @@
-use crate::{components::omdoc::Spec, FTMLString, FTMLStringMath};
+use crate::{components::omdoc::OMDocT, FTMLString, FTMLStringMath};
 use flams_ontology::{
     content::{declarations::symbols::ArgSpec, terms::Term},
     narration::{
@@ -10,108 +10,119 @@ use flams_ontology::{
 use flams_utils::vecmap::{VecMap, VecSet};
 
 use super::{
-    content::{ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec, SymbolSpec},
-    AnySpec,
+    content::{OMDocExtension, OMDocModule, OMDocMorphism, OMDocStructure, OMDocSymbol},
+    OMDoc,
 };
 use flams_web_utils::components::{Block, Header, HeaderLeft, HeaderRight, LazyCollapsible};
 use leptos::{either::Either, prelude::*};
 use thaw::{Text, TextTag};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DocumentSpec {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct OMDocDocument {
     pub uri: DocumentURI,
     pub title: Option<String>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
-    pub children: Vec<DocumentElementSpec>,
+    pub children: Vec<OMDocDocumentElement>,
 }
-impl super::Spec for DocumentSpec {
+impl super::OMDocT for OMDocDocument {
     fn into_view(self) -> impl IntoView {
         view! {<Block show_separator=false>
           <HeaderLeft slot>{super::uses("Uses",self.uses.0)}</HeaderLeft>
-          {self.children.into_iter().map(super::Spec::into_view).collect_view()}
+          {self.children.into_iter().map(super::OMDocT::into_view).collect_view()}
         </Block>}
     }
 }
-impl From<DocumentSpec> for AnySpec {
+impl From<OMDocDocument> for OMDoc {
     #[inline]
-    fn from(value: DocumentSpec) -> Self {
+    fn from(value: OMDocDocument) -> Self {
         Self::Document(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct SectionSpec {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct OMDocSection {
     pub title: Option<String>,
     pub uri: DocumentElementURI,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
-    pub children: Vec<DocumentElementSpec>,
+    pub children: Vec<OMDocDocumentElement>,
 }
-impl super::Spec for SectionSpec {
+impl super::OMDocT for OMDocSection {
     fn into_view(self) -> impl IntoView {
         if let Some(title) = self.title {
             Either::Left(view! {
               <Block>
                 <Header slot><b style="font-size:larger"><FTMLString html=title/></b></Header>
                 <HeaderLeft slot>{super::uses("Uses",self.uses.0)}</HeaderLeft>
-                {self.children.into_iter().map(super::Spec::into_view).collect_view()}
+                {self.children.into_iter().map(super::OMDocT::into_view).collect_view()}
               </Block>
             })
         } else {
             Either::Right(
                 self.children
                     .into_iter()
-                    .map(super::Spec::into_view)
+                    .map(super::OMDocT::into_view)
                     .collect_view(),
             )
         }
     }
 }
-impl From<SectionSpec> for AnySpec {
+impl From<OMDocSection> for OMDoc {
     #[inline]
-    fn from(value: SectionSpec) -> Self {
+    fn from(value: OMDocSection) -> Self {
         Self::Section(value)
     }
 }
-impl From<SectionSpec> for DocumentElementSpec {
+impl From<OMDocSection> for OMDocDocumentElement {
     #[inline]
-    fn from(value: SectionSpec) -> Self {
+    fn from(value: OMDocSection) -> Self {
         Self::Section(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct SlideSpec {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct OMDocSlide {
     pub uri: DocumentElementURI,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
-    pub children: Vec<DocumentElementSpec>,
+    pub children: Vec<OMDocDocumentElement>,
 }
-impl super::Spec for SlideSpec {
+impl super::OMDocT for OMDocSlide {
     fn into_view(self) -> impl IntoView {
         view! {
           <Block>
             <Header slot><b style="font-size:larger">"Slide"</b></Header>
             <HeaderLeft slot>{super::uses("Uses",self.uses.0)}</HeaderLeft>
-            {self.children.into_iter().map(super::Spec::into_view).collect_view()}
+            {self.children.into_iter().map(super::OMDocT::into_view).collect_view()}
           </Block>
         }
     }
 }
 
-impl From<SlideSpec> for AnySpec {
+impl From<OMDocSlide> for OMDoc {
     #[inline]
-    fn from(value: SlideSpec) -> Self {
+    fn from(value: OMDocSlide) -> Self {
         Self::Slide(value)
     }
 }
-impl From<SlideSpec> for DocumentElementSpec {
+impl From<OMDocSlide> for OMDocDocumentElement {
     #[inline]
-    fn from(value: SlideSpec) -> Self {
+    fn from(value: OMDocSlide) -> Self {
         Self::Slide(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct VariableSpec {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct OMDocVariable {
     pub uri: DocumentElementURI,
     pub arity: ArgSpec,
     pub macro_name: Option<String>,
@@ -119,9 +130,9 @@ pub struct VariableSpec {
     pub df: Option<Term>, //Option<String>,
     pub is_seq: bool,
 }
-impl super::Spec for VariableSpec {
+impl super::OMDocT for OMDocVariable {
     fn into_view(self) -> impl IntoView {
-        let VariableSpec {
+        let OMDocVariable {
             uri,
             df,
             tp,
@@ -164,31 +175,35 @@ impl super::Spec for VariableSpec {
         }
     }
 }
-impl From<VariableSpec> for AnySpec {
+impl From<OMDocVariable> for OMDoc {
     #[inline]
-    fn from(value: VariableSpec) -> Self {
+    fn from(value: OMDocVariable) -> Self {
         Self::Variable(value)
     }
 }
-impl From<VariableSpec> for DocumentElementSpec {
+impl From<OMDocVariable> for OMDocDocumentElement {
     #[inline]
-    fn from(value: VariableSpec) -> Self {
+    fn from(value: OMDocVariable) -> Self {
         Self::Variable(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ParagraphSpec {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct OMDocParagraph {
     pub uri: DocumentElementURI,
     pub kind: ParagraphKind,
     pub formatting: ParagraphFormatting,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub fors: VecMap<SymbolURI, Option<Term>>, //Option<String>>,
     pub title: Option<String>,
-    pub children: Vec<DocumentElementSpec>,
+    pub children: Vec<OMDocDocumentElement>,
     pub definition_like: bool,
 }
-impl super::Spec for ParagraphSpec {
+impl super::OMDocT for OMDocParagraph {
     fn into_view(self) -> impl IntoView {
         let Self {
             uri,
@@ -218,26 +233,28 @@ impl super::Spec for ParagraphSpec {
                 }})}
               })
             )}</HeaderRight>
-            {children.into_iter().map(super::Spec::into_view).collect_view()}
+            {children.into_iter().map(super::OMDocT::into_view).collect_view()}
           </Block>
         }
     }
 }
-impl From<ParagraphSpec> for AnySpec {
+impl From<OMDocParagraph> for OMDoc {
     #[inline]
-    fn from(value: ParagraphSpec) -> Self {
+    fn from(value: OMDocParagraph) -> Self {
         Self::Paragraph(value)
     }
 }
-impl From<ParagraphSpec> for DocumentElementSpec {
+impl From<OMDocParagraph> for OMDocDocumentElement {
     #[inline]
-    fn from(value: ParagraphSpec) -> Self {
+    fn from(value: OMDocParagraph) -> Self {
         Self::Paragraph(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ProblemSpec {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct OMDocProblem {
     pub uri: DocumentElementURI,
     pub sub_problem: bool,
     pub autogradable: bool,
@@ -245,10 +262,11 @@ pub struct ProblemSpec {
     pub title: Option<String>,
     pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
     pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
-    pub children: Vec<DocumentElementSpec>,
+    pub children: Vec<OMDocDocumentElement>,
 }
-impl super::Spec for ProblemSpec {
+impl super::OMDocT for OMDocProblem {
     fn into_view(self) -> impl IntoView {
         let Self {
             uri,
@@ -272,45 +290,54 @@ impl super::Spec for ProblemSpec {
                 " ("{dim.to_string()}")"
               })
             )}</HeaderRight>
-            {children.into_iter().map(super::Spec::into_view).collect_view()}
+            {children.into_iter().map(super::OMDocT::into_view).collect_view()}
           </Block>
         }
     }
 }
-impl From<ProblemSpec> for AnySpec {
+impl From<OMDocProblem> for OMDoc {
     #[inline]
-    fn from(value: ProblemSpec) -> Self {
+    fn from(value: OMDocProblem) -> Self {
         Self::Problem(value)
     }
 }
-impl From<ProblemSpec> for DocumentElementSpec {
+impl From<OMDocProblem> for OMDocDocumentElement {
     #[inline]
-    fn from(value: ProblemSpec) -> Self {
+    fn from(value: OMDocProblem) -> Self {
         Self::Problem(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum DocumentElementSpec {
-    Slide(SlideSpec),
-    Section(SectionSpec),
-    Module(ModuleSpec<Self>),
-    Morphism(MorphismSpec<Self>),
-    Structure(StructureSpec<Self>),
-    Extension(ExtensionSpec<Self>),
+#[serde(tag = "type")]
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub enum OMDocDocumentElement {
+    Slide(OMDocSlide),
+    Section(OMDocSection),
+    Module(OMDocModule<OMDocDocumentElement>),
+    Morphism(OMDocMorphism<OMDocDocumentElement>),
+    Structure(OMDocStructure<OMDocDocumentElement>),
+    Extension(OMDocExtension<OMDocDocumentElement>),
     DocumentReference {
         uri: DocumentURI,
         title: Option<String>,
     },
-    Variable(VariableSpec),
-    Paragraph(ParagraphSpec),
-    Problem(ProblemSpec),
-    TopTerm(DocumentElementURI, Term),
-    SymbolDeclaration(either::Either<SymbolURI, SymbolSpec>),
+    Variable(OMDocVariable),
+    Paragraph(OMDocParagraph),
+    Problem(OMDocProblem),
+    TopTerm {
+        uri: DocumentElementURI,
+        term: Term,
+    },
+    SymbolDeclaration(
+        #[cfg_attr(feature = "ts", tsify(type = "SymbolURI|OMDocSymbol"))]
+        either::Either<SymbolURI, OMDocSymbol>,
+    ),
 }
-impl super::sealed::Sealed for DocumentElementSpec {}
-impl super::SpecDecl for DocumentElementSpec {}
-impl super::Spec for DocumentElementSpec {
+impl super::sealed::Sealed for OMDocDocumentElement {}
+impl super::OMDocDecl for OMDocDocumentElement {}
+impl super::OMDocT for OMDocDocumentElement {
     fn into_view(self) -> impl IntoView {
         match self {
             Self::Slide(s) => s.into_view().into_any(),
@@ -323,10 +350,10 @@ impl super::Spec for DocumentElementSpec {
             Self::Variable(v) => v.into_view().into_any(),
             Self::Paragraph(p) => p.into_view().into_any(),
             Self::Problem(e) => e.into_view().into_any(),
-            Self::TopTerm(_, t) => view! {
+            Self::TopTerm { term, .. } => view! {
               <Block show_separator=false>
                 <Header slot><span><b>"Term "</b>{
-                  crate::remote::get!(present(t.clone()) = html => {
+                  crate::remote::get!(present(term.clone()) = html => {
                     view!(<FTMLStringMath html/>)
                   })
                 }</span></Header>
@@ -355,7 +382,7 @@ pub(crate) fn doc_ref(uri: DocumentURI, title: Option<String>) -> impl IntoView 
         view!{
           <Suspense fallback=|| view!(<flams_web_utils::components::Spinner/>)>{move || {
             if let Some(Ok((_,omdoc))) = r.get() {
-              let AnySpec::Document(omdoc) = omdoc else {unreachable!()};
+              let OMDoc::Document(omdoc) = omdoc else {unreachable!()};
               Some(omdoc.into_view())
             } else {None}
           }}</Suspense>
@@ -365,24 +392,24 @@ pub(crate) fn doc_ref(uri: DocumentURI, title: Option<String>) -> impl IntoView 
     } //</Block>}
 }
 
-impl From<DocumentElementSpec> for AnySpec {
-    fn from(value: DocumentElementSpec) -> Self {
+impl From<OMDocDocumentElement> for OMDoc {
+    fn from(value: OMDocDocumentElement) -> Self {
         match value {
-            DocumentElementSpec::Slide(s) => Self::Slide(s),
-            DocumentElementSpec::Section(s) => Self::Section(s),
-            DocumentElementSpec::Module(m) => Self::DocModule(m),
-            DocumentElementSpec::Morphism(m) => Self::DocMorphism(m),
-            DocumentElementSpec::Structure(s) => Self::DocStructure(s),
-            DocumentElementSpec::Extension(e) => Self::DocExtension(e),
-            DocumentElementSpec::DocumentReference { uri, title } => {
+            OMDocDocumentElement::Slide(s) => Self::Slide(s),
+            OMDocDocumentElement::Section(s) => Self::Section(s),
+            OMDocDocumentElement::Module(m) => Self::DocModule(m),
+            OMDocDocumentElement::Morphism(m) => Self::DocMorphism(m),
+            OMDocDocumentElement::Structure(s) => Self::DocStructure(s),
+            OMDocDocumentElement::Extension(e) => Self::DocExtension(e),
+            OMDocDocumentElement::DocumentReference { uri, title } => {
                 Self::DocReference { uri, title }
             }
-            DocumentElementSpec::SymbolDeclaration(either::Right(s)) => Self::SymbolDeclaration(s),
-            DocumentElementSpec::Variable(v) => Self::Variable(v),
-            DocumentElementSpec::Paragraph(p) => Self::Paragraph(p),
-            DocumentElementSpec::Problem(e) => Self::Problem(e),
-            DocumentElementSpec::TopTerm(uri, s) => Self::Term(uri, s),
-            DocumentElementSpec::SymbolDeclaration(either::Left(u)) => Self::Other(u.to_string()),
+            OMDocDocumentElement::SymbolDeclaration(either::Right(s)) => Self::SymbolDeclaration(s),
+            OMDocDocumentElement::Variable(v) => Self::Variable(v),
+            OMDocDocumentElement::Paragraph(p) => Self::Paragraph(p),
+            OMDocDocumentElement::Problem(e) => Self::Problem(e),
+            OMDocDocumentElement::TopTerm { uri, term } => Self::Term { uri, term },
+            OMDocDocumentElement::SymbolDeclaration(either::Left(u)) => Self::Other(u.to_string()),
         }
     }
 }
@@ -390,11 +417,11 @@ impl From<DocumentElementSpec> for AnySpec {
 #[cfg(feature = "ssr")]
 mod froms {
     use super::{
-        DocumentElementSpec, DocumentSpec, ParagraphSpec, ProblemSpec, SectionSpec, SlideSpec,
-        VariableSpec,
+        OMDocDocument, OMDocDocumentElement, OMDocParagraph, OMDocProblem, OMDocSection,
+        OMDocSlide, OMDocVariable,
     };
     use crate::components::omdoc::content::{
-        ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec, SymbolSpec,
+        OMDocExtension, OMDocModule, OMDocMorphism, OMDocStructure, OMDocSymbol,
     };
     use flams_ontology::{
         content::{declarations::OpenDeclaration, ModuleLike},
@@ -408,7 +435,7 @@ mod froms {
     use flams_system::backend::Backend;
     use flams_utils::{vecmap::VecSet, CSS};
 
-    impl SectionSpec {
+    impl OMDocSection {
         pub fn from_section<B: Backend>(
             Section {
                 title,
@@ -436,7 +463,7 @@ mod froms {
                 }
             });
             let children =
-                DocumentElementSpec::do_children(backend, children, &mut uses, &mut imports, css);
+                OMDocDocumentElement::do_children(backend, children, &mut uses, &mut imports, css);
             Self {
                 title,
                 uri: uri.clone(),
@@ -446,7 +473,7 @@ mod froms {
         }
     }
 
-    impl SlideSpec {
+    impl OMDocSlide {
         pub fn from_slide<B: Backend>(
             children: &[DocumentElement<Checked>],
             uri: &DocumentElementURI,
@@ -456,7 +483,7 @@ mod froms {
             let mut uses = VecSet::new();
             let mut imports = VecSet::new();
             let children =
-                DocumentElementSpec::do_children(backend, children, &mut uses, &mut imports, css);
+                OMDocDocumentElement::do_children(backend, children, &mut uses, &mut imports, css);
             Self {
                 uri: uri.clone(),
                 uses,
@@ -465,7 +492,7 @@ mod froms {
         }
     }
 
-    impl ParagraphSpec {
+    impl OMDocParagraph {
         pub fn from_paragraph<B: Backend>(
             LogicalParagraph {
                 uri,
@@ -498,7 +525,7 @@ mod froms {
                 }
             });
             let children =
-                DocumentElementSpec::do_children(backend, children, &mut uses, &mut imports, css);
+                OMDocDocumentElement::do_children(backend, children, &mut uses, &mut imports, css);
             Self {
                 kind: *kind,
                 formatting: *formatting,
@@ -512,7 +539,7 @@ mod froms {
         }
     }
 
-    impl ProblemSpec {
+    impl OMDocProblem {
         #[allow(clippy::cast_possible_truncation)]
         pub fn from_problem<B: Backend>(
             Problem {
@@ -546,7 +573,7 @@ mod froms {
                 }
             });
             let children =
-                DocumentElementSpec::do_children(backend, children, &mut uses, &mut imports, css);
+                OMDocDocumentElement::do_children(backend, children, &mut uses, &mut imports, css);
             Self {
                 sub_problem: *sub_problem,
                 autogradable: *autogradable,
@@ -561,7 +588,7 @@ mod froms {
         }
     }
 
-    impl VariableSpec {
+    impl OMDocVariable {
         pub fn from_variable<B: Backend>(
             Variable {
                 uri,
@@ -585,7 +612,7 @@ mod froms {
         }
     }
 
-    impl DocumentElementSpec {
+    impl OMDocDocumentElement {
         pub fn from_element<B: Backend>(
             e: &DocumentElement<Checked>,
             backend: &B, //&mut StringPresenter<'_,B>,
@@ -593,13 +620,13 @@ mod froms {
         ) -> Option<Self> {
             match e {
                 DocumentElement::Section(s) => {
-                    Some(SectionSpec::from_section(s, backend, css).into())
+                    Some(OMDocSection::from_section(s, backend, css).into())
                 }
                 DocumentElement::Paragraph(p) => {
-                    Some(ParagraphSpec::from_paragraph(p, backend, css).into())
+                    Some(OMDocParagraph::from_paragraph(p, backend, css).into())
                 }
                 DocumentElement::Problem(p) => {
-                    Some(ProblemSpec::from_problem(p, backend, css).into())
+                    Some(OMDocProblem::from_problem(p, backend, css).into())
                 }
                 _ => None,
             }
@@ -619,16 +646,16 @@ mod froms {
                         ret.extend(Self::do_children(backend, s, uses, imports, css).into_iter())
                     }
                     DocumentElement::Section(s) => {
-                        ret.push(SectionSpec::from_section(s, backend, css).into());
+                        ret.push(OMDocSection::from_section(s, backend, css).into());
                     }
                     DocumentElement::Slide { children, uri, .. } => {
-                        ret.push(SlideSpec::from_slide(children, uri, backend, css).into())
+                        ret.push(OMDocSlide::from_slide(children, uri, backend, css).into())
                     }
                     DocumentElement::Paragraph(p) => {
-                        ret.push(ParagraphSpec::from_paragraph(p, backend, css).into());
+                        ret.push(OMDocParagraph::from_paragraph(p, backend, css).into());
                     }
                     DocumentElement::Problem(p) => {
-                        ret.push(ProblemSpec::from_problem(p, backend, css).into());
+                        ret.push(OMDocProblem::from_problem(p, backend, css).into());
                     }
                     DocumentElement::Module {
                         module, children, ..
@@ -647,7 +674,7 @@ mod froms {
                         let mut imports = VecSet::new();
                         let children =
                             Self::do_children(backend, children, &mut uses, &mut imports, css);
-                        ret.push(Self::Module(ModuleSpec {
+                        ret.push(Self::Module(OMDocModule {
                             uri,
                             imports,
                             uses,
@@ -667,7 +694,7 @@ mod froms {
                         let mut imports = VecSet::new();
                         let children =
                             Self::do_children(backend, children, &mut uses, &mut imports, css);
-                        ret.push(Self::Morphism(MorphismSpec {
+                        ret.push(Self::Morphism(OMDocMorphism {
                             uri,
                             total,
                             target,
@@ -693,7 +720,7 @@ mod froms {
                                         .iter()
                                         .filter_map(|e| {
                                             if let OpenDeclaration::Symbol(s) = e {
-                                                Some(SymbolSpec::from_symbol(s, backend))
+                                                Some(OMDocSymbol::from_symbol(s, backend))
                                             } else {
                                                 None
                                             }
@@ -706,7 +733,7 @@ mod froms {
                         let mut imports = VecSet::new();
                         let children =
                             Self::do_children(backend, children, &mut uses, &mut imports, css);
-                        ret.push(Self::Structure(StructureSpec {
+                        ret.push(Self::Structure(OMDocStructure {
                             uri,
                             macro_name: macroname,
                             uses,
@@ -727,7 +754,7 @@ mod froms {
                         let mut imports = VecSet::new();
                         let children =
                             Self::do_children(backend, children, &mut uses, &mut imports, css);
-                        ret.push(Self::Extension(ExtensionSpec {
+                        ret.push(Self::Extension(OMDocExtension {
                             uri,
                             target,
                             uses,
@@ -744,11 +771,11 @@ mod froms {
                     DocumentElement::SymbolDeclaration(s) => {
                         ret.push(Self::SymbolDeclaration(s.get().map_or_else(
                             || either::Left(s.id().into_owned()),
-                            |s| either::Right(SymbolSpec::from_symbol(s.as_ref(), backend)),
+                            |s| either::Right(OMDocSymbol::from_symbol(s.as_ref(), backend)),
                         )));
                     }
                     DocumentElement::Variable(v) => {
-                        ret.push(VariableSpec::from_variable(v, backend).into());
+                        ret.push(OMDocVariable::from_variable(v, backend).into());
                     }
                     DocumentElement::UseModule(m) => {
                         uses.insert(m.id().into_owned());
@@ -757,7 +784,10 @@ mod froms {
                         imports.insert(m.id().into_owned());
                     }
                     DocumentElement::TopTerm { term, uri, .. } => {
-                        ret.push(Self::TopTerm(uri.clone(), term.clone())); //backend.present(term).unwrap_or_else(|e| format!("<mtext>term presenting failed: {e:?}</mtext>"))))
+                        ret.push(Self::TopTerm {
+                            term: term.clone(),
+                            uri: uri.clone(),
+                        }); //backend.present(term).unwrap_or_else(|e| format!("<mtext>term presenting failed: {e:?}</mtext>"))))
                     }
                     DocumentElement::Definiendum { .. }
                     | DocumentElement::SymbolReference { .. }
@@ -771,7 +801,7 @@ mod froms {
         }
     }
 
-    impl DocumentSpec {
+    impl OMDocDocument {
         pub fn from_document<B: Backend>(
             d: &Document,
             backend: &B, //&mut StringPresenter<'_,B>,
@@ -781,7 +811,7 @@ mod froms {
             let title = d.title().map(ToString::to_string);
             let mut uses = VecSet::new();
             let mut imports = VecSet::new();
-            let children = DocumentElementSpec::do_children(
+            let children = OMDocDocumentElement::do_children(
                 backend,
                 d.children(),
                 &mut uses,

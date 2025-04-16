@@ -9,7 +9,7 @@ use flams_ontology::{
 };
 use flams_utils::vecmap::VecSet;
 
-use super::{narration::DocumentElementSpec, AnySpec, SpecDecl};
+use super::{narration::OMDocDocumentElement, OMDoc, OMDocDecl};
 use flams_web_utils::{
     components::{Block, Header, HeaderLeft, HeaderRight, LazyCollapsible},
     inject_css,
@@ -25,15 +25,18 @@ use thaw::{Text, TextTag};
 struct InStruct;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ModuleSpec<E: SpecDecl> {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+pub struct OMDocModule<E: OMDocDecl> {
     pub uri: ModuleURI,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub imports: VecSet<ModuleURI>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
     pub metatheory: Option<ModuleURI>,
     pub signature: Option<Language>,
     pub children: Vec<E>,
 }
-impl<E: SpecDecl> super::Spec for ModuleSpec<E> {
+impl<E: OMDocDecl> super::OMDocT for OMDocModule<E> {
     fn into_view(self) -> impl IntoView {
         view! {
             <Block>
@@ -45,74 +48,79 @@ impl<E: SpecDecl> super::Spec for ModuleSpec<E> {
                 </b></Header>
                 <HeaderLeft slot>{super::uses("Imports",self.imports.0)}</HeaderLeft>
                 <HeaderRight slot>{super::uses("Uses",self.uses.0)}</HeaderRight>
-                {self.children.into_iter().map(super::Spec::into_view).collect_view()}
+                {self.children.into_iter().map(super::OMDocT::into_view).collect_view()}
             </Block>
         }
     }
 }
-impl From<ModuleSpec<DeclarationSpec>> for AnySpec {
+impl From<OMDocModule<OMDocDeclaration>> for OMDoc {
     #[inline]
-    fn from(value: ModuleSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocModule<OMDocDeclaration>) -> Self {
         Self::Module(value)
     }
 }
-impl From<ModuleSpec<DocumentElementSpec>> for AnySpec {
+impl From<OMDocModule<OMDocDocumentElement>> for OMDoc {
     #[inline]
-    fn from(value: ModuleSpec<DocumentElementSpec>) -> Self {
+    fn from(value: OMDocModule<OMDocDocumentElement>) -> Self {
         Self::DocModule(value)
     }
 }
-impl From<ModuleSpec<DeclarationSpec>> for DeclarationSpec {
+impl From<OMDocModule<OMDocDeclaration>> for OMDocDeclaration {
     #[inline]
-    fn from(value: ModuleSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocModule<OMDocDeclaration>) -> Self {
         Self::NestedModule(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MorphismSpec<E: SpecDecl> {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+pub struct OMDocMorphism<E: OMDocDecl> {
     pub uri: SymbolURI,
     pub total: bool,
     pub target: Option<ModuleURI>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
     pub children: Vec<E>,
 }
-impl<E: SpecDecl> super::Spec for MorphismSpec<E> {
+impl<E: OMDocDecl> super::OMDocT for OMDocMorphism<E> {
     fn into_view(self) -> impl IntoView {
         view!(<div>"TODO: Morphism"</div>)
     }
 }
-impl From<MorphismSpec<DeclarationSpec>> for AnySpec {
+impl From<OMDocMorphism<OMDocDeclaration>> for OMDoc {
     #[inline]
-    fn from(value: MorphismSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocMorphism<OMDocDeclaration>) -> Self {
         Self::Morphism(value)
     }
 }
-impl From<MorphismSpec<DocumentElementSpec>> for AnySpec {
+impl From<OMDocMorphism<OMDocDocumentElement>> for OMDoc {
     #[inline]
-    fn from(value: MorphismSpec<DocumentElementSpec>) -> Self {
+    fn from(value: OMDocMorphism<OMDocDocumentElement>) -> Self {
         Self::DocMorphism(value)
     }
 }
-impl From<MorphismSpec<DeclarationSpec>> for DeclarationSpec {
+impl From<OMDocMorphism<OMDocDeclaration>> for OMDocDeclaration {
     #[inline]
-    fn from(value: MorphismSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocMorphism<OMDocDeclaration>) -> Self {
         Self::Morphism(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct StructureSpec<E: SpecDecl> {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+pub struct OMDocStructure<E: OMDocDecl> {
     pub uri: SymbolURI,
     pub macro_name: Option<String>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub extends: VecSet<ModuleURI>,
     pub children: Vec<E>,
-    pub extensions: Vec<(SymbolURI, Vec<SymbolSpec>)>,
+    pub extensions: Vec<(SymbolURI, Vec<OMDocSymbol>)>,
 }
-impl<E: SpecDecl> super::Spec for StructureSpec<E> {
+impl<E: OMDocDecl> super::OMDocT for OMDocStructure<E> {
     fn into_view(self) -> impl IntoView {
-        let StructureSpec {
+        let OMDocStructure {
             uri,
             macro_name,
             extends,
@@ -130,13 +138,13 @@ impl<E: SpecDecl> super::Spec for StructureSpec<E> {
                     </span></Header>
                     <HeaderLeft slot>{super::uses("Extends",extends.0)}</HeaderLeft>
                     <HeaderRight slot>{super::uses("Uses",uses.0)}</HeaderRight>
-                    {children.into_iter().map(super::Spec::into_view).collect_view()}
+                    {children.into_iter().map(super::OMDocT::into_view).collect_view()}
                     {if !extensions.is_empty() {Some(view!{
                         <b>"Conservative Extensions:"</b>
                         {extensions.into_iter().map(|(uri,s)| view!{
                             <Block show_separator=false>
                                 <Header slot>{super::module_name(uri.module())}</Header>
-                                {s.into_iter().map(super::Spec::into_view).collect_view()}
+                                {s.into_iter().map(super::OMDocT::into_view).collect_view()}
                             </Block>
                         }).collect_view()}
                     })} else {None}}
@@ -146,35 +154,37 @@ impl<E: SpecDecl> super::Spec for StructureSpec<E> {
         }
     }
 }
-impl From<StructureSpec<DeclarationSpec>> for AnySpec {
+impl From<OMDocStructure<OMDocDeclaration>> for OMDoc {
     #[inline]
-    fn from(value: StructureSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocStructure<OMDocDeclaration>) -> Self {
         Self::Structure(value)
     }
 }
-impl From<StructureSpec<DocumentElementSpec>> for AnySpec {
+impl From<OMDocStructure<OMDocDocumentElement>> for OMDoc {
     #[inline]
-    fn from(value: StructureSpec<DocumentElementSpec>) -> Self {
+    fn from(value: OMDocStructure<OMDocDocumentElement>) -> Self {
         Self::DocStructure(value)
     }
 }
-impl From<StructureSpec<DeclarationSpec>> for DeclarationSpec {
+impl From<OMDocStructure<OMDocDeclaration>> for OMDocDeclaration {
     #[inline]
-    fn from(value: StructureSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocStructure<OMDocDeclaration>) -> Self {
         Self::Structure(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ExtensionSpec<E: SpecDecl> {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+pub struct OMDocExtension<E: OMDocDecl> {
     pub uri: SymbolURI,
     pub target: SymbolURI,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
     pub uses: VecSet<ModuleURI>,
     pub children: Vec<E>,
 }
-impl<E: SpecDecl> super::Spec for ExtensionSpec<E> {
+impl<E: OMDocDecl> super::OMDocT for OMDocExtension<E> {
     fn into_view(self) -> impl IntoView {
-        let ExtensionSpec {
+        let OMDocExtension {
             uri,
             target,
             uses,
@@ -187,43 +197,46 @@ impl<E: SpecDecl> super::Spec for ExtensionSpec<E> {
                         <b>"Conservative Extension for "{super::symbol_name(&target, target.name().last_name().as_ref())}</b>
                     </span></Header>
                     <HeaderRight slot>{super::uses("Uses",uses.0)}</HeaderRight>
-                    {children.into_iter().map(super::Spec::into_view).collect_view()}
+                    {children.into_iter().map(super::OMDocT::into_view).collect_view()}
                 </Block>
             </Provider>
         }
     }
 }
-impl From<ExtensionSpec<DeclarationSpec>> for AnySpec {
+impl From<OMDocExtension<OMDocDeclaration>> for OMDoc {
     #[inline]
-    fn from(value: ExtensionSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocExtension<OMDocDeclaration>) -> Self {
         Self::Extension(value)
     }
 }
-impl From<ExtensionSpec<DocumentElementSpec>> for AnySpec {
+impl From<OMDocExtension<OMDocDocumentElement>> for OMDoc {
     #[inline]
-    fn from(value: ExtensionSpec<DocumentElementSpec>) -> Self {
+    fn from(value: OMDocExtension<OMDocDocumentElement>) -> Self {
         Self::DocExtension(value)
     }
 }
-impl From<ExtensionSpec<DeclarationSpec>> for DeclarationSpec {
+impl From<OMDocExtension<OMDocDeclaration>> for OMDocDeclaration {
     #[inline]
-    fn from(value: ExtensionSpec<DeclarationSpec>) -> Self {
+    fn from(value: OMDocExtension<OMDocDeclaration>) -> Self {
         Self::Extension(value)
     }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum DeclarationSpec {
-    Symbol(SymbolSpec),
-    NestedModule(ModuleSpec<DeclarationSpec>),
-    Structure(StructureSpec<DeclarationSpec>),
-    Morphism(MorphismSpec<DeclarationSpec>),
-    Extension(ExtensionSpec<DeclarationSpec>),
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(tag = "type")]
+pub enum OMDocDeclaration {
+    Symbol(OMDocSymbol),
+    NestedModule(OMDocModule<OMDocDeclaration>),
+    Structure(OMDocStructure<OMDocDeclaration>),
+    Morphism(OMDocMorphism<OMDocDeclaration>),
+    Extension(OMDocExtension<OMDocDeclaration>),
 }
 
-impl super::sealed::Sealed for DeclarationSpec {}
-impl super::SpecDecl for DeclarationSpec {}
-impl super::Spec for DeclarationSpec {
+impl super::sealed::Sealed for OMDocDeclaration {}
+impl super::OMDocDecl for OMDocDeclaration {}
+impl super::OMDocT for OMDocDeclaration {
     #[inline]
     fn into_view(self) -> impl IntoView {
         match self {
@@ -235,15 +248,15 @@ impl super::Spec for DeclarationSpec {
         }
     }
 }
-impl From<DeclarationSpec> for AnySpec {
+impl From<OMDocDeclaration> for OMDoc {
     #[inline]
-    fn from(value: DeclarationSpec) -> Self {
+    fn from(value: OMDocDeclaration) -> Self {
         match value {
-            DeclarationSpec::Symbol(s) => Self::SymbolDeclaration(s),
-            DeclarationSpec::NestedModule(s) => Self::Module(s),
-            DeclarationSpec::Structure(s) => Self::Structure(s),
-            DeclarationSpec::Morphism(s) => Self::Morphism(s),
-            DeclarationSpec::Extension(s) => Self::Extension(s),
+            OMDocDeclaration::Symbol(s) => Self::SymbolDeclaration(s),
+            OMDocDeclaration::NestedModule(s) => Self::Module(s),
+            OMDocDeclaration::Structure(s) => Self::Structure(s),
+            OMDocDeclaration::Morphism(s) => Self::Morphism(s),
+            OMDocDeclaration::Extension(s) => Self::Extension(s),
         }
     }
 }
@@ -363,7 +376,9 @@ fn do_los(uri: SymbolURI) -> impl IntoView {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct SymbolSpec {
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct OMDocSymbol {
     pub uri: SymbolURI,
     pub df: Option<Term>,
     pub tp: Option<Term>,
@@ -371,9 +386,9 @@ pub struct SymbolSpec {
     pub macro_name: Option<String>,
     //pub notations:Vec<(ModuleURI,String,Option<String>,Option<String>)>
 }
-impl super::Spec for SymbolSpec {
+impl super::OMDocT for OMDocSymbol {
     fn into_view(self) -> impl IntoView {
-        let SymbolSpec {
+        let OMDocSymbol {
             uri,
             df,
             tp,
@@ -414,15 +429,15 @@ impl super::Spec for SymbolSpec {
         }
     }
 }
-impl From<SymbolSpec> for AnySpec {
+impl From<OMDocSymbol> for OMDoc {
     #[inline]
-    fn from(value: SymbolSpec) -> Self {
+    fn from(value: OMDocSymbol) -> Self {
         Self::SymbolDeclaration(value)
     }
 }
-impl From<SymbolSpec> for DeclarationSpec {
+impl From<OMDocSymbol> for OMDocDeclaration {
     #[inline]
-    fn from(value: SymbolSpec) -> Self {
+    fn from(value: OMDocSymbol) -> Self {
         Self::Symbol(value)
     }
 }
@@ -430,8 +445,8 @@ impl From<SymbolSpec> for DeclarationSpec {
 #[cfg(feature = "ssr")]
 mod froms {
     use super::{
-        super::AnySpec, DeclarationSpec, ExtensionSpec, ModuleSpec, MorphismSpec, StructureSpec,
-        SymbolSpec,
+        super::OMDoc, OMDocDeclaration, OMDocExtension, OMDocModule, OMDocMorphism, OMDocStructure,
+        OMDocSymbol,
     };
     use flams_ontology::{
         content::{
@@ -450,18 +465,18 @@ mod froms {
     use flams_system::backend::{Backend, StringPresenter};
     use flams_utils::vecmap::VecSet;
 
-    impl AnySpec {
+    impl OMDoc {
         pub fn from_module_like<B: Backend>(
             m: &ModuleLike,
             backend: &B, //&mut StringPresenter<'_,B>
         ) -> Self {
             match m {
-                ModuleLike::Module(m) => ModuleSpec::from_module(m, backend).into(),
+                ModuleLike::Module(m) => OMDocModule::from_module(m, backend).into(),
                 ModuleLike::NestedModule(m) => {
                     let mut imports = VecSet::new();
                     let children =
-                        DeclarationSpec::do_children(backend, &m.as_ref().elements, &mut imports);
-                    ModuleSpec {
+                        OMDocDeclaration::do_children(backend, &m.as_ref().elements, &mut imports);
+                    OMDocModule {
                         uri: m.as_ref().uri.clone().into_module(),
                         children,
                         imports,
@@ -472,17 +487,17 @@ mod froms {
                     .into()
                 }
                 ModuleLike::Structure(s) => {
-                    StructureSpec::from_structure(s.as_ref(), backend).into()
+                    OMDocStructure::from_structure(s.as_ref(), backend).into()
                 }
                 ModuleLike::Extension(e) => {
-                    ExtensionSpec::from_extension(e.as_ref(), backend).into()
+                    OMDocExtension::from_extension(e.as_ref(), backend).into()
                 }
-                ModuleLike::Morphism(m) => MorphismSpec::from_morphism(m.as_ref(), backend).into(),
+                ModuleLike::Morphism(m) => OMDocMorphism::from_morphism(m.as_ref(), backend).into(),
             }
         }
     }
 
-    impl SymbolSpec {
+    impl OMDocSymbol {
         pub fn from_symbol<B: Backend>(
             Symbol {
                 uri,
@@ -505,7 +520,7 @@ mod froms {
         }
     }
 
-    impl ModuleSpec<DeclarationSpec> {
+    impl OMDocModule<OMDocDeclaration> {
         pub fn from_module<B: Backend>(
             module: &Module,
             backend: &B, //&mut StringPresenter<'_,B>,
@@ -515,7 +530,7 @@ mod froms {
             let signature = module.signature().map(|c| c.id().into_owned());
             let mut imports = VecSet::new();
             let children =
-                DeclarationSpec::do_children(backend, module.declarations(), &mut imports);
+                OMDocDeclaration::do_children(backend, module.declarations(), &mut imports);
             Self {
                 uri,
                 metatheory,
@@ -527,7 +542,7 @@ mod froms {
         }
     }
 
-    impl StructureSpec<DeclarationSpec> {
+    impl OMDocStructure<OMDocDeclaration> {
         pub fn from_structure<B: Backend>(
             s: &MathStructure<Checked>,
             backend: &B, //&mut StringPresenter<'_,B>,
@@ -543,7 +558,7 @@ mod froms {
                             .iter()
                             .filter_map(|e| {
                                 if let OpenDeclaration::Symbol(s) = e {
-                                    Some(SymbolSpec::from_symbol(s, backend))
+                                    Some(OMDocSymbol::from_symbol(s, backend))
                                 } else {
                                     None
                                 }
@@ -553,7 +568,7 @@ mod froms {
                 })
                 .collect();
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(backend, s.declarations(), &mut imports);
+            let children = OMDocDeclaration::do_children(backend, s.declarations(), &mut imports);
             Self {
                 uri,
                 macro_name,
@@ -565,7 +580,7 @@ mod froms {
         }
     }
 
-    impl ExtensionSpec<DeclarationSpec> {
+    impl OMDocExtension<OMDocDeclaration> {
         pub fn from_extension<B: Backend>(
             e: &Extension<Checked>,
             backend: &B, //&mut StringPresenter<'_,B>
@@ -573,8 +588,8 @@ mod froms {
             let target = e.target.id().into_owned();
             let uri = e.uri.clone();
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(backend, &e.elements, &mut imports);
-            ExtensionSpec {
+            let children = OMDocDeclaration::do_children(backend, &e.elements, &mut imports);
+            OMDocExtension {
                 uri,
                 target,
                 uses: VecSet::new(),
@@ -583,7 +598,7 @@ mod froms {
         }
     }
 
-    impl MorphismSpec<DeclarationSpec> {
+    impl OMDocMorphism<OMDocDeclaration> {
         pub fn from_morphism<B: Backend>(
             m: &Morphism<Checked>,
             backend: &B, //&mut StringPresenter<'_,B>
@@ -592,8 +607,8 @@ mod froms {
             let total = m.total;
             let target = Some(m.domain.id().into_owned());
             let mut imports = VecSet::new();
-            let children = DeclarationSpec::do_children(backend, &m.elements, &mut imports);
-            MorphismSpec {
+            let children = OMDocDeclaration::do_children(backend, &m.elements, &mut imports);
+            OMDocMorphism {
                 uri,
                 total,
                 target,
@@ -603,7 +618,7 @@ mod froms {
         }
     }
 
-    impl DeclarationSpec {
+    impl OMDocDeclaration {
         pub fn do_children<B: Backend>(
             backend: &B, //&mut StringPresenter<'_,B>,
             children: &[Declaration],
@@ -613,17 +628,17 @@ mod froms {
             for c in children {
                 match c {
                     OpenDeclaration::Symbol(s) => {
-                        ret.push(SymbolSpec::from_symbol(s, backend).into())
+                        ret.push(OMDocSymbol::from_symbol(s, backend).into())
                     }
                     OpenDeclaration::Import(m) => imports.insert(m.id().into_owned()),
                     OpenDeclaration::MathStructure(s) => {
-                        ret.push(StructureSpec::from_structure(s, backend).into())
+                        ret.push(OMDocStructure::from_structure(s, backend).into())
                     }
                     OpenDeclaration::NestedModule(m) => {
                         let mut imports = VecSet::new();
                         let children = Self::do_children(backend, &m.elements, &mut imports);
                         ret.push(
-                            ModuleSpec {
+                            OMDocModule {
                                 uri: m.uri.clone().into_module(),
                                 children,
                                 imports,
@@ -635,10 +650,10 @@ mod froms {
                         )
                     }
                     OpenDeclaration::Extension(e) => {
-                        ret.push(ExtensionSpec::from_extension(e, backend).into())
+                        ret.push(OMDocExtension::from_extension(e, backend).into())
                     }
                     OpenDeclaration::Morphism(m) => {
-                        ret.push(MorphismSpec::from_morphism(m, backend).into())
+                        ret.push(OMDocMorphism::from_morphism(m, backend).into())
                     }
                 }
             }

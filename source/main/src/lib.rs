@@ -24,7 +24,7 @@ pub(crate) mod fns {
         uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
     };
     use flams_utils::CSS;
-    use ftml_viewer_components::components::{omdoc::AnySpec, TOCElem};
+    use ftml_viewer_components::components::{omdoc::OMDoc, TOCElem};
     use leptos::prelude::ServerFnError;
 
     fn fragment(
@@ -100,7 +100,7 @@ pub(crate) mod fns {
         e: Option<String>,
         m: Option<String>,
         s: Option<String>,
-    ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, AnySpec), ServerFnError<String>>> + Send>>
+    ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, OMDoc), ServerFnError<String>>> + Send>>
     {
         Box::pin(flams_router_dashboard::server_fns::content::omdoc(
             uri, rp, a, p, l, d, e, m, s,

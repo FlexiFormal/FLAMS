@@ -31,6 +31,8 @@ export type SlideElement = FTML.SlideElement;
 export type ArchiveId = FTML.ArchiveId;
 export type SolutionData = FTML.SolutionData;
 export type ProblemFeedbackJson = FTML.ProblemFeedbackJson;
+export type OMDoc = FTML.OMDoc;
+export type URI = FTML.URI;
 
 export type DocumentURIParams =
   | { uri: DocumentURI }
@@ -46,7 +48,7 @@ export type DocumentElementURIParams =
   | { a: string; p?: string; d: string; l: Language; e: string };
 
 export type URIParams =
-  | { uri: DocumentURI }
+  | { uri: URI }
   | { a: string } // ArchiveURI
   | { a: string; rp: string } // DocumentURI
   | { a: string; p?: string; d: string; l?: Language } // DocumentURI

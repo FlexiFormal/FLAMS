@@ -9,7 +9,7 @@ use flams_ontology::{
     uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
 };
 use flams_utils::CSS;
-use ftml_viewer_components::components::{TOCElem, omdoc::AnySpec};
+use ftml_viewer_components::components::{TOCElem, omdoc::OMDoc};
 use leptos::prelude::*;
 
 #[cfg(feature = "ssr")]
@@ -160,7 +160,7 @@ pub async fn omdoc(
     e: Option<String>,
     m: Option<String>,
     s: Option<String>,
-) -> Result<(Vec<CSS>, AnySpec), ServerFnError<String>> {
+) -> Result<(Vec<CSS>, OMDoc), ServerFnError<String>> {
     let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, m, s).try_into() else {
         return Err("invalid uri components".to_string().into());
     };
@@ -168,6 +168,34 @@ pub async fn omdoc(
         return Err("invalid uri".to_string().into());
     };
     server::omdoc(uri).await
+}
+
+#[server(
+  prefix="/content",
+  endpoint="title",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
+)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn title(
+    uri: Option<URI>,
+    rp: Option<String>,
+    a: Option<ArchiveId>,
+    p: Option<String>,
+    l: Option<Language>,
+    d: Option<String>,
+    e: Option<String>,
+    m: Option<String>,
+    s: Option<String>,
+) -> Result<(Vec<CSS>, String), ServerFnError<String>> {
+    let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, m, s).try_into() else {
+        return Err("invalid uri components".to_string().into());
+    };
+    let Some(uri) = comps.parse() else {
+        return Err("invalid uri".to_string().into());
+    };
+    server::title(uri).await
 }
 
 #[server(
@@ -295,6 +323,7 @@ mod server {
             notations::Notation,
             paragraphs::LogicalParagraph,
             problems::{Problem, Quiz, Solutions},
+            sections::Section,
         },
         rdf::ontologies::ulo2,
         uris::{
@@ -308,8 +337,8 @@ mod server {
     use ftml_viewer_components::components::{
         TOCElem,
         omdoc::{
-            AnySpec,
-            narration::{DocumentElementSpec, DocumentSpec},
+            OMDoc,
+            narration::{OMDocDocument, OMDocDocumentElement},
         },
     };
     use leptos::prelude::*;
@@ -427,22 +456,55 @@ mod server {
         Ok(v.0)
     }
 
-    pub async fn omdoc(uri: URI) -> Result<(Vec<CSS>, AnySpec), ServerFnError<String>> {
+    pub async fn title(uri: URI) -> Result<(Vec<CSS>, String), ServerFnError<String>> {
+        match uri {
+            uri @ (URI::Base(_) | URI::Archive(_) | URI::Path(_) | URI::Content(_)) => {
+                Err(format!("Not a URI of an element that can have a title: {uri}").into())
+            }
+            URI::Narrative(NarrativeURI::Document(uri)) => {
+                let Some(doc) = backend!(get_document!(&uri)) else {
+                    not_found!("Document {uri} not found");
+                };
+                Ok((Vec::new(), doc.title().unwrap_or_default().to_string()))
+            }
+            URI::Narrative(NarrativeURI::Element(uri)) => {
+                let Some(e): Option<NarrativeReference<DocumentElement<Checked>>> =
+                    backend!(get_document_element!(&uri))
+                else {
+                    not_found!("Document Element {uri} not found");
+                };
+                match e.as_ref() {
+                    DocumentElement::Section(Section { title, .. })
+                    | DocumentElement::Paragraph(LogicalParagraph { title, .. })
+                    | DocumentElement::Problem(Problem { title, .. }) => {
+                        let Some(title) = title else {
+                            return Ok((Vec::new(), String::new()));
+                        };
+                        backend!(get_html_fragment!(uri.document(), *title))
+                            .ok_or_else(|| format!("Error retrieving title").into())
+                    }
+                    _ => Err(format!("Narrative element has no title").into()),
+                }
+            }
+        }
+    }
+
+    pub async fn omdoc(uri: URI) -> Result<(Vec<CSS>, OMDoc), ServerFnError<String>> {
         let mut css = VecSet::default();
         match uri {
             uri @ (URI::Base(_) | URI::Archive(_) | URI::Path(_)) => {
-                Ok((insert_base_url(css.0), AnySpec::Other(uri.to_string())))
+                Ok((insert_base_url(css.0), OMDoc::Other(uri.to_string())))
             }
             URI::Narrative(NarrativeURI::Document(uri)) => {
                 let Some(doc) = backend!(get_document!(&uri)) else {
                     not_found!("Document {uri} not found");
                 };
                 let (css, r) = backend!(backend => {
-                  let r = DocumentSpec::from_document(&doc, backend,&mut css);
+                  let r = OMDocDocument::from_document(&doc, backend,&mut css);
                   (css,r)
                 }{
                   blocking_server_fn(move || {
-                    let r = DocumentSpec::from_document(&doc, backend,&mut css);
+                    let r = OMDocDocument::from_document(&doc, backend,&mut css);
                     Ok((css,r))
                   }).await?
                 });
@@ -455,11 +517,11 @@ mod server {
                     not_found!("Document Element {uri} not found");
                 };
                 let (css, r) = backend!(backend => {
-                  let r = DocumentElementSpec::from_element(e.as_ref(),backend, &mut css);
+                  let r = OMDocDocumentElement::from_element(e.as_ref(),backend, &mut css);
                   (css,r)
                 }{
                   blocking_server_fn(move || {
-                    let r = DocumentElementSpec::from_element(e.as_ref(),backend,&mut css);
+                    let r = OMDocDocumentElement::from_element(e.as_ref(),backend,&mut css);
                     Ok((css,r))
                   }).await?
                 });
@@ -473,10 +535,10 @@ mod server {
                     not_found!("Module {uri} not found");
                 };
                 let r = backend!(backend => {
-                  AnySpec::from_module_like(&m, backend)
+                  OMDoc::from_module_like(&m, backend)
                 }{
                   blocking_server_fn(move || {
-                    Ok(AnySpec::from_module_like(&m, backend))
+                    Ok(OMDoc::from_module_like(&m, backend))
                   }).await?
                 });
                 Ok((Vec::new(), r))

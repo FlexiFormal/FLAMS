@@ -1,4 +1,4 @@
-use content::DeclarationSpec;
+use content::OMDocDeclaration;
 use flams_ontology::{
     content::terms::Term,
     ftml::FTMLKey,
@@ -9,7 +9,7 @@ use flams_web_utils::{
     do_css,
 };
 use leptos::prelude::*;
-use narration::DocumentElementSpec;
+use narration::OMDocDocumentElement;
 
 use crate::{FTMLString, FTMLStringMath};
 
@@ -21,13 +21,13 @@ pub mod narration;
 pub enum OMDocSource {
     #[default]
     None,
-    Ready(narration::DocumentSpec),
+    Ready(narration::OMDocDocument),
     Get,
 }
 
 #[allow(clippy::match_wildcard_for_single_variants)]
 pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
-    use crate::components::omdoc::{AnySpec, Spec};
+    use crate::components::omdoc::{OMDoc, OMDocT};
     use flams_web_utils::components::{Drawer, Header, Trigger};
     use thaw::{Button, ButtonAppearance};
     if matches!(omdoc, OMDocSource::None) {
@@ -49,7 +49,7 @@ pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
             OMDocSource::Get => {
               let uri = uri.clone();
               leptos::either::Either::Left(crate::remote::get!(omdoc(NarrativeURI::Document(uri.clone()).into()) = (_,omdoc) => {
-                let AnySpec::Document(omdoc) = omdoc else {unreachable!()};
+                let OMDoc::Document(omdoc) = omdoc else {unreachable!()};
                 if let Some(s) = &omdoc.title {
                     title.set(s.clone());
                 }
@@ -70,43 +70,49 @@ pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
 pub(crate) mod sealed {
     pub trait Sealed {}
 }
-pub trait Spec: std::fmt::Debug + Clone {
+pub trait OMDocT: std::fmt::Debug + Clone {
     /*#[cfg(feature="ssr")]
     type Orig;
     #[cfg(feature="ssr")]
     fn from_orig(t:&Self::Orig) -> Self;*/
     fn into_view(self) -> impl leptos::IntoView;
 }
-pub trait SpecDecl:
-    sealed::Sealed + Spec + std::fmt::Debug + Clone + Send + Sync + 'static
+pub trait OMDocDecl:
+    sealed::Sealed + OMDocT + std::fmt::Debug + Clone + Send + Sync + 'static
 {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum AnySpec {
-    Slide(narration::SlideSpec),
-    Document(narration::DocumentSpec),
-    Section(narration::SectionSpec),
-    DocModule(content::ModuleSpec<DocumentElementSpec>),
-    Module(content::ModuleSpec<DeclarationSpec>),
-    DocMorphism(content::MorphismSpec<DocumentElementSpec>),
-    Morphism(content::MorphismSpec<DeclarationSpec>),
-    DocStructure(content::StructureSpec<DocumentElementSpec>),
-    Structure(content::StructureSpec<DeclarationSpec>),
-    DocExtension(content::ExtensionSpec<DocumentElementSpec>),
-    Extension(content::ExtensionSpec<DeclarationSpec>),
-    SymbolDeclaration(content::SymbolSpec),
-    Variable(narration::VariableSpec),
-    Paragraph(narration::ParagraphSpec),
-    Problem(narration::ProblemSpec),
-    Term(DocumentElementURI, Term),
+#[serde(tag = "type")]
+#[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
+pub enum OMDoc {
+    Slide(narration::OMDocSlide),
+    Document(narration::OMDocDocument),
+    Section(narration::OMDocSection),
+    DocModule(content::OMDocModule<OMDocDocumentElement>),
+    Module(content::OMDocModule<OMDocDeclaration>),
+    DocMorphism(content::OMDocMorphism<OMDocDocumentElement>),
+    Morphism(content::OMDocMorphism<OMDocDeclaration>),
+    DocStructure(content::OMDocStructure<OMDocDocumentElement>),
+    Structure(content::OMDocStructure<OMDocDeclaration>),
+    DocExtension(content::OMDocExtension<OMDocDocumentElement>),
+    Extension(content::OMDocExtension<OMDocDeclaration>),
+    SymbolDeclaration(content::OMDocSymbol),
+    Variable(narration::OMDocVariable),
+    Paragraph(narration::OMDocParagraph),
+    Problem(narration::OMDocProblem),
+    Term {
+        uri: DocumentElementURI,
+        term: Term,
+    },
     DocReference {
         uri: DocumentURI,
         title: Option<String>,
     },
     Other(String),
 }
-impl Spec for AnySpec {
+impl OMDocT for OMDoc {
     fn into_view(self) -> impl leptos::IntoView {
         match self {
             Self::Slide(d) => d.into_view().into_any(),
@@ -125,10 +131,10 @@ impl Spec for AnySpec {
             Self::Paragraph(d) => d.into_view().into_any(),
             Self::Problem(d) => d.into_view().into_any(),
             Self::DocReference { uri, title } => narration::doc_ref(uri, title).into_any(),
-            Self::Term(uri, t) => view! {
+            Self::Term { uri, term } => view! {
               <Block show_separator=false>
                 <Header slot><span><b>"Term "</b>{
-                  crate::remote::get!(present(t.clone()) = html => {
+                  crate::remote::get!(present(term.clone()) = html => {
                     view!(<FTMLStringMath html/>)
                   })
                 }</span></Header>

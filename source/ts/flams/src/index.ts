@@ -158,6 +158,18 @@ export class FLAMSServer {
     }
   }
 
+  async omdoc(
+    uri: FLAMS.URIParams,
+  ): Promise<[FLAMS.CSS[],FLAMS.OMDoc] | undefined> {
+    return await this.rawGetRequest("content/omdoc", {uri:uri});
+  }
+
+  async title(
+    uri: FLAMS.URIParams,
+  ): Promise<[FLAMS.CSS[],string] | undefined> {
+    return await this.rawGetRequest("content/title", {uri:uri});
+  }
+
   async contentDocument(
     uri: FLAMS.DocumentURIParams,
   ): Promise<[FLAMS.DocumentURI, FLAMS.CSS[], string] | undefined> {

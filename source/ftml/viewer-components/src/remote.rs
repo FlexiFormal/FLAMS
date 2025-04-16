@@ -9,7 +9,7 @@ use leptos::prelude::*;
 use std::borrow::Cow;
 
 #[cfg(feature = "omdoc")]
-use crate::components::omdoc::AnySpec;
+use crate::components::omdoc::OMDoc;
 
 use crate::components::TOCElem;
 
@@ -303,7 +303,7 @@ pub struct ServerConfig {
     get_full_doc: Cache<DocURIArgs, (DocumentURI, Vec<CSS>, String)>,
     get_fragment: Cache<URIArgs, (URI, Vec<CSS>, String)>,
     #[cfg(feature = "omdoc")]
-    get_omdoc: Cache<URIArgs, (Vec<CSS>, AnySpec)>,
+    get_omdoc: Cache<URIArgs, (Vec<CSS>, OMDoc)>,
     get_toc: Cache<DocURIArgs, (Vec<CSS>, Vec<TOCElem>)>,
     get_los: Cache<LOArgs, Vec<(DocumentElementURI, LOKind)>>,
     #[cfg(feature = "omdoc")]
@@ -392,10 +392,7 @@ impl ServerConfig {
     /// #### Panics
     #[cfg(feature = "omdoc")]
     #[inline]
-    pub async fn omdoc(
-        &self,
-        uri: flams_ontology::uris::URI,
-    ) -> Result<(Vec<CSS>, AnySpec), String> {
+    pub async fn omdoc(&self, uri: flams_ontology::uris::URI) -> Result<(Vec<CSS>, OMDoc), String> {
         self.get_omdoc.call(uri, ()).await
     }
 
@@ -545,7 +542,7 @@ impl ServerConfig {
         fragment: server_fun!(@URI => (URI,Vec<CSS>,String)),
         full_doc: server_fun!(@DOCURI => (DocumentURI,Vec<CSS>,String)),
         toc: server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>)),
-        omdoc: server_fun!(@URI => (Vec<CSS>,AnySpec)),
+        omdoc: server_fun!(@URI => (Vec<CSS>,OMDoc)),
         los: server_fun!(@SYMURI,bool => Vec<(DocumentElementURI,LOKind)>),
         notations: server_fun!(@URI => Vec<(DocumentElementURI,flams_ontology::narration::notations::Notation)>),
         solutions: server_fun!(@URI => String),

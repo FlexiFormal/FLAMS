@@ -6,12 +6,19 @@ use crate::uris::{
 };
 use const_format::concatcp;
 use modules::ModuleURIRef;
-use symbols::SymbolURIRef;
 use std::fmt::Display;
 use std::str::FromStr;
+use symbols::SymbolURIRef;
 
 pub(super) mod modules;
 pub(super) mod symbols;
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)
+)]
+const TS_URI: &str = "export type ContentURI = string;";
 
 pub trait ContentURITrait: URIOrRefTrait {
     fn as_content(&self) -> ContentURIRef;

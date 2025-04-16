@@ -42,6 +42,7 @@
  * | [`/img`](img_handler) | `kpse=<STRING>` or `file=<STRING>` (LSP only) or `a=<ArchiveID>&rp=<STRING>` | Images |
  * | [`/content/document`](content::document) | [DocumentURI] | `(`[DocumentURI],`Vec<`[CSS]`>,String)` Returns a pair of CSS rules and the full body of the HTML for the given document (with the `<body>` node replaced by a `<div>`, but preserving all attributes/classes) |
  * | [`/content/fragment`](content::fragment) | [URI] | `(Vec<`[CSS]`>,String)` Returns a pair of CSS rules and the HTML fragment representing the given element; i.e. the inner HTML of a document (for inputrefs), the HTML or a semantic paragraph, etc. |
+ * | [`/content/title`](content::title) | [URI] | `(Vec<`[CSS]`>,String)` Returns a pair of CSS rules and the HTML title of the given element |
  * | [`/content/omdoc`](content::omdoc) | [URI] | [`AnySpec`] Returns the structural representation of the OMDoc conent at the given URI |
  * | [`/content/toc`](content::toc()) | [DocumentURI] | `(Vec<`[CSS]`>,Vec<`[TOCElem]`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
  * | [`/content/los`](content::los()) | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
@@ -66,4 +67,4 @@ use flams_router_dashboard::{
     LoginState,
 };
 use flams_utils::{settings::SettingsSpec, CSS};
-use ftml_viewer_components::components::{omdoc::AnySpec, TOCElem};
+use ftml_viewer_components::components::{omdoc::OMDoc, TOCElem};
