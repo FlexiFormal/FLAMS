@@ -333,7 +333,7 @@ mod server {
     };
     use flams_system::backend::{Backend, GlobalBackend, rdf::sparql};
     use flams_utils::{CSS, vecmap::VecSet};
-    use flams_web_utils::blocking_server_fn;
+    use flams_web_utils::{blocking_server_fn, not_found};
     use ftml_viewer_components::components::{
         TOCElem,
         omdoc::{
@@ -342,15 +342,6 @@ mod server {
         },
     };
     use leptos::prelude::*;
-
-    macro_rules! not_found{
-        (! $($e:tt)*) => { {
-            let response = expect_context::<::leptos_axum::ResponseOptions>();
-            response.set_status(::http::StatusCode::NOT_FOUND);
-            format!($($e)*).into()
-        }};
-        ($($e:tt)*) => { return Err(not_found!(! $($e)*))};
-    }
 
     pub async fn document(
         uri: DocumentURI,

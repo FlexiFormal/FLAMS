@@ -1735,6 +1735,7 @@ name = "flams-router-backend"
 version = "0.0.1"
 dependencies = [
  "either",
+ "flams-git",
  "flams-ontology",
  "flams-router-base",
  "flams-router-buildqueue-base",
@@ -1748,6 +1749,7 @@ dependencies = [
  "leptos",
  "serde",
  "thaw",
+ "tokio",
  "urlencoding",
 ]
 
@@ -2081,9 +2083,11 @@ version = "0.0.1"
 dependencies = [
  "flams-utils",
  "gloo-storage",
+ "http 1.3.1",
  "icondata_ch",
  "leptos",
  "leptos-dyn-dom",
+ "leptos_axum",
  "leptos_meta",
  "send_wrapper",
  "serde",
@@ -3327,15 +3331,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
@@ -3443,16 +3438,15 @@ checksum = "03087c2bad5e1034e8cace5926dec053fb3790248370865f5117a7d0213354c8"
 
 [[package]]
 name = "leptos"
-version = "0.7.7"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88613d81f70f4e267473b2ee107e1ee70cf765a3c3dfee945929c8e9c520b957"
+checksum = "26b8731cb00f3f0894058155410b95c8955b17273181d2bc72600ab84edd24f1"
 dependencies = [
  "any_spawner",
  "base64 0.22.1",
  "cfg-if",
  "either_of",
  "futures",
- "getrandom 0.2.15",
  "hydration_context",
  "leptos_config",
  "leptos_dom",
@@ -3491,9 +3485,9 @@ dependencies = [
 
 [[package]]
 name = "leptos_axum"
-version = "0.7.7"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba5f7e98cbafa64b6dc0201557d912c39621a324f7bca4d6d069a154e78d3458"
+checksum = "b5e4b8a1c190800d24f0c79e6c320186ad31ca8800e54c057ad65cdf452ff7d0"
 dependencies = [
  "any_spawner",
  "axum",
@@ -3561,9 +3555,9 @@ dependencies = [
 
 [[package]]
 name = "leptos_integration_utils"
-version = "0.7.7"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55d2c530c10566744f1e2c88e7a30d0ebfb971cf609223bb204a2291537b411b"
+checksum = "42de4c69817c33179fdf21460b3429a2e4899dc646e1673eb87b2e81e325ddd0"
 dependencies = [
  "futures",
  "hydration_context",
@@ -3576,15 +3570,15 @@ dependencies = [
 
 [[package]]
 name = "leptos_macro"
-version = "0.7.7"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b9165909eabb02188a4b33b0ab6acff408bdf440018bf65b30bba0d38d61b19"
+checksum = "2fc2ae3f369c90a830e02119216f7d6f60fe212823560aa034038e27bd77ca87"
 dependencies = [
  "attribute-derive",
  "cfg-if",
- "convert_case 0.6.0",
+ "convert_case 0.7.1",
  "html-escape",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leptos_hot_reload",
  "prettyplease",
  "proc-macro-error2",
@@ -3598,9 +3592,9 @@ dependencies = [
 
 [[package]]
 name = "leptos_meta"
-version = "0.7.7"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4566969810e3f29cfdafd6dd430382e42f72f4cdebfbfa263bd98f75feaf166d"
+checksum = "448a6387e9e2cccbb756f474a54e36a39557127a3b8e46744b6ef6372b50f575"
 dependencies = [
  "futures",
  "indexmap",
@@ -3614,9 +3608,9 @@ dependencies = [
 
 [[package]]
 name = "leptos_router"
-version = "0.7.7"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e83cf6033f987f366be6ffa556ee22fa6f9f433cbffd173826fd67327c3ae7ed"
+checksum = "4168ead6a9715daba953aa842795cb2ad81b6e011a15745bd3d1baf86f76de95"
 dependencies = [
  "any_spawner",
  "either_of",
@@ -4418,7 +4412,7 @@ version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d28e7314364160e878e8a004598de4c45bd615a9eca09ec2aaedfb119cad06ba"
 dependencies = [
- "dashmap 5.5.3",
+ "dashmap 6.1.0",
  "getrandom 0.2.15",
  "libc",
  "oxiri",
@@ -4431,7 +4425,7 @@ dependencies = [
  "sparesults",
  "spareval",
  "spargebra",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4459,7 +4453,7 @@ dependencies = [
  "oxiri",
  "oxsdatatypes",
  "rand 0.8.5",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4471,7 +4465,7 @@ dependencies = [
  "oxrdf",
  "oxrdfxml",
  "oxttl",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4484,7 +4478,7 @@ dependencies = [
  "oxiri",
  "oxrdf",
  "quick-xml",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4493,7 +4487,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06fa874d87eae638daae9b4e3198864fe2cce68589f227c0b2cf5b62b1530516"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4506,7 +4500,7 @@ dependencies = [
  "oxilangtag",
  "oxiri",
  "oxrdf",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4637,7 +4631,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "image",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "js-sys",
  "libloading",
  "log",
@@ -6131,7 +6125,7 @@ dependencies = [
  "memchr",
  "oxrdf",
  "quick-xml",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -6154,7 +6148,7 @@ dependencies = [
  "sparesults",
  "spargebra",
  "sparopt",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -6168,7 +6162,7 @@ dependencies = [
  "oxrdf",
  "peg",
  "rand 0.8.5",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -6886,8 +6880,8 @@ dependencies = [
 
 [[package]]
 name = "thaw"
-version = "0.4.4"
-source = "git+https://github.com/Jazzpirate/thaw#8a60e90eaf77916853a55f1db5faeaef58bd5d28"
+version = "0.4.5"
+source = "git+https://github.com/Jazzpirate/thaw#6310432de15b9b3ce8e6fa4b0a42c572aee60d4d"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -6909,7 +6903,7 @@ dependencies = [
 [[package]]
 name = "thaw_components"
 version = "0.3.1"
-source = "git+https://github.com/Jazzpirate/thaw#8a60e90eaf77916853a55f1db5faeaef58bd5d28"
+source = "git+https://github.com/Jazzpirate/thaw#6310432de15b9b3ce8e6fa4b0a42c572aee60d4d"
 dependencies = [
  "cfg-if",
  "leptos",
@@ -6922,7 +6916,7 @@ dependencies = [
 [[package]]
 name = "thaw_macro"
 version = "0.1.0"
-source = "git+https://github.com/Jazzpirate/thaw#8a60e90eaf77916853a55f1db5faeaef58bd5d28"
+source = "git+https://github.com/Jazzpirate/thaw#6310432de15b9b3ce8e6fa4b0a42c572aee60d4d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6932,7 +6926,7 @@ dependencies = [
 [[package]]
 name = "thaw_utils"
 version = "0.1.1"
-source = "git+https://github.com/Jazzpirate/thaw#8a60e90eaf77916853a55f1db5faeaef58bd5d28"
+source = "git+https://github.com/Jazzpirate/thaw#6310432de15b9b3ce8e6fa4b0a42c572aee60d4d"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -7919,7 +7913,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

@@ -1,9 +1,13 @@
+use std::path::Path;
+
 use flams_ontology::{
     archive_json::{
         ArchiveData, ArchiveGroupData, ArchiveIndex, DirectoryData, FileData, Institution,
     },
-    uris::ArchiveId,
+    languages::Language,
+    uris::{ArchiveId, ArchiveURITrait, NarrativeURITrait, PathURITrait, URI, URIWithLanguage},
 };
+use flams_router_base::uris::URIComponents;
 use leptos::prelude::*;
 
 use crate::FileStates;
@@ -36,6 +40,162 @@ pub async fn build_status(
     path: Option<String>,
 ) -> Result<FileStates, ServerFnError<String>> {
     server::build_status(archive, path).await
+}
+
+#[server(prefix = "/api/backend", endpoint = "source_file",
+    input=server_fn::codec::GetUrl,
+    output=server_fn::codec::Json)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_arguments)]
+pub async fn source_file(
+    uri: Option<URI>,
+    rp: Option<String>,
+    a: Option<ArchiveId>,
+    p: Option<String>,
+    l: Option<Language>,
+    d: Option<String>,
+    e: Option<String>,
+    m: Option<String>,
+    s: Option<String>,
+) -> Result<String, ServerFnError<String>> {
+    use flams_system::backend::{Backend, archives::LocalArchive};
+    use flams_web_utils::not_found;
+    fn get_root(
+        id: &ArchiveId,
+        and_then: impl FnOnce(&LocalArchive, String) -> Result<String, String>,
+    ) -> Result<String, String> {
+        use flams_git::GitUrlExt;
+        flams_system::backend::GlobalBackend::get().with_local_archive(id, |a| {
+            let Some(a) = a else {
+                not_found!("Archive {id} not found")
+            };
+            let repo = flams_git::repos::GitRepo::open(a.path())
+                .map_err(|_| format!("No git remote for {id} found"))?;
+            let url = repo
+                .get_origin_url()
+                .map_err(|_| format!("No git remote for {id} found"))?;
+            and_then(a, url.into_https().to_string())
+        })
+    }
+    fn get_source(id: &ArchiveId, path: Option<&str>) -> Result<String, String> {
+        get_root(id, |_, s| Ok(s)).map(|mut s| {
+            s.push_str("/-/main/source/");
+            if let Some(p) = path {
+                s.push_str(p);
+            }
+            s
+        })
+    }
+    fn get_source_of_file<'a>(
+        id: &ArchiveId,
+        path: Option<&str>,
+        last: Option<&'a str>,
+        mut name: &'a str,
+        lang: Option<Language>,
+    ) -> Result<String, String> {
+        fn find(path: &Path, base: &mut String, name: &str, lang: Option<Language>) -> bool {
+            if let Some(lang) = lang {
+                // TODO add other file extensions here!
+                let filename = format!("{name}.{lang}.tex");
+                let p = path.join(&filename);
+                if p.exists() {
+                    base.push_str(&filename);
+                    return true;
+                }
+            } else {
+                // TODO add other file extensions here!
+                let filename = format!("{name}.en.tex");
+                let p = path.join(&filename);
+                if p.exists() {
+                    base.push_str(&filename);
+                    return true;
+                }
+            }
+            // TODO add other file extensions here!
+            let filename = format!("{name}.tex");
+            let p = path.join(&filename);
+            p.exists() && {
+                base.push_str(&filename);
+                true
+            }
+        }
+        get_root(id, |a, mut base| {
+            base.push_str("/-/main/source");
+            let mut source_path = a.source_dir();
+            if let Some(path) = path {
+                for s in path.split('/') {
+                    source_path = source_path.join(s);
+                    base.push('/');
+                    base.push_str(s);
+                }
+            }
+            if let Some(last) = last {
+                let np = source_path.join(last);
+                let mut nb = format!("{base}/{last}");
+                if find(&np, &mut nb, name, lang) {
+                    return Ok(base);
+                }
+                name = last;
+            }
+            if find(&source_path, &mut base, name, lang) {
+                Ok(base)
+            } else {
+                not_found!("No source file found")
+            }
+        })
+    }
+
+    tokio::task::spawn_blocking(move || {
+        let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, m, s).try_into()
+        else {
+            return Err("invalid uri components".to_string());
+        };
+        let Some(uri) = comps.parse() else {
+            return Err("invalid uri".to_string());
+        };
+        match uri {
+            uri @ URI::Base(_) => Err(format!("BaseURI can not have a source path: {uri}")),
+            URI::Archive(a) => get_root(a.archive_id(), |_, s| Ok(s)),
+            URI::Path(uri) => match uri.path() {
+                None => get_root(uri.archive_id(), |_, s| Ok(s)),
+                Some(p) => get_source(uri.archive_id(), Some(&p.to_string())),
+            },
+            URI::Narrative(n) => {
+                let doc = n.document();
+                let path_str = doc.path().map(ToString::to_string);
+                get_source_of_file(
+                    doc.archive_id(),
+                    path_str.as_deref(),
+                    None,
+                    doc.name().first_name().as_ref(),
+                    Some(doc.language()),
+                )
+            }
+            URI::Content(module) => {
+                let (path, last) = if let Some(p) = module.path() {
+                    let ps = p.to_string();
+                    if let Some((p, l)) = ps.rsplit_once('/') {
+                        (Some(p.to_string()), Some(l.to_string()))
+                    } else {
+                        (None, Some(ps))
+                    }
+                } else {
+                    (None, None)
+                };
+
+                get_source_of_file(
+                    module.archive_id(),
+                    path.as_deref(),
+                    last.as_deref(),
+                    module.name().first_name().as_ref(),
+                    None,
+                )
+            }
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|s: String| s.into())
 }
 
 #[server(prefix="/api/backend",endpoint="download",

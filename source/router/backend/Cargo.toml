@@ -14,8 +14,10 @@ ssr = [
     "flams-router-base/ssr",
     "flams-router-content/ssr",
     "flams-router-buildqueue-base/ssr",
+    "dep:tokio",
     "dep:futures",
     "dep:flams-system",
+    "dep:flams-git",
 ]
 hydrate = [
     "leptos/hydrate",
@@ -35,6 +37,7 @@ flams-router-base = { workspace = true }
 flams-router-content = { workspace = true }
 flams-router-buildqueue-base = { workspace = true }
 flams-system = { workspace = true, optional = true }
+flams-git = { workspace = true, features = ["git2"], optional = true }
 
 leptos = { workspace = true }
 thaw = { workspace = true }
@@ -45,3 +48,4 @@ icondata_bi = { workspace = true }
 urlencoding = { workspace = true }
 
 futures = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }

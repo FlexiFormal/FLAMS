@@ -8,7 +8,7 @@ workspace = true
 
 [features]
 csr = ["leptos/csr", "thaw/csr"]
-ssr = ["leptos/ssr", "thaw/ssr", "dep:tokio"]
+ssr = ["leptos/ssr", "thaw/ssr", "dep:tokio", "dep:http", "dep:leptos_axum"]
 hydrate = ["leptos/hydrate", "thaw/hydrate", "dep:gloo-storage"]
 
 [dependencies]
@@ -27,6 +27,8 @@ icondata_ch = { workspace = true }
 tracing = { workspace = true }
 
 tokio = { workspace = true, optional = true, features = ["rt"] }
+http = { workspace = true, optional = true }
+leptos_axum = { workspace = true, optional = true }
 
 #tachys = {workspace = true}
 #leptos_macro = {workspace = true}

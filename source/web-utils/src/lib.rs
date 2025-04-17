@@ -162,3 +162,19 @@ pub fn try_catch<R>(run: impl FnOnce() -> R) -> Result<R, leptos::wasm_bindgen::
         leptos::wasm_bindgen::JsError::new("Box<dyn Error>")
     })
 }
+
+#[cfg(feature = "ssr")]
+pub use http;
+#[cfg(feature = "ssr")]
+pub use leptos_axum;
+
+#[cfg(feature = "ssr")]
+#[macro_export]
+macro_rules! not_found{
+    (! $($e:tt)*) => { {
+        let response = expect_context::<$crate::leptos_axum::ResponseOptions>();
+        response.set_status($crate::http::StatusCode::NOT_FOUND);
+        format!($($e)*).into()
+    }};
+    ($($e:tt)*) => { return Err(not_found!(! $($e)*))};
+}

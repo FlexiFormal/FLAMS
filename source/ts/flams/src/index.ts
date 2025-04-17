@@ -132,6 +132,15 @@ export class FLAMSServer {
   }
 
   /**
+   * Return a git[lab|hub] link for the source file containing the given element
+   */
+  async sourceFile(
+    uri: FLAMS.URIParams,
+  ): Promise<string | undefined> {
+    return await this.rawGetRequest("api/backend/source_file", uri);
+  }
+
+  /**
    * Batch grade an arrray of <solution,response[]> pairs.
    * Each of the responses will be graded against the corresponding solution, and the resulting
    * feedback returned at the same position. If *any* of the responses is malformed,
