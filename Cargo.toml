@@ -195,7 +195,7 @@ html5ever = "=0.29.1"                                                        # T
 
 async-lsp = { version = "0.2", features = ["tokio", "async-io"] }
 futures = { version = "0.3" }
-oauth2 = { version = "4" }
+oauth2 = { version = "5" }
 
 reqwest = { version = "0", features = ["json"] }
 
@@ -207,10 +207,14 @@ gitlab = { version = "0" }
 git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 # leptos
-leptos = { version = "0.7", features = ["nightly"] }
-leptos_axum = "0.7"
-leptos_meta = "0.7"
-leptos_router = { version = "0.7", features = ["nightly"] }
+#leptos = { version = "0.7", features = ["nightly"] }
+#leptos_axum = "0.7"
+#leptos_meta = "0.7"
+#leptos_router = { version = "0.7", features = ["nightly"] }
+leptos = { version = "0.8.0-rc1", features = ["nightly"] }
+leptos_axum = "0.8.0-rc1"
+leptos_meta = "0.8.0-rc1"
+leptos_router = { version = "0.8.0-rc1", features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
 
 #thaw = { version="0.4.2",features=["nightly"] }
@@ -221,11 +225,15 @@ leptos_router = { version = "0.7", features = ["nightly"] }
 #thaw_components = { path="../thaw/thaw_components" }
 #thaw_utils = { path="../thaw/thaw_utils", features=["nightly"] }
 
-thaw = { git = "https://github.com/Jazzpirate/thaw", features = ["nightly"] }
-thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
+thaw = { git = "https://github.com/Jazzpirate/thaw", features = [
+    "nightly",
+], branch = "thaw/v0.5" }
+thaw_components = { git = "https://github.com/Jazzpirate/thaw", branch = "thaw/v0.5" }
 thaw_utils = { git = "https://github.com/Jazzpirate/thaw", features = [
     "nightly",
-] }
+], branch = "thaw/v0.5" }
+
+leptos-dyn-dom = { git = "https://github.com/Jazzpirate/leptos-dyn-dom", branch = "leptos8" }
 
 bytes = "1.10"
 icondata_bi = "0"
@@ -233,13 +241,13 @@ icondata_ai = "0"
 icondata_ch = "0"
 icondata_tb = "0"
 
-axum = { version = "=0.7", features = ["ws"] }
+axum = { version = "0.8", features = ["ws"] }
 axum-macros = { version = "0.5" }
 # leptos_axum requires 0.4:
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
-tower-sessions = { version = "=0.13" }
-axum-login = { version = "=0.16" }
+tower-sessions = { version = "0.14" }
+axum-login = { version = "0.17" }
 http = { version = "1" }
 
 # wasm
@@ -259,9 +267,8 @@ futures-util = "0.3"
 # search
 
 html2text = "0.14"
-tantivy = "0.22"
+tantivy = "0.24"
 
-leptos-dyn-dom = { git = "https://github.com/Jazzpirate/leptos-dyn-dom" }
 # leptos-dyn-dom = { path="../leptos_dyn_dom"}
 RusTeX = { git = "https://github.com/Jazzpirate/RusTeX", features = [
     "multithreaded",

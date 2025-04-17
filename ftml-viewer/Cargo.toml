@@ -76,10 +76,12 @@ flams-ontology = { path = "../source/ontology" }
 leptos_meta = "*"
 wasm-bindgen = "*"
 console_error_panic_hook = "*"
-thaw = { git = "https://github.com/Jazzpirate/thaw", features = ["nightly"] }
+thaw = { git = "https://github.com/Jazzpirate/thaw", features = [
+    "nightly",
+], branch = "thaw/v0.5" }
 tracing-wasm = "*"
 tracing = { version = "*", features = ["release_max_level_info"] }
-leptos-dyn-dom = { version = "*", git = "https://github.com/Jazzpirate/leptos-dyn-dom" }
+leptos-dyn-dom = { version = "*", git = "https://github.com/Jazzpirate/leptos-dyn-dom", branch = "leptos8" }
 leptos = { version = "*", features = ["csr"] }
 
 tsify-next = { version = "*", optional = true }

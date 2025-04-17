@@ -495,7 +495,7 @@ mod server {
             .with_local_archive(&id, |a| a.map(|a| a.zip()))
             .ok_or_else(|| ServerFnError::new(format!("No archive with id {id} found!")))?;
         Ok(leptos::server_fn::codec::ByteStream::new(
-            stream.map_err(|e| ServerFnError::new(e.to_string())),
+            stream.map_err(|e| e.to_string()), //.map_err(|e| ServerFnError::new(e.to_string())),
         ))
     }
 }

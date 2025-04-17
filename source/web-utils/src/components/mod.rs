@@ -91,7 +91,7 @@ pub fn Burger<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoV
     inject_css("burger", include_str!("burger.css"));
     let children = children.into_inner();
     view! {<ClientOnly><div class="ftml-burger-outer"><div class="ftml-burger">
-      <Menu on_select=|_| () trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
+      <Menu on_select=|_:String| () trigger_type=MenuTriggerType::Hover position=MenuPosition::FlexibleBottom>
           <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
           {children()}
       </Menu>

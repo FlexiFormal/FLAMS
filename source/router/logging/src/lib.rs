@@ -208,7 +208,7 @@ impl ws::WebSocketServer<(), Log> for LogSocket {
                     let Ok(s) = serde_json::to_string(&Log::Initial(init)) else {
                         return;
                     };
-                    s
+                    s.into()
                 }))
                 .await;
         }

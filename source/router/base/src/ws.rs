@@ -1,3 +1,4 @@
+use axum::body::Bytes;
 #[cfg(feature = "ssr")]
 pub use axum::extract::ws::Message as WSMessage;
 #[cfg(feature = "ssr")]
@@ -150,7 +151,7 @@ pub trait WebSocketServer<
         Self: Send,
     {
         if socket
-            .send(axum::extract::ws::Message::Ping(Vec::new()))
+            .send(axum::extract::ws::Message::Ping(Bytes::new()))
             .await
             .is_err()
         {
@@ -160,12 +161,12 @@ pub trait WebSocketServer<
         self.on_start(&mut socket).await;
         loop {
             tokio::select! {
-                () = tokio::time::sleep(timeout) => if socket.send(axum::extract::ws::Message::Ping(Vec::new())).await.is_err() {
+                () = tokio::time::sleep(timeout) => if socket.send(axum::extract::ws::Message::Ping(Bytes::new())).await.is_err() {
                     return
                 },
                 msg = self.next() => if let Some(msg) = msg {
                     if let Ok(msg) = serde_json::to_string(&msg) {
-                        if socket.send(axum::extract::ws::Message::Text(msg)).await.is_err() {
+                        if socket.send(axum::extract::ws::Message::Text(msg.into())).await.is_err() {
                             return
                         }
                     }
@@ -174,7 +175,7 @@ pub trait WebSocketServer<
                     None => break,
                     Some(msg) => match msg {
                         Ok(axum::extract::ws::Message::Ping(_)) => {
-                            if socket.send(axum::extract::ws::Message::Pong(Vec::new())).await.is_err() {
+                            if socket.send(axum::extract::ws::Message::Pong(Bytes::new())).await.is_err() {
                                 break
                             }
                         },
@@ -182,7 +183,7 @@ pub trait WebSocketServer<
                             if let Ok(msg) = serde_json::from_str(&msg) {
                                 if let Some(reply) = self.handle_message(msg).await {
                                     if let Ok(reply) = serde_json::to_string(&reply) {
-                                        if socket.send(axum::extract::ws::Message::Text(reply)).await.is_err() {
+                                        if socket.send(axum::extract::ws::Message::Text(reply.into())).await.is_err() {
                                             break
                                         }
                                     }
