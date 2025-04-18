@@ -105,7 +105,7 @@ jobs:
           path: bin
   release:
     needs: [linux, windows, mac_aarch64]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
