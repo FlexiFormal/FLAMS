@@ -240,6 +240,7 @@ impl RusTeX {
             verbose: false,
             sourcerefs: false,
             log: true,
+            insert_font_info: false,
             image_options: ImageOptions::AsIs,
         };
         (engine, settings)
@@ -278,6 +279,7 @@ impl RusTeX {
                 verbose: false,
                 sourcerefs: false,
                 log: true,
+                insert_font_info: false,
                 image_options: ImageOptions::AsIs,
             },
         }
@@ -299,6 +301,10 @@ impl<const HAS_PATH: bool> RusTeXRunBuilder<HAS_PATH> {
     }
     pub fn set_envs<I: IntoIterator<Item = (String, String)>>(mut self, envs: I) -> Self {
         self.inner.filesystem.add_envs(envs);
+        self
+    }
+    pub fn set_font_debug_info(mut self, b: bool) -> Self {
+        self.settings.insert_font_info = b;
         self
     }
 }

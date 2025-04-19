@@ -206,7 +206,9 @@ dashmap = { version = "6" }
 gitlab = { version = "0" }
 git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
+
 # leptos
+<<<<<<< HEAD
 #leptos = { version = "0.7", features = ["nightly"] }
 #leptos_axum = "0.7"
 #leptos_meta = "0.7"
@@ -216,6 +218,14 @@ leptos_axum = "0.8.0-rc1"
 leptos_meta = "0.8.0-rc1"
 leptos_router = { version = "0.8.0-rc1", features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
+=======
+leptos = { version = "0.7", features = ["nightly"] }
+leptos_axum = "0.7"
+leptos_meta = "0.7"
+leptos_router = { version = "0.7", features = ["nightly"] }
+leptos_use = { version = "0.15", default-features = false }
+
+>>>>>>> devel
 
 #thaw = { version="0.4.2",features=["nightly"] }
 #thaw_components = "0.3"
@@ -249,6 +259,7 @@ tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
 tower-sessions = { version = "0.14" }
 axum-login = { version = "0.17" }
 http = { version = "1" }
+mime_guess = "2"
 
 # wasm
 tracing-wasm = "0.2"
@@ -292,6 +303,12 @@ tex_engine = { git = "https://github.com/Jazzpirate/RusTeX", features = [
 #leptos_dom = {version="=0.7.0"}
 #leptos_router_macro = {version="=0.7.0"}
 
+#[patch.crates-io]
+#leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+#leptos_axum = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+#leptos_meta = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+#leptos_router = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+#reactive_graph = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
 
 [[workspace.metadata.leptos]]
 # project name

@@ -54,7 +54,7 @@
  * | [`/content/legacy/uris`](content::uris()) | | |
 */
 
-use crate::server::img::img_handler;
+use crate::server::files::img_handler;
 
 use flams_ontology::{
     narration::{notations::Notation, LOKind},

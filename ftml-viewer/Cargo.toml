@@ -88,6 +88,13 @@ tsify-next = { version = "*", optional = true }
 serde = { version = "*", optional = true }
 wasm-bindgen-futures = { version = "*", optional = true }
 
+[patch.crates-io]
+leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+leptos_axum = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+leptos_meta = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+leptos_router = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+reactive_graph = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+
 #tachys = {workspace = true}
 #leptos_macro = {workspace = true}
 #tachys = {version="=0.1.0-beta5"}

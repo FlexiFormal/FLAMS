@@ -1,4 +1,4 @@
-pub mod img;
+pub mod files;
 pub mod lsp;
 pub mod settings;
 
@@ -117,7 +117,8 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
             routes,
             axum::routing::get(|a, b, c| routes_handler(a, b, c)), //.in_current_span()),
         )
-        .route("/img", axum::routing::get(img::img_handler))
+        .route("/img", axum::routing::get(files::img_handler))
+        .route("/doc", axum::routing::get(files::doc_handler))
         .fallback(file_and_error_handler)
         .layer(auth_layer)
         .layer(
@@ -253,7 +254,7 @@ impl<A> tower_http::trace::MakeSpan<A> for SpanLayer {
 pub(crate) struct ServerState {
     options: LeptosOptions,
     db: DBBackend,
-    pub(crate) images: img::ImageStore,
+    pub(crate) images: files::ImageStore,
     pub(crate) oauth: Option<GitLabOAuth>,
 }
 
@@ -273,7 +274,7 @@ impl ServerState {
         Self {
             options: leptos_cfg.leptos_options,
             db,
-            images: img::ImageStore::default(),
+            images: files::ImageStore::default(),
             oauth,
         }
     }
