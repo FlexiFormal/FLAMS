@@ -208,24 +208,16 @@ git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 
 # leptos
-<<<<<<< HEAD
 #leptos = { version = "0.7", features = ["nightly"] }
 #leptos_axum = "0.7"
 #leptos_meta = "0.7"
 #leptos_router = { version = "0.7", features = ["nightly"] }
-leptos = { version = "0.8.0-rc1", features = ["nightly"] }
-leptos_axum = "0.8.0-rc1"
-leptos_meta = "0.8.0-rc1"
-leptos_router = { version = "0.8.0-rc1", features = ["nightly"] }
+leptos = { version = "0.8.0-rc2", features = ["nightly"] }
+leptos_axum = "0.8.0-rc2"
+leptos_meta = "0.8.0-rc2"
+leptos_router = { version = "0.8.0-rc2", features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
-=======
-leptos = { version = "0.7", features = ["nightly"] }
-leptos_axum = "0.7"
-leptos_meta = "0.7"
-leptos_router = { version = "0.7", features = ["nightly"] }
-leptos_use = { version = "0.15", default-features = false }
 
->>>>>>> devel
 
 #thaw = { version="0.4.2",features=["nightly"] }
 #thaw_components = "0.3"
