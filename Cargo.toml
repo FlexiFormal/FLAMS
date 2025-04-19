@@ -243,6 +243,7 @@ tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
 tower-sessions = { version = "=0.13" }
 axum-login = { version = "=0.16" }
 http = { version = "1" }
+mime_guess = "2"
 
 # wasm
 tracing-wasm = "0.2"

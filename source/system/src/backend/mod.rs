@@ -528,6 +528,15 @@ impl GlobalBackend {
         }
     }
 
+    pub fn artifact_path(&self, uri: &DocumentURI, format: &str) -> Option<PathBuf> {
+        let id = uri.archive_id();
+        let language = uri.language();
+        let name = uri.name().first_name();
+        self.with_local_archive(id, |a| {
+            a.and_then(|a| a.get_filepath(uri.path(), name, language, format))
+        })
+    }
+
     #[inline]
     pub fn with_archive_tree<R>(&self, f: impl FnOnce(&ArchiveTree) -> R) -> R {
         self.archives.with_tree(f)

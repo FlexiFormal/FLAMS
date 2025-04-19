@@ -362,7 +362,7 @@ impl LocalArchive {
         }
     }
 
-    fn get_filepath(
+    pub(super) fn get_filepath(
         &self,
         path: Option<&Name>,
         name: &NameStep,

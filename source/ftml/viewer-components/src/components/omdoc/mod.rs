@@ -2,7 +2,10 @@ use content::OMDocDeclaration;
 use flams_ontology::{
     content::terms::Term,
     ftml::FTMLKey,
-    uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI},
+    uris::{
+        ArchiveURITrait, DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, PathURITrait,
+        SymbolURI, URIWithLanguage,
+    },
 };
 use flams_web_utils::{
     components::{Block, Header},
@@ -36,10 +39,20 @@ pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
     let NarrativeURI::Document(uri) = expect_context() else {
         return None;
     };
+    let pdf_url = format!(
+        "{}/doc?a={}{}&d={}&l={}&format=pdf",
+        crate::remote::get_server_url(),
+        uri.archive_id(),
+        uri.path()
+            .map(|s| format!("&p={s}"))
+            .unwrap_or_else(|| String::new()),
+        uri.name().first_name(),
+        uri.language()
+    );
     let title = RwSignal::new(uri.name().to_string());
     Some(view! {<div style="margin-left:auto;"><Drawer lazy=true>
         <Trigger slot>
-        <Button
+         <Button
             appearance=ButtonAppearance::Subtle>
             <div style="font-variant:small-caps;font-weight:bold,width:fit-content,border:2px solid black">"OMDoc"</div>
           </Button>
@@ -64,7 +77,12 @@ pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
             }
             OMDocSource::None => unreachable!()
         }}
-    </Drawer></div>})
+    </Drawer>
+    <a target="_blank" href=pdf_url ><Button
+       appearance=ButtonAppearance::Subtle>
+       <div style="font-variant:small-caps;font-weight:bold,width:fit-content,border:2px solid black">"PDF"</div>
+    </Button></a>
+    </div>})
 }
 
 pub(crate) mod sealed {

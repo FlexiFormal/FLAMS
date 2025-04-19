@@ -54,6 +54,7 @@ ssr = [
     "dep:webp",
     "dep:dashmap",
     "dep:futures",
+    "dep:mime_guess",
     "flams-database/backend",
     "flams-git/gitlab",
     "flams-git/git2",
@@ -81,6 +82,7 @@ workspace = true
 
 [dependencies]
 flams-router-dashboard = { workspace = true }
+flams-router-base = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-utils = { workspace = true, features = ["serde"] }
 flams-ontology = { workspace = true, features = ["serde"] }
@@ -116,6 +118,7 @@ smallvec = { workspace = true }
 
 # ssr
 tex_engine = { workspace = true, optional = true }
+mime_guess = { workspace = true, optional = true }
 
 tokio = { workspace = true, features = [
     "full",
