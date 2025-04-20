@@ -1,4 +1,3 @@
-use axum::body::Bytes;
 #[cfg(feature = "ssr")]
 pub use axum::extract::ws::Message as WSMessage;
 #[cfg(feature = "ssr")]
@@ -150,6 +149,7 @@ pub trait WebSocketServer<
     where
         Self: Send,
     {
+        use axum::body::Bytes;
         if socket
             .send(axum::extract::ws::Message::Ping(Bytes::new()))
             .await

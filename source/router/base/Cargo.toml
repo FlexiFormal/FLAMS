@@ -24,8 +24,10 @@ hydrate = [
     "thaw/hydrate",
     "flams-web-utils/hydrate",
     "dep:bytes",
+    "dep:http",
     "dep:futures",
     "dep:wasm-streams",
+    "dep:wasm-bindgen-futures",
 ]
 docs-only = []
 
@@ -52,5 +54,7 @@ axum = { workspace = true, optional = true }
 icondata_tb = { workspace = true }
 send_wrapper = { workspace = true }
 bytes = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 wasm-streams = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
