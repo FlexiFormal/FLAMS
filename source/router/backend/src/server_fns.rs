@@ -74,12 +74,21 @@ pub async fn source_file(
             let url = repo
                 .get_origin_url()
                 .map_err(|_| format!("No git remote for {id} found"))?;
-            and_then(a, url.into_https().to_string())
+            let https = url.into_https();
+            let mut url = https.to_string();
+            if https.git_suffix {
+                // remove .git
+                url.pop();
+                url.pop();
+                url.pop();
+                url.pop();
+            }
+            and_then(a, url)
         })
     }
     fn get_source(id: &ArchiveId, path: Option<&str>) -> Result<String, String> {
         get_root(id, |_, s| Ok(s)).map(|mut s| {
-            s.push_str("/-/main/source/");
+            s.push_str("/-/tree/main/source/");
             if let Some(p) = path {
                 s.push_str(p);
             }
@@ -99,6 +108,7 @@ pub async fn source_file(
                 let filename = format!("{name}.{lang}.tex");
                 let p = path.join(&filename);
                 if p.exists() {
+                    base.push('/');
                     base.push_str(&filename);
                     return true;
                 }
@@ -107,6 +117,7 @@ pub async fn source_file(
                 let filename = format!("{name}.en.tex");
                 let p = path.join(&filename);
                 if p.exists() {
+                    base.push('/');
                     base.push_str(&filename);
                     return true;
                 }
@@ -115,12 +126,13 @@ pub async fn source_file(
             let filename = format!("{name}.tex");
             let p = path.join(&filename);
             p.exists() && {
+                base.push('/');
                 base.push_str(&filename);
                 true
             }
         }
         get_root(id, |a, mut base| {
-            base.push_str("/-/main/source");
+            base.push_str("/-/blob/main/source");
             let mut source_path = a.source_dir();
             if let Some(path) = path {
                 for s in path.split('/') {

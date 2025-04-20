@@ -22,7 +22,7 @@ use content::{
 use flams_utils::sourcerefs::{ByteOffset, SourceRange};
 use languages::Language;
 use narration::documents::Document;
-use uris::{DocumentURI, ModuleURI, SymbolURI};
+use uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI};
 
 pub mod content;
 pub mod file_states;
@@ -277,14 +277,17 @@ impl Resourcable for Box<str> {}
 pub enum SlideElement {
     Slide {
         html: String,
+        uri: DocumentElementURI,
     },
     Paragraph {
         html: String,
+        uri: DocumentElementURI,
     },
     Inputref {
         uri: DocumentURI,
     },
     Section {
+        uri: DocumentElementURI,
         title: Option<String>,
         children: Vec<SlideElement>,
     },
