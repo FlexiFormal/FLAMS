@@ -75,7 +75,7 @@ impl FromTs for ParagraphKind {
 impl AsTs for FragmentKind {
     #[inline]
     fn as_ts(&self) -> JsValue {
-        JsValue::from_str(&unwrap!(serde_json::to_string(self).ok()))
+        unwrap!(web_sys::js_sys::JSON::parse(&unwrap!(serde_json::to_string(self).ok())).ok())
     }
 }
 impl FromTs for FragmentKind {
