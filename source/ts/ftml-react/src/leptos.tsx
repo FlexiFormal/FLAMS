@@ -1,8 +1,7 @@
 import { createContext, ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-
-
 import { LeptosContext } from "@kwarc/ftml-viewer-base";//"./ftml-viewer/ftml-viewer-base";//
+
 
 export const FTMLContext = createContext<LeptosContext | undefined>(undefined);
 
@@ -25,7 +24,7 @@ export function useLeptosTunnel() {
 
   const removeTunnel = () => {
     if (tunnel) {
-      try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
+      //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
     }
     setTunnel(undefined);
   };
@@ -39,7 +38,7 @@ export function useLeptosTunnel() {
   useEffect(() => {
     return () => {
       if (tunnel) {
-        try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
+        //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
       }
     }
   })
@@ -63,7 +62,7 @@ export function useLeptosTunnels() {
   const removeTunnel = (id: string) => {
     setTunnels(prev => prev.filter(tunnel => {
       if (tunnel.id === id) {
-        try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
+        //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
       }
       return tunnel.id !== id
     }));
@@ -80,7 +79,7 @@ export function useLeptosTunnels() {
   useEffect(() => {
     return () => {
       tunnels.forEach(tunnel => {
-        try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
+        //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
       });
     }
   })
