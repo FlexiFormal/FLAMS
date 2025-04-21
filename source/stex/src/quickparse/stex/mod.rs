@@ -13,7 +13,7 @@ use flams_utils::{
     parsing::ParseStr,
     prelude::{TreeChild, TreeLike},
     sourcerefs::{LSPLineCol, SourceRange},
-    vecmap::{OrdSet, VecSet},
+    vecmap::VecSet,
 };
 use rules::{
     MathStructureArg, MathStructureArgIter, NotationArg, NotationArgIter, ParagraphArg,
@@ -158,7 +158,13 @@ pub enum STeXAnnot {
         archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
         filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
         token_range: SourceRange<LSPLineCol>,
-        range: SourceRange<LSPLineCol>,
+        full_range: SourceRange<LSPLineCol>,
+    },
+    MHInput {
+        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
+        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
+        token_range: SourceRange<LSPLineCol>,
+        full_range: SourceRange<LSPLineCol>,
     },
     #[allow(clippy::type_complexity)]
     Symdecl {
@@ -501,7 +507,18 @@ impl STeXAnnot {
                     archive,
                     filepath,
                     token_range,
-                    range: full_range,
+                    full_range,
+                }),
+                STeXToken::MHInput {
+                    archive,
+                    filepath,
+                    token_range,
+                    full_range,
+                } => v.push(STeXAnnot::MHInput {
+                    archive,
+                    filepath,
+                    token_range,
+                    full_range,
                 }),
                 STeXToken::Symdecl {
                     uri,
@@ -776,9 +793,8 @@ impl STeXAnnot {
             | Self::MorphismEnv { full_range, .. }
             | Self::RenameDecl { full_range, .. }
             | Self::Assign { full_range, .. }
-            | Self::Inputref {
-                range: full_range, ..
-            }
+            | Self::Inputref { full_range, .. }
+            | Self::MHInput { full_range, .. }
             | Self::InlineMorphism { full_range, .. }
             | Self::Precondition { full_range, .. }
             | Self::Objective { full_range, .. }
@@ -786,13 +802,6 @@ impl STeXAnnot {
         }
     }
 }
-
-type Multiple<'a, const N: usize> = std::iter::Flatten<
-    std::iter::FilterMap<
-        std::array::IntoIter<Option<std::slice::Iter<'a, STeXAnnot>>, N>,
-        fn(Option<std::slice::Iter<'a, STeXAnnot>>) -> Option<std::slice::Iter<'a, STeXAnnot>>,
-    >,
->;
 
 pub enum AnnotIter<'a> {
     Module(
@@ -847,10 +856,6 @@ impl TreeLike for STeXAnnot {
     type Child<'a> = &'a Self;
     type RefIter<'a> = AnnotIter<'a>;
     fn children(&self) -> Option<Self::RefIter<'_>> {
-        #[inline]
-        fn ident(o: Option<std::slice::Iter<STeXAnnot>>) -> Option<std::slice::Iter<STeXAnnot>> {
-            o
-        }
         match self {
             Self::Module { opts, children, .. } => Some(AnnotIter::Module(
                 SModuleArgIter::new(opts).chain(children.iter()),
@@ -904,6 +909,7 @@ impl TreeLike for STeXAnnot {
             | Self::UseModule { .. }
             | Self::SetMetatheory { .. }
             | Self::Inputref { .. }
+            | Self::MHInput { .. }
             | Self::SymName { .. }
             | Self::Symref { .. }
             | Self::Symuse { .. }

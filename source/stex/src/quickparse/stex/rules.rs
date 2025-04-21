@@ -1,30 +1,21 @@
 #![allow(clippy::ref_option)]
 #![allow(clippy::case_sensitive_file_extension_comparisons)]
 #![allow(clippy::cast_possible_truncation)]
+#![allow(unused_variables)]
 
-use std::{
-    borrow::Cow,
-    collections::hash_map::Entry,
-    num::NonZeroU8,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{borrow::Cow, path::Path, str::FromStr};
 
 use flams_ontology::{
     languages::Language,
     narration::paragraphs::ParagraphKind,
-    uris::{
-        ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, Name, PathURI,
-        PathURITrait, SymbolURI, URIRefTrait, URIWithLanguage,
-    },
+    uris::{ArchiveId, ArchiveURITrait, ModuleURI, Name, PathURITrait, SymbolURI, URIRefTrait},
 };
-use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
+use flams_system::backend::{Backend, GlobalBackend};
 use flams_utils::{
     impossible,
     parsing::ParseStr,
-    prelude::HMap,
     sourcerefs::{LSPLineCol, SourcePos, SourceRange},
-    vecmap::{VecMap, VecSet},
+    vecmap::VecMap,
     CondSerialize,
 };
 use smallvec::SmallVec;
@@ -33,11 +24,9 @@ use crate::{
     quickparse::{
         latex::{
             rules::{
-                AnyEnv, AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult,
-                MacroRule,
+                AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule,
             },
-            Environment, FromLaTeXToken, Group, GroupState, Groups, KeyValKind, LaTeXParser, Macro,
-            OptMap, ParsedKeyValue, ParserState,
+            Environment, KeyValKind, LaTeXParser, Macro, ParsedKeyValue,
         },
         stex::structs::MorphismKind,
     },
@@ -51,7 +40,7 @@ use super::{
         ModuleReference, ModuleRule, ModuleRules, MorphismSpec, STeXGroup, STeXModuleStore,
         STeXParseState, STeXToken, SymbolReference, SymbolRule,
     },
-    DiagnosticLevel, STeXParseData,
+    DiagnosticLevel,
 };
 
 #[must_use]
@@ -69,13 +58,14 @@ pub fn all_rules<
         Err,
         STeXParseState<'a, LSPLineCol, MS>,
     >,
-); 39] {
+); 40] {
     [
         ("importmodule", importmodule as _),
         ("setmetatheory", setmetatheory as _),
         ("usemodule", usemodule as _),
         ("usestructure", usestructure as _),
         ("inputref", inputref as _),
+        ("mhinput", mhinput as _),
         ("stexstyleassertion", stexstyleassertion as _),
         ("stexstyledefinition", stexstyledefinition as _),
         ("stexstyleparagraph", stexstyleparagraph as _),
@@ -382,15 +372,62 @@ stex!(p => stexstyleparagraph[_]{_}{_}!);
 
 stex!(p => inputref('*'?_s)[archive:str]{filepath:name} => {
       let archive = archive.map(|(s,p)| (ArchiveId::new(s),p));
-      let rel_path = if filepath.0.ends_with(".tex") {
+      let rel_path: std::sync::Arc<str> = if filepath.0.ends_with(".tex") {
         filepath.0.into()
       } else {
         format!("{}.tex",filepath.0).into()
       };
+      {
+          if let Some(id) = archive.as_ref().map_or_else(||
+              p.state.archive.as_ref().map(|a| a.id()),
+              |(a,_)| Some(a)
+          ) {
+              p.state.backend.with_local_archive(id,|a|
+                  if let Some(a) = a {
+                      let path = a.source_dir();
+                      let path = rel_path.as_ref().split('/').fold(path,|p,s| p.join(s));
+                      if !path.exists() {
+                          p.tokenizer.problem(filepath.1.start,format!("File {} not found",path.display()),DiagnosticLevel::Error);
+                      }
+                  } else {}
+              );
+          }
+      }
       let filepath = (rel_path,filepath.1);
       MacroResult::Success(STeXToken::Inputref {
         archive, filepath,full_range:inputref.range,
         token_range:inputref.token_range
+      })
+    }
+);
+
+stex!(p => mhinput[archive:str]{filepath:name} => {
+      let archive = archive.map(|(s,p)| (ArchiveId::new(s),p));
+      let rel_path: std::sync::Arc<str> = if filepath.0.ends_with(".tex") {
+        filepath.0.into()
+      } else {
+        format!("{}.tex",filepath.0).into()
+      };
+      {
+          if let Some(id) = archive.as_ref().map_or_else(||
+              p.state.archive.as_ref().map(|a| a.id()),
+              |(a,_)| Some(a)
+          ) {
+              p.state.backend.with_local_archive(id,|a|
+                  if let Some(a) = a {
+                      let path = a.source_dir();
+                      let path = rel_path.as_ref().split('/').fold(path,|p,s| p.join(s));
+                      if !path.exists() {
+                          p.tokenizer.problem(filepath.1.start,format!("File {} not found",path.display()),DiagnosticLevel::Error);
+                      }
+                  } else {}
+              );
+          }
+      }
+      let filepath = (rel_path,filepath.1);
+      MacroResult::Success(STeXToken::MHInput {
+        archive, filepath,full_range:mhinput.range,
+        token_range:mhinput.token_range
       })
     }
 );
@@ -487,6 +524,7 @@ macro_rules! optargtype {
           $parser:&mut crate::quickparse::latex::KeyValParser<'a, '_,Pos,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>>,
           key:&str
         ) -> Option<Self> {
+            #[allow(unused_imports)]
           use super::super::latex::KeyValParsable;
           match key {
             $(
@@ -572,6 +610,7 @@ macro_rules! optargtype {
           $parser:&mut crate::quickparse::latex::KeyValParser<'a, '_,LSPLineCol,STeXToken<LSPLineCol>,Err,STeXParseState<'a,LSPLineCol,MS>>,
           key:&str
         ) -> Option<Self> {
+            #[allow(unused_imports)]
           use super::super::latex::KeyValParsable;
           match key {
             $(
@@ -774,7 +813,7 @@ stex!(p => symdecl('*'?star){name:!name}[args:type SymdeclArg<Pos,STeXToken<Pos>
     let mut has_tp = false;
     let mut argnum = 0;
     for e in &args { match e {
-      SymdeclArg::Name(ParsedKeyValue { key_range, val_range, val }) => {
+      SymdeclArg::Name(ParsedKeyValue { val_range, val,.. }) => {
         name = (val,*val_range);
       }
       SymdeclArg::Tp(_) | SymdeclArg::Return(_) => has_tp = true,
@@ -818,14 +857,14 @@ stex!(p => textsymdecl{name:name}[args:type TextSymdeclArg<Pos,STeXToken<Pos>>] 
   let main_name_range = name.1;
   let args = args.unwrap_or_default();
   let mut name:(&str,_) = (&name.0,name.1);
-  let mut has_df = false;
-  let mut has_tp = false;
+  //let mut has_df = false;
+  //let mut has_tp = false;
   for e in &args { match e {
-    TextSymdeclArg::Name(ParsedKeyValue { key_range, val_range, val }) => {
+    TextSymdeclArg::Name(ParsedKeyValue { val_range, val,.. }) => {
       name = (val,*val_range);
     }
-    TextSymdeclArg::Tp(_) => has_tp = true,
-    TextSymdeclArg::Df(_) => has_df = true,
+    //TextSymdeclArg::Tp(_) => has_tp = true,
+    //TextSymdeclArg::Df(_) => has_df = true,
     _ => ()
   }}
 
@@ -1207,16 +1246,16 @@ stex!(p => vardef{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
   let args = args.unwrap_or_default();
   let main_name_range = name.1;
   let mut name: (&str,_) = (&name.0,name.1);
-  let mut has_df = false;
-  let mut has_tp = false;
+  //let mut has_df = false;
+  //let mut has_tp = false;
   let mut argnum = 0;
 
   for e in &args { match e {
     VardefArg::Name(ParsedKeyValue { key_range, val_range, val }) => {
       name = (val,*val_range);
     }
-    VardefArg::Tp(_) | VardefArg::Return(_) => has_tp = true,
-    VardefArg::Df(_) => has_df = true,
+    //VardefArg::Tp(_) | VardefArg::Return(_) => has_tp = true,
+    //VardefArg::Df(_) => has_df = true,
     VardefArg::Args(v) => argnum = v.val,
     _ => ()
   }}
@@ -1243,16 +1282,16 @@ stex!(p => varseq{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
   let args = args.unwrap_or_default();
   let main_name_range = name.1;
   let mut name : (&str,_) = (&name.0,name.1);
-  let mut has_df = false;
-  let mut has_tp = false;
+  //let mut has_df = false;
+  //let mut has_tp = false;
   let mut argnum = 0;
 
   for e in &args { match e {
     VardefArg::Name(ParsedKeyValue { key_range, val_range, val }) => {
       name = (val,*val_range);
     }
-    VardefArg::Tp(_) | VardefArg::Return(_) => has_tp = true,
-    VardefArg::Df(_) => has_df = true,
+    //VardefArg::Tp(_) | VardefArg::Return(_) => has_tp = true,
+    //VardefArg::Df(_) => has_df = true,
     VardefArg::Args(v) => argnum = v.val,
     _ => ()
   }}
@@ -1791,7 +1830,7 @@ fn do_paragraph<
         }
     }
 
-    let mut args =
+    let args =
         <Vec<ParagraphArg<_, _>> as crate::quickparse::latex::KeyValValues<_, _, _, _>>::parse_opt(
             p,
         )
@@ -2307,7 +2346,7 @@ fn setup_morphism<
             .problem(pos, "Not in a module", DiagnosticLevel::Error);
         return None;
     };
-    let Ok(uri) = (uri.clone() | name) else {
+    let Ok(uri) = uri.clone() | name else {
         p.tokenizer.problem(
             pos,
             format!("Invalid module name: {name}"),
@@ -2337,7 +2376,7 @@ fn elaborate_morphism<
     rules: Vec<ModuleRules<LSPLineCol>>,
     mut specs: VecMap<SymbolReference<LSPLineCol>, MorphismSpec<LSPLineCol>>,
 ) {
-    let mut old_end = std::mem::replace(&mut p.tokenizer.reader.pos, range.end);
+    let old_end = std::mem::replace(&mut p.tokenizer.reader.pos, range.end);
     let Some(name) = Name::from_str(name).ok() else {
         p.tokenizer.problem(
             range.start,
@@ -2569,7 +2608,7 @@ fn parse_assignments<
         macro_rules! rename {
             () => {{
                 p.skip_comments();
-                let (real_name) = if p.tokenizer.reader.starts_with('[') {
+                let real_name = if p.tokenizer.reader.starts_with('[') {
                     p.tokenizer.reader.pop_head();
                     let start = p.curr_pos();
                     let namestr = p
