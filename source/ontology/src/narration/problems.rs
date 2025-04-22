@@ -277,7 +277,9 @@ impl Solutions {
                             )
                             .collect(),
                     });
-                    pts += ((corrects as f32 - falses as f32) / choices.len() as f32).max(0.0);
+                    if selected.iter().any(|b| *b) {
+                        pts += ((corrects as f32 - falses as f32) / choices.len() as f32).max(0.0);
+                    }
                 }
                 (ProblemResponseType::Fillinsol(s), SolutionData::FillInSol(f)) => {
                     let mut fill_correct = None;
