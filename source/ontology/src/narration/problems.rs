@@ -262,7 +262,7 @@ impl Solutions {
                                         feedback,
                                     },
                                 )| {
-                                    if *cr {
+                                    if *cr == selected[i] {
                                         corrects += 1;
                                     } else {
                                         falses += 1;
@@ -626,7 +626,6 @@ pub struct FillinFeedback {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-#[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum FillinFeedbackKind {
     Exact(String),
     NumRange { from: Option<f32>, to: Option<f32> },
