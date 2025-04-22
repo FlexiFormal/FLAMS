@@ -4,9 +4,9 @@ import * as FTML from "@kwarc/ftml-viewer-base"; //"./ftml-viewer/ftml-viewer-ba
 import React, { ReactNode, useContext, useEffect, useRef } from "react";
 import { FTMLContext, useLeptosTunnel, useLeptosTunnels } from "./leptos";
 
-/** 
+/**
  * sets the server url. Reexported for **emphasis**.
- */ 
+ */
 export const setServerUrl = FTMLT.setServerUrl;
 
 /**
@@ -54,7 +54,7 @@ export interface FTMLConfig {
     uri: FTML.DocumentElementURI,
     kind: FTML.FragmentKind,
   ) => ((ch: ReactNode) => ReactNode) | undefined;
-  
+
   problemStates?: FTML.ProblemStates | undefined;
   onProblem?: ((response: FTML.ProblemResponse) => void) | undefined;
 }
@@ -176,10 +176,9 @@ export const FTMLFragment: React.FC<FTMLFragmentArgs> = (args) => {
 };
 
 const ElemToReact: React.FC<{
-  elems: ChildNode[],
-  uri: FTML.DocumentElementURI, 
-  ctx: FTML.LeptosContext
-}> = ({ elems, ctx, uri }) => {
+  elems: ChildNode[];
+  ctx: FTML.LeptosContext;
+}> = ({ elems, ctx }) => {
   const ref = useRef<HTMLDivElement>(null);
   const done = useRef<boolean>(false);
   useEffect(() => {
@@ -196,11 +195,15 @@ const ElemToReact: React.FC<{
   );
 };
 
-function elemToReact(uri: FTML.DocumentElementURI, elem: HTMLDivElement, ctx: FTML.LeptosContext): ReactNode {
+function elemToReact(
+  uri: FTML.DocumentElementURI,
+  elem: HTMLDivElement,
+  ctx: FTML.LeptosContext,
+): ReactNode {
   //console.log("Doing",uri);
   const chs = Array.from(elem.childNodes);
   chs.forEach((c) => elem.removeChild(c));
-  return <ElemToReact elems={chs} uri={uri} ctx={ctx} />;
+  return <ElemToReact elems={chs} ctx={ctx} />;
 }
 
 function toConfig(
@@ -229,7 +232,7 @@ function toConfig(
         const r = ofO(uri, kind);
         return r
           ? (elem: HTMLDivElement, ctx: FTML.LeptosContext) => {
-              const ret = r(elemToReact(uri,elem, ctx));
+              const ret = r(elemToReact(uri, elem, ctx));
               return addTunnel(elem, ret, ctx);
             }
           : undefined;
@@ -240,6 +243,6 @@ function toConfig(
     onSectionTitle: onSectionTitle,
     onFragment: onFragment,
     problemStates: config.problemStates,
-    onProblem: config.onProblem
+    onProblem: config.onProblem,
   };
 }
