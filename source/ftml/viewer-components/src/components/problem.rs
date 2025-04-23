@@ -93,7 +93,7 @@ impl CurrentProblem {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 enum ProblemResponse {
     MultipleChoice(bool, SmallVec<bool, 8>),
-    SingleChoice(bool, u16, u16),
+    SingleChoice(bool, Option<u16>, u16),
     Fillinsol(String),
 }
 
@@ -340,7 +340,7 @@ pub(super) fn choice_block<V: IntoView + 'static>(
     let response = if multiple {
         ProblemResponse::MultipleChoice(inline, SmallVec::new())
     } else {
-        ProblemResponse::SingleChoice(inline, 0, 0)
+        ProblemResponse::SingleChoice(inline, None, 0)
     };
     let Some(i) = with_context::<CurrentProblem, _>(|ex| {
         ex.responses.try_update_untracked(|ex| {
@@ -398,7 +398,7 @@ pub(super) fn problem_choice<V: IntoView + 'static>(
             (ProblemResponseType::MultipleChoice(v), Left(idx)) => {
                 v.get(idx).copied().unwrap_or_default()
             }
-            (ProblemResponseType::SingleChoice(v), Right(val)) => *v == val,
+            (ProblemResponseType::SingleChoice(v), Right(val)) => v.is_some_and(|v| v == val),
             _ => false,
         }
     } else {
@@ -519,12 +519,12 @@ fn single_choice<V: IntoView + 'static>(
         };
         let Some(CheckedResult::SingleChoice{selected,choices}) = feedback.data.get(block) else {return err()};
         let Some(BlockFeedback{is_correct,verdict_str,feedback}) = choices.get(idx as usize) else { return err() };
-        let icon = if *selected == idx && *is_correct {
+        let icon = if selected.is_some_and(|s| s ==  idx) && *is_correct {
           Some(Left(view!(<Icon icon=icondata_ai::AiCheckCircleOutlined style="color:green;"/>)))
-        } else if *selected == idx {
+        } else if selected.is_some_and(|s| s ==  idx) {
           Some(Right(view!(<Icon icon=icondata_ai::AiCloseCircleOutlined style="color:red;"/>)))
         } else {None};
-        let bx = if *selected == idx {
+        let bx = if selected.is_some_and(|s| s ==  idx) {
           Left(view!(<input type="radio" checked disabled/>))
         } else {
           Right(view!(<input type="radio" disabled/>))
@@ -545,7 +545,7 @@ fn single_choice<V: IntoView + 'static>(
           move |resp,()| {
             let resp = resp.get_mut(block).expect("Signal error in problem");
             let ProblemResponse::SingleChoice(_,i,_) = resp else { panic!("Signal error in problem")};
-            *i = idx;
+            *i = Some(idx);
           }
         );
         if orig_selected {sig.set(());}

@@ -93,7 +93,7 @@ impl Solutions {
                     choices,
                     ..
                 }) => data.push(CheckedResult::SingleChoice {
-                    selected: 0,
+                    selected: None,
                     choices: choices
                         .iter()
                         .enumerate()
@@ -220,7 +220,7 @@ impl Solutions {
                                     feedback,
                                 },
                             )| {
-                                if *selected as usize == i {
+                                if selected.is_some_and(|j| j as usize == i) {
                                     correct = correct && *cr;
                                     if *cr {
                                         pts += 1.0;
@@ -641,7 +641,7 @@ pub enum FillinFeedbackKind {
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum CheckedResult {
     SingleChoice {
-        selected: u16,
+        selected: Option<u16>,
         #[cfg_attr(feature = "wasm", tsify(type = "BlockFeedback[]"))]
         choices: SmallVec<BlockFeedback, 4>,
     },
@@ -679,7 +679,7 @@ pub struct ProblemResponse {
 /// or a string (fill-in-the-gaps)
 pub enum ProblemResponseType {
     MultipleChoice(#[cfg_attr(feature = "wasm", tsify(type = "boolean[]"))] SmallVec<bool, 8>),
-    SingleChoice(u16),
+    SingleChoice(Option<u16>),
     Fillinsol(String),
 }
 
