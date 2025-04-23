@@ -91,7 +91,7 @@ fn do_components<const MATH: bool>(
                 )
                 .into_any()
             }
-            OpenFTMLElement::Comp | OpenFTMLElement::MainComp if AllowHovers::get() => {
+            OpenFTMLElement::Comp | OpenFTMLElement::MainComp => {
                 view!(<DomCont skip_head=true orig=orig.clone() cont=crate::iterate/>).into_any()
             }
             OpenFTMLElement::Definiendum(_) => terms::do_definiendum::<_, MATH>(move || {
