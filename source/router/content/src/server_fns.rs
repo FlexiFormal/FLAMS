@@ -223,7 +223,10 @@ pub async fn get_quiz(
     server::get_quiz(uri).await
 }
 
-#[server(prefix = "/content", endpoint = "grade_enc")]
+#[server(prefix = "/content", endpoint = "grade_enc",
+    input=server_fn::codec::Json,
+    output=server_fn::codec::Json
+)]
 pub async fn grade_enc(
     submissions: Vec<(String, Vec<Option<ProblemResponse>>)>,
 ) -> Result<Vec<Vec<ProblemFeedbackJson>>, ServerFnError<String>> {
@@ -251,7 +254,10 @@ pub async fn grade_enc(
     .map_err(|e| e.to_string())?
 }
 
-#[server(prefix = "/content", endpoint = "grade")]
+#[server(prefix = "/content", endpoint = "grade",
+    input=server_fn::codec::Json,
+    output=server_fn::codec::Json
+)]
 pub async fn grade(
     submissions: Vec<(Box<[SolutionData]>, Vec<Option<ProblemResponse>>)>,
 ) -> Result<Vec<Vec<ProblemFeedbackJson>>, ServerFnError<String>> {
@@ -278,12 +284,7 @@ pub async fn grade(
     .map_err(|e| e.to_string())?
 }
 
-#[server(
-  prefix="/content",
-  endpoint="solution",
-  input=server_fn::codec::GetUrl,
-  output=server_fn::codec::Json
-)]
+#[server(prefix = "/content", endpoint = "solution")]
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_arguments)]
 pub async fn solution(

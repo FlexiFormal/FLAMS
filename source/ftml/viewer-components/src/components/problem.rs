@@ -72,17 +72,19 @@ impl CurrentProblem {
                 .iter()
                 .map(|r| match r {
                     ProblemResponse::MultipleChoice(_, sigs) => {
-                        flams_ontology::narration::problems::ProblemResponseType::MultipleChoice(
-                            sigs.clone(),
-                        )
+                        flams_ontology::narration::problems::ProblemResponseType::MultipleChoice {
+                            value: sigs.clone(),
+                        }
                     }
                     ProblemResponse::SingleChoice(_, sig, _) => {
-                        flams_ontology::narration::problems::ProblemResponseType::SingleChoice(*sig)
+                        flams_ontology::narration::problems::ProblemResponseType::SingleChoice {
+                            value: *sig,
+                        }
                     }
                     ProblemResponse::Fillinsol(s) => {
-                        flams_ontology::narration::problems::ProblemResponseType::Fillinsol(
-                            s.clone(),
-                        )
+                        flams_ontology::narration::problems::ProblemResponseType::Fillinsol {
+                            value: s.clone(),
+                        }
                     }
                 })
                 .collect(),
@@ -395,10 +397,12 @@ pub(super) fn problem_choice<V: IntoView + 'static>(
     };
     let selected = if let Some(init) = ex.initial.as_ref().and_then(|i| i.responses.get(block)) {
         match (init, multiple) {
-            (ProblemResponseType::MultipleChoice(v), Left(idx)) => {
-                v.get(idx).copied().unwrap_or_default()
+            (ProblemResponseType::MultipleChoice { value }, Left(idx)) => {
+                value.get(idx).copied().unwrap_or_default()
             }
-            (ProblemResponseType::SingleChoice(v), Right(val)) => v.is_some_and(|v| v == val),
+            (ProblemResponseType::SingleChoice { value }, Right(val)) => {
+                value.is_some_and(|v| v == val)
+            }
             _ => false,
         }
     } else {
@@ -627,7 +631,7 @@ pub(super) fn fillinsol(wd: Option<f32>) -> impl IntoView {
           *s = val;
         }
       );
-      let txt = if let Some(ProblemResponseType::Fillinsol(s)) = ex.initial.as_ref().and_then(|i| i.responses.get(choice)) {
+      let txt = if let Some(ProblemResponseType::Fillinsol{value:s}) = ex.initial.as_ref().and_then(|i| i.responses.get(choice)) {
           sig.set(s.clone());
           s.clone()
       } else {String::new()};
