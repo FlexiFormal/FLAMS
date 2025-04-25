@@ -156,6 +156,7 @@ lightningcss = { version = "1.0.0-alpha.63" }
 # cfg-if = "1"
 tokio = { version = "1" }                                                   #, features = ["fs","io-util","sync","test-util","macros","rt"] }
 tokio-util = { version = "0.7", features = ["compat"] }
+tokio-stream = { version="0.1"}
 tempfile = { version = "3" }
 phf = { version = "0.11", default-features = false, features = ["macros"] }
 crossbeam-channel = { version = "0.5" }

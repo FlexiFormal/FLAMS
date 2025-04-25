@@ -1,10 +1,10 @@
 use std::{path::Path, sync::atomic::AtomicBool};
 
-use async_lsp::{lsp_types::{Position, Range, Url}, ClientSocket};
+use async_lsp::lsp_types::{Position, Range};
 use flams_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
-use flams_utils::{time::measure, PathExt};
+use flams_utils::PathExt;
 
 use crate::{state::{LSPState, UrlOrFile}, LSPStore};
 
@@ -123,7 +123,7 @@ impl LSPDocument {
 
   #[allow(clippy::significant_drop_tightening)]
   fn load_annotations_and<R>(&self,state:LSPState,f:impl FnOnce(&STeXParseDataI) -> R) -> Option<R> {
-    let mut lock = self.text.lock();
+    let lock = self.text.lock();
     let uri = self.data.doc_uri.as_ref()?;
     let path = self.data.path.as_ref()?;
 
