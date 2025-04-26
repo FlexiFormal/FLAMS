@@ -30,6 +30,10 @@ impl DocumentURI {
 
     #[must_use]
     pub fn from_archive_relpath(a:ArchiveURI,rel_path:&str) -> eyre::Result<Self> {
+        #[cfg(windows)]
+        let replaced = rel_path.replace('\\',"/");
+        #[cfg(windows)]
+        let rel_path = &replaced;
         let (path,mut name) = rel_path.rsplit_once('/')
             .unwrap_or(("",rel_path));
         name = name.rsplit_once('.').map_or_else(|| name,|(name,_)| name);

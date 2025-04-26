@@ -323,7 +323,7 @@ impl<'a, const FULL: bool> STeXModuleStore for &mut LSPStore<'a, FULL> {
     fn get_module(
         &mut self,
         module: &ModuleReference,
-        in_path: Option<&std::sync::Arc<Path>>,
+        _in_path: Option<&std::sync::Arc<Path>>,
     ) -> Result<STeXParseData, GetModuleError> {
         let Some(p) = module.full_path.as_ref() else {
             return Err(GetModuleError::NotFound(module.uri.clone()));

@@ -8,7 +8,7 @@ use flams_utils::PathExt;
 
 use crate::{state::{LSPState, UrlOrFile}, LSPStore};
 
-
+#[derive(Debug)]
 struct DocumentData {
   path:Option<std::sync::Arc<Path>>,
   archive:Option<ArchiveURI>,
@@ -16,7 +16,7 @@ struct DocumentData {
   doc_uri:Option<DocumentURI>
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct LSPDocument {
   up_to_date:triomphe::Arc<AtomicBool>,
   text:triomphe::Arc<parking_lot::Mutex<LSPText>>,
@@ -24,6 +24,10 @@ pub struct LSPDocument {
   data:triomphe::Arc<DocumentData>
 }
 
+#[cfg(windows)]
+const PREFIX:&str = "\\source\\";
+#[cfg(not(windows))]
+const PREFIX:&str = "/source/";
 
 impl LSPDocument {
   #[allow(clippy::cast_possible_truncation)]
@@ -37,7 +41,7 @@ impl LSPDocument {
     let ap = path.as_ref().and_then(|path|
       GlobalBackend::get().archive_of(path,|a,rp| {
         let uri = a.uri().owned();
-        let rp = rp.strip_prefix("/source/").map(|r| r.into());
+        let rp = rp.strip_prefix(PREFIX).map(|r| r.into());
         (uri,rp)
       })
     ).or_else(default);
@@ -179,6 +183,7 @@ impl LSPDocument {
   }
 }
 
+#[derive(Debug)]
 struct LSPText {
   text: String,
   html_up_to_date:bool

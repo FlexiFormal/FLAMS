@@ -1,34 +1,31 @@
 use std::{
     collections::hash_map::Entry,
-    path::{Path, PathBuf},
+    path::Path
 };
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
 use flams_ontology::uris::{DocumentURI, URIRefTrait};
 use flams_stex::{
-    quickparse::stex::{DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseData, STeXParseDataI},
+    quickparse::stex::{DiagnosticLevel, STeXDiagnostic, STeXParseData, STeXParseDataI},
     OutputCont, RusTeX,
 };
 use flams_system::{
     backend::{
         archives::{
             source_files::{SourceDir, SourceEntry},
-            Archive, LocalArchive,
+            Archive, 
         },
         AnyBackend, Backend, GlobalBackend, TemporaryBackend,
     },
     formats::OMDocResult,
 };
 use flams_utils::{
-    prelude::{HMap, TreeChildIter},
-    sourcerefs::{LSPLineCol, SourceRange},
-    vecmap::OrdSet,
+    impossible, prelude::{HMap, TreeChildIter}, sourcerefs::{LSPLineCol, SourceRange}
 };
-use smallvec::SmallVec;
 
 use crate::{
-    annotations::to_diagnostic, capabilities::STeXSemanticTokens, documents::LSPDocument,
-    ClientExt, IsLSPRange, LSPStore, ProgressCallbackClient, ProgressCallbackServer,
+    annotations::to_diagnostic, documents::LSPDocument,
+    ClientExt, LSPStore, ProgressCallbackServer,
 };
 
 #[derive(Clone)]
@@ -48,7 +45,7 @@ impl DocData {
             }
         }
         match (self, other) {
-            (Self::Doc(d1), Self::Doc(mut d2)) => {
+            (Self::Doc(d1), Self::Doc(d2)) => {
                 //merge_a(&mut d1.annotations.lock(),&mut d2.annotations.lock());
                 *d1 = d2;
             }
@@ -58,7 +55,7 @@ impl DocData {
             (d2 @ Self::Data(_, _), Self::Doc(d1)) => {
                 {
                     let Self::Data(ref mut d2, _) = d2 else {
-                        unreachable!()
+                        impossible!()
                     };
                     merge_a(&mut d2.lock(), &mut d1.annotations.lock());
                 }
@@ -66,8 +63,8 @@ impl DocData {
             }
             (d1 @ Self::Data(_, false), Self::Data(d2, true)) => {
                 {
-                    let Self::Data(ref mut d1, _) = d1 else {
-                        unreachable!()
+                    let Self::Data(_, _) = d1 else {
+                        impossible!()
                     };
                     //merge_a(&mut d1.lock(),&mut d2.lock());
                 }
@@ -168,7 +165,7 @@ impl LSPState {
             None,
             move |progress| {
                 let out = ClientOutput(std::cell::RefCell::new(progress));
-                let (mut res, mut old) = engine.set_output(out).run();
+                let (mut res, old) = engine.set_output(out).run();
                 doc.set_html_up_to_date();
                 {
                     let mut lock = doc.annotations.lock();
@@ -300,7 +297,7 @@ impl LSPState {
         }
     }
 
-    pub fn relint_dependents(mut self, path: std::sync::Arc<Path>) { /*
+    pub fn relint_dependents(self, path: std::sync::Arc<Path>) { /*
                                                                      let docs = self.documents.read();
                                                                      let mut deps = vec![UrlOrFile::File(path.clone())];
                                                                      for (k,v) in docs.iter() {

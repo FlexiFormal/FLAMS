@@ -11,7 +11,7 @@ use flams_utils::{prelude::TreeChildIter, time::measure, unwrap};
 use git2::build::CheckoutBuilder;
 
 pub fn main() {
-    git_pull();
+    linter()//git_pull();
 }
 
 fn git_pull() {
@@ -111,7 +111,7 @@ fn git_urls() {
 pub fn linter() {
     let mut rt = tokio::runtime::Builder::new_multi_thread();
     rt.enable_all();
-    rt.thread_stack_size(2 * 1024 * 1024);
+    rt.thread_stack_size(16 * 1024 * 1024);
     rt.build()
         .expect("Failed to initialize Tokio runtime")
         .block_on(linter_i());

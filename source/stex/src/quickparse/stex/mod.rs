@@ -29,7 +29,7 @@ use structs::{
 
 use super::latex::LaTeXParser;
 
-#[derive(Default)]
+#[derive(Default,Debug)]
 pub struct STeXParseDataI {
     pub annotations: Vec<STeXAnnot>,
     pub diagnostics: VecSet<STeXDiagnostic>,
@@ -942,7 +942,7 @@ pub enum DiagnosticLevel {
     Hint,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct STeXDiagnostic {
     pub level: DiagnosticLevel,
     pub message: String,
