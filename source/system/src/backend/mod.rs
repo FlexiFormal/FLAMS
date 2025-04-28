@@ -40,7 +40,7 @@ use flams_utils::{
     prelude::{HMap, TreeLike},
     triomphe,
     vecmap::{VecMap, VecSet},
-    CSS,
+    PathExt, CSS,
 };
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
@@ -114,13 +114,29 @@ pub trait Backend {
     where
         Self: Sized,
     {
+        fn strip<'a>(base: &'a str, ap: &str) -> Option<&'a str> {
+            #[cfg(windows)]
+            {
+                if base.is_empty()
+                    || ap.is_empty()
+                    || !(&base[0..1]).eq_ignore_ascii_case(&ap[0..1])
+                {
+                    return None;
+                }
+                (&base[1..]).strip_prefix(&ap[1..])
+            }
+            #[cfg(not(windows))]
+            {
+                base.strip_prefix(ap)
+            }
+        }
         let base = p.as_os_str().to_str()?;
         self.with_archives(|mut a| {
             a.find_map(|a| {
                 let Archive::Local(a) = a else { return None };
                 let ap = a.path().as_os_str().to_str()?;
-                if let Some(r) = base.strip_prefix(ap) {
-                    if r.starts_with('/') || r.is_empty() {
+                if let Some(r) = strip(base, ap) {
+                    if r.starts_with(std::path::PathBuf::PATH_SEPARATOR) || r.is_empty() {
                         return Some(f(a, r));
                     }
                 }

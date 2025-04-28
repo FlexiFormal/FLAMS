@@ -15,6 +15,7 @@
  * | [`/api/search`](server_fns::search) | `query=<STRING>&opts=`[`QueryFilter`](flams_ontology::search::QueryFilter)`&num_results=<INT>` | `Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>` |
  * | [`/api/search_symbols`](server_fns::search_symbols) | `query=<STRING>&num_results=<INT>` | `Vec<(`[`SymbolURI`]`Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>)>` |
  * | [`/content/grade`](content::grade()) | TODO |
+ * | [`/content/grade_enc`](content::grade_enc()) | TODO |
  * | `/gitlab_login` |  |  |
  * | **Backend** | | |
  * | [`/api/backend/group_entries`](backend::group_entries) | (optional) `in=<STRING>` | `(Vec<`[ArchiveGroupData](crate::router::backend::ArchiveGroupData)`>,Vec<`[ArchiveData](crate::router::backend::ArchiveData)`>)` - the archives and archive groups in the provided archive group (if given) or on the top-level (if None) |

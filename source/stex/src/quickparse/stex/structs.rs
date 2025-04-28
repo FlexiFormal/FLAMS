@@ -73,6 +73,12 @@ pub enum STeXToken<Pos: SourcePos> {
         full_range: SourceRange<Pos>,
         token_range: SourceRange<Pos>,
     },
+    MHInput {
+        archive: Option<(ArchiveId, SourceRange<Pos>)>,
+        filepath: (std::sync::Arc<str>, SourceRange<Pos>),
+        full_range: SourceRange<Pos>,
+        token_range: SourceRange<Pos>,
+    },
     Module {
         uri: ModuleURI,
         rules: ModuleRules<Pos>,

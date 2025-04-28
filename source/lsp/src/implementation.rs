@@ -13,7 +13,6 @@ use async_lsp::{
     lsp_types::{self as lsp},
     LanguageClient, LanguageServer, ResponseError,
 };
-use flams_ontology::uris::DocumentURI;
 use flams_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
@@ -147,17 +146,21 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 remote_url,
             } = params;
             let mut rescan = false;
-            for a in archives {
-                if GlobalBackend::get()
-                    .all_archives()
-                    .iter()
-                    .any(|e| *e.id() == a)
-                {
-                    continue;
+            let archives = {
+                let mut ret = Vec::new();
+                let exis = GlobalBackend::get().all_archives();
+                for a in archives {
+                    if exis.iter().any(|e| *e.id() == a) || ret.contains(&a) {continue}
+                    ret.push(a);
                 }
+                ret
+            };
+            let len = archives.len();
+            for (i,a) in archives.into_iter().enumerate() {
                 let url = format!("{remote_url}/api/backend/download?id={a}");
-                progress.update(a.to_string(), None);
-                if LocalArchive::unzip_from_remote(a.clone(), &url)
+                let prefix = format!("{}/{len}: {a}",i+1);
+                progress.update( prefix.clone(), None);
+                if LocalArchive::unzip_from_remote(a.clone(), &url,|p| progress.update(format!("{prefix}: {}",p.display()),None))
                     .await
                     .is_err()
                 {

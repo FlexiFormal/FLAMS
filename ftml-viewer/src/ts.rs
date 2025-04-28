@@ -329,7 +329,6 @@ fn GlobalSetup<V: IntoView + 'static>(
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-#[serde(untagged)]
 /// Options for rendering an FTML document
 /// - `FromBackend`: calls the backend for the document
 ///     uri: the URI of the document (as string)
@@ -338,6 +337,7 @@ fn GlobalSetup<V: IntoView + 'static>(
 /// - `HtmlString`: render the provided HTML String
 ///     html: the HTML String
 ///     toc: if defined, will render a table of contents for the document
+#[serde(untagged)]
 pub enum DocumentOptions {
     FromBackend {
         uri: DocumentURI,
@@ -385,7 +385,6 @@ pub enum FragmentOptions {
 pub enum TOCOptions {
     #[serde(rename = "GET")]
     GET,
-    #[serde(untagged)]
     Predefined(Vec<TOCElem>),
 }
 

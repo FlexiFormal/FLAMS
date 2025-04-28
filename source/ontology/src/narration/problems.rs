@@ -93,7 +93,7 @@ impl Solutions {
                     choices,
                     ..
                 }) => data.push(CheckedResult::SingleChoice {
-                    selected: 0,
+                    selected: None,
                     choices: choices
                         .iter()
                         .enumerate()
@@ -176,6 +176,7 @@ impl Solutions {
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::cast_precision_loss)]
     pub fn check(&self, response: &ProblemResponse) -> Option<ProblemFeedback> {
+        //println!("Here: {self:?}\n{response:?}");
         fn next_sol<'a>(
             solutions: &mut SmallVec<Box<str>, 1>,
             datas: &mut impl Iterator<Item = &'a SolutionData>,
@@ -200,7 +201,7 @@ impl Solutions {
             let sol = next_sol(&mut solutions, &mut datas)?;
             match (response, sol) {
                 (
-                    ProblemResponseType::SingleChoice(selected),
+                    ProblemResponseType::SingleChoice { value: selected },
                     SolutionData::ChoiceBlock(ChoiceBlock {
                         multiple: false,
                         choices,
@@ -220,7 +221,7 @@ impl Solutions {
                                     feedback,
                                 },
                             )| {
-                                if *selected as usize == i {
+                                if selected.is_some_and(|j| j as usize == i) {
                                     correct = correct && *cr;
                                     if *cr {
                                         pts += 1.0;
@@ -236,7 +237,7 @@ impl Solutions {
                         .collect(),
                 }),
                 (
-                    ProblemResponseType::MultipleChoice(selected),
+                    ProblemResponseType::MultipleChoice { value: selected },
                     SolutionData::ChoiceBlock(ChoiceBlock {
                         multiple: true,
                         choices,
@@ -262,7 +263,7 @@ impl Solutions {
                                         feedback,
                                     },
                                 )| {
-                                    if *cr {
+                                    if *cr == selected[i] {
                                         corrects += 1;
                                     } else {
                                         falses += 1;
@@ -277,9 +278,11 @@ impl Solutions {
                             )
                             .collect(),
                     });
-                    pts += ((corrects as f32 - falses as f32) / choices.len() as f32).max(0.0);
+                    if selected.iter().any(|b| *b) {
+                        pts += ((corrects as f32 - falses as f32) / choices.len() as f32).max(0.0);
+                    }
                 }
-                (ProblemResponseType::Fillinsol(s), SolutionData::FillInSol(f)) => {
+                (ProblemResponseType::Fillinsol { value: s }, SolutionData::FillInSol(f)) => {
                     let mut fill_correct = None;
                     let mut matching = None;
                     let mut options = SmallVec::new();
@@ -626,7 +629,6 @@ pub struct FillinFeedback {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-#[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum FillinFeedbackKind {
     Exact(String),
     NumRange { from: Option<f32>, to: Option<f32> },
@@ -640,7 +642,7 @@ pub enum FillinFeedbackKind {
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum CheckedResult {
     SingleChoice {
-        selected: u16,
+        selected: Option<u16>,
         #[cfg_attr(feature = "wasm", tsify(type = "BlockFeedback[]"))]
         choices: SmallVec<BlockFeedback, 4>,
     },
@@ -671,15 +673,23 @@ pub struct ProblemResponse {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(untagged))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 /// Either a list of booleans (multiple choice), a single integer (single choice),
 /// or a string (fill-in-the-gaps)
 pub enum ProblemResponseType {
-    MultipleChoice(#[cfg_attr(feature = "wasm", tsify(type = "boolean[]"))] SmallVec<bool, 8>),
-    SingleChoice(u16),
-    Fillinsol(String),
+    MultipleChoice {
+        #[cfg_attr(feature = "wasm", tsify(type = "boolean[]"))]
+        value: SmallVec<bool, 8>,
+    },
+    SingleChoice {
+        value: Option<u16>,
+    },
+    Fillinsol {
+        #[serde(rename = "value")]
+        value: String,
+    },
 }
 
 #[derive(Debug, Clone)]

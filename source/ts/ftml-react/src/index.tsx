@@ -34,6 +34,12 @@ export const setDebugLog = FTMLT.setDebugLog;
  * Every attribute is inherited from ancestor nodes *unless explicitly overridden*.
  */
 export interface FTMLConfig {
+
+  /**
+   * whether to allow hovers
+   */
+  allowHovers?: boolean,
+  
   /** may return a react component to *insert* after the title of a section
    * @param uri the uri of the section
    * @param lvl the level of the section
@@ -54,7 +60,7 @@ export interface FTMLConfig {
     uri: FTML.DocumentElementURI,
     kind: FTML.FragmentKind,
   ) => ((ch: ReactNode) => ReactNode) | undefined;
-  
+
   problemStates?: FTML.ProblemStates | undefined;
   onProblem?: ((response: FTML.ProblemResponse) => void) | undefined;
 }
@@ -180,8 +186,11 @@ const ElemToReact: React.FC<{
   ctx: FTML.LeptosContext;
 }> = ({ elems, ctx }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const done = useRef<boolean>(false);
   useEffect(() => {
-    if (ref.current) {
+    if (ref.current && !done.current) {
+      done.current = true;
+      //console.log("Mounting",uri);
       ref.current.replaceChildren(...elems);
     }
   }, []);
@@ -192,7 +201,12 @@ const ElemToReact: React.FC<{
   );
 };
 
-function elemToReact(elem: HTMLDivElement, ctx: FTML.LeptosContext): ReactNode {
+function elemToReact(
+  uri: FTML.DocumentElementURI,
+  elem: HTMLDivElement,
+  ctx: FTML.LeptosContext,
+): ReactNode {
+  //console.log("Doing",uri);
   const chs = Array.from(elem.childNodes);
   chs.forEach((c) => elem.removeChild(c));
   return <ElemToReact elems={chs} ctx={ctx} />;
@@ -224,7 +238,7 @@ function toConfig(
         const r = ofO(uri, kind);
         return r
           ? (elem: HTMLDivElement, ctx: FTML.LeptosContext) => {
-              const ret = r(elemToReact(elem, ctx));
+              const ret = r(elemToReact(uri, elem, ctx));
               return addTunnel(elem, ret, ctx);
             }
           : undefined;
@@ -235,6 +249,7 @@ function toConfig(
     onSectionTitle: onSectionTitle,
     onFragment: onFragment,
     problemStates: config.problemStates,
-    onProblem: config.onProblem
+    onProblem: config.onProblem,
+    allowHovers: config.allowHovers,
   };
 }

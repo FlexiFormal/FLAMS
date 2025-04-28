@@ -122,6 +122,48 @@ mod zip {
             self.stream.size_hint()
         }
     }
+
+    pub(super) trait ZipExt {
+        async fn unpack_with_callback<P: AsRef<std::path::Path>>(&mut self, dst: P,cont: impl FnMut(&std::path::Path)) -> tokio::io::Result<()>;
+    }
+    impl<R: tokio::io::AsyncRead + Unpin> ZipExt for tokio_tar::Archive<R> {
+        async fn unpack_with_callback<P: AsRef<std::path::Path>>(&mut self, dst: P,mut cont: impl FnMut(&std::path::Path)) -> tokio::io::Result<()> {
+            use std::pin::Pin;
+            use tokio::fs;
+            use rustc_hash::FxHashSet;
+            use tokio_stream::StreamExt;
+            let mut entries = self.entries()?;
+            let mut pinned = Pin::new(&mut entries);
+            let dst = dst.as_ref();
+
+            if fs::symlink_metadata(dst).await.is_err() {
+                fs::create_dir_all(&dst)
+                    .await?;
+            }
+
+            let dst = fs::canonicalize(dst).await?;
+
+            let mut targets = FxHashSet::default();
+
+            let mut directories = Vec::new();
+            while let Some(entry) = pinned.next().await {
+                let mut file = entry?;
+                if file.header().entry_type() == tokio_tar::EntryType::Directory {
+                    directories.push(file);
+                } else {
+                    if let Ok(p) = file.path() { cont(&p) }
+                    file.unpack_in_raw(&dst, &mut targets).await?;
+                }
+            }
+
+            directories.sort_by(|a, b| b.path_bytes().cmp(&a.path_bytes()));
+            for mut dir in directories {
+                dir.unpack_in_raw(&dst, &mut targets).await?;
+            }
+
+            Ok(())
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -144,9 +186,10 @@ impl LocalArchive {
 
     #[cfg(feature = "zip")]
     /// #### Errors
-    pub async fn unzip_from_remote(id: ArchiveId, url: &str) -> Result<(), ()> {
+    pub async fn unzip_from_remote(id: ArchiveId, url: &str,cont:impl FnMut(&Path)) -> Result<(), ()> {
         use flams_utils::PathExt;
         use futures::TryStreamExt;
+        use zip::ZipExt;
         let resp = match reqwest::get(url).await {
             Ok(r) => r,
             Err(e) => {
@@ -168,7 +211,7 @@ impl LocalArchive {
             .join(flams_utils::hashstr("download", &id));
 
         let mut tar = tokio_tar::Archive::new(decomp);
-        if let Err(e) = tar.unpack(&dest).await {
+        if let Err(e) = tar.unpack_with_callback(&dest,cont).await {
             tracing::error!("Error unpacking stream: {e}");
             let _ = tokio::fs::remove_dir_all(dest).await;
             return Err(());

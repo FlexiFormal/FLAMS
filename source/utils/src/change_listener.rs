@@ -16,7 +16,7 @@ impl<T: Clone + Send + Sync> ChangeListener<T> {
         }
     }
     pub async fn read(&mut self) -> Option<T> {
-        self.inner.recv().await.ok()
+        self.inner.recv_direct().await.ok()
     }
 }
 impl<T: Clone> Clone for ChangeListener<T> {

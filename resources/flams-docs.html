@@ -1,0 +1,46 @@
+<style id="flams"">
+    p, .docblock > .flams-wip {
+    	margin: 0 0 .75em 0;
+    }
+    p:last-child, .docblock > .flams-wip:last-child {
+        margin: 0;
+    }
+    .content .docblock .flams-wip {
+    	border-left: 2px solid orange;
+    	padding: 14px;
+    	position: relative;
+    	/* The "!important" part is required because the rule is otherwise overruled in this CSS
+    	selector: ".docblock > :not(.more-examples-toggle):not(.example-wrap)" */
+    	overflow-x: visible !important;
+    }
+    .flams-wip { opacity:0.7; }
+    .content .docblock .flams-wip::before {
+    	color: orange;
+    	content: "🚧";
+    	position: absolute;
+    	left: -42px;
+    	top: 5px;
+    	font-weight: bold;
+    	font-size: 1.8rem;
+        text-shadow: 1px 0 0 black,-1px 0 0 black,0 1px 0 black,0 -1px 0 black;
+    }
+    .top-doc > .docblock >.flams-wip:first-child::before {
+        top: 20px;
+    }
+
+    .flams-syntax {
+        font-size: smaller;
+        width:100%;
+        display:flex;
+    }
+    .flams-syntax > *:first-child {
+        width: fit-content;
+        margin-right: auto;
+        margin-left: 20px;
+    }
+    .flams-syntax > *:nth-child(2) {
+        width: fit-content;
+        margin-left: auto;
+        margin-right: 0;
+    }
+</style>

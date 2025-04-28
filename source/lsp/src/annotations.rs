@@ -1,7 +1,7 @@
 use crate::capabilities::STeXSemanticTokens;
 use crate::{
     state::{DocData, LSPState, UrlOrFile},
-    IsLSPRange, LSPStore, ProgressCallbackClient,
+    IsLSPRange, ProgressCallbackClient,
 };
 use async_lsp::lsp_types as lsp;
 use flams_ontology::{
@@ -326,13 +326,34 @@ impl AnnotExt for STeXAnnot {
             Self::Inputref {
                 archive,
                 filepath,
-                range,
+                full_range: range,
                 ..
             } => Some((
                 lsp::DocumentSymbol {
                     name: archive.as_ref().map_or_else(
                         || format!("inputref@{}", filepath.0),
                         |(a, _)| format!("inputref@[{a}]{}", filepath.0),
+                    ),
+                    detail: None,
+                    kind: lsp::SymbolKind::PACKAGE,
+                    tags: None,
+                    deprecated: None,
+                    range: range.into_range(),
+                    selection_range: range.into_range(),
+                    children: None,
+                },
+                &[],
+            )),
+            Self::MHInput {
+                archive,
+                filepath,
+                full_range: range,
+                ..
+            } => Some((
+                lsp::DocumentSymbol {
+                    name: archive.as_ref().map_or_else(
+                        || format!("mhinput@{}", filepath.0),
+                        |(a, _)| format!("mhinput@[{a}]{}", filepath.0),
                     ),
                     detail: None,
                     kind: lsp::SymbolKind::PACKAGE,
@@ -366,7 +387,14 @@ impl AnnotExt for STeXAnnot {
                 archive,
                 token_range,
                 filepath,
-                range,
+                full_range: range,
+                ..
+            }
+            | Self::MHInput {
+                archive,
+                token_range,
+                filepath,
+                full_range: range,
                 ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
@@ -434,9 +462,7 @@ impl AnnotExt for STeXAnnot {
             };
         }
         match self {
-            Self::Module {
-                uri, name_range, ..
-            } => {
+            Self::Module { name_range, .. } => {
                 if !name_range.contains(pos) {
                     return None;
                 };
@@ -847,6 +873,7 @@ impl AnnotExt for STeXAnnot {
             }
             Self::Svar { .. }
             | Self::Inputref { .. }
+            | Self::MHInput { .. }
             | Self::Problem { .. }
             | Self::Definiens { .. }
             | Self::Defnotation { .. } => None,
@@ -855,7 +882,6 @@ impl AnnotExt for STeXAnnot {
     fn semantic_tokens(&self, cont: &mut impl FnMut(SourceRange<LSPLineCol>, u32)) {
         match self {
             Self::Module {
-                uri,
                 name_range,
                 full_range,
                 smodule_range,
@@ -898,13 +924,13 @@ impl AnnotExt for STeXAnnot {
                 cont(end_range, STeXSemanticTokens::DECLARATION);
             }
             Self::MathStructure {
-                uri,
                 extends,
                 name_range,
                 opts,
                 full_range,
                 children,
                 mathstructure_range,
+                ..
             } => {
                 cont(*mathstructure_range, STeXSemanticTokens::DECLARATION);
                 cont(*name_range, STeXSemanticTokens::NAME);
@@ -939,11 +965,11 @@ impl AnnotExt for STeXAnnot {
                 cont(end_range, STeXSemanticTokens::DECLARATION);
             }
             Self::ConservativeExt {
-                uri,
                 ext_range,
                 full_range,
                 extstructure_range,
                 children,
+                ..
             } => {
                 cont(*extstructure_range, STeXSemanticTokens::DECLARATION);
                 cont(*ext_range, STeXSemanticTokens::SYMBOL);
@@ -1066,6 +1092,9 @@ impl AnnotExt for STeXAnnot {
             Self::Inputref {
                 token_range: range, ..
             }
+            | Self::MHInput {
+                token_range: range, ..
+            }
             | Self::Defnotation { full_range: range } => {
                 cont(*range, STeXSemanticTokens::REF_MACRO)
             }
@@ -1079,11 +1108,11 @@ impl AnnotExt for STeXAnnot {
                 cont(*token_range, STeXSemanticTokens::VARIABLE)
             }
             Self::Problem {
-                sub,
                 full_range,
                 name_range,
                 parsed_args,
                 children,
+                ..
             } => {
                 cont(*name_range, STeXSemanticTokens::REF_MACRO);
                 for e in parsed_args {
@@ -1209,12 +1238,10 @@ impl AnnotExt for STeXAnnot {
                 }
             }
             Self::InlineParagraph {
-                kind,
                 symbol,
                 token_range,
                 parsed_args,
                 children,
-                full_range,
                 ..
             } => {
                 if symbol.is_some() {
@@ -1719,6 +1746,7 @@ impl AnnotExt for STeXAnnot {
             | Self::UseModule { .. }
             | Self::SetMetatheory { .. }
             | Self::Inputref { .. }
+            | Self::MHInput { .. }
             | Self::Symdecl { .. }
             | Self::Symdef { .. }
             | Self::Vardef { .. }
@@ -1735,9 +1763,8 @@ impl AnnotExt for STeXAnnot {
             Self::SymName {
                 uri,
                 full_range,
-                token_range,
-                name_range,
                 mode: mod_,
+                ..
             } => {
                 let name = uri
                     .first()
@@ -1964,10 +1991,10 @@ impl AnnotExt for STeXAnnot {
             | Self::UseStructure { .. }
             | Self::SetMetatheory { .. }
             | Self::Inputref { .. }
+            | Self::MHInput { .. }
             | Self::Symdecl { .. }
             | Self::TextSymdecl { .. }
             | Self::RenameDecl { .. }
-            | Self::Assign { .. }
             | Self::Symdef { .. }
             | Self::Vardef { .. }
             | Self::Varseq { .. }
@@ -2091,7 +2118,7 @@ impl LSPState {
     pub fn prepare_module_hierarchy(
         &self,
         uri: UrlOrFile,
-        progress: Option<ProgressCallbackClient>,
+        _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyItem>>>> {
         let d = self.get(&uri)?;
         let url: lsp::Url = uri.into();
@@ -2107,50 +2134,6 @@ impl LSPState {
                 data: Some(doc.to_string().into()),
             }]))
         })
-        /*
-        let name = d.document_uri().cloned();//.map(|d| d.name().to_string());
-        Some(d.with_annots(self.clone(), move |data| {
-            if let Some(doc) = name {
-                vec![
-
-                ]
-            } else { Vec::new() }
-             /*
-             let mut ret = Vec::new()
-            let iter : AnnotIter = data.annotations.iter().into();
-            for d in iter {
-                match d {
-                    STeXAnnot::Module { uri, name_range, full_range,.. } => {
-                        ret.push(lsp::CallHierarchyItem {
-                            name: uri.name().to_string(),
-                            kind: lsp::SymbolKind::MODULE,
-                            tags:None,
-                            detail:None,
-                            uri: url.clone(),
-                            range:IsLSPRange::into_range(*full_range),
-                            selection_range:IsLSPRange::into_range(*name_range),
-                            data:Some(uri.to_string().into())
-                        })
-                    }
-                    STeXAnnot::MathStructure { uri, name_range, full_range, .. } => {
-                        ret.push(lsp::CallHierarchyItem {
-                            name: format!("{}/{}",uri.uri.module().name(),uri.uri.name()),
-                            kind: lsp::SymbolKind::STRUCT,
-                            tags:None,
-                            detail:None,
-                            uri: url.clone(),
-                            range:IsLSPRange::into_range(*full_range),
-                            selection_range:IsLSPRange::into_range(*name_range),
-                            data:Some(uri.uri.to_string().into())
-                        })
-                    }
-                    _ => ()
-                }
-            }
-            tracing::info!("module hierarchy: {ret:#?}");
-            ret
-            */
-        })) */
     }
 
     pub fn module_hierarchy_imports(
@@ -2158,16 +2141,16 @@ impl LSPState {
         url: lsp::Url,
         kind: lsp::SymbolKind,
         uri: URI,
-        progress: Option<ProgressCallbackClient>,
+        _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyIncomingCall>>>>
     {
         Some(std::future::ready({
             let url = url.into();
             let d = self.documents.read().get(&url).cloned()?;
-            let annots = (match d {
+            let annots = match d {
                 DocData::Doc(d) => d.annotations,
                 DocData::Data(d, _) => d,
-            }); //
+            };
             let data = annots.lock();
             let mut rets = Vec::new();
             let (chs, usemods) = if kind == lsp::SymbolKind::FILE {
@@ -2224,7 +2207,7 @@ impl LSPState {
                     false,
                 )
             };
-            let mut iter: AnnotIter = chs.iter().into();
+            let iter: AnnotIter = chs.iter().into();
             for e in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
                 match e {
                     STeXAnnot::ImportModule {
@@ -2325,7 +2308,7 @@ impl LSPState {
         &self,
         uri: UrlOrFile,
         position: lsp::Position,
-        progress: Option<ProgressCallbackClient>,
+        _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::Location>>>> {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
@@ -2359,7 +2342,7 @@ impl LSPState {
                     }
                     | STeXAnnot::Symdef { uri, .. } => Some(Target::Symbol(uri.uri.clone())),
                     STeXAnnot::RenameDecl { .. } => None, // TODO
-                    STeXAnnot::Vardef { name, .. } | STeXAnnot::Varseq { name, .. } => {
+                    STeXAnnot::Vardef { .. } | STeXAnnot::Varseq { .. } => {
                         // TODO
                         None
                     }
@@ -2451,7 +2434,7 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         position: lsp::Position,
-        progress: Option<ProgressCallbackClient>,
+        _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>>> {
         let d = self.get(uri)?;
         let pos = LSPLineCol {
@@ -2472,7 +2455,7 @@ impl LSPState {
         uri: UrlOrFile,
         range: lsp::Range,
         _context: lsp::CodeActionContext,
-        progress: Option<ProgressCallbackClient>,
+        _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::CodeActionResponse>>> {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
@@ -2493,7 +2476,7 @@ impl LSPState {
         &self,
         uri: UrlOrFile,
         position: lsp::Position,
-        progress: Option<ProgressCallbackClient>,
+        _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::GotoDefinitionResponse>>> {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
@@ -2512,7 +2495,7 @@ impl LSPState {
     pub fn get_inlay_hints(
         &self,
         uri: &UrlOrFile,
-        progress: Option<ProgressCallbackClient>,
+        _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::InlayHint>>>> {
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(), move |data| {
@@ -2527,15 +2510,14 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
-        range: Option<lsp::Range>,
+        _range: Option<lsp::Range>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::SemanticTokens>>> {
-        let range = range.map(SourceRange::from_range);
+        //let range = range.map(SourceRange::from_range);
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(), |data| {
             let mut ret = Vec::new();
             let mut curr = (0u32, 0u32);
             for e in data.annotations.iter() {
-                //<std::slice::Iter<'_,STeXAnnot> as TreeChildIter<STeXAnnot>>::dfs(data.annotations.iter()) {
                 e.semantic_tokens(&mut |range, tp| {
                     if range.start.line < curr.0 {
                         return;

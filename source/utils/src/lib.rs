@@ -333,11 +333,17 @@ fn css_things() {
 }
 
 pub trait PathExt {
+    const PATH_SEPARATOR: char;
     fn as_slash_str(&self) -> String;
     fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool;
     fn rename_safe<P:AsRef<std::path::Path>>(&self,target:&P) -> eyre::Result<()>;
 }
 impl<T:AsRef<std::path::Path>> PathExt for T {
+    
+    #[cfg(target_os = "windows")]
+    const PATH_SEPARATOR: char = '\\';
+    #[cfg(not(target_os = "windows"))]
+    const PATH_SEPARATOR: char = '/';
     fn as_slash_str(&self) -> String {
         if cfg!(windows) {
             unwrap!(self.as_ref().as_os_str().to_str()).replace('\\',"/")

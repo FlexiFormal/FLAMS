@@ -8,16 +8,11 @@ use flams_utils::{
     change_listener::ChangeSender,
     prelude::{TreeChild, TreeLike},
     time::Timestamp,
-    vecmap::VecMap,
+    vecmap::VecMap, PathExt,
 };
 
 use super::ignore_regex::IgnoreSource;
 use crate::{backend::{archives::LocalArchive, BackendChange}, formats::{BuildTargetId, SourceFormatId}};
-
-#[cfg(target_os = "windows")]
-const PATH_SEPARATOR: char = '\\';
-#[cfg(not(target_os = "windows"))]
-const PATH_SEPARATOR: char = '/';
 
 #[derive(Debug)]
 pub enum SourceEntry {
@@ -284,15 +279,15 @@ impl SourceDir {
             };
             let Some(relative_path) = relative_path.strip_prefix(topstr).and_then(|s| {
                 s.strip_prefix(const_format::concatcp!(
-                    PATH_SEPARATOR,
+                    std::path::PathBuf::PATH_SEPARATOR,
                     "source",
-                    PATH_SEPARATOR
+                    std::path::PathBuf::PATH_SEPARATOR
                 ))
             }) else {
                 unreachable!("{relative_path} does not start with {topstr}???")
             };
             #[cfg(target_os = "windows")]
-            let relative_path: Arc<str> = relative_path.replace(PATH_SEPARATOR, "/").to_string().into();
+            let relative_path: Arc<str> = relative_path.replace(std::path::PathBuf::PATH_SEPARATOR, "/").to_string().into();
             #[cfg(not(target_os = "windows"))]
             let relative_path: Arc<str> = relative_path.to_string().into();
             let states = FileState::from(top, &metadata, &relative_path, *format);

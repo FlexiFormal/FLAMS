@@ -223,7 +223,41 @@ pub async fn get_quiz(
     server::get_quiz(uri).await
 }
 
-#[server(prefix = "/content", endpoint = "grade")]
+#[server(prefix = "/content", endpoint = "grade_enc",
+    input=server_fn::codec::Json,
+    output=server_fn::codec::Json
+)]
+pub async fn grade_enc(
+    submissions: Vec<(String, Vec<Option<ProblemResponse>>)>,
+) -> Result<Vec<Vec<ProblemFeedbackJson>>, ServerFnError<String>> {
+    tokio::task::spawn_blocking(move || {
+        let mut ret = Vec::new();
+        for (sol, resps) in submissions {
+            let mut ri = Vec::new();
+            let sol = flams_ontology::narration::problems::Solutions::from_jstring(&sol)
+                .ok_or_else(|| format!("Invalid solution string: {sol}"))?;
+            for resp in resps {
+                let r = if let Some(resp) = resp {
+                    sol.check_response(&resp).ok_or_else(|| {
+                        "Response {resp:?} does not match solution {sol:?}".to_string()
+                    })?
+                } else {
+                    sol.default_feedback()
+                };
+                ri.push(r.to_json());
+            }
+            ret.push(ri)
+        }
+        Ok(ret)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[server(prefix = "/content", endpoint = "grade",
+    input=server_fn::codec::Json,
+    output=server_fn::codec::Json
+)]
 pub async fn grade(
     submissions: Vec<(Box<[SolutionData]>, Vec<Option<ProblemResponse>>)>,
 ) -> Result<Vec<Vec<ProblemFeedbackJson>>, ServerFnError<String>> {
@@ -250,12 +284,7 @@ pub async fn grade(
     .map_err(|e| e.to_string())?
 }
 
-#[server(
-  prefix="/content",
-  endpoint="solution",
-  input=server_fn::codec::GetUrl,
-  output=server_fn::codec::Json
-)]
+#[server(prefix = "/content", endpoint = "solution")]
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_arguments)]
 pub async fn solution(
@@ -332,7 +361,7 @@ mod server {
         },
     };
     use flams_system::backend::{Backend, GlobalBackend, rdf::sparql};
-    use flams_utils::{CSS, vecmap::VecSet};
+    use flams_utils::{CSS, unwrap, vecmap::VecSet};
     use flams_web_utils::{blocking_server_fn, not_found};
     use ftml_viewer_components::components::{
         TOCElem,
@@ -573,19 +602,21 @@ mod server {
             css: &mut VecSet<CSS>,
             backend: &impl Backend,
         ) -> Result<Vec<SlideElement>, String> {
-            let mut stack = smallvec::SmallVec::<_, 2>::default();
+            let mut stack =
+                smallvec::SmallVec::<(_, _, _, Option<DocumentElementURI>), 2>::default();
             let mut ret = Vec::new();
             let mut curr = children.iter();
 
             loop {
                 let Some(next) = curr.next() else {
-                    if let Some((a, b, c)) = stack.pop() {
+                    if let Some((a, b, c, u)) = stack.pop() {
                         curr = a;
                         if let Some(mut b) = b {
                             std::mem::swap(&mut ret, &mut b);
                             ret.push(SlideElement::Section {
                                 title: c,
                                 children: b,
+                                uri: unwrap!(u),
                             });
                         }
                         continue;
@@ -600,7 +631,10 @@ mod server {
                         for c in c {
                             css.insert(c);
                         }
-                        ret.push(SlideElement::Slide { html });
+                        ret.push(SlideElement::Slide {
+                            html,
+                            uri: uri.clone(),
+                        });
                     }
                     DocumentElement::Paragraph(p) => {
                         let Some((c, html)) = backend.get_html_fragment(top, p.range) else {
@@ -609,7 +643,10 @@ mod server {
                         for c in c {
                             css.insert(c);
                         }
-                        ret.push(SlideElement::Paragraph { html });
+                        ret.push(SlideElement::Paragraph {
+                            html,
+                            uri: p.uri.clone(),
+                        });
                     }
                     DocumentElement::DocumentReference { target, .. } => {
                         ret.push(SlideElement::Inputref {
@@ -632,12 +669,18 @@ mod server {
                             std::mem::replace(&mut curr, s.children().iter()),
                             Some(std::mem::replace(&mut ret, Vec::new())),
                             title,
+                            Some(s.uri.clone()),
                         ));
                     }
                     o => {
                         let chs = o.children();
                         if !chs.is_empty() {
-                            stack.push((std::mem::replace(&mut curr, chs.iter()), None, None));
+                            stack.push((
+                                std::mem::replace(&mut curr, chs.iter()),
+                                None,
+                                None,
+                                None,
+                            ));
                         }
                     }
                 }
