@@ -5,6 +5,7 @@ edition = "2021"
 description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 
 [lib]
+name = "flams"
 crate-type = ["cdylib", "rlib"]
 
 #[package.metadata.wasm-pack.profile.release]
@@ -13,8 +14,8 @@ crate-type = ["cdylib", "rlib"]
 #[package.metadata.wasm-pack.profile.dev]
 #wasm-opt = false
 
-#[[bin]]
-#name = "flams"
+[[bin]]
+name = "flams"
 
 [features]
 docs = []

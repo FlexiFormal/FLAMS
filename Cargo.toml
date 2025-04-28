@@ -82,7 +82,17 @@ dwarf-debug-info = true
 
 [workspace.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
+rustdoc-args = [
+    "--cfg",
+    "docsrs",
+    "--html-in-header",
+    "resources/katex-header.html",
+    "--html-in-header",
+    "resources/flams-docs.html",
+    "--enable-index-page",
+    "-Zunstable-options",
+    "--generate-link-to-definition",
+]
 
 [workspace.lints.rust]
 #unsafe_code = "deny"
@@ -151,12 +161,12 @@ regex = "1.10"
 async-broadcast = "0.7"
 simple-home-dir = "0.5"
 async-trait = "0.1"
-bincode = { version = "2.0.0-rc.3", features = ["derive", "serde"] }
+bincode = { version = "2", features = ["derive", "serde"] }
 lightningcss = { version = "1.0.0-alpha.63" }
 # cfg-if = "1"
 tokio = { version = "1" }                                                   #, features = ["fs","io-util","sync","test-util","macros","rt"] }
 tokio-util = { version = "0.7", features = ["compat"] }
-tokio-stream = { version="0.1"}
+tokio-stream = { version = "0.1" }
 tempfile = { version = "3" }
 phf = { version = "0.11", default-features = false, features = ["macros"] }
 crossbeam-channel = { version = "0.5" }
