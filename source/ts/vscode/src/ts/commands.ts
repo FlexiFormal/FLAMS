@@ -167,7 +167,7 @@ function flamsTools(msg:any,context:FLAMSContext) {
       if (doc) {
         context.client.sendRequest<string | undefined>("flams/quizRequest",<QuizRequestParams>{uri:doc.uri.toString()}).then(s => {
           if (s) {
-            vscode.env.clipboard.writeText(s).then(() => {
+            vscode.env.clipboard.writeText(s + "\n").then(() => {
               vscode.window.showInformationMessage("Copied to clipboard");
             });
           }
