@@ -145,6 +145,8 @@ export function webview(flamscontext:FLAMSContext,html_file:string,onMessage?: (
   };
 }
 
+const USE_CLIPBOARD = false;
+
 function flamsTools(msg:any,context:FLAMSContext) {
   const doc = vscode.window.activeTextEditor?.document;
   switch (msg.command) {
@@ -167,9 +169,29 @@ function flamsTools(msg:any,context:FLAMSContext) {
       if (doc) {
         context.client.sendRequest<string | undefined>("flams/quizRequest",<QuizRequestParams>{uri:doc.uri.toString()}).then(s => {
           if (s) {
-            vscode.env.clipboard.writeText(s).then(() => {
-              vscode.window.showInformationMessage("Copied to clipboard");
-            });
+            if (USE_CLIPBOARD) {
+              vscode.env.clipboard.writeText(s).then(() => {
+                vscode.window.showInformationMessage("Copied to clipboard");
+              },
+              (e) => {
+                vscode.window.showErrorMessage("Failed to copy to clipboard: " + e);
+              });
+            } else {
+              vscode.window.showSaveDialog({
+                title:"Save Quiz JSON"
+              }).then(uri => {
+                if (uri) {
+                  vscode.workspace.fs.writeFile(uri,Buffer.from(s)).then(() => {
+                    vscode.window.showInformationMessage("Saved");
+                  },
+                  (e) => {
+                    vscode.window.showErrorMessage("Failed to save: " + e);
+                  });
+                }
+              });
+            }
+          } else {
+            vscode.window.showErrorMessage("No quiz available; possibly dependency missing");
           }
         });
       } else {

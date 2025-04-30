@@ -107,11 +107,18 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             serde_json::to_string(&quiz).map_err(|e| e.to_string())
         }
         let state = self.inner.state().clone();
+        let mut client = self.inner.client().clone();
         Box::pin(async move {
             let url: UrlOrFile = params.uri.into();
-            tokio::task::spawn_blocking(move || {
-                get_res(url, state)
-                    .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e))
+            tokio::task::spawn_blocking(move || match get_res(url, state) {
+                Err(e) => {
+                    let _ = client.show_message(lsp::ShowMessageParams {
+                        typ: lsp::MessageType::ERROR,
+                        message: e.clone(),
+                    });
+                    Err(ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e))
+                }
+                Ok(r) => Ok(r),
             })
             .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string()))
             .await?
@@ -150,19 +157,23 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 let mut ret = Vec::new();
                 let exis = GlobalBackend::get().all_archives();
                 for a in archives {
-                    if exis.iter().any(|e| *e.id() == a) || ret.contains(&a) {continue}
+                    if exis.iter().any(|e| *e.id() == a) || ret.contains(&a) {
+                        continue;
+                    }
                     ret.push(a);
                 }
                 ret
             };
             let len = archives.len();
-            for (i,a) in archives.into_iter().enumerate() {
+            for (i, a) in archives.into_iter().enumerate() {
                 let url = format!("{remote_url}/api/backend/download?id={a}");
-                let prefix = format!("{}/{len}: {a}",i+1);
-                progress.update( prefix.clone(), None);
-                if LocalArchive::unzip_from_remote(a.clone(), &url,|p| progress.update(format!("{prefix}: {}",p.display()),None))
-                    .await
-                    .is_err()
+                let prefix = format!("{}/{len}: {a}", i + 1);
+                progress.update(prefix.clone(), None);
+                if LocalArchive::unzip_from_remote(a.clone(), &url, |p| {
+                    progress.update(format!("{prefix}: {}", p.display()), None)
+                })
+                .await
+                .is_err()
                 {
                     let _ = progress.client_mut().show_message(lsp::ShowMessageParams {
                         message: format!("Failed to install archive {a}"),
