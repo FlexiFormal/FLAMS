@@ -106,11 +106,11 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
 
     let app = app
         .route(
-            "/api/*fn_name",
+            "/api/{*fn_name}",
             axum::routing::get(server_fn_handle).post(server_fn_handle),
         )
         .route(
-            "/content/*fn_name",
+            "/content/{*fn_name}",
             axum::routing::get(server_fn_handle).post(server_fn_handle),
         )
         .leptos_routes_with_handler(

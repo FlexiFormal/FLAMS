@@ -238,11 +238,11 @@ leptos_router = { version = "0.8.0-rc3", features = ["nightly"] }
 #thaw_components = { path="../thaw/thaw_components" }
 #thaw_utils = { path="../thaw/thaw_utils", features=["nightly"] }
 
-thaw = { git = "https://github.com/Jazzpirate/thaw", features = [
+thaw = { git = "https://github.com/thaw-ui/thaw", features = [
     "nightly",
 ], branch = "thaw/v0.5" }
-thaw_components = { git = "https://github.com/Jazzpirate/thaw", branch = "thaw/v0.5" }
-thaw_utils = { git = "https://github.com/Jazzpirate/thaw", features = [
+thaw_components = { git = "https://github.com/thaw-ui/thaw", branch = "thaw/v0.5" }
+thaw_utils = { git = "https://github.com/thaw-ui/thaw", features = [
     "nightly",
 ], branch = "thaw/v0.5" }
 

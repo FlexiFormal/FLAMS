@@ -1,17 +1,21 @@
 use leptos::prelude::*;
-use thaw::{Popover as ThawPopover,PopoverProps as ThawPopoverProps,PopoverPosition,PopoverAppearance,Dialog,DialogSurface};
+use thaw::{
+    Dialog, DialogSurface, Popover as ThawPopover, PopoverAppearance, PopoverPosition,
+    PopoverProps as ThawPopoverProps,
+};
 use thaw_utils::BoxCallback;
 
-pub use thaw::{PopoverTrigger,PopoverTriggerType,PopoverSize};
+pub use thaw::{PopoverSize, PopoverTrigger, PopoverTriggerType};
 
 #[slot]
 pub struct OnClickModal {
-    children:Children,
-    #[prop(optional, into)] signal:RwSignal<bool>
+    children: Children,
+    #[prop(optional, into)]
+    signal: RwSignal<bool>,
 }
 
 #[component]
-pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
+pub fn Popover<Ch: IntoView + 'static, T: IntoView + 'static>(
     #[prop(optional, into)] class: MaybeProp<String>,
     /// Action that displays the popover.
     #[prop(optional)]
@@ -19,15 +23,12 @@ pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
     /// The element or component that triggers popover.
     popover_trigger: PopoverTrigger<T>,
     /// Configures the position of the Popover.
-    #[prop(optional,default=PopoverPosition::FlexibleTop)]
+    #[prop(optional,default=PopoverPosition::Top)]
     position: PopoverPosition,
-    #[prop(optional)]
-    on_click_modal:Option<OnClickModal>,
-    #[prop(optional)]
-    on_click_signal:Option<RwSignal<bool>>,
+    #[prop(optional)] on_click_modal: Option<OnClickModal>,
+    #[prop(optional)] on_click_signal: Option<RwSignal<bool>>,
     children: TypedChildren<Ch>,
-    #[prop(optional, into)]
-    appearance: MaybeProp<PopoverAppearance>,
+    #[prop(optional, into)] appearance: MaybeProp<PopoverAppearance>,
     #[prop(optional, into)] size: Signal<PopoverSize>,
     #[prop(optional, into)] on_open: Option<BoxCallback>,
     #[prop(optional, into)] on_close: Option<BoxCallback>,
@@ -35,29 +36,45 @@ pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
     let trigger = popover_trigger.children.into_inner();
     let children = children.into_inner();
 
-    let modal_signal = on_click_modal.as_ref().map(|OnClickModal{signal,..}| *signal)
+    let modal_signal = on_click_modal
+        .as_ref()
+        .map(|OnClickModal { signal, .. }| *signal)
         .or(on_click_signal);
     ThawPopover(ThawPopoverProps {
-        class,trigger_type,position,appearance,size,on_open,on_close,popover_trigger:PopoverTrigger { 
+        class,
+        trigger_type,
+        position,
+        appearance,
+        size,
+        on_open,
+        on_close,
+        popover_trigger: PopoverTrigger {
             children: leptos::children::ToChildren::to_children(move || {
                 let t = trigger();
                 if let Some(sig) = modal_signal {
                     leptos::either::Either::Left(t.add_any_attr(leptos::tachys::html::event::on(
-                        leptos::tachys::html::event::click, 
-                        Box::new(move |_| sig.set(true))
+                        leptos::tachys::html::event::click,
+                        Box::new(move |_| sig.set(true)),
                     )))
                 } else {
                     leptos::either::Either::Right(t)
                 }
-            })
+            }),
         },
-        children:Box::new(move || if let Some(OnClickModal{signal,children}) = on_click_modal { view!{
-            <Dialog open=signal>
-                <DialogSurface>//<DialogBody>
-                    {children()}
-                /*</DialogBody>*/</DialogSurface>
-            </Dialog>
-        }.into_any()} else {children().into_any()})
+        children: Box::new(move || {
+            if let Some(OnClickModal { signal, children }) = on_click_modal {
+                view! {
+                    <Dialog open=signal>
+                        <DialogSurface>//<DialogBody>
+                            {children()}
+                        /*</DialogBody>*/</DialogSurface>
+                    </Dialog>
+                }
+                .into_any()
+            } else {
+                children().into_any()
+            }
+        }),
     })
 }
 
@@ -111,7 +128,7 @@ pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
     //let previous_popover = use_context::<InnerPopover>();
     //let this_popover = InnerPopover(RwSignal::new(None));
     let children = children.into_inner();
-    
+
     crate::inject_css("thaw-id-popover", include_str!("./popover.css"));
     let config_provider = thaw::ConfigInjection::expect_context();
     let popover_ref = NodeRef::<html::Div>::new();
@@ -250,7 +267,7 @@ pub fn Popover<Ch:IntoView+'static,T:IntoView+'static>(
             </mrow>
         })
     };
-    
+
     view! {
         {on_click_modal.map(|OnClickModal{signal,children}| view!{
             <Dialog open=signal>
