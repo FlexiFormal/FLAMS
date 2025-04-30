@@ -234,6 +234,10 @@ pub fn render_fragment(
         on_inputref: Option<JInputRefCont>,
         problem_opts: Option<ProblemOptions>,
     ) -> Result<FTMLMountHandle, String> {
+        let _ = to.style().set_property(
+            "--rustex-this-width",
+            "var(--rustex-curr-width,min(800px,100%))",
+        );
         let on_section_title = on_section_title.map(|f| OnSectionTitle(f.get().into()));
         let on_fragment = on_fragment.map(|f| f.get().into());
         let on_inputref = on_inputref.map(|f| f.get().into());
@@ -337,7 +341,7 @@ fn GlobalSetup<V: IntoView + 'static>(
 /// - `HtmlString`: render the provided HTML String
 ///     html: the HTML String
 ///     toc: if defined, will render a table of contents for the document
-#[serde(untagged)]
+#[serde(tag = "type")]
 pub enum DocumentOptions {
     FromBackend {
         uri: DocumentURI,
@@ -358,7 +362,7 @@ pub enum DocumentOptions {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-#[serde(untagged)]
+#[serde(tag = "type")]
 /// Options for rendering an FTML document fragment
 /// - `FromBackend`: calls the backend for the document fragment
 ///     uri: the URI of the document fragment (as string)
