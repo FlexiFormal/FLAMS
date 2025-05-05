@@ -1,5 +1,7 @@
 # 𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System
 
+Documentation hosted [here](https://kwarc.github.io/FLAMS).
+
 ## Build steps
 
 ```sh
