@@ -223,10 +223,10 @@ git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 #leptos_axum = "0.7"
 #leptos_meta = "0.7"
 #leptos_router = { version = "0.7", features = ["nightly"] }
-leptos = { version = "0.8.0-rc3", features = ["nightly"] }
-leptos_axum = "0.8.0-rc3"
-leptos_meta = "0.8.0-rc3"
-leptos_router = { version = "0.8.0-rc3", features = ["nightly"] }
+leptos = { version = "0.8", features = ["nightly"] }
+leptos_axum = "0.8"
+leptos_meta = "0.8"
+leptos_router = { version = "0.8", features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
 
 
@@ -238,13 +238,9 @@ leptos_router = { version = "0.8.0-rc3", features = ["nightly"] }
 #thaw_components = { path="../thaw/thaw_components" }
 #thaw_utils = { path="../thaw/thaw_utils", features=["nightly"] }
 
-thaw = { git = "https://github.com/thaw-ui/thaw", features = [
-    "nightly",
-], branch = "thaw/v0.5" }
-thaw_components = { git = "https://github.com/thaw-ui/thaw", branch = "thaw/v0.5" }
-thaw_utils = { git = "https://github.com/thaw-ui/thaw", features = [
-    "nightly",
-], branch = "thaw/v0.5" }
+thaw = { version = "0.5.0-beta", features = ["nightly"] }
+thaw_components = { version = "0.4.0-beta" }
+thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
 
 leptos-dyn-dom = { git = "https://github.com/Jazzpirate/leptos-dyn-dom", branch = "leptos8" }
 
