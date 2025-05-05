@@ -620,7 +620,7 @@ pub(super) fn fillinsol(wd: Option<f32>) -> impl IntoView {
       Either::B(view!{
         {icon}" "
         <input type="text" style=style disabled value=text.clone()/>
-        {solution.map(|s| view!(" "<pre style="color:green">{s}</pre>))}
+        {solution.map(|s| view!(" "<pre style="color:green;display:inline;">{s}</pre>))}
         {feedback.map(|s| view!(" "<span style="background-color:lightgray;" inner_html=s/>))}
       })
     } else {
