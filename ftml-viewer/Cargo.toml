@@ -73,14 +73,14 @@ flams-web-utils = { path = "../source/web-utils", features = ["csr"] }
 flams-utils = { path = "../source/utils" }
 flams-ontology = { path = "../source/ontology" }
 
-leptos_meta = "*"
+leptos_meta = "0.7"
 wasm-bindgen = "*"
 console_error_panic_hook = "*"
 thaw = { git = "https://github.com/Jazzpirate/thaw", features = ["nightly"] }
 tracing-wasm = "*"
 tracing = { version = "*", features = ["release_max_level_info"] }
 leptos-dyn-dom = { version = "*", git = "https://github.com/Jazzpirate/leptos-dyn-dom" }
-leptos = { version = "*", features = ["csr"] }
+leptos = { version = "0.7", features = ["csr"] }
 
 tsify-next = { version = "*", optional = true }
 serde = { version = "*", optional = true }

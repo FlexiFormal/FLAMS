@@ -103,8 +103,8 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 .backend()
                 .get_document(uri)
                 .ok_or_else(|| "Document not found".to_string())?;
-            let quiz = doc.as_quiz(state.backend()).map_err(|e| e.to_string())?;
-            serde_json::to_string(&quiz).map_err(|e| e.to_string())
+            let quiz = doc.as_quiz(state.backend()).map_err(|e| format!("{e:#}"))?;
+            serde_json::to_string(&quiz).map_err(|e| format!("{e:#}"))
         }
         let state = self.inner.state().clone();
         let mut client = self.inner.client().clone();

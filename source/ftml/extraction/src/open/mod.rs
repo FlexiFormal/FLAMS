@@ -411,6 +411,19 @@ impl OpenFTMLElement {
                 }
             }
             Self::ProblemSolution(id) => {
+                let range = node.range();
+                // kinda-hack: remove all paragraphs in a solution
+                extractor.with_problem(|ex| {
+                    ex.children.retain(|e| match e {
+                        DocumentElement::Paragraph(LogicalParagraph { range: rng, .. })
+                        | DocumentElement::Slide { range: rng, .. }
+                        | DocumentElement::Problem(Problem { range: rng, .. }) => {
+                            rng.end < range.start || rng.start > range.end
+                        }
+
+                        _ => true,
+                    });
+                });
                 let s = node.inner_string().into_boxed_str();
                 node.delete_children();
                 if extractor

@@ -1042,6 +1042,7 @@ impl Backend for TemporaryBackend {
         let Some(html) = lock.get(&rf.in_doc) else {
             return self.inner.parent.get_reference(rf);
         };
+
         let Some(bytes) = html.refs.as_slice().get(rf.start..rf.end) else {
             return Err(eyre::eyre!("reference has invalid start/end points"));
         };
