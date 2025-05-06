@@ -259,53 +259,51 @@ fn user_field() -> impl IntoView {
     use flams_web_utils::components::{Spinner, SpinnerSize};
     use thaw::{Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType};
 
-    {
-        view! {//<ClientOnly>
-            <div class="flams-user-menu-trigger">{
-            let theme = expect_context::<RwSignal<thaw::Theme>>();
-            let on_select = move |key: String| match key.as_str() {
-                "theme" => {
-                    theme.update(|v| {
-                        if v.name == "dark" {
-                            *v = thaw::Theme::light();
-                        } else {
-                            *v = thaw::Theme::dark();
-                        }
-                    });
-                }
-                _ => unreachable!(),
-            };
-            let src = Memo::new(|_| match LoginState::get() {
-                LoginState::User { avatar, .. } => Some(avatar),
-                LoginState::Admin => Some("/admin.png".to_string()),
-                _ => None,
-            });
-            let icon = Memo::new(move |_| if theme.with(|v| v.name == "dark")
-                {icondata_bi::BiSunRegular} else {icondata_bi::BiMoonSolid}
-            );
-            let text = Memo::new(move |_| if theme.with(|v| v.name == "dark")
-                {"Light Mode"} else {"Dark Mode"}
-            );
-            view!{
-            <Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::Bottom>
-                <MenuTrigger slot>
-                    <thaw::Avatar src />
-                </MenuTrigger>
-                // AiGitlabFilled
-                <MenuItem value="theme" icon=icon>{text}</MenuItem>
-                <Divider/>
-                {move || match LoginState::get() {
-                    LoginState::None => EitherOf4::A(login_form()),
-                    LoginState::NoAccounts => EitherOf4::B(view!(<span>"Admin"</span>)),
-                    LoginState::Admin => EitherOf4::C(logout_form("admin".to_string())),
-                    LoginState::User{name,..} => EitherOf4::C(logout_form(name)),
-                    LoginState::Loading => EitherOf4::D(view!(<Spinner size=SpinnerSize::Tiny/>))
-                }}
-            </Menu>
+    view! {//<ClientOnly>
+        <div class="flams-user-menu-trigger">{
+        let theme = expect_context::<RwSignal<thaw::Theme>>();
+        let on_select = move |key: &'static str| match key {
+            "theme" => {
+                theme.update(|v| {
+                    if v.name == "dark" {
+                        *v = thaw::Theme::light();
+                    } else {
+                        *v = thaw::Theme::dark();
+                    }
+                });
             }
-        }</div>
-        //</ClientOnly>
+            _ => unreachable!(),
+        };
+        let src = Memo::new(|_| match LoginState::get() {
+            LoginState::User { avatar, .. } => Some(avatar),
+            LoginState::Admin => Some("/admin.png".to_string()),
+            _ => None,
+        });
+        let icon = Memo::new(move |_| if theme.with(|v| v.name == "dark")
+            {icondata_bi::BiSunRegular} else {icondata_bi::BiMoonSolid}
+        );
+        let text = Memo::new(move |_| if theme.with(|v| v.name == "dark")
+            {"Light Mode"} else {"Dark Mode"}
+        );
+        view!{
+        <Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::LeftEnd>
+            <MenuTrigger slot>
+                <thaw::Avatar src />
+            </MenuTrigger>
+            // AiGitlabFilled
+            <MenuItem value="theme" icon=icon>{text}</MenuItem>
+            <Divider/>
+            {move || match LoginState::get() {
+                LoginState::None => EitherOf4::A(login_form()),
+                LoginState::NoAccounts => EitherOf4::B(view!(<span>"Admin"</span>)),
+                LoginState::Admin => EitherOf4::C(logout_form("admin".to_string())),
+                LoginState::User{name,..} => EitherOf4::C(logout_form(name)),
+                LoginState::Loading => EitherOf4::D(view!(<Spinner size=SpinnerSize::Tiny/>))
+            }}
+        </Menu>
         }
+    }</div>
+    //</ClientOnly>
     }
 }
 
