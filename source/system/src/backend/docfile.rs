@@ -103,6 +103,13 @@ impl QuizExtension for Document {
             let Some(e) = curr.next() else { pop!() };
             match e {
                 DocumentElement::DocumentReference { target, .. } => {
+                    // safety first
+                    let uri = target.id();
+                    let Some(d) = backend.get_document(&uri) else {
+                        return Err(eyre!("Missing document {uri}"));
+                    };
+                    let ret = d.as_quiz(backend)?;
+                    /*
                     let ret = if let Some(d) = target.get() {
                         d.as_quiz(backend)?
                     } else {
@@ -111,7 +118,7 @@ impl QuizExtension for Document {
                             return Err(eyre!("Missing document {uri}"));
                         };
                         d.as_quiz(backend)?
-                    };
+                    };*/
                     for c in ret.css {
                         css.insert(c);
                     }
