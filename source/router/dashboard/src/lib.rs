@@ -286,7 +286,7 @@ fn user_field() -> impl IntoView {
             {"Light Mode"} else {"Dark Mode"}
         );
         view!{
-        <Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::LeftEnd>
+        <Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::Bottom>
             <MenuTrigger slot>
                 <thaw::Avatar src />
             </MenuTrigger>
