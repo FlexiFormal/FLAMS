@@ -289,19 +289,6 @@ tex_engine = { git = "https://github.com/Jazzpirate/RusTeX", features = [
 #RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
 #tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
 
-#leptos_hot_reload = {version="=0.7.0-rc0"}
-#leptos_server = {version="=0.7.0-beta5"}
-#hydration_context = {version="=0.2.0-beta5"}
-#reactive_graph = {version="=0.1.0-beta5"}
-#leptos_macro = "=0.7.0"
-#tachys = "=0.1.0"
-#server_fn = "=0.7.0"
-#server_fn_macro = "=0.7.0"
-#server_fn_macro_default = "=0.7.0"
-#leptos_config = {version="=0.7.0"}
-#leptos_dom = {version="=0.7.0"}
-#leptos_router_macro = {version="=0.7.0"}
-
 #[patch.crates-io]
 #leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
 #leptos_axum = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }

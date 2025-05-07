@@ -16,6 +16,7 @@ pub fn URITop() -> impl IntoView {
     use ftml_viewer_components::FTMLGlobalSetup;
     use leptos::either::EitherOf3 as Either;
     use leptos_meta::Stylesheet;
+    use thaw::Scrollbar;
     #[cfg(not(feature = "ssr"))]
     let qm = leptos_router::hooks::use_location();
     #[cfg(not(feature = "ssr"))]
@@ -44,6 +45,7 @@ pub fn URITop() -> impl IntoView {
     view! {
       <Stylesheet id="leptos" href="/pkg/flams.css"/>
       <Themer><FTMLGlobalSetup>//<Login>
+      <Scrollbar style="width:100vw;max-height:100vh;">
         <div style="min-height:100vh;color:black;width:min-content">{
           use_query_map().with_untracked(|m| m.as_doc().map_or_else(
             || {
@@ -54,7 +56,8 @@ pub fn URITop() -> impl IntoView {
             },
             |doc| Either::A(view!(<Document doc/>))
           ))
-        }</div>//</Login>
+        }</div>
+      </Scrollbar>//</Login>
       </FTMLGlobalSetup></Themer>
     }
 }
