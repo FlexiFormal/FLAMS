@@ -110,7 +110,7 @@ type URIArgs = (
 );
 
 #[cfg(all(feature = "csr", not(any(feature = "hydrate", feature = "ssr"))))]
-type URIArgsWithContext = URI;
+type URIArgsWithContext = (URI, Option<URI>);
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type URIArgsWithContext = (
     Option<URI>,
@@ -142,7 +142,6 @@ impl ServerFunArgs for URIArgs {
     }
 }
 
-#[cfg(any(feature = "hydrate", feature = "ssr"))]
 #[allow(clippy::use_self)]
 impl ServerFunArgs for URIArgsWithContext {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
@@ -150,7 +149,7 @@ impl ServerFunArgs for URIArgsWithContext {
     type First = URI;
     type Extra = Option<URI>;
     #[cfg(feature = "csr")]
-    fn as_params((): &Self::Extra) -> Cow<'static, str> {
+    fn as_params(_: &Self::Extra) -> Cow<'static, str> {
         "".into()
     }
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
