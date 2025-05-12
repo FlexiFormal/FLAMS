@@ -79,6 +79,7 @@ pub async fn fragment(
     e: Option<String>,
     m: Option<String>,
     s: Option<String>,
+    context:Option<URI>
 ) -> Result<(URI, Vec<CSS>, String), ServerFnError<String>> {
     let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, m, s).try_into() else {
         return Err("invalid uri components".to_string().into());
@@ -86,7 +87,7 @@ pub async fn fragment(
     let Some(uri) = comps.parse() else {
         return Err("invalid uri".to_string().into());
     };
-    server::fragment(uri).await
+    server::fragment(uri,context).await
 }
 
 #[server(
@@ -394,7 +395,7 @@ mod server {
         Ok(crate::toc::from_document(&doc).await)
     }
 
-    pub async fn fragment(uri: URI) -> Result<(URI, Vec<CSS>, String), ServerFnError<String>> {
+    pub async fn fragment(uri: URI,_:Option<URI>) -> Result<(URI, Vec<CSS>, String), ServerFnError<String>> {
         match &uri {
             URI::Narrative(NarrativeURI::Document(duri)) => {
                 let Some((css, html)) = backend!(get_html_body!(duri, false)) else {

@@ -2,6 +2,7 @@ use super::Gotto;
 use super::TOCSource;
 use crate::iterate;
 use crate::FTMLDocumentSetup;
+use flams_ontology::uris::NarrativeURI;
 use flams_ontology::uris::{DocumentElementURI, DocumentURI, NameStep};
 use flams_web_utils::components::wait_local;
 use flams_web_utils::do_css;
@@ -80,19 +81,37 @@ pub fn FragmentString(
     #[prop(optional)] uri: Option<DocumentElementURI>,
 ) -> impl IntoView {
     use leptos::context::Provider;
+    use leptos::either::EitherOf3;
     let name = uri.as_ref().map(|uri| uri.name().last_name().clone());
-    let uri = uri.map_or_else(DocumentURI::no_doc, |d| d.document().clone());
-    if let Some(name) = name {
-        leptos::either::Either::Left(view! {<FTMLDocumentSetup uri>
-            <Provider value=ForcedName(name)>
-            <DomStringCont html cont=iterate/>
-            </Provider>
-        </FTMLDocumentSetup>})
-    } else {
-        leptos::either::Either::Right(view! {<FTMLDocumentSetup uri>
-            <DomStringCont html cont=iterate/>
-        </FTMLDocumentSetup>})
-    }
+    let needs_suffix = uri
+        .as_ref()
+        .map(|uri| uri.name().steps().len() > 1)
+        .unwrap_or_default();
+    let doc = uri
+        .as_ref()
+        .map_or_else(DocumentURI::no_doc, |d| d.document().clone());
+    view! {<FTMLDocumentSetup uri=doc>{
+        match name {
+            Some(name) if needs_suffix => {
+                let nuri = NarrativeURI::Element(flams_utils::unwrap!(uri).parent());
+                EitherOf3::A(view!{
+                    <Provider value=ForcedName(name)>
+                    <Provider value=nuri>
+                        <DomStringCont html cont=iterate/>
+                    </Provider>
+                    </Provider>
+                })
+            },
+            Some(name) => EitherOf3::B(view!{
+                <Provider value=ForcedName(name)>
+                    <DomStringCont html cont=iterate/>
+                </Provider>
+            }),
+            _ => EitherOf3::C(view!{
+                <DomStringCont html cont=iterate/>
+            })
+        }
+    }</FTMLDocumentSetup>}
 }
 
 #[derive(Clone, Debug)]

@@ -37,10 +37,11 @@ pub(crate) mod fns {
         e: Option<String>,
         m: Option<String>,
         s: Option<String>,
+        context:Option<URI>
     ) -> Pin<Box<dyn Future<Output = Result<(URI, Vec<CSS>, String), ServerFnError<String>>> + Send>>
     {
         Box::pin(flams_router_dashboard::server_fns::content::fragment(
-            uri, rp, a, p, l, d, e, m, s,
+            uri, rp, a, p, l, d, e, m, s, context
         ))
     }
     fn full_doc(

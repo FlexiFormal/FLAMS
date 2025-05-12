@@ -539,7 +539,7 @@ impl ServerConfig {
 
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     pub fn initialize(
-        fragment: server_fun!(@URI => (URI,Vec<CSS>,String)),
+        fragment: server_fun!(@URI,URI => (URI,Vec<CSS>,String)),
         full_doc: server_fun!(@DOCURI => (DocumentURI,Vec<CSS>,String)),
         toc: server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>)),
         omdoc: server_fun!(@URI => (Vec<CSS>,OMDoc)),
