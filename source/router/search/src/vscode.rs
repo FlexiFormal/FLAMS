@@ -345,6 +345,7 @@ fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl I
                                 e: None,
                                 s: None,
                                 m: None,
+                                context: None,
                             }
                             .call_remote(remote.clone())
                         },

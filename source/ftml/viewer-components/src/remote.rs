@@ -108,6 +108,23 @@ type URIArgs = (
     Option<String>,
     Option<String>,
 );
+
+#[cfg(all(feature = "csr", not(any(feature = "hydrate", feature = "ssr"))))]
+type URIArgsWithContext = URI;
+#[cfg(any(feature = "hydrate", feature = "ssr"))]
+type URIArgsWithContext = (
+    Option<URI>,
+    Option<String>,
+    Option<ArchiveId>,
+    Option<String>,
+    Option<Language>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<URI>,
+);
+
 #[allow(clippy::use_self)]
 impl ServerFunArgs for URIArgs {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
@@ -122,6 +139,23 @@ impl ServerFunArgs for URIArgs {
     #[inline]
     fn call<R>(uri: URI, _: (), f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
         f(Some(uri), None, None, None, None, None, None, None, None)
+    }
+}
+
+#[allow(clippy::use_self)]
+impl ServerFunArgs for URIArgsWithContext {
+    #[cfg(any(feature = "hydrate", feature = "ssr"))]
+    type DeTupledFun<R> = server_fun!(@URI,Option<URI> => R);
+    type First = URI;
+    type Extra = Option<URI>;
+    #[cfg(feature = "csr")]
+    fn as_params((): &Self::Extra) -> Cow<'static, str> {
+        "".into()
+    }
+    #[cfg(any(feature = "hydrate", feature = "ssr"))]
+    #[inline]
+    fn call<R>(uri: URI, c: Option<URI>, f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
+        f(Some(uri), None, None, None, None, None, None, None, None, c)
     }
 }
 
@@ -301,7 +335,7 @@ pub struct ServerConfig {
     #[cfg(feature = "csr")]
     pub server_url: flams_utils::parking_lot::Mutex<String>,
     get_full_doc: Cache<DocURIArgs, (DocumentURI, Vec<CSS>, String)>,
-    get_fragment: Cache<URIArgs, (URI, Vec<CSS>, String)>,
+    get_fragment: Cache<URIArgsWithContext, (URI, Vec<CSS>, String)>,
     #[cfg(feature = "omdoc")]
     get_omdoc: Cache<URIArgs, (Vec<CSS>, OMDoc)>,
     get_toc: Cache<DocURIArgs, (Vec<CSS>, Vec<TOCElem>)>,
@@ -337,7 +371,9 @@ impl ServerConfig {
     /// #### Panics
     #[inline]
     pub async fn inputref(&self, doc: DocumentURI) -> Result<(URI, Vec<CSS>, String), String> {
-        self.get_fragment.call(URI::Narrative(doc.into()), ()).await
+        self.get_fragment
+            .call(URI::Narrative(doc.into()), None)
+            .await
     }
 
     /// #### Errors
@@ -347,7 +383,9 @@ impl ServerConfig {
         &self,
         doc: DocumentElementURI,
     ) -> Result<(URI, Vec<CSS>, String), String> {
-        self.get_fragment.call(URI::Narrative(doc.into()), ()).await
+        self.get_fragment
+            .call(URI::Narrative(doc.into()), None)
+            .await
     }
 
     /// #### Errors
@@ -355,7 +393,7 @@ impl ServerConfig {
     #[inline]
     pub async fn definition(&self, uri: SymbolURI) -> Result<(Vec<CSS>, String), String> {
         self.get_fragment
-            .call(URI::Content(uri.into()), ())
+            .call(URI::Content(uri.into()), None)
             .await
             .map(|(_, a, b)| (a, b))
     }
@@ -539,7 +577,7 @@ impl ServerConfig {
 
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     pub fn initialize(
-        fragment: server_fun!(@URI,URI => (URI,Vec<CSS>,String)),
+        fragment: server_fun!(@URI,Option<URI> => (URI,Vec<CSS>,String)),
         full_doc: server_fun!(@DOCURI => (DocumentURI,Vec<CSS>,String)),
         toc: server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>)),
         omdoc: server_fun!(@URI => (Vec<CSS>,OMDoc)),
