@@ -142,6 +142,7 @@ impl ServerFunArgs for URIArgs {
     }
 }
 
+#[cfg(any(feature = "hydrate", feature = "ssr"))]
 #[allow(clippy::use_self)]
 impl ServerFunArgs for URIArgsWithContext {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
