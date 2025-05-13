@@ -286,8 +286,7 @@ pub async fn grade(
 }
 
 #[server(prefix = "/content", endpoint = "solution",
-    input=server_fn::codec::GetUrl,
-    output=server_fn::codec::Json
+    input=server_fn::codec::GetUrl
 )]
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_arguments)]
