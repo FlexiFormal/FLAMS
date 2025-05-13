@@ -80,11 +80,14 @@ thaw = { git = "https://github.com/Jazzpirate/thaw", features = ["nightly"] }
 tracing-wasm = "*"
 tracing = { version = "*", features = ["release_max_level_info"] }
 leptos-dyn-dom = { version = "*", git = "https://github.com/Jazzpirate/leptos-dyn-dom" }
+#leptos-dyn-dom = { path = "../../leptos_dyn_dom" }
 leptos = { version = "0.7", features = ["csr"] }
 
 tsify-next = { version = "*", optional = true }
 serde = { version = "*", optional = true }
 wasm-bindgen-futures = { version = "*", optional = true }
+
+ahash = { version = "=0.8.11" } # avoids getrandom v3, which needs special wasm support
 
 [patch.crates-io]
 leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }

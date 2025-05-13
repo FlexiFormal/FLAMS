@@ -276,7 +276,7 @@ html2text = "0.14"
 tantivy = "0.22"
 
 leptos-dyn-dom = { git = "https://github.com/Jazzpirate/leptos-dyn-dom" }
-# leptos-dyn-dom = { path="../leptos_dyn_dom"}
+#leptos-dyn-dom = { path = "../leptos_dyn_dom" }
 RusTeX = { git = "https://github.com/Jazzpirate/RusTeX", features = [
     "multithreaded",
 ] }
@@ -298,6 +298,9 @@ tex_engine = { git = "https://github.com/Jazzpirate/RusTeX", features = [
 #leptos_config = {version="=0.7.0"}
 #leptos_dom = {version="=0.7.0"}
 #leptos_router_macro = {version="=0.7.0"}
+
+
+ahash = { version = "=0.8.11" } # for wasm; avoids getrandom v3, which needs special wasm support
 
 [patch.crates-io]
 leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }

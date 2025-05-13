@@ -79,7 +79,7 @@ pub async fn fragment(
     e: Option<String>,
     m: Option<String>,
     s: Option<String>,
-    context:Option<URI>
+    context: Option<URI>,
 ) -> Result<(URI, Vec<CSS>, String), ServerFnError<String>> {
     let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, m, s).try_into() else {
         return Err("invalid uri components".to_string().into());
@@ -87,7 +87,7 @@ pub async fn fragment(
     let Some(uri) = comps.parse() else {
         return Err("invalid uri".to_string().into());
     };
-    server::fragment(uri,context).await
+    server::fragment(uri, context).await
 }
 
 #[server(
@@ -285,7 +285,10 @@ pub async fn grade(
     .map_err(|e| e.to_string())?
 }
 
-#[server(prefix = "/content", endpoint = "solution")]
+#[server(prefix = "/content", endpoint = "solution",
+    input=server_fn::codec::GetUrl,
+    output=server_fn::codec::Json
+)]
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_arguments)]
 pub async fn solution(
@@ -395,7 +398,10 @@ mod server {
         Ok(crate::toc::from_document(&doc).await)
     }
 
-    pub async fn fragment(uri: URI,_:Option<URI>) -> Result<(URI, Vec<CSS>, String), ServerFnError<String>> {
+    pub async fn fragment(
+        uri: URI,
+        _: Option<URI>,
+    ) -> Result<(URI, Vec<CSS>, String), ServerFnError<String>> {
         match &uri {
             URI::Narrative(NarrativeURI::Document(duri)) => {
                 let Some((css, html)) = backend!(get_html_body!(duri, false)) else {

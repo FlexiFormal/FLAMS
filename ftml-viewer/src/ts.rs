@@ -26,7 +26,12 @@ use leptos::{either::Either, prelude::*};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen(js_name = injectCss)]
-pub fn inject_css(css: flams_utils::CSS) {
+pub fn inject_css(mut css: flams_utils::CSS) {
+    if let flams_utils::CSS::Link(lnk) = &mut css {
+        if let Some(r) = lnk.strip_prefix("srv:") {
+            *lnk = format!("{}{r}", ftml_viewer_components::remote::get_server_url());
+        }
+    }
     flams_web_utils::do_css(css)
 }
 
@@ -169,14 +174,18 @@ pub fn render_document(
                 let toc = toc.map_or(TOCSource::None, TOCSource::Ready);
                 let gottos = gottos.unwrap_or_default();
                 Either::Left(
-                    view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts><DocumentString html gottos toc/></GlobalSetup>},
+                    view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts>
+                        <DocumentString html gottos toc/>
+                    </GlobalSetup>},
                 )
             }
             DocumentOptions::FromBackend { uri, gottos, toc } => {
                 let toc = toc.map_or(TOCSource::None, Into::into);
                 let gottos = gottos.unwrap_or_default();
                 Either::Right(
-                    view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts><DocumentFromURI uri gottos toc/></GlobalSetup>},
+                    view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts>
+                        <DocumentFromURI uri gottos toc/>
+                    </GlobalSetup>},
                 )
             }
         };
@@ -248,10 +257,11 @@ pub fn render_fragment(
             }
             FragmentOptions::FromBackend { uri } => Either::Right(view! {<FragmentFromURI uri/>}),
         };
-        Ok(FTMLMountHandle::new(
-            to,
-            move || view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts>{comp()}</GlobalSetup>},
-        ))
+        Ok(FTMLMountHandle::new(to, move || {
+            view! {<GlobalSetup allow_hovers on_section_title on_fragment on_inputref problem_opts>
+                {comp()}
+            </GlobalSetup>}
+        }))
     }
     let allow_hovers = allow_hovers.unwrap_or(true);
     let problem_opts = convert(on_problem, problem_states);
