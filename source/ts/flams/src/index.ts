@@ -170,7 +170,10 @@ export class FLAMSServer {
   async solution(
     uri: FLAMS.DocumentElementURIParams,
   ): Promise<string | undefined> {
-    return await this.rawGetRequest("content/solution", uri);
+    let r = await this.getRequestI("content/solution", uri);
+    if (r) {
+      return await r.text();
+    }
   }
 
   async omdoc(
