@@ -79,6 +79,7 @@ console_error_panic_hook = "*"
 thaw = { version = "0.5.0-beta", features = ["nightly"] }
 tracing-wasm = "*"
 tracing = { version = "*", features = ["release_max_level_info"] }
+
 leptos-dyn-dom = { version = "*", git = "https://github.com/Jazzpirate/leptos-dyn-dom", branch = "leptos8" }
 leptos = { version = "0.8", features = ["csr"] }
 
@@ -86,10 +87,11 @@ tsify-next = { version = "*", optional = true }
 serde = { version = "*", optional = true }
 wasm-bindgen-futures = { version = "*", optional = true }
 
+ahash = { version = "=0.8.11" } # avoids getrandom v3, which needs special wasm support
 
-#[patch.crates-io]
-#leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#leptos_axum = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#leptos_meta = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#leptos_router = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#reactive_graph = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# [patch.crates-io]
+# leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# leptos_axum = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# leptos_meta = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# leptos_router = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# reactive_graph = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }

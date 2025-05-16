@@ -32,8 +32,11 @@ macro_rules! do_keys {
         $(-? $otp:ty;)?
         $(@ $tp:ty)?
         =$val:literal
-        $(+ $($other:ident),+ ;)*
-        $(- $($req:ident),+ ;)*
+        $(+ $($other:ident),+ ;)?
+        $(>> $($children:ident),+ ;)?
+        $(&>> $($nchildren:ident),+ ;)?
+        $(<= $($parents:ident),+ ;)?
+        $(- $($req:ident),+ ;)?
         $(! $only:literal;)?
         $(-! $not:literal;)?
     )*
@@ -57,8 +60,26 @@ macro_rules! do_keys {
                             ,""
                         )?
                         $(,
+                            "\n\nChild nodes: " $(,
+                                "[" ,stringify!($children),"](FTMLKey::",stringify!($children), "), "
+                            )*
+                            ,""
+                        )?
+                        $(,
+                            "\n\n</div><div class=\"flams-syntax\"><div></div>\n\nChild nodes: " $(,
+                                "[" ,stringify!($nchildren),"](FTMLKey::",stringify!($nchildren), "), "
+                            )*
+                            ,""
+                        )?
+                        $(,
                             "\n\nAttribute of: " $(,
                                 "[" ,stringify!($req),"](FTMLKey::",stringify!($req), "), "
+                            )*
+                            ,""
+                        )?
+                        $(,
+                            "\n\nOnly allowed in: " $(,
+                                "[" ,stringify!($parents),"](FTMLKey::",stringify!($parents), "), "
                             )*
                             ,""
                         )?
@@ -111,7 +132,7 @@ do_keys! {119:
 
     /// Denotes a new [LogicalParagraph] of [ParagraphKind::Definition]
     /// for the given [Symbol]s using the given styles.
-    Definition                              = "definition"          + Id,Inline,Fors,Styles;
+    Definition                              = "definition"          + Id,Inline,Fors,Styles; &>> Definiens, Definiendum;
     /// Denotes a new [LogicalParagraph] of [ParagraphKind::Assertion] (Theorems, Lemmata,
     /// Axioms, etc.) for the given [Symbol]s using the given styles.
     Assertion                               = "assertion"           + Id,Inline,Fors,Styles;
@@ -171,11 +192,11 @@ do_keys! {119:
     Notation                    = "notation"
     NotationComp                = "notationcomp"
     NotationOpComp              = "notationopcomp"
-    Definiendum                 = "definiendum"
+    Definiendum                 = "definiendum"         <= Definition, Paragraph, Assertion;
 
     Type                        = "type"
     Conclusion                  = "conclusion"
-    Definiens                   = "definiens"
+    Definiens                   = "definiens"           <= Definition, Paragraph, Assertion;
     Rule                        = "rule"
 
     ArgSep                      = "argsep"

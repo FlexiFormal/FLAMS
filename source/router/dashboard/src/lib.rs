@@ -6,7 +6,7 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
-mod query;
+pub mod query;
 mod settings;
 
 pub mod ws {
@@ -31,9 +31,11 @@ pub mod server_fns {
     pub mod login {
         pub use flams_router_login::server_fns::*;
     }
+    pub mod search {
+        pub use flams_router_search::{search_query,search_symbols};
+    }
     pub use super::query::query_api as query;
     pub use super::settings::{get_settings as settings, reload};
-    pub use flams_router_search::{search_query as search, search_symbols};
 }
 
 pub use flams_router_base::LoginState;

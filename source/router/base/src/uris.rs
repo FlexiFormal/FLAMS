@@ -226,26 +226,76 @@ impl URIComponents {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<URI>,
         ) -> R,
     >(
         self,
         f: F,
     ) -> R {
         match self {
-            Self::Uri(uri) => f(Some(uri), None, None, None, None, None, None, None, None),
-            Self::RelPath(a, rp) => f(None, Some(rp), Some(a), None, None, None, None, None, None),
+            Self::Uri(uri) => f(
+                Some(uri),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            Self::RelPath(a, rp) => f(
+                None,
+                Some(rp),
+                Some(a),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
             Self::DocComps { a, p, l, d } => {
-                f(None, None, Some(a), p, l, Some(d), None, None, None)
+                f(None, None, Some(a), p, l, Some(d), None, None, None, None)
             }
-            Self::ElemComps { a, p, l, d, e } => {
-                f(None, None, Some(a), p, l, Some(d), Some(e), None, None)
-            }
-            Self::ModComps { a, p, m } => {
-                f(None, None, Some(a), p, None, None, None, Some(m), None)
-            }
-            Self::SymComps { a, p, m, s } => {
-                f(None, None, Some(a), p, None, None, None, Some(m), Some(s))
-            }
+            Self::ElemComps { a, p, l, d, e } => f(
+                None,
+                None,
+                Some(a),
+                p,
+                l,
+                Some(d),
+                Some(e),
+                None,
+                None,
+                None,
+            ),
+            Self::ModComps { a, p, m } => f(
+                None,
+                None,
+                Some(a),
+                p,
+                None,
+                None,
+                None,
+                Some(m),
+                None,
+                None,
+            ),
+            Self::SymComps { a, p, m, s } => f(
+                None,
+                None,
+                Some(a),
+                p,
+                None,
+                None,
+                None,
+                Some(m),
+                Some(s),
+                None,
+            ),
         }
     }
 }

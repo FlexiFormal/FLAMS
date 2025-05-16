@@ -197,7 +197,16 @@ impl Gottos {
     fn next(&mut self, uri: &DocumentElementURI) {
         if let Some(c) = self.current.as_ref() {
             if c.uri == *uri {
-                self.current = self.iter.next();
+                loop {
+                    self.current = self.iter.next();
+                    if let Some(c) = &self.current {
+                        if c.uri != *uri {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
             }
         }
     }
