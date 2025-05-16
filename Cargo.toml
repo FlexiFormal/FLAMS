@@ -24,17 +24,45 @@ members = [
     "source/router/login",
     "source/router/search",
     "source/router/vscode-bindings",
+    "ftml-viewer",
     "experiments",
     "source/ffi",
 ]
 resolver = "2"
 exclude = [
     "old",
-    "ftml-viewer", #"web/graphs","test-plugin","tests","thaw",
+    #"ftml-viewer", #"web/graphs","test-plugin","tests","thaw",
     #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm"
 ]
 
+# this is wasm, actually (because wasm-pack uses --release and --debug directly)
 [profile.release]
+overflow-checks = false
+strip = true
+panic = 'unwind'
+opt-level = 'z'
+lto = true
+#debug = true
+#split-debuginfo = "off"
+#strip = "none"
+#opt-level = 2
+
+# this is wasm, actually (because wasm-pack uses --release and --debug directly)
+[profile.dev]
+opt-level = 2
+debug = true
+strip = "none"
+split-debuginfo = "off"
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+#codegen-units = 256
+rpath = false
+
+[profile.flams-release]
+inherits = "release"
 opt-level = 2
 lto = "fat"
 #codegen-units = 1
@@ -42,7 +70,8 @@ overflow-checks = false
 panic = "unwind"
 strip = true
 
-[profile.dev]
+[profile.flams-dev]
+inherits="dev"
 split-debuginfo = "unpacked"
 #opt-level=1
 debug = 1
@@ -243,6 +272,7 @@ thaw_components = { version = "0.4.0-beta" }
 thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
 
 leptos-dyn-dom = { git = "https://github.com/Jazzpirate/leptos-dyn-dom", branch = "leptos8" }
+#leptos-dyn-dom = { path = "../leptos_dyn_dom" }
 
 bytes = "1.10"
 icondata_bi = "0"
@@ -279,12 +309,6 @@ futures-util = "0.3"
 html2text = "0.14"
 tantivy = "0.24"
 
-<<<<<<< HEAD
-# leptos-dyn-dom = { path="../leptos_dyn_dom"}
-=======
-leptos-dyn-dom = { git = "https://github.com/Jazzpirate/leptos-dyn-dom" }
-#leptos-dyn-dom = { path = "../leptos_dyn_dom" }
->>>>>>> devel
 RusTeX = { git = "https://github.com/Jazzpirate/RusTeX", features = [
     "multithreaded",
 ] }
@@ -311,6 +335,8 @@ lib-package = "flams"
 bin-features = ["ssr"]
 lib-features = ["hydrate"]
 lib-default-features = false
+bin-profile-release = "flams-release"
+bin-profile-dev = "flams-dev"
 lib-profile-release = "wasm-release"
 lib-profile-dev = "wasm-dev"
 bin-default-features = false

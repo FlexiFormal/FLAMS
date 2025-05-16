@@ -107,7 +107,7 @@ async function ftml_start() {{
 }}
 ftml_start();
     "#,
-    include_str!("../../../../../source/ftml/viewer-components/ftml-top.js")
+    include_str!("../../../../source/ftml/viewer-components/ftml-top.js")
         .replace("export function","function")
     ).as_bytes()).unwrap();
 }
@@ -135,14 +135,14 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
 fn main() {
   let _ = std::fs::remove_dir_all(Path::new("./ts/flams"));
   std::fs::create_dir_all(Path::new("./ts/flams")).unwrap();
-  copy_dir_all(&Path::new("../source/ts/vscode/src/ts/flams"),&Path::new("./ts/flams")).unwrap();
+  copy_dir_all(&Path::new("../ts/vscode/src/ts/flams"),&Path::new("./ts/flams")).unwrap();
 }
 '''
 
 [tasks.copy-d-ts]
 script_runner = "@shell"
 script = '''
-cp ./ts/ftml-viewer-base.d.ts ../source/ts/flams/src/ftml-viewer-base.d.ts
+cp ./ts/ftml-viewer-base.d.ts ../ts/flams/src/ftml-viewer-base.d.ts
 '''
 
 [tasks.ts]
@@ -175,7 +175,7 @@ command = "wasm-pack"
 args = [
     "build",
     "--out-dir",
-    "../../nextwasm/inline/src/base",
+    "ts-inline/src/base",
     "--out-name",
     "ftml-viewer-base",
     "--target",
@@ -199,14 +199,14 @@ script = '''
 use std::{io::Write, path::Path};
 fn main() {
     let js_file = Path::new(
-        "../../nextwasm/inline/src/base/ftml-viewer-base.js",
+        "ts-inline/src/base/ftml-viewer-base.js",
     );
     let ts_file = Path::new(
-        "../../nextwasm/inline/src/base/ftml-viewer-base.d.ts",
+        "ts-inline/src/base/ftml-viewer-base.d.ts",
     );
 
     const TOP_JS: &str =
-        include_str!("../../../../../source/ftml/viewer-components/ftml-top.js");
+        include_str!("../../../../source/ftml/viewer-components/ftml-top.js");
     let js_str = std::fs::read_to_string(js_file).unwrap();
     let js_str = js_str.split('\n').skip(1).collect::<Vec<_>>().join("\n");
 
@@ -238,17 +238,25 @@ fn main() {
 [tasks.ts-test-clean]
 script_runner = "@shell"
 script = '''
-cd ../../nextwasm/inline/src/base
+cd ts-inline/src/base
 rm .gitignore
 rm package.json
+rm -rf snippets
+'''
+
+[tasks.ts-test-clean2]
+script_runner = "@shell"
+script = '''
+cd ts-inline/src/base
+rm .gitignore
 rm -rf snippets
 '''
 
 [tasks.ts-test-patch]
 script_runner = "@shell"
 script = '''
-./ts-patch.sh -i ../../nextwasm/inline/src/base/ftml-viewer-base_bg.wasm -js ../../nextwasm/inline/src/base/ftml-viewer-base.js -o ../../nextwasm/inline/src/base/ftml-viewer-base.js
-cd ../../nextwasm/inline/src/base
+./ts-patch.sh -i ts-inline/src/base/ftml-viewer-base_bg.wasm -js ts-inline/src/base/ftml-viewer-base.js -o ts-inline/src/base/ftml-viewer-base.js
+cd ts-inline/src/base
 rm ftml-viewer-base_bg.wasm
 rm ftml-viewer-base_bg.wasm.d.ts
 '''
@@ -257,6 +265,6 @@ rm ftml-viewer-base_bg.wasm.d.ts
 dependencies = [
     "ts-test-build",
     "ts-test-update-js",
-    "ts-test-clean",
+    "ts-test-clean2",
     "ts-test-patch",
 ]

@@ -1,0 +1,15 @@
+[package]
+name = "flams-vscode"
+version = "0.0.1"
+edition = "2021"
+description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
+
+[lib]
+crate-type = ["cdylib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+wasm-bindgen = {workspace = true}
+js-sys = {workspace = true}

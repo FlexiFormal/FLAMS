@@ -1,0 +1,79 @@
+use std::marker::PhantomData;
+
+pub struct ArrayLike<T>{
+  array:js_sys::Array,
+  phantom:PhantomData<T>
+}
+impl<T> ArrayLike<T> {
+  #[inline]
+  const fn new(array:js_sys::Array) -> Self {
+    Self{array,phantom:PhantomData}
+  }
+  #[inline]
+  pub fn push(&self,t:&T) where T:std::ops::Deref<Target=wasm_bindgen::JsValue> {
+    self.array.push(t);
+  }
+}
+
+
+mod sys {
+  use wasm_bindgen::prelude::*;
+
+  #[wasm_bindgen(module = "vscode")]
+  extern "C" {
+    #[wasm_bindgen(js_name = "registerCommand",js_namespace=commands)]
+    #[must_use]
+    pub(super) fn register_command_sys(cmd: js_sys::JsString, cb: &js_sys::Function) -> Disposable;
+
+    pub type Disposable;
+
+    #[wasm_bindgen(method,js_name = "dispose")]
+    pub(super) fn dispose_sys(this: &Disposable);
+
+    pub type ExtensionContext;
+
+    #[wasm_bindgen(method, getter,js_name = "subscriptions")]
+    pub(super) fn subscriptions_sys(this: &ExtensionContext) -> js_sys::Array;
+
+    #[wasm_bindgen(js_name = "showInformationMessage",js_namespace=window)]
+    pub(super) fn show_information_message(msg: js_sys::JsString) -> js_sys::Promise;
+  }
+}
+
+pub mod commands {
+    use wasm_bindgen::{prelude::Closure,JsCast};
+    use super::sys;
+
+  pub fn register_command(cmd:&str,cb:impl FnMut() + 'static) -> sys::Disposable {
+    let cmd = js_sys::JsString::from(cmd);
+    let cb = Closure::new(cb);
+    let r = sys::register_command_sys(cmd, cb.as_ref().unchecked_ref());
+    cb.forget();
+    r
+  }
+}
+
+pub mod window {
+  use super::sys;
+  pub fn show_information_message(msg:&str) -> js_sys::Promise {
+    let msg = js_sys::JsString::from(msg);
+    sys::show_information_message(msg)
+  }
+
+}
+
+pub use sys::Disposable;
+impl Disposable {
+  #[inline]
+  pub fn dispose(&self) {
+    self.dispose_sys();
+  }
+}
+
+pub use sys::ExtensionContext;
+impl ExtensionContext {
+  #[inline]#[must_use]
+  pub fn subscriptions(&self) -> ArrayLike<Disposable> {
+    ArrayLike::new(self.subscriptions_sys())
+  }
+}

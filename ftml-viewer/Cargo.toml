@@ -6,7 +6,6 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-
 [profile.release]
 overflow-checks = false
 strip = true
@@ -66,28 +65,26 @@ ts = [
 omdoc = ["ftml-viewer-components/omdoc"]
 
 [dependencies]
-ftml-viewer-components = { path = "../source/ftml/viewer-components", features = [
-    "csr",
-] }
-flams-web-utils = { path = "../source/web-utils", features = ["csr"] }
-flams-utils = { path = "../source/utils" }
-flams-ontology = { path = "../source/ontology" }
+ftml-viewer-components = { workspace=true, features = ["csr"] }
+flams-web-utils = { workspace=true, features = ["csr"] }
+flams-utils = { workspace=true }
+flams-ontology = { workspace=true }
 
-leptos_meta = "0.8"
-wasm-bindgen = "*"
-console_error_panic_hook = "*"
-thaw = { version = "0.5.0-beta", features = ["nightly"] }
-tracing-wasm = "*"
-tracing = { version = "*", features = ["release_max_level_info"] }
+leptos_meta = { workspace=true }
+wasm-bindgen = { workspace=true }
+console_error_panic_hook = { workspace=true }
+thaw = { workspace=true, features = ["nightly"] }
+tracing-wasm = { workspace=true }
+tracing = { workspace=true, features = ["release_max_level_info"] }
 
-leptos-dyn-dom = { version = "*", git = "https://github.com/Jazzpirate/leptos-dyn-dom", branch = "leptos8" }
-leptos = { version = "0.8", features = ["csr"] }
+leptos-dyn-dom = { workspace=true }
+leptos = { workspace=true, features = ["csr"] }
 
-tsify-next = { version = "*", optional = true }
-serde = { version = "*", optional = true }
-wasm-bindgen-futures = { version = "*", optional = true }
+tsify-next = { workspace=true, optional = true }
+serde = { workspace=true, optional = true }
+wasm-bindgen-futures = { workspace=true, optional = true }
 
-ahash = { version = "=0.8.11" } # avoids getrandom v3, which needs special wasm support
+ahash = { workspace=true } # avoids getrandom v3, which needs special wasm support
 
 # [patch.crates-io]
 # leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }

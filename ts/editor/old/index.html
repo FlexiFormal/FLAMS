@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>monaco-vscode-api demo</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  </head>
+  <body>
+    <div id="app">
+      <div>
+        <button id="toggleSimple">Toggle Simple Editor</button>
+        <button id="toggleFull">Toggle Full</button>
+        <button id="open1">Open1</button>
+        <button id="open2">Open2</button>
+      </div>
+      <!--<div id="titleBar"></div>
+      <div id="banner"></div>-->
+      <div style="display: flex; gap: 20px;">
+        <!--<div style="display: flex; flex: none; border: 1px solid var(--vscode-editorWidget-border)">
+          <div id="activityBar"></div>
+          <div id="sidebar" style="width: 500px"></div>
+        </div>-->
+        <div style="flex: 1; min-width: 0">
+          <h1>Editor</h1>
+          <div id="editors"></div>
+<!--
+          <button id="run">Run with debugger</button>
+          <button id="filesystem">Attach filesystem</button>
+          <button id="customEditorPanel">Open custom editor panel</button>
+          <button id="clearStorage">Clear storage</button>
+          <br />
+          <button id="togglePanel">Toggle Panel</button>
+          <button id="toggleAuxiliary">Toggle Secondary Panel</button>-->
+        </div>
+        <!--<div style="border: 1px solid var(--vscode-editorWidget-border); width: 300px; height: 800px" id="auxiliaryBar"></div>-->
+      </div>
+      <div id="myeditor" class="standalone-editor"></div>
+<!--
+      <div id="panel"></div>
+
+      <div id="statusBar"></div>
+      -->
+<!--
+      <h1>Settings</h1>
+      <button id="settingsui">Open settings UI</button>
+      <div id="settings-editor" class="standalone-editor"></div>
+      <h1>Keybindings</h1>
+      <button id="keybindingsui">Open keybindings UI</button>
+      <div id="keybindings-editor" class="standalone-editor"></div>
+      -->
+    </div>
+    <div id="log"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

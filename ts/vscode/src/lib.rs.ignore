@@ -1,0 +1,17 @@
+pub mod vscode;
+
+use wasm_bindgen::prelude::*;
+
+#[must_use]
+#[wasm_bindgen]
+pub fn greet(name:&str) -> String {
+  format!("Hello from rust, {name}!")
+}
+
+#[wasm_bindgen]
+pub fn activate(context: &vscode::ExtensionContext) {
+  let disposable: vscode::Disposable = vscode::commands::register_command("flams.helloWorld", || {
+    let _ = vscode::window::show_information_message(&greet("Dude"));
+  });
+  context.subscriptions().push(&disposable);
+}
