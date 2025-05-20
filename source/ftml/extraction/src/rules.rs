@@ -592,9 +592,12 @@ pub mod rules {
         };
         let _ = attrs.take_language(FTMLKey::Language);
         let autogradable = attrs.get_bool(FTMLKey::Autogradable);
-        let points = attrs
-            .get(FTMLKey::ProblemPoints)
-            .and_then(|s| s.as_ref().parse().ok());
+        let points = attrs.get(FTMLKey::ProblemPoints).and_then(|s| {
+            s.as_ref()
+                .parse()
+                .ok()
+                .or_else(|| Some(s.as_ref().parse::<i32>().ok()? as f32))
+        });
         extractor.open_problem(uri.clone());
         Some(OpenFTMLElement::Problem {
             sub_problem,

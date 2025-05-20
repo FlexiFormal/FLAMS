@@ -333,7 +333,7 @@ fn GlobalSetup<V: IntoView + 'static>(
     //let r = owner.with(move || {
     if with_context::<thaw::ConfigInjection, _>(|_| ()).is_none() {
         Left(
-            view!(<Themer attr:style="font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;">{children()}</Themer>),
+            view!(<Themer attr:style="font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;background-color:inherit;">{children()}</Themer>),
         )
     } else {
         Right(children())
