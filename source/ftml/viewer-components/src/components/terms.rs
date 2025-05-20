@@ -17,6 +17,7 @@ use leptos_dyn_dom::OriginalNode;
 use crate::{
     components::{IntoLOs, LOs},
     config::FTMLConfig,
+    ts::FragmentContinuation,
     FTMLString,
 };
 
@@ -390,8 +391,10 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
                     "ftml-symbol-hover ftml-symbol-hover-hidden".to_string()
                 }
             });
+            let none: Option<FragmentContinuation> = None;
             //let s_click = s.clone();
             Either::Left(view!(
+                <Provider value=none>
               <Popover class=top_class //node_type class
                 size=PopoverSize::Small
                 on_click_signal=ocp
@@ -418,6 +421,7 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
                       EitherOf3::C(view!{<div>"Module" {m.name().last_name().to_string()}</div>}),
                 }}//</div>
               </Popover>
+              </Provider>
             ))
         } else {
             Either::Right(children())
@@ -486,7 +490,8 @@ pub fn do_onclick(uri: VarOrSym) -> impl IntoView {
           uri.map(|uri| {
             crate::remote::get!(paragraph(uri.clone()) = (_,css,html) => {
               for c in css { do_css(c); }
-              view!(<div><FTMLString html=html/></div>)
+              let none: Option<FragmentContinuation> = None;
+              view!(<Provider value=none><div><FTMLString html=html/></div></Provider>)
             })
           })
         }}
