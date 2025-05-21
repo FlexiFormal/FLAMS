@@ -259,6 +259,8 @@ script = '''
 cd ts-inline/src/base
 rm ftml-viewer-base_bg.wasm
 rm ftml-viewer-base_bg.wasm.d.ts
+rm package.json
+cp ../../../inline-package.json ./package.json
 '''
 
 [tasks.ts-test]
