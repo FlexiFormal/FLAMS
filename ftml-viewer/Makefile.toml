@@ -145,12 +145,12 @@ script = '''
 cp ./ts/ftml-viewer-base.d.ts ../ts/flams/src/ftml-viewer-base.d.ts
 '''
 
-[tasks.ts]
-dependencies = [
-    "wasm-pack-ts",
-    "update-package-json",
-    "copy-d-ts",
-] #,"copy-flams-to-ts"]
+#[tasks.ts]
+#dependencies = [
+#    "wasm-pack-ts",
+#    "update-package-json",
+#    "copy-d-ts",
+#] #,"copy-flams-to-ts"]
 
 [tasks.clean]
 command = "cargo"
@@ -168,14 +168,14 @@ alias = "build"
 
 # -----------------------------------------------------------------------
 
-[tasks.ts-test-build]
+[tasks.ts-build]
 env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
     "build",
     "--out-dir",
-    "ts-inline/src/base",
+    "../ts/ftml-viewer/src/base",
     "--out-name",
     "ftml-viewer-base",
     "--target",
@@ -191,7 +191,7 @@ args = [
     "build-std-features=optimize_for_size", #,panic_immediate_abort",
 ]
 
-[tasks.ts-test-update-js]
+[tasks.ts-update-js]
 env = { "RUSTFLAGS" = "" }
 #env = { "CARGO_MAKE_RUST_SCRIPT_PROVIDER" = "cargo-script" }
 script_runner = "@rust"
@@ -199,10 +199,10 @@ script = '''
 use std::{io::Write, path::Path};
 fn main() {
     let js_file = Path::new(
-        "ts-inline/src/base/ftml-viewer-base.js",
+        "../ts/ftml-viewer/src/base/ftml-viewer-base.js",
     );
     let ts_file = Path::new(
-        "ts-inline/src/base/ftml-viewer-base.d.ts",
+        "../ts/ftml-viewer/src/base/ftml-viewer-base.d.ts",
     );
 
     const TOP_JS: &str =
@@ -227,7 +227,7 @@ fn main() {
             .unwrap()
             .write_all(
                 format!(
-                    "{ts_str}\nexport async function init();"
+                    "{ts_str}\nexport function init(): Promise<void>;"
                 )
                 .as_bytes(),
             )
@@ -235,38 +235,24 @@ fn main() {
 }
 '''
 
-[tasks.ts-test-clean]
+[tasks.ts-clean]
 script_runner = "@shell"
 script = '''
-cd ts-inline/src/base
+cd ../ts/ftml-viewer/src/base
 rm .gitignore
+rm -rf snippets
 rm package.json
-rm -rf snippets
 '''
 
-[tasks.ts-test-clean2]
+[tasks.ts-patch]
 script_runner = "@shell"
 script = '''
-cd ts-inline/src/base
-rm .gitignore
-rm -rf snippets
-'''
-
-[tasks.ts-test-patch]
-script_runner = "@shell"
-script = '''
-./ts-patch.sh -i ts-inline/src/base/ftml-viewer-base_bg.wasm -js ts-inline/src/base/ftml-viewer-base.js -o ts-inline/src/base/ftml-viewer-base.js
-cd ts-inline/src/base
+./ts-patch.sh -i ../ts/ftml-viewer/src/base/ftml-viewer-base_bg.wasm -js ../ts/ftml-viewer/src/base/ftml-viewer-base.js -o ../ts/ftml-viewer/src/base/ftml-viewer-base.js
+cd ../ts/ftml-viewer/src/base
 rm ftml-viewer-base_bg.wasm
 rm ftml-viewer-base_bg.wasm.d.ts
-rm package.json
-cp ../../../inline-package.json ./package.json
+cp ftml-viewer-base.d.ts ../../../flams/src/ftml-viewer-base.d.ts
 '''
 
-[tasks.ts-test]
-dependencies = [
-    "ts-test-build",
-    "ts-test-update-js",
-    "ts-test-clean2",
-    "ts-test-patch",
-]
+[tasks.ts]
+dependencies = ["ts-build", "ts-update-js", "ts-clean", "ts-patch"]

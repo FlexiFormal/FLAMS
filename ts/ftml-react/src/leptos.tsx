@@ -1,14 +1,14 @@
 import { createContext, ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { LeptosContext } from "@kwarc/ftml-viewer-base";//"./ftml-viewer/ftml-viewer-base";//
+import { FTML as Base } from "@kwarc/ftml-viewer-test";
 
 
-export const FTMLContext = createContext<LeptosContext | undefined>(undefined);
+export const FTMLContext = createContext<Base.LeptosContext | undefined>(undefined);
 
 interface Tunnel {
   element: Element;
   node: ReactNode;
-  context:LeptosContext;
+  context:Base.LeptosContext;
   id: string; // for React keys
 }
 
@@ -16,7 +16,7 @@ interface Tunnel {
 export function useLeptosTunnel() {
   const [tunnel, setTunnel] = useState<Tunnel | undefined>(undefined);
 
-  const addTunnel = (element: Element, node: ReactNode, context:LeptosContext) => {
+  const addTunnel = (element: Element, node: ReactNode, context:Base.LeptosContext) => {
     const id = Math.random().toString(36).slice(2);
     setTunnel({ element, node, id, context });
     return id; // Return id for later removal
@@ -53,7 +53,7 @@ export function useLeptosTunnel() {
 export function useLeptosTunnels() {
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
 
-  const addTunnel = (element: Element, node: ReactNode, context:LeptosContext) => {
+  const addTunnel = (element: Element, node: ReactNode, context:Base.LeptosContext) => {
     const id = Math.random().toString(36).slice(2);
     setTunnels(prev => [...prev, { element, node, id, context }]);
     return id; // Return id for later removal

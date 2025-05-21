@@ -1,29 +1,32 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { ReactNode, useState } from "react";
-import { FTMLDocument, FTMLFragment, FTMLSetup, setServerUrl } from "./index";
 
-import { setDebugLog, getServerUrl } from "./index";
+import { getServerUrl, FTML,initialize } from "@kwarc/ftml-viewer-test";
+import { FTMLDocument, FTMLFragment, FTMLSetup } from "./index";
 
 export default {
   title: "Full Test",
 };
 
+await initialize("https://mathhub.info",true);
+
 export const Complete = () => {
-  setDebugLog();
-  setServerUrl("https://mathhub.info");
   console.log("Server URL according to leptos:", getServerUrl());
   const doc = {
+    type: "FromBackend",
     uri: "https://mathhub.info/:sTeX?a=sTeX/MathTutorial&d=textbook&l=en",
-    toc: "GET",
-  };
+    toc: "GET"
+  }  as FTML.DocumentOptions;
   const frag1 = {
+    type: "FromBackend",
     uri: "https://mathhub.info/:sTeX?a=sTeX/DemoExamples&d=problemtest&l=en&e=problem_1",
-  };
+  } as FTML.FragmentOptions;
   const frag2 = {
+    type: "FromBackend",
     uri: "https://mathhub.info/:sTeX?a=sTeX/DemoExamples&d=problemtest&l=en&e=problem_3",
-  };
+  } as FTML.FragmentOptions;
   return (
-    <div className="NARF">
+    <div className="NARF" style={{width: "100vw",height: "100vh",maxHeight:"100vh",overflow:"scroll"}}>
       <FTMLSetup>
         <h1>React & FTML</h1>
         <div className="card">
@@ -36,10 +39,12 @@ export const Complete = () => {
         <p> And here is a full document:</p>
         <FTMLDocument
           document={doc}
-          onSection={(uri, _lvl) => (ch) => (
-            <SectionWrap uri={uri}>{ch}</SectionWrap>
-          )}
           onSectionTitle={(uri, _lvl) => <SectionTitle sec={uri} />}
+          onFragment= {(uri, lvl) => {
+            if (lvl.type === "Section") {return (ch) => (
+            <SectionWrap uri={uri}>{ch}</SectionWrap>
+            )}
+          }}
         />
       </FTMLSetup>
     </div>

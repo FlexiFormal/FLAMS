@@ -1,46 +1,40 @@
-import * as FTML from "@kwarc/ftml-viewer-base"; // "./ftml-viewer-base"; //
-import * as FLAMS from "@kwarc/flams";
+import * as FTML from "./base/ftml-viewer-base";
 
-const Window: { FLAMS_SERVER_URL: string } =
-  typeof window !== "undefined"
-    ? (window as unknown as { FLAMS_SERVER_URL: string })
-    : { FLAMS_SERVER_URL: "" };
+export { FTML };
+
+const onStartI = FTML.init();
 
 /**
- * Turns on debugging messages on the console
+ * 
+ * Execute the given code only after the FTML viewer has been initialized
  */
-export function setDebugLog() {
-  FTML.set_debug_log();
+export function ifStarted<R>(f: () => R): Promise<R> {
+  return onStartI.then(() => f());
 }
 
 /**
- * Injects the given CSS rule into the header of the DOM (if adequate and not duplicate)
+ * Initializes the FTML viewer
+ * 
+ * @param serverUrl The url of the Flams server used for requests
+ * @param debug     Whether to print debug messages to the console
  */
-export function injectCss(css:FTML.CSS) {
-  FTML.injectCss(css);
+export async function initialize(serverUrl:string,debug?:boolean) {
+  await onStartI;
+  FTML.set_server_url(serverUrl);
+  if (debug && debug) {
+    FTML.set_debug_log();
+  }
 }
 
 /**
- * Get the FLAMS server used globally
+ * Injects all of the css elements into the document header
  */
-export function getFlamsServer(): FLAMS.FLAMSServer {
-  return new FLAMS.FLAMSServer(Window.FLAMS_SERVER_URL);
+export function injectCss(css:FTML.CSS[]): void {
+  css.forEach(c => FTML.injectCss(c))
 }
 
-/**
- * Set the FLAMS server used globally
- */
-export function setServerUrl(s: string) {
-  Window.FLAMS_SERVER_URL = s;
-  FTML.set_server_url(s);
-}
+export const getServerUrl = FTML.get_server_url;
 
-/**
- * Get the FLAMS server URL used globally
- */
-export function getServerUrl(): string {
-  return Window.FLAMS_SERVER_URL;
-}
 
 /**
  * Configuration for rendering FTML content

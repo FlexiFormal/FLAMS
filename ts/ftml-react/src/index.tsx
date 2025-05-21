@@ -1,33 +1,9 @@
-import * as FTMLT from "@kwarc/ftml-viewer"; //"./ftml-viewer";//
-import * as FTML from "@kwarc/ftml-viewer-base"; //"./ftml-viewer/ftml-viewer-base";//
+import {FTML, ftmlSetup,renderDocument,renderFragment,FTMLConfig as FTMLConfigI} from "@kwarc/ftml-viewer-test";
 
 import React, { ReactNode, useContext, useEffect, useRef } from "react";
 import { FTMLContext, useLeptosTunnel, useLeptosTunnels } from "./leptos";
 
-/**
- * sets the server url. Reexported for **emphasis**.
- */
-export const setServerUrl = FTMLT.setServerUrl;
 
-/**
- * Injects the given CSS rule into the header of the DOM (if adequate and not duplicate)
- */
-export const injectCss = FTMLT.injectCss;
-
-/**
- * Get the FLAMS server URL used globally
- */
-export const getServerUrl = FTMLT.getServerUrl;
-
-/**
- * Get the FLAMS server used globally
- */
-export const getFlamsServer = FTMLT.getFlamsServer;
-
-/**
- * Turns on debugging messages on the console
- */
-export const setDebugLog = FTMLT.setDebugLog;
 
 /**
  * Configurables for FTML rendering.
@@ -82,7 +58,7 @@ export const FTMLSetup: React.FC<FTMLSetupArgs> = (args) => {
 
   useEffect(() => {
     if (!mountRef.current) return;
-    const handle = FTMLT.ftmlSetup(
+    const handle = ftmlSetup(
       mountRef.current,
       (e, o) => {
         main.addTunnel(
@@ -127,7 +103,7 @@ export const FTMLDocument: React.FC<FTMLDocumentArgs> = (args) => {
   useEffect(() => {
     if (mountRef.current === null) return;
     const cont = context ? context.wasm_clone() : context;
-    const handle = FTMLT.renderDocument(
+    const handle = renderDocument(
       mountRef.current,
       args.document,
       cont,
@@ -163,7 +139,7 @@ export const FTMLFragment: React.FC<FTMLFragmentArgs> = (args) => {
   useEffect(() => {
     if (!mountRef.current) return;
     const cont = context ? context.wasm_clone() : context;
-    const handle = FTMLT.renderFragment(
+    const handle = renderFragment(
       mountRef.current,
       args.fragment,
       cont,
@@ -219,7 +195,7 @@ function toConfig(
     node: ReactNode,
     context: FTML.LeptosContext,
   ) => string,
-): FTMLT.FTMLConfig {
+): FTMLConfigI {
   const otO = config.onSectionTitle;
   const onSectionTitle = otO
     ? (uri: FTML.DocumentElementURI, lvl: FTML.SectionLevel) => {
