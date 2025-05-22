@@ -1,6 +1,6 @@
 {
   "name": "@kwarc/ftml-react",
-  "version": "0.0.14",
+  "version": "0.0.18",
   "description": "React components for integrating FTML viewer functionality in react",
   "homepage": "https://github.com/KWARC/FLAMS#readme",
   "bugs": {
@@ -26,8 +26,9 @@
   },
   "dependencies": {
     "@kwarc/ftml-viewer": "=0.0.31",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0"
+    "@kwarc/flams": "=0.0.19",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@chromatic-com/storybook": "^3.2.5",
@@ -39,8 +40,8 @@
     "@storybook/react": "^8.6.3",
     "@storybook/react-vite": "^8.6.3",
     "@storybook/test": "^8.6.3",
-    "@types/react": "^18.0.0",
-    "@types/react-dom": "^18.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/browser": "^3.0.7",
     "@vitest/coverage-v8": "^3.0.7",

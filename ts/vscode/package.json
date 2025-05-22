@@ -151,7 +151,7 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
-    "@kwarc/flams": "^0.0.18",
+    "@kwarc/flams": "=0.0.19",
     "@octokit/rest": "^21.1.1",
     "@vscode-elements/elements": "^1.14.0",
     "@vscode/codicons": "^0.0.36",

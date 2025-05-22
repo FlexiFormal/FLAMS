@@ -1,8 +1,17 @@
-import {FTML, ftmlSetup,renderDocument,renderFragment,FTMLConfig as FTMLConfigI} from "@kwarc/ftml-viewer";
+import {FTML, ftmlSetup,renderDocument,renderFragment,FTMLConfig as FTMLConfigI,initialize as init} from "@kwarc/ftml-viewer";
+import * as Flams from "@kwarc/flams";
 
 import React, { ReactNode, useContext, useEffect, useRef } from "react";
 import { FTMLContext, useLeptosTunnel, useLeptosTunnels } from "./leptos";
 
+export const initialize = init;
+
+export function getFlamsServer(): Flams.FLAMSServer {
+  return new Flams.FLAMSServer(FTML.get_server_url());
+}
+
+export {FTML} from "@kwarc/ftml-viewer";
+export * as Flams from "@kwarc/flams";
 
 
 /**
