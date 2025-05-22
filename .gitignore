@@ -23,6 +23,7 @@ ts/**/*.ignore
 ts/**/tsconfig.tsbuildinfo
 ts/**/src/stories/*
 ts/editor/old/**
+ts/ftml-viewer/src/base/*
 /rustc-ice-*
 .sqlx
 *storybook.log

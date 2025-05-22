@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { FTML as Base } from "@kwarc/ftml-viewer-test";
+import { FTML as Base } from "@kwarc/ftml-viewer";
 
 
 export const FTMLContext = createContext<Base.LeptosContext | undefined>(undefined);

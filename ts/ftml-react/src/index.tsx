@@ -1,4 +1,4 @@
-import {FTML, ftmlSetup,renderDocument,renderFragment,FTMLConfig as FTMLConfigI} from "@kwarc/ftml-viewer-test";
+import {FTML, ftmlSetup,renderDocument,renderFragment,FTMLConfig as FTMLConfigI} from "@kwarc/ftml-viewer";
 
 import React, { ReactNode, useContext, useEffect, useRef } from "react";
 import { FTMLContext, useLeptosTunnel, useLeptosTunnels } from "./leptos";

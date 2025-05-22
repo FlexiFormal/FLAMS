@@ -1,6 +1,6 @@
 {
-  "name": "@kwarc/ftml-viewer-test",
-  "version": "0.0.15",
+  "name": "@kwarc/ftml-viewer",
+  "version": "0.0.31",
   "description": "",
   "homepage": "https://github.com/KWARC/FLAMS#readme",
   "bugs": {
@@ -12,16 +12,17 @@
   },
   "license": "GPL-3.0-or-later",
   "author": "Dennis Müller",
-
   "types": "./dist/index.d.ts",
-  "exports":{
+  "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
   },
   "files": [
-    "dist","src/base/*","src/index.ts"
+    "dist",
+    "src/base/*",
+    "src/index.ts"
   ],
   "scripts": {
     "build": "tsup"
@@ -31,4 +32,3 @@
     "tsup": "^8.4.0"
   }
 }
-

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { ReactNode, useState } from "react";
 
-import { getServerUrl, FTML,initialize } from "@kwarc/ftml-viewer-test";
+import { getServerUrl, FTML,initialize } from "@kwarc/ftml-viewer";
 import { FTMLDocument, FTMLFragment, FTMLSetup } from "./index";
 
 export default {
