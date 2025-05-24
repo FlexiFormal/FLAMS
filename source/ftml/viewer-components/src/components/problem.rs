@@ -3,7 +3,7 @@ use flams_ontology::{
         BlockFeedback, CheckedResult, FillinFeedback, FillinFeedbackKind, ProblemFeedback,
         ProblemResponse as OrigResponse, ProblemResponseType, Solutions,
     },
-    uris::{DocumentElementURI, Name},
+    uris::{DocumentElementURI, Name, NarrativeURI},
 };
 use flams_utils::prelude::HMap;
 use flams_web_utils::inject_css;
@@ -162,10 +162,11 @@ pub(super) fn problem<V: IntoView + 'static>(
     })
     .unwrap_or(Left(false));
     let uri = ex.uri.clone();
+    let uuri = NarrativeURI::Element(ex.uri.clone());
     FragmentContinuation::wrap(
         &(uri.clone(), kind),
         view! {
-          <Provider value=ex><Provider value=counters><div class=cls style=style>
+          <Provider value=ex><Provider value=counters><Provider value=ForcedName::default()><Provider value=uuri><div class=cls style=style>
               {//<form>{
                 let r = children();
                 match is_done {
@@ -188,7 +189,7 @@ pub(super) fn problem<V: IntoView + 'static>(
                   })
                 }
               }//</form>
-          </div></Provider></Provider>
+          </div></Provider></Provider></Provider></Provider>
         },
     )
 }
