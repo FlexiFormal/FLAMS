@@ -6,7 +6,7 @@ on:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     environment: production
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
           path: bin
   release:
     needs: [linux, windows, mac_aarch64]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     environment: production
     steps:
       - uses: actions/checkout@v4
@@ -175,7 +175,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
