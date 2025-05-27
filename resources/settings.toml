@@ -4,7 +4,7 @@
 # database = "~/.flams/users.sqlite"
 
 [server]
-# port = 3000
+# port = 8095
 # ip = "127.0.0.1"
 # admin_pwd = "foobar"
 # external_url = "https://mathhub.info"
