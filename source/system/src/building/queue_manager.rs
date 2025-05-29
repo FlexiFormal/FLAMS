@@ -168,8 +168,20 @@ impl QueueManager {
 
     /// #### Errors
     #[cfg(feature = "tokio")]
-    #[allow(clippy::significant_drop_tightening)]
     pub fn migrate<R>(
+        &self,
+        id: QueueId,
+        then: impl FnOnce(&SandboxedBackend) -> eyre::Result<R>,
+    ) -> eyre::Result<(R, usize)> {
+        self.migrate_i(id, then).map_err(|e| {
+            tracing::error!("Error migrating: {e:#}");
+            e
+        })
+    }
+
+    #[cfg(feature = "tokio")]
+    #[allow(clippy::significant_drop_tightening)]
+    fn migrate_i<R>(
         &self,
         id: QueueId,
         then: impl FnOnce(&SandboxedBackend) -> eyre::Result<R>,

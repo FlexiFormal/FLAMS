@@ -1183,7 +1183,7 @@ impl SandboxedBackend {
         fields(path = %self.0.path.display()),
         skip_all
     )]
-    pub fn migrate(&self) -> Result<usize, std::io::Error> {
+    pub fn migrate(&self) -> eyre::Result<usize> {
         use eyre::Context;
         use flams_utils::{impossible, PathExt};
 
@@ -1236,7 +1236,7 @@ impl SandboxedBackend {
                 )
             },
             [&*self.0.path],
-        );
+        )?;
         global.triple_store.clear();
         global_cache.clear();
         sandbox_cache.clear();
