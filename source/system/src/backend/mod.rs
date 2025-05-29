@@ -1218,7 +1218,12 @@ impl SandboxedBackend {
                             let safe_target = unwrap!(target.parent())
                                 .join(format!(".{}.tmp", unwrap!(target.file_name()).display()));
                             if safe_target.exists() {
-                                std::fs::remove_dir_all(&safe_target)?;
+                                std::fs::remove_dir_all(&safe_target).wrap_err_with(|| {
+                                    format!(
+                                        "Failed to remove existing taget dir {}",
+                                        safe_target.display()
+                                    )
+                                })?;
                             }
                             if let Err(e) = source.rename_safe(&safe_target) {
                                 let e = e.wrap_err(format!("failed to migrate {}", a.id()));
@@ -1226,9 +1231,13 @@ impl SandboxedBackend {
                                 return Err(e);
                             }
                             if target.exists() {
-                                std::fs::remove_dir_all(&safe_target)?;
+                                std::fs::remove_dir_all(&target).wrap_err_with(|| {
+                                    format!("Failed to remove original archive {}", a.id())
+                                })?;
                             }
-                            std::fs::rename(safe_target, target)?;
+                            std::fs::rename(safe_target, target).wrap_err_with(|| {
+                                format!("Failed to install updated archive {}", a.id())
+                            })?;
                         }
                         Ok(())
                     },
