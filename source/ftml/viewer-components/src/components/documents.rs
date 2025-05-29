@@ -138,8 +138,6 @@ pub fn DocumentString(
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
-    //use flams_web_utils::components::ClientOnly;
-    use thaw::Scrollbar;
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(
         (&toc, &omdoc),

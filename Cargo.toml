@@ -71,7 +71,7 @@ panic = "unwind"
 strip = true
 
 [profile.flams-dev]
-inherits="dev"
+inherits = "dev"
 split-debuginfo = "unpacked"
 #opt-level=1
 debug = 1
