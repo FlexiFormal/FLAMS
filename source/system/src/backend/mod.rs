@@ -1183,7 +1183,7 @@ impl SandboxedBackend {
         fields(path = %self.0.path.display()),
         skip_all
     )]
-    pub fn migrate(&self) -> Result<usize, std::io::Error> {
+    pub fn migrate(&self) -> eyre::Result<usize> {
         use eyre::Context;
         use flams_utils::{impossible, PathExt};
 
@@ -1218,7 +1218,12 @@ impl SandboxedBackend {
                             let safe_target = unwrap!(target.parent())
                                 .join(format!(".{}.tmp", unwrap!(target.file_name()).display()));
                             if safe_target.exists() {
-                                std::fs::remove_dir_all(&safe_target)?;
+                                std::fs::remove_dir_all(&safe_target).wrap_err_with(|| {
+                                    format!(
+                                        "Failed to remove existing taget dir {}",
+                                        safe_target.display()
+                                    )
+                                })?;
                             }
                             if let Err(e) = source.rename_safe(&safe_target) {
                                 let e = e.wrap_err(format!("failed to migrate {}", a.id()));
@@ -1226,9 +1231,13 @@ impl SandboxedBackend {
                                 return Err(e);
                             }
                             if target.exists() {
-                                std::fs::remove_dir_all(&safe_target)?;
+                                std::fs::remove_dir_all(&target).wrap_err_with(|| {
+                                    format!("Failed to remove original archive {}", a.id())
+                                })?;
                             }
-                            std::fs::rename(safe_target, target)?;
+                            std::fs::rename(safe_target, target).wrap_err_with(|| {
+                                format!("Failed to install updated archive {}", a.id())
+                            })?;
                         }
                         Ok(())
                     },
@@ -1236,7 +1245,7 @@ impl SandboxedBackend {
                 )
             },
             [&*self.0.path],
-        );
+        )?;
         global.triple_store.clear();
         global_cache.clear();
         sandbox_cache.clear();
