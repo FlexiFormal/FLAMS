@@ -44,11 +44,11 @@ jobs:
       #      with:
       #        name: ts
       #        path: source/ftml/viewer/ts
-      - name: Upload VSCode Extension
-        uses: actions/upload-artifact@v4
-        with:
-          name: vscode
-          path: source/ts/vscode/flams.vsix
+      #- name: Upload VSCode Extension
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: vscode
+      #    path: source/ts/vscode/flams.vsix
   windows:
     runs-on: windows-latest
     environment: production
@@ -128,10 +128,10 @@ jobs:
       #    with:
       #      name: ts
       #      path: ./ts
-      - uses: actions/download-artifact@v4
-        with:
-          name: vscode
-          path: ./vscode
+      #- uses: actions/download-artifact@v4
+      #  with:
+      #    name: vscode
+      #    path: ./vscode
       - uses: vimtor/action-zip@v1
         with:
           files: linux/
@@ -163,7 +163,7 @@ jobs:
             ./windows.zip
             ./mac.zip
             ./ftml.zip
-            ./vscode/flams.vsix
+    #        ./vscode/flams.vsix
     #        ./ts.zip
   deploy-docs:
     needs: linux
