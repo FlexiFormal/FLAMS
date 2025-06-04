@@ -720,5 +720,6 @@ pub mod ontologies {
         + ANALYZE = "cd-analyze";
         + EVALUATE = "cd-evaluate";
         + CREATE = "cd-create";
+        + DISCOVER = "cd-discover";
     }
 }
