@@ -21,6 +21,9 @@ export function ifStarted<R>(f: () => R): Promise<R> {
 export async function initialize(serverUrl:string,debug?:boolean) {
   await onStartI;
   FTML.set_server_url(serverUrl);
+  if (typeof window !== "undefined") {
+    (window as any).FLAMS_SERVER_URL = serverUrl;
+  }
   if (debug && debug) {
     FTML.set_debug_log();
   }
