@@ -1,1 +1,0 @@
-const e=new TextEncoder,n=new TextDecoder,o={write:n=>e.encode(n),end(){}},t={write:e=>n.decode(e),end(){}};function r(e){if(!w(e))throw new Error(`Encoding not found: ${e}`)}const d=e=>(r(e),o),c=e=>(r(e),t),w=e=>"utf8"===e,i=(e,n)=>(r(n),t.write(e)),f=(e,n)=>(r(n),o.write(e));export{i as decode,f as encode,w as encodingExists,c as getDecoder,d as getEncoder};
