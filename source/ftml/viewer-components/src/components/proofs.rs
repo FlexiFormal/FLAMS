@@ -1,6 +1,6 @@
 use flams_ontology::{narration::paragraphs::ParagraphKind, uris::DocumentElementURI};
 use leptos::{context::Provider, either::Either, prelude::*};
-use leptos_dyn_dom::{DomCont, OriginalNode};
+use leptos_posthoc::{DomCont, OriginalNode};
 
 use crate::ts::FragmentContinuation;
 

@@ -48,7 +48,7 @@ thaw = { workspace = true, features = ["nightly"] }
 tracing-wasm = { workspace = true }
 tracing = { workspace = true, features = ["release_max_level_info"] }
 
-leptos-dyn-dom = { workspace = true }
+leptos-posthoc = { workspace = true }
 leptos = { workspace = true, features = ["csr"] }
 
 tsify-next = { workspace = true, optional = true }

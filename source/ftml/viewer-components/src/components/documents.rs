@@ -7,7 +7,7 @@ use flams_ontology::uris::{DocumentElementURI, DocumentURI, NameStep};
 use flams_web_utils::components::wait_local;
 use flams_web_utils::do_css;
 use leptos::prelude::*;
-use leptos_dyn_dom::DomStringCont;
+use leptos_posthoc::DomStringCont;
 
 #[cfg(feature = "omdoc")]
 #[component]

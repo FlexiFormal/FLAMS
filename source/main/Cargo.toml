@@ -69,7 +69,7 @@ hydrate = [
     "tracing/release_max_level_info",
     "dep:tracing-wasm",
     "flams-web-utils/hydrate",
-    "leptos-dyn-dom/hydrate",
+    "leptos-posthoc/hydrate",
     "ftml-viewer-components/hydrate",
     "flams-router-dashboard/hydrate",
 ]
@@ -111,7 +111,7 @@ icondata_bi = { workspace = true }
 icondata_ai = { workspace = true }
 either = { workspace = true }
 const-str = { workspace = true }
-leptos-dyn-dom = { workspace = true }
+leptos-posthoc = { workspace = true }
 paste = { workspace = true }
 lazy_static = { workspace = true }
 urlencoding = { workspace = true }

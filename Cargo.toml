@@ -271,8 +271,8 @@ thaw = { version = "0.5.0-beta", features = ["nightly"] }
 thaw_components = { version = "0.4.0-beta" }
 thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
 
-leptos-dyn-dom = { git = "https://github.com/Jazzpirate/leptos-dyn-dom", branch = "leptos8" }
-#leptos-dyn-dom = { path = "../leptos_dyn_dom" }
+leptos-posthoc = { version = "0.1" }
+#leptos-posthoc = { path = "../leptos_dyn_dom" }
 
 bytes = "1.10"
 icondata_bi = "0"
@@ -309,14 +309,10 @@ futures-util = "0.3"
 html2text = "0.14"
 tantivy = "0.24"
 
-RusTeX = { git = "https://github.com/Jazzpirate/RusTeX", features = [
-    "multithreaded",
-] }
-tex_engine = { git = "https://github.com/Jazzpirate/RusTeX", features = [
-    "multithreaded",
-] }
-#RusTeX = {path= "../RusTeXNew/rustex",features = ["multithreaded"]}
-#tex_engine = {path= "../RusTeXNew/tex_engine",features = ["multithreaded"]}
+rustex_lib = { version = "0.1.0", features = ["multithreaded"] }
+tex_engine = { version = "0.1.2", features = ["multithreaded"] }
+#rustex_lib = { path = "../RusTeXNew/rustex", features = ["multithreaded"] }
+#tex_engine = { path = "../RusTeXNew/tex_engine", features = ["multithreaded"] }
 
 ahash = { version = "=0.8.11" } # for wasm; avoids getrandom v3, which needs special wasm support
 

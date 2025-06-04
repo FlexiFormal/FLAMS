@@ -14,7 +14,7 @@ hydrate = ["leptos/hydrate", "thaw/hydrate", "dep:gloo-storage"]
 [dependencies]
 flams-utils = { workspace = true, features = ["serde"] }
 
-leptos-dyn-dom = { workspace = true }
+leptos-posthoc = { workspace = true }
 leptos = { workspace = true }
 leptos_meta = { workspace = true }
 thaw = { workspace = true }

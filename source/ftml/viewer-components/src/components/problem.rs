@@ -13,7 +13,7 @@ use leptos::{
     either::Either::{Left, Right},
     prelude::*,
 };
-use leptos_dyn_dom::OriginalNode;
+use leptos_posthoc::OriginalNode;
 use smallvec::SmallVec;
 
 use crate::{
