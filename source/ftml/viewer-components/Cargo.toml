@@ -10,10 +10,10 @@ workspace = true
 omdoc = ["dep:gloo-storage"]
 ts = ["dep:tsify-next"]
 rdf = ["flams-ontology/rdf", "ftml-extraction/rdf"]
-csr = ["leptos-dyn-dom/csr", "leptos/csr", "dep:reqwasm"]
+csr = ["leptos-posthoc/csr", "leptos/csr", "dep:reqwasm"]
 hydrate = [
     "omdoc",
-    "leptos-dyn-dom/hydrate",
+    "leptos-posthoc/hydrate",
     "leptos/hydrate",
     "flams-web-utils/hydrate",
 ]
@@ -33,7 +33,7 @@ flams-system = { workspace = true, optional = true }
 flams-utils = { workspace = true, features = ["wasm"] }
 flams-web-utils = { workspace = true }
 
-leptos-dyn-dom = { workspace = true }
+leptos-posthoc = { workspace = true }
 leptos = { workspace = true }
 thaw = { workspace = true }
 tokio = { workspace = true, optional = true }

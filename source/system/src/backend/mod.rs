@@ -38,7 +38,7 @@ use flams_ontology::{
 };
 use flams_utils::{
     prelude::{HMap, TreeLike},
-    triomphe,
+    triomphe, unwrap,
     vecmap::{VecMap, VecSet},
     PathExt, CSS,
 };
@@ -1183,17 +1183,18 @@ impl SandboxedBackend {
         fields(path = %self.0.path.display()),
         skip_all
     )]
-    pub fn migrate(&self) -> usize {
-        use flams_utils::PathExt;
+    pub fn migrate(&self) -> eyre::Result<usize> {
+        use eyre::Context;
+        use flams_utils::{impossible, PathExt};
 
         let mut count = 0;
         let cnt = &mut count;
         let global = GlobalBackend::get();
         let mut global_cache = global.cache.write();
         let mut sandbox_cache = self.0.cache.write();
-        self.0.manager.reinit(
+        self.0.manager.reinit::<eyre::Result<()>>(
             move |sandbox| {
-                global.archives.reinit(
+                global.archives.reinit::<eyre::Result<()>>(
                     |_| {
                         sandbox.groups.clear();
                         let Some(main) = Settings::get().mathhubs.first() else {
@@ -1204,24 +1205,47 @@ impl SandboxedBackend {
                             #[allow(irrefutable_let_patterns)]
                             let Archive::Local(a) = a
                             else {
-                                unreachable!()
+                                impossible!()
                             };
                             let source = a.path();
                             let target = main.join(a.id().as_ref());
-                            if target.exists() {
-                                let _ = std::fs::remove_dir_all(&target);
-                            }
+
                             if let Some(p) = target.parent() {
-                                let _ = std::fs::create_dir_all(p);
+                                std::fs::create_dir_all(p).wrap_err_with(|| {
+                                    format!("Failed to create parent directory for {}", a.id())
+                                })?;
                             }
-                            let _ = source.rename_safe(&target);
+                            let safe_target = unwrap!(target.parent())
+                                .join(format!(".{}.tmp", unwrap!(target.file_name()).display()));
+                            if safe_target.exists() {
+                                std::fs::remove_dir_all(&safe_target).wrap_err_with(|| {
+                                    format!(
+                                        "Failed to remove existing taget dir {}",
+                                        safe_target.display()
+                                    )
+                                })?;
+                            }
+                            if let Err(e) = source.rename_safe(&safe_target) {
+                                let e = e.wrap_err(format!("failed to migrate {}", a.id()));
+                                let _ = std::fs::remove_dir_all(safe_target);
+                                return Err(e);
+                            }
+                            if target.exists() {
+                                std::fs::remove_dir_all(&target).wrap_err_with(|| {
+                                    format!("Failed to remove original archive {}", a.id())
+                                })?;
+                            }
+                            std::fs::rename(safe_target, target).wrap_err_with(|| {
+                                format!("Failed to install updated archive {}", a.id())
+                            })?;
                         }
+                        Ok(())
                     },
                     Settings::get().mathhubs.iter().map(|p| &**p),
-                );
+                )
             },
             [&*self.0.path],
-        );
+        )?;
         global.triple_store.clear();
         global_cache.clear();
         sandbox_cache.clear();
@@ -1231,7 +1255,7 @@ impl SandboxedBackend {
             let global = GlobalBackend::get();
             global.triple_store.load_archives(&global.all_archives());
         });
-        count
+        Ok(count)
     }
 
     #[tracing::instrument(level = "info",
@@ -1337,11 +1361,13 @@ impl SandboxedBackend {
             id,
             &mut repos,
             |a, repos| {
-                repos.push(SandboxedRepository::Copy(id.clone()));
-                self.copy_archive(a);
+                if !repos.iter().any(|r| r.id() == id) {
+                    repos.push(SandboxedRepository::Copy(id.clone()));
+                    self.copy_archive(a);
+                }
             },
             |g, t, repos| {
-                for a in g.dfs().unwrap_or_else(|| unreachable!()) {
+                for a in unwrap!(g.dfs()) {
                     if let ArchiveOrGroup::Archive(id) = a {
                         if let Some(Archive::Local(a)) = t.get(id) {
                             if !repos.iter().any(|r| r.id() == id) {
@@ -1367,6 +1393,12 @@ impl SandboxedBackend {
         tracing::info!("copying archive {} to {}", a.id(), target.display());
         if let Err(e) = flams_utils::fs::copy_dir_all(path, &target) {
             tracing::error!("could not copy archive {}: {e}", a.id());
+        }
+        if !target.exists() || !target.is_dir() {
+            tracing::error!(
+                "could not copy archive {}: Target directory does not exist",
+                a.id()
+            );
         }
     }
 }

@@ -1,4 +1,4 @@
-use ::RusTeX::engine::{CompilationResult, RusTeXEngineExt};
+use ::rustex_lib::engine::{CompilationResult, RusTeXEngineExt};
 use flams_utils::binary::BinaryWriter;
 use parking_lot::Mutex;
 use std::io::Write;
@@ -7,6 +7,15 @@ use tex_engine::prelude::Mouth;
 
 #[allow(clippy::module_inception)]
 mod rustex {
+    pub use rustex_lib;
+    pub use rustex_lib::engine::commands::{
+        register_primitives_postinit, register_primitives_preinit,
+    };
+    pub use rustex_lib::engine::files::RusTeXFileSystem;
+    pub use rustex_lib::engine::output::{OutputCont, RusTeXOutput};
+    pub use rustex_lib::engine::stomach::RusTeXStomach;
+    pub use rustex_lib::engine::{fonts::Fontsystem, state::RusTeXState};
+    pub use rustex_lib::engine::{Extension, RusTeXEngine, RusTeXEngineT, Types};
     pub use tex_engine::commands::{Macro, MacroSignature, TeXCommand};
     pub use tex_engine::engine::filesystem::FileSystem;
     pub use tex_engine::engine::gullet::DefaultGullet;
@@ -18,15 +27,8 @@ mod rustex {
     pub use tex_engine::tex::tokens::StandardToken;
     pub use tex_engine::{engine::utils::memory::MemoryManager, tex::tokens::CompactToken};
     pub use tracing::{debug, error, instrument, trace, warn};
-    pub use RusTeX as rustex_crate;
-    pub use RusTeX::engine::commands::{register_primitives_postinit, register_primitives_preinit};
-    pub use RusTeX::engine::files::RusTeXFileSystem;
-    pub use RusTeX::engine::output::{OutputCont, RusTeXOutput};
-    pub use RusTeX::engine::stomach::RusTeXStomach;
-    pub use RusTeX::engine::{fonts::Fontsystem, state::RusTeXState};
-    pub use RusTeX::engine::{Extension, RusTeXEngine, RusTeXEngineT, Types};
-    pub type RTSettings = RusTeX::engine::Settings;
-    pub use RusTeX::ImageOptions;
+    pub type RTSettings = rustex_lib::engine::Settings;
+    pub use rustex_lib::ImageOptions;
 }
 pub use rustex::OutputCont;
 #[allow(clippy::wildcard_imports)]
@@ -171,6 +173,7 @@ impl EngineBase {
 
     #[instrument(level = "info", target = "sTeX", name = "Initializing RusTeX engine")]
     fn initialize() -> Result<Self, ()> {
+        use tex_engine::engine::TeXEngine;
         std::panic::catch_unwind(|| {
             let mut engine = DefaultEngine::<Types>::default();
             engine.aux.outputs = RusTeXOutput::Cont(Box::new(TracingOutput));
@@ -182,6 +185,12 @@ impl EngineBase {
                 }
             };
             register_primitives_postinit(&mut engine);
+            match engine.init_file("rustex_defs.def") {
+                Ok(()) => {}
+                Err(e) => {
+                    error!("Error initializing RusTeX engine: {}", e);
+                }
+            };
             Self {
                 state: engine.state.clone(),
                 memory: engine.aux.memory.clone(),
@@ -327,23 +336,22 @@ impl EngineRemnants {
 impl RusTeXRunBuilder<true> {
     pub fn run(mut self) -> (CompilationResult, EngineRemnants) {
         *self.inner.aux.extension.elapsed() = std::time::Instant::now();
-        let res = match tex_engine::engine::TeXEngine::run(
-            &mut self.inner,
-            rustex::rustex_crate::shipout::shipout,
-        ) {
-            Ok(()) => None,
-            Err(e) => {
-                self.inner.aux.outputs.errmessage(format!(
-                    "{}\n\nat {}",
-                    e,
-                    self.inner
-                        .mouth
-                        .current_sourceref()
-                        .display(&self.inner.filesystem)
-                ));
-                Some(e)
-            }
-        };
+        let res =
+            match tex_engine::engine::TeXEngine::run(&mut self.inner, rustex_lib::shipout::shipout)
+            {
+                Ok(()) => None,
+                Err(e) => {
+                    self.inner.aux.outputs.errmessage(format!(
+                        "{}\n\nat {}",
+                        e,
+                        self.inner
+                            .mouth
+                            .current_sourceref()
+                            .display(&self.inner.filesystem)
+                    ));
+                    Some(e)
+                }
+            };
         let res = self.inner.do_result(res, self.settings);
         (res, EngineRemnants(self.inner))
     }

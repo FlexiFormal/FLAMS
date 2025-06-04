@@ -7,7 +7,7 @@ use flams_ontology::uris::{DocumentElementURI, DocumentURI, NameStep};
 use flams_web_utils::components::wait_local;
 use flams_web_utils::do_css;
 use leptos::prelude::*;
-use leptos_dyn_dom::DomStringCont;
+use leptos_posthoc::DomStringCont;
 
 #[cfg(feature = "omdoc")]
 #[component]
@@ -95,7 +95,7 @@ pub fn FragmentString(
             Some(name) if needs_suffix => {
                 let nuri = NarrativeURI::Element(flams_utils::unwrap!(uri).parent());
                 EitherOf3::A(view!{
-                    <Provider value=ForcedName(name)>
+                    <Provider value=ForcedName(Some(name))>
                     <Provider value=nuri>
                         <DomStringCont html cont=iterate/>
                     </Provider>
@@ -103,7 +103,7 @@ pub fn FragmentString(
                 })
             },
             Some(name) => EitherOf3::B(view!{
-                <Provider value=ForcedName(name)>
+                <Provider value=ForcedName(Some(name))>
                     <DomStringCont html cont=iterate/>
                 </Provider>
             }),
@@ -114,13 +114,18 @@ pub fn FragmentString(
     }</FTMLDocumentSetup>}
 }
 
-#[derive(Clone, Debug)]
-pub struct ForcedName(NameStep);
+#[derive(Clone, Debug, Default)]
+pub struct ForcedName(Option<NameStep>);
 impl ForcedName {
     pub fn update(&self, uri: &DocumentElementURI) -> DocumentElementURI {
-        let name = uri.name().clone();
-        let doc = uri.document().clone();
-        doc & name.with_last_name(self.0.clone())
+        match self.0.as_ref() {
+            Some(n) => {
+                let name = uri.name().clone();
+                let doc = uri.document().clone();
+                doc & name.with_last_name(n.clone())
+            }
+            _ => uri.clone(),
+        }
     }
 }
 
@@ -133,7 +138,6 @@ pub fn DocumentString(
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
-    use flams_web_utils::components::ClientOnly;
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(
         (&toc, &omdoc),

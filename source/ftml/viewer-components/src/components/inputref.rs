@@ -4,7 +4,7 @@ use flams_ontology::{
 };
 use flams_web_utils::{do_css, inject_css};
 use leptos::{context::Provider, either::Either, prelude::*};
-use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
+use leptos_posthoc::{DomChildrenCont, OriginalNode};
 
 use crate::{
     components::{
@@ -25,7 +25,7 @@ pub fn InputRef<'a>(uri: DocumentURI, id: &'a str) -> impl IntoView {
 
 #[allow(clippy::similar_names)]
 pub(super) fn inputref(uri: DocumentURI, id: &str) -> impl IntoView {
-    use leptos_dyn_dom::DomStringCont;
+    use leptos_posthoc::DomStringCont;
     //leptos::logging::log!("inputref");
     inject_css("ftml-inputref", include_str!("./inputref.css"));
     let replace = RwSignal::new(false);
@@ -82,7 +82,7 @@ pub(super) fn inputref(uri: DocumentURI, id: &str) -> impl IntoView {
 
 fn do_inputref(uri: DocumentURI, on_load: RwSignal<bool>) -> impl IntoView {
     use flams_web_utils::components::wait_local;
-    use leptos_dyn_dom::DomStringCont;
+    use leptos_posthoc::DomStringCont;
     let uricl = uri.clone();
     wait_local(
         move || {

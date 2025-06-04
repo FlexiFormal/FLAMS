@@ -168,34 +168,49 @@ impl QueueManager {
 
     /// #### Errors
     #[cfg(feature = "tokio")]
-    #[allow(clippy::significant_drop_tightening)]
-    pub fn migrate<R, E: ToString>(
+    pub fn migrate<R>(
         &self,
         id: QueueId,
-        then: impl FnOnce(&SandboxedBackend) -> Result<R, E>,
-    ) -> Result<(R, usize), String> {
+        then: impl FnOnce(&SandboxedBackend) -> eyre::Result<R>,
+    ) -> eyre::Result<(R, usize)> {
+        self.migrate_i(id, then).map_err(|e| {
+            tracing::error!("Error migrating: {e:#}");
+            e
+        })
+    }
+
+    #[cfg(feature = "tokio")]
+    #[allow(clippy::significant_drop_tightening)]
+    fn migrate_i<R>(
+        &self,
+        id: QueueId,
+        then: impl FnOnce(&SandboxedBackend) -> eyre::Result<R>,
+    ) -> eyre::Result<(R, usize)> {
+        use eyre::eyre;
+        use flams_utils::impossible;
+
         let mut inner = self.inner.write();
         let r = if let Some(queue) = inner.get(&id) {
             if !matches!(&*queue.0.state.read(), QueueState::Finished { .. }) {
-                return Err(format!("Queue {id} not finished"));
+                return Err(eyre!("Queue {id} not finished"));
             }
             if !matches!(queue.backend(), AnyBackend::Sandbox(_)) {
-                return Err("Global Queue can not be migrated".to_string());
+                return Err(eyre!("Global Queue can not be migrated"));
             }
             let AnyBackend::Sandbox(sandbox) = queue.backend() else {
                 unreachable!()
             };
-            then(sandbox).map_err(|e| e.to_string())?
+            then(sandbox)?
         } else {
-            return Err(format!("No queue {id} found"));
+            return Err(eyre!("No queue {id} found"));
         };
         let Some(queue) = inner.remove(&id) else {
             unreachable!()
         };
         let AnyBackend::Sandbox(sandbox) = queue.backend() else {
-            unreachable!()
+            impossible!()
         };
-        Ok((r, sandbox.migrate()))
+        Ok((r, sandbox.migrate()?))
     }
 
     #[allow(clippy::significant_drop_tightening)]

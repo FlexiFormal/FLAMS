@@ -4,28 +4,28 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-serde = ["dep:serde","flams-ontology/serde","flams-utils/serde"]
+serde = ["dep:serde", "flams-ontology/serde", "flams-utils/serde"]
 
 [dev-dependencies]
-tracing-subscriber = {workspace = true}
+tracing-subscriber = { workspace = true }
 
 [dependencies]
-flams-ftml = {workspace=true}
-flams-ontology = {workspace=true}
-flams-system = {workspace=true}
-flams-utils = {workspace=true}
+flams-ftml = { workspace = true }
+flams-ontology = { workspace = true }
+flams-system = { workspace = true }
+flams-utils = { workspace = true }
 
-RusTeX = {workspace=true}
-tex_engine = {workspace=true}
+rustex_lib = { workspace = true }
+tex_engine = { workspace = true }
 
-chrono = {workspace = true}
-tracing = {workspace = true, features=["log"]}
-parking_lot = {workspace = true}
-paste = {workspace = true}
-either = {workspace = true}
+chrono = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+parking_lot = { workspace = true }
+paste = { workspace = true }
+either = { workspace = true }
 lazy_static = { workspace = true }
-smallvec = {workspace = true}
-serde = {workspace = true, optional = true}
+smallvec = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [lints]
 workspace = true

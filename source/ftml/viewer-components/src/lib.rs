@@ -34,7 +34,7 @@ use ftml_extraction::{open::terms::VarOrSym, prelude::*};
 use leptos::prelude::*;
 use leptos::tachys::view::any_view::AnyView;
 use leptos::web_sys::Element;
-use leptos_dyn_dom::{DomStringCont, DomStringContMath};
+use leptos_posthoc::{DomStringCont, DomStringContMath};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::ts::{FragmentContinuation, InputRefContinuation, OnSectionTitle};

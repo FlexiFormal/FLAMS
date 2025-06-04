@@ -126,7 +126,7 @@ impl<'a> TOCIter<'a> for &'a [TOCElem] {
 impl TOCElem {
     fn into_view(self, gottos: &mut Gottos) -> impl IntoView + use<> {
         use flams_web_utils::components::{AnchorLink, Header};
-        use leptos_dyn_dom::DomStringCont;
+        use leptos_posthoc::DomStringCont;
         let style = if gottos.current.is_some() {
             "background-color:var(--colorPaletteYellowBorder1);"
         } else {

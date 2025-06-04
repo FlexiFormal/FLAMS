@@ -20,7 +20,7 @@ pub fn wait_local<
     let res = LocalResource::new(future);
     view! {
       <Suspense fallback = || view!(<Spinner/>)>{move || {
-        res.get().and_then(|r| r.take()).map_or_else(
+        res.get().and_then(|mut r| r.take()).map_or_else(
           || Either::Left(view!(<div>{err.clone()}</div>)),
           |res| Either::Right(children(res))
         )

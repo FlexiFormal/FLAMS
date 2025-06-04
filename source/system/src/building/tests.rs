@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use std::{path::PathBuf, str::FromStr};
 
 use flams_utils::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};

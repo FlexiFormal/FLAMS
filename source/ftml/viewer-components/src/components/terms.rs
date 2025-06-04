@@ -12,7 +12,7 @@ use leptos::{
     either::{Either, EitherOf3},
     prelude::*,
 };
-use leptos_dyn_dom::OriginalNode;
+use leptos_posthoc::OriginalNode;
 
 use crate::{
     components::{IntoLOs, LOs},
@@ -65,7 +65,7 @@ mod term_replacing {
     };
     use ftml_extraction::prelude::FTMLElements;
     use leptos::{context::Provider, prelude::*};
-    use leptos_dyn_dom::{DomStringContMath, OriginalNode};
+    use leptos_posthoc::{DomStringContMath, OriginalNode};
 
     pub(crate) const DO_REPLACEMENTS: bool = true;
 

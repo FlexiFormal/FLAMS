@@ -19,7 +19,7 @@ pub fn run() {
     use flams_web_utils::components::Themer;
     use ftml_viewer_components::{FTMLDocumentSetup, FTMLGlobalSetup};
     use leptos::prelude::*;
-    use leptos_dyn_dom::{DomChildrenCont, OriginalNode};
+    use leptos_posthoc::{DomChildrenCont, OriginalNode};
     #[allow(unused_mut)]
     let mut config = tracing_wasm::WASMLayerConfigBuilder::new();
 
@@ -28,7 +28,7 @@ pub fn run() {
     //config.set_max_level(tracing::Level::INFO);
     tracing_wasm::set_as_global_default_with_config(config.build());
 
-    leptos_dyn_dom::hydrate_body(|orig| {
+    leptos_posthoc::hydrate_body(|orig| {
         leptos_meta::provide_meta_context();
         view!(<Themer attr:style="font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;background-color:inherit;"><FTMLGlobalSetup><FTMLDocumentSetup uri=DocumentURI::no_doc()>
             <DomChildrenCont orig cont=ftml_viewer_components::iterate/>

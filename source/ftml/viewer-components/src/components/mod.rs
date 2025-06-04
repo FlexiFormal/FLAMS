@@ -25,7 +25,7 @@ pub use toc::*;
 
 use ftml_extraction::{open::OpenFTMLElement, prelude::FTMLElements};
 use leptos::prelude::*;
-use leptos_dyn_dom::{DomChildrenCont, DomCont, OriginalNode};
+use leptos_posthoc::{DomChildrenCont, DomCont, OriginalNode};
 
 use counters::{LogicalLevel, SectionCounters};
 

@@ -237,7 +237,8 @@ pub mod server {
         blocking_server_fn(move || {
             login.with_queue(queue, |_| ())?;
             let ((), n) = flams_system::building::queue_manager::QueueManager::get()
-                .migrate::<(), String>(queue.into(), |_| Ok(()))?;
+                .migrate::<()>(queue.into(), |_| Ok(()))
+                .map_err(|r| format!("{r:#}"))?;
             Ok(n)
         })
         .await
