@@ -1422,6 +1422,9 @@ function ifStarted(f2) {
 async function initialize(serverUrl, debug) {
   await onStartI;
   SA(serverUrl);
+  if (typeof window !== "undefined") {
+    window.FLAMS_SERVER_URL = serverUrl;
+  }
   if (debug && debug) {
     UA();
   }

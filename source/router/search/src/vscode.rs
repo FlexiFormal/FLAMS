@@ -67,7 +67,7 @@ pub fn VSCodeSearch() -> impl IntoView {
         let opts = opts.get_untracked();
         async move {
             let Some(remote) = remote else { return };
-            #[cfg(feature = "hydrate")]
+            #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
             {
                 use flams_router_base::ServerFnExt;
                 let query = super::SearchQuery {
@@ -104,7 +104,7 @@ pub fn VSCodeSearch() -> impl IntoView {
         remote_results.set(SearchState::Loading);
         async move {
             let Some(remote) = remote else { return };
-            #[cfg(feature = "hydrate")]
+            #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
             {
                 use flams_router_base::ServerFnExt;
                 let query = super::SearchSymbols {
@@ -327,7 +327,7 @@ fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl I
         let uri = uri.clone();
         if let Some(remote) = remote.and_then(|f| f()) {
             Either::Left({
-                #[cfg(feature = "hydrate")]
+                #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
                 {
                     use flams_router_base::ServerFnExt;
                     use ftml_viewer_components::components::documents::{

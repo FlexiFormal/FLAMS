@@ -29,7 +29,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub fn inject_css(mut css: flams_utils::CSS) {
     if let flams_utils::CSS::Link(lnk) = &mut css {
         if let Some(r) = lnk.strip_prefix("srv:") {
-            *lnk = format!("{}{r}", ftml_viewer_components::remote::get_server_url());
+            *lnk = format!("{}{r}", ftml_viewer_components::remote::get_server_url()).into();
         }
     }
     flams_web_utils::do_css(css)
