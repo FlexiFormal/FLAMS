@@ -99,6 +99,11 @@ cwd = "./ftml-viewer"
 command = "cargo"
 args = ["make"]
 
+[tasks.build-ffi]
+workspace = false
+command = "cargo"
+args = ["build", "--release", "--package", "flams-ffi"]
+
 [tasks.vscode-npm-install]
 workspace = false
 cwd = "./ts/vscode"

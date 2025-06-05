@@ -8,7 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 flams-system = {workspace=true}
-flams-lsp = {workspace=true}
+flams-lsp = {workspace=true,features=["ws"]}
 flams-utils = {workspace=true,features=["serde"]}
 flams-ontology = {workspace=true,features = ["serde"]}
 flams-stex = {workspace=true, features = ["serde"]}
