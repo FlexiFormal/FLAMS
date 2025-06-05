@@ -2,17 +2,22 @@ use std::{path::Path, sync::Arc};
 
 use either::Either;
 use flams_ontology::{
-    file_states::FileStateSummary, uris::{ArchiveURIRef, URIRefTrait}
+    file_states::FileStateSummary,
+    uris::{ArchiveURIRef, URIRefTrait},
 };
 use flams_utils::{
     change_listener::ChangeSender,
     prelude::{TreeChild, TreeLike},
     time::Timestamp,
-    vecmap::VecMap, PathExt,
+    vecmap::VecMap,
+    PathExt,
 };
 
 use super::ignore_regex::IgnoreSource;
-use crate::{backend::{archives::LocalArchive, BackendChange}, formats::{BuildTargetId, SourceFormatId}};
+use crate::{
+    backend::{archives::LocalArchive, BackendChange},
+    formats::{BuildTargetId, SourceFormatId},
+};
 
 #[derive(Debug)]
 pub enum SourceEntry {
@@ -55,7 +60,7 @@ pub struct SourceFile {
     pub relative_path: Arc<str>,
     pub format: SourceFormatId,
     pub target_state: VecMap<BuildTargetId, FileState>,
-    pub format_state: FileState
+    pub format_state: FileState,
 }
 
 impl TreeChild<SourceEntry> for &SourceEntry {
@@ -194,7 +199,7 @@ impl SourceDir {
                         let SourceEntry::Dir(dir) = &mut current.children[i] else {
                             unreachable!()
                         };
-                        dir.state.merge(f.format,&f.format_state);
+                        dir.state.merge(f.format, &f.format_state);
                         current = dir;
                         continue;
                     }
@@ -203,7 +208,7 @@ impl SourceDir {
                         relative_path: curr_relpath.into(),
                         state: FileStates::default(),
                     };
-                    dir.state.merge(f.format,&f.format_state);
+                    dir.state.merge(f.format, &f.format_state);
                     current.children[i] = SourceEntry::Dir(dir);
                     current = if let SourceEntry::Dir(d) = &mut current.children[i] {
                         d
@@ -217,7 +222,7 @@ impl SourceDir {
                         relative_path: curr_relpath.into(),
                         state: FileStates::default(),
                     };
-                    dir.state.merge(f.format,&f.format_state);
+                    dir.state.merge(f.format, &f.format_state);
                     current.children.insert(i, SourceEntry::Dir(dir));
                     current = if let SourceEntry::Dir(d) = &mut current.children[i] {
                         d
@@ -287,15 +292,23 @@ impl SourceDir {
                 unreachable!("{relative_path} does not start with {topstr}???")
             };
             #[cfg(target_os = "windows")]
-            let relative_path: Arc<str> = relative_path.replace(std::path::PathBuf::PATH_SEPARATOR, "/").to_string().into();
+            let relative_path: Arc<str> = relative_path
+                .replace(std::path::PathBuf::PATH_SEPARATOR, "/")
+                .to_string()
+                .into();
             #[cfg(not(target_os = "windows"))]
             let relative_path: Arc<str> = relative_path.to_string().into();
             let states = FileState::from(top, &metadata, &relative_path, *format);
             let new = SourceFile {
                 relative_path,
                 format: *format,
-                format_state: states.iter().map(|(_,v)| v).min().cloned().unwrap_or(FileState::New),
-                target_state:states,
+                format_state: states
+                    .iter()
+                    .map(|(_, v)| v)
+                    .min()
+                    .cloned()
+                    .unwrap_or(FileState::New),
+                target_state: states,
             };
             if let Some(SourceEntry::File(previous)) = old.remove(&new.relative_path) {
                 if previous.format_state != new.format_state {
@@ -322,7 +335,7 @@ impl SourceDir {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash,serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ChangeState {
     pub last_built: Timestamp,
     pub last_changed: Timestamp,
@@ -330,7 +343,7 @@ pub struct ChangeState {
     //md5:u128 TODO
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash,serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum FileState {
     Deleted,
     New,
@@ -345,9 +358,10 @@ impl PartialOrd for FileState {
 impl Ord for FileState {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
-            (Self::Deleted, Self::Deleted) | (Self::New, Self::New) | 
-            (Self::Stale(_), Self::Stale(_)) | (Self::UpToDate(_), Self::UpToDate(_))
-                => std::cmp::Ordering::Equal,
+            (Self::Deleted, Self::Deleted)
+            | (Self::New, Self::New)
+            | (Self::Stale(_), Self::Stale(_))
+            | (Self::UpToDate(_), Self::UpToDate(_)) => std::cmp::Ordering::Equal,
             (Self::Deleted, _) => std::cmp::Ordering::Less,
             (_, Self::Deleted) => std::cmp::Ordering::Greater,
             (Self::New, _) => std::cmp::Ordering::Less,
@@ -363,7 +377,8 @@ impl FileState {
         source: &std::fs::Metadata,
         relative_path: &str,
         format: SourceFormatId,
-    ) -> VecMap<BuildTargetId,Self> {
+    ) -> VecMap<BuildTargetId, Self> {
+        use super::LocalOut;
         let out = LocalArchive::out_dir_of(top).join(relative_path);
         let mut ret = VecMap::new();
         for t in *format.targets() {
@@ -406,9 +421,9 @@ impl FileState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default,serde::Serialize, serde::Deserialize)]
-pub struct FileStates{
-    pub formats:VecMap<SourceFormatId,FileStateSummary>
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+pub struct FileStates {
+    pub formats: VecMap<SourceFormatId, FileStateSummary>,
 }
 impl FileStates {
     #[must_use]
@@ -425,7 +440,9 @@ impl FileStates {
     }
 
     pub(crate) fn merge(&mut self, format: SourceFormatId, state: &FileState) {
-        let target = self.formats.get_or_insert_mut(format, FileStateSummary::default);
+        let target = self
+            .formats
+            .get_or_insert_mut(format, FileStateSummary::default);
         match state {
             FileState::Deleted => target.deleted += 1,
             FileState::New => target.new += 1,
@@ -447,7 +464,9 @@ impl FileStates {
         }
     }*/
     pub(crate) fn merge_summary(&mut self, format: SourceFormatId, summary: &FileStateSummary) {
-        let target = self.formats.get_or_insert_mut(format, FileStateSummary::default);
+        let target = self
+            .formats
+            .get_or_insert_mut(format, FileStateSummary::default);
         target.new += summary.new;
         target.stale += summary.stale;
         target.deleted += summary.deleted;

@@ -1,5 +1,5 @@
 [env]
-LEPTOS_SASS_VERSION = "1.88.0"
+LEPTOS_SASS_VERSION = "1.89.1"
 
 #[env]
 #RUSTFLAGS = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext"

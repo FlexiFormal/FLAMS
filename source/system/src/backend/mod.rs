@@ -4,6 +4,7 @@ pub mod docfile;
 pub mod rdf;
 
 use crate::{
+    backend::archives::{ArchiveTrait, LocalOut},
     formats::{HTMLData, SourceFormatId},
     settings::Settings,
 };
@@ -549,7 +550,7 @@ impl GlobalBackend {
         let language = uri.language();
         let name = uri.name().first_name();
         self.with_local_archive(id, |a| {
-            a.and_then(|a| a.get_filepath(uri.path(), name, language, format))
+            a.and_then(|a| archives::get_filepath(a.out_dir(), uri.path(), name, language, format))
         })
     }
 
@@ -1201,6 +1202,8 @@ impl SandboxedBackend {
                             unreachable!()
                         };
                         for a in std::mem::take(&mut sandbox.archives) {
+                            use crate::backend::archives::ArchiveTrait;
+
                             *cnt += 1;
                             #[allow(irrefutable_let_patterns)]
                             let Archive::Local(a) = a

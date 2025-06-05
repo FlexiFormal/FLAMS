@@ -12,7 +12,7 @@ use flams_ontology::{
         ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait,
     },
 };
-use flams_system::backend::{AnyBackend, Backend};
+use flams_system::backend::{archives::ArchiveTrait, AnyBackend, Backend};
 use flams_utils::{
     id_counters::IdCounter,
     impossible,

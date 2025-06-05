@@ -17,7 +17,7 @@ use flams_ontology::{
     DocumentRange,
 };
 use flams_system::{
-    backend::{AnyBackend, Backend},
+    backend::{archives::ArchiveTrait, AnyBackend, Backend},
     formats::{HTMLData, OMDocResult},
 };
 use flams_utils::{prelude::HSet, CSS};

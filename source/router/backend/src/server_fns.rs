@@ -58,7 +58,10 @@ pub async fn source_file(
     m: Option<String>,
     s: Option<String>,
 ) -> Result<String, ServerFnError<String>> {
-    use flams_system::backend::{Backend, archives::LocalArchive};
+    use flams_system::backend::{
+        Backend,
+        archives::{LocalArchive, LocalOut},
+    };
     use flams_web_utils::not_found;
     fn get_root(
         id: &ArchiveId,
@@ -243,7 +246,7 @@ mod server {
     use flams_router_base::LoginState;
     use flams_system::backend::{
         Backend, GlobalBackend,
-        archives::{Archive, ArchiveOrGroup as AoG},
+        archives::{Archive, ArchiveOrGroup as AoG, ArchiveTrait},
     };
     use flams_utils::vecmap::VecSet;
     use flams_web_utils::blocking_server_fn;

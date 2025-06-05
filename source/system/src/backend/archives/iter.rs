@@ -1,4 +1,7 @@
-use flams_ontology::{archive_json::{ArchiveDatum, Institution}, uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI}};
+use flams_ontology::{
+    archive_json::{ArchiveDatum, Institution},
+    uris::{ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI},
+};
 use flams_utils::vecmap::{VecMap, VecSet};
 use parking_lot::RwLock;
 use std::{
@@ -6,9 +9,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{backend::archives::{
-    ignore_regex::IgnoreSource, source_files::SourceDir, RepositoryData,
-}, formats::SourceFormat};
+use crate::{
+    backend::archives::{
+        ignore_regex::IgnoreSource, source_files::SourceDir, Archive, RepositoryData,
+        ScrapedArchive,
+    },
+    formats::SourceFormat,
+};
 
 use super::{ArchiveIndex, LocalArchive};
 
@@ -39,7 +46,7 @@ impl<'a> ArchiveIterator<'a> {
         curr: &mut Option<ReadDir>,
         stack: &mut Vec<Vec<(PathBuf, String)>>,
         currp: &mut String,
-    ) -> Option<LocalArchive> {
+    ) -> Option<Archive> {
         loop {
             let d = match curr.as_mut().and_then(ReadDir::next) {
                 None => {
@@ -145,7 +152,7 @@ impl<'a> ArchiveIterator<'a> {
 
     #[allow(clippy::cognitive_complexity)]
     #[allow(clippy::too_many_lines)]
-    fn do_manifest(path: &Path, id: &str) -> Option<LocalArchive> {
+    fn do_manifest(path: &Path, id: &str) -> Option<Archive> {
         use std::io::BufRead;
         let Some(top_dir) = path.parent().and_then(Path::parent) else {
             tracing::warn!(target:"archives","Could not find parent directory of {}", path.display());
@@ -165,6 +172,7 @@ impl<'a> ArchiveIterator<'a> {
         let mut ignore = IgnoreSource::default();
         let mut attributes: VecMap<Box<str>, Box<str>> = VecMap::default();
         let mut had_id: bool = false;
+        let mut index_url: Option<std::sync::Arc<url::Url>> = None;
         loop {
             let line = match lines.next() {
                 Some(Err(_)) => continue,
@@ -206,6 +214,13 @@ impl<'a> ArchiveIterator<'a> {
                 "ignore" => {
                     ignore = IgnoreSource::new(v, &top_dir.join("source")); //Some(v.into());
                 }
+                "index" => match url::Url::parse(v) {
+                    Ok(u) => index_url = Some(u.into()),
+                    Err(e) => {
+                        tracing::warn!(target:"archives","Archive {id} has an invalid index URL: {e}");
+                        return None;
+                    }
+                },
                 _ => {
                     attributes.insert(k.into(), v.into());
                 }
@@ -235,43 +250,55 @@ impl<'a> ArchiveIterator<'a> {
             }
         };
         let uri = dom_uri & id;
-        let (institutions,index) = read_index_file(&uri,&path.with_file_name("archive.json"));
-        Some(LocalArchive {
-            out_path: out_path.into(),
-            ignore,
-            file_state: RwLock::new(SourceDir::default()),
-            #[cfg(feature="gitlab")]
-            is_managed: std::sync::OnceLock::new(),
-            //#[cfg(feature="zip")]
-            //zip_file: std::sync::Arc::new(std::sync::OnceLock::new()),
-            data: RepositoryData {
-                uri,
-                attributes,
-                formats,
-                institutions,index,
-                dependencies: dependencies.into(),
-            },
-        })
+        let (institutions, index) = read_index_file(&uri, &path.with_file_name("archive.json"));
+        let data = RepositoryData {
+            uri,
+            attributes,
+            formats,
+            institutions,
+            index,
+            dependencies: dependencies.into(),
+        };
+        if let Some(url) = index_url {
+            Some(Archive::Scraped(ScrapedArchive {
+                out_path: out_path.into(),
+                remote_url: url,
+                ignore,
+                docs: std::sync::Arc::new(RwLock::new(SourceDir::default())),
+                #[cfg(feature = "gitlab")]
+                is_managed: std::sync::OnceLock::new(),
+                data,
+            }))
+        } else {
+            Some(Archive::Local(LocalArchive {
+                out_path: out_path.into(),
+                ignore,
+                file_state: RwLock::new(SourceDir::default()),
+                #[cfg(feature = "gitlab")]
+                is_managed: std::sync::OnceLock::new(),
+                data,
+            }))
+        }
     }
 }
 
-fn read_index_file(archive:&ArchiveURI,path:&Path) -> (Box<[Institution]>,Box<[ArchiveIndex]>) {
+fn read_index_file(archive: &ArchiveURI, path: &Path) -> (Box<[Institution]>, Box<[ArchiveIndex]>) {
     if !path.exists() {
-        return (Vec::new().into(),Vec::new().into())
+        return (Vec::new().into(), Vec::new().into());
     }
     let reader = match std::fs::File::open(path) {
         Ok(reader) => reader,
         Err(e) => {
             tracing::error!("Could not read index file {}: {e}", path.display());
-            return (Vec::new().into(),Vec::new().into())
+            return (Vec::new().into(), Vec::new().into());
         }
     };
     let reader = std::io::BufReader::new(reader);
-    let v = match serde_json::from_reader::<_,Vec<ArchiveDatum>>(reader) {
+    let v = match serde_json::from_reader::<_, Vec<ArchiveDatum>>(reader) {
         Ok(v) => v,
         Err(e) => {
             tracing::error!("Invalid JSON file {}: {e}", path.display());
-            return (Vec::new().into(),Vec::new().into())
+            return (Vec::new().into(), Vec::new().into());
         }
     };
     let mut insts = Vec::new();
@@ -287,30 +314,73 @@ fn read_index_file(archive:&ArchiveURI,path:&Path) -> (Box<[Institution]>,Box<[A
                         }
                     }
                 }
-                match ArchiveIndex::from_kind(d,archive,
-                    |i| format!("{}/img?a={}&rp=source/{i}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
-                ) {
+                match ArchiveIndex::from_kind(d, archive, |i| {
+                    format!(
+                        "{}/img?a={}&rp=source/{i}",
+                        crate::settings::Settings::get()
+                            .external_url()
+                            .unwrap_or(""),
+                        archive.archive_id()
+                    )
+                    .into_boxed_str()
+                }) {
                     Ok(e) => idxs.push(e),
-                    Err(e) => tracing::error!("Error in index file {}: {e:#}",path.display())
+                    Err(e) => tracing::error!("Error in index file {}: {e:#}", path.display()),
                 }
-            },
+            }
             ArchiveDatum::Institution(i) => insts.push(match i {
-                Institution::University { title, place, country, url, acronym, logo }
-                    => Institution::University { title, place, country, url, acronym, 
-                        logo: format!("{}/img?a={}&rp=source/{logo}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
-                    },
-                Institution::School { title, place, country, url, acronym, logo }
-                    => Institution::School { title, place, country, url, acronym, 
-                        logo: format!("{}/img?a={}&rp=source/{logo}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
-                    }
+                Institution::University {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo,
+                } => Institution::University {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo: format!(
+                        "{}/img?a={}&rp=source/{logo}",
+                        crate::settings::Settings::get()
+                            .external_url()
+                            .unwrap_or(""),
+                        archive.archive_id()
+                    )
+                    .into_boxed_str(),
+                },
+                Institution::School {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo,
+                } => Institution::School {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo: format!(
+                        "{}/img?a={}&rp=source/{logo}",
+                        crate::settings::Settings::get()
+                            .external_url()
+                            .unwrap_or(""),
+                        archive.archive_id()
+                    )
+                    .into_boxed_str(),
+                },
             }),
         }
     }
-    (insts.into(),idxs.into())
+    (insts.into(), idxs.into())
 }
 
 impl Iterator for ArchiveIterator<'_> {
-    type Item = LocalArchive;
+    type Item = Archive;
     fn next(&mut self) -> Option<Self::Item> {
         let _span = self.in_span.enter();
         Self::next(&mut self.curr, &mut self.stack, &mut self.currp)

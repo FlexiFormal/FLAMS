@@ -169,6 +169,8 @@ pub mod sparql {
 }
 use sparql::{EvaluationError, Query, QueryResults, SparqlSyntaxError};
 
+use crate::backend::archives::{ArchiveTrait, LocalOut};
+
 use super::archives::Archive;
 
 pub enum QueryError {

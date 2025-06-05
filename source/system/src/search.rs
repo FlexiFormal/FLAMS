@@ -4,7 +4,10 @@ use flams_ontology::{
 };
 use flams_utils::vecmap::VecMap;
 
-use crate::backend::{archives::Archive, GlobalBackend};
+use crate::backend::{
+    archives::{Archive, LocalOut},
+    GlobalBackend,
+};
 
 const MEMORY_SIZE: usize = 50_000_000;
 

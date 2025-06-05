@@ -237,6 +237,9 @@ impl Queue {
                             Archive::Local(archive) => {
                                 Either::Left(archive.source_dir().join(&*f.relative_path))
                             }
+                            Archive::Scraped(archive) => {
+                                Either::Right(format!("{}/{}", archive.url(), f.relative_path))
+                            }
                         },
                         rel_path: f.relative_path.clone(),
                     });

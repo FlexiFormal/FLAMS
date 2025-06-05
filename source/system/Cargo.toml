@@ -9,7 +9,7 @@ gitlab = ["flams-git/gitlab", "tokio"]
 tantivy = ["dep:tantivy", "dep:html2text", "flams-ontology/tantivy"]
 zip = [
     "tokio",
-    "dep:reqwest",
+    "reqwest/stream",
     "dep:async-compression",
     "dep:astral-tokio-tar",
     "dep:tokio-util",
@@ -71,9 +71,10 @@ eyre = { workspace = true }
 #flate2 = {workspace=true,optional=true}
 #tar = {workspace=true,optional=true}
 futures = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true, features = ["stream"] }
+reqwest = { workspace = true, features = ["blocking"] }
 async-compression = { workspace = true, optional = true }
 astral-tokio-tar = { workspace = true, optional = true }
+regex = { workspace = true }
 
 [lints]
 workspace = true
