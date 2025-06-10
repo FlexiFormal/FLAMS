@@ -5,6 +5,7 @@ use flams_ontology::uris::DocumentURI;
 use flams_ontology::uris::URIRefTrait;
 use flams_system::backend::archives::source_files::{SourceDir, SourceEntry};
 use flams_system::backend::archives::Archive;
+use flams_system::backend::archives::ArchiveTrait;
 use flams_system::backend::GlobalBackend;
 
 use flams_lsp::documents::LSPDocument;
@@ -70,13 +71,18 @@ pub extern "C" fn load_all_files() {
                 for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
                     match e {
                         SourceEntry::File(f) => {
-                            let Ok(uri) = DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path) else { continue};
+                            let Ok(uri) = DocumentURI::from_archive_relpath(
+                                a.uri().owned(),
+                                &f.relative_path,
+                            ) else {
+                                continue;
+                            };
                             files.push((
                                 f.relative_path
                                     .split('/')
                                     .fold(a.source_dir(), |p, s| p.join(s))
                                     .into(),
-                                uri
+                                uri,
                             ));
                         }
                         _ => {}

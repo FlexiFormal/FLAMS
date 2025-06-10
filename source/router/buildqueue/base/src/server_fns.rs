@@ -58,6 +58,7 @@ pub mod server {
     use flams_ontology::uris::ArchiveId;
     use flams_router_base::LoginState;
     use flams_system::backend::SandboxedRepository;
+    use flams_system::backend::archives::HasLocalOut;
     use flams_system::building::Queue;
     use flams_system::building::queue_manager::QueueManager;
     use flams_web_utils::blocking_server_fn;
@@ -213,8 +214,9 @@ pub mod server {
         let id = archive.clone();
         let Some(path) = tokio::task::spawn_blocking(move || {
             login.with_queue(queue, |q| {
-                q.backend()
-                    .with_archive(&id, |a| a.map(|a| a.get_log(&rel_path, target)))
+                q.backend().with_archive(&id, |a| {
+                    a.and_then(|a| a.as_local_out().map(|a| a.get_log(&rel_path, target)))
+                })
             })
         })
         .await

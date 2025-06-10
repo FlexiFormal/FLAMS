@@ -169,7 +169,7 @@ pub mod sparql {
 }
 use sparql::{EvaluationError, Query, QueryResults, SparqlSyntaxError};
 
-use crate::backend::archives::{ArchiveTrait, LocalOut};
+use crate::backend::archives::{ArchiveTrait, HasLocalOut};
 
 use super::archives::Archive;
 

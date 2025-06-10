@@ -15,7 +15,10 @@ use flams_utils::{
 
 use super::ignore_regex::IgnoreSource;
 use crate::{
-    backend::{archives::LocalArchive, BackendChange},
+    backend::{
+        archives::{HasLocalOut, LocalArchive},
+        BackendChange,
+    },
     formats::{BuildTargetId, SourceFormatId},
 };
 
@@ -170,7 +173,7 @@ impl SourceDir {
             _ => None,
         }
     }
-    fn insert(&mut self, f: SourceFile) {
+    pub(super) fn insert(&mut self, f: SourceFile) {
         // TODO this logic overwrites existing entries, which would screw up the states.
         // In practice, that should never happen anyway.
         self.state.merge(f.format, &f.format_state);
@@ -378,7 +381,6 @@ impl FileState {
         relative_path: &str,
         format: SourceFormatId,
     ) -> VecMap<BuildTargetId, Self> {
-        use super::LocalOut;
         let out = LocalArchive::out_dir_of(top).join(relative_path);
         let mut ret = VecMap::new();
         for t in *format.targets() {

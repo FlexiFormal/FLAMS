@@ -11,8 +11,10 @@ use std::{
 
 use crate::{
     backend::archives::{
-        ignore_regex::IgnoreSource, source_files::SourceDir, Archive, RepositoryData,
-        ScrapedArchive,
+        ignore_regex::IgnoreSource,
+        source_files::SourceDir,
+        Archive, //InventoriedArchive,
+        RepositoryData,
     },
     formats::SourceFormat,
 };
@@ -172,7 +174,7 @@ impl<'a> ArchiveIterator<'a> {
         let mut ignore = IgnoreSource::default();
         let mut attributes: VecMap<Box<str>, Box<str>> = VecMap::default();
         let mut had_id: bool = false;
-        let mut index_url: Option<std::sync::Arc<url::Url>> = None;
+        //let mut index_url: Option<std::sync::Arc<url::Url>> = None;
         loop {
             let line = match lines.next() {
                 Some(Err(_)) => continue,
@@ -214,13 +216,13 @@ impl<'a> ArchiveIterator<'a> {
                 "ignore" => {
                     ignore = IgnoreSource::new(v, &top_dir.join("source")); //Some(v.into());
                 }
-                "index" => match url::Url::parse(v) {
+                /*"index" => match url::Url::parse(v) {
                     Ok(u) => index_url = Some(u.into()),
                     Err(e) => {
                         tracing::warn!(target:"archives","Archive {id} has an invalid index URL: {e}");
                         return None;
                     }
-                },
+                },*/
                 _ => {
                     attributes.insert(k.into(), v.into());
                 }
@@ -259,17 +261,20 @@ impl<'a> ArchiveIterator<'a> {
             index,
             dependencies: dependencies.into(),
         };
-        if let Some(url) = index_url {
-            Some(Archive::Scraped(ScrapedArchive {
+        /*if let Some(url) = index_url {
+            Some(Archive::Scraped(InventoriedArchive {
                 out_path: out_path.into(),
                 remote_url: url,
                 ignore,
-                docs: std::sync::Arc::new(RwLock::new(SourceDir::default())),
+                dir: std::sync::Arc::new(RwLock::new(SourceDir::default())),
+                index: std::sync::Arc::new(dashmap::DashMap::default()),
+                mods: std::sync::Arc::new(dashmap::DashMap::default()),
                 #[cfg(feature = "gitlab")]
                 is_managed: std::sync::OnceLock::new(),
                 data,
             }))
-        } else {
+        } else*/
+        {
             Some(Archive::Local(LocalArchive {
                 out_path: out_path.into(),
                 ignore,

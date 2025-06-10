@@ -5,7 +5,7 @@ use flams_ontology::{
 use flams_utils::vecmap::VecMap;
 
 use crate::backend::{
-    archives::{Archive, LocalOut},
+    archives::{Archive, HasLocalOut},
     GlobalBackend,
 };
 

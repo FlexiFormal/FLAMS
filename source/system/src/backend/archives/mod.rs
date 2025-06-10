@@ -1,10 +1,14 @@
 mod ignore_regex;
+//mod inventory;
+//pub use inventory::InventoriedArchive;
 mod iter;
 pub mod manager;
 pub mod source_files;
 #[cfg(feature = "zip")]
 mod zip;
 
+#[cfg(feature = "tokio")]
+use std::future::Future;
 use std::path::{Path, PathBuf};
 
 use either::Either;
@@ -23,7 +27,6 @@ use flams_ontology::{
 use flams_utils::{
     change_listener::ChangeSender,
     prelude::{TreeChild, TreeLike},
-    unwrap,
     vecmap::{VecMap, VecSet},
     CSS,
 };
@@ -37,13 +40,13 @@ use tracing::instrument;
 
 use crate::{
     building::{BuildArtifact, BuildResultArtifact},
-    formats::{BuildTargetId, OMDocResult, SourceFormatId},
+    formats::{BuildArtifactTypeId, BuildTargetId, OMDocResult, SourceFormatId},
 };
 
 use super::{docfile::PreDocFile, rdf::RDFStore, BackendChange};
 
 #[derive(Debug)]
-pub(super) struct RepositoryData {
+pub struct RepositoryData {
     pub(super) uri: ArchiveURI,
     pub(super) attributes: VecMap<Box<str>, Box<str>>,
     pub(super) formats: VecSet<SourceFormatId>,
@@ -52,19 +55,89 @@ pub(super) struct RepositoryData {
     pub(super) index: Box<[ArchiveIndex]>,
 }
 
-trait HasData {
+pub trait ArchiveBase: std::fmt::Debug {
     fn data(&self) -> &RepositoryData;
-}
+    fn files(&self) -> &parking_lot::RwLock<SourceDir>;
+    fn update_sources(&self, sender: &ChangeSender<BackendChange>);
 
-pub trait ArchiveTrait: HasData {
     #[cfg(feature = "gitlab")]
     fn is_managed(&self) -> Option<&git_url_parse::GitUrl>;
-
     #[cfg(not(feature = "gitlab"))]
     #[inline]
     fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
         None
     }
+}
+
+type Fut<T> = Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'static>>>;
+
+pub trait ArchiveTrait: ArchiveBase + Send + Sync {
+    //fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>>;
+    fn load_html_full(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Option<String>;
+
+    #[cfg(feature = "tokio")]
+    fn load_html_full_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Fut<Option<String>>;
+
+    fn load_html_body(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        full: bool,
+    ) -> Option<(Vec<CSS>, String)>;
+
+    #[cfg(feature = "tokio")]
+    fn load_html_body_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        full: bool,
+    ) -> Fut<Option<(Vec<CSS>, String)>>;
+
+    fn load_html_fragment(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> Option<(Vec<CSS>, String)>;
+
+    #[cfg(feature = "tokio")]
+    fn load_html_fragment_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> Fut<Option<(Vec<CSS>, String)>>;
+
+    /// ### Errors
+    fn load_reference_blob(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> eyre::Result<Vec<u8>>;
+
+    fn load_document(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Option<UncheckedDocument>;
+    fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>>;
 
     #[inline]
     #[must_use]
@@ -97,19 +170,142 @@ pub trait ArchiveTrait: HasData {
     }
 }
 
-pub trait LocalOut: ArchiveTrait {
+pub trait HasLocalOut: ArchiveBase {
     #[must_use]
     fn out_dir(&self) -> &Path;
 
+    fn artifact_path(&self, relative_path: &str, id: BuildArtifactTypeId) -> PathBuf {
+        self.out_dir().join(relative_path).join(id.name())
+    }
+
+    fn get_log(&self, relative_path: &str, target: BuildTargetId) -> PathBuf {
+        self.out_dir()
+            .join(relative_path)
+            .join(target.name())
+            .with_extension("log")
+    }
+
     #[inline]
     #[must_use]
-    fn out_dir_of(p: &Path) -> PathBuf {
+    fn out_dir_of(p: &Path) -> PathBuf
+    where
+        Self: Sized,
+    {
         p.join(".flams")
     }
-    #[must_use]
+}
+
+pub trait Buildable: ArchiveTrait {
+    fn save(
+        &self,
+        relative_path: &str,
+        log: Either<String, PathBuf>,
+        from: BuildTargetId,
+        result: Option<BuildResultArtifact>,
+    );
+    fn submit_triples(
+        &self,
+        in_doc: &DocumentURI,
+        rel_path: &str,
+        relational: &RDFStore,
+        load: bool,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
+    );
+}
+
+impl<T: ArchiveBase + Send + Sync> ArchiveTrait for T
+where
+    T: HasLocalOut,
+{
+    fn load_html_full(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Option<String> {
+        let p = get_filepath(self.out_dir(), path, name, language, "ftml")?;
+        OMDocResult::load_html_full(p)
+    }
+
+    #[cfg(feature = "tokio")]
     #[inline]
-    fn path(&self) -> &Path {
-        self.out_dir().parent().unwrap_or_else(|| unreachable!())
+    fn load_html_full_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Fut<Option<String>> {
+        load_html_full_async(self.out_dir(), path, name, language).map(|f| Box::pin(f) as _)
+    }
+
+    fn load_html_body(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        full: bool,
+    ) -> Option<(Vec<CSS>, String)> {
+        get_filepath(self.out_dir(), path, name, language, "ftml")
+            .and_then(|p| OMDocResult::load_html_body(&p, full))
+    }
+
+    #[cfg(feature = "tokio")]
+    #[inline]
+    fn load_html_body_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        full: bool,
+    ) -> Fut<Option<(Vec<CSS>, String)>> {
+        load_html_body_async(self.out_dir(), path, name, language, full).map(|f| Box::pin(f) as _)
+    }
+
+    fn load_html_fragment(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> Option<(Vec<CSS>, String)> {
+        get_filepath(self.out_dir(), path, name, language, "ftml")
+            .and_then(|p| OMDocResult::load_html_fragment(&p, range))
+    }
+
+    #[cfg(feature = "tokio")]
+    #[inline]
+    fn load_html_fragment_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> Fut<Option<(Vec<CSS>, String)>> {
+        load_html_fragment_async(self.out_dir(), path, name, language, range)
+            .map(|f| Box::pin(f) as _)
+    }
+
+    /// ### Errors
+    fn load_reference_blob(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> eyre::Result<Vec<u8>> {
+        let Some(p) = get_filepath(self.out_dir(), path, name, language, "ftml") else {
+            return Err(eyre::eyre!("File not found"));
+        };
+        OMDocResult::load_reference_blob(&p, range)
+    }
+    #[inline]
+    fn load_document(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Option<UncheckedDocument> {
+        load_document(self.out_dir(), path, name, language)
     }
 
     fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>> {
@@ -148,107 +344,9 @@ pub trait LocalOut: ArchiveTrait {
             None
         }
     }
+}
 
-    fn load_html_full(
-        &self,
-        path: Option<&Name>,
-        name: &NameStep,
-        language: Language,
-    ) -> Option<String> {
-        let p = get_filepath(self.out_dir(), path, name, language, "ftml")?;
-        OMDocResult::load_html_full(p)
-    }
-
-    #[cfg(feature = "tokio")]
-    #[inline]
-    fn load_html_full_async<'a>(
-        &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
-        language: Language,
-    ) -> Option<impl std::future::Future<Output = Option<String>> + 'a> {
-        load_html_full_async(self.out_dir(), path, name, language)
-    }
-
-    fn load_html_body(
-        &self,
-        path: Option<&Name>,
-        name: &NameStep,
-        language: Language,
-        full: bool,
-    ) -> Option<(Vec<CSS>, String)> {
-        get_filepath(self.out_dir(), path, name, language, "ftml")
-            .and_then(|p| OMDocResult::load_html_body(&p, full))
-    }
-
-    #[cfg(feature = "tokio")]
-    #[inline]
-    fn load_html_body_async<'a>(
-        &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
-        language: Language,
-        full: bool,
-    ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
-        load_html_body_async(self.out_dir(), path, name, language, full)
-    }
-
-    fn load_html_fragment(
-        &self,
-        path: Option<&Name>,
-        name: &NameStep,
-        language: Language,
-        range: DocumentRange,
-    ) -> Option<(Vec<CSS>, String)> {
-        get_filepath(self.out_dir(), path, name, language, "ftml")
-            .and_then(|p| OMDocResult::load_html_fragment(&p, range))
-    }
-
-    #[cfg(feature = "tokio")]
-    fn load_html_fragment_async<'a>(
-        &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
-        language: Language,
-        range: DocumentRange,
-    ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
-        load_html_fragment_async(self.out_dir(), path, name, language, range)
-    }
-
-    /// ### Errors
-    fn load_reference<T: flams_ontology::Resourcable>(
-        &self,
-        path: Option<&Name>,
-        name: &NameStep,
-        language: Language,
-        range: DocumentRange,
-    ) -> eyre::Result<T> {
-        let Some(p) = get_filepath(self.out_dir(), path, name, language, "ftml") else {
-            return Err(eyre::eyre!("File not found"));
-        };
-        OMDocResult::load_reference(&p, range)
-    }
-
-    /// ### Errors
-    fn load<D: BuildArtifact>(&self, relative_path: &str) -> Result<D, std::io::Error> {
-        let p = self
-            .out_dir()
-            .join(relative_path)
-            .join(D::get_type_id().name());
-        if p.exists() {
-            D::load(&p)
-        } else {
-            Err(std::io::ErrorKind::NotFound.into())
-        }
-    }
-
-    fn get_log(&self, relative_path: &str, target: BuildTargetId) -> PathBuf {
-        self.out_dir()
-            .join(relative_path)
-            .join(target.name())
-            .with_extension("log")
-    }
-
+impl<T: ArchiveBase + HasLocalOut + Send + Sync> Buildable for T {
     #[allow(clippy::cognitive_complexity)]
     fn save(
         &self,
@@ -292,6 +390,61 @@ pub trait LocalOut: ArchiveTrait {
             None | Some(BuildResultArtifact::None) => (),
         }
     }
+    #[inline]
+    fn submit_triples(
+        &self,
+        in_doc: &DocumentURI,
+        rel_path: &str,
+        relational: &RDFStore,
+        load: bool,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
+    ) {
+        submit_triples(self.out_dir(), in_doc, rel_path, relational, load, iter)
+    }
+}
+
+pub trait LocalOut: HasLocalOut {
+    #[must_use]
+    #[inline]
+    fn path(&self) -> &Path {
+        self.out_dir().parent().unwrap_or_else(|| unreachable!())
+    }
+
+    /// ### Errors
+    fn load_reference<T: flams_ontology::Resourcable>(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> eyre::Result<T> {
+        let Some(p) = get_filepath(self.out_dir(), path, name, language, "ftml") else {
+            return Err(eyre::eyre!("File not found"));
+        };
+        OMDocResult::load_reference(&p, range)
+    }
+
+    /// ### Errors
+    fn load<D: BuildArtifact>(&self, relative_path: &str) -> Result<D, std::io::Error> {
+        let p = self.artifact_path(relative_path, D::get_type_id());
+        if p.exists() {
+            D::load(&p)
+        } else {
+            Err(std::io::ErrorKind::NotFound.into())
+        }
+    }
+}
+impl<T: HasLocalOut + ?Sized> LocalOut for T {}
+
+pub trait ExternalArchive: Send + Sync + ArchiveTrait + std::any::Any {
+    #[inline]
+    fn local_out(&self) -> Option<&dyn HasLocalOut> {
+        None
+    }
+    #[inline]
+    fn buildable(&self) -> Option<&dyn Buildable> {
+        None
+    }
 }
 
 #[derive(Debug)]
@@ -303,13 +456,16 @@ pub struct LocalArchive {
     #[cfg(feature = "gitlab")]
     pub(super) is_managed: std::sync::OnceLock<Option<git_url_parse::GitUrl>>,
 }
-impl HasData for LocalArchive {
+impl ArchiveBase for LocalArchive {
     #[inline]
     fn data(&self) -> &RepositoryData {
         &self.data
     }
-}
-impl ArchiveTrait for LocalArchive {
+    #[inline]
+    fn files(&self) -> &parking_lot::RwLock<SourceDir> {
+        &self.file_state
+    }
+
     #[cfg(feature = "gitlab")]
     fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
         let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
@@ -322,8 +478,19 @@ impl ArchiveTrait for LocalArchive {
             })
             .as_ref()
     }
+
+    fn update_sources(&self, sender: &ChangeSender<BackendChange>) {
+        let mut state = self.file_state.write();
+        state.update(
+            self.uri(),
+            self.path(),
+            sender,
+            &self.ignore,
+            self.formats(),
+        );
+    }
 }
-impl LocalOut for LocalArchive {
+impl HasLocalOut for LocalArchive {
     #[inline]
     fn out_dir(&self) -> &Path {
         &self.out_path
@@ -335,6 +502,11 @@ impl LocalArchive {
     #[must_use]
     pub fn source_dir_of(p: &Path) -> PathBuf {
         p.join("source")
+    }
+
+    #[inline]
+    pub fn with_sources<R>(&self, f: impl FnOnce(&SourceDir) -> R) -> R {
+        f(&*self.files().read())
     }
 
     #[inline]
@@ -358,196 +530,29 @@ impl LocalArchive {
     pub const fn dependencies(&self) -> &[ArchiveId] {
         &self.data.dependencies
     }
-
-    #[inline]
-    pub fn with_sources<R>(&self, f: impl FnOnce(&SourceDir) -> R) -> R {
-        f(&self.file_state.read())
-    }
-
-    pub(crate) fn update_sources(&self, sender: &ChangeSender<BackendChange>) {
-        let mut state = self.file_state.write();
-        state.update(
-            self.uri(),
-            self.path(),
-            sender,
-            &self.ignore,
-            self.formats(),
-        );
-    }
 }
 
-pub struct ScrapedArchive {
-    pub(super) data: RepositoryData,
-    pub(super) out_path: std::sync::Arc<Path>,
-    pub(super) remote_url: std::sync::Arc<url::Url>,
-    pub(super) ignore: IgnoreSource,
-    pub(super) docs: std::sync::Arc<parking_lot::RwLock<SourceDir>>,
-    #[cfg(feature = "gitlab")]
-    pub(super) is_managed: std::sync::OnceLock<Option<git_url_parse::GitUrl>>,
-}
-lazy_static::lazy_static! {
-    static ref REL_LINK: regex::Regex = unwrap!(regex::Regex::new(
-        r#"<a\s+[^>]*?href\s*=\s*["']([^"']+)["']"#
-    ).ok());
-}
-
-impl ScrapedArchive {
-    #[inline]
-    #[must_use]
-    pub fn url(&self) -> &std::sync::Arc<url::Url> {
-        &self.remote_url
-    }
-    #[inline]
-    pub fn with_sources<R>(&self, f: impl FnOnce(&SourceDir) -> R) -> R {
-        f(&self.docs.read())
-    }
-
-    pub(crate) fn update_sources(&self, sender: &ChangeSender<BackendChange>) {
-        #[cfg(feature = "tokio")]
-        {
-            let docs = self.docs.clone();
-            let url = self.remote_url.clone();
-            crate::async_bg(async move {
-                let r = match reqwest::get((*url).clone()).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::error!("Error contacting remote: {e}");
-                        return ();
-                    }
-                };
-                let s = match r.text().await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::error!("Error contacting remote: {e}");
-                        return ();
-                    }
-                };
-                for m in REL_LINK.captures_iter(&s) {
-                    let link = unwrap!(m.get(1)).as_str();
-                    if link.starts_with("#")
-                        || link.starts_with("https://")
-                        || link.starts_with("http://")
-                    {
-                        continue;
-                    }
-                    println!("{link}");
-                }
-            });
-        }
-        #[cfg(not(feature = "tokio"))]
-        {
-            let r = match reqwest::blocking::get((*url).clone()) {
-                Ok(r) => r,
-                Err(e) => {
-                    tracing::error!("Error contacting remote: {e}");
-                    return ();
-                }
-            };
-            let s = match r.text() {
-                Ok(r) => r,
-                Err(e) => {
-                    tracing::error!("Error contacting remote: {e}");
-                    return ();
-                }
-            };
-        }
-        /*let mut state = self.file_state.write();
-        state.update(
-            self.uri(),
-            self.path(),
-            sender,
-            &self.ignore,
-            self.formats(),
-        );*/
-    }
-}
-impl HasData for ScrapedArchive {
-    #[inline]
-    fn data(&self) -> &RepositoryData {
-        &self.data
-    }
-}
-impl ArchiveTrait for ScrapedArchive {
-    #[cfg(feature = "gitlab")]
-    fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
-        let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
-        self.is_managed
-            .get_or_init(|| {
-                let Ok(repo) = flams_git::repos::GitRepo::open(self.path()) else {
-                    return None;
-                };
-                gl.host_str().and_then(|s| repo.is_managed(s))
-            })
-            .as_ref()
-    }
-}
-impl LocalOut for ScrapedArchive {
-    #[inline]
-    fn out_dir(&self) -> &Path {
-        &self.out_path
-    }
-}
-
-#[non_exhaustive]
+//#[non_exhaustive]
 pub enum Archive {
     Local(LocalArchive),
-    Scraped(ScrapedArchive),
+    Ext(Box<dyn ExternalArchive>), //Scraped(InventoriedArchive),
 }
 impl std::fmt::Debug for Archive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Local(a) => a.id().fmt(f),
-            Self::Scraped(a) => a.id().fmt(f),
+            Self::Ext(e) => e.fmt(f), //Self::Scraped(a) => a.id().fmt(f),
         }
     }
 }
+
 impl Archive {
     #[inline]
-    pub fn get_log(&self, relative_path: &str, target: BuildTargetId) -> PathBuf {
-        match self {
-            Self::Local(a) => a.get_log(relative_path, target),
-            Self::Scraped(a) => a.get_log(relative_path, target),
-        }
-    }
-
-    #[inline]
-    pub fn with_sources<R>(&self, f: impl FnOnce(&SourceDir) -> R) -> R {
-        match self {
-            Self::Local(a) => a.with_sources(f),
-            Self::Scraped(a) => a.with_sources(f),
-        }
-    }
-
-    #[inline]
-    pub(crate) fn update_sources(&self, sender: &ChangeSender<BackendChange>) {
-        match self {
-            Self::Local(a) => a.update_sources(sender),
-            Self::Scraped(a) => a.update_sources(sender),
-        }
-    }
-
-    pub fn submit_triples(
-        &self,
-        in_doc: &DocumentURI,
-        rel_path: &str,
-        relational: &RDFStore,
-        load: bool,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
-    ) {
-        match self {
-            Self::Local(a) => submit_triples(a.out_dir(), in_doc, rel_path, relational, load, iter),
-            Self::Scraped(a) => {
-                submit_triples(a.out_dir(), in_doc, rel_path, relational, load, iter)
-            }
-        }
-    }
-
-    #[inline]
     #[must_use]
-    const fn data(&self) -> &RepositoryData {
+    fn data(&self) -> &RepositoryData {
         match self {
             Self::Local(a) => &a.data,
-            Self::Scraped(a) => &a.data,
+            Self::Ext(a) => a.data(),
         }
     }
 
@@ -570,13 +575,13 @@ impl Archive {
 
     #[inline]
     #[must_use]
-    pub const fn attributes(&self) -> &VecMap<Box<str>, Box<str>> {
+    pub fn attributes(&self) -> &VecMap<Box<str>, Box<str>> {
         &self.data().attributes
     }
 
     #[inline]
     #[must_use]
-    pub const fn dependencies(&self) -> &[ArchiveId] {
+    pub fn dependencies(&self) -> &[ArchiveId] {
         &self.data().dependencies
     }
 
@@ -589,23 +594,25 @@ impl Archive {
     ) -> Option<(Vec<CSS>, String)> {
         match self {
             Self::Local(a) => a.load_html_body(path, name, language, full),
-            Self::Scraped(a) => a.load_html_body(path, name, language, full),
+            Self::Ext(a) => a.load_html_body(path, name, language, full), //Self::Scraped(a) => a.load_html_body(path, name, language, full),
         }
     }
 
     #[cfg(feature = "tokio")]
-    pub fn load_html_body_async<'a>(
+    pub fn load_html_body_async(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&Name>,
+        name: &NameStep,
         language: Language,
         full: bool,
-    ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
-        let out = match self {
-            Self::Local(a) => a.out_dir(),
-            Self::Scraped(a) => a.out_dir(),
-        };
-        load_html_body_async(out, path, name, language, full)
+    ) -> Option<impl Future<Output = Option<(Vec<CSS>, String)>>> {
+        match self {
+            Self::Local(a) => load_html_body_async(a.out_dir(), path, name, language, full)
+                .map(either::Either::Left),
+            Self::Ext(a) => a
+                .load_html_body_async(path, name, language, full)
+                .map(either::Either::Right), //Self::Scraped(a) => a.out_dir(),
+        }
     }
 
     pub fn load_html_full(
@@ -616,22 +623,25 @@ impl Archive {
     ) -> Option<String> {
         match self {
             Self::Local(a) => a.load_html_full(path, name, language),
-            Self::Scraped(a) => a.load_html_full(path, name, language),
+            Self::Ext(a) => a.load_html_full(path, name, language), //Self::Scraped(a) => a.load_html_full(path, name, language),
         }
     }
 
     #[cfg(feature = "tokio")]
-    pub fn load_html_full_async<'a>(
+    pub fn load_html_full_async(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&Name>,
+        name: &NameStep,
         language: Language,
-    ) -> Option<impl std::future::Future<Output = Option<String>> + 'a> {
-        let out = match self {
-            Self::Local(a) => a.out_dir(),
-            Self::Scraped(a) => a.out_dir(),
-        };
-        load_html_full_async(out, path, name, language)
+    ) -> Option<impl Future<Output = Option<String>>> {
+        match self {
+            Self::Local(a) => {
+                load_html_full_async(a.out_dir(), path, name, language).map(either::Either::Left)
+            } //Self::Scraped(a) => a.out_dir(),
+            Self::Ext(a) => a
+                .load_html_full_async(path, name, language)
+                .map(either::Either::Right),
+        }
     }
 
     pub fn load_html_fragment(
@@ -643,7 +653,7 @@ impl Archive {
     ) -> Option<(Vec<CSS>, String)> {
         match self {
             Self::Local(a) => a.load_html_fragment(path, name, language, range),
-            Self::Scraped(a) => a.load_html_fragment(path, name, language, range),
+            Self::Ext(a) => a.load_html_fragment(path, name, language, range),
         }
     }
 
@@ -656,23 +666,29 @@ impl Archive {
     ) -> eyre::Result<T> {
         match self {
             Self::Local(a) => a.load_reference(path, name, language, range),
-            Self::Scraped(a) => a.load_reference(path, name, language, range),
+            Self::Ext(a) => {
+                let bytes = a.load_reference_blob(path, name, language, range)?;
+                let r = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
+                Ok(r.0)
+            }
         }
     }
 
     #[cfg(feature = "tokio")]
-    pub fn load_html_fragment_async<'a>(
+    pub fn load_html_fragment_async(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&Name>,
+        name: &NameStep,
         language: Language,
         range: DocumentRange,
-    ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
-        let out = match self {
-            Self::Local(a) => a.out_dir(),
-            Self::Scraped(a) => a.out_dir(),
-        };
-        load_html_fragment_async(out, path, name, language, range)
+    ) -> Option<impl Future<Output = Option<(Vec<CSS>, String)>>> {
+        match self {
+            Self::Local(a) => load_html_fragment_async(a.out_dir(), path, name, language, range)
+                .map(either::Either::Left),
+            Self::Ext(a) => a
+                .load_html_fragment_async(path, name, language, range)
+                .map(either::Either::Right),
+        }
     }
 
     fn load_document(
@@ -683,24 +699,67 @@ impl Archive {
     ) -> Option<UncheckedDocument> {
         match self {
             Self::Local(a) => load_document(a.out_dir(), path, name, language),
-            Self::Scraped(a) => load_document(a.out_dir(), path, name, language),
-        }
-    }
-    fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>> {
-        match self {
-            Self::Local(a) => a.load_module(path, name),
-            Self::Scraped(a) => a.load_module(path, name),
+            Self::Ext(a) => a.load_document(path, name, language),
         }
     }
 
-    /// ### Errors
-    #[inline]
-    pub fn load<D: BuildArtifact>(&self, relative_path: &str) -> Result<D, std::io::Error> {
+    fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>> {
         match self {
-            Self::Local(a) => a.load(relative_path),
-            Self::Scraped(a) => a.load(relative_path),
+            Self::Local(a) => a.load_module(path, name),
+            Self::Ext(a) => a.load_module(path, name),
         }
     }
+
+    pub fn as_local_out(&self) -> Option<LocalOrLocalOut> {
+        match self {
+            Self::Local(a) => Some(either::Either::Left(a)),
+            Self::Ext(a) => a.local_out().map(either::Either::Right),
+        }
+    }
+
+    pub fn as_buildable(&self) -> Option<LocalOrBuildable> {
+        match self {
+            Self::Local(a) => Some(either::Either::Left(a)),
+            Self::Ext(a) => a.buildable().map(either::Either::Right),
+        }
+    }
+
+    #[inline]
+    fn update_sources(&self, sender: &ChangeSender<BackendChange>) {
+        match self {
+            Self::Local(a) => a.update_sources(sender),
+            Self::Ext(a) => a.update_sources(sender),
+            //Self::Scraped(a) => a.update_sources(sender),
+        }
+    }
+
+    #[inline]
+    pub fn with_sources<R>(&self, f: impl FnOnce(&SourceDir) -> R) -> R {
+        match self {
+            Self::Local(a) => f(&*a.files().read()),
+            Self::Ext(a) => f(&*a.files().read()),
+        }
+    }
+
+    /*
+
+    #[inline]
+    pub fn get_log(&self, relative_path: &str, target: BuildTargetId) -> Option<PathBuf> {
+        match self {
+            Self::Local(a) => Some(a.get_log(relative_path, target)),
+            Self::Ext(_) => None, //Self::Scraped(a) => a.get_log(relative_path, target),
+        }
+    }
+
+
+     /// ### Errors
+     #[inline]
+     pub fn load<D: BuildArtifact>(&self, relative_path: &str) -> Result<D, std::io::Error> {
+         match self {
+             Self::Local(a) => a.load(relative_path),
+             //Self::Scraped(a) => a.load(relative_path),
+         }
+     }
 
     pub fn save(
         &self,
@@ -711,9 +770,10 @@ impl Archive {
     ) {
         match self {
             Self::Local(a) => a.save(relative_path, log, from, result),
-            Self::Scraped(a) => a.save(relative_path, log, from, result),
+            //Self::Scraped(a) => a.save(relative_path, log, from, result),
         }
     }
+     */
 }
 
 #[derive(Debug, Default)]
@@ -1073,38 +1133,38 @@ fn load_document(
 
 #[cfg(feature = "tokio")]
 #[inline]
-fn load_html_body_async<'a>(
+fn load_html_body_async(
     out: &Path,
-    path: Option<&'a Name>,
-    name: &'a NameStep,
+    path: Option<&Name>,
+    name: &NameStep,
     language: Language,
     full: bool,
-) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + use<'a>> {
+) -> Option<impl Future<Output = Option<(Vec<CSS>, String)>> + 'static> {
     let p = get_filepath(out, path, name, language, "ftml")?;
     Some(OMDocResult::load_html_body_async(p, full))
 }
 
 #[cfg(feature = "tokio")]
 #[inline]
-fn load_html_full_async<'a>(
+fn load_html_full_async(
     out: &Path,
-    path: Option<&'a Name>,
-    name: &'a NameStep,
+    path: Option<&Name>,
+    name: &NameStep,
     language: Language,
-) -> Option<impl std::future::Future<Output = Option<String>> + use<'a>> {
+) -> Option<impl Future<Output = Option<String>> + 'static> {
     let p = get_filepath(out, path, name, language, "ftml")?;
     Some(OMDocResult::load_html_full_async(p))
 }
 
 #[cfg(feature = "tokio")]
 #[inline]
-fn load_html_fragment_async<'a>(
+fn load_html_fragment_async(
     out: &Path,
-    path: Option<&'a Name>,
-    name: &'a NameStep,
+    path: Option<&Name>,
+    name: &NameStep,
     language: Language,
     range: DocumentRange,
-) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
+) -> Option<impl Future<Output = Option<(Vec<CSS>, String)>> + 'static> {
     let p = get_filepath(out, path, name, language, "ftml")?;
     Some(OMDocResult::load_html_fragment_async(p, range))
 }
@@ -1186,5 +1246,205 @@ fn save_omdoc_result(out: &Path, top: &Path, result: &OMDocResult) {
             &mut buf,
             bincode::config::standard()
         ));
+    }
+}
+
+// -------------------------------------------------------------------------------------------
+
+impl<'a, A1: ArchiveBase + ?Sized, A2: ArchiveBase + ?Sized> ArchiveBase
+    for either::Either<&'a A1, &'a A2>
+{
+    #[inline]
+    fn data(&self) -> &RepositoryData {
+        match self {
+            either::Either::Left(a) => a.data(),
+            either::Either::Right(a) => a.data(),
+        }
+    }
+    #[inline]
+    fn files(&self) -> &parking_lot::RwLock<SourceDir> {
+        match self {
+            either::Either::Left(a) => a.files(),
+            either::Either::Right(a) => a.files(),
+        }
+    }
+    #[inline]
+    fn update_sources(&self, sender: &ChangeSender<BackendChange>) {
+        match self {
+            either::Either::Left(a) => a.update_sources(sender),
+            either::Either::Right(a) => a.update_sources(sender),
+        }
+    }
+
+    #[cfg(feature = "gitlab")]
+    #[inline]
+    fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
+        match self {
+            either::Either::Left(a) => a.is_managed(),
+            either::Either::Right(a) => a.is_managed(),
+        }
+    }
+}
+
+impl<'a, A1: ArchiveTrait + ?Sized, A2: ArchiveTrait + ?Sized> ArchiveTrait
+    for either::Either<&'a A1, &'a A2>
+{
+    #[inline]
+    fn load_html_full(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Option<String> {
+        match self {
+            either::Either::Left(a) => a.load_html_full(path, name, language),
+            either::Either::Right(a) => a.load_html_full(path, name, language),
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    #[inline]
+    fn load_html_full_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Fut<Option<String>> {
+        match self {
+            either::Either::Left(a) => a.load_html_full_async(path, name, language),
+            either::Either::Right(a) => a.load_html_full_async(path, name, language),
+        }
+    }
+
+    #[inline]
+    fn load_html_body(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        full: bool,
+    ) -> Option<(Vec<CSS>, String)> {
+        match self {
+            either::Either::Left(a) => a.load_html_body(path, name, language, full),
+            either::Either::Right(a) => a.load_html_body(path, name, language, full),
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    #[inline]
+    fn load_html_body_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        full: bool,
+    ) -> Fut<Option<(Vec<CSS>, String)>> {
+        match self {
+            either::Either::Left(a) => a.load_html_body_async(path, name, language, full),
+            either::Either::Right(a) => a.load_html_body_async(path, name, language, full),
+        }
+    }
+
+    #[inline]
+    fn load_html_fragment(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> Option<(Vec<CSS>, String)> {
+        match self {
+            either::Either::Left(a) => a.load_html_fragment(path, name, language, range),
+            either::Either::Right(a) => a.load_html_fragment(path, name, language, range),
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    #[inline]
+    fn load_html_fragment_async(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> Fut<Option<(Vec<CSS>, String)>> {
+        match self {
+            either::Either::Left(a) => a.load_html_fragment_async(path, name, language, range),
+            either::Either::Right(a) => a.load_html_fragment_async(path, name, language, range),
+        }
+    }
+
+    fn load_reference_blob(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+        range: DocumentRange,
+    ) -> eyre::Result<Vec<u8>> {
+        match self {
+            either::Either::Left(a) => a.load_reference_blob(path, name, language, range),
+            either::Either::Right(a) => a.load_reference_blob(path, name, language, range),
+        }
+    }
+
+    fn load_document(
+        &self,
+        path: Option<&Name>,
+        name: &NameStep,
+        language: Language,
+    ) -> Option<UncheckedDocument> {
+        match self {
+            either::Either::Left(a) => a.load_document(path, name, language),
+            either::Either::Right(a) => a.load_document(path, name, language),
+        }
+    }
+
+    fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>> {
+        match self {
+            either::Either::Left(a) => a.load_module(path, name),
+            either::Either::Right(a) => a.load_module(path, name),
+        }
+    }
+}
+
+pub type LocalOrLocalOut<'a> = either::Either<&'a LocalArchive, &'a dyn HasLocalOut>;
+pub type LocalOrBuildable<'a> = either::Either<&'a LocalArchive, &'a dyn Buildable>;
+
+impl<'a> HasLocalOut for LocalOrLocalOut<'a> {
+    #[inline]
+    fn out_dir(&self) -> &Path {
+        match self {
+            either::Either::Left(a) => a.out_dir(),
+            either::Either::Right(a) => a.out_dir(),
+        }
+    }
+}
+impl<'a> Buildable for LocalOrBuildable<'a> {
+    #[inline]
+    fn save(
+        &self,
+        relative_path: &str,
+        log: Either<String, PathBuf>,
+        from: BuildTargetId,
+        result: Option<BuildResultArtifact>,
+    ) {
+        match self {
+            either::Either::Left(a) => a.save(relative_path, log, from, result),
+            either::Either::Right(a) => a.save(relative_path, log, from, result),
+        }
+    }
+    #[inline]
+    fn submit_triples(
+        &self,
+        in_doc: &DocumentURI,
+        rel_path: &str,
+        relational: &RDFStore,
+        load: bool,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
+    ) {
+        match self {
+            either::Either::Left(a) => a.submit_triples(in_doc, rel_path, relational, load, iter),
+            either::Either::Right(a) => a.submit_triples(in_doc, rel_path, relational, load, iter),
+        }
     }
 }

@@ -20,9 +20,9 @@ global! {SER SourceFormat {name,
 
 #[macro_export]
 macro_rules! source_format {
-  ($name:ident[$($ft:literal),+] [$($tgt:expr)=>*] @ $desc:literal = $deps:expr) => {
+  ($name:ident[$($ft:literal),*] [$($tgt:expr)=>*] @ $desc:literal = $deps:expr) => {
     $crate::formats::global!{NEW {$crate::formats}SourceFormat; $name [
-      $desc,&[$($ft),+],&[$($tgt),*],$deps
+      $desc,&[$($ft),*],&[$($tgt),*],$deps
     ]
     }
   }
@@ -235,6 +235,13 @@ impl OMDocResult {
         path: &Path,
         range: DocumentRange,
     ) -> eyre::Result<T> {
+        let bytes = Self::load_reference_blob(path, range)?;
+        let r = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
+        Ok(r.0)
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    pub(crate) fn load_reference_blob(path: &Path, range: DocumentRange) -> eyre::Result<Vec<u8>> {
         use std::io::{Seek, SeekFrom};
         let file = std::fs::File::open(path)?;
         let mut file = std::io::BufReader::new(file);
@@ -244,8 +251,7 @@ impl OMDocResult {
         let len = range.end - range.start;
         let mut bytes = vec![0; len];
         file.read_exact(&mut bytes)?;
-        let r = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
-        Ok(r.0)
+        Ok(bytes)
     }
 
     #[cfg(feature = "tokio")]

@@ -75,6 +75,7 @@ reqwest = { workspace = true, features = ["blocking"] }
 async-compression = { workspace = true, optional = true }
 astral-tokio-tar = { workspace = true, optional = true }
 regex = { workspace = true }
+dashmap = { workspace = true }
 
 [lints]
 workspace = true

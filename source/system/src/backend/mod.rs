@@ -4,7 +4,7 @@ pub mod docfile;
 pub mod rdf;
 
 use crate::{
-    backend::archives::{ArchiveTrait, LocalOut},
+    backend::archives::{ArchiveTrait, HasLocalOut, LocalOut},
     formats::{HTMLData, SourceFormatId},
     settings::Settings,
 };
@@ -156,7 +156,7 @@ pub trait Backend {
         &self,
         in_doc: &DocumentURI,
         rel_path: &str,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
     ) where
         Self: Sized;
 
@@ -406,7 +406,7 @@ impl Backend for AnyBackend {
         &self,
         in_doc: &DocumentURI,
         rel_path: &str,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
     ) {
         match self {
             Self::Global(b) => b.submit_triples(in_doc, rel_path, iter),
@@ -747,7 +747,7 @@ impl Backend for &'static GlobalBackend {
         &self,
         in_doc: &DocumentURI,
         rel_path: &str,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
     ) {
         GlobalBackend::submit_triples(self, in_doc, rel_path, iter);
     }
@@ -860,10 +860,11 @@ impl Backend for GlobalBackend {
         &self,
         in_doc: &DocumentURI,
         rel_path: &str,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
     ) {
+        use archives::Buildable;
         self.archives.with_archive(in_doc.archive_id(), |a| {
-            if let Some(a) = a {
+            if let Some(a) = a.and_then(|a| a.as_buildable()) {
                 a.submit_triples(in_doc, rel_path, self.triple_store(), true, iter);
             }
         });
@@ -1102,7 +1103,7 @@ impl Backend for TemporaryBackend {
         &self,
         in_doc: &DocumentURI,
         rel_path: &str,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
     ) where
         Self: Sized,
     {
@@ -1471,10 +1472,11 @@ impl Backend for SandboxedBackend {
         &self,
         in_doc: &DocumentURI,
         rel_path: &str,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
+        iter: std::collections::hash_set::IntoIter<flams_ontology::rdf::Triple>,
     ) {
+        use archives::Buildable;
         self.0.manager.with_archive(in_doc.archive_id(), |a| {
-            if let Some(a) = a {
+            if let Some(a) = a.and_then(|a| a.as_buildable()) {
                 a.submit_triples(
                     in_doc,
                     rel_path,

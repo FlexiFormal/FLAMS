@@ -754,7 +754,7 @@ impl NarrationTrait for Problem<Checked> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum CognitiveDimension {
@@ -764,7 +764,21 @@ pub enum CognitiveDimension {
     Analyze,
     Evaluate,
     Create,
+    Discover,
 }
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for CognitiveDimension {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let s = String::deserialize(deserializer)?;
+        s.parse()
+            .map_err(|()| D::Error::custom("Invalid value for CognitiveDimension: {s}"))
+    }
+}
+
 impl CognitiveDimension {
     #[cfg(feature = "rdf")]
     #[must_use]
@@ -778,6 +792,7 @@ impl CognitiveDimension {
             Analyze => ulo2::ANALYZE,
             Evaluate => ulo2::EVALUATE,
             Create => ulo2::CREATE,
+            Discover => ulo2::DISCOVER,
         }
     }
 }
@@ -794,6 +809,7 @@ impl Display for CognitiveDimension {
                 Analyze => "analyze",
                 Evaluate => "evaluate",
                 Create => "create",
+                Discover => "discover",
             }
         )
     }
@@ -802,15 +818,31 @@ impl FromStr for CognitiveDimension {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use CognitiveDimension::*;
-        Ok(match s {
-            "remember" => Remember,
-            "understand" => Understand,
-            "apply" => Apply,
-            "analyze" | "analyse" => Analyze,
-            "evaluate" => Evaluate,
-            "create" => Create,
-            _ => return Err(()),
-        })
+        if s.eq_ignore_ascii_case("remember") {
+            return Ok(Remember);
+        }
+        if s.eq_ignore_ascii_case("understand") {
+            return Ok(Understand);
+        }
+        if s.eq_ignore_ascii_case("apply") {
+            return Ok(Apply);
+        }
+        if s.eq_ignore_ascii_case("analyze") {
+            return Ok(Analyze);
+        }
+        if s.eq_ignore_ascii_case("analyse") {
+            return Ok(Analyze);
+        }
+        if s.eq_ignore_ascii_case("evaluate") {
+            return Ok(Evaluate);
+        }
+        if s.eq_ignore_ascii_case("create") {
+            return Ok(Create);
+        }
+        if s.eq_ignore_ascii_case("discover") {
+            return Ok(Discover);
+        }
+        Err(())
     }
 }
 

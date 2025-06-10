@@ -241,12 +241,13 @@ pub async fn index() -> Result<(Vec<Institution>, Vec<ArchiveIndex>), ServerFnEr
 mod server {
     use flams_ontology::{
         archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
+        file_states::FileStateSummary,
         uris::{ArchiveId, ArchiveURI, ArchiveURITrait, URIOrRefTrait},
     };
     use flams_router_base::LoginState;
     use flams_system::backend::{
         Backend, GlobalBackend,
-        archives::{Archive, ArchiveOrGroup as AoG, ArchiveTrait},
+        archives::{Archive, ArchiveBase, ArchiveOrGroup as AoG, ArchiveTrait},
     };
     use flams_utils::vecmap::VecSet;
     use flams_web_utils::blocking_server_fn;
@@ -284,19 +285,23 @@ mod server {
                                 (None, None)
                             } else {
                                 tree.get(id)
-                                    .map(|a| {
-                                        if let Archive::Local(a) = a {
-                                            (
-                                                if allowed {
-                                                    Some(a.state_summary())
-                                                } else {
-                                                    None
-                                                },
-                                                a.is_managed().map(ToString::to_string),
-                                            )
-                                        } else {
-                                            (None, None)
-                                        }
+                                    .map(|a| match a {
+                                        Archive::Local(a) => (
+                                            if allowed {
+                                                Some(a.state_summary())
+                                            } else {
+                                                None
+                                            },
+                                            a.is_managed().map(ToString::to_string),
+                                        ),
+                                        Archive::Ext(a) => (
+                                            if allowed {
+                                                Some(FileStateSummary::default())
+                                            } else {
+                                                None
+                                            },
+                                            a.is_managed().map(ToString::to_string),
+                                        ),
                                     })
                                     .unwrap_or_default()
                             };
@@ -339,7 +344,7 @@ mod server {
                     | LoginState::NoAccounts
                     | LoginState::User { is_admin: true, .. }
             );
-            flams_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
+            flams_system::backend::GlobalBackend::get().with_archive(&archive, |a| {
                 let Some(a) = a else {
                     return Err(format!("Archive {archive} not found").into());
                 };

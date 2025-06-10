@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     backend::{
-        archives::{source_files::SourceEntry, ArchiveOrGroup},
+        archives::{source_files::SourceEntry, ArchiveOrGroup, Buildable},
         AnyBackend, Backend,
     },
     formats::{BuildTargetId, FormatOrTargets},
@@ -319,7 +319,9 @@ impl Queue {
                 self.0
                     .backend
                     .with_archive(task.archive().archive_id(), |a| {
-                        let Some(a) = a else { return };
+                        let Some(a) = a.and_then(|a| a.as_buildable()) else {
+                            return;
+                        };
                         a.save(task.rel_path(), log, target, None);
                     });
                 self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
@@ -351,7 +353,9 @@ impl Queue {
                 self.0
                     .backend
                     .with_archive(task.archive().archive_id(), |a| {
-                        let Some(a) = a else { return };
+                        let Some(a) = a.and_then(|a| a.as_buildable()) else {
+                            return;
+                        };
                         a.save(task.rel_path(), log, target, Some(data));
                     });
 

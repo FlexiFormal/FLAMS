@@ -9,7 +9,7 @@ use crate::{
     backend::{
         archives::{
             source_files::{FileState, SourceFile},
-            Archive,
+            Archive, ArchiveTrait,
         },
         AnyBackend,
     },
@@ -195,6 +195,9 @@ impl Queue {
         stale_only: bool,
         files: I,
     ) -> usize {
+        let Archive::Local(archive) = archive else {
+            return 0;
+        };
         let targets = match target {
             FormatOrTargets::Format(f) => f.targets(),
             FormatOrTargets::Targets(t) => t,
@@ -233,14 +236,13 @@ impl Queue {
                         id: BuildTaskId(id),
                         archive: archive.uri().owned(),
                         steps,
-                        source: match archive {
-                            Archive::Local(archive) => {
+                        source:/* match archive {
+                            Archive::Local(archive) => { */
                                 Either::Left(archive.source_dir().join(&*f.relative_path))
-                            }
-                            Archive::Scraped(archive) => {
-                                Either::Right(format!("{}/{}", archive.url(), f.relative_path))
-                            }
-                        },
+                                /*}*/ /*Archive::Scraped(archive) => {
+                                  Either::Right(format!("{}/{}", archive.url(), f.relative_path))
+                              }*/
+                              ,//},
                         rel_path: f.relative_path.clone(),
                     });
                     e.insert(BuildTask(task_i.clone()));
