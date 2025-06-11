@@ -96,7 +96,7 @@ flams-system = { workspace = true, features = [
 ], optional = true }
 flams-lsp = { workspace = true, optional = true, features = ["ws"] }
 flams-stex = { workspace = true, optional = true, features = ["serde"] }
-flams-ftml = { workspace = true, optional = true }
+flams-ftml = { workspace = true, optional = true, features = ["tokio", "git"] }
 flams-database = { workspace = true }
 
 # common

@@ -22,7 +22,7 @@ use settings::SettingsSpec;
 #[cfg(feature = "tokio")]
 static RT: std::sync::OnceLock<tokio::runtime::Handle> = std::sync::OnceLock::new();
 #[cfg(feature = "tokio")]
-pub(crate) fn async_bg<F: Future<Output = ()> + Send + 'static>(f: F) {
+pub fn async_bg<F: Future<Output = ()> + Send + 'static>(f: F) {
     unwrap!(RT.get()).spawn(f);
 }
 

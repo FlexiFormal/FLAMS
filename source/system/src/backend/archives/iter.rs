@@ -16,7 +16,7 @@ use crate::{
         Archive, //InventoriedArchive,
         RepositoryData,
     },
-    formats::SourceFormat,
+    formats::{ArchiveKind, SourceFormat},
 };
 
 use super::{ArchiveIndex, LocalArchive};
@@ -169,11 +169,12 @@ impl<'a> ArchiveIterator<'a> {
         let mut lines = reader.lines();
 
         let mut formats = VecSet::default();
-        let mut dom_uri: String = String::new();
+        let mut url_base: String = String::new();
         let mut dependencies = Vec::new();
         let mut ignore = IgnoreSource::default();
         let mut attributes: VecMap<Box<str>, Box<str>> = VecMap::default();
         let mut had_id: bool = false;
+        let mut kind = None;
         //let mut index_url: Option<std::sync::Arc<url::Url>> = None;
         loop {
             let line = match lines.next() {
@@ -202,8 +203,7 @@ impl<'a> ArchiveIterator<'a> {
                         .filter_map(SourceFormat::get_from_str)
                         .collect();
                 }
-                "url-base" => dom_uri = v.into(),
-                //"ns" => dom_uri = v.into(),
+                "url-base" => url_base = v.into(),
                 "dependencies" => {
                     for d in v
                         .split(',')
@@ -215,6 +215,14 @@ impl<'a> ArchiveIterator<'a> {
                 }
                 "ignore" => {
                     ignore = IgnoreSource::new(v, &top_dir.join("source")); //Some(v.into());
+                }
+                "kind" => {
+                    if let Some(k) = ArchiveKind::get_from_str(v) {
+                        kind = Some(k);
+                    } else {
+                        tracing::error!("Unknown archive kind {v}");
+                        return None;
+                    }
                 }
                 /*"index" => match url::Url::parse(v) {
                     Ok(u) => index_url = Some(u.into()),
@@ -232,19 +240,16 @@ impl<'a> ArchiveIterator<'a> {
             tracing::warn!(target:"archives","Archive {id} has no id");
             return None;
         }
-        /*if dom_uri.ends_with(id) {
-            dom_uri.split_off(id.len() + 1);
-        }*/
         let id = ArchiveId::new(id);
-        if formats.is_empty() && !id.is_meta() {
+        if formats.is_empty() && !id.is_meta() && kind.is_none() {
             tracing::warn!(target:"archives","No formats found for archive {}",id);
             return None;
         }
-        if dom_uri.is_empty() {
+        if url_base.is_empty() {
             tracing::warn!(target:"archives","Archive {} has no URL base", id);
             return None;
         }
-        let dom_uri: BaseURI = match dom_uri.parse() {
+        let dom_uri: BaseURI = match url_base.parse() {
             Ok(b) => b,
             Err(e) => {
                 tracing::warn!(target:"archives","Archive {} has an invalid URL base: {}", id, e);
@@ -261,6 +266,9 @@ impl<'a> ArchiveIterator<'a> {
             index,
             dependencies: dependencies.into(),
         };
+        if let Some(kind) = kind {
+            kind.0.make_new(data, top_dir).map(Archive::Ext)
+        } else
         /*if let Some(url) = index_url {
             Some(Archive::Scraped(InventoriedArchive {
                 out_path: out_path.into(),

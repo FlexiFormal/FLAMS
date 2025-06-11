@@ -16,7 +16,7 @@ pub struct UncheckedSection {
 }
     */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Section<State: CheckingState> {
     pub range: DocumentRange,
     pub uri: DocumentElementURI,

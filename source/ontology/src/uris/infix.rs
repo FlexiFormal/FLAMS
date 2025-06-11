@@ -6,7 +6,7 @@ use super::name::{InvalidURICharacter, INVALID_CHARS};
 use super::{DocumentElementURI, DocumentURI, NarrativeURI, PathURI};
 
 impl<'a> Div<&'a str> for Name {
-    type Output = Result<Self,InvalidURICharacter>;
+    type Output = Result<Self, InvalidURICharacter>;
     fn div(self, rhs: &'a str) -> Self::Output {
         if rhs.contains(INVALID_CHARS) {
             return Err(InvalidURICharacter);
@@ -24,7 +24,7 @@ impl<'a> Div<&'a str> for Name {
     }
 }
 impl Div<String> for Name {
-    type Output = Result<Self,InvalidURICharacter>;
+    type Output = Result<Self, InvalidURICharacter>;
     #[inline]
     fn div(self, rhs: String) -> Self::Output {
         self / rhs.as_str()
@@ -70,12 +70,12 @@ impl BitOr<Name> for ArchiveURI {
     fn bitor(self, rhs: Name) -> Self::Output {
         ModuleURI {
             path: self.into(),
-            name: rhs
+            name: rhs,
         }
     }
 }
 impl BitOr<&str> for ArchiveURI {
-    type Output = Result<ModuleURI,InvalidURICharacter>;
+    type Output = Result<ModuleURI, InvalidURICharacter>;
     #[inline]
     fn bitor(self, rhs: &str) -> Self::Output {
         Ok(<Self as BitOr<Name>>::bitor(self, rhs.parse()?))
@@ -93,7 +93,7 @@ impl BitOr<Name> for ModuleURI {
     }
 }
 impl BitOr<&str> for ModuleURI {
-    type Output = Result<SymbolURI,InvalidURICharacter>;
+    type Output = Result<SymbolURI, InvalidURICharacter>;
     #[inline]
     fn bitor(self, rhs: &str) -> Self::Output {
         Ok(<Self as BitOr<Name>>::bitor(self, rhs.parse()?))
@@ -111,7 +111,7 @@ impl BitAnd<Name> for ArchiveURI {
     }
 }
 impl BitAnd<&str> for ArchiveURI {
-    type Output = Result<DocumentURI,InvalidURICharacter>;
+    type Output = Result<DocumentURI, InvalidURICharacter>;
     #[inline]
     fn bitand(self, rhs: &str) -> Self::Output {
         Ok(<Self as BitAnd<Name>>::bitand(self, rhs.parse()?))
@@ -130,7 +130,7 @@ impl Rem<Name> for ArchiveURI {
 }
 
 impl Rem<&str> for ArchiveURI {
-    type Output = Result<PathURI,InvalidURICharacter>;
+    type Output = Result<PathURI, InvalidURICharacter>;
     #[inline]
     fn rem(self, rhs: &str) -> Self::Output {
         Ok(PathURI {
@@ -151,11 +151,12 @@ impl Div<Name> for PathURI {
             archive: self.archive,
             path: Some(if let Some(p) = self.path {
                 p / rhs
-            } else {rhs})
+            } else {
+                rhs
+            }),
         }
     }
 }
-
 
 impl Div<&Name> for PathURI {
     type Output = Self;
@@ -165,7 +166,7 @@ impl Div<&Name> for PathURI {
 }
 
 impl Div<&str> for PathURI {
-    type Output = Result<Self,InvalidURICharacter>;
+    type Output = Result<Self, InvalidURICharacter>;
     fn div(self, rhs: &str) -> Self::Output {
         if rhs.is_empty() {
             Ok(self)
@@ -181,12 +182,22 @@ impl BitOr<Name> for PathURI {
     fn bitor(self, rhs: Name) -> Self::Output {
         ModuleURI {
             path: self,
-            name: rhs
+            name: rhs,
+        }
+    }
+}
+impl BitOr<NameStep> for PathURI {
+    type Output = ModuleURI;
+    #[inline]
+    fn bitor(self, rhs: NameStep) -> Self::Output {
+        ModuleURI {
+            path: self,
+            name: Name(smallvec::smallvec!(rhs)),
         }
     }
 }
 impl BitOr<&str> for PathURI {
-    type Output = Result<ModuleURI,InvalidURICharacter>;
+    type Output = Result<ModuleURI, InvalidURICharacter>;
     #[inline]
     fn bitor(self, rhs: &str) -> Self::Output {
         Ok(<Self as BitOr<Name>>::bitor(self, rhs.parse()?))
@@ -205,10 +216,13 @@ impl BitAnd<(Name, Language)> for ArchiveURI {
     }
 }
 impl BitAnd<(&str, Language)> for ArchiveURI {
-    type Output = Result<DocumentURI,InvalidURICharacter>;
+    type Output = Result<DocumentURI, InvalidURICharacter>;
     #[inline]
     fn bitand(self, rhs: (&str, Language)) -> Self::Output {
-        Ok(<Self as BitAnd<(Name, Language)>>::bitand(self, (rhs.0.parse()?, rhs.1)))
+        Ok(<Self as BitAnd<(Name, Language)>>::bitand(
+            self,
+            (rhs.0.parse()?, rhs.1),
+        ))
     }
 }
 impl BitAnd<(Name, Language)> for PathURI {
@@ -222,11 +236,25 @@ impl BitAnd<(Name, Language)> for PathURI {
         }
     }
 }
+impl BitAnd<(NameStep, Language)> for PathURI {
+    type Output = DocumentURI;
+    #[inline]
+    fn bitand(self, rhs: (NameStep, Language)) -> Self::Output {
+        DocumentURI {
+            path: self,
+            name: Name(smallvec::smallvec!(rhs.0)),
+            language: rhs.1,
+        }
+    }
+}
 impl BitAnd<(&str, Language)> for PathURI {
-    type Output = Result<DocumentURI,InvalidURICharacter>;
+    type Output = Result<DocumentURI, InvalidURICharacter>;
     #[inline]
     fn bitand(self, rhs: (&str, Language)) -> Self::Output {
-        Ok(<Self as BitAnd<(Name, Language)>>::bitand(self, (rhs.0.parse()?, rhs.1)))
+        Ok(<Self as BitAnd<(Name, Language)>>::bitand(
+            self,
+            (rhs.0.parse()?, rhs.1),
+        ))
     }
 }
 
@@ -234,20 +262,20 @@ impl BitAnd<(&str, Language)> for PathURI {
 impl BitAnd<Name> for NarrativeURI {
     type Output = DocumentElementURI;
     #[inline]
-    fn bitand(self,rhs:Name) -> Self::Output {
+    fn bitand(self, rhs: Name) -> Self::Output {
         match self {
             Self::Document(d) => DocumentElementURI {
                 document: d,
-                name: rhs
+                name: rhs,
             },
-            Self::Element(e) => e / rhs
+            Self::Element(e) => e / rhs,
         }
     }
 }
 impl BitAnd<&str> for NarrativeURI {
-    type Output = Result<DocumentElementURI,InvalidURICharacter>;
+    type Output = Result<DocumentElementURI, InvalidURICharacter>;
     #[inline]
-    fn bitand(self,rhs:&str) -> Self::Output {
+    fn bitand(self, rhs: &str) -> Self::Output {
         Ok(self & rhs.parse::<Name>()?)
     }
 }
@@ -256,17 +284,17 @@ impl BitAnd<&str> for NarrativeURI {
 impl BitAnd<Name> for DocumentURI {
     type Output = DocumentElementURI;
     #[inline]
-    fn bitand(self,rhs:Name) -> Self::Output {
+    fn bitand(self, rhs: Name) -> Self::Output {
         DocumentElementURI {
             document: self,
-            name: rhs
+            name: rhs,
         }
     }
 }
 impl BitAnd<&str> for DocumentURI {
-    type Output = Result<DocumentElementURI,InvalidURICharacter>;
+    type Output = Result<DocumentElementURI, InvalidURICharacter>;
     #[inline]
-    fn bitand(self,rhs:&str) -> Self::Output {
+    fn bitand(self, rhs: &str) -> Self::Output {
         Ok(self & rhs.parse::<Name>()?)
     }
 }
@@ -287,18 +315,17 @@ impl Not for ModuleURI {
     }
 }
 
-
 impl<'a> Div<&'a str> for ModuleURI {
-    type Output = Result<Self,InvalidURICharacter>;
+    type Output = Result<Self, InvalidURICharacter>;
     fn div(self, rhs: &'a str) -> Self::Output {
         Ok(Self {
-            path:self.path,
-            name:self.name / rhs.parse::<Name>()?
+            path: self.path,
+            name: self.name / rhs.parse::<Name>()?,
         })
     }
 }
 impl Div<String> for ModuleURI {
-    type Output = Result<Self,InvalidURICharacter>;
+    type Output = Result<Self, InvalidURICharacter>;
     #[inline]
     fn div(self, rhs: String) -> Self::Output {
         self / rhs.as_str()
@@ -321,18 +348,17 @@ impl Div<Name> for ModuleURI {
     }
 }
 
-
 impl<'a> Div<&'a str> for DocumentElementURI {
-    type Output = Result<Self,InvalidURICharacter>;
+    type Output = Result<Self, InvalidURICharacter>;
     fn div(self, rhs: &'a str) -> Self::Output {
         Ok(Self {
-            document:self.document,
-            name:(self.name / rhs)?
+            document: self.document,
+            name: (self.name / rhs)?,
         })
     }
 }
 impl Div<String> for DocumentElementURI {
-    type Output = Result<Self,InvalidURICharacter>;
+    type Output = Result<Self, InvalidURICharacter>;
     #[inline]
     fn div(self, rhs: String) -> Self::Output {
         self / rhs.as_str()

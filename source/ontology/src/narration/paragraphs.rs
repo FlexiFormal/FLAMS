@@ -21,7 +21,7 @@ pub enum ParagraphFormatting {
     Collapsed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LogicalParagraph<State: CheckingState> {
     pub kind: ParagraphKind,
     pub uri: DocumentElementURI,

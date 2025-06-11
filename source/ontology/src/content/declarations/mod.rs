@@ -3,7 +3,7 @@ pub mod structures;
 pub mod symbols;
 
 use super::modules::NestedModule;
-use crate::{ Checked, CheckingState};
+use crate::{Checked, CheckingState, Unchecked};
 use morphisms::Morphism;
 use structures::{Extension, MathStructure};
 use symbols::Symbol;
@@ -11,18 +11,30 @@ use symbols::Symbol;
 pub(super) mod private {
     pub trait Sealed {}
 }
-pub trait DeclarationTrait: private::Sealed+std::fmt::Debug {
+pub trait DeclarationTrait: private::Sealed + std::fmt::Debug {
     fn from_declaration(decl: &Declaration) -> Option<&Self>;
 }
 
 #[derive(Debug)]
-pub enum OpenDeclaration<State:CheckingState> {
+pub enum OpenDeclaration<State: CheckingState> {
     NestedModule(NestedModule<State>),
     Import(State::ModuleLike),
     Symbol(Symbol),
     MathStructure(MathStructure<State>),
     Morphism(Morphism<State>),
     Extension(Extension<State>),
+}
+impl Clone for OpenDeclaration<Unchecked> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::NestedModule(nm) => Self::NestedModule(nm.clone()),
+            Self::Import(ml) => Self::Import(ml.clone()),
+            Self::Symbol(s) => Self::Symbol(s.clone()),
+            Self::MathStructure(s) => Self::MathStructure(s.clone()),
+            Self::Morphism(m) => Self::Morphism(m.clone()),
+            Self::Extension(e) => Self::Extension(e.clone()),
+        }
+    }
 }
 
 pub type Declaration = OpenDeclaration<Checked>;
@@ -52,8 +64,8 @@ crate::serde_impl! {
         match slf {
             Self::NestedModule(nm) => {
                 ser.serialize_newtype_variant(
-                    "OpenDeclaration", 
-                    0, 
+                    "OpenDeclaration",
+                    0,
                     "NestedModule", nm
                 )
             }
@@ -78,12 +90,12 @@ crate::serde_impl! {
                     }
                     _ => todo!()
                 }
-                
+
             }
         }
         de.deserialize_enum(
-            "OpenDeclaration", 
-            &["NestedModule","Import","Symbol","MathStructure","Morphism","Extension"], 
+            "OpenDeclaration",
+            &["NestedModule","Import","Symbol","MathStructure","Morphism","Extension"],
             Visitor
         )
     }

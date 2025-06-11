@@ -173,7 +173,7 @@ impl SourceDir {
             _ => None,
         }
     }
-    pub(super) fn insert(&mut self, f: SourceFile) {
+    pub fn insert(&mut self, f: SourceFile) {
         // TODO this logic overwrites existing entries, which would screw up the states.
         // In practice, that should never happen anyway.
         self.state.merge(f.format, &f.format_state);

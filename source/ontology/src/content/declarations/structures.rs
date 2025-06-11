@@ -1,20 +1,21 @@
 use crate::{
-    content::ModuleTrait, uris::{ContentURIRef, SymbolURI}, Checked, CheckingState, Resolvable
+    content::ModuleTrait,
+    uris::{ContentURIRef, SymbolURI},
+    Checked, CheckingState, Resolvable,
 };
 
 use super::{Declaration, DeclarationTrait, OpenDeclaration};
 
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 //#[cfg_attr(feature="serde", derive(serde::Serialize))]
-pub struct MathStructure<State:CheckingState> {
+pub struct MathStructure<State: CheckingState> {
     pub uri: SymbolURI,
     pub elements: State::Seq<OpenDeclaration<State>>,
     pub macroname: Option<Box<str>>,
 }
 impl Resolvable for MathStructure<Checked> {
     type From = SymbolURI;
-    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+    fn id(&self) -> std::borrow::Cow<'_, Self::From> {
         std::borrow::Cow::Borrowed(&self.uri)
     }
 }
@@ -39,16 +40,15 @@ impl ModuleTrait for MathStructure<Checked> {
     }
 }
 
-
-#[derive(Debug)]
-pub struct Extension<State:CheckingState> {
+#[derive(Debug, Clone)]
+pub struct Extension<State: CheckingState> {
     pub uri: SymbolURI,
     pub target: State::Decl<MathStructure<Checked>>,
     pub elements: State::Seq<OpenDeclaration<State>>,
 }
 impl Resolvable for Extension<Checked> {
     type From = SymbolURI;
-    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+    fn id(&self) -> std::borrow::Cow<'_, Self::From> {
         std::borrow::Cow::Borrowed(&self.uri)
     }
 }
@@ -73,10 +73,10 @@ impl ModuleTrait for Extension<Checked> {
     }
 }
 
-crate::serde_impl!{mod serde_impl_struct =
+crate::serde_impl! {mod serde_impl_struct =
     struct MathStructure[uri,elements,macroname]
 }
-crate::serde_impl!{mod serde_impl_ext =
+crate::serde_impl! {mod serde_impl_ext =
     struct Extension[uri,target,elements]
 }
 
@@ -89,7 +89,7 @@ crate::serde_impl!{
         s.serialize_field("elements", &slf.elements);
         s.serialize_field("macroname", &slf.macroname);
         s.end()
-    } 
+    }
     de => {
         #[derive(serde::Deserialize)]
         #[allow(non_camel_case_types)]

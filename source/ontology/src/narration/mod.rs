@@ -284,6 +284,123 @@ pub enum DocumentElement<State: CheckingState> {
     Problem(Problem<State>),
     SkipSection(State::Seq<DocumentElement<State>>),
 }
+impl Clone for DocumentElement<Unchecked> {
+    fn clone(&self) -> Self {
+        match self {
+            DocumentElement::Definiendum { range, uri } => DocumentElement::Definiendum {
+                range: range.clone(),
+                uri: uri.clone(),
+            },
+            DocumentElement::SymbolReference {
+                range,
+                uri,
+                notation,
+            } => DocumentElement::SymbolReference {
+                range: range.clone(),
+                uri: uri.clone(),
+                notation: notation.clone(),
+            },
+            DocumentElement::VariableReference {
+                range,
+                uri,
+                notation,
+            } => DocumentElement::VariableReference {
+                range: range.clone(),
+                uri: uri.clone(),
+                notation: notation.clone(),
+            },
+            DocumentElement::TopTerm { uri, term } => DocumentElement::TopTerm {
+                uri: uri.clone(),
+                term: term.clone(),
+            },
+            DocumentElement::UseModule(module) => DocumentElement::UseModule(module.clone()),
+            DocumentElement::ImportModule(module) => DocumentElement::ImportModule(module.clone()),
+            DocumentElement::Paragraph(paragraph) => DocumentElement::Paragraph(paragraph.clone()),
+            DocumentElement::Problem(problem) => DocumentElement::Problem(problem.clone()),
+            DocumentElement::SkipSection(children) => {
+                DocumentElement::SkipSection(children.clone())
+            }
+            DocumentElement::SetSectionLevel(level) => {
+                DocumentElement::SetSectionLevel(level.clone())
+            }
+            DocumentElement::Section(sec) => DocumentElement::Section(sec.clone()),
+            DocumentElement::Module {
+                range,
+                module,
+                children,
+            } => DocumentElement::Module {
+                range: range.clone(),
+                module: module.clone(),
+                children: children.clone(),
+            },
+            DocumentElement::Slide {
+                range,
+                uri,
+                children,
+            } => DocumentElement::Slide {
+                range: range.clone(),
+                uri: uri.clone(),
+                children: children.clone(),
+            },
+            DocumentElement::Morphism {
+                range,
+                morphism,
+                children,
+            } => DocumentElement::Morphism {
+                range: range.clone(),
+                morphism: morphism.clone(),
+                children: children.clone(),
+            },
+            DocumentElement::MathStructure {
+                range,
+                structure,
+                children,
+            } => DocumentElement::MathStructure {
+                range: range.clone(),
+                structure: structure.clone(),
+                children: children.clone(),
+            },
+            DocumentElement::Extension {
+                range,
+                extension,
+                target,
+                children,
+            } => DocumentElement::Extension {
+                range: range.clone(),
+                extension: extension.clone(),
+                target: target.clone(),
+                children: children.clone(),
+            },
+            DocumentElement::DocumentReference { id, range, target } => {
+                DocumentElement::DocumentReference {
+                    id: id.clone(),
+                    range: range.clone(),
+                    target: target.clone(),
+                }
+            }
+            DocumentElement::SymbolDeclaration(s) => DocumentElement::SymbolDeclaration(s.clone()),
+            DocumentElement::Notation {
+                symbol,
+                id,
+                notation,
+            } => DocumentElement::Notation {
+                symbol: symbol.clone(),
+                id: id.clone(),
+                notation: notation.clone(),
+            },
+            DocumentElement::Variable(v) => DocumentElement::Variable(v.clone()),
+            DocumentElement::VariableNotation {
+                variable,
+                id,
+                notation,
+            } => DocumentElement::VariableNotation {
+                variable: variable.clone(),
+                id: id.clone(),
+                notation: notation.clone(),
+            },
+        }
+    }
+}
 
 crate::serde_impl! {
     enum DocumentElement {

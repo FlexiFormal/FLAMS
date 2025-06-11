@@ -71,11 +71,11 @@ eyre = { workspace = true }
 #flate2 = {workspace=true,optional=true}
 #tar = {workspace=true,optional=true}
 futures = { workspace = true, optional = true }
-reqwest = { workspace = true, features = ["blocking"] }
+reqwest = { workspace = true }
 async-compression = { workspace = true, optional = true }
 astral-tokio-tar = { workspace = true, optional = true }
-regex = { workspace = true }
-dashmap = { workspace = true }
+#regex = { workspace = true }
+#dashmap = { workspace = true }
 
 [lints]
 workspace = true

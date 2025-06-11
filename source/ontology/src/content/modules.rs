@@ -10,7 +10,7 @@ use crate::{
 };
 use triomphe::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OpenModule<State: CheckingState> {
     pub uri: ModuleURI,
     pub meta: Option<State::Module>,
@@ -107,7 +107,7 @@ mod serde_impl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NestedModule<State: CheckingState> {
     pub uri: SymbolURI,
     pub elements: State::Seq<OpenDeclaration<State>>,

@@ -29,6 +29,33 @@ pub struct Problem<State: CheckingState> {
     pub preconditions: State::Seq<(CognitiveDimension, SymbolURI)>,
     pub objectives: State::Seq<(CognitiveDimension, SymbolURI)>,
 }
+impl<State: CheckingState> Clone for Problem<State>
+where
+    State::Seq<(CognitiveDimension, SymbolURI)>: Clone,
+    State::Seq<LazyDocRef<GradingNote>>: Clone,
+    State::Seq<DocumentRange>: Clone,
+    State::Seq<LazyDocRef<Box<str>>>: Clone,
+    State::Seq<DocumentElement<State>>: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            sub_problem: self.sub_problem.clone(),
+            uri: self.uri.clone(),
+            range: self.range.clone(),
+            autogradable: self.autogradable,
+            points: self.points,
+            solutions: self.solutions.clone(),
+            gnotes: self.gnotes.clone(),
+            hints: self.hints.clone(),
+            notes: self.notes.clone(),
+            title: self.title.clone(),
+            children: self.children.clone(),
+            styles: self.styles.clone(),
+            preconditions: self.preconditions.clone(),
+            objectives: self.objectives.clone(),
+        }
+    }
+}
 
 #[cfg(not(feature = "wasm"))]
 #[derive(Debug, Clone)]

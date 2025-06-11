@@ -11,6 +11,30 @@ use crate::{
     building::{BuildArtifact, BuildResult, BuildTask},
 };
 
+global! {SER ArchiveKind {name,
+    new:fn(crate::backend::archives::RepositoryData,&Path) -> Option<Box<dyn crate::backend::archives::ExternalArchive>>
+}}
+
+#[macro_export]
+macro_rules! archive_kind {
+    ($name:ident @ $f:expr) => {
+        $crate::formats::global! {NEW {$crate::formats}ArchiveKind; $name [
+          $f
+        ]
+        }
+    };
+}
+impl ArchiveKind {
+    #[inline]
+    pub fn make_new(
+        &self,
+        data: crate::backend::archives::RepositoryData,
+        path: &Path,
+    ) -> Option<Box<dyn crate::backend::archives::ExternalArchive>> {
+        (self.new)(data, path)
+    }
+}
+
 global! {SER SourceFormat {name,
   description: &'static str,
   file_exts: &'static [&'static str],

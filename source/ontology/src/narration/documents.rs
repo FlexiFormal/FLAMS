@@ -53,7 +53,7 @@ pub struct SectionCounter {
     pub parent: Option<SectionLevel>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OpenDocument<State: CheckingState> {
     pub uri: DocumentURI,
     pub title: Option<Box<str>>,

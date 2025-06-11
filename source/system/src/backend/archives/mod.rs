@@ -30,7 +30,7 @@ use flams_utils::{
     vecmap::{VecMap, VecSet},
     CSS,
 };
-use ignore_regex::IgnoreSource;
+pub use ignore_regex::IgnoreSource;
 use iter::ArchiveIterator;
 use manager::MaybeQuads;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -47,29 +47,22 @@ use super::{docfile::PreDocFile, rdf::RDFStore, BackendChange};
 
 #[derive(Debug)]
 pub struct RepositoryData {
-    pub(super) uri: ArchiveURI,
-    pub(super) attributes: VecMap<Box<str>, Box<str>>,
-    pub(super) formats: VecSet<SourceFormatId>,
-    pub(super) dependencies: Box<[ArchiveId]>,
-    pub(super) institutions: Box<[Institution]>,
-    pub(super) index: Box<[ArchiveIndex]>,
+    pub uri: ArchiveURI,
+    pub attributes: VecMap<Box<str>, Box<str>>,
+    pub formats: VecSet<SourceFormatId>,
+    pub dependencies: Box<[ArchiveId]>,
+    pub institutions: Box<[Institution]>,
+    pub index: Box<[ArchiveIndex]>,
 }
 
 pub trait ArchiveBase: std::fmt::Debug {
     fn data(&self) -> &RepositoryData;
     fn files(&self) -> &parking_lot::RwLock<SourceDir>;
     fn update_sources(&self, sender: &ChangeSender<BackendChange>);
-
-    #[cfg(feature = "gitlab")]
     fn is_managed(&self) -> Option<&git_url_parse::GitUrl>;
-    #[cfg(not(feature = "gitlab"))]
-    #[inline]
-    fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
-        None
-    }
 }
 
-type Fut<T> = Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'static>>>;
+pub type Fut<T> = Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'static>>>;
 
 pub trait ArchiveTrait: ArchiveBase + Send + Sync {
     //fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>>;
@@ -477,6 +470,11 @@ impl ArchiveBase for LocalArchive {
                 gl.host_str().and_then(|s| repo.is_managed(s))
             })
             .as_ref()
+    }
+    #[cfg(not(feature = "gitlab"))]
+    #[inline]
+    fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
+        None
     }
 
     fn update_sources(&self, sender: &ChangeSender<BackendChange>) {
@@ -1283,6 +1281,11 @@ impl<'a, A1: ArchiveBase + ?Sized, A2: ArchiveBase + ?Sized> ArchiveBase
             either::Either::Left(a) => a.is_managed(),
             either::Either::Right(a) => a.is_managed(),
         }
+    }
+    #[cfg(not(feature = "gitlab"))]
+    #[inline]
+    fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
+        None
     }
 }
 
