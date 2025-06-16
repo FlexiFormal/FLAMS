@@ -58,13 +58,14 @@ pub fn all_rules<
         Err,
         STeXParseState<'a, LSPLineCol, MS>,
     >,
-); 40] {
+); 41] {
     [
         ("importmodule", importmodule as _),
         ("setmetatheory", setmetatheory as _),
         ("usemodule", usemodule as _),
         ("usestructure", usestructure as _),
         ("inputref", inputref as _),
+        ("includeproblem", includeproblem as _),
         ("mhinput", mhinput as _),
         ("stexstyleassertion", stexstyleassertion as _),
         ("stexstyledefinition", stexstyledefinition as _),
@@ -456,6 +457,7 @@ fn strip_comments(s: &str) -> Cow<'_, str> {
 
 macro_rules! optargtype {
   ($parser:ident => $name:ident { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? }) => {
+    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
     pub enum $name<Pos:SourcePos> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE $($tp)*)>)
@@ -788,6 +790,47 @@ macro_rules! optargtype {
     optargtype!(@DOITER $e $name {$($tks)*} { $($rest)* })
   };
 }
+
+optargtype! {parser =>
+  IncludeProblemArg {
+    {Pts = "pts" : f32}
+    {Min = "min": f32}
+    {Archive = "archive": str}
+  }
+}
+
+stex!(p => includeproblem[args:type IncludeProblemArg<Pos>]{filepath:name} => {
+    let args = args.unwrap_or_default();
+      let archive = args.iter().find_map(|p| if let IncludeProblemArg::Archive(a) = p {Some(a)} else {None})
+          .map(|p| (ArchiveId::new(&p.val),p.val_range));
+      let rel_path: std::sync::Arc<str> = if filepath.0.ends_with(".tex") {
+        filepath.0.into()
+      } else {
+        format!("{}.tex",filepath.0).into()
+      };
+      {
+          if let Some(id) = archive.as_ref().map_or_else(||
+              p.state.archive.as_ref().map(|a| a.id()),
+              |(a,_)| Some(a)
+          ) {
+              p.state.backend.with_local_archive(id,|a|
+                  if let Some(a) = a {
+                      let path = a.source_dir();
+                      let path = rel_path.as_ref().split('/').fold(path,|p,s| p.join(s));
+                      if !path.exists() {
+                          p.tokenizer.problem(filepath.1.start,format!("File {} not found",path.display()),DiagnosticLevel::Error);
+                      }
+                  } else {}
+              );
+          }
+      }
+      let filepath = (rel_path,filepath.1);
+      MacroResult::Success(STeXToken::IncludeProblem {
+        filepath,full_range:includeproblem.range,archive,
+        token_range:includeproblem.token_range,args
+      })
+    }
+);
 
 optargtype! {parser =>
   SymdeclArg<T> {

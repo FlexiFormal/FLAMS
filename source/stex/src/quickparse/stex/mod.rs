@@ -27,9 +27,11 @@ use structs::{
     MorphismKind, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode,
 };
 
+use crate::quickparse::stex::rules::IncludeProblemArg;
+
 use super::latex::LaTeXParser;
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug)]
 pub struct STeXParseDataI {
     pub annotations: Vec<STeXAnnot>,
     pub diagnostics: VecSet<STeXDiagnostic>,
@@ -233,6 +235,13 @@ pub enum STeXAnnot {
         token_range: SourceRange<LSPLineCol>,
         name_range: SourceRange<LSPLineCol>,
         mode: SymnameMode<LSPLineCol>,
+    },
+    IncludeProblem {
+        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
+        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
+        full_range: SourceRange<LSPLineCol>,
+        token_range: SourceRange<LSPLineCol>,
+        args: Vec<IncludeProblemArg<LSPLineCol>>,
     },
     Symuse {
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
@@ -484,6 +493,19 @@ impl STeXAnnot {
                     module,
                     token_range,
                     full_range,
+                }),
+                STeXToken::IncludeProblem {
+                    filepath,
+                    full_range,
+                    token_range,
+                    archive,
+                    args,
+                } => v.push(STeXAnnot::IncludeProblem {
+                    filepath,
+                    archive,
+                    full_range,
+                    token_range,
+                    args,
                 }),
                 STeXToken::SetMetatheory {
                     archive_range,
@@ -775,6 +797,7 @@ impl STeXAnnot {
             | Self::SetMetatheory { full_range, .. }
             | Self::Symdecl { full_range, .. }
             | Self::Symdef { full_range, .. }
+            | Self::IncludeProblem { full_range, .. }
             | Self::SymName { full_range, .. }
             | Self::Symuse { full_range, .. }
             | Self::Symref { full_range, .. }
@@ -920,6 +943,7 @@ impl TreeLike for STeXAnnot {
             | Self::Precondition { .. }
             | Self::Objective { .. }
             | Self::RenameDecl { .. }
+            | Self::IncludeProblem { .. }
             | Self::Assign { .. } => None,
         }
     }

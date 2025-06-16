@@ -23,9 +23,12 @@ use flams_utils::{
 };
 use smallvec::SmallVec;
 
-use crate::quickparse::latex::{
-    rules::{AnyEnv, AnyMacro, DynMacro},
-    Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
+use crate::quickparse::{
+    latex::{
+        rules::{AnyEnv, AnyMacro, DynMacro},
+        Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
+    },
+    stex::rules::IncludeProblemArg,
 };
 
 use super::{
@@ -72,6 +75,13 @@ pub enum STeXToken<Pos: SourcePos> {
         filepath: (std::sync::Arc<str>, SourceRange<Pos>),
         full_range: SourceRange<Pos>,
         token_range: SourceRange<Pos>,
+    },
+    IncludeProblem {
+        filepath: (std::sync::Arc<str>, SourceRange<Pos>),
+        archive: Option<(ArchiveId, SourceRange<Pos>)>,
+        full_range: SourceRange<Pos>,
+        token_range: SourceRange<Pos>,
+        args: Vec<IncludeProblemArg<Pos>>,
     },
     MHInput {
         archive: Option<(ArchiveId, SourceRange<Pos>)>,

@@ -11,6 +11,7 @@ use flams_ontology::{
         PathURITrait, SymbolURI, URIWithLanguage, URI,
     },
 };
+use flams_stex::quickparse::stex::rules::IncludeProblemArg;
 use flams_stex::quickparse::{
     latex::ParsedKeyValue,
     stex::{
@@ -328,6 +329,12 @@ impl AnnotExt for STeXAnnot {
                 filepath,
                 full_range: range,
                 ..
+            }
+            | Self::IncludeProblem {
+                archive,
+                filepath,
+                full_range: range,
+                ..
             } => Some((
                 lsp::DocumentSymbol {
                     name: archive.as_ref().map_or_else(
@@ -384,6 +391,13 @@ impl AnnotExt for STeXAnnot {
     fn links(&self, top_archive: Option<&ArchiveURI>, mut cont: impl FnMut(lsp::DocumentLink)) {
         match self {
             Self::Inputref {
+                archive,
+                token_range,
+                filepath,
+                full_range: range,
+                ..
+            }
+            | Self::IncludeProblem {
                 archive,
                 token_range,
                 filepath,
@@ -873,6 +887,7 @@ impl AnnotExt for STeXAnnot {
             }
             Self::Svar { .. }
             | Self::Inputref { .. }
+            | Self::IncludeProblem { .. }
             | Self::MHInput { .. }
             | Self::Problem { .. }
             | Self::Definiens { .. }
@@ -1090,6 +1105,9 @@ impl AnnotExt for STeXAnnot {
                 cont(*structure_range, STeXSemanticTokens::SYMBOL);
             }
             Self::Inputref {
+                token_range: range, ..
+            }
+            | Self::IncludeProblem {
                 token_range: range, ..
             }
             | Self::MHInput {
@@ -1746,6 +1764,7 @@ impl AnnotExt for STeXAnnot {
             | Self::UseModule { .. }
             | Self::SetMetatheory { .. }
             | Self::Inputref { .. }
+            | Self::IncludeProblem { .. }
             | Self::MHInput { .. }
             | Self::Symdecl { .. }
             | Self::Symdef { .. }
@@ -1991,6 +2010,7 @@ impl AnnotExt for STeXAnnot {
             | Self::UseStructure { .. }
             | Self::SetMetatheory { .. }
             | Self::Inputref { .. }
+            | Self::IncludeProblem { .. }
             | Self::MHInput { .. }
             | Self::Symdecl { .. }
             | Self::TextSymdecl { .. }
