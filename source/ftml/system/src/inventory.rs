@@ -12,12 +12,9 @@ use flams_ontology::{
     uris::{DocumentURI, ModuleURI, SymbolURI, URIRefTrait},
     DocumentRange, Unchecked,
 };
-use flams_system::{
-    backend::archives::{
-        source_files::{FileState, SourceDir, SourceFile},
-        ArchiveBase, ArchiveTrait, ExternalArchive, Fut, RepositoryData,
-    },
-    formats::SourceFormat,
+use flams_system::backend::archives::{
+    source_files::{FileState, SourceDir, SourceFile},
+    ArchiveBase, ArchiveTrait, ExternalArchive, Fut, RepositoryData,
 };
 use flams_utils::{unwrap, vecmap::VecMap, CSS};
 use parking_lot::RwLock;
@@ -27,6 +24,7 @@ use rustc_hash::FxBuildHasher;
 struct Frags {
     css: Vec<CSS>,
     body: DocumentRange,
+    inner_off: usize,
     frag: VecMap<Box<str>, DocumentRange>,
 }
 
@@ -148,7 +146,8 @@ impl ArchiveTrait for InventoriedArchive {
         name: &flams_ontology::uris::NameStep,
         _: flams_ontology::languages::Language,
     ) -> Option<String> {
-        self.get(path, name, |s| s)
+        //self.get(path, name, |s| s)
+        Some("<html><body></body></html>".to_string())
     }
     #[inline]
     fn load_html_full_async(
@@ -157,7 +156,10 @@ impl ArchiveTrait for InventoriedArchive {
         name: &flams_ontology::uris::NameStep,
         _: flams_ontology::languages::Language,
     ) -> Fut<Option<String>> {
-        self.get_a(path, name, |s| s)
+        //self.get_a(path, name, |s| s)
+        Some(Box::pin(async move {
+            Some("<html><body></body></html>".to_string())
+        }))
     }
     fn load_html_body(
         &self,
@@ -166,13 +168,27 @@ impl ArchiveTrait for InventoriedArchive {
         language: flams_ontology::languages::Language,
         full: bool,
     ) -> Option<(Vec<flams_utils::CSS>, String)> {
+        /*
         let idx = (path.cloned(), name.clone(), language);
         let f = &*self.cache.frags.get(&idx)?;
         let css = f.css.clone();
-        let body = f.body;
-        self.get(path, name, move |s| {
-            (css, s[body.start..body.end].to_string())
-        })
+        let start = if full {
+            f.body.start
+        } else {
+            f.body.start + f.inner_off
+        };
+        let end = if full {
+            f.body.end
+        } else {
+            f.body.end - "</body>".len()
+        };
+        self.get(path, name, move |s| (css, s[start..end].to_string()))
+         */
+        if full {
+            Some((Vec::new(), "<body></body>".to_string()))
+        } else {
+            Some((Vec::new(), "".to_string()))
+        }
     }
     fn load_html_body_async(
         &self,
@@ -181,13 +197,28 @@ impl ArchiveTrait for InventoriedArchive {
         language: flams_ontology::languages::Language,
         full: bool,
     ) -> Fut<Option<(Vec<CSS>, String)>> {
-        let idx = (path.cloned(), name.clone(), language);
+        /*let idx = (path.cloned(), name.clone(), language);
         let f = &*self.cache.frags.get(&idx)?;
         let css = f.css.clone();
-        let body = f.body;
-        self.get_a(path, name, move |s| {
-            (css, s[body.start..body.end].to_string())
-        })
+        let start = if full {
+            f.body.start
+        } else {
+            f.body.start + f.inner_off
+        };
+        let end = if full {
+            f.body.end
+        } else {
+            f.body.end - "</body>".len()
+        };
+        self.get_a(path, name, move |s| (css, s[start..end].to_string()))*/
+
+        Some(Box::pin(async move {
+            if full {
+                Some((Vec::new(), "<body></body>".to_string()))
+            } else {
+                Some((Vec::new(), "".to_string()))
+            }
+        }))
     }
 
     fn load_html_fragment(
@@ -275,7 +306,7 @@ impl InventoriedArchive {
 
         Some(Box::new(Self {
             remote_url: std::sync::Arc::new(remote_url),
-            top_path: path.clone().into(),
+            top_path: path.into(),
             data: repo,
             cache: std::sync::Arc::new(CachedData {
                 dir: Default::default(),
@@ -333,16 +364,21 @@ async fn update_async_i(
 ) -> Result<(), eyre::Report> {
     let client = reqwest::Client::new();
     let inventory: Inventory = get_async(&client, (*url).clone()).await?;
-    let (mut docs, mut mods) = tokio::task::spawn_blocking(move || {
+    let dt = data.clone();
+    let docs = tokio::task::spawn_blocking(move || {
         do_los(
             inventory.learning_objects,
             inventory.definienda,
-            &mut *data.dir.write(),
             &archive,
+            &*dt,
         )
     })
     .await??;
 
+    data.docs.clear();
+    for (d, _) in docs {
+        data.docs.insert(d.uri.clone(), d);
+    }
     /*for d in &docs {
         println!("{d:#?}");
     }
@@ -361,11 +397,11 @@ fn update_sync_i(
 ) -> Result<(), eyre::Report> {
     let client = reqwest::blocking::Client::new();
     let inventory: Inventory = get_sync(&client, (*url).clone())?;
-    let (docs, mods) = do_los(
+    let docs = do_los(
         inventory.learning_objects,
         inventory.definienda,
-        &mut *data.dir.write(),
         archive,
+        data,
     )?;
 
     Ok(())
@@ -374,18 +410,14 @@ fn update_sync_i(
 fn do_los(
     v: Vec<InvLO>,
     defs: Vec<Def>,
-    dir: &mut SourceDir,
     uri: &ArchiveURI,
-) -> Result<
-    (
-        Vec<(OpenDocument<Unchecked>, Vec<(String, Vec<SymbolURI>)>)>,
-        Vec<OpenModule<Unchecked>>,
-    ),
-    eyre::Report,
-> {
+    data: &CachedData,
+) -> Result<Vec<(OpenDocument<Unchecked>, Vec<(String, Vec<SymbolURI>)>)>, eyre::Report> {
     use flams_ontology::uris::ArchiveURITrait;
 
     let mut tds = Vec::new();
+
+    let mut dir = data.dir.write();
     for lo in v {
         let urlstr = lo.url.strip_suffix(".html").unwrap_or(&lo.url);
         let uri = DocumentURI::from_archive_relpath(uri.clone(), urlstr)?;
@@ -399,14 +431,16 @@ fn do_los(
             Vec::new(),
         ));
         dir.insert(SourceFile {
-            relative_path: lo.url.into(),
+            relative_path: urlstr.into(),
             format: crate::FTML,
             target_state: VecMap::default(),
             format_state: FileState::New,
         });
     }
+    drop(dir);
 
-    let mut modsv = Vec::new();
+    data.mods.clear();
+    //let mut modsv = Vec::new();
     for Def { symbol, url } in defs {
         let (url, id) = url.rsplit_once('#').unwrap_or((&url, ""));
         let url = url.strip_suffix(".html").unwrap_or(url);
@@ -427,24 +461,19 @@ fn do_los(
                     modules::OpenModule,
                 },
                 uris::ContentURITrait,
-                Unchecked,
             };
 
-            let md = match modsv
-                .iter_mut()
-                .find(|m: &&mut OpenModule<Unchecked>| m.uri == *symbol.module())
-            {
-                Some(m) => m,
-                None => {
+            let md = match data.mods.entry(symbol.module().owned()) {
+                dashmap::Entry::Vacant(e) => {
                     let m = OpenModule {
                         uri: symbol.module().owned(),
                         meta: None,
                         signature: None,
                         elements: Vec::new(),
                     };
-                    modsv.push(m);
-                    unwrap!(modsv.last_mut())
+                    &mut *e.insert(m)
                 }
+                dashmap::Entry::Occupied(m) => &mut *m.into_ref(),
             };
             md.elements.push(OpenDeclaration::Symbol(
                 flams_ontology::content::declarations::symbols::Symbol {
@@ -477,7 +506,8 @@ fn do_los(
             &mut unwrap!(tds.last_mut()).0
         }
     };
-    index.elements = modsv
+    index.elements = data
+        .mods
         .iter()
         .map(|m| DocumentElement::Module {
             range: DocumentRange { start: 0, end: 0 },
@@ -490,7 +520,7 @@ fn do_los(
     .map(|m| m.check(&mut GlobalBackend::get().as_checker()))
     .collect();*/
 
-    Ok((tds, modsv))
+    Ok(tds)
 }
 
 #[cfg(feature = "tokio")]
