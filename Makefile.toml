@@ -1,6 +1,6 @@
 [env]
 DATABASE_URL = "sqlite:./resources/migrations/users.sqlite?mode=rwc"
-LEPTOS_SASS_VERSION = "1.88.0"
+LEPTOS_SASS_VERSION = "1.89.2"
 RUSTDOCFLAGS = "--cfg docsrs --html-in-header resources/katex-header.html --html-in-header resources/flams-docs.html --enable-index-page -Zunstable-options --generate-link-to-definition"
 
 [tasks.db-create]

@@ -7,9 +7,9 @@ edition = "2021"
 workspace = true
 
 [features]
-csr = ["leptos/csr", "thaw/csr"]
+csr = ["leptos/csr", "thaw/csr","getrandom/wasm_js"]
 ssr = ["leptos/ssr", "thaw/ssr", "dep:tokio", "dep:http", "dep:leptos_axum"]
-hydrate = ["leptos/hydrate", "thaw/hydrate", "dep:gloo-storage"]
+hydrate = ["leptos/hydrate", "thaw/hydrate", "dep:gloo-storage","getrandom/wasm_js"]
 
 [dependencies]
 flams-utils = { workspace = true, features = ["serde"] }
@@ -25,6 +25,7 @@ gloo-storage = { workspace = true, optional = true }
 send_wrapper = { workspace = true }
 icondata_ch = { workspace = true }
 tracing = { workspace = true }
+getrandom = { workspace = true }
 
 tokio = { workspace = true, optional = true, features = ["rt"] }
 http = { workspace = true, optional = true }
