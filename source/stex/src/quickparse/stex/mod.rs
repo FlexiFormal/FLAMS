@@ -27,7 +27,7 @@ use structs::{
     MorphismKind, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode,
 };
 
-use crate::quickparse::stex::rules::IncludeProblemArg;
+use crate::quickparse::stex::rules::{IncludeProblemArg, MHGraphicsArg};
 
 use super::latex::LaTeXParser;
 
@@ -58,8 +58,7 @@ impl STeXParseDataI {
 pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParseDataI>>;
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum STeXAnnot {
     Module {
         uri: ModuleURI,
@@ -305,6 +304,13 @@ pub enum STeXAnnot {
         children: Vec<Self>,
         children_range: SourceRange<LSPLineCol>,
     },
+    MHGraphics {
+        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
+        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
+        full_range: SourceRange<LSPLineCol>,
+        token_range: SourceRange<LSPLineCol>,
+        args: Vec<MHGraphicsArg<LSPLineCol>>,
+    },
 }
 impl STeXAnnot {
     fn from_tokens<I: IntoIterator<Item = STeXToken<LSPLineCol>>>(
@@ -343,6 +349,19 @@ impl STeXAnnot {
                         children: Self::from_tokens(children, None),
                     });
                 }
+                STeXToken::MHGraphics {
+                    filepath,
+                    archive,
+                    full_range,
+                    token_range,
+                    args,
+                } => v.push(STeXAnnot::MHGraphics {
+                    filepath,
+                    archive,
+                    full_range,
+                    token_range,
+                    args,
+                }),
                 STeXToken::UseStructure {
                     structure,
                     structure_range,
@@ -821,6 +840,7 @@ impl STeXAnnot {
             | Self::InlineMorphism { full_range, .. }
             | Self::Precondition { full_range, .. }
             | Self::Objective { full_range, .. }
+            | Self::MHGraphics { full_range, .. }
             | Self::TextSymdecl { full_range, .. } => *full_range,
         }
     }
@@ -944,6 +964,7 @@ impl TreeLike for STeXAnnot {
             | Self::Objective { .. }
             | Self::RenameDecl { .. }
             | Self::IncludeProblem { .. }
+            | Self::MHGraphics { .. }
             | Self::Assign { .. } => None,
         }
     }

@@ -95,7 +95,7 @@ flams-system = { workspace = true, features = [
     "tantivy",
 ], optional = true }
 flams-lsp = { workspace = true, optional = true, features = ["ws"] }
-flams-stex = { workspace = true, optional = true, features = ["serde"] }
+flams-stex = { workspace = true, optional = true }
 flams-ftml = { workspace = true, optional = true }
 flams-database = { workspace = true }
 

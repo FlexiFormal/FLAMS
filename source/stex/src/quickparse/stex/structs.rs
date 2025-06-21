@@ -28,7 +28,7 @@ use crate::quickparse::{
         rules::{AnyEnv, AnyMacro, DynMacro},
         Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
     },
-    stex::rules::IncludeProblemArg,
+    stex::rules::{IncludeProblemArg, MHGraphicsArg},
 };
 
 use super::{
@@ -40,8 +40,7 @@ use super::{
 };
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, serde::Serialize)]
 pub enum STeXToken<Pos: SourcePos> {
     ImportModule {
         archive_range: Option<SourceRange<Pos>>,
@@ -82,6 +81,13 @@ pub enum STeXToken<Pos: SourcePos> {
         full_range: SourceRange<Pos>,
         token_range: SourceRange<Pos>,
         args: Vec<IncludeProblemArg<Pos>>,
+    },
+    MHGraphics {
+        filepath: (std::sync::Arc<str>, SourceRange<Pos>),
+        archive: Option<(ArchiveId, SourceRange<Pos>)>,
+        full_range: SourceRange<Pos>,
+        token_range: SourceRange<Pos>,
+        args: Vec<MHGraphicsArg<Pos>>,
     },
     MHInput {
         archive: Option<(ArchiveId, SourceRange<Pos>)>,
@@ -316,15 +322,13 @@ impl<'a, P: SourcePos> FromLaTeXToken<'a, P, &'a str> for STeXToken<P> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Copy, Clone, Debug, serde::Serialize)]
 pub enum MorphismKind {
     CopyModule,
     InterpretModule,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum SymnameMode<Pos: SourcePos> {
     Cap {
         post: Option<(SourceRange<Pos>, SourceRange<Pos>, String)>,
@@ -339,8 +343,7 @@ pub enum SymnameMode<Pos: SourcePos> {
     },
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct InlineMorphAssign<Pos: SourcePos, T> {
     pub symbol: SymbolReference<Pos>,
     pub symbol_range: SourceRange<Pos>,
@@ -417,23 +420,20 @@ impl<'a, Pos: SourcePos, T> Iterator for InlineMorphAssIter<'a, Pos, T> {
     }
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum InlineMorphAssKind<Pos: SourcePos, T> {
     Df(Vec<T>),
     Rename(Option<(Name, SourceRange<Pos>)>, Box<str>, SourceRange<Pos>),
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolReference<Pos: SourcePos> {
     pub uri: SymbolURI,
     pub filepath: Option<std::sync::Arc<Path>>,
     pub range: SourceRange<Pos>,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ModuleReference {
     pub uri: ModuleURI,
     pub in_doc: DocumentURI,
@@ -504,8 +504,7 @@ impl STeXModuleStore for () {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, serde::Serialize)]
 pub enum ModuleRule<Pos: SourcePos> {
     Import(ModuleReference),
     Symbol(SymbolRule<Pos>),
@@ -518,8 +517,7 @@ pub enum ModuleRule<Pos: SourcePos> {
     StructureImport(SymbolReference<Pos>),
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolRule<Pos: SourcePos> {
     pub uri: SymbolReference<Pos>,
     pub macroname: Option<std::sync::Arc<str>>,
@@ -553,8 +551,7 @@ impl<Pos: SourcePos> PartialEq for SymbolReference<Pos> {
     }
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ModuleRules<Pos: SourcePos> {
     pub rules: std::sync::Arc<[ModuleRule<Pos>]>,
 }
@@ -1937,8 +1934,7 @@ pub struct MorphismSpec<Pos: SourcePos> {
     pub decl_range: SourceRange<Pos>,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum ModuleOrStruct<Pos: SourcePos> {
     Module(ModuleReference),
     Struct(SymbolReference<Pos>),

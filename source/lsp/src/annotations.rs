@@ -43,7 +43,7 @@ trait AnnotExt: Sized {
         pos: LSPLineCol,
     ) -> Option<lsp::GotoDefinitionResponse>;
     fn semantic_tokens(&self, cont: &mut impl FnMut(SourceRange<LSPLineCol>, u32));
-    fn hover(&self, pos: LSPLineCol) -> Option<lsp::Hover>;
+    fn hover(&self, top_archive: Option<&ArchiveURI>, pos: LSPLineCol) -> Option<lsp::Hover>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
     fn code_action(&self, pos: LSPLineCol, url: &lsp::Url) -> lsp::CodeActionResponse;
 }
@@ -372,7 +372,8 @@ impl AnnotExt for STeXAnnot {
                 },
                 &[],
             )),
-            Self::SemanticMacro { .. }
+            Self::MHGraphics { .. }
+            | Self::SemanticMacro { .. }
             | Self::VariableMacro { .. }
             | Self::SymName { .. }
             | Self::Symref { .. }
@@ -390,14 +391,45 @@ impl AnnotExt for STeXAnnot {
 
     fn links(&self, top_archive: Option<&ArchiveURI>, mut cont: impl FnMut(lsp::DocumentLink)) {
         match self {
-            Self::Inputref {
-                archive,
-                token_range,
-                filepath,
-                full_range: range,
-                ..
+            Self::IncludeProblem {
+                archive, filepath, ..
+            } => {
+                let Some(a) = archive.as_ref().map_or_else(
+                    || top_archive.map(ArchiveURITrait::archive_id),
+                    |(a, _)| Some(a),
+                ) else {
+                    return;
+                };
+                let Some(uri) = uri_from_archive_relpath(a, &filepath.0) else {
+                    return;
+                };
+                cont(lsp::DocumentLink {
+                    range: filepath.1.into_range(),
+                    target: Some(uri),
+                    tooltip: None,
+                    data: None,
+                });
             }
-            | Self::IncludeProblem {
+            Self::MHGraphics {
+                archive, filepath, ..
+            } => {
+                let Some(a) = archive.as_ref().map_or_else(
+                    || top_archive.map(ArchiveURITrait::archive_id),
+                    |(a, _)| Some(a),
+                ) else {
+                    return;
+                };
+                let Some(uri) = uri_from_archive_relpath(a, &filepath.0) else {
+                    return;
+                };
+                cont(lsp::DocumentLink {
+                    range: filepath.1.into_range(),
+                    target: Some(uri),
+                    tooltip: None,
+                    data: None,
+                });
+            }
+            Self::Inputref {
                 archive,
                 token_range,
                 filepath,
@@ -888,6 +920,7 @@ impl AnnotExt for STeXAnnot {
             Self::Svar { .. }
             | Self::Inputref { .. }
             | Self::IncludeProblem { .. }
+            | Self::MHGraphics { .. }
             | Self::MHInput { .. }
             | Self::Problem { .. }
             | Self::Definiens { .. }
@@ -1104,13 +1137,26 @@ impl AnnotExt for STeXAnnot {
                 cont(*token_range, STeXSemanticTokens::LOCAL);
                 cont(*structure_range, STeXSemanticTokens::SYMBOL);
             }
+            Self::IncludeProblem {
+                token_range, args, ..
+            } => {
+                cont(*token_range, STeXSemanticTokens::REF_MACRO);
+                for a in args {
+                    let r = match a {
+                        IncludeProblemArg::Min(m) => m.key_range,
+                        IncludeProblemArg::Pts(m) => m.key_range,
+                        IncludeProblemArg::Archive(m) => m.key_range,
+                    };
+                    cont(r, STeXSemanticTokens::KEYWORD);
+                }
+            }
             Self::Inputref {
                 token_range: range, ..
             }
-            | Self::IncludeProblem {
+            | Self::MHInput {
                 token_range: range, ..
             }
-            | Self::MHInput {
+            | Self::MHGraphics {
                 token_range: range, ..
             }
             | Self::Defnotation { full_range: range } => {
@@ -1595,7 +1641,7 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn hover(&self, pos: LSPLineCol) -> Option<lsp::Hover> {
+    fn hover(&self, top_archive: Option<&ArchiveURI>, pos: LSPLineCol) -> Option<lsp::Hover> {
         fn uriname(pre: &str, d: &impl std::fmt::Display) -> String {
             format!("{pre}<sup>`{d}`</sup>")
         }
@@ -1758,6 +1804,29 @@ impl AnnotExt for STeXAnnot {
                     }
                 }
                 None
+            }
+            Self::MHGraphics {
+                filepath,
+                archive,
+                full_range,
+                ..
+            } => {
+                let Some(a) = archive.as_ref().map_or_else(
+                    || top_archive.map(ArchiveURITrait::archive_id),
+                    |(a, _)| Some(a),
+                ) else {
+                    return None;
+                };
+                let Some(uri) = uri_from_archive_relpath(a, &filepath.0) else {
+                    return None;
+                };
+                Some(lsp::Hover {
+                    range: Some(SourceRange::into_range(*full_range)),
+                    contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                        kind: lsp::MarkupKind::Markdown,
+                        value: format!("![img]({uri})"),
+                    }),
+                })
             }
             Self::Module { .. }
             | Self::ImportModule { .. }
@@ -2011,6 +2080,7 @@ impl AnnotExt for STeXAnnot {
             | Self::SetMetatheory { .. }
             | Self::Inputref { .. }
             | Self::IncludeProblem { .. }
+            | Self::MHGraphics { .. }
             | Self::MHInput { .. }
             | Self::Symdecl { .. }
             | Self::TextSymdecl { .. }
@@ -2457,13 +2527,14 @@ impl LSPState {
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>>> {
         let d = self.get(uri)?;
+        let da = d.archive().cloned();
         let pos = LSPLineCol {
             line: position.line,
             col: position.character,
         };
         Some(
             d.with_annots(self.clone(), move |data| {
-                at_position(data, pos).and_then(|e| e.hover(pos))
+                at_position(data, pos).and_then(|e| e.hover(da.as_ref(), pos))
             })
             .map(|o| o.flatten()),
         )

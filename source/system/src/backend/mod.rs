@@ -32,7 +32,8 @@ use flams_ontology::{
     },
     uris::{
         ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI,
-        ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIWithLanguage,
+        ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIRefTrait,
+        URIWithLanguage,
     },
     Checked, DocumentRange, LocalBackend, Unchecked,
 };
@@ -108,6 +109,20 @@ pub trait Backend {
     ) -> R
     where
         Self: Sized;
+
+    fn uri_of(&self, p: &Path) -> Option<DocumentURI>
+    where
+        Self: Sized,
+    {
+        #[cfg(windows)]
+        const PREFIX: &str = "\\source\\";
+        #[cfg(not(windows))]
+        const PREFIX: &str = "/source/";
+        self.archive_of(p, |a: &LocalArchive, rp: &str| {
+            DocumentURI::from_archive_relpath(a.uri().owned(), rp.strip_prefix(PREFIX)?).ok()
+        })
+        .flatten()
+    }
 
     #[allow(irrefutable_let_patterns)]
     fn archive_of<R>(&self, p: &Path, mut f: impl FnMut(&LocalArchive, &str) -> R) -> Option<R>

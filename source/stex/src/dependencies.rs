@@ -12,7 +12,7 @@ use crate::{
 use either::Either;
 use flams_ontology::{
     languages::Language,
-    uris::{ArchiveId, ArchiveURIRef, ArchiveURITrait, DocumentURI},
+    uris::{ArchiveId, ArchiveURITrait, DocumentURI},
 };
 use flams_system::{
     backend::AnyBackend,
@@ -40,6 +40,10 @@ pub enum STeXDependency {
         sig: Option<Language>,
         meta: Option<(ArchiveId, std::sync::Arc<str>)>,
     },
+    Img {
+        archive: Option<ArchiveId>,
+        filepath: std::sync::Arc<str>,
+    },
 }
 
 #[allow(clippy::type_complexity)]
@@ -55,14 +59,14 @@ pub struct DepParser<'a> {
     curr: Option<std::vec::IntoIter<STeXToken<()>>>,
 }
 
-fn parse_deps<'a>(
+pub(super) fn parse_deps<'a>(
     source: &'a str,
     path: &'a Path,
-    archive: ArchiveURIRef<'a>,
     doc: &'a DocumentURI,
     backend: &'a AnyBackend,
 ) -> impl Iterator<Item = STeXDependency> + use<'a> {
     const NOERR: fn(String, SourceRange<()>, DiagnosticLevel) = |_, _, _| {};
+    let archive = doc.archive_uri();
     let parser = LaTeXParser::with_rules(
         ParseStr::new(source),
         STeXParseState::<(), ()>::new(Some(archive), Some(path), doc, backend, ()),
@@ -73,6 +77,8 @@ fn parse_deps<'a>(
             ("usemodule", rules::usemodule_deps as _),
             ("inputref", rules::inputref as _),
             ("mhinput", rules::inputref as _),
+            ("mhgraphics", rules::mhgraphics as _),
+            ("cmhgraphics", rules::mhgraphics as _),
             ("stexstyleassertion", rules::stexstyleassertion as _),
             ("stexstyledefinition", rules::stexstyledefinition as _),
             ("stexstyleparagraph", rules::stexstyleparagraph as _),
@@ -145,12 +151,10 @@ impl DepParser<'_> {
                 })
             }
             STeXToken::Inputref {
-                archive,
-                filepath: module,
-                ..
+                archive, filepath, ..
             } => Some(STeXDependency::Inputref {
                 archive: archive.map(|(a, _)| a),
-                filepath: module.0,
+                filepath: filepath.0,
             }),
             STeXToken::Vec(v) => {
                 let old = std::mem::replace(&mut self.curr, Some(v.into_iter()));
@@ -159,6 +163,12 @@ impl DepParser<'_> {
                 }
                 None
             }
+            STeXToken::MHGraphics {
+                filepath, archive, ..
+            } => Some(STeXDependency::Img {
+                archive: archive.map(|(a, _)| a),
+                filepath: filepath.0,
+            }),
             _ => None,
         }
     }
@@ -196,7 +206,7 @@ pub fn get_deps(backend: &AnyBackend, task: &BuildTask) {
     let source = std::fs::read_to_string(path);
     if let Ok(source) = source {
         //let mut yields = Vec::new();
-        for d in parse_deps(&source, path, task.archive(), &uri, backend) {
+        for d in parse_deps(&source, path, &uri, backend) {
             match d {
                 STeXDependency::ImportModule { archive, module }
                 | STeXDependency::UseModule { archive, module } => {
@@ -290,86 +300,8 @@ pub fn get_deps(backend: &AnyBackend, task: &BuildTask) {
                         }
                     }
                 }
+                STeXDependency::Img { .. } => (),
             }
         }
     }
 }
-
-/*
-#[allow(clippy::case_sensitive_file_extension_comparisons)]
-fn file_path_from_archive(
-    current: &Path,
-    id: &ArchiveId,
-    module: &str,
-    backend: &AnyBackend,
-    yields: &[&str],
-) -> Option<std::sync::Arc<str>> {
-    let lang = if current.extension().and_then(|s| s.to_str()) == Some("tex") {
-        match current.file_stem().and_then(|s| s.to_str()) {
-            Some(s) if s.ends_with(".ru") => "ru",
-            Some(s) if s.ends_with(".de") => "de",
-            Some(s) if s.ends_with(".fr") => "fr",
-            // TODO etc
-            _ => "en",
-        }
-    } else {
-        "en"
-    };
-    let archive_path = backend.get_base_path(id)?;
-    let (path, mut module) = if let Some((a, b)) = module.split_once('?') {
-        (a, b)
-    } else {
-        ("", module)
-    };
-    module = module.split('/').next().unwrap_or(module);
-    let p = PathBuf::from(format!(
-        "{}/source/{path}/{module}.{lang}.tex",
-        archive_path.display()
-    ));
-    if p.exists() {
-        return Some(format!("{path}/{module}.{lang}.tex").into());
-    }
-    let p = PathBuf::from(format!(
-        "{}/source/{path}/{module}.en.tex",
-        archive_path.display()
-    ));
-    if p.exists() {
-        return Some(format!("{path}/{module}.en.tex").into());
-    }
-    let p = PathBuf::from(format!(
-        "{}/source/{path}/{module}.tex",
-        archive_path.display()
-    ));
-    if p.exists() {
-        return Some(format!("{path}/{module}.tex").into());
-    }
-    let p = PathBuf::from(format!(
-        "{}/source/{path}.{lang}.tex",
-        archive_path.display()
-    ));
-    if p.exists() {
-        return Some(format!("{path}.{lang}.tex").into());
-    }
-    let p = PathBuf::from(format!("{}/source/{path}.en.tex", archive_path.display()));
-    if p.exists() {
-        return Some(format!("{path}.en.tex").into());
-    }
-    let p = PathBuf::from(format!("{}/source/{path}.tex", archive_path.display()));
-    if p.exists() {
-        return Some(format!("{path}.tex").into());
-    }
-    if yields.contains(&module) {
-        return None;
-    }
-    None
-}
-
-#[allow(clippy::case_sensitive_file_extension_comparisons)]
-fn to_file_path_ref(path: &str) -> std::sync::Arc<str> {
-    if path.ends_with(".tex") {
-        path.into()
-    } else {
-        format!("{path}.tex").into()
-    }
-}
-*/

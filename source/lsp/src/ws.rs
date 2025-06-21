@@ -1,10 +1,10 @@
 use super::{FLAMSLSPServer, ServerWrapper};
 use async_lsp::{
     client_monitor::ClientProcessMonitorLayer, concurrency::ConcurrencyLayer,
-    panic::CatchUnwindLayer, router::Router, server::LifecycleLayer, tracing::TracingLayer,
-    ClientSocket, LspService, MainLoop,
+    panic::CatchUnwindLayer, server::LifecycleLayer, tracing::TracingLayer, ClientSocket,
+    LspService, MainLoop,
 };
-use axum::extract::ws::{Message, Utf8Bytes};
+use axum::extract::ws::Message;
 use std::pin::Pin;
 use std::{
     io::{self, ErrorKind},
