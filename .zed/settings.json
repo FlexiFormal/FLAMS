@@ -8,12 +8,11 @@
           }
         },
         "cargo": {
-          "targetDir": "target/analyzer",
           "features": [
             "ts",
             "ws",
             "docs",
-            "hydrate" //"ssr" //
+            "ssr" //"hydrate" //
           ] // "all"
         }
       }

@@ -6,6 +6,7 @@ use crate::{
     annotations::to_diagnostic,
     state::{LSPState, UrlOrFile},
     ClientExt, HtmlRequestParams, ProgressCallbackServer, QuizRequestParams,
+    StandaloneExportParams,
 };
 
 use super::{FLAMSLSPServer, ServerWrapper};
@@ -88,6 +89,65 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             })
             .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string())),
         )
+    }
+
+    pub(crate) fn export_standalone(
+        &mut self,
+        params: StandaloneExportParams,
+    ) -> <Self as LanguageServer>::NotifyResult {
+        let StandaloneExportParams { uri, target } = params;
+        let uri: UrlOrFile = uri.into();
+        let state = self.inner.state().clone();
+        let mut client = self.inner.client().clone();
+        tokio::task::spawn_blocking(move || {
+            let Some(doc) = state.get(&uri) else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!("Not a valid file path: {uri}"),
+                });
+                return;
+            };
+            let Some(doc_uri) = doc.document_uri() else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!("Document for {uri} not found"),
+                });
+                return;
+            };
+            let Some(file) = doc.path() else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!("File for {uri} not found"),
+                });
+                return;
+            };
+            let progress = ProgressCallbackServer::new(
+                client.clone(),
+                format!("Exporting {}", doc_uri.name()),
+                None,
+            );
+            if let Err(e) = flams_stex::export_standalone(doc_uri, file, &target) {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!(
+                        "Error exporting {} to {}: {e:#}",
+                        file.display(),
+                        target.display()
+                    ),
+                });
+            } else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::INFO,
+                    message: format!(
+                        "Finished exporting {} to {}\n\nYou may want to verify the exported file actually compiles",
+                        file.display(),
+                        target.display()
+                    ),
+                });
+            }
+            drop(progress);
+        });
+        ControlFlow::Continue(())
     }
 
     pub(crate) fn quiz_request(&mut self, params: QuizRequestParams) -> Res<String> {

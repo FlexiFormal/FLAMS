@@ -179,11 +179,22 @@ impl lsp::request::Request for HTMLRequest {
     const METHOD: &'static str = "flams/htmlRequest";
 }
 
+pub(crate) struct StandaloneExport;
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StandaloneExportParams {
+    pub uri: lsp::Url,
+    pub target: std::path::PathBuf,
+}
+impl lsp::notification::Notification for StandaloneExport {
+    type Params = StandaloneExportParams;
+    const METHOD: &str = "flams/standaloneExport";
+}
+
+pub(crate) struct QuizRequest;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct QuizRequestParams {
     pub uri: lsp::Url,
 }
-pub(crate) struct QuizRequest;
 impl lsp::request::Request for QuizRequest {
     type Params = QuizRequestParams;
     type Result = String;
@@ -260,6 +271,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         r.request::<HTMLRequest, _>(Self::html_request);
         r.request::<QuizRequest, _>(Self::quiz_request);
         r.notification::<Reload>(Self::reload);
+        r.notification::<StandaloneExport>(Self::export_standalone);
         r.notification::<InstallArchives>(Self::install);
         //r.request(handler)
         r
