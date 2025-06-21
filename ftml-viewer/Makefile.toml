@@ -1,11 +1,11 @@
 [env]
-LEPTOS_SASS_VERSION = "1.88.0"
+LEPTOS_SASS_VERSION = "1.89.2"
 
 #[env]
 #RUSTFLAGS = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext"
 
 [tasks.wasm-pack]
-env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
+env = { "RUSTFLAGS" = "--cfg getrandom_backend=\"wasm_js\" -Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -30,7 +30,7 @@ cp ./package.json-real ./ts/package.json
 '''
 
 [tasks.wasm-pack-ts]
-env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
+env = { "RUSTFLAGS" = "--cfg getrandom_backend=\"wasm_js\" -Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -51,7 +51,7 @@ args = [
 ]
 
 [tasks.wasm-pack-ts-dev]
-env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
+env = { "RUSTFLAGS" = "--cfg getrandom_backend=\"wasm_js\" -Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -70,7 +70,7 @@ args = [
 dependencies = ["wasm-pack-ts-dev", "update-package-json"] #,"copy-flams-to-ts"]
 
 [tasks.wasm-pack-dev]
-env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
+env = { "RUSTFLAGS" = "--cfg getrandom_backend=\"wasm_js\" -Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = ["build", "--target", "no-modules", "--dev"]
@@ -107,7 +107,7 @@ async function ftml_start() {{
 }}
 ftml_start();
     "#,
-    include_str!("../../../../source/ftml/viewer-components/ftml-top.js")
+    include_str!("../../../source/ftml/viewer-components/ftml-top.js")
         .replace("export function","function")
     ).as_bytes()).unwrap();
 }
@@ -169,7 +169,7 @@ alias = "build"
 # -----------------------------------------------------------------------
 
 [tasks.ts-build]
-env = { "RUSTFLAGS" = "-Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
+env = { "RUSTFLAGS" = "--cfg getrandom_backend=\"wasm_js\" -Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -206,7 +206,7 @@ fn main() {
     );
 
     const TOP_JS: &str =
-        include_str!("../../../../source/ftml/viewer-components/ftml-top.js");
+        include_str!("../../../source/ftml/viewer-components/ftml-top.js");
     let js_str = std::fs::read_to_string(js_file).unwrap();
     let js_str = js_str.split('\n').skip(1).collect::<Vec<_>>().join("\n");
 

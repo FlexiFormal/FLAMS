@@ -27,9 +27,11 @@ use structs::{
     MorphismKind, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode,
 };
 
+use crate::quickparse::stex::rules::{IncludeProblemArg, MHGraphicsArg};
+
 use super::latex::LaTeXParser;
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug)]
 pub struct STeXParseDataI {
     pub annotations: Vec<STeXAnnot>,
     pub diagnostics: VecSet<STeXDiagnostic>,
@@ -56,8 +58,7 @@ impl STeXParseDataI {
 pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParseDataI>>;
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum STeXAnnot {
     Module {
         uri: ModuleURI,
@@ -234,6 +235,13 @@ pub enum STeXAnnot {
         name_range: SourceRange<LSPLineCol>,
         mode: SymnameMode<LSPLineCol>,
     },
+    IncludeProblem {
+        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
+        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
+        full_range: SourceRange<LSPLineCol>,
+        token_range: SourceRange<LSPLineCol>,
+        args: Vec<IncludeProblemArg<LSPLineCol>>,
+    },
     Symuse {
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
         full_range: SourceRange<LSPLineCol>,
@@ -296,6 +304,13 @@ pub enum STeXAnnot {
         children: Vec<Self>,
         children_range: SourceRange<LSPLineCol>,
     },
+    MHGraphics {
+        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
+        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
+        full_range: SourceRange<LSPLineCol>,
+        token_range: SourceRange<LSPLineCol>,
+        args: Vec<MHGraphicsArg<LSPLineCol>>,
+    },
 }
 impl STeXAnnot {
     fn from_tokens<I: IntoIterator<Item = STeXToken<LSPLineCol>>>(
@@ -334,6 +349,19 @@ impl STeXAnnot {
                         children: Self::from_tokens(children, None),
                     });
                 }
+                STeXToken::MHGraphics {
+                    filepath,
+                    archive,
+                    full_range,
+                    token_range,
+                    args,
+                } => v.push(STeXAnnot::MHGraphics {
+                    filepath,
+                    archive,
+                    full_range,
+                    token_range,
+                    args,
+                }),
                 STeXToken::UseStructure {
                     structure,
                     structure_range,
@@ -484,6 +512,19 @@ impl STeXAnnot {
                     module,
                     token_range,
                     full_range,
+                }),
+                STeXToken::IncludeProblem {
+                    filepath,
+                    full_range,
+                    token_range,
+                    archive,
+                    args,
+                } => v.push(STeXAnnot::IncludeProblem {
+                    filepath,
+                    archive,
+                    full_range,
+                    token_range,
+                    args,
                 }),
                 STeXToken::SetMetatheory {
                     archive_range,
@@ -775,6 +816,7 @@ impl STeXAnnot {
             | Self::SetMetatheory { full_range, .. }
             | Self::Symdecl { full_range, .. }
             | Self::Symdef { full_range, .. }
+            | Self::IncludeProblem { full_range, .. }
             | Self::SymName { full_range, .. }
             | Self::Symuse { full_range, .. }
             | Self::Symref { full_range, .. }
@@ -798,6 +840,7 @@ impl STeXAnnot {
             | Self::InlineMorphism { full_range, .. }
             | Self::Precondition { full_range, .. }
             | Self::Objective { full_range, .. }
+            | Self::MHGraphics { full_range, .. }
             | Self::TextSymdecl { full_range, .. } => *full_range,
         }
     }
@@ -920,6 +963,8 @@ impl TreeLike for STeXAnnot {
             | Self::Precondition { .. }
             | Self::Objective { .. }
             | Self::RenameDecl { .. }
+            | Self::IncludeProblem { .. }
+            | Self::MHGraphics { .. }
             | Self::Assign { .. } => None,
         }
     }

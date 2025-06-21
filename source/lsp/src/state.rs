@@ -1,7 +1,4 @@
-use std::{
-    collections::hash_map::Entry,
-    path::Path
-};
+use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
 use flams_ontology::uris::{DocumentURI, URIRefTrait};
@@ -13,19 +10,20 @@ use flams_system::{
     backend::{
         archives::{
             source_files::{SourceDir, SourceEntry},
-            Archive, 
+            Archive,
         },
         AnyBackend, Backend, GlobalBackend, TemporaryBackend,
     },
     formats::OMDocResult,
 };
 use flams_utils::{
-    impossible, prelude::{HMap, TreeChildIter}, sourcerefs::{LSPLineCol, SourceRange}
+    impossible,
+    prelude::{HMap, TreeChildIter},
+    sourcerefs::{LSPLineCol, SourceRange},
 };
 
 use crate::{
-    annotations::to_diagnostic, documents::LSPDocument,
-    ClientExt, LSPStore, ProgressCallbackServer,
+    annotations::to_diagnostic, documents::LSPDocument, ClientExt, LSPStore, ProgressCallbackServer,
 };
 
 #[derive(Clone)]
@@ -63,9 +61,7 @@ impl DocData {
             }
             (d1 @ Self::Data(_, false), Self::Data(d2, true)) => {
                 {
-                    let Self::Data(_, _) = d1 else {
-                        impossible!()
-                    };
+                    let Self::Data(_, _) = d1 else { impossible!() };
                     //merge_a(&mut d1.lock(),&mut d2.lock());
                 }
                 *d1 = Self::Data(d2, true)
@@ -298,19 +294,19 @@ impl LSPState {
     }
 
     pub fn relint_dependents(self, path: std::sync::Arc<Path>) { /*
-                                                                     let docs = self.documents.read();
-                                                                     let mut deps = vec![UrlOrFile::File(path.clone())];
-                                                                     for (k,v) in docs.iter() {
-                                                                       if matches!(k,UrlOrFile::File(p) if p == path) { continue }
-                                                                       let d = match v {
-                                                                         DocData::Doc(d) => &d.annotations,
-                                                                         DocData::Data(d,_) => d
-                                                                       };
-                                                                       let lock = d.lock();
-                                                                       if lock.dependencies.contains(&path) {
-                                                                         deps.push(k.clone());
-                                                                       }
-                                                                     } */
+                                                                 let docs = self.documents.read();
+                                                                 let mut deps = vec![UrlOrFile::File(path.clone())];
+                                                                 for (k,v) in docs.iter() {
+                                                                   if matches!(k,UrlOrFile::File(p) if p == path) { continue }
+                                                                   let d = match v {
+                                                                     DocData::Doc(d) => &d.annotations,
+                                                                     DocData::Data(d,_) => d
+                                                                   };
+                                                                   let lock = d.lock();
+                                                                   if lock.dependencies.contains(&path) {
+                                                                     deps.push(k.clone());
+                                                                   }
+                                                                 } */
     }
     /*
     fn relint_dependents_i(&mut self,path:std::sync::Arc<Path>,&mut v:Vec<UrlOrFile>) {

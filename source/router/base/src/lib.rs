@@ -20,7 +20,7 @@ pub fn vscode_link(
 ) -> impl IntoView + use<> {
     let href = format!("vscode://kwarc.flams/open?a={archive}&rp={rel_path}");
     view! {
-        <a href=href><thaw::Icon icon=icondata_tb::TbBrandVscode/></a>
+        <a href=href><thaw::Icon icon=icondata_tb::TbBrandVscodeOutline/></a>
     }
 }
 

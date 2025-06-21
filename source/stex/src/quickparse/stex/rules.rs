@@ -58,14 +58,17 @@ pub fn all_rules<
         Err,
         STeXParseState<'a, LSPLineCol, MS>,
     >,
-); 40] {
+); 43] {
     [
         ("importmodule", importmodule as _),
         ("setmetatheory", setmetatheory as _),
         ("usemodule", usemodule as _),
         ("usestructure", usestructure as _),
         ("inputref", inputref as _),
+        ("includeproblem", includeproblem as _),
         ("mhinput", mhinput as _),
+        ("mhgraphics", mhgraphics as _),
+        ("cmhgraphics", mhgraphics as _),
         ("stexstyleassertion", stexstyleassertion as _),
         ("stexstyledefinition", stexstyledefinition as _),
         ("stexstyleparagraph", stexstyleparagraph as _),
@@ -456,6 +459,7 @@ fn strip_comments(s: &str) -> Cow<'_, str> {
 
 macro_rules! optargtype {
   ($parser:ident => $name:ident { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? }) => {
+    #[derive(serde::Serialize)]
     pub enum $name<Pos:SourcePos> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE $($tp)*)>)
@@ -493,7 +497,7 @@ macro_rules! optargtype {
     }
   };
   ($parser:ident => $name:ident <T> { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? } @ $iter:ident) => {
-    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+    #[derive(serde::Serialize)]
     pub enum $name<Pos:SourcePos,T:CondSerialize> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE T $($tp)*)>)
@@ -579,7 +583,7 @@ macro_rules! optargtype {
   };
   (LSP $parser:ident => $name:ident <T> { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? } @ $iter:ident) => {
 
-    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+    #[derive(serde::Serialize)]
     pub enum $name<Pos:SourcePos,T:CondSerialize> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE T $($tp)*)>)
@@ -788,6 +792,104 @@ macro_rules! optargtype {
     optargtype!(@DOITER $e $name {$($tks)*} { $($rest)* })
   };
 }
+
+optargtype! {parser =>
+  IncludeProblemArg {
+    {Pts = "pts" : f32}
+    {Min = "min": f32}
+    {Archive = "archive": str}
+  }
+}
+
+stex!(p => includeproblem[args:type IncludeProblemArg<Pos>]{filepath:name} => {
+    let args = args.unwrap_or_default();
+      let archive = args.iter().find_map(|p| if let IncludeProblemArg::Archive(a) = p {Some(a)} else {None})
+          .map(|p| (ArchiveId::new(&p.val),p.val_range));
+      let rel_path: std::sync::Arc<str> = if filepath.0.ends_with(".tex") {
+        filepath.0.into()
+      } else {
+        format!("{}.tex",filepath.0).into()
+      };
+      {
+          if let Some(id) = archive.as_ref().map_or_else(||
+              p.state.archive.as_ref().map(|a| a.id()),
+              |(a,_)| Some(a)
+          ) {
+              p.state.backend.with_local_archive(id,|a|
+                  if let Some(a) = a {
+                      let path = a.source_dir();
+                      let path = rel_path.as_ref().split('/').fold(path,|p,s| p.join(s));
+                      if !path.exists() {
+                          p.tokenizer.problem(filepath.1.start,format!("File {} not found",path.display()),DiagnosticLevel::Error);
+                      }
+                  } else {}
+              );
+          }
+      }
+      let filepath = (rel_path,filepath.1);
+      MacroResult::Success(STeXToken::IncludeProblem {
+        filepath,full_range:includeproblem.range,archive,
+        token_range:includeproblem.token_range,args
+      })
+    }
+);
+
+optargtype! {parser =>
+  MHGraphicsArg {
+    {Width = "width" : str}
+    {Height = "height": str}
+    {Archive = "archive": str}
+  }
+}
+
+stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
+    fn img_exists(path:&Path,rel_path:&mut String) -> bool {
+        const IMG_EXTS: [&str;8] = ["png","PNG","jpg","JPG","jpeg","JPEG","bmp","BMP"];
+        if path.extension().is_some_and(|s| s.to_str().is_some_and(|s| IMG_EXTS.contains(&s))) {
+            return path.exists();
+        }
+        for e in &IMG_EXTS {
+            if path.with_extension(e).exists() {
+                if let Some(ex) = path.extension().and_then(|s| s.to_str()) {
+                    let len = rel_path.len() - ex.len();
+                    rel_path.truncate(len);
+                    rel_path.push_str(*e);
+                } else {
+                    rel_path.push('.');
+                    rel_path.push_str(*e);
+                }
+                return true
+            }
+        }
+        false
+    }
+    let args = args.unwrap_or_default();
+      let archive = args.iter().find_map(|p| if let MHGraphicsArg::Archive(a) = p {Some(a)} else {None})
+          .map(|p| (ArchiveId::new(&p.val),p.val_range));
+      let mut rel_path = filepath.0.to_string();
+      {
+          if let Some(id) = archive.as_ref().map_or_else(||
+              p.state.archive.as_ref().map(|a| a.id()),
+              |(a,_)| Some(a)
+          ) {
+              p.state.backend.with_local_archive(id,|a|
+                  if let Some(a) = a {
+                      let path = a.source_dir();
+                      let path = rel_path.as_str().split('/').fold(path,|p,s| p.join(s));
+                      if !img_exists(&path,&mut rel_path) {
+                          p.tokenizer.problem(filepath.1.start,format!("Image file {} not found",path.display()),DiagnosticLevel::Error);
+                      }
+                  } else {}
+              );
+          }
+      }
+      let filepath = (rel_path.into(),filepath.1);
+      MacroResult::Success(STeXToken::MHGraphics {
+        filepath,full_range:mhgraphics.range,archive,
+        token_range:mhgraphics.token_range,args
+      })
+    }
+);
 
 optargtype! {parser =>
   SymdeclArg<T> {

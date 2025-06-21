@@ -21,7 +21,7 @@ flams-utils = { workspace = true, features = ["serde", "tokio"] }
 flams-ontology = { workspace = true, features = ["serde", "tantivy"] }
 flams-system = { workspace = true, features = ["tantivy"] }
 flams-lsp = { workspace = true, features = ["ws"] }
-flams-stex = { workspace = true, features = ["serde"] }
+flams-stex = { workspace = true }
 flams-ftml = { workspace = true }
 flams-git = { workspace = true, features = ["git2"] }
 git2 = { workspace = true }

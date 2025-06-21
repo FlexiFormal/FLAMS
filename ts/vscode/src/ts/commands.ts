@@ -7,8 +7,6 @@ import { Clipboard } from "vscode";
 import { insertUsemodule } from "./utils";
 
 export enum Commands {
-  HelloWorld = "flams.helloWorld",
-  FlamsMissing = "flams.flams_missing",
   openFile = "flams.openFile",
 }
 
@@ -19,10 +17,6 @@ export enum Settings {
 }
 
 export function register_commands(context: FLAMSPreContext) {
-  //import { greet } from '../../pkg/flams_vscode';
-  /*context.register_command(Commands.HelloWorld, () => {
-    vscode.window.showInformationMessage(greet("Dude"));
-  });*/
   context.vsc.subscriptions.push(
     vscode.commands.registerCommand(Commands.openFile, (arg) => {
       vscode.window.showTextDocument(arg);
@@ -36,6 +30,11 @@ interface HtmlRequestParams {
 
 interface QuizRequestParams {
   uri: language.URI;
+}
+
+interface StandaloneExportParams {
+  uri: language.URI;
+  target: string;
 }
 
 interface ReloadParams {}
@@ -229,6 +228,28 @@ function flamsTools(msg: any, context: FLAMSContext) {
               );
             }
           });
+      } else {
+        vscode.window.showInformationMessage("(No sTeX file in focus)");
+      }
+      break;
+    case "standalone":
+      if (doc) {
+        vscode.window.showOpenDialog({
+          title: "Export packaged standalone document",
+          openLabel:"Select directory",
+          canSelectFiles: false,
+          canSelectFolders: true,
+          canSelectMany: false,
+        }).then((uri) => {
+          const path = uri?.[0].fsPath;
+          if (!path) { return; }
+          context.client.sendNotification("flams/standaloneExport", 
+            <StandaloneExportParams>{ 
+              uri: doc.uri.toString() ,
+              target:path,
+            }
+          );
+        });
       } else {
         vscode.window.showInformationMessage("(No sTeX file in focus)");
       }

@@ -37,7 +37,9 @@ impl PathURI {
     pub fn up(mut self) -> Self {
         if let Some(name) = &mut self.path {
             name.0.pop();
-            if name.0.is_empty() {self.path = None}
+            if name.0.is_empty() {
+                self.path = None
+            }
         }
         self
     }
