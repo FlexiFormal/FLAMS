@@ -61,14 +61,28 @@ mod tests {
 
     #[test]
     fn ignore_test() {
+        #[cfg(target_os = "windows")]
+        let source = Path::new("C:\\Users\\jazzpirate\\work\\MathHub\\sTeX\\Documentation\\source");
+
+        #[cfg(target_os = "linux")]
         let source = Path::new("/home/jazzpirate/work/MathHub/sTeX/Documentation/source");
+
         let ignore = get_ignore(source);
         tracing::info!("Ignore: {ignore}");
 
+        #[cfg(target_os = "linux")]
         let path = Path::new("/home/jazzpirate/work/MathHub/sTeX/Documentation/source/tutorial/solution/preamble.tex");
 
+        #[cfg(target_os = "windows")]
+        let path = Path::new("C:\\Users\\jazzpirate\\work\\MathHub\\sTeX\\Documentation\\source\\tutorial\\solution\\preamble.tex");
+
         assert!(ignore.ignores(path));
+        #[cfg(target_os = "linux")]
         let path = Path::new("/home/jazzpirate/work/MathHub/sTeX/Documentation/source/tutorial/math/assertions.en.tex");
+
+        #[cfg(target_os = "windows")]
+        let path = Path::new("C:\\Users\\jazzpirate\\work\\MathHub\\sTeX\\Documentation\\source\\tutorial\\math\\assertions.en.tex");
+
         assert!(!ignore.ignores(path));
     }
 }
