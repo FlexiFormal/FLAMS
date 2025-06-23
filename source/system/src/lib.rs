@@ -14,12 +14,9 @@ pub mod settings;
 
 use backend::GlobalBackend;
 use building::queue_manager::QueueManager;
-use building::queue_manager::QueueManager;
 #[cfg(feature = "tokio")]
 use flams_utils::background;
 use formats::FLAMSExtension;
-use formats::FLAMSExtension;
-use settings::SettingsSpec;
 use settings::SettingsSpec;
 
 /// #### Panics

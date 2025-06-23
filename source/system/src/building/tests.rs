@@ -63,9 +63,6 @@ lazy_static::lazy_static! {
       admin_pwd:None,
     },
     log_dir:None,
-    database : None,
-    gitlab : GitlabSettings{ url: None, token: None, app_id: None, app_secret: None, redirect_url:None},
-    temp_dir : None,
     buildqueue:BuildQueueSettings {
       num_threads:Some(4)
     }

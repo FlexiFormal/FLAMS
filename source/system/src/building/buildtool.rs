@@ -9,5 +9,8 @@ impl Queue {
         let tasks = map.map.values().collect::<Vec<_>>();
         let buildask = tasks[0];
         let steps = buildask.steps();
+        for i in steps {
+            print!("{:?}", i);
+        }
     }
 }
