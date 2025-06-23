@@ -38,7 +38,11 @@ fn extract(backend:&AnyBackend,task:&BuildTask) -> BuildResult {
     Err(e) => return e,
     Ok(h) => h
   };
-  match build_ftml(backend,&html.0,task.document_uri(),task.rel_path()) {
+  let uri = match task.document_uri() {
+    Ok(uri) => uri,
+    Err(e) => return BuildResult::with_err(format!("{e:#}"))
+  };
+  match build_ftml(backend,&html.0,uri,task.rel_path()) {
     Err(e) => BuildResult {
       log:Either::Left(e),
       result:Err(Vec::new())

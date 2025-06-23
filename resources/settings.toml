@@ -4,16 +4,16 @@
 # database = "~/.flams/users.sqlite"
 
 [server]
-# port = 3000
+# port = 8095
 # ip = "127.0.0.1"
 # admin_pwd = "foobar"
-# external_url = "https://flams.mathhub.info"
+# external_url = "https://mathhub.info"
 
 [buildqueue]
 # num_threads=6
 
 [gitlab]
-# url = "https://gl.mathhub.info"
+# url = "https://mathhub.info"
 # token = "SECRET_TOKEN"
 # app_id = "APP_ID"
 # app_secret = "APP_SECRET"

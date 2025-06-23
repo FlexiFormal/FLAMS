@@ -5,22 +5,15 @@ use std::{
 };
 
 use either::Either;
-<<<<<<< HEAD
-use flams_ontology::{
-    languages::Language,
-    uris::{
-        ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, URIRefTrait,
-    },
+use flams_ontology::uris::{
+    ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, URIRefTrait,
 };
 use flams_utils::{
     time::Eta,
     triomphe::Arc,
     vecmap::{VecMap, VecSet},
 };
-=======
-use flams_ontology::uris::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, URIRefTrait};
 use flams_utils::{time::Eta, triomphe::Arc, vecmap::{VecMap, VecSet}};
->>>>>>> origin/devel
 use parking_lot::RwLock;
 
 use crate::formats::{BuildArtifactTypeId, BuildTargetId};
@@ -100,7 +93,7 @@ pub struct BuildTask(Arc<BuildTaskI>);
 impl BuildTask {
     #[must_use]
     #[inline]
-    pub fn document_uri(&self) -> DocumentURI {
+    pub fn document_uri(&self) -> eyre::Result<DocumentURI> {
         DocumentURI::from_archive_relpath(self.archive().owned(), self.rel_path())
     }
     #[must_use]
@@ -171,7 +164,7 @@ struct BuildStepI {
     //task:std::sync::Weak<BuildTaskI>,
     target: BuildTargetId,
     state: RwLock<TaskState>,
-    yields: RwLock<Vec<ModuleURI>>,
+    //yields:RwLock<Vec<ModuleURI>>,
     requires: RwLock<VecSet<Dependency>>,
     dependents: RwLock<Vec<(BuildTaskId, BuildTargetId)>>,
 }
@@ -223,6 +216,7 @@ pub struct BuildResult {
 }
 impl BuildResult {
     #[must_use]
+    #[inline]
     pub const fn empty() -> Self {
         Self {
             log: Either::Left(String::new()),
@@ -230,9 +224,18 @@ impl BuildResult {
         }
     }
     #[must_use]
+    #[inline]
     pub const fn err() -> Self {
         Self {
             log: Either::Left(String::new()),
+            result: Err(Vec::new()),
+        }
+    }
+
+    #[inline]
+    pub fn with_err(s: String) -> Self {
+        Self {
+            log: Either::Left(s),
             result: Err(Vec::new()),
         }
     }

@@ -1,0 +1,84 @@
+[package]
+name = "flams-router-dashboard"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "thaw/ssr",
+    "flams-web-utils/ssr",
+    "dep:flams-system",
+    "dep:flams-git",
+    "dep:tokio",
+    "dep:leptos_axum",
+    "dep:axum",
+    "ftml-viewer-components/ssr",
+    "leptos_router/ssr",
+    "flams-router-base/ssr",
+    "flams-router-content/ssr",
+    "flams-router-backend/ssr",
+    "flams-router-logging/ssr",
+    "flams-router-buildqueue-base/ssr",
+    "flams-router-buildqueue-components/ssr",
+    "flams-router-git-base/ssr",
+    "flams-router-git-components/ssr",
+    "flams-router-login/ssr",
+    "flams-router-vscode/ssr",
+    "flams-router-search/ssr",
+]
+hydrate = [
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "ftml-viewer-components/hydrate",
+    "flams-web-utils/hydrate",
+    "flams-router-base/hydrate",
+    "flams-router-content/hydrate",
+    "flams-router-backend/hydrate",
+    "flams-router-logging/hydrate",
+    "flams-router-buildqueue-base/hydrate",
+    "flams-router-buildqueue-components/hydrate",
+    "flams-router-git-base/hydrate",
+    "flams-router-git-components/hydrate",
+    "flams-router-login/hydrate",
+    "flams-router-vscode/hydrate",
+    "flams-router-search/hydrate",
+]
+docs-only = []
+
+[dependencies]
+flams-utils = { workspace = true }
+flams-ontology = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-router-base = { workspace = true }
+flams-router-content = { workspace = true }
+flams-router-backend = { workspace = true }
+flams-router-logging = { workspace = true }
+flams-router-buildqueue-base = { workspace = true }
+flams-router-buildqueue-components = { workspace = true }
+flams-router-git-base = { workspace = true }
+flams-router-git-components = { workspace = true }
+flams-router-login = { workspace = true }
+flams-router-vscode = { workspace = true }
+flams-router-search = { workspace = true }
+ftml-viewer-components = { workspace = true, features = ["omdoc"] }
+flams-system = { workspace = true, optional = true, features = ["tokio"] }
+flams-git = { workspace = true, optional = true, features = ["gitlab"] }
+
+leptos = { workspace = true }
+leptos_router = { workspace = true }
+leptos_meta = { workspace = true }
+thaw = { workspace = true }
+tracing = { workspace = true }
+icondata_ai = { workspace = true }
+icondata_bi = { workspace = true }
+
+serde = { workspace = true }
+#async-trait = { workspace = true }
+tokio = { workspace = true, optional = true }
+leptos_axum = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+#serde_json = { workspace = true, optional = true }

@@ -1,0 +1,39 @@
+[package]
+name = "flams-router-logging"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "thaw/ssr",
+    "flams-web-utils/ssr",
+    "flams-router-base/ssr",
+    "dep:flams-system",
+    "dep:tokio",
+    "dep:serde_json",
+]
+hydrate = [
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "flams-web-utils/hydrate",
+    "flams-router-base/hydrate",
+]
+docs-only = []
+
+[dependencies]
+flams-utils = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-router-base = { workspace = true }
+flams-system = { workspace = true, optional = true, features = ["tokio"] }
+
+leptos = { workspace = true }
+thaw = { workspace = true }
+
+serde = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }

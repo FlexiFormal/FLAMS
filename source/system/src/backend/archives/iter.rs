@@ -287,9 +287,12 @@ fn read_index_file(archive:&ArchiveURI,path:&Path) -> (Box<[Institution]>,Box<[A
                         }
                     }
                 }
-                idxs.push(ArchiveIndex::from_kind(d,archive,
+                match ArchiveIndex::from_kind(d,archive,
                     |i| format!("{}/img?a={}&rp=source/{i}",crate::settings::Settings::get().external_url().unwrap_or(""),archive.archive_id()).into_boxed_str()
-                ));
+                ) {
+                    Ok(e) => idxs.push(e),
+                    Err(e) => tracing::error!("Error in index file {}: {e:#}",path.display())
+                }
             },
             ArchiveDatum::Institution(i) => insts.push(match i {
                 Institution::University { title, place, country, url, acronym, logo }

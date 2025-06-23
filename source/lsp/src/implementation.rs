@@ -2,71 +2,193 @@
 
 use std::ops::ControlFlow;
 
-use crate::{annotations::to_diagnostic, ClientExt, HtmlRequestParams, LSPStore, ProgressCallbackClient, ProgressCallbackServer};
+use crate::{
+    annotations::to_diagnostic,
+    state::{LSPState, UrlOrFile},
+    ClientExt, HtmlRequestParams, ProgressCallbackServer, QuizRequestParams,
+    StandaloneExportParams,
+};
 
-use super::{FLAMSLSPServer,ServerWrapper};
-use async_lsp::{lsp_types::{self as lsp}, LanguageClient, LanguageServer, ResponseError};
-use flams_system::backend::archives::LocalArchive;
+use super::{FLAMSLSPServer, ServerWrapper};
+use async_lsp::{
+    lsp_types::{self as lsp},
+    LanguageClient, LanguageServer, ResponseError,
+};
+use flams_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
 macro_rules! impl_request {
-  ($name:ident = $struct:ident) => {
-      #[must_use]
-      fn $name(&mut self, params: <lsp::request::$struct as lsp::request::Request>::Params) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
-          tracing::info!("LSP: {params:?}");
-          Box::pin(std::future::ready(Err(
-              ResponseError::new(
-                  async_lsp::ErrorCode::METHOD_NOT_FOUND,
-                  format!("No such method: {}", <lsp::request::$struct as lsp::request::Request>::METHOD)
-              )
-          )))
-      }
-  };
-  (? $name:ident = $struct:ident => ($default:expr)) => {
-      #[must_use]
-      fn $name(&mut self, params: <lsp::request::$struct as lsp::request::Request>::Params) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
-          tracing::info!("LSP: {params:?}");
-          Box::pin(std::future::ready(Ok($default)))
-      }
-  };
-  (! $name:ident = $struct:ident => ($default:expr)) => {
-      #[must_use]
-      fn $name(&mut self, params: <lsp::request::$struct as lsp::request::Request>::Params) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
-          tracing::debug!("LSP: {params:?}");
-          Box::pin(std::future::ready(Ok($default)))
-      }
-  };
+    ($name:ident = $struct:ident) => {
+        fn $name(
+            &mut self,
+            params: <lsp::request::$struct as lsp::request::Request>::Params,
+        ) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
+            tracing::info!("LSP: {params:?}");
+            Box::pin(std::future::ready(Err(ResponseError::new(
+                async_lsp::ErrorCode::METHOD_NOT_FOUND,
+                format!(
+                    "No such method: {}",
+                    <lsp::request::$struct as lsp::request::Request>::METHOD
+                ),
+            ))))
+        }
+    };
+    (? $name:ident = $struct:ident => ($default:expr)) => {
+        fn $name(
+            &mut self,
+            params: <lsp::request::$struct as lsp::request::Request>::Params,
+        ) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
+            tracing::info!("LSP: {params:?}");
+            Box::pin(std::future::ready(Ok($default)))
+        }
+    };
+    (! $name:ident = $struct:ident => ($default:expr)) => {
+        fn $name(
+            &mut self,
+            params: <lsp::request::$struct as lsp::request::Request>::Params,
+        ) -> Res<<lsp::request::$struct as lsp::request::Request>::Result> {
+            tracing::debug!("LSP: {params:?}");
+            Box::pin(std::future::ready(Ok($default)))
+        }
+    };
 }
 
 macro_rules! impl_notification {
-  (! $name:ident = $struct:ident) => {
-      #[must_use]
-      fn $name(&mut self, params: <lsp::notification::$struct as lsp::notification::Notification>::Params) -> Self::NotifyResult {
-          tracing::debug!("LSP: {params:?}");
-          ControlFlow::Continue(())
-      }
-  };
-  ($name:ident = $struct:ident) => {
-      #[must_use]
-      fn $name(&mut self, params: <lsp::notification::$struct as lsp::notification::Notification>::Params) -> Self::NotifyResult {
-          tracing::info!("LSP: {params:?}");
-          ControlFlow::Break(Err(async_lsp::Error::Routing(format!(
-              "Unhandled notification: {}",
-              <lsp::notification::$struct as lsp::notification::Notification>::METHOD,
-          ))))
-      }
-  }
+    (! $name:ident = $struct:ident) => {
+        fn $name(
+            &mut self,
+            params: <lsp::notification::$struct as lsp::notification::Notification>::Params,
+        ) -> Self::NotifyResult {
+            tracing::debug!("LSP: {params:?}");
+            ControlFlow::Continue(())
+        }
+    };
+    ($name:ident = $struct:ident) => {
+        fn $name(
+            &mut self,
+            params: <lsp::notification::$struct as lsp::notification::Notification>::Params,
+        ) -> Self::NotifyResult {
+            tracing::info!("LSP: {params:?}");
+            ControlFlow::Break(Err(async_lsp::Error::Routing(format!(
+                "Unhandled notification: {}",
+                <lsp::notification::$struct as lsp::notification::Notification>::METHOD,
+            ))))
+        }
+    };
 }
 
-impl<T:FLAMSLSPServer> ServerWrapper<T> {
-    pub(crate) fn html_request(&mut self,params:HtmlRequestParams) -> Res<Option<String>> {
+impl<T: FLAMSLSPServer> ServerWrapper<T> {
+    pub(crate) fn html_request(&mut self, params: HtmlRequestParams) -> Res<Option<String>> {
         let mut client = self.inner.client().clone();
         let state = self.inner.state().clone();
-        Box::pin(tokio::task::spawn_blocking(move || {
-            state.build_html(&params.uri.into(), &mut client).map(|d| d.to_string())
-        }).map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string())))
+        Box::pin(
+            tokio::task::spawn_blocking(move || {
+                state
+                    .build_html(&params.uri.into(), &mut client)
+                    .map(|d| d.to_string())
+            })
+            .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string())),
+        )
     }
-    pub(crate) fn reload(&mut self,_:crate::ReloadParams) -> <Self as LanguageServer>::NotifyResult {
+
+    pub(crate) fn export_standalone(
+        &mut self,
+        params: StandaloneExportParams,
+    ) -> <Self as LanguageServer>::NotifyResult {
+        let StandaloneExportParams { uri, target } = params;
+        let uri: UrlOrFile = uri.into();
+        let state = self.inner.state().clone();
+        let mut client = self.inner.client().clone();
+        tokio::task::spawn_blocking(move || {
+            let Some(doc) = state.get(&uri) else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!("Not a valid file path: {uri}"),
+                });
+                return;
+            };
+            let Some(doc_uri) = doc.document_uri() else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!("Document for {uri} not found"),
+                });
+                return;
+            };
+            let Some(file) = doc.path() else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!("File for {uri} not found"),
+                });
+                return;
+            };
+            let progress = ProgressCallbackServer::new(
+                client.clone(),
+                format!("Exporting {}", doc_uri.name()),
+                None,
+            );
+            if let Err(e) = flams_stex::export_standalone(doc_uri, file, &target) {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::ERROR,
+                    message: format!(
+                        "Error exporting {} to {}: {e:#}",
+                        file.display(),
+                        target.display()
+                    ),
+                });
+            } else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::INFO,
+                    message: format!(
+                        "Finished exporting {} to {}\n\nYou may want to verify the exported file actually compiles",
+                        file.display(),
+                        target.display()
+                    ),
+                });
+            }
+            drop(progress);
+        });
+        ControlFlow::Continue(())
+    }
+
+    pub(crate) fn quiz_request(&mut self, params: QuizRequestParams) -> Res<String> {
+        use flams_system::backend::docfile::QuizExtension;
+        fn get_res(url: UrlOrFile, state: LSPState) -> Result<String, String> {
+            let doc = state
+                .get(&url)
+                .ok_or_else(|| "Document not found".to_string())?;
+            let uri = doc
+                .document_uri()
+                .ok_or_else(|| "Document URI not found".to_string())?;
+            let doc = state
+                .backend()
+                .get_document(uri)
+                .ok_or_else(|| "Document not found".to_string())?;
+            let quiz = doc.as_quiz(state.backend()).map_err(|e| format!("{e:#}"))?;
+            serde_json::to_string(&quiz).map_err(|e| format!("{e:#}"))
+        }
+        let state = self.inner.state().clone();
+        let mut client = self.inner.client().clone();
+        Box::pin(async move {
+            let url: UrlOrFile = params.uri.into();
+            tokio::task::spawn_blocking(move || match get_res(url, state) {
+                Err(e) => {
+                    let _ = client.show_message(lsp::ShowMessageParams {
+                        typ: lsp::MessageType::ERROR,
+                        message: e.clone(),
+                    });
+                    Err(ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e))
+                }
+                Ok(r) => Ok(r),
+            })
+            .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string()))
+            .await?
+        })
+    }
+
+    pub(crate) fn reload(
+        &mut self,
+        _: crate::ReloadParams,
+    ) -> <Self as LanguageServer>::NotifyResult {
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
         let _ = tokio::task::spawn_blocking(move || {
@@ -78,20 +200,44 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
         ControlFlow::Continue(())
     }
 
-    pub(crate) fn install(&mut self,params:crate::InstallParams) -> <Self as LanguageServer>::NotifyResult {
+    pub(crate) fn install(
+        &mut self,
+        params: crate::InstallParams,
+    ) -> <Self as LanguageServer>::NotifyResult {
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
         let mut progress = ProgressCallbackServer::new(client, "Installing".to_string(), None);
         let _ = tokio::task::spawn(async move {
-            let crate::InstallParams { mut archives,remote_url } = params;
+            let crate::InstallParams {
+                archives,
+                remote_url,
+            } = params;
             let mut rescan = false;
-            for a in archives {
+            let archives = {
+                let mut ret = Vec::new();
+                let exis = GlobalBackend::get().all_archives();
+                for a in archives {
+                    if exis.iter().any(|e| *e.id() == a) || ret.contains(&a) {
+                        continue;
+                    }
+                    ret.push(a);
+                }
+                ret
+            };
+            let len = archives.len();
+            for (i, a) in archives.into_iter().enumerate() {
                 let url = format!("{remote_url}/api/backend/download?id={a}");
-                progress.update(a.to_string(), None);
-                if LocalArchive::unzip_from_remote(a.clone(), &url).await.is_err() {
+                let prefix = format!("{}/{len}: {a}", i + 1);
+                progress.update(prefix.clone(), None);
+                if LocalArchive::unzip_from_remote(a.clone(), &url, |p| {
+                    progress.update(format!("{prefix}: {}", p.display()), None)
+                })
+                .await
+                .is_err()
+                {
                     let _ = progress.client_mut().show_message(lsp::ShowMessageParams {
-                        message:format!("Failed to install archive {a}"),
-                        typ:lsp::MessageType::ERROR
+                        message: format!("Failed to install archive {a}"),
+                        typ: lsp::MessageType::ERROR,
                     });
                 } else {
                     rescan = true;
@@ -100,7 +246,8 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
             let client = progress.client().clone();
             drop(progress);
             if rescan {
-                let _ = tokio::task::spawn_blocking(move || { // <- necessary, but I don't quite understand why
+                let _ = tokio::task::spawn_blocking(move || {
+                    // <- necessary, but I don't quite understand why
                     state.backend().reset();
                     state.load_mathhubs(client.clone());
                     client.update_mathhub();
@@ -113,78 +260,72 @@ impl<T:FLAMSLSPServer> ServerWrapper<T> {
     }
 }
 
-type Res<T> = BoxFuture<'static,Result<T,ResponseError>>;
+type Res<T> = BoxFuture<'static, Result<T, ResponseError>>;
 
-impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
-  type Error = ResponseError;
-  type NotifyResult = ControlFlow<async_lsp::Result<()>>;
+impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
+    type Error = ResponseError;
+    type NotifyResult = ControlFlow<async_lsp::Result<()>>;
 
-
-    fn initialize(
-        &mut self,
-        params: lsp::InitializeParams,
-    ) -> Res<lsp::InitializeResult> {
+    fn initialize(&mut self, params: lsp::InitializeParams) -> Res<lsp::InitializeResult> {
         tracing::info!("LSP: initialize");
         self.inner.initialize(
-            params.workspace_folders
-            .unwrap_or_default().into_iter()
-            .map(|f| (f.name,f.uri))
+            params
+                .workspace_folders
+                .unwrap_or_default()
+                .into_iter()
+                .map(|f| (f.name, f.uri)),
         );
         Box::pin(std::future::ready({
             Ok(lsp::InitializeResult {
                 capabilities: super::capabilities::capabilities(),
-                server_info:None
+                server_info: None,
             })
         }))
     }
 
-
-    #[must_use]
-    fn shutdown(
-        &mut self,
-        (): (),
-    ) -> Res<()> {
+    fn shutdown(&mut self, (): ()) -> Res<()> {
         tracing::info!("LSP: shutdown");
         Box::pin(std::future::ready(Ok(())))
     }
 
     // Notifications -------------------------------------------
 
-    #[must_use]
     //impl_notification!(! initialized = Initialized);
     fn initialized(&mut self, _params: lsp::InitializedParams) -> Self::NotifyResult {
         tracing::info!("LSP: initialized");
         self.inner.initialized();
         /*
          */
-      ControlFlow::Continue(())
+        ControlFlow::Continue(())
     }
 
-    impl_notification!(! exit = Exit);
+    impl_notification!(!exit = Exit);
 
     // workspace/
-    impl_notification!(! did_change_workspace_folders = DidChangeWorkspaceFolders);
-    impl_notification!(! did_change_configuration = DidChangeConfiguration);
-    impl_notification!(! did_change_watched_files = DidChangeWatchedFiles);
-    impl_notification!(! did_create_files = DidCreateFiles);
-    impl_notification!(! did_rename_files = DidRenameFiles);
-    impl_notification!(! did_delete_files = DidDeleteFiles);
+    impl_notification!(!did_change_workspace_folders = DidChangeWorkspaceFolders);
+    impl_notification!(!did_change_configuration = DidChangeConfiguration);
+    impl_notification!(!did_change_watched_files = DidChangeWatchedFiles);
+    impl_notification!(!did_create_files = DidCreateFiles);
+    impl_notification!(!did_rename_files = DidRenameFiles);
+    impl_notification!(!did_delete_files = DidDeleteFiles);
 
     // textDocument/
-    #[must_use]
     //impl_notification!(! did_open = DidOpenTextDocument);
     fn did_open(&mut self, params: lsp::DidOpenTextDocumentParams) -> Self::NotifyResult {
         let document = params.text_document;
-        tracing::trace!("URI: {}, language: {}, version: {}, text: \n{}",
+        tracing::trace!(
+            "URI: {}, language: {}, version: {}, text: \n{}",
             document.uri,
             document.language_id,
             document.version,
             document.text
         );
-        self.inner.state().insert(document.uri.into(),document.text);
+        self.inner
+            .state()
+            .insert(document.uri.into(), document.text);
         ControlFlow::Continue(())
     }
-    #[must_use]
+
     #[allow(clippy::let_underscore_future)]
     //impl_notification!(! did_change = DidChangeTextDocument);
     fn did_change(&mut self, params: lsp::DidChangeTextDocumentParams) -> Self::NotifyResult {
@@ -192,7 +333,8 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         let uri = document.uri.clone().into();
         if let Some(d) = self.inner.state().get(&uri) {
             for change in params.content_changes {
-                tracing::trace!("URI: {},version: {}, text: \"{}\", range: {:?}",
+                tracing::trace!(
+                    "URI: {},version: {}, text: \"{}\", range: {:?}",
                     document.uri,
                     document.version,
                     change.text,
@@ -201,25 +343,24 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
                 d.delta(change.text, change.range);
             }
             let mut client = self.inner.client().clone();
-            let _ = tokio::spawn(d.with_annots(self.inner.state().clone(),move |a| {
+            let _ = tokio::spawn(d.with_annots(self.inner.state().clone(), move |a| {
                 let r = lsp::PublishDiagnosticsParams {
                     uri: document.uri,
-                    diagnostics:  a.diagnostics.iter().map(to_diagnostic).collect(),
+                    diagnostics: a.diagnostics.iter().map(to_diagnostic).collect(),
                     version: None,
                 };
                 let _ = client.publish_diagnostics(r);
             }));
         } else {
-            tracing::warn!("document not found: {}",document.uri);
+            tracing::warn!("document not found: {}", document.uri);
         }
         ControlFlow::Continue(())
     }
 
-    #[must_use]
     #[allow(clippy::let_underscore_future)]
     //impl_notification!(! did_save = DidSaveTextDocument);
-    fn did_save(&mut self,params:lsp::DidSaveTextDocumentParams) -> Self::NotifyResult {
-        tracing::trace!("did_save: {}",params.text_document.uri);
+    fn did_save(&mut self, params: lsp::DidSaveTextDocumentParams) -> Self::NotifyResult {
+        tracing::trace!("did_save: {}", params.text_document.uri);
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
         let uri = params.text_document.uri.into();
@@ -229,55 +370,63 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         ControlFlow::Continue(())
     }
 
-    impl_notification!(! will_save = WillSaveTextDocument);
-    
-    //impl_notification!(! did_close = DidCloseTextDocument);    
-    fn did_close(&mut self,params:lsp::DidCloseTextDocumentParams) -> Self::NotifyResult {
-        tracing::trace!("did_close: {}",params.text_document.uri);
+    impl_notification!(!will_save = WillSaveTextDocument);
+
+    //impl_notification!(! did_close = DidCloseTextDocument);
+    fn did_close(&mut self, params: lsp::DidCloseTextDocumentParams) -> Self::NotifyResult {
+        tracing::trace!("did_close: {}", params.text_document.uri);
         ControlFlow::Continue(())
     }
 
     // window/
-        // workDoneProgress/
-        impl_notification!(work_done_progress_cancel = WorkDoneProgressCancel);
+    // workDoneProgress/
+    impl_notification!(work_done_progress_cancel = WorkDoneProgressCancel);
 
     // $/
-    impl_notification!(! set_trace = SetTrace);
-    impl_notification!(! cancel_request = Cancel);
-    impl_notification!(! progress = Progress);
-
+    impl_notification!(!set_trace = SetTrace);
+    impl_notification!(!cancel_request = Cancel);
+    impl_notification!(!progress = Progress);
 
     // Requests -----------------------------------------------
 
     // textDocument/
 
-    #[must_use]
     // impl_request!(document_symbol = DocumentSymbolRequest);
-    fn document_symbol(&mut self, params: lsp::DocumentSymbolParams) -> Res<Option<lsp::DocumentSymbolResponse>> {
+    fn document_symbol(
+        &mut self,
+        params: lsp::DocumentSymbolParams,
+    ) -> Res<Option<lsp::DocumentSymbolResponse>> {
         tracing::trace_span!("document_symbol").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?}, partial_results: {:?}",
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}, partial_results: {:?}",
                 params.text_document.uri,
                 params.work_done_progress_params,
                 params.partial_result_params
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            self.inner.state().get_symbols(&params.text_document.uri.into(),p)
-                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_symbols(&params.text_document.uri.into(), p)
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
                 )
         })
     }
 
-    #[must_use]
     // impl_request!(! document_diagnostic = DocumentDiagnosticRequest => (lsp::DocumentDiagnosticReportResult::Report(lsp::DocumentDiagnosticReport::Full(lsp::RelatedFullDocumentDiagnosticReport::default()))));
-    fn document_diagnostic(&mut self, params: lsp::DocumentDiagnosticParams) -> Res<lsp::DocumentDiagnosticReportResult> {
-        fn default() -> lsp::DocumentDiagnosticReportResult { lsp::DocumentDiagnosticReportResult::Report(
-            lsp::DocumentDiagnosticReport::Full(
-                lsp::RelatedFullDocumentDiagnosticReport::default()
-            )
-        )}
+    fn document_diagnostic(
+        &mut self,
+        params: lsp::DocumentDiagnosticParams,
+    ) -> Res<lsp::DocumentDiagnosticReportResult> {
+        fn default() -> lsp::DocumentDiagnosticReportResult {
+            lsp::DocumentDiagnosticReportResult::Report(lsp::DocumentDiagnosticReport::Full(
+                lsp::RelatedFullDocumentDiagnosticReport::default(),
+            ))
+        }
         tracing::trace_span!("document_diagnostics").in_scope(move || {
             tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, position: {:?}, context: {:?}",
                 params.work_done_progress_params,
@@ -296,7 +445,6 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-    //#[must_use]
     //impl_request!(? references = References => (None));
     fn references(&mut self, params: lsp::ReferenceParams) -> Res<Option<Vec<lsp::Location>>> {
         tracing::trace_span!("references").in_scope(move || {
@@ -318,68 +466,93 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
-
-    #[must_use]
     //impl_request!(! document_link = DocumentLinkRequest => (None));
-    fn document_link(&mut self, params: lsp::DocumentLinkParams) -> Res<Option<Vec<lsp::DocumentLink>>> {
+    fn document_link(
+        &mut self,
+        params: lsp::DocumentLinkParams,
+    ) -> Res<Option<Vec<lsp::DocumentLink>>> {
         tracing::trace_span!("document_link").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?}, partial_results: {:?}",
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}, partial_results: {:?}",
                 params.text_document.uri,
                 params.work_done_progress_params,
                 params.partial_result_params
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            self.inner.state().get_links(&params.text_document.uri.into(),p)
-                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_links(&params.text_document.uri.into(), p)
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
                 )
         })
     }
 
-    #[must_use]
     // impl_request!(! hover = HoverRequest => (None));
     fn hover(&mut self, params: lsp::HoverParams) -> Res<Option<lsp::Hover>> {
         tracing::trace_span!("hover").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?}, position: {:?}",
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}, position: {:?}",
                 params.text_document_position_params.text_document.uri,
                 params.work_done_progress_params,
                 params.text_document_position_params.position
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            self.inner.state().get_hover(
-                &params.text_document_position_params.text_document.uri.into(),
-                params.text_document_position_params.position,
-                p
-            )
-                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_hover(
+                    &params
+                        .text_document_position_params
+                        .text_document
+                        .uri
+                        .into(),
+                    params.text_document_position_params.position,
+                    p,
+                )
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
                 )
         })
     }
 
-    #[must_use]
     // impl_request!(! definition = GotoDefinition => (None));
-    fn definition(&mut self, params: lsp::GotoDefinitionParams) -> Res<Option<lsp::GotoDefinitionResponse>> {
+    fn definition(
+        &mut self,
+        params: lsp::GotoDefinitionParams,
+    ) -> Res<Option<lsp::GotoDefinitionResponse>> {
         tracing::trace_span!("definition").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?}, position: {:?}",
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}, position: {:?}",
                 params.text_document_position_params.text_document.uri,
                 params.work_done_progress_params,
                 params.text_document_position_params.position
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            self.inner.state().get_goto_definition(
-                params.text_document_position_params.text_document.uri.into(),
-                params.text_document_position_params.position,
-                p
-            )
-                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_goto_definition(
+                    params
+                        .text_document_position_params
+                        .text_document
+                        .uri
+                        .into(),
+                    params.text_document_position_params.position,
+                    p,
+                )
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
                 )
         })
     }
@@ -389,142 +562,167 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(! declaration = GotoDefinition => (None));
 
     impl_request!(! workspace_diagnostic = WorkspaceDiagnosticRequest => (lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport {items:Vec::new()})));
-/*
-    #[must_use]
-    fn workspace_diagnostic(&mut self, params: lsp::WorkspaceDiagnosticParams) -> Res<lsp::WorkspaceDiagnosticReportResult> {
-        tracing::info_span!("workspace_diagnostics").in_scope(move || {
-            tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, identifier: {:?}, previous_results_id: {:?}",
-                params.work_done_progress_params,
-                params.partial_result_params,
-                params.identifier,
-                params.previous_result_ids
-            );
-            if let Some(_token) = params.partial_result_params.partial_result_token {
-                if self.ws_diagnostics.load(Ordering::Relaxed) {
-                    self.ws_diagnostics.store(false, Ordering::Relaxed);
+    /*
+        #[must_use]
+        fn workspace_diagnostic(&mut self, params: lsp::WorkspaceDiagnosticParams) -> Res<lsp::WorkspaceDiagnosticReportResult> {
+            tracing::info_span!("workspace_diagnostics").in_scope(move || {
+                tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, identifier: {:?}, previous_results_id: {:?}",
+                    params.work_done_progress_params,
+                    params.partial_result_params,
+                    params.identifier,
+                    params.previous_result_ids
+                );
+                if let Some(_token) = params.partial_result_params.partial_result_token {
+                    if self.ws_diagnostics.load(Ordering::Relaxed) {
+                        self.ws_diagnostics.store(false, Ordering::Relaxed);
+                        return Box::pin(std::future::ready(Ok(
+                            lsp::WorkspaceDiagnosticReportResult::Partial(lsp::WorkspaceDiagnosticReportPartialResult {
+                                items:Vec::new()
+                            })
+                        )))
+                    }
+
+                    self.ws_diagnostics.store(true, Ordering::Relaxed);
                     return Box::pin(std::future::ready(Ok(
-                        lsp::WorkspaceDiagnosticReportResult::Partial(lsp::WorkspaceDiagnosticReportPartialResult {
+                        lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport {
                             items:Vec::new()
                         })
                     )))
                 }
-                
-                self.ws_diagnostics.store(true, Ordering::Relaxed);
-                return Box::pin(std::future::ready(Ok(
+
+                /*
+                if let Some(p) = params.work_done_progress_params.work_done_token {
+                    self.get_progress(p).finish_delay();
+                }
+                if let Some(p) = params.partial_result_params.partial_result_token {
+                    self.get_progress(p).finish_delay();
+                }
+                */
+                Box::pin(std::future::ready(Ok(
                     lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport {
                         items:Vec::new()
                     })
                 )))
-            }
-    
-            /*
-            if let Some(p) = params.work_done_progress_params.work_done_token {
-                self.get_progress(p).finish_delay();
-            }
-            if let Some(p) = params.partial_result_params.partial_result_token {
-                self.get_progress(p).finish_delay();
-            }
-            */
-            Box::pin(std::future::ready(Ok(
-                lsp::WorkspaceDiagnosticReportResult::Report(lsp::WorkspaceDiagnosticReport {
-                    items:Vec::new()
-                })
-            )))
-        })
-    }
-*/
-    #[must_use]
+            })
+        }
+    */
+
     //impl_request!(! inlay_hint = InlayHintRequest => (None));
     fn inlay_hint(&mut self, params: lsp::InlayHintParams) -> Res<Option<Vec<lsp::InlayHint>>> {
         tracing::trace_span!("inlay hint").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?}",
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}",
                 params.text_document.uri,
                 params.work_done_progress_params,
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            self.inner.state().get_inlay_hints(
-                &params.text_document.uri.into(),
-                p
-            )
-                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_inlay_hints(&params.text_document.uri.into(), p)
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
                 )
         })
     }
     // inlayHint/
     impl_request!(inlay_hint_resolve = InlayHintResolveRequest);
 
-
     //impl_request!(! code_action = CodeActionRequest => (None));
-    #[must_use]
-    fn code_action(&mut self, params: lsp::CodeActionParams) -> Res<Option<lsp::CodeActionResponse>> {
+    fn code_action(
+        &mut self,
+        params: lsp::CodeActionParams,
+    ) -> Res<Option<lsp::CodeActionResponse>> {
         tracing::trace_span!("code_action").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?}; range: {:?}; context:{:?}",
-                params.text_document.uri,//.text_document_position_params.text_document.uri,
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}; range: {:?}; context:{:?}",
+                params.text_document.uri, //.text_document_position_params.text_document.uri,
                 params.work_done_progress_params,
                 params.range,
                 params.context
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            self.inner.state().get_codeaction(
-                params.text_document.uri.into(),
-                params.range,
-                params.context,
-                p
-            )
-                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_codeaction(
+                    params.text_document.uri.into(),
+                    params.range,
+                    params.context,
+                    p,
+                )
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
                 )
         })
     }
 
     //impl_request!(prepare_call_hierarchy = CallHierarchyPrepare);
-    #[must_use]
-    fn prepare_call_hierarchy(&mut self, params: lsp::CallHierarchyPrepareParams) -> Res<Option<Vec<lsp::CallHierarchyItem>>> {
+    fn prepare_call_hierarchy(
+        &mut self,
+        params: lsp::CallHierarchyPrepareParams,
+    ) -> Res<Option<Vec<lsp::CallHierarchyItem>>> {
         tracing::trace_span!("prepare_call_hierarchy").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?}; position: {:?}",
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}; position: {:?}",
                 params.text_document_position_params.text_document.uri,
                 params.work_done_progress_params,
                 params.text_document_position_params.position
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            self.inner.state().prepare_module_hierarchy(
-                params.text_document_position_params.text_document.uri.into(),
-                p
-            )
-                .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .prepare_module_hierarchy(
+                    params
+                        .text_document_position_params
+                        .text_document
+                        .uri
+                        .into(),
+                    p,
+                )
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
                 )
         })
     }
 
     // callHierarchy/
     //impl_request!(incoming_calls = CallHierarchyIncomingCalls);
-    #[must_use]
-    fn incoming_calls(&mut self, params: lsp::CallHierarchyIncomingCallsParams) -> Res<Option<Vec<lsp::CallHierarchyIncomingCall>>> {
+    fn incoming_calls(
+        &mut self,
+        params: lsp::CallHierarchyIncomingCallsParams,
+    ) -> Res<Option<Vec<lsp::CallHierarchyIncomingCall>>> {
         tracing::trace_span!("incoming_call_hierarchy").in_scope(move || {
-            tracing::trace!("uri: {},work_done_progress_params: {:?};",
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?};",
                 params.item.uri,
                 params.work_done_progress_params,
             );
-            let p = params.work_done_progress_params.work_done_token.map(
-                |tk| self.get_progress(tk)
-            );
-            if let Some(d) = params.item.data.and_then(|d| d.as_str().and_then(|d| d.parse().ok())) {
-                self.inner.state().module_hierarchy_imports(
-                    params.item.uri,
-                    params.item.kind,
-                    d,
-                    p
-                )
-                    .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                    |f| Box::pin(f.map(Result::Ok)) as _
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            if let Some(d) = params
+                .item
+                .data
+                .and_then(|d| d.as_str().and_then(|d| d.parse().ok()))
+            {
+                self.inner
+                    .state()
+                    .module_hierarchy_imports(params.item.uri, params.item.kind, d, p)
+                    .map_or_else(
+                        || Box::pin(std::future::ready(Ok(None))) as _,
+                        |f| Box::pin(f.map(Result::Ok)) as _,
                     )
             } else {
                 Box::pin(std::future::ready(Ok(None))) as _
@@ -533,11 +731,9 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     }
     impl_request!(outgoing_calls = CallHierarchyOutgoingCalls);
 
-
-
     impl_request!(! document_highlight = DocumentHighlightRequest => (None));
     impl_request!(! folding_range = FoldingRangeRequest => (None));
-    
+
     impl_request!(implementation = GotoImplementation);
     impl_request!(type_definition = GotoTypeDefinition);
     impl_request!(document_color = DocumentColor);
@@ -558,51 +754,66 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(signature_help = SignatureHelpRequest);
     impl_request!(linked_editing_range = LinkedEditingRange);
 
+    // semanticTokens/
+    // impl_request!(semantic_tokens_full = SemanticTokensFullRequest);
+    fn semantic_tokens_full(
+        &mut self,
+        params: lsp::SemanticTokensParams,
+    ) -> Res<Option<lsp::SemanticTokensResult>> {
+        tracing::trace_span!("semantic_tokens_full").in_scope(|| {
+            tracing::trace!(
+                "work_done_progress_params: {:?}, partial_results: {:?}, uri: {}",
+                params.work_done_progress_params,
+                params.partial_result_params,
+                params.text_document.uri
+            );
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_semantic_tokens(&params.text_document.uri.into(), p, None)
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensResult::Tokens)))) as _,
+                )
+        })
+    }
 
-        // semanticTokens/
-        #[must_use]
-        // impl_request!(semantic_tokens_full = SemanticTokensFullRequest);
-        fn semantic_tokens_full(&mut self, params: lsp::SemanticTokensParams) -> Res<Option<lsp::SemanticTokensResult>> {
-            tracing::trace_span!("semantic_tokens_full").in_scope(|| {
-                tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, uri: {}",
-                    params.work_done_progress_params,
-                    params.partial_result_params,
-                    params.text_document.uri
-                );
-                let p = params.work_done_progress_params.work_done_token.map(
-                    |tk| self.get_progress(tk)
-                );
-                self.inner.state().get_semantic_tokens(&params.text_document.uri.into(),p,None)
-                    .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                    |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensResult::Tokens)))) as _
-                    )
-            })
-        }
+    // impl_request!(semantic_tokens_range = SemanticTokensRangeRequest);
+    fn semantic_tokens_range(
+        &mut self,
+        params: lsp::SemanticTokensRangeParams,
+    ) -> Res<Option<lsp::SemanticTokensRangeResult>> {
+        tracing::trace_span!("semantic_tokens_range").in_scope(|| {
+            tracing::trace!(
+                "work_done_progress_params: {:?}, partial_results: {:?}, range: {:?}, uri:{}",
+                params.work_done_progress_params,
+                params.partial_result_params,
+                params.range,
+                params.text_document.uri
+            );
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_semantic_tokens(&params.text_document.uri.into(), p, Some(params.range))
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensRangeResult::Tokens)))) as _,
+                )
+        })
+    }
 
-        #[must_use]
-        // impl_request!(semantic_tokens_range = SemanticTokensRangeRequest);
-        fn semantic_tokens_range(&mut self, params: lsp::SemanticTokensRangeParams) -> Res<Option<lsp::SemanticTokensRangeResult>> {
-            tracing::trace_span!("semantic_tokens_range").in_scope(|| {
-                tracing::trace!("work_done_progress_params: {:?}, partial_results: {:?}, range: {:?}, uri:{}",
-                    params.work_done_progress_params,
-                    params.partial_result_params,
-                    params.range,
-                    params.text_document.uri
-                );
-                let p = params.work_done_progress_params.work_done_token.map(
-                    |tk| self.get_progress(tk)
-                );
-                self.inner.state().get_semantic_tokens(&params.text_document.uri.into(),p,Some(params.range))
-                    .map_or_else(|| Box::pin(std::future::ready(Ok(None))) as _,
-                    |f| Box::pin(f.map(|r| Ok(r.map(lsp::SemanticTokensRangeResult::Tokens)))) as _
-                    )
-            })
-        }
-
-        #[must_use]
-        // impl_request!(semantic_tokens_full_delta = SemanticTokensFullDeltaRequest);
-        fn semantic_tokens_full_delta(&mut self, params: lsp::SemanticTokensDeltaParams) -> Res<Option<lsp::SemanticTokensFullDeltaResult>> {
-            tracing::info_span!("semantic_tokens_full_delta").in_scope(|| {
+    // impl_request!(semantic_tokens_full_delta = SemanticTokensFullDeltaRequest);
+    fn semantic_tokens_full_delta(
+        &mut self,
+        params: lsp::SemanticTokensDeltaParams,
+    ) -> Res<Option<lsp::SemanticTokensFullDeltaResult>> {
+        tracing::info_span!("semantic_tokens_full_delta").in_scope(|| {
                 tracing::info!("work_done_progress_params: {:?}, partial_results: {:?}, previous_result_id: {:?}, uri:{}",
                     params.work_done_progress_params,
                     params.partial_result_params,
@@ -611,7 +822,7 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
                 );
                 Box::pin(std::future::ready(Ok(None)))
             })
-        }
+    }
 
     // workspace/
     impl_request!(will_create_files = WillCreateFiles);
@@ -638,5 +849,4 @@ impl<T:FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
 
     // documentLink/
     impl_request!(document_link_resolve = DocumentLinkResolve);
-
 }

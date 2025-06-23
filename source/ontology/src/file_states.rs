@@ -1,6 +1,5 @@
 use flams_utils::time::Timestamp;
 
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
@@ -14,15 +13,14 @@ pub struct FileStateSummary {
     pub last_changed: Timestamp,
 }
 impl Default for FileStateSummary {
-    #[must_use]
     fn default() -> Self {
-      Self {
-        new: 0,
-        stale: 0,
-        up_to_date: 0,
-        deleted: 0,
-        last_built: Timestamp::zero(),
-        last_changed: Timestamp::zero(),
-      }
+        Self {
+            new: 0,
+            stale: 0,
+            up_to_date: 0,
+            deleted: 0,
+            last_built: Timestamp::zero(),
+            last_changed: Timestamp::zero(),
+        }
     }
 }

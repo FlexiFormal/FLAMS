@@ -7,25 +7,27 @@ edition = "2021"
 workspace = true
 
 [features]
-ws = ["dep:axum","dep:serde_json"]
+ws = ["dep:axum", "dep:serde_json"]
 
 [dependencies]
-flams-system = {workspace=true,features=["tokio","zip"]}
-flams-ftml = {workspace=true}
-flams-ontology = {workspace=true}
-flams-utils = {workspace = true}
-tracing={workspace=true}
-async-lsp = {workspace=true}
-futures = {workspace=true}
-tower = {workspace = true}
-tokio = {workspace=true}
-triomphe = {workspace=true}
-parking_lot = {workspace=true}
-serde = {workspace=true}
+flams-system = { workspace = true, features = ["tokio", "zip"] }
+flams-ftml = { workspace = true }
+flams-ontology = { workspace = true }
+flams-utils = { workspace = true }
+flams-stex = { workspace = true }
 
-axum = {workspace=true,optional=true}
-serde_json = {workspace=true,optional=true}
-lazy_static = {workspace=true}
-smallvec = {workspace = true}
+tracing = { workspace = true }
+async-lsp = { workspace = true }
+futures = { workspace = true }
+tower = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+triomphe = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+eyre = {workspace = true}
 
-flams-stex = {workspace = true}
+axum = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+lazy_static = { workspace = true }
+smallvec = { workspace = true }

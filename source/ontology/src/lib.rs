@@ -12,141 +12,153 @@ pub enum Test {
 pub struct Foo<const T:Test>(String);
 */
 
-
 use std::borrow::Cow;
 
-use content::{declarations::DeclarationTrait, modules::{Module, Signature}, ContentReference, ModuleLike};
+use content::{
+    declarations::DeclarationTrait,
+    modules::{Module, Signature},
+    ContentReference, ModuleLike,
+};
 use flams_utils::sourcerefs::{ByteOffset, SourceRange};
 use languages::Language;
 use narration::documents::Document;
-use uris::{DocumentURI, ModuleURI, SymbolURI};
+use uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI};
 
 pub mod content;
+pub mod file_states;
 pub mod languages;
 pub mod narration;
-pub mod file_states;
 
 #[cfg(feature = "serde")]
 pub mod archive_json;
+pub mod ftml;
 #[cfg(feature = "rdf")]
 pub mod rdf;
 pub mod search;
 pub mod uris;
-pub mod ftml;
 
 mod sealed {
     pub trait Sealed {}
 }
 
-#[cfg(not(feature="serde"))]
-pub trait CheckingState: sealed::Sealed+std::fmt::Debug {
-    type ModuleLike:std::fmt::Debug;
-    type Module:std::fmt::Debug;
-    type Seq<A:std::fmt::Debug>:std::fmt::Debug;
-    type Decl<D:DeclarationTrait + Resolvable<From=SymbolURI>>:std::fmt::Debug;
-    type Doc:std::fmt::Debug;
-    type Sig:std::fmt::Debug;
+#[cfg(not(feature = "serde"))]
+pub trait CheckingState: sealed::Sealed + std::fmt::Debug {
+    type ModuleLike: std::fmt::Debug;
+    type Module: std::fmt::Debug;
+    type Seq<A: std::fmt::Debug>: std::fmt::Debug;
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>>: std::fmt::Debug;
+    type Doc: std::fmt::Debug;
+    type Sig: std::fmt::Debug;
 }
-#[cfg(feature="serde")]
-pub trait CheckingState: sealed::Sealed+std::fmt::Debug {//+serde::Serialize {
-    type ModuleLike:std::fmt::Debug + serde::Serialize;
-    type Module:std::fmt::Debug + serde::Serialize;
-    type Seq<A:std::fmt::Debug + serde::Serialize>:std::fmt::Debug + serde::Serialize;
-    type Decl<D:DeclarationTrait + Resolvable<From=SymbolURI>>:std::fmt::Debug + serde::Serialize;
-    type Doc:std::fmt::Debug + serde::Serialize;
-    type Sig:std::fmt::Debug + serde::Serialize;
+#[cfg(feature = "serde")]
+pub trait CheckingState: sealed::Sealed + std::fmt::Debug {
+    //+serde::Serialize {
+    type ModuleLike: std::fmt::Debug + serde::Serialize;
+    type Module: std::fmt::Debug + serde::Serialize;
+    type Seq<A: std::fmt::Debug + serde::Serialize>: std::fmt::Debug + serde::Serialize;
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>>: std::fmt::Debug
+        + serde::Serialize;
+    type Doc: std::fmt::Debug + serde::Serialize;
+    type Sig: std::fmt::Debug + serde::Serialize;
 }
 
-#[derive(Debug,Copy,Clone)]
+#[derive(Debug, Copy, Clone)]
 //#[cfg_attr(feature="serde",derive(serde::Serialize,serde::Deserialize))]
 pub struct Unchecked;
 impl sealed::Sealed for Unchecked {}
 impl CheckingState for Unchecked {
     type ModuleLike = ModuleURI;
     type Module = ModuleURI;
-    type Decl<D:DeclarationTrait + Resolvable<From=SymbolURI>> = SymbolURI;
-    #[cfg(feature="serde")]
-    type Seq<A:std::fmt::Debug + serde::Serialize> = Vec<A>;
-    #[cfg(not(feature="serde"))]
-    type Seq<A:std::fmt::Debug> = Vec<A>;
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>> = SymbolURI;
+    #[cfg(feature = "serde")]
+    type Seq<A: std::fmt::Debug + serde::Serialize> = Vec<A>;
+    #[cfg(not(feature = "serde"))]
+    type Seq<A: std::fmt::Debug> = Vec<A>;
     type Doc = DocumentURI;
     type Sig = Language;
 }
-#[derive(Debug,Copy,Clone)]
+#[derive(Debug, Copy, Clone)]
 //#[cfg_attr(feature="serde",derive(serde::Serialize))]
 pub struct Checked;
 impl sealed::Sealed for Checked {}
 impl CheckingState for Checked {
     type ModuleLike = MaybeResolved<ModuleLike>;
     type Module = MaybeResolved<Module>;
-    type Decl<D:DeclarationTrait + Resolvable<From=SymbolURI>> = MaybeResolved<ContentReference<D>>;
-    #[cfg(feature="serde")]
-    type Seq<A:std::fmt::Debug + serde::Serialize> = Box<[A]>;
-    #[cfg(not(feature="serde"))]
-    type Seq<A:std::fmt::Debug> = Box<[A]>;
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>> =
+        MaybeResolved<ContentReference<D>>;
+    #[cfg(feature = "serde")]
+    type Seq<A: std::fmt::Debug + serde::Serialize> = Box<[A]>;
+    #[cfg(not(feature = "serde"))]
+    type Seq<A: std::fmt::Debug> = Box<[A]>;
     type Doc = MaybeResolved<Document>;
     type Sig = MaybeResolved<Signature>;
 }
 
-pub trait Resolvable:std::fmt::Debug {
-    type From:std::fmt::Debug+Clone;
-    fn id(&self) -> Cow<'_,Self::From>;
+pub trait Resolvable: std::fmt::Debug {
+    type From: std::fmt::Debug + Clone;
+    fn id(&self) -> Cow<'_, Self::From>;
 }
 
 #[derive(Debug)]
-enum MaybeResolvedI<T:Resolvable> {
+enum MaybeResolvedI<T: Resolvable> {
     Resolved(T),
-    Unresolved(T::From)
+    Unresolved(T::From),
 }
 
 #[derive(Debug)]
-pub struct MaybeResolved<T:Resolvable> {
-    inner:MaybeResolvedI<T>
+pub struct MaybeResolved<T: Resolvable> {
+    inner: MaybeResolvedI<T>,
 }
-impl<T:Resolvable> MaybeResolved<T> {
+impl<T: Resolvable> MaybeResolved<T> {
     #[inline]
-    pub fn id(&self) -> Cow<'_,T::From> {
+    pub fn id(&self) -> Cow<'_, T::From> {
         match &self.inner {
             MaybeResolvedI::Resolved(r) => r.id(),
-            MaybeResolvedI::Unresolved(i) => Cow::Borrowed(i)
+            MaybeResolvedI::Unresolved(i) => Cow::Borrowed(i),
         }
     }
     #[inline]
     pub const fn is_resolved(&self) -> bool {
-        matches!(self.inner,MaybeResolvedI::Resolved(_))
+        matches!(self.inner, MaybeResolvedI::Resolved(_))
     }
     #[inline]
     pub const fn get(&self) -> Option<&T> {
         if let MaybeResolvedI::Resolved(i) = &self.inner {
             Some(i)
-        } else { None }
-    }
-    #[inline]
-    pub const fn unresolved(id:T::From) -> Self {
-        Self {
-            inner: MaybeResolvedI::Unresolved(id)
+        } else {
+            None
         }
     }
     #[inline]
-    pub const fn resolved(value:T) -> Self {
+    pub const fn unresolved(id: T::From) -> Self {
         Self {
-            inner: MaybeResolvedI::Resolved(value)
+            inner: MaybeResolvedI::Unresolved(id),
         }
     }
     #[inline]
-    pub fn resolve(id:T::From,resolve:impl FnOnce(&T::From) -> Option<T>) -> Self {
+    pub const fn resolved(value: T) -> Self {
+        Self {
+            inner: MaybeResolvedI::Resolved(value),
+        }
+    }
+    #[inline]
+    pub fn resolve(id: T::From, resolve: impl FnOnce(&T::From) -> Option<T>) -> Self {
         resolve(&id).map_or_else(|| Self::unresolved(id), Self::resolved)
     }
 }
 
-#[cfg(feature="serde")]
+#[cfg(feature = "serde")]
 mod serde_resolved {
     use crate::{MaybeResolved, MaybeResolvedI, Resolvable};
 
-    impl<T:Resolvable> serde::Serialize for MaybeResolved<T> where T::From: serde::Serialize {
+    impl<T: Resolvable> serde::Serialize for MaybeResolved<T>
+    where
+        T::From: serde::Serialize,
+    {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer {
+        where
+            S: serde::Serializer,
+        {
             match &self.inner {
                 MaybeResolvedI::Unresolved(t) => t.serialize(serializer),
                 MaybeResolvedI::Resolved(s) => {
@@ -156,13 +168,13 @@ mod serde_resolved {
                 }
             }
         }
-    } 
+    }
 }
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-//#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-//#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct DocumentRange {
     pub start: usize,
     pub end: usize,
@@ -214,16 +226,27 @@ impl From<std::io::Error> for DecodeError {
 */
 
 pub mod metatheory {
-    use crate::{languages::Language, uris::{BaseURI, DocumentURI, ModuleURI, SymbolURI}};
+    use crate::{
+        languages::Language,
+        uris::{BaseURI, DocumentURI, ModuleURI, SymbolURI},
+    };
     use lazy_static::lazy_static;
     lazy_static! {
-        pub static ref DOC_URI: DocumentURI = ((BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf") & ("Metatheory",Language::English)).unwrap_or_else(|_| unreachable!());
+        pub static ref DOC_URI: DocumentURI = ((BaseURI::new_unchecked("http://mathhub.info")
+            & "sTeX/meta-inf")
+            & ("Metatheory", Language::English))
+            .unwrap_or_else(|_| unreachable!());
         pub static ref URI: ModuleURI =
-            ((BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf") | "Metatheory").unwrap_or_else(|_| unreachable!());
-        pub static ref FIELD_PROJECTION: SymbolURI = (URI.clone() | "record field").unwrap_or_else(|_| unreachable!());
-        pub static ref OF_TYPE: SymbolURI = (URI.clone() | "of type").unwrap_or_else(|_| unreachable!());
-        pub static ref SEQUENCE_EXPRESSION: SymbolURI = (URI.clone() | "sequence expression").unwrap_or_else(|_| unreachable!());
-        pub(crate) static ref NOTATION_DUMMY: SymbolURI = (URI.clone() | "notation dummy").unwrap_or_else(|_| unreachable!());
+            ((BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf") | "Metatheory")
+                .unwrap_or_else(|_| unreachable!());
+        pub static ref FIELD_PROJECTION: SymbolURI =
+            (URI.clone() | "record field").unwrap_or_else(|_| unreachable!());
+        pub static ref OF_TYPE: SymbolURI =
+            (URI.clone() | "of type").unwrap_or_else(|_| unreachable!());
+        pub static ref SEQUENCE_EXPRESSION: SymbolURI =
+            (URI.clone() | "sequence expression").unwrap_or_else(|_| unreachable!());
+        pub(crate) static ref NOTATION_DUMMY: SymbolURI =
+            (URI.clone() | "notation dummy").unwrap_or_else(|_| unreachable!());
     }
 }
 
@@ -238,20 +261,43 @@ pub trait LocalBackend {
     ) -> Option<ContentReference<T>>;
 }
 
-#[cfg(feature="serde")]
-pub trait Resourcable:serde::Serialize + for <'a> serde::Deserialize<'a> {}
+#[cfg(feature = "serde")]
+pub trait Resourcable: serde::Serialize + for<'a> serde::Deserialize<'a> {}
 
-#[cfg(not(feature="serde"))]
+#[cfg(not(feature = "serde"))]
 pub trait Resourcable {}
 
 impl Resourcable for Box<str> {}
 
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum SlideElement {
+    Slide {
+        html: String,
+        uri: DocumentElementURI,
+    },
+    Paragraph {
+        html: String,
+        uri: DocumentElementURI,
+    },
+    Inputref {
+        uri: DocumentURI,
+    },
+    Section {
+        uri: DocumentElementURI,
+        title: Option<String>,
+        children: Vec<SlideElement>,
+    },
+}
 
 macro_rules! serde_impl {
     (@i_count ) => { 0 };
     (@i_count $r:ident $($rs:tt)* ) => { 1 + crate::serde_impl!(@i_count $($rs)*) };
     (@count $($r:ident)*) => { crate::serde_impl!(@i_count $($r)*)};
-    
+
     (@caseI $f:ident) => {
         Self::$f
     };
@@ -402,7 +448,7 @@ macro_rules! serde_impl {
     }};
 
     ($(mod $m:ident = )? enum $s:ident{ $( {$idx:literal = $f:ident $($spec:tt)*} )+ } ) => {
-        crate::serde_impl!{$(mod $m = )? $s : slf 
+        crate::serde_impl!{$(mod $m = )? $s : slf
             ser => {
                 match slf {
                     $(
@@ -410,7 +456,7 @@ macro_rules! serde_impl {
                         crate::serde_impl!{@caseII ser $s $idx $f $($spec)* }
                     ),*
                 }
-            } 
+            }
             de => {
                 #[derive(serde::Deserialize)]
                 enum Fields {
@@ -435,14 +481,14 @@ macro_rules! serde_impl {
                             )*
                             //s => Err(A::Error::unknown_variant(s, &[ $(stringify!($f)),* ]))
                         }
-                        
+
                     }
 
                 }
-                
+
                 de.deserialize_enum(
-                    stringify!($s), 
-                    &[ $( stringify!($f) ),* ], 
+                    stringify!($s),
+                    &[ $( stringify!($f) ),* ],
                     Visitor
                 )
             }

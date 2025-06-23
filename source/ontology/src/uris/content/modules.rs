@@ -2,13 +2,22 @@ use crate::languages::Language;
 use crate::uris::errors::URIParseError;
 use crate::uris::macros::debugdisplay;
 use crate::uris::{
-    ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, Name, PathURI, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIRef, URIRefTrait, URITrait, URIWithLanguage, URI
+    ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, Name,
+    PathURI, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIRef, URIRefTrait, URITrait,
+    URIWithLanguage, URI,
 };
 use const_format::concatcp;
 use std::fmt::Display;
 use std::str::{FromStr, Split};
 
 use super::ContentURI;
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)
+)]
+const TS_URI: &str = "export type ModuleURI = string;";
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ModuleURI {
@@ -21,7 +30,9 @@ impl ModuleURI {
     #[must_use]
     pub fn into_symbol(mut self) -> Option<SymbolURI> {
         let last = self.name.0.pop()?;
-        if self.name.0.is_empty() {return None}
+        if self.name.0.is_empty() {
+            return None;
+        }
         Some(SymbolURI {
             module: self,
             name: last.into(),
@@ -31,13 +42,7 @@ impl ModuleURI {
 impl Display for ModuleURI {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}&{}={}",
-            self.path,
-            Self::SEPARATOR,
-            self.name
-        )
+        write!(f, "{}&{}={}", self.path, Self::SEPARATOR, self.name)
     }
 }
 debugdisplay!(ModuleURI);
@@ -67,7 +72,7 @@ debugdisplay!(ModuleURIRef<'_>);
 */
 
 impl URITrait for ModuleURI {
-    type Ref<'a> = &'a Self;//ModuleURIRef<'a>;
+    type Ref<'a> = &'a Self; //ModuleURIRef<'a>;
 }
 
 pub type ModuleURIRef<'a> = &'a ModuleURI;
@@ -248,7 +253,7 @@ impl<'a> PathURITrait for ModuleURIRef<'a> {
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use crate::uris::{serialize, ModuleURI,ModuleURIRef};
+    use crate::uris::{serialize, ModuleURI, ModuleURIRef};
     serialize!(DE ModuleURI);
     //serialize!(ModuleURIRef<'_>);
 }

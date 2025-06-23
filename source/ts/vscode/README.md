@@ -1,2 +1,0 @@
-# FLAMS README
-Foo Bar Baz

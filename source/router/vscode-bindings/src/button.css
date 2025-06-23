@@ -1,0 +1,24 @@
+.flams-vscode-button {
+    background-color: var(--vscode-button-background, #0078d4);
+    border-color: var(--vscode-button-border, transparent);
+    border-style: solid;
+    border-radius: 2px;
+    border-width: 1px;
+    color: var(--vscode-button-foreground, #ffffff);
+    cursor: pointer;
+    display: inline-block;
+    font-family: var(
+        --vscode-font-family,
+        system-ui,
+        "Ubuntu",
+        "Droid Sans",
+        sans-serif
+    );
+    font-size: var(--vscode-font-size, 13px);
+    font-weight: var(--vscode-font-weight, normal);
+    line-height: 22px;
+    overflow: hidden;
+    padding: 1px 13px;
+    user-select: none;
+    white-space: nowrap;
+}

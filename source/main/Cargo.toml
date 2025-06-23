@@ -5,7 +5,8 @@ edition = "2021"
 description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 
 [lib]
-crate-type = ["cdylib","rlib"]
+name = "flams"
+crate-type = ["cdylib", "rlib"]
 
 #[package.metadata.wasm-pack.profile.release]
 #wasm-opt = ['-Oz','--enable-bulk-memory','--all-features']
@@ -13,60 +14,64 @@ crate-type = ["cdylib","rlib"]
 #[package.metadata.wasm-pack.profile.dev]
 #wasm-opt = false
 
-#[[bin]]
-#name = "flams"
+[[bin]]
+name = "flams"
 
 [features]
 docs = []
 ssr = [
-  "dep:flams-system",
-  "dep:flams-stex",
-  "dep:flams-ftml",
-  "dep:tokio", 
-  "dep:toml", 
-  "dep:color-eyre", 
-  "dep:clap",
-  "dep:sqlx",
-  "dep:libsqlite3-sys",
-  "leptos/ssr",
-  "leptos_meta/ssr",
-  "leptos_router/ssr",
-  "dep:leptos_axum",
-  "thaw/ssr",
-  "dep:axum",
-  "dep:axum-macros",
-  "dep:tower",
-  "dep:tower-http",
-  "dep:tower-sessions",
-  "dep:axum-login",
-  "dep:async-trait",
-  "dep:password-hash",
-  "dep:argon2",
-  "dep:http",
-  "flams-web-utils/ssr",
-  "ftml-viewer-components/ssr",
-  "dep:flams-lsp",
-  "dep:tracing-subscriber",
-  "dep:tokio-util",
-  "dep:rayon",
-  "dep:tex_engine",
-  "dep:image",
-  "dep:webp",
-  "dep:dashmap",
-  "dep:futures",
-  "flams-git/gitlab",
-  "flams-git/git2",
+    "dep:flams-system",
+    "dep:flams-stex",
+    "dep:flams-ftml",
+    "dep:tokio",
+    "dep:toml",
+    "dep:color-eyre",
+    "dep:clap",
+    "dep:sqlx",
+    "dep:libsqlite3-sys",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+    "dep:leptos_axum",
+    "thaw/ssr",
+    "dep:axum",
+    "dep:axum-macros",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:tower-sessions",
+    "dep:axum-login",
+    "dep:async-trait",
+    "dep:password-hash",
+    "dep:argon2",
+    "dep:http",
+    "flams-web-utils/ssr",
+    "ftml-viewer-components/ssr",
+    "dep:flams-lsp",
+    "dep:tracing-subscriber",
+    "dep:tokio-util",
+    "dep:rayon",
+    "dep:tex_engine",
+    "dep:image",
+    "dep:webp",
+    "dep:dashmap",
+    "dep:futures",
+    "dep:mime_guess",
+    "flams-database/backend",
+    "flams-git/gitlab",
+    "flams-git/git2",
+    "flams-router-dashboard/ssr",
 ]
 hydrate = [
-  "dep:console_error_panic_hook",
-  "leptos/hydrate",
-  "thaw/hydrate",
-  "dep:wasm-bindgen",
-  "tracing/release_max_level_info",
-  "dep:tracing-wasm",
-  "flams-web-utils/hydrate",
-  "leptos-dyn-dom/hydrate",
-  "ftml-viewer-components/hydrate",
+    "dep:console_error_panic_hook",
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "dep:wasm-bindgen",
+    "tracing/release_max_level_info",
+    "dep:tracing-wasm",
+    "flams-web-utils/hydrate",
+    "leptos-posthoc/hydrate",
+    "ftml-viewer-components/hydrate",
+    "flams-router-dashboard/hydrate",
 ]
 
 [dev-dependencies]
@@ -77,73 +82,85 @@ hydrate = [
 workspace = true
 
 [dependencies]
+flams-router-dashboard = { workspace = true }
+flams-router-base = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-utils = { workspace = true, features = ["serde"] }
+flams-ontology = { workspace = true, features = ["serde"] }
+ftml-viewer-components = { workspace = true, features = ["omdoc"] }
+flams-git = { workspace = true }
+flams-system = { workspace = true, features = [
+    "zip",
+    "gitlab",
+    "tantivy",
+], optional = true }
+flams-lsp = { workspace = true, optional = true, features = ["ws"] }
+flams-stex = { workspace = true, optional = true }
+flams-ftml = { workspace = true, optional = true }
+flams-database = { workspace = true }
 
 # common
-leptos = {workspace=true}
-leptos_meta = {workspace=true}
-leptos_router = {workspace=true}
-thaw = {workspace=true}
-serde = {workspace=true}
-serde_json = {workspace=true}
-tracing = {workspace=true}
-flams-web-utils = {workspace=true}
-icondata_bi = {workspace=true}
-icondata_ai = {workspace=true}
-flams-utils = {workspace=true,features=["serde"]}
-flams-ontology = {workspace=true,features=["serde"]}
-either = {workspace = true}
-const-str = {workspace = true}
-ftml-viewer-components = {workspace = true, features=["omdoc"]}
-leptos-dyn-dom = {workspace = true}
-paste = {workspace=true}
-lazy_static = {workspace=true}
-flams-git = {workspace=true}
-urlencoding = {workspace=true}
+leptos = { workspace = true }
+leptos_meta = { workspace = true }
+leptos_router = { workspace = true }
+thaw = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+icondata_bi = { workspace = true }
+icondata_ai = { workspace = true }
+either = { workspace = true }
+const-str = { workspace = true }
+leptos-posthoc = { workspace = true }
+paste = { workspace = true }
+lazy_static = { workspace = true }
+urlencoding = { workspace = true }
+smallvec = { workspace = true }
 
 # ssr
-flams-system = {workspace=true,features=["zip","gitlab","tantivy"],optional=true}
-flams-lsp = {workspace=true,optional=true, features=["ws"]}
-flams-stex = {workspace=true,optional=true, features=["serde"]}
-flams-ftml = {workspace=true,optional=true}
-tex_engine = {workspace=true,optional=true}
+tex_engine = { workspace = true, optional = true }
+mime_guess = { workspace = true, optional = true }
 
-tokio = {workspace=true,features = ["full","rt","rt-multi-thread"],optional=true}
-toml = {workspace = true,optional=true}
-color-eyre = {workspace = true,optional=true}
-clap = {workspace = true,optional=true}
-leptos_axum = {workspace=true,optional=true}
-rayon = {workspace=true,optional=true}
+tokio = { workspace = true, features = [
+    "full",
+    "rt",
+    "rt-multi-thread",
+], optional = true }
+toml = { workspace = true, optional = true }
+color-eyre = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+leptos_axum = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
 
-sqlx = {workspace=true,optional = true}
-libsqlite3-sys = {workspace = true,optional=true}
+sqlx = { workspace = true, optional = true }
+libsqlite3-sys = { workspace = true, optional = true }
 
-axum = {workspace=true,optional=true}#,features=["macros"]}
-axum-macros = {workspace=true,optional = true}
-tower = {workspace = true,optional = true}
-tower-http = {workspace = true,optional = true}
-tower-sessions = {workspace = true,optional = true}
-axum-login = {workspace = true,optional = true}
-async-trait = {workspace=true,optional=true}
-http = {workspace=true,optional=true}
-futures = {workspace=true,optional=true}
+axum = { workspace = true, optional = true }           #,features=["macros"]}
+axum-macros = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+tower-sessions = { workspace = true, optional = true }
+axum-login = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
 
-password-hash = {workspace=true,optional=true}
-argon2 = {workspace=true,optional=true}
+password-hash = { workspace = true, optional = true }
+argon2 = { workspace = true, optional = true }
 
-tokio-util = {workspace=true,optional=true}
-tracing-subscriber = {workspace=true,optional=true}
+tokio-util = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
 
-image = {workspace=true,optional=true}
-webp = {workspace=true,optional=true}
-dashmap = {workspace=true,optional=true}
+image = { workspace = true, optional = true }
+webp = { workspace = true, optional = true }
+dashmap = { workspace = true, optional = true }
 
 #hydrate
-console_error_panic_hook = {workspace = true,optional=true}
-wasm-bindgen = {workspace = true,optional=true}
-tracing-wasm = {workspace = true,optional = true}
+console_error_panic_hook = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+tracing-wasm = { workspace = true, optional = true }
 
-
-
+ahash = { workspace = true }
 
 #tachys = {workspace = true}
 #server_fn = {workspace = true}

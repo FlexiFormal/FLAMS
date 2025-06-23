@@ -1,16 +1,101 @@
-pub const PREFIX:&str = "data-ftml-";
+#[cfg(doc)]
+use crate::{
+    content::{
+        declarations::{
+            structures::{Extension, MathStructure},
+            symbols::Symbol,
+        },
+        modules::{Module, NestedModule},
+    },
+    narration::{
+        documents::Document,
+        paragraphs::{LogicalParagraph, ParagraphKind},
+        problems::Problem,
+        sections::{Section, SectionLevel},
+        DocumentElement::Slide,
+    },
+    uris::{Name, PathURI},
+};
 
-macro_rules! ftml { ($l:literal) => {concat!("data-ftml-",$l)} }
+pub const PREFIX: &str = "data-ftml-";
+
+macro_rules! ftml {
+    ($l:literal) => {
+        concat!("data-ftml-", $l)
+    };
+}
 
 macro_rules! do_keys {
-    ($count:literal: $($tag:ident =$val:literal)*) => {
+    ( $count:literal: $(
+        $(#[$meta:meta])*
+        $tag:ident
+        $(-? $otp:ty;)?
+        $(@ $tp:ty)?
+        =$val:literal
+        $(+ $($other:ident),+ ;)?
+        $(>> $($children:ident),+ ;)?
+        $(&>> $($nchildren:ident),+ ;)?
+        $(<= $($parents:ident),+ ;)?
+        $(- $($req:ident),+ ;)?
+        $(! $only:literal;)?
+        $(-! $not:literal;)?
+    )*
+    ) => {
 
         pub const NUM_RULES: usize = $count;
 
         #[derive(Copy,Clone,PartialEq, Eq,Hash)]
         pub enum FTMLKey {
             $(
-                #[doc = ftml!($val)]
+                #[doc = concat!(
+                    "<div class=\"flams-syntax\">\n\n`data-ftml-",
+                        $val
+                        $(,"`[`=\"`<[",stringify!($otp),"]>`\"`]`")?
+                        $(,"=\"`<[",stringify!($tp),"]>`\"")?
+                        ,"`"
+                        $(,
+                            "\n\nAdditional attributes: " $(,
+                                "[" ,stringify!($other),"](FTMLKey::",stringify!($other), "), "
+                            )*
+                            ,""
+                        )?
+                        $(,
+                            "\n\nChild nodes: " $(,
+                                "[" ,stringify!($children),"](FTMLKey::",stringify!($children), "), "
+                            )*
+                            ,""
+                        )?
+                        $(,
+                            "\n\n</div><div class=\"flams-syntax\"><div></div>\n\nChild nodes: " $(,
+                                "[" ,stringify!($nchildren),"](FTMLKey::",stringify!($nchildren), "), "
+                            )*
+                            ,""
+                        )?
+                        $(,
+                            "\n\nAttribute of: " $(,
+                                "[" ,stringify!($req),"](FTMLKey::",stringify!($req), "), "
+                            )*
+                            ,""
+                        )?
+                        $(,
+                            "\n\nOnly allowed in: " $(,
+                                "[" ,stringify!($parents),"](FTMLKey::",stringify!($parents), "), "
+                            )*
+                            ,""
+                        )?
+                    ,"\n\n</div>\n\n"
+                    $(
+                        , "<div class=\"warning\">\n\n*Only allowed "
+                        , $only,
+                        "*\n\n</div>\n\n"
+                    )?
+                    $(
+                        , "<div class=\"warning\">\n\n*Not allowed "
+                        , $not,
+                        "*\n\n</div>\n\n"
+                    )?
+                )]
+                $(#[$meta])*
                 $tag
             ),*
         }
@@ -39,22 +124,57 @@ macro_rules! do_keys {
     }
 }
 
+do_keys! {119:
 
-do_keys!{117:
-    Module                      = "module"
-    MathStructure               = "feature-structure"
-    Morphism                    = "feature-morphism"
-    Section                     = "section"
+    /// Denotes a new [Section]. The given [SectionLevel] is only a sanity check;
+    /// the actual level is determined by the occurrence within a [Document].
+    Section                     @ SectionLevel  = "section"         + Id; -!"in [LogicalParagraph]s, [Problem]s or [Slide]s";
 
-    Definition                  = "definition"
-    Paragraph                   = "paragraph"
-    Assertion                   = "assertion"
-    Example                     = "example"
-    Problem                     = "problem"
-    SubProblem                  = "subproblem"
+    /// Denotes a new [LogicalParagraph] of [ParagraphKind::Definition]
+    /// for the given [Symbol]s using the given styles.
+    Definition                              = "definition"          + Id,Inline,Fors,Styles; &>> Definiens, Definiendum;
+    /// Denotes a new [LogicalParagraph] of [ParagraphKind::Assertion] (Theorems, Lemmata,
+    /// Axioms, etc.) for the given [Symbol]s using the given styles.
+    Assertion                               = "assertion"           + Id,Inline,Fors,Styles;
+    /// Denotes a new [LogicalParagraph] of [ParagraphKind::Example] (this includes counterexamples)
+    /// for the given [Symbol]s using the given styles.
+    Example                                 = "example"             + Id,Inline,Fors,Styles;
+    /// Denotes a new [LogicalParagraph] of [ParagraphKind::Paragraph]
+    /// for the given [Symbol]s using the given styles.
+    Paragraph                               = "paragraph"           + Id,Inline,Fors,Styles;
 
-    Slide                       = "slide"
-    SlideNumber                 = "slide-number"
+    /// Denotes a new [Problem] with [`sub_problem`](Problem::sub_problem)`=false`
+    Problem                                 = "problem"             + Id,Styles,Autogradable,ProblemPoints ;
+    /// Denotes a new [Problem] with [`sub_problem`](Problem::sub_problem)`=true`
+    SubProblem                              = "subproblem"          + Id,Styles,Autogradable,ProblemPoints ;
+
+    /// Denotes a [Slide], implying that the [Document] is (or contains in some sense)
+    /// a presentation.
+    Slide                                   = "slide"               + Id;    -!"in [LogicalParagraph]s, [Problem]s or [Slide]s";
+
+
+    // --------------------------------------------------------------------------------
+
+    /// A (possibly empty) node that, when being rendered, should be replaced by the
+    /// current slide number.
+    SlideNumber                 = "slide-number"            !"in [Slide]s";
+
+    // ------------------------------------------------------------------------------------
+
+    /// Denotes a new [Module] (or [NestedModule]) with the given [Name] in the
+    /// current [Namespace](PathURI).
+    Module                      @ String        = "module"              + Metatheory, Signature;
+
+    /// Denotes a new [MathStructure] or [Extension] with the given [Name].
+    MathStructure               @ String        = "feature-structure"   + Macroname; !"in [Module]s";
+
+    /// <div class="flams-wip">TODO</div>
+    Morphism                                    = "feature-morphism"
+
+    Proof                                   = "proof"               + Id,Inline,Fors,Styles,ProofHide;
+    SubProof                                = "subproof"            + Id,Inline,Fors,Styles,ProofHide;
+
+
 
     Style                       = "style"
     Counter                     = "counter"
@@ -62,6 +182,8 @@ do_keys!{117:
 
     DocTitle                    = "doctitle"
     Title                       = "title"
+    ProofTitle                  = "prooftitle"
+    SubproofTitle               = "subprooftitle"
 
     Symdecl                     = "symdecl"
     Vardef                      = "vardef"
@@ -70,11 +192,11 @@ do_keys!{117:
     Notation                    = "notation"
     NotationComp                = "notationcomp"
     NotationOpComp              = "notationopcomp"
-    Definiendum                 = "definiendum"
+    Definiendum                 = "definiendum"         <= Definition, Paragraph, Assertion;
 
     Type                        = "type"
     Conclusion                  = "conclusion"
-    Definiens                   = "definiens"
+    Definiens                   = "definiens"           <= Definition, Paragraph, Assertion;
     Rule                        = "rule"
 
     ArgSep                      = "argsep"
@@ -92,14 +214,12 @@ do_keys!{117:
     SetSectionLevel             = "sectionlevel"
     SkipSection                 = "skipsection"
 
-    Proof                       = "proof"
-    SubProof                    = "subproof"
+
     ProofMethod                 = "proofmethod"
     ProofSketch                 = "proofsketch"
     ProofTerm                   = "proofterm"
     ProofBody                   = "proofbody"
     ProofAssumption             = "spfassumption"
-    ProofHide                   = "proofhide"
     ProofStep                   = "spfstep"
     ProofStepName               = "stepname"
     ProofEqStep                 = "spfeqstep"
@@ -124,10 +244,10 @@ do_keys!{117:
     ProblemFillinsolCase        = "fillin-case"
     ProblemFillinsolCaseValue   = "fillin-case-value"
     ProblemFillinsolCaseVerdict = "fillin-case-verdict"
-    ExerciseSolution            = "solution"
-    ExerciseHint                = "problemhint"
+    ProblemSolution            = "solution"
+    ProblemHint                = "problemhint"
     ProblemNote                 = "problemnote"
-    ExerciseGradingNote         = "problemgnote"
+    ProblemGradingNote         = "problemgnote"
 
     Comp                        = "comp"
     VarComp                     = "varcomp"
@@ -146,7 +266,7 @@ do_keys!{117:
     SlideshowSlide              = "slideshow-slide"
     CurrentSectionLevel         = "currentsectionlevel"
     Capitalize                  = "capitalize"
-    
+
     Assign                      = "assign"
     Rename                      = "rename"
     RenameTo                    = "to"
@@ -157,21 +277,24 @@ do_keys!{117:
     ArgumentReordering          = "reorderargs"
     ArgNum                      = "argnum"
     Bind                        = "bind"
-    ProblemPoints               = "problempoints"
-    Autogradable                = "autogradable"
     MorphismDomain              = "domain"
     MorphismTotal               = "total"
     ArgMode                     = "argmode"
     NotationId                  = "notationid"
     Head                        = "head"
     Language                    = "language"
-    Metatheory                  = "metatheory"
-    Signature                   = "signature"
+    /// The metatheory of a module, that provides the formal "language" the module
+    /// is in
+    Metatheory                              = "metatheory"      - Module;
+    Signature                               = "signature"       - Module;
     Args                        = "args"
-    Macroname                   = "macroname"
-    Inline                      = "inline"
-    Fors                        = "fors"
-    Id                          = "id"
+    ProblemPoints               = "problempoints"               - Problem, SubProblem;
+    Autogradable                = "autogradable"                - Problem, SubProblem;
+    ProofHide                   = "proofhide"                   - Proof,SubProof;
+    Macroname                   = "macroname"                   - MathStructure;
+    Inline                      = "inline"                      - Definition, Paragraph, Assertion, Example, Problem, SubProblem;
+    Fors                        = "fors"                        - Definition, Paragraph, Assertion, Example, Proof, SubProof;
+    Id                          = "id"                          - Section,Definition, Paragraph, Assertion, Example, Proof, SubProof, Problem, SubProblem, Slide;
     NotationFragment            = "notationfragment"
     Precedence                  = "precedence"
     Role                        = "role"

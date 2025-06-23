@@ -22,7 +22,6 @@ use super::{
 };
 
 impl Queue {
-    /// It sorts the build queue.
     #[allow(clippy::significant_drop_in_scrutinee)]
     pub(super) fn sort(map: &TaskMap, state: &mut RunningQueue) {
         let RunningQueue {
@@ -33,13 +32,11 @@ impl Queue {
             ..
         } = state;
         let mut tasks = map.map.values().cloned().collect::<Vec<_>>();
-        //weak bool initialization for breaking ?
         let mut weak = true;
         while !tasks.is_empty() {
             let mut changed = false;
             for t in &tasks {
                 let mut has_failed = false;
-                // finding the first occurance of the task that is not done and task that is not failed
                 let Some(step) = t.steps().iter().find(|s| {
                     let state = s.0.state.read();
                     if *state == TaskState::Failed {
@@ -222,7 +219,7 @@ impl Queue {
                             BuildStep(Arc::new(BuildStepI {
                                 target: *t,
                                 state: RwLock::new(TaskState::None),
-                                yields: RwLock::new(Vec::new()),
+                                //yields:RwLock::new(Vec::new()),
                                 requires: RwLock::new(VecSet::default()),
                                 dependents: RwLock::new(Vec::new()),
                             }))

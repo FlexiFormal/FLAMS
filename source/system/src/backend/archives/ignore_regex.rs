@@ -1,4 +1,4 @@
-use regex::Regex;
+use flams_utils::regex::Regex;
 use std::fmt::Display;
 use std::path::Path;
 #[cfg(target_os = "windows")]
@@ -44,7 +44,7 @@ impl IgnoreSource {
         #[cfg(target_os = "windows")]
         let p = p.to_string().replace('\\', PATH_SEPARATOR);
         let s = format!("{p}({PATH_SEPARATOR})?({s})");
-        Self(regex::Regex::new(&s).ok())
+        Self(Regex::new(&s).ok())
     }
     pub fn ignores(&self, p: &Path) -> bool {
         let Some(p) = p.to_str() else { return false };
@@ -71,5 +71,4 @@ mod tests {
         let path = Path::new("/home/jazzpirate/work/MathHub/sTeX/Documentation/source/tutorial/math/assertions.en.tex");
         assert!(!ignore.ignores(path));
     }
-    
 }

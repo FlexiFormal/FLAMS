@@ -1,0 +1,6 @@
+.flams-vscode {
+    color: var(--vscode-foreground, #cccccc);
+    font-family: var(--vscode-font-family, sans-serif);
+    font-size: var(--vscode-font-size, 13px);
+    font-weight: var(--vscode-font-weight, normal);
+}

@@ -17,7 +17,7 @@ pub struct UncheckedSection {
     */
 
 #[derive(Debug)]
-pub struct Section<State:CheckingState> {
+pub struct Section<State: CheckingState> {
     pub range: DocumentRange,
     pub uri: DocumentElementURI,
     pub level: SectionLevel,
@@ -25,7 +25,7 @@ pub struct Section<State:CheckingState> {
     pub children: State::Seq<DocumentElement<State>>,
 }
 
-crate::serde_impl!{
+crate::serde_impl! {
     struct Section[range,uri,level,title,children]
 }
 
@@ -36,8 +36,15 @@ impl NarrationTrait for Section<Checked> {
     }
 
     #[inline]
-    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
-        if let DocumentElement::Section(e) = e {Some(e)} else {None}
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self>
+    where
+        Self: Sized,
+    {
+        if let DocumentElement::Section(e) = e {
+            Some(e)
+        } else {
+            None
+        }
     }
 }
 
@@ -57,8 +64,8 @@ pub enum SectionLevel {
 impl Ord for SectionLevel {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let su : u8 = (*self).into();
-        let ou : u8 = (*other).into();
+        let su: u8 = (*self).into();
+        let ou: u8 = (*other).into();
         su.cmp(&ou)
     }
 }

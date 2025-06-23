@@ -1,0 +1,7 @@
+.flams-settings-table {
+    width: max-content !important;
+}
+.flams-settings-col {
+    border: 1px solid black;
+    padding: 3px 10px;
+}

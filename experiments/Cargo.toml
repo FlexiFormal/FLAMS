@@ -5,34 +5,35 @@ edition = "2021"
 description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 
 [lib]
-crate-type = ["cdylib","rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 
 [dev-dependencies]
-rstest = {workspace=true}
-
+rstest = { workspace = true }
 
 
 [lints]
 workspace = true
 
 [dependencies]
-flams-utils = {workspace=true,features=["serde","tokio"]}
-flams-ontology = {workspace=true,features=["serde","tantivy"]}
-flams-system = {workspace=true,features=["tantivy"]}
-flams-lsp = {workspace=true, features=["ws"]}
-flams-stex = {workspace=true,features=["serde"]}
-flams-ftml = {workspace=true}
+flams-utils = { workspace = true, features = ["serde", "tokio"] }
+flams-ontology = { workspace = true, features = ["serde", "tantivy"] }
+flams-system = { workspace = true, features = ["tantivy"] }
+flams-lsp = { workspace = true, features = ["ws"] }
+flams-stex = { workspace = true }
+flams-ftml = { workspace = true }
+flams-git = { workspace = true, features = ["git2"] }
+git2 = { workspace = true }
 
-tracing = {workspace=true}
-tracing-subscriber = {workspace=true}
-tokio = {workspace=true,features = ["full","rt","rt-multi-thread"]}
-lazy_static = {workspace = true}
-color-eyre = {workspace=true}
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["full", "rt", "rt-multi-thread"] }
+lazy_static = { workspace = true }
+color-eyre = { workspace = true }
 
-html2text = {workspace = true}
-tantivy = {workspace = true}
-url = {workspace = true}
+html2text = { workspace = true }
+tantivy = { workspace = true }
+url = { workspace = true }
 
-git-url-parse = {workspace=true}
+git-url-parse = { workspace = true }

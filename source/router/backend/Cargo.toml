@@ -1,0 +1,51 @@
+[package]
+name = "flams-router-backend"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "leptos/ssr",
+    "thaw/ssr",
+    "flams-web-utils/ssr",
+    "flams-router-base/ssr",
+    "flams-router-content/ssr",
+    "flams-router-buildqueue-base/ssr",
+    "dep:tokio",
+    "dep:futures",
+    "dep:flams-system",
+    "dep:flams-git",
+]
+hydrate = [
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "flams-web-utils/hydrate",
+    "flams-router-base/hydrate",
+    "flams-router-content/hydrate",
+    "flams-router-buildqueue-base/hydrate",
+]
+docs-only = []
+
+[dependencies]
+flams-ontology = { workspace = true, features = ["serde"] }
+flams-utils = { workspace = true }
+flams-web-utils = { workspace = true }
+flams-router-base = { workspace = true }
+flams-router-content = { workspace = true }
+flams-router-buildqueue-base = { workspace = true }
+flams-system = { workspace = true, optional = true }
+flams-git = { workspace = true, features = ["git2"], optional = true }
+
+leptos = { workspace = true }
+thaw = { workspace = true }
+serde = { workspace = true }
+either = { workspace = true }
+icondata_ai = { workspace = true }
+icondata_bi = { workspace = true }
+urlencoding = { workspace = true }
+
+futures = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }

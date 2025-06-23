@@ -1,0 +1,27 @@
+.flams-vscode-textbox {
+    background-color: var(--vscode-settings-textInputBackground, #313131);
+    border: 0;
+    box-sizing: border-box;
+    color: var(--vscode-settings-textInputForeground, #cccccc);
+    display: block;
+    font-family: var(
+        --vscode-font-family,
+        system-ui,
+        "Ubuntu",
+        "Droid Sans",
+        sans-serif
+    );
+    font-size: var(--vscode-font-size, 13px);
+    font-weight: var(--vscode-font-weight, "normal");
+    line-height: 18px;
+    outline: none;
+    padding-bottom: 3px;
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 3px;
+}
+
+.flams-vscode-textbox[:disabled] {
+    pointer-events: none;
+    opacity: 0.4;
+}

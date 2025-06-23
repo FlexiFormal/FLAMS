@@ -1,0 +1,65 @@
+[package]
+name = "ftml-viewer"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+#[package.metadata.wasm-pack.profile.release]
+#wasm-opt = ['-Oz','--enable-bulk-memory','--all-features']
+
+#[package.metadata.wasm-pack.profile.release]
+#wasm-opt = false
+
+#[package.metadata.wasm-pack.profile.dev.wasm-bindgen]
+#debug-js-glue = true
+#demangle-name-section = true
+#dwarf-debug-info = true
+
+[features]
+ssr = [] # just to make documentation happy
+ts = [
+    "ftml-viewer-components/ts",
+    "dep:tsify-next",
+    "dep:serde",
+    "flams-utils/wasm",
+    "dep:wasm-bindgen-futures",
+    "flams-ontology/wasm",
+]
+omdoc = ["ftml-viewer-components/omdoc"]
+
+[dependencies]
+ftml-viewer-components = { workspace = true, features = ["csr"] }
+flams-web-utils = { workspace = true, features = ["csr"] }
+flams-utils = { workspace = true }
+flams-ontology = { workspace = true }
+
+leptos_meta = { workspace = true }
+wasm-bindgen = { workspace = true }
+console_error_panic_hook = { workspace = true }
+thaw = { workspace = true, features = ["nightly"] }
+tracing-wasm = { workspace = true }
+tracing = { workspace = true, features = ["release_max_level_info"] }
+
+leptos-posthoc = { workspace = true }
+leptos = { workspace = true, features = ["csr"] }
+
+tsify-next = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+
+ahash = { workspace = true } # avoids getrandom v3, which needs special wasm support
+
+# [patch.crates-io]
+# leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# leptos_axum = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# leptos_meta = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# leptos_router = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
+# reactive_graph = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }

@@ -4,38 +4,43 @@ version = "0.0.1"
 edition = "2021"
 
 [dev-dependencies]
-walkdir = {workspace=true}
-tracing-subscriber = {workspace=true}
-tracing = {workspace=true}
-serde_json = {workspace=true}
+walkdir = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 rdf = ["dep:oxrdf"]
 tokio = ["dep:tokio"]
-serde = ["dep:serde","flams-utils/serde","smallvec/serde"]
-wasm = ["serde","dep:wasm-bindgen","dep:tsify-next","dep:serde_json"]
-tantivy = ["dep:tantivy","dep:html2text","dep:tracing"]
+serde = ["dep:serde", "flams-utils/serde", "smallvec/serde"]
+wasm = ["serde", "dep:wasm-bindgen", "dep:tsify-next", "dep:serde_json"]
+tantivy = ["dep:tantivy", "dep:html2text", "dep:tracing"]
 
 [dependencies]
-oxrdf = {workspace=true,optional=true}
-flams-utils = {workspace=true}
-lazy_static = {workspace=true}
-triomphe = {workspace=true}
-parking_lot = {workspace=true}
-smallvec = {workspace=true}
-serde = {workspace=true,optional=true}
-url = {workspace=true}
-either = {workspace=true}
-const_format = {workspace=true}
-paste = {workspace=true}
-regex = {workspace=true}
-tokio = {workspace=true,optional=true,features=["io-util"]}
-wasm-bindgen = {workspace=true,optional=true}
-tsify-next = {workspace=true,optional=true}
-serde_json = {workspace=true,optional=true}
-tracing = {workspace = true,optional=true}
-tantivy = {workspace = true,optional=true}
-html2text = {workspace = true,optional=true}
+flams-utils = { workspace = true }
+
+oxrdf = { workspace = true, optional = true }
+lazy_static = { workspace = true }
+triomphe = { workspace = true }
+parking_lot = { workspace = true }
+smallvec = { workspace = true }
+serde = { workspace = true, optional = true }
+url = { workspace = true }
+either = { workspace = true }
+const_format = { workspace = true }
+paste = { workspace = true }
+#regex = { workspace = true }
+#js_regexp = { workspace = true }
+eyre = { workspace = true }
+thiserror = { workspace = true }
+
+tokio = { workspace = true, optional = true, features = ["io-util"] }
+wasm-bindgen = { workspace = true, optional = true }
+tsify-next = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+tantivy = { workspace = true, optional = true }
+html2text = { workspace = true, optional = true }
 
 [lints]
 workspace = true

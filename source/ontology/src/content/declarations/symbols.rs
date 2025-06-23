@@ -3,7 +3,8 @@ use std::str::FromStr;
 
 use crate::{
     content::terms::{ArgMode, Term},
-    uris::SymbolURI, Resolvable,
+    uris::SymbolURI,
+    Resolvable,
 };
 
 use super::{Declaration, DeclarationTrait};
@@ -22,7 +23,7 @@ pub struct Symbol {
 }
 impl Resolvable for Symbol {
     type From = SymbolURI;
-    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+    fn id(&self) -> std::borrow::Cow<'_, Self::From> {
         std::borrow::Cow::Borrowed(&self.uri)
     }
 }
@@ -63,7 +64,9 @@ impl FromStr for AssocType {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ArgSpec(SmallVec<ArgMode, 9>);
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct ArgSpec(#[cfg_attr(feature = "wasm", tsify(type = "ArgMode[]"))] SmallVec<ArgMode, 9>);
 impl IntoIterator for ArgSpec {
     type Item = ArgMode;
     type IntoIter = smallvec::IntoIter<ArgMode, 9>;

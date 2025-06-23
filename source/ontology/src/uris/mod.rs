@@ -1,7 +1,7 @@
 /*! # URIs
- * 
+ *
  * ## Grammar
- * 
+ *
  * | Type  |     | Cases/Def | Trait | Reference |
  * |----------- |---- | -----|-------|---------|
  * | [URI]      | ::= | [BaseURI]⏐[ArchiveURI]⏐[PathURI]⏐[ContentURI]⏐[NarrativeURI] | [URITrait] | [URIRef] |
@@ -32,10 +32,12 @@ pub mod terms;
 pub use archives::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait};
 pub use base::BaseURI;
 pub use content::{
-    modules::{ModuleURI,ModuleURIRef}, symbols::{SymbolURI,SymbolURIRef}, ContentURI, ContentURIRef, ContentURITrait,
+    modules::{ModuleURI, ModuleURIRef},
+    symbols::{SymbolURI, SymbolURIRef},
+    ContentURI, ContentURIRef, ContentURITrait,
 };
 pub use errors::URIParseError;
-pub use name::{Name, NameStep,InvalidURICharacter};
+pub use name::{InvalidURICharacter, Name, NameStep};
 pub use narrative::{
     document_elements::DocumentElementURI, documents::DocumentURI, NarrativeURI, NarrativeURIRef,
     NarrativeURITrait,
@@ -48,6 +50,13 @@ use flams_utils::parsing::StringOrStr;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::str::{FromStr, Split};
+
+#[cfg(feature = "wasm")]
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)
+)]
+const TS_URI: &str = "export type URI = string;";
 
 pub(crate) mod macros {
     macro_rules! debugdisplay {
@@ -133,7 +142,9 @@ pub trait URITrait: URIOrRefTrait + Into<URI> {
 }
 
 #[cfg(feature = "serde")]
-pub trait URITrait: URIOrRefTrait + serde::Deserialize<'static> + Into<URI>+FromStr+std::fmt::Display {
+pub trait URITrait:
+    URIOrRefTrait + serde::Deserialize<'static> + Into<URI> + FromStr + std::fmt::Display
+{
     type Ref<'a>: URIRefTrait<'a, Owned = Self>; // where &'a Self:Into<Self::Ref<'a>>;
 }
 
@@ -305,14 +316,16 @@ impl URI {
     fn parse_content(
         s: &str,
         module: &str,
-        path: impl FnOnce() -> Result<PathURI,URIParseError>,
+        path: impl FnOnce() -> Result<PathURI, URIParseError>,
         mut split: Split<char>,
     ) -> Result<ContentURI, URIParseError> {
         let name = move || module.parse();
-        let module = move || Ok::<_,URIParseError>(ModuleURI {
-            path: path()?,
-            name: name()?,
-        });
+        let module = move || {
+            Ok::<_, URIParseError>(ModuleURI {
+                path: path()?,
+                name: name()?,
+            })
+        };
         let Some(next) = split.next() else {
             return Ok(ContentURI::Module(module()?));
         };
@@ -342,15 +355,17 @@ impl URI {
         s: &str,
         document: &str,
         (language, next): (Language, Option<&str>),
-        path: impl FnOnce() -> Result<PathURI,URIParseError>,
+        path: impl FnOnce() -> Result<PathURI, URIParseError>,
         mut split: Split<char>,
     ) -> Result<NarrativeURI, URIParseError> {
         let name = move || document.parse();
-        let document = move || Ok::<_,URIParseError>(DocumentURI {
-            path: path()?,
-            name: name()?,
-            language,
-        });
+        let document = move || {
+            Ok::<_, URIParseError>(DocumentURI {
+                path: path()?,
+                name: name()?,
+                language,
+            })
+        };
         let Some(next) = next else {
             return Ok(NarrativeURI::Document(document()?));
         };
@@ -406,10 +421,12 @@ impl FromStr for URI {
                     let (path, next) =
                         if let Some(path) = next.strip_prefix(concatcp!(PathURI::SEPARATOR, "=")) {
                             (
-                                Either::Left(|| Ok(PathURI {
-                                    archive: archive(),
-                                    path: Some(path.parse()?),
-                                })),
+                                Either::Left(|| {
+                                    Ok(PathURI {
+                                        archive: archive(),
+                                        path: Some(path.parse()?),
+                                    })
+                                }),
                                 split.next(),
                             )
                         } else {
@@ -435,23 +452,20 @@ impl FromStr for URI {
                                 n.strip_prefix(concatcp!(Language::SEPARATOR, "="))
                                     .map_or_else(
                                         || Ok((Language::default(), Some(n))),
-                                        |l| l.parse()
-                                            .map_err(|()| URIParseError::InvalidLanguage {
-                                                uri_kind: "uri",
-                                                original: s.to_string(),
-                                            })
-                                            .map(|l| (l, split.next())),
+                                        |l| {
+                                            l.parse()
+                                                .map_err(|()| URIParseError::InvalidLanguage {
+                                                    uri_kind: "uri",
+                                                    original: s.to_string(),
+                                                })
+                                                .map(|l| (l, split.next()))
+                                        },
                                     )
                             },
                         )
                     };
                     if let Some(module) = next.strip_prefix(concatcp!(ModuleURI::SEPARATOR, "=")) {
-                        Ok(Self::Content(Self::parse_content(
-                            s,
-                            module,
-                            path,
-                            split,
-                        )?))
+                        Ok(Self::Content(Self::parse_content(s, module, path, split)?))
                     } else if let Some(document) =
                         next.strip_prefix(concatcp!(DocumentURI::SEPARATOR, "="))
                     {

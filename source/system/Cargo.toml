@@ -13,6 +13,7 @@ zip = [
     "dep:async-compression",
     "dep:astral-tokio-tar",
     "dep:tokio-util",
+    "dep:tokio-stream",
     "dep:futures",
 ] #["dep:flate2","dep:tar","tokio","dep:tokio-util","dep:reqwest","dep:async-compression"]
 
@@ -34,13 +35,14 @@ crossbeam-channel = { workspace = true }
 rayon = { workspace = true }
 spliter = { workspace = true }
 walkdir = { workspace = true }
-regex = { workspace = true }
+#regex = {workspace=true}
 either = { workspace = true }
 parking_lot = { workspace = true }
 smallvec = { workspace = true }
 const_format = { workspace = true }
 lazy_static = { workspace = true }
 simple-home-dir = { workspace = true }
+rustc-hash = { workspace = true }
 tokio = { workspace = true, features = [
     "rt",
     "io-util",
@@ -48,6 +50,7 @@ tokio = { workspace = true, features = [
     "fs",
 ], optional = true }
 tokio-util = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
 chrono = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
@@ -63,6 +66,7 @@ html2text = { workspace = true, optional = true }
 
 serde = { workspace = true }
 bincode = { workspace = true }
+eyre = { workspace = true }
 
 #flate2 = {workspace=true,optional=true}
 #tar = {workspace=true,optional=true}

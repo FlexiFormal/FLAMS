@@ -25,7 +25,7 @@ pub fn clean(path: &Path) {
         "blg",
         "fdb_latexmk",
         "fls",
-        "sref",
+        //"sref",
         "run.xml",
         "synctex.gz",
     ];
