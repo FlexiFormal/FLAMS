@@ -486,6 +486,7 @@ macro_rules! optargtype {
           $parser:&mut crate::quickparse::latex::KeyValParser<'a, '_,Pos,STeXToken<Pos>,Err,STeXParseState<'a,Pos,MS>>,
           key:&str
         ) -> Option<Self> {
+          #[allow(unused_imports)]
           use super::super::latex::KeyValParsable;
           match key {
             $(
@@ -839,17 +840,29 @@ optargtype! {parser =>
     {Width = "width" : str}
     {Height = "height": str}
     {Archive = "archive": str}
+    {Viewport = "viewport": str}
+    {Trim = "trim": str}
+    {Scale = "scale": f32}
+    {Angle = "angle": f32}
+    {Clip = "clip":()}
+    {KeepAspectRatio = "keepaspectratio":()}
   }
 }
 
 stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
-    fn img_exists(path:&Path,rel_path:&mut String) -> bool {
-        const IMG_EXTS: [&str;8] = ["png","PNG","jpg","JPG","jpeg","JPEG","bmp","BMP"];
-        if path.extension().is_some_and(|s| s.to_str().is_some_and(|s| IMG_EXTS.contains(&s))) {
+    fn img_exists(path:&Path,rel_path:&mut String,warn:impl FnOnce(&str)) -> bool {
+        const IMG_EXTS: [&str;10] = ["png","PNG","jpg","JPG","jpeg","JPEG","bmp","BMP","pdf","PDF"];
+        if let Some(e) = path.extension().and_then(|s| s.to_str().and_then(|s| IMG_EXTS.iter().find(|e| **e == s))) {
+            if ["pdf","PDF"].contains(e) {
+                warn(".pdf extension not suitable for HTML\n\nrustex will substitute with a png instead.\nYou may want to directly use the .png here");
+            }
             return path.exists();
         }
         for e in &IMG_EXTS {
             if path.with_extension(e).exists() {
+                if ["pdf","PDF"].contains(e) {
+                    warn(".pdf extension not suitable for HTML\n\nrustex will substitute with a png instead.\nYou may want to directly use the .png here");
+                }
                 if let Some(ex) = path.extension().and_then(|s| s.to_str()) {
                     let len = rel_path.len() - ex.len();
                     rel_path.truncate(len);
@@ -864,6 +877,15 @@ stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
         false
     }
     let args = args.unwrap_or_default();
+    for a in &args {
+        match a {
+            MHGraphicsArg::Scale(x) => p.tokenizer.problem(x.key_range.start,"`scale` results in an image size relative to the original image file. Absolute values (`width` or `height`) are strongly encouraged",DiagnosticLevel::Warning),
+            _ => ()
+        }
+    }
+    if !args.iter().any(|e| matches!(e,MHGraphicsArg::Width(_)|MHGraphicsArg::Height(_))) {
+        p.tokenizer.problem(mhgraphics.token_range.start,"No `width` or `height` attribute in image. It is strongly encouraged to provide one of them.",DiagnosticLevel::Warning)
+    }
       let archive = args.iter().find_map(|p| if let MHGraphicsArg::Archive(a) = p {Some(a)} else {None})
           .map(|p| (ArchiveId::new(&p.val),p.val_range));
       let mut rel_path = filepath.0.to_string();
@@ -876,7 +898,7 @@ stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
                   if let Some(a) = a {
                       let path = a.source_dir();
                       let path = rel_path.as_str().split('/').fold(path,|p,s| p.join(s));
-                      if !img_exists(&path,&mut rel_path) {
+                      if !img_exists(&path,&mut rel_path,|s| p.tokenizer.problem(filepath.1.start,s,DiagnosticLevel::Info)) {
                           p.tokenizer.problem(filepath.1.start,format!("Image file {} not found",path.display()),DiagnosticLevel::Error);
                       }
                   } else {}
