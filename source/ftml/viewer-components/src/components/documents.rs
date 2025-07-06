@@ -138,20 +138,21 @@ pub fn DocumentString(
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
+    use thaw::Flex;
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(
         (&toc, &omdoc),
         (TOCSource::None, crate::components::omdoc::OMDocSource::None)
     );
-    view! {<FTMLDocumentSetup uri>
-        {
-            if burger {Some(
+    view! {<FTMLDocumentSetup uri><Flex>
+        <div><DomStringCont html cont=iterate/></div>
+        {if burger {
+            Some(view!{<div style="position:sticky;inset:0;height:min-content;">{
                 do_burger(toc,gottos,omdoc)
-            )}
-            else { None }
-        }
-        <DomStringCont html cont=iterate/>
-    </FTMLDocumentSetup>}
+            }</div>})
+        } else {None}}
+    </Flex></FTMLDocumentSetup>
+    }
 }
 
 #[cfg(not(feature = "omdoc"))]
@@ -164,13 +165,16 @@ pub fn DocumentString(
 ) -> impl IntoView {
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(toc, TOCSource::None);
-    view! {<FTMLDocumentSetup uri>
-        {if burger {Some(
-            do_burger(toc,gottos)
-        )}
-        else { None }}
-        <DomStringCont html cont=iterate/>
-    </FTMLDocumentSetup>}
+
+    view! {<FTMLDocumentSetup uri><Flex>
+        <div><DomStringCont html cont=iterate/></div>
+        {if burger {
+            Some(view!{<div style="position:sticky;inset:0;height:min-content;">{
+                do_burger(toc,gottos)
+            }</div>})
+        } else {None}}
+    </Flex></FTMLDocumentSetup>
+    }
 }
 
 #[cfg(feature = "omdoc")]
@@ -179,19 +183,45 @@ fn do_burger(
     gottos: Vec<Gotto>,
     omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
-    use flams_web_utils::components::Burger;
-    //use flams_web_utils::components::ClientOnly;
+    //use flams_web_utils::components::Burger;
+    use flams_web_utils::components::ClientOnly;
+    use thaw::{
+        Button, ButtonAppearance, ButtonShape, ButtonSize, DrawerBody, DrawerPosition,
+        InlineDrawer, Scrollbar,
+    };
+    let visible = RwSignal::new(true);
+    let display = Memo::new(move |_| {
+        if visible.get() {
+            "transition:height 0.3s, max-height 0.3s ease-in;overflow:hidden;max-height:100vh"
+        } else {
+            "transition:height 0.3s, max-height 0.3s ease-out;max-height:0px;overflow:hidden;"
+        }
+    });
     crate::components::do_toc(toc, gottos, move |v| {
         view! {
-            /*<ClientOnly>
-                <div style="width:0;height:0;margin-left:auto;">
-                    <div style="position:fixed">
-                        {crate::components::omdoc::do_omdoc(omdoc)}
-                        <div style="width:fit-content;height:fit-content;">{v}</div>
-                    </div>
-                </div>
-            </ClientOnly>*/
-            <Burger>{crate::components::omdoc::do_omdoc(omdoc)}{v}</Burger>
+            <ClientOnly>
+                //<div style="width:0;height:0;margin-left:auto;">
+                //    <div style="position:fixed">
+                //<div style="max-height:600px">
+                //        <InlineDrawer open=visible position=DrawerPosition::Right>
+                //        <DrawerBody>
+                            <Button
+                                //appearance=ButtonAppearance::Subtle
+                                shape=ButtonShape::Circular
+                                size=ButtonSize::Small
+                                on_click=move |_| visible.set(!visible.get_untracked())
+                            >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
+                            <div style=display>
+                            {crate::components::omdoc::do_omdoc(omdoc)}
+                            <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
+                            </div>
+                //        </DrawerBody>
+                //        </InlineDrawer>
+                //</div>
+                //    </div>
+                //</div>
+            </ClientOnly>
+            //<Burger>{crate::components::omdoc::do_omdoc(omdoc)}{v}</Burger>
         }
     })
 }
@@ -199,11 +229,11 @@ fn do_burger(
 #[cfg(not(feature = "omdoc"))]
 fn do_burger(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl IntoView {
     use flams_web_utils::components::Burger;
-    //use flams_web_utils::components::ClientOnly;
+    use flams_web_utils::components::ClientOnly;
     crate::components::do_toc(toc, gottos, move |v| {
         view! {
-           //<ClientOnly> <div>{v}</div></ClientOnly>
-            <Burger>{v}</Burger>
+           <ClientOnly> <div>{v}</div></ClientOnly>
+            //<Burger>{v}</Burger>
         }
     })
 }

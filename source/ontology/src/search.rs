@@ -174,30 +174,34 @@ mod tantivy_i {
         }
     }
 
-    lazy_static::lazy_static! {
-        static ref SCHEMA : SearchSchema = {
-          use tantivy::schema::{Schema,INDEXED,STORED,TEXT};
-    /*
-          let text_field_indexing = tantivy::schema::TextFieldIndexing::default()
-            .set_tokenizer("ngram3")
-            .set_index_option(tantivy::schema::IndexRecordOption::WithFreqsAndPositions);
-          let txt_opts = tantivy::schema::TextOptions::default().set_indexing_options(text_field_indexing);
-           */
+    static SCHEMA: std::sync::LazyLock<SearchSchema> = std::sync::LazyLock::new(|| {
+        use tantivy::schema::{Schema, INDEXED, STORED, TEXT};
+        /*
+        let text_field_indexing = tantivy::schema::TextFieldIndexing::default()
+          .set_tokenizer("ngram3")
+          .set_index_option(tantivy::schema::IndexRecordOption::WithFreqsAndPositions);
+        let txt_opts = tantivy::schema::TextOptions::default().set_indexing_options(text_field_indexing);
+         */
 
-          let mut schema = Schema::builder();
-          let kind = schema.add_u64_field("kind", INDEXED|STORED);
-          let uri = schema.add_text_field("uri", STORED);
-          let def_like = schema.add_bool_field("deflike", INDEXED|STORED);
-          let fors = schema.add_text_field("for", STORED);
-          let title = schema.add_text_field("title", TEXT);
-          let body = schema.add_text_field("body", TEXT);//txt_opts);//TEXT);
+        let mut schema = Schema::builder();
+        let kind = schema.add_u64_field("kind", INDEXED | STORED);
+        let uri = schema.add_text_field("uri", STORED);
+        let def_like = schema.add_bool_field("deflike", INDEXED | STORED);
+        let fors = schema.add_text_field("for", STORED);
+        let title = schema.add_text_field("title", TEXT);
+        let body = schema.add_text_field("body", TEXT); //txt_opts);//TEXT);
 
-          let schema = schema.build();
-          SearchSchema {
-            schema,uri,kind,title,body,fors,def_like
-          }
-        };
-      }
+        let schema = schema.build();
+        SearchSchema {
+            schema,
+            uri,
+            kind,
+            title,
+            body,
+            fors,
+            def_like,
+        }
+    });
 
     /*impl QueryFilter {
       #[must_use]
@@ -268,7 +272,7 @@ mod tantivy_i {
             write!(s, "({query})").ok()?;
             let mut parser =
                 tantivy::query::QueryParser::for_index(index, vec![SCHEMA.title, SCHEMA.body]);
-            parser.set_field_fuzzy(SCHEMA.body, false, 1, true);
+            //parser.set_field_fuzzy(SCHEMA.body, false, 1, true);
             parser.set_conjunction_by_default();
             parser.parse_query(&s).ok()
         }

@@ -67,15 +67,19 @@ pub fn Fragment(uri: URIComponents) -> impl IntoView {
     wait_and_then_fn(
         move || uri.clone().into_args(super::server_fns::fragment),
         move |(uri, css, html)| {
-            let uri = if let URI::Narrative(NarrativeURI::Element(uri)) = uri {
-                Some(uri)
+            if let URI::Narrative(NarrativeURI::Element(uri)) = uri {
+                leptos::either::Either::Left(view! {<div>{
+                  for css in css { do_css(css); }
+                  FragmentString(FragmentStringProps{html,uri:Some(uri)})
+                }</div>})
             } else {
-                None
+                leptos::either::Either::Right(
+                    view! {<div style="padding: 0 60px;--rustex-this-width:590px;">{
+                      for css in css { do_css(css); }
+                      FragmentString(FragmentStringProps{html,uri:None})
+                    }</div>},
+                )
             };
-            view! {<div>{
-              for css in css { do_css(css); }
-              FragmentString(FragmentStringProps{html,uri})
-            }</div>}
         },
     )
 }
