@@ -191,6 +191,29 @@ fn do_toc_sidebar(
             "ftml-toc-invisible"
         }
     });
+
+    let hl_option: RwSignal<crate::HighlightOption> = expect_context();
+    let value = RwSignal::new(hl_option.get_untracked().as_str().to_string());
+    Effect::new(move || {
+        if let Some(v) = crate::HighlightOption::from_str(&value.get()) {
+            if hl_option.get_untracked() != v {
+                hl_option.set(v);
+            }
+        }
+    });
+    use thaw::Select;
+    let select = move || {
+        if hl_option.get() == crate::HighlightOption::None {
+            None
+        } else {
+            Some(view!(<Select value size=thaw::SelectSize::Small>
+            <option class="ftml-comp">{crate::HighlightOption::Colored.as_str()}</option>
+            <option class="ftml-comp-subtle">{crate::HighlightOption::Subtle.as_str()}</option>
+            <option>{crate::HighlightOption::Off.as_str()}</option>
+        </Select>))
+        }
+    };
+
     crate::components::do_toc(toc, gottos, move |v| {
         view! {<div class="ftml-toc-sidebar">
         <ClientOnly>
@@ -206,6 +229,7 @@ fn do_toc_sidebar(
                             on_click=move |_| visible.set(!visible.get_untracked())
                         >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
                         <div class=display>
+                        {select}
                         {crate::components::omdoc::do_omdoc(omdoc)}
                         <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
                         </div>
@@ -237,6 +261,29 @@ fn do_toc_sidebar(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl
             "ftml-toc-invisible"
         }
     });
+
+    let hl_option: RwSignal<crate::HighlightOption> = expect_context();
+    let value = RwSignal::new(hl_option.get_untracked().as_str().to_string());
+    Effect::new(move || {
+        if let Some(v) = crate::HighlightOption::from_str(&value.get()) {
+            if hl_option.get_untracked() != v {
+                hl_option.set(v);
+            }
+        }
+    });
+    use thaw::Select;
+    let select = move || {
+        if hl_option.get() == crate::HighlightOption::None {
+            None
+        } else {
+            Some(view!(<Select value size=thaw::SelectSize::Small>
+            <option>{crate::HighlightOption::Colored.as_str()}</option>
+            <option>{crate::HighlightOption::Subtle.as_str()}</option>
+            <option>{crate::HighlightOption::Off.as_str()}</option>
+        </Select>))
+        }
+    };
+
     crate::components::do_toc(toc, gottos, move |v| {
         view! {<div class="ftml-toc-sidebar">
             <ClientOnly>
@@ -245,7 +292,7 @@ fn do_toc_sidebar(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl
                     size=ButtonSize::Small
                     on_click=move |_| visible.set(!visible.get_untracked())
                 >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
-                <div class=display>
+                <div class=display>{select}
                 <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
                 </div>
             </ClientOnly>

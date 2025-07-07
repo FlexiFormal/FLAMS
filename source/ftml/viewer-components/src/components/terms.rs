@@ -338,13 +338,19 @@ pub(super) fn do_term<V: IntoView + 'static, const MATH: bool>(
 pub(super) fn do_definiendum<V: IntoView + 'static, const MATH: bool>(
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
+    let highlight: RwSignal<crate::HighlightOption> = expect_context();
+    let cls = Memo::new(move |_| match highlight.get() {
+        crate::HighlightOption::Colored | crate::HighlightOption::None => "ftml-def-comp",
+        crate::HighlightOption::Subtle => "ftml-def-comp-subtle",
+        crate::HighlightOption::Off => "",
+    });
     if MATH {
         leptos::either::Either::Left(view! {
-          <mrow class="ftml-def-comp">{children()}</mrow>
+          <mrow class=cls>{children()}</mrow>
         })
     } else {
         leptos::either::Either::Right(view! {
-          <span class="ftml-def-comp">{children()}</span>
+          <span class=cls>{children()}</span>
         })
     }
 }
@@ -353,6 +359,7 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
     is_defi: bool,
     mut children: impl FnMut() -> V + Send + 'static,
 ) -> impl IntoView {
+    use crate::HighlightOption as HL;
     use flams_web_utils::components::PopoverTrigger;
     //tracing::info!("comp!");
     let in_term = use_context::<Option<InTermState>>().flatten();
@@ -360,24 +367,30 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
         let is_hovered = in_term.is_hovered;
         //tracing::debug!("comp of term {:?}",in_term.owner);
         let is_var = matches!(in_term.owner, VarOrSym::V(_));
-        let class = Memo::new(move |_| {
-            match (
-                is_defi,
-                is_hovered.get(),
-                is_var, /*,in_term.replaced.get_untracked() */
-            ) {
-                /*(true, true, true) => "ftml-comp-replaced ftml-var-comp ftml-comp-hover".to_string(),
-                (true, false, true) => "ftml-comp-replaced ftml-comp ftml-comp-hover".to_string(),
-                (false, true, true) => "ftml-comp-replaced ftml-var-comp".to_string(),
-                (false, false, true) => "ftml-comp-replaced ftml-comp".to_string(),*/
-                (true, false, _) => "ftml-def-comp".to_string(),
-                (true, true, _) => "ftml-def-comp ftml-comp-hover".to_string(),
-                (_, true, true) => "ftml-var-comp ftml-comp-hover".to_string(),
-                (_, true, false) => "ftml-comp ftml-comp-hover".to_string(),
-                (_, false, true) => "ftml-var-comp".to_string(),
-                (_, false, false) => "ftml-comp".to_string(),
-            }
-        });
+        let highlight: RwSignal<HL> = expect_context();
+        let class =
+            Memo::new(
+                move |_| match (is_defi, is_hovered.get(), is_var, highlight.get()) {
+                    (_, false, true, _) => "ftml-var-comp".to_string(),
+                    (_, true, true, _) => "ftml-var-comp ftml-comp-hover".to_string(),
+                    (true, false, _, HL::Colored | HL::None) => "ftml-def-comp".to_string(),
+                    (true, false, _, HL::Subtle) => "ftml-def-comp-subtle".to_string(),
+                    (true, true, _, HL::Colored | HL::None) => {
+                        "ftml-def-comp ftml-comp-hover".to_string()
+                    }
+                    (true, true, _, HL::Subtle) => {
+                        "ftml-def-comp-subtle ftml-comp-hover".to_string()
+                    }
+                    (_, false, false, HL::Colored | HL::None) => "ftml-comp".to_string(),
+                    (_, false, false, HL::Subtle) => "ftml-comp-subtle".to_string(),
+                    (_, true, false, HL::Subtle) => "ftml-comp-subtle ftml-comp-hover".to_string(),
+                    (_, true, false, HL::Colored | HL::None) => {
+                        "ftml-comp ftml-comp-hover".to_string()
+                    }
+                    (_, false, _, HL::Off) => "".to_string(),
+                    (_, true, _, HL::Off) => "ftml-comp-hover".to_string(),
+                },
+            );
         let do_popover = || use_context::<DisablePopover>().is_none();
         let s = in_term.owner;
         //let node_type = if MATH { DivOrMrow::Mrow } else { DivOrMrow::Div };
