@@ -5,7 +5,7 @@ use crate::FTMLDocumentSetup;
 use flams_ontology::uris::NarrativeURI;
 use flams_ontology::uris::{DocumentElementURI, DocumentURI, NameStep};
 use flams_web_utils::components::wait_local;
-use flams_web_utils::do_css;
+use flams_web_utils::{do_css, inject_css};
 use leptos::prelude::*;
 use leptos_posthoc::DomStringCont;
 
@@ -163,9 +163,9 @@ pub fn DocumentString(
     #[prop(optional, into)] toc: TOCSource,
     #[prop(optional, into)] gottos: Vec<Gotto>,
 ) -> impl IntoView {
+    use thaw::Flex;
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(toc, TOCSource::None);
-
     view! {<FTMLDocumentSetup uri><Flex>
         <div><DomStringCont html cont=iterate/></div>
         {if burger {
@@ -183,6 +183,7 @@ fn do_burger(
     gottos: Vec<Gotto>,
     omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
+    inject_css("ftml-toc", include_str!("./toc.css"));
     //use flams_web_utils::components::Burger;
     use flams_web_utils::components::ClientOnly;
     use thaw::{
@@ -192,9 +193,9 @@ fn do_burger(
     let visible = RwSignal::new(true);
     let display = Memo::new(move |_| {
         if visible.get() {
-            "transition:height 0.3s, max-height 0.3s ease-in;overflow:hidden;max-height:100vh"
+            "ftml-toc-visible"
         } else {
-            "transition:height 0.3s, max-height 0.3s ease-out;max-height:0px;overflow:hidden;"
+            "ftml-toc-invisible"
         }
     });
     crate::components::do_toc(toc, gottos, move |v| {
@@ -211,7 +212,7 @@ fn do_burger(
                                 size=ButtonSize::Small
                                 on_click=move |_| visible.set(!visible.get_untracked())
                             >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
-                            <div style=display>
+                            <div class=display>
                             {crate::components::omdoc::do_omdoc(omdoc)}
                             <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
                             </div>
@@ -228,12 +229,33 @@ fn do_burger(
 
 #[cfg(not(feature = "omdoc"))]
 fn do_burger(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl IntoView {
-    use flams_web_utils::components::Burger;
+    //use flams_web_utils::components::Burger;
     use flams_web_utils::components::ClientOnly;
+    use thaw::{
+        Button, ButtonAppearance, ButtonShape, ButtonSize, DrawerBody, DrawerPosition,
+        InlineDrawer, Scrollbar,
+    };
+    inject_css("ftml-toc", include_str!("./toc.css"));
+    let visible = RwSignal::new(true);
+    let display = Memo::new(move |_| {
+        if visible.get() {
+            "ftml-toc-visible"
+        } else {
+            "ftml-toc-invisible"
+        }
+    });
     crate::components::do_toc(toc, gottos, move |v| {
         view! {
-           <ClientOnly> <div>{v}</div></ClientOnly>
-            //<Burger>{v}</Burger>
+            <ClientOnly>
+                <Button
+                    shape=ButtonShape::Circular
+                    size=ButtonSize::Small
+                    on_click=move |_| visible.set(!visible.get_untracked())
+                >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
+                <div class=display>
+                <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
+                </div>
+            </ClientOnly>
         }
     })
 }

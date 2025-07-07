@@ -1,0 +1,14 @@
+.ftml-toc-visible,
+.ftml-toc-invisible {
+    transition:
+        height 0.3s,
+        max-height 0.3s ease-in;
+    overflow: hidden;
+    background-color: var(--colorNeutralBackground1);
+}
+.ftml-toc-visible {
+    max-height: 100vh;
+}
+.ftml-toc-invisible {
+    max-height: 0px;
+}
