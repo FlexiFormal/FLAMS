@@ -147,9 +147,7 @@ pub fn DocumentString(
     view! {<FTMLDocumentSetup uri><Flex>
         <div><DomStringCont html cont=iterate/></div>
         {if burger {
-            Some(view!{<div style="position:sticky;inset:0;height:min-content;">{
-                do_burger(toc,gottos,omdoc)
-            }</div>})
+            Some(do_toc_sidebar(toc,gottos,omdoc))
         } else {None}}
     </Flex></FTMLDocumentSetup>
     }
@@ -169,16 +167,14 @@ pub fn DocumentString(
     view! {<FTMLDocumentSetup uri><Flex>
         <div><DomStringCont html cont=iterate/></div>
         {if burger {
-            Some(view!{<div style="position:sticky;inset:0;height:min-content;">{
-                do_burger(toc,gottos)
-            }</div>})
+            Some(do_toc_sidebar(toc,gottos))
         } else {None}}
     </Flex></FTMLDocumentSetup>
     }
 }
 
 #[cfg(feature = "omdoc")]
-fn do_burger(
+fn do_toc_sidebar(
     toc: TOCSource,
     gottos: Vec<Gotto>,
     omdoc: crate::components::omdoc::OMDocSource,
@@ -186,10 +182,7 @@ fn do_burger(
     inject_css("ftml-toc", include_str!("./toc.css"));
     //use flams_web_utils::components::Burger;
     use flams_web_utils::components::ClientOnly;
-    use thaw::{
-        Button, ButtonAppearance, ButtonShape, ButtonSize, DrawerBody, DrawerPosition,
-        InlineDrawer, Scrollbar,
-    };
+    use thaw::{Button, ButtonShape, ButtonSize, Scrollbar};
     let visible = RwSignal::new(true);
     let display = Memo::new(move |_| {
         if visible.get() {
@@ -199,36 +192,36 @@ fn do_burger(
         }
     });
     crate::components::do_toc(toc, gottos, move |v| {
-        view! {
-            <ClientOnly>
-                //<div style="width:0;height:0;margin-left:auto;">
-                //    <div style="position:fixed">
-                //<div style="max-height:600px">
-                //        <InlineDrawer open=visible position=DrawerPosition::Right>
-                //        <DrawerBody>
-                            <Button
-                                //appearance=ButtonAppearance::Subtle
-                                shape=ButtonShape::Circular
-                                size=ButtonSize::Small
-                                on_click=move |_| visible.set(!visible.get_untracked())
-                            >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
-                            <div class=display>
-                            {crate::components::omdoc::do_omdoc(omdoc)}
-                            <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
-                            </div>
-                //        </DrawerBody>
-                //        </InlineDrawer>
-                //</div>
-                //    </div>
-                //</div>
-            </ClientOnly>
-            //<Burger>{crate::components::omdoc::do_omdoc(omdoc)}{v}</Burger>
-        }
+        view! {<div class="ftml-toc-sidebar">
+        <ClientOnly>
+            //<div style="width:0;height:0;margin-left:auto;">
+            //    <div style="position:fixed">
+            //<div style="max-height:600px">
+            //        <InlineDrawer open=visible position=DrawerPosition::Right>
+            //        <DrawerBody>
+                        <Button
+                            //appearance=ButtonAppearance::Subtle
+                            shape=ButtonShape::Circular
+                            size=ButtonSize::Small
+                            on_click=move |_| visible.set(!visible.get_untracked())
+                        >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
+                        <div class=display>
+                        {crate::components::omdoc::do_omdoc(omdoc)}
+                        <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
+                        </div>
+            //        </DrawerBody>
+            //        </InlineDrawer>
+            //</div>
+            //    </div>
+            //</div>
+        </ClientOnly>
+        //<Burger>{crate::components::omdoc::do_omdoc(omdoc)}{v}</Burger>
+        </div>}
     })
 }
 
 #[cfg(not(feature = "omdoc"))]
-fn do_burger(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl IntoView {
+fn do_toc_sidebar(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl IntoView {
     //use flams_web_utils::components::Burger;
     use flams_web_utils::components::ClientOnly;
     use thaw::{
@@ -245,7 +238,7 @@ fn do_burger(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl Into
         }
     });
     crate::components::do_toc(toc, gottos, move |v| {
-        view! {
+        view! {<div class="ftml-toc-sidebar">
             <ClientOnly>
                 <Button
                     shape=ButtonShape::Circular
@@ -256,6 +249,6 @@ fn do_burger(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl Into
                 <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
                 </div>
             </ClientOnly>
-        }
+        </div>}
     })
 }
