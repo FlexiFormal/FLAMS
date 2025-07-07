@@ -61,8 +61,7 @@ pub extern "C" fn initialize() {
         });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn load_all_files() {
+fn _get_all_files() -> Vec<(Arc<Path>, DocumentURI)> {
     let mut files: Vec<(Arc<Path>, DocumentURI)> = Vec::new();
     for a in GlobalBackend::get().all_archives().iter() {
         if let Archive::Local(a) = a {
@@ -85,6 +84,12 @@ pub extern "C" fn load_all_files() {
             })
         }
     }
+    files
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn load_all_files() {
+    let files = _get_all_files();
     let len = files.len();
     tracing::info!("Linting {len} files");
 
@@ -97,6 +102,16 @@ pub extern "C" fn load_all_files() {
         }
     }
     tracing::info!("Finished linting {len} files");
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn list_of_all_files() -> *const libc::c_char {
+    to_json(
+        &_get_all_files()
+            .into_iter()
+            .map(|(p, _)| p.as_ref().to_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    )
 }
 
 #[unsafe(no_mangle)]

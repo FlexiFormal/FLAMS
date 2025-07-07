@@ -29,6 +29,9 @@ void load_all_files();
 // Returns a JSON array of the paths of all loaded files
 char* list_of_loaded_files();
 
+// Returns a JSON array of all files FLAMS knows about
+char* list_of_all_files();
+
 // Returns the JSON representation of the annotations of a file (requires the file to be loaded)
 char* get_file_annotations(char* path);
 
