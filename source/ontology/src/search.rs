@@ -354,7 +354,22 @@ mod tantivy_i {
     impl SearchIndex {
         #[must_use]
         pub fn html_to_search_text(html: &str) -> Option<String> {
-            html2text::from_read(html.as_bytes(), usize::MAX / 3).ok()
+            fn replacer(s: &mut String) {
+                let mut i = 0;
+                loop {
+                    match s.as_bytes().get(i..i + 2) {
+                        None => return,
+                        Some(b".\n" | b"!\n" | b":\n" | b";\n") => i += 2,
+                        Some(b) if b[0] == b'\n' => {
+                            s.remove(i);
+                        }
+                        _ => i += 1,
+                    }
+                }
+            }
+            let mut s = html2text::from_read(html.as_bytes(), usize::MAX / 3).ok()?;
+            replacer(&mut s);
+            Some(s)
         }
     }
 
