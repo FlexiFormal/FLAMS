@@ -1,15 +1,25 @@
 .ftml-comp {
-    /* -webkit-text-stroke: 0.04ex cyan */
     color: dodgerblue;
-}
-.ftml-var-comp {
-    color: gray;
 }
 .ftml-def-comp {
     color: mediumvioletred;
 }
+
+.ftml-comp-subtle {
+    text-shadow: 0.1ex 0.1ex 0.3ex #1e90ff80;
+    transition-delay: 0.15s;
+}
+.ftml-def-comp-subtle {
+    text-shadow: 0.1ex 0.1ex 0.5ex #c7158580;
+    font-weight: bold;
+}
+
+.ftml-var-comp {
+    color: gray;
+}
 .ftml-comp-hover {
     background-color: rgba(238, 255, 47, 0.702);
+    transition-duration: 0.5s;
 }
 .ftml-comp-replaced {
     border: 1px dotted red;
@@ -29,6 +39,7 @@
     @starting-style {
         opacity: 0;
     }
+    transition-delay: 0.15s;
 }
 .ftml-symbol-hover-hidden {
     opacity: 0;

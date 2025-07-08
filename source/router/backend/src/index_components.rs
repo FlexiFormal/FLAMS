@@ -72,8 +72,9 @@ fn do_img(url: String) -> impl IntoView {
 }
 
 fn do_teaser(txt: String) -> impl IntoView {
+    use flams_web_utils::components::ClientOnly;
     view!(<div style="margin:5px;"><Scrollbar style="max-height: 100px;"><Body1>
-    <span inner_html=txt style="font-size:smaller;"/>
+    <ClientOnly><span inner_html=txt style="font-size:smaller;"/></ClientOnly>
   </Body1></Scrollbar></div>)
 }
 

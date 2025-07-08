@@ -224,6 +224,7 @@ fn do_results(results: RwSignal<SearchState>) -> impl IntoView {
 
 fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoView + use<> {
     use flams_router_content::components::Fragment;
+    use flams_web_utils::components::ClientOnly;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
     let name = ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
@@ -238,7 +239,12 @@ fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoVie
                 <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">{
                   res.into_iter().map(|(_,r)| {
                     let SearchResult::Paragraph { uri, .. } = r else { impossible!()};
-                    view!(<Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) />)
+                    view!{
+                        //<span>"Here: "{uri.to_string()}</span>
+                        //<div>"---"</div>
+                        <Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) />
+                        //<div>"---"</div>
+                    }
                   }).collect_view()
                 }
                 </Scrollbar>

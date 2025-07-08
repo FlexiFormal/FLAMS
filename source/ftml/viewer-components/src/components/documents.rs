@@ -5,7 +5,7 @@ use crate::FTMLDocumentSetup;
 use flams_ontology::uris::NarrativeURI;
 use flams_ontology::uris::{DocumentElementURI, DocumentURI, NameStep};
 use flams_web_utils::components::wait_local;
-use flams_web_utils::do_css;
+use flams_web_utils::{do_css, inject_css};
 use leptos::prelude::*;
 use leptos_posthoc::DomStringCont;
 
@@ -138,20 +138,19 @@ pub fn DocumentString(
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
+    use thaw::Flex;
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(
         (&toc, &omdoc),
         (TOCSource::None, crate::components::omdoc::OMDocSource::None)
     );
-    view! {<FTMLDocumentSetup uri>
-        {
-            if burger {Some(
-                do_burger(toc,gottos,omdoc)
-            )}
-            else { None }
-        }
-        <DomStringCont html cont=iterate/>
-    </FTMLDocumentSetup>}
+    view! {<FTMLDocumentSetup uri><Flex>
+        <div><DomStringCont html cont=iterate/></div>
+        {if burger {
+            Some(do_toc_sidebar(toc,gottos,omdoc))
+        } else {None}}
+    </Flex></FTMLDocumentSetup>
+    }
 }
 
 #[cfg(not(feature = "omdoc"))]
@@ -162,48 +161,143 @@ pub fn DocumentString(
     #[prop(optional, into)] toc: TOCSource,
     #[prop(optional, into)] gottos: Vec<Gotto>,
 ) -> impl IntoView {
+    use thaw::Flex;
     let uri = uri.unwrap_or_else(DocumentURI::no_doc);
     let burger = !matches!(toc, TOCSource::None);
-    view! {<FTMLDocumentSetup uri>
-        {if burger {Some(
-            do_burger(toc,gottos)
-        )}
-        else { None }}
-        <DomStringCont html cont=iterate/>
-    </FTMLDocumentSetup>}
+    view! {<FTMLDocumentSetup uri><Flex>
+        <div><DomStringCont html cont=iterate/></div>
+        {if burger {
+            Some(do_toc_sidebar(toc,gottos))
+        } else {None}}
+    </Flex></FTMLDocumentSetup>
+    }
 }
 
 #[cfg(feature = "omdoc")]
-fn do_burger(
+fn do_toc_sidebar(
     toc: TOCSource,
     gottos: Vec<Gotto>,
     omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
-    use flams_web_utils::components::Burger;
-    //use flams_web_utils::components::ClientOnly;
-    crate::components::do_toc(toc, gottos, move |v| {
-        view! {
-            /*<ClientOnly>
-                <div style="width:0;height:0;margin-left:auto;">
-                    <div style="position:fixed">
-                        {crate::components::omdoc::do_omdoc(omdoc)}
-                        <div style="width:fit-content;height:fit-content;">{v}</div>
-                    </div>
-                </div>
-            </ClientOnly>*/
-            <Burger>{crate::components::omdoc::do_omdoc(omdoc)}{v}</Burger>
+    inject_css("ftml-toc", include_str!("./toc.css"));
+    //use flams_web_utils::components::Burger;
+    use flams_web_utils::components::ClientOnly;
+    use thaw::{Button, ButtonShape, ButtonSize, Scrollbar};
+    let visible = RwSignal::new(true);
+    let display = Memo::new(move |_| {
+        if visible.get() {
+            "ftml-toc-visible"
+        } else {
+            "ftml-toc-invisible"
         }
+    });
+
+    let hl_option: RwSignal<crate::HighlightOption> = expect_context();
+    let value = RwSignal::new(hl_option.get_untracked().as_str().to_string());
+    Effect::new(move || {
+        if let Some(v) = crate::HighlightOption::from_str(&value.get()) {
+            if hl_option.get_untracked() != v {
+                hl_option.set(v);
+            }
+        }
+    });
+    use thaw::Select;
+    let select = move || {
+        if hl_option.get() == crate::HighlightOption::None {
+            None
+        } else {
+            Some(
+                view!(<Select value default_value=value.get_untracked() size=thaw::SelectSize::Small>
+            <option class="ftml-comp">{crate::HighlightOption::Colored.as_str()}</option>
+            <option class="ftml-comp-subtle">{crate::HighlightOption::Subtle.as_str()}</option>
+            <option>{crate::HighlightOption::Off.as_str()}</option>
+        </Select>),
+            )
+        }
+    };
+
+    crate::components::do_toc(toc, gottos, move |v| {
+        view! {<div class="ftml-toc-sidebar">
+        <ClientOnly>
+            //<div style="width:0;height:0;margin-left:auto;">
+            //    <div style="position:fixed">
+            //<div style="max-height:600px">
+            //        <InlineDrawer open=visible position=DrawerPosition::Right>
+            //        <DrawerBody>
+                        <Button
+                            //appearance=ButtonAppearance::Subtle
+                            shape=ButtonShape::Circular
+                            size=ButtonSize::Small
+                            on_click=move |_| visible.set(!visible.get_untracked())
+                        >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
+                        <div class=display>
+                        {select}
+                        {crate::components::omdoc::do_omdoc(omdoc)}
+                        <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
+                        </div>
+            //        </DrawerBody>
+            //        </InlineDrawer>
+            //</div>
+            //    </div>
+            //</div>
+        </ClientOnly>
+        //<Burger>{crate::components::omdoc::do_omdoc(omdoc)}{v}</Burger>
+        </div>}
     })
 }
 
 #[cfg(not(feature = "omdoc"))]
-fn do_burger(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl IntoView {
-    use flams_web_utils::components::Burger;
-    //use flams_web_utils::components::ClientOnly;
-    crate::components::do_toc(toc, gottos, move |v| {
-        view! {
-           //<ClientOnly> <div>{v}</div></ClientOnly>
-            <Burger>{v}</Burger>
+fn do_toc_sidebar(toc: crate::components::TOCSource, gottos: Vec<Gotto>) -> impl IntoView {
+    //use flams_web_utils::components::Burger;
+    use flams_web_utils::components::ClientOnly;
+    use thaw::{
+        Button, ButtonAppearance, ButtonShape, ButtonSize, DrawerBody, DrawerPosition,
+        InlineDrawer, Scrollbar,
+    };
+    inject_css("ftml-toc", include_str!("./toc.css"));
+    let visible = RwSignal::new(true);
+    let display = Memo::new(move |_| {
+        if visible.get() {
+            "ftml-toc-visible"
+        } else {
+            "ftml-toc-invisible"
         }
+    });
+
+    let hl_option: RwSignal<crate::HighlightOption> = expect_context();
+    let value = RwSignal::new(hl_option.get_untracked().as_str().to_string());
+    Effect::new(move || {
+        if let Some(v) = crate::HighlightOption::from_str(&value.get()) {
+            if hl_option.get_untracked() != v {
+                hl_option.set(v);
+            }
+        }
+    });
+    use thaw::Select;
+    let select = move || {
+        if hl_option.get() == crate::HighlightOption::None {
+            None
+        } else {
+            Some(view!(<Select value size=thaw::SelectSize::Small>
+            <option>{crate::HighlightOption::Colored.as_str()}</option>
+            <option>{crate::HighlightOption::Subtle.as_str()}</option>
+            <option>{crate::HighlightOption::Off.as_str()}</option>
+        </Select>))
+        }
+    };
+
+    crate::components::do_toc(toc, gottos, move |v| {
+        view! {<div class="ftml-toc-sidebar">
+            <ClientOnly>
+                <Button
+                    shape=ButtonShape::Circular
+                    size=ButtonSize::Small
+                    on_click=move |_| visible.set(!visible.get_untracked())
+                >{move || if visible.get() {"⌃"} else {"⌄"}}</Button>
+                <div class=display>{select}
+                <Scrollbar style="width:fit-content;max-height:575px;">{v}</Scrollbar>
+                </div>
+            </ClientOnly>
+        </div>}
     })
 }
