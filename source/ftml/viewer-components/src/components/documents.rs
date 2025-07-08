@@ -206,11 +206,13 @@ fn do_toc_sidebar(
         if hl_option.get() == crate::HighlightOption::None {
             None
         } else {
-            Some(view!(<Select value size=thaw::SelectSize::Small>
+            Some(
+                view!(<Select value default_value=value.get_untracked() size=thaw::SelectSize::Small>
             <option class="ftml-comp">{crate::HighlightOption::Colored.as_str()}</option>
             <option class="ftml-comp-subtle">{crate::HighlightOption::Subtle.as_str()}</option>
             <option>{crate::HighlightOption::Off.as_str()}</option>
-        </Select>))
+        </Select>),
+            )
         }
     };
 

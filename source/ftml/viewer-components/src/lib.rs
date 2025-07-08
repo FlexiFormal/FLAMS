@@ -106,10 +106,9 @@ pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
             .map_or_else(|_| HighlightOption::Colored, |e| e);
         let r = RwSignal::new(r);
         Effect::new(move || {
-            let _ = <gloo_storage::LocalStorage as gloo_storage::Storage>::set(
-                "highlight_option",
-                r.get(),
-            );
+            let r = r.get();
+            let _ =
+                <gloo_storage::LocalStorage as gloo_storage::Storage>::set("highlight_option", r);
         });
         r
     };
