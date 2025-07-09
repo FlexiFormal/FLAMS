@@ -12,6 +12,7 @@ use archives::{
     ArchiveTree, LocalArchive,
 };
 use cache::BackendCache;
+use eyre::Context;
 use flams_ontology::{
     content::{
         checking::ModuleChecker,
@@ -31,9 +32,9 @@ use flams_ontology::{
         DocumentElement, LazyDocRef, NarrationTrait, NarrativeReference,
     },
     uris::{
-        ArchiveId, ArchiveURI, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI,
-        ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIRefTrait,
-        URIWithLanguage,
+        ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, ContentURITrait, DocumentElementURI,
+        DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait,
+        URIRefTrait, URIWithLanguage,
     },
     Checked, DocumentRange, LocalBackend, Unchecked,
 };
@@ -557,6 +558,60 @@ impl GlobalBackend {
             #[cfg(not(feature = "tokio"))]
             crate::search::Searcher::get().reload();
         }
+    }
+
+    pub fn new_archive(
+        &self,
+        id: &ArchiveId,
+        base_uri: &BaseURI,
+        format: &str,
+        default_file: &str,
+        content: &str,
+    ) -> Result<PathBuf, eyre::Report> {
+        let settings = crate::settings::Settings::get();
+        // should be impossible
+        let mh = settings
+            .mathhubs
+            .first()
+            .expect("No mathhub directories found!");
+        let meta_inf = id
+            .steps()
+            .fold(mh.to_path_buf(), |p, s| p.join(s))
+            .join("META-INF");
+
+        std::fs::create_dir_all(&meta_inf)
+            .wrap_err_with(|| format!("Failed to create directory {}", meta_inf.display()))?;
+        std::fs::write(
+            meta_inf.join("MANIFEST.MF"),
+            &format!("id: {id}\nurl-base: {base_uri}\nformat: {format}"),
+        )
+        .wrap_err_with(|| format!("Failed to create file {}/MANIFEST.MF", meta_inf.display()))?;
+
+        let parent = unwrap!(meta_inf.parent());
+        std::fs::write(
+            parent.join(".gitignore"),
+            include_str!("gitignore_template.txt"),
+        )
+        .wrap_err_with(|| format!("Failed to create file {}/.gitignore", parent.display()))?;
+
+        let lib = parent.join("lib");
+        std::fs::create_dir_all(&lib)
+            .wrap_err_with(|| format!("Failed to create directory {}", lib.display()))?;
+        std::fs::write(
+            lib.join("preamble.tex"),
+            &format!("% preamble code for {id}"),
+        )
+        .wrap_err_with(|| format!("Failed to create file {}/preamble.tex", lib.display()))?;
+
+        let source = parent.join("source");
+        std::fs::create_dir_all(&source)
+            .wrap_err_with(|| format!("Failed to create directory {}", source.display()))?;
+        let dflt = source.join(default_file);
+        std::fs::write(&dflt, content)
+            .wrap_err_with(|| format!("Failed to create file {}/{default_file}", lib.display()))?;
+        self.manager().load(parent);
+
+        Ok(dflt)
     }
 
     pub fn artifact_path(&self, uri: &DocumentURI, format: &str) -> Option<PathBuf> {

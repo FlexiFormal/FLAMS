@@ -55,6 +55,38 @@ interface NewArchive {
   urlbase:string
 }
 
+function new_archive(context: FLAMSContext) {
+  vscode.window.showInputBox({
+    prompt:"Insert the name of a new math archive here.",
+    password:false,
+    title:"New Math Archive",
+    placeHolder:"My/Archive/Name",
+    validateInput(value) {
+      return undefined; // TODO
+    },
+  }).then((value) => {
+    if (value !== undefined) { 
+      let archive = value;
+      vscode.window.showInputBox({
+        prompt:"Insert the URL base of the archive (where you plan to host it):",
+        password:false,
+        title:"New Math Archive",
+        value:"https://mathhub.info",
+        validateInput(value) {
+          return undefined; // TODO
+        },
+      }).then(value => {
+        if (value !== undefined) { 
+          let urlbase = value;
+          context.client.sendNotification("flams/newArchive", <NewArchive>{ 
+            archive,urlbase
+          });
+        }
+      });
+    }
+  });
+}
+
 export function register_server_commands(context: FLAMSContext) {
   vscode.commands.executeCommand("setContext", "flams.loaded", true);
 
@@ -110,6 +142,10 @@ export function register_server_commands(context: FLAMSContext) {
   context.client.onNotification("flams/updateMathHub", (_) =>
     context.mathhub?.update(),
   );
+  context.client.onNotification("flams/openFile", (v:string) =>{
+    const uri = vscode.Uri.parse(v);
+    vscode.window.showTextDocument(uri);
+  });
 }
 
 export function openIframe(url: string, title: string): vscode.WebviewPanel {
@@ -227,6 +263,9 @@ function flamsTools(msg: any, context: FLAMSContext) {
   switch (msg.command) {
     case "dashboard":
       openIframe(context.server.url + "/dashboard", "Dashboard");
+      break;
+    case "newarchive":
+      new_archive(context);
       break;
     case "preview":
       if (doc) {

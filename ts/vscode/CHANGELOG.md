@@ -10,6 +10,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 - Improved Search Interfaces
 - Added "preview" button on local symbol search results
+- Added "New sTeX archive" button
 
 ### v0.0.2
 

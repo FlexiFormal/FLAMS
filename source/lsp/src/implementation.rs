@@ -5,7 +5,7 @@ use std::ops::ControlFlow;
 use crate::{
     annotations::to_diagnostic,
     state::{LSPState, UrlOrFile},
-    ClientExt, HtmlRequestParams, ProgressCallbackServer, QuizRequestParams,
+    ClientExt, HtmlRequestParams, NewArchiveParams, ProgressCallbackServer, QuizRequestParams,
     StandaloneExportParams,
 };
 
@@ -89,6 +89,37 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             })
             .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string())),
         )
+    }
+
+    pub(crate) fn new_archive(
+        &mut self,
+        NewArchiveParams { archive, urlbase }: NewArchiveParams,
+    ) -> <Self as LanguageServer>::NotifyResult {
+        let mut client = self.inner.client().clone();
+        tokio::task::spawn_blocking(move || {
+            match flams_system::backend::GlobalBackend::get().new_archive(
+                &archive,
+                &urlbase,
+                "stex",
+                "helloworld.tex",
+                include_str!("stex_default.txt"),
+            ) {
+                Ok(path) => {
+                    let _ = client.show_message(lsp::ShowMessageParams {
+                        typ: lsp::MessageType::INFO,
+                        message: format!("Created new archive {archive}"),
+                    });
+                    client.open_file(&path);
+                }
+                Err(e) => {
+                    let _ = client.show_message(lsp::ShowMessageParams {
+                        typ: lsp::MessageType::ERROR,
+                        message: format!("Error creating new archive {archive}: {e:#}"),
+                    });
+                }
+            }
+        });
+        ControlFlow::Continue(())
     }
 
     pub(crate) fn export_standalone(
