@@ -6,6 +6,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### v0.0.3
+
+- Improved Search Interfaces
+- Added "preview" button on local symbol search results
+
 ### v0.0.2
 
 - Added exporting of standalone sTeX source files; bundling `stex.sty`, the `.sms` file of the document and all `\inputref`ed (and similarly referenced) files.

@@ -32,7 +32,7 @@ pub mod server_fns {
         pub use flams_router_login::server_fns::*;
     }
     pub mod search {
-        pub use flams_router_search::{search_query,search_symbols};
+        pub use flams_router_search::{search_query, search_symbols};
     }
     pub use super::query::query_api as query;
     pub use super::settings::{get_settings as settings, reload};
@@ -80,6 +80,18 @@ pub fn Main() -> impl IntoView {
                     <ParentRoute path=path!("/vscode") view= flams_router_vscode::VSCodeWrap>
                         <Route path=path!("search") view=flams_router_search::vscode::VSCodeSearch/>
                     </ParentRoute>
+                    <Route path=path!("/document") view={move || {
+                        use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
+                        let params = params.get();
+                        if let Some(p) = params.get_str("uri") {
+                            let Ok(uri) = <flams_ontology::uris::URI as std::str::FromStr>::from_str(p) else {
+                                return Either::Right(view! { <Redirect path="/dashboard"/> })
+                            };
+                            Either::Left(DocumentOfTop(DocumentOfTopProps{uri}))
+                        } else {
+                            Either::Right(view! { <Redirect path="/dashboard"/> })
+                        }
+                    }}/>
                     <Route path=path!("/") view={move || if has_params() {
                             Either::Left(view! { <flams_router_content::components::URITop/> })
                         } else {

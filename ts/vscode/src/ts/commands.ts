@@ -40,8 +40,19 @@ interface StandaloneExportParams {
 interface ReloadParams {}
 
 interface Usemodule {
+  kind:"usemodule";
   archive: string;
   path: string;
+}
+
+interface PreviewLocal {
+  kind:"preview";
+  uri:string;
+}
+
+interface NewArchive {
+  archive:string,
+  urlbase:string
 }
 
 export function register_server_commands(context: FLAMSContext) {
@@ -62,12 +73,19 @@ export function register_server_commands(context: FLAMSContext) {
       `${context.server._url}/vscode/search`,
       remote,
       (msg) => {
-        if ("archive" in msg && "path" in msg) {
+        if ("kind" in msg && msg.kind === "usemodule") {
+          const usem = <Usemodule> msg;
           if (vscode.window.activeTextEditor?.document) {
-            let doc = vscode.window.activeTextEditor.document;
-            return insertUsemodule(doc, msg.archive, msg.path);
+            const doc = vscode.window.activeTextEditor.document;
+            return insertUsemodule(doc, usem.archive, usem.path);
           }
-          vscode.window.showInformationMessage("No sTeX file in focus");
+          return vscode.window.showInformationMessage("No sTeX file in focus");
+        }
+        if ("kind" in msg && msg.kind === "preview") {
+          const pv = <PreviewLocal>msg;
+          const url = context.server.url + "/document?uri=" + encodeURIComponent(pv.uri);
+          return openIframe(url,pv.uri.split("&d=")[1],
+          );
         }
         vscode.window.showErrorMessage(`Unknown message: ${msg}`);
       },

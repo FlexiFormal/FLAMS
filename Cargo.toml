@@ -231,7 +231,7 @@ oxrdfio = { version = "0.1" }                            #, features = ["async-t
 
 sqlx = { version = "0.8", features = ["sqlite", "macros", "runtime-tokio"] }
 libsqlite3-sys = { version = "*", features = ["bundled"] }
-html5ever = "0.31"                                                        # TODO update once html2text updates markup5ever dependency
+html5ever = "0.31"                                                           # TODO update once html2text updates markup5ever dependency
 
 async-lsp = { version = "0.2", features = ["tokio", "async-io"] }
 futures = { version = "0.3" }
@@ -351,7 +351,9 @@ lib-cargo-args = [
     "build-std=std,panic_abort,core,alloc",
     "-Z",
     "build-std-features=optimize_for_size,panic_immediate_abort",
+    "--timings",
 ]
+bin-cargo-args = ["--timings"]
 
 # dafuq:
 # https://higherorderco.com/

@@ -63,6 +63,15 @@ pub fn URITop() -> impl IntoView {
 }
 
 #[component]
+pub fn DocumentOfTop(uri: URI) -> impl IntoView {
+    use leptos_router::components::Redirect;
+    wait_and_then_fn(
+        move || super::server_fns::document_of(uri.clone()),
+        |u| view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>),
+    )
+}
+
+#[component]
 pub fn Fragment(uri: URIComponents) -> impl IntoView {
     wait_and_then_fn(
         move || uri.clone().into_args(super::server_fns::fragment),

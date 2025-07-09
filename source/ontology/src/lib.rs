@@ -232,12 +232,12 @@ pub mod metatheory {
     };
     use lazy_static::lazy_static;
     lazy_static! {
-        pub static ref DOC_URI: DocumentURI = ((BaseURI::new_unchecked("http://mathhub.info")
-            & "sTeX/meta-inf")
+        pub static ref DOC_URI: DocumentURI = ((BaseURI::new_unchecked("https://mathhub.info")
+            & "FTML/meta")
             & ("Metatheory", Language::English))
             .unwrap_or_else(|_| unreachable!());
         pub static ref URI: ModuleURI =
-            ((BaseURI::new_unchecked("http://mathhub.info") & "sTeX/meta-inf") | "Metatheory")
+            ((BaseURI::new_unchecked("https://mathhub.info") & "FTML/meta") | "Metatheory")
                 .unwrap_or_else(|_| unreachable!());
         pub static ref FIELD_PROJECTION: SymbolURI =
             (URI.clone() | "record field").unwrap_or_else(|_| unreachable!());

@@ -2,7 +2,7 @@
   "name": "flams",
   "displayName": "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System",
   "description": "IDE for the FLAMS system and sTeX",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "license": "GPL3",
   "publisher": "kwarc",
   "icon": "img/flams.png",
