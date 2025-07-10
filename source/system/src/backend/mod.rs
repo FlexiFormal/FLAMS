@@ -1200,15 +1200,15 @@ impl SandboxedRepository {
 }
 
 #[derive(Debug)]
-struct SandboxedBackendI {
+pub(super) struct SandboxedBackendI {
     path: Box<Path>,
     span: tracing::Span,
-    repos: parking_lot::RwLock<Vec<SandboxedRepository>>,
+    pub(super) repos: parking_lot::RwLock<Vec<SandboxedRepository>>,
     manager: ArchiveManager,
     cache: RwLock<cache::BackendCache>,
 }
 #[derive(Debug, Clone)]
-pub struct SandboxedBackend(triomphe::Arc<SandboxedBackendI>);
+pub struct SandboxedBackend(pub(super) triomphe::Arc<SandboxedBackendI>);
 impl Drop for SandboxedBackendI {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.path);
@@ -1454,7 +1454,7 @@ impl SandboxedBackend {
         self.0.manager.load(&self.0.path);
     }
 
-    fn copy_archive(&self, a: &LocalArchive) {
+    pub(super) fn copy_archive(&self, a: &LocalArchive) {
         let path = a.path();
         let target = self.0.path.join(a.id().as_ref());
         if target.exists() {

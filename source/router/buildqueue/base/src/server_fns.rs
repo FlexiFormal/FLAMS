@@ -21,13 +21,14 @@ pub async fn requeue(id: NonZeroU32) -> Result<(), ServerFnError<String>> {
 
 #[server(prefix = "/api/buildqueue", endpoint = "enqueue")]
 pub async fn enqueue(
-    archive: ArchiveId,
+    archive: Option<ArchiveId>,
     target: FormatOrTarget,
     path: Option<String>,
     stale_only: Option<bool>,
     queue: Option<NonZeroU32>,
+    clean: bool,
 ) -> Result<usize, ServerFnError<String>> {
-    server::enqueue(archive, target, path, stale_only, queue).await
+    server::enqueue(archive, target, path, stale_only, queue, clean).await
 }
 
 #[server(prefix = "/api/buildqueue", endpoint = "log")]
@@ -133,11 +134,12 @@ pub mod server {
     }
 
     pub(super) async fn enqueue(
-        archive: ArchiveId,
+        archive: Option<ArchiveId>,
         target: FormatOrTarget,
         path: Option<String>,
         stale_only: Option<bool>,
         queue: Option<NonZeroU32>,
+        clean: bool,
     ) -> Result<usize, ServerFnError<String>> {
         use flams_system::backend::archives::ArchiveOrGroup as AoG;
         use flams_system::formats::FormatOrTargets;
@@ -172,6 +174,10 @@ pub mod server {
                     FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice()),
                 };
 
+                let Some(archive) = archive else {
+                    return Ok(queue.enqueue_all(fot, stale_only, clean));
+                };
+
                 let group = flams_system::backend::GlobalBackend::get().with_archive_tree(
                     |tree| -> Result<bool, String> {
                         match tree.find(&archive) {
@@ -189,9 +195,15 @@ pub mod server {
                 }
 
                 if group {
-                    Ok(queue.enqueue_group(&archive, fot, stale_only))
+                    Ok(queue.enqueue_group(&archive, fot, stale_only, clean))
                 } else {
-                    Ok(queue.enqueue_archive(&archive, fot, stale_only, path.as_deref()))
+                    Ok(queue.enqueue_archive(
+                        &archive,
+                        fot,
+                        stale_only,
+                        path.as_deref(),
+                        clean && path.is_none(),
+                    ))
                 }
             })?
         })

@@ -36,7 +36,7 @@ pub async fn archive_dependencies(
 
 #[server(prefix = "/api/backend", endpoint = "build_status")]
 pub async fn build_status(
-    archive: ArchiveId,
+    archive: Option<ArchiveId>,
     path: Option<String>,
 ) -> Result<FileStates, ServerFnError<String>> {
     server::build_status(archive, path).await
@@ -449,7 +449,7 @@ mod server {
         .await
     }
     pub async fn build_status(
-        archive: ArchiveId,
+        archive: Option<ArchiveId>,
         path: Option<String>,
     ) -> Result<FileStates, ServerFnError<String>> {
         use either::Either;
@@ -469,18 +469,27 @@ mod server {
             }
             path.map_or_else(
                 || {
-                    GlobalBackend::get().with_archive_tree(|tree| match tree.find(&archive) {
-                        None => Err(format!("Archive {archive} not found").into()),
-                        Some(AoG::Archive(id)) => {
-                            let Some(Archive::Local(archive)) = tree.get(id) else {
-                                return Err(format!("Archive {archive} not found").into());
-                            };
-                            Ok(archive.file_state().into())
-                        }
-                        Some(AoG::Group(g)) => Ok(g.state.clone().into()),
-                    })
+                    if let Some(archive) = archive.as_ref() {
+                        GlobalBackend::get().with_archive_tree(|tree| match tree.find(archive) {
+                            None => Err(format!("Archive {archive} not found").into()),
+                            Some(AoG::Archive(id)) => {
+                                let Some(Archive::Local(archive)) = tree.get(id) else {
+                                    return Err(format!("Archive {archive} not found").into());
+                                };
+                                Ok(archive.file_state().into())
+                            }
+                            Some(AoG::Group(g)) => Ok(g.state.clone().into()),
+                        })
+                    } else {
+                        Ok(GlobalBackend::get()
+                            .with_archive_tree(|tree| tree.state())
+                            .into())
+                    }
                 },
                 |path| {
+                    let Some(archive) = archive.as_ref() else {
+                        return Err("path without archive".to_string().into());
+                    };
                     GlobalBackend::get().with_local_archive(&archive, |a| {
                         let Some(a) = a else {
                             return Err(format!("Archive {archive} not found").into());

@@ -255,7 +255,13 @@ mod server {
                 })?;
                 let mut u = 0;
                 for f in formats {
-                    u += queue.enqueue_archive(&archive, FormatOrTargets::Format(f), true, None);
+                    u += queue.enqueue_archive(
+                        &archive,
+                        FormatOrTargets::Format(f),
+                        true,
+                        None,
+                        false,
+                    );
                 }
                 Ok((u, queue_id.into()))
             })?
@@ -318,7 +324,13 @@ mod server {
                 })?;
                 let mut u = 0;
                 for f in formats {
-                    u += queue.enqueue_archive(&archive, FormatOrTargets::Format(f), false, None);
+                    u += queue.enqueue_archive(
+                        &archive,
+                        FormatOrTargets::Format(f),
+                        false,
+                        None,
+                        false,
+                    );
                 }
                 Ok((u, queue_id.into()))
             })
