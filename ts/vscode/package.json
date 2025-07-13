@@ -67,6 +67,18 @@
           "group": "inline",
           "when": "view == flams-mathhub && viewItem == remote"
         }
+      ],
+      "editor/title": [
+				{
+					"command": "flams.buildAll",
+					"group": "navigation",
+					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+				},
+				{
+					"command": "flams.buildOne",
+					"group": "navigation",
+					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+				}
       ]
     },
     "commands": [
@@ -77,6 +89,16 @@
           "light": "img/cloud-download-light.svg",
           "dark": "img/cloud-download-dark.svg"
         }
+      },
+      {
+        "command": "flams.buildAll",
+        "title": "Build recursively",
+        "icon": "$(testing-run-all-icon)"
+      },
+      {
+        "command": "flams.buildOne",
+        "title": "Build file",
+        "icon": "$(testing-run-icon)"
       }
     ],
     "configuration": [

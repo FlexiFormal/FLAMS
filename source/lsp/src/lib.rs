@@ -179,17 +179,6 @@ impl lsp::notification::Notification for NewArchive {
     const METHOD: &str = "flams/newArchive";
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct HtmlRequestParams {
-    pub uri: lsp::Url,
-}
-pub(crate) struct HTMLRequest;
-impl lsp::request::Request for HTMLRequest {
-    type Params = HtmlRequestParams;
-    type Result = Option<String>;
-    const METHOD: &'static str = "flams/htmlRequest";
-}
-
 pub(crate) struct StandaloneExport;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct StandaloneExportParams {
@@ -199,17 +188,6 @@ pub struct StandaloneExportParams {
 impl lsp::notification::Notification for StandaloneExport {
     type Params = StandaloneExportParams;
     const METHOD: &str = "flams/standaloneExport";
-}
-
-pub(crate) struct QuizRequest;
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct QuizRequestParams {
-    pub uri: lsp::Url,
-}
-impl lsp::request::Request for QuizRequest {
-    type Params = QuizRequestParams;
-    type Result = String;
-    const METHOD: &'static str = "flams/quizRequest";
 }
 
 struct UpdateMathHub;
@@ -228,6 +206,45 @@ struct HTMLResult;
 impl lsp::notification::Notification for HTMLResult {
     type Params = String;
     const METHOD: &str = "flams/htmlResult";
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct HtmlRequestParams {
+    pub uri: lsp::Url,
+}
+pub(crate) struct HTMLRequest;
+impl lsp::request::Request for HTMLRequest {
+    type Params = HtmlRequestParams;
+    type Result = Option<String>;
+    const METHOD: &'static str = "flams/htmlRequest";
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BuildParams {
+    pub uri: lsp::Url,
+}
+struct BuildOne;
+impl lsp::request::Request for BuildOne {
+    type Params = BuildParams;
+    type Result = ();
+    const METHOD: &str = "flams/buildOne";
+}
+struct BuildAll;
+impl lsp::request::Request for BuildAll {
+    type Params = BuildParams;
+    type Result = ();
+    const METHOD: &str = "flams/buildAll";
+}
+
+pub(crate) struct QuizRequest;
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct QuizRequestParams {
+    pub uri: lsp::Url,
+}
+impl lsp::request::Request for QuizRequest {
+    type Params = QuizRequestParams;
+    type Result = String;
+    const METHOD: &'static str = "flams/quizRequest";
 }
 
 pub struct ServerURL;
@@ -298,6 +315,9 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         let mut r = async_lsp::router::Router::from_language_server(self);
         r.request::<HTMLRequest, _>(Self::html_request);
         r.request::<QuizRequest, _>(Self::quiz_request);
+        r.request::<BuildOne, _>(Self::build_one);
+        r.request::<BuildAll, _>(Self::build_all);
+
         r.notification::<Reload>(Self::reload);
         r.notification::<StandaloneExport>(Self::export_standalone);
         r.notification::<InstallArchives>(Self::install);

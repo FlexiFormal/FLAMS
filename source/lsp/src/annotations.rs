@@ -48,7 +48,7 @@ trait AnnotExt: Sized {
     fn code_action(&self, pos: LSPLineCol, url: &lsp::Url) -> lsp::CodeActionResponse;
 }
 
-fn uri_from_archive_relpath(id: &ArchiveId, relpath: &str) -> Option<lsp::Url> {
+pub(crate) fn uri_from_archive_relpath(id: &ArchiveId, relpath: &str) -> Option<lsp::Url> {
     let path = GlobalBackend::get().with_local_archive(id, |a| a.map(LocalArchive::source_dir))?;
     let path = relpath.split('/').fold(path, |p, s| p.join(s));
     lsp::Url::from_file_path(path).ok()
@@ -1828,8 +1828,25 @@ impl AnnotExt for STeXAnnot {
                     }),
                 })
             }
-            Self::Module { .. }
-            | Self::ImportModule { .. }
+            Self::Module {
+                uri,
+                name_range,
+                full_range,
+                ..
+            } => {
+                let range = SourceRange {
+                    start: full_range.start,
+                    end: name_range.end,
+                };
+                Some(lsp::Hover {
+                    range: Some(SourceRange::into_range(range)),
+                    contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                        kind: lsp::MarkupKind::Markdown,
+                        value: uri.to_string(),
+                    }),
+                })
+            }
+            Self::ImportModule { .. }
             | Self::UseModule { .. }
             | Self::SetMetatheory { .. }
             | Self::Inputref { .. }

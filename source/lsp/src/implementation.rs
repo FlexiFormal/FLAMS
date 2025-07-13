@@ -4,9 +4,10 @@ use std::ops::ControlFlow;
 
 use crate::{
     annotations::to_diagnostic,
+    documents::LSPDocument,
     state::{LSPState, UrlOrFile},
-    ClientExt, HtmlRequestParams, NewArchiveParams, ProgressCallbackServer, QuizRequestParams,
-    StandaloneExportParams,
+    BuildParams, ClientExt, HtmlRequestParams, NewArchiveParams, ProgressCallbackServer,
+    QuizRequestParams, StandaloneExportParams,
 };
 
 use super::{FLAMSLSPServer, ServerWrapper};
@@ -14,7 +15,13 @@ use async_lsp::{
     lsp_types::{self as lsp},
     LanguageClient, LanguageServer, ResponseError,
 };
-use flams_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
+use flams_ontology::uris::ArchiveURITrait;
+use flams_stex::quickparse::stex::{AnnotIter, STeXAnnot};
+use flams_system::{
+    backend::{archives::LocalArchive, Backend, GlobalBackend},
+    formats::FormatOrTargets,
+};
+use flams_utils::{prelude::TreeChildIter, unwrap};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
 macro_rules! impl_request {
@@ -75,6 +82,29 @@ macro_rules! impl_notification {
             ))))
         }
     };
+}
+
+#[inline]
+fn fut<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Res<T> {
+    Box::pin(tokio::task::spawn_blocking(f).map_ok_or_else(
+        |e| {
+            Err(ResponseError::new(
+                async_lsp::ErrorCode::REQUEST_FAILED,
+                e.to_string(),
+            ))
+        },
+        |r| r.map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e)),
+    ))
+}
+fn block<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> impl std::future::Future<Output = Result<T, String>> {
+    tokio::task::spawn_blocking(f).map_ok_or_else(|e| Err(e.to_string()), |r| r)
+}
+fn wrap_fut<T: Send + 'static>(
+    f: impl std::future::Future<Output = Result<T, String>> + Send + 'static,
+) -> Res<T> {
+    Box::pin(f.map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e)))
 }
 
 impl<T: FLAMSLSPServer> ServerWrapper<T> {
@@ -213,6 +243,171 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             })
             .map_err(|e| ResponseError::new(async_lsp::ErrorCode::REQUEST_FAILED, e.to_string()))
             .await?
+        })
+    }
+
+    fn build(
+        doc: &LSPDocument,
+        uri: &impl std::fmt::Display,
+        stale_only: bool,
+    ) -> Result<(), String> {
+        let Some(id) = doc.archive().map(|a| a.archive_id()) else {
+            return Err(format!("Containing archive for {uri} not found"));
+        };
+        let Some(rel_path) = doc.relative_path() else {
+            return Err(format!("relative path for {uri} not found"));
+        };
+        //tracing::info!("Queueing [{id}]{{{rel_path}}}");
+        flams_system::building::queue_manager::QueueManager::get().with_global(move |queue| {
+            queue.enqueue_archive(
+                id,
+                FormatOrTargets::Format(flams_stex::STEX),
+                stale_only,
+                Some(rel_path),
+                false,
+            )
+        });
+        Ok(())
+    }
+
+    pub(crate) fn build_one(&mut self, params: BuildParams) -> Res<()> {
+        let state = self.inner.state().clone();
+        fut(move || {
+            let url: UrlOrFile = params.uri.into();
+            let Some(doc) = state.get(&url) else {
+                return Err(format!("Document not found: {url}"));
+            };
+            Self::build(&doc, &url, false)
+        })
+    }
+    pub(crate) fn build_all(&mut self, params: BuildParams) -> Res<()> {
+        let state = self.inner.state().clone();
+        let client = self.inner.client().clone();
+        wrap_fut(async move {
+            let istate = state.clone();
+            let url = block(move || {
+                let url: UrlOrFile = params.uri.into();
+                let Some(doc) = istate.get(&url) else {
+                    return Err(format!("Document not found: {url}"));
+                };
+                Self::build(&doc, &url, false)?;
+                Ok(url)
+            })
+            .await?;
+            let deps = triomphe::Arc::new(parking_lot::Mutex::new(vec![url]));
+            let mut curr = 0;
+            loop {
+                let url = {
+                    let dps = deps.lock();
+                    if curr == dps.len() {
+                        break;
+                    }
+                    let d = dps[curr].clone();
+                    drop(dps);
+                    d
+                };
+                curr += 1;
+                let Some(d) = state.get(&url) else {
+                    // should be unreachable ?
+                    continue;
+                };
+                //let deps = deps.clone();
+                //let state = state.clone();
+                let iclient = client.clone();
+                let d_archive = d.archive().cloned();
+                let Some(vec) = d
+                    .with_annots_block(state.clone(), move |annots| {
+                        let mut client = iclient;
+                        <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(AnnotIter::from(
+                            annots.annotations.iter(),
+                        ))
+                        .filter_map(|a| match a {
+                            STeXAnnot::Inputref {
+                                archive, filepath, ..
+                            }
+                            | STeXAnnot::MHInput {
+                                archive, filepath, ..
+                            }
+                            | STeXAnnot::IncludeProblem {
+                                archive, filepath, ..
+                            } => {
+                                let archive = archive
+                                    .as_ref()
+                                    .map(|a| &a.0)
+                                    .unwrap_or_else(|| unwrap!(d_archive.as_ref()).archive_id());
+                                let Some(uri) = crate::annotations::uri_from_archive_relpath(
+                                    &archive,
+                                    &filepath.0,
+                                ) else {
+                                    let _ = client.show_message(lsp::ShowMessageParams {
+                                        typ: lsp::MessageType::ERROR,
+                                        message: format!(
+                                            "Could not find file [{archive}]{{{}}}",
+                                            &filepath.0
+                                        ),
+                                    });
+                                    return None;
+                                };
+                                let url: UrlOrFile = uri.into();
+                                Some(url)
+                            }
+                            STeXAnnot::ImportModule { module, .. }
+                            | STeXAnnot::UseModule { module, .. } => {
+                                let Some(uri) = module
+                                    .full_path
+                                    .as_ref()
+                                    .and_then(|e| lsp::Url::from_file_path(e).ok())
+                                else {
+                                    let _ = client.show_message(lsp::ShowMessageParams {
+                                        typ: lsp::MessageType::ERROR,
+                                        message: format!(
+                                            "Could not find module file {}",
+                                            &module.uri
+                                        ),
+                                    });
+                                    return None;
+                                };
+                                let url: UrlOrFile = uri.into();
+                                Some(url)
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                    })
+                    .await
+                else {
+                    continue;
+                };
+                for url in vec {
+                    {
+                        let mut dep_lock = deps.lock();
+                        if dep_lock.contains(&url) {
+                            continue;
+                        }
+                        dep_lock.push(url.clone());
+                    }
+                    let state = state.clone();
+                    let mut client = client.clone();
+                    block(move || {
+                        let Some(doc) = state.force_get(&url) else {
+                            let _ = client.show_message(lsp::ShowMessageParams {
+                                typ: lsp::MessageType::ERROR,
+                                message: format!("Could not find document {url}"),
+                            });
+                            return Ok(());
+                        };
+                        if let Err(e) = Self::build(&doc, &url, true) {
+                            let _ = client.show_message(lsp::ShowMessageParams {
+                                typ: lsp::MessageType::ERROR,
+                                message: format!("Could not queue document {url}: {e}"),
+                            });
+                        }
+                        Ok(())
+                    })
+                    .await?
+                }
+            }
+            Ok(())
         })
     }
 
