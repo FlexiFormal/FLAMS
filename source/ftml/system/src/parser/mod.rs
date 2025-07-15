@@ -187,7 +187,8 @@ impl TreeSink for HTMLParser<'_> {
               result:Err(Vec::new())
             } */
         }
-        css.sort();
+        css = CSS::merge(std::mem::take(&mut css));
+        //css.sort();
         let Ok((uri, elems, modules, styles)) = state.take() else {
             return Err("Unbalanced FTML document".to_string());
             /*return BuildResult {
@@ -460,7 +461,8 @@ impl TreeSink for HTMLParser<'_> {
                                     .children()
                                     .filter_map(|c| c.as_text().map(|s| s.borrow().to_string()))
                                     .collect::<String>();
-                                self.extractor.borrow_mut().css.extend(CSS::split(&str));
+                                // update: will get sorted / processed in bulk later
+                                self.extractor.borrow_mut().css.push(CSS::Inline(str.into()));//.extend(CSS::split(&str));
                                 node.delete();
                                 return;
                             }
