@@ -6,7 +6,7 @@ use std::path::Path;
 use flams_ontology::{
     languages::Language,
     narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
-    uris::{ArchiveId, ArchiveURITrait, DocumentURI, ModuleURI, Name, SymbolURI},
+    uris::{ArchiveId, ArchiveUriTrait, DocumentUri, ModuleUri, Name, SymbolUri},
 };
 use flams_system::backend::AnyBackend;
 use flams_utils::{
@@ -35,7 +35,7 @@ use super::latex::LaTeXParser;
 pub struct STeXParseDataI {
     pub annotations: Vec<STeXAnnot>,
     pub diagnostics: VecSet<STeXDiagnostic>,
-    pub modules: SmallVec<(ModuleURI, ModuleRules<LSPLineCol>), 1>,
+    pub modules: SmallVec<(ModuleUri, ModuleRules<LSPLineCol>), 1>,
     pub dependencies: Vec<std::sync::Arc<Path>>,
 }
 impl STeXParseDataI {
@@ -61,7 +61,7 @@ pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParse
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum STeXAnnot {
     Module {
-        uri: ModuleURI,
+        uri: ModuleUri,
         name_range: SourceRange<LSPLineCol>,
         opts: Vec<SModuleArg<LSPLineCol, Self>>,
         sig: Option<Language>,
@@ -90,7 +90,7 @@ pub enum STeXAnnot {
         full_range: SourceRange<LSPLineCol>,
         name_range: SourceRange<LSPLineCol>,
         env_range: SourceRange<LSPLineCol>,
-        uri: SymbolURI,
+        uri: SymbolUri,
         star: bool,
         domain: ModuleOrStruct<LSPLineCol>,
         domain_range: SourceRange<LSPLineCol>,
@@ -101,7 +101,7 @@ pub enum STeXAnnot {
         full_range: SourceRange<LSPLineCol>,
         token_range: SourceRange<LSPLineCol>,
         name_range: SourceRange<LSPLineCol>,
-        uri: SymbolURI,
+        uri: SymbolUri,
         domain: ModuleOrStruct<LSPLineCol>,
         domain_range: SourceRange<LSPLineCol>,
         kind: MorphismKind,
@@ -315,7 +315,7 @@ pub enum STeXAnnot {
 impl STeXAnnot {
     fn from_tokens<I: IntoIterator<Item = STeXToken<LSPLineCol>>>(
         iter: I,
-        mut modules: Option<&mut SmallVec<(ModuleURI, ModuleRules<LSPLineCol>), 1>>,
+        mut modules: Option<&mut SmallVec<(ModuleUri, ModuleRules<LSPLineCol>), 1>>,
     ) -> Vec<Self> {
         let mut v = Vec::new();
         macro_rules! cont {
@@ -996,7 +996,7 @@ pub struct STeXDiagnostic {
 
 #[must_use]
 pub fn quickparse<'a, S: STeXModuleStore>(
-    uri: &'a DocumentURI,
+    uri: &'a DocumentUri,
     source: &'a str,
     path: &'a Path,
     backend: &'a AnyBackend,

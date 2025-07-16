@@ -12,7 +12,7 @@ use std::{collections::hash_map::Entry, path::Path};
 
 pub use async_lsp;
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::{ArchiveId, BaseURI, DocumentURI};
+use flams_ontology::uris::{ArchiveId, BaseUri, DocumentUri};
 use flams_stex::quickparse::stex::{
     structs::{GetModuleError, ModuleReference, STeXModuleStore},
     STeXParseData,
@@ -171,7 +171,7 @@ impl lsp::notification::Notification for InstallArchives {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct NewArchiveParams {
     pub archive: ArchiveId,
-    pub urlbase: BaseURI,
+    pub urlbase: BaseUri,
 }
 struct NewArchive;
 impl lsp::notification::Notification for NewArchive {
@@ -260,13 +260,13 @@ impl lsp::notification::Notification for ServerURL {
 }
 
 pub trait ClientExt {
-    fn html_result(&self, uri: &DocumentURI);
+    fn html_result(&self, uri: &DocumentUri);
     fn update_mathhub(&self);
     fn open_file(&self, path: &Path);
 }
 impl ClientExt for ClientSocket {
     #[inline]
-    fn html_result(&self, uri: &DocumentURI) {
+    fn html_result(&self, uri: &DocumentUri) {
         let _ = self.notify::<HTMLResult>(uri.to_string());
     }
     #[inline]
@@ -342,7 +342,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 
 pub struct LSPStore<'a, const FULL: bool> {
     pub(crate) map: &'a mut HMap<UrlOrFile, DocData>,
-    cycles: Vec<DocumentURI>,
+    cycles: Vec<DocumentUri>,
 }
 impl<'a, const FULL: bool> LSPStore<'a, FULL> {
     #[inline]
@@ -353,7 +353,7 @@ impl<'a, const FULL: bool> LSPStore<'a, FULL> {
         }
     }
 
-    pub fn load(&mut self, p: &Path, uri: &DocumentURI) -> Option<STeXParseData> {
+    pub fn load(&mut self, p: &Path, uri: &DocumentUri) -> Option<STeXParseData> {
         let text = std::fs::read_to_string(p).ok()?;
         let r = flams_stex::quickparse::stex::quickparse(
             uri,
@@ -366,7 +366,7 @@ impl<'a, const FULL: bool> LSPStore<'a, FULL> {
         Some(r)
     }
 
-    fn load_as_false(&mut self, p: &Path, uri: &DocumentURI) -> Option<STeXParseData> {
+    fn load_as_false(&mut self, p: &Path, uri: &DocumentUri) -> Option<STeXParseData> {
         if !FULL {
             self.load(p, uri)
         } else {

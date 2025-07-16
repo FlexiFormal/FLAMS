@@ -176,7 +176,7 @@ pub mod rules {
     use flams_ontology::narration::documents::{DocumentStyle, SectionCounter};
     use flams_ontology::narration::paragraphs::{ParagraphFormatting, ParagraphKind};
     use flams_ontology::narration::problems::{AnswerKind, FillInSolOption};
-    use flams_ontology::uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI};
+    use flams_ontology::uris::{DocumentElementUri, DocumentUri, ModuleUri, Name, SymbolUri};
     use flams_utils::vecmap::VecSet;
     use smallvec::SmallVec;
     use std::borrow::Cow;
@@ -452,7 +452,7 @@ pub mod rules {
         _attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        extractor.open_section((DocumentURI::no_doc() & "skip").unwrap_or_else(|_| unreachable!()));
+        extractor.open_section((DocumentUri::no_doc() & "skip").unwrap_or_else(|_| unreachable!()));
         Some(OpenFTMLElement::SkipSection)
     }
 
@@ -1206,11 +1206,11 @@ pub mod rules {
             }
             Some(v) => {
                 let v = v.as_ref();
-                v.parse::<SymbolURI>().ok().map_or_else(
+                v.parse::<SymbolUri>().ok().map_or_else(
                     || {
-                        v.parse::<ModuleURI>().map_or_else(
+                        v.parse::<ModuleUri>().map_or_else(
                             |_| {
-                                DocumentElementURI::from_str(v).map_or_else(
+                                DocumentElementUri::from_str(v).map_or_else(
                                     |_| {
                                         if v.contains('?') {
                                             tracing::warn!(

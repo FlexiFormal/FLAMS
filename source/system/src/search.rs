@@ -1,6 +1,6 @@
 use flams_ontology::{
     search::{QueryFilter, SearchIndex, SearchResult, SearchSchema},
-    uris::SymbolURI,
+    uris::SymbolUri,
 };
 use flams_utils::vecmap::VecMap;
 
@@ -163,7 +163,7 @@ impl Searcher {
         &self,
         s: &str,
         num_results: usize,
-    ) -> Option<VecMap<SymbolURI, Vec<(f32, SearchResult)>>> {
+    ) -> Option<VecMap<SymbolUri, Vec<(f32, SearchResult)>>> {
         SPAN.in_scope(move || {
             const FILTER: QueryFilter = QueryFilter {
                 allow_documents: false,

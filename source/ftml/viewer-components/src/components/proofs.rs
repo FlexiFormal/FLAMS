@@ -1,4 +1,4 @@
-use flams_ontology::{narration::paragraphs::ParagraphKind, uris::DocumentElementURI};
+use flams_ontology::{narration::paragraphs::ParagraphKind, uris::DocumentElementUri};
 use leptos::{context::Provider, either::Either, prelude::*};
 use leptos_posthoc::{DomCont, OriginalNode};
 
@@ -27,7 +27,7 @@ struct ProofOrSubproof {
 }
 
 pub fn proof<V: IntoView + 'static>(
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     initial: bool,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
@@ -70,7 +70,7 @@ pub fn proof<V: IntoView + 'static>(
 }
 
 pub fn subproof<V: IntoView + 'static>(
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     initial: bool,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {

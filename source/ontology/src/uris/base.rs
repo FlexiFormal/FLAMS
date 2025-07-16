@@ -15,8 +15,8 @@ lazy_static! {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct BaseURI(TArcInterned<str>);
-impl BaseURI {
+pub struct BaseUri(TArcInterned<str>);
+impl BaseUri {
     #[must_use]
     #[inline]
     pub fn new_unchecked(s: &str) -> Self {
@@ -46,8 +46,8 @@ impl BaseURI {
 
     pub(super) fn pre_parse(s: &str) -> Result<Either<Self, (Self, Split<char>)>, URIParseError> {
         #[inline]
-        fn do_base(s: &str) -> Result<BaseURI, URIParseError> {
-            Ok(BaseURI::new_checked_partially(s)?)
+        fn do_base(s: &str) -> Result<BaseUri, URIParseError> {
+            Ok(BaseUri::new_checked_partially(s)?)
         }
 
         let Some((base, rest)) = s.split_once('?') else {
@@ -61,20 +61,20 @@ impl BaseURI {
         })
     }
 }
-impl AsRef<str> for BaseURI {
+impl AsRef<str> for BaseUri {
     #[inline]
     fn as_ref(&self) -> &str {
         self.0.as_ref()
     }
 }
-impl Display for BaseURI {
+impl Display for BaseUri {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
 }
-debugdisplay!(BaseURI);
-impl URIOrRefTrait for BaseURI {
+debugdisplay!(BaseUri);
+impl URIOrRefTrait for BaseUri {
     #[inline]
     fn base(&self) -> &Self {
         self
@@ -83,18 +83,18 @@ impl URIOrRefTrait for BaseURI {
         URIRef::Base(self)
     }
 }
-impl URITrait for BaseURI {
+impl URITrait for BaseUri {
     type Ref<'a> = &'a Self;
 }
-impl<'a> URIRefTrait<'a> for &'a BaseURI {
-    type Owned = BaseURI;
+impl<'a> URIRefTrait<'a> for &'a BaseUri {
+    type Owned = BaseUri;
     #[inline]
-    fn owned(self) -> BaseURI {
+    fn owned(self) -> BaseUri {
         self.clone()
     }
 }
 
-impl FromStr for BaseURI {
+impl FromStr for BaseUri {
     type Err = URIParseError;
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -104,10 +104,10 @@ impl FromStr for BaseURI {
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use super::BaseURI;
+    use super::BaseUri;
     use crate::uris::serialize;
-    serialize!(as BaseURI);
-    impl<'de> serde::Deserialize<'de> for BaseURI {
+    serialize!(as BaseUri);
+    impl<'de> serde::Deserialize<'de> for BaseUri {
         fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             let s = String::deserialize(deserializer)?;
             Self::new_checked(&s).map_err(serde::de::Error::custom)

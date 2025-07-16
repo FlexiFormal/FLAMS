@@ -1,7 +1,7 @@
 use flams_ontology::{
     languages::Language,
     narration::LOKind,
-    uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
+    uris::{ArchiveId, DocumentElementUri, DocumentUri, SymbolUri, URI},
 };
 use flams_utils::CSS;
 use leptos::prelude::*;
@@ -57,10 +57,10 @@ macro_rules! server_fun{
         server_fun!(Option<URI>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>,Option<String>,Option<String> $(,$ty)* => $ret)
     };
     (@DOCURI$(,$ty:ty)* => $ret:ty) => {
-        server_fun!(Option<DocumentURI>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String> $(,$ty)* => $ret)
+        server_fun!(Option<DocumentUri>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String> $(,$ty)* => $ret)
     };
     (@SYMURI$(,$ty:ty)* => $ret:ty) => {
-        server_fun!(Option<SymbolURI>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>  $(,$ty)* => $ret)
+        server_fun!(Option<SymbolUri>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>  $(,$ty)* => $ret)
     };
 }
 
@@ -160,10 +160,10 @@ impl ServerFunArgs for URIArgsWithContext {
 }
 
 #[cfg(all(feature = "csr", not(any(feature = "hydrate", feature = "ssr"))))]
-type DocURIArgs = DocumentURI;
+type DocURIArgs = DocumentUri;
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type DocURIArgs = (
-    Option<DocumentURI>,
+    Option<DocumentUri>,
     Option<String>,
     Option<ArchiveId>,
     Option<String>,
@@ -174,7 +174,7 @@ type DocURIArgs = (
 impl ServerFunArgs for DocURIArgs {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     type DeTupledFun<R> = server_fun!(@DOCURI => R);
-    type First = DocumentURI;
+    type First = DocumentUri;
     type Extra = ();
     #[cfg(feature = "csr")]
     fn as_params((): &Self::Extra) -> Cow<'static, str> {
@@ -182,16 +182,16 @@ impl ServerFunArgs for DocURIArgs {
     }
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     #[inline]
-    fn call<R>(uri: DocumentURI, _: (), f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
+    fn call<R>(uri: DocumentUri, _: (), f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
         f(Some(uri), None, None, None, None, None)
     }
 }
 
 #[cfg(all(feature = "csr", not(any(feature = "hydrate", feature = "ssr"))))]
-type SymURIArgs = SymbolURI;
+type SymURIArgs = SymbolUri;
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type SymURIArgs = (
-    Option<SymbolURI>,
+    Option<SymbolUri>,
     Option<ArchiveId>,
     Option<String>,
     Option<String>,
@@ -201,7 +201,7 @@ type SymURIArgs = (
 impl ServerFunArgs for SymURIArgs {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     type DeTupledFun<R> = server_fun!(@SYMURI => R);
-    type First = SymbolURI;
+    type First = SymbolUri;
     type Extra = ();
     #[cfg(feature = "csr")]
     fn as_params((): &Self::Extra) -> Cow<'static, str> {
@@ -209,16 +209,16 @@ impl ServerFunArgs for SymURIArgs {
     }
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     #[inline]
-    fn call<R>(uri: SymbolURI, _: (), f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
+    fn call<R>(uri: SymbolUri, _: (), f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
         f(Some(uri), None, None, None, None)
     }
 }
 
 #[cfg(all(feature = "csr", not(any(feature = "hydrate", feature = "ssr"))))]
-type LOArgs = (SymbolURI, bool);
+type LOArgs = (SymbolUri, bool);
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type LOArgs = (
-    Option<SymbolURI>,
+    Option<SymbolUri>,
     Option<ArchiveId>,
     Option<String>,
     Option<String>,
@@ -228,7 +228,7 @@ type LOArgs = (
 impl ServerFunArgs for LOArgs {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     type DeTupledFun<R> = server_fun!(@SYMURI,bool => R);
-    type First = SymbolURI;
+    type First = SymbolUri;
     type Extra = bool;
     #[cfg(feature = "csr")]
     fn as_params(b: &Self::Extra) -> Cow<'static, str> {
@@ -236,7 +236,7 @@ impl ServerFunArgs for LOArgs {
     }
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     #[inline]
-    fn call<R>(uri: SymbolURI, b: bool, f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
+    fn call<R>(uri: SymbolUri, b: bool, f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
         f(Some(uri), None, None, None, None, b)
     }
 }
@@ -334,17 +334,17 @@ impl<T: ServerFunArgs, V: Clone + std::fmt::Debug + for<'de> serde::Deserialize<
 pub struct ServerConfig {
     #[cfg(feature = "csr")]
     pub server_url: flams_utils::parking_lot::Mutex<String>,
-    get_full_doc: Cache<DocURIArgs, (DocumentURI, Vec<CSS>, String)>,
+    get_full_doc: Cache<DocURIArgs, (DocumentUri, Vec<CSS>, String)>,
     get_fragment: Cache<URIArgsWithContext, (URI, Vec<CSS>, String)>,
     #[cfg(feature = "omdoc")]
     get_omdoc: Cache<URIArgs, (Vec<CSS>, OMDoc)>,
     get_toc: Cache<DocURIArgs, (Vec<CSS>, Vec<TOCElem>)>,
-    get_los: Cache<LOArgs, Vec<(DocumentElementURI, LOKind)>>,
+    get_los: Cache<LOArgs, Vec<(DocumentElementUri, LOKind)>>,
     #[cfg(feature = "omdoc")]
     get_notations: Cache<
         URIArgs,
         Vec<(
-            DocumentElementURI,
+            DocumentElementUri,
             flams_ontology::narration::notations::Notation,
         )>,
     >,
@@ -352,7 +352,7 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
-    pub fn top_doc_url(&self, uri: &DocumentURI) -> String {
+    pub fn top_doc_url(&self, uri: &DocumentUri) -> String {
         #[cfg(feature = "csr")]
         {
             format!(
@@ -370,7 +370,7 @@ impl ServerConfig {
     /// #### Errors
     /// #### Panics
     #[inline]
-    pub async fn inputref(&self, doc: DocumentURI) -> Result<(URI, Vec<CSS>, String), String> {
+    pub async fn inputref(&self, doc: DocumentUri) -> Result<(URI, Vec<CSS>, String), String> {
         self.get_fragment
             .call(URI::Narrative(doc.into()), None)
             .await
@@ -381,7 +381,7 @@ impl ServerConfig {
     #[inline]
     pub async fn paragraph(
         &self,
-        doc: DocumentElementURI,
+        doc: DocumentElementUri,
     ) -> Result<(URI, Vec<CSS>, String), String> {
         self.get_fragment
             .call(URI::Narrative(doc.into()), None)
@@ -391,7 +391,7 @@ impl ServerConfig {
     /// #### Errors
     /// #### Panics
     #[inline]
-    pub async fn definition(&self, uri: SymbolURI) -> Result<(Vec<CSS>, String), String> {
+    pub async fn definition(&self, uri: SymbolUri) -> Result<(Vec<CSS>, String), String> {
         self.get_fragment
             .call(URI::Content(uri.into()), None)
             .await
@@ -403,15 +403,15 @@ impl ServerConfig {
     #[inline]
     pub async fn full_doc(
         &self,
-        uri: DocumentURI,
-    ) -> Result<(DocumentURI, Vec<CSS>, String), String> {
+        uri: DocumentUri,
+    ) -> Result<(DocumentUri, Vec<CSS>, String), String> {
         self.get_full_doc.call(uri, ()).await
     }
 
     /// #### Errors
     /// #### Panics
     #[inline]
-    pub async fn get_toc(&self, uri: DocumentURI) -> Result<(Vec<CSS>, Vec<TOCElem>), String> {
+    pub async fn get_toc(&self, uri: DocumentUri) -> Result<(Vec<CSS>, Vec<TOCElem>), String> {
         self.get_toc.call(uri, ()).await
     }
 
@@ -420,9 +420,9 @@ impl ServerConfig {
     #[inline]
     pub async fn get_los(
         &self,
-        uri: SymbolURI,
+        uri: SymbolUri,
         problems: bool,
-    ) -> Result<Vec<(DocumentElementURI, LOKind)>, String> {
+    ) -> Result<Vec<(DocumentElementUri, LOKind)>, String> {
         self.get_los.call(uri, problems).await
     }
 
@@ -439,7 +439,7 @@ impl ServerConfig {
     #[inline]
     pub async fn solution(
         &self,
-        uri: flams_ontology::uris::DocumentElementURI,
+        uri: flams_ontology::uris::DocumentElementUri,
     ) -> Result<flams_ontology::narration::problems::Solutions, String> {
         use flams_utils::Hexable;
         let r = self
@@ -458,7 +458,7 @@ impl ServerConfig {
         uri: flams_ontology::uris::URI,
     ) -> Result<
         Vec<(
-            DocumentElementURI,
+            DocumentElementUri,
             flams_ontology::narration::notations::Notation,
         )>,
         String,
@@ -470,7 +470,7 @@ impl ServerConfig {
     #[cfg(feature = "omdoc")]
     pub fn get_notation(
         &self,
-        uri: &flams_ontology::uris::DocumentElementURI,
+        uri: &flams_ontology::uris::DocumentElementUri,
     ) -> Option<flams_ontology::narration::notations::Notation> {
         #[cfg(any(feature = "csr", feature = "hydrate"))]
         {
@@ -519,26 +519,26 @@ impl ServerConfig {
             }
             impl Presenter for Pres<'_> {
                 type N = Notation;
-                fn get_notation(&mut self, uri: &SymbolURI) -> Option<Self::N> {
+                fn get_notation(&mut self, uri: &SymbolUri) -> Option<Self::N> {
                     let lock = self.slf.get_notations.cache.lock();
                     lock.get(&uri.as_uri().owned())
                         .and_then(|v| v.first().map(|(_, n)| n.clone()))
                 }
-                fn get_op_notation(&mut self, uri: &SymbolURI) -> Option<Self::N> {
+                fn get_op_notation(&mut self, uri: &SymbolUri) -> Option<Self::N> {
                     let lock = self.slf.get_notations.cache.lock();
                     lock.get(&uri.as_uri().owned()).and_then(|v| {
                         v.iter()
                             .find_map(|(_, n)| if n.is_op() { Some(n.clone()) } else { None })
                     })
                 }
-                fn get_variable_notation(&mut self, uri: &DocumentElementURI) -> Option<Self::N> {
+                fn get_variable_notation(&mut self, uri: &DocumentElementUri) -> Option<Self::N> {
                     let lock = self.slf.get_notations.cache.lock();
                     lock.get(&uri.as_uri().owned())
                         .and_then(|v| v.first().map(|(_, n)| n.clone()))
                 }
                 fn get_variable_op_notation(
                     &mut self,
-                    uri: &DocumentElementURI,
+                    uri: &DocumentElementUri,
                 ) -> Option<Self::N> {
                     let lock = self.slf.get_notations.cache.lock();
                     lock.get(&uri.as_uri().owned()).and_then(|v| {
@@ -578,11 +578,11 @@ impl ServerConfig {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     pub fn initialize(
         fragment: server_fun!(@URI,Option<URI> => (URI,Vec<CSS>,String)),
-        full_doc: server_fun!(@DOCURI => (DocumentURI,Vec<CSS>,String)),
+        full_doc: server_fun!(@DOCURI => (DocumentUri,Vec<CSS>,String)),
         toc: server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>)),
         omdoc: server_fun!(@URI => (Vec<CSS>,OMDoc)),
-        los: server_fun!(@SYMURI,bool => Vec<(DocumentElementURI,LOKind)>),
-        notations: server_fun!(@URI => Vec<(DocumentElementURI,flams_ontology::narration::notations::Notation)>),
+        los: server_fun!(@SYMURI,bool => Vec<(DocumentElementUri,LOKind)>),
+        notations: server_fun!(@URI => Vec<(DocumentElementUri,flams_ontology::narration::notations::Notation)>),
         solutions: server_fun!(@URI => String),
     ) {
         let _ = server_config.get_fragment.getter.set(fragment);

@@ -1,7 +1,7 @@
 use std::{path::Path, sync::atomic::AtomicBool};
 
 use async_lsp::lsp_types::{Position, Range};
-use flams_ontology::uris::{ArchiveURI, DocumentURI, URIRefTrait};
+use flams_ontology::uris::{ArchiveUri, DocumentUri, URIRefTrait};
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
 use flams_utils::PathExt;
@@ -14,9 +14,9 @@ use crate::{
 #[derive(Debug, PartialEq, Eq)]
 struct DocumentData {
     path: Option<std::sync::Arc<Path>>,
-    archive: Option<ArchiveURI>,
+    archive: Option<ArchiveUri>,
     rel_path: Option<Box<str>>,
-    doc_uri: Option<DocumentURI>,
+    doc_uri: Option<DocumentUri>,
 }
 
 #[derive(Clone, Debug)]
@@ -49,7 +49,7 @@ impl LSPDocument {
         }; //lsp_uri.to_file_path().ok().map(Into::into);
         let default = || {
             let path = path.as_ref()?.as_slash_str().into();
-            Some((ArchiveURI::no_archive(), Some(path)))
+            Some((ArchiveUri::no_archive(), Some(path)))
         };
         let ap = path
             .as_ref()
@@ -68,7 +68,7 @@ impl LSPDocument {
         };
         let doc_uri = archive.as_ref().and_then(|a| {
             rel_path.as_deref().and_then(|rp: &str| {
-                match DocumentURI::from_archive_relpath(a.clone(), rp) {
+                match DocumentUri::from_archive_relpath(a.clone(), rp) {
                     Ok(u) => Some(u),
                     Err(e) => {
                         tracing::error!("Error in URI {rp} in {a}: {e}");
@@ -100,7 +100,7 @@ impl LSPDocument {
 
     #[inline]
     #[must_use]
-    pub fn archive(&self) -> Option<&ArchiveURI> {
+    pub fn archive(&self) -> Option<&ArchiveUri> {
         self.data.archive.as_ref()
     }
 
@@ -112,7 +112,7 @@ impl LSPDocument {
 
     #[inline]
     #[must_use]
-    pub fn document_uri(&self) -> Option<&DocumentURI> {
+    pub fn document_uri(&self) -> Option<&DocumentUri> {
         self.data.doc_uri.as_ref()
     }
 

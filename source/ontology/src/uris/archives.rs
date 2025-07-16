@@ -1,7 +1,7 @@
 use crate::uris::errors::URIParseError;
 use crate::uris::macros::debugdisplay;
 use crate::uris::{
-    BaseURI, Name, PathURIRef, PathURITrait, URIOrRefTrait, URIRef, URIRefTrait, URITrait, URI,
+    BaseUri, Name, PathURIRef, PathURITrait, URIOrRefTrait, URIRef, URIRefTrait, URITrait, URI,
 };
 use const_format::concatcp;
 use either::Either;
@@ -14,15 +14,19 @@ use std::str::{FromStr, Split};
 use triomphe::Arc;
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)
+)]
 const TS_ARCHIVE_ID: &str = "export type ArchiveId = string;";
 
 lazy_static! {
     static ref ARCHIVE_IDS: Arc<Mutex<TArcInterner<str, 4, 100>>> =
         Arc::new(Mutex::new(TArcInterner::default()));
-
-    static ref NO_ARCHIVE_ID:ArchiveId = ArchiveId::new("no/archive");
-    static ref NO_ARCHIVE_URI:ArchiveURI = "http://unknown.source?a=no/archive".parse().unwrap_or_else(|_| unreachable!());
+    static ref NO_ARCHIVE_ID: ArchiveId = ArchiveId::new("no/archive");
+    static ref NO_ARCHIVE_URI: ArchiveUri = "http://unknown.source?a=no/archive"
+        .parse()
+        .unwrap_or_else(|_| unreachable!());
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -34,8 +38,11 @@ impl ArchiveId {
         s.rsplit_once('/').map_or(s, |(_, s)| s)
     }
 
-    #[inline]#[must_use]
-    pub fn no_archive() -> Self { NO_ARCHIVE_ID.clone() }
+    #[inline]
+    #[must_use]
+    pub fn no_archive() -> Self {
+        NO_ARCHIVE_ID.clone()
+    }
 
     #[must_use]
     pub fn steps(&self) -> std::str::Split<char> {
@@ -105,24 +112,26 @@ impl Display for ArchiveId {
 }
 debugdisplay!(ArchiveId);
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct ArchiveURI {
-    pub(super) base: super::BaseURI,
+pub struct ArchiveUri {
+    pub(super) base: super::BaseUri,
     pub(super) archive: ArchiveId,
 }
-impl Display for ArchiveURI {
+impl Display for ArchiveUri {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}?{}={}", self.base, Self::SEPARATOR, self.archive)
     }
 }
-debugdisplay!(ArchiveURI);
+debugdisplay!(ArchiveUri);
 
-impl ArchiveURI {
+impl ArchiveUri {
     #[must_use]
-    pub fn no_archive() -> Self { NO_ARCHIVE_URI.clone() }
+    pub fn no_archive() -> Self {
+        NO_ARCHIVE_URI.clone()
+    }
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
-    pub fn new(base: BaseURI, archive: ArchiveId) -> Self {
+    pub fn new(base: BaseUri, archive: ArchiveId) -> Self {
         Self { base, archive }
     }
     pub const SEPARATOR: char = 'a';
@@ -131,7 +140,7 @@ impl ArchiveURI {
         uri_kind: &'static str,
         f: impl FnOnce(Self, Split<char>) -> Result<R, URIParseError>,
     ) -> Result<R, URIParseError> {
-        let Either::Right((base, mut split)) = BaseURI::pre_parse(s)? else {
+        let Either::Right((base, mut split)) = BaseUri::pre_parse(s)? else {
             return Err(URIParseError::MissingPartFor {
                 uri_kind,
                 part: "archive id",
@@ -141,7 +150,7 @@ impl ArchiveURI {
         let Some(archive) = split.next() else {
             unreachable!()
         };
-        if !archive.starts_with(concatcp!(ArchiveURI::SEPARATOR, "=")) {
+        if !archive.starts_with(concatcp!(ArchiveUri::SEPARATOR, "=")) {
             return Err(URIParseError::MissingPartFor {
                 uri_kind,
                 part: "archive id",
@@ -155,7 +164,7 @@ impl ArchiveURI {
         f(archive, split)
     }
 }
-impl FromStr for ArchiveURI {
+impl FromStr for ArchiveUri {
     type Err = URIParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::pre_parse(s, "archive uri", |a, mut split| {
@@ -169,31 +178,31 @@ impl FromStr for ArchiveURI {
         })
     }
 }
-impl URIOrRefTrait for ArchiveURI {
+impl URIOrRefTrait for ArchiveUri {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         &self.base
     }
     fn as_uri(&self) -> URIRef {
         URIRef::Archive(self.archive_uri())
     }
 }
-impl URITrait for ArchiveURI {
-    type Ref<'a> = ArchiveURIRef<'a>;
+impl URITrait for ArchiveUri {
+    type Ref<'a> = ArchiveUriRef<'a>;
 }
 
-pub trait ArchiveURITrait: URIOrRefTrait {
-    fn archive_uri(&self) -> ArchiveURIRef;
+pub trait ArchiveUriTrait: URIOrRefTrait {
+    fn archive_uri(&self) -> ArchiveUriRef;
 
     #[inline]
     fn archive_id(&self) -> &ArchiveId {
         self.archive_uri().archive
     }
 }
-impl ArchiveURITrait for ArchiveURI {
+impl ArchiveUriTrait for ArchiveUri {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef {
-        ArchiveURIRef {
+    fn archive_uri(&self) -> ArchiveUriRef {
+        ArchiveUriRef {
             base: &self.base,
             archive: &self.archive,
         }
@@ -204,7 +213,7 @@ impl ArchiveURITrait for ArchiveURI {
     }
 }
 
-impl PathURITrait for ArchiveURI {
+impl PathURITrait for ArchiveUri {
     fn as_path(&self) -> PathURIRef {
         PathURIRef {
             archive: self.archive_uri(),
@@ -218,14 +227,14 @@ impl PathURITrait for ArchiveURI {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ArchiveURIRef<'a> {
-    pub(super) base: &'a super::BaseURI,
+pub struct ArchiveUriRef<'a> {
+    pub(super) base: &'a super::BaseUri,
     pub(super) archive: &'a ArchiveId,
 }
-impl<'a> ArchiveURIRef<'a> {
+impl<'a> ArchiveUriRef<'a> {
     #[inline]
     #[must_use]
-    pub const fn new(base: &'a BaseURI, archive: &'a ArchiveId) -> Self {
+    pub const fn new(base: &'a BaseUri, archive: &'a ArchiveId) -> Self {
         Self { base, archive }
     }
     #[inline]
@@ -235,9 +244,9 @@ impl<'a> ArchiveURIRef<'a> {
     }
 }
 
-impl<'a> URIOrRefTrait for ArchiveURIRef<'a> {
+impl<'a> URIOrRefTrait for ArchiveUriRef<'a> {
     #[inline]
-    fn base(&self) -> &'a BaseURI {
+    fn base(&self) -> &'a BaseUri {
         self.base
     }
     #[inline]
@@ -245,31 +254,31 @@ impl<'a> URIOrRefTrait for ArchiveURIRef<'a> {
         URIRef::<'a>::Archive(*self)
     }
 }
-impl<'a> URIRefTrait<'a> for ArchiveURIRef<'a> {
-    type Owned = ArchiveURI;
+impl<'a> URIRefTrait<'a> for ArchiveUriRef<'a> {
+    type Owned = ArchiveUri;
     #[inline]
-    fn owned(self) -> ArchiveURI {
-        ArchiveURI {
+    fn owned(self) -> ArchiveUri {
+        ArchiveUri {
             base: self.base.clone(),
             archive: self.archive.clone(),
         }
     }
 }
 
-impl Display for ArchiveURIRef<'_> {
+impl Display for ArchiveUriRef<'_> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}?{}={}",
             self.base,
-            ArchiveURI::SEPARATOR,
+            ArchiveUri::SEPARATOR,
             self.archive
         )
     }
 }
-debugdisplay!(ArchiveURIRef<'_>);
-impl<'a> PathURITrait for ArchiveURIRef<'a> {
+debugdisplay!(ArchiveUriRef<'_>);
+impl<'a> PathURITrait for ArchiveUriRef<'a> {
     #[inline]
     fn as_path(&self) -> PathURIRef<'a> {
         PathURIRef {
@@ -279,7 +288,7 @@ impl<'a> PathURITrait for ArchiveURIRef<'a> {
     }
 }
 
-impl ArchiveURITrait for ArchiveURIRef<'_> {
+impl ArchiveUriTrait for ArchiveUriRef<'_> {
     #[inline]
     fn archive_uri(&self) -> Self {
         *self
@@ -288,10 +297,10 @@ impl ArchiveURITrait for ArchiveURIRef<'_> {
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use super::{ArchiveId, ArchiveURI};
-    use crate::uris::{serialize, ArchiveURIRef};
+    use super::{ArchiveId, ArchiveUri};
+    use crate::uris::{serialize, ArchiveUriRef};
 
     serialize!(as+DE ArchiveId);
-    serialize!(DE ArchiveURI);
-    serialize!(ArchiveURIRef<'_>);
+    serialize!(DE ArchiveUri);
+    serialize!(ArchiveUriRef<'_>);
 }

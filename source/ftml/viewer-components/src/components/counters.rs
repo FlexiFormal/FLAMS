@@ -1,6 +1,6 @@
 use flams_ontology::{
     narration::{paragraphs::ParagraphKind, sections::SectionLevel},
-    uris::{DocumentURI, Name},
+    uris::{DocumentUri, Name},
 };
 use flams_utils::{
     impossible, unwrap,
@@ -571,7 +571,7 @@ impl SectionCounters {
         counters
     }
 
-    pub fn inputref(uri: DocumentURI, id: String) -> Self {
+    pub fn inputref(uri: DocumentUri, id: String) -> Self {
         let mut counters: Self = expect_context();
         counters.init_paras();
 

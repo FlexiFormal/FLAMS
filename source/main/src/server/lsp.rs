@@ -82,7 +82,7 @@ async fn linter() {
                                     .split('/')
                                     .fold(a.source_dir(), |p, s| p.join(s))
                                     .into(),
-                                DocumentURI::from_archive_relpath(
+                                DocumentUri::from_archive_relpath(
                                     a.uri().owned(),
                                     &f.relative_path,
                                 ),

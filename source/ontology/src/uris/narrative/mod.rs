@@ -1,9 +1,9 @@
 use crate::languages::Language;
-use crate::uris::narrative::document_elements::DocumentElementURI;
-use crate::uris::narrative::documents::DocumentURI;
+use crate::uris::narrative::document_elements::DocumentElementUri;
+use crate::uris::narrative::documents::DocumentUri;
 use crate::uris::{
-    debugdisplay, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURI, ContentURIRef,
-    ContentURITrait, ModuleURI, PathURITrait, SymbolURI, URIOrRefTrait, URIParseError, URIRef,
+    debugdisplay, ArchiveUriRef, ArchiveUriTrait, BaseUri, ContentURI, ContentURIRef,
+    ContentURITrait, ModuleUri, PathURITrait, SymbolUri, URIOrRefTrait, URIParseError, URIRef,
     URIRefTrait, URITrait, URIWithLanguage,
 };
 use const_format::concatcp;
@@ -15,29 +15,29 @@ pub(super) mod documents;
 
 pub trait NarrativeURITrait: URIWithLanguage {
     fn as_narrative(&self) -> NarrativeURIRef;
-    fn document(&self) -> &DocumentURI;
+    fn document(&self) -> &DocumentUri;
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum NarrativeURI {
-    Document(DocumentURI),
-    Element(DocumentElementURI),
+    Document(DocumentUri),
+    Element(DocumentElementUri),
 }
-impl From<DocumentURI> for NarrativeURI {
+impl From<DocumentUri> for NarrativeURI {
     #[inline]
-    fn from(value: DocumentURI) -> Self {
+    fn from(value: DocumentUri) -> Self {
         Self::Document(value)
     }
 }
-impl From<DocumentElementURI> for NarrativeURI {
+impl From<DocumentElementUri> for NarrativeURI {
     #[inline]
-    fn from(value: DocumentElementURI) -> Self {
+    fn from(value: DocumentElementUri) -> Self {
         Self::Element(value)
     }
 }
 impl URIOrRefTrait for NarrativeURI {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         match self {
             Self::Document(m) => m.base(),
             Self::Element(s) => s.base(),
@@ -69,7 +69,7 @@ impl NarrativeURITrait for NarrativeURI {
         }
     }
     #[inline]
-    fn document(&self) -> &DocumentURI {
+    fn document(&self) -> &DocumentUri {
         match self {
             Self::Document(m) => m,
             Self::Element(s) => s.document(),
@@ -79,8 +79,8 @@ impl NarrativeURITrait for NarrativeURI {
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum NarrativeURIRef<'a> {
-    Document(&'a DocumentURI),
-    Element(&'a DocumentElementURI),
+    Document(&'a DocumentUri),
+    Element(&'a DocumentElementUri),
 }
 
 impl URIWithLanguage for NarrativeURIRef<'_> {
@@ -103,7 +103,7 @@ impl<'a> From<&'a NarrativeURI> for NarrativeURIRef<'a> {
 }
 impl URIOrRefTrait for NarrativeURIRef<'_> {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         match self {
             Self::Document(m) => m.base(),
             Self::Element(s) => s.base(),
@@ -131,7 +131,7 @@ impl NarrativeURITrait for NarrativeURIRef<'_> {
         *self
     }
     #[inline]
-    fn document(&self) -> &DocumentURI {
+    fn document(&self) -> &DocumentUri {
         match self {
             Self::Document(m) => m,
             Self::Element(s) => s.document(),
@@ -159,15 +159,15 @@ impl Display for NarrativeURIRef<'_> {
 }
 debugdisplay!(NarrativeURIRef<'_>);
 
-impl ArchiveURITrait for NarrativeURI {
+impl ArchiveUriTrait for NarrativeURI {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef {
+    fn archive_uri(&self) -> ArchiveUriRef {
         self.document().archive_uri()
     }
 }
-impl ArchiveURITrait for NarrativeURIRef<'_> {
+impl ArchiveUriTrait for NarrativeURIRef<'_> {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef {
+    fn archive_uri(&self) -> ArchiveUriRef {
         self.document().archive_uri()
     }
 }
@@ -196,11 +196,11 @@ impl PathURITrait for NarrativeURIRef<'_> {
 impl FromStr for NarrativeURI {
     type Err = URIParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        DocumentURI::pre_parse(s, "narrative uri", |document, mut split| {
+        DocumentUri::pre_parse(s, "narrative uri", |document, mut split| {
             let Some(c) = split.next() else {
                 return Ok(Self::Document(document));
             };
-            c.strip_prefix(concatcp!(DocumentElementURI::SEPARATOR, "="))
+            c.strip_prefix(concatcp!(DocumentElementUri::SEPARATOR, "="))
                 .map_or_else(
                     || {
                         Err(URIParseError::TooManyPartsFor {
@@ -209,7 +209,7 @@ impl FromStr for NarrativeURI {
                         })
                     },
                     |name| {
-                        Ok(Self::Element(DocumentElementURI {
+                        Ok(Self::Element(DocumentElementUri {
                             document,
                             name: name.parse()?,
                         }))

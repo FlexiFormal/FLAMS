@@ -11,7 +11,7 @@ use flams_ontology::{
     },
     triple,
     uris::{
-        ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, DocumentURI, ModuleURI, SymbolURI,
+        ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, DocumentUri, ModuleUri, SymbolUri,
         URIOrRefTrait, URIRefTrait, URIWithLanguage,
     },
     DocumentRange,
@@ -114,7 +114,7 @@ impl StatefulExtractor for Extractor<'_> {
 impl<'p> HTMLParser<'p> {
     pub fn run(
         input: &str,
-        uri: DocumentURI,
+        uri: DocumentUri,
         rel_path: &'p str,
         backend: &'p AnyBackend,
     ) -> Result<(OMDocResult, String), String> {
@@ -462,7 +462,10 @@ impl TreeSink for HTMLParser<'_> {
                                     .filter_map(|c| c.as_text().map(|s| s.borrow().to_string()))
                                     .collect::<String>();
                                 // update: will get sorted / processed in bulk later
-                                self.extractor.borrow_mut().css.push(CSS::Inline(str.into()));//.extend(CSS::split(&str));
+                                self.extractor
+                                    .borrow_mut()
+                                    .css
+                                    .push(CSS::Inline(str.into())); //.extend(CSS::split(&str));
                                 node.delete();
                                 return;
                             }

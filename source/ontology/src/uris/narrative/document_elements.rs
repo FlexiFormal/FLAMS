@@ -1,6 +1,9 @@
 use crate::languages::Language;
 use crate::uris::{
-    debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, DocumentURI, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URITrait, URIWithLanguage, URI
+    debugdisplay, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, BaseUri, ContentURIRef,
+    ContentURITrait, DocumentUri, ModuleUri, Name, NarrativeURIRef, NarrativeURITrait, PathURIRef,
+    PathURITrait, SymbolUri, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URITrait,
+    URIWithLanguage, URI,
 };
 use const_format::concatcp;
 use std::fmt::Display;
@@ -9,20 +12,22 @@ use std::str::{FromStr, Split};
 use super::NarrativeURI;
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
-const TS_URI: &str = "export type DocumentElementURI = string;";
-
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)
+)]
+const TS_URI: &str = "export type DocumentElementUri = string;";
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct DocumentElementURI {
-    pub(in crate::uris) document: DocumentURI,
+pub struct DocumentElementUri {
+    pub(in crate::uris) document: DocumentUri,
     pub(in crate::uris) name: Name,
 }
-impl DocumentElementURI {
+impl DocumentElementUri {
     pub const SEPARATOR: char = 'e';
     #[inline]
     #[must_use]
-    pub const fn document(&self) -> &DocumentURI {
+    pub const fn document(&self) -> &DocumentUri {
         &self.document
     }
 
@@ -34,26 +39,28 @@ impl DocumentElementURI {
 
     #[must_use]
     pub fn parent(&self) -> Self {
-        if self.name.is_simple() { return self.clone() }
+        if self.name.is_simple() {
+            return self.clone();
+        }
         let steps = self.name.steps();
-        let steps = &steps[0..steps.len()-1];
+        let steps = &steps[0..steps.len() - 1];
         let name = Name(steps.into());
         Self {
             document: self.document.clone(),
-            name
+            name,
         }
     }
 }
-impl Display for DocumentElementURI {
+impl Display for DocumentElementUri {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}&{}={}", self.document, Self::SEPARATOR, self.name)
     }
 }
-debugdisplay!(DocumentElementURI);
-impl URIOrRefTrait for DocumentElementURI {
+debugdisplay!(DocumentElementUri);
+impl URIOrRefTrait for DocumentElementUri {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         self.document.base()
     }
     #[inline]
@@ -61,53 +68,52 @@ impl URIOrRefTrait for DocumentElementURI {
         URIRef::Narrative(self.as_narrative())
     }
 }
-impl URIWithLanguage for DocumentElementURI {
+impl URIWithLanguage for DocumentElementUri {
     #[inline]
     fn language(&self) -> Language {
         self.document.language
     }
 }
-impl NarrativeURITrait for DocumentElementURI {
+impl NarrativeURITrait for DocumentElementUri {
     #[inline]
     fn as_narrative(&self) -> NarrativeURIRef {
         NarrativeURIRef::Element(self)
     }
     #[inline]
-    fn document(&self) -> &DocumentURI {
+    fn document(&self) -> &DocumentUri {
         &self.document
     }
 }
-impl URITrait for DocumentElementURI {
+impl URITrait for DocumentElementUri {
     type Ref<'a> = &'a Self;
 }
-impl From<DocumentElementURI> for URI {
+impl From<DocumentElementUri> for URI {
     #[inline]
-    fn from(value: DocumentElementURI) -> Self {
+    fn from(value: DocumentElementUri) -> Self {
         Self::Narrative(NarrativeURI::Element(value))
     }
 }
-impl<'a> From<&'a DocumentElementURI> for URIRef<'a> {
+impl<'a> From<&'a DocumentElementUri> for URIRef<'a> {
     #[inline]
-    fn from(value: &'a DocumentElementURI) -> Self {
+    fn from(value: &'a DocumentElementUri) -> Self {
         URIRef::Narrative(NarrativeURIRef::Element(value))
     }
 }
-impl<'a> URIRefTrait<'a> for &'a DocumentElementURI {
-    type Owned = DocumentElementURI;
+impl<'a> URIRefTrait<'a> for &'a DocumentElementUri {
+    type Owned = DocumentElementUri;
     #[inline]
-    fn owned(self) -> DocumentElementURI {
+    fn owned(self) -> DocumentElementUri {
         self.clone()
     }
 }
 
-
-impl DocumentElementURI {
+impl DocumentElementUri {
     pub(super) fn pre_parse<R>(
         s: &str,
         uri_kind: &'static str,
         f: impl FnOnce(Self, Split<char>) -> Result<R, URIParseError>,
     ) -> Result<R, URIParseError> {
-        DocumentURI::pre_parse(s, uri_kind, |document, mut split| {
+        DocumentUri::pre_parse(s, uri_kind, |document, mut split| {
             let Some(s) = split.next() else {
                 return Err(URIParseError::MissingPartFor {
                     uri_kind,
@@ -115,7 +121,7 @@ impl DocumentElementURI {
                     original: s.to_string(),
                 });
             };
-            s.strip_prefix(concatcp!(DocumentElementURI::SEPARATOR, "="))
+            s.strip_prefix(concatcp!(DocumentElementUri::SEPARATOR, "="))
                 .map_or_else(
                     || {
                         Err(URIParseError::MissingPartFor {
@@ -138,7 +144,7 @@ impl DocumentElementURI {
     }
 }
 
-impl FromStr for DocumentElementURI {
+impl FromStr for DocumentElementUri {
     type Err = URIParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::pre_parse(s, "document element uri", |u, mut split| {
@@ -153,13 +159,13 @@ impl FromStr for DocumentElementURI {
     }
 }
 
-impl ArchiveURITrait for DocumentElementURI {
+impl ArchiveUriTrait for DocumentElementUri {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef {
+    fn archive_uri(&self) -> ArchiveUriRef {
         self.document.archive_uri()
     }
 }
-impl PathURITrait for DocumentElementURI {
+impl PathURITrait for DocumentElementUri {
     #[inline]
     fn as_path(&self) -> PathURIRef {
         self.document.as_path()
@@ -172,15 +178,21 @@ impl PathURITrait for DocumentElementURI {
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use crate::uris::{serialize, DocumentElementURI};
-    serialize!(DE DocumentElementURI);
+    use crate::uris::{serialize, DocumentElementUri};
+    serialize!(DE DocumentElementUri);
 }
 
-#[cfg(feature="tantivy")]
-impl tantivy::schema::document::ValueDeserialize for DocumentElementURI {
-    fn deserialize<'de, D>(deserializer: D) -> Result<Self, tantivy::schema::document::DeserializeError>
-        where D: tantivy::schema::document::ValueDeserializer<'de> {
-        deserializer.deserialize_string()?.parse()
-          .map_err(|_| tantivy::schema::document::DeserializeError::custom(""))
+#[cfg(feature = "tantivy")]
+impl tantivy::schema::document::ValueDeserialize for DocumentElementUri {
+    fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<Self, tantivy::schema::document::DeserializeError>
+    where
+        D: tantivy::schema::document::ValueDeserializer<'de>,
+    {
+        deserializer
+            .deserialize_string()?
+            .parse()
+            .map_err(|_| tantivy::schema::document::DeserializeError::custom(""))
     }
-  }
+}

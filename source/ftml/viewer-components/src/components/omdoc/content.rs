@@ -5,7 +5,7 @@ use crate::{
 use flams_ontology::{
     content::{declarations::symbols::ArgSpec, terms::Term},
     languages::Language,
-    uris::{ContentURITrait, ModuleURI, Name, SymbolURI, URIOrRefTrait, URIRefTrait, URI},
+    uris::{DomainUriTrait, ModuleUri, Name, SymbolUri, URIOrRefTrait, URIRefTrait, URI},
 };
 use flams_utils::vecmap::VecSet;
 
@@ -27,12 +27,12 @@ struct InStruct;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 pub struct OMDocModule<E: OMDocDecl> {
-    pub uri: ModuleURI,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub imports: VecSet<ModuleURI>,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
-    pub metatheory: Option<ModuleURI>,
+    pub uri: ModuleUri,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub imports: VecSet<ModuleUri>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
+    pub metatheory: Option<ModuleUri>,
     pub signature: Option<Language>,
     pub children: Vec<E>,
 }
@@ -75,11 +75,11 @@ impl From<OMDocModule<OMDocDeclaration>> for OMDocDeclaration {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 pub struct OMDocMorphism<E: OMDocDecl> {
-    pub uri: SymbolURI,
+    pub uri: SymbolUri,
     pub total: bool,
-    pub target: Option<ModuleURI>,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
+    pub target: Option<ModuleUri>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
     pub children: Vec<E>,
 }
 impl<E: OMDocDecl> super::OMDocT for OMDocMorphism<E> {
@@ -109,14 +109,14 @@ impl From<OMDocMorphism<OMDocDeclaration>> for OMDocDeclaration {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 pub struct OMDocStructure<E: OMDocDecl> {
-    pub uri: SymbolURI,
+    pub uri: SymbolUri,
     pub macro_name: Option<String>,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub extends: VecSet<ModuleURI>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub extends: VecSet<ModuleUri>,
     pub children: Vec<E>,
-    pub extensions: Vec<(SymbolURI, Vec<OMDocSymbol>)>,
+    pub extensions: Vec<(SymbolUri, Vec<OMDocSymbol>)>,
 }
 impl<E: OMDocDecl> super::OMDocT for OMDocStructure<E> {
     fn into_view(self) -> impl IntoView {
@@ -133,7 +133,7 @@ impl<E: OMDocDecl> super::OMDocT for OMDocStructure<E> {
             <Provider value=InStruct>
                 <Block>
                     <Header slot><span>
-                        <b>"Structure "{super::symbol_name(&uri, uri.name().last_name().as_ref())}</b>
+                        <b>"Structure "{super::symbol_name(&uri, uri.name().last())}</b>
                         {macro_name.map(|name| view!(<span>" ("<Text tag=TextTag::Code>"\\"{name}</Text>")"</span>))}
                     </span></Header>
                     <HeaderLeft slot>{super::uses("Extends",extends.0)}</HeaderLeft>
@@ -176,10 +176,10 @@ impl From<OMDocStructure<OMDocDeclaration>> for OMDocDeclaration {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 pub struct OMDocExtension<E: OMDocDecl> {
-    pub uri: SymbolURI,
-    pub target: SymbolURI,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
+    pub uri: SymbolUri,
+    pub target: SymbolUri,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
     pub children: Vec<E>,
 }
 impl<E: OMDocDecl> super::OMDocT for OMDocExtension<E> {
@@ -194,7 +194,7 @@ impl<E: OMDocDecl> super::OMDocT for OMDocExtension<E> {
             <Provider value=InStruct>
                 <Block>
                     <Header slot><span>
-                        <b>"Conservative Extension for "{super::symbol_name(&target, target.name().last_name().as_ref())}</b>
+                        <b>"Conservative Extension for "{super::symbol_name(&target, target.name().last())}</b>
                     </span></Header>
                     <HeaderRight slot>{super::uses("Uses",uses.0)}</HeaderRight>
                     {children.into_iter().map(super::OMDocT::into_view).collect_view()}
@@ -337,7 +337,7 @@ pub(super) fn do_notations(uri: URI, arity: ArgSpec) -> impl IntoView {
     })
 }
 
-fn do_los(uri: SymbolURI) -> impl IntoView {
+fn do_los(uri: SymbolUri) -> impl IntoView {
     use flams_ontology::narration::LOKind;
     view! {
         <LazyCollapsible>
@@ -379,13 +379,13 @@ fn do_los(uri: SymbolURI) -> impl IntoView {
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct OMDocSymbol {
-    pub uri: SymbolURI,
+    pub uri: SymbolUri,
     pub df: Option<Term>,
     pub tp: Option<Term>,
     pub arity: ArgSpec,
     pub roles: Vec<String>,
     pub macro_name: Option<String>,
-    //pub notations:Vec<(ModuleURI,String,Option<String>,Option<String>)>
+    //pub notations:Vec<(ModuleUri,String,Option<String>,Option<String>)>
 }
 impl super::OMDocT for OMDocSymbol {
     fn into_view(self) -> impl IntoView {
@@ -410,7 +410,7 @@ impl super::OMDocT for OMDocSymbol {
         view! {
             <Block show_separator>
                 <Header slot><span>
-                    <b>{symbol_str}{super::symbol_name(&uri, uri.name().last_name().as_ref())}</b>
+                    <b>{symbol_str}{super::symbol_name(&uri, uri.name().last())}</b>
                     {macro_name.map(|name| view!(<span>" ("<Text tag=TextTag::Code>"\\"{name}</Text>")"</span>))}
                     {tp.map(|t| view! {
                         " of type "{
@@ -463,7 +463,7 @@ mod froms {
             modules::{Module, NestedModule},
             ModuleLike, ModuleTrait,
         },
-        uris::ModuleURI,
+        uris::ModuleUri,
         Checked, Resolvable,
     };
     use flams_system::backend::{Backend, StringPresenter};
@@ -628,7 +628,7 @@ mod froms {
         pub fn do_children<B: Backend>(
             backend: &B, //&mut StringPresenter<'_,B>,
             children: &[Declaration],
-            imports: &mut VecSet<ModuleURI>,
+            imports: &mut VecSet<ModuleUri>,
         ) -> Vec<Self> {
             let mut ret = Vec::new();
             for c in children {

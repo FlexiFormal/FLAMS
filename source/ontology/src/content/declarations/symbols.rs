@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use crate::{
     content::terms::{ArgMode, Term},
-    uris::SymbolURI,
+    uris::SymbolUri,
     Resolvable,
 };
 
@@ -12,7 +12,7 @@ use super::{Declaration, DeclarationTrait};
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Symbol {
-    pub uri: SymbolURI,
+    pub uri: SymbolUri,
     pub arity: ArgSpec,
     pub macroname: Option<Box<str>>,
     pub role: Box<[Box<str>]>,
@@ -22,7 +22,7 @@ pub struct Symbol {
     pub reordering: Option<Box<str>>,
 }
 impl Resolvable for Symbol {
-    type From = SymbolURI;
+    type From = SymbolUri;
     fn id(&self) -> std::borrow::Cow<'_, Self::From> {
         std::borrow::Cow::Borrowed(&self.uri)
     }

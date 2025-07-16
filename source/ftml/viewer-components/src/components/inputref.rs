@@ -1,6 +1,6 @@
 use flams_ontology::{
     narration::sections::SectionLevel,
-    uris::{DocumentURI, NarrativeURI},
+    uris::{DocumentUri, NarrativeURI},
 };
 use flams_web_utils::{do_css, inject_css};
 use leptos::{context::Provider, either::Either, prelude::*};
@@ -19,12 +19,12 @@ use crate::{
 pub struct InInputRef(pub bool);
 
 #[component]
-pub fn InputRef<'a>(uri: DocumentURI, id: &'a str) -> impl IntoView {
+pub fn InputRef<'a>(uri: DocumentUri, id: &'a str) -> impl IntoView {
     inputref(uri, id)
 }
 
 #[allow(clippy::similar_names)]
-pub(super) fn inputref(uri: DocumentURI, id: &str) -> impl IntoView {
+pub(super) fn inputref(uri: DocumentUri, id: &str) -> impl IntoView {
     use leptos_posthoc::DomStringCont;
     //leptos::logging::log!("inputref");
     inject_css("ftml-inputref", include_str!("./inputref.css"));
@@ -80,7 +80,7 @@ pub(super) fn inputref(uri: DocumentURI, id: &str) -> impl IntoView {
     }
 }
 
-fn do_inputref(uri: DocumentURI, on_load: RwSignal<bool>) -> impl IntoView {
+fn do_inputref(uri: DocumentUri, on_load: RwSignal<bool>) -> impl IntoView {
     use flams_web_utils::components::wait_local;
     use leptos_posthoc::DomStringCont;
     let uricl = uri.clone();

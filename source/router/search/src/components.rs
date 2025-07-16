@@ -1,6 +1,6 @@
 use flams_ontology::{
     search::{QueryFilter, SearchResult, SearchResultKind},
-    uris::{DocumentElementURI, DocumentURI, SymbolURI, URI},
+    uris::{DocumentElementUri, DocumentUri, SymbolUri, URI},
 };
 use flams_router_base::uris::{DocURIComponents, URIComponents};
 use flams_utils::{impossible, vecmap::VecMap};
@@ -12,7 +12,7 @@ pub(crate) enum SearchState {
     None,
     Loading,
     Results(Vec<(f32, SearchResult)>),
-    SymResults(VecMap<SymbolURI, Vec<(f32, SearchResult)>>),
+    SymResults(VecMap<SymbolUri, Vec<(f32, SearchResult)>>),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -222,7 +222,7 @@ fn do_results(results: RwSignal<SearchState>) -> impl IntoView {
     })
 }
 
-fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoView + use<> {
+fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> impl IntoView + use<> {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::ClientOnly;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
@@ -265,7 +265,7 @@ fn do_result(score: f32, res: &SearchResult) -> impl IntoView + use<> {
     }
 }
 
-fn do_doc(score: f32, uri: DocumentURI) -> impl IntoView {
+fn do_doc(score: f32, uri: DocumentUri) -> impl IntoView {
     use flams_router_content::components::DocumentInner;
     use ftml_viewer_components::components::omdoc::doc_name;
     use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
@@ -299,9 +299,9 @@ fn do_doc(score: f32, uri: DocumentURI) -> impl IntoView {
 
 fn do_para(
     score: f32,
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     kind: SearchResultKind,
-    fors: Vec<SymbolURI>,
+    fors: Vec<SymbolUri>,
 ) -> impl IntoView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::{Popover, PopoverTrigger};
@@ -320,8 +320,7 @@ fn do_para(
     };
     let desc = comma_sep(
         "For",
-        fors.into_iter()
-            .map(|s| symbol_name(&s, s.name().last_name().as_ref())),
+        fors.into_iter().map(|s| symbol_name(&s, s.name().last())),
     );
     view! {
       <Card>

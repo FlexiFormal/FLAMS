@@ -1,5 +1,5 @@
 use crate::uris::{
-    debugdisplay, ContentURI, DocumentElementURI, NameStep, NarrativeURI, SymbolURI, URIParseError,
+    debugdisplay, ContentURI, DocumentElementUri, NameStep, NarrativeURI, SymbolUri, URIParseError,
     URI,
 };
 use smallvec::SmallVec;
@@ -8,11 +8,11 @@ use std::str::FromStr;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TermURI {
-    SymbolTp(SymbolURI),
-    SymbolDf(SymbolURI),
-    VariableTp(DocumentElementURI),
-    VariableDf(DocumentElementURI),
-    DocumentTerm(DocumentElementURI),
+    SymbolTp(SymbolUri),
+    SymbolDf(SymbolUri),
+    VariableTp(DocumentElementUri),
+    VariableDf(DocumentElementUri),
+    DocumentTerm(DocumentElementUri),
 }
 impl TermURI {
     #[must_use]
@@ -29,11 +29,11 @@ impl TermURI {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TermURIRef<'a> {
-    SymbolTp(&'a SymbolURI),
-    SymbolDf(&'a SymbolURI),
-    VariableTp(&'a DocumentElementURI),
-    VariableDf(&'a DocumentElementURI),
-    DocumentTerm(&'a DocumentElementURI),
+    SymbolTp(&'a SymbolUri),
+    SymbolDf(&'a SymbolUri),
+    VariableTp(&'a DocumentElementUri),
+    VariableDf(&'a DocumentElementUri),
+    DocumentTerm(&'a DocumentElementUri),
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SubTermIndex(SmallVec<u16, 8>);
@@ -81,7 +81,7 @@ impl FromStr for TermURI {
         s.strip_suffix("&tp").map_or_else(
             || {
                 s.strip_suffix("&df").map_or_else(
-                    || DocumentElementURI::from_str(s).map(TermURI::DocumentTerm),
+                    || DocumentElementUri::from_str(s).map(TermURI::DocumentTerm),
                     |s| symordoc!(s, Df),
                 )
             },

@@ -1,7 +1,7 @@
 use crate::FragmentKind;
 use flams_ontology::{
     narration::{paragraphs::ParagraphKind, problems::ProblemResponse, sections::SectionLevel},
-    uris::{DocumentElementURI, DocumentURI},
+    uris::{DocumentElementUri, DocumentUri},
 };
 use flams_utils::unwrap;
 use leptos::prelude::*;
@@ -29,13 +29,13 @@ impl FromTs for String {
     }
 }
 
-impl AsTs for DocumentElementURI {
+impl AsTs for DocumentElementUri {
     #[inline]
     fn as_ts(&self) -> JsValue {
         JsValue::from_str(self.to_string().as_str())
     }
 }
-impl FromTs for DocumentElementURI {
+impl FromTs for DocumentElementUri {
     #[inline]
     fn from_ts(v: JsValue) -> Result<Self, JsValue> {
         v.as_string()
@@ -43,13 +43,13 @@ impl FromTs for DocumentElementURI {
             .map_or(Err(v), Ok)
     }
 }
-impl AsTs for DocumentURI {
+impl AsTs for DocumentUri {
     #[inline]
     fn as_ts(&self) -> JsValue {
         JsValue::from_str(self.to_string().as_str())
     }
 }
-impl FromTs for DocumentURI {
+impl FromTs for DocumentUri {
     #[inline]
     fn from_ts(v: JsValue) -> Result<Self, JsValue> {
         v.as_string()
@@ -445,18 +445,18 @@ impl TsCont {
 }
 
 ts_function! {
-  JFragCont FragmentContinuation @ "(uri: DocumentElementURI,kind:FragmentKind) => (LeptosContinuation | undefined)"
-  = (DocumentElementURI,FragmentKind) => Option<TsCont>
+  JFragCont FragmentContinuation @ "(uri: DocumentElementUri,kind:FragmentKind) => (LeptosContinuation | undefined)"
+  = (DocumentElementUri,FragmentKind) => Option<TsCont>
 }
 
 ts_function! {
-  JOnSectTtl OnSectionTitleFn @ "(uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined)"
-  = (DocumentElementURI,SectionLevel) => Option<TsCont>
+  JOnSectTtl OnSectionTitleFn @ "(uri: DocumentElementUri,lvl:SectionLevel) => (LeptosContinuation | undefined)"
+  = (DocumentElementUri,SectionLevel) => Option<TsCont>
 }
 
 ts_function! {
-  JInputRefCont InputRefContinuation @ "(uri: DocumentURI) => (LeptosContinuation | undefined)"
-  = DocumentURI => Option<TsCont>
+  JInputRefCont InputRefContinuation @ "(uri: DocumentUri) => (LeptosContinuation | undefined)"
+  = DocumentUri => Option<TsCont>
 }
 
 #[derive(Clone)]
@@ -464,19 +464,19 @@ pub struct OnSectionTitle(pub OnSectionTitleFn);
 
 /*
 ts_function! {
-  JParaCont ParagraphContinuation @ "(uri: DocumentElementURI,kind:ParagraphKind) => (LeptosContinuation | undefined)"
-  = (DocumentElementURI,ParagraphKind) => Option<TsCont>
+  JParaCont ParagraphContinuation @ "(uri: DocumentElementUri,kind:ParagraphKind) => (LeptosContinuation | undefined)"
+  = (DocumentElementUri,ParagraphKind) => Option<TsCont>
 }
 
 ts_function! {
-  JSectCont SectionContinuationFn @ "(uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined)"
-  = (DocumentElementURI,SectionLevel) => Option<TsCont>
+  JSectCont SectionContinuationFn @ "(uri: DocumentElementUri,lvl:SectionLevel) => (LeptosContinuation | undefined)"
+  = (DocumentElementUri,SectionLevel) => Option<TsCont>
 }
 
 
 ts_function! {
-  JSlideCont SlideContinuation @ "(uri: DocumentElementURI) => (LeptosContinuation | undefined)"
-  = DocumentElementURI => Option<TsCont>
+  JSlideCont SlideContinuation @ "(uri: DocumentElementUri) => (LeptosContinuation | undefined)"
+  = DocumentElementUri => Option<TsCont>
 }
 
 #[derive(Clone)]
@@ -484,7 +484,7 @@ pub struct SectionContinuation(pub SectionContinuationFn);
 
 impl SectionContinuation {
     pub fn wrap<T: IntoView>(
-        args: &(DocumentElementURI, SectionLevel),
+        args: &(DocumentElementUri, SectionLevel),
         children: T,
     ) -> impl IntoView {
         if let Some(slf) = expect_context::<Option<Self>>() {

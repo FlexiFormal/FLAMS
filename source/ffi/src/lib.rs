@@ -1,7 +1,7 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use flams_lsp::state::{DocData, UrlOrFile};
-use flams_ontology::uris::DocumentURI;
+use flams_ontology::uris::DocumentUri;
 use flams_ontology::uris::URIRefTrait;
 use flams_system::backend::archives::source_files::{SourceDir, SourceEntry};
 use flams_system::backend::archives::Archive;
@@ -61,21 +61,26 @@ pub extern "C" fn initialize() {
         });
 }
 
-fn _get_all_files() -> Vec<(Arc<Path>, DocumentURI)> {
-    let mut files: Vec<(Arc<Path>, DocumentURI)> = Vec::new();
+fn _get_all_files() -> Vec<(Arc<Path>, DocumentUri)> {
+    let mut files: Vec<(Arc<Path>, DocumentUri)> = Vec::new();
     for a in GlobalBackend::get().all_archives().iter() {
         if let Archive::Local(a) = a {
             a.with_sources(|d| {
                 for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
                     match e {
                         SourceEntry::File(f) => {
-                            let Ok(uri) = DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path) else { continue};
+                            let Ok(uri) = DocumentUri::from_archive_relpath(
+                                a.uri().owned(),
+                                &f.relative_path,
+                            ) else {
+                                continue;
+                            };
                             files.push((
                                 f.relative_path
                                     .split('/')
                                     .fold(a.source_dir(), |p, s| p.join(s))
                                     .into(),
-                                uri
+                                uri,
                             ));
                         }
                         _ => {}
@@ -110,7 +115,7 @@ pub unsafe extern "C" fn list_of_all_files() -> *const libc::c_char {
         &_get_all_files()
             .into_iter()
             .map(|(p, _)| p.as_ref().to_str().unwrap().to_string())
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
     )
 }
 
@@ -157,7 +162,7 @@ pub unsafe extern "C" fn load_file(path: *const libc::c_char) {
 
     let lspdoc = LSPDocument::new("".to_string(), File(Path::new(path_str).into()));
     let p = Path::new(path_str);
-    let uri: &DocumentURI = lspdoc.document_uri().unwrap();
+    let uri: &DocumentUri = lspdoc.document_uri().unwrap();
     if let Some(ret) = LSPStore::<true>::new(&mut state).load(p.as_ref(), &uri) {
         state.insert(File(p.into()), Data(ret, true));
     }

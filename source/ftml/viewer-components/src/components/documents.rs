@@ -3,7 +3,7 @@ use super::TOCSource;
 use crate::iterate;
 use crate::FTMLDocumentSetup;
 use flams_ontology::uris::NarrativeURI;
-use flams_ontology::uris::{DocumentElementURI, DocumentURI, NameStep};
+use flams_ontology::uris::{DocumentElementUri, DocumentUri, NameStep};
 use flams_web_utils::components::wait_local;
 use flams_web_utils::{do_css, inject_css};
 use leptos::prelude::*;
@@ -12,7 +12,7 @@ use leptos_posthoc::DomStringCont;
 #[cfg(feature = "omdoc")]
 #[component]
 pub fn DocumentFromURI(
-    uri: DocumentURI,
+    uri: DocumentUri,
     #[prop(optional, into)] toc: TOCSource,
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
@@ -34,7 +34,7 @@ pub fn DocumentFromURI(
 }
 
 #[component]
-pub fn FragmentFromURI(uri: DocumentElementURI) -> impl IntoView {
+pub fn FragmentFromURI(uri: DocumentElementUri) -> impl IntoView {
     let uricl = uri.clone();
     wait_local(
         move || {
@@ -55,7 +55,7 @@ pub fn FragmentFromURI(uri: DocumentElementURI) -> impl IntoView {
 #[cfg(not(feature = "omdoc"))]
 #[component]
 pub fn DocumentFromURI(
-    uri: DocumentURI,
+    uri: DocumentUri,
     #[prop(optional, into)] toc: TOCSource,
     #[prop(optional, into)] gottos: Vec<Gotto>,
 ) -> impl IntoView {
@@ -78,7 +78,7 @@ pub fn DocumentFromURI(
 #[component]
 pub fn FragmentString(
     html: String,
-    #[prop(optional)] uri: Option<DocumentElementURI>,
+    #[prop(optional)] uri: Option<DocumentElementUri>,
 ) -> impl IntoView {
     use leptos::context::Provider;
     use leptos::either::EitherOf3;
@@ -89,7 +89,7 @@ pub fn FragmentString(
         .unwrap_or_default();
     let doc = uri
         .as_ref()
-        .map_or_else(DocumentURI::no_doc, |d| d.document().clone());
+        .map_or_else(DocumentUri::no_doc, |d| d.document().clone());
     view! {<FTMLDocumentSetup uri=doc>{
         match name {
             Some(name) if needs_suffix => {
@@ -117,7 +117,7 @@ pub fn FragmentString(
 #[derive(Clone, Debug, Default)]
 pub struct ForcedName(Option<NameStep>);
 impl ForcedName {
-    pub fn update(&self, uri: &DocumentElementURI) -> DocumentElementURI {
+    pub fn update(&self, uri: &DocumentElementUri) -> DocumentElementUri {
         match self.0.as_ref() {
             Some(n) => {
                 let name = uri.name().clone();
@@ -133,13 +133,13 @@ impl ForcedName {
 #[component]
 pub fn DocumentString(
     html: String,
-    #[prop(optional)] uri: Option<DocumentURI>,
+    #[prop(optional)] uri: Option<DocumentUri>,
     #[prop(optional, into)] toc: TOCSource,
     #[prop(optional, into)] gottos: Vec<Gotto>,
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
     use thaw::Flex;
-    let uri = uri.unwrap_or_else(DocumentURI::no_doc);
+    let uri = uri.unwrap_or_else(DocumentUri::no_doc);
     let burger = !matches!(
         (&toc, &omdoc),
         (TOCSource::None, crate::components::omdoc::OMDocSource::None)
@@ -157,12 +157,12 @@ pub fn DocumentString(
 #[component]
 pub fn DocumentString(
     html: String,
-    #[prop(optional)] uri: Option<DocumentURI>,
+    #[prop(optional)] uri: Option<DocumentUri>,
     #[prop(optional, into)] toc: TOCSource,
     #[prop(optional, into)] gottos: Vec<Gotto>,
 ) -> impl IntoView {
     use thaw::Flex;
-    let uri = uri.unwrap_or_else(DocumentURI::no_doc);
+    let uri = uri.unwrap_or_else(DocumentUri::no_doc);
     let burger = !matches!(toc, TOCSource::None);
     view! {<FTMLDocumentSetup uri><Flex>
         <div><DomStringCont html cont=iterate/></div>

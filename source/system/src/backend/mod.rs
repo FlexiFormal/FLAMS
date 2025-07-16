@@ -32,8 +32,8 @@ use flams_ontology::{
         DocumentElement, LazyDocRef, NarrationTrait, NarrativeReference,
     },
     uris::{
-        ArchiveId, ArchiveURI, ArchiveURITrait, BaseURI, ContentURITrait, DocumentElementURI,
-        DocumentURI, ModuleURI, NameStep, PathURIRef, PathURITrait, SymbolURI, URIOrRefTrait,
+        ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, ContentURITrait, DocumentElementUri,
+        DocumentUri, ModuleUri, NameStep, PathURIRef, PathURITrait, SymbolUri, URIOrRefTrait,
         URIRefTrait, URIWithLanguage,
     },
     Checked, DocumentRange, LocalBackend, Unchecked,
@@ -55,11 +55,11 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub enum BackendChange {
-    NewArchive(ArchiveURI),
-    ArchiveUpdate(ArchiveURI),
-    ArchiveDeleted(ArchiveURI),
+    NewArchive(ArchiveUri),
+    ArchiveUpdate(ArchiveUri),
+    ArchiveDeleted(ArchiveUri),
     FileChange {
-        archive: ArchiveURI,
+        archive: ArchiveUri,
         relative_path: String,
         format: SourceFormatId,
         old: Option<FileState>,
@@ -81,10 +81,10 @@ pub trait Backend {
     }
 
     fn to_any(&self) -> AnyBackend;
-    fn get_document(&self, uri: &DocumentURI) -> Option<Document>;
-    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike>;
+    fn get_document(&self, uri: &DocumentUri) -> Option<Document>;
+    fn get_module(&self, uri: &ModuleUri) -> Option<ModuleLike>;
     fn get_base_path(&self, id: &ArchiveId) -> Option<PathBuf>;
-    fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolURI) -> Option<ContentReference<T>>
+    fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolUri) -> Option<ContentReference<T>>
     where
         Self: Sized,
     {
@@ -94,7 +94,7 @@ pub trait Backend {
     }
     fn get_document_element<T: NarrationTrait>(
         &self,
-        uri: &DocumentElementURI,
+        uri: &DocumentElementUri,
     ) -> Option<NarrativeReference<T>>
     where
         Self: Sized,
@@ -111,7 +111,7 @@ pub trait Backend {
     where
         Self: Sized;
 
-    fn uri_of(&self, p: &Path) -> Option<DocumentURI>
+    fn uri_of(&self, p: &Path) -> Option<DocumentUri>
     where
         Self: Sized,
     {
@@ -120,7 +120,7 @@ pub trait Backend {
         #[cfg(not(windows))]
         const PREFIX: &str = "/source/";
         self.archive_of(p, |a: &LocalArchive, rp: &str| {
-            DocumentURI::from_archive_relpath(a.uri().owned(), rp.strip_prefix(PREFIX)?).ok()
+            DocumentUri::from_archive_relpath(a.uri().owned(), rp.strip_prefix(PREFIX)?).ok()
         })
         .flatten()
     }
@@ -169,7 +169,7 @@ pub trait Backend {
 
     fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
     ) where
@@ -179,13 +179,13 @@ pub trait Backend {
     where
         Self: Sized;
 
-    fn get_html_body(&self, d: &DocumentURI, full: bool) -> Option<(Vec<CSS>, String)>;
+    fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)>;
 
-    fn get_html_full(&self, d: &DocumentURI) -> Option<String>;
+    fn get_html_full(&self, d: &DocumentUri) -> Option<String>;
 
     fn get_html_fragment(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)>;
 
@@ -206,7 +206,7 @@ pub trait Backend {
         })
     }
 
-    fn get_notations(&self, uri: &SymbolURI) -> Option<VecSet<(DocumentElementURI, Notation)>>
+    fn get_notations(&self, uri: &SymbolUri) -> Option<VecSet<(DocumentElementUri, Notation)>>
     where
         Self: Sized,
     {
@@ -240,8 +240,8 @@ pub trait Backend {
 
     fn get_var_notations(
         &self,
-        uri: &DocumentElementURI,
-    ) -> Option<VecSet<(DocumentElementURI, Notation)>>
+        uri: &DocumentElementUri,
+    ) -> Option<VecSet<(DocumentElementUri, Notation)>>
     where
         Self: Sized,
     {
@@ -289,7 +289,7 @@ pub trait Backend {
         }
     }
 
-    /*fn get_archive_for_path(p:&Path) -> Option<(ArchiveURI,String)> {
+    /*fn get_archive_for_path(p:&Path) -> Option<(ArchiveUri,String)> {
 
     }*/
 
@@ -386,7 +386,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn get_html_body(&self, d: &DocumentURI, full: bool) -> Option<(Vec<CSS>, String)> {
+    fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)> {
         match self {
             Self::Global(b) => b.get_html_body(d, full),
             Self::Temp(b) => b.get_html_body(d, full),
@@ -395,7 +395,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn get_html_full(&self, d: &DocumentURI) -> Option<String> {
+    fn get_html_full(&self, d: &DocumentUri) -> Option<String> {
         match self {
             Self::Global(b) => b.get_html_full(d),
             Self::Temp(b) => b.get_html_full(d),
@@ -406,7 +406,7 @@ impl Backend for AnyBackend {
     #[inline]
     fn get_html_fragment(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         match self {
@@ -419,7 +419,7 @@ impl Backend for AnyBackend {
     #[inline]
     fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
     ) {
@@ -431,7 +431,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&self, uri: &DocumentUri) -> Option<Document> {
         match self {
             Self::Global(b) => b.get_document(uri),
             Self::Temp(b) => b.get_document(uri),
@@ -440,7 +440,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&self, uri: &ModuleUri) -> Option<ModuleLike> {
         match self {
             Self::Global(b) => b.get_module(uri),
             Self::Temp(b) => b.get_module(uri),
@@ -458,7 +458,7 @@ impl Backend for AnyBackend {
     }
 
     #[inline]
-    fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolURI) -> Option<ContentReference<T>>
+    fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolUri) -> Option<ContentReference<T>>
     where
         Self: Sized,
     {
@@ -563,7 +563,7 @@ impl GlobalBackend {
     pub fn new_archive(
         &self,
         id: &ArchiveId,
-        base_uri: &BaseURI,
+        base_uri: &BaseUri,
         format: &str,
         default_file: &str,
         content: &str,
@@ -614,7 +614,7 @@ impl GlobalBackend {
         Ok(dflt)
     }
 
-    pub fn artifact_path(&self, uri: &DocumentURI, format: &str) -> Option<PathBuf> {
+    pub fn artifact_path(&self, uri: &DocumentUri, format: &str) -> Option<PathBuf> {
         let id = uri.archive_id();
         let language = uri.language();
         let name = uri.name().first_name();
@@ -658,7 +658,7 @@ impl GlobalBackend {
     #[cfg(feature = "tokio")]
     pub async fn get_html_body_async(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         full: bool,
     ) -> Option<(Vec<CSS>, String)> {
         let f = self.manager().with_archive(d.archive_id(), move |a| {
@@ -670,7 +670,7 @@ impl GlobalBackend {
     }
 
     #[cfg(feature = "tokio")]
-    pub async fn get_html_full_async(&self, d: &DocumentURI) -> Option<String> {
+    pub async fn get_html_full_async(&self, d: &DocumentUri) -> Option<String> {
         let f = self.manager().with_archive(d.archive_id(), move |a| {
             a.map(move |a| a.load_html_full_async(d.path(), d.name().first_name(), d.language()))
         })??;
@@ -680,7 +680,7 @@ impl GlobalBackend {
     #[cfg(feature = "tokio")]
     pub async fn get_html_fragment_async(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         let f = self.manager().with_archive(d.archive_id(), move |a| {
@@ -709,7 +709,7 @@ impl GlobalBackend {
     #[cfg(feature = "tokio")]
     #[allow(clippy::similar_names)]
     #[allow(clippy::significant_drop_tightening)]
-    pub async fn get_document_async(&self, uri: &DocumentURI) -> Option<Document> {
+    pub async fn get_document_async(&self, uri: &DocumentUri) -> Option<Document> {
         {
             let lock = self.cache.read();
             if let Some(doc) = lock.has_document(uri) {
@@ -731,7 +731,7 @@ impl GlobalBackend {
     #[cfg(feature = "tokio")]
     #[allow(clippy::similar_names)]
     #[allow(clippy::significant_drop_tightening)]
-    pub async fn get_module_async(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+    pub async fn get_module_async(&self, uri: &ModuleUri) -> Option<ModuleLike> {
         {
             let lock = self.cache.read();
             if uri.name().is_simple() {
@@ -761,7 +761,7 @@ impl GlobalBackend {
     #[cfg(feature = "tokio")]
     pub async fn get_declaration_async<T: DeclarationTrait>(
         &self,
-        uri: &SymbolURI,
+        uri: &SymbolUri,
     ) -> Option<ContentReference<T>> {
         let m = self.get_module_async(uri.module()).await?;
         // TODO this unnecessarily clones
@@ -771,7 +771,7 @@ impl GlobalBackend {
     #[cfg(feature = "tokio")]
     pub async fn get_document_element_async<T: NarrationTrait>(
         &self,
-        uri: &DocumentElementURI,
+        uri: &DocumentElementUri,
     ) -> Option<NarrativeReference<T>> {
         let d = self.get_document_async(uri.document()).await?;
         // TODO this unnecessarily clones
@@ -788,19 +788,19 @@ impl Backend for &'static GlobalBackend {
     }
 
     #[inline]
-    fn get_html_body(&self, d: &DocumentURI, full: bool) -> Option<(Vec<CSS>, String)> {
+    fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)> {
         GlobalBackend::get_html_body(self, d, full)
     }
 
     #[inline]
-    fn get_html_full(&self, d: &DocumentURI) -> Option<String> {
+    fn get_html_full(&self, d: &DocumentUri) -> Option<String> {
         GlobalBackend::get_html_full(self, d)
     }
 
     #[inline]
     fn get_html_fragment(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         GlobalBackend::get_html_fragment(self, d, range)
@@ -814,7 +814,7 @@ impl Backend for &'static GlobalBackend {
     #[inline]
     fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
     ) {
@@ -850,11 +850,11 @@ impl Backend for &'static GlobalBackend {
         GlobalBackend::with_archive_or_group(self, id, f)
     }
     #[inline]
-    fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&self, uri: &DocumentUri) -> Option<Document> {
         GlobalBackend::get_document(self, uri)
     }
     #[inline]
-    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&self, uri: &ModuleUri) -> Option<ModuleLike> {
         GlobalBackend::get_module(self, uri)
     }
     #[inline]
@@ -862,7 +862,7 @@ impl Backend for &'static GlobalBackend {
         GlobalBackend::get_base_path(self, id)
     }
     #[inline]
-    fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolURI) -> Option<ContentReference<T>> {
+    fn get_declaration<T: DeclarationTrait>(&self, uri: &SymbolUri) -> Option<ContentReference<T>> {
         GlobalBackend::get_declaration(self, uri)
     }
 }
@@ -877,7 +877,7 @@ impl Backend for GlobalBackend {
 
     fn get_html_fragment(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         self.archives.with_archive(d.archive_id(), |a| {
@@ -912,14 +912,14 @@ impl Backend for GlobalBackend {
         self.archives.with_tree(|t| f(t.archives.iter()))
     }
 
-    fn get_html_body(&self, d: &DocumentURI, full: bool) -> Option<(Vec<CSS>, String)> {
+    fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)> {
         self.archives.with_archive(d.archive_id(), |a| {
             a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(), full))
         })
     }
 
     #[inline]
-    fn get_html_full(&self, d: &DocumentURI) -> Option<String> {
+    fn get_html_full(&self, d: &DocumentUri) -> Option<String> {
         self.archives.with_archive(d.archive_id(), |a| {
             a.and_then(|a| a.load_html_full(d.path(), d.name().first_name(), d.language()))
         })
@@ -927,7 +927,7 @@ impl Backend for GlobalBackend {
 
     fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
     ) {
@@ -957,7 +957,7 @@ impl Backend for GlobalBackend {
     }
 
     #[allow(clippy::significant_drop_tightening)]
-    fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&self, uri: &DocumentUri) -> Option<Document> {
         {
             let lock = self.cache.read();
             if let Some(doc) = lock.has_document(uri) {
@@ -970,7 +970,7 @@ impl Backend for GlobalBackend {
     }
 
     #[allow(clippy::significant_drop_tightening)]
-    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&self, uri: &ModuleUri) -> Option<ModuleLike> {
         {
             let lock = self.cache.read();
             if uri.name().is_simple() {
@@ -996,9 +996,9 @@ impl Backend for GlobalBackend {
 
 #[derive(Debug)]
 struct TemporaryBackendI {
-    modules: parking_lot::Mutex<HMap<ModuleURI, Module>>,
-    documents: parking_lot::Mutex<HMap<DocumentURI, Document>>,
-    html: parking_lot::Mutex<HMap<DocumentURI, HTMLData>>,
+    modules: parking_lot::Mutex<HMap<ModuleUri, Module>>,
+    documents: parking_lot::Mutex<HMap<DocumentUri, Document>>,
+    html: parking_lot::Mutex<HMap<DocumentUri, HTMLData>>,
     parent: AnyBackend,
 }
 
@@ -1038,7 +1038,7 @@ impl TemporaryBackend {
     pub fn add_document(&self, d: Document) {
         self.inner.documents.lock().insert(d.uri().clone(), d);
     }
-    pub fn add_html(&self, uri: DocumentURI, d: HTMLData) {
+    pub fn add_html(&self, uri: DocumentUri, d: HTMLData) {
         self.inner.html.lock().insert(uri, d);
     }
 }
@@ -1050,7 +1050,7 @@ impl Backend for TemporaryBackend {
     fn to_any(&self) -> AnyBackend {
         AnyBackend::Temp(self.clone())
     }
-    fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&self, uri: &DocumentUri) -> Option<Document> {
         self.inner
             .documents
             .lock()
@@ -1067,7 +1067,7 @@ impl Backend for TemporaryBackend {
         self.inner.parent.with_archives(f)
     }
 
-    fn get_html_body(&self, d: &DocumentURI, full: bool) -> Option<(Vec<CSS>, String)> {
+    fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)> {
         self.inner.html.lock().get(d).map_or_else(
             || self.inner.parent.get_html_body(d, full),
             |html| {
@@ -1084,7 +1084,7 @@ impl Backend for TemporaryBackend {
     }
 
     #[inline]
-    fn get_html_full(&self, d: &DocumentURI) -> Option<String> {
+    fn get_html_full(&self, d: &DocumentUri) -> Option<String> {
         self.inner.html.lock().get(d).map_or_else(
             || self.inner.parent.get_html_full(d),
             |html| Some(html.html.clone()),
@@ -1093,7 +1093,7 @@ impl Backend for TemporaryBackend {
 
     fn get_html_fragment(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         self.inner.html.lock().get(d).map_or_else(
@@ -1120,7 +1120,7 @@ impl Backend for TemporaryBackend {
         Ok(r)
     }
 
-    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&self, uri: &ModuleUri) -> Option<ModuleLike> {
         if uri.name().is_simple() {
             return self
                 .inner
@@ -1169,7 +1169,7 @@ impl Backend for TemporaryBackend {
     #[inline]
     fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
     ) where
@@ -1484,7 +1484,7 @@ impl Backend for SandboxedBackend {
 
     fn get_html_fragment(
         &self,
-        d: &DocumentURI,
+        d: &DocumentUri,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         self.with_archive(d.archive_id(), |a| {
@@ -1521,14 +1521,14 @@ impl Backend for SandboxedBackend {
         })
     }
 
-    fn get_html_body(&self, d: &DocumentURI, full: bool) -> Option<(Vec<CSS>, String)> {
+    fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)> {
         self.with_archive(d.archive_id(), |a| {
             a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(), full))
         })
     }
 
     #[inline]
-    fn get_html_full(&self, d: &DocumentURI) -> Option<String> {
+    fn get_html_full(&self, d: &DocumentUri) -> Option<String> {
         self.with_archive(d.archive_id(), |a| {
             a.and_then(|a| a.load_html_full(d.path(), d.name().first_name(), d.language()))
         })
@@ -1536,7 +1536,7 @@ impl Backend for SandboxedBackend {
 
     fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
     ) {
@@ -1586,7 +1586,7 @@ impl Backend for SandboxedBackend {
         self.with_local_archive(id, |a| a.map(|a| a.path().to_path_buf()))
     }
 
-    fn get_document(&self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&self, uri: &DocumentUri) -> Option<Document> {
         let id = uri.archive_id();
         if self.0.manager.with_archive(id, |a| a.is_none()) {
             return GlobalBackend::get().get_document(uri);
@@ -1606,7 +1606,7 @@ impl Backend for SandboxedBackend {
     }
 
     #[allow(clippy::significant_drop_tightening)]
-    fn get_module(&self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&self, uri: &ModuleUri) -> Option<ModuleLike> {
         let id = uri.archive_id();
         if self.0.manager.with_archive(id, |a| a.is_none()) {
             return GlobalBackend::get().get_module(uri);
@@ -1639,18 +1639,18 @@ pub struct AsChecker<'a, B: Backend>(&'a B);
 
 impl<B: Backend> LocalBackend for AsChecker<'_, B> {
     #[inline]
-    fn get_document(&mut self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&mut self, uri: &DocumentUri) -> Option<Document> {
         self.0.get_document(uri)
     }
     #[inline]
     fn get_declaration<T: DeclarationTrait>(
         &mut self,
-        uri: &SymbolURI,
+        uri: &SymbolUri,
     ) -> Option<ContentReference<T>> {
         self.0.get_declaration(uri)
     }
     #[inline]
-    fn get_module(&mut self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&mut self, uri: &ModuleUri) -> Option<ModuleLike> {
         self.0.get_module(uri)
     }
 }
@@ -1695,7 +1695,7 @@ impl GlobalFlattener<'_> {
 
 impl LocalBackend for GlobalFlattener<'_> {
     #[allow(clippy::option_if_let_else)]
-    fn get_document(&mut self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&mut self, uri: &DocumentUri) -> Option<Document> {
         if let Some(doc) = self.0.has_document(uri) {
             Some(doc.clone())
         } else {
@@ -1703,7 +1703,7 @@ impl LocalBackend for GlobalFlattener<'_> {
         }
     }
 
-    fn get_module(&mut self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&mut self, uri: &ModuleUri) -> Option<ModuleLike> {
         if uri.name().is_simple() {
             if let Some(m) = self.0.has_module(uri) {
                 return Some(ModuleLike::Module(m.clone()));
@@ -1721,7 +1721,7 @@ impl LocalBackend for GlobalFlattener<'_> {
 
     fn get_declaration<T: DeclarationTrait>(
         &mut self,
-        uri: &SymbolURI,
+        uri: &SymbolUri,
     ) -> Option<flams_ontology::content::ContentReference<T>> {
         let m = self.get_module(uri.module())?;
         // TODO this unnecessarily clones
@@ -1779,7 +1779,7 @@ impl SandboxFlattener<'_> {
 
 impl LocalBackend for SandboxFlattener<'_> {
     #[allow(clippy::option_if_let_else)]
-    fn get_document(&mut self, uri: &DocumentURI) -> Option<Document> {
+    fn get_document(&mut self, uri: &DocumentUri) -> Option<Document> {
         if let Some(doc) = self.0.has_document(uri) {
             Some(doc.clone())
         } else {
@@ -1787,7 +1787,7 @@ impl LocalBackend for SandboxFlattener<'_> {
         }
     }
 
-    fn get_module(&mut self, uri: &ModuleURI) -> Option<ModuleLike> {
+    fn get_module(&mut self, uri: &ModuleUri) -> Option<ModuleLike> {
         if uri.name().is_simple() {
             if let Some(m) = self.0.has_module(uri) {
                 return Some(ModuleLike::Module(m.clone()));
@@ -1805,7 +1805,7 @@ impl LocalBackend for SandboxFlattener<'_> {
 
     fn get_declaration<T: DeclarationTrait>(
         &mut self,
-        uri: &SymbolURI,
+        uri: &SymbolUri,
     ) -> Option<flams_ontology::content::ContentReference<T>> {
         let m = self.get_module(uri.module())?;
         // TODO this unnecessarily clones
@@ -1831,10 +1831,10 @@ pub struct TermPresenter<'a, W: std::fmt::Write, B: Backend> {
     out: W,
     backend: &'a B,
     in_text: bool,
-    cache: VecMap<SymbolURI, Option<Rc<Notation>>>,
-    op_cache: VecMap<SymbolURI, Option<Rc<Notation>>>,
-    var_cache: VecMap<DocumentElementURI, Option<Rc<Notation>>>,
-    var_op_cache: VecMap<DocumentElementURI, Option<Rc<Notation>>>,
+    cache: VecMap<SymbolUri, Option<Rc<Notation>>>,
+    op_cache: VecMap<SymbolUri, Option<Rc<Notation>>>,
+    var_cache: VecMap<DocumentElementUri, Option<Rc<Notation>>>,
+    var_op_cache: VecMap<DocumentElementUri, Option<Rc<Notation>>>,
 }
 impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
     #[inline]
@@ -1859,7 +1859,7 @@ impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
         self.backend
     }
 
-    fn load_notation(backend: &B, uri: &SymbolURI, needs_op: bool) -> Option<Notation> {
+    fn load_notation(backend: &B, uri: &SymbolUri, needs_op: bool) -> Option<Notation> {
         use flams_ontology::rdf::ontologies::ulo2;
         use rdf::sparql::{Select, Var};
         let iri = uri.to_iri();
@@ -1886,7 +1886,7 @@ impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
 
     fn load_var_notation(
         backend: &B,
-        uri: &DocumentElementURI,
+        uri: &DocumentElementUri,
         needs_op: bool,
     ) -> Option<Notation> {
         let parent = uri.parent();
@@ -1947,7 +1947,7 @@ impl<W: std::fmt::Write, B: Backend> Presenter for TermPresenter<'_, W, B> {
         self.in_text
     }
 
-    fn get_notation(&mut self, uri: &SymbolURI) -> Option<Self::N> {
+    fn get_notation(&mut self, uri: &SymbolUri) -> Option<Self::N> {
         //println!("Getting notation for {uri:?}");
         if let Some(n) = self.cache.get(uri) {
             //println!("Returning from cache {n:?}");
@@ -1964,7 +1964,7 @@ impl<W: std::fmt::Write, B: Backend> Presenter for TermPresenter<'_, W, B> {
         r
     }
 
-    fn get_op_notation(&mut self, uri: &SymbolURI) -> Option<Self::N> {
+    fn get_op_notation(&mut self, uri: &SymbolUri) -> Option<Self::N> {
         //println!("Getting op notation for {uri:?}");
         if let Some(n) = self.op_cache.get(uri) {
             //println!("Returning from cache {n:?}");
@@ -1980,7 +1980,7 @@ impl<W: std::fmt::Write, B: Backend> Presenter for TermPresenter<'_, W, B> {
     }
 
     #[inline]
-    fn get_variable_notation(&mut self, uri: &DocumentElementURI) -> Option<Self::N> {
+    fn get_variable_notation(&mut self, uri: &DocumentElementUri) -> Option<Self::N> {
         if let Some(n) = self.var_cache.get(uri) {
             return n.clone();
         };
@@ -1994,7 +1994,7 @@ impl<W: std::fmt::Write, B: Backend> Presenter for TermPresenter<'_, W, B> {
         r
     }
     #[inline]
-    fn get_variable_op_notation(&mut self, uri: &DocumentElementURI) -> Option<Self::N> {
+    fn get_variable_op_notation(&mut self, uri: &DocumentElementUri) -> Option<Self::N> {
         if let Some(n) = self.var_op_cache.get(uri) {
             return n.clone();
         };

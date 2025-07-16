@@ -5,7 +5,7 @@ use flams_utils::vecmap::VecMap;
 use crate::{
     content::terms::Term,
     ftml::FTMLKey,
-    uris::{DocumentElementURI, Name, SymbolURI},
+    uris::{DocumentElementUri, Name, SymbolUri},
     Checked, CheckingState, DocumentRange,
 };
 
@@ -24,13 +24,13 @@ pub enum ParagraphFormatting {
 #[derive(Debug)]
 pub struct LogicalParagraph<State: CheckingState> {
     pub kind: ParagraphKind,
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub formatting: ParagraphFormatting,
     pub title: Option<DocumentRange>,
     pub range: DocumentRange,
     pub styles: Box<[Name]>,
     pub children: State::Seq<DocumentElement<State>>,
-    pub fors: VecMap<SymbolURI, Option<Term>>,
+    pub fors: VecMap<SymbolUri, Option<Term>>,
 }
 
 crate::serde_impl! {

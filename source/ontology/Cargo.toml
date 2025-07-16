@@ -12,12 +12,20 @@ serde_json = { workspace = true }
 [features]
 rdf = ["dep:oxrdf"]
 tokio = ["dep:tokio"]
-serde = ["dep:serde", "flams-utils/serde", "smallvec/serde"]
-wasm = ["serde", "dep:wasm-bindgen", "dep:tsify-next", "dep:serde_json"]
-tantivy = ["dep:tantivy", "dep:html2text", "dep:tracing"]
+serde = ["dep:serde", "flams-utils/serde", "smallvec/serde", "ftml-uris/serde"]
+wasm = [
+    "serde",
+    "dep:wasm-bindgen",
+    "dep:tsify-next",
+    "dep:serde_json",
+    "ftml-uris/typescript",
+]
+tantivy = ["dep:tantivy", "dep:html2text", "dep:tracing", "ftml-uris/tantivy"]
 
 [dependencies]
 flams-utils = { workspace = true }
+
+ftml-uris = { workspace = true, features = ["interned"] }
 
 oxrdf = { workspace = true, optional = true }
 lazy_static = { workspace = true }

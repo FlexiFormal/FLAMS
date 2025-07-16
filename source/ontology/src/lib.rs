@@ -22,7 +22,7 @@ use content::{
 use flams_utils::sourcerefs::{ByteOffset, SourceRange};
 use languages::Language;
 use narration::documents::Document;
-use uris::{DocumentElementURI, DocumentURI, ModuleURI, SymbolURI};
+use uris::{DocumentElementUri, DocumentUri, ModuleUri, SymbolUri};
 
 pub mod content;
 pub mod file_states;
@@ -35,7 +35,10 @@ pub mod ftml;
 #[cfg(feature = "rdf")]
 pub mod rdf;
 pub mod search;
-pub mod uris;
+//pub mod uris;
+pub mod uris {
+    pub use ftml_uris::*;
+}
 
 mod sealed {
     pub trait Sealed {}
@@ -46,7 +49,7 @@ pub trait CheckingState: sealed::Sealed + std::fmt::Debug {
     type ModuleLike: std::fmt::Debug;
     type Module: std::fmt::Debug;
     type Seq<A: std::fmt::Debug>: std::fmt::Debug;
-    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>>: std::fmt::Debug;
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolUri>>: std::fmt::Debug;
     type Doc: std::fmt::Debug;
     type Sig: std::fmt::Debug;
 }
@@ -56,7 +59,7 @@ pub trait CheckingState: sealed::Sealed + std::fmt::Debug {
     type ModuleLike: std::fmt::Debug + serde::Serialize;
     type Module: std::fmt::Debug + serde::Serialize;
     type Seq<A: std::fmt::Debug + serde::Serialize>: std::fmt::Debug + serde::Serialize;
-    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>>: std::fmt::Debug
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolUri>>: std::fmt::Debug
         + serde::Serialize;
     type Doc: std::fmt::Debug + serde::Serialize;
     type Sig: std::fmt::Debug + serde::Serialize;
@@ -67,14 +70,14 @@ pub trait CheckingState: sealed::Sealed + std::fmt::Debug {
 pub struct Unchecked;
 impl sealed::Sealed for Unchecked {}
 impl CheckingState for Unchecked {
-    type ModuleLike = ModuleURI;
-    type Module = ModuleURI;
-    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>> = SymbolURI;
+    type ModuleLike = ModuleUri;
+    type Module = ModuleUri;
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolUri>> = SymbolUri;
     #[cfg(feature = "serde")]
     type Seq<A: std::fmt::Debug + serde::Serialize> = Vec<A>;
     #[cfg(not(feature = "serde"))]
     type Seq<A: std::fmt::Debug> = Vec<A>;
-    type Doc = DocumentURI;
+    type Doc = DocumentUri;
     type Sig = Language;
 }
 #[derive(Debug, Copy, Clone)]
@@ -84,7 +87,7 @@ impl sealed::Sealed for Checked {}
 impl CheckingState for Checked {
     type ModuleLike = MaybeResolved<ModuleLike>;
     type Module = MaybeResolved<Module>;
-    type Decl<D: DeclarationTrait + Resolvable<From = SymbolURI>> =
+    type Decl<D: DeclarationTrait + Resolvable<From = SymbolUri>> =
         MaybeResolved<ContentReference<D>>;
     #[cfg(feature = "serde")]
     type Seq<A: std::fmt::Debug + serde::Serialize> = Box<[A]>;
@@ -228,36 +231,36 @@ impl From<std::io::Error> for DecodeError {
 pub mod metatheory {
     use crate::{
         languages::Language,
-        uris::{BaseURI, DocumentURI, ModuleURI, SymbolURI},
+        uris::{BaseUri, DocumentUri, ModuleUri, SymbolUri},
     };
     use lazy_static::lazy_static;
     lazy_static! {
-        pub static ref DOC_URI: DocumentURI = ((BaseURI::new_unchecked("https://mathhub.info")
+        pub static ref DOC_URI: DocumentUri = ((BaseUri::new_unchecked("https://mathhub.info")
             & "FTML/meta")
             & ("Metatheory", Language::English))
             .unwrap_or_else(|_| unreachable!());
-        pub static ref URI: ModuleURI =
-            ((BaseURI::new_unchecked("https://mathhub.info") & "FTML/meta") | "Metatheory")
+        pub static ref URI: ModuleUri =
+            ((BaseUri::new_unchecked("https://mathhub.info") & "FTML/meta") | "Metatheory")
                 .unwrap_or_else(|_| unreachable!());
-        pub static ref FIELD_PROJECTION: SymbolURI =
+        pub static ref FIELD_PROJECTION: SymbolUri =
             (URI.clone() | "record field").unwrap_or_else(|_| unreachable!());
-        pub static ref OF_TYPE: SymbolURI =
+        pub static ref OF_TYPE: SymbolUri =
             (URI.clone() | "of type").unwrap_or_else(|_| unreachable!());
-        pub static ref SEQUENCE_EXPRESSION: SymbolURI =
+        pub static ref SEQUENCE_EXPRESSION: SymbolUri =
             (URI.clone() | "sequence expression").unwrap_or_else(|_| unreachable!());
-        pub(crate) static ref NOTATION_DUMMY: SymbolURI =
+        pub(crate) static ref NOTATION_DUMMY: SymbolUri =
             (URI.clone() | "notation dummy").unwrap_or_else(|_| unreachable!());
     }
 }
 
 pub trait LocalBackend {
-    fn get_document(&mut self, uri: &DocumentURI) -> Option<Document>;
+    fn get_document(&mut self, uri: &DocumentUri) -> Option<Document>;
 
-    fn get_module(&mut self, uri: &ModuleURI) -> Option<ModuleLike>;
+    fn get_module(&mut self, uri: &ModuleUri) -> Option<ModuleLike>;
 
     fn get_declaration<T: DeclarationTrait>(
         &mut self,
-        uri: &SymbolURI,
+        uri: &SymbolUri,
     ) -> Option<ContentReference<T>>;
 }
 
@@ -277,17 +280,17 @@ impl Resourcable for Box<str> {}
 pub enum SlideElement {
     Slide {
         html: String,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
     },
     Paragraph {
         html: String,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
     },
     Inputref {
-        uri: DocumentURI,
+        uri: DocumentUri,
     },
     Section {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         title: Option<String>,
         children: Vec<SlideElement>,
     },

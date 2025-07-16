@@ -1,20 +1,21 @@
 use crate::{
-    content::ModuleTrait, uris::{ContentURIRef, SymbolURI}, Checked, CheckingState, Resolvable
+    content::ModuleTrait,
+    uris::{DomainUriRef, SymbolUri},
+    Checked, CheckingState, Resolvable,
 };
 
 use super::{Declaration, DeclarationTrait, OpenDeclaration};
 
-
 #[derive(Debug)]
 //#[cfg_attr(feature="serde", derive(serde::Serialize))]
-pub struct MathStructure<State:CheckingState> {
-    pub uri: SymbolURI,
+pub struct MathStructure<State: CheckingState> {
+    pub uri: SymbolUri,
     pub elements: State::Seq<OpenDeclaration<State>>,
     pub macroname: Option<Box<str>>,
 }
 impl Resolvable for MathStructure<Checked> {
-    type From = SymbolURI;
-    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+    type From = SymbolUri;
+    fn id(&self) -> std::borrow::Cow<'_, Self::From> {
         std::borrow::Cow::Borrowed(&self.uri)
     }
 }
@@ -34,21 +35,20 @@ impl ModuleTrait for MathStructure<Checked> {
         &self.elements
     }
     #[inline]
-    fn content_uri(&self) -> ContentURIRef {
-        ContentURIRef::Symbol(&self.uri)
+    fn content_uri(&self) -> DomainUriRef {
+        DomainUriRef::Symbol(&self.uri)
     }
 }
 
-
 #[derive(Debug)]
-pub struct Extension<State:CheckingState> {
-    pub uri: SymbolURI,
+pub struct Extension<State: CheckingState> {
+    pub uri: SymbolUri,
     pub target: State::Decl<MathStructure<Checked>>,
     pub elements: State::Seq<OpenDeclaration<State>>,
 }
 impl Resolvable for Extension<Checked> {
-    type From = SymbolURI;
-    fn id(&self) -> std::borrow::Cow<'_,Self::From> {
+    type From = SymbolUri;
+    fn id(&self) -> std::borrow::Cow<'_, Self::From> {
         std::borrow::Cow::Borrowed(&self.uri)
     }
 }
@@ -68,15 +68,15 @@ impl ModuleTrait for Extension<Checked> {
         &self.elements
     }
     #[inline]
-    fn content_uri(&self) -> ContentURIRef {
-        ContentURIRef::Symbol(&self.uri)
+    fn content_uri(&self) -> DomainUriRef {
+        DomainUriRef::Symbol(&self.uri)
     }
 }
 
-crate::serde_impl!{mod serde_impl_struct =
+crate::serde_impl! {mod serde_impl_struct =
     struct MathStructure[uri,elements,macroname]
 }
-crate::serde_impl!{mod serde_impl_ext =
+crate::serde_impl! {mod serde_impl_ext =
     struct Extension[uri,target,elements]
 }
 
@@ -89,7 +89,7 @@ crate::serde_impl!{
         s.serialize_field("elements", &slf.elements);
         s.serialize_field("macroname", &slf.macroname);
         s.end()
-    } 
+    }
     de => {
         #[derive(serde::Deserialize)]
         #[allow(non_camel_case_types)]

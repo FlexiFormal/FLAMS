@@ -4,16 +4,16 @@
  *
  * | Type  |     | Cases/Def | Trait | Reference |
  * |----------- |---- | -----|-------|---------|
- * | [URI]      | ::= | [BaseURI]⏐[ArchiveURI]⏐[PathURI]⏐[ContentURI]⏐[NarrativeURI] | [URITrait] | [URIRef] |
- * | [BaseURI]  | ::= | (URL with no query/fragment) | - | `&`[BaseURI] |
- * | [ArchiveURI] | ::= | [BaseURI]`?a=`[ArchiveId] | [ArchiveURITrait] | [ArchiveURIRef] |
- * | [PathURI]  | ::= | [ArchiveURI]`[&p=`[Name]`]` | [PathURITrait] | [PathURIRef] |
- * | [ContentURI] | ::= | [ModuleURI]⏐[SymbolURI]   | [ContentURITrait] | [ContentURIRef] |
- * | [NarrativeURI] | ::= | [DocumentURI]⏐[DocumentElementURI] | [NarrativeURITrait] | [NarrativeURIRef] |
- * | [ModuleURI] | ::= | [PathURI]`&m=`[Name]`&l=`[Language] | - | `&`[ModuleURI] |
- * | [SymbolURI] | ::= | [ModuleURI]`&s=`[Name] | - | `&`[SymbolURI] |
- * | [DocumentURI] | ::= | [PathURI]`&d=`[Name]`&l=`[Language] | - | `&`[DocumentURI] |
- * | [DocumentElementURI] | ::= | [DocumentURI]`&e=`[Name] | - | `&`[DocumentElementURI] |
+ * | [URI]      | ::= | [BaseUri]⏐[ArchiveUri]⏐[PathURI]⏐[ContentURI]⏐[NarrativeURI] | [URITrait] | [URIRef] |
+ * | [BaseUri]  | ::= | (URL with no query/fragment) | - | `&`[BaseUri] |
+ * | [ArchiveUri] | ::= | [BaseUri]`?a=`[ArchiveId] | [ArchiveUriTrait] | [ArchiveUriRef] |
+ * | [PathURI]  | ::= | [ArchiveUri]`[&p=`[Name]`]` | [PathURITrait] | [PathURIRef] |
+ * | [ContentURI] | ::= | [ModuleUri]⏐[SymbolUri]   | [ContentURITrait] | [ContentURIRef] |
+ * | [NarrativeURI] | ::= | [DocumentUri]⏐[DocumentElementUri] | [NarrativeURITrait] | [NarrativeURIRef] |
+ * | [ModuleUri] | ::= | [PathURI]`&m=`[Name]`&l=`[Language] | - | `&`[ModuleUri] |
+ * | [SymbolUri] | ::= | [ModuleUri]`&s=`[Name] | - | `&`[SymbolUri] |
+ * | [DocumentUri] | ::= | [PathURI]`&d=`[Name]`&l=`[Language] | - | `&`[DocumentUri] |
+ * | [DocumentElementUri] | ::= | [DocumentUri]`&e=`[Name] | - | `&`[DocumentElementUri] |
 */
 
 #![allow(unused_macros)]
@@ -29,17 +29,17 @@ mod narrative;
 mod paths;
 pub mod terms;
 
-pub use archives::{ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait};
-pub use base::BaseURI;
+pub use archives::{ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait};
+pub use base::BaseUri;
 pub use content::{
-    modules::{ModuleURI, ModuleURIRef},
-    symbols::{SymbolURI, SymbolURIRef},
+    modules::{ModuleUri, ModuleUriRef},
+    symbols::{SymbolUri, SymbolUriRef},
     ContentURI, ContentURIRef, ContentURITrait,
 };
 pub use errors::URIParseError;
 pub use name::{InvalidURICharacter, Name, NameStep};
 pub use narrative::{
-    document_elements::DocumentElementURI, documents::DocumentURI, NarrativeURI, NarrativeURIRef,
+    document_elements::DocumentElementUri, documents::DocumentUri, NarrativeURI, NarrativeURIRef,
     NarrativeURITrait,
 };
 pub use paths::{PathURI, PathURIRef, PathURITrait};
@@ -119,7 +119,7 @@ macro_rules! common {
             crate::rdf::NamedNode::new(flams_utils::escaping::IRI_ESCAPE.escape(self).to_string())
                 .unwrap_or_else(|_| unreachable!())
         }
-        fn base(&self) -> &BaseURI;
+        fn base(&self) -> &BaseUri;
         fn as_uri(&self) -> URIRef;
     };
 }
@@ -166,7 +166,7 @@ impl<'a, A: URITrait<Ref<'a> = &'a A> + URIWithLanguage> URIWithLanguage for &'a
 impl<U: URITrait> sealed::Sealed for &U {}
 impl<U: URITrait> URIOrRefTrait for &U {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         (*self).base()
     }
     #[inline]
@@ -177,32 +177,32 @@ impl<U: URITrait> URIOrRefTrait for &U {
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum URI {
-    Base(BaseURI),
-    Archive(ArchiveURI),
+    Base(BaseUri),
+    Archive(ArchiveUri),
     Path(PathURI),
     Content(ContentURI),
     Narrative(NarrativeURI),
 }
 impl sealed::Sealed for URI {}
-impl sealed::Sealed for BaseURI {}
-impl sealed::Sealed for ArchiveURI {}
+impl sealed::Sealed for BaseUri {}
+impl sealed::Sealed for ArchiveUri {}
 impl sealed::Sealed for PathURI {}
 impl sealed::Sealed for ContentURI {}
-impl sealed::Sealed for ModuleURI {}
-impl sealed::Sealed for SymbolURI {}
+impl sealed::Sealed for ModuleUri {}
+impl sealed::Sealed for SymbolUri {}
 impl sealed::Sealed for NarrativeURI {}
-impl sealed::Sealed for DocumentURI {}
-impl sealed::Sealed for DocumentElementURI {}
+impl sealed::Sealed for DocumentUri {}
+impl sealed::Sealed for DocumentElementUri {}
 
-impl From<BaseURI> for URI {
+impl From<BaseUri> for URI {
     #[inline]
-    fn from(b: BaseURI) -> Self {
+    fn from(b: BaseUri) -> Self {
         Self::Base(b)
     }
 }
-impl From<ArchiveURI> for URI {
+impl From<ArchiveUri> for URI {
     #[inline]
-    fn from(b: ArchiveURI) -> Self {
+    fn from(b: ArchiveUri) -> Self {
         Self::Archive(b)
     }
 }
@@ -227,28 +227,28 @@ impl From<NarrativeURI> for URI {
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum URIRef<'a> {
-    Base(&'a BaseURI),
-    Archive(ArchiveURIRef<'a>),
+    Base(&'a BaseUri),
+    Archive(ArchiveUriRef<'a>),
     Path(PathURIRef<'a>),
     Content(ContentURIRef<'a>),
     Narrative(NarrativeURIRef<'a>),
 }
-impl sealed::Sealed for ArchiveURIRef<'_> {}
+impl sealed::Sealed for ArchiveUriRef<'_> {}
 impl sealed::Sealed for PathURIRef<'_> {}
-//impl sealed::Sealed for ModuleURIRef<'_> {}
-//impl sealed::Sealed for SymbolURIRef<'_> {}
+//impl sealed::Sealed for ModuleUriRef<'_> {}
+//impl sealed::Sealed for SymbolUriRef<'_> {}
 impl sealed::Sealed for URIRef<'_> {}
 impl sealed::Sealed for ContentURIRef<'_> {}
 impl sealed::Sealed for NarrativeURIRef<'_> {}
-impl<'a> From<&'a BaseURI> for URIRef<'a> {
+impl<'a> From<&'a BaseUri> for URIRef<'a> {
     #[inline]
-    fn from(b: &'a BaseURI) -> Self {
+    fn from(b: &'a BaseUri) -> Self {
         Self::Base(b)
     }
 }
-impl<'a> From<&'a ArchiveURI> for URIRef<'a> {
+impl<'a> From<&'a ArchiveUri> for URIRef<'a> {
     #[inline]
-    fn from(b: &'a ArchiveURI) -> Self {
+    fn from(b: &'a ArchiveUri) -> Self {
         Self::Archive(b.archive_uri())
     }
 }
@@ -258,9 +258,9 @@ impl<'a> From<PathURIRef<'a>> for URIRef<'a> {
         Self::Path(b)
     }
 }
-impl<'a> From<ArchiveURIRef<'a>> for URIRef<'a> {
+impl<'a> From<ArchiveUriRef<'a>> for URIRef<'a> {
     #[inline]
-    fn from(b: ArchiveURIRef<'a>) -> Self {
+    fn from(b: ArchiveUriRef<'a>) -> Self {
         Self::Archive(b)
     }
 }
@@ -304,7 +304,7 @@ debugdisplay!(URIRef<'_>);
 
 impl URIOrRefTrait for URIRef<'_> {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         inherit!(self = b => b.base())
     }
     fn as_uri(&self) -> URIRef {
@@ -321,7 +321,7 @@ impl URI {
     ) -> Result<ContentURI, URIParseError> {
         let name = move || module.parse();
         let module = move || {
-            Ok::<_, URIParseError>(ModuleURI {
+            Ok::<_, URIParseError>(ModuleUri {
                 path: path()?,
                 name: name()?,
             })
@@ -329,7 +329,7 @@ impl URI {
         let Some(next) = split.next() else {
             return Ok(ContentURI::Module(module()?));
         };
-        next.strip_prefix(concatcp!(SymbolURI::SEPARATOR, "="))
+        next.strip_prefix(concatcp!(SymbolUri::SEPARATOR, "="))
             .map_or_else(
                 || {
                     Err(URIParseError::UnrecognizedPart {
@@ -343,7 +343,7 @@ impl URI {
                             original: s.to_string(),
                         })
                     } else {
-                        Ok(ContentURI::Symbol(SymbolURI {
+                        Ok(ContentURI::Symbol(SymbolUri {
                             module: module()?,
                             name: symbol.parse()?,
                         }))
@@ -360,7 +360,7 @@ impl URI {
     ) -> Result<NarrativeURI, URIParseError> {
         let name = move || document.parse();
         let document = move || {
-            Ok::<_, URIParseError>(DocumentURI {
+            Ok::<_, URIParseError>(DocumentUri {
                 path: path()?,
                 name: name()?,
                 language,
@@ -369,7 +369,7 @@ impl URI {
         let Some(next) = next else {
             return Ok(NarrativeURI::Document(document()?));
         };
-        next.strip_prefix(concatcp!(DocumentElementURI::SEPARATOR, "="))
+        next.strip_prefix(concatcp!(DocumentElementUri::SEPARATOR, "="))
             .map_or_else(
                 || {
                     Err(URIParseError::UnrecognizedPart {
@@ -383,7 +383,7 @@ impl URI {
                             original: s.to_string(),
                         })
                     } else {
-                        Ok(NarrativeURI::Element(DocumentElementURI {
+                        Ok(NarrativeURI::Element(DocumentElementUri {
                             document: document()?,
                             name: element.parse()?,
                         }))
@@ -396,14 +396,14 @@ impl URI {
 impl FromStr for URI {
     type Err = URIParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (base, mut split) = match BaseURI::pre_parse(s)? {
+        let (base, mut split) = match BaseUri::pre_parse(s)? {
             Either::Left(base) => return Ok(Self::Base(base)),
             Either::Right(c) => c,
         };
         let Some(next) = split.next() else {
             unreachable!()
         };
-        next.strip_prefix(concatcp!(ArchiveURI::SEPARATOR, "="))
+        next.strip_prefix(concatcp!(ArchiveUri::SEPARATOR, "="))
             .map_or_else(
                 || {
                     Err(URIParseError::UnrecognizedPart {
@@ -411,7 +411,7 @@ impl FromStr for URI {
                     })
                 },
                 |archive| {
-                    let archive = move || ArchiveURI {
+                    let archive = move || ArchiveUri {
                         base,
                         archive: archive.parse().unwrap_or_else(|_| unreachable!()),
                     };
@@ -464,10 +464,10 @@ impl FromStr for URI {
                             },
                         )
                     };
-                    if let Some(module) = next.strip_prefix(concatcp!(ModuleURI::SEPARATOR, "=")) {
+                    if let Some(module) = next.strip_prefix(concatcp!(ModuleUri::SEPARATOR, "=")) {
                         Ok(Self::Content(Self::parse_content(s, module, path, split)?))
                     } else if let Some(document) =
-                        next.strip_prefix(concatcp!(DocumentURI::SEPARATOR, "="))
+                        next.strip_prefix(concatcp!(DocumentUri::SEPARATOR, "="))
                     {
                         Ok(Self::Narrative(Self::parse_narrative(
                             s,
@@ -487,7 +487,7 @@ impl FromStr for URI {
 }
 impl URIOrRefTrait for URI {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         inherit!(self = b => b.base())
     }
     fn as_uri(&self) -> URIRef {

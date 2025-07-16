@@ -9,7 +9,7 @@ pub mod vscode;
 
 use flams_ontology::{
     search::{QueryFilter, SearchResult},
-    uris::SymbolURI,
+    uris::SymbolUri,
 };
 use flams_utils::vecmap::VecMap;
 use leptos::prelude::*;
@@ -35,7 +35,7 @@ pub async fn search_query(
 pub async fn search_symbols(
     query: String,
     num_results: usize,
-) -> Result<VecMap<SymbolURI, Vec<(f32, SearchResult)>>, ServerFnError<String>> {
+) -> Result<VecMap<SymbolUri, Vec<(f32, SearchResult)>>, ServerFnError<String>> {
     use flams_system::search::Searcher;
     tokio::task::spawn_blocking(move || {
         Searcher::get()

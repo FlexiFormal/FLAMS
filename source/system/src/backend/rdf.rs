@@ -4,7 +4,7 @@ use flams_ontology::narration::LOKind;
 use flams_ontology::rdf::ontologies::ulo2;
 use flams_ontology::rdf::{NamedNode, Quad, Triple};
 use flams_ontology::uris::{
-    ArchiveURIRef, DocumentElementURI, DocumentURI, PathURITrait, SymbolURI, URIOrRefTrait,
+    ArchiveUriRef, DocumentElementUri, DocumentUri, PathURITrait, SymbolUri, URIOrRefTrait,
     URIRefTrait, URITrait,
 };
 use oxigraph::sparql::QuerySolutionIter;
@@ -20,7 +20,7 @@ use tracing::instrument;
 pub mod sparql {
     use flams_ontology::{
         rdf::ontologies::{self, ulo2},
-        uris::{SymbolURI, URIOrRefTrait},
+        uris::{SymbolUri, URIOrRefTrait},
     };
     pub use oxigraph::sparql::*;
     pub use spargebra::{
@@ -69,7 +69,7 @@ pub mod sparql {
     }
 
     #[must_use]
-    pub fn lo_query(s: &SymbolURI, problems: bool) -> Query {
+    pub fn lo_query(s: &SymbolUri, problems: bool) -> Query {
         /*
         SELECT DISTINCT ?x ?R ?t ?s WHERE {
           {
@@ -290,7 +290,7 @@ pub struct LOIter {
     inner: QuerySolutionIter,
 }
 impl Iterator for LOIter {
-    type Item = (DocumentElementURI, LOKind);
+    type Item = (DocumentElementUri, LOKind);
     fn next(&mut self) -> Option<Self::Item> {
         use flams_ontology::rdf::RDFTerm;
         loop {
@@ -378,7 +378,7 @@ impl RDFStore {
     }
 
     #[must_use]
-    pub fn los(&self, s: &SymbolURI, problems: bool) -> Option<LOIter> {
+    pub fn los(&self, s: &SymbolUri, problems: bool) -> Option<LOIter> {
         let q = sparql::lo_query(s, problems);
         self.query(q).ok().and_then(|s| {
             if let QueryResults::Solutions(s) = s.0 {
@@ -389,7 +389,7 @@ impl RDFStore {
         })
     }
 
-    pub fn export(&self, iter: impl Iterator<Item = Triple>, p: &Path, uri: &DocumentURI) {
+    pub fn export(&self, iter: impl Iterator<Item = Triple>, p: &Path, uri: &DocumentUri) {
         if let Ok(file) = std::fs::File::create(p) {
             let writer = BufWriter::new(file);
             let iri = uri.as_path().to_iri();
@@ -480,7 +480,7 @@ impl RDFStore {
         tracing::info!(target:"relational","Loaded {} relations", self.store.len().unwrap_or_default() - old);
     }
 
-    fn get_iri(a: ArchiveURIRef, out: &Path, e: &walkdir::DirEntry) -> Option<NamedNode> {
+    fn get_iri(a: ArchiveUriRef, out: &Path, e: &walkdir::DirEntry) -> Option<NamedNode> {
         let parent = e.path().parent()?;
         let parentname = parent.file_name()?.to_str()?;
         let parentname = parentname.rsplit_once('.').map_or(parentname, |(s, _)| s);

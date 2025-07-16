@@ -10,7 +10,7 @@ use crate::{
     formats::{BuildTargetId, FormatOrTargets},
 };
 use either::Either;
-use flams_ontology::uris::{ArchiveId, ArchiveURITrait};
+use flams_ontology::uris::{ArchiveId, ArchiveUriTrait};
 use flams_utils::time::Timestamp;
 use flams_utils::{
     change_listener::{ChangeListener, ChangeSender},

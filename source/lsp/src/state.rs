@@ -1,7 +1,7 @@
 use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::{DocumentURI, URIRefTrait};
+use flams_ontology::uris::{DocumentUri, URIRefTrait};
 use flams_stex::{
     quickparse::stex::{DiagnosticLevel, STeXDiagnostic, STeXParseData, STeXParseDataI},
     OutputCont, RusTeX,
@@ -135,7 +135,7 @@ impl LSPState {
         })
     }
 
-    pub fn build_html(&self, uri: &UrlOrFile, client: &mut ClientSocket) -> Option<DocumentURI> {
+    pub fn build_html(&self, uri: &UrlOrFile, client: &mut ClientSocket) -> Option<DocumentUri> {
         let Some(DocData::Doc(doc)) = self.documents.read().get(uri).cloned() else {
             return None;
         };
@@ -336,7 +336,7 @@ impl LSPState {
                         for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
                             match e {
                                 SourceEntry::File(f) => {
-                                    let uri = match DocumentURI::from_archive_relpath(
+                                    let uri = match DocumentUri::from_archive_relpath(
                                         a.uri().owned(),
                                         &f.relative_path,
                                     ) {
@@ -400,7 +400,7 @@ impl LSPState {
         tracing::info!("Linting mathhubs finished after {t}");
     }
 
-    pub fn load_all<I: IntoIterator<Item = (std::sync::Arc<Path>, DocumentURI)>>(
+    pub fn load_all<I: IntoIterator<Item = (std::sync::Arc<Path>, DocumentUri)>>(
         &self,
         iter: I,
         mut and_then: impl FnMut(&std::sync::Arc<Path>, &STeXParseData),
@@ -437,7 +437,7 @@ impl LSPState {
     pub fn load<const FULL: bool>(
         &self,
         p: std::sync::Arc<Path>,
-        uri: &DocumentURI,
+        uri: &DocumentUri,
         and_then: impl FnOnce(&STeXParseData),
     ) {
         //let Some(lsp_uri) = lsp::Url::from_file_path(p).ok() else {return};

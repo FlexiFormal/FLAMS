@@ -7,8 +7,8 @@ use async_lsp::lsp_types as lsp;
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
     uris::{
-        ArchiveId, ArchiveURI, ArchiveURITrait, ContentURI, ContentURITrait, ModuleURI,
-        PathURITrait, SymbolURI, URIWithLanguage, URI,
+        ArchiveId, ArchiveUri, ArchiveUriTrait, ContentURI, ContentURITrait, ModuleUri,
+        PathURITrait, SymbolUri, URIWithLanguage, URI,
     },
 };
 use flams_stex::quickparse::stex::rules::IncludeProblemArg;
@@ -36,14 +36,14 @@ use smallvec::SmallVec;
 
 trait AnnotExt: Sized {
     fn as_symbol(&self) -> Option<(lsp::DocumentSymbol, &[Self])>;
-    fn links(&self, top_archive: Option<&ArchiveURI>, f: impl FnMut(lsp::DocumentLink));
+    fn links(&self, top_archive: Option<&ArchiveUri>, f: impl FnMut(lsp::DocumentLink));
     fn goto_definition(
         &self,
         in_doc: &UrlOrFile,
         pos: LSPLineCol,
     ) -> Option<lsp::GotoDefinitionResponse>;
     fn semantic_tokens(&self, cont: &mut impl FnMut(SourceRange<LSPLineCol>, u32));
-    fn hover(&self, top_archive: Option<&ArchiveURI>, pos: LSPLineCol) -> Option<lsp::Hover>;
+    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
     fn code_action(&self, pos: LSPLineCol, url: &lsp::Url) -> lsp::CodeActionResponse;
 }
@@ -389,13 +389,13 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn links(&self, top_archive: Option<&ArchiveURI>, mut cont: impl FnMut(lsp::DocumentLink)) {
+    fn links(&self, top_archive: Option<&ArchiveUri>, mut cont: impl FnMut(lsp::DocumentLink)) {
         match self {
             Self::IncludeProblem {
                 archive, filepath, ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
+                    || top_archive.map(ArchiveUriTrait::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -414,7 +414,7 @@ impl AnnotExt for STeXAnnot {
                 archive, filepath, ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
+                    || top_archive.map(ArchiveUriTrait::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -444,7 +444,7 @@ impl AnnotExt for STeXAnnot {
                 ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
+                    || top_archive.map(ArchiveUriTrait::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -1641,7 +1641,7 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn hover(&self, top_archive: Option<&ArchiveURI>, pos: LSPLineCol) -> Option<lsp::Hover> {
+    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover> {
         fn uriname(pre: &str, d: &impl std::fmt::Display) -> String {
             format!("{pre}<sup>`{d}`</sup>")
         }
@@ -1812,7 +1812,7 @@ impl AnnotExt for STeXAnnot {
                 ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
+                    || top_archive.map(ArchiveUriTrait::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return None;
@@ -1949,7 +1949,7 @@ impl AnnotExt for STeXAnnot {
             v: &[SymbolReference<LSPLineCol>],
             r: SourceRange<LSPLineCol>,
         ) -> lsp::CodeActionResponse {
-            fn disamb(uri: &SymbolURI, all: &[String]) -> String {
+            fn disamb(uri: &SymbolUri, all: &[String]) -> String {
                 let mut ret = format!("?{}", uri.name());
                 if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
                     return ret;
@@ -2424,10 +2424,10 @@ impl LSPState {
         };
         let slf = self.clone();
         enum Target {
-            Module(ModuleURI),
-            Structure(SymbolURI),
-            Symbol(SymbolURI),
-            Morphism(SymbolURI),
+            Module(ModuleUri),
+            Structure(SymbolUri),
+            Symbol(SymbolUri),
+            Morphism(SymbolUri),
         }
         Some(async move {
             let e = d

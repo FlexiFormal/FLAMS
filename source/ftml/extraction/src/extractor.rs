@@ -17,7 +17,7 @@ use flams_ontology::narration::sections::SectionLevel;
 use flams_ontology::narration::variables::Variable;
 use flams_ontology::narration::{DocumentElement, LazyDocRef};
 use flams_ontology::uris::{
-    DocumentElementURI, DocumentURI, ModuleURI, Name, NarrativeURI, NarrativeURITrait, SymbolURI,
+    DocumentElementUri, DocumentUri, ModuleUri, Name, NarrativeURI, NarrativeURITrait, SymbolUri,
     URIRefTrait,
 };
 use flams_ontology::{DocumentRange, Resourcable, Unchecked};
@@ -38,7 +38,7 @@ pub trait FTMLExtractor {
     fn add_triples<const N: usize>(&mut self, triples: [flams_ontology::rdf::Triple; N]);
 
     fn get_narrative_uri(&self) -> NarrativeURI;
-    fn get_content_uri(&self) -> Option<&ModuleURI>;
+    fn get_content_uri(&self) -> Option<&ModuleUri>;
 
     #[cfg(feature = "rdf")]
     fn get_document_iri(&self) -> flams_ontology::rdf::NamedNode {
@@ -68,25 +68,25 @@ pub trait FTMLExtractor {
         elem: OpenDeclaration<Unchecked>,
     ) -> Result<(), OpenDeclaration<Unchecked>>;
 
-    fn open_content(&mut self, uri: ModuleURI);
+    fn open_content(&mut self, uri: ModuleUri);
     fn open_narrative(&mut self, uri: Option<NarrativeURI>);
     fn open_complex_term(&mut self);
-    fn close_content(&mut self) -> Option<(ModuleURI, Vec<OpenDeclaration<Unchecked>>)>;
+    fn close_content(&mut self) -> Option<(ModuleUri, Vec<OpenDeclaration<Unchecked>>)>;
     fn close_narrative(&mut self) -> Option<(NarrativeURI, Vec<DocumentElement<Unchecked>>)>;
     fn close_complex_term(&mut self) -> Option<Term>;
-    fn open_section(&mut self, uri: DocumentElementURI);
+    fn open_section(&mut self, uri: DocumentElementUri);
     fn close_section(
         &mut self,
     ) -> Option<(
-        DocumentElementURI,
+        DocumentElementUri,
         Option<DocumentRange>,
         Vec<DocumentElement<Unchecked>>,
     )>;
     fn open_slide(&mut self);
     fn close_slide(&mut self) -> Option<Vec<DocumentElement<Unchecked>>>;
-    fn open_paragraph(&mut self, uri: DocumentElementURI, fors: VecSet<SymbolURI>);
+    fn open_paragraph(&mut self, uri: DocumentElementUri, fors: VecSet<SymbolUri>);
     fn close_paragraph(&mut self) -> Option<ParagraphState>;
-    fn open_problem(&mut self, uri: DocumentElementURI);
+    fn open_problem(&mut self, uri: DocumentElementUri);
     fn close_problem(&mut self) -> Option<ProblemState>;
     fn open_gnote(&mut self);
     fn close_gnote(&mut self) -> Option<GnoteState>;
@@ -108,13 +108,13 @@ pub trait FTMLExtractor {
     fn open_args(&mut self);
     fn close_args(&mut self) -> (Vec<Arg>, Option<Term>);
 
-    fn add_precondition(&mut self, uri: SymbolURI, dim: CognitiveDimension);
-    fn add_objective(&mut self, uri: SymbolURI, dim: CognitiveDimension);
+    fn add_precondition(&mut self, uri: SymbolUri, dim: CognitiveDimension);
+    fn add_objective(&mut self, uri: SymbolUri, dim: CognitiveDimension);
     /// #### Errors
     #[allow(clippy::result_unit_err)]
     fn add_arg(&mut self, pos: (u8, Option<u8>), tm: Term, mode: ArgMode) -> Result<(), ()>;
 
-    fn add_definiendum(&mut self, uri: SymbolURI);
+    fn add_definiendum(&mut self, uri: SymbolUri);
 
     fn add_resource<T: Resourcable>(&mut self, t: &T) -> LazyDocRef<T>;
     /// #### Errors
@@ -124,7 +124,7 @@ pub trait FTMLExtractor {
     /// #### Errors
     fn add_type(&mut self, tm: Term) -> Result<(), Term>;
     /// #### Errors
-    fn add_term(&mut self, symbol: Option<SymbolURI>, tm: Term) -> Result<(), Term>;
+    fn add_term(&mut self, symbol: Option<SymbolUri>, tm: Term) -> Result<(), Term>;
 }
 
 pub trait Attributes {
@@ -234,8 +234,8 @@ pub trait Attributes {
         &self,
         key: FTMLKey,
         _extractor: &mut E,
-    ) -> Result<ModuleURI, FTMLError> {
-        self.get_typed(key, ModuleURI::from_str)
+    ) -> Result<ModuleUri, FTMLError> {
+        self.get_typed(key, ModuleUri::from_str)
     }
 
     /// #### Errors
@@ -243,7 +243,7 @@ pub trait Attributes {
         &self,
         key: FTMLKey,
         extractor: &mut E,
-    ) -> Result<ModuleURI, FTMLError> {
+    ) -> Result<ModuleUri, FTMLError> {
         let Some(v) = self.get(key) else {
             return Err(FTMLError::InvalidKeyFor(key.as_str(), None));
         };
@@ -267,8 +267,8 @@ pub trait Attributes {
         &mut self,
         key: FTMLKey,
         _extractor: &mut E,
-    ) -> Result<ModuleURI, FTMLError> {
-        self.take_typed(key, ModuleURI::from_str)
+    ) -> Result<ModuleUri, FTMLError> {
+        self.take_typed(key, ModuleUri::from_str)
     }
 
     /// #### Errors
@@ -276,7 +276,7 @@ pub trait Attributes {
         &mut self,
         key: FTMLKey,
         extractor: &mut E,
-    ) -> Result<ModuleURI, FTMLError> {
+    ) -> Result<ModuleUri, FTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(FTMLError::InvalidKeyFor(key.as_str(), None));
         };
@@ -295,8 +295,8 @@ pub trait Attributes {
         &self,
         key: FTMLKey,
         _extractor: &mut E,
-    ) -> Result<SymbolURI, FTMLError> {
-        self.get_typed(key, SymbolURI::from_str)
+    ) -> Result<SymbolUri, FTMLError> {
+        self.get_typed(key, SymbolUri::from_str)
     }
 
     /// #### Errors
@@ -304,7 +304,7 @@ pub trait Attributes {
         &self,
         key: FTMLKey,
         extractor: &mut E,
-    ) -> Result<SymbolURI, FTMLError> {
+    ) -> Result<SymbolUri, FTMLError> {
         let Some(v) = self.get(key) else {
             return Err(FTMLError::InvalidKeyFor(key.as_str(), None));
         };
@@ -321,8 +321,8 @@ pub trait Attributes {
         &mut self,
         key: FTMLKey,
         _extractor: &mut E,
-    ) -> Result<SymbolURI, FTMLError> {
-        self.take_typed(key, SymbolURI::from_str)
+    ) -> Result<SymbolUri, FTMLError> {
+        self.take_typed(key, SymbolUri::from_str)
     }
 
     /// #### Errors
@@ -330,7 +330,7 @@ pub trait Attributes {
         &mut self,
         key: FTMLKey,
         extractor: &mut E,
-    ) -> Result<SymbolURI, FTMLError> {
+    ) -> Result<SymbolUri, FTMLError> {
         let Some(v) = self.remove(key) else {
             return Err(FTMLError::InvalidKeyFor(key.as_str(), None));
         };
@@ -346,8 +346,8 @@ pub trait Attributes {
         &self,
         key: FTMLKey,
         _extractor: &mut E,
-    ) -> Result<DocumentURI, FTMLError> {
-        self.get_typed(key, DocumentURI::from_str)
+    ) -> Result<DocumentUri, FTMLError> {
+        self.get_typed(key, DocumentUri::from_str)
     }
 
     /// #### Errors
@@ -356,8 +356,8 @@ pub trait Attributes {
         &mut self,
         key: FTMLKey,
         _extractor: &mut E,
-    ) -> Result<DocumentURI, FTMLError> {
-        self.take_typed(key, DocumentURI::from_str)
+    ) -> Result<DocumentUri, FTMLError> {
+        self.take_typed(key, DocumentUri::from_str)
     }
 
     fn get_id<E: FTMLExtractor>(&self, extractor: &mut E, prefix: Cow<'static, str>) -> Box<str> {
@@ -409,9 +409,9 @@ pub trait FTMLNode {
 
 #[derive(Debug)]
 pub struct ParagraphState {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub children: Vec<DocumentElement<Unchecked>>,
-    pub fors: VecMap<SymbolURI, Option<Term>>,
+    pub fors: VecMap<SymbolUri, Option<Term>>,
     pub title: Option<DocumentRange>,
 }
 
@@ -426,7 +426,7 @@ pub struct NotationState {
 
 #[derive(Debug)]
 pub struct ProblemState {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub solutions: Vec<SolutionData>,
     pub gnote: Option<GnoteState>,
     pub choice_block: Option<ChoiceBlockState>,
@@ -436,12 +436,12 @@ pub struct ProblemState {
     pub gnotes: Vec<LazyDocRef<GradingNote>>,
     pub title: Option<DocumentRange>,
     pub children: Vec<DocumentElement<Unchecked>>,
-    pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
-    pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
+    pub preconditions: Vec<(CognitiveDimension, SymbolUri)>,
+    pub objectives: Vec<(CognitiveDimension, SymbolUri)>,
 }
 impl ProblemState {
     #[must_use]
-    pub const fn new(uri: DocumentElementURI) -> Self {
+    pub const fn new(uri: DocumentElementUri) -> Self {
         Self {
             uri,
             solutions: Vec::new(),
@@ -491,7 +491,7 @@ pub enum Narrative {
     Container(NarrativeURI, Vec<DocumentElement<Unchecked>>),
     Paragraph(ParagraphState),
     Section {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         title: Option<DocumentRange>,
         children: Vec<DocumentElement<Unchecked>>,
     },
@@ -506,7 +506,7 @@ pub enum Narrative {
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Content {
-    Container(ModuleURI, Vec<OpenDeclaration<Unchecked>>),
+    Container(ModuleUri, Vec<OpenDeclaration<Unchecked>>),
     SingleTerm(Option<Term>),
     Symdecl { tp: Option<Term>, df: Option<Term> },
     Args(Vec<Option<(TermOrList, ArgMode)>>, Option<Term>),
@@ -525,7 +525,7 @@ pub struct ExtractorState {
 #[cfg(feature = "full")]
 impl ExtractorState {
     #[must_use]
-    pub fn document_uri(&self) -> &DocumentURI {
+    pub fn document_uri(&self) -> &DocumentUri {
         let Some(Narrative::Container(NarrativeURI::Document(ref ret), _)) =
             self.narrative.first().as_ref()
         else {
@@ -534,7 +534,7 @@ impl ExtractorState {
         ret
     }
     #[must_use]
-    pub fn new(document: DocumentURI) -> Self {
+    pub fn new(document: DocumentUri) -> Self {
         Self {
             in_term: false,
             ids: IdCounter::default(),
@@ -551,7 +551,7 @@ impl ExtractorState {
         mut self,
     ) -> Result<
         (
-            DocumentURI,
+            DocumentUri,
             Vec<DocumentElement<Unchecked>>,
             Vec<OpenModule<Unchecked>>,
             DocumentStyles,
@@ -654,7 +654,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         Var::Name(name)
     }
 
-    fn open_content(&mut self, uri: ModuleURI) {
+    fn open_content(&mut self, uri: ModuleUri) {
         self.state_mut()
             .content
             .push(Content::Container(uri, Vec::new()));
@@ -665,7 +665,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
     fn open_complex_term(&mut self) {
         self.state_mut().content.push(Content::SingleTerm(None));
     }
-    fn close_content(&mut self) -> Option<(ModuleURI, Vec<OpenDeclaration<Unchecked>>)> {
+    fn close_content(&mut self) -> Option<(ModuleUri, Vec<OpenDeclaration<Unchecked>>)> {
         match self.state_mut().content.pop() {
             Some(Content::Container(uri, elements)) => return Some((uri, elements)),
             Some(o) => self.state_mut().content.push(o),
@@ -763,7 +763,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         None
     }
 
-    fn open_section(&mut self, uri: DocumentElementURI) {
+    fn open_section(&mut self, uri: DocumentElementUri) {
         self.state_mut().narrative.push(Narrative::Section {
             title: None,
             children: Vec::new(),
@@ -773,7 +773,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
     fn close_section(
         &mut self,
     ) -> Option<(
-        DocumentElementURI,
+        DocumentElementUri,
         Option<DocumentRange>,
         Vec<DocumentElement<Unchecked>>,
     )> {
@@ -803,7 +803,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         None
     }
 
-    fn open_paragraph(&mut self, uri: DocumentElementURI, fors: VecSet<SymbolURI>) {
+    fn open_paragraph(&mut self, uri: DocumentElementUri, fors: VecSet<SymbolUri>) {
         let fors = fors.into_iter().map(|s| (s, None)).collect();
         self.state_mut()
             .narrative
@@ -888,7 +888,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         self.with_problem(|e| e.choice_block.take()).flatten()
     }
 
-    fn open_problem(&mut self, uri: DocumentElementURI) {
+    fn open_problem(&mut self, uri: DocumentElementUri) {
         self.state_mut()
             .narrative
             .push(Narrative::Problem(ProblemState::new(uri)));
@@ -901,7 +901,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         }
         None
     }
-    fn add_precondition(&mut self, uri: SymbolURI, dim: CognitiveDimension) {
+    fn add_precondition(&mut self, uri: SymbolUri, dim: CognitiveDimension) {
         let e = self.state_mut().narrative.iter_mut().rev().find_map(|e| {
             if let Narrative::Problem(e) = e {
                 Some(e)
@@ -915,7 +915,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             self.add_error(FTMLError::NotInNarrative);
         }
     }
-    fn add_objective(&mut self, uri: SymbolURI, dim: CognitiveDimension) {
+    fn add_objective(&mut self, uri: SymbolUri, dim: CognitiveDimension) {
         let e = self.state_mut().narrative.iter_mut().rev().find_map(|e| {
             if let Narrative::Problem(e) = e {
                 Some(e)
@@ -1009,7 +1009,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             .unwrap_or_else(|| unreachable!())
     }
 
-    fn add_definiendum(&mut self, uri: SymbolURI) {
+    fn add_definiendum(&mut self, uri: SymbolUri) {
         for n in self.state_mut().narrative.iter_mut().rev() {
             if let Narrative::Paragraph(ParagraphState { fors, .. }) = n {
                 fors.get_or_insert_mut(uri, || None);
@@ -1019,7 +1019,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         self.add_error(FTMLError::NotInNarrative);
     }
 
-    fn get_content_uri(&self) -> Option<&ModuleURI> {
+    fn get_content_uri(&self) -> Option<&ModuleUri> {
         self.state().content.iter().rev().find_map(|t| match t {
             Content::Container(uri, _) => Some(uri),
             _ => None,
@@ -1141,7 +1141,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         Ok(())
     }
     /// #### Errors
-    fn add_term(&mut self, symbol: Option<SymbolURI>, tm: Term) -> Result<(), Term> {
+    fn add_term(&mut self, symbol: Option<SymbolUri>, tm: Term) -> Result<(), Term> {
         if symbol.is_none() {
             match self.state_mut().content.last_mut() {
                 Some(Content::Symdecl { df, .. }) => {

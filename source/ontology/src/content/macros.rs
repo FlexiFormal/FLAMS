@@ -1,20 +1,20 @@
 #[macro_export]
 macro_rules! oms {
     (ftml:$i:ident) => {
-        $crate::content::terms::Term::OMID($crate::uris::ContentURI::Symbol($crate::ftml!($i)))
+        $crate::content::terms::Term::OMID($crate::uris::DomainUri::Symbol($crate::ftml!($i)))
     };
     (=ftml:$i:ident) => {
-        $crate::content::terms::Term::OMID($crate::uris::ContentURI::Symbol($crate::metatheory::$i))
+        $crate::content::terms::Term::OMID($crate::uris::DomainUri::Symbol($crate::metatheory::$i))
     };
     ($s:expr) => {
-        $crate::content::terms::Term::OMID($crate::uris::ContentURI::Symbol($s))
+        $crate::content::terms::Term::OMID($crate::uris::DomainUri::Symbol($s))
     };
 }
 
 #[macro_export]
 macro_rules! omsp {
     ($p:pat) => {
-        $crate::content::terms::Term::OMID($crate::uris::ContentURI::Symbol($p))
+        $crate::content::terms::Term::OMID($crate::uris::DomainUri::Symbol($p))
     };
 }
 

@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 use std::{collections::HashMap, fmt::Display, str::FromStr};
 
 use crate::{
-    uris::{DocumentElementURI, Name, SymbolURI},
+    uris::{DocumentElementUri, Name, SymbolUri},
     Checked, CheckingState, DocumentRange,
 };
 
@@ -15,7 +15,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[derive(Debug)]
 pub struct Problem<State: CheckingState> {
     pub sub_problem: bool,
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub range: DocumentRange,
     pub autogradable: bool,
     pub points: Option<f32>,
@@ -26,8 +26,8 @@ pub struct Problem<State: CheckingState> {
     pub title: Option<DocumentRange>,
     pub children: State::Seq<DocumentElement<State>>,
     pub styles: Box<[Name]>,
-    pub preconditions: State::Seq<(CognitiveDimension, SymbolURI)>,
-    pub objectives: State::Seq<(CognitiveDimension, SymbolURI)>,
+    pub preconditions: State::Seq<(CognitiveDimension, SymbolUri)>,
+    pub objectives: State::Seq<(CognitiveDimension, SymbolUri)>,
 }
 
 #[cfg(not(feature = "wasm"))]
@@ -666,7 +666,7 @@ pub enum CheckedResult {
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 //#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct ProblemResponse {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     #[cfg_attr(feature = "wasm", tsify(type = "ProblemResponseType[]"))]
     pub responses: SmallVec<ProblemResponseType, 4>,
 }
@@ -822,8 +822,8 @@ pub struct Quiz {
     pub css: Vec<CSS>,
     pub title: Option<String>,
     pub elements: Vec<QuizElement>,
-    pub solutions: HashMap<DocumentElementURI, String>,
-    pub answer_classes: HashMap<DocumentElementURI, Vec<AnswerClass>>,
+    pub solutions: HashMap<DocumentElementUri, String>,
+    pub answer_classes: HashMap<DocumentElementUri, Vec<AnswerClass>>,
 }
 
 #[derive(Debug, Clone)]
@@ -848,10 +848,10 @@ pub enum QuizElement {
 pub struct QuizProblem {
     pub html: String,
     pub title_html: Option<String>,
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     //pub solution:String,//Solutions,
     pub total_points: Option<f32>,
     //pub is_sub_problem:bool,
-    pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
-    pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
+    pub preconditions: Vec<(CognitiveDimension, SymbolUri)>,
+    pub objectives: Vec<(CognitiveDimension, SymbolUri)>,
 }

@@ -1,8 +1,8 @@
-use crate::uris::archives::ArchiveURIRef;
+use crate::uris::archives::ArchiveUriRef;
 use crate::uris::errors::URIParseError;
 use crate::uris::macros::debugdisplay;
 use crate::uris::{
-    ArchiveURI, ArchiveURITrait, BaseURI, Name, URIOrRefTrait, URIRef, URIRefTrait, URITrait, URI,
+    ArchiveUri, ArchiveUriTrait, BaseUri, Name, URIOrRefTrait, URIRef, URIRefTrait, URITrait, URI,
 };
 use const_format::concatcp;
 use either::Either;
@@ -12,12 +12,12 @@ use std::str::{FromStr, Split};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct PathURI {
-    pub(super) archive: ArchiveURI,
+    pub(super) archive: ArchiveUri,
     pub(super) path: Option<Name>,
 }
-impl From<ArchiveURI> for PathURI {
+impl From<ArchiveUri> for PathURI {
     #[inline]
-    fn from(archive: ArchiveURI) -> Self {
+    fn from(archive: ArchiveUri) -> Self {
         Self {
             archive,
             path: None,
@@ -54,7 +54,7 @@ debugdisplay!(PathURI);
 
 impl URIOrRefTrait for PathURI {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         &self.archive.base
     }
     #[inline]
@@ -65,16 +65,16 @@ impl URIOrRefTrait for PathURI {
 impl URITrait for PathURI {
     type Ref<'a> = PathURIRef<'a>;
 }
-impl ArchiveURITrait for PathURI {
+impl ArchiveUriTrait for PathURI {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef {
+    fn archive_uri(&self) -> ArchiveUriRef {
         self.archive.archive_uri()
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PathURIRef<'a> {
-    pub(super) archive: ArchiveURIRef<'a>,
+    pub(super) archive: ArchiveUriRef<'a>,
     pub(super) path: Option<&'a Name>,
 }
 impl<'a> From<&'a PathURI> for PathURIRef<'a> {
@@ -88,7 +88,7 @@ impl<'a> From<&'a PathURI> for PathURIRef<'a> {
 }
 impl<'a> URIOrRefTrait for PathURIRef<'a> {
     #[inline]
-    fn base(&self) -> &'a BaseURI {
+    fn base(&self) -> &'a BaseUri {
         self.archive.base
     }
     #[inline]
@@ -118,7 +118,7 @@ impl Display for PathURIRef<'_> {
 }
 debugdisplay!(PathURIRef<'_>);
 
-pub trait PathURITrait: ArchiveURITrait {
+pub trait PathURITrait: ArchiveUriTrait {
     fn as_path(&self) -> PathURIRef;
     #[inline]
     fn path(&self) -> Option<&Name> {
@@ -139,9 +139,9 @@ impl PathURITrait for PathURIRef<'_> {
         *self
     }
 }
-impl<'a> ArchiveURITrait for PathURIRef<'a> {
+impl<'a> ArchiveUriTrait for PathURIRef<'a> {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef<'a> {
+    fn archive_uri(&self) -> ArchiveUriRef<'a> {
         self.archive
     }
 }
@@ -151,7 +151,7 @@ impl PathURI {
         uri_kind: &'static str,
         f: impl FnOnce(Self, Option<&str>, Split<char>) -> Result<R, URIParseError>,
     ) -> Result<R, URIParseError> {
-        ArchiveURI::pre_parse(s, uri_kind, |archive, mut split| {
+        ArchiveUri::pre_parse(s, uri_kind, |archive, mut split| {
             let (p, n) = if let Some(p) = split.next() {
                 if let Some(p) = p.strip_prefix(concatcp!(PathURI::SEPARATOR, "=")) {
                     (

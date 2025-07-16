@@ -5,7 +5,7 @@ use flams_ontology::{
         paragraphs::{ParagraphFormatting, ParagraphKind},
         problems::CognitiveDimension,
     },
-    uris::{DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, SymbolURI, URI},
+    uris::{DocumentElementUri, DocumentUri, ModuleUri, NarrativeURI, SymbolUri, URI},
 };
 use flams_utils::vecmap::{VecMap, VecSet};
 
@@ -21,10 +21,10 @@ use thaw::{Text, TextTag};
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct OMDocDocument {
-    pub uri: DocumentURI,
+    pub uri: DocumentUri,
     pub title: Option<String>,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
     pub children: Vec<OMDocDocumentElement>,
 }
 impl super::OMDocT for OMDocDocument {
@@ -47,9 +47,9 @@ impl From<OMDocDocument> for OMDoc {
 #[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct OMDocSection {
     pub title: Option<String>,
-    pub uri: DocumentElementURI,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
+    pub uri: DocumentElementUri,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
     pub children: Vec<OMDocDocumentElement>,
 }
 impl super::OMDocT for OMDocSection {
@@ -89,9 +89,9 @@ impl From<OMDocSection> for OMDocDocumentElement {
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct OMDocSlide {
-    pub uri: DocumentElementURI,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
+    pub uri: DocumentElementUri,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
     pub children: Vec<OMDocDocumentElement>,
 }
 impl super::OMDocT for OMDocSlide {
@@ -123,7 +123,7 @@ impl From<OMDocSlide> for OMDocDocumentElement {
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct OMDocVariable {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub arity: ArgSpec,
     pub macro_name: Option<String>,
     pub tp: Option<Term>, //Option<String>,
@@ -192,13 +192,13 @@ impl From<OMDocVariable> for OMDocDocumentElement {
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct OMDocParagraph {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub kind: ParagraphKind,
     pub formatting: ParagraphFormatting,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub fors: VecMap<SymbolURI, Option<Term>>, //Option<String>>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub fors: VecMap<SymbolUri, Option<Term>>, //Option<String>>,
     pub title: Option<String>,
     pub children: Vec<OMDocDocumentElement>,
     pub definition_like: bool,
@@ -225,7 +225,7 @@ impl super::OMDocT for OMDocParagraph {
             <HeaderRight slot>{super::comma_sep(
               if definition_like {"Defines"} else {"Concerns"},
               fors.into_iter().map(|(k,t)| view!{
-                {super::symbol_name(&k,k.name().last_name().as_ref())}
+                {super::symbol_name(&k,k.name().last())}
                 {t.map(|t| view!{" as "{
                   crate::remote::get!(present(t.clone()) = html => {
                     view!(<FTMLStringMath html/>)
@@ -255,15 +255,15 @@ impl From<OMDocParagraph> for OMDocDocumentElement {
 #[cfg_attr(feature = "ts", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "ts", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct OMDocProblem {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub sub_problem: bool,
     pub autogradable: bool,
     pub points: Option<f32>,
     pub title: Option<String>,
-    pub preconditions: Vec<(CognitiveDimension, SymbolURI)>,
-    pub objectives: Vec<(CognitiveDimension, SymbolURI)>,
-    #[cfg_attr(feature = "ts", tsify(type = "ModuleURI[]"))]
-    pub uses: VecSet<ModuleURI>,
+    pub preconditions: Vec<(CognitiveDimension, SymbolUri)>,
+    pub objectives: Vec<(CognitiveDimension, SymbolUri)>,
+    #[cfg_attr(feature = "ts", tsify(type = "ModuleUri[]"))]
+    pub uses: VecSet<ModuleUri>,
     pub children: Vec<OMDocDocumentElement>,
 }
 impl super::OMDocT for OMDocProblem {
@@ -286,7 +286,7 @@ impl super::OMDocT for OMDocProblem {
             <HeaderRight slot>{super::comma_sep(
               "Objectives",
               objectives.into_iter().map(|(dim,sym)| view!{
-                {super::symbol_name(&sym,sym.name().last_name().as_ref())}
+                {super::symbol_name(&sym,sym.name().last())}
                 " ("{dim.to_string()}")"
               })
             )}</HeaderRight>
@@ -320,19 +320,19 @@ pub enum OMDocDocumentElement {
     Structure(OMDocStructure<OMDocDocumentElement>),
     Extension(OMDocExtension<OMDocDocumentElement>),
     DocumentReference {
-        uri: DocumentURI,
+        uri: DocumentUri,
         title: Option<String>,
     },
     Variable(OMDocVariable),
     Paragraph(OMDocParagraph),
     Problem(OMDocProblem),
     TopTerm {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         term: Term,
     },
     SymbolDeclaration(
-        #[cfg_attr(feature = "ts", tsify(type = "SymbolURI|OMDocSymbol"))]
-        either::Either<SymbolURI, OMDocSymbol>,
+        #[cfg_attr(feature = "ts", tsify(type = "SymbolUri|OMDocSymbol"))]
+        either::Either<SymbolUri, OMDocSymbol>,
     ),
 }
 impl super::sealed::Sealed for OMDocDocumentElement {}
@@ -370,7 +370,7 @@ impl super::OMDocT for OMDocDocumentElement {
     }
 }
 
-pub(crate) fn doc_ref(uri: DocumentURI, title: Option<String>) -> impl IntoView {
+pub(crate) fn doc_ref(uri: DocumentUri, title: Option<String>) -> impl IntoView {
     let name = title.unwrap_or_else(|| uri.name().last_name().to_string());
     let uricl = uri.clone();
     view! {//<Block>
@@ -429,7 +429,7 @@ mod froms {
             documents::Document, paragraphs::LogicalParagraph, problems::Problem,
             sections::Section, variables::Variable, DocumentElement, NarrationTrait,
         },
-        uris::{DocumentElementURI, ModuleURI},
+        uris::{DocumentElementUri, ModuleUri},
         Checked,
     };
     use flams_system::backend::Backend;
@@ -476,7 +476,7 @@ mod froms {
     impl OMDocSlide {
         pub fn from_slide<B: Backend>(
             children: &[DocumentElement<Checked>],
-            uri: &DocumentElementURI,
+            uri: &DocumentElementUri,
             backend: &B, //&mut StringPresenter<'_,B>,
             css: &mut VecSet<CSS>,
         ) -> Self {
@@ -635,8 +635,8 @@ mod froms {
         fn do_children<B: Backend>(
             backend: &B, //&mut StringPresenter<'_,B>,
             children: &[DocumentElement<Checked>],
-            uses: &mut VecSet<ModuleURI>,
-            imports: &mut VecSet<ModuleURI>,
+            uses: &mut VecSet<ModuleUri>,
+            imports: &mut VecSet<ModuleUri>,
             css: &mut VecSet<CSS>,
         ) -> Vec<Self> {
             let mut ret = Vec::new();

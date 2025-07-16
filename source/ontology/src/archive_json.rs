@@ -1,6 +1,6 @@
 use crate::{
     file_states::FileStateSummary,
-    uris::{ArchiveId, ArchiveURI, ArchiveURITrait, DocumentURI},
+    uris::{ArchiveId, ArchiveUri, DocumentUri},
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -186,7 +186,7 @@ pub enum ArchiveIndex {
     Book {
         title: Box<str>,
         authors: Box<[Box<str>]>,
-        file: DocumentURI,
+        file: DocumentUri,
         #[serde(default)]
         teaser: Option<Box<str>>,
         #[serde(default)]
@@ -196,7 +196,7 @@ pub enum ArchiveIndex {
     Paper {
         title: Box<str>,
         authors: Box<[Box<str>]>,
-        file: DocumentURI,
+        file: DocumentUri,
         #[serde(default)]
         thumbnail: Option<Box<str>>,
         #[serde(default)]
@@ -209,14 +209,14 @@ pub enum ArchiveIndex {
     #[serde(rename = "course")]
     Course {
         title: Box<str>,
-        landing: DocumentURI,
+        landing: DocumentUri,
         acronym: Option<Box<str>>,
         instructors: Box<[Box<str>]>,
         institution: Box<str>,
         instances: Box<[Instance]>,
-        notes: DocumentURI,
+        notes: DocumentUri,
         #[serde(default)]
-        slides: Option<DocumentURI>,
+        slides: Option<DocumentUri>,
         #[serde(default)]
         thumbnail: Option<Box<str>>,
         #[serde(default)]
@@ -229,12 +229,12 @@ pub enum ArchiveIndex {
     #[serde(rename = "self-study")]
     SelfStudy {
         title: Box<str>,
-        landing: DocumentURI,
-        notes: DocumentURI,
+        landing: DocumentUri,
+        notes: DocumentUri,
         #[serde(default)]
         acronym: Option<Box<str>>,
         #[serde(default)]
-        slides: Option<DocumentURI>,
+        slides: Option<DocumentUri>,
         #[serde(default)]
         thumbnail: Option<Box<str>>,
         #[serde(default)]
@@ -279,7 +279,7 @@ impl PartialEq for ArchiveIndex {
 impl ArchiveIndex {
     pub fn from_kind(
         d: DocumentKind,
-        a: &ArchiveURI,
+        a: &ArchiveUri,
         images: impl FnMut(Box<str>) -> Box<str>,
     ) -> eyre::Result<Self> {
         Ok(match d {
@@ -306,7 +306,7 @@ impl ArchiveIndex {
             } => Self::Book {
                 title,
                 teaser,
-                file: DocumentURI::from_archive_relpath(a.clone(), &file)?,
+                file: DocumentUri::from_archive_relpath(a.clone(), &file)?,
                 authors: authors.into_iter().map(|is| is.name).collect(),
                 thumbnail: if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {
                     None
@@ -327,7 +327,7 @@ impl ArchiveIndex {
                 teaser,
                 venue,
                 venue_url,
-                file: DocumentURI::from_archive_relpath(a.clone(), &file)?,
+                file: DocumentUri::from_archive_relpath(a.clone(), &file)?,
                 authors: authors.into_iter().map(|is| is.name).collect(),
                 thumbnail: if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {
                     None
@@ -355,18 +355,18 @@ impl ArchiveIndex {
                 quizzes,
                 homeworks,
                 teaser,
-                landing: DocumentURI::from_archive_relpath(a.clone(), &landing)?,
+                landing: DocumentUri::from_archive_relpath(a.clone(), &landing)?,
                 thumbnail: if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {
                     None
                 } else {
                     thumbnail.map(images)
                 },
-                notes: DocumentURI::from_archive_relpath(a.clone(), &notes)?,
+                notes: DocumentUri::from_archive_relpath(a.clone(), &notes)?,
                 slides: if slides.as_ref().is_some_and(|s| s.is_empty()) {
                     None
                 } else {
                     slides
-                        .map(|s| DocumentURI::from_archive_relpath(a.clone(), &s))
+                        .map(|s| DocumentUri::from_archive_relpath(a.clone(), &s))
                         .transpose()?
                 },
                 instances: instances
@@ -396,18 +396,18 @@ impl ArchiveIndex {
                 title,
                 acronym,
                 teaser,
-                landing: DocumentURI::from_archive_relpath(a.clone(), &landing)?,
+                landing: DocumentUri::from_archive_relpath(a.clone(), &landing)?,
                 thumbnail: if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {
                     None
                 } else {
                     thumbnail.map(images)
                 },
-                notes: DocumentURI::from_archive_relpath(a.clone(), &notes)?,
+                notes: DocumentUri::from_archive_relpath(a.clone(), &notes)?,
                 slides: if slides.as_ref().is_some_and(|s| s.is_empty()) {
                     None
                 } else {
                     slides
-                        .map(|s| DocumentURI::from_archive_relpath(a.clone(), &s))
+                        .map(|s| DocumentUri::from_archive_relpath(a.clone(), &s))
                         .transpose()?
                 },
             },

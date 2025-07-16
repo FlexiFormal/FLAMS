@@ -3,7 +3,7 @@
 use crate::components::navigation::NavElems;
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
-    uris::{DocumentElementURI, DocumentURI, Name, NarrativeURI},
+    uris::{DocumentElementUri, DocumentUri, Name, NarrativeURI},
 };
 use flams_utils::{time::Timestamp, CSS};
 use flams_web_utils::do_css;
@@ -17,7 +17,7 @@ use leptos::{
 /// A section that has been "covered" at the specified timestamp; will be marked accordingly
 /// in the TOC.
 pub struct Gotto {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     #[serde(default)]
     pub timestamp: Option<Timestamp>,
 }
@@ -34,7 +34,7 @@ pub enum TOCElem {
     /// A section; the title is assumed to be an HTML string
     Section {
         title: Option<String>,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         id: String,
         children: Vec<TOCElem>,
     },
@@ -44,17 +44,17 @@ pub enum TOCElem {
     /// An inputref to some other document; the URI is the one for the
     /// referenced Document.
     Inputref {
-        uri: DocumentURI,
+        uri: DocumentUri,
         title: Option<String>,
         id: String,
         children: Vec<TOCElem>,
     },
     Paragraph {
-        //uri:DocumentElementURI,
+        //uri:DocumentElementUri,
         styles: Vec<Name>,
         kind: ParagraphKind,
     },
-    Slide, //{uri:DocumentElementURI}
+    Slide, //{uri:DocumentElementUri}
 }
 
 pub trait TOCIter<'a> {
@@ -194,7 +194,7 @@ struct Gottos {
     iter: std::vec::IntoIter<Gotto>,
 }
 impl Gottos {
-    fn next(&mut self, uri: &DocumentElementURI) {
+    fn next(&mut self, uri: &DocumentElementUri) {
         if let Some(c) = self.current.as_ref() {
             if c.uri == *uri {
                 loop {

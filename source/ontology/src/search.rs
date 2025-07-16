@@ -2,7 +2,7 @@
 
 use crate::{
     narration::paragraphs::ParagraphKind,
-    uris::{DocumentElementURI, DocumentURI, SymbolURI},
+    uris::{DocumentElementUri, DocumentUri, SymbolUri},
 };
 
 #[allow(dead_code)]
@@ -51,10 +51,10 @@ impl Default for QueryFilter {
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum SearchResult {
-    Document(DocumentURI),
+    Document(DocumentUri),
     Paragraph {
-        uri: DocumentElementURI,
-        fors: Vec<SymbolURI>,
+        uri: DocumentElementUri,
+        fors: Vec<SymbolUri>,
         def_like: bool,
         kind: SearchResultKind,
     },
@@ -130,16 +130,16 @@ impl TryFrom<ParagraphKind> for SearchResultKind {
 #[derive(Debug, Clone)]
 pub enum SearchIndex {
     Document {
-        uri: DocumentURI,
+        uri: DocumentUri,
         title: Option<String>,
         body: String,
     },
     Paragraph {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         kind: SearchResultKind,
         definition_like: bool,
         title: Option<String>,
-        fors: Vec<SymbolURI>,
+        fors: Vec<SymbolUri>,
         body: String,
     },
 }

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{uris::DocumentElementURI, Checked, CheckingState, DocumentRange};
+use crate::{uris::DocumentElementUri, Checked, CheckingState, DocumentRange};
 
 use super::{DocumentElement, NarrationTrait};
 
@@ -9,7 +9,7 @@ use super::{DocumentElement, NarrationTrait};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UncheckedSection {
     pub range: DocumentRange,
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub level: SectionLevel,
     pub title: Option<DocumentRange>,
     pub children: Vec<UncheckedDocumentElement>,
@@ -19,7 +19,7 @@ pub struct UncheckedSection {
 #[derive(Debug)]
 pub struct Section<State: CheckingState> {
     pub range: DocumentRange,
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub level: SectionLevel,
     pub title: Option<DocumentRange>,
     pub children: State::Seq<DocumentElement<State>>,

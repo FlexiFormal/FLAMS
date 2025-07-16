@@ -3,24 +3,25 @@ use crate::{
         declarations::symbols::{ArgSpec, AssocType},
         terms::Term,
     },
-    uris::DocumentElementURI, Checked,
+    uris::DocumentElementUri,
+    Checked,
 };
 
 use super::{DocumentElement, NarrationTrait};
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Variable {
-    pub uri: DocumentElementURI,
+    pub uri: DocumentElementUri,
     pub arity: ArgSpec,
     pub macroname: Option<Box<str>>,
     pub role: Box<[Box<str>]>,
     pub tp: Option<Term>,
     pub df: Option<Term>,
-    pub bind:bool,
+    pub bind: bool,
     pub assoctype: Option<AssocType>,
     pub reordering: Option<Box<str>>,
-    pub is_seq:bool
+    pub is_seq: bool,
 }
 
 impl NarrationTrait for Variable {
@@ -30,7 +31,14 @@ impl NarrationTrait for Variable {
     }
 
     #[inline]
-    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self> where Self: Sized {
-        if let DocumentElement::Variable(e) = e {Some(e)} else {None}
+    fn from_element(e: &DocumentElement<Checked>) -> Option<&Self>
+    where
+        Self: Sized,
+    {
+        if let DocumentElement::Variable(e) = e {
+            Some(e)
+        } else {
+            None
+        }
     }
 }

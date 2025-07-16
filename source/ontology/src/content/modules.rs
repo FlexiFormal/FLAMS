@@ -5,14 +5,14 @@ use super::{
 };
 use crate::{
     languages::Language,
-    uris::{ContentURIRef, ModuleURI, SymbolURI},
+    uris::{DomainUriRef, ModuleUri, SymbolUri},
     Checked, CheckingState, MaybeResolved, Resolvable, Unchecked,
 };
 use triomphe::Arc;
 
 #[derive(Debug)]
 pub struct OpenModule<State: CheckingState> {
-    pub uri: ModuleURI,
+    pub uri: ModuleUri,
     pub meta: Option<State::Module>,
     pub signature: Option<State::Sig>,
     pub elements: State::Seq<OpenDeclaration<State>>,
@@ -36,15 +36,15 @@ impl ModuleTrait for OpenModule<Checked> {
         &self.elements
     }
     #[inline]
-    fn content_uri(&self) -> ContentURIRef {
-        ContentURIRef::Module(&self.uri)
+    fn content_uri(&self) -> DomainUriRef {
+        DomainUriRef::Module(&self.uri)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Module(pub(super) Arc<OpenModule<Checked>>);
 impl Resolvable for Module {
-    type From = ModuleURI;
+    type From = ModuleUri;
     fn id(&self) -> std::borrow::Cow<'_, Self::From> {
         std::borrow::Cow::Borrowed(&self.0.uri)
     }
@@ -58,7 +58,7 @@ impl Module {
 
     #[inline]
     #[must_use]
-    pub fn uri(&self) -> &ModuleURI {
+    pub fn uri(&self) -> &ModuleUri {
         &self.0.uri
     }
 
@@ -81,8 +81,8 @@ impl ModuleTrait for Module {
         &self.0.elements
     }
     #[inline]
-    fn content_uri(&self) -> ContentURIRef {
-        ContentURIRef::Module(self.uri())
+    fn content_uri(&self) -> DomainUriRef {
+        DomainUriRef::Module(self.uri())
     }
 }
 
@@ -109,7 +109,7 @@ mod serde_impl {
 
 #[derive(Debug)]
 pub struct NestedModule<State: CheckingState> {
-    pub uri: SymbolURI,
+    pub uri: SymbolUri,
     pub elements: State::Seq<OpenDeclaration<State>>,
 }
 impl super::declarations::private::Sealed for NestedModule<Checked> {}
@@ -132,8 +132,8 @@ impl ModuleTrait for NestedModule<Checked> {
     }
 
     #[inline]
-    fn content_uri(&self) -> ContentURIRef {
-        ContentURIRef::Symbol(&self.uri)
+    fn content_uri(&self) -> DomainUriRef {
+        DomainUriRef::Symbol(&self.uri)
     }
 }
 

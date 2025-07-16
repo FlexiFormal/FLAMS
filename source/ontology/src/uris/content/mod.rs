@@ -1,14 +1,14 @@
 use crate::languages::Language;
-use crate::uris::content::symbols::SymbolURI;
+use crate::uris::content::symbols::SymbolUri;
 use crate::uris::{
-    debugdisplay, ArchiveURIRef, ArchiveURITrait, BaseURI, ModuleURI, Name, PathURITrait,
+    debugdisplay, ArchiveUriRef, ArchiveUriTrait, BaseUri, ModuleUri, Name, PathURITrait,
     URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URITrait, URIWithLanguage, URI,
 };
 use const_format::concatcp;
-use modules::ModuleURIRef;
+use modules::ModuleUriRef;
 use std::fmt::Display;
 use std::str::FromStr;
-use symbols::SymbolURIRef;
+use symbols::SymbolUriRef;
 
 pub(super) mod modules;
 pub(super) mod symbols;
@@ -22,13 +22,13 @@ const TS_URI: &str = "export type ContentURI = string;";
 
 pub trait ContentURITrait: URIOrRefTrait {
     fn as_content(&self) -> ContentURIRef;
-    fn module(&self) -> ModuleURIRef;
+    fn module(&self) -> ModuleUriRef;
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum ContentURI {
-    Module(ModuleURI),
-    Symbol(SymbolURI),
+    Module(ModuleUri),
+    Symbol(SymbolUri),
 }
 impl ContentURI {
     #[inline]
@@ -41,21 +41,21 @@ impl ContentURI {
         }
     }
 }
-impl From<ModuleURI> for ContentURI {
+impl From<ModuleUri> for ContentURI {
     #[inline]
-    fn from(value: ModuleURI) -> Self {
+    fn from(value: ModuleUri) -> Self {
         Self::Module(value)
     }
 }
-impl From<SymbolURI> for ContentURI {
+impl From<SymbolUri> for ContentURI {
     #[inline]
-    fn from(value: SymbolURI) -> Self {
+    fn from(value: SymbolUri) -> Self {
         Self::Symbol(value)
     }
 }
 impl URIOrRefTrait for ContentURI {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         match self {
             Self::Module(m) => m.base(),
             Self::Symbol(s) => s.base(),
@@ -78,7 +78,7 @@ impl ContentURITrait for ContentURI {
         }
     }
     #[inline]
-    fn module(&self) -> ModuleURIRef {
+    fn module(&self) -> ModuleUriRef {
         match self {
             Self::Module(m) => m.module(),
             Self::Symbol(s) => s.module(),
@@ -88,8 +88,8 @@ impl ContentURITrait for ContentURI {
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ContentURIRef<'a> {
-    Module(ModuleURIRef<'a>),
-    Symbol(SymbolURIRef<'a>),
+    Module(ModuleUriRef<'a>),
+    Symbol(SymbolUriRef<'a>),
 }
 impl<'a> From<&'a ContentURI> for ContentURIRef<'a> {
     #[inline]
@@ -102,7 +102,7 @@ impl<'a> From<&'a ContentURI> for ContentURIRef<'a> {
 }
 impl<'a> URIOrRefTrait for ContentURIRef<'a> {
     #[inline]
-    fn base(&self) -> &'a BaseURI {
+    fn base(&self) -> &'a BaseUri {
         match self {
             Self::Module(m) => &m.path.archive.base,
             Self::Symbol(s) => &s.module.path.archive.base,
@@ -129,7 +129,7 @@ impl<'a> ContentURITrait for ContentURIRef<'a> {
         *self
     }
     #[inline]
-    fn module(&self) -> ModuleURIRef<'a> {
+    fn module(&self) -> ModuleUriRef<'a> {
         match self {
             Self::Module(m) => m,
             Self::Symbol(s) => &s.module,
@@ -158,18 +158,18 @@ impl Display for ContentURIRef<'_> {
     }
 }
 debugdisplay!(ContentURIRef<'_>);
-impl ArchiveURITrait for ContentURI {
+impl ArchiveUriTrait for ContentURI {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef {
+    fn archive_uri(&self) -> ArchiveUriRef {
         match self {
             Self::Module(m) => m.archive_uri(),
             Self::Symbol(s) => s.module.path.archive_uri(),
         }
     }
 }
-impl<'a> ArchiveURITrait for ContentURIRef<'a> {
+impl<'a> ArchiveUriTrait for ContentURIRef<'a> {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef<'a> {
+    fn archive_uri(&self) -> ArchiveUriRef<'a> {
         match self {
             Self::Module(m) => m.path.archive_uri(),
             Self::Symbol(s) => s.module.path.archive_uri(),
@@ -213,11 +213,11 @@ impl<'a> PathURITrait for ContentURIRef<'a> {
 impl FromStr for ContentURI {
     type Err = URIParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ModuleURI::pre_parse(s, "content uri", |module, mut split| {
+        ModuleUri::pre_parse(s, "content uri", |module, mut split| {
             let Some(c) = split.next() else {
                 return Ok(Self::Module(module));
             };
-            c.strip_prefix(concatcp!(SymbolURI::SEPARATOR, "="))
+            c.strip_prefix(concatcp!(SymbolUri::SEPARATOR, "="))
                 .map_or_else(
                     || {
                         Err(URIParseError::TooManyPartsFor {
@@ -226,7 +226,7 @@ impl FromStr for ContentURI {
                         })
                     },
                     |name| {
-                        Ok(Self::Symbol(SymbolURI {
+                        Ok(Self::Symbol(SymbolUri {
                             module,
                             name: name.parse()?,
                         }))

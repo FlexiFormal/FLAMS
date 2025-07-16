@@ -21,7 +21,7 @@ pub(crate) mod fns {
     use flams_ontology::{
         languages::Language,
         narration::{notations::Notation, LOKind},
-        uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
+        uris::{ArchiveId, DocumentElementUri, DocumentUri, SymbolUri, URI},
     };
     use flams_utils::CSS;
     use ftml_viewer_components::components::{omdoc::OMDoc, TOCElem};
@@ -37,15 +37,15 @@ pub(crate) mod fns {
         e: Option<String>,
         m: Option<String>,
         s: Option<String>,
-        context:Option<URI>
+        context: Option<URI>,
     ) -> Pin<Box<dyn Future<Output = Result<(URI, Vec<CSS>, String), ServerFnError<String>>> + Send>>
     {
         Box::pin(flams_router_dashboard::server_fns::content::fragment(
-            uri, rp, a, p, l, d, e, m, s, context
+            uri, rp, a, p, l, d, e, m, s, context,
         ))
     }
     fn full_doc(
-        uri: Option<DocumentURI>,
+        uri: Option<DocumentUri>,
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
@@ -53,7 +53,7 @@ pub(crate) mod fns {
         d: Option<String>,
     ) -> Pin<
         Box<
-            dyn Future<Output = Result<(DocumentURI, Vec<CSS>, String), ServerFnError<String>>>
+            dyn Future<Output = Result<(DocumentUri, Vec<CSS>, String), ServerFnError<String>>>
                 + Send,
         >,
     > {
@@ -62,7 +62,7 @@ pub(crate) mod fns {
         ))
     }
     fn toc(
-        uri: Option<DocumentURI>,
+        uri: Option<DocumentUri>,
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
@@ -75,7 +75,7 @@ pub(crate) mod fns {
         ))
     }
     fn los(
-        uri: Option<SymbolURI>,
+        uri: Option<SymbolUri>,
         a: Option<ArchiveId>,
         p: Option<String>,
         m: Option<String>,
@@ -83,7 +83,7 @@ pub(crate) mod fns {
         problems: bool,
     ) -> Pin<
         Box<
-            dyn Future<Output = Result<Vec<(DocumentElementURI, LOKind)>, ServerFnError<String>>>
+            dyn Future<Output = Result<Vec<(DocumentElementUri, LOKind)>, ServerFnError<String>>>
                 + Send,
         >,
     > {
@@ -119,7 +119,7 @@ pub(crate) mod fns {
         s: Option<String>,
     ) -> Pin<
         Box<
-            dyn Future<Output = Result<Vec<(DocumentElementURI, Notation)>, ServerFnError<String>>>
+            dyn Future<Output = Result<Vec<(DocumentElementUri, Notation)>, ServerFnError<String>>>
                 + Send,
         >,
     > {

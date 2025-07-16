@@ -1,6 +1,6 @@
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
-    uris::{DocumentElementURI, Name},
+    uris::{DocumentElementUri, Name},
 };
 use flams_web_utils::inject_css;
 use leptos::{context::Provider, prelude::*};
@@ -9,7 +9,7 @@ use crate::{components::counters::SectionCounters, ts::FragmentContinuation, Fra
 
 pub(super) fn paragraph<V: IntoView + 'static>(
     kind: ParagraphKind,
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     styles: Box<[Name]>,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
@@ -43,7 +43,7 @@ pub(super) fn paragraph<V: IntoView + 'static>(
 }
 
 pub(super) fn slide<V: IntoView + 'static>(
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
     inject_css("ftml-slide", include_str!("slides.css"));
@@ -58,7 +58,7 @@ pub(super) fn slide_number() -> impl IntoView {
     move || v.get()
 }
 /*
-pub(super) fn skip_slides(uri:&DocumentURI,id:&str) -> Option<u32> {
+pub(super) fn skip_slides(uri:&DocumentUri,id:&str) -> Option<u32> {
   let ctw = expect_context::<RwSignal::<Option<Vec<TOCElem>>>>();
   ctw.with(|v| v.as_ref().and_then(|v| {
     leptos::logging::log!("TOC: {v:?}");

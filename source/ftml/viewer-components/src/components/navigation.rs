@@ -1,4 +1,4 @@
-use flams_ontology::uris::DocumentURI;
+use flams_ontology::uris::DocumentUri;
 use flams_utils::prelude::HMap;
 use leptos::prelude::*;
 use web_sys::Element;
@@ -12,10 +12,10 @@ pub enum SectionOrInputref {
 pub struct NavElems {
     pub initialized: RwSignal<bool>,
     pub ids: HMap<String, SectionOrInputref>,
-    pub titles: HMap<DocumentURI, RwSignal<String>>,
+    pub titles: HMap<DocumentUri, RwSignal<String>>,
 }
 impl NavElems {
-    pub fn get_title(&mut self, uri: DocumentURI) -> RwSignal<String> {
+    pub fn get_title(&mut self, uri: DocumentUri) -> RwSignal<String> {
         match self.titles.entry(uri) {
             std::collections::hash_map::Entry::Occupied(e) => *e.get(),
             std::collections::hash_map::Entry::Vacant(e) => {
@@ -24,7 +24,7 @@ impl NavElems {
             }
         }
     }
-    pub fn set_title(&mut self, uri: DocumentURI, title: String) {
+    pub fn set_title(&mut self, uri: DocumentUri, title: String) {
         match self.titles.entry(uri) {
             std::collections::hash_map::Entry::Occupied(e) => e.get().set(title),
             std::collections::hash_map::Entry::Vacant(e) => {

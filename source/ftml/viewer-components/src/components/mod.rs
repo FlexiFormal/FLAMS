@@ -17,7 +17,7 @@ use flams_ontology::{
         problems::CognitiveDimension,
         LOKind,
     },
-    uris::DocumentElementURI,
+    uris::DocumentElementUri,
 };
 use inputref::InInputRef;
 pub use inputref::{IfInputref, InputRef};
@@ -218,16 +218,16 @@ fn do_components<const MATH: bool>(
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LOs {
-    pub definitions: Vec<DocumentElementURI>,
-    pub examples: Vec<DocumentElementURI>,
-    pub problems: Vec<(bool, DocumentElementURI, CognitiveDimension)>,
+    pub definitions: Vec<DocumentElementUri>,
+    pub examples: Vec<DocumentElementUri>,
+    pub problems: Vec<(bool, DocumentElementUri, CognitiveDimension)>,
 }
 
 pub(crate) trait IntoLOs {
     fn lo_sort(self) -> LOs;
 }
 
-impl IntoLOs for Vec<(DocumentElementURI, LOKind)> {
+impl IntoLOs for Vec<(DocumentElementUri, LOKind)> {
     fn lo_sort(self) -> LOs {
         let mut definitions = Vec::new();
         let mut examples = Vec::new();

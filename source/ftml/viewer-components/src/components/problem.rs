@@ -3,7 +3,7 @@ use flams_ontology::{
         BlockFeedback, CheckedResult, FillinFeedback, FillinFeedbackKind, ProblemFeedback,
         ProblemResponse as OrigResponse, ProblemResponseType, Solutions,
     },
-    uris::{DocumentElementURI, Name, NarrativeURI},
+    uris::{DocumentElementUri, Name, NarrativeURI},
 };
 use flams_utils::prelude::HMap;
 use flams_web_utils::inject_css;
@@ -40,7 +40,7 @@ pub enum ProblemState {
 
 pub struct ProblemOptions {
     pub on_response: Option<JsOrRsF<OrigResponse, ()>>,
-    pub states: HMap<DocumentElementURI, ProblemState>,
+    pub states: HMap<DocumentElementUri, ProblemState>,
 }
 
 impl std::fmt::Debug for ProblemOptions {
@@ -54,7 +54,7 @@ impl std::fmt::Debug for ProblemOptions {
 
 #[derive(Clone, Debug)]
 pub struct CurrentProblem {
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     solutions: RwSignal<u8>,
     initial: Option<OrigResponse>,
     responses: RwSignal<SmallVec<ProblemResponse, 4>>,
@@ -63,7 +63,7 @@ pub struct CurrentProblem {
 }
 impl CurrentProblem {
     fn to_response(
-        uri: &DocumentElementURI,
+        uri: &DocumentElementUri,
         responses: &SmallVec<ProblemResponse, 4>,
     ) -> OrigResponse {
         OrigResponse {
@@ -100,7 +100,7 @@ enum ProblemResponse {
 }
 
 pub(super) fn problem<V: IntoView + 'static>(
-    uri: &DocumentElementURI,
+    uri: &DocumentElementUri,
     autogradable: bool,
     sub_problem: bool,
     styles: Box<[Name]>,
@@ -509,7 +509,7 @@ fn single_choice<V: IntoView + 'static>(
     orig_selected: bool,
     disabled: bool,
     responses: RwSignal<SmallVec<ProblemResponse, 4>>,
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     feedback: RwSignal<Option<ProblemFeedback>>,
     children: impl Fn() -> V + Send + 'static + Clone,
 ) -> impl IntoView {

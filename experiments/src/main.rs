@@ -1,5 +1,5 @@
 use flams_lsp::state::LSPState;
-use flams_ontology::uris::{DocumentURI, URIRefTrait};
+use flams_ontology::uris::{DocumentUri, URIRefTrait};
 use flams_system::backend::{
     archives::{
         source_files::{SourceDir, SourceEntry},
@@ -142,7 +142,7 @@ async fn linter_i() {
                                     .split('/')
                                     .fold(a.source_dir(), |p, s| p.join(s))
                                     .into(),
-                                unwrap!(DocumentURI::from_archive_relpath(
+                                unwrap!(DocumentUri::from_archive_relpath(
                                     a.uri().owned(),
                                     &f.relative_path,
                                 ).ok()),

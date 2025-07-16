@@ -6,7 +6,7 @@ use flams_ontology::{
     narration::problems::{
         ProblemFeedback, ProblemFeedbackJson, ProblemResponse, SolutionData, Solutions,
     },
-    uris::{DocumentElementURI, DocumentURI},
+    uris::{DocumentElementUri, DocumentUri},
 };
 use ftml_viewer_components::{
     components::{
@@ -85,7 +85,7 @@ impl From<ProblemState> for OrigState {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(transparent)]
-pub struct ProblemStates(pub HashMap<DocumentElementURI, ProblemState>);
+pub struct ProblemStates(pub HashMap<DocumentElementUri, ProblemState>);
 
 fn convert(
     on_response: Option<JProblemCont>,
@@ -356,7 +356,7 @@ fn GlobalSetup<V: IntoView + 'static>(
 #[serde(tag = "type")]
 pub enum DocumentOptions {
     FromBackend {
-        uri: DocumentURI,
+        uri: DocumentUri,
         #[serde(default)]
         gottos: Option<Vec<Gotto>>,
         //#[serde(default)] <- this breaks toc:"GET" for some reason
@@ -383,13 +383,13 @@ pub enum DocumentOptions {
 ///     html: the HTML String
 pub enum FragmentOptions {
     FromBackend {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
     },
     //Prerendered,
     HtmlString {
         html: String,
         #[serde(default)]
-        uri: Option<DocumentElementURI>,
+        uri: Option<DocumentElementUri>,
     },
 }
 
@@ -422,8 +422,8 @@ ftml_viewer_components::ts_function! {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, tsify_next::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ProblemOption {
-    WithFeedback(Vec<(DocumentElementURI, ProblemFeedback)>),
-    WithSolutions(Vec<(DocumentElementURI, Solutions)>),
+    WithFeedback(Vec<(DocumentElementUri, ProblemFeedback)>),
+    WithSolutions(Vec<(DocumentElementUri, Solutions)>),
 }
 impl Into<ProblemOptions> for ProblemOption {
     fn into(self) -> ProblemOptions {

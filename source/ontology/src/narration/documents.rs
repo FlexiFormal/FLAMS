@@ -3,7 +3,7 @@ use super::{
     NarrationTrait,
 };
 use crate::{
-    uris::{DocumentURI, Name},
+    uris::{DocumentUri, UriName},
     Checked, CheckingState, Resolvable, Unchecked,
 };
 use core::str;
@@ -22,15 +22,15 @@ pub struct DocumentStyles {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentStyle {
     pub kind: ParagraphKind,
-    pub name: Option<Name>,
-    pub counter: Option<Name>,
+    pub name: Option<UriName>,
+    pub counter: Option<UriName>,
 }
 impl FromStr for DocumentStyle {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some((a, b)) = s.split_once('-') {
             let kind = ParagraphKind::from_str(a)?;
-            let name = Some(Name::from_str(b).map_err(|_| ())?);
+            let name = Some(UriName::from_str(b).map_err(|_| ())?);
             return Ok(Self {
                 kind,
                 name,
@@ -49,13 +49,13 @@ impl FromStr for DocumentStyle {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SectionCounter {
-    pub name: Name,
+    pub name: UriName,
     pub parent: Option<SectionLevel>,
 }
 
 #[derive(Debug)]
 pub struct OpenDocument<State: CheckingState> {
-    pub uri: DocumentURI,
+    pub uri: DocumentUri,
     pub title: Option<Box<str>>,
     pub elements: State::Seq<DocumentElement<State>>,
     pub styles: DocumentStyles,
@@ -67,7 +67,7 @@ crate::serde_impl! {mod serde_doc =
 #[derive(Debug, Clone)]
 pub struct Document(pub(super) Arc<OpenDocument<Checked>>);
 impl Resolvable for Document {
-    type From = DocumentURI;
+    type From = DocumentUri;
     #[inline]
     fn id(&self) -> Cow<'_, Self::From> {
         Cow::Borrowed(&self.0.uri)
@@ -76,7 +76,7 @@ impl Resolvable for Document {
 impl Document {
     #[inline]
     #[must_use]
-    pub fn uri(&self) -> &DocumentURI {
+    pub fn uri(&self) -> &DocumentUri {
         &self.0.uri
     }
     #[must_use]
@@ -161,7 +161,7 @@ impl UncheckedDocument {
     /// #### Errors
     pub fn from_byte_stream(bytes: &mut impl BinaryReader) -> Result<Self, DecodeError> {
         let version = bytes.pop()?;
-        let uri = bytes.read_string(DocumentURI::from_str)??;
+        let uri = bytes.read_string(DocumentUri::from_str)??;
         let title: Option<Box<str>> =
             bytes.read_string(|s| if s.is_empty() { None } else { Some(s.into()) })?;
         let elements = ByteReadState::new(bytes,version).go()?;

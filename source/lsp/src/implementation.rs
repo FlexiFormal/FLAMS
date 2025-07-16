@@ -15,7 +15,7 @@ use async_lsp::{
     lsp_types::{self as lsp},
     LanguageClient, LanguageServer, ResponseError,
 };
-use flams_ontology::uris::ArchiveURITrait;
+use flams_ontology::uris::ArchiveUriTrait;
 use flams_stex::quickparse::stex::{AnnotIter, STeXAnnot};
 use flams_system::{
     backend::{archives::LocalArchive, Backend, GlobalBackend},

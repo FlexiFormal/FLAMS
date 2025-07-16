@@ -3,8 +3,8 @@ use flams_ontology::{
     content::terms::Term,
     ftml::FTMLKey,
     uris::{
-        ArchiveURITrait, DocumentElementURI, DocumentURI, ModuleURI, NarrativeURI, PathURITrait,
-        SymbolURI, URIWithLanguage,
+        ArchiveUriTrait, DocumentElementUri, DocumentUri, ModuleUri, NarrativeURI, PathURITrait,
+        SymbolUri, URIWithLanguage,
     },
 };
 use flams_web_utils::{
@@ -121,11 +121,11 @@ pub enum OMDoc {
     Paragraph(narration::OMDocParagraph),
     Problem(narration::OMDocProblem),
     Term {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         term: Term,
     },
     DocReference {
-        uri: DocumentURI,
+        uri: DocumentUri,
         title: Option<String>,
     },
     Other(String),
@@ -170,7 +170,7 @@ pub mod froms {
     use flams_ontology::{
         content::{declarations::structures::Extension, ContentReference},
         rdf::ontologies::ulo2,
-        uris::{SymbolURI, URIOrRefTrait},
+        uris::{SymbolUri, URIOrRefTrait},
         Checked,
     };
     use flams_system::backend::{
@@ -180,7 +180,7 @@ pub mod froms {
 
     pub(crate) fn get_extensions<'a>(
         b: &'a impl Backend,
-        s: &SymbolURI,
+        s: &SymbolUri,
     ) -> impl Iterator<Item = ContentReference<Extension<Checked>>> + 'a {
         let syms = GlobalBackend::get()
             .triple_store()
@@ -197,7 +197,7 @@ pub mod froms {
         syms.filter_map(|s| b.get_declaration(&s))
     }
     /*
-     pub(crate) async fn get_extensions_async<'a>(s:&SymbolURI) -> Vec<ContentReference<Extension<Checked>>> {
+     pub(crate) async fn get_extensions_async<'a>(s:&SymbolUri) -> Vec<ContentReference<Extension<Checked>>> {
        let backend = GlobalBackend::get();
        let query = sparql::Select {
          subject: sparql::Var('x'),
@@ -219,7 +219,7 @@ pub mod froms {
 }
 
 #[inline]
-pub fn uses(header: &'static str, uses: Vec<ModuleURI>) -> impl IntoView {
+pub fn uses(header: &'static str, uses: Vec<ModuleUri>) -> impl IntoView {
     comma_sep(header, uses.into_iter().map(|m| module_name(&m)))
 }
 
@@ -235,7 +235,7 @@ pub fn comma_sep<V: IntoView>(
     })
 }
 
-pub fn module_name(uri: &ModuleURI) -> impl IntoView {
+pub fn module_name(uri: &ModuleUri) -> impl IntoView {
     use flams_web_utils::components::{OnClickModal, Popover, PopoverTrigger};
     use thaw::Scrollbar;
     let name = uri.name().last_name().to_string();
@@ -265,7 +265,7 @@ pub fn module_name(uri: &ModuleURI) -> impl IntoView {
     }
 }
 
-pub fn doc_name(uri: &DocumentURI, title: String) -> impl IntoView {
+pub fn doc_name(uri: &DocumentUri, title: String) -> impl IntoView {
     use flams_web_utils::components::{Popover, PopoverTrigger};
     let uristring = uri.to_string();
     view! {
@@ -278,7 +278,7 @@ pub fn doc_name(uri: &DocumentURI, title: String) -> impl IntoView {
     }
 }
 pub fn doc_elem_name(
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     kind: Option<&'static str>,
     title: String,
 ) -> impl IntoView {
@@ -303,7 +303,7 @@ pub fn doc_elem_name(
 }
 
 #[inline]
-pub fn symbol_name(uri: &SymbolURI, title: &str) -> impl IntoView {
+pub fn symbol_name(uri: &SymbolUri, title: &str) -> impl IntoView {
     const TERM: &str = FTMLKey::Term.attr_name();
     const HEAD: &str = FTMLKey::Head.attr_name();
     const COMP: &str = FTMLKey::Comp.attr_name();

@@ -6,16 +6,16 @@ use crate::{
 };
 use flams_ontology::{
     narration::sections::SectionLevel,
-    uris::{DocumentElementURI, NarrativeURI},
+    uris::{DocumentElementUri, NarrativeURI},
 };
 use flams_web_utils::inject_css;
 use leptos::{context::Provider, prelude::*};
 
 pub(super) fn section<V: IntoView + 'static>(
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
-    let id = expect_context::<IdPrefix>().new_id(uri.name().last_name().as_ref());
+    let id = expect_context::<IdPrefix>().new_id(uri.name().last());
     NavElems::update_untracked(|ne| {
         ne.ids.insert(id.clone(), SectionOrInputref::Section);
     });

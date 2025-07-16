@@ -9,8 +9,8 @@ use flams_ontology::{
         problems::{ProblemFeedbackJson, ProblemResponse, Quiz, SolutionData},
     },
     uris::{
-        ArchiveId, ArchiveURITrait, ContentURI, ContentURITrait, DocumentElementURI, DocumentURI,
-        NarrativeURI, PathURITrait, SymbolURI, URI, URIRefTrait,
+        ArchiveId, ArchiveUriTrait, DocumentElementUri, DocumentUri, DomainUri, DomainUriTrait,
+        NarrativeURI, PathURITrait, SymbolUri, URI, URIRefTrait,
     },
 };
 use flams_utils::{CSS, unwrap};
@@ -27,13 +27,13 @@ use flams_router_base::uris::{DocURIComponents, SymURIComponents, URIComponents}
   output=server_fn::codec::Json
 )]
 pub async fn document(
-    uri: Option<DocumentURI>,
+    uri: Option<DocumentUri>,
     rp: Option<String>,
     a: Option<ArchiveId>,
     p: Option<String>,
     l: Option<Language>,
     d: Option<String>,
-) -> Result<(DocumentURI, Vec<CSS>, String), ServerFnError<String>> {
+) -> Result<(DocumentUri, Vec<CSS>, String), ServerFnError<String>> {
     let Result::<DocURIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d).try_into() else {
         return Err("invalid uri components".to_string().into());
     };
@@ -49,7 +49,7 @@ pub async fn document(
   input=server_fn::codec::GetUrl,
   output=server_fn::codec::Json
 )]
-pub async fn document_of(uri: URI) -> Result<DocumentURI, ServerFnError<String>> {
+pub async fn document_of(uri: URI) -> Result<DocumentUri, ServerFnError<String>> {
     use flams_system::backend::Backend;
     let m = match uri {
         URI::Base(_) | URI::Archive(_) | URI::Path(_) => {
@@ -57,8 +57,8 @@ pub async fn document_of(uri: URI) -> Result<DocumentURI, ServerFnError<String>>
         }
         URI::Narrative(NarrativeURI::Document(d)) => return Ok(d),
         URI::Narrative(NarrativeURI::Element(d)) => return Ok(d.document().clone()),
-        URI::Content(ContentURI::Module(ref m)) => m,
-        URI::Content(ContentURI::Symbol(ref s)) => s.module(),
+        URI::Content(DomainUri::Module(ref m)) => m,
+        URI::Content(DomainUri::Symbol(ref s)) => s.module(),
     };
     flams_system::backend::GlobalBackend::get().with_local_archive(m.archive_id(), |o| {
         let Some(archive) = o else {
@@ -70,7 +70,7 @@ pub async fn document_of(uri: URI) -> Result<DocumentURI, ServerFnError<String>>
             for step in &path.steps()[..path.steps().len() - 1] {
                 file = file.join(step.as_ref());
             }
-            Some(path.last_name().as_ref())
+            Some(path.last())
         } else {
             None
         };
@@ -102,7 +102,7 @@ pub async fn document_of(uri: URI) -> Result<DocumentURI, ServerFnError<String>>
                         }
                     })
                 }) {
-                    return DocumentURI::from_archive_relpath(m.archive_uri().owned(), &rp)
+                    return DocumentUri::from_archive_relpath(m.archive_uri().owned(), &rp)
                         .map_err(|e| e.to_string().into());
                 }
                 mname = step;
@@ -135,7 +135,7 @@ pub async fn document_of(uri: URI) -> Result<DocumentURI, ServerFnError<String>>
                     }
                 })
             }) {
-                return DocumentURI::from_archive_relpath(m.archive_uri().owned(), &rp)
+                return DocumentUri::from_archive_relpath(m.archive_uri().owned(), &rp)
                     .map_err(|e| e.to_string().into());
             }
         };
@@ -150,7 +150,7 @@ pub async fn document_of(uri: URI) -> Result<DocumentURI, ServerFnError<String>>
   output=server_fn::codec::Json
 )]
 pub async fn toc(
-    uri: Option<DocumentURI>,
+    uri: Option<DocumentUri>,
     rp: Option<String>,
     a: Option<ArchiveId>,
     p: Option<String>,
@@ -204,13 +204,13 @@ pub async fn fragment(
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_arguments)]
 pub async fn los(
-    uri: Option<SymbolURI>,
+    uri: Option<SymbolUri>,
     a: Option<ArchiveId>,
     p: Option<String>,
     m: Option<String>,
     s: Option<String>,
     problems: bool,
-) -> Result<Vec<(DocumentElementURI, LOKind)>, ServerFnError<String>> {
+) -> Result<Vec<(DocumentElementUri, LOKind)>, ServerFnError<String>> {
     let Result::<SymURIComponents, _>::Ok(comps) = (uri, a, p, m, s).try_into() else {
         return Err("invalid uri components".to_string().into());
     };
@@ -238,7 +238,7 @@ pub async fn notations(
     e: Option<String>,
     m: Option<String>,
     s: Option<String>,
-) -> Result<Vec<(DocumentElementURI, Notation)>, ServerFnError<String>> {
+) -> Result<Vec<(DocumentElementUri, Notation)>, ServerFnError<String>> {
     let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, m, s).try_into() else {
         return Err("invalid uri components".to_string().into());
     };
@@ -313,7 +313,7 @@ pub async fn title(
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_arguments)]
 pub async fn get_quiz(
-    uri: Option<DocumentURI>,
+    uri: Option<DocumentUri>,
     rp: Option<String>,
     a: Option<ArchiveId>,
     p: Option<String>,
@@ -464,8 +464,7 @@ mod server {
         },
         rdf::ontologies::ulo2,
         uris::{
-            ContentURI, DocumentElementURI, DocumentURI, NarrativeURI, SymbolURI, URI,
-            URIOrRefTrait,
+            DocumentElementUri, DocumentUri, DomainUri, NarrativeURI, SymbolUri, URI, URIOrRefTrait,
         },
     };
     use flams_system::backend::{Backend, GlobalBackend, rdf::sparql};
@@ -481,8 +480,8 @@ mod server {
     use leptos::prelude::*;
 
     pub async fn document(
-        uri: DocumentURI,
-    ) -> Result<(DocumentURI, Vec<CSS>, String), ServerFnError<String>> {
+        uri: DocumentUri,
+    ) -> Result<(DocumentUri, Vec<CSS>, String), ServerFnError<String>> {
         let Some((css, doc)) = backend!(get_html_body!(&uri, true)) else {
             not_found!("Document {uri} not found");
         };
@@ -495,7 +494,7 @@ mod server {
         Ok((uri, insert_base_url(css), html))
     }
 
-    pub async fn toc(uri: DocumentURI) -> Result<(Vec<CSS>, Vec<TOCElem>), ServerFnError<String>> {
+    pub async fn toc(uri: DocumentUri) -> Result<(Vec<CSS>, Vec<TOCElem>), ServerFnError<String>> {
         let Some(doc) = backend!(get_document!(&uri)) else {
             not_found!("Document {uri} not found");
         };
@@ -541,21 +540,21 @@ mod server {
                     _ => return Err("not a paragraph".to_string().into()),
                 }
             }
-            URI::Content(ContentURI::Symbol(suri)) => get_definitions(suri.clone())
+            URI::Content(DomainUri::Symbol(suri)) => get_definitions(suri.clone())
                 .await
                 .ok_or_else(|| not_found!(!"No definition for {suri} not found"))
                 .map(|(css, b)| (uri, insert_base_url(filter_paras(css)), b)),
             URI::Base(_) => return Err("TODO: base".to_string().into()),
             URI::Archive(_) => return Err("TODO: archive".to_string().into()),
             URI::Path(_) => return Err("TODO: path".to_string().into()),
-            URI::Content(ContentURI::Module(_)) => return Err("TODO: module".to_string().into()),
+            URI::Content(DomainUri::Module(_)) => return Err("TODO: module".to_string().into()),
         }
     }
 
     pub async fn los(
-        uri: SymbolURI,
+        uri: SymbolUri,
         problems: bool,
-    ) -> Result<Vec<(DocumentElementURI, LOKind)>, ServerFnError<String>> {
+    ) -> Result<Vec<(DocumentElementUri, LOKind)>, ServerFnError<String>> {
         blocking_server_fn(move || {
             Ok(GlobalBackend::get()
                 .triple_store()
@@ -568,9 +567,9 @@ mod server {
 
     pub async fn notations(
         uri: URI,
-    ) -> Result<Vec<(DocumentElementURI, Notation)>, ServerFnError<String>> {
+    ) -> Result<Vec<(DocumentElementUri, Notation)>, ServerFnError<String>> {
         let v = match uri {
-            URI::Content(ContentURI::Symbol(uri)) => {
+            URI::Content(DomainUri::Symbol(uri)) => {
                 blocking_server_fn(move || {
                     Ok(backend!(get_notations SYNC!(&uri)).unwrap_or_default())
                 })
@@ -661,7 +660,7 @@ mod server {
                 };
                 Ok((insert_base_url(css.0), r.into()))
             }
-            URI::Content(ContentURI::Module(uri)) => {
+            URI::Content(DomainUri::Module(uri)) => {
                 let Some(m) = backend!(get_module!(&uri)) else {
                     not_found!("Module {uri} not found");
                 };
@@ -674,7 +673,7 @@ mod server {
                 });
                 Ok((Vec::new(), r))
             }
-            URI::Content(ContentURI::Symbol(uri)) => {
+            URI::Content(DomainUri::Symbol(uri)) => {
                 let Some(s): Option<ContentReference<Declaration>> =
                     backend!(get_declaration!(&uri))
                 else {
@@ -685,7 +684,7 @@ mod server {
         }
     }
 
-    pub async fn get_quiz(uri: DocumentURI) -> Result<Quiz, ServerFnError<String>> {
+    pub async fn get_quiz(uri: DocumentUri) -> Result<Quiz, ServerFnError<String>> {
         use flams_system::backend::docfile::QuizExtension;
         let Some(doc) = backend!(get_document!(&uri)) else {
             not_found!("Document {uri} not found");
@@ -708,13 +707,13 @@ mod server {
 
     pub async fn slides(uri: URI) -> Result<(Vec<CSS>, Vec<SlideElement>), ServerFnError<String>> {
         fn from_children(
-            top: &DocumentURI,
+            top: &DocumentUri,
             children: &[DocumentElement<Checked>],
             css: &mut VecSet<CSS>,
             backend: &impl Backend,
         ) -> Result<Vec<SlideElement>, String> {
             let mut stack =
-                smallvec::SmallVec::<(_, _, _, Option<DocumentElementURI>), 2>::default();
+                smallvec::SmallVec::<(_, _, _, Option<DocumentElementUri>), 2>::default();
             let mut ret = Vec::new();
             let mut curr = children.iter();
 
@@ -838,7 +837,7 @@ mod server {
         .await
     }
 
-    pub fn get_solution(uri: &DocumentElementURI) -> Result<Solutions, String> {
+    pub fn get_solution(uri: &DocumentElementUri) -> Result<Solutions, String> {
         use flams_system::backend::Backend;
         match backend!(get_document_element(&uri)) {
             Some(rf) => {
@@ -853,7 +852,7 @@ mod server {
         }
     }
 
-    async fn get_definitions(uri: SymbolURI) -> Option<(Vec<CSS>, String)> {
+    async fn get_definitions(uri: SymbolUri) -> Option<(Vec<CSS>, String)> {
         let b = GlobalBackend::get();
         let query = sparql::Select {
             subject: sparql::Var('x'),
@@ -904,7 +903,7 @@ mod server {
 #[server(prefix = "/content/legacy", endpoint = "uris")]
 pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<String>> {
     use flams_ontology::uris::{
-        ArchiveURI, ArchiveURITrait, BaseURI, ModuleURI, URIOrRefTrait, URIRefTrait,
+        ArchiveUri, ArchiveUriTrait, BaseUri, ModuleUri, URIOrRefTrait, URIRefTrait,
     };
     use flams_system::backend::{Backend, GlobalBackend};
 
@@ -913,15 +912,15 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<S
     const URTHEORIES: &str = "http://cds.omdoc.org/urtheories";
 
     lazy_static::lazy_static! {
-      static ref MATHHUB_INFO: BaseURI = BaseURI::new_unchecked("http://mathhub.info/:sTeX");
-      static ref META_URI: ArchiveURI = flams_ontology::metatheory::URI.archive_uri().owned();//ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("sTeX/meta-inf"));
-      static ref UR_URI: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://cds.omdoc.org"),ArchiveId::new("MMT/urtheories"));
-      static ref MY_ARCHIVE: ArchiveURI = ArchiveURI::new(BaseURI::new_unchecked("http://mathhub.info"),ArchiveId::new("my/archive"));
-      static ref INJECTING: ArchiveURI = ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("Papers/22-CICM-Injecting-Formal-Mathematics"));
-      static ref TUG: ArchiveURI = ArchiveURI::new(MATHHUB_INFO.clone(),ArchiveId::new("Papers/22-TUG-sTeX"));
+      static ref MATHHUB_INFO: BaseUri = BaseUri::new_unchecked("http://mathhub.info/:sTeX");
+      static ref META_URI: ArchiveUri = flams_ontology::metatheory::URI.archive_uri().owned();//ArchiveUri::new(MATHHUB_INFO.clone(),ArchiveId::new("sTeX/meta-inf"));
+      static ref UR_URI: ArchiveUri = ArchiveUri::new(BaseUri::new_unchecked("http://cds.omdoc.org"),ArchiveId::new("MMT/urtheories"));
+      static ref MY_ARCHIVE: ArchiveUri = ArchiveUri::new(BaseUri::new_unchecked("http://mathhub.info"),ArchiveId::new("my/archive"));
+      static ref INJECTING: ArchiveUri = ArchiveUri::new(MATHHUB_INFO.clone(),ArchiveId::new("Papers/22-CICM-Injecting-Formal-Mathematics"));
+      static ref TUG: ArchiveUri = ArchiveUri::new(MATHHUB_INFO.clone(),ArchiveId::new("Papers/22-TUG-sTeX"));
     }
 
-    fn split(p: &str) -> Option<(ArchiveURI, usize)> {
+    fn split(p: &str) -> Option<(ArchiveUri, usize)> {
         if p.starts_with(META) {
             return Some((META_URI.clone(), 29));
         }
@@ -938,7 +937,7 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<S
             return Some((TUG.clone(), 34));
         }
         if p.starts_with("file://") {
-            return Some((ArchiveURI::no_archive(), 7));
+            return Some((ArchiveUri::no_archive(), 7));
         }
         if let Some(mut p) = p.strip_prefix(MATHHUB) {
             let mut i = MATHHUB.len();
@@ -968,7 +967,7 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<S
         })
     }
 
-    fn split_old(p: &str, len: usize) -> Option<(ArchiveURI, usize)> {
+    fn split_old(p: &str, len: usize) -> Option<(ArchiveUri, usize)> {
         GlobalBackend::get().with_archives(|mut tree| {
             tree.find_map(|a| {
                 if p.starts_with(a.id().as_ref()) {
@@ -985,7 +984,7 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<S
         })
     }
 
-    fn get_doc_uri(pathstr: &str) -> Option<DocumentURI> {
+    fn get_doc_uri(pathstr: &str) -> Option<DocumentUri> {
         let pathstr = pathstr.strip_suffix(".tex").unwrap_or(pathstr);
         let (p, mut m) = pathstr.rsplit_once('/')?;
         let (a, l) = split(p)?;
@@ -998,7 +997,7 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<S
         ((a % path).ok()? & (m, lang)).ok()
     }
 
-    fn get_mod_uri(pathstr: &str) -> Option<ModuleURI> {
+    fn get_mod_uri(pathstr: &str) -> Option<ModuleUri> {
         let (mut p, mut m) = pathstr.rsplit_once('?')?;
         m = m.strip_suffix("-module").unwrap_or(m);
         if p.bytes().last() == Some(b'/') {
@@ -1012,7 +1011,7 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<S
         ((a % path).ok()? | m).ok()
     }
 
-    fn get_sym_uri(pathstr: &str) -> Option<SymbolURI> {
+    fn get_sym_uri(pathstr: &str) -> Option<SymbolUri> {
         let (m, s) = match pathstr.split_once('[') {
             Some((m, s)) => {
                 let (m, _) = m.rsplit_once('?')?;

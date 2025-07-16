@@ -1,12 +1,13 @@
 use crate::{
-    uris::{ModuleURI, SymbolURI}, LocalBackend, MaybeResolved, Unchecked
+    uris::{ModuleUri, SymbolUri},
+    LocalBackend, MaybeResolved, Unchecked,
 };
 
 use super::{
     declarations::{
         morphisms::Morphism,
         structures::{Extension, MathStructure},
-        Declaration, OpenDeclaration
+        Declaration, OpenDeclaration,
     },
     modules::NestedModule,
 };
@@ -17,15 +18,15 @@ pub trait ModuleChecker: LocalBackend {
 }
 
 enum Elem {
-    Extension(SymbolURI, SymbolURI),
-    NestedModule(SymbolURI),
+    Extension(SymbolUri, SymbolUri),
+    NestedModule(SymbolUri),
     MathStructure {
-        uri: SymbolURI,
+        uri: SymbolUri,
         macroname: Option<Box<str>>,
     },
     Morphism {
-        uri: SymbolURI,
-        domain: ModuleURI,
+        uri: SymbolUri,
+        domain: ModuleUri,
         total: bool,
     },
 }
@@ -35,7 +36,7 @@ impl Elem {
         match self {
             Self::Extension(uri, target) => {
                 //println!("Require declaration {target}");
-                let target = MaybeResolved::resolve(target,|m| checker.get_declaration(m));
+                let target = MaybeResolved::resolve(target, |m| checker.get_declaration(m));
                 Declaration::Extension(Extension {
                     uri,
                     target,
@@ -59,7 +60,7 @@ impl Elem {
             }
             Self::Morphism { uri, domain, total } => {
                 //println!("Require domain {domain}");
-                let domain = MaybeResolved::resolve(domain,|d| checker.get_module(d));
+                let domain = MaybeResolved::resolve(domain, |d| checker.get_module(d));
                 Declaration::Morphism(Morphism {
                     uri,
                     domain,
@@ -80,13 +81,13 @@ pub(super) struct ModuleCheckIter<'a, Check: ModuleChecker> {
     curr_in: std::vec::IntoIter<OpenDeclaration<Unchecked>>,
     curr_out: Vec<Declaration>,
     checker: &'a mut Check,
-    uri: &'a ModuleURI,
+    uri: &'a ModuleUri,
 }
 impl<Check: ModuleChecker> ModuleCheckIter<'_, Check> {
     pub fn go(
         elems: Vec<OpenDeclaration<Unchecked>>,
         checker: &mut Check,
-        uri: &ModuleURI,
+        uri: &ModuleUri,
     ) -> Vec<Declaration> {
         let mut slf = ModuleCheckIter {
             stack: Vec::new(),
@@ -119,7 +120,7 @@ impl<Check: ModuleChecker> ModuleCheckIter<'_, Check> {
                 let m = if !uri.clone() == *self.uri {
                     MaybeResolved::unresolved(uri)
                 } else {
-                    MaybeResolved::resolve(uri,|u| self.checker.get_module(u))
+                    MaybeResolved::resolve(uri, |u| self.checker.get_module(u))
                 };
                 let mut m = Declaration::Import(m);
                 self.checker.close(&mut m);

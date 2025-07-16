@@ -26,7 +26,7 @@ use flams_ontology::{
         problems::{CognitiveDimension, ProblemResponse, Solutions},
         sections::SectionLevel,
     },
-    uris::{DocumentElementURI, DocumentURI, NarrativeURI, URI},
+    uris::{DocumentElementUri, DocumentUri, NarrativeURI, URI},
 };
 use flams_utils::{prelude::HMap, vecmap::VecMap};
 use flams_web_utils::{components::wait_local, do_css, inject_css};
@@ -96,7 +96,7 @@ pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
     #[cfg(any(feature = "csr", feature = "hydrate"))]
     provide_context(RwSignal::new(DOMExtractor::default()));
     provide_context(SectionCounters::default());
-    provide_context(NarrativeURI::Document(DocumentURI::no_doc()));
+    provide_context(NarrativeURI::Document(DocumentUri::no_doc()));
     provide_context(FTMLConfig::new());
     provide_context(RwSignal::new(None::<Vec<TOCElem>>));
 
@@ -127,7 +127,7 @@ pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
 
 #[component]
 pub fn FTMLDocumentSetup<Ch: IntoView + 'static>(
-    uri: DocumentURI,
+    uri: DocumentUri,
     #[prop(default=None)] allow_hovers: Option<bool>,
     #[prop(default=None)] on_section_title: Option<OnSectionTitle>,
     #[prop(default=None)] on_fragment: Option<FragmentContinuation>,

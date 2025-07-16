@@ -27,7 +27,7 @@ use crate::{
         },
         terms::Term,
     },
-    uris::{DocumentElementURI, DocumentURI, Name, NameStep, SymbolURI},
+    uris::{DocumentElementUri, DocumentUri, Name, NameStep, SymbolUri},
     Checked, CheckingState, DocumentRange, Unchecked,
 };
 
@@ -48,13 +48,13 @@ pub enum LOKind {
 pub struct LazyDocRef<T> {
     pub start: usize,
     pub end: usize,
-    pub in_doc: DocumentURI,
+    pub in_doc: DocumentUri,
     phantom_data: PhantomData<T>,
 }
 impl<T> LazyDocRef<T> {
     #[inline]
     #[must_use]
-    pub const fn new(start: usize, end: usize, in_doc: DocumentURI) -> Self {
+    pub const fn new(start: usize, end: usize, in_doc: DocumentUri) -> Self {
         Self {
             start,
             end,
@@ -219,7 +219,7 @@ pub enum DocumentElement<State: CheckingState> {
     Section(Section<State>),
     Slide {
         range: DocumentRange,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         children: State::Seq<DocumentElement<State>>,
     },
     Module {
@@ -244,38 +244,38 @@ pub enum DocumentElement<State: CheckingState> {
         children: State::Seq<DocumentElement<State>>,
     },
     DocumentReference {
-        id: DocumentElementURI,
+        id: DocumentElementUri,
         range: DocumentRange,
         target: State::Doc,
     },
     SymbolDeclaration(State::Decl<Symbol>),
     Notation {
-        symbol: SymbolURI,
-        id: DocumentElementURI,
+        symbol: SymbolUri,
+        id: DocumentElementUri,
         notation: LazyDocRef<Notation>,
     },
     VariableNotation {
-        variable: DocumentElementURI,
-        id: DocumentElementURI,
+        variable: DocumentElementUri,
+        id: DocumentElementUri,
         notation: LazyDocRef<Notation>,
     },
     Variable(Variable),
     Definiendum {
         range: DocumentRange,
-        uri: SymbolURI,
+        uri: SymbolUri,
     },
     SymbolReference {
         range: DocumentRange,
-        uri: SymbolURI,
+        uri: SymbolUri,
         notation: Option<NameStep>,
     },
     VariableReference {
         range: DocumentRange,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         notation: Option<NameStep>,
     },
     TopTerm {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         term: Term,
     },
     UseModule(State::ModuleLike),

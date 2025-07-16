@@ -6,7 +6,7 @@ use std::{
 
 use either::Either;
 use flams_ontology::uris::{
-    ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, ModuleURI, URIRefTrait,
+    ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, DocumentUri, ModuleUri, URIRefTrait,
 };
 use flams_utils::{
     time::Eta,
@@ -58,7 +58,7 @@ pub enum Dependency {
         strict: bool,
     },
     Logical {
-        uri: ModuleURI,
+        uri: ModuleUri,
         strict: bool,
     },
     Resolved {
@@ -80,7 +80,7 @@ impl From<BuildTaskId> for u32 {
 #[derive(Debug, PartialEq, Eq)]
 struct BuildTaskI {
     id: BuildTaskId,
-    archive: ArchiveURI,
+    archive: ArchiveUri,
     steps: Box<[BuildStep]>,
     source: Either<PathBuf, String>,
     rel_path: std::sync::Arc<str>,
@@ -91,8 +91,8 @@ pub struct BuildTask(Arc<BuildTaskI>);
 impl BuildTask {
     #[must_use]
     #[inline]
-    pub fn document_uri(&self) -> eyre::Result<DocumentURI> {
-        DocumentURI::from_archive_relpath(self.archive().owned(), self.rel_path())
+    pub fn document_uri(&self) -> eyre::Result<DocumentUri> {
+        DocumentUri::from_archive_relpath(self.archive().owned(), self.rel_path())
     }
     #[must_use]
     pub fn get_task_ref(&self, target: BuildTargetId) -> TaskRef {
@@ -114,7 +114,7 @@ impl BuildTask {
 
     #[inline]
     #[must_use]
-    pub fn archive(&self) -> ArchiveURIRef {
+    pub fn archive(&self) -> ArchiveUriRef {
         self.0.archive.archive_uri()
     }
 
@@ -162,7 +162,7 @@ struct BuildStepI {
     //task:std::sync::Weak<BuildTaskI>,
     target: BuildTargetId,
     state: RwLock<TaskState>,
-    //yields:RwLock<Vec<ModuleURI>>,
+    //yields:RwLock<Vec<ModuleUri>>,
     requires: RwLock<VecSet<Dependency>>,
     dependents: RwLock<Vec<(BuildTaskId, BuildTargetId)>>,
 }

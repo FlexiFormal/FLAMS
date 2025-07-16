@@ -1,6 +1,6 @@
 use flams_ontology::{
     archive_json::{ArchiveIndex, Institution},
-    uris::DocumentURI,
+    uris::DocumentUri,
 };
 use flams_web_utils::components::wait_and_then_fn;
 use leptos::prelude::*;
@@ -55,7 +55,7 @@ fn wrap_list<V: IntoView + 'static>(
 }
 
 fn link_doc<V: IntoView + 'static, T: FnOnce() -> V>(
-    uri: &DocumentURI,
+    uri: &DocumentUri,
     i: T,
 ) -> impl IntoView + 'static + use<V, T> {
     view! {

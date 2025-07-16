@@ -3,7 +3,7 @@ use std::{default, ops::Deref, path::PathBuf, sync::atomic::AtomicU64};
 use axum::body::Body;
 use flams_ontology::{
     languages::Language,
-    uris::{ArchiveId, DocumentURI},
+    uris::{ArchiveId, DocumentUri},
 };
 use flams_router_base::uris::DocURIComponents;
 use flams_system::{
@@ -147,7 +147,7 @@ pub(crate) async fn doc_handler(
         return err("Missing format");
     };
 
-    let uri: Option<DocumentURI> = parse!("uri");
+    let uri: Option<DocumentUri> = parse!("uri");
     let rp = params.get("rp");
     let a: Option<ArchiveId> = parse!("a");
     let p = params.get("p");

@@ -23,9 +23,7 @@ use flams_ontology::{
         variables::Variable,
         DocumentElement,
     },
-    uris::{
-        ContentURI, DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI, URIOrRefTrait,
-    },
+    uris::{DocumentElementUri, DocumentUri, DomainUri, ModuleUri, Name, SymbolUri, URIOrRefTrait},
 };
 use smallvec::SmallVec;
 use terms::{OpenArg, PreVar, VarOrSym};
@@ -45,39 +43,39 @@ pub mod terms;
 pub enum OpenFTMLElement {
     Invisible,
     SetSectionLevel(SectionLevel),
-    ImportModule(ModuleURI),
-    UseModule(ModuleURI),
-    Slide(DocumentElementURI),
+    ImportModule(ModuleUri),
+    UseModule(ModuleUri),
+    Slide(DocumentElementUri),
     SlideNumber,
     ProofBody,
     Module {
-        uri: ModuleURI,
-        meta: Option<ModuleURI>,
+        uri: ModuleUri,
+        meta: Option<ModuleUri>,
         signature: Option<Language>,
     },
     MathStructure {
-        uri: SymbolURI,
+        uri: SymbolUri,
         macroname: Option<Box<str>>,
     },
     Morphism {
-        uri: SymbolURI,
-        domain: ModuleURI,
+        uri: SymbolUri,
+        domain: ModuleUri,
         total: bool,
     },
-    Assign(SymbolURI),
+    Assign(SymbolUri),
     Section {
         lvl: SectionLevel,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
     },
     SkipSection,
     Paragraph {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         kind: ParagraphKind,
         formatting: ParagraphFormatting,
         styles: Box<[Name]>,
     },
     Problem {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         styles: Box<[Name]>,
         autogradable: bool,
         points: Option<f32>,
@@ -88,7 +86,7 @@ pub enum OpenFTMLElement {
     ProofTitle,
     SubproofTitle,
     Symdecl {
-        uri: SymbolURI,
+        uri: SymbolUri,
         arity: ArgSpec,
         macroname: Option<Box<str>>,
         role: Box<[Box<str>]>,
@@ -96,7 +94,7 @@ pub enum OpenFTMLElement {
         reordering: Option<Box<str>>,
     },
     Vardecl {
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         arity: ArgSpec,
         bind: bool,
         macroname: Option<Box<str>>,
@@ -113,14 +111,14 @@ pub enum OpenFTMLElement {
     },
     NotationComp,
     NotationOpComp,
-    Definiendum(SymbolURI),
+    Definiendum(SymbolUri),
     Type,
     Conclusion {
-        uri: SymbolURI,
+        uri: SymbolUri,
         in_term: bool,
     },
     Definiens {
-        uri: Option<SymbolURI>,
+        uri: Option<SymbolUri>,
         in_term: bool,
     },
     OpenTerm {
@@ -149,7 +147,7 @@ pub enum OpenFTMLElement {
     FillinsolCase,
 
     Inputref {
-        uri: DocumentURI,
+        uri: DocumentUri,
         id: Box<str>,
     },
     IfInputref(bool),
@@ -605,7 +603,7 @@ impl OpenFTMLElement {
         node.as_term()
     }
 
-    fn close_importmodule<E: FTMLExtractor>(extractor: &mut E, uri: ModuleURI) {
+    fn close_importmodule<E: FTMLExtractor>(extractor: &mut E, uri: ModuleUri) {
         #[cfg(feature = "rdf")]
         if E::RDF {
             if let Some(m) = extractor.get_content_iri() {
@@ -621,7 +619,7 @@ impl OpenFTMLElement {
         }
     }
 
-    fn close_usemodule<E: FTMLExtractor>(extractor: &mut E, uri: ModuleURI) {
+    fn close_usemodule<E: FTMLExtractor>(extractor: &mut E, uri: ModuleUri) {
         #[cfg(feature = "rdf")]
         if E::RDF {
             extractor.add_triples([
@@ -634,8 +632,8 @@ impl OpenFTMLElement {
     fn close_module<E: FTMLExtractor, N: FTMLNode>(
         extractor: &mut E,
         node: &N,
-        uri: ModuleURI,
-        meta: Option<ModuleURI>,
+        uri: ModuleUri,
+        meta: Option<ModuleUri>,
         signature: Option<Language>,
     ) {
         let Some((_, narrative)) = extractor.close_narrative() else {
@@ -695,7 +693,7 @@ impl OpenFTMLElement {
     fn close_structure<E: FTMLExtractor, N: FTMLNode>(
         extractor: &mut E,
         node: &N,
-        uri: SymbolURI,
+        uri: SymbolUri,
         macroname: Option<Box<str>>,
     ) {
         let Some((_, narrative)) = extractor.close_narrative() else {
@@ -718,11 +716,9 @@ impl OpenFTMLElement {
             }
         }
 
-        if uri.name().last_name().as_ref().starts_with("EXTSTRUCT") {
+        if uri.name().last().starts_with("EXTSTRUCT") {
             let Some(target) = content.iter().find_map(|d| match d {
-                OpenDeclaration::Import(uri)
-                    if !uri.name().last_name().as_ref().starts_with("EXTSTRUCT") =>
-                {
+                OpenDeclaration::Import(uri) if !uri.name().last().starts_with("EXTSTRUCT") => {
                     Some(uri)
                 }
                 _ => None,
@@ -777,8 +773,8 @@ impl OpenFTMLElement {
     fn close_morphism<E: FTMLExtractor, N: FTMLNode>(
         extractor: &mut E,
         node: &N,
-        uri: SymbolURI,
-        domain: ModuleURI,
+        uri: SymbolUri,
+        domain: ModuleUri,
         total: bool,
     ) {
         let Some((_, narrative)) = extractor.close_narrative() else {
@@ -824,7 +820,7 @@ impl OpenFTMLElement {
         extractor: &mut E,
         node: &N,
         lvl: SectionLevel,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
     ) {
         let Some((_, title, children)) = extractor.close_section() else {
             extractor.add_error(FTMLError::NotInNarrative);
@@ -856,7 +852,7 @@ impl OpenFTMLElement {
         kind: ParagraphKind,
         formatting: ParagraphFormatting,
         styles: Box<[Name]>,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
     ) {
         let Some(ParagraphState {
             children,
@@ -904,7 +900,7 @@ impl OpenFTMLElement {
     fn close_problem<E: FTMLExtractor, N: FTMLNode>(
         extractor: &mut E,
         node: &N,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         styles: Box<[Name]>,
         autogradable: bool,
         points: Option<f32>,
@@ -979,7 +975,7 @@ impl OpenFTMLElement {
 
     fn close_symdecl<E: FTMLExtractor>(
         extractor: &mut E,
-        uri: SymbolURI,
+        uri: SymbolUri,
         arity: ArgSpec,
         macroname: Option<Box<str>>,
         role: Box<[Box<str>]>,
@@ -1021,7 +1017,7 @@ impl OpenFTMLElement {
     #[allow(clippy::too_many_arguments)]
     fn close_vardecl<E: FTMLExtractor>(
         extractor: &mut E,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         bind: bool,
         arity: ArgSpec,
         macroname: Option<Box<str>>,
@@ -1098,7 +1094,7 @@ impl OpenFTMLElement {
             argprecs,
         });
         match symbol {
-            VarOrSym::S(ContentURI::Symbol(symbol)) => {
+            VarOrSym::S(DomainUri::Symbol(symbol)) => {
                 #[cfg(feature = "rdf")]
                 if E::RDF {
                     let iri = uri.to_iri();

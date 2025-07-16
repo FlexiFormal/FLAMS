@@ -14,7 +14,7 @@ use std::{
 use either::Either;
 use eyre::Context;
 use flams_ftml::{HTMLString, FTML_DOC, FTML_OMDOC};
-use flams_ontology::uris::{ArchiveId, ArchiveURITrait, DocumentURI, PathURITrait, URIRefTrait};
+use flams_ontology::uris::{ArchiveId, ArchiveUriTrait, DocumentUri, PathURITrait, URIRefTrait};
 use flams_system::{
     backend::{
         archives::{Archive, ArchiveOrGroup, LocalArchive},
@@ -206,7 +206,7 @@ macro_rules! err {
     ($e:expr => $fmt:expr, $($args:tt)*) => { $e.wrap_err_with(|| format!($fmt,$($args)*))?};
 }
 
-pub fn export_standalone(doc: &DocumentURI, file: &Path, target_dir: &Path) -> eyre::Result<()> {
+pub fn export_standalone(doc: &DocumentUri, file: &Path, target_dir: &Path) -> eyre::Result<()> {
     use std::fmt::Write;
     if !file.extension().is_some_and(|e| e == "tex") {
         err!("Not a .tex file: {}", file.display());
@@ -330,7 +330,7 @@ pub fn export_standalone(doc: &DocumentURI, file: &Path, target_dir: &Path) -> e
                     let Some((d, f)) = GlobalBackend::get().with_local_archive(archive, |a| {
                         a.and_then(|a| {
                             let f = a.path().join("source").join(&*filepath);
-                            let d = DocumentURI::from_archive_relpath(a.uri().owned(), &*filepath)
+                            let d = DocumentUri::from_archive_relpath(a.uri().owned(), &*filepath)
                                 .ok()?;
                             Some((d, f))
                         })
@@ -480,12 +480,12 @@ fn test() {
     }
     tracing_subscriber::fmt().init();
     print::<ArchiveId>();
-    print::<flams_ontology::uris::BaseURI>();
-    print::<flams_ontology::uris::ArchiveURI>();
+    print::<flams_ontology::uris::BaseUri>();
+    print::<flams_ontology::uris::ArchiveUri>();
     print::<flams_ontology::uris::PathURI>();
-    print::<flams_ontology::uris::ModuleURI>();
-    print::<flams_ontology::uris::DocumentURI>();
-    print::<flams_ontology::uris::SymbolURI>();
-    print::<flams_ontology::uris::DocumentElementURI>();
+    print::<flams_ontology::uris::ModuleUri>();
+    print::<flams_ontology::uris::DocumentUri>();
+    print::<flams_ontology::uris::SymbolUri>();
+    print::<flams_ontology::uris::DocumentElementUri>();
 }
  */

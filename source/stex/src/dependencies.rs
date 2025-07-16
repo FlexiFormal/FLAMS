@@ -12,7 +12,7 @@ use crate::{
 use either::Either;
 use flams_ontology::{
     languages::Language,
-    uris::{ArchiveId, ArchiveURITrait, DocumentURI},
+    uris::{ArchiveId, ArchiveUriTrait, DocumentUri},
 };
 use flams_system::{
     backend::AnyBackend,
@@ -36,7 +36,7 @@ pub enum STeXDependency {
         filepath: std::sync::Arc<str>,
     },
     Module {
-        //uri:ModuleURI,
+        //uri:ModuleUri,
         sig: Option<Language>,
         meta: Option<(ArchiveId, std::sync::Arc<str>)>,
     },
@@ -62,7 +62,7 @@ pub struct DepParser<'a> {
 pub(super) fn parse_deps<'a>(
     source: &'a str,
     path: &'a Path,
-    doc: &'a DocumentURI,
+    doc: &'a DocumentUri,
     backend: &'a AnyBackend,
 ) -> impl Iterator<Item = STeXDependency> + use<'a> {
     const NOERR: fn(String, SourceRange<()>, DiagnosticLevel) = |_, _, _| {};

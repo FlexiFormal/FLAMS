@@ -13,7 +13,7 @@ use flams_ontology::{
     languages::Language,
     narration::documents::UncheckedDocument,
     uris::{
-        ArchiveId, ArchiveURI, ArchiveURIRef, ArchiveURITrait, DocumentURI, Name, NameStep,
+        ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, DocumentUri, Name, NameStep,
         PathURITrait, URIOrRefTrait, URIRefTrait,
     },
     DocumentRange, Unchecked,
@@ -41,7 +41,7 @@ use super::{docfile::PreDocFile, rdf::RDFStore, BackendChange};
 
 #[derive(Debug)]
 pub(super) struct RepositoryData {
-    pub(super) uri: ArchiveURI,
+    pub(super) uri: ArchiveUri,
     pub(super) attributes: VecMap<Box<str>, Box<str>>,
     pub(super) formats: VecSet<SourceFormatId>,
     pub(super) dependencies: Box<[ArchiveId]>,
@@ -318,7 +318,7 @@ impl LocalArchive {
 
     #[inline]
     #[must_use]
-    pub fn uri(&self) -> ArchiveURIRef {
+    pub fn uri(&self) -> ArchiveUriRef {
         self.data.uri.archive_uri()
     }
 
@@ -401,7 +401,7 @@ impl LocalArchive {
 
     fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         relational: &RDFStore,
         load: bool,
@@ -733,7 +733,7 @@ impl Archive {
 
     pub fn submit_triples(
         &self,
-        in_doc: &DocumentURI,
+        in_doc: &DocumentUri,
         rel_path: &str,
         relational: &RDFStore,
         load: bool,
@@ -754,7 +754,7 @@ impl Archive {
 
     #[inline]
     #[must_use]
-    pub fn uri(&self) -> ArchiveURIRef {
+    pub fn uri(&self) -> ArchiveUriRef {
         self.data().uri.archive_uri()
     }
     #[inline]

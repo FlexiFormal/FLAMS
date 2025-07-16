@@ -15,7 +15,7 @@ pub use ftml_viewer_components::remote::get_server_url;
 #[cfg(any(doc, not(feature = "ts")))]
 #[wasm_bindgen(start)]
 pub fn run() {
-    use flams_ontology::uris::DocumentURI;
+    use flams_ontology::uris::DocumentUri;
     use flams_web_utils::components::Themer;
     use ftml_viewer_components::{FTMLDocumentSetup, FTMLGlobalSetup};
     use leptos::prelude::*;
@@ -30,7 +30,7 @@ pub fn run() {
 
     leptos_posthoc::hydrate_body(|orig| {
         leptos_meta::provide_meta_context();
-        view!(<Themer attr:style="font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;background-color:inherit;"><FTMLGlobalSetup><FTMLDocumentSetup uri=DocumentURI::no_doc()>
+        view!(<Themer attr:style="font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;background-color:inherit;"><FTMLGlobalSetup><FTMLDocumentSetup uri=DocumentUri::no_doc()>
             <DomChildrenCont orig cont=ftml_viewer_components::iterate/>
             </FTMLDocumentSetup></FTMLGlobalSetup></Themer>
         )

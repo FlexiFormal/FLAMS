@@ -5,7 +5,7 @@ export { FTML };
 const onStartI = FTML.init();
 
 /**
- * 
+ *
  * Execute the given code only after the FTML viewer has been initialized
  */
 export function ifStarted<R>(f: () => R): Promise<R> {
@@ -14,11 +14,11 @@ export function ifStarted<R>(f: () => R): Promise<R> {
 
 /**
  * Initializes the FTML viewer
- * 
+ *
  * @param serverUrl The url of the Flams server used for requests
  * @param debug     Whether to print debug messages to the console
  */
-export async function initialize(serverUrl:string,debug?:boolean) {
+export async function initialize(serverUrl: string, debug?: boolean) {
   await onStartI;
   FTML.set_server_url(serverUrl);
   if (typeof window !== "undefined") {
@@ -32,18 +32,16 @@ export async function initialize(serverUrl:string,debug?:boolean) {
 /**
  * Injects all of the css elements into the document header
  */
-export function injectCss(css:FTML.CSS[]): void {
-  css.forEach(c => FTML.injectCss(c))
+export function injectCss(css: FTML.CSS[]): void {
+  css.forEach((c) => FTML.injectCss(c));
 }
 
 export const getServerUrl = FTML.get_server_url;
-
 
 /**
  * Configuration for rendering FTML content
  */
 export interface FTMLConfig {
-
   /**
    * whether to allow hovers
    */
@@ -53,7 +51,7 @@ export interface FTMLConfig {
    * callback for *inserting* elements immediately after a section's title
    */
   onSectionTitle?: (
-    uri: FTML.DocumentElementURI,
+    uri: FTML.DocumentElementUri,
     lvl: FTML.SectionLevel,
   ) => FTML.LeptosContinuation | undefined;
 
@@ -61,18 +59,17 @@ export interface FTMLConfig {
    * callback for wrapping fragments (sections, paragraphs, problems, etc.)
    */
   onFragment?: (
-    uri: FTML.DocumentElementURI,
+    uri: FTML.DocumentElementUri,
     kind: FTML.FragmentKind,
   ) => FTML.LeptosContinuation | undefined;
   /**
    * callback for wrapping inputreferences (i.e. lazily loaded document fragments)
    */
-  onInputref?: (uri: FTML.DocumentURI) => FTML.LeptosContinuation | undefined;
-  
-  problemStates?: FTML.ProblemStates | undefined,
-  onProblem?: ((response: FTML.ProblemResponse) => void) | undefined,
-}
+  onInputref?: (uri: FTML.DocumentUri) => FTML.LeptosContinuation | undefined;
 
+  problemStates?: FTML.ProblemStates | undefined;
+  onProblem?: ((response: FTML.ProblemResponse) => void) | undefined;
+}
 
 /**
  * sets up a leptos context for rendering FTML documents or fragments.
@@ -100,7 +97,7 @@ export function ftmlSetup(
     cfg?.onFragment,
     cfg?.onInputref,
     cfg?.onProblem,
-    cfg?.problemStates
+    cfg?.problemStates,
   );
 }
 
@@ -128,7 +125,7 @@ export function renderDocument(
     cfg?.onFragment,
     cfg?.onInputref,
     cfg?.onProblem,
-    cfg?.problemStates
+    cfg?.problemStates,
   );
 }
 
@@ -156,6 +153,6 @@ export function renderFragment(
     cfg?.onFragment,
     cfg?.onInputref,
     cfg?.onProblem,
-    cfg?.problemStates
+    cfg?.problemStates,
   );
 }

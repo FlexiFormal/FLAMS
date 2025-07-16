@@ -1,14 +1,14 @@
 use flams_ontology::{
     content::modules::Module,
     narration::documents::Document,
-    uris::{DocumentURI, ModuleURI},
+    uris::{DocumentUri, ModuleUri},
 };
 use flams_utils::prelude::HMap;
 
 #[derive(Default, Debug)]
 pub(super) struct BackendCache {
-    modules: HMap<ModuleURI, Module>,
-    documents: HMap<DocumentURI, Document>,
+    modules: HMap<ModuleUri, Module>,
+    documents: HMap<DocumentUri, Document>,
 }
 
 impl BackendCache {
@@ -31,7 +31,7 @@ impl BackendCache {
     }
 
     #[inline]
-    pub(super) fn has_document(&self, uri: &DocumentURI) -> Option<&Document> {
+    pub(super) fn has_document(&self, uri: &DocumentUri) -> Option<&Document> {
         self.documents.get(uri)
     }
 
@@ -42,7 +42,7 @@ impl BackendCache {
     }
 
     #[inline]
-    pub(super) fn has_module(&self, uri: &ModuleURI) -> Option<&Module> {
+    pub(super) fn has_module(&self, uri: &ModuleUri) -> Option<&Module> {
         self.modules.get(uri)
     }
 

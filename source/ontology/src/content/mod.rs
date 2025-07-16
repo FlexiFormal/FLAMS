@@ -6,9 +6,13 @@ use declarations::{
     Declaration, DeclarationTrait,
 };
 use flams_utils::prelude::InnerArc;
+use ftml_uris::{IsDomainUri, UriName};
 use modules::{Module, NestedModule};
 
-use crate::{uris::{ContentURIRef, ModuleURI, Name, NameStep, SymbolURI}, Checked, Resolvable};
+use crate::{
+    uris::{DomainUriRef, ModuleUri, SymbolUri},
+    Checked, Resolvable,
+};
 
 pub mod checking;
 pub mod declarations;
@@ -17,16 +21,16 @@ pub mod modules;
 pub mod terms;
 
 pub struct ContentReference<T: DeclarationTrait>(InnerArc<Module, T>);
-impl<T:DeclarationTrait+Resolvable<From=SymbolURI>> Resolvable for ContentReference<T> {
-    type From = SymbolURI;
-    fn id(&self) -> Cow<'_,Self::From> {
+impl<T: DeclarationTrait + Resolvable<From = SymbolUri>> Resolvable for ContentReference<T> {
+    type From = SymbolUri;
+    fn id(&self) -> Cow<'_, Self::From> {
         self.0.as_ref().id()
     }
 }
 
 impl<T: DeclarationTrait> ContentReference<T> {
     #[must_use]
-    pub fn new(m: &ModuleLike, name: &Name) -> Option<Self> {
+    pub fn new(m: &ModuleLike, name: &UriName) -> Option<Self> {
         macro_rules! get {
             () => {
                 |m| {
@@ -74,27 +78,26 @@ pub enum ModuleLike {
     Morphism(ContentReference<Morphism<Checked>>),
 }
 impl Resolvable for ModuleLike {
-    type From = ModuleURI;
-    fn id(&self) -> Cow<'_,Self::From> {
+    type From = ModuleUri;
+    fn id(&self) -> Cow<'_, Self::From> {
         match self {
             Self::Module(m) => Cow::Borrowed(m.uri()),
             Self::NestedModule(m) => Cow::Owned(m.as_ref().uri.clone().into_module()),
             Self::Structure(s) => Cow::Owned(s.as_ref().uri.clone().into_module()),
             Self::Extension(e) => Cow::Owned(e.as_ref().uri.clone().into_module()),
-            Self::Morphism(_) => todo!()//Cow::Owned(m.0.as_ref().uri.into_module()),
+            Self::Morphism(_) => todo!(), //Cow::Owned(m.0.as_ref().uri.into_module()),
         }
     }
 }
 
 impl ModuleLike {
     #[must_use]
-    pub fn in_module(m: &Module, name: &Name) -> Option<Self> {
-        let steps = name.steps();
-        if steps.is_empty() || &steps[0] != m.uri().name().last_name() {
+    pub fn in_module(m: &Module, name: &UriName) -> Option<Self> {
+        let mut steps = name.steps().peekable();
+        if steps.next_if_eq(&m.uri().module_name().last()).is_none() {
             return None;
         }
-        let steps = &steps[1..];
-        if steps.is_empty() {
+        if steps.peek().is_none() {
             return Some(Self::Module(m.clone()));
         }
         let d: &Declaration = m.find(steps)?;
@@ -118,44 +121,30 @@ impl ModuleLike {
 
 pub trait ModuleTrait {
     fn declarations(&self) -> &[Declaration];
-    fn content_uri(&self) -> ContentURIRef;
-    fn find<T: DeclarationTrait>(&self, steps: &[NameStep]) -> Option<&T> {
-        //println!("Trying to find {steps:?} in {}",self.content_uri());
-        let mut steps = steps;
+    fn content_uri(&self) -> DomainUriRef;
+    fn find<'s, T: DeclarationTrait>(
+        &self,
+        steps: impl IntoIterator<Item = &'s str>,
+    ) -> Option<&T> {
+        let mut steps = steps.into_iter().peekable();
         let mut curr = self.declarations().iter();
-        while !steps.is_empty() {
-            let step = &steps[0];
-            steps = &steps[1..];
+        macro_rules! ret {
+            ($e:expr;$m:expr) => {{
+                if steps.peek().is_none() {
+                    return T::from_declaration($e);
+                }
+                curr = $m.declarations().iter();
+            }};
+        }
+        while let Some(step) = steps.next() {
             while let Some(c) = curr.next() {
                 match c {
-                    Declaration::NestedModule(m) if m.uri.name().last_name() == step => {
-                        if steps.is_empty() {
-                            return T::from_declaration(c);
-                        }
-                        curr = m.declarations().iter();
-                    }
-                    Declaration::MathStructure(m) if m.uri.name().last_name() == step => {
-                        if steps.is_empty() {
-                            return T::from_declaration(c);
-                        }
-                        curr = m.declarations().iter();
-                    }
-                    Declaration::Morphism(m)
-                        if m.uri.name().last_name() == step =>
-                    {
-                        if steps.is_empty() {
-                            return T::from_declaration(c);
-                        }
-                        curr = m.declarations().iter();
-                    }
-                    Declaration::Extension(m) if m.uri.name().last_name() == step => {
-                        if steps.is_empty() {
-                            return T::from_declaration(c);
-                        }
-                        curr = m.declarations().iter();
-                    }
-                    Declaration::Symbol(s) if s.uri.name().last_name() == step => {
-                        return if steps.is_empty() {
+                    Declaration::NestedModule(m) if m.uri.name().last() == step => ret!(c;m),
+                    Declaration::MathStructure(m) if m.uri.name().last() == step => ret!(c;m),
+                    Declaration::Morphism(m) if m.uri.name().last() == step => ret!(c;m),
+                    Declaration::Extension(m) if m.uri.name().last() == step => ret!(c;m),
+                    Declaration::Symbol(s) if s.uri.name().last() == step => {
+                        return if steps.peek().is_none() {
                             T::from_declaration(c)
                         } else {
                             None
@@ -181,7 +170,7 @@ impl ModuleTrait for ModuleLike {
         }
     }
     #[inline]
-    fn content_uri(&self) -> ContentURIRef {
+    fn content_uri(&self) -> DomainUriRef {
         match self {
             Self::Module(m) => m.content_uri(),
             Self::NestedModule(m) => m.as_ref().content_uri(),

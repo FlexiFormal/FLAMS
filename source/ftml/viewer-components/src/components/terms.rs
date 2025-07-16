@@ -1,6 +1,6 @@
 use flams_ontology::{
     content::terms::ArgMode,
-    uris::{ArchiveURITrait, ContentURI, DocumentElementURI, URIWithLanguage, URI},
+    uris::{ArchiveUriTrait, ContentURI, DocumentElementUri, URIWithLanguage, URI},
 };
 use flams_web_utils::{
     components::{Popover, PopoverSize},
@@ -61,7 +61,7 @@ mod term_replacing {
     use flams_ontology::{
         content::terms::ArgMode,
         narration::notations::{PresentationError, PresenterArgs},
-        uris::{DocumentElementURI, URI},
+        uris::{DocumentElementUri, URI},
     };
     use ftml_extraction::prelude::FTMLElements;
     use leptos::{context::Provider, prelude::*};
@@ -123,7 +123,7 @@ mod term_replacing {
         orig: OriginalNode,
         is_var: bool,
         uri: URI,
-        notation_signal: RwSignal<Option<DocumentElementURI>>,
+        notation_signal: RwSignal<Option<DocumentElementUri>>,
     ) -> impl IntoView {
         let args = head.args;
         let parsed = RwSignal::new(false);
@@ -495,9 +495,9 @@ pub fn do_onclick(uri: VarOrSym) -> impl IntoView {
           let uri = selected.with(|s| s.as_ref().map(|s| {
             let i: usize = s.parse().unwrap_or_else(|_| unreachable!());
             if i < ex_off {
-              definitions.with_value(|v:&Vec<DocumentElementURI>| v.as_slice()[i].clone())
+              definitions.with_value(|v:&Vec<DocumentElementUri>| v.as_slice()[i].clone())
             } else {
-              examples.with_value(|v:&Vec<DocumentElementURI>| v.as_slice()[i - ex_off].clone())
+              examples.with_value(|v:&Vec<DocumentElementUri>| v.as_slice()[i - ex_off].clone())
             }
           }));
           uri.map(|uri| {
@@ -583,7 +583,7 @@ pub fn do_onclick(uri: VarOrSym) -> impl IntoView {
     }}))
 }
 
-pub fn lo_line(uri: &DocumentElementURI) -> impl IntoView + 'static {
+pub fn lo_line(uri: &DocumentElementUri) -> impl IntoView + 'static {
     let archive = uri.archive_id().to_string();
     let name = uri.name().to_string();
     let lang = uri.language().flag_svg();

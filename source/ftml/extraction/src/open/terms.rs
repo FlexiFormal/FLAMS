@@ -1,7 +1,7 @@
 use crate::extractor::FTMLExtractor;
 use either::Either;
 use flams_ontology::content::terms::{Arg, ArgMode, Term, Var};
-use flams_ontology::uris::{ContentURI, DocumentElementURI, Name};
+use flams_ontology::uris::{ContentURI, DocumentElementUri, Name};
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -200,7 +200,7 @@ impl TermOrList {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum PreVar {
-    Resolved(DocumentElementURI),
+    Resolved(DocumentElementUri),
     Unresolved(Name),
 }
 impl Display for PreVar {

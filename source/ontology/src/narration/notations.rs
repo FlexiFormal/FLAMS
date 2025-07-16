@@ -92,13 +92,14 @@ pub use presentation::{PresentationError, Presenter, PresenterArgs};
 
 mod presentation {
     use flams_utils::prelude::HMap;
+    use ftml_uris::FtmlUri;
     use std::fmt::Display;
 
     use crate::{
         content::terms::{Arg, ArgMode, Informal, Term, Var},
         ftml::FTMLKey,
         omsp,
-        uris::{ContentURI, DocumentElementURI, SymbolURI, URITrait},
+        uris::{DocumentElementUri, DomainUri, SymbolUri},
     };
 
     pub type Result = std::result::Result<(), PresentationError>;
@@ -124,10 +125,10 @@ mod presentation {
 
     pub trait Presenter: std::fmt::Write + Sized {
         type N: AsRef<Notation>;
-        fn get_notation(&mut self, uri: &SymbolURI) -> Option<Self::N>;
-        fn get_op_notation(&mut self, uri: &SymbolURI) -> Option<Self::N>;
-        fn get_variable_notation(&mut self, uri: &DocumentElementURI) -> Option<Self::N>;
-        fn get_variable_op_notation(&mut self, uri: &DocumentElementURI) -> Option<Self::N>;
+        fn get_notation(&mut self, uri: &SymbolUri) -> Option<Self::N>;
+        fn get_op_notation(&mut self, uri: &SymbolUri) -> Option<Self::N>;
+        fn get_variable_notation(&mut self, uri: &DocumentElementUri) -> Option<Self::N>;
+        fn get_variable_op_notation(&mut self, uri: &DocumentElementUri) -> Option<Self::N>;
         fn in_text(&self) -> bool;
         /// #### Errors
         #[inline]
@@ -150,28 +151,28 @@ mod presentation {
     impl Presenter for FromStore<'_> {
         type N = Notation;
         #[inline]
-        fn get_notation(&mut self, uri: &SymbolURI) -> Option<Self::N> {
+        fn get_notation(&mut self, uri: &SymbolUri) -> Option<Self::N> {
             self.store
                 .notations
                 .get(uri)
                 .and_then(|v| v.first().cloned())
         }
         #[inline]
-        fn get_op_notation(&mut self, uri: &SymbolURI) -> Option<Self::N> {
+        fn get_op_notation(&mut self, uri: &SymbolUri) -> Option<Self::N> {
             self.store
                 .notations
                 .get(uri)
                 .and_then(|v| v.first().cloned())
         }
         #[inline]
-        fn get_variable_notation(&mut self, uri: &DocumentElementURI) -> Option<Self::N> {
+        fn get_variable_notation(&mut self, uri: &DocumentElementUri) -> Option<Self::N> {
             self.store
                 .var_notations
                 .get(uri)
                 .and_then(|v| v.first().cloned())
         }
         #[inline]
-        fn get_variable_op_notation(&mut self, uri: &DocumentElementURI) -> Option<Self::N> {
+        fn get_variable_op_notation(&mut self, uri: &DocumentElementUri) -> Option<Self::N> {
             self.store
                 .var_notations
                 .get(uri)
@@ -197,17 +198,17 @@ mod presentation {
     #[derive(Debug, Clone, Default)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct NotationStore {
-        notations: HMap<SymbolURI, Vec<Notation>>,
-        var_notations: HMap<DocumentElementURI, Vec<Notation>>,
+        notations: HMap<SymbolUri, Vec<Notation>>,
+        var_notations: HMap<DocumentElementUri, Vec<Notation>>,
     }
     /*
     impl NotationStore {
         #[inline]
-        pub fn push(&mut self, uri:SymbolURI,notation:Notation) {
+        pub fn push(&mut self, uri:SymbolUri,notation:Notation) {
             self.notations.entry(uri).or_default().push(notation);
         }
         #[inline]
-        pub fn push_var(&mut self, uri:DocumentElementURI,notation:Notation) {
+        pub fn push_var(&mut self, uri:DocumentElementUri,notation:Notation) {
             self.var_notations.entry(uri).or_default().push(notation);
         }
     }
@@ -377,7 +378,7 @@ mod presentation {
             &'a self,
             op: bool,
             as_variable: bool,
-            uri: &'a impl URITrait,
+            uri: &'a impl FtmlUri,
         ) -> impl Display + 'a {
             let (d, arity, termstr) = Displayer::new(self);
             NotationDisplay {
@@ -467,41 +468,41 @@ mod presentation {
                         let args : &[Arg] = &[];
                         n.as_ref().apply_op(presenter,"OMID",uri,&args,true)
                     } else {
-                        Self::default_omid(presenter,"OMID",uri,uri.name().last_name().as_ref(),presenter.in_text())
+                        Self::default_omid(presenter,"OMID",uri,uri.name().last(),presenter.in_text())
                     },
                 Term::OMV(Var::Ref{declaration:uri,is_sequence:_}) =>
                     if let Some(n) = presenter.get_variable_notation(uri) {
                         let args : &[Arg] = &[];
                         n.as_ref().apply_op(presenter, "OMV",uri,&args,true)
                     } else {
-                        Self::default_omid(presenter,"OMV",uri,uri.name().last_name().as_ref(),presenter.in_text())
+                        Self::default_omid(presenter,"OMV",uri,uri.name().last(),presenter.in_text())
                     },
-                Term::OMV(Var::Name(name)) => Self::default_omid(presenter,"OMV",name,name.last_name().as_ref(),presenter.in_text()),
-                Term::Field { record, owner:Some(itm),..} => //box Term::OMID(ContentURI::Symbol(uri))),.. } =>
+                Term::OMV(Var::Name(name)) => Self::default_omid(presenter,"OMV",name,name.last(),presenter.in_text()),
+                Term::Field { record, owner:Some(itm),..} => //box Term::OMID(DomainUri::Symbol(uri))),.. } =>
                     match &**itm {
-                        Term::OMID(ContentURI::Symbol(uri)) =>
+                        Term::OMID(DomainUri::Symbol(uri)) =>
                             if let Some(n) = presenter.get_op_notation(uri) {
                                 n.as_ref().apply_op_this(presenter,record,"COMPLEX",uri)
                             } else {
-                                Self::default_omid(presenter,"OMID",uri,uri.name().last_name().as_ref(),presenter.in_text())
+                                Self::default_omid(presenter,"OMID",uri,uri.name().last(),presenter.in_text())
                             },
                         _ => write!(presenter,"<mtext>TODO: {term:?}</mtext>").map_err(Into::into)
                     },
                 Term::OMA{head,args} => match &**head {
-                    Term::OMID(ContentURI::Symbol(uri)) =>
+                    Term::OMID(DomainUri::Symbol(uri)) =>
                         if let Some(n) = presenter.get_notation(uri) {
                             n.as_ref().apply(presenter,None,None,uri,args)
                         } else {
-                            Self::default_oma(presenter, "OMA", uri, uri.name().last_name().as_ref(), args)
+                            Self::default_oma(presenter, "OMA", uri, uri.name().last(), args)
                         },
                     Term::OMV(Var::Ref{declaration:uri,is_sequence:_}) =>
                         if let Some(n) = presenter.get_variable_notation(uri) {
                             n.as_ref().apply(presenter,None,None,uri,args)
                         } else {
-                            Self::default_oma(presenter, "OMA", uri, uri.name().last_name().as_ref(), args)
+                            Self::default_oma(presenter, "OMA", uri, uri.name().last(), args)
                         }
                     Term::OMV(Var::Name(name)) =>
-                        Self::default_oma(presenter, "OMA", name, name.last_name().as_ref(), args),
+                        Self::default_oma(presenter, "OMA", name, name.last(), args),
                     _ => write!(presenter,"<mtext>TODO: {term:?}</mtext>").map_err(Into::into)
 
                 }
@@ -510,16 +511,16 @@ mod presentation {
                     if let Some(n) = presenter.get_notation(uri) {
                         n.as_ref().apply(presenter,None,None,uri,args)
                     } else {
-                        Self::default_oma(presenter, "OMA", uri, uri.name().last_name().as_ref(), args)
+                        Self::default_oma(presenter, "OMA", uri, uri.name().last(), args)
                     },
                 Term::OMA{head:box Term::OMV(Var::Ref{declaration:uri,is_sequence:_}),args,..} =>
                     if let Some(n) = presenter.get_variable_notation(uri) {
                         n.as_ref().apply(presenter,None,None,uri,args)
                     } else {
-                        Self::default_oma(presenter, "OMA", uri, uri.name().last_name().as_ref(), args)
+                        Self::default_oma(presenter, "OMA", uri, uri.name().last(), args)
                     }
                 Term::OMA{head:box Term::OMV(Var::Name(name)),args,..} =>
-                    Self::default_oma(presenter, "OMA", name, name.last_name().as_ref(), args),
+                    Self::default_oma(presenter, "OMA", name, name.last(), args),
                      */
 
                 Term::Informal { tag, attributes, children, terms,.. } =>

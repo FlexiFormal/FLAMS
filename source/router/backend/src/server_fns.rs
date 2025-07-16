@@ -5,7 +5,7 @@ use flams_ontology::{
         ArchiveData, ArchiveGroupData, ArchiveIndex, DirectoryData, FileData, Institution,
     },
     languages::Language,
-    uris::{ArchiveId, ArchiveURITrait, NarrativeURITrait, PathURITrait, URI, URIWithLanguage},
+    uris::{ArchiveId, ArchiveUriTrait, NarrativeURITrait, PathURITrait, URI, URIWithLanguage},
 };
 use flams_router_base::uris::URIComponents;
 use leptos::prelude::*;
@@ -166,7 +166,7 @@ pub async fn source_file(
             return Err("invalid uri".to_string());
         };
         match uri {
-            uri @ URI::Base(_) => Err(format!("BaseURI can not have a source path: {uri}")),
+            uri @ URI::Base(_) => Err(format!("BaseUri can not have a source path: {uri}")),
             URI::Archive(a) => get_root(a.archive_id(), |_, s| Ok(s)),
             URI::Path(uri) => match uri.path() {
                 None => get_root(uri.archive_id(), |_, s| Ok(s)),
@@ -238,7 +238,7 @@ pub async fn index() -> Result<(Vec<Institution>, Vec<ArchiveIndex>), ServerFnEr
 mod server {
     use flams_ontology::{
         archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
-        uris::{ArchiveId, ArchiveURI, ArchiveURITrait, URIOrRefTrait},
+        uris::{ArchiveId, ArchiveUri, ArchiveUriTrait, URIOrRefTrait},
     };
     use flams_router_base::LoginState;
     use flams_system::backend::{
@@ -436,7 +436,7 @@ mod server {
                         iri.as_str()
                     ))
                     .map_err(|e| e.to_string())?;
-                for i in res.into_uris::<ArchiveURI>() {
+                for i in res.into_uris::<ArchiveUri>() {
                     let id = i.archive_id();
                     if !ret.0.contains(&id) {
                         archives.insert(id.clone());

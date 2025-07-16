@@ -1,7 +1,9 @@
 use crate::languages::Language;
 use crate::uris::name::InvalidURICharacter;
 use crate::uris::{
-    debugdisplay, ArchiveURI, ArchiveURIRef, ArchiveURITrait, BaseURI, ContentURIRef, ContentURITrait, ModuleURI, Name, NarrativeURIRef, NarrativeURITrait, PathURI, PathURIRef, PathURITrait, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URIWithLanguage
+    debugdisplay, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, BaseUri, DomainUriRef,
+    DomainUriTrait, ModuleUri, Name, NarrativeURIRef, NarrativeURITrait, PathURI, PathURIRef,
+    PathURITrait, URIOrRefTrait, URIParseError, URIRef, URIRefTrait, URIWithLanguage,
 };
 use const_format::concatcp;
 use eyre::Context;
@@ -9,49 +11,53 @@ use std::fmt::Display;
 use std::str::{FromStr, Split};
 
 lazy_static::lazy_static! {
-    static ref NO_DOCUMENT:DocumentURI = "http://unknown.source?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
+    static ref NO_DOCUMENT:DocumentUri = "http://unknown.source?a=no/archive&d=unknown_document&l=en".parse().unwrap_or_else(|_| unreachable!());
 }
 
 #[cfg(feature = "wasm")]
-#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section))]
-const TS_URI: &str = "export type DocumentURI = string;";
-
+#[cfg_attr(
+    feature = "wasm",
+    wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)
+)]
+const TS_URI: &str = "export type DocumentUri = string;";
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct DocumentURI {
+pub struct DocumentUri {
     pub(in crate::uris) path: PathURI,
     pub(in crate::uris) name: Name,
     pub(in crate::uris) language: Language,
 }
-impl DocumentURI {
+impl DocumentUri {
     pub const SEPARATOR: char = 'd';
     #[must_use]
-    pub fn no_doc() -> Self { NO_DOCUMENT.clone()}
+    pub fn no_doc() -> Self {
+        NO_DOCUMENT.clone()
+    }
 
     #[must_use]
-    pub fn from_archive_relpath(a:ArchiveURI,rel_path:&str) -> eyre::Result<Self> {
+    pub fn from_archive_relpath(a: ArchiveUri, rel_path: &str) -> eyre::Result<Self> {
         #[cfg(windows)]
-        let replaced = rel_path.replace('\\',"/");
+        let replaced = rel_path.replace('\\', "/");
         #[cfg(windows)]
         let rel_path = &replaced;
-        let (path,mut name) = rel_path.rsplit_once('/')
-            .unwrap_or(("",rel_path));
-        name = name.rsplit_once('.').map_or_else(|| name,|(name,_)| name);
+        let (path, mut name) = rel_path.rsplit_once('/').unwrap_or(("", rel_path));
+        name = name.rsplit_once('.').map_or_else(|| name, |(name, _)| name);
         let lang = Language::from_rel_path(name);
         name = name.strip_suffix(&format!(".{lang}")).unwrap_or(name);
-        ((a % path).wrap_err_with(|| format!("Error in path component `{path}`"))? & (name,lang)).wrap_err_with(|| format!("Error in name component `{name}`"))
+        ((a % path).wrap_err_with(|| format!("Error in path component `{path}`"))? & (name, lang))
+            .wrap_err_with(|| format!("Error in name component `{name}`"))
     }
 
     /// #### Errors
-    pub fn module_uri_from(&self,name:&str) -> Result<ModuleURI,InvalidURICharacter> {
-        if self.name.last_name().as_ref() == name {
+    pub fn module_uri_from(&self, name: &str) -> Result<ModuleUri, InvalidURICharacter> {
+        if self.name.last() == name {
             self.as_path().owned() | name
         } else {
-            (self.as_path().owned() / self.name().last_name().as_ref())? | name
+            (self.as_path().owned() / self.name().last())? | name
         }
     }
 }
-impl Display for DocumentURI {
+impl Display for DocumentUri {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -65,10 +71,10 @@ impl Display for DocumentURI {
         )
     }
 }
-debugdisplay!(DocumentURI);
-impl URIOrRefTrait for DocumentURI {
+debugdisplay!(DocumentUri);
+impl URIOrRefTrait for DocumentUri {
     #[inline]
-    fn base(&self) -> &BaseURI {
+    fn base(&self) -> &BaseUri {
         self.path.base()
     }
     #[inline]
@@ -76,24 +82,24 @@ impl URIOrRefTrait for DocumentURI {
         URIRef::Narrative(self.as_narrative())
     }
 }
-impl URIWithLanguage for DocumentURI {
+impl URIWithLanguage for DocumentUri {
     #[inline]
     fn language(&self) -> Language {
         self.language
     }
 }
-impl NarrativeURITrait for DocumentURI {
+impl NarrativeURITrait for DocumentUri {
     #[inline]
     fn as_narrative(&self) -> NarrativeURIRef {
         NarrativeURIRef::Document(self)
     }
     #[inline]
-    fn document(&self) -> &DocumentURI {
+    fn document(&self) -> &DocumentUri {
         self
     }
 }
 
-impl DocumentURI {
+impl DocumentUri {
     #[inline]
     #[must_use]
     pub const fn name(&self) -> &Name {
@@ -112,7 +118,7 @@ impl DocumentURI {
                     original: s.to_string(),
                 });
             };
-            m.strip_prefix(concatcp!(DocumentURI::SEPARATOR, "="))
+            m.strip_prefix(concatcp!(DocumentUri::SEPARATOR, "="))
                 .map_or_else(
                     || {
                         Err(URIParseError::MissingPartFor {
@@ -164,7 +170,7 @@ impl DocumentURI {
     }
 }
 
-impl FromStr for DocumentURI {
+impl FromStr for DocumentUri {
     type Err = URIParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::pre_parse(s, "document uri", |u, mut split| {
@@ -178,13 +184,13 @@ impl FromStr for DocumentURI {
         })
     }
 }
-impl ArchiveURITrait for DocumentURI {
+impl ArchiveUriTrait for DocumentUri {
     #[inline]
-    fn archive_uri(&self) -> ArchiveURIRef {
+    fn archive_uri(&self) -> ArchiveUriRef {
         self.path.archive_uri()
     }
 }
-impl PathURITrait for DocumentURI {
+impl PathURITrait for DocumentUri {
     #[inline]
     fn as_path(&self) -> PathURIRef {
         self.path.as_path()
@@ -197,15 +203,21 @@ impl PathURITrait for DocumentURI {
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use crate::uris::{serialize, DocumentURI};
-    serialize!(DE DocumentURI);
+    use crate::uris::{serialize, DocumentUri};
+    serialize!(DE DocumentUri);
 }
 
-#[cfg(feature="tantivy")]
-impl tantivy::schema::document::ValueDeserialize for DocumentURI {
-    fn deserialize<'de, D>(deserializer: D) -> Result<Self, tantivy::schema::document::DeserializeError>
-        where D: tantivy::schema::document::ValueDeserializer<'de> {
-        deserializer.deserialize_string()?.parse()
-          .map_err(|_| tantivy::schema::document::DeserializeError::custom(""))
+#[cfg(feature = "tantivy")]
+impl tantivy::schema::document::ValueDeserialize for DocumentUri {
+    fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<Self, tantivy::schema::document::DeserializeError>
+    where
+        D: tantivy::schema::document::ValueDeserializer<'de>,
+    {
+        deserializer
+            .deserialize_string()?
+            .parse()
+            .map_err(|_| tantivy::schema::document::DeserializeError::custom(""))
     }
-  }
+}

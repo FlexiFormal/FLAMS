@@ -1,6 +1,7 @@
-use crate::uris::{ContentURI, DocumentElementURI, Name, URIOrRefTrait, URIRef};
+use crate::uris::{DocumentElementUri, DomainUri};
 use crate::{oma, oms, omsp};
 use flams_utils::prelude::{DFSContinuation, Indentor, TreeChild, TreeChildIter, TreeLike};
+use ftml_uris::UriName;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::str::FromStr;
 
@@ -9,7 +10,7 @@ use std::str::FromStr;
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum Term {
-    OMID(ContentURI),
+    OMID(DomainUri),
     OMV(Var),
     OMA {
         head: Box<Term>,
@@ -17,11 +18,11 @@ pub enum Term {
     },
     Field {
         record: Box<Term>,
-        key: Name,
+        key: UriName,
         owner: Option<Box<Term>>,
     },
     OML {
-        name: Name,
+        name: UriName,
         df: Option<Box<Term>>,
         tp: Option<Box<Term>>,
     },
@@ -52,9 +53,9 @@ impl Term {
     pub fn as_list(&self) -> Option<&[Arg]> {
         match self {
             Self::OMA {
-                head, //:box Self::OMID(ContentURI::Symbol(s)),
+                head, //:box Self::OMID(DomainUri::Symbol(s)),
                 args,
-            } if matches!(&**head,Self::OMID(ContentURI::Symbol(s)) if *s == *crate::metatheory::SEQUENCE_EXPRESSION) => {
+            } if matches!(&**head,Self::OMID(DomainUri::Symbol(s)) if *s == *crate::metatheory::SEQUENCE_EXPRESSION) => {
                 Some(&**args)
             } //if *s == *crate::metatheory::SEQUENCE_EXPRESSION => Some(&**args),
             _ => None,
@@ -69,7 +70,7 @@ impl Term {
 
     /// #### Errors
     #[allow(clippy::result_large_err)]
-    pub fn into_record_field(self) -> Result<(Self, Name), Self> {
+    pub fn into_record_field(self) -> Result<(Self, UriName), Self> {
         match self {
             oma!(hd, args)
                 if matches!(&*hd,omsp!(fp) if *fp == *crate::metatheory::FIELD_PROJECTION)
@@ -365,7 +366,7 @@ impl FromStr for ArgMode {
 pub enum Var {
     Name(Name),
     Ref {
-        declaration: DocumentElementURI,
+        declaration: DocumentElementUri,
         is_sequence: Option<bool>,
     },
 }
@@ -465,19 +466,19 @@ impl<'a> Iterator for InformalIterMut<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::uris::{ArchiveURI, BaseURI, ModuleURI, SymbolURI};
+    use crate::uris::{ArchiveUri, BaseUri, ModuleUri, SymbolUri};
     use crate::{content::terms::Term, oma, oml, oms, omv};
     use lazy_static::lazy_static;
     lazy_static! {
-        static ref NAMESPACE: BaseURI = BaseURI::new_unchecked("http://example.com/");
-        static ref ARCHIVE1: ArchiveURI = NAMESPACE.clone() & "some/archive";
-        static ref ARCHIVE2: ArchiveURI = NAMESPACE.clone() & "some/other/archive";
-        static ref MODULE1: ModuleURI = (ARCHIVE1.clone() | "some/module").expect("impossible");
-        static ref MODULE2: ModuleURI = (ARCHIVE2.clone() | "some/module").expect("impossible");
-        static ref SYM1: SymbolURI = (MODULE1.clone() | "some symbol").expect("impossible");
-        static ref SYM2: SymbolURI = (MODULE2.clone() | "other symbol").expect("impossible");
-        static ref FUNC1: SymbolURI = (MODULE1.clone() | "some function").expect("impossible");
-        static ref FUNC2: SymbolURI = (MODULE2.clone() | "other function").expect("impossible");
+        static ref NAMESPACE: BaseUri = BaseUri::new_unchecked("http://example.com/");
+        static ref ARCHIVE1: ArchiveUri = NAMESPACE.clone() & "some/archive";
+        static ref ARCHIVE2: ArchiveUri = NAMESPACE.clone() & "some/other/archive";
+        static ref MODULE1: ModuleUri = (ARCHIVE1.clone() | "some/module").expect("impossible");
+        static ref MODULE2: ModuleUri = (ARCHIVE2.clone() | "some/module").expect("impossible");
+        static ref SYM1: SymbolUri = (MODULE1.clone() | "some symbol").expect("impossible");
+        static ref SYM2: SymbolUri = (MODULE2.clone() | "other symbol").expect("impossible");
+        static ref FUNC1: SymbolUri = (MODULE1.clone() | "some function").expect("impossible");
+        static ref FUNC2: SymbolUri = (MODULE2.clone() | "other function").expect("impossible");
         static ref TERM: Term = oma!(oms!(FUNC1.clone()),[
             {N:oma!(oms!(FUNC2.clone()),[
                 {N:oms!(SYM1.clone())},

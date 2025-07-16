@@ -8,7 +8,7 @@ use std::{borrow::Cow, path::Path, str::FromStr};
 use flams_ontology::{
     languages::Language,
     narration::paragraphs::ParagraphKind,
-    uris::{ArchiveId, ArchiveURITrait, ModuleURI, Name, PathURITrait, SymbolURI, URIRefTrait},
+    uris::{ArchiveId, ArchiveUriTrait, ModuleUri, Name, PathURITrait, SymbolUri, URIRefTrait},
 };
 use flams_system::backend::{Backend, GlobalBackend};
 use flams_utils::{
@@ -1469,7 +1469,7 @@ fn get_module<
     Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
 >(
     p: &'b mut LaTeXParser<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>>,
-) -> Option<(&'b ModuleURI, &'b mut Vec<ModuleRule<Pos>>)> {
+) -> Option<(&'b ModuleUri, &'b mut Vec<ModuleRule<Pos>>)> {
     p.groups.iter_mut().rev().find_map(|g| match &mut g.kind {
         GroupKind::Module { uri, rules } | GroupKind::MathStructure { uri, rules } => {
             Some((&*uri, rules))
@@ -2293,11 +2293,9 @@ fn get_in_morphism<
                 let mut name = name;
                 for (s, r) in &specs.0 {
                     if r.macroname.as_ref().is_some_and(|n| &**n == name)
-                        || r.new_name
-                            .as_ref()
-                            .is_some_and(|n| n.last_name().as_ref() == name)
+                        || r.new_name.as_ref().is_some_and(|n| n.last() == name)
                     {
-                        name = s.uri.name().last_name().as_ref();
+                        name = s.uri.name().last();
                         break;
                     }
                 }
@@ -2305,7 +2303,7 @@ fn get_in_morphism<
                     match r {
                         ModuleRule::Symbol(s) | ModuleRule::Structure { symbol: s, .. }
                             if s.macroname.as_ref().is_some_and(|n| &**n == name)
-                                || s.uri.uri.name().last_name().as_ref() == name =>
+                                || s.uri.uri.name().last() == name =>
                         {
                             return Some((s, specs))
                         }
@@ -2448,7 +2446,7 @@ fn setup_morphism<
     domain: &str,
     pos: LSPLineCol,
 ) -> Option<(
-    SymbolURI,
+    SymbolUri,
     ModuleOrStruct<LSPLineCol>,
     Vec<ModuleRules<LSPLineCol>>,
 )> {
@@ -2610,7 +2608,7 @@ stex!(LSP: p => @begin{copymodule}({name:!name}[archive:str]{domain:!name}){
       let GroupKind::Morphism{domain,rules,specs} = std::mem::take(&mut g.kind) else {
         return EnvironmentResult::Simple(copymodule);
       };
-      elaborate_morphism(p,star,false,copymodule.begin.range,uri.name().last_name().as_ref(),rules,specs);
+      elaborate_morphism(p,star,false,copymodule.begin.range,uri.name().last(),rules,specs);
       EnvironmentResult::Success(STeXToken::MorphismEnv {
         kind, full_range, name_range, star,env_range,uri,domain,domain_range,children
       })
@@ -2653,7 +2651,7 @@ stex!(LSP: p => @begin{copymodule_ast}({name:!name}[archive:str]{domain:!name}){
       let GroupKind::Morphism{domain,rules,specs} = std::mem::take(&mut g.kind) else {
         return EnvironmentResult::Simple(copymodule_ast);
       };
-      elaborate_morphism(p,star,false,copymodule_ast.begin.range,uri.name().last_name().as_ref(),rules,specs);
+      elaborate_morphism(p,star,false,copymodule_ast.begin.range,uri.name().last(),rules,specs);
       EnvironmentResult::Success(STeXToken::MorphismEnv {
         kind, full_range, name_range, star,env_range,uri,domain,domain_range,children
       })
@@ -3047,7 +3045,7 @@ stex!(LSP: p => @begin{interpretmodule}({name:!name}[archive:str]{domain:!name})
       let GroupKind::Morphism{domain,rules,specs} = std::mem::take(&mut g.kind) else {
         return EnvironmentResult::Simple(interpretmodule);
       };
-      elaborate_morphism(p,star,true,interpretmodule.begin.range,uri.name().last_name().as_ref(),rules,specs);
+      elaborate_morphism(p,star,true,interpretmodule.begin.range,uri.name().last(),rules,specs);
       EnvironmentResult::Success(STeXToken::MorphismEnv {
         kind, full_range, name_range, star,env_range,uri,domain,domain_range,children
       })
@@ -3090,7 +3088,7 @@ stex!(LSP: p => @begin{interpretmodule_ast}({name:!name}[archive:str]{domain:!na
       let GroupKind::Morphism{domain,rules,specs} = std::mem::take(&mut g.kind) else {
         return EnvironmentResult::Simple(interpretmodule_ast);
       };
-      elaborate_morphism(p,star,true,interpretmodule_ast.begin.range,uri.name().last_name().as_ref(),rules,specs);
+      elaborate_morphism(p,star,true,interpretmodule_ast.begin.range,uri.name().last(),rules,specs);
       EnvironmentResult::Success(STeXToken::MorphismEnv {
         kind, full_range, name_range, star,env_range,uri,domain,domain_range,children
       })

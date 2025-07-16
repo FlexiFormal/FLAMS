@@ -2,7 +2,7 @@ use flams_utils::vecmap::VecMap;
 
 use crate::{
     content::terms::Term,
-    uris::{DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI},
+    uris::{DocumentElementUri, DocumentUri, ModuleUri, SymbolUri, UriName},
     Checked, DocumentRange, LocalBackend, MaybeResolved, Unchecked,
 };
 
@@ -21,44 +21,44 @@ pub trait DocumentChecker: LocalBackend {
 enum Elem {
     Section {
         range: DocumentRange,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         level: SectionLevel,
         title: Option<DocumentRange>,
     },
     Slide {
         range: DocumentRange,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
     },
     SkipSection,
     Module {
         range: DocumentRange,
-        module: ModuleURI,
+        module: ModuleUri,
     },
     Morphism {
         range: DocumentRange,
-        morphism: SymbolURI,
+        morphism: SymbolUri,
     },
     MathStructure {
         range: DocumentRange,
-        structure: SymbolURI,
+        structure: SymbolUri,
     },
     Extension {
         range: DocumentRange,
-        extension: SymbolURI,
-        target: SymbolURI,
+        extension: SymbolUri,
+        target: SymbolUri,
     },
     Paragraph {
         kind: ParagraphKind,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         formatting: ParagraphFormatting,
         title: Option<DocumentRange>,
         range: DocumentRange,
-        styles: Box<[Name]>,
-        fors: VecMap<SymbolURI, Option<Term>>,
+        styles: Box<[UriName]>,
+        fors: VecMap<SymbolUri, Option<Term>>,
     },
     Problem {
         sub_problem: bool,
-        uri: DocumentElementURI,
+        uri: DocumentElementUri,
         autogradable: bool,
         range: DocumentRange,
         points: Option<f32>,
@@ -67,9 +67,9 @@ enum Elem {
         hints: Vec<DocumentRange>,
         notes: Vec<LazyDocRef<Box<str>>>,
         title: Option<DocumentRange>,
-        styles: Box<[Name]>,
-        preconditions: Vec<(CognitiveDimension, SymbolURI)>,
-        objectives: Vec<(CognitiveDimension, SymbolURI)>,
+        styles: Box<[UriName]>,
+        preconditions: Vec<(CognitiveDimension, SymbolUri)>,
+        objectives: Vec<(CognitiveDimension, SymbolUri)>,
     },
 }
 impl Elem {
@@ -185,14 +185,14 @@ pub(super) struct DocumentCheckIter<'a, Check: DocumentChecker> {
     curr_out: Vec<DocumentElement<Checked>>,
     checker: &'a mut Check,
     #[allow(dead_code)]
-    uri: &'a DocumentURI,
+    uri: &'a DocumentUri,
 }
 
 impl<Check: DocumentChecker> DocumentCheckIter<'_, Check> {
     pub(super) fn go(
         elems: Vec<DocumentElement<Unchecked>>,
         checker: &mut Check,
-        uri: &DocumentURI,
+        uri: &DocumentUri,
     ) -> Vec<DocumentElement<Checked>> {
         let mut slf = DocumentCheckIter {
             stack: Vec::new(),

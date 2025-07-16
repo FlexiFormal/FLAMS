@@ -4,8 +4,8 @@ use crate::components::SearchState;
 use flams_ontology::{
     search::{QueryFilter, SearchResult, SearchResultKind},
     uris::{
-        ArchiveId, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI, NarrativeURI,
-        PathURITrait, SymbolURI, URI,
+        ArchiveId, ArchiveUriTrait, DocumentElementUri, DocumentUri, DomainUriTrait, NarrativeURI,
+        PathURITrait, SymbolUri, URI,
     },
 };
 use flams_router_base::uris::{URIComponents, URIComponentsTrait};
@@ -219,7 +219,7 @@ struct Usemodule {
     path: String,
 }
 impl Usemodule {
-    fn make(uri: &SymbolURI) -> Self {
+    fn make(uri: &SymbolUri) -> Self {
         let module = uri.module();
         let archive = module.archive_id().clone();
         let path = if let Some(p) = module.path() {
@@ -238,10 +238,10 @@ impl Usemodule {
 #[derive(leptos::server_fn::serde::Serialize, Debug, Clone)]
 struct Preview<'u> {
     kind: &'static str,
-    uri: &'u SymbolURI,
+    uri: &'u SymbolUri,
 }
 impl Preview<'_> {
-    fn make(uri: &SymbolURI) -> Preview<'_> {
+    fn make(uri: &SymbolUri) -> Preview<'_> {
         Preview {
             kind: "preview",
             uri,
@@ -250,7 +250,7 @@ impl Preview<'_> {
 }
 
 #[derive(Copy, Clone)]
-struct Short<'u>(&'u SymbolURI);
+struct Short<'u>(&'u SymbolUri);
 impl std::fmt::Display for Short<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}]{{", self.0.archive_id())?;
@@ -262,7 +262,7 @@ impl std::fmt::Display for Short<'_> {
     }
 }
 
-fn do_sym_result_local(sym: &SymbolURI) -> impl IntoView + use<> {
+fn do_sym_result_local(sym: &SymbolUri) -> impl IntoView + use<> {
     let vs = unwrap!(VSCode::get());
     let name = ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
     view! {
@@ -297,7 +297,7 @@ fn do_sym_result_local(sym: &SymbolURI) -> impl IntoView + use<> {
 }
 
 fn do_sym_result_remote(
-    sym: &SymbolURI,
+    sym: &SymbolUri,
     res: Vec<(f32, SearchResult)>,
     remote: fn() -> Option<String>,
 ) -> impl IntoView + use<> {
@@ -324,7 +324,7 @@ fn do_sym_result_remote(
     }
 }
 
-fn do_doc(score: f32, uri: DocumentURI, remote: Option<fn() -> Option<String>>) -> impl IntoView {
+fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
     use thaw::Scrollbar;
     let name = doc_name(&uri, uri.name().to_string());
     view! {
@@ -347,9 +347,9 @@ fn do_doc(score: f32, uri: DocumentURI, remote: Option<fn() -> Option<String>>) 
 
 fn do_para(
     score: f32,
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     kind: SearchResultKind,
-    fors: Vec<SymbolURI>,
+    fors: Vec<SymbolUri>,
     remote: Option<fn() -> Option<String>>,
 ) -> impl IntoView {
     use thaw::Scrollbar;
@@ -357,8 +357,7 @@ fn do_para(
     let name = uristr;
     let desc = comma_sep(
         "For",
-        fors.into_iter()
-            .map(|s| symbol_name(&s, s.name().last_name().as_ref())),
+        fors.into_iter().map(|s| symbol_name(&s, s.name().last())),
     );
     view! {
         <div class="flams-search-block">
