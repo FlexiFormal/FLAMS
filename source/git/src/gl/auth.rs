@@ -179,7 +179,7 @@ impl GitLabOAuth {
         let r = r.split('\n').find_map(|line| {
             let line = line.trim();
             line.strip_prefix("id:")
-                .map(|rest| ArchiveId::new(rest.trim()))
+                .and_then(|rest| ArchiveId::new(rest.trim()).ok())
         });
         ret!(r)
     }
