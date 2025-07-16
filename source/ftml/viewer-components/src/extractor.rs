@@ -1,4 +1,4 @@
-use flams_ontology::{narration::documents::DocumentStyles, uris::NarrativeURI, Unchecked};
+use flams_ontology::{narration::documents::DocumentStyles, uris::NarrativeUri, Unchecked};
 use flams_utils::{id_counters::IdCounter, vecmap::VecSet};
 use ftml_extraction::prelude::{Attributes, FTMLExtractor, GnoteState};
 use leptos::{prelude::expect_context, web_sys::Element};
@@ -175,7 +175,7 @@ impl FTMLExtractor for DOMExtractor {
     fn close_narrative(
         &mut self,
     ) -> Option<(
-        flams_ontology::uris::NarrativeURI,
+        flams_ontology::uris::NarrativeUri,
         Vec<flams_ontology::narration::DocumentElement<Unchecked>>,
     )> {
         todo!()
@@ -198,8 +198,8 @@ impl FTMLExtractor for DOMExtractor {
     fn get_content_uri(&self) -> Option<&flams_ontology::uris::ModuleUri> {
         todo!()
     }
-    fn get_narrative_uri(&self) -> flams_ontology::uris::NarrativeURI {
-        expect_context::<NarrativeURI>()
+    fn get_narrative_uri(&self) -> flams_ontology::uris::NarrativeUri {
+        expect_context::<NarrativeUri>()
     }
     fn with_problem<R>(
         &mut self,
@@ -240,7 +240,7 @@ impl FTMLExtractor for DOMExtractor {
     fn open_content(&mut self, _uri: flams_ontology::uris::ModuleUri) {}
     fn open_decl(&mut self) {}
     fn open_problem(&mut self, _uri: flams_ontology::uris::DocumentElementUri) {}
-    fn open_narrative(&mut self, _uri: Option<flams_ontology::uris::NarrativeURI>) {}
+    fn open_narrative(&mut self, _uri: Option<flams_ontology::uris::NarrativeUri>) {}
     fn open_notation(&mut self) {}
     fn open_slide(&mut self) {}
     fn open_paragraph(

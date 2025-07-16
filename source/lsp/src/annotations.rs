@@ -7,8 +7,8 @@ use async_lsp::lsp_types as lsp;
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
     uris::{
-        ArchiveId, ArchiveUri, ArchiveUriTrait, ContentURI, ContentURITrait, ModuleUri,
-        PathURITrait, SymbolUri, URIWithLanguage, URI,
+        ArchiveId, ArchiveUri, ArchiveUriTrait, DomainUri, DomainUriTrait, ModuleUri, PathURITrait,
+        SymbolUri, URIWithLanguage, URI,
     },
 };
 use flams_stex::quickparse::stex::rules::IncludeProblemArg;
@@ -2270,7 +2270,7 @@ impl LSPState {
                             uri: muri,
                             children,
                             ..
-                        } if matches!(&uri,URI::Content(ContentURI::Module(u)) if u == muri) => {
+                        } if matches!(&uri,URI::Content(DomainUri::Module(u)) if u == muri) => {
                             Some(&**children)
                         }
                         STeXAnnot::MathStructure {
@@ -2278,7 +2278,7 @@ impl LSPState {
                             children,
                             extends,
                             ..
-                        } if matches!(&uri,URI::Content(ContentURI::Symbol(u)) if u == &suri.uri) =>
+                        } if matches!(&uri,URI::Content(DomainUri::Symbol(u)) if u == &suri.uri) =>
                         {
                             for (sym, range) in extends {
                                 if let Some(p) = sym.filepath.as_ref() {

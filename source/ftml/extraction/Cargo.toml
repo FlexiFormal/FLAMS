@@ -5,18 +5,22 @@ edition = "2021"
 
 [features]
 full = []
-rdf = ["flams-ontology/rdf"]
+rdf = ["flams-ontology/rdf", "ftml-uris/rdf", "dep:ulo"]
 
 [dependencies]
-flams-ontology = {workspace=true}
-flams-utils = {workspace=true}
+ftml-uris = { workspace = true }
+ulo = { workspace = true, optional = true }
 
-smallvec = {workspace=true}
-const_format = {workspace=true}
-paste = {workspace=true}
-tracing = {workspace=true}
-lazy_static = {workspace=true}
-either = {workspace=true}
+flams-ontology = { workspace = true }
+flams-utils = { workspace = true }
+
+smallvec = { workspace = true }
+const_format = { workspace = true }
+paste = { workspace = true }
+tracing = { workspace = true }
+lazy_static = { workspace = true }
+either = { workspace = true }
+ftml-core = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,5 +1,5 @@
 #![allow(clippy::must_use_candidate)]
-use flams_ontology::uris::{NarrativeURI, URI};
+use flams_ontology::uris::{NarrativeUri, URI};
 use flams_router_base::uris::{DocURIComponents, URIComponents, URIComponentsTrait};
 use flams_web_utils::{components::wait_and_then_fn, do_css};
 use ftml_viewer_components::components::{
@@ -80,7 +80,7 @@ pub fn Fragment(uri: URIComponents) -> impl IntoView {
                 do_css(css);
             }
             //leptos::logging::log!("Here 2: {html}");
-            if let URI::Narrative(NarrativeURI::Element(uri)) = uri {
+            if let URI::Narrative(NarrativeUri::Element(uri)) = uri {
                 leptos::either::Either::Left(view! {
                     //<pre>"Here: "{html.clone()}</pre>
                     <div><FragmentString html uri/></div>

@@ -4,7 +4,7 @@ use crate::components::SearchState;
 use flams_ontology::{
     search::{QueryFilter, SearchResult, SearchResultKind},
     uris::{
-        ArchiveId, ArchiveUriTrait, DocumentElementUri, DocumentUri, DomainUriTrait, NarrativeURI,
+        ArchiveId, ArchiveUriTrait, DocumentElementUri, DocumentUri, DomainUriTrait, NarrativeUri,
         PathURITrait, SymbolUri, URI,
     },
 };
@@ -377,7 +377,7 @@ fn do_para(
     }
 }
 
-fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl IntoView {
+fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
     use flams_router_content::components::Fragment;
     use leptos::either::Either;
     move || {
@@ -407,7 +407,7 @@ fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl I
                             .call_remote(remote.clone())
                         },
                         move |(uri, css, html)| {
-                            let uri = if let URI::Narrative(NarrativeURI::Element(uri)) = uri {
+                            let uri = if let URI::Narrative(NarrativeUri::Element(uri)) = uri {
                                 Some(uri)
                             } else {
                                 None

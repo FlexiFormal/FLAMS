@@ -3,7 +3,7 @@
 use crate::components::navigation::NavElems;
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
-    uris::{DocumentElementUri, DocumentUri, Name, NarrativeURI},
+    uris::{DocumentElementUri, DocumentUri, Name, NarrativeUri},
 };
 use flams_utils::{time::Timestamp, CSS};
 use flams_web_utils::do_css;
@@ -286,7 +286,7 @@ pub fn do_toc<V: IntoView + 'static>(
             })
         }
         TOCSource::Get => match expect_context() {
-            NarrativeURI::Document(uri) => {
+            NarrativeUri::Document(uri) => {
                 let r = Resource::new(
                     || (),
                     move |()| crate::remote::server_config.get_toc(uri.clone()),

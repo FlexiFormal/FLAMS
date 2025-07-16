@@ -10,7 +10,7 @@ use flams_ontology::{
     },
     uris::{
         ArchiveId, ArchiveUriTrait, DocumentElementUri, DocumentUri, DomainUri, DomainUriTrait,
-        NarrativeURI, PathURITrait, SymbolUri, URI, UriRefTrait,
+        NarrativeUri, PathURITrait, SymbolUri, URI, UriRefTrait,
     },
 };
 use flams_utils::{CSS, unwrap};
@@ -55,8 +55,8 @@ pub async fn document_of(uri: URI) -> Result<DocumentUri, ServerFnError<String>>
         URI::Base(_) | URI::Archive(_) | URI::Path(_) => {
             return Err("not in a document".to_string().into());
         }
-        URI::Narrative(NarrativeURI::Document(d)) => return Ok(d),
-        URI::Narrative(NarrativeURI::Element(d)) => return Ok(d.document().clone()),
+        URI::Narrative(NarrativeUri::Document(d)) => return Ok(d),
+        URI::Narrative(NarrativeUri::Element(d)) => return Ok(d.document().clone()),
         URI::Content(DomainUri::Module(ref m)) => m,
         URI::Content(DomainUri::Symbol(ref s)) => s.module(),
     };
@@ -404,14 +404,14 @@ pub async fn solution(
     d: Option<String>,
     e: Option<String>,
 ) -> Result<String, ServerFnError<String>> {
-    use flams_ontology::uris::NarrativeURI;
+    use flams_ontology::uris::NarrativeUri;
     use flams_utils::Hexable;
     use flams_web_utils::blocking_server_fn;
     let Result::<URIComponents, _>::Ok(comps) = (uri, rp, a, p, l, d, e, None, None).try_into()
     else {
         return Err("invalid uri components".to_string().into());
     };
-    let Some(URI::Narrative(NarrativeURI::Element(uri))) = comps.parse() else {
+    let Some(URI::Narrative(NarrativeUri::Element(uri))) = comps.parse() else {
         return Err("invalid uri".to_string().into());
     };
     blocking_server_fn(move || {
@@ -464,7 +464,7 @@ mod server {
         },
         rdf::ontologies::ulo2,
         uris::{
-            DocumentElementUri, DocumentUri, DomainUri, NarrativeURI, SymbolUri, URI, URIOrRefTrait,
+            DocumentElementUri, DocumentUri, DomainUri, NarrativeUri, SymbolUri, URI, URIOrRefTrait,
         },
     };
     use flams_system::backend::{Backend, GlobalBackend, rdf::sparql};
@@ -506,13 +506,13 @@ mod server {
         _: Option<URI>,
     ) -> Result<(URI, Vec<CSS>, String), ServerFnError<String>> {
         match &uri {
-            URI::Narrative(NarrativeURI::Document(duri)) => {
+            URI::Narrative(NarrativeUri::Document(duri)) => {
                 let Some((css, html)) = backend!(get_html_body!(duri, false)) else {
                     not_found!("Document {duri} not found");
                 };
                 Ok((uri, insert_base_url(filter_paras(css)), html))
             }
-            URI::Narrative(NarrativeURI::Element(euri)) => {
+            URI::Narrative(NarrativeUri::Element(euri)) => {
                 let Some(e) = backend!(get_document_element!(euri)) else {
                     not_found!("Document Element {euri} not found");
                 };
@@ -575,7 +575,7 @@ mod server {
                 })
                 .await
             }
-            URI::Narrative(NarrativeURI::Element(uri)) => {
+            URI::Narrative(NarrativeUri::Element(uri)) => {
                 blocking_server_fn(move || {
                     Ok(backend!(get_var_notations SYNC!(&uri)).unwrap_or_default())
                 })
@@ -591,13 +591,13 @@ mod server {
             uri @ (URI::Base(_) | URI::Archive(_) | URI::Path(_) | URI::Content(_)) => {
                 Err(format!("Not a URI of an element that can have a title: {uri}").into())
             }
-            URI::Narrative(NarrativeURI::Document(uri)) => {
+            URI::Narrative(NarrativeUri::Document(uri)) => {
                 let Some(doc) = backend!(get_document!(&uri)) else {
                     not_found!("Document {uri} not found");
                 };
                 Ok((Vec::new(), doc.title().unwrap_or_default().to_string()))
             }
-            URI::Narrative(NarrativeURI::Element(uri)) => {
+            URI::Narrative(NarrativeUri::Element(uri)) => {
                 let Some(e): Option<NarrativeReference<DocumentElement<Checked>>> =
                     backend!(get_document_element!(&uri))
                 else {
@@ -625,7 +625,7 @@ mod server {
             uri @ (URI::Base(_) | URI::Archive(_) | URI::Path(_)) => {
                 Ok((insert_base_url(css.0), OMDoc::Other(uri.to_string())))
             }
-            URI::Narrative(NarrativeURI::Document(uri)) => {
+            URI::Narrative(NarrativeUri::Document(uri)) => {
                 let Some(doc) = backend!(get_document!(&uri)) else {
                     not_found!("Document {uri} not found");
                 };
@@ -640,7 +640,7 @@ mod server {
                 });
                 Ok((insert_base_url(css.0), r.into()))
             }
-            URI::Narrative(NarrativeURI::Element(uri)) => {
+            URI::Narrative(NarrativeUri::Element(uri)) => {
                 let Some(e): Option<NarrativeReference<DocumentElement<Checked>>> =
                     backend!(get_document_element!(&uri))
                 else {
@@ -799,10 +799,10 @@ mod server {
         }
 
         let Some(doe) = (match &uri {
-            URI::Narrative(NarrativeURI::Document(uri)) => {
+            URI::Narrative(NarrativeUri::Document(uri)) => {
                 backend!(get_document!(uri)).map(either::Either::Left)
             }
-            URI::Narrative(NarrativeURI::Element(uri)) => {
+            URI::Narrative(NarrativeUri::Element(uri)) => {
                 backend!(get_document_element!(uri)).map(either::Either::Right)
             }
             _ => return Err("Not a narrative URI".to_string().into()),

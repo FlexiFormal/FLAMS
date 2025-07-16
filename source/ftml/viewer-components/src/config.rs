@@ -1,10 +1,10 @@
-use flams_ontology::uris::{DocumentElementUri, NarrativeURI, URI};
+use flams_ontology::uris::{DocumentElementUri, NarrativeUri, URI};
 use ftml_extraction::open::terms::VarOrSym;
 use leptos::prelude::*;
 
 pub struct FTMLConfiguration {
     pub allow_hovers: Option<bool>,
-    pub top_uri: Option<NarrativeURI>,
+    pub top_uri: Option<NarrativeUri>,
     // on_section_title: Option<OnSectionTitle>,
     // on_fragment: Option<FragmentContinuation>,
     // on_inpuref: Option<InputRefContinuation>,

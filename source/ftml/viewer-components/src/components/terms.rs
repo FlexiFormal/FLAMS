@@ -1,6 +1,6 @@
 use flams_ontology::{
     content::terms::ArgMode,
-    uris::{ArchiveUriTrait, ContentURI, DocumentElementUri, URIWithLanguage, URI},
+    uris::{ArchiveUriTrait, DocumentElementUri, DomainUri, URIWithLanguage, URI},
 };
 use flams_web_utils::{
     components::{Popover, PopoverSize},
@@ -283,7 +283,7 @@ pub(super) fn math_term(
                 let subst = use_context::<DisablePopover>().is_none();
                 if subst {
                     let uri = match &head.owner {
-                        VarOrSym::S(s @ ContentURI::Symbol(_)) => {
+                        VarOrSym::S(s @ DomainUri::Symbol(_)) => {
                             Some((false, URI::Content(s.clone())))
                         }
                         VarOrSym::V(PreVar::Resolved(v)) => {
@@ -422,7 +422,7 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
                 //<div style="max-width:600px;">
                   {match s {
                     VarOrSym::V(v) => EitherOf3::A(view!{<span>"Variable "{v.name().last_name().to_string()}</span>}),
-                    VarOrSym::S(ContentURI::Symbol(s)) => EitherOf3::B(crate::remote::get!(definition(s.clone()) = (css,s) => {
+                    VarOrSym::S(DomainUri::Symbol(s)) => EitherOf3::B(crate::remote::get!(definition(s.clone()) = (css,s) => {
                       for c in css { do_css(c); }
                       Some(view!(
                         <div style="color:black;background-color:white;padding:3px;max-width:600px;">
@@ -430,7 +430,7 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
                         </div>
                       ))
                     })),
-                    VarOrSym::S(ContentURI::Module(m)) =>
+                    VarOrSym::S(DomainUri::Module(m)) =>
                       EitherOf3::C(view!{<div>"Module" {m.name().last_name().to_string()}</div>}),
                 }}//</div>
               </Popover>
@@ -453,10 +453,10 @@ pub fn do_onclick(uri: VarOrSym) -> impl IntoView {
         VarOrSym::V(v) => {
             return EitherOf3::A(view! {<span>"Variable "{v.name().last_name().to_string()}</span>})
         }
-        VarOrSym::S(ContentURI::Module(m)) => {
+        VarOrSym::S(DomainUri::Module(m)) => {
             return EitherOf3::B(view! {<div>"Module" {m.name().last_name().to_string()}</div>})
         }
-        VarOrSym::S(ContentURI::Symbol(s)) => s,
+        VarOrSym::S(DomainUri::Symbol(s)) => s,
     };
     let name = s.name().last_name().to_string();
 
@@ -511,7 +511,7 @@ pub fn do_onclick(uri: VarOrSym) -> impl IntoView {
         {#[cfg(feature="omdoc")]{
           if term_replacing::DO_REPLACEMENTS {
             let uri = match &uriclone {
-              VarOrSym::S(s@ContentURI::Symbol(_)) => Some((false,URI::Content(s.clone()))),
+              VarOrSym::S(s@DomainUri::Symbol(_)) => Some((false,URI::Content(s.clone()))),
               VarOrSym::V(PreVar::Resolved(v)) => Some((true,URI::Narrative(v.clone().into()))),
               _ => None
             };

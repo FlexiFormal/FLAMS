@@ -5,7 +5,7 @@ use flams_ontology::{
         ArchiveData, ArchiveGroupData, ArchiveIndex, DirectoryData, FileData, Institution,
     },
     languages::Language,
-    uris::{ArchiveId, ArchiveUriTrait, NarrativeURITrait, PathURITrait, URI, URIWithLanguage},
+    uris::{ArchiveId, ArchiveUriTrait, IsNarrativeUri, PathURITrait, URI, URIWithLanguage},
 };
 use flams_router_base::uris::URIComponents;
 use leptos::prelude::*;

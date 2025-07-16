@@ -2,7 +2,7 @@ use super::Gotto;
 use super::TOCSource;
 use crate::iterate;
 use crate::FTMLDocumentSetup;
-use flams_ontology::uris::NarrativeURI;
+use flams_ontology::uris::NarrativeUri;
 use flams_ontology::uris::{DocumentElementUri, DocumentUri, NameStep};
 use flams_web_utils::components::wait_local;
 use flams_web_utils::{do_css, inject_css};
@@ -93,7 +93,7 @@ pub fn FragmentString(
     view! {<FTMLDocumentSetup uri=doc>{
         match name {
             Some(name) if needs_suffix => {
-                let nuri = NarrativeURI::Element(flams_utils::unwrap!(uri).parent());
+                let nuri = NarrativeUri::Element(flams_utils::unwrap!(uri).parent());
                 EitherOf3::A(view!{
                     <Provider value=ForcedName(Some(name))>
                     <Provider value=nuri>

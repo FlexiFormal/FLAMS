@@ -23,13 +23,17 @@ use flams_ontology::{
         variables::Variable,
         DocumentElement,
     },
-    uris::{DocumentElementUri, DocumentUri, DomainUri, ModuleUri, Name, SymbolUri, URIOrRefTrait},
+    uris::{DocumentElementUri, DocumentUri, DomainUri, ModuleUri, SymbolUri, UriName},
 };
+use flams_utils::unwrap;
+use ftml_uris::IsDomainUri;
 use smallvec::SmallVec;
 use terms::{OpenArg, PreVar, VarOrSym};
 
 #[cfg(feature = "rdf")]
-use flams_ontology::triple;
+use ftml_uris::FtmlUri;
+#[cfg(feature = "rdf")]
+use ulo::triple;
 
 use crate::{
     errors::FTMLError,
@@ -72,11 +76,11 @@ pub enum OpenFTMLElement {
         uri: DocumentElementUri,
         kind: ParagraphKind,
         formatting: ParagraphFormatting,
-        styles: Box<[Name]>,
+        styles: Box<[UriName]>,
     },
     Problem {
         uri: DocumentElementUri,
-        styles: Box<[Name]>,
+        styles: Box<[UriName]>,
         autogradable: bool,
         points: Option<f32>,
         sub_problem: bool,
@@ -316,16 +320,11 @@ impl OpenFTMLElement {
             }
             Self::OpenTerm { term, is_top: true } => {
                 let term = term.close(extractor);
-                let uri = match extractor.get_narrative_uri()
-                    & &*extractor.new_id(Cow::Borrowed("term"))
-                {
-                    Ok(uri) => uri,
-                    Err(_) => {
-                        extractor
-                            .add_error(FTMLError::InvalidURI("(should be impossible)".to_string()));
-                        return None;
-                    }
-                };
+                let uri = extractor.get_narrative_uri().clone()
+                    & unwrap!(extractor
+                        .new_id(Cow::Borrowed("term"))
+                        .parse::<UriName>()
+                        .ok());
                 extractor.set_in_term(false);
                 if !matches!(term, Term::OMID { .. } | Term::OMV { .. }) {
                     extractor.add_document_element(DocumentElement::TopTerm { uri, term });
@@ -385,11 +384,11 @@ impl OpenFTMLElement {
                 let top = extractor.get_narrative_uri();
                 #[cfg(feature = "rdf")]
                 if E::RDF {
-                    extractor.add_triples([triple!(<(top.to_iri())> dc:HAS_PART <(uri.to_iri())>)]);
+                    extractor.add_triples([triple!(<(top.to_iri())> dc:hasPart <(uri.to_iri())>)]);
                 }
                 extractor.add_document_element(DocumentElement::DocumentReference {
-                    id: match top & &*id {
-                        Ok(id) => id,
+                    id: match id.parse::<UriName>() {
+                        Ok(id) => top & id,
                         Err(_) => {
                             extractor.add_error(FTMLError::InvalidURI(format!("5: {id}")));
                             return None;
@@ -607,7 +606,7 @@ impl OpenFTMLElement {
         #[cfg(feature = "rdf")]
         if E::RDF {
             if let Some(m) = extractor.get_content_iri() {
-                extractor.add_triples([triple!(<(m)> ulo:IMPORTS <(uri.to_iri())>)]);
+                extractor.add_triples([triple!(<(m)> ulo:imports <(uri.to_iri())>)]);
             }
         }
         extractor.add_document_element(DocumentElement::ImportModule(uri.clone()));
@@ -623,7 +622,7 @@ impl OpenFTMLElement {
         #[cfg(feature = "rdf")]
         if E::RDF {
             extractor.add_triples([
-                triple!(<(extractor.get_document_iri())> dc:REQUIRES <(uri.to_iri())>),
+                triple!(<(extractor.get_document_iri())> dc:requires <(uri.to_iri())>),
             ]);
         }
         extractor.add_document_element(DocumentElement::UseModule(uri));
@@ -649,8 +648,8 @@ impl OpenFTMLElement {
         if E::RDF {
             let iri = uri.to_iri();
             extractor.add_triples([
-                triple!(<(iri.clone())> : ulo:THEORY),
-                triple!(<(extractor.get_document_iri())> ulo:CONTAINS <(iri)>),
+                triple!(<(iri.clone())> : ulo:theory),
+                triple!(<(extractor.get_document_iri())> ulo:contains <(iri)>),
             ]);
         }
 
@@ -660,7 +659,7 @@ impl OpenFTMLElement {
             children: narrative,
         });
 
-        if uri.name().is_simple() {
+        if uri.module_name().is_simple() {
             extractor.add_module(OpenModule {
                 uri,
                 meta,
@@ -675,7 +674,7 @@ impl OpenFTMLElement {
             #[cfg(feature = "rdf")]
             if E::RDF {
                 if let Some(m) = extractor.get_content_iri() {
-                    extractor.add_triples([triple!(<(m)> ulo:CONTAINS <(sym.to_iri())>)]);
+                    extractor.add_triples([triple!(<(m)> ulo:contains <(sym.to_iri())>)]);
                 }
             }
             if extractor
@@ -710,15 +709,17 @@ impl OpenFTMLElement {
             if let Some(cont) = extractor.get_content_iri() {
                 let iri = uri.to_iri();
                 extractor.add_triples([
-                    triple!(<(iri.clone())> : ulo:STRUCTURE),
-                    triple!(<(cont)> ulo:CONTAINS <(iri)>),
+                    triple!(<(iri.clone())> : ulo:structure),
+                    triple!(<(cont)> ulo:contains <(iri)>),
                 ]);
             }
         }
 
         if uri.name().last().starts_with("EXTSTRUCT") {
             let Some(target) = content.iter().find_map(|d| match d {
-                OpenDeclaration::Import(uri) if !uri.name().last().starts_with("EXTSTRUCT") => {
+                OpenDeclaration::Import(uri)
+                    if !uri.module_name().last().starts_with("EXTSTRUCT") =>
+                {
                     Some(uri)
                 }
                 _ => None,
@@ -733,7 +734,7 @@ impl OpenFTMLElement {
 
             #[cfg(feature = "rdf")]
             if E::RDF {
-                extractor.add_triples([triple!(<(uri.to_iri())> ulo:EXTENDS <(target.to_iri())>)]);
+                extractor.add_triples([triple!(<(uri.to_iri())> ulo:extends <(target.to_iri())>)]);
             }
             extractor.add_document_element(DocumentElement::Extension {
                 range: node.range(),
@@ -791,9 +792,9 @@ impl OpenFTMLElement {
             if let Some(cont) = extractor.get_content_iri() {
                 let iri = uri.to_iri(); // TODO
                 extractor.add_triples([
-                    triple!(<(iri.clone())> : ulo:MORPHISM),
+                    triple!(<(iri.clone())> : ulo:morphism),
                     triple!(<(iri.clone())> rdfs:DOMAIN <(domain.to_iri())>),
-                    triple!(<(cont)> ulo:CONTAINS <(iri)>),
+                    triple!(<(cont)> ulo:contains <(iri)>),
                 ]);
             }
         }
@@ -832,8 +833,8 @@ impl OpenFTMLElement {
             let doc = extractor.get_document_iri();
             let iri = uri.to_iri();
             extractor.add_triples([
-                triple!(<(iri.clone())> : ulo:SECTION),
-                triple!(<(doc)> ulo:CONTAINS <(iri)>),
+                triple!(<(iri.clone())> : ulo:section),
+                triple!(<(doc)> ulo:contains <(iri)>),
             ]);
         }
 
@@ -851,7 +852,7 @@ impl OpenFTMLElement {
         node: &N,
         kind: ParagraphKind,
         formatting: ParagraphFormatting,
-        styles: Box<[Name]>,
+        styles: Box<[UriName]>,
         uri: DocumentElementUri,
     ) {
         let Some(ParagraphState {
@@ -871,17 +872,17 @@ impl OpenFTMLElement {
             let iri = uri.to_iri();
             if kind.is_definition_like(&styles) {
                 for (f, _) in fors.iter() {
-                    extractor.add_triples([triple!(<(iri.clone())> ulo:DEFINES <(f.to_iri())>)]);
+                    extractor.add_triples([triple!(<(iri.clone())> ulo:defines <(f.to_iri())>)]);
                 }
             } else if kind == ParagraphKind::Example {
                 for (f, _) in fors.iter() {
                     extractor
-                        .add_triples([triple!(<(iri.clone())> ulo:EXAMPLE_FOR <(f.to_iri())>)]);
+                        .add_triples([triple!(<(iri.clone())> ulo:example_for <(f.to_iri())>)]);
                 }
             }
             extractor.add_triples([
                 triple!(<(iri.clone())> : <(kind.rdf_type().into_owned())>),
-                triple!(<(doc)> ulo:CONTAINS <(iri)>),
+                triple!(<(doc)> ulo:contains <(iri)>),
             ]);
         }
 
@@ -901,7 +902,7 @@ impl OpenFTMLElement {
         extractor: &mut E,
         node: &N,
         uri: DocumentElementUri,
-        styles: Box<[Name]>,
+        styles: Box<[UriName]>,
         autogradable: bool,
         points: Option<f32>,
         sub_problem: bool,
@@ -929,27 +930,27 @@ impl OpenFTMLElement {
             for (d, s) in &preconditions {
                 let b = flams_ontology::rdf::BlankNode::default();
                 extractor.add_triples([
-                    triple!(<(iri.clone())> ulo:PRECONDITION (b.clone())!),
-                    triple!((b.clone())! ulo:COGDIM <(d.to_iri().into_owned())>),
-                    triple!((b)! ulo:POSYMBOL <(s.to_iri())>),
+                    triple!(<(iri.clone())> ulo:has_precondition (b.clone())!),
+                    triple!((b.clone())! ulo:has_cognitive_dimension <(d.to_iri().into_owned())>),
+                    triple!((b)! ulo:po_has_symbol <(s.to_iri())>),
                 ]);
             }
             for (d, s) in &objectives {
                 let b = flams_ontology::rdf::BlankNode::default();
                 extractor.add_triples([
-                    triple!(<(iri.clone())> ulo:OBJECTIVE (b.clone())!),
-                    triple!((b.clone())! ulo:COGDIM <(d.to_iri().into_owned())>),
-                    triple!((b)! ulo:POSYMBOL <(s.to_iri())>),
+                    triple!(<(iri.clone())> ulo:has_objective (b.clone())!),
+                    triple!((b.clone())! ulo:has_cognitive_dimension <(d.to_iri().into_owned())>),
+                    triple!((b)! ulo:po_has_symbol <(s.to_iri())>),
                 ]);
             }
 
             extractor.add_triples([
                 if sub_problem {
-                    triple!(<(iri.clone())> : ulo:SUBPROBLEM)
+                    triple!(<(iri.clone())> : ulo:subproblem)
                 } else {
-                    triple!(<(iri.clone())> : ulo:PROBLEM)
+                    triple!(<(iri.clone())> : ulo:problem)
                 },
-                triple!(<(doc)> ulo:CONTAINS <(iri)>),
+                triple!(<(doc)> ulo:contains <(iri)>),
             ]);
         }
         let solutions =
@@ -991,8 +992,8 @@ impl OpenFTMLElement {
             if let Some(m) = extractor.get_content_iri() {
                 let iri = uri.to_iri();
                 extractor.add_triples([
-                    triple!(<(iri.clone())> : ulo:DECLARATION),
-                    triple!(<(m)> ulo:DECLARES <(iri)>),
+                    triple!(<(iri.clone())> : ulo:declaration),
+                    triple!(<(m)> ulo:declares <(iri)>),
                 ]);
             }
         }
@@ -1035,8 +1036,8 @@ impl OpenFTMLElement {
         if E::RDF {
             let iri = uri.to_iri();
             extractor.add_triples([
-                triple!(<(iri.clone())> : ulo:VARIABLE),
-                triple!(<(extractor.get_document_iri())> ulo:DECLARES <(iri)>),
+                triple!(<(iri.clone())> : ulo:variable),
+                triple!(<(extractor.get_document_iri())> ulo:declares <(iri)>),
             ]);
         }
 
@@ -1076,8 +1077,8 @@ impl OpenFTMLElement {
             extractor.add_error(FTMLError::NotInNarrative);
             return;
         }
-        let uri = match extractor.get_narrative_uri() & &*id {
-            Ok(uri) => uri,
+        let uri = match id.parse::<UriName>() {
+            Ok(id) => extractor.get_narrative_uri().clone() & id,
             Err(_) => {
                 extractor.add_error(FTMLError::InvalidURI(format!("6: {id}")));
                 return;
@@ -1099,9 +1100,9 @@ impl OpenFTMLElement {
                 if E::RDF {
                     let iri = uri.to_iri();
                     extractor.add_triples([
-                        triple!(<(iri.clone())> : ulo:NOTATION),
-                        triple!(<(iri.clone())> ulo:NOTATION_FOR <(symbol.to_iri())>),
-                        triple!(<(extractor.get_document_iri())> ulo:DECLARES <(iri)>),
+                        triple!(<(iri.clone())> : ulo:notation),
+                        triple!(<(iri.clone())> ulo:notation_for <(symbol.to_iri())>),
+                        triple!(<(extractor.get_document_iri())> ulo:declares <(iri)>),
                     ]);
                 }
                 extractor.add_document_element(DocumentElement::Notation {

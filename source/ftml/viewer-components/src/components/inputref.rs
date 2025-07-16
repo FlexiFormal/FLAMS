@@ -1,6 +1,6 @@
 use flams_ontology::{
     narration::sections::SectionLevel,
-    uris::{DocumentUri, NarrativeURI},
+    uris::{DocumentUri, NarrativeUri},
 };
 use flams_web_utils::{do_css, inject_css};
 use leptos::{context::Provider, either::Either, prelude::*};
@@ -94,7 +94,7 @@ fn do_inputref(uri: DocumentUri, on_load: RwSignal<bool>) -> impl IntoView {
                 do_css(c);
             }
             view!(<span style="display:contents">
-      <Provider value=NarrativeURI::Document(uricl.clone())>
+      <Provider value=NarrativeUri::Document(uricl.clone())>
       <Provider value = RwSignal::new(DOMExtractor::default())>
         <DomStringCont html cont=crate::iterate on_load/>
       </Provider></Provider>

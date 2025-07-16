@@ -1,5 +1,5 @@
 use crate::open::terms::{OpenTermKind, VarOrSym};
-use flams_ontology::{ftml::FTMLKey, uris::Name};
+use flams_ontology::{ftml::FTMLKey, uris::UriName};
 use std::fmt::Display;
 
 #[derive(Clone, Debug)]
@@ -7,7 +7,7 @@ pub enum FTMLError {
     MissingArguments,
     MissingElementsInList,
     MissingTermForComplex(VarOrSym),
-    UnresolvedVariable(Name),
+    UnresolvedVariable(UriName),
     MissingHeadForTerm,
     InvalidTermKind(String),
     InvalidHeadForTermKind(OpenTermKind, VarOrSym),

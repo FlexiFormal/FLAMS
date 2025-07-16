@@ -17,8 +17,7 @@ use flams_ontology::narration::sections::SectionLevel;
 use flams_ontology::narration::variables::Variable;
 use flams_ontology::narration::{DocumentElement, LazyDocRef};
 use flams_ontology::uris::{
-    DocumentElementUri, DocumentUri, ModuleUri, Name, NarrativeURI, NarrativeURITrait, SymbolUri,
-    UriRefTrait,
+    DocumentElementUri, DocumentUri, IsNarrativeUri, ModuleUri, NarrativeUri, SymbolUri, UriName,
 };
 use flams_ontology::{DocumentRange, Resourcable, Unchecked};
 use flams_utils::id_counters::IdCounter;
@@ -37,24 +36,23 @@ pub trait FTMLExtractor {
     #[cfg(feature = "rdf")]
     fn add_triples<const N: usize>(&mut self, triples: [flams_ontology::rdf::Triple; N]);
 
-    fn get_narrative_uri(&self) -> NarrativeURI;
+    fn get_narrative_uri(&self) -> NarrativeUri;
     fn get_content_uri(&self) -> Option<&ModuleUri>;
 
     #[cfg(feature = "rdf")]
     fn get_document_iri(&self) -> flams_ontology::rdf::NamedNode {
-        use flams_ontology::uris::URIOrRefTrait;
+        use ftml_uris::FtmlUri;
         self.get_narrative_uri().to_iri()
     }
 
     #[cfg(feature = "rdf")]
     fn get_content_iri(&self) -> Option<flams_ontology::rdf::NamedNode> {
-        use flams_ontology::uris::URIOrRefTrait;
-        self.get_content_uri().map(URIOrRefTrait::to_iri)
+        self.get_content_uri().map(ftml_uris::FtmlUri::to_iri)
     }
 
     fn with_problem<R>(&mut self, then: impl FnOnce(&mut ProblemState) -> R) -> Option<R>;
 
-    fn resolve_variable_name(&self, name: Name) -> Var;
+    fn resolve_variable_name(&self, name: UriName) -> Var;
     fn add_error(&mut self, err: FTMLError);
     fn add_module(&mut self, module: OpenModule<Unchecked>);
     fn new_id(&mut self, prefix: Cow<'static, str>) -> Box<str>;
@@ -69,10 +67,10 @@ pub trait FTMLExtractor {
     ) -> Result<(), OpenDeclaration<Unchecked>>;
 
     fn open_content(&mut self, uri: ModuleUri);
-    fn open_narrative(&mut self, uri: Option<NarrativeURI>);
+    fn open_narrative(&mut self, uri: Option<NarrativeUri>);
     fn open_complex_term(&mut self);
     fn close_content(&mut self) -> Option<(ModuleUri, Vec<OpenDeclaration<Unchecked>>)>;
-    fn close_narrative(&mut self) -> Option<(NarrativeURI, Vec<DocumentElement<Unchecked>>)>;
+    fn close_narrative(&mut self) -> Option<(NarrativeUri, Vec<DocumentElement<Unchecked>>)>;
     fn close_complex_term(&mut self) -> Option<Term>;
     fn open_section(&mut self, uri: DocumentElementUri);
     fn close_section(
@@ -253,10 +251,15 @@ pub trait Attributes {
                 || {
                     extractor
                         .get_narrative_uri()
-                        .document()
+                        .document_uri()
                         .module_uri_from(v.as_ref())
                 },
-                |m| m.clone() / v.as_ref(),
+                |m| {
+                    v.as_ref()
+                        .parse()
+                        .map(|v| m.clone() / &v)
+                        .map_err(Into::into)
+                },
             )
             .map_err(|_| FTMLError::InvalidURI(format!("1: {}", v.as_ref())))
     }
@@ -283,8 +286,13 @@ pub trait Attributes {
         extractor
             .get_content_uri()
             .map_or_else(
-                || extractor.get_narrative_uri().document().module_uri_from(&v),
-                |m| m.clone() / v.as_str(),
+                || {
+                    extractor
+                        .get_narrative_uri()
+                        .document_uri()
+                        .module_uri_from(&v)
+                },
+                |m| v.parse().map(|v| m.clone() / &v).map_err(Into::into),
             )
             .map_err(|_| FTMLError::InvalidURI(format!("2: {v}")))
     }
@@ -311,7 +319,9 @@ pub trait Attributes {
         let Some(module) = extractor.get_content_uri() else {
             return Err(FTMLError::NotInContent);
         };
-        (module.owned() | v.as_ref())
+        v.as_ref()
+            .parse()
+            .map(|v| module.clone() | v)
             .map_err(|_| FTMLError::InvalidURI(format!("3: {}", v.as_ref())))
     }
 
@@ -337,7 +347,9 @@ pub trait Attributes {
         let Some(module) = extractor.get_content_uri() else {
             return Err(FTMLError::NotInContent);
         };
-        (module.owned() | v.as_str()).map_err(|_| FTMLError::InvalidURI(format!("4: {v}")))
+        v.parse()
+            .map(|v| module.clone() | v)
+            .map_err(|_| FTMLError::InvalidURI(format!("4: {v}")))
     }
 
     /// #### Errors
@@ -488,7 +500,7 @@ pub struct NotationSpec {
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Narrative {
-    Container(NarrativeURI, Vec<DocumentElement<Unchecked>>),
+    Container(NarrativeUri, Vec<DocumentElement<Unchecked>>),
     Paragraph(ParagraphState),
     Section {
         uri: DocumentElementUri,
@@ -526,7 +538,7 @@ pub struct ExtractorState {
 impl ExtractorState {
     #[must_use]
     pub fn document_uri(&self) -> &DocumentUri {
-        let Some(Narrative::Container(NarrativeURI::Document(ref ret), _)) =
+        let Some(Narrative::Container(NarrativeUri::Document(ref ret), _)) =
             self.narrative.first().as_ref()
         else {
             unreachable!()
@@ -563,14 +575,14 @@ impl ExtractorState {
                 unreachable!()
             };
             match document {
-                NarrativeURI::Document(d) => Ok((d, elements, self.modules, self.styles)),
-                NarrativeURI::Element(_) => Err(()),
+                NarrativeUri::Document(d) => Ok((d, elements, self.modules, self.styles)),
+                NarrativeUri::Element(_) => Err(()),
             }
         } else {
             Err(())
         }
     }
-    pub(crate) fn push_narr(&mut self, uri: Option<NarrativeURI>) {
+    pub(crate) fn push_narr(&mut self, uri: Option<NarrativeUri>) {
         let uri = uri.unwrap_or_else(|| {
             self.narrative
                 .iter()
@@ -626,8 +638,16 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         <Self as StatefulExtractor>::add_resource(self, t)
     }
 
-    fn resolve_variable_name(&self, name: Name) -> Var {
-        let names = name.steps();
+    fn resolve_variable_name(&self, name: UriName) -> Var {
+        fn ew(a: &UriName, b: &UriName) -> bool {
+            let mut steps = a.steps().rev();
+            for s in b.steps().rev() {
+                if steps.next() != Some(s) {
+                    return false;
+                }
+            }
+            true
+        }
         for n in self.state().narrative.iter().rev() {
             let ch = match n {
                 Narrative::Container(_, c) => c,
@@ -640,7 +660,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             for c in ch.iter().rev() {
                 match c {
                     DocumentElement::Variable(Variable { uri, is_seq, .. })
-                        if uri.name().steps().ends_with(names) =>
+                        if ew(uri.name(), &name) =>
                     {
                         return Var::Ref {
                             declaration: uri.clone(),
@@ -659,7 +679,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
             .content
             .push(Content::Container(uri, Vec::new()));
     }
-    fn open_narrative(&mut self, uri: Option<NarrativeURI>) {
+    fn open_narrative(&mut self, uri: Option<NarrativeUri>) {
         self.state_mut().push_narr(uri);
     }
     fn open_complex_term(&mut self) {
@@ -673,7 +693,7 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         }
         None
     }
-    fn close_narrative(&mut self) -> Option<(NarrativeURI, Vec<DocumentElement<Unchecked>>)> {
+    fn close_narrative(&mut self) -> Option<(NarrativeUri, Vec<DocumentElement<Unchecked>>)> {
         let state = self.state_mut();
         let r = state.narrative.pop().unwrap_or_else(|| unreachable!());
         if state.narrative.is_empty() {
@@ -993,17 +1013,17 @@ impl<E: StatefulExtractor> FTMLExtractor for E {
         (Vec::new(), None)
     }
 
-    fn get_narrative_uri(&self) -> NarrativeURI {
+    fn get_narrative_uri(&self) -> NarrativeUri {
         self.state()
             .narrative
             .iter()
             .rev()
             .find_map(|t| match t {
-            Narrative::Container(uri,_) => Some(uri.as_narrative().owned()),
+            Narrative::Container(uri,_) => Some(uri.clone()),
             Narrative::Paragraph(ParagraphState { uri, .. }) |
             Narrative::Problem(ProblemState { uri,.. }) |
             //Narrative::Slide{uri,..} |
-            Narrative::Section{uri,..} => Some(uri.as_narrative().owned()),
+            Narrative::Section{uri,..} => Some(NarrativeUri::Element(uri.clone())),
             Narrative::Notation(_) | Narrative::Slide{..} => None
         })
             .unwrap_or_else(|| unreachable!())

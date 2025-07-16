@@ -5,7 +5,7 @@ use flams_ontology::{
         paragraphs::{ParagraphFormatting, ParagraphKind},
         problems::CognitiveDimension,
     },
-    uris::{DocumentElementUri, DocumentUri, ModuleUri, NarrativeURI, SymbolUri, URI},
+    uris::{DocumentElementUri, DocumentUri, ModuleUri, NarrativeUri, SymbolUri, URI},
 };
 use flams_utils::vecmap::{VecMap, VecSet};
 
@@ -378,7 +378,7 @@ pub(crate) fn doc_ref(uri: DocumentUri, title: Option<String>) -> impl IntoView 
       <Header slot><b>"Document "{super::doc_name(&uri, name)}</b></Header>
       <div style="padding-left:15px;">{
         let uri = uricl.clone();
-        let r = Resource::new(|| (),move |()| crate::remote::server_config.omdoc(NarrativeURI::Document(uri.clone()).into()));
+        let r = Resource::new(|| (),move |()| crate::remote::server_config.omdoc(NarrativeUri::Document(uri.clone()).into()));
         view!{
           <Suspense fallback=|| view!(<flams_web_utils::components::Spinner/>)>{move || {
             if let Some(Ok((_,omdoc))) = r.get() {

@@ -6,7 +6,7 @@ use crate::{
 };
 use flams_ontology::{
     narration::sections::SectionLevel,
-    uris::{DocumentElementUri, NarrativeURI},
+    uris::{DocumentElementUri, NarrativeUri},
 };
 use flams_web_utils::inject_css;
 use leptos::{context::Provider, prelude::*};
@@ -28,7 +28,7 @@ pub(super) fn section<V: IntoView + 'static>(
 
     view! {
       <Provider value=IdPrefix(id.clone())>
-        <Provider value=NarrativeURI::Element(uri.clone())>
+        <Provider value=NarrativeUri::Element(uri.clone())>
         <Provider value=counters>
         <div id=id style=style class=cls>
           {
@@ -52,7 +52,7 @@ pub(super) fn title<V: IntoView + 'static>(
     let counters: SectionCounters = expect_context();
     let (begin, cls) = match counters.current_level() {
         LogicalLevel::Section(l) => (
-            if let Some(NarrativeURI::Element(uri)) = use_context() {
+            if let Some(NarrativeUri::Element(uri)) = use_context() {
                 expect_context::<Option<OnSectionTitle>>()
                     .map(|s| TsCont::res_into_view(s.0.apply(&(uri, l))))
             } else {

@@ -32,8 +32,8 @@ use flams_ontology::{
         DocumentElement, LazyDocRef, NarrationTrait, NarrativeReference,
     },
     uris::{
-        ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, ContentURITrait, DocumentElementUri,
-        DocumentUri, ModuleUri, NameStep, PathURITrait, PathUriRef, SymbolUri, URIOrRefTrait,
+        ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, DocumentElementUri, DocumentUri,
+        DomainUriTrait, ModuleUri, NameStep, PathURITrait, PathUriRef, SymbolUri, URIOrRefTrait,
         URIWithLanguage, UriRefTrait,
     },
     Checked, DocumentRange, LocalBackend, Unchecked,

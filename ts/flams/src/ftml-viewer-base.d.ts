@@ -478,7 +478,7 @@ export interface Arg {
 }
 
 export type Term =
-  | { OMID: ContentURI }
+  | { OMID: DomainUri }
   | { OMV: Var }
   | { OMA: { head: Term; args: Arg[] } }
   | { Field: { record: Term; key: Name; owner: Term | undefined } }
@@ -554,7 +554,7 @@ export type ModuleUri = string;
 
 export type SymbolUri = string;
 
-export type ContentURI = string;
+export type DomainUri = string;
 
 export type DocumentElementUri = string;
 

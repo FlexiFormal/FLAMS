@@ -3,7 +3,7 @@ use flams_ontology::{
     content::terms::Term,
     ftml::FTMLKey,
     uris::{
-        ArchiveUriTrait, DocumentElementUri, DocumentUri, ModuleUri, NarrativeURI, PathURITrait,
+        ArchiveUriTrait, DocumentElementUri, DocumentUri, ModuleUri, NarrativeUri, PathURITrait,
         SymbolUri, URIWithLanguage,
     },
 };
@@ -36,7 +36,7 @@ pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
     if matches!(omdoc, OMDocSource::None) {
         return None;
     }
-    let NarrativeURI::Document(uri) = expect_context() else {
+    let NarrativeUri::Document(uri) = expect_context() else {
         return None;
     };
     let pdf_url = format!(
@@ -61,7 +61,7 @@ pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
         {match &omdoc {
             OMDocSource::Get => {
               let uri = uri.clone();
-              leptos::either::Either::Left(crate::remote::get!(omdoc(NarrativeURI::Document(uri.clone()).into()) = (_,omdoc) => {
+              leptos::either::Either::Left(crate::remote::get!(omdoc(NarrativeUri::Document(uri.clone()).into()) = (_,omdoc) => {
                 let OMDoc::Document(omdoc) = omdoc else {unreachable!()};
                 if let Some(s) = &omdoc.title {
                     title.set(s.clone());

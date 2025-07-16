@@ -1,31 +1,31 @@
 use crate::extractor::FTMLExtractor;
 use either::Either;
 use flams_ontology::content::terms::{Arg, ArgMode, Term, Var};
-use flams_ontology::uris::{ContentURI, DocumentElementUri, Name};
+use flams_ontology::uris::{DocumentElementUri, DomainUri, UriName};
 use std::fmt::Display;
 use std::str::FromStr;
 
 use crate::errors::FTMLError;
 use flams_ontology::{omfp, omsp};
 #[cfg(feature = "rdf")]
-use flams_ontology::{triple, uris::URIOrRefTrait};
+use ulo::triple;
 
 #[derive(Debug, Clone)]
 pub enum OpenTerm {
     Symref {
-        uri: ContentURI,
-        notation: Option<Name>,
+        uri: DomainUri,
+        notation: Option<UriName>,
     },
     Varref {
         name: PreVar,
-        notation: Option<Name>,
+        notation: Option<UriName>,
     },
     OML {
-        name: Name,
+        name: UriName,
     }, //,tp:Option<Term>,df:Option<Term>},
     OMA {
         head: VarOrSym,
-        notation: Option<Name>,
+        notation: Option<UriName>,
         //args:SmallVec<Option<(TermOrList,ArgMode)>,9>
     },
     Complex(VarOrSym),
@@ -48,8 +48,10 @@ impl OpenTerm {
             } => {
                 #[cfg(feature = "rdf")]
                 if E::RDF {
+                    use ftml_uris::FtmlUri;
+
                     let iri = extractor.get_document_iri();
-                    extractor.add_triples([triple!(<(iri)> ulo:CROSSREFS <(uri.to_iri())>)]);
+                    extractor.add_triples([triple!(<(iri)> ulo:crossrefs <(uri.to_iri())>)]);
                 }
                 Term::OMID(uri)
             }
@@ -201,7 +203,7 @@ impl TermOrList {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum PreVar {
     Resolved(DocumentElementUri),
-    Unresolved(Name),
+    Unresolved(UriName),
 }
 impl Display for PreVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -232,7 +234,7 @@ impl PreVar {
     }
     #[inline]
     #[must_use]
-    pub const fn name(&self) -> &Name {
+    pub const fn name(&self) -> &UriName {
         match self {
             Self::Resolved(declaration) => declaration.name(),
             Self::Unresolved(name) => name,
@@ -242,7 +244,7 @@ impl PreVar {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum VarOrSym {
-    S(ContentURI),
+    S(DomainUri),
     V(PreVar),
 }
 impl Display for VarOrSym {
@@ -260,8 +262,10 @@ impl VarOrSym {
             Self::S(uri) => {
                 #[cfg(feature = "rdf")]
                 if E::RDF {
+                    use ftml_uris::FtmlUri;
+
                     let iri = extractor.get_document_iri();
-                    extractor.add_triples([triple!(<(iri)> ulo:CROSSREFS <(uri.to_iri())>)]);
+                    extractor.add_triples([triple!(<(iri)> ulo:crossrefs <(uri.to_iri())>)]);
                 }
                 Term::OMID(uri)
             }

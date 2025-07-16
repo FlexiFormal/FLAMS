@@ -94,7 +94,7 @@ pub trait RuleSet<E: FTMLExtractor> {
         let mut stripped = attrs
             .keys()
             .filter(|s| {
-                if s.starts_with(flams_ontology::ftml::PREFIX) {
+                if s.starts_with(ftml_core::PREFIX) {
                     //tracing::trace!("attribute {s} ({:?})",std::thread::current().id());
                     true
                 } else {
@@ -176,8 +176,9 @@ pub mod rules {
     use flams_ontology::narration::documents::{DocumentStyle, SectionCounter};
     use flams_ontology::narration::paragraphs::{ParagraphFormatting, ParagraphKind};
     use flams_ontology::narration::problems::{AnswerKind, FillInSolOption};
-    use flams_ontology::uris::{DocumentElementUri, DocumentUri, ModuleUri, Name, SymbolUri};
+    use flams_ontology::uris::{DocumentElementUri, DocumentUri, ModuleUri, SymbolUri, UriName};
     use flams_utils::vecmap::VecSet;
+    use ftml_uris::IsNarrativeUri;
     use smallvec::SmallVec;
     use std::borrow::Cow;
     use std::str::FromStr;
@@ -186,9 +187,10 @@ pub mod rules {
     #[allow(type_alias_bounds)]
     pub type SV<E: FTMLExtractor> = SmallVec<FTMLExtractionRule<E>, 4>;
 
-    lazy_static::lazy_static! {
-        static ref ERROR : Name = "ERROR".parse().unwrap_or_else(|_| unreachable!());
-    }
+    static ERROR: std::sync::LazyLock<UriName> =
+        std::sync::LazyLock::new(|| "ERROR".parse().expect("is a valid name"));
+    static SKIP: std::sync::LazyLock<UriName> =
+        std::sync::LazyLock::new(|| "skip".parse().expect("is a valid name"));
 
     macro_rules! err {
         ($extractor:ident,$f:expr) => {
@@ -417,7 +419,10 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let lvl = err!(extractor, attrs.get_section_level(FTMLKey::Section));
         let id = attrs.get_id(extractor, Cow::Borrowed("section"));
-        let Ok(uri) = extractor.get_narrative_uri() & &*id else {
+        let Ok(uri) = id
+            .parse()
+            .map(|id: UriName| extractor.get_narrative_uri() & id)
+        else {
             extractor.add_error(FTMLError::InvalidURI(format!("7: {id}")));
             return None;
         };
@@ -431,7 +436,10 @@ pub mod rules {
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
         let id = attrs.get_id(extractor, Cow::Borrowed("slide"));
-        let Ok(uri) = extractor.get_narrative_uri() & &*id else {
+        let Ok(uri) = id
+            .parse()
+            .map(|id: UriName| extractor.get_narrative_uri() & id)
+        else {
             extractor.add_error(FTMLError::InvalidURI(format!("7: {id}")));
             return None;
         };
@@ -452,7 +460,7 @@ pub mod rules {
         _attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        extractor.open_section((DocumentUri::no_doc() & "skip").unwrap_or_else(|_| unreachable!()));
+        extractor.open_section(DocumentUri::no_doc().clone() & SKIP.clone());
         Some(OpenFTMLElement::SkipSection)
     }
 
@@ -506,7 +514,10 @@ pub mod rules {
         kind: ParagraphKind,
     ) -> Option<OpenFTMLElement> {
         let id = attrs.get_id(extractor, Cow::Borrowed(kind.as_str()));
-        let Ok(uri) = extractor.get_narrative_uri() & &*id else {
+        let Ok(uri) = id
+            .parse()
+            .map(|id: UriName| extractor.get_narrative_uri().clone() & id)
+        else {
             extractor.add_error(FTMLError::InvalidURI(format!("8: {id}")));
             return None;
         };
@@ -586,7 +597,10 @@ pub mod rules {
         )
         .unwrap_or_default();
         let id = attrs.get_id(extractor, Cow::Borrowed("problem"));
-        let Ok(uri) = extractor.get_narrative_uri() & &*id else {
+        let Ok(uri) = id
+            .parse()
+            .map(|id: UriName| extractor.get_narrative_uri().clone() & id)
+        else {
             extractor.add_error(FTMLError::InvalidURI(format!("9: {id}")));
             return None;
         };
@@ -907,7 +921,10 @@ pub mod rules {
         tag: FTMLKey,
         is_seq: bool,
     ) -> Option<OpenFTMLElement> {
-        let Some(name) = attrs.get(tag).and_then(|v| Name::from_str(v.as_ref()).ok()) else {
+        let Some(name) = attrs
+            .get(tag)
+            .and_then(|v| UriName::from_str(v.as_ref()).ok())
+        else {
             extractor.add_error(FTMLError::InvalidKeyFor(tag.as_str(), None));
             return None;
         };
@@ -1194,7 +1211,7 @@ pub mod rules {
             if asr.is_empty() {
                 return None;
             }
-            Some(asr.parse::<Name>().unwrap_or_else(|_| {
+            Some(asr.parse::<UriName>().unwrap_or_else(|_| {
                 extractor.add_error(FTMLError::InvalidURI(format!("12: {}", n.as_ref())));
                 ERROR.clone()
             }))
@@ -1313,7 +1330,7 @@ pub mod rules {
             extractor,
             attrs.get_document_uri(FTMLKey::InputRef, extractor)
         );
-        let id = attrs.get_id(extractor, Cow::Owned(uri.name().last_name().to_string()));
+        let id = attrs.get_id(extractor, Cow::Owned(uri.document_name().to_string()));
         Some(OpenFTMLElement::Inputref { uri, id })
     }
 
