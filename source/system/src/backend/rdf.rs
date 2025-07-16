@@ -5,7 +5,7 @@ use flams_ontology::rdf::ontologies::ulo2;
 use flams_ontology::rdf::{NamedNode, Quad, Triple};
 use flams_ontology::uris::{
     ArchiveUriRef, DocumentElementUri, DocumentUri, PathURITrait, SymbolUri, URIOrRefTrait,
-    URIRefTrait, URITrait,
+    URITrait, UriRefTrait,
 };
 use oxigraph::sparql::QuerySolutionIter;
 use oxrdfio::RdfFormat;

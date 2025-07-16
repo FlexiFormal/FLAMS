@@ -14,7 +14,7 @@ use std::{
 use either::Either;
 use eyre::Context;
 use flams_ftml::{HTMLString, FTML_DOC, FTML_OMDOC};
-use flams_ontology::uris::{ArchiveId, ArchiveUriTrait, DocumentUri, PathURITrait, URIRefTrait};
+use flams_ontology::uris::{ArchiveId, ArchiveUriTrait, DocumentUri, PathURITrait, UriRefTrait};
 use flams_system::{
     backend::{
         archives::{Archive, ArchiveOrGroup, LocalArchive},

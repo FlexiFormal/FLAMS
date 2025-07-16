@@ -5,7 +5,7 @@ use flams_utils::vecmap::VecMap;
 use crate::{
     content::terms::Term,
     ftml::FTMLKey,
-    uris::{DocumentElementUri, Name, SymbolUri},
+    uris::{DocumentElementUri, SymbolUri, UriName},
     Checked, CheckingState, DocumentRange,
 };
 
@@ -28,7 +28,7 @@ pub struct LogicalParagraph<State: CheckingState> {
     pub formatting: ParagraphFormatting,
     pub title: Option<DocumentRange>,
     pub range: DocumentRange,
-    pub styles: Box<[Name]>,
+    pub styles: Box<[UriName]>,
     pub children: State::Seq<DocumentElement<State>>,
     pub fors: VecMap<SymbolUri, Option<Term>>,
 }
@@ -87,26 +87,26 @@ impl ParagraphKind {
         })
     }
     #[must_use]
-    pub fn is_definition_like(&self, styles: &[Name]) -> bool {
+    pub fn is_definition_like(&self, styles: &[UriName]) -> bool {
         match &self {
             Self::Definition | Self::Assertion => true,
             _ => styles
                 .iter()
-                .any(|s| s.first_name().as_ref() == "symdoc" || s.first_name().as_ref() == "decl"),
+                .any(|s| s.first() == "symdoc" || s.first() == "decl"),
         }
     }
     #[cfg(feature = "rdf")]
     #[must_use]
     #[allow(clippy::wildcard_imports)]
     pub const fn rdf_type(&self) -> crate::rdf::NamedNodeRef {
-        use crate::rdf::ontologies::ulo2::*;
+        use crate::rdf::ontologies::ulo::*;
         match self {
-            Self::Definition => DEFINITION,
-            Self::Assertion => PROPOSITION,
-            Self::Paragraph => PARA,
-            Self::Proof => PROOF,
-            Self::SubProof => SUBPROOF,
-            Self::Example => EXAMPLE,
+            Self::Definition => definition,
+            Self::Assertion => proposition,
+            Self::Paragraph => para,
+            Self::Proof => proof,
+            Self::SubProof => subproof,
+            Self::Example => example,
         }
     }
 

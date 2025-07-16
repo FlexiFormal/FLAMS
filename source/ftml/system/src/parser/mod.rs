@@ -12,7 +12,7 @@ use flams_ontology::{
     triple,
     uris::{
         ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, DocumentUri, ModuleUri, SymbolUri,
-        URIOrRefTrait, URIRefTrait, URIWithLanguage,
+        URIOrRefTrait, URIWithLanguage, UriRefTrait,
     },
     DocumentRange,
 };

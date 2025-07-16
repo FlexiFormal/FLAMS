@@ -1,3 +1,5 @@
+use ftml_uris::UriWithArchive;
+
 use crate::{
     file_states::FileStateSummary,
     uris::{ArchiveId, ArchiveUri, DocumentUri},

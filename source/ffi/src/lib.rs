@@ -2,7 +2,7 @@
 
 use flams_lsp::state::{DocData, UrlOrFile};
 use flams_ontology::uris::DocumentUri;
-use flams_ontology::uris::URIRefTrait;
+use flams_ontology::uris::UriRefTrait;
 use flams_system::backend::archives::source_files::{SourceDir, SourceEntry};
 use flams_system::backend::archives::Archive;
 use flams_system::backend::GlobalBackend;

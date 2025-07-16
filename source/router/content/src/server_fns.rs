@@ -10,7 +10,7 @@ use flams_ontology::{
     },
     uris::{
         ArchiveId, ArchiveUriTrait, DocumentElementUri, DocumentUri, DomainUri, DomainUriTrait,
-        NarrativeURI, PathURITrait, SymbolUri, URI, URIRefTrait,
+        NarrativeURI, PathURITrait, SymbolUri, URI, UriRefTrait,
     },
 };
 use flams_utils::{CSS, unwrap};
@@ -903,7 +903,7 @@ mod server {
 #[server(prefix = "/content/legacy", endpoint = "uris")]
 pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<URI>>, ServerFnError<String>> {
     use flams_ontology::uris::{
-        ArchiveUri, ArchiveUriTrait, BaseUri, ModuleUri, URIOrRefTrait, URIRefTrait,
+        ArchiveUri, ArchiveUriTrait, BaseUri, ModuleUri, URIOrRefTrait, UriRefTrait,
     };
     use flams_system::backend::{Backend, GlobalBackend};
 

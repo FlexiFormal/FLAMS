@@ -5,7 +5,7 @@ use crate::{
 use flams_ontology::{
     content::{declarations::symbols::ArgSpec, terms::Term},
     languages::Language,
-    uris::{DomainUriTrait, ModuleUri, Name, SymbolUri, URIOrRefTrait, URIRefTrait, URI},
+    uris::{DomainUriTrait, ModuleUri, Name, SymbolUri, URIOrRefTrait, UriRefTrait, URI},
 };
 use flams_utils::vecmap::VecSet;
 

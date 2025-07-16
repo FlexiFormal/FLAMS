@@ -9,7 +9,7 @@ use flams_ontology::{
     narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
     uris::{
         ArchiveId, ArchiveUriRef, ArchiveUriTrait, DocumentUri, DomainUri, DomainUriTrait,
-        ModuleUri, Name, PathURI, PathURITrait, SymbolUri, URIRefTrait,
+        ModuleUri, Name, PathURI, PathURITrait, SymbolUri, UriRefTrait,
     },
 };
 use flams_system::backend::{AnyBackend, Backend};

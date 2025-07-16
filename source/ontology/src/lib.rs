@@ -20,20 +20,30 @@ use content::{
     ContentReference, ModuleLike,
 };
 use flams_utils::sourcerefs::{ByteOffset, SourceRange};
-use languages::Language;
 use narration::documents::Document;
 use uris::{DocumentElementUri, DocumentUri, ModuleUri, SymbolUri};
-
+pub mod languages {
+    pub use ftml_uris::Language;
+}
+use languages::Language;
 pub mod content;
 pub mod file_states;
-pub mod languages;
 pub mod narration;
 
 #[cfg(feature = "serde")]
 pub mod archive_json;
-pub mod ftml;
+//pub mod ftml;
+pub mod ftml {
+    pub use ftml_core::*;
+}
+
 #[cfg(feature = "rdf")]
-pub mod rdf;
+pub mod rdf {
+    pub use ::ulo::rdf_types::*;
+    pub mod ontologies {
+        pub use ::ulo::*;
+    }
+}
 pub mod search;
 //pub mod uris;
 pub mod uris {
@@ -233,23 +243,28 @@ pub mod metatheory {
         languages::Language,
         uris::{BaseUri, DocumentUri, ModuleUri, SymbolUri},
     };
-    use lazy_static::lazy_static;
-    lazy_static! {
-        pub static ref DOC_URI: DocumentUri = ((BaseUri::new_unchecked("https://mathhub.info")
-            & "FTML/meta")
-            & ("Metatheory", Language::English))
-            .unwrap_or_else(|_| unreachable!());
-        pub static ref URI: ModuleUri =
-            ((BaseUri::new_unchecked("https://mathhub.info") & "FTML/meta") | "Metatheory")
-                .unwrap_or_else(|_| unreachable!());
-        pub static ref FIELD_PROJECTION: SymbolUri =
-            (URI.clone() | "record field").unwrap_or_else(|_| unreachable!());
-        pub static ref OF_TYPE: SymbolUri =
-            (URI.clone() | "of type").unwrap_or_else(|_| unreachable!());
-        pub static ref SEQUENCE_EXPRESSION: SymbolUri =
-            (URI.clone() | "sequence expression").unwrap_or_else(|_| unreachable!());
-        pub(crate) static ref NOTATION_DUMMY: SymbolUri =
-            (URI.clone() | "notation dummy").unwrap_or_else(|_| unreachable!());
+
+    macro_rules! lzy {
+        ($($name:ident : $tp:ty = $e:expr;)*) => {
+            $(pub static $name : std::sync::LazyLock<$tp> = std::sync::LazyLock::new(|| $e);)*
+        }
+    }
+    lzy! {
+        DOC_URI: DocumentUri = ("https://mathhub.info".parse::<BaseUri>().expect("valid")
+            & "FTML/meta".parse().expect("valid"))
+            & ("Metatheory".parse().expect("valid"), Language::English);
+        URI: ModuleUri =
+            ("https://mathhub.info".parse::<BaseUri>().expect("valid")
+                & "FTML/meta".parse().expect("valid"))
+                | "Metatheory".parse().expect("valid");
+        FIELD_PROJECTION: SymbolUri =
+            URI.clone() | "record field".parse().expect("valid");
+        OF_TYPE: SymbolUri =
+            URI.clone() | "of type".parse().expect("valid");
+        SEQUENCE_EXPRESSION: SymbolUri =
+            URI.clone() | "sequence expression".parse().expect("valid");
+        NOTATION_DUMMY: SymbolUri =
+            URI.clone() | "notation dummy".parse().expect("valid");
     }
 }
 

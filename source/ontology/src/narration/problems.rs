@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 use std::{collections::HashMap, fmt::Display, str::FromStr};
 
 use crate::{
-    uris::{DocumentElementUri, Name, SymbolUri},
+    uris::{DocumentElementUri, SymbolUri, UriName},
     Checked, CheckingState, DocumentRange,
 };
 
@@ -25,7 +25,7 @@ pub struct Problem<State: CheckingState> {
     pub notes: State::Seq<LazyDocRef<Box<str>>>,
     pub title: Option<DocumentRange>,
     pub children: State::Seq<DocumentElement<State>>,
-    pub styles: Box<[Name]>,
+    pub styles: Box<[UriName]>,
     pub preconditions: State::Seq<(CognitiveDimension, SymbolUri)>,
     pub objectives: State::Seq<(CognitiveDimension, SymbolUri)>,
 }
@@ -768,16 +768,16 @@ pub enum CognitiveDimension {
 impl CognitiveDimension {
     #[cfg(feature = "rdf")]
     #[must_use]
-    pub const fn to_iri(&self) -> crate::rdf::NamedNodeRef {
-        use crate::rdf::ontologies::ulo2;
+    pub const fn to_iri(&self) -> crate::rdf::NamedNodeRef<'static> {
+        use crate::rdf::ontologies::ulo;
         use CognitiveDimension::*;
         match self {
-            Remember => ulo2::REMEMBER,
-            Understand => ulo2::UNDERSTAND,
-            Apply => ulo2::APPLY,
-            Analyze => ulo2::ANALYZE,
-            Evaluate => ulo2::EVALUATE,
-            Create => ulo2::CREATE,
+            Remember => ulo::remember,
+            Understand => ulo::understand,
+            Apply => ulo::apply,
+            Analyze => ulo::analyze,
+            Evaluate => ulo::evaluate,
+            Create => ulo::create,
         }
     }
 }

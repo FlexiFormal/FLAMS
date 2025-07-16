@@ -14,7 +14,7 @@ use flams_ontology::{
     narration::documents::UncheckedDocument,
     uris::{
         ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, DocumentUri, Name, NameStep,
-        PathURITrait, URIOrRefTrait, URIRefTrait,
+        PathURITrait, URIOrRefTrait, UriRefTrait,
     },
     DocumentRange, Unchecked,
 };
@@ -1049,7 +1049,7 @@ impl ArchiveTree {
                 let mut lock = old_new_f.lock();
                 let (old, new, f) = &mut *lock;
                 if old.remove_from_list(a.id()).is_none() {
-                    sender.lazy_send(|| BackendChange::NewArchive(URIRefTrait::owned(a.uri())));
+                    sender.lazy_send(|| BackendChange::NewArchive(UriRefTrait::owned(a.uri())));
                 }
                 new.insert(Archive::Local(a), f);
                 drop(lock);

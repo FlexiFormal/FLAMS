@@ -6,7 +6,7 @@ use std::{
 
 use either::Either;
 use flams_ontology::uris::{
-    ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, DocumentUri, ModuleUri, URIRefTrait,
+    ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, DocumentUri, ModuleUri, UriRefTrait,
 };
 use flams_utils::{
     time::Eta,

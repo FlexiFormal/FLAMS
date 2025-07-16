@@ -27,7 +27,7 @@ use crate::{
         },
         terms::Term,
     },
-    uris::{DocumentElementUri, DocumentUri, Name, NameStep, SymbolUri},
+    uris::{DocumentElementUri, DocumentUri, SymbolUri, UriName},
     Checked, CheckingState, DocumentRange, Unchecked,
 };
 
@@ -70,7 +70,7 @@ pub trait NarrationTrait {
         Self: Sized;
     fn children(&self) -> &[DocumentElement<Checked>];
 
-    fn find<T: NarrationTrait>(&self, steps: &[NameStep]) -> Option<&T> {
+    fn find<'s, T: NarrationTrait>(&self, steps: impl IntoIterator<Item = &'s str>) -> Option<&T> {
         enum I<'a> {
             One(std::slice::Iter<'a, DocumentElement<Checked>>),
             Mul(
@@ -119,26 +119,24 @@ pub trait NarrationTrait {
                 }
             }
         }
-        let mut steps = steps;
+        let mut steps = steps.into_iter().peekable();
         let mut curr = I::One(self.children().iter());
-        'outer: while !steps.is_empty() {
-            let step = &steps[0];
-            steps = &steps[1..];
+        'outer: while let Some(step) = steps.next() {
             while let Some(c) = curr.next() {
                 match c {
                     DocumentElement::Section(Section { uri, children, .. })
                     | DocumentElement::Paragraph(LogicalParagraph { uri, children, .. })
                     | DocumentElement::Problem(Problem { uri, children, .. })
-                        if uri.name().last_name() == step =>
+                        if uri.name().last() == step =>
                     {
-                        if steps.is_empty() {
+                        if steps.peek().is_none() {
                             return T::from_element(c);
                         }
                         curr = I::One(children.iter());
                         continue 'outer;
                     }
                     DocumentElement::Slide { uri, .. }
-                        if uri.name().last_name() == step && steps.is_empty() =>
+                        if uri.name().last() == step && steps.peek().is_none() =>
                     {
                         return T::from_element(c);
                     }
@@ -151,9 +149,9 @@ pub trait NarrationTrait {
                     | DocumentElement::VariableNotation { id: uri, .. }
                     | DocumentElement::Variable(Variable { uri, .. })
                     | DocumentElement::TopTerm { uri, .. }
-                        if uri.name().last_name() == step =>
+                        if uri.name().last() == step =>
                     {
-                        if steps.is_empty() {
+                        if steps.peek().is_none() {
                             return T::from_element(c);
                         }
                         return None;
@@ -185,7 +183,7 @@ pub struct NarrativeReference<T: NarrationTrait>(InnerArc<Document, T>);
 
 impl<T: NarrationTrait> NarrativeReference<T> {
     #[must_use]
-    pub fn new(d: &Document, name: &Name) -> Option<Self> {
+    pub fn new(d: &Document, name: &UriName) -> Option<Self> {
         unsafe {
             InnerArc::new(d, |d| &d.0, |d| d.find(name.steps()).ok_or(()))
                 .ok()
@@ -267,12 +265,12 @@ pub enum DocumentElement<State: CheckingState> {
     SymbolReference {
         range: DocumentRange,
         uri: SymbolUri,
-        notation: Option<NameStep>,
+        notation: Option<UriName>,
     },
     VariableReference {
         range: DocumentRange,
         uri: DocumentElementUri,
-        notation: Option<NameStep>,
+        notation: Option<UriName>,
     },
     TopTerm {
         uri: DocumentElementUri,

@@ -1,7 +1,7 @@
 use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::{DocumentUri, URIRefTrait};
+use flams_ontology::uris::{DocumentUri, UriRefTrait};
 use flams_stex::{
     quickparse::stex::{DiagnosticLevel, STeXDiagnostic, STeXParseData, STeXParseDataI},
     OutputCont, RusTeX,

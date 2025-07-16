@@ -1,5 +1,5 @@
 use flams_lsp::state::LSPState;
-use flams_ontology::uris::{DocumentUri, URIRefTrait};
+use flams_ontology::uris::{DocumentUri, UriRefTrait};
 use flams_system::backend::{
     archives::{
         source_files::{SourceDir, SourceEntry},
@@ -11,7 +11,7 @@ use flams_utils::{prelude::TreeChildIter, time::measure, unwrap};
 use git2::build::CheckoutBuilder;
 
 pub fn main() {
-    linter()//git_pull();
+    linter() //git_pull();
 }
 
 fn git_pull() {
@@ -145,7 +145,8 @@ async fn linter_i() {
                                 unwrap!(DocumentUri::from_archive_relpath(
                                     a.uri().owned(),
                                     &f.relative_path,
-                                ).ok()),
+                                )
+                                .ok()),
                             )),
                             _ => {}
                         }

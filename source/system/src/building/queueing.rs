@@ -1,7 +1,7 @@
 use std::collections::hash_map::Entry;
 
 use either::Either;
-use flams_ontology::uris::{ArchiveUriTrait, URIRefTrait};
+use flams_ontology::uris::{ArchiveUriTrait, UriRefTrait};
 use flams_utils::{triomphe::Arc, vecmap::VecSet};
 use parking_lot::RwLock;
 

@@ -33,8 +33,8 @@ use flams_ontology::{
     },
     uris::{
         ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, ContentURITrait, DocumentElementUri,
-        DocumentUri, ModuleUri, NameStep, PathURIRef, PathURITrait, SymbolUri, URIOrRefTrait,
-        URIRefTrait, URIWithLanguage,
+        DocumentUri, ModuleUri, NameStep, PathURITrait, PathUriRef, SymbolUri, URIOrRefTrait,
+        URIWithLanguage, UriRefTrait,
     },
     Checked, DocumentRange, LocalBackend, Unchecked,
 };
@@ -1673,7 +1673,7 @@ struct GlobalFlattener<'a>(&'a mut BackendCache, &'a ArchiveManager);
 impl GlobalFlattener<'_> {
     fn load_document(
         &mut self,
-        path: PathURIRef,
+        path: PathUriRef,
         language: Language,
         name: &NameStep,
     ) -> Option<Document> {
@@ -1684,7 +1684,7 @@ impl GlobalFlattener<'_> {
         self.0.insert_document(doc_file);
         Some(doc)
     }
-    fn load_module(&mut self, path: PathURIRef, name: &NameStep) -> Option<Module> {
+    fn load_module(&mut self, path: PathUriRef, name: &NameStep) -> Option<Module> {
         //println!("Module {path}&m={name}&l={language}");
         let pre = self.1.load_module(path, name)?;
         let module = pre.check(self);
@@ -1747,7 +1747,7 @@ struct SandboxFlattener<'a>(&'a mut BackendCache, &'a ArchiveManager, &'a Archiv
 impl SandboxFlattener<'_> {
     fn load_document(
         &mut self,
-        path: PathURIRef,
+        path: PathUriRef,
         language: Language,
         name: &NameStep,
     ) -> Option<Document> {
@@ -1763,7 +1763,7 @@ impl SandboxFlattener<'_> {
         self.0.insert_document(doc_file);
         Some(doc)
     }
-    fn load_module(&mut self, path: PathURIRef, name: &NameStep) -> Option<Module> {
+    fn load_module(&mut self, path: PathUriRef, name: &NameStep) -> Option<Module> {
         let be = if self.1.with_archive(path.archive_id(), |a| a.is_some()) {
             self.1
         } else {

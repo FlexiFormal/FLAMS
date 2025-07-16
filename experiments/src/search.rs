@@ -7,7 +7,7 @@ use flams_ontology::{
         DocumentElement, NarrationTrait,
     },
     search::{QueryFilter, SearchResult, SearchResultKind, SearchSchema},
-    uris::{DocumentElementUri, DocumentUri, SymbolUri, URIRefTrait},
+    uris::{DocumentElementUri, DocumentUri, SymbolUri, UriRefTrait},
     Checked,
 };
 use flams_system::{

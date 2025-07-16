@@ -18,7 +18,7 @@ use flams_ontology::narration::variables::Variable;
 use flams_ontology::narration::{DocumentElement, LazyDocRef};
 use flams_ontology::uris::{
     DocumentElementUri, DocumentUri, ModuleUri, Name, NarrativeURI, NarrativeURITrait, SymbolUri,
-    URIRefTrait,
+    UriRefTrait,
 };
 use flams_ontology::{DocumentRange, Resourcable, Unchecked};
 use flams_utils::id_counters::IdCounter;

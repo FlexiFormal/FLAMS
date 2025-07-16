@@ -494,11 +494,11 @@ impl ServerConfig {
     pub async fn present(&self, t: flams_ontology::content::terms::Term) -> Result<String, String> {
         use flams_ontology::content::terms::Term;
         use flams_ontology::narration::notations::{Notation, PresentationError, Presenter};
-        use flams_ontology::uris::{ContentURI, NarrativeURI, URIOrRefTrait, URIRef, URIRefTrait};
+        use flams_ontology::uris::{ContentURI, NarrativeURI, URIOrRefTrait, UriRef, UriRefTrait};
         use flams_utils::vecmap::VecSet;
         #[cfg(any(feature = "csr", feature = "hydrate"))]
         {
-            let syms: VecSet<_> = t.uri_iter().map(URIRef::owned).collect();
+            let syms: VecSet<_> = t.uri_iter().map(UriRef::owned).collect();
             for s in syms {
                 match &s {
                     URI::Content(ContentURI::Symbol(_)) => self.load_notations(s).await,

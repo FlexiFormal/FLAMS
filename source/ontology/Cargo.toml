@@ -26,9 +26,11 @@ tantivy = ["dep:tantivy", "dep:html2text", "dep:tracing", "ftml-uris/tantivy"]
 flams-utils = { workspace = true }
 
 ftml-uris = { workspace = true, features = ["interned"] }
+ftml-core = { workspace = true }
+ulo = { workspace = true }
 
 oxrdf = { workspace = true, optional = true }
-lazy_static = { workspace = true }
+# lazy_static = { workspace = true }
 triomphe = { workspace = true }
 parking_lot = { workspace = true }
 smallvec = { workspace = true }

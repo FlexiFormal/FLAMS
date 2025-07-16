@@ -1,7 +1,7 @@
 use crate::uris::{DocumentElementUri, DomainUri};
 use crate::{oma, oms, omsp};
 use flams_utils::prelude::{DFSContinuation, Indentor, TreeChild, TreeChildIter, TreeLike};
-use ftml_uris::UriName;
+use ftml_uris::{FtmlUri, NamedUri, UriName, UriRef};
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::str::FromStr;
 
@@ -195,7 +195,7 @@ impl Term {
     }
 
     #[inline]
-    pub fn uri_iter(&self) -> impl Iterator<Item = URIRef<'_>> {
+    pub fn uri_iter(&self) -> impl Iterator<Item = UriRef<'_>> {
         self.subterm_iter().filter_map(|t| match t {
             Self::OMID(uri) => Some(uri.as_uri()),
             Self::OMV(Var::Ref { declaration, .. }) => Some(declaration.as_uri()),
@@ -364,7 +364,7 @@ impl FromStr for ArgMode {
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum Var {
-    Name(Name),
+    Name(UriName),
     Ref {
         declaration: DocumentElementUri,
         is_sequence: Option<bool>,
@@ -374,7 +374,7 @@ impl Display for Var {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Name(n) => Display::fmt(n, f),
-            Self::Ref { declaration, .. } => Display::fmt(declaration.name().last_name(), f),
+            Self::Ref { declaration, .. } => Display::fmt(declaration.name().last(), f),
         }
     }
 }
@@ -468,18 +468,30 @@ impl<'a> Iterator for InformalIterMut<'a> {
 mod tests {
     use crate::uris::{ArchiveUri, BaseUri, ModuleUri, SymbolUri};
     use crate::{content::terms::Term, oma, oml, oms, omv};
-    use lazy_static::lazy_static;
-    lazy_static! {
-        static ref NAMESPACE: BaseUri = BaseUri::new_unchecked("http://example.com/");
-        static ref ARCHIVE1: ArchiveUri = NAMESPACE.clone() & "some/archive";
-        static ref ARCHIVE2: ArchiveUri = NAMESPACE.clone() & "some/other/archive";
-        static ref MODULE1: ModuleUri = (ARCHIVE1.clone() | "some/module").expect("impossible");
-        static ref MODULE2: ModuleUri = (ARCHIVE2.clone() | "some/module").expect("impossible");
-        static ref SYM1: SymbolUri = (MODULE1.clone() | "some symbol").expect("impossible");
-        static ref SYM2: SymbolUri = (MODULE2.clone() | "other symbol").expect("impossible");
-        static ref FUNC1: SymbolUri = (MODULE1.clone() | "some function").expect("impossible");
-        static ref FUNC2: SymbolUri = (MODULE2.clone() | "other function").expect("impossible");
-        static ref TERM: Term = oma!(oms!(FUNC1.clone()),[
+
+    macro_rules! lzy {
+        ($($name:ident : $tp:ty = $e:expr;)*) => {
+            $(static $name : std::sync::LazyLock<$tp> = std::sync::LazyLock::new(|| $e);)*
+        }
+    }
+
+    lzy! {
+        NAMESPACE: BaseUri = "http://example.com/".parse().expect("impossible");
+        ARCHIVE1: ArchiveUri =
+            NAMESPACE.clone() & "some/archive".parse().expect("impossible");
+        ARCHIVE2: ArchiveUri =
+            NAMESPACE.clone() & "some/other/archive".parse().expect("impossible");
+        MODULE1: ModuleUri =
+            ARCHIVE1.clone() | "some/module".parse().expect("impossible");
+        MODULE2: ModuleUri =
+            ARCHIVE2.clone() | "some/module".parse().expect("impossible");
+        SYM1: SymbolUri = MODULE1.clone() | "some symbol".parse().expect("impossible");
+        SYM2: SymbolUri = MODULE2.clone() | "other symbol".parse().expect("impossible");
+        FUNC1: SymbolUri =
+            MODULE1.clone() | "some function".parse().expect("impossible");
+        FUNC2: SymbolUri =
+            MODULE2.clone() | "other function".parse().expect("impossible");
+        TERM: Term = oma!(oms!(FUNC1.clone()),[
             {N:oma!(oms!(FUNC2.clone()),[
                 {N:oms!(SYM1.clone())},
                 {N:oms!(SYM2.clone())}

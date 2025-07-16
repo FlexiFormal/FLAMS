@@ -8,7 +8,7 @@ use std::{borrow::Cow, path::Path, str::FromStr};
 use flams_ontology::{
     languages::Language,
     narration::paragraphs::ParagraphKind,
-    uris::{ArchiveId, ArchiveUriTrait, ModuleUri, Name, PathURITrait, SymbolUri, URIRefTrait},
+    uris::{ArchiveId, ArchiveUriTrait, ModuleUri, Name, PathURITrait, SymbolUri, UriRefTrait},
 };
 use flams_system::backend::{Backend, GlobalBackend};
 use flams_utils::{

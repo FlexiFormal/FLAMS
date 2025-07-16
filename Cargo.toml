@@ -162,6 +162,8 @@ ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
 ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
 
 ftml-uris = { path = "../../FlexiFormal/FTML/uris" }
+ftml-core = { path = "../../FlexiFormal/FTML/core" }
+ulo = { path = "../../FlexiFormal/FTML/ulo" }
 
 rstest = { version = "0.25" }
 

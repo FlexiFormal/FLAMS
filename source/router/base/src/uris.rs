@@ -556,7 +556,7 @@ mod ssr {
         languages::Language,
         uris::{
             ArchiveId, DocumentElementUri, DocumentUri, ModuleUri, Name, SymbolUri, URI,
-            URIRefTrait,
+            UriRefTrait,
         },
     };
     use flams_system::backend::{Backend, GlobalBackend};

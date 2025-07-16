@@ -1,7 +1,7 @@
 use std::{path::Path, sync::atomic::AtomicBool};
 
 use async_lsp::lsp_types::{Position, Range};
-use flams_ontology::uris::{ArchiveUri, DocumentUri, URIRefTrait};
+use flams_ontology::uris::{ArchiveUri, DocumentUri, UriRefTrait};
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
 use flams_utils::PathExt;
