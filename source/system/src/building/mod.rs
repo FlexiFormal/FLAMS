@@ -5,9 +5,7 @@ use std::{
 };
 
 use either::Either;
-use flams_ontology::uris::{
-    ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, DocumentUri, ModuleUri, UriRefTrait,
-};
+use flams_ontology::uris::{ArchiveId, ArchiveUri, DocumentUri, ModuleUri, UriWithArchive};
 use flams_utils::{
     time::Eta,
     triomphe::Arc,
@@ -92,7 +90,8 @@ impl BuildTask {
     #[must_use]
     #[inline]
     pub fn document_uri(&self) -> eyre::Result<DocumentUri> {
-        DocumentUri::from_archive_relpath(self.archive().owned(), self.rel_path())
+        DocumentUri::from_archive_relpath(self.archive().clone(), self.rel_path())
+            .map_err(eyre::Report::new)
     }
     #[must_use]
     pub fn get_task_ref(&self, target: BuildTargetId) -> TaskRef {
@@ -114,7 +113,7 @@ impl BuildTask {
 
     #[inline]
     #[must_use]
-    pub fn archive(&self) -> ArchiveUriRef {
+    pub fn archive(&self) -> &ArchiveUri {
         self.0.archive.archive_uri()
     }
 

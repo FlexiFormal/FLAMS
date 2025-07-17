@@ -10,7 +10,7 @@ use crate::{
     formats::{BuildTargetId, FormatOrTargets},
 };
 use either::Either;
-use flams_ontology::uris::{ArchiveId, ArchiveUriTrait};
+use flams_ontology::uris::{ArchiveId, UriWithArchive};
 use flams_utils::time::Timestamp;
 use flams_utils::{
     change_listener::{ChangeListener, ChangeSender},
@@ -247,7 +247,7 @@ impl Queue {
                 *s.0.state.write() = TaskState::None;
             }
             map.map.insert(
-                (t.archive().id().clone(), t.0.rel_path.clone()),
+                (t.archive().archive_id().clone(), t.0.rel_path.clone()),
                 BuildTask(Arc::new(super::BuildTaskI {
                     id: BuildTaskId(map.counter),
                     rel_path: t.0.rel_path.clone(),

@@ -1,7 +1,7 @@
 use std::collections::hash_map::Entry;
 
 use either::Either;
-use flams_ontology::uris::{ArchiveUriTrait, UriRefTrait};
+use flams_ontology::uris::UriWithArchive;
 use flams_utils::{triomphe::Arc, vecmap::VecSet};
 use parking_lot::RwLock;
 
@@ -231,7 +231,7 @@ impl Queue {
                     map.counter = map.counter.saturating_add(1);
                     let task_i = Arc::new(BuildTaskI {
                         id: BuildTaskId(id),
-                        archive: archive.uri().owned(),
+                        archive: archive.uri().clone(),
                         steps,
                         source: match archive {
                             Archive::Local(archive) => {
