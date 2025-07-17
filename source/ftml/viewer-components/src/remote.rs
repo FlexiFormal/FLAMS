@@ -1,7 +1,7 @@
 use flams_ontology::{
     languages::Language,
     narration::LOKind,
-    uris::{ArchiveId, DocumentElementUri, DocumentUri, SymbolUri, URI},
+    uris::{ArchiveId, DocumentElementUri, DocumentUri, SymbolUri, Uri},
 };
 use flams_utils::CSS;
 use leptos::prelude::*;
@@ -54,7 +54,7 @@ macro_rules! server_fun{
         fn($($ty),*) -> server_fun_ret!($ret)
     };
     (@URI$(,$ty:ty)* => $ret:ty) => {
-        server_fun!(Option<URI>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>,Option<String>,Option<String> $(,$ty)* => $ret)
+        server_fun!(Option<Uri>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>,Option<String>,Option<String> $(,$ty)* => $ret)
     };
     (@DOCURI$(,$ty:ty)* => $ret:ty) => {
         server_fun!(Option<DocumentUri>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String> $(,$ty)* => $ret)
@@ -98,7 +98,7 @@ trait ServerFunArgs {
 type URIArgs = URI;
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type URIArgs = (
-    Option<URI>,
+    Option<Uri>,
     Option<String>,
     Option<ArchiveId>,
     Option<String>,
@@ -113,7 +113,7 @@ type URIArgs = (
 type URIArgsWithContext = (URI, Option<URI>);
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type URIArgsWithContext = (
-    Option<URI>,
+    Option<Uri>,
     Option<String>,
     Option<ArchiveId>,
     Option<String>,
@@ -122,14 +122,14 @@ type URIArgsWithContext = (
     Option<String>,
     Option<String>,
     Option<String>,
-    Option<URI>,
+    Option<Uri>,
 );
 
 #[allow(clippy::use_self)]
 impl ServerFunArgs for URIArgs {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     type DeTupledFun<R> = server_fun!(@URI => R);
-    type First = URI;
+    type First = Uri;
     type Extra = ();
     #[cfg(feature = "csr")]
     fn as_params((): &Self::Extra) -> Cow<'static, str> {
@@ -137,7 +137,7 @@ impl ServerFunArgs for URIArgs {
     }
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     #[inline]
-    fn call<R>(uri: URI, _: (), f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
+    fn call<R>(uri: Uri, _: (), f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
         f(Some(uri), None, None, None, None, None, None, None, None)
     }
 }
@@ -145,16 +145,16 @@ impl ServerFunArgs for URIArgs {
 #[allow(clippy::use_self)]
 impl ServerFunArgs for URIArgsWithContext {
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
-    type DeTupledFun<R> = server_fun!(@URI,Option<URI> => R);
-    type First = URI;
-    type Extra = Option<URI>;
+    type DeTupledFun<R> = server_fun!(@URI,Option<Uri> => R);
+    type First = Uri;
+    type Extra = Option<Uri>;
     #[cfg(feature = "csr")]
     fn as_params(_: &Self::Extra) -> Cow<'static, str> {
         "".into()
     }
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     #[inline]
-    fn call<R>(uri: URI, c: Option<URI>, f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
+    fn call<R>(uri: Uri, c: Option<Uri>, f: &Self::DeTupledFun<R>) -> server_fun_ret!(R) {
         f(Some(uri), None, None, None, None, None, None, None, None, c)
     }
 }
@@ -335,7 +335,7 @@ pub struct ServerConfig {
     #[cfg(feature = "csr")]
     pub server_url: flams_utils::parking_lot::Mutex<String>,
     get_full_doc: Cache<DocURIArgs, (DocumentUri, Vec<CSS>, String)>,
-    get_fragment: Cache<URIArgsWithContext, (URI, Vec<CSS>, String)>,
+    get_fragment: Cache<URIArgsWithContext, (Uri, Vec<CSS>, String)>,
     #[cfg(feature = "omdoc")]
     get_omdoc: Cache<URIArgs, (Vec<CSS>, OMDoc)>,
     get_toc: Cache<DocURIArgs, (Vec<CSS>, Vec<TOCElem>)>,
@@ -370,10 +370,8 @@ impl ServerConfig {
     /// #### Errors
     /// #### Panics
     #[inline]
-    pub async fn inputref(&self, doc: DocumentUri) -> Result<(URI, Vec<CSS>, String), String> {
-        self.get_fragment
-            .call(URI::Narrative(doc.into()), None)
-            .await
+    pub async fn inputref(&self, doc: DocumentUri) -> Result<(Uri, Vec<CSS>, String), String> {
+        self.get_fragment.call(doc.into(), None).await
     }
 
     /// #### Errors
@@ -382,10 +380,8 @@ impl ServerConfig {
     pub async fn paragraph(
         &self,
         doc: DocumentElementUri,
-    ) -> Result<(URI, Vec<CSS>, String), String> {
-        self.get_fragment
-            .call(URI::Narrative(doc.into()), None)
-            .await
+    ) -> Result<(Uri, Vec<CSS>, String), String> {
+        self.get_fragment.call(doc.into(), None).await
     }
 
     /// #### Errors
@@ -393,7 +389,7 @@ impl ServerConfig {
     #[inline]
     pub async fn definition(&self, uri: SymbolUri) -> Result<(Vec<CSS>, String), String> {
         self.get_fragment
-            .call(URI::Content(uri.into()), None)
+            .call(uri.into(), None)
             .await
             .map(|(_, a, b)| (a, b))
     }
@@ -430,7 +426,7 @@ impl ServerConfig {
     /// #### Panics
     #[cfg(feature = "omdoc")]
     #[inline]
-    pub async fn omdoc(&self, uri: flams_ontology::uris::URI) -> Result<(Vec<CSS>, OMDoc), String> {
+    pub async fn omdoc(&self, uri: Uri) -> Result<(Vec<CSS>, OMDoc), String> {
         self.get_omdoc.call(uri, ()).await
     }
 
@@ -442,10 +438,7 @@ impl ServerConfig {
         uri: flams_ontology::uris::DocumentElementUri,
     ) -> Result<flams_ontology::narration::problems::Solutions, String> {
         use flams_utils::Hexable;
-        let r = self
-            .get_solution
-            .call(URI::Narrative(uri.into()), ())
-            .await?;
+        let r = self.get_solution.call(uri.into(), ()).await?;
         flams_ontology::narration::problems::Solutions::from_hex(&r).map_err(|e| e.to_string())
     }
 
@@ -455,7 +448,7 @@ impl ServerConfig {
     #[inline]
     pub async fn notations(
         &self,
-        uri: flams_ontology::uris::URI,
+        uri: flams_ontology::uris::Uri,
     ) -> Result<
         Vec<(
             DocumentElementUri,
@@ -494,15 +487,16 @@ impl ServerConfig {
     pub async fn present(&self, t: flams_ontology::content::terms::Term) -> Result<String, String> {
         use flams_ontology::content::terms::Term;
         use flams_ontology::narration::notations::{Notation, PresentationError, Presenter};
-        use flams_ontology::uris::{DomainUri, NarrativeUri, URIOrRefTrait, UriRef, UriRefTrait};
+        use flams_ontology::uris::FtmlUri;
+        use flams_ontology::uris::{DomainUri, NarrativeUri, UriRef};
         use flams_utils::vecmap::VecSet;
         #[cfg(any(feature = "csr", feature = "hydrate"))]
         {
             let syms: VecSet<_> = t.uri_iter().map(UriRef::owned).collect();
             for s in syms {
                 match &s {
-                    URI::Content(DomainUri::Symbol(_)) => self.load_notations(s).await,
-                    URI::Narrative(NarrativeUri::Element(_)) => self.load_notations(s).await,
+                    Uri::Symbol(_) => self.load_notations(s).await,
+                    Uri::DocumentElement(_) => self.load_notations(s).await,
                     _ => (),
                 }
             }
@@ -568,7 +562,7 @@ impl ServerConfig {
 
     #[cfg(all(feature = "omdoc", any(feature = "csr", feature = "hydrate")))]
     #[inline]
-    async fn load_notations(&self, uri: URI) {
+    async fn load_notations(&self, uri: Uri) {
         if self.get_notations.cache.lock().get(&uri).is_some() {
             return;
         }
@@ -577,7 +571,7 @@ impl ServerConfig {
 
     #[cfg(any(feature = "hydrate", feature = "ssr"))]
     pub fn initialize(
-        fragment: server_fun!(@URI,Option<URI> => (URI,Vec<CSS>,String)),
+        fragment: server_fun!(@URI,Option<Uri> => (Uri,Vec<CSS>,String)),
         full_doc: server_fun!(@DOCURI => (DocumentUri,Vec<CSS>,String)),
         toc: server_fun!(@DOCURI => (Vec<CSS>,Vec<TOCElem>)),
         omdoc: server_fun!(@URI => (Vec<CSS>,OMDoc)),

@@ -4,7 +4,7 @@
 mod parser;
 
 use either::Either;
-use flams_ontology::uris::{ArchiveUriTrait, DocumentUri};
+use flams_ontology::uris::{DocumentUri, UriWithArchive};
 use flams_system::{
     backend::{AnyBackend, Backend},
     build_result, build_target,

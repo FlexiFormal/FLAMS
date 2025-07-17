@@ -1,4 +1,4 @@
-use flams_ontology::uris::{DocumentElementUri, NarrativeUri, URI};
+use flams_ontology::uris::{DocumentElementUri, NarrativeUri, Uri};
 use ftml_extraction::open::terms::VarOrSym;
 use leptos::prelude::*;
 
@@ -29,7 +29,7 @@ pub(crate) struct FTMLConfig {
     on_clicks: StoredValue<flams_utils::prelude::HMap<VarOrSym, RwSignal<bool>>>,
     #[cfg(feature = "omdoc")]
     forced_notations:
-        StoredValue<flams_utils::prelude::HMap<URI, RwSignal<Option<DocumentElementUri>>>>,
+        StoredValue<flams_utils::prelude::HMap<Uri, RwSignal<Option<DocumentElementUri>>>>,
 }
 
 impl FTMLConfig {
@@ -69,7 +69,7 @@ impl FTMLConfig {
 
 #[cfg(feature = "omdoc")]
 impl FTMLConfig {
-    pub fn get_forced_notation(&self, uri: &URI) -> RwSignal<Option<DocumentElementUri>> {
+    pub fn get_forced_notation(&self, uri: &Uri) -> RwSignal<Option<DocumentElementUri>> {
         self.owner.with(|| {
             self.forced_notations
                 .with_value(|map| map.get(uri).copied())

@@ -1,4 +1,4 @@
-use flams_ontology::uris::DocumentUri;
+use flams_ontology::uris::{DocumentUri, IsNarrativeUri};
 use flams_utils::prelude::HMap;
 use leptos::prelude::*;
 use web_sys::Element;
@@ -19,7 +19,7 @@ impl NavElems {
         match self.titles.entry(uri) {
             std::collections::hash_map::Entry::Occupied(e) => *e.get(),
             std::collections::hash_map::Entry::Vacant(e) => {
-                let name = e.key().name().to_string();
+                let name = e.key().document_name().to_string();
                 *e.insert(RwSignal::new(name))
             }
         }

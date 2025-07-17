@@ -1,6 +1,6 @@
 use flams_ontology::{
     content::terms::ArgMode,
-    uris::{ArchiveUriTrait, DocumentElementUri, DomainUri, URIWithLanguage, URI},
+    uris::{DocumentElementUri, DomainUri, IsDomainUri, IsNarrativeUri, Uri, UriWithArchive},
 };
 use flams_web_utils::{
     components::{Popover, PopoverSize},
@@ -61,7 +61,7 @@ mod term_replacing {
     use flams_ontology::{
         content::terms::ArgMode,
         narration::notations::{PresentationError, PresenterArgs},
-        uris::{DocumentElementUri, URI},
+        uris::{DocumentElementUri, Uri},
     };
     use ftml_extraction::prelude::FTMLElements;
     use leptos::{context::Provider, prelude::*};
@@ -122,7 +122,7 @@ mod term_replacing {
         elements: FTMLElements,
         orig: OriginalNode,
         is_var: bool,
-        uri: URI,
+        uri: Uri,
         notation_signal: RwSignal<Option<DocumentElementUri>>,
     ) -> impl IntoView {
         let args = head.args;
@@ -283,12 +283,8 @@ pub(super) fn math_term(
                 let subst = use_context::<DisablePopover>().is_none();
                 if subst {
                     let uri = match &head.owner {
-                        VarOrSym::S(s @ DomainUri::Symbol(_)) => {
-                            Some((false, URI::Content(s.clone())))
-                        }
-                        VarOrSym::V(PreVar::Resolved(v)) => {
-                            Some((true, URI::Narrative(v.clone().into())))
-                        }
+                        VarOrSym::S(s @ DomainUri::Symbol(_)) => Some((false, s.clone().into())),
+                        VarOrSym::V(PreVar::Resolved(v)) => Some((true, v.clone().into())),
                         _ => None,
                     };
                     let notation_signal = uri
@@ -421,7 +417,7 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
                 //<OnClickModal slot>{do_onclick(s_click)}</OnClickModal>
                 //<div style="max-width:600px;">
                   {match s {
-                    VarOrSym::V(v) => EitherOf3::A(view!{<span>"Variable "{v.name().last_name().to_string()}</span>}),
+                    VarOrSym::V(v) => EitherOf3::A(view!{<span>"Variable "{v.name().last().to_string()}</span>}),
                     VarOrSym::S(DomainUri::Symbol(s)) => EitherOf3::B(crate::remote::get!(definition(s.clone()) = (css,s) => {
                       for c in css { do_css(c); }
                       Some(view!(
@@ -431,7 +427,7 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
                       ))
                     })),
                     VarOrSym::S(DomainUri::Module(m)) =>
-                      EitherOf3::C(view!{<div>"Module" {m.name().last_name().to_string()}</div>}),
+                      EitherOf3::C(view!{<div>"Module" {m.module_name().last().to_string()}</div>}),
                 }}//</div>
               </Popover>
               </Provider>
@@ -451,14 +447,14 @@ pub fn do_onclick(uri: VarOrSym) -> impl IntoView {
     let uriclone = uri.clone();
     let s = match uri {
         VarOrSym::V(v) => {
-            return EitherOf3::A(view! {<span>"Variable "{v.name().last_name().to_string()}</span>})
+            return EitherOf3::A(view! {<span>"Variable "{v.name().last().to_string()}</span>})
         }
         VarOrSym::S(DomainUri::Module(m)) => {
-            return EitherOf3::B(view! {<div>"Module" {m.name().last_name().to_string()}</div>})
+            return EitherOf3::B(view! {<div>"Module" {m.module_name().last().to_string()}</div>})
         }
         VarOrSym::S(DomainUri::Symbol(s)) => s,
     };
-    let name = s.name().last_name().to_string();
+    let name = s.name().last().to_string();
 
     EitherOf3::C(crate::remote::get!(get_los(s.clone(),false) = v => {
       let LOs {definitions,examples,..} = v.lo_sort();
@@ -510,9 +506,9 @@ pub fn do_onclick(uri: VarOrSym) -> impl IntoView {
         }}
         {#[cfg(feature="omdoc")]{
           if term_replacing::DO_REPLACEMENTS {
-            let uri = match &uriclone {
-              VarOrSym::S(s@DomainUri::Symbol(_)) => Some((false,URI::Content(s.clone()))),
-              VarOrSym::V(PreVar::Resolved(v)) => Some((true,URI::Narrative(v.clone().into()))),
+            let uri: Option<(_,Uri)> = match &uriclone {
+              VarOrSym::S(s@DomainUri::Symbol(_)) => Some((false,s.clone().into())),
+              VarOrSym::V(PreVar::Resolved(v)) => Some((true,v.clone().into())),
               _ => None
             };
             uri.map(|(is_variable,uri)| {let uricl = uri.clone();crate::remote::get!(notations(uri.clone()) = v => {

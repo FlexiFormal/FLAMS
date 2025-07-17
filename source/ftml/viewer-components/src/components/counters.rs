@@ -1,6 +1,6 @@
 use flams_ontology::{
     narration::{paragraphs::ParagraphKind, sections::SectionLevel},
-    uris::{DocumentUri, Name},
+    uris::{DocumentUri, UriName},
 };
 use flams_utils::{
     impossible, unwrap,
@@ -367,9 +367,9 @@ pub struct SectionCounters {
     pub max: SectionLevel,
     sections: SmartCounter<AllSections>,
     initialized: RwSignal<bool>,
-    counters: RwSignal<VecMap<Name, SmartCounter<u16>>>,
-    resets: RwSignal<VecMap<SectionLevel, VecSet<Name>>>,
-    for_paras: RwSignal<VecMap<(ParagraphKind, Option<Name>), Option<Name>>>,
+    counters: RwSignal<VecMap<UriName, SmartCounter<u16>>>,
+    resets: RwSignal<VecMap<SectionLevel, VecSet<UriName>>>,
+    for_paras: RwSignal<VecMap<(ParagraphKind, Option<UriName>), Option<UriName>>>,
     slides: SmartCounter<u32>,
 }
 impl Default for SectionCounters {
@@ -513,10 +513,10 @@ impl SectionCounters {
     }
 
     fn get_counter(
-        all: &VecMap<(ParagraphKind, Option<Name>), Option<Name>>,
+        all: &VecMap<(ParagraphKind, Option<UriName>), Option<UriName>>,
         kind: ParagraphKind,
-        styles: &[Name],
-    ) -> Option<Name> {
+        styles: &[UriName],
+    ) -> Option<UriName> {
         styles
             .iter()
             .rev()
@@ -533,7 +533,7 @@ impl SectionCounters {
             .cloned()
     }
 
-    pub fn get_para(&mut self, kind: ParagraphKind, styles: &[Name]) -> Memo<String> {
+    pub fn get_para(&mut self, kind: ParagraphKind, styles: &[UriName]) -> Memo<String> {
         self.init_paras();
         self.current = LogicalLevel::Paragraph;
         let cnt = self
@@ -552,7 +552,7 @@ impl SectionCounters {
         }
     }
 
-    pub fn get_problem(&mut self, _styles: &[Name]) -> Memo<String> {
+    pub fn get_problem(&mut self, _styles: &[UriName]) -> Memo<String> {
         self.init_paras();
         self.current = LogicalLevel::Paragraph;
         Memo::new(|_| String::new())
@@ -659,8 +659,8 @@ fn update(
     max: SectionLevel,
     old_slides: &RwSignal<u32>,
     old_sections: &RwSignal<AllSections>,
-    old_paras: &VecMap<Name, (RwSignal<u16>, u16)>,
-    para_map: &VecMap<(ParagraphKind, Option<Name>), Option<Name>>,
+    old_paras: &VecMap<UriName, (RwSignal<u16>, u16)>,
+    para_map: &VecMap<(ParagraphKind, Option<UriName>), Option<UriName>>,
 ) {
     let mut curr = ch.iter();
     let mut stack = SmallVec::<_, 4>::new();

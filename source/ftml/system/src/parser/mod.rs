@@ -9,10 +9,9 @@ use flams_ontology::{
         documents::{DocumentStyles, UncheckedDocument},
         LazyDocRef,
     },
-    triple,
     uris::{
-        ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, DocumentUri, ModuleUri, SymbolUri,
-        URIOrRefTrait, URIWithLanguage, UriRefTrait,
+        ArchiveId, ArchiveUri, BaseUri, DocumentUri, FtmlUri, IsNarrativeUri, ModuleUri, SymbolUri,
+        UriWithArchive,
     },
     DocumentRange,
 };
@@ -118,12 +117,13 @@ impl<'p> HTMLParser<'p> {
         rel_path: &'p str,
         backend: &'p AnyBackend,
     ) -> Result<(OMDocResult, String), String> {
+        use flams_ontology::rdf::ontologies::triple;
         let iri = uri.to_iri();
         let mut triples = HSet::default();
         for t in [
-            triple!(<(iri.clone())> dc:LANGUAGE = (uri.language().to_string()) ),
-            triple!(<(iri.clone())> : ulo:DOCUMENT),
-            triple!(<(uri.archive_uri().to_iri())> ulo:CONTAINS <(iri)>),
+            triple!(<(iri.clone())> dc:language = (uri.language().to_string()) ),
+            triple!(<(iri.clone())> : ulo:document),
+            triple!(<(uri.archive_uri().to_iri())> ulo:contains <(iri)>),
         ] {
             triples.insert(t);
         }

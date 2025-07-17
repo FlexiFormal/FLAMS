@@ -3,8 +3,8 @@ use flams_ontology::{
     content::terms::Term,
     ftml::FTMLKey,
     uris::{
-        ArchiveUriTrait, DocumentElementUri, DocumentUri, ModuleUri, NarrativeUri, PathURITrait,
-        SymbolUri, URIWithLanguage,
+        DocumentElementUri, DocumentUri, IsDomainUri, IsNarrativeUri, ModuleUri, NarrativeUri,
+        SymbolUri, UriWithArchive, UriWithPath,
     },
 };
 use flams_web_utils::{
@@ -46,10 +46,10 @@ pub(crate) fn do_omdoc(omdoc: OMDocSource) -> impl IntoView {
         uri.path()
             .map(|s| format!("&p={s}"))
             .unwrap_or_else(|| String::new()),
-        uri.name().first_name(),
+        uri.document_name(),
         uri.language()
     );
-    let title = RwSignal::new(uri.name().to_string());
+    let title = RwSignal::new(uri.document_name().to_string());
     Some(view! {<div style="margin-left:auto;"><Drawer lazy=true>
         <Trigger slot>
          <Button
@@ -169,8 +169,8 @@ impl OMDocT for OMDoc {
 pub mod froms {
     use flams_ontology::{
         content::{declarations::structures::Extension, ContentReference},
-        rdf::ontologies::ulo2,
-        uris::{SymbolUri, URIOrRefTrait},
+        rdf::ontologies::ulo,
+        uris::{FtmlUri, SymbolUri},
         Checked,
     };
     use flams_system::backend::{
@@ -187,7 +187,7 @@ pub mod froms {
             .query(
                 sparql::Select {
                     subject: sparql::Var('x'),
-                    pred: ulo2::EXTENDS.into_owned(),
+                    pred: ulo::extends.into_owned(),
                     object: s.to_iri(),
                 }
                 .into(),
@@ -238,7 +238,7 @@ pub fn comma_sep<V: IntoView>(
 pub fn module_name(uri: &ModuleUri) -> impl IntoView {
     use flams_web_utils::components::{OnClickModal, Popover, PopoverTrigger};
     use thaw::Scrollbar;
-    let name = uri.name().last_name().to_string();
+    let name = uri.module_name().last().to_string();
     let uristring = uri.to_string();
     let uriclone = uri.clone();
     let uri = uri.clone();

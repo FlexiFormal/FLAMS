@@ -2,8 +2,10 @@ use super::Gotto;
 use super::TOCSource;
 use crate::iterate;
 use crate::FTMLDocumentSetup;
+use flams_ontology::uris::IsNarrativeUri;
 use flams_ontology::uris::NarrativeUri;
-use flams_ontology::uris::{DocumentElementUri, DocumentUri, NameStep};
+use flams_ontology::uris::SimpleUriName;
+use flams_ontology::uris::{DocumentElementUri, DocumentUri};
 use flams_web_utils::components::wait_local;
 use flams_web_utils::{do_css, inject_css};
 use leptos::prelude::*;
@@ -82,18 +84,22 @@ pub fn FragmentString(
 ) -> impl IntoView {
     use leptos::context::Provider;
     use leptos::either::EitherOf3;
-    let name = uri.as_ref().map(|uri| uri.name().last_name().clone());
+    let name: Option<SimpleUriName> = uri
+        .as_ref()
+        .map(|uri| flams_utils::unwrap!(uri.name().last().parse().ok()));
     let needs_suffix = uri
         .as_ref()
-        .map(|uri| uri.name().steps().len() > 1)
+        .map(|uri| !uri.name().is_simple())
         .unwrap_or_default();
-    let doc = uri
-        .as_ref()
-        .map_or_else(DocumentUri::no_doc, |d| d.document().clone());
+    let doc = uri.as_ref().map_or_else(
+        || DocumentUri::no_doc().clone(),
+        |d| d.document_uri().clone(),
+    );
     view! {<FTMLDocumentSetup uri=doc>{
         match name {
             Some(name) if needs_suffix => {
-                let nuri = NarrativeUri::Element(flams_utils::unwrap!(uri).parent());
+                let uri = flams_utils::unwrap!(uri);
+                let nuri: NarrativeUri = uri.parent().map_or(uri.document_uri().clone().into(), |e| e.clone().into());
                 EitherOf3::A(view!{
                     <Provider value=ForcedName(Some(name))>
                     <Provider value=nuri>
@@ -115,14 +121,13 @@ pub fn FragmentString(
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ForcedName(Option<NameStep>);
+pub struct ForcedName(Option<SimpleUriName>);
 impl ForcedName {
     pub fn update(&self, uri: &DocumentElementUri) -> DocumentElementUri {
         match self.0.as_ref() {
             Some(n) => {
-                let name = uri.name().clone();
-                let doc = uri.document().clone();
-                doc & name.with_last_name(n.clone())
+                let doc = uri.document_uri().clone();
+                doc & uri.name().with_last_name(n)
             }
             _ => uri.clone(),
         }
@@ -139,7 +144,7 @@ pub fn DocumentString(
     #[prop(optional)] omdoc: crate::components::omdoc::OMDocSource,
 ) -> impl IntoView {
     use thaw::Flex;
-    let uri = uri.unwrap_or_else(DocumentUri::no_doc);
+    let uri = uri.unwrap_or_else(|| DocumentUri::no_doc().clone());
     let burger = !matches!(
         (&toc, &omdoc),
         (TOCSource::None, crate::components::omdoc::OMDocSource::None)

@@ -77,7 +77,7 @@ impl FTMLExtractor for DOMExtractor {
 
     fn resolve_variable_name(
         &self,
-        _name: flams_ontology::uris::Name,
+        _name: flams_ontology::uris::UriName,
     ) -> flams_ontology::content::terms::Var {
         todo!()
     }

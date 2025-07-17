@@ -3,7 +3,7 @@ use flams_ontology::{
         BlockFeedback, CheckedResult, FillinFeedback, FillinFeedbackKind, ProblemFeedback,
         ProblemResponse as OrigResponse, ProblemResponseType, Solutions,
     },
-    uris::{DocumentElementUri, Name, NarrativeUri},
+    uris::{DocumentElementUri, NarrativeUri, UriName},
 };
 use flams_utils::prelude::HMap;
 use flams_web_utils::inject_css;
@@ -103,7 +103,7 @@ pub(super) fn problem<V: IntoView + 'static>(
     uri: &DocumentElementUri,
     autogradable: bool,
     sub_problem: bool,
-    styles: Box<[Name]>,
+    styles: Box<[UriName]>,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
     let kind = FragmentKind::Problem {
@@ -119,7 +119,7 @@ pub(super) fn problem<V: IntoView + 'static>(
         for style in styles {
             s.push(' ');
             s.push_str("ftml-problem-");
-            s.push_str(style.first_name().as_ref());
+            s.push_str(style.first().as_ref());
         }
         s
     };

@@ -1,6 +1,6 @@
 use flams_ontology::{
     narration::sections::SectionLevel,
-    uris::{DocumentUri, NarrativeUri},
+    uris::{DocumentUri, IsNarrativeUri, NarrativeUri},
 };
 use flams_web_utils::{do_css, inject_css};
 use leptos::{context::Provider, either::Either, prelude::*};
@@ -51,7 +51,7 @@ pub(super) fn inputref(uri: DocumentUri, id: &str) -> impl IntoView {
                 if ne.initialized.get() {
                     if ne
                         .get_title(uri.clone())
-                        .with_untracked(|ttl| *ttl == uri.name().to_string())
+                        .with_untracked(|ttl| *ttl == uri.document_name().to_string())
                     {
                         replace.set(true);
                     }

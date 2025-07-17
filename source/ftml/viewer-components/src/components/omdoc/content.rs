@@ -5,7 +5,7 @@ use crate::{
 use flams_ontology::{
     content::{declarations::symbols::ArgSpec, terms::Term},
     languages::Language,
-    uris::{DomainUriTrait, ModuleUri, Name, SymbolUri, URIOrRefTrait, UriRefTrait, URI},
+    uris::{IsDomainUri, IsNarrativeUri, ModuleUri, SymbolUri, Uri, UriName},
 };
 use flams_utils::vecmap::VecSet;
 
@@ -143,7 +143,7 @@ impl<E: OMDocDecl> super::OMDocT for OMDocStructure<E> {
                         <b>"Conservative Extensions:"</b>
                         {extensions.into_iter().map(|(uri,s)| view!{
                             <Block show_separator=false>
-                                <Header slot>{super::module_name(uri.module())}</Header>
+                                <Header slot>{super::module_name(uri.module_uri())}</Header>
                                 {s.into_iter().map(super::OMDocT::into_view).collect_view()}
                             </Block>
                         }).collect_view()}
@@ -261,15 +261,11 @@ impl From<OMDocDeclaration> for OMDoc {
     }
 }
 
-pub(super) fn do_notations(uri: URI, arity: ArgSpec) -> impl IntoView {
+pub(super) fn do_notations(uri: Uri, arity: ArgSpec) -> impl IntoView {
     use flams_web_utils::components::{Popover, PopoverTrigger};
     use thaw::{Table, TableCell, TableHeader, TableHeaderCell, TableRow};
     let functional = arity.num() > 0;
-    let as_variable = match &uri {
-        URI::Content(_) => false,
-        URI::Narrative(_) => true,
-        _ => unreachable!(),
-    };
+    let as_variable = matches!(uri, Uri::DocumentElement(_));
     let uriclone = uri.clone();
     inject_css("flams-notation-table", include_str!("notations.css"));
     crate::remote::get!(notations(uri.clone()) = v => {
@@ -306,7 +302,7 @@ pub(super) fn do_notations(uri: URI, arity: ArgSpec) -> impl IntoView {
                                             </TableHeader>
                                             <TableRow>
                                                 <TableCell class="flams-notation-cell">{
-                                                    super::doc_name(u.document(), u.document().name().last_name().to_string())
+                                                    super::doc_name(u.document_uri(), u.document_name().to_string())
                                                 }</TableCell>
                                                 {if functional {Some(view!{<TableCell class="flams-notation-cell">{
                                                     op.map_or_else(
@@ -349,19 +345,19 @@ fn do_los(uri: SymbolUri) -> impl IntoView {
                     view!{
                         <div>{if definitions.is_empty() { None } else {Some(
                             super::comma_sep("Definitions", definitions.into_iter().map(|uri| {
-                                let title = uri.name().last_name().to_string();
+                                let title = uri.name().last().to_string();
                                 super::doc_elem_name(uri,None,title)
                             }))
                         )}}</div>
                         <div>{if examples.is_empty() { None } else {Some(
                             super::comma_sep("Examples", examples.into_iter().map(|uri| {
-                                let title = uri.name().last_name().to_string();
+                                let title = uri.name().last().to_string();
                                 super::doc_elem_name(uri,None,title)
                             }))
                         )}}</div>
                         <div>{if problems.is_empty() { None } else {Some(
                             super::comma_sep("Problems", problems.into_iter().map(|(_,uri,cd)| {
-                                let title = uri.name().last_name().to_string();
+                                let title = uri.name().last().to_string();
                                 view!{
                                     {super::doc_elem_name(uri,None,title)}
                                     " ("{cd.to_string()}")"
@@ -420,7 +416,7 @@ impl super::OMDocT for OMDocSymbol {
                         }
                     })}
                 </span></Header>
-                <HeaderLeft slot>{do_notations(URI::Content(uriclone_b.into()),arity)}</HeaderLeft>
+                <HeaderLeft slot>{do_notations(uriclone_b.into(),arity)}</HeaderLeft>
                 <HeaderRight slot><span style="white-space:nowrap;">{df.map(|t| view! {
                     "Definiens: "{
                         crate::remote::get!(present(t.clone()) = html => {

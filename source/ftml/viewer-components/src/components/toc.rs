@@ -3,7 +3,7 @@
 use crate::components::navigation::NavElems;
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
-    uris::{DocumentElementUri, DocumentUri, Name, NarrativeUri},
+    uris::{DocumentElementUri, DocumentUri, NarrativeUri, UriName},
 };
 use flams_utils::{time::Timestamp, CSS};
 use flams_web_utils::do_css;
@@ -51,7 +51,7 @@ pub enum TOCElem {
     },
     Paragraph {
         //uri:DocumentElementUri,
-        styles: Vec<Name>,
+        styles: Vec<UriName>,
         kind: ParagraphKind,
     },
     Slide, //{uri:DocumentElementUri}

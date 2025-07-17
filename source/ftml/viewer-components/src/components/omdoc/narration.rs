@@ -5,7 +5,9 @@ use flams_ontology::{
         paragraphs::{ParagraphFormatting, ParagraphKind},
         problems::CognitiveDimension,
     },
-    uris::{DocumentElementUri, DocumentUri, ModuleUri, NarrativeUri, SymbolUri, URI},
+    uris::{
+        DocumentElementUri, DocumentUri, IsNarrativeUri, ModuleUri, NarrativeUri, SymbolUri, Uri,
+    },
 };
 use flams_utils::vecmap::{VecMap, VecSet};
 
@@ -146,7 +148,7 @@ impl super::OMDocT for OMDocVariable {
         } else {
             "Variable "
         };
-        let name = uri.name().last_name().to_string();
+        let name = uri.name().last().to_string();
         view! {
             <Block show_separator=false>
                 <Header slot><span>
@@ -161,7 +163,7 @@ impl super::OMDocT for OMDocVariable {
                   })}
                 </span></Header>
                 <HeaderLeft slot>
-                  {super::content::do_notations(URI::Narrative(uri.into()),arity)}
+                  {super::content::do_notations(uri.into(),arity)}
                 </HeaderLeft>
                 <HeaderRight slot><span style="white-space:nowrap;">{df.map(|t| view! {
                     "Definiens: "{
@@ -215,7 +217,7 @@ impl super::OMDocT for OMDocParagraph {
             definition_like,
             ..
         } = self;
-        let title = title.unwrap_or_else(|| uri.name().last_name().to_string());
+        let title = title.unwrap_or_else(|| uri.name().last().to_string());
         view! {
           <Block>
             <Header slot><b>
@@ -276,7 +278,7 @@ impl super::OMDocT for OMDocProblem {
             children,
             ..
         } = self;
-        let title = title.unwrap_or_else(|| uri.name().last_name().to_string());
+        let title = title.unwrap_or_else(|| uri.name().last().to_string());
         view! {
           <Block>
             <Header slot><b>
@@ -371,7 +373,7 @@ impl super::OMDocT for OMDocDocumentElement {
 }
 
 pub(crate) fn doc_ref(uri: DocumentUri, title: Option<String>) -> impl IntoView {
-    let name = title.unwrap_or_else(|| uri.name().last_name().to_string());
+    let name = title.unwrap_or_else(|| uri.document_name().to_string());
     let uricl = uri.clone();
     view! {//<Block>
     <LazyCollapsible>
@@ -429,7 +431,7 @@ mod froms {
             documents::Document, paragraphs::LogicalParagraph, problems::Problem,
             sections::Section, variables::Variable, DocumentElement, NarrationTrait,
         },
-        uris::{DocumentElementUri, ModuleUri},
+        uris::{DocumentElementUri, IsNarrativeUri, ModuleUri},
         Checked,
     };
     use flams_system::backend::Backend;
@@ -449,7 +451,7 @@ mod froms {
             let mut uses = VecSet::new();
             let mut imports = VecSet::new();
             let title = title.and_then(|r| {
-                if let Some((c, s)) = backend.get_html_fragment(uri.document(), r) {
+                if let Some((c, s)) = backend.get_html_fragment(uri.document_uri(), r) {
                     if s.trim().is_empty() {
                         None
                     } else {
@@ -511,7 +513,7 @@ mod froms {
             let mut uses = VecSet::new();
             let mut imports = VecSet::new();
             let title = title.and_then(|r| {
-                if let Some((c, s)) = backend.get_html_fragment(uri.document(), r) {
+                if let Some((c, s)) = backend.get_html_fragment(uri.document_uri(), r) {
                     if s.trim().is_empty() {
                         None
                     } else {
@@ -559,7 +561,7 @@ mod froms {
             let mut uses = VecSet::new();
             let mut imports = VecSet::new();
             let title = title.and_then(|r| {
-                if let Some((c, s)) = backend.get_html_fragment(uri.document(), r) {
+                if let Some((c, s)) = backend.get_html_fragment(uri.document_uri(), r) {
                     if s.trim().is_empty() {
                         None
                     } else {

@@ -1,6 +1,6 @@
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
-    uris::{DocumentElementUri, Name},
+    uris::{DocumentElementUri, UriName},
 };
 use flams_web_utils::inject_css;
 use leptos::{context::Provider, prelude::*};
@@ -10,7 +10,7 @@ use crate::{components::counters::SectionCounters, ts::FragmentContinuation, Fra
 pub(super) fn paragraph<V: IntoView + 'static>(
     kind: ParagraphKind,
     uri: DocumentElementUri,
-    styles: Box<[Name]>,
+    styles: Box<[UriName]>,
     children: impl FnOnce() -> V + Send + 'static,
 ) -> impl IntoView {
     inject_css("ftml-sections", include_str!("sections.css"));
@@ -30,7 +30,7 @@ pub(super) fn paragraph<V: IntoView + 'static>(
             s.push(' ');
             s.push_str(p);
             s.push('-');
-            s.push_str(style.first_name().as_ref());
+            s.push_str(style.first().as_ref());
         }
         s
     });
