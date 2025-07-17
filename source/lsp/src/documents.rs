@@ -1,7 +1,7 @@
 use std::{path::Path, sync::atomic::AtomicBool};
 
 use async_lsp::lsp_types::{Position, Range};
-use flams_ontology::uris::{ArchiveUri, DocumentUri, UriRefTrait};
+use flams_ontology::uris::{ArchiveUri, DocumentUri};
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
 use flams_utils::PathExt;
@@ -55,7 +55,7 @@ impl LSPDocument {
             .as_ref()
             .and_then(|path| {
                 GlobalBackend::get().archive_of(path, |a, rp| {
-                    let uri = a.uri().owned();
+                    let uri = a.uri().clone();
                     let rp = rp.strip_prefix(PREFIX).map(|r| r.into());
                     (uri, rp)
                 })

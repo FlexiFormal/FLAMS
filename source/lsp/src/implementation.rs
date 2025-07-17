@@ -15,7 +15,7 @@ use async_lsp::{
     lsp_types::{self as lsp},
     LanguageClient, LanguageServer, ResponseError,
 };
-use flams_ontology::uris::ArchiveUriTrait;
+use flams_ontology::uris::{IsNarrativeUri, UriWithArchive};
 use flams_stex::quickparse::stex::{AnnotIter, STeXAnnot};
 use flams_system::{
     backend::{archives::LocalArchive, Backend, GlobalBackend},
@@ -184,7 +184,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             };
             let progress = ProgressCallbackServer::new(
                 client.clone(),
-                format!("Exporting {}", doc_uri.name()),
+                format!("Exporting {}", doc_uri.document_name()),
                 None,
             );
             if let Err(e) = flams_stex::export_standalone(doc_uri, file, &target) {

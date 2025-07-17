@@ -1,7 +1,7 @@
 use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::{DocumentUri, UriRefTrait};
+use flams_ontology::uris::DocumentUri;
 use flams_stex::{
     quickparse::stex::{DiagnosticLevel, STeXDiagnostic, STeXParseData, STeXParseDataI},
     OutputCont, RusTeX,
@@ -337,7 +337,7 @@ impl LSPState {
                             match e {
                                 SourceEntry::File(f) => {
                                     let uri = match DocumentUri::from_archive_relpath(
-                                        a.uri().owned(),
+                                        a.uri().clone(),
                                         &f.relative_path,
                                     ) {
                                         Ok(u) => u,

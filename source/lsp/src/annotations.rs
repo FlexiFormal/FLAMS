@@ -4,12 +4,10 @@ use crate::{
     IsLSPRange, ProgressCallbackClient,
 };
 use async_lsp::lsp_types as lsp;
+use flams_ontology::uris::{IsDomainUri, IsNarrativeUri, UriWithArchive, UriWithPath};
 use flams_ontology::{
     narration::paragraphs::ParagraphKind,
-    uris::{
-        ArchiveId, ArchiveUri, ArchiveUriTrait, DomainUri, DomainUriTrait, ModuleUri, PathURITrait,
-        SymbolUri, URIWithLanguage, URI,
-    },
+    uris::{ArchiveId, ArchiveUri, DomainUri, ModuleUri, SymbolUri, Uri},
 };
 use flams_stex::quickparse::stex::rules::IncludeProblemArg;
 use flams_stex::quickparse::{
@@ -395,7 +393,7 @@ impl AnnotExt for STeXAnnot {
                 archive, filepath, ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveUriTrait::archive_id),
+                    || top_archive.map(UriWithArchive::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -414,7 +412,7 @@ impl AnnotExt for STeXAnnot {
                 archive, filepath, ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveUriTrait::archive_id),
+                    || top_archive.map(UriWithArchive::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -444,7 +442,7 @@ impl AnnotExt for STeXAnnot {
                 ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveUriTrait::archive_id),
+                    || top_archive.map(UriWithArchive::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -1812,7 +1810,7 @@ impl AnnotExt for STeXAnnot {
                 ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveUriTrait::archive_id),
+                    || top_archive.map(UriWithArchive::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return None;
@@ -1876,8 +1874,7 @@ impl AnnotExt for STeXAnnot {
                     .unwrap_or_else(|| unreachable!())
                     .uri
                     .name()
-                    .last_name();
-                let name = name.as_ref();
+                    .last();
                 let name = match mod_ {
                     SymnameMode::Cap {
                         post: Some((_, _, post)),
@@ -1954,13 +1951,13 @@ impl AnnotExt for STeXAnnot {
                 if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
                     return ret;
                 }
-                ret = format!("?{}{ret}", uri.module().name());
+                ret = format!("?{}{ret}", uri.module_name());
                 if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
                     return ret;
                 }
                 if let Some(path) = uri.path() {
                     let mut had_path = false;
-                    for s in path.steps().iter().rev() {
+                    for s in path.steps().rev() {
                         if had_path {
                             ret = format!("{s}/{ret}");
                         } else {
@@ -1988,7 +1985,7 @@ impl AnnotExt for STeXAnnot {
                         ret.push('/');
                         ret.push_str(&p.to_string());
                     }
-                    ret.push_str(&format!("?{}?{}", u.uri.module().name(), u.uri.name()));
+                    ret.push_str(&format!("?{}?{}", u.uri.module_name(), u.uri.name()));
                     ret
                 })
                 .collect();
@@ -2231,7 +2228,7 @@ impl LSPState {
         let url: lsp::Url = uri.into();
         d.document_uri().map(|doc| {
             std::future::ready(Some(vec![lsp::CallHierarchyItem {
-                name: format!("{}.{}", doc.name(), doc.language()),
+                name: format!("{}.{}", doc.document_name(), doc.language()),
                 kind: lsp::SymbolKind::FILE,
                 tags: None,
                 detail: None,
@@ -2247,7 +2244,7 @@ impl LSPState {
         &self,
         url: lsp::Url,
         kind: lsp::SymbolKind,
-        uri: URI,
+        uri: Uri,
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyIncomingCall>>>>
     {
@@ -2270,16 +2267,13 @@ impl LSPState {
                             uri: muri,
                             children,
                             ..
-                        } if matches!(&uri,URI::Content(DomainUri::Module(u)) if u == muri) => {
-                            Some(&**children)
-                        }
+                        } if matches!(&uri,Uri::Module(u) if u == muri) => Some(&**children),
                         STeXAnnot::MathStructure {
                             uri: suri,
                             children,
                             extends,
                             ..
-                        } if matches!(&uri,URI::Content(DomainUri::Symbol(u)) if u == &suri.uri) =>
-                        {
+                        } if matches!(&uri,Uri::Symbol(u) if u == &suri.uri) => {
                             for (sym, range) in extends {
                                 if let Some(p) = sym.filepath.as_ref() {
                                     let Ok(url) = lsp::Url::from_file_path(p) else {
@@ -2338,7 +2332,7 @@ impl LSPState {
                                         .1
                                         .to_string(),
                                 ),
-                                name: module.uri.name().to_string(),
+                                name: module.uri.module_name().to_string(),
                                 kind: lsp::SymbolKind::CLASS,
                                 tags: None,
                                 uri: url,
@@ -2363,7 +2357,7 @@ impl LSPState {
                                     .1
                                     .to_string(),
                             ),
-                            name: uri.name().to_string(),
+                            name: uri.module_name().to_string(),
                             kind: lsp::SymbolKind::MODULE,
                             tags: None,
                             uri: url.clone().into(),
@@ -2393,7 +2387,7 @@ impl LSPState {
                                         .1
                                         .to_string(),
                                 ),
-                                name: module.uri.name().to_string(),
+                                name: module.uri.module_name().to_string(),
                                 kind: lsp::SymbolKind::METHOD,
                                 tags: None,
                                 uri: url,
