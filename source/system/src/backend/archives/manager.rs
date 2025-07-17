@@ -4,7 +4,7 @@ use flams_ontology::{
     content::modules::OpenModule,
     languages::Language,
     narration::documents::UncheckedDocument,
-    uris::{ArchiveId, ArchiveUriTrait, NameStep, PathURITrait, PathUriRef},
+    uris::{ArchiveId, PathUri, UriWithArchive, UriWithPath},
     Unchecked,
 };
 use flams_utils::change_listener::ChangeSender;
@@ -77,9 +77,9 @@ impl ArchiveManager {
 
     pub(crate) fn load_document(
         &self,
-        path_uri: PathUriRef,
+        path_uri: &PathUri,
         language: Language,
-        name: &NameStep,
+        name: &str,
     ) -> Option<UncheckedDocument> {
         let archive = path_uri.archive_id();
         let path = path_uri.path();
@@ -89,8 +89,8 @@ impl ArchiveManager {
     }
     pub(crate) fn load_module(
         &self,
-        path_uri: PathUriRef,
-        name: &NameStep,
+        path_uri: &PathUri,
+        name: &str,
     ) -> Option<OpenModule<Unchecked>> {
         let archive = path_uri.archive_id();
         let path = path_uri.path();

@@ -1,10 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use either::Either;
-use flams_ontology::{
-    file_states::FileStateSummary,
-    uris::{ArchiveUriRef, UriRefTrait},
-};
+use flams_ontology::{file_states::FileStateSummary, uris::ArchiveUri};
 use flams_utils::{
     change_listener::ChangeSender,
     prelude::{TreeChild, TreeLike},
@@ -240,7 +237,7 @@ impl SourceDir {
 
     pub(crate) fn update(
         &mut self,
-        archive: ArchiveUriRef,
+        archive: &ArchiveUri,
         top: &Path,
         sender: &ChangeSender<BackendChange>,
         ignore: &IgnoreSource,
@@ -313,7 +310,7 @@ impl SourceDir {
             if let Some(SourceEntry::File(previous)) = old.remove(&new.relative_path) {
                 if previous.format_state != new.format_state {
                     sender.lazy_send(|| BackendChange::FileChange {
-                        archive: UriRefTrait::owned(archive),
+                        archive: archive.clone(),
                         relative_path: new.relative_path.to_string(),
                         format: new.format,
                         old: Some(previous.format_state),
@@ -322,7 +319,7 @@ impl SourceDir {
                 }
             } else {
                 sender.lazy_send(|| BackendChange::FileChange {
-                    archive: UriRefTrait::owned(archive),
+                    archive: archive.clone(),
                     relative_path: new.relative_path.to_string(),
                     format: new.format,
                     old: None,

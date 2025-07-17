@@ -780,6 +780,19 @@ impl CognitiveDimension {
             Create => ulo::create,
         }
     }
+
+    #[cfg(feature = "rdf")]
+    pub fn from_iri(iri: ulo::rdf_types::NamedNodeRef) -> Option<Self> {
+        Some(match iri {
+            ulo::ulo::remember => Self::Remember,
+            ulo::ulo::understand => Self::Understand,
+            ulo::ulo::apply => Self::Apply,
+            ulo::ulo::analyze => Self::Analyze,
+            ulo::ulo::evaluate => Self::Evaluate,
+            ulo::ulo::create => Self::Create,
+            _ => return None,
+        })
+    }
 }
 impl Display for CognitiveDimension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

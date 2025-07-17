@@ -1,6 +1,6 @@
 use flams_ontology::{
     archive_json::{ArchiveDatum, Institution},
-    uris::{ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri},
+    uris::{ArchiveId, ArchiveUri, BaseUri, UriWithArchive},
 };
 use flams_utils::vecmap::{VecMap, VecSet};
 use parking_lot::RwLock;
@@ -204,7 +204,9 @@ impl<'a> ArchiveIterator<'a> {
                         .map(str::trim)
                         .filter(|s| !s.is_empty() && *s != id)
                     {
-                        dependencies.push(ArchiveId::new(d));
+                        if let Ok(id) = ArchiveId::new(d) {
+                            dependencies.push(id);
+                        }
                     }
                 }
                 "ignore" => {
@@ -222,7 +224,7 @@ impl<'a> ArchiveIterator<'a> {
         /*if dom_uri.ends_with(id) {
             dom_uri.split_off(id.len() + 1);
         }*/
-        let id = ArchiveId::new(id);
+        let id = ArchiveId::new(id).ok()?;
         if formats.is_empty() && !id.is_meta() {
             tracing::warn!(target:"archives","No formats found for archive {}",id);
             return None;

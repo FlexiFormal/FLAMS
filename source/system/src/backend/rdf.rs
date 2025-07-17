@@ -1,11 +1,9 @@
 use flams_ontology::languages::Language;
 use flams_ontology::narration::problems::CognitiveDimension;
 use flams_ontology::narration::LOKind;
-use flams_ontology::rdf::ontologies::ulo2;
 use flams_ontology::rdf::{NamedNode, Quad, Triple};
 use flams_ontology::uris::{
-    ArchiveUriRef, DocumentElementUri, DocumentUri, PathURITrait, SymbolUri, URIOrRefTrait,
-    URITrait, UriRefTrait,
+    ArchiveUri, DocumentElementUri, DocumentUri, FtmlUri, SymbolUri, UriPath, UriWithPath,
 };
 use oxigraph::sparql::QuerySolutionIter;
 use oxrdfio::RdfFormat;
@@ -18,10 +16,7 @@ use std::string::FromUtf8Error;
 use tracing::instrument;
 
 pub mod sparql {
-    use flams_ontology::{
-        rdf::ontologies::{self, ulo2},
-        uris::{SymbolUri, URIOrRefTrait},
-    };
+    use flams_ontology::uris::{FtmlUri, SymbolUri};
     pub use oxigraph::sparql::*;
     pub use spargebra::{
         algebra::GraphPattern, term::TriplePattern, Query as QueryBuilder, SparqlSyntaxError,
@@ -100,7 +95,7 @@ pub mod sparql {
                 inner: Box::new(GraphPattern::Bgp {
                     patterns: vec![TriplePattern {
                         subject: var("x").into(),
-                        predicate: ulo2::DEFINES.into_owned().into(),
+                        predicate: ulo::ulo::defines.into_owned().into(),
                         object: iri.clone().into(),
                     }],
                 }),
@@ -111,7 +106,7 @@ pub mod sparql {
                 inner: Box::new(GraphPattern::Bgp {
                     patterns: vec![TriplePattern {
                         subject: var("x").into(),
-                        predicate: ulo2::EXAMPLE_FOR.into_owned().into(),
+                        predicate: ulo::ulo::example_for.into_owned().into(),
                         object: iri.clone().into(),
                     }],
                 }),
@@ -132,22 +127,24 @@ pub mod sparql {
                                 patterns: vec![
                                     TriplePattern {
                                         subject: var("x").into(),
-                                        predicate: ulo2::OBJECTIVE.into_owned().into(),
+                                        predicate: ulo::ulo::objective.into_owned().into(),
                                         object: var("bn").into(),
                                     },
                                     TriplePattern {
                                         subject: var("bn").into(),
-                                        predicate: ulo2::POSYMBOL.into_owned().into(),
+                                        predicate: ulo::ulo::po_has_symbol.into_owned().into(),
                                         object: iri.into(),
                                     },
                                     TriplePattern {
                                         subject: var("bn").into(),
-                                        predicate: ulo2::COGDIM.into_owned().into(),
+                                        predicate: ulo::ulo::has_cognitive_dimension
+                                            .into_owned()
+                                            .into(),
                                         object: var("R").into(),
                                     },
                                     TriplePattern {
                                         subject: var("x").into(),
-                                        predicate: ontologies::rdf::TYPE.into_owned().into(),
+                                        predicate: ulo::rdf::TYPE.into_owned().into(),
                                         object: var("t").into(),
                                     },
                                 ],
@@ -219,7 +216,7 @@ impl QueryResult {
     }
 
     #[must_use]
-    pub fn into_uris<U: URITrait>(self) -> RetIter<U> {
+    pub fn into_uris<U: FtmlUri>(self) -> RetIter<U> {
         RetIter(
             match self.0 {
                 QueryResults::Boolean(_) | QueryResults::Graph(_) => RetIterI::None,
@@ -251,15 +248,15 @@ enum RetIterI {
     Sols(QuerySolutionIter),
 }
 
-pub struct RetIter<U: URITrait>(RetIterI, PhantomData<U>);
-impl<U: URITrait> Default for RetIter<U> {
+pub struct RetIter<U: FtmlUri>(RetIterI, PhantomData<U>);
+impl<U: FtmlUri> Default for RetIter<U> {
     #[inline]
     fn default() -> Self {
         Self(RetIterI::default(), PhantomData)
     }
 }
 
-impl<U: URITrait> Iterator for RetIter<U> {
+impl<U: FtmlUri> Iterator for RetIter<U> {
     type Item = U;
     fn next(&mut self) -> Option<Self::Item> {
         let RetIterI::Sols(s) = &mut self.0 else {
@@ -319,17 +316,10 @@ impl Iterator for LOIter {
                 Some(RDFTerm::NamedNode(s)) => s,
                 _ => continue,
             };
-            let cd = match n.as_ref() {
-                ulo2::REMEMBER => CognitiveDimension::Remember,
-                ulo2::UNDERSTAND => CognitiveDimension::Understand,
-                ulo2::APPLY => CognitiveDimension::Apply,
-                ulo2::ANALYZE => CognitiveDimension::Analyze,
-                ulo2::EVALUATE => CognitiveDimension::Evaluate,
-                ulo2::CREATE => CognitiveDimension::Create,
-                _ => continue,
+            let Some(cd) = CognitiveDimension::from_iri(n.as_ref()) else {
+                continue;
             };
-            let sub =
-                matches!(s.get("t"),Some(RDFTerm::NamedNode(n)) if n.as_ref() == ulo2::SUBPROBLEM);
+            let sub = matches!(s.get("t"),Some(RDFTerm::NamedNode(n)) if n.as_ref() == ulo::ulo::subproblem);
             return Some((
                 uri,
                 if sub {
@@ -356,7 +346,7 @@ impl Default for RDFStore {
         let store = oxigraph::store::Store::new().unwrap_or_else(|_| unreachable!());
         store
             .bulk_loader()
-            .load_quads(flams_ontology::rdf::ontologies::ulo2::QUADS.iter().copied())
+            .load_quads(ulo::ulo::QUADS.iter().copied())
             .unwrap_or_else(|_| unreachable!());
         Self { store }
     }
@@ -392,7 +382,7 @@ impl RDFStore {
     pub fn export(&self, iter: impl Iterator<Item = Triple>, p: &Path, uri: &DocumentUri) {
         if let Ok(file) = std::fs::File::create(p) {
             let writer = BufWriter::new(file);
-            let iri = uri.as_path().to_iri();
+            let iri = uri.path_uri().to_iri();
             let ns = iri.as_str();
             //let ns = ns.strip_prefix("<").unwrap_or(&ns);
             //let ns = ns.strip_suffix(">").unwrap_or(ns);
@@ -480,7 +470,7 @@ impl RDFStore {
         tracing::info!(target:"relational","Loaded {} relations", self.store.len().unwrap_or_default() - old);
     }
 
-    fn get_iri(a: ArchiveUriRef, out: &Path, e: &walkdir::DirEntry) -> Option<NamedNode> {
+    fn get_iri(a: &ArchiveUri, out: &Path, e: &walkdir::DirEntry) -> Option<NamedNode> {
         let parent = e.path().parent()?;
         let parentname = parent.file_name()?.to_str()?;
         let parentname = parentname.rsplit_once('.').map_or(parentname, |(s, _)| s);
@@ -489,7 +479,8 @@ impl RDFStore {
             .strip_suffix(&format!(".{language}"))
             .unwrap_or(parentname);
         let pathstr = parent.parent()?.to_str()?.strip_prefix(out.to_str()?)?;
-        let doc = ((a.owned() % pathstr).ok()? & (parentname, language)).ok()?;
+        let doc =
+            (a.clone() / pathstr.parse::<UriPath>().ok()?) & (parentname.parse().ok()?, language);
         Some(doc.to_iri())
     }
 }

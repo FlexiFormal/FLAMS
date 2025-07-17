@@ -6,21 +6,21 @@ pub mod source_files;
 use std::path::{Path, PathBuf};
 
 use either::Either;
+#[cfg(feature = "tokio")]
+use flams_ontology::uris::UriPath;
 use flams_ontology::{
     archive_json::{ArchiveIndex, Institution},
     content::modules::OpenModule,
     file_states::FileStateSummary,
     languages::Language,
     narration::documents::UncheckedDocument,
-    uris::{
-        ArchiveId, ArchiveUri, ArchiveUriRef, ArchiveUriTrait, DocumentUri, Name, NameStep,
-        PathURITrait, URIOrRefTrait, UriRefTrait,
-    },
+    uris::{ArchiveId, ArchiveUri, DocumentUri, FtmlUri, IsDomainUri, UriWithArchive, UriWithPath},
     DocumentRange, Unchecked,
 };
 use flams_utils::{
     change_listener::ChangeSender,
     prelude::{TreeChild, TreeLike},
+    unwrap,
     vecmap::{VecMap, VecSet},
     CSS,
 };
@@ -318,7 +318,7 @@ impl LocalArchive {
 
     #[inline]
     #[must_use]
-    pub fn uri(&self) -> ArchiveUriRef {
+    pub fn uri(&self) -> &ArchiveUri {
         self.data.uri.archive_uri()
     }
 
@@ -362,13 +362,12 @@ impl LocalArchive {
         );
     }
 
-    fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>> {
+    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Option<OpenModule<Unchecked>> {
         let out = path.map_or_else(
             || self.out_dir().join(".modules"),
             |n| {
                 n.steps()
-                    .iter()
-                    .fold(self.out_dir().to_path_buf(), |p, n| p.join(n.as_ref()))
+                    .fold(self.out_dir().to_path_buf(), |p, n| p.join(n))
                     .join(".modules")
             },
         );
@@ -420,8 +419,8 @@ impl LocalArchive {
 
     pub(super) fn get_filepath(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
         filename: &str,
     ) -> Option<PathBuf> {
@@ -429,11 +428,9 @@ impl LocalArchive {
             || self.out_dir().to_path_buf(),
             |n| {
                 n.steps()
-                    .iter()
-                    .fold(self.out_dir().to_path_buf(), |p, n| p.join(n.as_ref()))
+                    .fold(self.out_dir().to_path_buf(), |p, n| p.join(n))
             },
         );
-        let name = name.as_ref();
 
         for d in std::fs::read_dir(&out).ok()? {
             let Ok(dir) = d else { continue };
@@ -467,8 +464,8 @@ impl LocalArchive {
 
     fn load_document(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
     ) -> Option<UncheckedDocument> {
         self.get_filepath(path, name, language, "doc")
@@ -477,8 +474,8 @@ impl LocalArchive {
 
     pub fn load_html_body(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
         full: bool,
     ) -> Option<(Vec<CSS>, String)> {
@@ -489,8 +486,8 @@ impl LocalArchive {
     #[cfg(feature = "tokio")]
     pub fn load_html_body_async<'a>(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&'a UriPath>,
+        name: &'a str,
         language: Language,
         full: bool,
     ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
@@ -501,8 +498,8 @@ impl LocalArchive {
     #[cfg(feature = "tokio")]
     pub fn load_html_full_async<'a>(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&'a UriPath>,
+        name: &'a str,
         language: Language,
     ) -> Option<impl std::future::Future<Output = Option<String>> + 'a> {
         let p = self.get_filepath(path, name, language, "ftml")?;
@@ -511,8 +508,8 @@ impl LocalArchive {
 
     pub fn load_html_full(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
     ) -> Option<String> {
         let p = self.get_filepath(path, name, language, "ftml")?;
@@ -521,8 +518,8 @@ impl LocalArchive {
 
     pub fn load_html_fragment(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
@@ -531,8 +528,8 @@ impl LocalArchive {
     }
     pub fn load_reference<T: flams_ontology::Resourcable>(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
         range: DocumentRange,
     ) -> eyre::Result<T> {
@@ -545,8 +542,8 @@ impl LocalArchive {
     #[cfg(feature = "tokio")]
     pub fn load_html_fragment_async<'a>(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&'a UriPath>,
+        name: &'a str,
         language: Language,
         range: DocumentRange,
     ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
@@ -567,10 +564,8 @@ impl LocalArchive {
         }
     }
 
-    fn escape_module_name(in_path: &Path, name: &NameStep) -> PathBuf {
-        static REPLACER: flams_utils::escaping::Escaper<u8, 1> =
-            flams_utils::escaping::Escaper([(b'*', "__AST__")]);
-        in_path.join(REPLACER.escape(name).to_string())
+    fn escape_module_name(in_path: &Path, name: &str) -> PathBuf {
+        in_path.join(name.replace('*', "__AST__"))
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -628,20 +623,19 @@ impl LocalArchive {
 
         for m in modules {
             let path = m.uri.path();
-            let name = m.uri.name();
+            let name = m.uri.module_name();
             //let language = m.uri.language();
             let out = path.map_or_else(
                 || self.out_dir().join(".modules"),
                 |n| {
                     n.steps()
-                        .iter()
-                        .fold(self.out_dir().to_path_buf(), |p, n| p.join(n.as_ref()))
+                        .fold(self.out_dir().to_path_buf(), |p, n| p.join(n))
                         .join(".modules")
                 },
             );
             //.join(name.to_string());
             err!(std::fs::create_dir_all(&out));
-            let out = Self::escape_module_name(&out, name.first_name());
+            let out = Self::escape_module_name(&out, name.first());
             let file = err!(std::fs::File::create(&out));
             let mut buf = std::io::BufWriter::new(file);
             //er!(m.into_byte_stream(&mut buf));
@@ -754,7 +748,7 @@ impl Archive {
 
     #[inline]
     #[must_use]
-    pub fn uri(&self) -> ArchiveUriRef {
+    pub fn uri(&self) -> &ArchiveUri {
         self.data().uri.archive_uri()
     }
     #[inline]
@@ -783,8 +777,8 @@ impl Archive {
 
     pub fn load_html_body(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
         full: bool,
     ) -> Option<(Vec<CSS>, String)> {
@@ -796,8 +790,8 @@ impl Archive {
     #[cfg(feature = "tokio")]
     pub fn load_html_body_async<'a>(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&'a UriPath>,
+        name: &'a str,
         language: Language,
         full: bool,
     ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
@@ -808,8 +802,8 @@ impl Archive {
     #[cfg(feature = "tokio")]
     pub fn load_html_full_async<'a>(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&'a UriPath>,
+        name: &'a str,
         language: Language,
     ) -> Option<impl std::future::Future<Output = Option<String>> + 'a> {
         match self {
@@ -818,8 +812,8 @@ impl Archive {
     }
     pub fn load_html_full(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
     ) -> Option<String> {
         match self {
@@ -829,8 +823,8 @@ impl Archive {
 
     pub fn load_html_fragment(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
@@ -841,8 +835,8 @@ impl Archive {
 
     pub fn load_reference<T: flams_ontology::Resourcable>(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
         range: DocumentRange,
     ) -> eyre::Result<T> {
@@ -854,8 +848,8 @@ impl Archive {
     #[cfg(feature = "tokio")]
     pub fn load_html_fragment_async<'a>(
         &self,
-        path: Option<&'a Name>,
-        name: &'a NameStep,
+        path: Option<&'a UriPath>,
+        name: &'a str,
         language: Language,
         range: DocumentRange,
     ) -> Option<impl std::future::Future<Output = Option<(Vec<CSS>, String)>> + 'a> {
@@ -866,15 +860,15 @@ impl Archive {
 
     fn load_document(
         &self,
-        path: Option<&Name>,
-        name: &NameStep,
+        path: Option<&UriPath>,
+        name: &str,
         language: Language,
     ) -> Option<UncheckedDocument> {
         match self {
             Self::Local(a) => a.load_document(path, name, language),
         }
     }
-    fn load_module(&self, path: Option<&Name>, name: &NameStep) -> Option<OpenModule<Unchecked>> {
+    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Option<OpenModule<Unchecked>> {
         match self {
             Self::Local(a) => a.load_module(path, name),
         }
@@ -1049,7 +1043,7 @@ impl ArchiveTree {
                 let mut lock = old_new_f.lock();
                 let (old, new, f) = &mut *lock;
                 if old.remove_from_list(a.id()).is_none() {
-                    sender.lazy_send(|| BackendChange::NewArchive(UriRefTrait::owned(a.uri())));
+                    sender.lazy_send(|| BackendChange::NewArchive(a.uri().clone()));
                 }
                 new.insert(Archive::Local(a), f);
                 drop(lock);
@@ -1161,7 +1155,7 @@ impl ArchiveTree {
                         state.merge_all(a.file_state.read().state());
                     }
                     let g = ArchiveGroup {
-                        id: ArchiveId::new(&curr_name),
+                        id: unwrap!(ArchiveId::new(&curr_name).ok()),
                         children: Vec::new(),
                         state,
                     };

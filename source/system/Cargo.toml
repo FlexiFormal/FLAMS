@@ -24,6 +24,7 @@ tracing-subscriber = { workspace = true }
 flams-utils = { workspace = true, features = ["rayon", "async", "serde"] }
 flams-ontology = { workspace = true, features = ["rdf", "serde"] }
 flams-git = { workspace = true }
+ulo = { workspace = true}
 
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

@@ -32,9 +32,8 @@ use flams_ontology::{
         DocumentElement, LazyDocRef, NarrationTrait, NarrativeReference,
     },
     uris::{
-        ArchiveId, ArchiveUri, ArchiveUriTrait, BaseUri, DocumentElementUri, DocumentUri,
-        DomainUriTrait, ModuleUri, NameStep, PathURITrait, PathUriRef, SymbolUri, URIOrRefTrait,
-        URIWithLanguage, UriRefTrait,
+        ArchiveId, ArchiveUri, BaseUri, DocumentElementUri, DocumentUri, FtmlUri, IsDomainUri,
+        IsNarrativeUri, ModuleUri, NamedUri, PathUri, SymbolUri, UriWithArchive, UriWithPath,
     },
     Checked, DocumentRange, LocalBackend, Unchecked,
 };
@@ -88,7 +87,7 @@ pub trait Backend {
     where
         Self: Sized,
     {
-        let m = self.get_module(uri.module())?;
+        let m = self.get_module(uri.module_uri())?;
         // TODO this unnecessarily clones
         ContentReference::new(&m, uri.name())
     }
@@ -99,7 +98,7 @@ pub trait Backend {
     where
         Self: Sized,
     {
-        let d = self.get_document(uri.document())?;
+        let d = self.get_document(uri.document_uri())?;
         // TODO this unnecessarily clones
         NarrativeReference::new(&d, uri.name())
     }
@@ -120,7 +119,7 @@ pub trait Backend {
         #[cfg(not(windows))]
         const PREFIX: &str = "/source/";
         self.archive_of(p, |a: &LocalArchive, rp: &str| {
-            DocumentUri::from_archive_relpath(a.uri().owned(), rp.strip_prefix(PREFIX)?).ok()
+            DocumentUri::from_archive_relpath(a.uri().clone(), rp.strip_prefix(PREFIX)?).ok()
         })
         .flatten()
     }
@@ -210,12 +209,12 @@ pub trait Backend {
     where
         Self: Sized,
     {
-        use flams_ontology::rdf::ontologies::ulo2;
         use rdf::sparql::{Select, Var};
+        use ulo::ulo;
         let iri = uri.to_iri();
         let q = Select {
             subject: Var('n'),
-            pred: ulo2::NOTATION_FOR.into_owned(),
+            pred: ulo::notation_for.into_owned(),
             object: iri,
         };
         let ret: VecSet<_> = GlobalBackend::get()
@@ -245,47 +244,58 @@ pub trait Backend {
     where
         Self: Sized,
     {
-        let parent = uri.parent();
-        let parent = self.get_document_element::<DocumentElement<Checked>>(&parent)?;
-        let mut ch = parent.as_ref().children().iter();
-        let mut stack = Vec::new();
-        let mut ret = VecSet::new();
-        loop {
-            let Some(next) = ch.next() else {
-                if let Some(n) = stack.pop() {
-                    ch = n;
+        fn inner(
+            slf: &impl Backend,
+            uri: &DocumentElementUri,
+            children: &[DocumentElement<Checked>],
+        ) -> Option<VecSet<(DocumentElementUri, Notation)>> {
+            let mut ch = children.iter();
+            let mut stack = Vec::new();
+            let mut ret = VecSet::new();
+            loop {
+                let Some(next) = ch.next() else {
+                    if let Some(n) = stack.pop() {
+                        ch = n;
+                        continue;
+                    }
+                    break;
+                };
+                let (uri, not) = match next {
+                    DocumentElement::Module { children, .. }
+                    | DocumentElement::Section(Section { children, .. })
+                    | DocumentElement::Morphism { children, .. }
+                    | DocumentElement::MathStructure { children, .. }
+                    | DocumentElement::Extension { children, .. }
+                    | DocumentElement::Paragraph(LogicalParagraph { children, .. })
+                    | DocumentElement::Problem(Problem { children, .. }) => {
+                        let old = std::mem::replace(&mut ch, children.iter());
+                        stack.push(old);
+                        continue;
+                    }
+                    DocumentElement::VariableNotation {
+                        variable,
+                        id,
+                        notation,
+                    } if variable == uri => (id, notation),
+                    _ => continue,
+                };
+                let Some(r) = slf.get_reference(not).ok() else {
                     continue;
-                }
-                break;
-            };
-            let (uri, not) = match next {
-                DocumentElement::Module { children, .. }
-                | DocumentElement::Section(Section { children, .. })
-                | DocumentElement::Morphism { children, .. }
-                | DocumentElement::MathStructure { children, .. }
-                | DocumentElement::Extension { children, .. }
-                | DocumentElement::Paragraph(LogicalParagraph { children, .. })
-                | DocumentElement::Problem(Problem { children, .. }) => {
-                    let old = std::mem::replace(&mut ch, children.iter());
-                    stack.push(old);
-                    continue;
-                }
-                DocumentElement::VariableNotation {
-                    variable,
-                    id,
-                    notation,
-                } if variable == uri => (id, notation),
-                _ => continue,
-            };
-            let Some(r) = self.get_reference(not).ok() else {
-                continue;
-            };
-            ret.insert((uri.clone(), r));
+                };
+                ret.insert((uri.clone(), r));
+            }
+            if ret.is_empty() {
+                None
+            } else {
+                Some(ret)
+            }
         }
-        if ret.is_empty() {
-            None
+        if let Some(parent) = uri.parent() {
+            let parent = self.get_document_element::<DocumentElement<Checked>>(&parent)?;
+            inner(self, uri, parent.as_ref().children())
         } else {
-            Some(ret)
+            let parent = self.get_document(uri.document_uri())?;
+            inner(self, uri, NarrationTrait::children(&parent))
         }
     }
 
@@ -617,7 +627,7 @@ impl GlobalBackend {
     pub fn artifact_path(&self, uri: &DocumentUri, format: &str) -> Option<PathBuf> {
         let id = uri.archive_id();
         let language = uri.language();
-        let name = uri.name().first_name();
+        let name = uri.name().first();
         self.with_local_archive(id, |a| {
             a.and_then(|a| a.get_filepath(uri.path(), name, language, format))
         })
@@ -662,9 +672,7 @@ impl GlobalBackend {
         full: bool,
     ) -> Option<(Vec<CSS>, String)> {
         let f = self.manager().with_archive(d.archive_id(), move |a| {
-            a.map(move |a| {
-                a.load_html_body_async(d.path(), d.name().first_name(), d.language(), full)
-            })
+            a.map(move |a| a.load_html_body_async(d.path(), d.name().first(), d.language(), full))
         })??;
         f.await
     }
@@ -672,7 +680,7 @@ impl GlobalBackend {
     #[cfg(feature = "tokio")]
     pub async fn get_html_full_async(&self, d: &DocumentUri) -> Option<String> {
         let f = self.manager().with_archive(d.archive_id(), move |a| {
-            a.map(move |a| a.load_html_full_async(d.path(), d.name().first_name(), d.language()))
+            a.map(move |a| a.load_html_full_async(d.path(), d.name().first(), d.language()))
         })??;
         f.await
     }
@@ -685,7 +693,7 @@ impl GlobalBackend {
     ) -> Option<(Vec<CSS>, String)> {
         let f = self.manager().with_archive(d.archive_id(), move |a| {
             a.map(move |a| {
-                a.load_html_fragment_async(d.path(), d.name().first_name(), d.language(), range)
+                a.load_html_fragment_async(d.path(), d.name().first(), d.language(), range)
             })
         })??;
         f.await
@@ -721,7 +729,7 @@ impl GlobalBackend {
             let slf = Self::get();
             let mut cache = slf.cache.write();
             let mut flattener = GlobalFlattener(&mut cache, &slf.archives);
-            flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name())
+            flattener.load_document(uri.path_uri(), uri.language(), uri.name().first())
         })
         .await
         .ok()
@@ -751,7 +759,7 @@ impl GlobalBackend {
             let slf = Self::get();
             let mut cache = slf.cache.write();
             let mut flattener = GlobalFlattener(&mut cache, &slf.archives);
-            flattener.load_module(top.as_path(), top.name().first_name())
+            flattener.load_module(top.path_uri(), top.name().first())
         })
         .await
         .ok()??;
@@ -763,7 +771,9 @@ impl GlobalBackend {
         &self,
         uri: &SymbolUri,
     ) -> Option<ContentReference<T>> {
-        let m = self.get_module_async(uri.module()).await?;
+        use flams_ontology::uris::IsDomainUri;
+
+        let m = self.get_module_async(uri.module_uri()).await?;
         // TODO this unnecessarily clones
         ContentReference::new(&m, uri.name())
     }
@@ -773,7 +783,7 @@ impl GlobalBackend {
         &self,
         uri: &DocumentElementUri,
     ) -> Option<NarrativeReference<T>> {
-        let d = self.get_document_async(uri.document()).await?;
+        let d = self.get_document_async(uri.document_uri()).await?;
         // TODO this unnecessarily clones
         NarrativeReference::new(&d, uri.name())
     }
@@ -881,9 +891,7 @@ impl Backend for GlobalBackend {
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         self.archives.with_archive(d.archive_id(), |a| {
-            a.and_then(|a| {
-                a.load_html_fragment(d.path(), d.name().first_name(), d.language(), range)
-            })
+            a.and_then(|a| a.load_html_fragment(d.path(), d.name().first(), d.language(), range))
         })
     }
 
@@ -894,7 +902,7 @@ impl Backend for GlobalBackend {
             };
             a.load_reference(
                 rf.in_doc.path(),
-                rf.in_doc.name().first_name(),
+                rf.in_doc.name().first(),
                 rf.in_doc.language(),
                 DocumentRange {
                     start: rf.start,
@@ -914,14 +922,14 @@ impl Backend for GlobalBackend {
 
     fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)> {
         self.archives.with_archive(d.archive_id(), |a| {
-            a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(), full))
+            a.and_then(|a| a.load_html_body(d.path(), d.name().first(), d.language(), full))
         })
     }
 
     #[inline]
     fn get_html_full(&self, d: &DocumentUri) -> Option<String> {
         self.archives.with_archive(d.archive_id(), |a| {
-            a.and_then(|a| a.load_html_full(d.path(), d.name().first_name(), d.language()))
+            a.and_then(|a| a.load_html_full(d.path(), d.name().first(), d.language()))
         })
     }
 
@@ -966,7 +974,7 @@ impl Backend for GlobalBackend {
         }
         let mut cache = self.cache.write();
         let mut flattener = GlobalFlattener(&mut cache, &self.archives);
-        flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name())
+        flattener.load_document(uri.path_uri(), uri.language(), uri.name().first())
     }
 
     #[allow(clippy::significant_drop_tightening)]
@@ -987,7 +995,7 @@ impl Backend for GlobalBackend {
         let m = {
             let mut cache = self.cache.write();
             let mut flattener = GlobalFlattener(&mut cache, &self.archives);
-            flattener.load_module(uri.as_path(), uri.name().first_name())?
+            flattener.load_module(uri.path_uri(), uri.name().first())?
         };
         // TODO: this unnecessarily clones
         ModuleLike::in_module(&m, uri.name())
@@ -1488,9 +1496,7 @@ impl Backend for SandboxedBackend {
         range: DocumentRange,
     ) -> Option<(Vec<CSS>, String)> {
         self.with_archive(d.archive_id(), |a| {
-            a.and_then(|a| {
-                a.load_html_fragment(d.path(), d.name().first_name(), d.language(), range)
-            })
+            a.and_then(|a| a.load_html_fragment(d.path(), d.name().first(), d.language(), range))
         })
     }
     fn get_reference<T: flams_ontology::Resourcable>(&self, rf: &LazyDocRef<T>) -> eyre::Result<T> {
@@ -1500,7 +1506,7 @@ impl Backend for SandboxedBackend {
             };
             a.load_reference(
                 rf.in_doc.path(),
-                rf.in_doc.name().first_name(),
+                rf.in_doc.name().first(),
                 rf.in_doc.language(),
                 DocumentRange {
                     start: rf.start,
@@ -1523,14 +1529,14 @@ impl Backend for SandboxedBackend {
 
     fn get_html_body(&self, d: &DocumentUri, full: bool) -> Option<(Vec<CSS>, String)> {
         self.with_archive(d.archive_id(), |a| {
-            a.and_then(|a| a.load_html_body(d.path(), d.name().first_name(), d.language(), full))
+            a.and_then(|a| a.load_html_body(d.path(), d.name().first(), d.language(), full))
         })
     }
 
     #[inline]
     fn get_html_full(&self, d: &DocumentUri) -> Option<String> {
         self.with_archive(d.archive_id(), |a| {
-            a.and_then(|a| a.load_html_full(d.path(), d.name().first_name(), d.language()))
+            a.and_then(|a| a.load_html_full(d.path(), d.name().first(), d.language()))
         })
     }
 
@@ -1600,7 +1606,7 @@ impl Backend for SandboxedBackend {
         let mut cache = self.0.cache.write();
         let mut flattener =
             SandboxFlattener(&mut cache, &self.0.manager, &GlobalBackend::get().archives);
-        let r = flattener.load_document(uri.as_path(), uri.language(), uri.name().first_name());
+        let r = flattener.load_document(uri.path_uri(), uri.language(), uri.name().first());
         drop(cache);
         r
     }
@@ -1628,7 +1634,7 @@ impl Backend for SandboxedBackend {
             let mut cache = self.0.cache.write();
             let mut flattener =
                 SandboxFlattener(&mut cache, &self.0.manager, &GlobalBackend::get().archives);
-            flattener.load_module(uri.as_path(), uri.name().first_name())?
+            flattener.load_module(uri.path_uri(), uri.name().first())?
         };
         // TODO: this unnecessarily clones
         ModuleLike::in_module(&m, uri.name())
@@ -1673,9 +1679,9 @@ struct GlobalFlattener<'a>(&'a mut BackendCache, &'a ArchiveManager);
 impl GlobalFlattener<'_> {
     fn load_document(
         &mut self,
-        path: PathUriRef,
+        path: &PathUri,
         language: Language,
-        name: &NameStep,
+        name: &str,
     ) -> Option<Document> {
         //println!("Document {path}&d={name}&l={language}");
         let pre = self.1.load_document(path, language, name)?;
@@ -1684,7 +1690,7 @@ impl GlobalFlattener<'_> {
         self.0.insert_document(doc_file);
         Some(doc)
     }
-    fn load_module(&mut self, path: PathUriRef, name: &NameStep) -> Option<Module> {
+    fn load_module(&mut self, path: &PathUri, name: &str) -> Option<Module> {
         //println!("Module {path}&m={name}&l={language}");
         let pre = self.1.load_module(path, name)?;
         let module = pre.check(self);
@@ -1699,7 +1705,7 @@ impl LocalBackend for GlobalFlattener<'_> {
         if let Some(doc) = self.0.has_document(uri) {
             Some(doc.clone())
         } else {
-            self.load_document(uri.as_path(), uri.language(), uri.name().first_name())
+            self.load_document(uri.path_uri(), uri.language(), uri.name().first())
         }
     }
 
@@ -1714,7 +1720,7 @@ impl LocalBackend for GlobalFlattener<'_> {
                 return ModuleLike::in_module(m, uri.name());
             }
         }
-        let m = self.load_module(uri.as_path(), uri.name().first_name())?;
+        let m = self.load_module(uri.path_uri(), uri.name().first())?;
         // TODO this unnecessarily clones
         ModuleLike::in_module(&m, uri.name())
     }
@@ -1723,7 +1729,7 @@ impl LocalBackend for GlobalFlattener<'_> {
         &mut self,
         uri: &SymbolUri,
     ) -> Option<flams_ontology::content::ContentReference<T>> {
-        let m = self.get_module(uri.module())?;
+        let m = self.get_module(uri.module_uri())?;
         // TODO this unnecessarily clones
         ContentReference::new(&m, uri.name())
     }
@@ -1747,9 +1753,9 @@ struct SandboxFlattener<'a>(&'a mut BackendCache, &'a ArchiveManager, &'a Archiv
 impl SandboxFlattener<'_> {
     fn load_document(
         &mut self,
-        path: PathUriRef,
+        path: &PathUri,
         language: Language,
-        name: &NameStep,
+        name: &str,
     ) -> Option<Document> {
         let be = if self.1.with_archive(path.archive_id(), |a| a.is_some()) {
             self.1
@@ -1763,7 +1769,7 @@ impl SandboxFlattener<'_> {
         self.0.insert_document(doc_file);
         Some(doc)
     }
-    fn load_module(&mut self, path: PathUriRef, name: &NameStep) -> Option<Module> {
+    fn load_module(&mut self, path: &PathUri, name: &str) -> Option<Module> {
         let be = if self.1.with_archive(path.archive_id(), |a| a.is_some()) {
             self.1
         } else {
@@ -1783,7 +1789,7 @@ impl LocalBackend for SandboxFlattener<'_> {
         if let Some(doc) = self.0.has_document(uri) {
             Some(doc.clone())
         } else {
-            self.load_document(uri.as_path(), uri.language(), uri.name().first_name())
+            self.load_document(uri.path_uri(), uri.language(), uri.name().first())
         }
     }
 
@@ -1798,7 +1804,7 @@ impl LocalBackend for SandboxFlattener<'_> {
                 return ModuleLike::in_module(m, uri.name());
             }
         }
-        let m = self.load_module(uri.as_path(), uri.name().first_name())?;
+        let m = self.load_module(uri.path_uri(), uri.name().first())?;
         // TODO this unnecessarily clones
         ModuleLike::in_module(&m, uri.name())
     }
@@ -1807,7 +1813,7 @@ impl LocalBackend for SandboxFlattener<'_> {
         &mut self,
         uri: &SymbolUri,
     ) -> Option<flams_ontology::content::ContentReference<T>> {
-        let m = self.get_module(uri.module())?;
+        let m = self.get_module(uri.module_uri())?;
         // TODO this unnecessarily clones
         ContentReference::new(&m, uri.name())
     }
@@ -1860,12 +1866,12 @@ impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
     }
 
     fn load_notation(backend: &B, uri: &SymbolUri, needs_op: bool) -> Option<Notation> {
-        use flams_ontology::rdf::ontologies::ulo2;
         use rdf::sparql::{Select, Var};
+        use ulo::ulo;
         let iri = uri.to_iri();
         let q = Select {
             subject: Var('n'),
-            pred: ulo2::NOTATION_FOR.into_owned(),
+            pred: ulo::notation_for.into_owned(),
             object: iri,
         };
         let iter = GlobalBackend::get().triple_store().query(q.into()).ok()?;
@@ -1889,42 +1895,53 @@ impl<'a, W: std::fmt::Write, B: Backend> TermPresenter<'a, W, B> {
         uri: &DocumentElementUri,
         needs_op: bool,
     ) -> Option<Notation> {
-        let parent = uri.parent();
-        //println!("Looking for {uri} in {parent}");
-        let parent = backend.get_document_element::<DocumentElement<Checked>>(&parent)?;
-        let mut ch = parent.as_ref().children().iter();
-        let mut stack = Vec::new();
-        loop {
-            let Some(next) = ch.next() else {
-                if let Some(n) = stack.pop() {
-                    ch = n;
+        fn inner(
+            backend: &impl Backend,
+            uri: &DocumentElementUri,
+            needs_op: bool,
+            children: &[DocumentElement<Checked>],
+        ) -> Option<Notation> {
+            let mut ch = children.iter();
+            let mut stack = Vec::new();
+            loop {
+                let Some(next) = ch.next() else {
+                    if let Some(n) = stack.pop() {
+                        ch = n;
+                        continue;
+                    }
+                    return None;
+                };
+                let not = match next {
+                    DocumentElement::Module { children, .. }
+                    | DocumentElement::Section(Section { children, .. })
+                    | DocumentElement::Morphism { children, .. }
+                    | DocumentElement::MathStructure { children, .. }
+                    | DocumentElement::Extension { children, .. }
+                    | DocumentElement::Paragraph(LogicalParagraph { children, .. })
+                    | DocumentElement::Problem(Problem { children, .. }) => {
+                        let old = std::mem::replace(&mut ch, children.iter());
+                        stack.push(old);
+                        continue;
+                    }
+                    DocumentElement::VariableNotation {
+                        variable, notation, ..
+                    } if variable == uri => notation,
+                    _ => continue,
+                };
+                let Some(r) = backend.get_reference(not).ok() else {
                     continue;
+                };
+                if r.is_op() || !needs_op {
+                    return Some(r);
                 }
-                return None;
-            };
-            let not = match next {
-                DocumentElement::Module { children, .. }
-                | DocumentElement::Section(Section { children, .. })
-                | DocumentElement::Morphism { children, .. }
-                | DocumentElement::MathStructure { children, .. }
-                | DocumentElement::Extension { children, .. }
-                | DocumentElement::Paragraph(LogicalParagraph { children, .. })
-                | DocumentElement::Problem(Problem { children, .. }) => {
-                    let old = std::mem::replace(&mut ch, children.iter());
-                    stack.push(old);
-                    continue;
-                }
-                DocumentElement::VariableNotation {
-                    variable, notation, ..
-                } if variable == uri => notation,
-                _ => continue,
-            };
-            let Some(r) = backend.get_reference(not).ok() else {
-                continue;
-            };
-            if r.is_op() || !needs_op {
-                return Some(r);
             }
+        }
+        if let Some(parent) = uri.parent() {
+            let parent = backend.get_document_element::<DocumentElement<Checked>>(&parent)?;
+            inner(backend, uri, needs_op, parent.as_ref().children())
+        } else {
+            let parent = backend.get_document(uri.document_uri())?;
+            inner(backend, uri, needs_op, NarrationTrait::children(&parent))
         }
     }
 }
