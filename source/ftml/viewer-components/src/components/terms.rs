@@ -421,7 +421,7 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
                 //<OnClickModal slot>{do_onclick(s_click)}</OnClickModal>
                 //<div style="max-width:600px;">
                   {match s {
-                    VarOrSym::V(v) => EitherOf3::A(view!{<span>"Variable "{v.name().last_name().to_string()}</span>}),
+                    VarOrSym::V(v) => EitherOf3::A(do_var_hover(v)),
                     VarOrSym::S(ContentURI::Symbol(s)) => EitherOf3::B(crate::remote::get!(definition(s.clone()) = (css,s) => {
                       for c in css { do_css(c); }
                       Some(view!(
@@ -442,6 +442,21 @@ pub(super) fn do_comp<V: IntoView + 'static, const MATH: bool>(
     } else {
         Either::Right(children())
     }
+}
+
+fn do_var_hover(v: PreVar) -> impl IntoView {
+    #[cfg(feature = "omdoc")]
+    match v {
+        PreVar::Unresolved(n) => leptos::either::Either::Left(
+            view! {<span>"Variable "{n.last_name().to_string()}</span>},
+        ),
+        PreVar::Resolved(u) => {
+            let name = u.name().last_name().to_string();
+            leptos::either::Either::Right(super::omdoc::doc_elem_name(u, Some("variable"), name))
+        }
+    }
+    #[cfg(not(feature = "omdoc"))]
+    view! {<span>"Variable "{v.name().last_name().to_string()}</span>}
 }
 
 #[allow(clippy::too_many_lines)]
