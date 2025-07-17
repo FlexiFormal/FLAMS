@@ -9,9 +9,9 @@
         },
         "cargo": {
           "features": [
-            "ts",
-            "ws",
-            "docs",
+            //"ts",
+            //"ws",
+            //"docs",
             "ssr" //"hydrate" //
           ] // "all"
         }

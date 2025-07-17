@@ -80,7 +80,7 @@ impl ProjectTree {
                                 url: repo.url,
                                 id: repo.id,
                                 path: repo.path,
-                                name: id,
+                                name: id.clone(),
                                 default_branch: repo.default_branch,
                                 state: RwSignal::new(state),
                             }),

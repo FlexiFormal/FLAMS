@@ -29,6 +29,8 @@ hydrate = [
 docs-only = []
 
 [dependencies]
+ftml-uris = { workspace = true, features = ["leptos"] }
+
 flams-ontology = { workspace = true, features = ["serde"] }
 flams-utils = { workspace = true }
 ftml-viewer-components = { workspace = true }

@@ -84,7 +84,7 @@ pub fn Main() -> impl IntoView {
                         use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
                         let params = params.get();
                         if let Some(p) = params.get_str("uri") {
-                            let Ok(uri) = <flams_ontology::uris::URI as std::str::FromStr>::from_str(p) else {
+                            let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
                                 return Either::Right(view! { <Redirect path="/dashboard"/> })
                             };
                             Either::Left(DocumentOfTop(DocumentOfTopProps{uri}))

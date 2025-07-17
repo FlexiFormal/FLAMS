@@ -20,6 +20,7 @@ name = "flams"
 [features]
 docs = []
 ssr = [
+    "ftml-uris/leptos",
     "dep:flams-system",
     "dep:flams-stex",
     "dep:flams-ftml",
@@ -82,6 +83,8 @@ hydrate = [
 workspace = true
 
 [dependencies]
+ftml-uris = { workspace = true }
+
 flams-router-dashboard = { workspace = true }
 flams-router-base = { workspace = true }
 flams-web-utils = { workspace = true }

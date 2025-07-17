@@ -32,6 +32,8 @@ hydrate = [
 docs-only = []
 
 [dependencies]
+ftml-uris = { workspace = true, features = ["leptos"] }
+
 flams-database = { workspace = true }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }
 flams-web-utils = { workspace = true }

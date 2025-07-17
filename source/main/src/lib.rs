@@ -21,27 +21,27 @@ pub(crate) mod fns {
     use flams_ontology::{
         languages::Language,
         narration::{notations::Notation, LOKind},
-        uris::{ArchiveId, DocumentElementUri, DocumentUri, SymbolUri, URI},
+        uris::{ArchiveId, DocumentElementUri, DocumentUri, SymbolUri, Uri},
     };
     use flams_utils::CSS;
     use ftml_viewer_components::components::{omdoc::OMDoc, TOCElem};
     use leptos::prelude::ServerFnError;
 
     fn fragment(
-        uri: Option<URI>,
+        uri: Option<Uri>,
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
-        l: Option<Language>,
         d: Option<String>,
-        e: Option<String>,
         m: Option<String>,
+        l: Option<Language>,
+        e: Option<String>,
         s: Option<String>,
-        context: Option<URI>,
-    ) -> Pin<Box<dyn Future<Output = Result<(URI, Vec<CSS>, String), ServerFnError<String>>> + Send>>
+        context: Option<Uri>,
+    ) -> Pin<Box<dyn Future<Output = Result<(Uri, Vec<CSS>, String), ServerFnError<String>>> + Send>>
     {
         Box::pin(flams_router_dashboard::server_fns::content::fragment(
-            uri, rp, a, p, l, d, e, m, s, context,
+            uri, rp, a, p, d, m, l, e, s, context,
         ))
     }
     fn full_doc(
@@ -49,8 +49,8 @@ pub(crate) mod fns {
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
-        l: Option<Language>,
         d: Option<String>,
+        l: Option<Language>,
     ) -> Pin<
         Box<
             dyn Future<Output = Result<(DocumentUri, Vec<CSS>, String), ServerFnError<String>>>
@@ -58,7 +58,7 @@ pub(crate) mod fns {
         >,
     > {
         Box::pin(flams_router_dashboard::server_fns::content::document(
-            uri, rp, a, p, l, d,
+            uri, rp, a, p, d, l,
         ))
     }
     fn toc(
@@ -66,12 +66,12 @@ pub(crate) mod fns {
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
-        l: Option<Language>,
         d: Option<String>,
+        l: Option<Language>,
     ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, Vec<TOCElem>), ServerFnError<String>>> + Send>>
     {
         Box::pin(flams_router_dashboard::server_fns::content::toc(
-            uri, rp, a, p, l, d,
+            uri, rp, a, p, d, l,
         ))
     }
     fn los(
@@ -92,30 +92,30 @@ pub(crate) mod fns {
         ))
     }
     fn omdoc(
-        uri: Option<URI>,
+        uri: Option<Uri>,
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
-        l: Option<Language>,
         d: Option<String>,
-        e: Option<String>,
         m: Option<String>,
+        l: Option<Language>,
+        e: Option<String>,
         s: Option<String>,
     ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, OMDoc), ServerFnError<String>>> + Send>>
     {
         Box::pin(flams_router_dashboard::server_fns::content::omdoc(
-            uri, rp, a, p, l, d, e, m, s,
+            uri, rp, a, p, d, m, l, e, s,
         ))
     }
     fn notations(
-        uri: Option<URI>,
+        uri: Option<Uri>,
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
-        l: Option<Language>,
         d: Option<String>,
-        e: Option<String>,
         m: Option<String>,
+        l: Option<Language>,
+        e: Option<String>,
         s: Option<String>,
     ) -> Pin<
         Box<
@@ -124,22 +124,22 @@ pub(crate) mod fns {
         >,
     > {
         Box::pin(flams_router_dashboard::server_fns::content::notations(
-            uri, rp, a, p, l, d, e, m, s,
+            uri, rp, a, p, d, m, l, e, s,
         ))
     }
     fn solutions(
-        uri: Option<URI>,
+        uri: Option<Uri>,
         rp: Option<String>,
         a: Option<ArchiveId>,
         p: Option<String>,
-        l: Option<Language>,
         d: Option<String>,
+        m: Option<String>,
+        l: Option<Language>,
         e: Option<String>,
-        _m: Option<String>,
-        _s: Option<String>,
+        s: Option<String>,
     ) -> Pin<Box<dyn Future<Output = Result<String, ServerFnError<String>>> + Send>> {
         Box::pin(flams_router_dashboard::server_fns::content::solution(
-            uri, rp, a, p, l, d, e,
+            uri, rp, a, p, d, m, l, e, s,
         ))
     }
     pub(super) fn init() {

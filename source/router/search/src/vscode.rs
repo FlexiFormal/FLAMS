@@ -3,18 +3,18 @@ use std::fmt::Write;
 use crate::components::SearchState;
 use flams_ontology::{
     search::{QueryFilter, SearchResult, SearchResultKind},
-    uris::{
-        ArchiveId, ArchiveUriTrait, DocumentElementUri, DocumentUri, DomainUriTrait, NarrativeUri,
-        PathURITrait, SymbolUri, URI,
-    },
+    uris::{ArchiveId, DocumentElementUri, DocumentUri, NarrativeUri, SymbolUri, Uri},
 };
-use flams_router_base::uris::{URIComponents, URIComponentsTrait};
 use flams_router_vscode::{
     VSCode,
     components::{VSCodeButton, VSCodeCheckbox, VSCodeRadio, VSCodeRadioGroup, VSCodeTextbox},
 };
 use flams_utils::{impossible, unwrap};
 use flams_web_utils::{components::wait_and_then_fn, do_css, inject_css};
+use ftml_uris::{
+    IsDomainUri, IsNarrativeUri, UriWithArchive, UriWithPath,
+    components::{UriComponents, UriComponentsTrait},
+};
 use ftml_viewer_components::components::omdoc::{comma_sep, doc_name, symbol_name};
 use leptos::prelude::*;
 
@@ -24,7 +24,7 @@ pub fn VSCodeSearch() -> impl IntoView {
     use flams_web_utils::components::Themer;
     use ftml_viewer_components::FTMLGlobalSetup;
 
-    let remote = || leptos_router::hooks::use_query_map().with(|q| q.get_string("remote"));
+    let remote = || leptos_router::hooks::use_query_map().with(|q| q.get("remote"));
 
     let selected_radio = RwSignal::new(Some("doc".to_string()));
     let disabled =
@@ -220,12 +220,12 @@ struct Usemodule {
 }
 impl Usemodule {
     fn make(uri: &SymbolUri) -> Self {
-        let module = uri.module();
+        let module = uri.module_uri();
         let archive = module.archive_id().clone();
         let path = if let Some(p) = module.path() {
-            format!("{p}?{}", module.name().first_name())
+            format!("{p}?{}", module.module_name().first())
         } else {
-            module.name().first_name().to_string()
+            module.module_name().first().to_string()
         };
         Self {
             kind: "usemodule",
@@ -258,7 +258,7 @@ impl std::fmt::Display for Short<'_> {
             p.fmt(f)?;
             f.write_char('?')?;
         }
-        write!(f, "{}}} {}", self.0.module().name(), self.0.name())
+        write!(f, "{}}} {}", self.0.module_name(), self.0.name())
     }
 }
 
@@ -326,7 +326,7 @@ fn do_sym_result_remote(
 
 fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
     use thaw::Scrollbar;
-    let name = doc_name(&uri, uri.name().to_string());
+    let name = doc_name(&uri, uri.document_name().to_string());
     view! {
         <div class="flams-search-block">
             <div><b>"Document "{name}</b>
@@ -393,7 +393,7 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                     wait_and_then_fn(
                         move || {
                             flams_router_content::server_fns::Fragment {
-                                uri: Some(URI::Narrative(uri.clone())),
+                                uri: Some(uri.clone().into()),
                                 rp: None,
                                 a: None,
                                 p: None,
@@ -407,7 +407,7 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                             .call_remote(remote.clone())
                         },
                         move |(uri, css, html)| {
-                            let uri = if let URI::Narrative(NarrativeUri::Element(uri)) = uri {
+                            let uri = if let Uri::DocumentElement(uri) = uri {
                                 Some(uri)
                             } else {
                                 None
@@ -425,7 +425,7 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                 }
             })
         } else {
-            Either::Right(view!(<Fragment uri=URIComponents::Uri(URI::Narrative(uri)) />))
+            Either::Right(view!(<Fragment uri=UriComponents::Full(uri.into()) />))
         }
     }
 }

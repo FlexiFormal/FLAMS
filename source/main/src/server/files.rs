@@ -11,6 +11,10 @@ use flams_system::{
     settings::Settings,
 };
 use flams_utils::time::Timestamp;
+use ftml_uris::{
+    components::{DocumentUriComponentTuple, DocumentUriComponents},
+    IsNarrativeUri,
+};
 use http::Request;
 use leptos_router::location::LocationProvider;
 use tower::ServiceExt;
@@ -154,9 +158,21 @@ pub(crate) async fn doc_handler(
     let l: Option<Language> = parse!("l");
     let d = params.get("d");
 
-    let comps: Result<DocURIComponents, _> = (uri, rp, a, p, l, d).try_into();
+    let comps = DocumentUriComponentTuple {
+        uri,
+        rp,
+        a,
+        p,
+        d,
+        l,
+    };
+
+    let comps: Result<DocumentUriComponents, _> = comps.try_into();
     let uri = if let Ok(comps) = comps {
-        let Some(uri) = comps.parse() else {
+        let Ok(uri) = comps.parse(|a| {
+            flams_system::backend::GlobalBackend::get()
+                .with_archive(a, |a| a.map(|a| a.uri().clone()))
+        }) else {
             return err("Malformed URI components");
         };
         uri
@@ -167,7 +183,7 @@ pub(crate) async fn doc_handler(
         return default();
     };
 
-    let pandq = format!("/{}.{format}", uri.name().first_name());
+    let pandq = format!("/{}.{format}", uri.document_name());
     let mime = mime_guess::from_ext(&format).first_or_octet_stream();
     let req_uri = http::Uri::builder()
         .path_and_query(pandq)

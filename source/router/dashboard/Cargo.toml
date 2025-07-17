@@ -50,6 +50,8 @@ hydrate = [
 docs-only = []
 
 [dependencies]
+ftml-uris = { workspace = true }
+
 flams-utils = { workspace = true }
 flams-ontology = { workspace = true }
 flams-web-utils = { workspace = true }

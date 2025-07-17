@@ -1,11 +1,23 @@
 use flams_ontology::{
     languages::Language,
     uris::{
-        ArchiveId, ArchiveUri, DocumentElementUri, DocumentUri, ModuleUri, PathURI, SymbolUri, URI,
+        ArchiveId, ArchiveUri, DocumentElementUri, DocumentUri, ModuleUri, PathUri, SymbolUri, Uri,
     },
 };
 use std::str::FromStr;
 
+pub use ftml_uris::components::{
+    DocumentUriComponents as DocURIComponents, UriComponents as URIComponents,
+    UriComponentsTrait as URIComponentsTrait,
+};
+
+#[cfg(feature = "ssr")]
+pub fn get_uri(a: &ArchiveId) -> Option<ArchiveUri> {
+    use flams_system::backend::Backend;
+    flams_system::backend::GlobalBackend::get().with_archive(a, |a| a.map(|a| a.uri().clone()))
+}
+
+/*
 macro_rules! charstr {
     ($c:ident) => {
         const_str::concat!($c::SEPARATOR)
@@ -384,6 +396,7 @@ impl
     }
 }
 
+pub use
 pub trait URIComponentsTrait {
     fn get(&self, key: &str) -> Option<&str>;
     fn get_string(&self, key: &str) -> Option<String>;
@@ -706,3 +719,4 @@ mod ssr {
 
 #[cfg(feature = "ssr")]
 pub use ssr::*;
+ */

@@ -6,6 +6,7 @@ use flams_ontology::narration::{
 };
 use flams_system::backend::Backend;
 use flams_utils::{CSS, unwrap, vecmap::VecSet};
+use ftml_uris::IsNarrativeUri;
 use ftml_viewer_components::components::TOCElem;
 
 pub async fn from_document(doc: &Document) -> (Vec<CSS>, Vec<TOCElem>) {
@@ -32,7 +33,9 @@ pub async fn from_document(doc: &Document) -> (Vec<CSS>, Vec<TOCElem>) {
                 }) => {
                     let old = std::mem::replace(&mut curr, children.iter());
                     let title = if let Some(title) = title {
-                        if let Some((c, h)) = backend!(!get_html_fragment(uri.document(), *title)) {
+                        if let Some((c, h)) =
+                            backend!(!get_html_fragment(uri.document_uri(), *title))
+                        {
                             for c in c {
                                 css.insert(c);
                             }
@@ -53,9 +56,9 @@ pub async fn from_document(doc: &Document) -> (Vec<CSS>, Vec<TOCElem>) {
                         }),
                     ));
                     prefix = if prefix.is_empty() {
-                        uri.name().last_name().to_string()
+                        uri.name().last().to_string()
                     } else {
-                        format!("{prefix}/{}", uri.name().last_name())
+                        format!("{prefix}/{}", uri.name().last())
                     };
                 }
                 DocumentElement::DocumentReference { id, target, .. } if target.is_resolved() => {
@@ -73,9 +76,9 @@ pub async fn from_document(doc: &Document) -> (Vec<CSS>, Vec<TOCElem>) {
                         }),
                     ));
                     prefix = if prefix.is_empty() {
-                        id.name().last_name().to_string()
+                        id.name().last().to_string()
                     } else {
-                        format!("{prefix}/{}", id.name().last_name())
+                        format!("{prefix}/{}", id.name().last())
                     };
                 }
                 DocumentElement::Paragraph(p) => {

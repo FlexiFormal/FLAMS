@@ -1,10 +1,13 @@
 use flams_ontology::{
     search::{QueryFilter, SearchResult, SearchResultKind},
-    uris::{DocumentElementUri, DocumentUri, SymbolUri, URI},
+    uris::{DocumentElementUri, DocumentUri, SymbolUri, Uri},
 };
-use flams_router_base::uris::{DocURIComponents, URIComponents};
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::{components::error_with_toaster, inject_css};
+use ftml_uris::{
+    IsNarrativeUri,
+    components::{DocumentUriComponents, UriComponents},
+};
 use leptos::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -242,7 +245,7 @@ fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> impl IntoVie
                     view!{
                         //<span>"Here: "{uri.to_string()}</span>
                         //<div>"---"</div>
-                        <Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) />
+                        <Fragment uri=UriComponents::Full(uri.into()) />
                         //<div>"---"</div>
                     }
                   }).collect_view()
@@ -269,7 +272,7 @@ fn do_doc(score: f32, uri: DocumentUri) -> impl IntoView {
     use flams_router_content::components::DocumentInner;
     use ftml_viewer_components::components::omdoc::doc_name;
     use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
-    let name = doc_name(&uri, uri.name().to_string());
+    let name = doc_name(&uri, uri.document_name().to_string());
     view! {
       <Card>
           <CardHeader>
@@ -286,7 +289,7 @@ fn do_doc(score: f32, uri: DocumentUri) -> impl IntoView {
           <CardPreview>
               <div style="padding:0 5px;max-width:100%">
                 <div style="width:100%;color:black;background-color:white;">
-                    <Scrollbar style="max-height: 100px;;width:100%;max-width:100%;"><DocumentInner doc=DocURIComponents::Uri(uri) /></Scrollbar>
+                    <Scrollbar style="max-height: 100px;;width:100%;max-width:100%;"><DocumentInner doc=DocumentUriComponents::Full(uri) /></Scrollbar>
                 </div>
               </div>
           </CardPreview>
@@ -338,7 +341,7 @@ fn do_para(
           <CardPreview>
             <div style="padding:0 5px;max-width:100%">
               <div style="width:100%;color:black;background-color:white;">
-                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) /></Scrollbar>
+                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=UriComponents::Full(uri.into()) /></Scrollbar>
               </div>
             </div>
           </CardPreview>

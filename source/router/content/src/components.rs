@@ -1,7 +1,10 @@
 #![allow(clippy::must_use_candidate)]
-use flams_ontology::uris::{NarrativeUri, URI};
-use flams_router_base::uris::{DocURIComponents, URIComponents, URIComponentsTrait};
+use flams_ontology::uris::{NarrativeUri, Uri};
 use flams_web_utils::{components::wait_and_then_fn, do_css};
+use ftml_uris::components::{
+    DocumentUriComponentTuple, DocumentUriComponents, UriComponentTuple, UriComponents,
+    UriComponentsTrait,
+};
 use ftml_viewer_components::components::{
     TOCSource,
     documents::{DocumentString, FragmentString, FragmentStringProps},
@@ -47,14 +50,12 @@ pub fn URITop() -> impl IntoView {
       <Themer><FTMLGlobalSetup>//<Login>
       <Scrollbar style="width:100vw;max-height:100vh;">
         <div style="min-height:100vh;color:black;width:min-content">{
-          use_query_map().with_untracked(|m| m.as_doc().map_or_else(
-            || {
-              let Some(uri) = m.as_comps() else {
-                return Either::C(flams_web_utils::components::display_error("Invalid URI".into()));
-              };
-              Either::B(view!(<Fragment uri/>))
+          use_query_map().with_untracked(|m| m.as_document().map_or_else(
+            |_| match m.as_comps() {
+                Ok(uri) => Either::B(view!(<Fragment uri=uri.into()/>)),
+                Err(e) => Either::C(flams_web_utils::components::display_error(format!("Invalid URI: {e}").into()))
             },
-            |doc| Either::A(view!(<Document doc/>))
+            |doc| Either::A(view!(<Document doc=doc.into()/>))
           ))
         }</div>
       </Scrollbar>//</Login>
@@ -63,7 +64,7 @@ pub fn URITop() -> impl IntoView {
 }
 
 #[component]
-pub fn DocumentOfTop(uri: URI) -> impl IntoView {
+pub fn DocumentOfTop(uri: Uri) -> impl IntoView {
     use leptos_router::components::Redirect;
     wait_and_then_fn(
         move || super::server_fns::document_of(uri.clone()),
@@ -72,15 +73,15 @@ pub fn DocumentOfTop(uri: URI) -> impl IntoView {
 }
 
 #[component]
-pub fn Fragment(uri: URIComponents) -> impl IntoView {
+pub fn Fragment(uri: UriComponents) -> impl IntoView {
     wait_and_then_fn(
-        move || uri.clone().into_args(super::server_fns::fragment),
+        move || UriComponentTuple::from(uri.clone()).apply1(super::server_fns::fragment, None),
         move |(uri, css, html)| {
             for css in css {
                 do_css(css);
             }
             //leptos::logging::log!("Here 2: {html}");
-            if let URI::Narrative(NarrativeUri::Element(uri)) = uri {
+            if let Uri::DocumentElement(uri) = uri {
                 leptos::either::Either::Left(view! {
                     //<pre>"Here: "{html.clone()}</pre>
                     <div><FragmentString html uri/></div>
@@ -98,9 +99,9 @@ pub fn Fragment(uri: URIComponents) -> impl IntoView {
 }
 
 #[component]
-pub fn Document(doc: DocURIComponents) -> impl IntoView {
+pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
     wait_and_then_fn(
-        move || doc.clone().into_args(super::server_fns::document),
+        move || DocumentUriComponentTuple::from(doc.clone()).apply(super::server_fns::document),
         |(uri, css, html)| {
             for css in css {
                 do_css(css);
@@ -113,10 +114,10 @@ pub fn Document(doc: DocURIComponents) -> impl IntoView {
 }
 
 #[component]
-pub fn DocumentInner(doc: DocURIComponents) -> impl IntoView {
-    let doc: URIComponents = doc.into();
+pub fn DocumentInner(doc: DocumentUriComponents) -> impl IntoView {
+    let doc: UriComponents = doc.into();
     wait_and_then_fn(
-        move || doc.clone().into_args(super::server_fns::fragment),
+        move || UriComponentTuple::from(doc.clone()).apply1(super::server_fns::fragment, None),
         |(_, css, html)| {
             view! {<div>{
                 for css in css { do_css(css); }

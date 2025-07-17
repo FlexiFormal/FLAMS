@@ -54,10 +54,10 @@ macro_rules! server_fun{
         fn($($ty),*) -> server_fun_ret!($ret)
     };
     (@URI$(,$ty:ty)* => $ret:ty) => {
-        server_fun!(Option<Uri>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String>,Option<String>,Option<String>,Option<String> $(,$ty)* => $ret)
+        server_fun!(Option<Uri>,Option<String>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>,Option<Language>,Option<String>,Option<String> $(,$ty)* => $ret)
     };
     (@DOCURI$(,$ty:ty)* => $ret:ty) => {
-        server_fun!(Option<DocumentUri>,Option<String>,Option<ArchiveId>,Option<String>,Option<Language>,Option<String> $(,$ty)* => $ret)
+        server_fun!(Option<DocumentUri>,Option<String>,Option<ArchiveId>,Option<String>,Option<String>,Option<Language> $(,$ty)* => $ret)
     };
     (@SYMURI$(,$ty:ty)* => $ret:ty) => {
         server_fun!(Option<SymbolUri>,Option<ArchiveId>,Option<String>,Option<String>,Option<String>  $(,$ty)* => $ret)
@@ -102,9 +102,9 @@ type URIArgs = (
     Option<String>,
     Option<ArchiveId>,
     Option<String>,
+    Option<String>,
+    Option<String>,
     Option<Language>,
-    Option<String>,
-    Option<String>,
     Option<String>,
     Option<String>,
 );
@@ -117,9 +117,9 @@ type URIArgsWithContext = (
     Option<String>,
     Option<ArchiveId>,
     Option<String>,
+    Option<String>,
+    Option<String>,
     Option<Language>,
-    Option<String>,
-    Option<String>,
     Option<String>,
     Option<String>,
     Option<Uri>,
@@ -167,8 +167,8 @@ type DocURIArgs = (
     Option<String>,
     Option<ArchiveId>,
     Option<String>,
-    Option<Language>,
     Option<String>,
+    Option<Language>,
 );
 #[allow(clippy::use_self)]
 impl ServerFunArgs for DocURIArgs {

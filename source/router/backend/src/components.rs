@@ -174,8 +174,10 @@ fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
 
     let link = format!("/?a={archive}&rp={}", f.rel_path);
     let button = format!("[{archive}]/{}", f.rel_path);
-    let comps =
-        flams_router_base::uris::DocURIComponents::RelPath(archive.clone(), f.rel_path.clone());
+    let comps = ftml_uris::components::DocumentUriComponents::RelPath {
+        a: archive.clone(),
+        rp: f.rel_path.clone(),
+    };
 
     let pathstr = unwrap!(f.rel_path.split('/').last()).to_string();
     let header = view!(
