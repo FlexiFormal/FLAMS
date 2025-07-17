@@ -3,12 +3,12 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(unused_variables)]
 
-use std::{borrow::Cow, path::Path, str::FromStr};
+use std::{borrow::Cow, path::Path};
 
 use flams_ontology::{
     languages::Language,
     narration::paragraphs::ParagraphKind,
-    uris::{ArchiveId, ArchiveUriTrait, ModuleUri, Name, PathURITrait, SymbolUri, UriRefTrait},
+    uris::{ArchiveId, ModuleUri, SymbolUri, UriName, UriWithArchive},
 };
 use flams_system::backend::{Backend, GlobalBackend};
 use flams_utils::{
@@ -29,6 +29,7 @@ use crate::{
             Environment, KeyValKind, LaTeXParser, Macro, ParsedKeyValue,
         },
         stex::structs::MorphismKind,
+        tokenizer::TeXTokenizer,
     },
     tex,
 };
@@ -282,8 +283,34 @@ macro_rules! stex {
   };
 }
 
+fn parse_id<
+    'a,
+    P: SourcePos,
+    Pa: ParseSource<'a, Pos = P>,
+    E: FnMut(String, SourceRange<P>, DiagnosticLevel),
+>(
+    id: &str,
+    pos: P,
+    tkn: &mut TeXTokenizer<'a, Pa, E>,
+) -> Option<ArchiveId> {
+    match ArchiveId::new(id) {
+        Ok(id) => Some(id),
+        Err(e) => {
+            tkn.problem(
+                pos,
+                format_args!("Invalid Archive Id {id}: {e}"),
+                DiagnosticLevel::Error,
+            );
+            None
+        }
+    }
+}
+
 stex!(LSP: p => importmodule[archive:str]{module:name} => {
-  let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (Some(ArchiveId::new(a)),Some(r)));
+  let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (
+      parse_id(a,importmodule.range.start,&mut p.tokenizer),
+      Some(r)
+  ));
   if let Some(r) = p.state.resolve_module(module.0, archive) {
     let path = p.state.in_path.as_ref().unwrap();
     let (state,groups) = p.split();
@@ -299,7 +326,11 @@ stex!(LSP: p => importmodule[archive:str]{module:name} => {
 });
 
 stex!(p => importmodule_deps[archive:str]{module:name} => {
-    let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (Some(ArchiveId::new(a)),Some(r)));
+    let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (
+        parse_id(a,importmodule_deps.range.start,&mut p.tokenizer),
+        Some(r)
+    ));
+
     if let Some(r) = p.state.resolve_module(module.0, archive) {
       MacroResult::Success(STeXToken::ImportModule {
         archive_range, path_range:module.1,module:r,
@@ -312,7 +343,10 @@ stex!(p => importmodule_deps[archive:str]{module:name} => {
 });
 
 stex!(LSP:p => usemodule[archive:str]{module:name} => {
-      let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (Some(ArchiveId::new(a)),Some(r)));
+    let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (
+        parse_id(a,usemodule.range.start,&mut p.tokenizer),
+        Some(r)
+    ));
       if let Some(r) = p.state.resolve_module(module.0, archive) {
         let (state,groups) = p.split();
         state.add_use(&r, groups,usemodule.range);
@@ -342,7 +376,10 @@ stex!(LSP:p => usestructure{exts:!name} => {
 );
 
 stex!(p => usemodule_deps[archive:str]{module:name} => {
-      let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (Some(ArchiveId::new(a)),Some(r)));
+    let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (
+        parse_id(a,usemodule_deps.range.start,&mut p.tokenizer),
+        Some(r)
+    ));
       if let Some(r) = p.state.resolve_module(module.0, archive) {
         MacroResult::Success(STeXToken::UseModule {
           archive_range, path_range:module.1,module:r,
@@ -356,7 +393,10 @@ stex!(p => usemodule_deps[archive:str]{module:name} => {
 );
 
 stex!(p => setmetatheory[archive:str]{module:name} => {
-      let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (Some(ArchiveId::new(a)),Some(r)));
+    let (archive,archive_range) = archive.map_or((None,None),|(a,r)| (
+        parse_id(a,setmetatheory.range.start,&mut p.tokenizer),
+        Some(r)
+    ));
       if let Some(r) = p.state.resolve_module(module.0, archive) {
         MacroResult::Success(STeXToken::SetMetatheory {
           archive_range, path_range:module.1,module:r,
@@ -374,7 +414,9 @@ stex!(p => stexstyledefinition[_]{_}{_}!);
 stex!(p => stexstyleparagraph[_]{_}{_}!);
 
 stex!(p => inputref('*'?_s)[archive:str]{filepath:name} => {
-      let archive = archive.map(|(s,p)| (ArchiveId::new(s),p));
+    let archive = archive.and_then(|(a,r)|
+        parse_id(a,inputref.range.start,&mut p.tokenizer).map(|a| (a,r))
+    );
       let rel_path: std::sync::Arc<str> = if filepath.0.ends_with(".tex") {
         filepath.0.into()
       } else {
@@ -405,7 +447,9 @@ stex!(p => inputref('*'?_s)[archive:str]{filepath:name} => {
 );
 
 stex!(p => mhinput[archive:str]{filepath:name} => {
-      let archive = archive.map(|(s,p)| (ArchiveId::new(s),p));
+    let archive = archive.and_then(|(a,r)|
+        parse_id(a,mhinput.range.start,&mut p.tokenizer).map(|a| (a,r))
+    );
       let rel_path: std::sync::Arc<str> = if filepath.0.ends_with(".tex") {
         filepath.0.into()
       } else {
@@ -805,7 +849,9 @@ optargtype! {parser =>
 stex!(p => includeproblem[args:type IncludeProblemArg<Pos>]{filepath:name} => {
     let args = args.unwrap_or_default();
       let archive = args.iter().find_map(|p| if let IncludeProblemArg::Archive(a) = p {Some(a)} else {None})
-          .map(|p| (ArchiveId::new(&p.val),p.val_range));
+          .and_then(|pair|
+          parse_id(&pair.val,pair.key_range.start,&mut p.tokenizer).map(|a| (a,pair.val_range))
+          );
       let rel_path: std::sync::Arc<str> = if filepath.0.ends_with(".tex") {
         filepath.0.into()
       } else {
@@ -887,7 +933,9 @@ stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
         p.tokenizer.problem(mhgraphics.token_range.start,"No `width` or `height` attribute in image. It is strongly encouraged to provide one of them.",DiagnosticLevel::Warning)
     }
       let archive = args.iter().find_map(|p| if let MHGraphicsArg::Archive(a) = p {Some(a)} else {None})
-          .map(|p| (ArchiveId::new(&p.val),p.val_range));
+          .and_then(|pair|
+          parse_id(&pair.val,pair.key_range.start,&mut p.tokenizer).map(|a| (a,pair.val_range))
+          );
       let mut rel_path = filepath.0.to_string();
       {
           if let Some(id) = archive.as_ref().map_or_else(||
@@ -947,7 +995,7 @@ stex!(p => symdecl('*'?star){name:!name}[args:type SymdeclArg<Pos,STeXToken<Pos>
     }}
 
     let (state,mut groups) = p.split();
-    let Ok(fname) : Result<Name,_> = name.0.parse() else {
+    let Ok(fname) : Result<UriName,_> = name.0.parse() else {
       p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.0),DiagnosticLevel::Error);
       return MacroResult::Simple(symdecl)
     };
@@ -993,7 +1041,7 @@ stex!(p => textsymdecl{name:name}[args:type TextSymdeclArg<Pos,STeXToken<Pos>>] 
   }}
 
   let (state,mut groups) = p.split();
-  let Ok(fname) : Result<Name,_> = name.0.parse() else {
+  let Ok(fname) : Result<UriName,_> = name.0.parse() else {
     p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(textsymdecl)
   };
@@ -1074,7 +1122,7 @@ stex!(p => symdef{name:!name}[args:type SymdefArg<Pos,STeXToken<Pos>>] => {
   }}
 
   let (state,mut groups) = p.split();
-  let Ok(fname) : Result<Name,_> = name.0.parse() else {
+  let Ok(fname) : Result<UriName,_> = name.0.parse() else {
     p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(symdef)
   };
@@ -1385,7 +1433,7 @@ stex!(p => vardef{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
   }}
 
   let (state,mut groups) = p.split();
-  let Ok(fname) : Result<Name,_> = name.0.parse() else {
+  let Ok(fname) : Result<UriName,_> = name.0.parse() else {
     p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(vardef)
   };
@@ -1421,7 +1469,7 @@ stex!(p => varseq{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
   }}
 
   let (state,mut groups) = p.split();
-  let Ok(fname) : Result<Name,_> = name.0.parse() else {
+  let Ok(fname) : Result<UriName,_> = name.0.parse() else {
     p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(varseq)
   };
@@ -1443,7 +1491,7 @@ stex!(p => svar[optname:!name]{arg:!name} => {
   } else {
     (arg.0,None)
   };
-  let Ok(name) = Name::from_str(name.as_ref()) else {
+  let Ok(name) = name.as_ref().parse::<UriName>() else {
     p.tokenizer.problem(name_range.unwrap().start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
     return MacroResult::Simple(svar)
   };

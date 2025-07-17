@@ -5,16 +5,12 @@ mod dependencies;
 mod latex;
 pub mod quickparse;
 mod rustex;
-use std::{
-    fs,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 use either::Either;
 use eyre::Context;
 use flams_ftml::{HTMLString, FTML_DOC, FTML_OMDOC};
-use flams_ontology::uris::{ArchiveId, ArchiveUriTrait, DocumentUri, PathURITrait, UriRefTrait};
+use flams_ontology::uris::{ArchiveId, DocumentUri, UriWithArchive, UriWithPath};
 use flams_system::{
     backend::{
         archives::{Archive, ArchiveOrGroup, LocalArchive},
@@ -330,7 +326,7 @@ pub fn export_standalone(doc: &DocumentUri, file: &Path, target_dir: &Path) -> e
                     let Some((d, f)) = GlobalBackend::get().with_local_archive(archive, |a| {
                         a.and_then(|a| {
                             let f = a.path().join("source").join(&*filepath);
-                            let d = DocumentUri::from_archive_relpath(a.uri().owned(), &*filepath)
+                            let d = DocumentUri::from_archive_relpath(a.uri().clone(), &*filepath)
                                 .ok()?;
                             Some((d, f))
                         })

@@ -10,9 +10,10 @@ use crate::{
     PDFLATEX_FIRST,
 };
 use either::Either;
+use flams_ontology::uris::UriWithArchive;
 use flams_ontology::{
     languages::Language,
-    uris::{ArchiveId, ArchiveUriTrait, DocumentUri},
+    uris::{ArchiveId, DocumentUri},
 };
 use flams_system::{
     backend::AnyBackend,
@@ -236,7 +237,8 @@ pub fn get_deps(backend: &AnyBackend, task: &BuildTask) {
                         step.add_dependency(Dependency::Physical {
                             strict: false,
                             task: TaskRef {
-                                archive: archive.unwrap_or_else(|| task.archive().id().clone()),
+                                archive: archive
+                                    .unwrap_or_else(|| task.archive().archive_id().clone()),
                                 rel_path: filepath,
                                 target: PDFLATEX_FIRST,
                             },
@@ -249,7 +251,7 @@ pub fn get_deps(backend: &AnyBackend, task: &BuildTask) {
                 } => {
                     //yields.push(uri);
                     if let Some(lang) = sig {
-                        let archive = task.archive().id().clone();
+                        let archive = task.archive().archive_id().clone();
                         let Some(rel_path) = task.rel_path().rsplit_once('.').and_then(|(a, _)| {
                             a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
                         }) else {

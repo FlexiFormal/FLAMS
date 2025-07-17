@@ -6,7 +6,7 @@ use std::path::Path;
 use flams_ontology::{
     languages::Language,
     narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
-    uris::{ArchiveId, ArchiveUriTrait, DocumentUri, ModuleUri, Name, SymbolUri},
+    uris::{ArchiveId, DocumentUri, ModuleUri, SymbolUri, UriName, UriWithArchive},
 };
 use flams_system::backend::AnyBackend;
 use flams_utils::{
@@ -114,7 +114,7 @@ pub enum STeXAnnot {
         full_range: SourceRange<LSPLineCol>,
     },
     VariableMacro {
-        name: Name,
+        name: UriName,
         argnum: u8,
         orig: SourceRange<LSPLineCol>,
         sequence: bool,
@@ -122,7 +122,7 @@ pub enum STeXAnnot {
         full_range: SourceRange<LSPLineCol>,
     },
     Svar {
-        name: Name,
+        name: UriName,
         token_range: SourceRange<LSPLineCol>,
         full_range: SourceRange<LSPLineCol>,
         arg_range: SourceRange<LSPLineCol>,
@@ -214,7 +214,7 @@ pub enum STeXAnnot {
     },
     #[allow(clippy::type_complexity)]
     Vardef {
-        name: Name,
+        name: UriName,
         main_name_range: SourceRange<LSPLineCol>,
         parsed_args: Vec<VardefArg<LSPLineCol, Self>>,
         token_range: SourceRange<LSPLineCol>,
@@ -222,7 +222,7 @@ pub enum STeXAnnot {
     },
     #[allow(clippy::type_complexity)]
     Varseq {
-        name: Name,
+        name: UriName,
         main_name_range: SourceRange<LSPLineCol>,
         parsed_args: Vec<VardefArg<LSPLineCol, Self>>,
         token_range: SourceRange<LSPLineCol>,
