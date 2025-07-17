@@ -8,7 +8,7 @@ use std::{borrow::Cow, path::Path};
 use flams_ontology::{
     languages::Language,
     narration::paragraphs::ParagraphKind,
-    uris::{ArchiveId, ModuleUri, SymbolUri, UriName, UriWithArchive},
+    uris::{ArchiveId, IsNarrativeUri, ModuleUri, SymbolUri, UriName, UriWithArchive, UriWithPath},
 };
 use flams_system::backend::{Backend, GlobalBackend};
 use flams_utils::{
@@ -424,7 +424,7 @@ stex!(p => inputref('*'?_s)[archive:str]{filepath:name} => {
       };
       {
           if let Some(id) = archive.as_ref().map_or_else(||
-              p.state.archive.as_ref().map(|a| a.id()),
+              p.state.archive.as_ref().map(|a| a.archive_id()),
               |(a,_)| Some(a)
           ) {
               p.state.backend.with_local_archive(id,|a|
@@ -457,7 +457,7 @@ stex!(p => mhinput[archive:str]{filepath:name} => {
       };
       {
           if let Some(id) = archive.as_ref().map_or_else(||
-              p.state.archive.as_ref().map(|a| a.id()),
+              p.state.archive.as_ref().map(|a| a.archive_id()),
               |(a,_)| Some(a)
           ) {
               p.state.backend.with_local_archive(id,|a|
@@ -859,7 +859,7 @@ stex!(p => includeproblem[args:type IncludeProblemArg<Pos>]{filepath:name} => {
       };
       {
           if let Some(id) = archive.as_ref().map_or_else(||
-              p.state.archive.as_ref().map(|a| a.id()),
+              p.state.archive.as_ref().map(|a| a.archive_id()),
               |(a,_)| Some(a)
           ) {
               p.state.backend.with_local_archive(id,|a|
@@ -934,12 +934,12 @@ stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
     }
       let archive = args.iter().find_map(|p| if let MHGraphicsArg::Archive(a) = p {Some(a)} else {None})
           .and_then(|pair|
-          parse_id(&pair.val,pair.key_range.start,&mut p.tokenizer).map(|a| (a,pair.val_range))
+              parse_id(&pair.val,pair.key_range.start,&mut p.tokenizer).map(|a| (a,pair.val_range))
           );
       let mut rel_path = filepath.0.to_string();
       {
           if let Some(id) = archive.as_ref().map_or_else(||
-              p.state.archive.as_ref().map(|a| a.id()),
+              p.state.archive.as_ref().map(|a| a.archive_id()),
               |(a,_)| Some(a)
           ) {
               p.state.backend.with_local_archive(id,|a|
@@ -1562,7 +1562,7 @@ stex!(LSP: p => @begin{smodule}([opt:type SModuleArg<LSPLineCol,STeXToken<LSPLin
       } else { None };
 
       let uri = if let Some((m,_)) = get_module(p) {
-        m.clone() / name.0
+        name.0.parse().map(|n| m.clone() / &n).map_err(Into::into)
       } else {
         p.state.doc_uri.module_uri_from(name.0)
       };
@@ -1592,7 +1592,7 @@ stex!(LSP: p => @begin{smodule}([opt:type SModuleArg<LSPLineCol,STeXToken<LSPLin
           };
           let full_path = path.with_file_name(&filename);
           let rel_path = p.state.archive.as_ref().and_then(|a| {
-            p.state.backend.with_local_archive(a.id(), |a|
+            p.state.backend.with_local_archive(a.archive_id(), |a|
               a.and_then(|a| path.strip_prefix(a.path()).ok().and_then(|p|
                 p.strip_prefix("source").ok().map(|p| p.with_file_name(filename).display().to_string().into())
               ))
@@ -1600,7 +1600,7 @@ stex!(LSP: p => @begin{smodule}([opt:type SModuleArg<LSPLineCol,STeXToken<LSPLin
           });
 
           let uri = uri.clone();
-          let in_doc = p.state.doc_uri.as_path().owned() & (p.state.doc_uri.name().clone(),l);
+          let in_doc = p.state.doc_uri.path_uri().clone() & (p.state.doc_uri.document_name().clone(),l);
           let mrf = ModuleReference {
             uri,in_doc,rel_path,full_path:Some(full_path.into())
           };
@@ -1663,7 +1663,7 @@ stex!(LSP: p => @begin{mathstructure}({name:!name}[args:type MathStructureArg<LS
     _ => ()
   }}
 
-  let Ok(fname) : Result<Name,_> = name.parse() else {
+  let Ok(fname) : Result<UriName,_> = name.parse() else {
     p.tokenizer.problem(name_range.start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
     return
   };
@@ -1729,7 +1729,7 @@ stex!(LSP: p => @begin{extstructure}({name:!name}[args:type MathStructureArg<LSP
     _ => ()
   }}
 
-  let Ok(fname) : Result<Name,_> = name.parse() else {
+  let Ok(fname) : Result<UriName,_> = name.parse() else {
     p.tokenizer.problem(name_range.start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
     return
   };
@@ -1851,7 +1851,7 @@ stex!(p => @begin{smodule_deps}([opt]{name:name}){
       let opt = opt.as_keyvals();
       let sig = opt.get(&"sig").and_then(|v| v.val.parse().ok());
       let uri = if let Some((m,_)) = get_module(p) {
-        m.clone() / name.0
+        name.0.parse().map(|n| m.clone() / &n).map_err(Into::into)
       } else {
         p.state.doc_uri.module_uri_from(name.0)
       };
@@ -2035,7 +2035,7 @@ fn do_paragraph<
 
     let sym = if name.is_some() || macroname.is_some() {
         let fname = name.unwrap_or_else(|| macroname.unwrap_or_else(|| unreachable!()));
-        let Ok(fname): Result<Name, _> = fname.parse() else {
+        let Ok(fname): Result<UriName, _> = fname.parse() else {
             p.tokenizer.problem(
                 range.start,
                 format!("Invalid uri segment {fname}"),
@@ -2498,12 +2498,9 @@ fn setup_morphism<
     ModuleOrStruct<LSPLineCol>,
     Vec<ModuleRules<LSPLineCol>>,
 )> {
+    let archive = archive.and_then(|(a, r)| parse_id(a, pos, &mut p.tokenizer));
     let (state, groups) = p.split();
-    let Some((mors, rules)) = state.resolve_module_or_struct(
-        &groups,
-        domain,
-        archive.as_ref().map(|(r, _)| ArchiveId::new(r)),
-    ) else {
+    let Some((mors, rules)) = state.resolve_module_or_struct(&groups, domain, archive) else {
         groups.tokenizer.problem(
             pos,
             format!("No module or structure {} found", domain),
@@ -2516,7 +2513,7 @@ fn setup_morphism<
             .problem(pos, "Not in a module", DiagnosticLevel::Error);
         return None;
     };
-    let Ok(uri) = uri.clone() | name else {
+    let Ok(name) = name.parse() else {
         p.tokenizer.problem(
             pos,
             format!("Invalid module name: {name}"),
@@ -2524,7 +2521,7 @@ fn setup_morphism<
         );
         return None;
     };
-    Some((uri, mors, rules))
+    Some((uri.clone() | name, mors, rules))
 }
 
 fn elaborate_morphism<
@@ -2547,7 +2544,7 @@ fn elaborate_morphism<
     mut specs: VecMap<SymbolReference<LSPLineCol>, MorphismSpec<LSPLineCol>>,
 ) {
     let old_end = std::mem::replace(&mut p.tokenizer.reader.pos, range.end);
-    let Some(name) = Name::from_str(name).ok() else {
+    let Some(name) = name.parse::<UriName>().ok() else {
         p.tokenizer.problem(
             range.start,
             format!("Invalid name: {name}"),
@@ -2580,13 +2577,13 @@ fn elaborate_morphism<
                     let n = if let Some(n) = spec.new_name {
                         n
                     } else {
-                        name.clone() / s.uri.uri.name().clone()
+                        &name / s.uri.uri.name()
                     };
                     let d = spec.is_assigned_at.is_some() || s.has_df;
                     (m, n, d, spec.decl_range)
                 } else {
                     let m = if do_macros { s.macroname.clone() } else { None };
-                    let n = name.clone() / s.uri.uri.name().clone();
+                    let n = &name / s.uri.uri.name();
                     let d = s.has_df;
                     (m, n, d, range)
                 };
@@ -2802,7 +2799,7 @@ fn parse_assignments<
                         start,
                         end: p.curr_pos(),
                     };
-                    let Ok(name) = Name::from_str(namestr) else {
+                    let Ok(name) = namestr.parse::<UriName>() else {
                         p.tokenizer.problem(
                             start,
                             format!("Invalid name: {namestr}"),
