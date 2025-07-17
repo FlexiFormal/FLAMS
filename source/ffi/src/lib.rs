@@ -2,7 +2,6 @@
 
 use flams_lsp::state::{DocData, UrlOrFile};
 use flams_ontology::uris::DocumentUri;
-use flams_ontology::uris::UriRefTrait;
 use flams_system::backend::archives::source_files::{SourceDir, SourceEntry};
 use flams_system::backend::archives::Archive;
 use flams_system::backend::GlobalBackend;
@@ -70,7 +69,7 @@ fn _get_all_files() -> Vec<(Arc<Path>, DocumentUri)> {
                     match e {
                         SourceEntry::File(f) => {
                             let Ok(uri) = DocumentUri::from_archive_relpath(
-                                a.uri().owned(),
+                                a.uri().clone(),
                                 &f.relative_path,
                             ) else {
                                 continue;
