@@ -6,7 +6,6 @@ pub mod source_files;
 use std::path::{Path, PathBuf};
 
 use either::Either;
-#[cfg(feature = "tokio")]
 use flams_ontology::uris::UriPath;
 use flams_ontology::{
     archive_json::{ArchiveIndex, Institution},

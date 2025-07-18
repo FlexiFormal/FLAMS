@@ -452,7 +452,7 @@ fn do_var_hover(v: PreVar) -> impl IntoView {
         }
     }
     #[cfg(not(feature = "omdoc"))]
-    view! {<span>"Variable "{v.name().last_name().to_string()}</span>}
+    view! {<span>"Variable "{v.name().last().to_string()}</span>}
 }
 
 #[allow(clippy::too_many_lines)]

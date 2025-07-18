@@ -10,7 +10,7 @@ tracing = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
-rdf = ["dep:oxrdf"]
+rdf = ["dep:oxrdf", "ftml-uris/rdf"]
 tokio = ["dep:tokio"]
 serde = ["dep:serde", "flams-utils/serde", "smallvec/serde", "ftml-uris/serde"]
 wasm = [

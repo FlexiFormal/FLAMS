@@ -167,7 +167,7 @@ pub fn DocumentString(
     #[prop(optional, into)] gottos: Vec<Gotto>,
 ) -> impl IntoView {
     use thaw::Flex;
-    let uri = uri.unwrap_or_else(DocumentUri::no_doc);
+    let uri = uri.unwrap_or_else(|| DocumentUri::no_doc().clone());
     let burger = !matches!(toc, TOCSource::None);
     view! {<FTMLDocumentSetup uri><Flex>
         <div><DomStringCont html cont=iterate/></div>

@@ -95,7 +95,7 @@ trait ServerFunArgs {
 }
 
 #[cfg(all(feature = "csr", not(any(feature = "hydrate", feature = "ssr"))))]
-type URIArgs = URI;
+type URIArgs = Uri;
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type URIArgs = (
     Option<Uri>,
@@ -110,7 +110,7 @@ type URIArgs = (
 );
 
 #[cfg(all(feature = "csr", not(any(feature = "hydrate", feature = "ssr"))))]
-type URIArgsWithContext = (URI, Option<URI>);
+type URIArgsWithContext = (Uri, Option<Uri>);
 #[cfg(any(feature = "hydrate", feature = "ssr"))]
 type URIArgsWithContext = (
     Option<Uri>,
