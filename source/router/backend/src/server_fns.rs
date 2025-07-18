@@ -425,7 +425,7 @@ mod server {
                     if let Some(mut n) = steps.next() {
                         let mut curr = tree.groups.as_slice();
                         while let Some(g) = curr.iter().find_map(|a| match a {
-                            ArchiveOrGroup::Group(g) if g.id.last_name() == n => Some(g),
+                            ArchiveOrGroup::Group(g) if g.id.last() == n => Some(g),
                             _ => None,
                         }) {
                             curr = g.children.as_slice();

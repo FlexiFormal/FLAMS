@@ -63,7 +63,7 @@ fn group(a: ArchiveGroupData) -> impl IntoView {
     let id = a.id.clone();
     let header = view!(
       <thaw::Icon icon=icondata_bi::BiLibraryRegular/>" "
-      {a.id.last_name().to_string()}
+      {a.id.last().to_string()}
       {a.summary.map(badge)}
       {dialog(move |signal| if signal.get() {
         let id = id.clone();
@@ -94,7 +94,7 @@ fn archive(a: ArchiveData) -> impl IntoView {
     let id = a.id.clone();
     let header = view!(
       <thaw::Icon icon=icondata_bi::BiBookSolid/>" "
-      {a.id.last_name().to_string()}
+      {a.id.last().to_string()}
       {a.summary.map(badge)}
       {dialog(move |signal| if signal.get() {
         let id = id.clone();

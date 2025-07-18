@@ -386,7 +386,7 @@ fn do_archive(id: &ArchiveId, target: &Path) -> eyre::Result<()> {
         };
         let mut ls = &t.groups;
         loop {
-            let Some(a) = ls.iter().find(|a| a.id().last_name() == current) else {
+            let Some(a) = ls.iter().find(|a| a.id().last() == current) else {
                 err!("archive not found: {id}");
             };
             match a {

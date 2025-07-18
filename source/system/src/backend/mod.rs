@@ -1384,7 +1384,7 @@ impl SandboxedBackend {
             };
             let mut ls = &t.groups;
             loop {
-                let Some(a) = ls.iter().find(|a| a.id().last_name() == current) else {
+                let Some(a) = ls.iter().find(|a| a.id().last() == current) else {
                     else_();
                     return;
                 };

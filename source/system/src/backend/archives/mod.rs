@@ -979,8 +979,8 @@ impl ArchiveTree {
         let mut steps = id.steps().peekable();
         let mut curr = &self.groups;
         while let Some(step) = steps.next() {
-            let e = curr.iter().find(|e| e.id().last_name() == step)?;
-            /*let Ok(i) = curr.binary_search_by_key(&step, |v| v.id().last_name()) else {
+            let e = curr.iter().find(|e| e.id().last() == step)?;
+            /*let Ok(i) = curr.binary_search_by_key(&step, |v| v.id().last()) else {
                 return None;
             };*/
             if steps.peek().is_none() {
@@ -1078,7 +1078,7 @@ impl ArchiveTree {
         let mut curr = &mut self.groups;
         let mut steps = id.steps();
         while let Some(step) = steps.next() {
-            let Ok(i) = curr.binary_search_by_key(&step, |v| v.id().last_name()) else {
+            let Ok(i) = curr.binary_search_by_key(&step, |v| v.id().last()) else {
                 return None;
             };
             if matches!(curr[i], ArchiveOrGroup::Group(_)) {
@@ -1121,7 +1121,7 @@ impl ArchiveTree {
             };
             match self
                 .groups
-                .binary_search_by_key(&id.as_ref(), |v| v.id().last_name())
+                .binary_search_by_key(&id.as_ref(), |v| v.id().last())
             {
                 Ok(i) => self.groups[i] = ArchiveOrGroup::Archive(id),
                 Err(i) => self.groups.insert(i, ArchiveOrGroup::Archive(id)),
@@ -1136,7 +1136,7 @@ impl ArchiveTree {
             } else {
                 curr_name = format!("{curr_name}/{step}");
             }
-            match curr.binary_search_by_key(&step, |v| v.id().last_name()) {
+            match curr.binary_search_by_key(&step, |v| v.id().last()) {
                 Ok(i) => {
                     let ArchiveOrGroup::Group(g) = &mut curr[i]
                     // TODO maybe reachable?
@@ -1174,7 +1174,7 @@ impl ArchiveTree {
             Ok(i) => self.archives[i] = archive,
             Err(i) => self.archives.insert(i, archive),
         };
-        match curr.binary_search_by_key(&id.last_name(), |v| v.id().last_name()) {
+        match curr.binary_search_by_key(&id.last(), |v| v.id().last()) {
             Ok(i) => curr[i] = ArchiveOrGroup::Archive(id),
             Err(i) => curr.insert(i, ArchiveOrGroup::Archive(id)),
         }

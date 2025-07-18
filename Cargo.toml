@@ -161,9 +161,9 @@ flams-router-vscode = { path = "source/router/vscode-bindings", version = "0.0.1
 ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
 ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
 
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/uris" }
-ftml-core = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/core" }
-ulo = { git = "https://github.com/FlexiFormal/FTML" }       #{ path = "../../FlexiFormal/FTML/ulo" }
+ftml-uris = { git = "https://github.com/FlexiFormal/FTML" } # { path = "../../FlexiFormal/FTML/uris" } #
+ftml-core = { git = "https://github.com/FlexiFormal/FTML" } # { path = "../../FlexiFormal/FTML/core" } #
+ulo = { git = "https://github.com/FlexiFormal/FTML" } # { path = "../../FlexiFormal/FTML/ulo" }        #
 
 rstest = { version = "0.25" }
 
