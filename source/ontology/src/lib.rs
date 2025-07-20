@@ -212,31 +212,6 @@ impl From<DocumentRange> for SourceRange<ByteOffset> {
         }
     }
 }
-/*
-pub enum DecodeError {
-    URIParse(URIParseError),
-    Io(flams_utils::binary::DecodeError),
-    UnknownDiscriminant,
-}
-impl From<URIParseError> for DecodeError {
-    #[inline]
-    fn from(value: URIParseError) -> Self {
-        Self::URIParse(value)
-    }
-}
-impl From<flams_utils::binary::DecodeError> for DecodeError {
-    #[inline]
-    fn from(value: flams_utils::binary::DecodeError) -> Self {
-        Self::Io(value)
-    }
-}
-impl From<std::io::Error> for DecodeError {
-    #[inline]
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value.into())
-    }
-}
-*/
 
 pub mod metatheory {
     use crate::{
