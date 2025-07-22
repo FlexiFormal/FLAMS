@@ -1,22 +1,22 @@
 use crate::extractor::FTMLExtractor;
 use crate::open::OpenFTMLElement;
 use crate::rules::FTMLExtractionRule;
-use flams_ontology::ftml::FTMLKey;
+use flams_ontology::ftml::FtmlKey;
 use paste::paste;
 
 macro_rules! do_tags {
     ($($tag:ident $(@$f:ident)?),*) => {
         paste! {
-            //impl FTMLTagExt for FTMLKey {
+            //impl FTMLTagExt for FtmlKey {
                 #[must_use]#[inline]
-                pub const fn all_rules<E:FTMLExtractor>() -> [FTMLExtractionRule<E>;flams_ontology::ftml::NUM_RULES] {[$(
-                    rule(FTMLKey::$tag)
+                pub const fn all_rules<E:FTMLExtractor>() -> [FTMLExtractionRule<E>;ftml_core::NUM_KEYS as usize] {[$(
+                    rule(FtmlKey::$tag)
                 ),*]}
                 #[must_use]#[inline]
-                pub const fn rule<E:FTMLExtractor>(key:FTMLKey) -> FTMLExtractionRule<E> {
+                pub const fn rule<E:FTMLExtractor>(key:FtmlKey) -> FTMLExtractionRule<E> {
                     match key {$(
-                        FTMLKey::$tag =>
-                            FTMLExtractionRule::new(key,FTMLKey::$tag.attr_name(),do_tags!(@FUN $tag $($f)?))
+                        FtmlKey::$tag =>
+                            FTMLExtractionRule::new(key,FtmlKey::$tag.attr_name(),do_tags!(@FUN $tag $($f)?))
                     ),*}
                 }
             //}
@@ -173,7 +173,7 @@ do_tags! {
     Argprecs                    @ no_op
 }
 #[allow(dead_code)]
-pub const fn ignore<E: FTMLExtractor>(key: FTMLKey) -> FTMLExtractionRule<E> {
+pub const fn ignore<E: FTMLExtractor>(key: FtmlKey) -> FTMLExtractionRule<E> {
     FTMLExtractionRule::new(key, key.attr_name(), super::rules::rules::no_op)
 }
 #[allow(dead_code)]
@@ -190,7 +190,7 @@ pub fn todo<E: FTMLExtractor>(
     _extractor: &mut E,
     _attrs: &mut E::Attr<'_>,
     _nexts: &mut super::rules::rules::SV<E>,
-    tag: FTMLKey,
+    tag: FtmlKey,
 ) -> Option<OpenFTMLElement> {
     todo!("Tag {}", tag.as_str())
 }

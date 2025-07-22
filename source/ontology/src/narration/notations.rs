@@ -1,4 +1,5 @@
-use crate::{content::terms::ArgMode, ftml::FTMLKey, Resourcable};
+use crate::{content::terms::ArgMode, Resourcable};
+use ftml_core::FtmlKey;
 use smallvec::SmallVec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,9 +51,9 @@ impl OpNotation {
         }
         impl<U: std::fmt::Display> std::fmt::Display for OpDisplayer<'_, U> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                const TERM: &str = FTMLKey::Term.attr_name();
-                const HEAD: &str = FTMLKey::Head.attr_name();
-                const COMP: &str = FTMLKey::Comp.attr_name();
+                const TERM: &str = FtmlKey::Term.attr_name();
+                const HEAD: &str = FtmlKey::Head.attr_name();
+                const COMP: &str = FtmlKey::Comp.attr_name();
                 let tp = if self.as_variable { "OMV" } else { "OMID" };
                 let uri = &self.uri;
                 let text = &self.op.text;
@@ -97,7 +98,7 @@ mod presentation {
 
     use crate::{
         content::terms::{Arg, ArgMode, Informal, Term, Var},
-        ftml::FTMLKey,
+        ftml::FtmlKey,
         omsp,
         uris::{DocumentElementUri, DomainUri, SymbolUri},
     };
@@ -312,9 +313,9 @@ mod presentation {
 
     impl<W: std::fmt::Write> PresenterArgs<W> for Displayer {
         fn single(&self, idx: u8, _mode: ArgMode, out: &mut W) -> Result {
-            const TERM: &str = FTMLKey::Term.attr_name();
-            const HEAD: &str = FTMLKey::Head.attr_name();
-            const COMP: &str = FTMLKey::Comp.attr_name();
+            const TERM: &str = FtmlKey::Term.attr_name();
+            const HEAD: &str = FtmlKey::Head.attr_name();
+            const COMP: &str = FtmlKey::Comp.attr_name();
 
             let c = self.args[(idx - 1) as usize];
             write!(out, "<mi {TERM}=\"OMV\" {HEAD}=\"{c}\" {COMP}>{c}</mi>").map_err(Into::into)
@@ -327,9 +328,9 @@ mod presentation {
             impl Iterator<Item = impl FnOnce(&mut W) -> Result>,
             PresentationError,
         > {
-            const TERM: &str = FTMLKey::Term.attr_name();
-            const HEAD: &str = FTMLKey::Head.attr_name();
-            const COMP: &str = FTMLKey::Comp.attr_name();
+            const TERM: &str = FtmlKey::Term.attr_name();
+            const HEAD: &str = FtmlKey::Head.attr_name();
+            const COMP: &str = FtmlKey::Comp.attr_name();
 
             let c = self.args[(idx - 1) as usize];
             Ok([
@@ -400,9 +401,9 @@ mod presentation {
             txt: &str,
             in_text: bool,
         ) -> Result {
-            const TERM: &str = FTMLKey::Term.attr_name();
-            const HEAD: &str = FTMLKey::Head.attr_name();
-            const COMP: &str = FTMLKey::Comp.attr_name();
+            const TERM: &str = FtmlKey::Term.attr_name();
+            const HEAD: &str = FtmlKey::Head.attr_name();
+            const COMP: &str = FtmlKey::Comp.attr_name();
             if in_text {
                 write!(
                     out,
@@ -424,11 +425,11 @@ mod presentation {
             txt: &str,
             args: &[Arg],
         ) -> Result {
-            const TERM: &str = FTMLKey::Term.attr_name();
-            const HEAD: &str = FTMLKey::Head.attr_name();
-            const COMP: &str = FTMLKey::Comp.attr_name();
-            const ARG: &str = FTMLKey::Arg.attr_name();
-            const MODE: &str = FTMLKey::ArgMode.attr_name();
+            const TERM: &str = FtmlKey::Term.attr_name();
+            const HEAD: &str = FtmlKey::Head.attr_name();
+            const COMP: &str = FtmlKey::Comp.attr_name();
+            const ARG: &str = FtmlKey::Arg.attr_name();
+            const MODE: &str = FtmlKey::ArgMode.attr_name();
             if presenter.in_text() {
                 write!(
                     presenter,
@@ -582,9 +583,9 @@ mod presentation {
             args: &impl PresenterArgs<W>,
             insert_arg_attrs: bool,
         ) -> Result {
-            const TERM: &str = FTMLKey::Term.attr_name();
-            const HEAD: &str = FTMLKey::Head.attr_name();
-            const NID: &str = FTMLKey::NotationId.attr_name();
+            const TERM: &str = FtmlKey::Term.attr_name();
+            const HEAD: &str = FtmlKey::Head.attr_name();
+            const NID: &str = FtmlKey::NotationId.attr_name();
             if let Some(opn) = &self.op {
                 let index = opn.attribute_index as usize;
                 let start = &opn.text[0..index];
@@ -606,10 +607,10 @@ mod presentation {
             termstr: &str,
             head: impl Display,
         ) -> Result {
-            const TERM: &str = FTMLKey::Term.attr_name();
-            const HEAD: &str = FTMLKey::Head.attr_name();
-            const NID: &str = FTMLKey::NotationId.attr_name();
-            const HEADTERM: &str = FTMLKey::HeadTerm.attr_name();
+            const TERM: &str = FtmlKey::Term.attr_name();
+            const HEAD: &str = FtmlKey::Head.attr_name();
+            const NID: &str = FtmlKey::NotationId.attr_name();
+            const HEADTERM: &str = FtmlKey::HeadTerm.attr_name();
             if let Some(opn) = &self.op {
                 write!(
                     presenter,
@@ -657,9 +658,9 @@ mod presentation {
             insert_arg_attrs: bool,
             args: &impl PresenterArgs<W>,
         ) -> Result {
-            const TERM: &str = FTMLKey::Term.attr_name();
-            const HEAD: &str = FTMLKey::Head.attr_name();
-            const NID: &str = FTMLKey::NotationId.attr_name();
+            const TERM: &str = FtmlKey::Term.attr_name();
+            const HEAD: &str = FtmlKey::Head.attr_name();
+            const NID: &str = FtmlKey::NotationId.attr_name();
             //println!("Components: {:?}",self.components);
             let mut comps = self.components.iter();
             match comps.next() {
@@ -738,8 +739,8 @@ mod presentation {
             in_text: bool,
             insert_arg_attrs: bool,
         ) -> Result {
-            const ARG: &str = FTMLKey::Arg.attr_name();
-            const MODE: &str = FTMLKey::ArgMode.attr_name();
+            const ARG: &str = FtmlKey::Arg.attr_name();
+            const MODE: &str = FtmlKey::ArgMode.attr_name();
             match mode {
                 ArgMode::Normal | ArgMode::Binding if !in_text => {
                     if insert_arg_attrs {
@@ -767,8 +768,8 @@ mod presentation {
             insert_arg_attrs: bool,
             sep: impl Fn(&mut W) -> Result,
         ) -> Result {
-            const ARG: &str = FTMLKey::Arg.attr_name();
-            const MODE: &str = FTMLKey::ArgMode.attr_name();
+            const ARG: &str = FtmlKey::Arg.attr_name();
+            const MODE: &str = FtmlKey::ArgMode.attr_name();
             let mut ls = args.sequence(idx, mode)?;
             let mode = match mode {
                 ArgMode::Sequence => ArgMode::Normal,

@@ -1,10 +1,10 @@
 use std::{fmt::Display, str::FromStr};
 
 use flams_utils::vecmap::VecMap;
+use ftml_core::FtmlKey;
 
 use crate::{
     content::terms::Term,
-    ftml::FTMLKey,
     uris::{DocumentElementUri, SymbolUri, UriName},
     Checked, CheckingState, DocumentRange,
 };
@@ -70,11 +70,11 @@ pub enum ParagraphKind {
 }
 
 impl ParagraphKind {
-    const DEF: &str = FTMLKey::Definition.attr_name();
-    const ASS: &str = FTMLKey::Assertion.attr_name();
-    const PAR: &str = FTMLKey::Paragraph.attr_name();
-    const PRO: &str = FTMLKey::Proof.attr_name();
-    const SUB: &str = FTMLKey::SubProof.attr_name();
+    const DEF: &str = FtmlKey::Definition.attr_name();
+    const ASS: &str = FtmlKey::Assertion.attr_name();
+    const PAR: &str = FtmlKey::Paragraph.attr_name();
+    const PRO: &str = FtmlKey::Proof.attr_name();
+    const SUB: &str = FtmlKey::SubProof.attr_name();
     #[must_use]
     pub fn from_ftml(s: &str) -> Option<Self> {
         Some(match s {

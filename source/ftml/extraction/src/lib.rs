@@ -11,5 +11,5 @@ pub mod prelude {
     pub use super::extractor::*;
     pub use crate::rules::{FTMLElements, FTMLExtractionRule, RuleSet};
     pub use crate::tags::{all_rules, rule};
-    pub use flams_ontology::ftml::FTMLKey as FTMLTag;
+    pub use flams_ontology::ftml::FtmlKey as FTMLTag;
 }

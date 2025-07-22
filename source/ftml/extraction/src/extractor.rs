@@ -6,7 +6,6 @@ use crate::rules::FTMLElements;
 use flams_ontology::content::declarations::OpenDeclaration;
 use flams_ontology::content::modules::OpenModule;
 use flams_ontology::content::terms::{Arg, ArgMode, Term, Var};
-use flams_ontology::ftml::FTMLKey;
 use flams_ontology::languages::Language;
 use flams_ontology::narration::documents::DocumentStyles;
 use flams_ontology::narration::notations::{NotationComponent, OpNotation};
@@ -22,6 +21,7 @@ use flams_ontology::uris::{
 use flams_ontology::{DocumentRange, Resourcable, Unchecked};
 use flams_utils::id_counters::IdCounter;
 use flams_utils::vecmap::{VecMap, VecSet};
+use ftml_core::FtmlKey;
 use std::borrow::Cow;
 use std::str::FromStr;
 
@@ -138,18 +138,18 @@ pub trait Attributes {
     fn take(&mut self, key: &str) -> Option<String>;
 
     #[inline]
-    fn get(&self, tag: FTMLKey) -> Option<Self::Value<'_>> {
+    fn get(&self, tag: FtmlKey) -> Option<Self::Value<'_>> {
         self.value(tag.attr_name())
     }
     #[inline]
-    fn remove(&mut self, tag: FTMLKey) -> Option<String> {
+    fn remove(&mut self, tag: FtmlKey) -> Option<String> {
         self.take(tag.attr_name())
     }
 
     /// #### Errors
     fn get_typed<E, T>(
         &self,
-        key: FTMLKey,
+        key: FtmlKey,
         f: impl FnOnce(&str) -> Result<T, E>,
     ) -> Result<T, FTMLError> {
         let Some(v) = self.get(key) else {
@@ -161,7 +161,7 @@ pub trait Attributes {
     /// #### Errors
     fn get_typed_vec<E, T>(
         &self,
-        key: FTMLKey,
+        key: FtmlKey,
         mut f: impl FnMut(&str) -> Result<T, E>,
     ) -> Result<Vec<T>, FTMLError> {
         let Some(v) = self.get(key) else {
@@ -180,7 +180,7 @@ pub trait Attributes {
     /// #### Errors
     fn take_typed<E, T>(
         &mut self,
-        key: FTMLKey,
+        key: FtmlKey,
         f: impl FnOnce(&str) -> Result<T, E>,
     ) -> Result<T, FTMLError> {
         let Some(v) = self.remove(key) else {
@@ -190,7 +190,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn get_section_level(&self, key: FTMLKey) -> Result<SectionLevel, FTMLError> {
+    fn get_section_level(&self, key: FtmlKey) -> Result<SectionLevel, FTMLError> {
         use std::str::FromStr;
         let Some(v) = self.get(key) else {
             return Err(FTMLError::InvalidKeyFor(key.as_str(), None));
@@ -203,7 +203,7 @@ pub trait Attributes {
     }
 
     /// #### Errors
-    fn take_section_level(&mut self, key: FTMLKey) -> Result<SectionLevel, FTMLError> {
+    fn take_section_level(&mut self, key: FtmlKey) -> Result<SectionLevel, FTMLError> {
         use std::str::FromStr;
         let Some(v) = self.remove(key) else {
             return Err(FTMLError::InvalidKeyFor(key.as_str(), None));
@@ -216,13 +216,13 @@ pub trait Attributes {
 
     /// #### Errors
     #[inline]
-    fn get_language(&self, key: FTMLKey) -> Result<Language, FTMLError> {
+    fn get_language(&self, key: FtmlKey) -> Result<Language, FTMLError> {
         self.get_typed(key, Language::from_str)
     }
 
     /// #### Errors
     #[inline]
-    fn take_language(&mut self, key: FTMLKey) -> Result<Language, FTMLError> {
+    fn take_language(&mut self, key: FtmlKey) -> Result<Language, FTMLError> {
         self.take_typed(key, Language::from_str)
     }
 
@@ -230,7 +230,7 @@ pub trait Attributes {
     #[inline]
     fn get_module_uri<E: FTMLExtractor>(
         &self,
-        key: FTMLKey,
+        key: FtmlKey,
         _extractor: &mut E,
     ) -> Result<ModuleUri, FTMLError> {
         self.get_typed(key, ModuleUri::from_str)
@@ -239,7 +239,7 @@ pub trait Attributes {
     /// #### Errors
     fn get_new_module_uri<E: FTMLExtractor>(
         &self,
-        key: FTMLKey,
+        key: FtmlKey,
         extractor: &mut E,
     ) -> Result<ModuleUri, FTMLError> {
         let Some(v) = self.get(key) else {
@@ -268,7 +268,7 @@ pub trait Attributes {
     #[inline]
     fn take_module_uri<E: FTMLExtractor>(
         &mut self,
-        key: FTMLKey,
+        key: FtmlKey,
         _extractor: &mut E,
     ) -> Result<ModuleUri, FTMLError> {
         self.take_typed(key, ModuleUri::from_str)
@@ -277,7 +277,7 @@ pub trait Attributes {
     /// #### Errors
     fn take_new_module_uri<E: FTMLExtractor>(
         &mut self,
-        key: FTMLKey,
+        key: FtmlKey,
         extractor: &mut E,
     ) -> Result<ModuleUri, FTMLError> {
         let Some(v) = self.remove(key) else {
@@ -301,7 +301,7 @@ pub trait Attributes {
     #[inline]
     fn get_symbol_uri<E: FTMLExtractor>(
         &self,
-        key: FTMLKey,
+        key: FtmlKey,
         _extractor: &mut E,
     ) -> Result<SymbolUri, FTMLError> {
         self.get_typed(key, SymbolUri::from_str)
@@ -310,7 +310,7 @@ pub trait Attributes {
     /// #### Errors
     fn get_new_symbol_uri<E: FTMLExtractor>(
         &self,
-        key: FTMLKey,
+        key: FtmlKey,
         extractor: &mut E,
     ) -> Result<SymbolUri, FTMLError> {
         let Some(v) = self.get(key) else {
@@ -329,7 +329,7 @@ pub trait Attributes {
     #[inline]
     fn take_symbol_uri<E: FTMLExtractor>(
         &mut self,
-        key: FTMLKey,
+        key: FtmlKey,
         _extractor: &mut E,
     ) -> Result<SymbolUri, FTMLError> {
         self.take_typed(key, SymbolUri::from_str)
@@ -338,7 +338,7 @@ pub trait Attributes {
     /// #### Errors
     fn take_new_symbol_uri<E: FTMLExtractor>(
         &mut self,
-        key: FTMLKey,
+        key: FtmlKey,
         extractor: &mut E,
     ) -> Result<SymbolUri, FTMLError> {
         let Some(v) = self.remove(key) else {
@@ -356,7 +356,7 @@ pub trait Attributes {
     #[inline]
     fn get_document_uri<E: FTMLExtractor>(
         &self,
-        key: FTMLKey,
+        key: FtmlKey,
         _extractor: &mut E,
     ) -> Result<DocumentUri, FTMLError> {
         self.get_typed(key, DocumentUri::from_str)
@@ -366,14 +366,14 @@ pub trait Attributes {
     #[inline]
     fn take_document_uri<E: FTMLExtractor>(
         &mut self,
-        key: FTMLKey,
+        key: FtmlKey,
         _extractor: &mut E,
     ) -> Result<DocumentUri, FTMLError> {
         self.take_typed(key, DocumentUri::from_str)
     }
 
     fn get_id<E: FTMLExtractor>(&self, extractor: &mut E, prefix: Cow<'static, str>) -> Box<str> {
-        self.get(FTMLKey::Id).map_or_else(
+        self.get(FtmlKey::Id).map_or_else(
             || extractor.new_id(prefix),
             |v| {
                 let v = v.as_ref();
@@ -389,13 +389,13 @@ pub trait Attributes {
         )
     }
 
-    fn get_bool(&self, key: FTMLKey) -> bool {
+    fn get_bool(&self, key: FtmlKey) -> bool {
         self.get(key)
             .and_then(|s| s.as_ref().parse().ok())
             .unwrap_or_default()
     }
 
-    fn take_bool(&mut self, key: FTMLKey) -> bool {
+    fn take_bool(&mut self, key: FtmlKey) -> bool {
         self.remove(key)
             .and_then(|s| s.parse().ok())
             .unwrap_or_default()

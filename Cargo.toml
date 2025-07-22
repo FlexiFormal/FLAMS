@@ -161,9 +161,9 @@ flams-router-vscode = { path = "source/router/vscode-bindings", version = "0.0.1
 ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
 ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
 
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML" } # { path = "../../FlexiFormal/FTML/uris" } #
-ftml-core = { git = "https://github.com/FlexiFormal/FTML" } # { path = "../../FlexiFormal/FTML/core" } #
-ulo = { git = "https://github.com/FlexiFormal/FTML" } # { path = "../../FlexiFormal/FTML/ulo" }        #
+ftml-uris = { path = "../../FlexiFormal/FTML/uris" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-core = { path = "../../FlexiFormal/FTML/core" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ulo = { path = "../../FlexiFormal/FTML/ulo" }        #{ git = "https://github.com/FlexiFormal/FTML" } #
 
 rstest = { version = "0.25" }
 
@@ -195,7 +195,7 @@ async-broadcast = "0.7"
 simple-home-dir = "0.5"
 async-trait = "0.1"
 bincode = { version = "2", features = ["derive", "serde"] }
-lightningcss = { version = "1.0.0-alpha.63" }
+lightningcss = { version = "1.0.0-alpha.63", default-features = false }
 # cfg-if = "1"
 tokio = { version = "1" }                                                   #, features = ["fs","io-util","sync","test-util","macros","rt"] }
 tokio-util = { version = "0.7", features = ["compat"] }

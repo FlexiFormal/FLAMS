@@ -1,5 +1,6 @@
 use crate::open::terms::{OpenTermKind, VarOrSym};
-use flams_ontology::{ftml::FTMLKey, uris::UriName};
+use flams_ontology::uris::UriName;
+use ftml_core::FtmlKey;
 use std::fmt::Display;
 
 #[derive(Clone, Debug)]
@@ -23,7 +24,7 @@ pub enum FTMLError {
 }
 
 impl std::error::Error for FTMLError {}
-const HEAD: &str = FTMLKey::Head.attr_name();
+const HEAD: &str = FtmlKey::Head.attr_name();
 impl Display for FTMLError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -1,7 +1,7 @@
 use crate::extractor::{Attributes, FTMLExtractor};
 use crate::open::OpenFTMLElement;
 use crate::prelude::FTMLNode;
-use flams_ontology::ftml::FTMLKey;
+use ftml_core::FtmlKey;
 use smallvec::SmallVec;
 
 #[allow(type_alias_bounds)]
@@ -13,7 +13,7 @@ pub type Call<E: FTMLExtractor> = for<'a> fn(
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct FTMLExtractionRule<E: FTMLExtractor> {
-    pub(crate) tag: FTMLKey,
+    pub(crate) tag: FtmlKey,
     pub(crate) attr: &'static str,
     call: Call<E>,
 }
@@ -26,7 +26,7 @@ impl<E: FTMLExtractor> Clone for FTMLExtractionRule<E> {
 }
 impl<E: FTMLExtractor> FTMLExtractionRule<E> {
     #[inline]
-    pub(crate) const fn new(tag: FTMLKey, attr: &'static str, call: Call<E>) -> Self {
+    pub(crate) const fn new(tag: FtmlKey, attr: &'static str, call: Call<E>) -> Self {
         Self { tag, attr, call }
     }
     #[inline]
@@ -172,7 +172,7 @@ pub mod rules {
     use crate::prelude::{Attributes, FTMLExtractor};
     use crate::rules::FTMLExtractionRule;
     use flams_ontology::content::declarations::symbols::{ArgSpec, AssocType};
-    use flams_ontology::ftml::FTMLKey;
+    use flams_ontology::ftml::FtmlKey;
     use flams_ontology::narration::documents::{DocumentStyle, SectionCounter};
     use flams_ontology::narration::paragraphs::{ParagraphFormatting, ParagraphKind};
     use flams_ontology::narration::problems::{AnswerKind, FillInSolOption};
@@ -221,7 +221,7 @@ pub mod rules {
     //pub(crate) use rules_impl::*;
 
     //mod rules_impl {
-    //    use flams_ontology::ftml::FTMLKey;
+    //    use flams_ontology::ftml::FtmlKey;
     //    use std::str::FromStr;
     //    use crate::{open::OpenFTMLElement, prelude::{Attributes, FTMLExtractor}};
 
@@ -233,7 +233,7 @@ pub mod rules {
         None
     }
 
-    /*pub(crate) fn todo<E:FTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,tag:FTMLKey) -> Option<OpenFTMLElement> {
+    /*pub(crate) fn todo<E:FTMLExtractor>(_extractor:&mut E,_attrs:&mut E::Attr<'_>,_nexts:&mut SV<E>,tag:FtmlKey) -> Option<OpenFTMLElement> {
         todo!("Tag {}",tag.as_str())
     }*/
 
@@ -242,7 +242,7 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        if attrs.take_bool(FTMLKey::Invisible) {
+        if attrs.take_bool(FtmlKey::Invisible) {
             Some(OpenFTMLElement::Invisible)
         } else {
             None
@@ -254,7 +254,7 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let lvl = err!(extractor, attrs.get_section_level(FTMLKey::SetSectionLevel));
+        let lvl = err!(extractor, attrs.get_section_level(FtmlKey::SetSectionLevel));
         Some(OpenFTMLElement::SetSectionLevel(lvl))
     }
 
@@ -263,15 +263,15 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let Some(style) = attrs.get(FTMLKey::Style) else {
+        let Some(style) = attrs.get(FtmlKey::Style) else {
             unreachable!()
         };
         let Ok(mut style) = DocumentStyle::from_str(style.as_ref()) else {
             extractor.add_error(FTMLError::InvalidURI(style.into()));
             return None;
         };
-        if let Some(count) = attrs.get(FTMLKey::Counter) {
-            nexts.retain(|e| e.tag != FTMLKey::Counter);
+        if let Some(count) = attrs.get(FtmlKey::Counter) {
+            nexts.retain(|e| e.tag != FtmlKey::Counter);
             if !count.as_ref().is_empty() {
                 if let Ok(name) = count.as_ref().parse() {
                     style.counter = Some(name);
@@ -290,8 +290,8 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let name = if let Some(count) = attrs.get(FTMLKey::Counter) {
-            nexts.retain(|e| e.tag != FTMLKey::Counter);
+        let name = if let Some(count) = attrs.get(FtmlKey::Counter) {
+            nexts.retain(|e| e.tag != FtmlKey::Counter);
             if let Ok(name) = count.as_ref().parse() {
                 name
             } else {
@@ -302,7 +302,7 @@ pub mod rules {
             extractor.add_error(FTMLError::MissingArguments);
             return None;
         };
-        let parent = opt!(extractor, attrs.get_section_level(FTMLKey::CounterParent));
+        let parent = opt!(extractor, attrs.get_section_level(FtmlKey::CounterParent));
         extractor
             .styles()
             .counters
@@ -317,7 +317,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.take_module_uri(FTMLKey::ImportModule, extractor)
+            attrs.take_module_uri(FtmlKey::ImportModule, extractor)
         );
         Some(OpenFTMLElement::ImportModule(uri))
     }
@@ -329,7 +329,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.take_module_uri(FTMLKey::UseModule, extractor)
+            attrs.take_module_uri(FtmlKey::UseModule, extractor)
         );
         Some(OpenFTMLElement::UseModule(uri))
     }
@@ -341,14 +341,14 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.take_new_module_uri(FTMLKey::Module, extractor)
+            attrs.take_new_module_uri(FtmlKey::Module, extractor)
         );
-        let _ = attrs.take_language(FTMLKey::Language);
+        let _ = attrs.take_language(FtmlKey::Language);
         let meta = opt!(
             extractor,
-            attrs.take_module_uri(FTMLKey::Metatheory, extractor)
+            attrs.take_module_uri(FtmlKey::Metatheory, extractor)
         );
-        let signature = opt!(extractor, attrs.take_language(FTMLKey::Signature));
+        let signature = opt!(extractor, attrs.take_language(FtmlKey::Signature));
         extractor.open_content(uri.clone());
         extractor.open_narrative(None);
         Some(OpenFTMLElement::Module {
@@ -366,10 +366,10 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.take_new_symbol_uri(FTMLKey::MathStructure, extractor)
+            attrs.take_new_symbol_uri(FtmlKey::MathStructure, extractor)
         );
         let macroname = attrs
-            .remove(FTMLKey::Macroname)
+            .remove(FtmlKey::Macroname)
             .map(|s| Into::<String>::into(s).into_boxed_str());
         extractor.open_content(uri.clone().into_module());
         extractor.open_narrative(None);
@@ -386,13 +386,13 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.take_new_symbol_uri(FTMLKey::Morphism, extractor)
+            attrs.take_new_symbol_uri(FtmlKey::Morphism, extractor)
         );
         let domain = err!(
             extractor,
-            attrs.take_module_uri(FTMLKey::MorphismDomain, extractor)
+            attrs.take_module_uri(FtmlKey::MorphismDomain, extractor)
         );
-        let total = attrs.take_bool(FTMLKey::MorphismTotal);
+        let total = attrs.take_bool(FtmlKey::MorphismTotal);
         extractor.open_content(uri.clone().into_module());
         extractor.open_narrative(None);
         Some(OpenFTMLElement::Morphism {
@@ -407,7 +407,7 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let symbol = err!(extractor, attrs.get_symbol_uri(FTMLKey::Assign, extractor));
+        let symbol = err!(extractor, attrs.get_symbol_uri(FtmlKey::Assign, extractor));
         extractor.open_complex_term();
         Some(OpenFTMLElement::Assign(symbol))
     }
@@ -417,7 +417,7 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let lvl = err!(extractor, attrs.get_section_level(FTMLKey::Section));
+        let lvl = err!(extractor, attrs.get_section_level(FtmlKey::Section));
         let id = attrs.get_id(extractor, Cow::Borrowed("section"));
         let Ok(uri) = id
             .parse()
@@ -521,15 +521,15 @@ pub mod rules {
             extractor.add_error(FTMLError::InvalidURI(format!("8: {id}")));
             return None;
         };
-        let inline = attrs.get_bool(FTMLKey::Inline);
+        let inline = attrs.get_bool(FtmlKey::Inline);
         let mut fors = VecSet::new();
-        if let Some(f) = attrs.get(FTMLKey::Fors) {
+        if let Some(f) = attrs.get(FtmlKey::Fors) {
             for f in f.as_ref().split(',') {
                 if let Ok(f) = f.trim().parse() {
                     fors.insert(f);
                 } else {
                     extractor.add_error(FTMLError::InvalidKeyFor(
-                        FTMLKey::Fors.as_str(),
+                        FtmlKey::Fors.as_str(),
                         Some(f.trim().into()),
                     ));
                 };
@@ -537,14 +537,14 @@ pub mod rules {
         }
         let styles = opt!(
             extractor,
-            attrs.get_typed_vec(FTMLKey::Styles, |s| s.trim().parse())
+            attrs.get_typed_vec(FtmlKey::Styles, |s| s.trim().parse())
         )
         .unwrap_or_default();
         extractor.open_paragraph(uri.clone(), fors);
         let formatting = if inline {
             ParagraphFormatting::Inline
         } else if matches!(kind, ParagraphKind::Proof | ParagraphKind::SubProof) {
-            let hide = attrs.get_bool(FTMLKey::ProofHide);
+            let hide = attrs.get_bool(FtmlKey::ProofHide);
             if hide {
                 ParagraphFormatting::Collapsed
             } else {
@@ -593,7 +593,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let styles = opt!(
             extractor,
-            attrs.get_typed_vec(FTMLKey::Styles, |s| s.trim().parse())
+            attrs.get_typed_vec(FtmlKey::Styles, |s| s.trim().parse())
         )
         .unwrap_or_default();
         let id = attrs.get_id(extractor, Cow::Borrowed("problem"));
@@ -604,9 +604,9 @@ pub mod rules {
             extractor.add_error(FTMLError::InvalidURI(format!("9: {id}")));
             return None;
         };
-        let _ = attrs.take_language(FTMLKey::Language);
-        let autogradable = attrs.get_bool(FTMLKey::Autogradable);
-        let points = attrs.get(FTMLKey::ProblemPoints).and_then(|s| {
+        let _ = attrs.take_language(FtmlKey::Language);
+        let autogradable = attrs.get_bool(FtmlKey::Autogradable);
+        let points = attrs.get(FtmlKey::ProblemPoints).and_then(|s| {
             s.as_ref()
                 .parse()
                 .ok()
@@ -638,8 +638,8 @@ pub mod rules {
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
         // TODO Check if in problem!
-        let mut id = attrs.remove(FTMLKey::AnswerClass).map(Into::into);
-        nexts.retain(|r| !matches!(r.tag, FTMLKey::AnswerClass));
+        let mut id = attrs.remove(FtmlKey::AnswerClass).map(Into::into);
+        nexts.retain(|r| !matches!(r.tag, FtmlKey::AnswerClass));
         if id.as_ref().is_some_and(|s: &Box<str>| s.is_empty()) {
             id = None
         }
@@ -663,7 +663,7 @@ pub mod rules {
         let id = attrs.get_id(extractor, Cow::Borrowed("AC"));
         let kind = opt!(
             extractor,
-            attrs.get_typed(FTMLKey::AnswerClassPts, str::parse)
+            attrs.get_typed(FtmlKey::AnswerClassPts, str::parse)
         )
         .unwrap_or(AnswerKind::Trait(0.0));
         extractor.push_answer_class(id, kind);
@@ -685,7 +685,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let styles = opt!(
             extractor,
-            attrs.get_typed(FTMLKey::Styles, |s| Result::<_, ()>::Ok(
+            attrs.get_typed(FtmlKey::Styles, |s| Result::<_, ()>::Ok(
                 s.split(',')
                     .map(|s| s.trim().to_string().into_boxed_str())
                     .collect::<Vec<_>>()
@@ -708,7 +708,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let styles = opt!(
             extractor,
-            attrs.get_typed(FTMLKey::Styles, |s| Result::<_, ()>::Ok(
+            attrs.get_typed(FtmlKey::Styles, |s| Result::<_, ()>::Ok(
                 s.split(',')
                     .map(|s| s.trim().to_string().into_boxed_str())
                     .collect::<Vec<_>>()
@@ -729,8 +729,8 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let correct = attrs.get_bool(FTMLKey::ProblemChoice); //attrs.take_bool(FTMLKey::ProblemChoice);
-        attrs.set(FTMLKey::ProblemChoice.attr_name(), "");
+        let correct = attrs.get_bool(FtmlKey::ProblemChoice); //attrs.take_bool(FtmlKey::ProblemChoice);
+        attrs.set(FtmlKey::ProblemChoice.attr_name(), "");
         extractor.push_problem_choice(correct);
         Some(OpenFTMLElement::ProblemChoice)
     }
@@ -758,7 +758,7 @@ pub mod rules {
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
         let val = attrs
-            .get_typed(FTMLKey::ProblemFillinsolWidth, |s| {
+            .get_typed(FtmlKey::ProblemFillinsolWidth, |s| {
                 if s.contains('.') {
                     s.parse::<f32>().map_err(|_| ())
                 } else {
@@ -775,11 +775,11 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let Some(val) = attrs.remove(FTMLKey::ProblemFillinsolCase) else {
+        let Some(val) = attrs.remove(FtmlKey::ProblemFillinsolCase) else {
             unreachable!()
         };
-        let verdict = attrs.take_bool(FTMLKey::ProblemFillinsolCaseVerdict);
-        let Some(value) = attrs.remove(FTMLKey::ProblemFillinsolCaseValue) else {
+        let verdict = attrs.take_bool(FtmlKey::ProblemFillinsolCaseVerdict);
+        let Some(value) = attrs.remove(FtmlKey::ProblemFillinsolCaseValue) else {
             extractor.add_error(FTMLError::IncompleteArgs(5));
             return None;
         };
@@ -830,11 +830,11 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.get_symbol_uri(FTMLKey::PreconditionSymbol, extractor)
+            attrs.get_symbol_uri(FtmlKey::PreconditionSymbol, extractor)
         );
         let dim = err!(
             extractor,
-            attrs.get_typed(FTMLKey::PreconditionDimension, str::parse)
+            attrs.get_typed(FtmlKey::PreconditionDimension, str::parse)
         );
         extractor.add_precondition(uri, dim);
         None
@@ -847,11 +847,11 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.get_symbol_uri(FTMLKey::ObjectiveSymbol, extractor)
+            attrs.get_symbol_uri(FtmlKey::ObjectiveSymbol, extractor)
         );
         let dim = err!(
             extractor,
-            attrs.get_typed(FTMLKey::ObjectiveDimension, str::parse)
+            attrs.get_typed(FtmlKey::ObjectiveDimension, str::parse)
         );
         extractor.add_objective(uri, dim);
         None
@@ -864,11 +864,11 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.get_new_symbol_uri(FTMLKey::Symdecl, extractor)
+            attrs.get_new_symbol_uri(FtmlKey::Symdecl, extractor)
         );
         let role = opt!(
             extractor,
-            attrs.get_typed(FTMLKey::Role, |s| Result::<_, ()>::Ok(
+            attrs.get_typed(FtmlKey::Role, |s| Result::<_, ()>::Ok(
                 s.split(',')
                     .map(|s| s.trim().to_string().into_boxed_str())
                     .collect::<Vec<_>>()
@@ -878,15 +878,15 @@ pub mod rules {
         .unwrap_or_default();
         let assoctype = opt!(
             extractor,
-            attrs.get_typed(FTMLKey::AssocType, AssocType::from_str)
+            attrs.get_typed(FtmlKey::AssocType, AssocType::from_str)
         );
         let arity =
-            opt!(extractor, attrs.get_typed(FTMLKey::Args, ArgSpec::from_str)).unwrap_or_default();
+            opt!(extractor, attrs.get_typed(FtmlKey::Args, ArgSpec::from_str)).unwrap_or_default();
         let reordering = attrs
-            .get(FTMLKey::ArgumentReordering)
+            .get(FtmlKey::ArgumentReordering)
             .map(|s| Into::<String>::into(s).into_boxed_str());
         let macroname = attrs
-            .get(FTMLKey::Macroname)
+            .get(FtmlKey::Macroname)
             .map(|s| Into::<String>::into(s).into_boxed_str());
         extractor.open_decl();
         Some(OpenFTMLElement::Symdecl {
@@ -904,21 +904,21 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        do_vardecl(extractor, attrs, nexts, FTMLKey::Vardef, false)
+        do_vardecl(extractor, attrs, nexts, FtmlKey::Vardef, false)
     }
     pub fn varseq<E: FTMLExtractor>(
         extractor: &mut E,
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        do_vardecl(extractor, attrs, nexts, FTMLKey::Varseq, true)
+        do_vardecl(extractor, attrs, nexts, FtmlKey::Varseq, true)
     }
 
     pub fn do_vardecl<E: FTMLExtractor>(
         extractor: &mut E,
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
-        tag: FTMLKey,
+        tag: FtmlKey,
         is_seq: bool,
     ) -> Option<OpenFTMLElement> {
         let Some(name) = attrs
@@ -930,7 +930,7 @@ pub mod rules {
         };
         let role = opt!(
             extractor,
-            attrs.get_typed(FTMLKey::Role, |s| Result::<_, ()>::Ok(
+            attrs.get_typed(FtmlKey::Role, |s| Result::<_, ()>::Ok(
                 s.split(',')
                     .map(|s| s.trim().to_string().into_boxed_str())
                     .collect::<Vec<_>>()
@@ -940,17 +940,17 @@ pub mod rules {
         .unwrap_or_default();
         let assoctype = opt!(
             extractor,
-            attrs.get_typed(FTMLKey::AssocType, AssocType::from_str)
+            attrs.get_typed(FtmlKey::AssocType, AssocType::from_str)
         );
         let arity =
-            opt!(extractor, attrs.get_typed(FTMLKey::Args, ArgSpec::from_str)).unwrap_or_default();
+            opt!(extractor, attrs.get_typed(FtmlKey::Args, ArgSpec::from_str)).unwrap_or_default();
         let reordering = attrs
-            .get(FTMLKey::ArgumentReordering)
+            .get(FtmlKey::ArgumentReordering)
             .map(|s| Into::<String>::into(s).into_boxed_str());
         let macroname = attrs
-            .get(FTMLKey::Macroname)
+            .get(FtmlKey::Macroname)
             .map(|s| Into::<String>::into(s).into_boxed_str());
-        let bind = attrs.get_bool(FTMLKey::Bind);
+        let bind = attrs.get_bool(FtmlKey::Bind);
         extractor.open_decl();
         let uri = extractor.get_narrative_uri() & name;
         Some(OpenFTMLElement::Vardecl {
@@ -970,38 +970,38 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let symbol = if let Ok(s) = attrs.get_symbol_uri(FTMLKey::Notation, extractor) {
+        let symbol = if let Ok(s) = attrs.get_symbol_uri(FtmlKey::Notation, extractor) {
             VarOrSym::S(s.into())
-        } else if let Some(v) = attrs.get(FTMLKey::Notation) {
+        } else if let Some(v) = attrs.get(FtmlKey::Notation) {
             let Ok(n) = v.as_ref().parse() else {
                 extractor.add_error(FTMLError::InvalidURI(format!("10: {}", v.as_ref())));
                 return None;
             };
             VarOrSym::V(PreVar::Unresolved(n))
         } else {
-            extractor.add_error(FTMLError::InvalidKeyFor(FTMLKey::Notation.as_str(), None));
+            extractor.add_error(FTMLError::InvalidKeyFor(FtmlKey::Notation.as_str(), None));
             return None;
         };
         let mut fragment = attrs
-            .get(FTMLKey::NotationFragment)
+            .get(FtmlKey::NotationFragment)
             .map(|s| Into::<String>::into(s).into_boxed_str());
         if fragment.as_ref().is_some_and(|s| s.is_empty()) {
             fragment = None
         };
         let id = fragment.as_ref().map_or("notation", |s| &**s).to_string();
         let id = extractor.new_id(Cow::Owned(id));
-        let prec = if let Some(v) = attrs.get(FTMLKey::Precedence) {
+        let prec = if let Some(v) = attrs.get(FtmlKey::Precedence) {
             if let Ok(v) = isize::from_str(v.as_ref()) {
                 v
             } else {
-                extractor.add_error(FTMLError::InvalidKeyFor(FTMLKey::Precedence.as_str(), None));
+                extractor.add_error(FTMLError::InvalidKeyFor(FtmlKey::Precedence.as_str(), None));
                 return None;
             }
         } else {
             0
         };
         let mut argprecs = SmallVec::default();
-        if let Some(s) = attrs.get(FTMLKey::Argprecs) {
+        if let Some(s) = attrs.get(FtmlKey::Argprecs) {
             for s in s.as_ref().split(',') {
                 if s.is_empty() {
                     continue;
@@ -1009,7 +1009,7 @@ pub mod rules {
                 if let Ok(v) = isize::from_str(s.trim()) {
                     argprecs.push(v)
                 } else {
-                    extractor.add_error(FTMLError::InvalidKeyFor(FTMLKey::Argprecs.as_str(), None));
+                    extractor.add_error(FTMLError::InvalidKeyFor(FtmlKey::Argprecs.as_str(), None));
                     return None;
                 }
             }
@@ -1028,15 +1028,15 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        attrs.remove(FTMLKey::NotationComp);
-        attrs.remove(FTMLKey::Term);
-        attrs.remove(FTMLKey::Head);
-        attrs.remove(FTMLKey::NotationId);
-        attrs.remove(FTMLKey::Invisible);
+        attrs.remove(FtmlKey::NotationComp);
+        attrs.remove(FtmlKey::Term);
+        attrs.remove(FtmlKey::Head);
+        attrs.remove(FtmlKey::NotationId);
+        attrs.remove(FtmlKey::Invisible);
         nexts.retain(|r| {
             !matches!(
                 r.tag,
-                FTMLKey::Term | FTMLKey::Head | FTMLKey::NotationId | FTMLKey::Invisible
+                FtmlKey::Term | FtmlKey::Head | FtmlKey::NotationId | FtmlKey::Invisible
             )
         });
         Some(OpenFTMLElement::NotationComp)
@@ -1046,15 +1046,15 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        attrs.remove(FTMLKey::NotationComp);
-        attrs.remove(FTMLKey::Term);
-        attrs.remove(FTMLKey::Head);
-        attrs.remove(FTMLKey::NotationId);
-        attrs.remove(FTMLKey::Invisible);
+        attrs.remove(FtmlKey::NotationComp);
+        attrs.remove(FtmlKey::Term);
+        attrs.remove(FtmlKey::Head);
+        attrs.remove(FtmlKey::NotationId);
+        attrs.remove(FtmlKey::Invisible);
         nexts.retain(|r| {
             !matches!(
                 r.tag,
-                FTMLKey::Term | FTMLKey::Head | FTMLKey::NotationId | FTMLKey::Invisible
+                FtmlKey::Term | FtmlKey::Head | FtmlKey::NotationId | FtmlKey::Invisible
             )
         });
         Some(OpenFTMLElement::NotationOpComp)
@@ -1067,7 +1067,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.get_symbol_uri(FTMLKey::Definiendum, extractor)
+            attrs.get_symbol_uri(FtmlKey::Definiendum, extractor)
         );
         extractor.add_definiendum(uri.clone());
         Some(OpenFTMLElement::Definiendum(uri))
@@ -1093,7 +1093,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.get_symbol_uri(FTMLKey::Conclusion, extractor)
+            attrs.get_symbol_uri(FtmlKey::Conclusion, extractor)
         );
         let in_term = extractor.in_term();
         extractor.set_in_term(true);
@@ -1107,7 +1107,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = opt!(
             extractor,
-            attrs.get_symbol_uri(FTMLKey::Definiens, extractor)
+            attrs.get_symbol_uri(FtmlKey::Definiens, extractor)
         );
         let in_term = extractor.in_term();
         extractor.set_in_term(true);
@@ -1120,7 +1120,7 @@ pub mod rules {
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
         let id = attrs
-            .get(FTMLKey::Rule)
+            .get(FtmlKey::Rule)
             .unwrap_or_else(|| unreachable!())
             .as_ref()
             .to_string()
@@ -1134,19 +1134,19 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        attrs.remove(FTMLKey::Term);
-        attrs.remove(FTMLKey::ArgSep);
-        attrs.remove(FTMLKey::Head);
-        attrs.remove(FTMLKey::NotationId);
-        attrs.remove(FTMLKey::Invisible);
+        attrs.remove(FtmlKey::Term);
+        attrs.remove(FtmlKey::ArgSep);
+        attrs.remove(FtmlKey::Head);
+        attrs.remove(FtmlKey::NotationId);
+        attrs.remove(FtmlKey::Invisible);
         nexts.retain(|r| {
             !matches!(
                 r.tag,
-                FTMLKey::Term
-                    | FTMLKey::Head
-                    | FTMLKey::NotationId
-                    | FTMLKey::Invisible
-                    | FTMLKey::ArgSep
+                FtmlKey::Term
+                    | FtmlKey::Head
+                    | FtmlKey::NotationId
+                    | FtmlKey::Invisible
+                    | FtmlKey::ArgSep
             )
         });
         Some(OpenFTMLElement::ArgSep)
@@ -1157,19 +1157,19 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        attrs.remove(FTMLKey::Term);
-        attrs.remove(FTMLKey::Head);
-        attrs.remove(FTMLKey::ArgMap);
-        attrs.remove(FTMLKey::NotationId);
-        attrs.remove(FTMLKey::Invisible);
+        attrs.remove(FtmlKey::Term);
+        attrs.remove(FtmlKey::Head);
+        attrs.remove(FtmlKey::ArgMap);
+        attrs.remove(FtmlKey::NotationId);
+        attrs.remove(FtmlKey::Invisible);
         nexts.retain(|r| {
             !matches!(
                 r.tag,
-                FTMLKey::Term
-                    | FTMLKey::Head
-                    | FTMLKey::NotationId
-                    | FTMLKey::Invisible
-                    | FTMLKey::ArgMap
+                FtmlKey::Term
+                    | FtmlKey::Head
+                    | FtmlKey::NotationId
+                    | FtmlKey::Invisible
+                    | FtmlKey::ArgMap
             )
         });
         Some(OpenFTMLElement::ArgMap)
@@ -1180,19 +1180,19 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        attrs.remove(FTMLKey::Term);
-        attrs.remove(FTMLKey::Head);
-        attrs.remove(FTMLKey::ArgMapSep);
-        attrs.remove(FTMLKey::NotationId);
-        attrs.remove(FTMLKey::Invisible);
+        attrs.remove(FtmlKey::Term);
+        attrs.remove(FtmlKey::Head);
+        attrs.remove(FtmlKey::ArgMapSep);
+        attrs.remove(FtmlKey::NotationId);
+        attrs.remove(FtmlKey::Invisible);
         nexts.retain(|r| {
             !matches!(
                 r.tag,
-                FTMLKey::Term
-                    | FTMLKey::Head
-                    | FTMLKey::NotationId
-                    | FTMLKey::Invisible
-                    | FTMLKey::ArgMapSep
+                FtmlKey::Term
+                    | FtmlKey::Head
+                    | FtmlKey::NotationId
+                    | FtmlKey::Invisible
+                    | FtmlKey::ArgMapSep
             )
         });
         Some(OpenFTMLElement::ArgMapSep)
@@ -1206,7 +1206,7 @@ pub mod rules {
         if extractor.in_notation() {
             return None;
         }
-        let notation = attrs.value(FTMLKey::NotationId.attr_name()).and_then(|n| {
+        let notation = attrs.value(FtmlKey::NotationId.attr_name()).and_then(|n| {
             let asr = n.as_ref().trim();
             if asr.is_empty() {
                 return None;
@@ -1216,7 +1216,7 @@ pub mod rules {
                 ERROR.clone()
             }))
         });
-        let head = match attrs.value(FTMLKey::Head.attr_name()) {
+        let head = match attrs.value(FtmlKey::Head.attr_name()) {
             None => {
                 extractor.add_error(FTMLError::MissingHeadForTerm);
                 VarOrSym::V(PreVar::Unresolved(ERROR.clone()))
@@ -1256,7 +1256,7 @@ pub mod rules {
         };
         //attrs.set(tagstrings::HEAD,&head.to_string());
         let kind = attrs
-            .value(FTMLKey::Term.attr_name())
+            .value(FtmlKey::Term.attr_name())
             .unwrap_or_else(|| unreachable!());
         let kind: OpenTermKind = kind.as_ref().parse().unwrap_or_else(|()| {
             extractor.add_error(FTMLError::InvalidTermKind(kind.into()));
@@ -1301,11 +1301,11 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let Some(value) = attrs.value(FTMLKey::Arg.attr_name()) else {
+        let Some(value) = attrs.value(FtmlKey::Arg.attr_name()) else {
             extractor.add_error(FTMLError::InvalidArgSpec);
             return None;
         };
-        let arg = OpenArg::from_strs(value, attrs.value(FTMLKey::ArgMode.attr_name()));
+        let arg = OpenArg::from_strs(value, attrs.value(FtmlKey::ArgMode.attr_name()));
         let Some(arg) = arg else {
             extractor.add_error(FTMLError::InvalidArgSpec);
             return None;
@@ -1328,7 +1328,7 @@ pub mod rules {
     ) -> Option<OpenFTMLElement> {
         let uri = err!(
             extractor,
-            attrs.get_document_uri(FTMLKey::InputRef, extractor)
+            attrs.get_document_uri(FtmlKey::InputRef, extractor)
         );
         let id = attrs.get_id(extractor, Cow::Owned(uri.document_name().to_string()));
         Some(OpenFTMLElement::Inputref { uri, id })
@@ -1339,7 +1339,7 @@ pub mod rules {
         attrs: &mut E::Attr<'_>,
         _nexts: &mut SV<E>,
     ) -> Option<OpenFTMLElement> {
-        let value = attrs.get_bool(FTMLKey::IfInputref);
+        let value = attrs.get_bool(FtmlKey::IfInputref);
         Some(OpenFTMLElement::IfInputref(value))
     }
 

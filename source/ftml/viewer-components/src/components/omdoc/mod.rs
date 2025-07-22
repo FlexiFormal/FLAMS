@@ -1,7 +1,7 @@
 use content::OMDocDeclaration;
 use flams_ontology::{
     content::terms::Term,
-    ftml::FTMLKey,
+    ftml::FtmlKey,
     uris::{
         DocumentElementUri, DocumentUri, IsDomainUri, IsNarrativeUri, ModuleUri, NarrativeUri,
         SymbolUri, UriWithArchive, UriWithPath,
@@ -304,9 +304,9 @@ pub fn doc_elem_name(
 
 #[inline]
 pub fn symbol_name(uri: &SymbolUri, title: &str) -> impl IntoView {
-    const TERM: &str = FTMLKey::Term.attr_name();
-    const HEAD: &str = FTMLKey::Head.attr_name();
-    const COMP: &str = FTMLKey::Comp.attr_name();
+    const TERM: &str = FtmlKey::Term.attr_name();
+    const HEAD: &str = FtmlKey::Head.attr_name();
+    const COMP: &str = FtmlKey::Comp.attr_name();
     let html = format!("<span {TERM}=\"OMID\" {HEAD}=\"{uri}\" {COMP}>{title}</span>");
     view!(<FTMLString html/>)
 }

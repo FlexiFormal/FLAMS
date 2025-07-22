@@ -608,7 +608,7 @@ pub(super) fn do_arg<V: IntoView + 'static>(
 ) -> impl IntoView {
     #[cfg(feature = "omdoc")]
     {
-        use flams_ontology::ftml::FTMLKey;
+        use flams_ontology::ftml::FtmlKey;
         let tm = use_context::<Option<InTermState>>().flatten();
         if let Some(tm) = tm {
             if tm.replacable {
@@ -632,7 +632,7 @@ pub(super) fn do_arg<V: IntoView + 'static>(
                                 let entry = &mut subs[sub];
                                 *entry = Some(orig.html_string());
                             } else {
-                                tracing::error!("{} is not a list", FTMLKey::Arg.attr_name());
+                                tracing::error!("{} is not a list", FtmlKey::Arg.attr_name());
                             }
                         } else {
                             *entry = Some((arg.mode, either::Left(orig.html_string())));
@@ -641,7 +641,7 @@ pub(super) fn do_arg<V: IntoView + 'static>(
                 })
             }
         } /*else {
-            tracing::error!("{} outside of a term",FTMLKey::Arg.attr_name());
+            tracing::error!("{} outside of a term",FtmlKey::Arg.attr_name());
           } */
     }
 
