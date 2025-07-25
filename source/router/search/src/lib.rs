@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
     not(any(feature = "ssr", feature = "hydrate"))
