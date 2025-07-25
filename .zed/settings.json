@@ -12,7 +12,7 @@
             "ts",
             "ws",
             "docs",
-            "ssr" //"hydrate" //
+            "hydrate" //"ssr" //
           ] // "all"
         }
       }

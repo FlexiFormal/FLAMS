@@ -12,6 +12,7 @@ ssr = [
     "thaw/ssr",
     "ftml-viewer-components/ssr",
     "flams-web-utils/ssr",
+    "flams-router-base/ssr",
     "dep:flams-system",
     "dep:leptos_axum",
     "dep:http",
@@ -48,6 +49,8 @@ either = { workspace = true }
 tracing = { workspace = true }
 lazy_static = { workspace = true }
 urlencoding = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
 
 tokio = { workspace = true, optional = true }
 paste = { workspace = true, optional = true }

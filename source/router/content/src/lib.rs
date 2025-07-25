@@ -8,6 +8,7 @@
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
 pub mod components;
+pub mod errors;
 pub mod server_fns;
 #[cfg(feature = "ssr")]
 mod toc;
@@ -38,7 +39,7 @@ mod ssr {
       ($fn:ident!($($args:tt)*)) => {
         if flams_system::settings::Settings::get().lsp {
           let Some(state) = ::flams_lsp::STDIOLSPServer::global_state() else {
-            return Err("no lsp server".to_string().into())
+            panic!("no lsp server");
           };
           state.backend().$fn($($args)*)
         } else {
@@ -50,7 +51,7 @@ mod ssr {
       ($fn:ident SYNC!($($args:tt)*)) => {
         if flams_system::settings::Settings::get().lsp {
           let Some(state) = ::flams_lsp::STDIOLSPServer::global_state() else {
-            return Err("no lsp server".to_string())
+              panic!("no lsp server");
           };
           state.backend().$fn($($args)*)
         } else {
@@ -60,7 +61,7 @@ mod ssr {
       ($fn:ident($($args:tt)*)) => {
         if flams_system::settings::Settings::get().lsp {
             let Some(state) = ::flams_lsp::STDIOLSPServer::global_state() else {
-                return Err("no lsp server".to_string())
+                panic!("no lsp server");
               };
             state.backend().$fn($($args)*)
         } else {
@@ -78,7 +79,7 @@ mod ssr {
       ($b:ident => {$($lsp:tt)*}{$($global:tt)*}) => {
         if flams_system::settings::Settings::get().lsp {
           let Some(state) = ::flams_lsp::STDIOLSPServer::global_state() else {
-            return Err("no lsp server".to_string().into())
+              panic!("no lsp server");
           };
           let $b = state.backend();
           $($lsp)*

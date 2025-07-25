@@ -7,7 +7,7 @@ edition = "2021"
 workspace = true
 
 [features]
-ws = ["dep:axum", "dep:serde_json"]
+ws = ["dep:axum"]
 
 [dependencies]
 flams-system = { workspace = true, features = ["tokio", "zip"] }
@@ -25,9 +25,9 @@ tokio-util = { workspace = true }
 triomphe = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
-eyre = {workspace = true}
+eyre = { workspace = true }
+serde_json = { workspace = true }
 
 axum = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 smallvec = { workspace = true }

@@ -171,6 +171,10 @@ pub use leptos_axum;
 #[cfg(feature = "ssr")]
 #[macro_export]
 macro_rules! not_found{
+    () => {
+        let response = expect_context::<$crate::leptos_axum::ResponseOptions>();
+        response.set_status($crate::http::StatusCode::NOT_FOUND);
+    };
     (! $($e:tt)*) => { {
         let response = expect_context::<$crate::leptos_axum::ResponseOptions>();
         response.set_status($crate::http::StatusCode::NOT_FOUND);

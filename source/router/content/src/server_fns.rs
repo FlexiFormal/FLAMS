@@ -177,12 +177,11 @@ ftml_uris::compfun! {
     pub async fn fragment(uri:Uri,
         context: Option<Uri>
     ) -> Result<(Uri, Vec<CSS>, String), ServerFnError<String>> {
-        let Result::<UriComponents, _>::Ok(comps) = uri else {
-            return Err("invalid uri components".to_string().into());
-        };
+        // TODO this actually already returns proper errors
+        let comps = uri.map_err(|e| e.to_string())?;
         match comps.parse(flams_router_base::uris::get_uri) {
-            Ok(uri) => server::fragment(uri, context).await,
-            Err(e) => Err(format!("Invalid uri: {e}").into()),
+            Ok(uri) => server::fragment(uri, context).await.map_err(|e| e.to_string().into()),
+            Err(e) => Err(crate::errors::BackendError::NotFound(ftml_uris::UriKind::Archive).to_string().into()),
         }
     }
 }
@@ -462,17 +461,21 @@ mod server {
     pub async fn fragment(
         uri: Uri,
         _: Option<Uri>,
-    ) -> Result<(Uri, Vec<CSS>, String), ServerFnError<String>> {
+    ) -> Result<(Uri, Vec<CSS>, String), crate::errors::BackendError> {
+        use crate::errors::BackendError;
+        use ftml_uris::UriKind;
         match &uri {
             Uri::Document(duri) => {
                 let Some((css, html)) = backend!(get_html_body!(duri, false)) else {
-                    not_found!("Document {duri} not found");
+                    not_found!();
+                    return Err(BackendError::NotFound(UriKind::Document));
                 };
                 Ok((uri, insert_base_url(filter_paras(css)), html))
             }
             Uri::DocumentElement(euri) => {
                 let Some(e) = backend!(get_document_element!(euri)) else {
-                    not_found!("Document Element {euri} not found");
+                    not_found!();
+                    return Err(BackendError::NotFound(UriKind::DocumentElement));
                 };
                 match e.as_ref() {
                     DocumentElement::Paragraph(LogicalParagraph { range, .. })
@@ -480,7 +483,8 @@ mod server {
                         let Some((css, html)) =
                             backend!(get_html_fragment!(euri.document_uri(), *range))
                         else {
-                            not_found!("Paragraph HTML fragment {euri} not found");
+                            not_found!();
+                            return Err(BackendError::HtmlNotFound);
                         };
                         Ok((uri, insert_base_url(filter_paras(css)), html))
                     }
@@ -491,21 +495,25 @@ mod server {
                         let Some((css, html)) =
                             backend!(get_html_fragment!(euri.document_uri(), *range))
                         else {
-                            not_found!("Section HTML fragment {euri} not found");
+                            not_found!();
+                            return Err(BackendError::HtmlNotFound);
                         };
                         Ok((uri, insert_base_url(filter_paras(css)), html))
                     }
-                    _ => return Err("not a paragraph".to_string().into()),
+                    _ => return Err(BackendError::NoFragment),
                 }
             }
             Uri::Symbol(suri) => get_definitions(suri.clone())
                 .await
-                .ok_or_else(|| not_found!(!"No definition for {suri} not found"))
+                .ok_or_else(|| {
+                    not_found!();
+                    BackendError::NoDefinition
+                })
                 .map(|(css, b)| (uri, insert_base_url(filter_paras(css)), b)),
-            Uri::Base(_) => return Err("TODO: base".to_string().into()),
-            Uri::Archive(_) => return Err("TODO: archive".to_string().into()),
-            Uri::Path(_) => return Err("TODO: path".to_string().into()),
-            Uri::Module(_) => return Err("TODO: module".to_string().into()),
+            Uri::Base(_) => Err(BackendError::ToDo("base uri".to_string())),
+            Uri::Archive(_) => Err(BackendError::ToDo("archive uri".to_string())),
+            Uri::Path(_) => Err(BackendError::ToDo("path uri".to_string())),
+            Uri::Module(_) => Err(BackendError::ToDo("module uri".to_string())),
         }
     }
 
