@@ -1,6 +1,6 @@
 {
   "name": "@kwarc/flams",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "Typescript bindings for interacting with a FLAMS server",
   "homepage": "https://github.com/KWARC/FLAMS#readme",
   "bugs": {

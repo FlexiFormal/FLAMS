@@ -31,11 +31,8 @@ impl VSCode {
     ) -> Result<(), String> {
         #[cfg(feature = "hydrate")]
         {
-            leptos::logging::log!("Here: {t:?}");
             let e = serde_wasm_bindgen::to_value(&t).map_err(|e| e.to_string())?;
-            leptos::logging::log!("Got value");
             let parent = unwrap!(unwrap!(unwrap!(leptos::web_sys::window()).parent().ok()));
-            leptos::logging::log!("Got parent");
             unwrap!(parent.post_message(&e, &self.origin).ok());
         }
         Ok(())

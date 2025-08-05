@@ -2,7 +2,7 @@
   "name": "flams",
   "displayName": "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System",
   "description": "IDE for the FLAMS system and sTeX",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "license": "GPL3",
   "publisher": "kwarc",
   "icon": "img/flams.png",
@@ -67,6 +67,18 @@
           "group": "inline",
           "when": "view == flams-mathhub && viewItem == remote"
         }
+      ],
+      "editor/title": [
+				{
+					"command": "flams.buildAll",
+					"group": "navigation",
+					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+				},
+				{
+					"command": "flams.buildOne",
+					"group": "navigation",
+					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+				}
       ]
     },
     "commands": [
@@ -77,6 +89,16 @@
           "light": "img/cloud-download-light.svg",
           "dark": "img/cloud-download-dark.svg"
         }
+      },
+      {
+        "command": "flams.buildAll",
+        "title": "Build recursively",
+        "icon": "$(testing-run-all-icon)"
+      },
+      {
+        "command": "flams.buildOne",
+        "title": "Build file",
+        "icon": "$(testing-run-icon)"
       }
     ],
     "configuration": [

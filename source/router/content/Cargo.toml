@@ -45,9 +45,10 @@ serde = { workspace = true }
 either = { workspace = true }
 tracing = { workspace = true }
 lazy_static = { workspace = true }
+urlencoding = { workspace = true }
 
 tokio = { workspace = true, optional = true }
 paste = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
-leptos_axum = { workspace = true,optional=true }
-http = { workspace = true,optional=true }
+leptos_axum = { workspace = true, optional = true }
+http = { workspace = true, optional = true }

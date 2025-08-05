@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use flams_ontology::{
     SlideElement,
     languages::Language,
@@ -6,9 +8,12 @@ use flams_ontology::{
         notations::Notation,
         problems::{ProblemFeedbackJson, ProblemResponse, Quiz, SolutionData},
     },
-    uris::{ArchiveId, DocumentElementURI, DocumentURI, SymbolURI, URI},
+    uris::{
+        ArchiveId, ArchiveURITrait, ContentURI, ContentURITrait, DocumentElementURI, DocumentURI,
+        NarrativeURI, PathURITrait, SymbolURI, URI, URIRefTrait,
+    },
 };
-use flams_utils::CSS;
+use flams_utils::{CSS, unwrap};
 use ftml_viewer_components::components::{TOCElem, omdoc::OMDoc};
 use leptos::prelude::*;
 
@@ -36,6 +41,106 @@ pub async fn document(
         return Err("invalid uri".to_string().into());
     };
     server::document(uri).await
+}
+
+#[server(
+  prefix="/content",
+  endpoint="document_of",
+  input=server_fn::codec::GetUrl,
+  output=server_fn::codec::Json
+)]
+pub async fn document_of(uri: URI) -> Result<DocumentURI, ServerFnError<String>> {
+    use flams_system::backend::Backend;
+    let m = match uri {
+        URI::Base(_) | URI::Archive(_) | URI::Path(_) => {
+            return Err("not in a document".to_string().into());
+        }
+        URI::Narrative(NarrativeURI::Document(d)) => return Ok(d),
+        URI::Narrative(NarrativeURI::Element(d)) => return Ok(d.document().clone()),
+        URI::Content(ContentURI::Module(ref m)) => m,
+        URI::Content(ContentURI::Symbol(ref s)) => s.module(),
+    };
+    flams_system::backend::GlobalBackend::get().with_local_archive(m.archive_id(), |o| {
+        let Some(archive) = o else {
+            return Err(format!("no local archive {} found", m.archive_id()).into());
+        };
+        let mut mname = m.name().first_name().as_ref();
+        let mut file = archive.source_dir();
+        let maybe_step = if let Some(path) = m.path() {
+            for step in &path.steps()[..path.steps().len() - 1] {
+                file = file.join(step.as_ref());
+            }
+            Some(path.last_name().as_ref())
+        } else {
+            None
+        };
+        if let Some(step) = maybe_step {
+            if let Ok(mut d) = std::fs::read_dir(file.join(step)) {
+                if let Some(rp) = d.find_map::<String, _>(|p| {
+                    p.ok().and_then(|p| {
+                        let fnm = p.file_name();
+                        let name = fnm.as_os_str().as_encoded_bytes();
+                        let Some(name) = name.strip_prefix(mname.as_bytes()) else {
+                            return None;
+                        };
+                        let Some(name) = name.strip_prefix(&[b'.']) else {
+                            return None;
+                        };
+                        let Some(lang) = name.strip_suffix(b".tex") else {
+                            return None;
+                        };
+                        if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
+                            Some(
+                                p.path()
+                                    .as_os_str()
+                                    .to_str()?
+                                    .strip_prefix(archive.source_dir().as_os_str().to_str()?)?[1..]
+                                    .to_string(),
+                            )
+                        } else {
+                            None
+                        }
+                    })
+                }) {
+                    return DocumentURI::from_archive_relpath(m.archive_uri().owned(), &rp)
+                        .map_err(|e| e.to_string().into());
+                }
+                mname = step;
+            };
+        }
+        if let Ok(mut d) = std::fs::read_dir(file) {
+            if let Some(rp) = d.find_map::<String, _>(|p| {
+                p.ok().and_then(|p| {
+                    let fnm = p.file_name();
+                    let name = fnm.as_os_str().as_encoded_bytes();
+                    let Some(name) = name.strip_prefix(mname.as_bytes()) else {
+                        return None;
+                    };
+                    let Some(name) = name.strip_prefix(&[b'.']) else {
+                        return None;
+                    };
+                    let Some(lang) = name.strip_suffix(b".tex") else {
+                        return None;
+                    };
+                    if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
+                        Some(
+                            p.path()
+                                .as_os_str()
+                                .to_str()?
+                                .strip_prefix(archive.source_dir().as_os_str().to_str()?)?[1..]
+                                .to_string(),
+                        )
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                return DocumentURI::from_archive_relpath(m.archive_uri().owned(), &rp)
+                    .map_err(|e| e.to_string().into());
+            }
+        };
+        Err("Not found".to_string().into())
+    })
 }
 
 #[server(

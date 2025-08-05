@@ -24,3 +24,13 @@ impl Default for FileStateSummary {
         }
     }
 }
+impl FileStateSummary {
+    pub fn merge(&mut self, other: Self) {
+        self.new += other.new;
+        self.stale += other.stale;
+        self.deleted += other.deleted;
+        self.up_to_date += other.up_to_date;
+        self.last_built = self.last_built.max(other.last_built);
+        self.last_changed = self.last_changed.max(other.last_changed);
+    }
+}

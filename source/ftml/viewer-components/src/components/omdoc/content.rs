@@ -383,6 +383,7 @@ pub struct OMDocSymbol {
     pub df: Option<Term>,
     pub tp: Option<Term>,
     pub arity: ArgSpec,
+    pub roles: Vec<String>,
     pub macro_name: Option<String>,
     //pub notations:Vec<(ModuleURI,String,Option<String>,Option<String>)>
 }
@@ -393,11 +394,14 @@ impl super::OMDocT for OMDocSymbol {
             df,
             tp,
             arity,
+            roles,
             macro_name,
         } = self;
         let show_separator = true; // !notations.is_empty();
         let symbol_str = if use_context::<InStruct>().is_some() {
             "Field "
+        } else if roles.iter().any(|s| s == "textsymdecl") {
+            "Text Symbol "
         } else {
             "Symbol "
         };
@@ -505,6 +509,7 @@ mod froms {
                 df,
                 tp,
                 macroname,
+                role,
                 ..
             }: &Symbol,
             backend: &B, //&mut StringPresenter<'_,B>,
@@ -512,6 +517,7 @@ mod froms {
             Self {
                 uri: uri.clone(),
                 arity: arity.clone(),
+                roles: role.iter().map(|s| s.to_string()).collect(),
                 df: df.clone(), //.as_ref().and_then(|t| backend.present(t).ok()),
                 tp: tp.clone(), //.as_ref().and_then(|t| backend.present(t).ok()),
                 macro_name: macroname.as_ref().map(ToString::to_string),

@@ -12,7 +12,7 @@ use std::{collections::hash_map::Entry, path::Path};
 
 pub use async_lsp;
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::{ArchiveId, DocumentURI};
+use flams_ontology::uris::{ArchiveId, BaseURI, DocumentURI};
 use flams_stex::quickparse::stex::{
     structs::{GetModuleError, ModuleReference, STeXModuleStore},
     STeXParseData,
@@ -169,14 +169,14 @@ impl lsp::notification::Notification for InstallArchives {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct HtmlRequestParams {
-    pub uri: lsp::Url,
+struct NewArchiveParams {
+    pub archive: ArchiveId,
+    pub urlbase: BaseURI,
 }
-pub(crate) struct HTMLRequest;
-impl lsp::request::Request for HTMLRequest {
-    type Params = HtmlRequestParams;
-    type Result = Option<String>;
-    const METHOD: &'static str = "flams/htmlRequest";
+struct NewArchive;
+impl lsp::notification::Notification for NewArchive {
+    type Params = NewArchiveParams;
+    const METHOD: &str = "flams/newArchive";
 }
 
 pub(crate) struct StandaloneExport;
@@ -190,6 +190,52 @@ impl lsp::notification::Notification for StandaloneExport {
     const METHOD: &str = "flams/standaloneExport";
 }
 
+struct UpdateMathHub;
+impl lsp::notification::Notification for UpdateMathHub {
+    type Params = ();
+    const METHOD: &str = "flams/updateMathHub";
+}
+
+struct OpenFile;
+impl lsp::notification::Notification for OpenFile {
+    type Params = lsp::Url;
+    const METHOD: &str = "flams/openFile";
+}
+
+struct HTMLResult;
+impl lsp::notification::Notification for HTMLResult {
+    type Params = String;
+    const METHOD: &str = "flams/htmlResult";
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct HtmlRequestParams {
+    pub uri: lsp::Url,
+}
+pub(crate) struct HTMLRequest;
+impl lsp::request::Request for HTMLRequest {
+    type Params = HtmlRequestParams;
+    type Result = Option<String>;
+    const METHOD: &'static str = "flams/htmlRequest";
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BuildParams {
+    pub uri: lsp::Url,
+}
+struct BuildOne;
+impl lsp::request::Request for BuildOne {
+    type Params = BuildParams;
+    type Result = ();
+    const METHOD: &str = "flams/buildOne";
+}
+struct BuildAll;
+impl lsp::request::Request for BuildAll {
+    type Params = BuildParams;
+    type Result = ();
+    const METHOD: &str = "flams/buildAll";
+}
+
 pub(crate) struct QuizRequest;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct QuizRequestParams {
@@ -199,18 +245,6 @@ impl lsp::request::Request for QuizRequest {
     type Params = QuizRequestParams;
     type Result = String;
     const METHOD: &'static str = "flams/quizRequest";
-}
-
-struct UpdateMathHub;
-impl lsp::notification::Notification for UpdateMathHub {
-    type Params = ();
-    const METHOD: &str = "flams/updateMathHub";
-}
-
-struct HTMLResult;
-impl lsp::notification::Notification for HTMLResult {
-    type Params = String;
-    const METHOD: &str = "flams/htmlResult";
 }
 
 pub struct ServerURL;
@@ -228,6 +262,7 @@ impl lsp::notification::Notification for ServerURL {
 pub trait ClientExt {
     fn html_result(&self, uri: &DocumentURI);
     fn update_mathhub(&self);
+    fn open_file(&self, path: &Path);
 }
 impl ClientExt for ClientSocket {
     #[inline]
@@ -237,6 +272,16 @@ impl ClientExt for ClientSocket {
     #[inline]
     fn update_mathhub(&self) {
         if let Err(e) = self.notify::<UpdateMathHub>(()) {
+            tracing::error!("failed to send notification: {}", e);
+            return;
+        }
+    }
+
+    fn open_file(&self, path: &Path) {
+        let Ok(url) = lsp::Url::from_file_path(path) else {
+            return;
+        };
+        if let Err(e) = self.notify::<OpenFile>(url) {
             tracing::error!("failed to send notification: {}", e);
             return;
         }
@@ -270,9 +315,13 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         let mut r = async_lsp::router::Router::from_language_server(self);
         r.request::<HTMLRequest, _>(Self::html_request);
         r.request::<QuizRequest, _>(Self::quiz_request);
+        r.request::<BuildOne, _>(Self::build_one);
+        r.request::<BuildAll, _>(Self::build_all);
+
         r.notification::<Reload>(Self::reload);
         r.notification::<StandaloneExport>(Self::export_standalone);
         r.notification::<InstallArchives>(Self::install);
+        r.notification::<NewArchive>(Self::new_archive);
         //r.request(handler)
         r
     }

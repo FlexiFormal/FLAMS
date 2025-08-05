@@ -4,8 +4,8 @@ use super::{
 };
 use crate::{
     backend::{
-        archives::{source_files::SourceEntry, ArchiveOrGroup},
-        AnyBackend, Backend,
+        archives::{source_files::SourceEntry, Archive, ArchiveOrGroup},
+        AnyBackend, Backend, GlobalBackend, SandboxedRepository,
     },
     formats::{BuildTargetId, FormatOrTargets},
 };
@@ -378,11 +378,57 @@ impl Queue {
     name = "Queueing tasks",
     skip_all
   )]
+    pub fn enqueue_all(&self, target: FormatOrTargets, stale_only: bool, clean: bool) -> usize {
+        self.maybe_restart();
+        if let AnyBackend::Sandbox(b) = &self.0.backend {
+            b.0.repos.write().clear();
+        }
+        let mut acc = 0;
+        for a in &*GlobalBackend::get().all_archives() {
+            let Archive::Local(archive) = a else { continue };
+
+            if let AnyBackend::Sandbox(b) = &self.0.backend {
+                b.0.repos
+                    .write()
+                    .push(SandboxedRepository::Copy(archive.id().clone()));
+                b.copy_archive(archive);
+                if clean {
+                    let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
+                }
+            } else if clean {
+                let _ = std::fs::remove_dir_all(archive.out_dir());
+            }
+            acc += archive.with_sources(|d| {
+                let Some(d) = d.dfs() else { return 0 };
+                let map = &mut *self.0.map.write();
+                Self::enqueue(
+                    map,
+                    &self.0.backend,
+                    a,
+                    target,
+                    stale_only,
+                    d.filter_map(|e| match e {
+                        SourceEntry::Dir(_) => None,
+                        SourceEntry::File(f) => Some(f),
+                    }),
+                )
+            });
+        }
+        acc
+    }
+
+    #[instrument(level = "info",
+    parent=&self.0.span,
+    target = "buildqueue",
+    name = "Queueing tasks",
+    skip_all
+  )]
     pub fn enqueue_group(
         &self,
         id: &ArchiveId,
         target: FormatOrTargets,
         stale_only: bool,
+        clean: bool,
     ) -> usize {
         self.maybe_restart();
         if let AnyBackend::Sandbox(b) = &self.0.backend {
@@ -392,6 +438,13 @@ impl Queue {
             None => 0,
             Some(ArchiveOrGroup::Archive(id)) => self.0.backend.with_archive(id, |a| {
                 let Some(archive) = a else { return 0 };
+                if clean {
+                    if let AnyBackend::Sandbox(b) = &self.0.backend {
+                        let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
+                    } else if let Archive::Local(a) = archive {
+                        let _ = std::fs::remove_dir_all(a.out_dir());
+                    }
+                }
                 archive.with_sources(|d| {
                     let Some(d) = d.dfs() else { return 0 };
                     let map = &mut *self.0.map.write();
@@ -418,6 +471,16 @@ impl Queue {
                 }) {
                     ret += self.0.backend.with_archive(id, |a| {
                         let Some(archive) = a else { return 0 };
+
+                        if clean {
+                            if let AnyBackend::Sandbox(b) = &self.0.backend {
+                                let _ = std::fs::remove_dir_all(
+                                    b.path_for(archive.id()).join(".flams"),
+                                );
+                            } else if let Archive::Local(a) = archive {
+                                let _ = std::fs::remove_dir_all(a.out_dir());
+                            }
+                        }
                         archive.with_sources(|d| {
                             let Some(d) = d.dfs() else { return 0 };
                             Self::enqueue(
@@ -451,6 +514,7 @@ impl Queue {
         target: FormatOrTargets,
         stale_only: bool,
         rel_path: Option<&str>,
+        clean: bool,
     ) -> usize {
         self.maybe_restart();
         if let AnyBackend::Sandbox(b) = &self.0.backend {
@@ -458,6 +522,13 @@ impl Queue {
         }
         self.0.backend.with_archive(id, |archive| {
             let Some(archive) = archive else { return 0 };
+            if clean {
+                if let AnyBackend::Sandbox(b) = &self.0.backend {
+                    let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
+                } else if let Archive::Local(a) = archive {
+                    let _ = std::fs::remove_dir_all(a.out_dir());
+                }
+            }
             archive.with_sources(|d| match rel_path {
                 None => {
                     let Some(d) = d.dfs() else { return 0 };

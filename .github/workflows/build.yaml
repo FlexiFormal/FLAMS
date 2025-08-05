@@ -26,6 +26,8 @@ jobs:
       #      run: cd source/ftml/viewer && cargo make wasm-pack-ts
       - name: doc
         run: cargo make doc
+      - name: ffi
+        run: cargo make build-ffi
       - name: Remove lock file
         run: rm target/doc/.lock
       - name: Set executable
@@ -34,6 +36,11 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: target/doc
+      - name: Upload ffi
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffi-linux
+          path: target/release/libflams-ffi.so
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -60,6 +67,13 @@ jobs:
         run: cargo install --force cargo-make && cargo install wasm-pack && cargo install wasm-bindgen-cli && cargo install --locked cargo-leptos
       - name: main
         run: cargo make
+      - name: ffi
+        run: cargo make build-ffi
+      - name: Upload ffi
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffi-windows
+          path: target/x86_64-pc-windows-msvc/release/flams-ffi.dll
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -95,8 +109,15 @@ jobs:
         run: cargo install --force cargo-make && cargo install wasm-pack && cargo install wasm-bindgen-cli && cargo install --locked cargo-leptos
       - name: main
         run: cargo make
+      - name: ffi
+        run: cargo make build-ffi
       - name: Set executable
         run: chmod +x bin/flams
+      - name: Upload ffi
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffi-macos
+          path: target/release/libflams-ffi.so
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -124,6 +145,18 @@ jobs:
           path: ./mac
       - name: Set executable
         run: chmod +x ./mac/flams
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffi-linux
+          path: ./ffi-linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffi-windows
+          path: ./ffi-windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffi-macos
+          path: ./ffi-macos
       #  - uses: actions/download-artifact@v4
       #    with:
       #      name: ts
@@ -136,6 +169,18 @@ jobs:
         with:
           files: linux/
           dest: linux.zip
+      - uses: vimtor/action-zip@v1
+        with:
+          files: ffi-linux/
+          dest: ffi-linux.zip
+      - uses: vimtor/action-zip@v1
+        with:
+          files: ffi-windows/
+          dest: ffi-windows.zip
+      - uses: vimtor/action-zip@v1
+        with:
+          files: ffi-macos/
+          dest: ffi-macos.zip
       - uses: vimtor/action-zip@v1
         with:
           files: windows/
@@ -163,6 +208,9 @@ jobs:
             ./windows.zip
             ./mac.zip
             ./ftml.zip
+            ./ffi-linux.zip
+            ./ffi-windows.zip
+            ./ffi-macos.zip
     #        ./vscode/flams.vsix
     #        ./ts.zip
   deploy-docs:

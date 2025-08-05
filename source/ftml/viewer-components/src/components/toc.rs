@@ -242,9 +242,11 @@ pub fn Toc(
         iter: gottos,
     };
     view! {
-      <div><Scrollbar style="max-height: 400px;"><Anchor>{
+      //<div><Scrollbar style="max-height: 400px;">
+      <Anchor>{
         toc.into_iter().map(|e| e.into_view(&mut gottos)).collect_view()
-      }</Anchor></Scrollbar></div>
+      }</Anchor>
+      //</Scrollbar></div>
     }
 }
 

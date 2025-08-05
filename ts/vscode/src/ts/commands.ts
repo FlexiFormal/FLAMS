@@ -8,6 +8,13 @@ import { insertUsemodule } from "./utils";
 
 export enum Commands {
   openFile = "flams.openFile",
+  installArchive = "flams.mathhub.install",
+  buildOne = "flams.buildOne",
+  buildAll = "flams.buildAll"
+}
+
+export enum Lsp {
+
 }
 
 export enum Settings {
@@ -39,9 +46,102 @@ interface StandaloneExportParams {
 
 interface ReloadParams {}
 
+interface NewArchiveParams {
+  archive:string,
+  urlbase:string
+}
+
+interface BuildFileParams {
+  uri: language.URI;
+}
+
 interface Usemodule {
+  kind:"usemodule";
   archive: string;
   path: string;
+}
+
+interface PreviewLocal {
+  kind:"preview";
+  uri:string;
+}
+
+class PreviewPanel {
+  panel:[string,vscode.WebviewPanel][];
+  constructor() {
+    this.panel = [];
+  }
+  open(url:string,title:string) {
+    let old = this.panel.find(([u,_]) => u === url);
+    if (old) {
+      const column = old[1].viewColumn?old[1].viewColumn:vscode.ViewColumn.Beside;
+      old[1].reveal(column,true);
+      old[1].webview.html = "";
+      old[1].webview.html = iframeHtml(url,title);
+    } else {
+      const new_panel = openIframe(url,title,false);
+      this.panel.push([url,new_panel]);
+      new_panel.onDidDispose(() => {
+        this.panel = this.panel.filter(([u,_]) => u !== url);
+      });
+    }
+  }
+}
+
+export const PREVIEW : PreviewPanel = new PreviewPanel();
+
+class Dashboard {
+  panel: vscode.WebviewPanel | undefined;
+  show(context:FLAMSContext,url:string) {
+    if (this.panel) {
+      const column = this.panel.viewColumn?this.panel.viewColumn:vscode.ViewColumn.Beside;
+      this.panel.reveal(column,false);
+      this.panel.webview.html = "";
+      this.panel.webview.html = iframeHtml(context.server.url + "/dashboard/" + url,"Dashboard");
+    } else {
+      const new_panel = openIframe(context.server.url + "/dashboard/" + url,"Dashboard",true);
+      this.panel = new_panel;
+      new_panel.onDidDispose(() => {
+        this.panel = undefined;
+      });
+    }
+  }
+}
+
+export const DASHBOARD = new Dashboard();
+
+ 
+
+function new_archive(context: FLAMSContext) {
+  vscode.window.showInputBox({
+    prompt:"Insert the name of a new math archive here.",
+    password:false,
+    title:"New Math Archive",
+    placeHolder:"My/Archive/Name",
+    validateInput(value) {
+      return undefined; // TODO
+    },
+  }).then((value) => {
+    if (value !== undefined) { 
+      let archive = value;
+      vscode.window.showInputBox({
+        prompt:"Insert the URL base of the archive (where you plan to host it):",
+        password:false,
+        title:"New Math Archive",
+        value:"https://mathhub.info",
+        validateInput(value) {
+          return undefined; // TODO
+        },
+      }).then(value => {
+        if (value !== undefined) { 
+          let urlbase = value;
+          context.client.sendNotification("flams/newArchive", <NewArchiveParams>{ 
+            archive,urlbase
+          });
+        }
+      });
+    }
+  });
 }
 
 export function register_server_commands(context: FLAMSContext) {
@@ -62,12 +162,18 @@ export function register_server_commands(context: FLAMSContext) {
       `${context.server._url}/vscode/search`,
       remote,
       (msg) => {
-        if ("archive" in msg && "path" in msg) {
+        if ("kind" in msg && msg.kind === "usemodule") {
+          const usem = <Usemodule> msg;
           if (vscode.window.activeTextEditor?.document) {
-            let doc = vscode.window.activeTextEditor.document;
-            return insertUsemodule(doc, msg.archive, msg.path);
+            const doc = vscode.window.activeTextEditor.document;
+            return insertUsemodule(doc, usem.archive, usem.path);
           }
-          vscode.window.showInformationMessage("No sTeX file in focus");
+          return vscode.window.showInformationMessage("No sTeX file in focus");
+        }
+        if ("kind" in msg && msg.kind === "preview") {
+          const pv = <PreviewLocal>msg;
+          const url = context.server.url + "/document?uri=" + encodeURIComponent(pv.uri);
+          PREVIEW.open(url,pv.uri.split("&d=")[1]);
         }
         vscode.window.showErrorMessage(`Unknown message: ${msg}`);
       },
@@ -78,41 +184,63 @@ export function register_server_commands(context: FLAMSContext) {
   vscode.window.registerTreeDataProvider("flams-mathhub", context.mathhub);
 
   context.vsc.subscriptions.push(
-    vscode.commands.registerCommand("flams.mathhub.install", (e) =>
+    vscode.commands.registerCommand(Commands.installArchive, (e) =>
       context.mathhub?.install(e),
     ),
   );
+  context.vsc.subscriptions.push(
+    vscode.commands.registerCommand(Commands.buildOne, (arg:vscode.Uri) => 
+		context.client?.sendRequest("flams/buildOne",<BuildFileParams>{uri:arg.toString()})
+      .then((_) => DASHBOARD.show(context,"queue") )
+	));
+  context.vsc.subscriptions.push(
+    vscode.commands.registerCommand(Commands.buildAll, (arg:vscode.Uri) => 
+		context.client?.sendRequest("flams/buildAll",<BuildFileParams>{uri:arg.toString()})
+      .then((_) => DASHBOARD.show(context,"queue") )
+	));
 
   context.client.onNotification("flams/htmlResult", (s: string) => {
-    openIframe(
-      context.server.url + "?uri=" + encodeURIComponent(s),
-      s.split("&d=")[1],
-    );
+    PREVIEW.open(context.server.url + "?uri=" + encodeURIComponent(s),s.split("&d=")[1]);
   });
   context.client.onNotification("flams/updateMathHub", (_) =>
     context.mathhub?.update(),
   );
+  context.client.onNotification("flams/openFile", (v:string) =>{
+    const uri = vscode.Uri.parse(v);
+    vscode.window.showTextDocument(uri);
+  });
 }
 
-export function openIframe(url: string, title: string): vscode.WebviewPanel {
+export function openIframe(url: string, title: string,focus:boolean): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel(
     "webviewPanel",
     title,
-    vscode.ViewColumn.Beside,
+    {
+      viewColumn: vscode.ViewColumn.Beside,
+      preserveFocus: !focus
+    },
     {
       enableScripts: true,
       enableForms: true,
     },
   );
-  panel.webview.html = `
+  panel.webview.html = iframeHtml(url,title);
+  return panel;
+}
+
+function iframeHtml(url:string,title:string): string {
+  return `
   <!DOCTYPE html>
   <html>
     <head></head>
     <body style="padding:0;width:100vw;height:100vh;overflow:hidden;">
-      <iframe style="width:100vw;height:100vh;overflow:hidden;" src="${url}" title="${title}" style="background:white"></iframe>
+      <iframe style="width:100vw;height:100vh;overflow:hidden;" src="${url}" title="${title}" style="background:white" id="miframe"></iframe>
+      <script>
+        var _theframe = document.getElementById("miframe");
+        _theframe.contentWindow.location.href = _theframe.src;
+      </script>
     </body>
   </html>`;
-  return panel;
 }
 
 export function webview_iframe(
@@ -208,7 +336,10 @@ function flamsTools(msg: any, context: FLAMSContext) {
   const doc = vscode.window.activeTextEditor?.document;
   switch (msg.command) {
     case "dashboard":
-      openIframe(context.server.url + "/dashboard", "Dashboard");
+      DASHBOARD.show(context,"");
+      break;
+    case "newarchive":
+      new_archive(context);
       break;
     case "preview":
       if (doc) {
@@ -218,9 +349,9 @@ function flamsTools(msg: any, context: FLAMSContext) {
           >("flams/htmlRequest", <HtmlRequestParams>{ uri: doc.uri.toString() })
           .then((s) => {
             if (s) {
-              openIframe(
+              PREVIEW.open(
                 context.server.url + "?uri=" + encodeURIComponent(s),
-                doc.fileName,
+                doc.fileName
               );
             } else {
               vscode.window.showInformationMessage(

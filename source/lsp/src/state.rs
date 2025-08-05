@@ -498,6 +498,18 @@ impl LSPState {
             None
         }
     }
+
+    pub fn force_get(&self, uri: &UrlOrFile) -> Option<LSPDocument> {
+        if let Some(DocData::Doc(doc)) = self.documents.read().get(uri) {
+            return Some(doc.clone());
+        }
+        let UrlOrFile::File(f) = uri else { return None };
+        let Some(s) = std::fs::read_to_string(f).ok() else {
+            return None;
+        };
+        self.insert(uri.clone(), s);
+        self.get(uri)
+    }
 }
 
 struct ClientOutput(std::cell::RefCell<ProgressCallbackServer>);

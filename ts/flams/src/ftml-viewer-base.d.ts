@@ -124,13 +124,36 @@ export interface OMDocDocument {
     children: OMDocDocumentElement[];
 }
 
+/**
+ * An entry in a table of contents. Either:
+ * 1. a section; the title is assumed to be an HTML string, or
+ * 2. an inputref to some other document; the URI is the one for the
+ *    inputref itself; not the referenced Document. For the TOC,
+ *    which document is inputrefed is actually irrelevant.
+ */
+export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementURI; id: string; children: TOCElem[] } | { type: "SkippedSection"; children: TOCElem[] } | { type: "Inputref"; uri: DocumentURI; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: Name[]; kind: ParagraphKind } | { type: "Slide" };
+
+/**
+ * A section that has been \"covered\" at the specified timestamp; will be marked accordingly
+ * in the TOC.
+ */
+export interface Gotto {
+    uri: DocumentElementURI;
+    timestamp?: Timestamp | undefined;
+}
+
 export type OMDoc = ({ type: "Slide" } & OMDocSlide) | ({ type: "Document" } & OMDocDocument) | ({ type: "Section" } & OMDocSection) | ({ type: "DocModule" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Module" } & OMDocModule<OMDocDeclaration>) | ({ type: "DocMorphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDeclaration>) | ({ type: "DocStructure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDeclaration>) | ({ type: "DocExtension" } & OMDocExtension<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDeclaration>) | ({ type: "SymbolDeclaration" } & OMDocSymbol) | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "Term"; uri: DocumentElementURI; term: Term } | { type: "DocReference"; uri: DocumentURI; title: string | undefined } | ({ type: "Other" } & string);
+
+export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
+
+export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
 
 export interface OMDocSymbol {
     uri: SymbolURI;
     df: Term | undefined;
     tp: Term | undefined;
     arity: ArgSpec;
+    roles: string[];
     macro_name: string | undefined;
 }
 
@@ -167,28 +190,6 @@ export interface OMDocModule<E> {
     metatheory: ModuleURI | undefined;
     signature: Language | undefined;
     children: E[];
-}
-
-export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
-
-export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
-
-/**
- * An entry in a table of contents. Either:
- * 1. a section; the title is assumed to be an HTML string, or
- * 2. an inputref to some other document; the URI is the one for the
- *    inputref itself; not the referenced Document. For the TOC,
- *    which document is inputrefed is actually irrelevant.
- */
-export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementURI; id: string; children: TOCElem[] } | { type: "SkippedSection"; children: TOCElem[] } | { type: "Inputref"; uri: DocumentURI; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: Name[]; kind: ParagraphKind } | { type: "Slide" };
-
-/**
- * A section that has been \"covered\" at the specified timestamp; will be marked accordingly
- * in the TOC.
- */
-export interface Gotto {
-    uri: DocumentElementURI;
-    timestamp?: Timestamp | undefined;
 }
 
 export type SolutionData = { Solution: { html: string; answer_class: string | undefined } } | { ChoiceBlock: ChoiceBlock } | { FillInSol: FillInSol };
@@ -277,14 +278,7 @@ export interface QuizProblem {
     objectives: [CognitiveDimension, SymbolURI][];
 }
 
-export interface FileStateSummary {
-    new: number;
-    stale: number;
-    deleted: number;
-    up_to_date: number;
-    last_built: Timestamp;
-    last_changed: Timestamp;
-}
+export type ContentURI = string;
 
 export type Informal = { Term: number } | { Node: { tag: string; attributes: [string, string][]; children: Informal[] } } | { Text: string };
 
@@ -298,6 +292,24 @@ export interface Arg {
 }
 
 export type Term = { OMID: ContentURI } | { OMV: Var } | { OMA: { head: Term; args: Arg[] } } | { Field: { record: Term; key: Name; owner: Term | undefined } } | { OML: { name: Name; df: Term | undefined; tp: Term | undefined } } | { Informal: { tag: string; attributes: [string, string][]; children: Informal[]; terms: Term[] } };
+
+export type ModuleURI = string;
+
+export type SymbolURI = string;
+
+export type DocumentElementURI = string;
+
+export type DocumentURI = string;
+
+export type URI = string;
+
+export type ArgSpec = ArgMode[];
+
+export type ArchiveId = string;
+
+export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
+
+export type Name = string;
 
 export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Problem";
 
@@ -316,24 +328,6 @@ export interface QueryFilter {
 export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
 
 export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
-
-export type ArchiveId = string;
-
-export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
-
-export type ModuleURI = string;
-
-export type SymbolURI = string;
-
-export type ContentURI = string;
-
-export type DocumentElementURI = string;
-
-export type DocumentURI = string;
-
-export type URI = string;
-
-export type ArgSpec = ArgMode[];
 
 export type SlideElement = { type: "Slide"; html: string; uri: DocumentElementURI } | { type: "Paragraph"; html: string; uri: DocumentElementURI } | { type: "Inputref"; uri: DocumentURI } | { type: "Section"; uri: DocumentElementURI; title: string | undefined; children: SlideElement[] };
 
@@ -378,13 +372,20 @@ export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" |
 
 export type ParagraphFormatting = "Block" | "Inline" | "Collapsed";
 
-export type Name = string;
+export interface FileStateSummary {
+    new: number;
+    stale: number;
+    deleted: number;
+    up_to_date: number;
+    last_built: Timestamp;
+    last_changed: Timestamp;
+}
 
-export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
+export type Timestamp = number;
 
 export type Regex = string;
 
-export type Timestamp = number;
+export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
 
 export class FTMLMountHandle {
   private constructor();
@@ -464,10 +465,6 @@ export interface InitOutput {
   readonly __wbg_leptoscontext_free: (a: number, b: number) => void;
   readonly leptoscontext_cleanup: (a: number, b: number) => void;
   readonly leptoscontext_wasm_clone: (a: number) => number;
-  readonly __wbg_intounderlyingsink_free: (a: number, b: number) => void;
-  readonly intounderlyingsink_write: (a: number, b: number) => number;
-  readonly intounderlyingsink_close: (a: number) => number;
-  readonly intounderlyingsink_abort: (a: number, b: number) => number;
   readonly __wbg_intounderlyingbytesource_free: (a: number, b: number) => void;
   readonly intounderlyingbytesource_type: (a: number) => number;
   readonly intounderlyingbytesource_autoAllocateChunkSize: (a: number) => number;
@@ -477,6 +474,10 @@ export interface InitOutput {
   readonly __wbg_intounderlyingsource_free: (a: number, b: number) => void;
   readonly intounderlyingsource_pull: (a: number, b: number) => number;
   readonly intounderlyingsource_cancel: (a: number) => void;
+  readonly __wbg_intounderlyingsink_free: (a: number, b: number) => void;
+  readonly intounderlyingsink_write: (a: number, b: number) => number;
+  readonly intounderlyingsink_close: (a: number) => number;
+  readonly intounderlyingsink_abort: (a: number, b: number) => number;
   readonly __wbg_solutions_free: (a: number, b: number) => void;
   readonly solutions_from_jstring: (a: number, b: number) => number;
   readonly solutions_to_jstring: (a: number, b: number) => void;
@@ -503,11 +504,10 @@ export interface InitOutput {
   readonly __wbindgen_export_6: (a: number, b: number) => void;
   readonly __wbindgen_export_7: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_8: (a: number, b: number, c: number) => number;
-  readonly __wbindgen_export_9: (a: number, b: number, c: number) => void;
-  readonly __wbindgen_export_10: (a: number, b: number) => void;
+  readonly __wbindgen_export_9: (a: number, b: number) => void;
+  readonly __wbindgen_export_10: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_11: (a: number, b: number, c: number) => void;
-  readonly __wbindgen_export_12: (a: number, b: number, c: number) => void;
-  readonly __wbindgen_export_13: (a: number, b: number, c: number, d: number) => void;
+  readonly __wbindgen_export_12: (a: number, b: number, c: number, d: number) => void;
 }
 
 export type SyncInitInput = BufferSource | WebAssembly.Module;

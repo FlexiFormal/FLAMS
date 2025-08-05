@@ -52,6 +52,33 @@ impl AllowHovers {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum HighlightOption {
+    Colored,
+    Subtle,
+    Off,
+    None,
+}
+impl HighlightOption {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Colored => "colored",
+            Self::Subtle => "subtle",
+            Self::Off => "off",
+            Self::None => "none",
+        }
+    }
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "colored" => Some(Self::Colored),
+            "subtle" => Some(Self::Subtle),
+            "off" => Some(Self::Off),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+}
+
 #[component(transparent)]
 pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
     //#[prop(optional)] problems:Option<ProblemOptions>,
@@ -72,6 +99,22 @@ pub fn FTMLGlobalSetup<Ch: IntoView + 'static>(
     provide_context(NarrativeURI::Document(DocumentURI::no_doc()));
     provide_context(FTMLConfig::new());
     provide_context(RwSignal::new(None::<Vec<TOCElem>>));
+
+    #[cfg(any(feature = "csr", feature = "hydrate"))]
+    let hl_opt = {
+        let r = <gloo_storage::LocalStorage as gloo_storage::Storage>::get("highlight_option")
+            .map_or_else(|_| HighlightOption::Colored, |e| e);
+        let r = RwSignal::new(r);
+        Effect::new(move || {
+            let r = r.get();
+            let _ =
+                <gloo_storage::LocalStorage as gloo_storage::Storage>::set("highlight_option", r);
+        });
+        r
+    };
+    #[cfg(not(any(feature = "csr", feature = "hydrate")))]
+    let hl_opt = RwSignal::new(HighlightOption::Colored);
+    provide_context(hl_opt);
     provide_context(on_fragment);
     provide_context(on_section_title);
     provide_context(on_inpuref);

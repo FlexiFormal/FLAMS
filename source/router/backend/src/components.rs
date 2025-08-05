@@ -10,7 +10,7 @@ use flams_router_buildqueue_base::{FormatOrTarget, select_queue, server_fns::enq
 use flams_utils::{time::Timestamp, unwrap};
 use flams_web_utils::{
     components::{
-        Header, LazySubtree, Leaf, Tree, message_action, wait_and_then, wait_and_then_fn,
+        Header, LazySubtree, Leaf, Subtree, Tree, message_action, wait_and_then, wait_and_then_fn,
     },
     inject_css,
 };
@@ -22,7 +22,32 @@ use crate::FileStates;
 pub fn ArchivesTop() -> impl IntoView {
     wait_and_then_fn(
         || super::server_fns::group_entries(None),
-        |(groups, archives)| view!(<Tree><ArchivesAndGroups archives groups/></Tree>),
+        |(groups, archives)| {
+            let mut summary = FileStateSummary::default();
+            for g in &groups {
+                if let Some(s) = g.summary {
+                    summary.merge(s);
+                }
+            }
+            for a in &archives {
+                if let Some(s) = a.summary {
+                    summary.merge(s);
+                }
+            }
+            view!(<Tree><Subtree expanded=true>
+            <Header slot>
+                "All Archives "
+                {badge(summary)}
+                {dialog(move |signal| if signal.get() {
+                  Some(wait_and_then(
+                    move || super::server_fns::build_status(None,None),
+                    move |state| modal(None,None,state,None)
+                  ))
+                } else {None})}
+            </Header>
+            <ArchivesAndGroups archives groups/>
+        </Subtree></Tree>)
+        },
     )
 }
 
@@ -44,8 +69,8 @@ fn group(a: ArchiveGroupData) -> impl IntoView {
         let id = id.clone();
         let title = id.clone();
         Some(wait_and_then(
-          move || super::server_fns::build_status(id.clone(),None),
-          move |state| modal(title,None,state,None)
+          move || super::server_fns::build_status(Some(id.clone()),None),
+          move |state| modal(Some(title),None,state,None)
         ))
       } else {None})}
     );
@@ -75,8 +100,8 @@ fn archive(a: ArchiveData) -> impl IntoView {
         let id = id.clone();
         let title = id.clone();
         Some(wait_and_then(
-          move || super::server_fns::build_status(id.clone(),None),
-          move |state| modal(title,None,state,None)
+          move || super::server_fns::build_status(Some(id.clone()),None),
+          move |state| modal(Some(title),None,state,None)
         ))
       } else {None})}
     );
@@ -119,8 +144,8 @@ fn dir(archive: ArchiveId, d: DirectoryData) -> impl IntoView {
         let title = id.clone();
         let rel_path = rel_path.clone();
         Some(wait_and_then(
-          move || super::server_fns::build_status(id.clone(),None),
-          move |state| modal(title,Some(rel_path),state,None)
+          move || super::server_fns::build_status(Some(id.clone()),None),
+          move |state| modal(Some(title),Some(rel_path),state,None)
         ))
       } else {None})}
     );
@@ -172,8 +197,8 @@ fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
         let rp = rel_path.clone();
         let fmt = f.format.clone();
         Some(wait_and_then_fn(
-          move || super::server_fns::build_status(id.clone(),Some(rp.clone())),
-          move |state| modal(title.clone(),Some(rel_path.clone()),state,Some(fmt.clone()))
+          move || super::server_fns::build_status(Some(id.clone()),Some(rp.clone())),
+          move |state| modal(Some(title.clone()),Some(rel_path.clone()),state,Some(fmt.clone()))
         ))
       } else {None})}
     );
@@ -223,7 +248,7 @@ fn dialog<V: IntoView + 'static>(
 }
 
 fn modal(
-    archive: ArchiveId,
+    archive: Option<ArchiveId>,
     path: Option<String>,
     states: FileStates,
     format: Option<String>,
@@ -232,37 +257,57 @@ fn modal(
         Button, ButtonSize, Caption1Strong, Card, CardHeader, CardHeaderAction, Divider, Table,
     };
     inject_css("flams-filecard", include_str!("filecards.css"));
-    let title = path
-        .as_ref()
-        .map_or_else(|| archive.to_string(), |path| format!("[{archive}]{path}"));
+    let do_clean = path.is_none();
+    let title = path.as_ref().map_or_else(
+        || {
+            archive
+                .as_ref()
+                .map_or_else(|| "All Archives".to_string(), |a| a.to_string())
+        },
+        |path| format!("[{}]{path}", archive.as_ref().expect("unreachable")),
+    );
     //let toaster = ToasterInjection::expect_context();
     let targets = format.is_some();
     let queue_id = RwSignal::<Option<NonZeroU32>>::new(None);
     let act = message_action(
-        move |(t, b)| {
+        move |(t, b, clean)| {
             enqueue(
                 archive.clone(),
                 t,
                 path.clone(),
                 Some(b),
                 queue_id.get_untracked(),
+                clean,
             )
         },
         |i| format!("{i} new build tasks queued"),
     );
+    let clean_btn = move |f: String| {
+        if do_clean {
+            Some(view! {
+                <Button size=ButtonSize::Small on_click=move |_|
+                {act.dispatch((FormatOrTarget::Format(f.clone()),false,true));}
+                >"clean"</Button>
+            })
+        } else {
+            None
+        }
+    };
     view! {
       <div class="flams-treeview-file-card"><Card>
           <CardHeader>
             <Caption1Strong>{title}</Caption1Strong>
             <CardHeaderAction slot>{format.map(|f| {
               let f2 = f.clone();
+              let f3 = f.clone();
               view!{
                 <Button size=ButtonSize::Small on_click=move |_|
-                  {act.dispatch((FormatOrTarget::Format(f.clone()),true));}
+                  {act.dispatch((FormatOrTarget::Format(f.clone()),true,false));}
                 >"stale"</Button>
                 <Button size=ButtonSize::Small on_click=move |_|
-                  {act.dispatch((FormatOrTarget::Format(f2.clone()),false));}
+                  {act.dispatch((FormatOrTarget::Format(f2.clone()),false,false));}
                 >"all"</Button>
+                {clean_btn(f3)}
               }
             })}</CardHeaderAction>
           </CardHeader>
@@ -285,6 +330,7 @@ fn modal(
                 let name = name.clone();
                 let fmt1 = name.clone();
                 let fmt2 = name.clone();
+                let fmt3 = name.clone();
                 view!{
                   <tr>
                     <td><Caption1Strong>{name}</Caption1Strong></td>
@@ -297,13 +343,14 @@ fn modal(
                       <Button size=ButtonSize::Small on_click=move |_|
                         {act.dispatch((if targets {todo!()} else {
                           FormatOrTarget::Format(fmt1.clone())
-                        },true));}
+                        },true,false));}
                       >"stale"</Button>
                       <Button size=ButtonSize::Small on_click=move |_|
                         {act.dispatch((if targets {todo!()} else {
                           FormatOrTarget::Format(fmt2.clone())
-                        },false));}
+                        },false,false));}
                       >"all"</Button>
+                      {clean_btn(fmt3)}
                     </div></td>
                   </tr>
                 }

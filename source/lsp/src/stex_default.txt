@@ -1,0 +1,5 @@
+\documentclass{stex}
+\libinput{preamble}
+\begin{document}
+% A first sTeX document
+\end{document}

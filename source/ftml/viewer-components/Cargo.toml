@@ -7,15 +7,16 @@ edition = "2021"
 workspace = true
 
 [features]
-omdoc = ["dep:gloo-storage"]
+omdoc = []
 ts = ["dep:tsify-next"]
 rdf = ["flams-ontology/rdf", "ftml-extraction/rdf"]
-csr = ["leptos-posthoc/csr", "leptos/csr", "dep:reqwasm"]
+csr = ["leptos-posthoc/csr", "leptos/csr", "dep:reqwasm", "dep:gloo-storage"]
 hydrate = [
     "omdoc",
     "leptos-posthoc/hydrate",
     "leptos/hydrate",
     "flams-web-utils/hydrate",
+    "dep:gloo-storage",
 ]
 ssr = [
     "omdoc",

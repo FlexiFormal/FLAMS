@@ -21,6 +21,7 @@ args = [
     "build-std=std,panic_abort,core,alloc",
     "-Z",
     "build-std-features=optimize_for_size", #,panic_immediate_abort",
+    "--timings",
 ]
 
 [tasks.update-package-json]
@@ -48,6 +49,7 @@ args = [
     "build-std=std,panic_abort,core,alloc",
     "-Z",
     "build-std-features=optimize_for_size", #,panic_immediate_abort",
+    "--timings",
 ]
 
 [tasks.wasm-pack-ts-dev]
@@ -64,6 +66,7 @@ args = [
     "--",
     "--features",
     "ts,omdoc",
+    "--timings",
 ]
 
 [tasks.ts-dev]
@@ -73,7 +76,7 @@ dependencies = ["wasm-pack-ts-dev", "update-package-json"] #,"copy-flams-to-ts"]
 env = { "RUSTFLAGS" = "--cfg getrandom_backend=\"wasm_js\" -Ctarget-cpu=mvp -Ctarget-feature=+multivalue,+mutable-globals,+reference-types,+sign-ext" }
 install_crate = "wasm-pack"
 command = "wasm-pack"
-args = ["build", "--target", "no-modules", "--dev"]
+args = ["build", "--target", "no-modules", "--dev", "--", "--timings"]
 
 [tasks.update-js]
 env = { "RUSTFLAGS" = "" }
@@ -189,6 +192,7 @@ args = [
     "build-std=std,panic_abort,core,alloc",
     "-Z",
     "build-std-features=optimize_for_size", #,panic_immediate_abort",
+    "--timings",
 ]
 
 [tasks.ts-update-js]
