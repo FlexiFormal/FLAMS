@@ -30,7 +30,7 @@ pub fn run() {
 
     leptos_posthoc::hydrate_body(|orig| {
         leptos_meta::provide_meta_context();
-        view!(<Themer attr:style="font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;background-color:inherit;"><FTMLGlobalSetup><FTMLDocumentSetup uri=DocumentURI::no_doc()>
+        view!(<Themer attr:style="font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;background-color:inherit;color:inherit;display:contents;"><FTMLGlobalSetup><FTMLDocumentSetup uri=DocumentURI::no_doc()>
             <DomChildrenCont orig cont=ftml_viewer_components::iterate/>
             </FTMLDocumentSetup></FTMLGlobalSetup></Themer>
         )
