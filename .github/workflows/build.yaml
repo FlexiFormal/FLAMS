@@ -117,7 +117,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffi-macos
-          path: target/release/libflams_ffi.so
+          path: target/release/libflams_ffi.dylib
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
