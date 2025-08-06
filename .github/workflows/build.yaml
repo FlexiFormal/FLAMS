@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffi-windows
-          path: target/x86_64-pc-windows-msvc/release/flams_ffi.dll
+          path: target/release/flams_ffi.dll
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
