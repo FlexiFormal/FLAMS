@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffi-linux
-          path: target/release/libflams-ffi.so
+          path: target/release/libflams_ffi.so
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffi-windows
-          path: target/x86_64-pc-windows-msvc/release/flams-ffi.dll
+          path: target/x86_64-pc-windows-msvc/release/flams_ffi.dll
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -117,7 +117,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffi-macos
-          path: target/release/libflams-ffi.so
+          path: target/release/libflams_ffi.so
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
