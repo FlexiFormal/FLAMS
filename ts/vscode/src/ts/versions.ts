@@ -114,6 +114,6 @@ export class Version {
 	}
 }
 
-export const REQUIRED_FLAMS = new Version([0,0,1]);
+export const REQUIRED_FLAMS = new Version([0,0,2]);
 export const REQUIRED_STEX = new Version([4,0,0]);
 

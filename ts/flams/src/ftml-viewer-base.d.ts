@@ -139,7 +139,27 @@ export type TOCOptions = "GET" | { Predefined: TOCElem[] };
 
 export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
 
+/**
+ * An entry in a table of contents. Either:
+ * 1. a section; the title is assumed to be an HTML string, or
+ * 2. an inputref to some other document; the URI is the one for the
+ *    inputref itself; not the referenced Document. For the TOC,
+ *    which document is inputrefed is actually irrelevant.
+ */
+export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementUri; id: string; children: TOCElem[] } | { type: "SkippedSection"; children: TOCElem[] } | { type: "Inputref"; uri: DocumentUri; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: UriName[]; kind: ParagraphKind } | { type: "Slide" };
+
+/**
+ * A section that has been \"covered\" at the specified timestamp; will be marked accordingly
+ * in the TOC.
+ */
+export interface Gotto {
+    uri: DocumentElementUri;
+    timestamp?: Timestamp | undefined;
+}
+
 export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
+
+export type OMDoc = ({ type: "Slide" } & OMDocSlide) | ({ type: "Document" } & OMDocDocument) | ({ type: "Section" } & OMDocSection) | ({ type: "DocModule" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Module" } & OMDocModule<OMDocDeclaration>) | ({ type: "DocMorphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDeclaration>) | ({ type: "DocStructure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDeclaration>) | ({ type: "DocExtension" } & OMDocExtension<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDeclaration>) | ({ type: "SymbolDeclaration" } & OMDocSymbol) | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "Term"; uri: DocumentElementUri; term: Term } | { type: "DocReference"; uri: DocumentUri; title: string | undefined } | ({ type: "Other" } & string);
 
 export type OMDocDocumentElement = ({ type: "Slide" } & OMDocSlide) | ({ type: "Section" } & OMDocSection) | ({ type: "Module" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDocumentElement>) | { type: "DocumentReference"; uri: DocumentUri; title: string | undefined } | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "TopTerm"; uri: DocumentElementUri; term: Term } | ({ type: "SymbolDeclaration" } & SymbolUri|OMDocSymbol);
 
@@ -239,26 +259,6 @@ export interface OMDocModule<E> {
     children: E[];
 }
 
-/**
- * An entry in a table of contents. Either:
- * 1. a section; the title is assumed to be an HTML string, or
- * 2. an inputref to some other document; the URI is the one for the
- *    inputref itself; not the referenced Document. For the TOC,
- *    which document is inputrefed is actually irrelevant.
- */
-export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementUri; id: string; children: TOCElem[] } | { type: "SkippedSection"; children: TOCElem[] } | { type: "Inputref"; uri: DocumentUri; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: UriName[]; kind: ParagraphKind } | { type: "Slide" };
-
-/**
- * A section that has been \"covered\" at the specified timestamp; will be marked accordingly
- * in the TOC.
- */
-export interface Gotto {
-    uri: DocumentElementUri;
-    timestamp?: Timestamp | undefined;
-}
-
-export type OMDoc = ({ type: "Slide" } & OMDocSlide) | ({ type: "Document" } & OMDocDocument) | ({ type: "Section" } & OMDocSection) | ({ type: "DocModule" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Module" } & OMDocModule<OMDocDeclaration>) | ({ type: "DocMorphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDeclaration>) | ({ type: "DocStructure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDeclaration>) | ({ type: "DocExtension" } & OMDocExtension<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDeclaration>) | ({ type: "SymbolDeclaration" } & OMDocSymbol) | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "Term"; uri: DocumentElementUri; term: Term } | { type: "DocReference"; uri: DocumentUri; title: string | undefined } | ({ type: "Other" } & string);
-
 export type SolutionData = { Solution: { html: string; answer_class: string | undefined } } | { ChoiceBlock: ChoiceBlock } | { FillInSol: FillInSol };
 
 export interface ChoiceBlock {
@@ -345,6 +345,19 @@ export interface QuizProblem {
     objectives: [CognitiveDimension, SymbolUri][];
 }
 
+export type Informal = { Term: number } | { Node: { tag: string; attributes: [string, string][]; children: Informal[] } } | { Text: string };
+
+export type Var = { Name: UriName } | { Ref: { declaration: DocumentElementUri; is_sequence: boolean | undefined } };
+
+export type ArgMode = "Normal" | "Sequence" | "Binding" | "BindingSequence";
+
+export interface Arg {
+    term: Term;
+    mode: ArgMode;
+}
+
+export type Term = { OMID: DomainUri } | { OMV: Var } | { OMA: { head: Term; args: Arg[] } } | { Field: { record: Term; key: UriName; owner: Term | undefined } } | { OML: { name: UriName; df: Term | undefined; tp: Term | undefined } } | { Informal: { tag: string; attributes: [string, string][]; children: Informal[]; terms: Term[] } };
+
 export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Problem";
 
 export type SearchResult = { Document: DocumentUri } | { Paragraph: { uri: DocumentElementUri; fors: SymbolUri[]; def_like: boolean; kind: SearchResultKind } };
@@ -364,6 +377,19 @@ export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subs
 export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
 
 export type ParagraphFormatting = "Block" | "Inline" | "Collapsed";
+
+export interface FileStateSummary {
+    new: number;
+    stale: number;
+    deleted: number;
+    up_to_date: number;
+    last_built: Timestamp;
+    last_changed: Timestamp;
+}
+
+export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
+
+export type ArgSpec = ArgMode[];
 
 export type SlideElement = { type: "Slide"; html: string; uri: DocumentElementUri } | { type: "Paragraph"; html: string; uri: DocumentElementUri } | { type: "Inputref"; uri: DocumentUri } | { type: "Section"; uri: DocumentElementUri; title: string | undefined; children: SlideElement[] };
 
@@ -404,32 +430,6 @@ export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string;
 
 export type Institution = { type: "university"; title: string; place: string; country: string; url: string; acronym: string; logo: string } | { type: "school"; title: string; place: string; country: string; url: string; acronym: string; logo: string };
 
-export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
-
-export interface FileStateSummary {
-    new: number;
-    stale: number;
-    deleted: number;
-    up_to_date: number;
-    last_built: Timestamp;
-    last_changed: Timestamp;
-}
-
-export type ArgSpec = ArgMode[];
-
-export type Informal = { Term: number } | { Node: { tag: string; attributes: [string, string][]; children: Informal[] } } | { Text: string };
-
-export type Var = { Name: UriName } | { Ref: { declaration: DocumentElementUri; is_sequence: boolean | undefined } };
-
-export type ArgMode = "Normal" | "Sequence" | "Binding" | "BindingSequence";
-
-export interface Arg {
-    term: Term;
-    mode: ArgMode;
-}
-
-export type Term = { OMID: DomainUri } | { OMV: Var } | { OMA: { head: Term; args: Arg[] } } | { Field: { record: Term; key: UriName; owner: Term | undefined } } | { OML: { name: UriName; df: Term | undefined; tp: Term | undefined } } | { Informal: { tag: string; attributes: [string, string][]; children: Informal[]; terms: Term[] } };
-
 export type ArchiveId = string;
 
 export type ArchiveUri = string;
@@ -438,15 +438,17 @@ export type SimpleUriName = string;
 
 export type DocumentUri = string;
 
-export type UriName = string;
-
-export type ModuleUri = string;
-
 export type Uri = string;
 
 export type DomainUri = string;
 
 export type NarrativeUri = string;
+
+export type LeafUri = string;
+
+export type UriName = string;
+
+export type ModuleUri = string;
 
 export type DocumentElementUri = string;
 
@@ -458,11 +460,13 @@ export type PathUri = string;
 
 export type SymbolUri = string;
 
-export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
+export type Id = string;
 
 export type Timestamp = number;
 
 export type Regex = string;
+
+export type CSS = { Link: string } | { Inline: string } | { Class: { name: string; css: string } };
 
 export class FTMLMountHandle {
   private constructor();
@@ -542,15 +546,15 @@ export interface InitOutput {
   readonly leptoscontext_cleanup: (a: number, b: number) => void;
   readonly leptoscontext_wasm_clone: (a: number) => number;
   readonly get_server_url: (a: number) => void;
-  readonly __wbg_intounderlyingsource_free: (a: number, b: number) => void;
-  readonly intounderlyingsource_pull: (a: number, b: number) => number;
-  readonly intounderlyingsource_cancel: (a: number) => void;
   readonly __wbg_intounderlyingbytesource_free: (a: number, b: number) => void;
   readonly intounderlyingbytesource_type: (a: number) => number;
   readonly intounderlyingbytesource_autoAllocateChunkSize: (a: number) => number;
   readonly intounderlyingbytesource_start: (a: number, b: number) => void;
   readonly intounderlyingbytesource_pull: (a: number, b: number) => number;
   readonly intounderlyingbytesource_cancel: (a: number) => void;
+  readonly __wbg_intounderlyingsource_free: (a: number, b: number) => void;
+  readonly intounderlyingsource_pull: (a: number, b: number) => number;
+  readonly intounderlyingsource_cancel: (a: number) => void;
   readonly __wbg_intounderlyingsink_free: (a: number, b: number) => void;
   readonly intounderlyingsink_write: (a: number, b: number) => number;
   readonly intounderlyingsink_close: (a: number) => number;
@@ -578,8 +582,8 @@ export interface InitOutput {
   readonly __wbindgen_export_4: WebAssembly.Table;
   readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
   readonly __wbindgen_export_5: (a: number, b: number, c: number) => void;
-  readonly __wbindgen_export_6: (a: number, b: number, c: number) => void;
-  readonly __wbindgen_export_7: (a: number, b: number) => void;
+  readonly __wbindgen_export_6: (a: number, b: number) => void;
+  readonly __wbindgen_export_7: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_8: (a: number, b: number, c: number) => number;
   readonly __wbindgen_export_9: (a: number, b: number) => void;
   readonly __wbindgen_export_10: (a: number, b: number, c: number) => void;
