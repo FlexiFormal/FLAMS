@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "math-archives",
     "source/main",
     "source/utils",
     "source/ontology",
@@ -161,13 +162,23 @@ flams-router-vscode = { path = "source/router/vscode-bindings", version = "0.0.1
 ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
 ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
 
-ftml-uris = { path = "../../FlexiFormal/FTML/uris" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+# refactor
+math-archives = { path = "math-archives" }
+
+# FTML
+ftml-uris = { path = "../../FlexiFormal/FTML/uris", features = [
+    "interned",
+] } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-ontology = { path = "../../FlexiFormal/FTML/ontology" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ftml-core = { path = "../../FlexiFormal/FTML/core" } #{ git = "https://github.com/FlexiFormal/FTML" } #
-ulo = { path = "../../FlexiFormal/FTML/ulo" }        #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-backend = { path = "../../FlexiFormal/FTML/backend" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ulo = { path = "../../FlexiFormal/FTML/ulo" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 
 rstest = { version = "0.25" }
 
 # utils
+document-features = "0.2"
+rustc_version = "0.4"
 const-str = "0.6"
 triomphe = "0.1"
 parking_lot = "0.12"

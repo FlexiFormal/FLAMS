@@ -1,0 +1,44 @@
+[package]
+name = "math-archives"
+version = "0.0.1"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[features]
+## Enables RDF support
+rdf = ["ftml-uris/rdf", "dep:ulo"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = [
+    "--cfg",
+    "docsrs",
+    "-Zunstable-options",
+    "--generate-link-to-definition",
+    "--html-in-header",
+    "doc/katex-header.html",
+    "--html-in-header",
+    "doc/docs.html",
+]
+# cargo +nightly doc --no-deps --all-features --release --open
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[dev-dependencies]
+#tracing-subscriber = { workspace = true }
+#rstest = { workspace = true }
+#criterion = { workspace = true }
+
+[dependencies]
+document-features = { workspace = true }
+ftml-ontology = { workspace = true }
+ftml-backend = { workspace = true }
+ftml-uris = { workspace = true, features = ["interned"] }
+
+ulo = { workspace = true, optional = true }
