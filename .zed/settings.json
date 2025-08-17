@@ -8,12 +8,12 @@
           }
         },
         "cargo": {
-          "features": [
+          "features": "all" /*[
             "ts",
             "ws",
             "docs",
             "hydrate" //"ssr" //
-          ] // "all"
+          ] // "all"*/
         }
       }
     }

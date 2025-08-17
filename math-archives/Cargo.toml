@@ -12,6 +12,8 @@ workspace = true
 [features]
 ## Enables RDF support
 rdf = ["ftml-uris/rdf", "dep:ulo"]
+## wasm
+wasm = ["dep:tsify", "dep:wasm-bindgen"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -31,7 +33,7 @@ rustdoc-args = [
 rustc_version = { workspace = true }
 
 [dev-dependencies]
-#tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true }
 #rstest = { workspace = true }
 #criterion = { workspace = true }
 
@@ -41,4 +43,28 @@ ftml-ontology = { workspace = true }
 ftml-backend = { workspace = true }
 ftml-uris = { workspace = true, features = ["interned"] }
 
+inventory = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+smallvec = { workspace = true }
+tracing = { workspace = true }
+simple-home-dir = { workspace = true }
+filetime = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+parking_lot = { workspace = true }
+either = { workspace = true }
+walkdir = { workspace = true }
+const_format = { workspace = true }
+bincode = { workspace = true }
+triomphe = { workspace = true }
+
+# orx-parallel = { workspace = true }
+# # This is faster:
+spliter = { workspace = true }
+rayon = { workspace = true }
+
 ulo = { workspace = true, optional = true }
+tsify = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }

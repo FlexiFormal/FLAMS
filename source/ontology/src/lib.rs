@@ -214,6 +214,8 @@ impl From<DocumentRange> for SourceRange<ByteOffset> {
 }
 
 pub mod metatheory {
+    use ftml_uris::UriName;
+
     use crate::{
         languages::Language,
         uris::{BaseUri, DocumentUri, ModuleUri, SymbolUri},
@@ -225,21 +227,21 @@ pub mod metatheory {
         }
     }
     lzy! {
-        DOC_URI: DocumentUri = ("https://mathhub.info".parse::<BaseUri>().expect("valid")
+        DOC_URI: DocumentUri = ("http://mathhub.info".parse::<BaseUri>().expect("valid")
             & "FTML/meta".parse().expect("valid"))
             & ("Metatheory".parse().expect("valid"), Language::English);
         URI: ModuleUri =
-            ("https://mathhub.info".parse::<BaseUri>().expect("valid")
+            ("http://mathhub.info".parse::<BaseUri>().expect("valid")
                 & "FTML/meta".parse().expect("valid"))
                 | "Metatheory".parse().expect("valid");
         FIELD_PROJECTION: SymbolUri =
-            URI.clone() | "record field".parse().expect("valid");
+            URI.clone() | "record field".parse::<UriName>().expect("valid");
         OF_TYPE: SymbolUri =
-            URI.clone() | "of type".parse().expect("valid");
+            URI.clone() | "of type".parse::<UriName>().expect("valid");
         SEQUENCE_EXPRESSION: SymbolUri =
-            URI.clone() | "sequence expression".parse().expect("valid");
+            URI.clone() | "sequence expression".parse::<UriName>().expect("valid");
         NOTATION_DUMMY: SymbolUri =
-            URI.clone() | "notation dummy".parse().expect("valid");
+            URI.clone() | "notation dummy".parse::<UriName>().expect("valid");
     }
 }
 

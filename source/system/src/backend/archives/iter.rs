@@ -2,7 +2,10 @@ use flams_ontology::{
     archive_json::{ArchiveDatum, Institution},
     uris::{ArchiveId, ArchiveUri, BaseUri, UriWithArchive},
 };
-use flams_utils::vecmap::{VecMap, VecSet};
+use flams_utils::{
+    change_listener::ChangeSender,
+    vecmap::{VecMap, VecSet},
+};
 use parking_lot::RwLock;
 use std::{
     fs::ReadDir,
@@ -12,6 +15,7 @@ use std::{
 use crate::{
     backend::archives::{ignore_regex::IgnoreSource, source_files::SourceDir, RepositoryData},
     formats::SourceFormat,
+    source_format,
 };
 
 use super::{ArchiveIndex, LocalArchive};
@@ -392,4 +396,47 @@ impl spliter::Spliterator for ArchiveIterator<'_> {
             }
         }
     }
+}
+
+#[test]
+fn all_archives() {
+    use flams_utils::time::measure;
+    use rayon::iter::*;
+    use spliter::*;
+    use std::fmt::Write;
+    crate::settings::Settings::initialize(crate::SettingsSpec::default());
+    source_format!(stex ["tex","ltx"] [] @ "foo" = |_,_| todo!());
+    //let subscriber = tracing_subscriber::FmtSubscriber::builder()
+    //.with_max_level(tracing::Level::DEBUG)
+    //.finish();
+    //tracing::subscriber::set_global_default(subscriber).unwrap();
+    //let manager = ArchiveManager::default();
+    tracing_subscriber::fmt().try_init();
+    let (i, t) = measure(|| {
+        crate::settings::MATHHUB_PATHS
+            .iter()
+            .map(|path| {
+                ArchiveIterator::new(path)
+                    .par_split()
+                    .into_par_iter()
+                    .map(|e| {
+                        e.update_sources(&ChangeSender::new(8));
+                        e
+                    })
+                    .count()
+            })
+            .sum::<usize>()
+    });
+
+    tracing::info!("Loaded {i} archives in {t}");
+
+    /*
+    let mut all = String::new();
+    for a in &*manager.all_archives() {
+    write!(all,"{}, ",a.id()).unwrap();
+    }
+    tracing::info!("{all}");
+
+    assert_eq!(165,manager.all_archives().len());
+     */
 }

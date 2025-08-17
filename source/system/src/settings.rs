@@ -2,33 +2,34 @@
 
 use std::{
     fmt::Debug,
-    path::{Path, PathBuf}, sync::atomic::AtomicU16,
+    path::{Path, PathBuf},
+    sync::atomic::AtomicU16,
 };
 
 use flams_utils::settings::GitlabSettings;
-pub use flams_utils::settings::{SettingsSpec,BuildQueueSettings, ServerSettings};
+pub use flams_utils::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
 use lazy_static::lazy_static;
 
 static SETTINGS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
 
 pub struct Settings {
     pub mathhubs: Box<[Box<Path>]>,
-    pub mathhubs_is_default:bool,
+    pub mathhubs_is_default: bool,
     pub debug: bool,
     pub log_dir: Box<Path>,
     pub port: AtomicU16,
     pub ip: std::net::IpAddr,
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
-    external_url:Option<Box<str>>,
+    external_url: Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
     pub num_threads: u8,
     pub gitlab_url: Option<url::Url>,
     pub gitlab_token: Option<Box<str>>,
-    pub gitlab_app_id:Option<Box<str>>,
-    pub gitlab_app_secret:Option<Box<str>>,
-    pub gitlab_redirect_url:Option<Box<str>>,
-    pub lsp:bool
+    pub gitlab_app_id: Option<Box<str>>,
+    pub gitlab_app_secret: Option<Box<str>>,
+    pub gitlab_redirect_url: Option<Box<str>>,
+    pub lsp: bool,
 }
 impl Debug for Settings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -37,7 +38,9 @@ impl Debug for Settings {
 }
 
 impl Settings {
-    pub fn port(&self) -> u16 { self.port.load(std::sync::atomic::Ordering::Relaxed) }
+    pub fn port(&self) -> u16 {
+        self.port.load(std::sync::atomic::Ordering::Relaxed)
+    }
     #[allow(clippy::missing_panics_doc)]
     pub fn initialize(settings: SettingsSpec) {
         SETTINGS
@@ -57,7 +60,12 @@ impl Settings {
 
     /// #### Panics
     pub fn temp_dir(&self) -> PathBuf {
-        self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf()
+        self.temp_dir
+            .read()
+            .as_ref()
+            .expect("This should never happen!")
+            .path()
+            .to_path_buf()
     }
 
     #[allow(clippy::significant_drop_in_scrutinee)]
@@ -75,14 +83,24 @@ impl Settings {
             mathhubs: self.mathhubs.to_vec(),
             debug: Some(self.debug),
             log_dir: Some(self.log_dir.clone()),
-            temp_dir: Some(self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf().into_boxed_path()),
+            temp_dir: Some(
+                self.temp_dir
+                    .read()
+                    .as_ref()
+                    .expect("This should never happen!")
+                    .path()
+                    .to_path_buf()
+                    .into_boxed_path(),
+            ),
             database: Some(self.database.clone()),
             server: ServerSettings {
                 port,
                 ip: Some(self.ip),
-                external_url: self.external_url.as_ref().map(ToString::to_string).or_else(
-                    || Some(format!("http://{}:{port}",self.ip)),
-                ),
+                external_url: self
+                    .external_url
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .or_else(|| Some(format!("http://{}:{port}", self.ip))),
                 admin_pwd: self.admin_pwd.as_ref().map(ToString::to_string),
             },
             buildqueue: BuildQueueSettings {
@@ -95,7 +113,7 @@ impl Settings {
                 app_secret: self.gitlab_app_secret.clone(),
                 redirect_url: self.gitlab_redirect_url.clone(),
             },
-            lsp: self.lsp
+            lsp: self.lsp,
         };
         spec
     }
@@ -103,15 +121,16 @@ impl Settings {
 impl From<SettingsSpec> for Settings {
     #[allow(clippy::cast_possible_truncation)]
     fn from(spec: SettingsSpec) -> Self {
-        let (mathhubs,mathhubs_is_default) = if spec.mathhubs.is_empty() {
-            (MATHHUB_PATHS.clone(),true)
+        let (mathhubs, mathhubs_is_default) = if spec.mathhubs.is_empty() {
+            (MATHHUB_PATHS.clone(), true)
         } else {
             let mhs = spec.mathhubs.into_boxed_slice();
             let is_def = mhs == *MATHHUB_PATHS;
-            (mhs,is_def)
+            (mhs, is_def)
         };
         Self {
-            mathhubs,mathhubs_is_default,
+            mathhubs,
+            mathhubs_is_default,
             debug: spec.debug.unwrap_or(cfg!(debug_assertions)),
             log_dir: spec.log_dir.unwrap_or_else(|| {
                 CONFIG_DIR
@@ -124,7 +143,9 @@ impl From<SettingsSpec> for Settings {
                 || tempfile::TempDir::new().expect("Could not create temp dir"),
                 |p| {
                     let _ = std::fs::create_dir_all(&p);
-                    tempfile::Builder::new().tempdir_in(p).expect("Could not create temp dir")
+                    tempfile::Builder::new()
+                        .tempdir_in(p)
+                        .expect("Could not create temp dir")
                 },
             ))),
             external_url: spec.server.external_url.map(String::into_boxed_str),
@@ -137,7 +158,11 @@ impl From<SettingsSpec> for Settings {
                 .server
                 .ip
                 .unwrap_or_else(|| "127.0.0.1".parse().unwrap_or_else(|_| unreachable!())),
-            admin_pwd: if spec.lsp {None} else {spec.server.admin_pwd.map(String::into_boxed_str)},
+            admin_pwd: if spec.lsp {
+                None
+            } else {
+                spec.server.admin_pwd.map(String::into_boxed_str)
+            },
             database: spec.database.unwrap_or_else(|| {
                 CONFIG_DIR
                     .as_ref()
@@ -160,13 +185,13 @@ impl From<SettingsSpec> for Settings {
             gitlab_url: spec.gitlab.url,
             gitlab_app_id: spec.gitlab.app_id,
             gitlab_app_secret: spec.gitlab.app_secret,
-            gitlab_redirect_url: spec.gitlab.redirect_url
+            gitlab_redirect_url: spec.gitlab.redirect_url,
         }
     }
 }
 
 lazy_static! {
-    static ref MATHHUB_PATHS: Box<[Box<Path>]> = mathhubs().into();
+    pub static ref MATHHUB_PATHS: Box<[Box<Path>]> = mathhubs().into();
     static ref CONFIG_DIR: Option<Box<Path>> =
         simple_home_dir::home_dir().map(|d| d.join(".flams").into_boxed_path());
     static ref EXE_DIR: Option<Box<Path>> = std::env::current_exe()
