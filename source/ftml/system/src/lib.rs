@@ -22,7 +22,7 @@ source_format! { FTML {
 }}
 
 build_target! { FTML_CONTENT {
-    name:"ftml->content",
+    name:"ftml-content",
     description:"imports existent FTML",
     run: extract
 }}

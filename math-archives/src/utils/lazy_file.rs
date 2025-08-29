@@ -72,11 +72,12 @@ impl<const NUM_FIELDS: usize> LazyFile<NUM_FIELDS> {
         };
         let buf_ref = &mut buf_ref[0..4 * (NUM_FIELDS - 1)];
         file.read_exact(buf_ref)?;
+        let offsets = offsets.map(u32::from_be_bytes);
         Ok((
             Self {
                 path,
                 //file: Some(file),
-                offsets: offsets.map(u32::from_be_bytes),
+                offsets,
             },
             file,
         ))
@@ -109,7 +110,7 @@ impl<const NUM_FIELDS: usize> LazyFileReader<NUM_FIELDS> {
             Some(i - offset as usize)
         };
         let file = &mut self.file;
-        file.seek(SeekFrom::Start(offset))?;
+        file.seek(SeekFrom::Start(offset + ((NUM_FIELDS - 1) as u64 * 4)))?;
         then(file, len)
     }
     /// # Errors
@@ -211,7 +212,7 @@ impl<const NUM_FIELDS: usize> LazyFileWriter<NUM_FIELDS> {
         if self.written == NUM_FIELDS as u64 {
             return Ok(());
         }
-        self.file.seek(SeekFrom::Start(self.written))?;
+        self.file.seek(SeekFrom::Start((self.written - 1) * 4))?;
         self.file.write_all(&self.current_offset.to_be_bytes())?;
         self.file.seek(SeekFrom::End(0)).map(|_| ())?;
         Ok(())
@@ -240,7 +241,10 @@ impl<const NUM_FIELDS: usize> LazyFileWriter<NUM_FIELDS> {
 
     /// # Errors
     #[allow(clippy::cast_possible_truncation)]
-    pub fn write<T: serde::Serialize>(&mut self, value: &T) -> Result<(), WriteError> {
+    pub fn write<T: serde::Serialize + std::fmt::Debug>(
+        &mut self,
+        value: &T,
+    ) -> Result<(), WriteError> {
         if self.written == NUM_FIELDS as u64 {
             return Err(WriteError::NumberOfFields {
                 max: NUM_FIELDS - 1,

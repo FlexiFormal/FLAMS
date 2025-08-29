@@ -42,7 +42,10 @@ use ftml_uris::{
     ArchiveId, ArchiveUri, IsDomainUri, Language, SimpleUriName, UriPath, UriWithArchive,
     UriWithPath,
 };
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str,
+};
 
 type Result<T> = std::result::Result<T, BackendError>;
 /*
@@ -273,7 +276,7 @@ pub trait LocallyBuilt: BuildableArchive {
         language: Language,
     ) -> PathBuf {
         self.out_path_of(path, doc_name, rel_path, language)
-            .join("doc")
+            .join("content")
     }
 }
 
@@ -307,37 +310,6 @@ impl MathArchive for LocalArchive {
         self.uri.archive_id().is_meta()
     }
 
-    /*
-    fn load_document(
-        &self,
-        path: Option<&UriPath>,
-        name: &str,
-        language: Language,
-    ) -> Option<Document> {
-        todo!()
-    }
-    fn load_html(&self, path: Option<&UriPath>, name: &str, language: Language) -> Option<String> {
-        todo!()
-    }
-    fn load_html_body(
-        &self,
-        path: Option<&UriPath>,
-        name: &str,
-        language: Language,
-        full: bool,
-    ) -> Option<(Vec<Css>, String)> {
-        todo!()
-    }
-    fn load_html_fragment(
-        &self,
-        path: Option<&UriPath>,
-        name: &str,
-        language: Language,
-        range: DocumentRange,
-    ) -> Option<(Vec<Css>, String)> {
-        todo!()
-    }
-     */
     fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module> {
         let out = path.map_or_else(
             || self.out_dir().join(".modules"),
@@ -480,8 +452,16 @@ impl LocallyBuilt for LocalArchive {
         rel_path: Option<&UriPath>,
         language: Language,
     ) -> PathBuf {
-        if let Some(rel_path) = rel_path {
-            return self.out_dir().join(rel_path.as_ref());
+        if let Some(rp) = rel_path {
+            use std::str::FromStr;
+            let mut rel_path = rp.as_ref();
+            if let Some((first, last)) = rp.steps().last().and_then(|s| s.rsplit_once('.'))
+                && Language::from_str(last).is_err()
+            {
+                rel_path = first;
+            }
+
+            return self.out_dir().join(rel_path);
         }
         self.rel_path_of(path, doc_name, language).map_or_else(
             || {

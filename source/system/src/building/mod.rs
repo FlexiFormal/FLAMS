@@ -1,6 +1,7 @@
 use std::{
     num::NonZeroU32,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use either::Either;
@@ -13,7 +14,7 @@ use flams_utils::{
     vecmap::{VecMap, VecSet},
 };
 use ftml_ontology::utils::time::Eta;
-use ftml_uris::{ArchiveId, ArchiveUri, DocumentUri, ModuleUri, UriPath, UriWithArchive};
+use ftml_uris::{ArchiveId, ArchiveUri, DocumentUri, Language, ModuleUri, UriPath, UriWithArchive};
 use parking_lot::RwLock;
 
 mod queue;
