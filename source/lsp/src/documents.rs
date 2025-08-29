@@ -1,10 +1,13 @@
 use std::{path::Path, sync::atomic::AtomicBool};
 
 use async_lsp::lsp_types::{Position, Range};
-use flams_ontology::uris::{ArchiveUri, DocumentUri};
+use flams_math_archives::{
+    backend::{AnyBackend, GlobalBackend, LocalBackend},
+    utils::path_ext::PathExt,
+    MathArchive,
+};
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
-use flams_system::backend::{AnyBackend, Backend, GlobalBackend};
-use flams_utils::PathExt;
+use ftml_uris::{ArchiveUri, DocumentUri};
 
 use crate::{
     state::{LSPState, UrlOrFile},
@@ -33,11 +36,6 @@ impl PartialEq for LSPDocument {
     }
 }
 
-#[cfg(windows)]
-const PREFIX: &str = "\\source\\";
-#[cfg(not(windows))]
-const PREFIX: &str = "/source/";
-
 impl LSPDocument {
     #[allow(clippy::cast_possible_truncation)]
     #[must_use]
@@ -48,16 +46,15 @@ impl LSPDocument {
             None
         }; //lsp_uri.to_file_path().ok().map(Into::into);
         let default = || {
-            let path = path.as_ref()?.as_slash_str().into();
-            Some((ArchiveUri::no_archive(), Some(path)))
+            let path = path.as_ref()?.as_slash_str().into_owned();
+            Some((ArchiveUri::no_archive(), Some(path.into_boxed_str())))
         };
         let ap = path
             .as_ref()
             .and_then(|path| {
-                GlobalBackend::get().archive_of(path, |a, rp| {
+                GlobalBackend.archive_of_source(path, |a, rp| {
                     let uri = a.uri().clone();
-                    let rp = rp.strip_prefix(PREFIX).map(|r| r.into());
-                    (uri, rp)
+                    (uri, Some(rp.to_string().into_boxed_str()))
                 })
             })
             .or_else(default);
@@ -181,7 +178,7 @@ impl LSPDocument {
     //let (data,t) = measure(||
       flams_stex::quickparse::stex::quickparse(
       uri,&lock.text, path,
-      &AnyBackend::Global(GlobalBackend::get()),
+      &AnyBackend::Global,
       &mut store);
         //);
         data.replace(&self.annotations);

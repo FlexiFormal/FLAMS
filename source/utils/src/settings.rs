@@ -1,11 +1,13 @@
-use std::{ops::{Add, AddAssign}, path::{Path, PathBuf}};
-
+use std::{
+    ops::{Add, AddAssign},
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
-    pub mathhubs: Vec<Box<Path>>,
+    pub mathhubs: Vec<PathBuf>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub debug: Option<bool>,
     #[cfg_attr(feature = "serde", serde(default))]
@@ -17,7 +19,7 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
     pub buildqueue: BuildQueueSettings,
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub lsp:bool,
+    pub lsp: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     pub database: Option<Box<Path>>,
     #[cfg_attr(feature = "serde", serde(default))]
@@ -38,8 +40,8 @@ impl Add for SettingsSpec {
             temp_dir: self.temp_dir.or(rhs.temp_dir),
             database: self.database.or(rhs.database),
             buildqueue: self.buildqueue + rhs.buildqueue,
-            gitlab:self.gitlab + rhs.gitlab,
-            lsp:self.lsp || rhs.lsp
+            gitlab: self.gitlab + rhs.gitlab,
+            lsp: self.lsp || rhs.lsp,
         }
     }
 }
@@ -101,23 +103,20 @@ impl SettingsSpec {
                     .and_then(|s| s.parse().ok()),
             },
             gitlab: GitlabSettings {
-                url:std::env::var("FLAMS_GITLAB_URL")
-                    .ok()
-                    .map( |s| {
-                        s.parse()
-                            .expect("Could not parse URL (environment variable FLAMS_GITLAB_URL)")
-                    }),
-                token:std::env::var("FLAMS_GITLAB_TOKEN")
+                url: std::env::var("FLAMS_GITLAB_URL").ok().map(|s| {
+                    s.parse()
+                        .expect("Could not parse URL (environment variable FLAMS_GITLAB_URL)")
+                }),
+                token: std::env::var("FLAMS_GITLAB_TOKEN").ok().map(Into::into),
+                app_id: std::env::var("FLAMS_GITLAB_APP_ID").ok().map(Into::into),
+                app_secret: std::env::var("FLAMS_GITLAB_APP_SECRET")
                     .ok()
                     .map(Into::into),
-                app_id:std::env::var("FLAMS_GITLAB_APP_ID")
-                    .ok().map(Into::into),
-                app_secret:std::env::var("FLAMS_GITLAB_APP_SECRET")
-                    .ok().map(Into::into),
-                redirect_url:std::env::var("FLAMS_GITLAB_REDIRECT_URL")
-                    .ok().map(Into::into),
+                redirect_url: std::env::var("FLAMS_GITLAB_REDIRECT_URL")
+                    .ok()
+                    .map(Into::into),
             },
-            lsp:false
+            lsp: false,
         }
     }
 }

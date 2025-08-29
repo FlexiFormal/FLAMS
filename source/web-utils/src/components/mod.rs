@@ -9,6 +9,8 @@ mod trees;
 
 mod errors;
 pub use errors::*;
+use ftml_dom::utils::css::inject_css;
+use leptos::prelude::*;
 
 #[cfg(any(feature = "ssr", feature = "hydrate"))]
 pub use theming::*;
@@ -46,10 +48,6 @@ pub struct Header {
 pub struct Trigger {
     children: leptos::prelude::Children,
 }
-
-use leptos::prelude::*;
-
-use crate::inject_css;
 
 #[component]
 pub fn Collapsible<Ch: IntoView + 'static>(

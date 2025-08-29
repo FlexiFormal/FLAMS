@@ -1,29 +1,23 @@
-use std::num::NonZeroU32;
-
-use flams_ontology::{
-    archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
-    file_states::FileStateSummary,
-    uris::ArchiveId,
-};
+use crate::FileStates;
+use flams_backend_types::archives::{ArchiveData, ArchiveGroupData, DirectoryData, FileData};
 use flams_router_base::LoginState;
 use flams_router_buildqueue_base::{FormatOrTarget, select_queue, server_fns::enqueue};
-use flams_utils::{time::Timestamp, unwrap};
-use flams_web_utils::{
-    components::{
-        Header, LazySubtree, Leaf, Subtree, Tree, message_action, wait_and_then, wait_and_then_fn,
-    },
-    inject_css,
+use flams_utils::unwrap;
+use flams_web_utils::components::{
+    Header, LazySubtree, Leaf, Subtree, Tree, message_action, wait_and_then, wait_and_then_fn,
 };
+use ftml_dom::utils::css::inject_css;
+use ftml_ontology::utils::time::Timestamp;
+use ftml_uris::ArchiveId;
 use leptos::prelude::*;
-
-use crate::FileStates;
+use std::num::NonZeroU32;
 
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
     wait_and_then_fn(
         || super::server_fns::group_entries(None),
         |(groups, archives)| {
-            let mut summary = FileStateSummary::default();
+            let mut summary = flams_backend_types::archives::FileStateSummary::default();
             for g in &groups {
                 if let Some(s) = g.summary {
                     summary.merge(s);
@@ -209,7 +203,7 @@ fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
     }
 }
 
-fn badge(state: FileStateSummary) -> impl IntoView {
+fn badge(state: crate::FileStateSummary) -> impl IntoView {
     use thaw::{Badge, BadgeAppearance, BadgeColor};
     view! {
       {if state.new == 0 {None} else {Some(view!(

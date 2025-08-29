@@ -1,32 +1,45 @@
+use ftml_dom::utils::css::inject_css;
 use leptos::prelude::*;
-use crate::inject_css;
 
 use super::Header;
 
 #[slot]
-pub struct Footer { children:Children }
+pub struct Footer {
+    children: Children,
+}
 #[slot]
-pub struct HeaderRight { children:Children }
+pub struct HeaderRight {
+    children: Children,
+}
 #[slot]
-pub struct HeaderLeft { children:Children }
+pub struct HeaderLeft {
+    children: Children,
+}
 #[slot]
-pub struct Separator { children:Children }
+pub struct Separator {
+    children: Children,
+}
 
 #[component]
 pub fn Block(
-    #[prop(optional)] header:Option<Header>,
-    #[prop(optional)] header_right:Option<HeaderRight>,
-    #[prop(optional)] header_left:Option<HeaderLeft>,
-    #[prop(optional)] footer:Option<Footer>,
-    #[prop(optional)] separator:Option<Separator>,
-    #[prop(optional)] show_separator:Option<bool>,
-    children:Children
+    #[prop(optional)] header: Option<Header>,
+    #[prop(optional)] header_right: Option<HeaderRight>,
+    #[prop(optional)] header_left: Option<HeaderLeft>,
+    #[prop(optional)] footer: Option<Footer>,
+    #[prop(optional)] separator: Option<Separator>,
+    #[prop(optional)] show_separator: Option<bool>,
+    children: Children,
 ) -> impl IntoView {
-    use thaw::{Card,CardHeader,CardHeaderProps,CardHeaderAction,CardHeaderDescription,Divider,CardPreview,CardFooter};
-    inject_css("flams-block",include_str!("block.css"));
+    use thaw::{
+        Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription, CardHeaderProps,
+        CardPreview, Divider,
+    };
+    inject_css("flams-block", include_str!("block.css"));
     let has_header = header.is_some() || header_right.is_some() || header_left.is_some();
-    let has_separator = separator.is_some() || show_separator == Some(true) || (show_separator.is_none() && has_header);
-    view!{
+    let has_separator = separator.is_some()
+        || show_separator == Some(true)
+        || (show_separator.is_none() && has_header);
+    view! {
         <Card class="flams-block-card">
             {if has_header {
                 Some(CardHeader(CardHeaderProps{

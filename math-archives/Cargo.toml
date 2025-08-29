@@ -1,5 +1,5 @@
 [package]
-name = "math-archives"
+name = "flams-math-archives"
 version = "0.0.1"
 edition = "2024"
 
@@ -11,9 +11,19 @@ workspace = true
 
 [features]
 ## Enables RDF support
-rdf = ["ftml-uris/rdf", "dep:ulo"]
-## wasm
-wasm = ["dep:tsify", "dep:wasm-bindgen"]
+rdf = [
+    "ftml-ontology/rdf",
+    "ftml-uris/rdf",
+    "dep:ulo",
+    "dep:oxigraph",
+    "dep:spargebra",
+    "dep:sparesults",
+]
+## adds memory "monitoring"
+deepsize = ["dep:deepsize", "dep:bytesize", "ftml-ontology/deepsize"]
+
+## adds git suppert for math archives that are git repos
+git = ["dep:flams-git", "dep:url"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -39,9 +49,12 @@ tracing-subscriber = { workspace = true }
 
 [dependencies]
 document-features = { workspace = true }
+
 ftml-ontology = { workspace = true }
-ftml-backend = { workspace = true }
+# ftml-backend = { workspace = true }
 ftml-uris = { workspace = true, features = ["interned"] }
+flams-backend-types = { workspace = true, features = ["serde"] }
+flams-git = { workspace = true, optional = true, features = ["git2"] }
 
 inventory = { workspace = true }
 serde = { workspace = true }
@@ -57,8 +70,11 @@ parking_lot = { workspace = true }
 either = { workspace = true }
 walkdir = { workspace = true }
 const_format = { workspace = true }
-bincode = { workspace = true }
+bincode = { workspace = true, features = ["std", "serde"] }
 triomphe = { workspace = true }
+dashmap = { workspace = true }
+rustc-hash = { workspace = true }
+flume = { workspace = true }
 
 # orx-parallel = { workspace = true }
 # # This is faster:
@@ -68,3 +84,9 @@ rayon = { workspace = true }
 ulo = { workspace = true, optional = true }
 tsify = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
+oxigraph = { workspace = true, optional = true }
+spargebra = { workspace = true, optional = true }
+sparesults = { workspace = true, optional = true }
+deepsize = { workspace = true, optional = true }
+bytesize = { workspace = true, optional = true }
+url = { workspace = true, optional = true }

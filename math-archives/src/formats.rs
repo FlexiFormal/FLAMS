@@ -1,5 +1,20 @@
+use std::path::Path;
+
+use ftml_uris::{ArchiveId, DocumentUri, ModuleUri, UriPath};
+
+use crate::{
+    artifacts::{Artifact, FileOrString},
+    backend::AnyBackend,
+};
+
 pub mod __reexport {
     pub use inventory::*;
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FormatOrTargets<'a> {
+    Format(SourceFormatId),
+    Targets(&'a [BuildTargetId]),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -8,7 +23,7 @@ pub struct SourceFormat {
     pub description: &'static str,
     pub targets: &'static [BuildTargetId],
     pub file_extensions: &'static [&'static str],
-    // dependencies
+    pub dependencies: fn(BuildSpec) -> Vec<(BuildTargetId, TaskDependency)>,
 }
 impl SourceFormat {
     #[inline]
@@ -37,12 +52,47 @@ impl SourceFormat {
     }
 }
 
-source_format! { FTML {
-    name:"ftml",
-    description:"Flexiformal HTML",
-    targets:&[FTML_CONTENT.id()],
-    file_extensions: &["html"]
-}}
+pub struct BuildResult {
+    pub log: FileOrString,
+    pub result: Result<Option<Box<dyn Artifact>>, Vec<TaskDependency>>,
+}
+impl BuildResult {
+    #[must_use]
+    pub fn err() -> Self {
+        Self {
+            log: FileOrString::Str(String::new().into_boxed_str()),
+            result: Err(Vec::new()),
+        }
+    }
+}
+impl Default for BuildResult {
+    fn default() -> Self {
+        Self {
+            log: FileOrString::Str(String::new().into_boxed_str()),
+            result: Ok(None),
+        }
+    }
+}
+
+pub struct BuildSpec<'a> {
+    pub uri: &'a DocumentUri,
+    pub source: either::Either<&'a Path, &'a str>,
+    pub backend: &'a AnyBackend,
+    pub rel_path: &'a UriPath,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct TaskRef {
+    pub archive: ArchiveId,
+    pub rel_path: UriPath,
+    pub target: BuildTargetId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskDependency {
+    Physical { task: TaskRef, strict: bool },
+    Logical { uri: ModuleUri, strict: bool },
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct BuildTarget {
@@ -50,7 +100,7 @@ pub struct BuildTarget {
     pub description: &'static str,
     // dependencies
     // yields
-    // run
+    pub run: fn(BuildSpec<'_>) -> BuildResult,
 }
 impl BuildTarget {
     #[inline]
@@ -68,6 +118,12 @@ macro_rules! build_target {
     };
 }
 
+build_target!(CHECK {
+    name: "check",
+    description: "check content",
+    run: |_| BuildResult::default()
+});
+
 impl BuildTarget {
     #[inline]
     pub fn all() -> impl Iterator<Item = BuildTargetId> {
@@ -78,11 +134,6 @@ impl BuildTarget {
         Self::all().find(|e| e.name == name)
     }
 }
-
-build_target! { FTML_CONTENT {
-    name:"ftml->content",
-    description:"imports existent FTML"
-}}
 
 #[derive(Copy, Clone)]
 pub struct SourceFormatId(&'static SourceFormat);

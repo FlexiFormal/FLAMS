@@ -1,29 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::{
+    borrow::Cow,
+    path::{Component, Path, PathBuf},
+};
 
-#[derive(Debug, thiserror::Error)]
-pub enum FileError {
-    #[error("error creating file {f}: {1}",f=.0.display())]
-    Creation(PathBuf, #[source] std::io::Error),
-    #[error("error renaming directory {f}: {1}",f=.0.display())]
-    Rename(PathBuf, #[source] std::io::Error),
-    #[error("error reading directory {f}: {1}",f=.0.display())]
-    ReadDir(PathBuf, #[source] std::io::Error),
-    #[error("error reading entry of directory {f}: {1}",f=.0.display())]
-    ReadEntry(PathBuf, #[source] std::io::Error),
-    #[error("error determining type of file {f}: {1}",f=.0.display())]
-    FileType(PathBuf, #[source] std::io::Error),
-    #[error("error obtaining metadata of file {f}: {1}",f=.0.display())]
-    MetaData(PathBuf, #[source] std::io::Error),
-    #[error("error copying {f} to {t}: {error}",f=.from.display(),t=.to.display())]
-    Copying {
-        from: PathBuf,
-        to: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-    #[error("Error setting file modification time for {f}: {1}",f=.0.display())]
-    SetFileModTime(PathBuf, #[source] std::io::Error),
-}
+use ftml_uris::{ArchiveId, UriPath};
+
+use crate::utils::errors::FileError;
 
 /// A relative path normalized and always displayed with `/` as component separator
 #[derive(Copy, Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
@@ -65,7 +47,7 @@ impl std::fmt::Display for RelPath<'_> {
         }
     }
 }
-impl RelPath<'_> {
+impl<'s> RelPath<'s> {
     /// # Errors
     pub fn parse<T: std::str::FromStr>(&self) -> Result<T, T::Err> {
         #[cfg(target_os = "windows")]
@@ -76,6 +58,35 @@ impl RelPath<'_> {
         {
             self.0.as_os_str().to_str().unwrap_or("").parse()
         }
+    }
+
+    #[must_use]
+    pub fn steps(self) -> impl DoubleEndedIterator<Item = &'s str> {
+        self.0.components().filter_map(|s| match s {
+            Component::Normal(n) => n.to_str(),
+            _ => None,
+        })
+    }
+
+    #[must_use]
+    pub fn split_last(self) -> Option<(Self, &'s str)> {
+        let last = self.steps().last()?;
+        let first = self.0.parent()?;
+        Some((Self(first), last))
+    }
+
+    #[must_use]
+    pub fn from_id(id: &'s ArchiveId) -> Self {
+        Self(Path::new(id.as_ref()))
+    }
+
+    #[must_use]
+    pub fn from_path(path: &'s UriPath) -> Self {
+        Self(Path::new(path.as_ref()))
+    }
+    #[must_use]
+    pub fn new(path: &'s str) -> Self {
+        Self(Path::new(path))
     }
 }
 
@@ -145,6 +156,8 @@ pub trait PathExt {
     fn rename_safe<P: AsRef<std::path::Path>>(&self, target: &P) -> Result<(), FileError>;
     /// ### Errors
     fn copy_dir_all<P: AsRef<std::path::Path>>(&self, target: &P) -> Result<(), FileError>;
+    fn join_uri_path(&self, path: &UriPath) -> PathBuf;
+    fn as_slash_str(&self) -> Cow<'_, str>;
 }
 impl<T: AsRef<std::path::Path>> PathExt for T {
     #[cfg(target_os = "windows")]
@@ -157,7 +170,15 @@ impl<T: AsRef<std::path::Path>> PathExt for T {
             .ok()
             .map(RelPath)
     }
-    /*
+    fn join_uri_path(&self, path: &UriPath) -> PathBuf {
+        let mut steps = path.steps();
+        // SAFETY: UriPaths are non-empty
+        let ret = self
+            .as_ref()
+            .join(unsafe { steps.next().unwrap_unchecked() });
+        steps.fold(ret, |p, n| p.join(n))
+    }
+
     fn as_slash_str(&self) -> Cow<'_, str> {
         // SAFTEY: don't run this on weird OSes with entirely nonstandard filepaths
         if cfg!(windows) {
@@ -172,7 +193,7 @@ impl<T: AsRef<std::path::Path>> PathExt for T {
             Cow::Borrowed(unsafe { self.as_ref().as_os_str().to_str().unwrap_unchecked() })
         }
     }
-     */
+
     #[cfg(target_os = "windows")]
     fn same_fs_as<P: AsRef<std::path::Path>>(&self, other: &P) -> bool {
         let Some(p1) = self

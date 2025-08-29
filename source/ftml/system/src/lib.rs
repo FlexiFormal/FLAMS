@@ -1,60 +1,102 @@
 //#![feature(string_from_utf8_lossy_owned)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-mod parser;
+//mod parser;
 
-use either::Either;
-use flams_ontology::uris::{DocumentUri, UriWithArchive};
-use flams_system::{
-    backend::{AnyBackend, Backend},
-    build_result, build_target,
-    building::{BuildArtifact, BuildResult, BuildResultArtifact, BuildTask},
-    formats::{BuildArtifactTypeId, OMDocResult, CHECK, UNCHECKED_OMDOC},
-    source_format,
+use flams_math_archives::{
+    artifacts::{ContentResult, FileOrString},
+    backend::{AnyBackend, LocalBackend},
+    build_target,
+    formats::{BuildResult, BuildSpec},
+    source_format, Archive, LocallyBuilt, MathArchive,
 };
+pub use ftml5ever::FtmlResult;
+use ftml_uris::{DocumentUri, UriWithArchive, UriWithPath};
 
-source_format!(ftml ["html","xhtml","htm"] [FTML_IMPORT => FTML_OMDOC => CHECK] @
-  "Flexiformally annotated HTML"
-  = |_,_| todo!()
-);
+source_format! { FTML {
+    name:"ftml",
+    description:"Flexiformal HTML",
+    targets:&[FTML_CONTENT.id()],
+    file_extensions: &["html","html","xhtml"],
+    dependencies: |_| Vec::new()
+}}
 
-build_target!(
-  ftml_import [] => [FTML_DOC]
-  @ "Import existing FTML"
-  = |_,_| todo!()
-);
+build_target! { FTML_CONTENT {
+    name:"ftml->content",
+    description:"imports existent FTML",
+    run: extract
+}}
 
-build_target!(
-  ftml_omdoc [FTML_DOC] => [UNCHECKED_OMDOC]
-  @ "Extract OMDoc from FTML"
-  = extract
-);
-
-build_result!(ftml_doc @ "Semantically annotated HTML");
-
-fn extract(backend: &AnyBackend, task: &BuildTask) -> BuildResult {
-    let html: Result<HTMLString, _> = backend.with_archive(task.archive().archive_id(), |a| {
-        let Some(a) = a else {
+#[deprecated(note = "uses local archives only; maybe catch tracing/log output?")]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::needless_pass_by_value)]
+fn extract(spec: BuildSpec) -> BuildResult {
+    let html: Result<String, _> = spec.backend.with_archive(spec.uri.archive_id(), |a| {
+        let Some(Archive::Local(a)) = a else {
             return Err(BuildResult::err());
         };
-        a.load(task.rel_path()).map_err(|e| BuildResult {
-            log: Either::Left(format!(
-                "Error loading html data for {}/{}: {e}",
-                task.archive().archive_id(),
-                task.rel_path()
-            )),
-            result: Err(Vec::new()),
+        let path = a
+            .out_path_of(
+                spec.uri.path(),
+                &spec.uri.name,
+                Some(spec.rel_path),
+                spec.uri.language,
+            )
+            .join(FTML.name);
+        std::fs::read_to_string(path).map_err(|e| {
+            let mut err = BuildResult::err();
+            err.log = FileOrString::Str(e.to_string().into_boxed_str());
+            err
         })
     });
     let html = match html {
         Err(e) => return e,
         Ok(h) => h,
     };
-    let uri = match task.document_uri() {
-        Ok(uri) => uri,
-        Err(e) => return BuildResult::with_err(format!("{e:#}")),
-    };
-    match build_ftml(backend, &html.0, uri, task.rel_path()) {
+    let uri = spec.uri.clone();
+    match build_ftml(spec.backend, &html, uri) {
+        Err(e) => {
+            let mut err = BuildResult::err();
+            err.log = FileOrString::Str(e.into_boxed_str());
+            err
+        }
+        Ok(FtmlResult {
+            ftml,
+            css,
+            errors,
+            doc,
+            body,
+            inner_offset,
+        }) => {
+            let has_errored = !errors.is_empty();
+            BuildResult {
+                log: FileOrString::Str(
+                    errors
+                        .into_vec()
+                        .into_iter()
+                        .map(|e| e.to_string())
+                        .collect::<String>()
+                        .into_boxed_str(),
+                ),
+                result: if has_errored {
+                    Err(Vec::new())
+                } else {
+                    Ok(Some(Box::new(ContentResult {
+                        document: doc.document,
+                        modules: doc.modules,
+                        data: doc.data,
+                        body,
+                        inner_offset,
+                        css,
+                        ftml,
+                        triples: doc.triples,
+                    })))
+                },
+            }
+        }
+    }
+
+    /*match build_ftml(backend, &html.0, uri, task.rel_path()) {
         Err(e) => BuildResult {
             log: Either::Left(e),
             result: Err(Vec::new()),
@@ -63,52 +105,51 @@ fn extract(backend: &AnyBackend, task: &BuildTask) -> BuildResult {
             log: Either::Left(s),
             result: Ok(BuildResultArtifact::Data(Box::new(r))),
         },
-    }
+    }*/
 }
 
-/// #### Errors
-#[inline]
+/// # Errors
 pub fn build_ftml(
     backend: &AnyBackend,
     html: &str,
     uri: DocumentUri,
-    rel_path: &str,
-) -> Result<(OMDocResult, String), String> {
-    parser::HTMLParser::run(html, uri, rel_path, backend)
-}
-
-pub struct HTMLString(pub String);
-impl BuildArtifact for HTMLString {
-    #[inline]
-    fn get_type_id() -> BuildArtifactTypeId
-    where
-        Self: Sized,
-    {
-        FTML_DOC
-    }
-    #[inline]
-    fn get_type(&self) -> BuildArtifactTypeId {
-        FTML_DOC
-    }
-    fn write(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
-        std::fs::write(path, &self.0)
-    }
-    fn load(p: &std::path::Path) -> Result<Self, std::io::Error>
-    where
-        Self: Sized,
-    {
-        let s = std::fs::read_to_string(p)?;
-        Ok(Self(s))
-    }
-
-    #[inline]
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-impl HTMLString {
-    #[must_use]
-    pub fn create(s: String) -> BuildResultArtifact {
-        BuildResultArtifact::Data(Box::new(Self(s)))
-    }
+) -> Result<FtmlResult, String> {
+    static CSS_SUBSTS: [(&str, &str); 1] = [(
+        "https://raw.githack.com/Jazzpirate/RusTeX/main/rustex/src/resources/rustex.css",
+        "srv:/rustex.css",
+    )];
+    ftml5ever::run(
+        html,
+        |src| {
+            let path = std::path::Path::new(src);
+            if let Some(s) =
+                backend.archive_of(path, |a, rp| format!("srv:/img?a={}&rp={}", a.id(), rp))
+            {
+                return Some(s);
+            }
+            let kpsewhich = &*tex_engine::engine::filesystem::kpathsea::KPATHSEA;
+            let last = src.rsplit_once('/').map_or(src, |(_, p)| p);
+            kpsewhich.which(last).map_or_else(
+                || Some(format!("srv:/img?file={src}")),
+                |file| {
+                    if file == path {
+                        Some(format!("srv:/img?kpse={last}"))
+                    } else {
+                        None
+                    }
+                },
+            )
+        },
+        |css| {
+            CSS_SUBSTS.iter().find_map(|(old, new)| {
+                if css == *old {
+                    Some((*new).to_string().into_boxed_str())
+                } else {
+                    None
+                }
+            })
+        },
+        uri,
+        true,
+    )
 }

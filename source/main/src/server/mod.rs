@@ -137,7 +137,7 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
             .expect("Error sending port address");
     }
 
-    crate::fns::init();
+    //crate::fns::init();
 
     axum::serve(
         listener,

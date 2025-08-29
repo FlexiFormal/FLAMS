@@ -6,10 +6,10 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
-use flams_ontology::uris::ArchiveId;
 use flams_router_base::LoginState;
 use flams_utils::unwrap;
-use flams_web_utils::inject_css;
+use ftml_dom::utils::css::inject_css;
+use ftml_uris::ArchiveId;
 use std::num::NonZeroU32;
 
 pub mod server_fns;
@@ -34,7 +34,7 @@ pub enum RepoInfo {
         id: ArchiveId,
         remote: String,
         branch: String,
-        commit: flams_git::Commit,
+        commit: flams_backend_types::git::Commit,
         //updates:Vec<(String,flams_git::Commit)>
     },
 }
@@ -150,6 +150,7 @@ mod login {
 pub use login::*;
 
 use leptos::prelude::*;
+#[must_use]
 pub fn select_queue(queue_id: RwSignal<Option<NonZeroU32>>) -> impl IntoView {
     use flams_web_utils::components::{Spinner, display_error};
     move || {

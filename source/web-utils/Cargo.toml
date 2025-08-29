@@ -7,11 +7,28 @@ edition = "2021"
 workspace = true
 
 [features]
-csr = ["leptos/csr", "thaw/csr","getrandom/wasm_js"]
-ssr = ["leptos/ssr", "thaw/ssr", "dep:tokio", "dep:http", "dep:leptos_axum"]
-hydrate = ["leptos/hydrate", "thaw/hydrate", "dep:gloo-storage","getrandom/wasm_js"]
+csr = ["leptos/csr", "thaw/csr", "getrandom/wasm_js", "ftml-leptos/csr"]
+ssr = [
+    "leptos/ssr",
+    "thaw/ssr",
+    "dep:tokio",
+    "dep:http",
+    "dep:leptos_axum",
+    "ftml-leptos/ssr",
+]
+hydrate = [
+    "leptos/hydrate",
+    "thaw/hydrate",
+    "dep:gloo-storage",
+    "getrandom/wasm_js",
+    "ftml-leptos/hydrate",
+]
 
 [dependencies]
+
+ftml-dom = { workspace = true }
+ftml-leptos = { workspace = true }
+
 flams-utils = { workspace = true, features = ["serde"] }
 
 leptos-posthoc = { workspace = true }

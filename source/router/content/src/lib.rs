@@ -7,26 +7,27 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
+pub mod backend;
 pub mod components;
-pub mod errors;
+//pub mod errors;
 pub mod server_fns;
 #[cfg(feature = "ssr")]
 mod toc;
 
+pub type Views = ftml_leptos::Views<backend::FtmlBackend>;
+
 #[cfg(feature = "ssr")]
 mod ssr {
-    use flams_utils::CSS;
+    use ftml_ontology::utils::Css;
 
-    pub(crate) fn insert_base_url(mut v: Vec<CSS>) -> Vec<CSS> {
+    pub(crate) fn insert_base_url(mut v: Box<[Css]>) -> Box<[Css]> {
         //v.sort();
         for c in v.iter_mut() {
-            if let CSS::Link(lnk) = c {
+            if let Css::Link(lnk) = c {
                 if let Some(r) = lnk.strip_prefix("srv:") {
                     *lnk = format!(
                         "{}{r}",
-                        flams_system::settings::Settings::get()
-                            .external_url()
-                            .unwrap_or("")
+                        flams_system::settings::Settings::get().external_url()
                     )
                     .into_boxed_str()
                 }
@@ -34,7 +35,7 @@ mod ssr {
         }
         v
     }
-
+    /*
     macro_rules! backend {
       ($fn:ident!($($args:tt)*)) => {
         if flams_system::settings::Settings::get().lsp {
@@ -91,4 +92,5 @@ mod ssr {
     }
 
     pub(crate) use backend;
+     */
 }

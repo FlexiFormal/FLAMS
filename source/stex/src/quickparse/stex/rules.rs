@@ -2,23 +2,7 @@
 #![allow(clippy::case_sensitive_file_extension_comparisons)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(unused_variables)]
-
-use std::{borrow::Cow, path::Path};
-
-use flams_ontology::{
-    languages::Language,
-    narration::paragraphs::ParagraphKind,
-    uris::{ArchiveId, IsNarrativeUri, ModuleUri, SymbolUri, UriName, UriWithArchive, UriWithPath},
-};
-use flams_system::backend::{Backend, GlobalBackend};
-use flams_utils::{
-    impossible,
-    parsing::ParseStr,
-    sourcerefs::{LSPLineCol, SourcePos, SourceRange},
-    vecmap::VecMap,
-    CondSerialize,
-};
-use smallvec::SmallVec;
+#![allow(clippy::needless_pass_by_value)]
 
 use crate::{
     quickparse::{
@@ -33,7 +17,24 @@ use crate::{
     },
     tex,
 };
+use flams_math_archives::{
+    backend::{GlobalBackend, LocalBackend},
+    MathArchive,
+};
 use flams_utils::parsing::ParseSource;
+use flams_utils::{
+    impossible,
+    parsing::ParseStr,
+    sourcerefs::{LSPLineCol, SourcePos, SourceRange},
+    vecmap::VecMap,
+    CondSerialize,
+};
+use ftml_ontology::narrative::elements::paragraphs::ParagraphKind;
+use ftml_uris::{
+    ArchiveId, IsNarrativeUri, Language, ModuleUri, SymbolUri, UriName, UriWithArchive, UriWithPath,
+};
+use smallvec::SmallVec;
+use std::{borrow::Cow, path::Path};
 
 use super::{
     structs::{
@@ -312,7 +313,7 @@ stex!(LSP: p => importmodule[archive:str]{module:name} => {
       Some(r)
   ));
   if let Some(r) = p.state.resolve_module(module.0, archive) {
-    let path = p.state.in_path.as_ref().unwrap();
+    let path = p.state.in_path.as_ref().expect("this is a bug");
     let (state,groups) = p.split();
     state.add_import(&r, groups,importmodule.range);
     MacroResult::Success(STeXToken::ImportModule {
@@ -480,25 +481,23 @@ stex!(p => mhinput[archive:str]{filepath:name} => {
 );
 
 fn strip_comments(s: &str) -> Cow<'_, str> {
-    if let Some(i) = s.find('%') {
+    s.find('%').map_or(Cow::Borrowed(s), |i| {
         let rest = &s[i..];
-        let j = rest
-            .find("\r\n")
+        rest.find("\r\n")
             .or_else(|| rest.find('\n'))
-            .or_else(|| rest.find('\r'));
-        if let Some(j) = j {
-            let r = strip_comments(&rest[j..]);
-            if r.is_empty() {
-                Cow::Borrowed(&s[..i])
-            } else {
-                Cow::Owned(format!("{}{}", &s[..i], r))
-            }
-        } else {
-            Cow::Borrowed(&s[..i])
-        }
-    } else {
-        Cow::Borrowed(s)
-    }
+            .or_else(|| rest.find('\r'))
+            .map_or_else(
+                || Cow::Borrowed(&s[..i]),
+                |j| {
+                    let r = strip_comments(&rest[j..]);
+                    if r.is_empty() {
+                        Cow::Borrowed(&s[..i])
+                    } else {
+                        Cow::Owned(format!("{}{}", &s[..i], r))
+                    }
+                },
+            )
+    })
 }
 
 macro_rules! optargtype {
@@ -912,11 +911,10 @@ stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
                 if let Some(ex) = path.extension().and_then(|s| s.to_str()) {
                     let len = rel_path.len() - ex.len();
                     rel_path.truncate(len);
-                    rel_path.push_str(*e);
                 } else {
                     rel_path.push('.');
-                    rel_path.push_str(*e);
                 }
+                rel_path.push_str(*e);
                 return true
             }
         }
@@ -930,7 +928,7 @@ stex!(p => mhgraphics[args:type MHGraphicsArg<Pos>]{filepath:name} => {
         }
     }
     if !args.iter().any(|e| matches!(e,MHGraphicsArg::Width(_)|MHGraphicsArg::Height(_))) {
-        p.tokenizer.problem(mhgraphics.token_range.start,"No `width` or `height` attribute in image. It is strongly encouraged to provide one of them.",DiagnosticLevel::Warning)
+        p.tokenizer.problem(mhgraphics.token_range.start,"No `width` or `height` attribute in image. It is strongly encouraged to provide one of them.",DiagnosticLevel::Warning);
     }
       let archive = args.iter().find_map(|p| if let MHGraphicsArg::Archive(a) = p {Some(a)} else {None})
           .and_then(|pair|
@@ -1001,7 +999,7 @@ stex!(p => symdecl('*'?star){name:!name}[args:type SymdeclArg<Pos,STeXToken<Pos>
     };
     let mn = macroname.as_ref();
     if let Some(uri) = state.add_symbol(&mut groups,fname,
-      mn.map(|s| s.to_string().into()),
+      mn.map(|s| (*s).to_string().into()),
       symdecl.range,has_tp,has_df,argnum
     ) {
       MacroResult::Success(STeXToken::Symdecl {
@@ -1047,7 +1045,7 @@ stex!(p => textsymdecl{name:name}[args:type TextSymdeclArg<Pos,STeXToken<Pos>>] 
   };
   let mn = macroname.as_ref();
   if let Some(uri) = state.add_symbol(&mut groups,fname,
-    mn.map(|s| s.to_string().into()),
+    mn.map(|s| (*s).to_string().into()),
     textsymdecl.range,false,false,0
   ) {
     MacroResult::Success(STeXToken::TextSymdecl {
@@ -1128,7 +1126,7 @@ stex!(p => symdef{name:!name}[args:type SymdefArg<Pos,STeXToken<Pos>>] => {
   };
   let mn = macroname.as_ref();
   if let Some(uri) = state.add_symbol(&mut groups,fname,
-    mn.map(|s| s.to_string().into()),
+    mn.map(|s| (*s).to_string().into()),
     symdef.range,has_tp,has_df,argnum
   ) {
     MacroResult::Success(STeXToken::Symdef {
@@ -1188,7 +1186,7 @@ stex!(LSP: p => symref[mut args:Map]{name:!name}{text:T} => {
   };
   args.inner.remove(&"root");
   for (k,v) in args.inner.iter() {
-    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::Symref {
     uri:s, full_range: symref.range, token_range: symref.token_range,
@@ -1209,7 +1207,7 @@ stex!(LSP: p => symname[mut args:Map]{name:!name} => {
     Some((val.key_range,val.val_range,strip_comments(val.str).trim().to_string()))
   } else { None };
   for (k,v) in args.inner.iter() {
-    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
     uri:s, full_range: symname.range, token_range: symname.token_range,
@@ -1228,7 +1226,7 @@ stex!(LSP: p => Symname[mut args:Map]{name:!name} => {
     Some((val.key_range,val.val_range,strip_comments(val.str).trim().to_string()))
   } else { None };
   for (k,v) in args.inner.iter() {
-    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
     uri:s, full_range: Symname.range, token_range: Symname.token_range,
@@ -1247,7 +1245,7 @@ stex!(LSP: p => symnames[mut args:Map]{name:!name} => {
     Some((val.key_range,val.val_range,strip_comments(val.str).trim().to_string()))
   } else { None };
   for (k,v) in args.inner.iter() {
-    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
     uri:s, full_range: symnames.range, token_range: symnames.token_range,
@@ -1283,7 +1281,7 @@ stex!(LSP: p => definame[mut args:Map]{name:!name} => {
   } else { None };
   args.inner.remove(&"root");
   for (k,v) in args.inner.iter() {
-    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
     uri:s, full_range: definame.range, token_range: definame.token_range,
@@ -1302,7 +1300,7 @@ stex!(LSP: p => Definame[mut args:Map]{name:!name} => {
     Some((val.key_range,val.val_range,strip_comments(val.str).trim().to_string()))
   } else { None };
   for (k,v) in args.inner.iter() {
-    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
     uri:s, full_range: Definame.range, token_range: Definame.token_range,
@@ -1321,7 +1319,7 @@ stex!(LSP: p => definames[mut args:Map]{name:!name} => {
     Some((val.key_range,val.val_range,strip_comments(val.str).trim().to_string()))
   } else { None };
   for (k,v) in args.inner.iter() {
-    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {}",k),DiagnosticLevel::Error);
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
     uri:s, full_range: definames.range, token_range: definames.token_range,
@@ -1441,7 +1439,7 @@ stex!(p => vardef{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
     ptr: variable_macro as _,
     arg:MacroArg::Variable(fname.clone(), vardef.range, false,argnum)
   });
-  p.add_macro_rule(macroname.clone().into(), Some(rule));
+  p.add_macro_rule(macroname.into(), Some(rule));
   MacroResult::Success(STeXToken::Vardef {
     name:fname, main_name_range,
     full_range:vardef.range,parsed_args:args,
@@ -1477,7 +1475,7 @@ stex!(p => varseq{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
     ptr: variable_macro as _,
     arg:MacroArg::Variable(fname.clone(), varseq.range, true,argnum)
   });
-  p.add_macro_rule(macroname.clone().into(), Some(rule));
+  p.add_macro_rule(macroname.into(), Some(rule));
   MacroResult::Success(STeXToken::Varseq {
     name:fname, main_name_range,
     full_range:varseq.range,parsed_args:args,
@@ -1492,7 +1490,7 @@ stex!(p => svar[optname:!name]{arg:!name} => {
     (arg.0,None)
   };
   let Ok(name) = name.as_ref().parse::<UriName>() else {
-    p.tokenizer.problem(name_range.unwrap_or_default().start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
+    p.tokenizer.problem(name_range.unwrap_or_default().start, format!("Invalid uri segment {name}"),DiagnosticLevel::Error);
     return MacroResult::Simple(svar)
   };
   MacroResult::Success(STeXToken::Svar {
@@ -1501,13 +1499,14 @@ stex!(p => svar[optname:!name]{arg:!name} => {
   })
 });
 
-lazy_static::lazy_static! {
-  static ref META_REL_PATH:std::sync::Arc<str> = "Metatheory.en.tex".into();
-  static ref META_FULL_PATH:Option<std::sync::Arc<Path>> =
-    GlobalBackend::get().with_local_archive(flams_ontology::metatheory::URI.archive_id(), |a|
-    a.map(|a| a.source_dir().join("Metatheory.en.tex").into())
-  );
-}
+static META_REL_PATH: std::sync::LazyLock<std::sync::Arc<str>> =
+    std::sync::LazyLock::new(|| "Metatheory.en.tex".into());
+static META_FULL_PATH: std::sync::LazyLock<Option<std::sync::Arc<Path>>> =
+    std::sync::LazyLock::new(|| {
+        GlobalBackend.with_local_archive(ftml_uris::metatheory::URI.archive_id(), |a| {
+            a.map(|a| a.source_dir().join("Metatheory.en.tex").into())
+        })
+    });
 
 fn get_module<
     'a,
@@ -1550,12 +1549,12 @@ stex!(LSP: p => @begin{smodule}([opt:type SModuleArg<LSPLineCol,STeXToken<LSPLin
             has_meta_theory = Some(true);
           }
         }
-        _ => ()
+        SModuleArg::Title(_) => ()
       }}
       let meta_theory = if has_meta_theory == Some(false) {
         Some(ModuleReference {
-          uri:flams_ontology::metatheory::URI.clone(),
-          in_doc:flams_ontology::metatheory::DOC_URI.clone(),
+          uri:ftml_uris::metatheory::URI.clone(),
+          in_doc:ftml_uris::metatheory::DOC_URI.clone(),
           rel_path:Some(META_REL_PATH.clone()),
           full_path:META_FULL_PATH.clone()
         })
@@ -1660,11 +1659,11 @@ stex!(LSP: p => @begin{mathstructure}({name:!name}[args:type MathStructureArg<LS
   let mut name : &str = &name.0;
   for a in &args{ match a {
     MathStructureArg::Name(_,n) => name = n,
-    _ => ()
+    MathStructureArg::This(_) => ()
   }}
 
   let Ok(fname) : Result<UriName,_> = name.parse() else {
-    p.tokenizer.problem(name_range.start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
+    p.tokenizer.problem(name_range.start, format!("Invalid uri segment {name}"),DiagnosticLevel::Error);
     return
   };
   let (state,mut groups) = p.split();
@@ -1726,11 +1725,11 @@ stex!(LSP: p => @begin{extstructure}({name:!name}[args:type MathStructureArg<LSP
   let mut name: &str = &name.0;
   for a in &args{ match a {
     MathStructureArg::Name(_,n) => name = n,
-    _ => ()
+    MathStructureArg::This(_) => ()
   }}
 
   let Ok(fname) : Result<UriName,_> = name.parse() else {
-    p.tokenizer.problem(name_range.start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
+    p.tokenizer.problem(name_range.start, format!("Invalid uri segment {name}"),DiagnosticLevel::Error);
     return
   };
   let (state,mut groups) = p.split();
@@ -1861,8 +1860,8 @@ stex!(p => @begin{smodule_deps}([opt]{name:name}){
       };
       let meta_theory = match opt.get(&"meta").map(|v| v.val) {
         None => Some(ModuleReference{
-          uri:flams_ontology::metatheory::URI.clone(),
-          in_doc:flams_ontology::metatheory::DOC_URI.clone(),
+          uri:ftml_uris::metatheory::URI.clone(),
+          in_doc:ftml_uris::metatheory::DOC_URI.clone(),
           rel_path:Some(META_REL_PATH.clone()),
           full_path:META_FULL_PATH.clone()
         }),
@@ -2146,7 +2145,7 @@ fn close_paragraph<
     MS: STeXModuleStore,
     Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
 >(
-    p: &mut LaTeXParser<
+    p: &LaTeXParser<
         'a,
         ParseStr<'a, LSPLineCol>,
         STeXToken<LSPLineCol>,
@@ -2271,7 +2270,7 @@ fn close_problem<
     MS: STeXModuleStore,
     Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
 >(
-    p: &mut LaTeXParser<
+    p: &LaTeXParser<
         'a,
         ParseStr<'a, LSPLineCol>,
         STeXToken<LSPLineCol>,
@@ -2320,12 +2319,11 @@ stex!(LSP: p => @begin{subproblem}(){
 });
 
 fn get_in_morphism<
-    'a,
     'b,
     MS: STeXModuleStore,
     Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
 >(
-    groups: &'b mut Vec<STeXGroup<'a, MS, LSPLineCol, Err>>,
+    groups: &'b mut Vec<STeXGroup<'_, MS, LSPLineCol, Err>>,
     name: &str,
 ) -> Option<(
     &'b SymbolRule<LSPLineCol>,
@@ -2367,13 +2365,12 @@ fn get_in_morphism<
 }
 
 fn set_defined<
-    'a,
     MS: STeXModuleStore,
     Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
 >(
     symbol: &SymbolReference<LSPLineCol>,
     range: SourceRange<LSPLineCol>,
-    groups: &mut Vec<STeXGroup<'a, MS, LSPLineCol, Err>>,
+    groups: &mut Vec<STeXGroup<'_, MS, LSPLineCol, Err>>,
 ) {
     for g in groups.iter_mut().rev() {
         match &mut g.kind {
@@ -2503,7 +2500,7 @@ fn setup_morphism<
     let Some((mors, rules)) = state.resolve_module_or_struct(&groups, domain, archive) else {
         groups.tokenizer.problem(
             pos,
-            format!("No module or structure {} found", domain),
+            format!("No module or structure {domain} found"),
             DiagnosticLevel::Error,
         );
         return None;
@@ -2513,7 +2510,7 @@ fn setup_morphism<
             .problem(pos, "Not in a module", DiagnosticLevel::Error);
         return None;
     };
-    let Ok(name) = name.parse() else {
+    let Ok(name) = name.parse::<UriName>() else {
         p.tokenizer.problem(
             pos,
             format!("Invalid module name: {name}"),
@@ -2567,18 +2564,11 @@ fn elaborate_morphism<
         for r in rls.rules.iter() {
             if let ModuleRule::Symbol(s) = r {
                 let (macroname, name, dfed, rng) = if let Some(spec) = specs.remove(&s.uri) {
-                    let m = if let Some(m) = spec.macroname {
-                        Some(m.into())
-                    } else if do_macros {
-                        s.macroname.clone()
-                    } else {
-                        None
-                    };
-                    let n = if let Some(n) = spec.new_name {
-                        n
-                    } else {
-                        &name / s.uri.uri.name()
-                    };
+                    let m = spec.macroname.map_or_else(
+                        || if do_macros { s.macroname.clone() } else { None },
+                        |m| Some(m.into()),
+                    );
+                    let n = spec.new_name.unwrap_or_else(|| &name / s.uri.uri.name());
                     let d = spec.is_assigned_at.is_some() || s.has_df;
                     (m, n, d, spec.decl_range)
                 } else {
@@ -2598,7 +2588,7 @@ fn elaborate_morphism<
                     .add_symbol(
                         &mut groups,
                         name,
-                        macroname.map(|s| s.into()),
+                        macroname.map(Into::into),
                         range,
                         s.has_tp,
                         dfed,
@@ -2705,6 +2695,7 @@ stex!(LSP: p => @begin{copymodule_ast}({name:!name}[archive:str]{domain:!name}){
   }
 });
 
+#[allow(clippy::too_many_lines)]
 fn parse_assignments<
     'a,
     MS: STeXModuleStore,
@@ -3142,6 +3133,7 @@ stex!(LSP: p => @begin{interpretmodule_ast}({name:!name}[archive:str]{domain:!na
   }
 });
 
+#[allow(clippy::needless_pass_by_value)]
 pub(super) fn semantic_macro<
     'a,
     MS: STeXModuleStore,

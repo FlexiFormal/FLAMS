@@ -1,18 +1,21 @@
-use std::{
-    borrow::Cow,
-    collections::hash_map::Entry,
-    path::{Path, PathBuf},
-};
-
-use flams_ontology::{
-    languages::Language,
-    narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
-    uris::{
-        ArchiveId, ArchiveUri, DocumentUri, DomainUri, IsDomainUri, ModuleUri, PathUri, SymbolUri,
-        UriName, UriPath, UriWithArchive, UriWithPath,
+use super::{
+    rules::{
+        MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg, SymdefArg,
+        TextSymdeclArg, VardefArg,
     },
+    DiagnosticLevel, STeXParseData,
 };
-use flams_system::backend::{AnyBackend, Backend};
+use crate::quickparse::{
+    latex::{
+        rules::{AnyEnv, AnyMacro, DynMacro},
+        Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
+    },
+    stex::rules::{IncludeProblemArg, MHGraphicsArg},
+};
+use flams_math_archives::{
+    backend::{AnyBackend, LocalBackend},
+    MathArchive,
+};
 use flams_utils::{
     id_counters::IdCounter,
     impossible,
@@ -21,22 +24,16 @@ use flams_utils::{
     sourcerefs::{LSPLineCol, SourcePos, SourceRange},
     vecmap::{VecMap, VecSet},
 };
-use smallvec::SmallVec;
-
-use crate::quickparse::{
-    latex::{
-        rules::{AnyEnv, AnyMacro, DynMacro},
-        Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
-    },
-    stex::rules::{IncludeProblemArg, MHGraphicsArg},
+use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
+use ftml_uris::{
+    ArchiveId, ArchiveUri, DocumentUri, DomainUri, IsDomainUri, Language, ModuleUri, PathUri,
+    SymbolUri, UriName, UriPath, UriWithArchive, UriWithPath,
 };
-
-use super::{
-    rules::{
-        MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg, SymdefArg,
-        TextSymdeclArg, VardefArg,
-    },
-    DiagnosticLevel, STeXParseData,
+use smallvec::SmallVec;
+use std::{
+    borrow::Cow,
+    collections::hash_map::Entry,
+    path::{Path, PathBuf},
 };
 
 #[allow(clippy::large_enum_variant)]
@@ -356,7 +353,7 @@ impl<Pos: SourcePos, T1> InlineMorphAssign<Pos, T1> {
         self,
         mut cont: impl FnMut(Vec<T1>) -> Vec<T2>,
     ) -> InlineMorphAssign<Pos, T2> {
-        let InlineMorphAssign {
+        let Self {
             symbol,
             symbol_range,
             first,
@@ -474,13 +471,13 @@ pub enum GetModuleError {
 impl std::fmt::Display for GetModuleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GetModuleError::NotFound(uri) => write!(f, "module not found: {}", uri),
-            GetModuleError::Cycle(cycle) => write!(
+            Self::NotFound(uri) => write!(f, "module not found: {uri}"),
+            Self::Cycle(cycle) => write!(
                 f,
                 "cycle in module dependencies: {}",
                 cycle
                     .iter()
-                    .map(|uri| uri.to_string())
+                    .map(DocumentUri::to_string)
                     .collect::<Vec<_>>()
                     .join(" -> ")
             ),
@@ -490,6 +487,7 @@ impl std::fmt::Display for GetModuleError {
 
 pub trait STeXModuleStore {
     const FULL: bool;
+    /// # Errors
     fn get_module(
         &mut self,
         module: &ModuleReference,
@@ -594,7 +592,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }*/
         match self.module_store.get_module(module, self.in_path.as_ref()) {
             Ok(d) => {
-                for (uri, m) in d.lock().modules.iter() {
+                for (uri, m) in &d.lock().modules {
                     if *uri == module.uri {
                         return Ok(m.clone());
                     }
@@ -667,7 +665,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     }
                 }
                 ModuleRule::ConservativeExt(s, rls) => {
-                    semantic_rules.push(SemanticRule::ConservativeExt(s.clone(), rls.clone()))
+                    semantic_rules.push(SemanticRule::ConservativeExt(s.clone(), rls.clone()));
                 }
                 _ => (),
             }
@@ -701,6 +699,8 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         false
     }
 
+    /// # Panics
+    #[allow(clippy::needless_pass_by_value)]
     pub fn add_use<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &mut self,
         module: &ModuleReference,
@@ -737,7 +737,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 {
                     groups
                         .tokenizer
-                        .problem(range.start, "Import cycle", DiagnosticLevel::Error)
+                        .problem(range.start, "Import cycle", DiagnosticLevel::Error);
                 }
             }
             Err(e) => groups
@@ -856,7 +856,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
             };
         }
         for rule in irules.rules.iter() {
-            do_rule!(rule)
+            do_rule!(rule);
         }
         for g in prev.iter().rev() {
             for rule in g.semantic_rules.iter().rev() {
@@ -864,13 +864,13 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     //tracing::info!("Checking {} vs {}",s.uri,symbol.uri);
                     if s.uri == symbol.uri {
                         for rule in rls.rules.iter() {
-                            do_rule!(rule)
+                            do_rule!(rule);
                         }
                     }
                 }
             }
         }
-        semantic_rules.push(SemanticRule::StructureImport(symbol, irules))
+        semantic_rules.push(SemanticRule::StructureImport(symbol, irules));
     }
 
     pub fn import_structure<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
@@ -901,9 +901,10 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         let (prev, after) = groups_ls.split_at_mut(i);
         let prev = &*prev;
         let g = &mut after[0];
-        let rules = match &mut g.kind {
-            GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. } => rules,
-            _ => impossible!(),
+        let (GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. }) =
+            &mut g.kind
+        else {
+            impossible!()
         };
         if rules
             .iter()
@@ -952,6 +953,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn add_import<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &mut self,
         module: &ModuleReference,
@@ -979,9 +981,10 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         let (prev, after) = groups_ls.split_at_mut(i);
         let prev = &*prev;
         let g = &mut after[0];
-        let rules = match &mut g.kind {
-            GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. } => rules,
-            _ => unreachable!(),
+        let (GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. }) =
+            &mut g.kind
+        else {
+            unreachable!()
         };
         if rules
             .iter()
@@ -1014,7 +1017,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 {
                     groups
                         .tokenizer
-                        .problem(range.start, "Import cycle", DiagnosticLevel::Error)
+                        .problem(range.start, "Import cycle", DiagnosticLevel::Error);
                 }
             }
             Err(e) => groups
@@ -1023,6 +1026,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn get_symbol_macro_or_name<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1087,7 +1091,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                             }
                         }
                     }
-                    _ => (),
+                    SemanticRule::ConservativeExt(..) => (),
                 }
             }
         }
@@ -1098,6 +1102,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn get_structure_macro_or_name<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1142,11 +1147,11 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
             let mut uri_steps = n2.steps().rev();
             loop {
                 let Some(sym) = symbol_steps.next() else {
-                    if uri_steps.next().is_some() {
-                        return None;
+                    return if uri_steps.next().is_some() {
+                        None
                     } else {
-                        return Some(true);
-                    }
+                        Some(true)
+                    };
                 };
                 let Some(uristep) = uri_steps.next() else {
                     return Some(false);
@@ -1175,7 +1180,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 }
                 if let Some(p) = path.strip_suffix(step) {
                     if let Some(p) = p.strip_suffix('/') {
-                        path = p
+                        path = p;
                     } else {
                         if p.is_empty() {
                             return true;
@@ -1190,6 +1195,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         return id.as_ref().ends_with(path);
     }
 
+    #[allow(clippy::unused_self)]
     fn get_symbol_complex<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1249,6 +1255,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn get_structure_uri<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1279,6 +1286,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         None
     }
 
+    #[allow(clippy::unused_self)]
     fn get_structure_complex<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1337,9 +1345,8 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     );
                 }
                 return Some(r);
-            } else {
-                ""
             }
+            ""
         };
         let path = if steps.next().is_none() {
             None
@@ -1379,6 +1386,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         self.get_structure_complex(groups, name, module, path)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(super) fn resolve_module_or_struct<
         Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
     >(
@@ -1412,14 +1420,14 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                             .iter()
                             .any(|u| matches!(u,DomainUri::Module(u) if *u == m.uri)) =>
                     {
-                        load_module(slf, groups, m, dones, target)?
+                        load_module(slf, groups, m, dones, target)?;
                     }
                     ModuleRule::StructureImport(s)
                         if !dones
                             .iter()
                             .any(|u| matches!(u,DomainUri::Symbol(u) if *u == s.uri)) =>
                     {
-                        load_structure(slf, groups, s, dones, target)?
+                        load_structure(slf, groups, s, dones, target)?;
                     }
                     _ => (),
                 }
@@ -1766,6 +1774,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::too_many_lines)]
     pub(super) fn resolve_module(
         &self,
         module: &'a str,

@@ -10,9 +10,13 @@ workspace = true
 ws = ["dep:axum"]
 
 [dependencies]
+ftml-ontology = { workspace = true }
+ftml-uris = { workspace = true, features = ["interned", "serde"] }
+
+flams-math-archives = { workspace = true }
+
 flams-system = { workspace = true, features = ["tokio", "zip"] }
 flams-ftml = { workspace = true }
-flams-ontology = { workspace = true }
 flams-utils = { workspace = true }
 flams-stex = { workspace = true }
 

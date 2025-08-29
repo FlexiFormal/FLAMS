@@ -7,28 +7,60 @@
 #![cfg_attr(doc,doc = document_features::document_features!())]
 
 pub mod archive_iter;
-pub mod archive_json;
-pub mod cache;
+pub mod artifacts;
+pub mod backend;
+pub mod document_file;
 pub mod formats;
+pub mod manager;
 pub mod manifest;
 pub mod mathhub;
 pub mod source_files;
+#[cfg(feature = "rdf")]
+pub mod triple_store;
 pub mod utils;
 
+#[cfg(feature = "rdf")]
+use crate::triple_store::RDFStore;
 use crate::{
-    archive_json::{ArchiveIndex, Institution},
+    artifacts::{Artifact, ContentResult, FileOrString},
     formats::{BuildTargetId, SourceFormatId},
     manifest::RepositoryData,
     source_files::{FileStates, SourceDir},
-    utils::ignore_source::IgnoreSource,
+    utils::{
+        AsyncEngine,
+        errors::{ArtifactSaveError, BackendError, FileError},
+        ignore_source::IgnoreSource,
+        path_ext::PathExt,
+    },
 };
-use ftml_ontology::{
-    domain::modules::Module,
-    narrative::{DocumentRange, documents::Document},
-    utils::Css,
+use flams_backend_types::{
+    archive_json::{ArchiveIndex, Institution},
+    archives::FileStateSummary,
 };
-use ftml_uris::{ArchiveId, ArchiveUri, Language, UriPath, UriWithArchive};
+use ftml_ontology::{domain::modules::Module, narrative::documents::Document};
+use ftml_uris::{
+    ArchiveId, ArchiveUri, IsDomainUri, Language, SimpleUriName, UriPath, UriWithArchive,
+    UriWithPath,
+};
 use std::path::{Path, PathBuf};
+
+type Result<T> = std::result::Result<T, BackendError>;
+/*
+pub trait DocumentSource: std::fmt::Debug {
+    fn get_document(&self) -> impl Future<Output = Result<Document>>
+    where
+        Self: Sized;
+    fn get_css(&self) -> impl Future<Output = Result<Box<[Css]>>>
+    where
+        Self: Sized;
+    fn get_html(&self) -> impl Future<Output = Result<Box<str>>>
+    where
+        Self: Sized;
+    fn get_document_sync(&self) -> Result<Document>;
+    fn get_css_sync(&self) -> Result<Box<[Css]>>;
+    fn get_html_sync(&self) -> Result<Box<str>>;
+}
+ */
 
 pub trait MathArchive {
     fn uri(&self) -> &ArchiveUri;
@@ -40,26 +72,19 @@ pub trait MathArchive {
         self.uri().archive_id()
     }
 
-    #[cfg(feature = "gitlab")]
-    pub fn is_managed(&self) -> Option<&git_url_parse::GitUrl> {
-        let gl = crate::settings::Settings::get().gitlab_url.as_ref()?;
-        self.is_managed
-            .get_or_init(|| {
-                let Ok(repo) = flams_git::repos::GitRepo::open(self.path()) else {
-                    return None;
-                };
-                gl.host_str().and_then(|s| repo.is_managed(s))
-            })
-            .as_ref()
-    }
+    /// # Errors
+    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module>;
 
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Option<Module>;
-    fn load_document(
+    /// # Errors
+    fn load_module_async<A: AsyncEngine>(
         &self,
         path: Option<&UriPath>,
         name: &str,
-        language: Language,
-    ) -> Option<Document>;
+    ) -> impl Future<Output = Result<Module>> + 'static + use<Self, A>
+    where
+        Self: Sized;
+
+    /*
     fn load_html(&self, path: Option<&UriPath>, name: &str, language: Language) -> Option<String>;
     fn load_html_body(
         &self,
@@ -75,18 +100,17 @@ pub trait MathArchive {
         language: Language,
         range: DocumentRange,
     ) -> Option<(Vec<Css>, String)>;
-    /*fn load_reference<T: flams_ontology::Resourcable>(
+    fn load_reference<T: flams_ontology::Resourcable>(
         &self,
         path: Option<&UriPath>,
         name: &str,
         language: Language,
         range: DocumentRange,
     ) -> eyre::Result<T>;
-    fn load<D: BuildArtifact>(&self, relative_path: &str) -> Result<D, std::io::Error>;
     */
 }
 
-pub trait ExternalArchive: Send + Sync + MathArchive + std::any::Any {
+pub trait ExternalArchive: Send + Sync + MathArchive + std::any::Any + std::fmt::Debug {
     #[inline]
     fn local_out(&self) -> Option<&dyn LocallyBuilt> {
         None
@@ -95,17 +119,91 @@ pub trait ExternalArchive: Send + Sync + MathArchive + std::any::Any {
     fn buildable(&self) -> Option<&dyn BuildableArchive> {
         None
     }
+
+    fn load_document(
+        &self,
+        path: Option<&UriPath>,
+        name: &str,
+        language: Language,
+    ) -> Option<Document>;
 }
 
+#[derive(Debug)]
 pub enum Archive {
     Local(Box<LocalArchive>),
     Ext(&'static ArchiveKind, Box<dyn ExternalArchive>),
+}
+impl Archive {
+    fn buildable(&self) -> Option<&dyn BuildableArchive> {
+        match self {
+            Self::Local(l) => Some(&**l as _),
+            Self::Ext(_, a) => a.buildable(),
+        }
+    }
+}
+
+impl std::hash::Hash for Archive {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uri().hash(state);
+    }
+}
+impl std::borrow::Borrow<ArchiveUri> for Archive {
+    #[inline]
+    fn borrow(&self) -> &ArchiveUri {
+        self.uri()
+    }
+}
+impl PartialEq for Archive {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        *self.uri() == *other.uri()
+    }
+}
+impl Eq for Archive {}
+
+impl MathArchive for Archive {
+    fn uri(&self) -> &ArchiveUri {
+        match self {
+            Self::Local(a) => a.uri(),
+            Self::Ext(_, a) => a.uri(),
+        }
+    }
+    fn path(&self) -> &Path {
+        match self {
+            Self::Local(a) => a.path(),
+            Self::Ext(_, a) => a.path(),
+        }
+    }
+    fn is_meta(&self) -> bool {
+        match self {
+            Self::Local(a) => a.is_meta(),
+            Self::Ext(_, a) => a.is_meta(),
+        }
+    }
+    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module> {
+        match self {
+            Self::Local(a) => a.load_module(path, name),
+            Self::Ext(_, a) => a.load_module(path, name),
+        }
+    }
+    fn load_module_async<A: AsyncEngine>(
+        &self,
+        path: Option<&UriPath>,
+        name: &str,
+    ) -> impl Future<Output = Result<Module>> + 'static + use<A> {
+        match self {
+            Self::Local(a) => a.load_module_async::<A>(path, name),
+            Self::Ext(_, a) => todo!(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ArchiveKind {
     pub name: &'static str,
-    make_new: fn(RepositoryData, &Path) -> Option<Box<dyn ExternalArchive>>,
+    #[allow(clippy::type_complexity)]
+    make_new: fn(RepositoryData, &Path) -> std::result::Result<Box<dyn ExternalArchive>, String>,
 }
 
 impl ArchiveKind {
@@ -131,44 +229,68 @@ pub trait BuildableArchive: MathArchive {
     fn file_state(&self) -> FileStates;
     fn formats(&self) -> &[SourceFormatId];
     fn get_log(&self, relative_path: &str, target: BuildTargetId) -> PathBuf;
-    //fn save_omdoc_result(&self, top: &Path, result: &OMDocResult)
-    /*
-    * pub fn save(
-        &self,
-        relative_path: &str,
-        log: Either<String, PathBuf>,
-        from: BuildTargetId,
-        result: Option<BuildResultArtifact>,
-    )
-    */
 
-    #[cfg(feature = "rdf")]
-    fn submit_triples(
+    #[allow(clippy::too_many_arguments)]
+    /// # Errors
+    fn save(
         &self,
         in_doc: &ftml_uris::DocumentUri,
-        rel_path: &str,
-        //relational: &RDFStore,
+        rel_path: Option<&UriPath>,
+        log: FileOrString,
+        from: BuildTargetId,
+        result: Option<Box<dyn Artifact>>,
+        #[cfg(feature = "rdf")] relational: &RDFStore,
+        #[cfg(feature = "rdf")] load: bool,
+    ) -> std::result::Result<(), ArtifactSaveError>;
+
+    #[cfg(feature = "rdf")]
+    fn save_triples(
+        &self,
+        in_doc: &ftml_uris::DocumentUri,
+        rel_path: Option<&UriPath>,
+        relational: &RDFStore,
         load: bool,
-        iter: &mut dyn Iterator<Item = ulo::rdf_types::Triple>,
+        iter: Vec<ulo::rdf_types::Triple>,
     );
 }
 
 pub trait LocallyBuilt: BuildableArchive {
     fn out_dir(&self) -> &Path;
+
+    fn out_path_of(
+        &self,
+        path: Option<&UriPath>,
+        doc_name: &SimpleUriName,
+        rel_path: Option<&UriPath>,
+        language: Language,
+    ) -> PathBuf;
+
+    fn document_file(
+        &self,
+        path: Option<&UriPath>,
+        rel_path: Option<&UriPath>,
+        doc_name: &SimpleUriName,
+        language: Language,
+    ) -> PathBuf {
+        self.out_path_of(path, doc_name, rel_path, language)
+            .join("doc")
+    }
 }
 
+#[derive(Debug)]
 pub struct LocalArchive {
     pub(crate) uri: ArchiveUri,
     pub(crate) out_path: PathBuf,
-    pub(crate) attributes: Vec<(Box<str>, Box<str>)>,
-    pub(crate) formats: Vec<SourceFormatId>,
+    pub(crate) source: Option<Box<str>>,
+    //pub(crate) attributes: Vec<(Box<str>, Box<str>)>,
+    pub(crate) formats: smallvec::SmallVec<SourceFormatId, 1>,
     //pub dependencies: Box<[ArchiveId]>,
     pub(crate) file_state: parking_lot::RwLock<SourceDir>,
     pub(crate) institutions: Box<[Institution]>,
     pub(crate) index: Box<[ArchiveIndex]>,
     pub ignore: IgnoreSource,
-    #[cfg(feature = "gitlab")]
-    pub(super) is_managed: std::sync::OnceLock<Option<git_url_parse::GitUrl>>,
+    #[cfg(feature = "git")]
+    pub(crate) is_managed: std::sync::OnceLock<Option<flams_git::GitUrl>>,
 }
 impl MathArchive for LocalArchive {
     #[inline]
@@ -184,6 +306,8 @@ impl MathArchive for LocalArchive {
     fn is_meta(&self) -> bool {
         self.uri.archive_id().is_meta()
     }
+
+    /*
     fn load_document(
         &self,
         path: Option<&UriPath>,
@@ -213,8 +337,42 @@ impl MathArchive for LocalArchive {
     ) -> Option<(Vec<Css>, String)> {
         todo!()
     }
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Option<Module> {
-        todo!()
+     */
+    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module> {
+        let out = path.map_or_else(
+            || self.out_dir().join(".modules"),
+            |n| self.out_dir().join_uri_path(n).join(".modules"),
+        );
+        let out = Self::escape_module_name(&out, name);
+        if !out.exists() {
+            return Err(BackendError::NotFound);
+        }
+        let file = std::io::BufReader::new(std::fs::File::open(out)?);
+        let ret = bincode::serde::decode_from_reader(file, bincode::config::standard())?;
+        Ok(ret)
+    }
+
+    fn load_module_async<A: AsyncEngine>(
+        &self,
+        path: Option<&UriPath>,
+        name: &str,
+    ) -> impl Future<Output = Result<Module>> + 'static + use<A>
+    where
+        Self: Sized,
+    {
+        let out = path.map_or_else(
+            || self.out_dir().join(".modules"),
+            |n| self.out_dir().join_uri_path(n).join(".modules"),
+        );
+        let out = Self::escape_module_name(&out, name);
+        A::block_on(move || {
+            if !out.exists() {
+                return Err(BackendError::NotFound);
+            }
+            let file = std::io::BufReader::new(std::fs::File::open(out)?);
+            let ret = bincode::serde::decode_from_reader(file, bincode::config::standard())?;
+            Ok(ret)
+        })
     }
 }
 impl BuildableArchive for LocalArchive {
@@ -228,18 +386,84 @@ impl BuildableArchive for LocalArchive {
         &self.formats
     }
     fn get_log(&self, relative_path: &str, target: BuildTargetId) -> PathBuf {
-        todo!()
+        self.out_dir()
+            .join(relative_path)
+            .join(target.name)
+            .with_extension("log")
     }
-    #[cfg(feature = "rdf")]
-    fn submit_triples(
+
+    fn save(
         &self,
         in_doc: &ftml_uris::DocumentUri,
-        rel_path: &str,
-        //relational: &RDFStore,
+        rel_path: Option<&UriPath>,
+        log: FileOrString,
+        from: BuildTargetId,
+        result: Option<Box<dyn Artifact>>,
+        #[cfg(feature = "rdf")] relational: &RDFStore,
+        #[cfg(feature = "rdf")] load: bool,
+    ) -> std::result::Result<(), ArtifactSaveError> {
+        // TODO TANTIVY
+        let out = self.out_path_of(in_doc.path(), &in_doc.name, rel_path, in_doc.language);
+        if let Err(e) = std::fs::create_dir_all(&out) {
+            return Err(ArtifactSaveError::Fs(FileError::Creation(out, e)));
+        }
+        let logfile = out.join(from.name).with_extension("log");
+        match log {
+            FileOrString::File(f) => f.rename_safe(&logfile)?,
+            FileOrString::Str(s) => {
+                if let Err(e) = std::fs::write(&logfile, s.as_bytes()) {
+                    return Err(ArtifactSaveError::Fs(FileError::Write(logfile, e)));
+                }
+            }
+        }
+        let Some(mut res) = result else { return Ok(()) };
+        let outfile = out.join(res.kind());
+        res.write(&outfile)?;
+        if let Some(e) = res.as_any_mut().downcast_mut::<ContentResult>() {
+            #[cfg(feature = "rdf")]
+            self.save_triples(
+                in_doc,
+                rel_path,
+                relational,
+                load,
+                std::mem::take(&mut e.triples),
+            );
+            for m in &e.modules {
+                let path = m.uri.path();
+                let name = m.uri.module_name();
+                let out = path.map_or_else(
+                    || self.out_dir().join(".modules"),
+                    |n| self.out_dir().join_uri_path(n).join(".modules"),
+                );
+                std::fs::create_dir_all(&out)
+                    .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out.clone(), e)))?;
+                let out = Self::escape_module_name(&out, name.as_ref());
+                let file = std::fs::File::create(&out)
+                    .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out, e)))?;
+                let mut buf = std::io::BufWriter::new(file);
+                bincode::serde::encode_into_std_write(m, &mut buf, bincode::config::standard())?;
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "rdf")]
+    fn save_triples(
+        &self,
+        in_doc: &ftml_uris::DocumentUri,
+        rel_path: Option<&UriPath>,
+        relational: &RDFStore,
         load: bool,
-        iter: &mut dyn Iterator<Item = ulo::rdf_types::Triple>,
+        iter: Vec<ulo::rdf_types::Triple>,
     ) {
-        todo!()
+        use ftml_uris::FtmlUri;
+        let out = self.out_path_of(in_doc.path(), &in_doc.name, rel_path, in_doc.language);
+        let _ = std::fs::create_dir_all(&out);
+        let out = out.join("index.ttl");
+        relational.export(iter.into_iter(), &out, in_doc);
+        if load {
+            relational.load(&out, in_doc.to_iri());
+        }
     }
 }
 
@@ -248,22 +472,71 @@ impl LocallyBuilt for LocalArchive {
     fn out_dir(&self) -> &Path {
         &self.out_path
     }
+
+    fn out_path_of(
+        &self,
+        path: Option<&UriPath>,
+        doc_name: &SimpleUriName,
+        rel_path: Option<&UriPath>,
+        language: Language,
+    ) -> PathBuf {
+        if let Some(rel_path) = rel_path {
+            return self.out_dir().join(rel_path.as_ref());
+        }
+        self.rel_path_of(path, doc_name, language).map_or_else(
+            || {
+                let lang: &'static str = language.into();
+                let p = path.map_or_else(
+                    || self.out_path.join(doc_name.as_ref()),
+                    |n| self.out_path.join_uri_path(n).join(doc_name.as_ref()),
+                );
+                p.with_extension(lang)
+            },
+            |source| {
+                // SAFETY source is ancestor of source_dir
+                let rel_path = unsafe { source.relative_to(&self.source_dir()).unwrap_unchecked() };
+                self.out_path.join(rel_path)
+            },
+        )
+    }
 }
 impl LocalArchive {
+    #[cfg(feature = "git")]
+    pub fn git_url(&self, on_host: &url::Url) -> Option<&flams_git::GitUrl> {
+        self.is_managed
+            .get_or_init(|| {
+                let Ok(repo) = flams_git::repos::GitRepo::open(self.path()) else {
+                    return None;
+                };
+                on_host.host_str().and_then(|s| repo.is_managed(s))
+            })
+            .as_ref()
+    }
+
+    pub fn state_summary(&self) -> FileStateSummary {
+        self.file_state.read().state().summarize()
+    }
+
     fn escape_module_name(in_path: &Path, name: &str) -> PathBuf {
         in_path.join(name.replace('*', "__AST__"))
     }
 
-    #[inline]
-    #[must_use]
-    pub fn source_dir_of(p: &Path) -> PathBuf {
-        p.join("source")
-    }
-
-    #[inline]
     #[must_use]
     pub fn source_dir(&self) -> PathBuf {
-        Self::source_dir_of(self.path())
+        self.path().join(self.source.as_deref().unwrap_or("source"))
+    }
+
+    /// blocks
+    #[must_use]
+    pub fn manifest_of(p: &Path) -> Option<PathBuf> {
+        for e in std::fs::read_dir(p).ok()? {
+            let Ok(e) = e else { continue };
+            let Ok(md) = e.metadata() else { continue };
+            if md.is_dir() && e.file_name().eq_ignore_ascii_case("meta-inf") {
+                return crate::archive_iter::find_manifest(&e.path());
+            }
+        }
+        None
     }
 
     #[inline]
@@ -281,14 +554,54 @@ impl LocalArchive {
     }
 
     pub(crate) fn update_sources(&self) {
+        let dir = SourceDir::new(&self.source_dir(), &self.ignore, self.formats());
         let mut state = self.file_state.write();
-        state.update(self.uri(), self.path(), &self.ignore, self.formats());
+        state.update(dir);
     }
 
-    pub(crate) fn get_filepath(
+    /// blocks!
+    pub fn rel_path_of(
         &self,
         path: Option<&UriPath>,
-        name: &str,
+        doc_name: &SimpleUriName,
+        language: Language,
+    ) -> Option<PathBuf> {
+        let dir = path.map_or_else(|| self.source_dir(), |n| self.source_dir().join_uri_path(n));
+
+        for f in std::fs::read_dir(&dir)
+            .ok()?
+            .filter_map(std::result::Result::ok)
+        {
+            let Ok(m) = dir.metadata() else { continue };
+            if !m.is_file() {
+                continue;
+            }
+            let fname = f.file_name();
+            let Some(name) = fname.to_str() else { continue };
+
+            if !name.starts_with(doc_name.as_ref()) {
+                continue;
+            }
+            let rest = &name[doc_name.as_ref().len()..];
+            if !rest.is_empty() && !rest.starts_with('.') {
+                continue;
+            }
+            let rest = rest.strip_prefix('.').unwrap_or(rest);
+            if rest.contains('.') {
+                let lang: &'static str = language.into();
+                if !rest.starts_with(lang) {
+                    continue;
+                }
+            }
+            return Some(f.path());
+        }
+        None
+    }
+    /*
+    pub(crate) fn out_path_from_doc(
+        &self,
+        path: Option<&UriPath>,
+        doc_name: &SimpleUriName,
         language: Language,
         filename: &str,
     ) -> Option<PathBuf> {
@@ -308,10 +621,10 @@ impl LocalArchive {
             }
             let dname = dir.file_name();
             let Some(d) = dname.to_str() else { continue };
-            if !d.starts_with(name) {
+            if !d.starts_with(doc_name) {
                 continue;
             }
-            let rest = &d[name.len()..];
+            let rest = &d[doc_name.len()..];
             if !rest.is_empty() && !rest.starts_with('.') {
                 continue;
             }
@@ -329,4 +642,5 @@ impl LocalArchive {
         }
         None
     }
+     */
 }

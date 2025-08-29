@@ -1,17 +1,19 @@
 [workspace]
 members = [
     "math-archives",
+    "backend-types",
+    "search",
     "source/main",
     "source/utils",
-    "source/ontology",
+    #"source/ontology",
     "source/database",
     "source/system",
     "source/web-utils",
     "source/lsp",
     "source/stex",
     "source/ftml/system",
-    "source/ftml/viewer-components",
-    "source/ftml/extraction",
+    #"source/ftml/viewer-components",
+    #"source/ftml/extraction",
     "source/git",
     "source/router/base",
     "source/router/dashboard",
@@ -25,7 +27,7 @@ members = [
     "source/router/login",
     "source/router/search",
     "source/router/vscode-bindings",
-    "ftml-viewer",
+    #"ftml-viewer",
     "experiments",
     "source/ffi",
 ]
@@ -128,18 +130,21 @@ rustdoc-args = [
 #unsafe_code = "deny"
 
 [workspace.lints.clippy]
-pedantic = "deny"
-nursery = "deny"
-unwrap_used = "deny"
-module_name_repetitions = { level = "allow", priority = 1 }
-enum_glob_use = { level = "allow", priority = 1 }
+pedantic = { level = "warn", priority = 1 }
+nursery = { level = "warn", priority = 2 }
+unwrap_used = "warn"
+module_name_repetitions = { level = "allow", priority = 0 }
+enum_glob_use = { level = "allow", priority = 0 }
+redundant_else = { level = "warn", priority = 1 }
+similar_names = { level = "warn", priority = 1 }
+too_many_lines = { level = "warn", priority = 1 }
 
 [workspace.dependencies]
 # flams
 flams-ftml = { path = "source/ftml/system", version = "0.0.1" }
 flams-stex = { path = "source/stex", version = "0.0.1" }
 flams-utils = { path = "source/utils", version = "0.0.1" }
-flams-ontology = { path = "source/ontology", version = "0.0.1" }
+#flams-ontology = { path = "source/ontology", version = "0.0.1" }
 flams-system = { path = "source/system", version = "0.0.1" }
 flams-database = { path = "source/database", version = "0.0.1" }
 flams-lsp = { path = "source/lsp", version = "0.0.1" }
@@ -159,20 +164,25 @@ flams-router-logging = { path = "source/router/logging", version = "0.0.1" }
 flams-router-search = { path = "source/router/search", version = "0.0.1" }
 flams-router-vscode = { path = "source/router/vscode-bindings", version = "0.0.1" }
 
-ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
-ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
+#ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
+#ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
 
 # refactor
-math-archives = { path = "math-archives" }
+flams-math-archives = { path = "math-archives" }
+flams-backend-types = { path = "backend-types" }
+flams-search = { path = "search" }
 
 # FTML
 ftml-uris = { path = "../../FlexiFormal/FTML/uris", features = [
     "interned",
 ] } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ftml-ontology = { path = "../../FlexiFormal/FTML/ontology" } #{ git = "https://github.com/FlexiFormal/FTML" } #
-ftml-core = { path = "../../FlexiFormal/FTML/core" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ftml-backend = { path = "../../FlexiFormal/FTML/backend" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-core = { path = "../../FlexiFormal/FTML/core" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-leptos = { path = "../../FlexiFormal/FTML/leptos" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml5ever = { path = "../../FlexiFormal/FTML/ftml5ever" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ulo = { path = "../../FlexiFormal/FTML/ulo" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-dom = { path = "../../FlexiFormal/FTML/dom" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 
 rstest = { version = "0.25" }
 
@@ -206,6 +216,8 @@ regex = "1.10"
 async-broadcast = "0.7"
 simple-home-dir = "0.5"
 async-trait = "0.1"
+bytesize = "2"
+deepsize = "0.2"
 bincode = { version = "2", features = ["derive", "serde"] }
 lightningcss = { version = "1.0.0-alpha.63", default-features = false }
 # cfg-if = "1"
@@ -221,6 +233,7 @@ async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 astral-tokio-tar = "0.5.1"
 strum = { version = "0.27", features = ["derive"] }
 git-url-parse = { version = "0.4.5" }
+flume = { version = "0.11", features = ["async"] }
 
 password-hash = { version = "0.5" }
 argon2 = { version = "0.5" }
@@ -274,20 +287,15 @@ leptos_meta = "0.8"
 leptos_router = { version = "0.8", features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
 
+#thaw = { version = "0.5.0-beta", features = ["nightly"] }
+#thaw_components = { version = "0.4.0-beta" }
+#thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
 
-#thaw = { version="0.4.2",features=["nightly"] }
-#thaw_components = "0.3"
-#thaw_utils = {features=["nightly"],version="0.1"}
+thaw = { git = "https://github.com/thaw-ui/thaw", features = ["nightly"] }
+thaw_utils = { git = "https://github.com/thaw-ui/thaw", features = ["nightly"] }
+thaw_components = { git = "https://github.com/thaw-ui/thaw" }
 
-#thaw = { path="../thaw/thaw", features=["nightly"] }
-#thaw_components = { path="../thaw/thaw_components" }
-#thaw_utils = { path="../thaw/thaw_utils", features=["nightly"] }
-
-thaw = { version = "0.5.0-beta", features = ["nightly"] }
-thaw_components = { version = "0.4.0-beta" }
-thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
-
-leptos-posthoc = { version = "0.1" }
+leptos-posthoc = { version = "0.2", git = "https://github.com/FlexiFormal/leptos-posthoc.git" }
 #leptos-posthoc = { path = "../leptos_dyn_dom" }
 
 bytes = "1.10"

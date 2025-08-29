@@ -1,26 +1,23 @@
 use std::{collections::hash_map::Entry, path::Path};
 
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::DocumentUri;
+use flams_ftml::FtmlResult;
+use flams_math_archives::{
+    backend::{AnyBackend, GlobalBackend, HTMLData, TemporaryBackend},
+    source_files::SourceEntry,
+    Archive, MathArchive,
+};
 use flams_stex::{
     quickparse::stex::{DiagnosticLevel, STeXDiagnostic, STeXParseData, STeXParseDataI},
     OutputCont, RusTeX,
-};
-use flams_system::{
-    backend::{
-        archives::{
-            source_files::{SourceDir, SourceEntry},
-            Archive,
-        },
-        AnyBackend, Backend, GlobalBackend, TemporaryBackend,
-    },
-    formats::OMDocResult,
 };
 use flams_utils::{
     impossible,
     prelude::{HMap, TreeChildIter},
     sourcerefs::{LSPLineCol, SourceRange},
 };
+use ftml_ontology::utils::RefTree;
+use ftml_uris::DocumentUri;
 
 use crate::{
     annotations::to_diagnostic, documents::LSPDocument, ClientExt, LSPStore, ProgressCallbackServer,
@@ -115,13 +112,16 @@ impl std::fmt::Display for UrlOrFile {
 pub struct LSPState {
     pub documents: triomphe::Arc<parking_lot::RwLock<HMap<UrlOrFile, DocData>>>,
     rustex: triomphe::Arc<std::sync::OnceLock<RusTeX>>,
-    backend: TemporaryBackend,
+    //backend: TemporaryBackend,
 }
 impl LSPState {
     #[inline]
     #[must_use]
-    pub const fn backend(&self) -> &TemporaryBackend {
-        &self.backend
+    pub fn backend(&self) -> &TemporaryBackend {
+        let AnyBackend::Temp(t) = flams_system::backend::backend() else {
+            panic!("this is a bug")
+        };
+        t
     }
 
     #[must_use]
@@ -242,26 +242,32 @@ impl LSPState {
                     let html = res.to_string();
                     let rel_path = doc.relative_path().unwrap_or_else(|| unreachable!());
                     match flams_ftml::build_ftml(
-                        &AnyBackend::Temp(self.backend.clone()),
+                        &AnyBackend::Temp(self.backend().clone()),
                         &html,
                         doc_uri.clone(),
-                        rel_path,
                     ) {
-                        Ok((
-                            OMDocResult {
-                                document,
-                                html,
-                                modules,
-                            },
-                            _,
-                        )) => {
-                            self.backend.add_html(document.uri.clone(), html);
-                            for m in modules {
-                                let m = m.check(&mut self.backend.as_checker());
-                                self.backend.add_module(m);
+                        Ok(FtmlResult {
+                            doc,
+                            ftml,
+                            css,
+                            body,
+                            inner_offset,
+                            ..
+                        }) => {
+                            self.backend().add_html(
+                                doc.document.uri.clone(),
+                                HTMLData {
+                                    html: ftml,
+                                    css,
+                                    body,
+                                    inner_offset: inner_offset as _,
+                                    refs: doc.data,
+                                },
+                            );
+                            for m in doc.modules {
+                                self.backend().add_module(m);
                             }
-                            let document = document.check(&mut self.backend.as_checker());
-                            self.backend.add_document(document);
+                            self.backend().add_document(doc.document);
                             old.memorize(self.rustex());
                             Some(doc_uri)
                         }
@@ -326,19 +332,19 @@ impl LSPState {
     } */
 
     pub fn load_mathhubs(&self, client: ClientSocket) {
-        let (_, t) = flams_utils::time::measure(move || {
+        let (_, t) = ftml_ontology::utils::time::measure(move || {
             let mut files = Vec::new();
 
-            for a in GlobalBackend::get().all_archives().iter() {
+            for a in GlobalBackend.all_archives().iter() {
                 if let Archive::Local(a) = a {
                     let mut v = Vec::new();
                     a.with_sources(|d| {
-                        for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
+                        for e in d.dfs() {
                             match e {
                                 SourceEntry::File(f) => {
                                     let uri = match DocumentUri::from_archive_relpath(
                                         a.uri().clone(),
-                                        &f.relative_path,
+                                        f.relative_path.as_ref(),
                                     ) {
                                         Ok(u) => u,
                                         Err(e) => {
@@ -348,7 +354,7 @@ impl LSPState {
                                     };
                                     v.push((
                                         f.relative_path
-                                            .split('/')
+                                            .steps()
                                             .fold(a.source_dir(), |p, s| p.join(s))
                                             .into(),
                                         uri,

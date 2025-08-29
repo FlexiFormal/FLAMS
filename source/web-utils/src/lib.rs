@@ -6,8 +6,6 @@ pub mod mathml;
 
 use std::borrow::Cow;
 
-use flams_utils::{hashstr, CSS};
-
 #[cfg(feature = "ssr")]
 #[derive(Default, Clone)]
 pub struct CssIds(
@@ -27,7 +25,8 @@ pub async fn blocking_server_fn<T: Send + 'static>(
         .map_err(Into::into)
 }
 
-pub fn do_css(css: CSS) {
+/*
+pub fn do_css(css: Css) {
     match css {
         CSS::Inline(s) => {
             let id = hashstr("id_", &s);
@@ -90,6 +89,7 @@ pub fn do_css(css: CSS) {
 pub fn inject_css(id: &'static str, content: &'static str) {
     do_inject_css(Cow::Borrowed(id), Cow::Borrowed(content));
 }
+ */
 
 #[macro_export]
 macro_rules! console_log {
@@ -151,6 +151,7 @@ fn do_inject_css(id: Cow<'static, str>, content: Cow<'static, str>) {
 }
 
 //#[cfg(any(feature = "csr", feature = "ssr"))]
+/// # Errors
 pub fn try_catch<R>(run: impl FnOnce() -> R) -> Result<R, leptos::wasm_bindgen::JsError> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).map_err(|e| {
         if let Some(s) = e.downcast_ref::<&str>() {

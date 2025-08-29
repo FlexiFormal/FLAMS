@@ -1,24 +1,44 @@
 #![allow(clippy::must_use_candidate)]
-use flams_ontology::uris::{NarrativeUri, Uri};
-use flams_web_utils::{components::wait_and_then_fn, do_css};
-use ftml_uris::components::{
-    DocumentUriComponentTuple, DocumentUriComponents, UriComponentTuple, UriComponents,
-    UriComponentsTrait,
-};
-use ftml_viewer_components::components::{
-    TOCSource,
-    documents::{DocumentString, FragmentString, FragmentStringProps},
-    omdoc::OMDocSource,
+
+use flams_web_utils::components::wait_and_then_fn;
+use ftml_dom::{FtmlViews, utils::css::CssExt};
+use ftml_ontology::utils::Css;
+use ftml_uris::{
+    DocumentUri, Uri,
+    components::{
+        DocumentUriComponentTuple, DocumentUriComponents, UriComponentTuple, UriComponents,
+        UriComponentsTrait,
+    },
 };
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
 #[component(transparent)]
 pub fn URITop() -> impl IntoView {
+    use leptos::either::EitherOf3::{A, B, C};
+    use leptos_meta::Stylesheet;
+    view! {
+        <Stylesheet id="leptos" href="/pkg/flams.css"/>
+        {crate::Views::top(||
+            use_query_map().with_untracked(|m| {
+                m.as_document().map_or_else(
+                    |_| match m.as_comps() {
+                        Ok(uri) => B(
+                            view!(<Fragment uri=uri.into()/>)
+                        ),
+                        Err(e) => C(flams_web_utils::components::display_error(
+                            format!("Invalid URI: {e}").into(),
+                        )),
+                    },
+                    |doc| A(view!(<Document doc=doc.into()/>)),
+                )
+            })
+        )}
+    }
+    /*
     use flams_web_utils::components::Themer;
     use ftml_viewer_components::FTMLGlobalSetup;
     use leptos::either::EitherOf3 as Either;
-    use leptos_meta::Stylesheet;
     use thaw::Scrollbar;
     #[cfg(not(feature = "ssr"))]
     let qm = leptos_router::hooks::use_location();
@@ -61,6 +81,7 @@ pub fn URITop() -> impl IntoView {
       </Scrollbar>//</Login>
       </FTMLGlobalSetup></Themer>
     }
+     */
 }
 
 #[component]
@@ -74,27 +95,32 @@ pub fn DocumentOfTop(uri: Uri) -> impl IntoView {
 
 #[component]
 pub fn Fragment(uri: UriComponents) -> impl IntoView {
-    wait_and_then_fn(
+    use ftml_dom::utils::css::CssExt;
+    ftml_leptos::utils::wait_and_then(
         move || UriComponentTuple::from(uri.clone()).apply1(super::server_fns::fragment, None),
         move |(uri, css, html)| {
             for css in css {
-                do_css(css);
+                css.inject()
             }
             //leptos::logging::log!("Here 2: {html}");
             if let Uri::DocumentElement(uri) = uri {
-                leptos::either::Either::Left(view! {
-                    //<pre>"Here: "{html.clone()}</pre>
-                    <div><FragmentString html uri/></div>
-                })
+                leptos::either::Either::Left(crate::Views::document(
+                    DocumentUri::no_doc().clone(),
+                    || crate::Views::render_ftml(html.into_string()),
+                ))
             } else {
                 leptos::either::Either::Right(view! {
                     //<pre>"Here: "{html.clone()}</pre>
                     <div style="padding: 0 60px;--rustex-this-width:590px;">
-                    <FragmentString html/>
+                    {crate::Views::document(
+                        DocumentUri::no_doc().clone(),
+                        || crate::Views::render_ftml(html.into_string()),
+                    )}
                     </div>
                 })
             }
         },
+        |e| view!(<span style="color:red">{e.to_string()}</span>),
     )
 }
 
@@ -104,11 +130,12 @@ pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
         move || DocumentUriComponentTuple::from(doc.clone()).apply(super::server_fns::document),
         |(uri, css, html)| {
             for css in css {
-                do_css(css);
+                css.inject();
             }
-            view! {<div>
+            crate::Views::document(uri, || crate::Views::render_ftml(html.into_string()))
+            /*view! {<div>
                 <DocumentString html uri toc=TOCSource::Get omdoc=OMDocSource::Get/>
-            </div>}
+            </div>}*/
         },
     )
 }
@@ -118,10 +145,10 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> impl IntoView {
     let doc: UriComponents = doc.into();
     wait_and_then_fn(
         move || UriComponentTuple::from(doc.clone()).apply1(super::server_fns::fragment, None),
-        |(_, css, html)| {
+        |(uri, css, html)| {
             view! {<div>{
-                for css in css { do_css(css); }
-                FragmentString(FragmentStringProps{html,uri:None})
+                for css in css { css.inject(); }
+                crate::Views::document(DocumentUri::no_doc().clone(), || crate::Views::render_ftml(html.into_string()))
             }</div>}
         },
     )

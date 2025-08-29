@@ -8,16 +8,15 @@
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
 mod login_state;
+use ftml_uris::FtmlUri;
 pub use login_state::*;
+#[cfg(feature = "ssr")]
 pub mod uris;
 pub mod ws;
 
 use leptos::{either::EitherOf3, prelude::*};
 
-pub fn vscode_link(
-    archive: &flams_ontology::uris::ArchiveId,
-    rel_path: &str,
-) -> impl IntoView + use<> {
+pub fn vscode_link(archive: &ftml_uris::ArchiveId, rel_path: &str) -> impl IntoView + use<> {
     let href = format!("vscode://kwarc.flams/open?a={archive}&rp={rel_path}");
     view! {
         <a href=href><thaw::Icon icon=icondata_tb::TbBrandVscodeOutline/></a>
@@ -68,6 +67,7 @@ pub trait ServerFnExt {
     #[allow(async_fn_in_trait)]
     async fn call_remote(self, url: String) -> Result<Self::Output, Self::Error>;
 }
+
 /*
 #[cfg(feature = "hydrate")]
 mod hydrate {

@@ -4,15 +4,16 @@
       "initialization_options": {
         "runnables": {
           "extraEnv": {
-            "DATABASE_URL": "sqlite:./main/migrations/users.sqlite?mode=rwc"
+            "DATABASE_URL": "sqlite:./resources/migrations/users.sqlite?mode=rwc"
           }
         },
         "cargo": {
-          "features": "all" /*[
-            "ts",
-            "ws",
+          "features": [
+            //"ts",
+            //"ws",
+            "git",
             "docs",
-            "hydrate" //"ssr" //
+            "ssr" //"hydrate" //
           ] // "all"*/
         }
       }

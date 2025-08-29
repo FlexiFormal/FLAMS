@@ -175,7 +175,7 @@ impl spliter::Spliterator for ManifestIterator {
     }
 }
 
-fn find_manifest(metainf: &Path) -> Option<PathBuf> {
+pub(crate) fn find_manifest(metainf: &Path) -> Option<PathBuf> {
     tracing::trace!("Checking manifest {}", metainf.display());
     if let Ok(rd) = metainf.read_dir() {
         for d in rd {

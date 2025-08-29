@@ -1,28 +1,26 @@
 use std::fmt::Write;
 
 use crate::components::SearchState;
-use flams_ontology::{
-    search::{QueryFilter, SearchResult, SearchResultKind},
-    uris::{ArchiveId, DocumentElementUri, DocumentUri, NarrativeUri, SymbolUri, Uri},
-};
+use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
 use flams_router_vscode::{
     VSCode,
     components::{VSCodeButton, VSCodeCheckbox, VSCodeRadio, VSCodeRadioGroup, VSCodeTextbox},
 };
 use flams_utils::{impossible, unwrap};
-use flams_web_utils::{components::wait_and_then_fn, do_css, inject_css};
+use flams_web_utils::components::wait_and_then_fn;
+use ftml_dom::{FtmlViews, utils::css::inject_css};
+use ftml_leptos::components::content::FtmlViewable;
 use ftml_uris::{
-    IsDomainUri, IsNarrativeUri, UriWithArchive, UriWithPath,
+    ArchiveId, DocumentElementUri, DocumentUri, IsDomainUri, IsNarrativeUri, NarrativeUri,
+    SymbolUri, UriWithArchive, UriWithPath,
     components::{UriComponents, UriComponentsTrait},
 };
-use ftml_viewer_components::components::omdoc::{comma_sep, doc_name, symbol_name};
 use leptos::prelude::*;
 
 #[component]
 pub fn VSCodeSearch() -> impl IntoView {
     inject_css("flams-search-block", include_str!("vscode.css"));
     use flams_web_utils::components::Themer;
-    use ftml_viewer_components::FTMLGlobalSetup;
 
     let remote = || leptos_router::hooks::use_query_map().with(|q| q.get("remote"));
 
@@ -155,11 +153,13 @@ pub fn VSCodeSearch() -> impl IntoView {
                 <VSCodeCheckbox checked=exs disabled>"Examples"</VSCodeCheckbox>
                 <VSCodeCheckbox checked=asss disabled>"Assertions"</VSCodeCheckbox>
                 <VSCodeCheckbox checked=probs disabled>"Problems"</VSCodeCheckbox>
-                <Themer><FTMLGlobalSetup>
-                {do_results("Local Results",None,local_results)}
-                <div style="margin-top:25px;"></div>
-                {do_results("Remote Results",Some(remote),remote_results)}
-                </FTMLGlobalSetup></Themer>
+                <Themer>{
+                    flams_router_content::Views::top(move || view!{
+                        {do_results("Local Results",None,local_results)}
+                        <div style="margin-top:25px;"></div>
+                        {do_results("Remote Results",Some(remote),remote_results)}
+                    })
+                }</Themer>
             </div>
         </div>
     }
@@ -171,10 +171,10 @@ fn do_results(
     results: RwSignal<SearchState>,
 ) -> impl IntoView {
     use leptos::either::EitherOf6::*;
-    inject_css(
+    /*inject_css(
         "ftml-comp",
         include_str!("../../../ftml/viewer-components/src/components/comp.css"),
-    );
+    );*/
     let pre_view =
         move || view! {<div style="width:100%;font-weight:bold;text-align:center;">{pre}</div>};
     move || {
@@ -264,7 +264,7 @@ impl std::fmt::Display for Short<'_> {
 
 fn do_sym_result_local(sym: &SymbolUri) -> impl IntoView + use<> {
     let vs = unwrap!(VSCode::get());
-    let name = ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
+    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
     view! {
         <div class="flams-search-block">
             <div><b>{name}</b>
@@ -302,7 +302,7 @@ fn do_sym_result_remote(
     remote: fn() -> Option<String>,
 ) -> impl IntoView + use<> {
     use thaw::Scrollbar;
-    let name = ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     view! {
         <div class="flams-search-block">
             <div><b>{name}</b>
@@ -326,7 +326,7 @@ fn do_sym_result_remote(
 
 fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
     use thaw::Scrollbar;
-    let name = doc_name(&uri, uri.document_name().to_string());
+    let name = uri.as_view::<flams_router_content::backend::FtmlBackend>(); //doc_name(&uri, uri.document_name().to_string());
     view! {
         <div class="flams-search-block">
             <div><b>"Document "{name}</b>
@@ -355,10 +355,11 @@ fn do_para(
     use thaw::Scrollbar;
     let uristr = uri.to_string();
     let name = uristr;
-    let desc = comma_sep(
+    /*let desc = ftml_leptos::components::content::CommaSep(
         "For",
-        fors.into_iter().map(|s| symbol_name(&s, s.name().last())),
-    );
+        fors.into_iter()
+            .map(|s| s.as_view::<flams_router_content::backend::FtmlBackend>()),
+    );*/
     view! {
         <div class="flams-search-block">
             <div><b>{kind.as_str()}" "{name}</b>
@@ -387,9 +388,6 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                 #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
                 {
                     use flams_router_base::ServerFnExt;
-                    use ftml_viewer_components::components::documents::{
-                        FragmentString, FragmentStringProps,
-                    };
                     wait_and_then_fn(
                         move || {
                             flams_router_content::server_fns::Fragment {
@@ -407,14 +405,18 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                             .call_remote(remote.clone())
                         },
                         move |(uri, css, html)| {
+                            use ftml_dom::utils::css::CssExt;
+                            use ftml_uris::Uri;
+
                             let uri = if let Uri::DocumentElement(uri) = uri {
                                 Some(uri)
                             } else {
                                 None
                             };
                             view! {<div>{
-                              for css in css { do_css(css); }
-                              FragmentString(FragmentStringProps{html,uri})
+                              for css in css { css.inject(); }
+                              flams_router_content::Views::render_ftml(html.into_string())
+                              //FragmentString(FragmentStringProps{html,uri})
                             }</div>}
                         },
                     )

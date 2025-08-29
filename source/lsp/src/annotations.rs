@@ -4,11 +4,8 @@ use crate::{
     IsLSPRange, ProgressCallbackClient,
 };
 use async_lsp::lsp_types as lsp;
-use flams_ontology::uris::{IsDomainUri, IsNarrativeUri, UriWithArchive, UriWithPath};
-use flams_ontology::{
-    narration::paragraphs::ParagraphKind,
-    uris::{ArchiveId, ArchiveUri, DomainUri, ModuleUri, SymbolUri, Uri},
-};
+use flams_math_archives::backend::{GlobalBackend, LocalBackend};
+use flams_math_archives::LocalArchive;
 use flams_stex::quickparse::stex::rules::IncludeProblemArg;
 use flams_stex::quickparse::{
     latex::ParsedKeyValue,
@@ -24,10 +21,14 @@ use flams_stex::quickparse::{
         AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI,
     },
 };
-use flams_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
 use flams_utils::{
     prelude::TreeChildIter,
     sourcerefs::{LSPLineCol, SourceRange},
+};
+use ftml_ontology::narrative::elements::paragraphs::ParagraphKind;
+use ftml_uris::{
+    ArchiveId, ArchiveUri, IsDomainUri, IsNarrativeUri, ModuleUri, SymbolUri, Uri, UriWithArchive,
+    UriWithPath,
 };
 use futures::FutureExt;
 use smallvec::SmallVec;
@@ -47,7 +48,7 @@ trait AnnotExt: Sized {
 }
 
 pub(crate) fn uri_from_archive_relpath(id: &ArchiveId, relpath: &str) -> Option<lsp::Url> {
-    let path = GlobalBackend::get().with_local_archive(id, |a| a.map(LocalArchive::source_dir))?;
+    let path = GlobalBackend.with_local_archive(id, |a| a.map(LocalArchive::source_dir))?;
     let path = relpath.split('/').fold(path, |p, s| p.join(s));
     lsp::Url::from_file_path(path).ok()
 }
@@ -392,10 +393,10 @@ impl AnnotExt for STeXAnnot {
             Self::IncludeProblem {
                 archive, filepath, ..
             } => {
-                let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(UriWithArchive::archive_id),
-                    |(a, _)| Some(a),
-                ) else {
+                let Some(a) = archive
+                    .as_ref()
+                    .map_or_else(|| top_archive.map(ArchiveUri::archive_id), |(a, _)| Some(a))
+                else {
                     return;
                 };
                 let Some(uri) = uri_from_archive_relpath(a, &filepath.0) else {

@@ -10,35 +10,41 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "thaw/ssr",
-    "ftml-viewer-components/ssr",
+    "ftml-leptos/ssr",
     "flams-web-utils/ssr",
     "flams-router-base/ssr",
     "dep:flams-system",
+    "dep:flams-math-archives",
     "dep:leptos_axum",
     "dep:http",
     "dep:flams-lsp",
     "dep:tokio",
     "dep:paste",
     "dep:smallvec",
+    "dep:ulo",
 ]
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
-    "ftml-viewer-components/hydrate",
+    "ftml-leptos/hydrate",
     "flams-web-utils/hydrate",
 ]
 docs-only = []
 
 [dependencies]
 ftml-uris = { workspace = true, features = ["leptos"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-leptos = { workspace = true }
+ftml-dom = { workspace = true }
+ftml-backend = { workspace = true, features = ["server_fn"] }
 
-flams-ontology = { workspace = true, features = ["serde"] }
 flams-utils = { workspace = true }
-ftml-viewer-components = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-router-base = { workspace = true }
 flams-system = { workspace = true, optional = true }
+flams-math-archives = { workspace = true, optional = true }
 flams-lsp = { workspace = true, optional = true }
+ulo = { workspace = true, optional = true }
 
 leptos = { workspace = true }
 leptos_meta = { workspace = true }

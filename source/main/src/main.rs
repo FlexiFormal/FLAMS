@@ -2,7 +2,12 @@
 fn main() {
     use flams::server::settings;
     #[allow(unused_imports)]
+    use flams_ftml::FTML;
+    #[allow(unused_imports)]
+    use flams_search::TANTIVY;
+    #[allow(unused_imports)]
     use flams_stex::STEX;
+
     use flams_system::settings::SettingsSpec;
     fn exit() {
         flams_system::building::queue_manager::QueueManager::clear();
@@ -15,7 +20,7 @@ fn main() {
     async fn run(settings: SettingsSpec) {
         let lsp = settings.lsp;
         let _ce = color_eyre::install();
-        flams_system::initialize(settings);
+        flams_system::initialize::<flams_system::TokioEngine>(settings);
         if lsp {
             let (sender, recv) = tokio::sync::watch::channel(None);
             tokio::select! {

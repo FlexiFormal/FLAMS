@@ -1,24 +1,18 @@
-use std::collections::hash_map::Entry;
-
 use either::Either;
-use flams_ontology::uris::UriWithArchive;
-use flams_utils::{triomphe::Arc, vecmap::VecSet};
-use parking_lot::RwLock;
-
-use crate::{
-    backend::{
-        archives::{
-            source_files::{FileState, SourceFile},
-            Archive,
-        },
-        AnyBackend,
-    },
+use flams_math_archives::{
+    backend::AnyBackend,
     formats::{BuildTargetId, FormatOrTargets},
+    source_files::{FileState, SourceFile},
+    Archive, MathArchive,
 };
+use flams_utils::{triomphe::Arc, vecmap::VecSet};
+use ftml_uris::UriWithArchive;
+use parking_lot::RwLock;
+use std::collections::hash_map::Entry;
 
 use super::{
     queue::{Queue, QueueState, RunningQueue, TaskMap},
-    BuildStep, BuildStepI, BuildTask, BuildTaskI, BuildTaskId, Dependency, TaskState,
+    BuildStep, BuildStepI, BuildTask, BuildTaskId, Dependency, TaskState,
 };
 
 impl Queue {
@@ -46,7 +40,7 @@ impl Queue {
                     !matches!(*state, TaskState::Done)
                 }) else {
                     if has_failed {
-                        failed.push(t.clone())
+                        failed.push(t.clone());
                     } else {
                         done.push(t.clone());
                     }
@@ -187,6 +181,7 @@ impl Queue {
         Some(step.0.target)
     }
 
+    #[deprecated(note = "assumes local archives")]
     pub(super) fn enqueue<'a, I: Iterator<Item = &'a SourceFile>>(
         map: &mut TaskMap,
         backend: &AnyBackend,
@@ -196,12 +191,13 @@ impl Queue {
         files: I,
     ) -> usize {
         let targets = match target {
-            FormatOrTargets::Format(f) => f.targets(),
+            FormatOrTargets::Format(f) => f.targets,
             FormatOrTargets::Targets(t) => t,
         };
         let has_target = |f: &SourceFile, tgt: BuildTargetId| {
             f.target_state
-                .get(&tgt)
+                .iter()
+                .find_map(|(k, v)| if *k == tgt { Some(v) } else { None })
                 .is_some_and(|t| !stale_only || matches!(t, FileState::Stale(_) | FileState::New))
         };
         let should_queue = |f: &SourceFile| targets.iter().any(|t| has_target(f, *t));
@@ -229,19 +225,21 @@ impl Queue {
                     map.total += steps.len();
                     let id = map.counter;
                     map.counter = map.counter.saturating_add(1);
-                    let task_i = Arc::new(BuildTaskI {
-                        id: BuildTaskId(id),
-                        archive: archive.uri().clone(),
+                    let task = BuildTask::new(
+                        BuildTaskId(id),
+                        archive.uri().clone(),
                         steps,
-                        source: match archive {
+                        match archive {
                             Archive::Local(archive) => {
-                                Either::Left(archive.source_dir().join(&*f.relative_path))
+                                Either::Left(archive.source_dir().join(f.relative_path.as_ref()))
                             }
+                            Archive::Ext(..) => todo!("foreign archives"),
                         },
-                        rel_path: f.relative_path.clone(),
-                    });
-                    e.insert(BuildTask(task_i.clone()));
-                    BuildTask(task_i)
+                        f.relative_path.clone(),
+                    )
+                    .expect("this is a bug");
+                    e.insert(task.clone());
+                    task
                 }
                 Entry::Occupied(o) => {
                     count += 1;
@@ -251,8 +249,13 @@ impl Queue {
                     continue;
                 }
             };
+            let spec = task.as_build_spec(backend);
             if let FormatOrTargets::Format(fmt) = target {
-                (fmt.dependencies())(backend, &task);
+                for (f, d) in (fmt.dependencies)(spec) {
+                    if let Some(step) = task.get_step(f) {
+                        step.add_dependency(d.into());
+                    }
+                }
                 Self::process_dependencies(&task, map);
             }
         }
@@ -261,7 +264,7 @@ impl Queue {
 
     fn process_dependencies(task: &BuildTask, map: &mut TaskMap) {
         for s in task.steps() {
-            let key = task.get_task_ref(s.0.target);
+            let key = task.as_task_ref(s.0.target);
             if let Some(v) = map.dependents.remove(&key) {
                 for (d, i) in v {
                     if let Some(t) = d.get_step(s.0.target) {
@@ -290,7 +293,7 @@ impl Queue {
                     strict,
                 } = dep
                 {
-                    if deptask.archive == *task.0.archive.archive_id()
+                    if deptask.archive == *task.0.uri.archive_id()
                         && deptask.rel_path == task.0.rel_path
                     {
                         continue;

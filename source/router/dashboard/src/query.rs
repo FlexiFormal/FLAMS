@@ -1,4 +1,4 @@
-use flams_web_utils::inject_css;
+use ftml_dom::utils::css::inject_css;
 use leptos::prelude::*;
 
 #[server(QueryApi,
@@ -12,11 +12,11 @@ use leptos::prelude::*;
     tracing::instrument(level = "info", name = "query", target = "query", skip_all)
 )]
 pub async fn query_api(query: String) -> Result<String, ServerFnError<String>> {
-    use flams_system::backend::GlobalBackend;
-    use flams_system::backend::rdf::QueryResult;
+    use flams_math_archives::backend::GlobalBackend;
+    use flams_math_archives::triple_store::sparql::QueryResult;
     tracing::info!("Query: {query}");
     let r = tokio::task::spawn_blocking(move || {
-        GlobalBackend::get()
+        GlobalBackend
             .triple_store()
             .query_str(&query)
             .map(QueryResult::into_json)

@@ -1,8 +1,7 @@
-use flams_ontology::{
-    archive_json::{ArchiveIndex, Institution},
-    uris::DocumentUri,
-};
+use flams_backend_types::archive_json::{ArchiveIndex, Institution};
 use flams_web_utils::components::wait_and_then_fn;
+use ftml_dom::utils::css::inject_css;
+use ftml_uris::DocumentUri;
 use leptos::prelude::*;
 use thaw::{
     Body1, Caption1, Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription,
@@ -11,7 +10,7 @@ use thaw::{
 
 #[component]
 pub fn Index() -> impl IntoView {
-    flams_web_utils::inject_css(
+    inject_css(
         "flams-index-card",
         ".flams-index-card{max-width:400px !important;margin:10px !important;}",
     );

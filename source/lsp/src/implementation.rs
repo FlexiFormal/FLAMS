@@ -15,13 +15,20 @@ use async_lsp::{
     lsp_types::{self as lsp},
     LanguageClient, LanguageServer, ResponseError,
 };
-use flams_ontology::uris::{IsNarrativeUri, UriWithArchive};
-use flams_stex::quickparse::stex::{AnnotIter, STeXAnnot};
-use flams_system::{
-    backend::{archives::LocalArchive, Backend, GlobalBackend},
+use flams_math_archives::{
+    backend::{GlobalBackend, LocalBackend},
     formats::FormatOrTargets,
+    utils::path_ext::RelPath,
+    LocalArchive, MathArchive,
 };
+use flams_stex::quickparse::stex::{AnnotIter, STeXAnnot};
+use flams_system::TokioEngine;
 use flams_utils::{prelude::TreeChildIter, unwrap};
+use ftml_ontology::narrative::{
+    elements::problems::{GradingNote, Solutions},
+    DataRef,
+};
+use ftml_uris::{IsNarrativeUri, UriWithArchive};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
 macro_rules! impl_request {
@@ -127,12 +134,13 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
     ) -> <Self as LanguageServer>::NotifyResult {
         let mut client = self.inner.client().clone();
         tokio::task::spawn_blocking(move || {
-            match flams_system::backend::GlobalBackend::get().new_archive(
+            match GlobalBackend.new_archive(
                 &archive,
                 &urlbase,
-                "stex",
+                flams_stex::STEX.id(),
                 "helloworld.tex",
                 include_str!("stex_default.txt"),
+                "",
             ) {
                 Ok(path) => {
                     let _ = client.show_message(lsp::ShowMessageParams {
@@ -212,7 +220,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
     }
 
     pub(crate) fn quiz_request(&mut self, params: QuizRequestParams) -> Res<String> {
-        use flams_system::backend::docfile::QuizExtension;
+        use flams_system::backend::backend;
         fn get_res(url: UrlOrFile, state: LSPState) -> Result<String, String> {
             let doc = state
                 .get(&url)
@@ -220,11 +228,19 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             let uri = doc
                 .document_uri()
                 .ok_or_else(|| "Document URI not found".to_string())?;
-            let doc = state
-                .backend()
-                .get_document(uri)
-                .ok_or_else(|| "Document not found".to_string())?;
-            let quiz = doc.as_quiz(state.backend()).map_err(|e| format!("{e:#}"))?;
+            let doc = backend().get_document(uri).map_err(|e| e.to_string())?;
+            let quiz = doc
+                .as_quiz(
+                    &|d| backend().get_document(d).ok(),
+                    &|d, r| backend().get_html_fragment(d, r).ok(),
+                    &|d, r: DataRef<Solutions>| {
+                        backend().get_reference(&r.with_doc(d.clone())).ok()
+                    },
+                    &|d, r: DataRef<GradingNote>| {
+                        backend().get_reference(&r.with_doc(d.clone())).ok()
+                    },
+                )
+                .map_err(|e| format!("{e:#}"))?;
             serde_json::to_string(&quiz).map_err(|e| format!("{e:#}"))
         }
         let state = self.inner.state().clone();
@@ -261,9 +277,9 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         flams_system::building::queue_manager::QueueManager::get().with_global(move |queue| {
             queue.enqueue_archive(
                 id,
-                FormatOrTargets::Format(flams_stex::STEX),
+                FormatOrTargets::Format(flams_stex::STEX.id()),
                 stale_only,
-                Some(rel_path),
+                Some(RelPath::new(rel_path)),
                 false,
             )
         });
@@ -417,9 +433,9 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
     ) -> <Self as LanguageServer>::NotifyResult {
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
+        tracing::info!("LSP: reload");
+        state.backend().reset::<TokioEngine>("");
         let _ = tokio::task::spawn_blocking(move || {
-            tracing::info!("LSP: reload");
-            state.backend().reset();
             state.load_mathhubs(client.clone());
             client.update_mathhub();
         });
@@ -441,7 +457,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             let mut rescan = false;
             let archives = {
                 let mut ret = Vec::new();
-                let exis = GlobalBackend::get().all_archives();
+                let exis = GlobalBackend.all_archives();
                 for a in archives {
                     if exis.iter().any(|e| *e.id() == a) || ret.contains(&a) {
                         continue;
@@ -455,7 +471,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 let url = format!("{remote_url}/api/backend/download?id={a}");
                 let prefix = format!("{}/{len}: {a}", i + 1);
                 progress.update(prefix.clone(), None);
-                if LocalArchive::unzip_from_remote(a.clone(), &url, |p| {
+                if flams_system::zip::unzip_from_remote(a.clone(), &url, |p| {
                     progress.update(format!("{prefix}: {}", p.display()), None)
                 })
                 .await
@@ -469,12 +485,12 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                     rescan = true;
                 }
             }
-            let client = progress.client().clone();
+            let client = progress.client();
             drop(progress);
             if rescan {
+                state.backend().reset::<TokioEngine>("");
                 let _ = tokio::task::spawn_blocking(move || {
                     // <- necessary, but I don't quite understand why
-                    state.backend().reset();
                     state.load_mathhubs(client.clone());
                     client.update_mathhub();
                 });

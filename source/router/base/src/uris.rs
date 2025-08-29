@@ -1,20 +1,11 @@
-use flams_ontology::{
-    languages::Language,
-    uris::{
-        ArchiveId, ArchiveUri, DocumentElementUri, DocumentUri, ModuleUri, PathUri, SymbolUri, Uri,
-    },
+use flams_math_archives::{
+    MathArchive,
+    backend::{GlobalBackend, LocalBackend},
 };
-use std::str::FromStr;
+use ftml_uris::{ArchiveId, ArchiveUri};
 
-pub use ftml_uris::components::{
-    DocumentUriComponents as DocURIComponents, UriComponents as URIComponents,
-    UriComponentsTrait as URIComponentsTrait,
-};
-
-#[cfg(feature = "ssr")]
 pub fn get_uri(a: &ArchiveId) -> Option<ArchiveUri> {
-    use flams_system::backend::Backend;
-    flams_system::backend::GlobalBackend::get().with_archive(a, |a| a.map(|a| a.uri().clone()))
+    GlobalBackend.with_archive(a, |a| a.map(|a| a.uri().clone()))
 }
 
 /*

@@ -70,10 +70,6 @@
 
 use crate::server::files::img_handler;
 
-use flams_ontology::{
-    narration::{notations::Notation, LOKind},
-    uris::*,
-};
 use flams_router_dashboard::{
     query::query_api,
     server_fns::{
@@ -83,5 +79,6 @@ use flams_router_dashboard::{
     },
     LoginState,
 };
-use flams_utils::{settings::SettingsSpec, CSS};
-use ftml_viewer_components::components::{omdoc::OMDoc, TOCElem};
+use flams_utils::settings::SettingsSpec;
+use ftml_ontology::narrative::elements::notations::Notation;
+use ftml_uris::prelude::*;

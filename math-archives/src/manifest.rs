@@ -1,40 +1,42 @@
 use crate::{
     Archive, ArchiveKind, LocalArchive,
-    archive_json::{ArchiveIndex, Institution, read_archive_json},
     formats::{SourceFormat, SourceFormatId},
     source_files::SourceDir,
-    utils::{ignore_source::IgnoreSource, path_ext::RelPath},
+    utils::{errors::ManifestParseError, ignore_source::IgnoreSource, path_ext::RelPath},
 };
-use ftml_uris::{ArchiveId, ArchiveUri, BaseUri};
+use flams_backend_types::archive_json::{ArchiveDatum, ArchiveIndex, Institution};
+use ftml_uris::{ArchiveId, ArchiveUri, BaseUri, UriWithArchive};
 use std::path::Path;
 
 #[derive(Debug)]
 pub struct RepositoryData {
     pub uri: ArchiveUri,
     pub attributes: Vec<(Box<str>, Box<str>)>,
-    pub formats: Vec<SourceFormatId>,
+    pub formats: smallvec::SmallVec<SourceFormatId, 1>,
     //pub dependencies: Box<[ArchiveId]>,
     pub institutions: Box<[Institution]>,
     pub index: Box<[ArchiveIndex]>,
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn parse_manifest(path: &Path, id: RelPath, external_url: &str) -> Option<Archive> {
+/// # Errors
+pub fn parse_manifest(
+    path: &Path,
+    id: RelPath,
+    external_url: &str,
+) -> Result<Archive, ManifestParseError> {
     use std::io::BufRead;
     let Some(top_dir) = path.parent().and_then(Path::parent) else {
-        tracing::warn!("Could not find parent directory of {}", path.display());
-        return None;
+        return Err(ManifestParseError::NoParent);
     };
     let out_path = LocalArchive::out_dir_of(top_dir);
-    let Ok(reader) = std::fs::File::open(path) else {
-        tracing::warn!("Could not open manifest {}", path.display());
-        return None;
-    };
+    let reader = std::fs::File::open(path)?;
     let reader = std::io::BufReader::new(reader);
     let mut lines = reader.lines();
 
-    let mut formats = Vec::default();
-    let mut url_base: String = String::new();
+    let mut source = None;
+    let mut formats = smallvec::SmallVec::<_, 1>::new();
+    let mut url_base: Option<BaseUri> = None;
     let mut ignore = IgnoreSource::default();
     let mut attributes: Vec<(Box<str>, Box<str>)> = Vec::new();
     let mut real_id: Option<ArchiveId> = None;
@@ -52,41 +54,38 @@ pub fn parse_manifest(path: &Path, id: RelPath, external_url: &str) -> Option<Ar
         match k {
             "id" => {
                 if id != *v {
-                    tracing::warn!("Archive {v}'s id does not match its location ({id})");
-                    return None;
+                    return Err(ManifestParseError::IdMismatch(v.to_string()));
                 } else if v.is_empty() {
-                    tracing::warn!("Archive {v} has an empty id");
-                    return None;
+                    return Err(ManifestParseError::EmptyId);
                 }
-                match v.parse() {
-                    Ok(id) => real_id = Some(id),
-                    Err(e) => {
-                        tracing::warn!("Invalid archive id {v} in {}: {e}", path.display());
-                        return None;
-                    }
-                }
+                real_id = Some(
+                    v.parse()
+                        .map_err(|_| ManifestParseError::InvalidId(v.to_string()))?,
+                );
             }
             "format" => {
-                formats = v
-                    .split(',')
-                    .filter_map(|l| {
-                        SourceFormat::get(l).or_else(|| {
-                            tracing::warn!("Invalid format {l} in archive {v}");
-                            None
-                        })
-                    })
-                    .collect();
+                for f in v.split(',') {
+                    formats.push(
+                        SourceFormat::get(f)
+                            .ok_or_else(|| ManifestParseError::UnknownFormat(f.to_string()))?,
+                    );
+                }
             }
-            "url-base" => url_base = v.into(),
+            "url-base" => {
+                url_base = Some(
+                    v.parse()
+                        .map_err(|e| ManifestParseError::InvalidUrlBase(v.to_string(), e))?,
+                );
+            }
             "ignore" => {
                 ignore = IgnoreSource::new(v, &top_dir.join("source")); //Some(v.into());
             }
+            "source" => source = Some(v.to_string().into_boxed_str()),
             "kind" => {
                 if let Some(k) = ArchiveKind::get(v) {
                     kind = Some(k);
                 } else {
-                    tracing::error!("Unknown archive kind {v}");
-                    return None;
+                    return Err(ManifestParseError::UnknownKind(v.to_string()));
                 }
             }
             _ => {
@@ -95,23 +94,13 @@ pub fn parse_manifest(path: &Path, id: RelPath, external_url: &str) -> Option<Ar
         }
     }
     let Some(id) = real_id else {
-        tracing::warn!("Archive {id} has no id");
-        return None;
+        return Err(ManifestParseError::EmptyId);
     };
     if formats.is_empty() && !id.is_meta() && kind.is_none() {
-        tracing::warn!("No formats found for archive {id}");
-        return None;
+        return Err(ManifestParseError::NoFormatOrKind);
     }
-    if url_base.is_empty() {
-        tracing::warn!("Archive {id} has no URL base");
-        return None;
-    }
-    let dom_uri: BaseUri = match url_base.parse() {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::warn!("Archive {id} has an invalid URL base: {e}");
-            return None;
-        }
+    let Some(dom_uri) = url_base else {
+        return Err(ManifestParseError::NoUrlBase);
     };
     let uri = dom_uri & id;
     let (institutions, index) =
@@ -124,20 +113,116 @@ pub fn parse_manifest(path: &Path, id: RelPath, external_url: &str) -> Option<Ar
             institutions,
             index, //dependencies: dependencies.into(),
         };
-        (kind.make_new)(data, top_dir).map(|r| Archive::Ext(kind, r))
+        (kind.make_new)(data, top_dir).map_or_else(
+            |e| Err(ManifestParseError::InvalidKind(kind.name, e)),
+            |r| Ok(Archive::Ext(kind, r)),
+        )
     } else {
-        Some(Archive::Local(Box::new(LocalArchive {
+        Ok(Archive::Local(Box::new(LocalArchive {
             uri,
-            attributes,
+            //attributes,
             formats,
             institutions,
             index,
             ignore,
             out_path,
+            source,
             //ignore,
             file_state: parking_lot::RwLock::new(SourceDir::default()),
-            #[cfg(feature = "gitlab")]
+            #[cfg(feature = "git")]
             is_managed: std::sync::OnceLock::new(),
         })))
     }
+}
+
+pub fn read_archive_json(
+    archive: &ArchiveUri,
+    path: &Path,
+    external_url: &str,
+) -> (Box<[Institution]>, Box<[ArchiveIndex]>) {
+    if !path.exists() {
+        return (Vec::new().into(), Vec::new().into());
+    }
+    let reader = match std::fs::File::open(path) {
+        Ok(reader) => reader,
+        Err(e) => {
+            tracing::error!("Could not read index file {}: {e}", path.display());
+            return (Vec::new().into(), Vec::new().into());
+        }
+    };
+    let reader = std::io::BufReader::new(reader);
+    let v = match serde_json::from_reader::<_, Vec<ArchiveDatum>>(reader) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Invalid JSON file {}: {e}", path.display());
+            return (Vec::new().into(), Vec::new().into());
+        }
+    };
+    let mut insts = Vec::new();
+    let mut idxs = Vec::new();
+    for d in v {
+        match d {
+            ArchiveDatum::Document(mut d) => {
+                if d.teaser().is_none() {
+                    let desc = path.with_file_name("desc.html");
+                    if desc.exists()
+                        && let Ok(s) = std::fs::read_to_string(desc)
+                    {
+                        d.set_teaser(s.into_boxed_str());
+                    }
+                }
+                match ArchiveIndex::from_kind(d, archive, |i| {
+                    format!(
+                        "{external_url}/img?a={}&rp=source/{i}",
+                        archive.archive_id()
+                    )
+                    .into_boxed_str()
+                }) {
+                    Ok(e) => idxs.push(e),
+                    Err(e) => tracing::error!("Error in index file {}: {e:#}", path.display()),
+                }
+            }
+            ArchiveDatum::Institution(i) => insts.push(match i {
+                Institution::University {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo,
+                } => Institution::University {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo: format!(
+                        "{external_url}/img?a={}&rp=source/{logo}",
+                        archive.archive_id()
+                    )
+                    .into_boxed_str(),
+                },
+                Institution::School {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo,
+                } => Institution::School {
+                    title,
+                    place,
+                    country,
+                    url,
+                    acronym,
+                    logo: format!(
+                        "{external_url}/img?a={}&rp=source/{logo}",
+                        archive.archive_id()
+                    )
+                    .into_boxed_str(),
+                },
+            }),
+        }
+    }
+    (insts.into(), idxs.into())
 }

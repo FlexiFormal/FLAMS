@@ -1,0 +1,364 @@
+use crate::{
+    Archive,
+    backend::{AnyBackend, GlobalBackend, LocalBackend},
+    manager::ArchiveOrGroup,
+    utils::{AsyncEngine, errors::BackendError},
+};
+use ftml_ontology::{
+    domain::modules::Module,
+    narrative::{DocDataRef, DocumentRange, documents::Document, elements::Notation},
+    utils::Css,
+};
+use ftml_uris::{ArchiveId, DocumentElementUri, DocumentUri, ModuleUri, SymbolUri, UriPath};
+
+#[derive(Debug)]
+pub struct HTMLData {
+    pub html: Box<str>,
+    pub css: Box<[Css]>,
+    pub body: DocumentRange,
+    pub inner_offset: usize,
+    pub refs: Box<[u8]>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TemporaryBackend {
+    inner: triomphe::Arc<TemporaryBackendI>,
+}
+impl Default for TemporaryBackend {
+    #[inline]
+    fn default() -> Self {
+        Self::new(AnyBackend::Global)
+    }
+}
+
+#[derive(Debug)]
+struct TemporaryBackendI {
+    modules: dashmap::DashMap<ModuleUri, Module, rustc_hash::FxBuildHasher>,
+    documents: dashmap::DashMap<DocumentUri, Document, rustc_hash::FxBuildHasher>,
+    html: dashmap::DashMap<DocumentUri, HTMLData, rustc_hash::FxBuildHasher>,
+    parent: AnyBackend,
+}
+
+impl TemporaryBackend {
+    pub fn reset<A: AsyncEngine>(&self, external_url: &str) {
+        self.inner.modules.clear();
+        self.inner.documents.clear();
+        GlobalBackend.reset::<A>(external_url);
+    }
+
+    #[must_use]
+    pub fn new(parent: AnyBackend) -> Self {
+        Self {
+            inner: triomphe::Arc::new(TemporaryBackendI {
+                modules: dashmap::DashMap::default(),
+                documents: dashmap::DashMap::default(),
+                html: dashmap::DashMap::default(),
+                parent,
+            }),
+        }
+    }
+    pub fn add_module(&self, m: Module) {
+        self.inner.modules.insert(m.uri.clone(), m);
+    }
+    pub fn add_document(&self, d: Document) {
+        self.inner.documents.insert(d.uri.clone(), d);
+    }
+    pub fn add_html(&self, uri: DocumentUri, d: HTMLData) {
+        self.inner.html.insert(uri, d);
+    }
+}
+
+impl LocalBackend for TemporaryBackend {
+    type ArchiveIter<'a> = <AnyBackend as LocalBackend>::ArchiveIter<'a>;
+
+    #[inline]
+    fn save(
+        &self,
+        in_doc: &ftml_uris::DocumentUri,
+        rel_path: Option<&UriPath>,
+        log: crate::artifacts::FileOrString,
+        from: crate::formats::BuildTargetId,
+        result: Option<Box<dyn crate::artifacts::Artifact>>,
+    ) -> std::result::Result<(), crate::utils::errors::ArtifactSaveError> {
+        self.inner.parent.save(in_doc, rel_path, log, from, result)
+    }
+
+    fn get_document(&self, uri: &DocumentUri) -> Result<Document, BackendError> {
+        self.inner.documents.get(uri).map_or_else(
+            || self.inner.parent.get_document(uri),
+            |e| Ok(e.value().clone()),
+        )
+    }
+
+    fn get_document_async<A: AsyncEngine>(
+        &self,
+        uri: &DocumentUri,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Document, BackendError>> + Send>>
+    where
+        Self: Sized,
+    {
+        if let Some(d) = self.inner.documents.get(uri) {
+            return Box::pin(std::future::ready(Ok(d.value().clone()))) as _;
+        }
+        Box::pin(self.inner.parent.get_document_async::<A>(uri)) as _
+    }
+
+    fn get_module(&self, uri: &ModuleUri) -> Result<Module, BackendError> {
+        if uri.is_top() {
+            self.inner.modules.get(uri).map_or_else(
+                || self.inner.parent.get_module(uri),
+                |e| Ok(e.value().clone()),
+            )
+        } else {
+            // SAFETY: !is_top()
+            let uri = unsafe { uri.clone().into_symbol().unwrap_unchecked() };
+            let m = self.inner.modules.get(&uri.module).map_or_else(
+                || self.inner.parent.get_module(&uri.module),
+                |e| Ok(e.value().clone()),
+            );
+            todo!()
+        }
+    }
+
+    fn get_module_async<A: AsyncEngine>(
+        &self,
+        uri: &ModuleUri,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Module, BackendError>> + Send>>
+    where
+        Self: Sized,
+    {
+        if uri.is_top() {
+            if let Some(m) = self.inner.modules.get(uri) {
+                Box::pin(std::future::ready(Ok(m.value().clone())))
+            } else {
+                Box::pin(self.inner.parent.get_module_async::<A>(uri)) as _
+            }
+        } else {
+            // SAFETY: !is_top()
+            let uri = unsafe { uri.clone().into_symbol().unwrap_unchecked() };
+            let m = if let Some(m) = self.inner.modules.get(&uri.module) {
+                Box::pin(std::future::ready(Ok(m.value().clone()))) as _
+            } else {
+                Box::pin(self.inner.parent.get_module_async::<A>(&uri.module)) as _
+            };
+            todo!();
+            m
+        }
+    }
+
+    #[inline]
+    fn with_archive_or_group<R>(
+        &self,
+        id: &ArchiveId,
+        f: impl FnOnce(Option<&ArchiveOrGroup>) -> R,
+    ) -> R
+    where
+        Self: Sized,
+    {
+        self.inner.parent.with_archive_or_group(id, f)
+    }
+
+    #[inline]
+    fn with_archive<R>(&self, id: &ArchiveId, f: impl FnOnce(Option<&Archive>) -> R) -> R
+    where
+        Self: Sized,
+    {
+        self.inner.parent.with_archive(id, f)
+    }
+
+    #[inline]
+    fn with_archives<R>(&self, f: impl FnOnce(Self::ArchiveIter<'_>) -> R) -> R
+    where
+        Self: Sized,
+    {
+        self.inner.parent.with_archives(f)
+    }
+
+    fn get_html_body(&self, d: &DocumentUri) -> Result<(Box<[Css]>, Box<str>), BackendError> {
+        self.inner.html.get(d).map_or_else(
+            || self.inner.parent.get_html_body(d),
+            |html| {
+                Ok((
+                    html.css.clone(),
+                    html.html[html.body.start + html.inner_offset..html.body.end]
+                        .to_string()
+                        .into_boxed_str(),
+                    /*if full {
+                        html.html[html.body.start..html.body.end].to_string()
+                    } else {
+                        html.html[html.body.start + html.inner_offset..html.body.end].to_string()
+                    }*/
+                ))
+            },
+        )
+    }
+
+    fn get_html_body_async<A: AsyncEngine>(
+        &self,
+        uri: &ftml_uris::DocumentUri,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = Result<(Box<[ftml_ontology::utils::Css]>, Box<str>), BackendError>>
+                + Send,
+        >,
+    >
+    where
+        Self: Sized,
+    {
+        if let Some(html) = self.inner.html.get(uri) {
+            return Box::pin(std::future::ready(Ok((
+                html.css.clone(),
+                html.html[html.body.start + html.inner_offset..html.body.end]
+                    .to_string()
+                    .into_boxed_str(),
+                /*if full {
+                    html.html[html.body.start..html.body.end].to_string()
+                } else {
+                    html.html[html.body.start + html.inner_offset..html.body.end].to_string()
+                }*/
+            )))) as _;
+        }
+        Box::pin(self.inner.parent.get_html_body_async::<A>(uri)) as _
+    }
+
+    fn get_html_body_inner(&self, d: &DocumentUri) -> Result<(Box<[Css]>, Box<str>), BackendError> {
+        self.inner.html.get(d).map_or_else(
+            || self.inner.parent.get_html_body_inner(d),
+            |html| {
+                Ok((
+                    html.css.clone(),
+                    html.html[html.body.start + html.inner_offset..html.body.end]
+                        .to_string()
+                        .into_boxed_str(),
+                ))
+            },
+        )
+    }
+
+    fn get_html_body_inner_async<A: AsyncEngine>(
+        &self,
+        uri: &ftml_uris::DocumentUri,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = Result<(Box<[ftml_ontology::utils::Css]>, Box<str>), BackendError>>
+                + Send,
+        >,
+    >
+    where
+        Self: Sized,
+    {
+        if let Some(html) = self.inner.html.get(uri) {
+            return Box::pin(std::future::ready(Ok((
+                html.css.clone(),
+                html.html[html.body.start + html.inner_offset..html.body.end]
+                    .to_string()
+                    .into_boxed_str(),
+            )))) as _;
+        }
+        Box::pin(self.inner.parent.get_html_body_inner_async::<A>(uri)) as _
+    }
+
+    fn get_html_full(&self, d: &DocumentUri) -> Result<Box<str>, BackendError> {
+        self.inner.html.get(d).map_or_else(
+            || self.inner.parent.get_html_full(d),
+            |html| Ok(html.html.clone()),
+        )
+    }
+
+    fn get_html_fragment(
+        &self,
+        d: &DocumentUri,
+        range: DocumentRange,
+    ) -> Result<(Box<[Css]>, Box<str>), BackendError> {
+        self.inner.html.get(d).map_or_else(
+            || self.inner.parent.get_html_fragment(d, range),
+            |html| {
+                Ok((
+                    html.css.clone(),
+                    html.html[range.start..range.end]
+                        .to_string()
+                        .into_boxed_str(),
+                ))
+            },
+        )
+    }
+
+    fn get_html_fragment_async<A: AsyncEngine>(
+        &self,
+        uri: &ftml_uris::DocumentUri,
+        range: ftml_ontology::narrative::DocumentRange,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = Result<(Box<[ftml_ontology::utils::Css]>, Box<str>), BackendError>>
+                + Send,
+        >,
+    > {
+        if let Some(html) = self.inner.html.get(uri) {
+            return Box::pin(std::future::ready(Ok((
+                html.css.clone(),
+                html.html[html.body.start + html.inner_offset..html.body.end]
+                    .to_string()
+                    .into_boxed_str(),
+            ))));
+        }
+        Box::pin(self.inner.parent.get_html_fragment_async::<A>(uri, range)) as _
+    }
+
+    fn get_reference<T: serde::de::DeserializeOwned>(
+        &self,
+        rf: &DocDataRef<T>,
+    ) -> Result<T, BackendError>
+    where
+        Self: Sized,
+    {
+        let Some(html) = self.inner.html.get(&rf.in_doc) else {
+            return self.inner.parent.get_reference(rf);
+        };
+
+        let Some(bytes) = html.refs.get(rf.start..rf.end) else {
+            return Err(BackendError::OutOfRangeError(rf.start, rf.end));
+        };
+        let (r, _) = bincode::serde::decode_from_slice(bytes, bincode::config::standard())?;
+        Ok(r)
+    }
+
+    #[inline]
+    fn get_notations(&self, uri: &SymbolUri) -> impl Iterator<Item = (DocumentElementUri, Notation)>
+    where
+        Self: Sized,
+    {
+        self.inner.parent.get_notations(uri)
+    }
+
+    #[inline]
+    fn get_var_notations(
+        &self,
+        uri: &DocumentElementUri,
+    ) -> impl Iterator<Item = (DocumentElementUri, Notation)>
+    where
+        Self: Sized,
+    {
+        self.inner.parent.get_var_notations(uri)
+    }
+
+    /*
+
+
+    #[inline]
+    fn get_base_path(&self, id: &ArchiveId) -> Option<PathBuf> {
+        self.inner.parent.get_base_path(id)
+    }
+
+    #[inline]
+    fn submit_triples(
+        &self,
+        in_doc: &DocumentUri,
+        rel_path: &str,
+        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
+    ) where
+        Self: Sized,
+    {
+        self.inner.parent.submit_triples(in_doc, rel_path, iter);
+    }
+     */
+}

@@ -1,18 +1,14 @@
-use std::path::Path;
-
-use flams_ontology::{
-    archive_json::{
-        ArchiveData, ArchiveGroupData, ArchiveIndex, DirectoryData, FileData, Institution,
-    },
-    languages::Language,
-    uris::{ArchiveId, Uri},
+use crate::FileStates;
+use flams_backend_types::{
+    archive_json::{ArchiveIndex, Institution},
+    archives::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
 };
 use ftml_uris::{
-    IsDomainUri, IsNarrativeUri, UriWithArchive, UriWithPath, components::UriComponents,
+    ArchiveId, IsDomainUri, IsNarrativeUri, Language, Uri, UriWithArchive, UriWithPath,
+    components::UriComponents,
 };
 use leptos::prelude::*;
-
-use crate::FileStates;
+use std::path::Path;
 
 #[server(prefix = "/api/backend", endpoint = "group_entries")]
 pub async fn group_entries(
@@ -53,14 +49,14 @@ ftml_uris::compfun! {
     pub async fn source_file(
         uri: Uri
     ) -> Result<String, ServerFnError<String>> {
-        use flams_system::backend::{Backend, archives::LocalArchive};
+        use flams_math_archives::{backend::LocalBackend, LocalArchive,MathArchive};
         use flams_web_utils::not_found;
         fn get_root(
             id: &ArchiveId,
             and_then: impl FnOnce(&LocalArchive, String) -> Result<String, String>,
         ) -> Result<String, String> {
             use flams_git::GitUrlExt;
-            flams_system::backend::GlobalBackend::get().with_local_archive(id, |a| {
+            flams_math_archives::backend::GlobalBackend.with_local_archive(id, |a| {
                 let Some(a) = a else {
                     not_found!("Archive {id} not found")
                 };
@@ -253,28 +249,30 @@ pub async fn archive_stream(
   output=server_fn::codec::Json
 )]
 pub async fn index() -> Result<(Vec<Institution>, Vec<ArchiveIndex>), ServerFnError<String>> {
-    use flams_system::backend::GlobalBackend;
+    use flams_math_archives::backend::GlobalBackend;
     flams_web_utils::blocking_server_fn(|| {
-        let (a, b) = GlobalBackend::get().with_archive_tree(|t| t.index.clone());
-        Ok((a.0, b.0))
+        let (a, b) = GlobalBackend.with_tree(|t| t.index.clone());
+        Ok((a, b))
     })
     .await
 }
 
 #[cfg(feature = "ssr")]
 mod server {
-    use flams_ontology::{
-        archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
-        uris::{ArchiveId, ArchiveUri},
+    use flams_backend_types::archives::{ArchiveData, ArchiveGroupData, DirectoryData, FileData};
+    use flams_math_archives::{
+        Archive, BuildableArchive, MathArchive,
+        backend::{GlobalBackend, LocalBackend},
+        manager::ArchiveOrGroup as AoG,
+        source_files::{SourceEntry, SourceEntryRef},
+        sparql,
+        utils::path_ext::RelPath,
     };
     use flams_router_base::LoginState;
-    use flams_system::backend::{
-        Backend, GlobalBackend,
-        archives::{Archive, ArchiveOrGroup as AoG},
-    };
+    use flams_system::LocalArchiveExt;
     use flams_utils::vecmap::VecSet;
     use flams_web_utils::blocking_server_fn;
-    use ftml_uris::{FtmlUri, UriWithArchive};
+    use ftml_uris::{ArchiveId, ArchiveUri, FtmlUri, UriPath, UriWithArchive};
     use leptos::prelude::*;
 
     use crate::FileStates;
@@ -290,10 +288,10 @@ mod server {
                     | LoginState::NoAccounts
                     | LoginState::User { is_admin: true, .. }
             );
-            flams_system::backend::GlobalBackend::get().with_archive_tree(|tree| {
+            GlobalBackend.with_tree(|tree| {
                 let v = match id {
-                    None => &tree.groups,
-                    Some(id) => match tree.find(&id) {
+                    None => &tree.top,
+                    Some(id) => match tree.get_group_or_archive(&id) {
                         Some(AoG::Group(g)) => &g.children,
                         _ => return Err(format!("Archive Group {id} not found").into()),
                     },
@@ -354,7 +352,6 @@ mod server {
         path: Option<String>,
     ) -> Result<(Vec<DirectoryData>, Vec<FileData>), ServerFnError<String>> {
         use either::Either;
-        use flams_system::backend::{Backend, archives::source_files::SourceEntry};
         let login = LoginState::get_server();
 
         blocking_server_fn(move || {
@@ -364,15 +361,15 @@ mod server {
                     | LoginState::NoAccounts
                     | LoginState::User { is_admin: true, .. }
             );
-            flams_system::backend::GlobalBackend::get().with_local_archive(&archive, |a| {
+            GlobalBackend.with_local_archive(&archive, |a| {
                 let Some(a) = a else {
                     return Err(format!("Archive {archive} not found").into());
                 };
                 a.with_sources(|d| {
                     let d = match path {
                         None => d,
-                        Some(p) => match d.find(&p) {
-                            Some(Either::Left(d)) => d,
+                        Some(p) => match d.find(RelPath::new(&p)) {
+                            Some(SourceEntryRef::Dir(d)) => d,
                             _ => {
                                 return Err(format!(
                                     "Directory {p} not found in archive {archive}"
@@ -386,7 +383,11 @@ mod server {
                     for d in &d.children {
                         match d {
                             SourceEntry::Dir(d) => ds.push(DirectoryData {
-                                rel_path: d.relative_path.to_string(),
+                                rel_path: d
+                                    .relative_path
+                                    .as_ref()
+                                    .map(UriPath::to_string)
+                                    .unwrap_or_default(),
                                 summary: if allowed {
                                     Some(d.state.summarize())
                                 } else {
@@ -409,28 +410,26 @@ mod server {
     pub async fn archive_dependencies(
         archives: Vec<ArchiveId>,
     ) -> Result<Vec<ArchiveId>, ServerFnError<String>> {
-        use flams_system::backend::archives::ArchiveOrGroup;
         let mut archives: VecSet<_> = archives.into_iter().collect();
         blocking_server_fn(move || {
             let mut ret = VecSet::new();
             let mut dones = VecSet::new();
-            let backend = flams_system::backend::GlobalBackend::get();
             while let Some(archive) = archives.0.pop() {
                 if dones.0.contains(&archive) {
                     continue;
                 }
                 dones.insert(archive.clone());
-                let Some(iri) = backend.with_archive_tree(|tree| {
+                let Some(iri) = GlobalBackend.with_tree(|tree| {
                     let mut steps = archive.steps();
                     if let Some(mut n) = steps.next() {
-                        let mut curr = tree.groups.as_slice();
+                        let mut curr = tree.top.as_slice();
                         while let Some(g) = curr.iter().find_map(|a| match a {
-                            ArchiveOrGroup::Group(g) if g.id.last() == n => Some(g),
+                            AoG::Group(g) if g.id.last() == n => Some(g),
                             _ => None,
                         }) {
                             curr = g.children.as_slice();
                             if let Some(a) = curr.iter().find_map(|a| match a {
-                                ArchiveOrGroup::Archive(a) if a.is_meta() => Some(a),
+                                AoG::Archive(a) if a.is_meta() => Some(a),
                                 _ => None,
                             }) {
                                 if !ret.0.contains(a) {
@@ -449,7 +448,7 @@ mod server {
                 }) else {
                     return Err(format!("Archive {archive} not found"));
                 };
-                let res = flams_system::backend::GlobalBackend::get()
+                let res = GlobalBackend
                     .triple_store()
                     .query_str(format!(
                         "SELECT DISTINCT ?a WHERE {{
@@ -481,8 +480,9 @@ mod server {
         path: Option<String>,
     ) -> Result<FileStates, ServerFnError<String>> {
         use either::Either;
-        use flams_system::backend::Backend;
-        use flams_system::backend::archives::{Archive, ArchiveOrGroup as AoG};
+        use flams_math_archives::Archive;
+        use flams_math_archives::backend::LocalBackend;
+        use flams_math_archives::manager::ArchiveOrGroup as AoG;
         let login = LoginState::get_server();
 
         blocking_server_fn(move || {
@@ -498,7 +498,7 @@ mod server {
             path.map_or_else(
                 || {
                     if let Some(archive) = archive.as_ref() {
-                        GlobalBackend::get().with_archive_tree(|tree| match tree.find(archive) {
+                        GlobalBackend.with_tree(|tree| match tree.get_group_or_archive(archive) {
                             None => Err(format!("Archive {archive} not found").into()),
                             Some(AoG::Archive(id)) => {
                                 let Some(Archive::Local(archive)) = tree.get(id) else {
@@ -509,22 +509,20 @@ mod server {
                             Some(AoG::Group(g)) => Ok(g.state.clone().into()),
                         })
                     } else {
-                        Ok(GlobalBackend::get()
-                            .with_archive_tree(|tree| tree.state())
-                            .into())
+                        Ok(GlobalBackend.with_tree(|tree| tree.state()).into())
                     }
                 },
                 |path| {
                     let Some(archive) = archive.as_ref() else {
                         return Err("path without archive".to_string().into());
                     };
-                    GlobalBackend::get().with_local_archive(&archive, |a| {
+                    GlobalBackend.with_local_archive(&archive, |a| {
                         let Some(a) = a else {
                             return Err(format!("Archive {archive} not found").into());
                         };
-                        a.with_sources(|d| match d.find(&path) {
-                            Some(Either::Left(d)) => Ok(d.state.clone().into()),
-                            Some(Either::Right(f)) => Ok((&f.target_state).into()),
+                        a.with_sources(|d| match d.find(RelPath::new(&path)) {
+                            Some(SourceEntryRef::Dir(d)) => Ok(d.state.clone().into()),
+                            Some(SourceEntryRef::File(f)) => Ok((&*f.target_state).into()),
                             None => {
                                 Err(format!("Directory {path} not found in archive {archive}")
                                     .into())
@@ -541,8 +539,8 @@ mod server {
     ) -> Result<leptos::server_fn::codec::ByteStream<ServerFnError<String>>, ServerFnError<String>>
     {
         use futures::TryStreamExt;
-        let stream = GlobalBackend::get()
-            .with_local_archive(&id, |a| a.map(|a| a.zip()))
+        let stream = GlobalBackend
+            .with_local_archive(&id, |a| a.map(flams_system::zip::zip))
             .ok_or_else(|| format!("No archive with id {id} found!"))?;
         Ok(leptos::server_fn::codec::ByteStream::new(
             stream.map_err(|e| e.to_string().into()), //.map_err(|e| ServerFnError::new(e.to_string())),

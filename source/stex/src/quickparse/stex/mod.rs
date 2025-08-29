@@ -1,20 +1,15 @@
 pub mod rules;
 pub mod structs;
 
-use std::path::Path;
-
-use flams_ontology::{
-    languages::Language,
-    narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
-    uris::{ArchiveId, DocumentUri, ModuleUri, SymbolUri, UriName, UriWithArchive},
-};
-use flams_system::backend::AnyBackend;
+use flams_math_archives::backend::AnyBackend;
 use flams_utils::{
     parsing::ParseStr,
     prelude::{TreeChild, TreeLike},
     sourcerefs::{LSPLineCol, SourceRange},
     vecmap::VecSet,
 };
+use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
+use ftml_uris::{ArchiveId, DocumentUri, Language, ModuleUri, SymbolUri, UriName, UriWithArchive};
 use rules::{
     MathStructureArg, MathStructureArgIter, NotationArg, NotationArgIter, ParagraphArg,
     ParagraphArgIter, ProblemArg, ProblemArgIter, SModuleArg, SModuleArgIter, SymdeclArg,
@@ -22,6 +17,7 @@ use rules::{
     VardefArgIter,
 };
 use smallvec::SmallVec;
+use std::path::Path;
 use structs::{
     InlineMorphAssIter, InlineMorphAssign, ModuleOrStruct, ModuleReference, ModuleRules,
     MorphismKind, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode,
@@ -50,7 +46,7 @@ impl STeXParseDataI {
     }
     #[inline]
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.annotations.is_empty() && self.diagnostics.is_empty()
     }
 }
@@ -313,6 +309,7 @@ pub enum STeXAnnot {
     },
 }
 impl STeXAnnot {
+    #[allow(clippy::too_many_lines)]
     fn from_tokens<I: IntoIterator<Item = STeXToken<LSPLineCol>>>(
         iter: I,
         mut modules: Option<&mut SmallVec<(ModuleUri, ModuleRules<LSPLineCol>), 1>>,
@@ -336,8 +333,8 @@ impl STeXAnnot {
                     opts,
                 } => {
                     if let Some(ref mut m) = modules {
-                        m.push((uri.clone(), rules))
-                    };
+                        m.push((uri.clone(), rules));
+                    }
                     v.push(Self::Module {
                         uri,
                         name_range,
@@ -355,7 +352,7 @@ impl STeXAnnot {
                     full_range,
                     token_range,
                     args,
-                } => v.push(STeXAnnot::MHGraphics {
+                } => v.push(Self::MHGraphics {
                     filepath,
                     archive,
                     full_range,
@@ -367,7 +364,7 @@ impl STeXAnnot {
                     structure_range,
                     full_range,
                     token_range,
-                } => v.push(STeXAnnot::UseStructure {
+                } => v.push(Self::UseStructure {
                     structure,
                     structure_range,
                     full_range,
@@ -453,7 +450,7 @@ impl STeXAnnot {
                     argnum,
                     token_range,
                     full_range,
-                } => v.push(STeXAnnot::SemanticMacro {
+                } => v.push(Self::SemanticMacro {
                     uri,
                     argnum,
                     token_range,
@@ -466,7 +463,7 @@ impl STeXAnnot {
                     orig,
                     token_range,
                     full_range,
-                } => v.push(STeXAnnot::VariableMacro {
+                } => v.push(Self::VariableMacro {
                     name,
                     argnum,
                     sequence,
@@ -480,7 +477,7 @@ impl STeXAnnot {
                     token_range,
                     name_range,
                     arg_range,
-                } => v.push(STeXAnnot::Svar {
+                } => v.push(Self::Svar {
                     name,
                     full_range,
                     token_range,
@@ -493,7 +490,7 @@ impl STeXAnnot {
                     module,
                     token_range,
                     full_range,
-                } => v.push(STeXAnnot::ImportModule {
+                } => v.push(Self::ImportModule {
                     archive_range,
                     path_range,
                     module,
@@ -506,7 +503,7 @@ impl STeXAnnot {
                     module,
                     token_range,
                     full_range,
-                } => v.push(STeXAnnot::UseModule {
+                } => v.push(Self::UseModule {
                     archive_range,
                     path_range,
                     module,
@@ -519,7 +516,7 @@ impl STeXAnnot {
                     token_range,
                     archive,
                     args,
-                } => v.push(STeXAnnot::IncludeProblem {
+                } => v.push(Self::IncludeProblem {
                     filepath,
                     archive,
                     full_range,
@@ -532,7 +529,7 @@ impl STeXAnnot {
                     module,
                     token_range,
                     full_range,
-                } => v.push(STeXAnnot::SetMetatheory {
+                } => v.push(Self::SetMetatheory {
                     archive_range,
                     path_range,
                     module,
@@ -544,7 +541,7 @@ impl STeXAnnot {
                     filepath,
                     token_range,
                     full_range,
-                } => v.push(STeXAnnot::Inputref {
+                } => v.push(Self::Inputref {
                     archive,
                     filepath,
                     token_range,
@@ -555,7 +552,7 @@ impl STeXAnnot {
                     filepath,
                     token_range,
                     full_range,
-                } => v.push(STeXAnnot::MHInput {
+                } => v.push(Self::MHInput {
                     archive,
                     filepath,
                     token_range,
@@ -567,7 +564,7 @@ impl STeXAnnot {
                     token_range,
                     full_range,
                     parsed_args,
-                } => v.push(STeXAnnot::Symdecl {
+                } => v.push(Self::Symdecl {
                     uri,
                     main_name_range,
                     token_range,
@@ -599,7 +596,7 @@ impl STeXAnnot {
                     name_range,
                 }),
                 STeXToken::Defnotation { full_range } => {
-                    v.push(STeXAnnot::Defnotation { full_range })
+                    v.push(Self::Defnotation { full_range });
                 }
                 STeXToken::Notation {
                     uri,
@@ -607,7 +604,7 @@ impl STeXAnnot {
                     name_range,
                     notation_args,
                     full_range,
-                } => v.push(STeXAnnot::Notation {
+                } => v.push(Self::Notation {
                     uri,
                     token_range,
                     name_range,
@@ -620,7 +617,7 @@ impl STeXAnnot {
                     token_range,
                     full_range,
                     parsed_args,
-                } => v.push(STeXAnnot::Symdef {
+                } => v.push(Self::Symdef {
                     uri,
                     main_name_range,
                     token_range,
@@ -633,7 +630,7 @@ impl STeXAnnot {
                     token_range,
                     full_range,
                     parsed_args,
-                } => v.push(STeXAnnot::Vardef {
+                } => v.push(Self::Vardef {
                     name,
                     main_name_range,
                     token_range,
@@ -646,7 +643,7 @@ impl STeXAnnot {
                     token_range,
                     full_range,
                     parsed_args,
-                } => v.push(STeXAnnot::Varseq {
+                } => v.push(Self::Varseq {
                     name,
                     main_name_range,
                     token_range,
@@ -659,7 +656,7 @@ impl STeXAnnot {
                     token_range,
                     name_range,
                     text,
-                } => v.push(STeXAnnot::Symref {
+                } => v.push(Self::Symref {
                     uri,
                     full_range,
                     token_range,
@@ -673,7 +670,7 @@ impl STeXAnnot {
                     dim_range,
                     symbol_range,
                     dim,
-                } => v.push(STeXAnnot::Precondition {
+                } => v.push(Self::Precondition {
                     uri,
                     full_range,
                     token_range,
@@ -688,7 +685,7 @@ impl STeXAnnot {
                     dim_range,
                     symbol_range,
                     dim,
-                } => v.push(STeXAnnot::Objective {
+                } => v.push(Self::Objective {
                     uri,
                     full_range,
                     token_range,
@@ -702,7 +699,7 @@ impl STeXAnnot {
                     token_range,
                     name_range,
                     mode: mod_,
-                } => v.push(STeXAnnot::SymName {
+                } => v.push(Self::SymName {
                     uri,
                     full_range,
                     token_range,
@@ -714,7 +711,7 @@ impl STeXAnnot {
                     full_range,
                     token_range,
                     name_range,
-                } => v.push(STeXAnnot::Symuse {
+                } => v.push(Self::Symuse {
                     uri,
                     full_range,
                     token_range,
@@ -727,7 +724,7 @@ impl STeXAnnot {
                     symbol,
                     parsed_args,
                     children,
-                } => v.push(STeXAnnot::Paragraph {
+                } => v.push(Self::Paragraph {
                     symbol,
                     kind,
                     full_range,
@@ -741,7 +738,7 @@ impl STeXAnnot {
                     name_range,
                     parsed_args,
                     children,
-                } => v.push(STeXAnnot::Problem {
+                } => v.push(Self::Problem {
                     sub,
                     full_range,
                     name_range,
@@ -756,7 +753,7 @@ impl STeXAnnot {
                     symbol,
                     parsed_args,
                     children,
-                } => v.push(STeXAnnot::InlineParagraph {
+                } => v.push(Self::InlineParagraph {
                     symbol,
                     kind,
                     full_range,
@@ -772,7 +769,7 @@ impl STeXAnnot {
                     name_range,
                     macroname_range,
                     full_range,
-                } => v.push(STeXAnnot::RenameDecl {
+                } => v.push(Self::RenameDecl {
                     uri,
                     token_range,
                     orig_range,
@@ -785,7 +782,7 @@ impl STeXAnnot {
                     token_range,
                     orig_range,
                     full_range,
-                } => v.push(STeXAnnot::Assign {
+                } => v.push(Self::Assign {
                     uri,
                     token_range,
                     orig_range,
@@ -793,11 +790,7 @@ impl STeXAnnot {
                 }),
                 STeXToken::Vec(vi) => v.extend(Self::from_tokens(
                     vi,
-                    if let Some(m) = modules.as_mut() {
-                        Some(*m)
-                    } else {
-                        None
-                    },
+                    modules.as_mut().map_or(None, |m| Some(*m)),
                 )),
             }
         }
@@ -1009,7 +1002,7 @@ pub fn quickparse<'a, S: STeXModuleStore>(
             level,
             message,
             range,
-        })
+        });
     };
     let mut parser = if S::FULL {
         LaTeXParser::with_rules(

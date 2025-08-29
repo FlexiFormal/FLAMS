@@ -8,12 +8,10 @@ use std::{
 
 use flams_utils::settings::GitlabSettings;
 pub use flams_utils::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
-use lazy_static::lazy_static;
 
 static SETTINGS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
 
 pub struct Settings {
-    pub mathhubs: Box<[Box<Path>]>,
     pub mathhubs_is_default: bool,
     pub debug: bool,
     pub log_dir: Box<Path>,
@@ -38,6 +36,10 @@ impl Debug for Settings {
 }
 
 impl Settings {
+    #[inline]
+    pub fn mathhubs(&self) -> &'static [&'static Path] {
+        flams_math_archives::mathhub::mathhubs()
+    }
     pub fn port(&self) -> u16 {
         self.port.load(std::sync::atomic::Ordering::Relaxed)
     }
@@ -54,8 +56,8 @@ impl Settings {
     }
 
     #[inline]
-    pub fn external_url(&self) -> Option<&str> {
-        self.external_url.as_deref()
+    pub fn external_url(&self) -> &str {
+        self.external_url.as_deref().unwrap_or_default()
     }
 
     /// #### Panics
@@ -80,7 +82,10 @@ impl Settings {
     pub fn as_spec(&self) -> SettingsSpec {
         let port = self.port();
         let spec = SettingsSpec {
-            mathhubs: self.mathhubs.to_vec(),
+            mathhubs: flams_math_archives::mathhub::mathhubs()
+                .iter()
+                .map(|m| m.to_path_buf())
+                .collect(), // self.mathhubs.to_vec(),
             debug: Some(self.debug),
             log_dir: Some(self.log_dir.clone()),
             temp_dir: Some(
@@ -121,15 +126,15 @@ impl Settings {
 impl From<SettingsSpec> for Settings {
     #[allow(clippy::cast_possible_truncation)]
     fn from(spec: SettingsSpec) -> Self {
-        let (mathhubs, mathhubs_is_default) = if spec.mathhubs.is_empty() {
-            (MATHHUB_PATHS.clone(), true)
+        let mathhubs_is_default = if spec.mathhubs.is_empty() {
+            true
         } else {
-            let mhs = spec.mathhubs.into_boxed_slice();
-            let is_def = mhs == *MATHHUB_PATHS;
-            (mhs, is_def)
+            let mhs = spec.mathhubs;
+            let _ = flams_math_archives::mathhub::set_mathhubs(mhs);
+            flams_math_archives::mathhub::mathhubs()
+                == flams_math_archives::mathhub::default_mathhubs()
         };
         Self {
-            mathhubs,
             mathhubs_is_default,
             debug: spec.debug.unwrap_or(cfg!(debug_assertions)),
             log_dir: spec.log_dir.unwrap_or_else(|| {
@@ -190,35 +195,14 @@ impl From<SettingsSpec> for Settings {
     }
 }
 
-lazy_static! {
-    pub static ref MATHHUB_PATHS: Box<[Box<Path>]> = mathhubs().into();
-    static ref CONFIG_DIR: Option<Box<Path>> =
-        simple_home_dir::home_dir().map(|d| d.join(".flams").into_boxed_path());
-    static ref EXE_DIR: Option<Box<Path>> = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Into::into));
-}
+static CONFIG_DIR: std::sync::LazyLock<Option<Box<Path>>> = std::sync::LazyLock::new(|| {
+    simple_home_dir::home_dir().map(|d| d.join(".flams").into_boxed_path())
+});
 
-fn mathhubs() -> Vec<Box<Path>> {
-    if let Ok(f) = std::env::var("MATHHUB") {
-        return f
-            .split(',')
-            .map(|s| PathBuf::from(s.trim()).into_boxed_path())
-            .collect();
-    }
-    if let Some(d) = simple_home_dir::home_dir() {
-        let p = d.join(".mathhub").join("mathhub.path");
-        if let Ok(f) = std::fs::read_to_string(p) {
-            return f
-                .split('\n')
-                .map(|s| PathBuf::from(s.trim()).into_boxed_path())
-                .collect();
-        }
-        return vec![d.join("MathHub").into_boxed_path()];
-    }
-    panic!(
-    "No MathHub directory found and default ~/MathHub not accessible!\n\
-    Please set the MATHHUB environment variable or create a file ~/.mathhub/mathhub.path containing \
-    the path to the MathHub directory."
-  )
-}
+/*
+static EXE_DIR: std::sync::LazyLock<Option<Box<Path>>> = std::sync::LazyLock::new(|| {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Into::into))
+});
+ */

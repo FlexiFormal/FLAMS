@@ -9,11 +9,9 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 pub mod components;
 pub mod vscode;
 
-use flams_ontology::{
-    search::{QueryFilter, SearchResult},
-    uris::SymbolUri,
-};
+use flams_backend_types::search::{QueryFilter, SearchResult};
 use flams_utils::vecmap::VecMap;
+use ftml_uris::SymbolUri;
 use leptos::prelude::*;
 
 #[server(prefix = "/api", endpoint = "search")]
@@ -23,7 +21,7 @@ pub async fn search_query(
     opts: QueryFilter,
     num_results: usize,
 ) -> Result<Vec<(f32, SearchResult)>, ServerFnError<String>> {
-    use flams_system::search::Searcher;
+    use flams_search::Searcher;
     tokio::task::spawn_blocking(move || {
         Searcher::get()
             .query(&query, opts, num_results)
@@ -37,8 +35,8 @@ pub async fn search_query(
 pub async fn search_symbols(
     query: String,
     num_results: usize,
-) -> Result<VecMap<SymbolUri, Vec<(f32, SearchResult)>>, ServerFnError<String>> {
-    use flams_system::search::Searcher;
+) -> Result<Vec<(SymbolUri, Vec<(f32, SearchResult)>)>, ServerFnError<String>> {
+    use flams_search::Searcher;
     tokio::task::spawn_blocking(move || {
         Searcher::get()
             .query_symbols(&query, num_results)

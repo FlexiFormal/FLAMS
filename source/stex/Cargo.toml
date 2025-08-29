@@ -8,10 +8,14 @@ tracing-subscriber = { workspace = true }
 rstest = { workspace = true }
 
 [dependencies]
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-uris = { workspace = true }
+
 flams-ftml = { workspace = true }
-flams-ontology = { workspace = true, features = ["serde"] }
 flams-system = { workspace = true }
 flams-utils = { workspace = true, features = ["serde"] }
+
+flams-math-archives = { workspace = true }
 
 rustex_lib = { workspace = true }
 tex_engine = { workspace = true }
@@ -21,7 +25,6 @@ tracing = { workspace = true, features = ["log"] }
 parking_lot = { workspace = true }
 paste = { workspace = true }
 either = { workspace = true }
-lazy_static = { workspace = true }
 regex = { workspace = true }
 smallvec = { workspace = true }
 eyre = { workspace = true }

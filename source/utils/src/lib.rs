@@ -11,10 +11,10 @@ pub mod id_counters;
 mod inner_arc;
 pub mod logs;
 pub mod parsing;
-pub mod regex;
+//pub mod regex;
 pub mod settings;
 pub mod sourcerefs;
-pub mod time;
+//pub mod time;
 mod treelike;
 pub mod vecmap;
 //pub mod file_id;
@@ -74,7 +74,7 @@ impl<T: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>> Hexable for
         Ok(ret)
     }
     fn from_hex(s: &str) -> eyre::Result<Self> {
-        let bytes: Result<Vec<_>, _> = if s.len() % 2 == 0 {
+        let bytes: Result<Vec<_>, _> = if s.len().is_multiple_of(2) {
             (0..s.len())
                 .step_by(2)
                 .filter_map(|i| s.get(i..i + 2))
@@ -132,7 +132,7 @@ pub mod fs {
         Ok(())
     }
 }
-
+/*
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -206,8 +206,8 @@ impl CSS {
             CssRuleList(Vec::new()),
             ParserOptions::default(),
         );
-        let mut inlines = smallvec::SmallVec::<_, 2>::new();
-        for (i, s) in strings.iter().enumerate() {
+        let inlines = smallvec::SmallVec::<_, 2>::new();
+        for s in &strings {
             if let Ok(rs) = StyleSheet::parse(s, ParserOptions::default()) {
                 sheet.rules.0.extend(rs.rules.0.into_iter());
             } else {
@@ -326,6 +326,7 @@ impl CSS {
             .collect()
     }
 }
+ */
 
 #[macro_export]
 macro_rules! impossible {
@@ -375,6 +376,7 @@ pub trait CondSerialize {}
 #[cfg(not(feature = "serde"))]
 impl<T> CondSerialize for T {}
 
+/*
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::cognitive_complexity)]
 #[allow(clippy::similar_names)]
@@ -493,3 +495,4 @@ impl<T: AsRef<std::path::Path>> PathExt for T {
         })
     }
 }
+ */

@@ -11,11 +11,12 @@ ssr = [
     "leptos/ssr",
     "leptos_router/ssr",
     "thaw/ssr",
-    "ftml-viewer-components/ssr",
+    "ftml-leptos/ssr",
     "flams-web-utils/ssr",
     "flams-router-vscode/ssr",
     "flams-router-content/ssr",
     "dep:flams-system",
+    "dep:flams-search",
     "dep:tokio",
     #"dep:paste",
     #"dep:smallvec",
@@ -23,7 +24,7 @@ ssr = [
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
-    "ftml-viewer-components/hydrate",
+    "ftml-leptos/hydrate",
     "flams-router-vscode/hydrate",
     "flams-router-content/hydrate",
     "flams-web-utils/hydrate",
@@ -33,15 +34,18 @@ docs-only = []
 
 [dependencies]
 ftml-uris = { workspace = true, features = ["leptos"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-leptos = { workspace = true }
+ftml-dom = { workspace = true }
 
-flams-ontology = { workspace = true, features = ["serde"] }
 flams-utils = { workspace = true }
-ftml-viewer-components = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-router-base = { workspace = true }
 flams-router-vscode = { workspace = true }
 flams-router-content = { workspace = true }
-flams-system = { workspace = true, optional = true, features = ["tantivy"] }
+flams-backend-types = { workspace = true, features = ["serde"] }
+flams-system = { workspace = true, optional = true }
+flams-search = { workspace = true, optional = true }
 
 leptos = { workspace = true }
 leptos_router = { workspace = true }

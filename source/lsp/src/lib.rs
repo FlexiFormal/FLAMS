@@ -12,21 +12,19 @@ use std::{collections::hash_map::Entry, path::Path};
 
 pub use async_lsp;
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::{ArchiveId, BaseUri, DocumentUri};
+use flams_math_archives::backend::AnyBackend;
 use flams_stex::quickparse::stex::{
     structs::{GetModuleError, ModuleReference, STeXModuleStore},
     STeXParseData,
 };
-use flams_system::{
-    backend::{AnyBackend, GlobalBackend},
-    settings::Settings,
-};
+use flams_system::settings::Settings;
 use flams_utils::{
     background,
     prelude::HMap,
     sourcerefs::{LSPLineCol, SourceRange},
     unwrap,
 };
+use ftml_uris::{ArchiveId, BaseUri, DocumentUri};
 use state::{DocData, LSPState, UrlOrFile};
 
 static GLOBAL_STATE: std::sync::OnceLock<LSPState> = std::sync::OnceLock::new();
@@ -355,14 +353,8 @@ impl<'a, const FULL: bool> LSPStore<'a, FULL> {
 
     pub fn load(&mut self, p: &Path, uri: &DocumentUri) -> Option<STeXParseData> {
         let text = std::fs::read_to_string(p).ok()?;
-        let r = flams_stex::quickparse::stex::quickparse(
-            uri,
-            &text,
-            p,
-            &AnyBackend::Global(GlobalBackend::get()),
-            self,
-        )
-        .lock();
+        let r = flams_stex::quickparse::stex::quickparse(uri, &text, p, &AnyBackend::Global, self)
+            .lock();
         Some(r)
     }
 

@@ -1,17 +1,15 @@
-use flams_ontology::uris::ArchiveId;
 use flams_utils::prelude::HSet;
+use ftml_uris::ArchiveId;
 use gitlab::api::AsyncQuery;
 use tracing::{instrument, Instrument};
 
 pub mod auth;
 
-lazy_static::lazy_static! {
-  static ref GITLAB: GLInstance = GLInstance::default();
-}
+static GITLAB: std::sync::LazyLock<GLInstance> = std::sync::LazyLock::new(GLInstance::default);
 
 #[derive(Debug)]
 struct ProjectWithId {
-    pub project: super::Project,
+    pub project: flams_backend_types::git::Project,
     #[allow(clippy::option_option)]
     pub id: Option<Option<ArchiveId>>,
 }
@@ -209,19 +207,20 @@ impl GitLab {
         name = "getting all gitlab projects",
         skip_all
     )]
-    pub async fn get_projects(&self) -> Result<Vec<crate::Project>, Err> {
+    pub async fn get_projects(&self) -> Result<Vec<flams_backend_types::git::Project>, Err> {
         use gitlab::api::AsyncQuery;
         let q = gitlab::api::projects::Projects::builder()
             .simple(true)
             .build()
             .unwrap_or_else(|_| unreachable!());
-        let v: Vec<super::Project> = gitlab::api::paged(q, gitlab::api::Pagination::All)
-            .query_async(&self.0.inner)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to load projects: {e}");
-                e
-            })?;
+        let v: Vec<flams_backend_types::git::Project> =
+            gitlab::api::paged(q, gitlab::api::Pagination::All)
+                .query_async(&self.0.inner)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to load projects: {e}");
+                    e
+                })?;
         let mut prs = self.0.projects.lock();
         for p in &v {
             if !prs.contains(&p.id) {
@@ -270,9 +269,11 @@ impl GitLab {
             .recursive(false)
             .build()
             .unwrap_or_else(|_| unreachable!());
-        let r: Vec<crate::TreeEntry> = r.query_async(&self.0.inner).await?;
+        let r: Vec<flams_backend_types::git::TreeEntry> = r.query_async(&self.0.inner).await?;
         let Some(p) = r.into_iter().find_map(|e| {
-            if e.path.eq_ignore_ascii_case("meta-inf") && matches!(e.kind, crate::DirOrFile::Dir) {
+            if e.path.eq_ignore_ascii_case("meta-inf")
+                && matches!(e.tp, flams_backend_types::git::DirOrFile::Dir)
+            {
                 Some(e.path)
             } else {
                 None
@@ -288,10 +289,10 @@ impl GitLab {
             .recursive(false)
             .build()
             .unwrap_or_else(|_| unreachable!());
-        let r: Vec<crate::TreeEntry> = r.query_async(&self.0.inner).await?;
+        let r: Vec<flams_backend_types::git::TreeEntry> = r.query_async(&self.0.inner).await?;
         let Some(p) = r.into_iter().find_map(|e| {
             if e.name.eq_ignore_ascii_case("manifest.mf")
-                && matches!(e.kind, crate::DirOrFile::File)
+                && matches!(e.tp, flams_backend_types::git::DirOrFile::File)
             {
                 Some(e.path)
             } else {
@@ -323,6 +324,7 @@ pub enum Err {
     Api(gitlab::api::ApiError<gitlab::RestError>),
     Str(std::str::Utf8Error),
     Gitlab(gitlab::GitlabError),
+    Other(String),
 }
 impl From<gitlab::api::ApiError<gitlab::RestError>> for Err {
     #[inline]
@@ -348,6 +350,7 @@ impl std::fmt::Display for Err {
             Self::Api(e) => e.fmt(f),
             Self::Str(e) => e.fmt(f),
             Self::Gitlab(e) => e.fmt(f),
+            Self::Other(s) => s.fmt(f),
         }
     }
 }

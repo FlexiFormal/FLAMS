@@ -1,31 +1,29 @@
 use std::{
-    any::Any,
     num::NonZeroU32,
     path::{Path, PathBuf},
 };
 
 use either::Either;
-use flams_ontology::uris::{ArchiveId, ArchiveUri, DocumentUri, ModuleUri, UriWithArchive};
+use flams_math_archives::{
+    backend::AnyBackend,
+    formats::{BuildSpec, BuildTargetId, TaskDependency, TaskRef},
+};
 use flams_utils::{
-    time::Eta,
     triomphe::Arc,
     vecmap::{VecMap, VecSet},
 };
+use ftml_ontology::utils::time::Eta;
+use ftml_uris::{ArchiveId, ArchiveUri, DocumentUri, ModuleUri, UriPath, UriWithArchive};
 use parking_lot::RwLock;
-
-use crate::formats::{BuildArtifactTypeId, BuildTargetId};
 
 mod queue;
 pub mod queue_manager;
 pub use queue::QueueName;
 mod queueing;
 
-lazy_static::lazy_static! {
-    pub(crate) static ref BUILD_QUEUE_SPAN:tracing::Span = {
-            //println!("Here!");
-            tracing::info_span!(target:"build queue",parent:None,"Build Queue")
-    };
-}
+pub(crate) static BUILD_QUEUE_SPAN: std::sync::LazyLock<tracing::Span> = std::sync::LazyLock::new(
+    || tracing::info_span!(target:"build queue",parent:None,"Build Queue"),
+);
 
 #[cfg(all(test, feature = "tokio"))]
 mod tests;
@@ -40,13 +38,6 @@ pub enum TaskState {
     Done,
     Failed,
     None,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct TaskRef {
-    pub archive: ArchiveId,
-    pub rel_path: std::sync::Arc<str>,
-    pub target: BuildTargetId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +56,14 @@ pub enum Dependency {
         strict: bool,
     },
 }
+impl From<TaskDependency> for Dependency {
+    fn from(value: TaskDependency) -> Self {
+        match value {
+            TaskDependency::Logical { uri, strict } => Self::Logical { uri, strict },
+            TaskDependency::Physical { task, strict } => Self::Physical { task, strict },
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct BuildTaskId(NonZeroU32);
@@ -78,25 +77,54 @@ impl From<BuildTaskId> for u32 {
 #[derive(Debug, PartialEq, Eq)]
 struct BuildTaskI {
     id: BuildTaskId,
-    archive: ArchiveUri,
+    uri: DocumentUri,
     steps: Box<[BuildStep]>,
     source: Either<PathBuf, String>,
-    rel_path: std::sync::Arc<str>,
+    rel_path: UriPath,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildTask(Arc<BuildTaskI>);
 impl BuildTask {
+    #[inline]
+    /// # Errors
+    pub fn new(
+        id: BuildTaskId,
+        archive: ArchiveUri,
+        steps: Box<[BuildStep]>,
+        source: Either<PathBuf, String>,
+        rel_path: UriPath,
+    ) -> eyre::Result<Self> {
+        Ok(Self(Arc::new(BuildTaskI {
+            uri: DocumentUri::from_archive_relpath(archive, rel_path.as_ref())
+                .map_err(eyre::Report::new)?,
+            id,
+            steps,
+            source,
+            rel_path,
+        })))
+    }
+
     #[must_use]
     #[inline]
-    pub fn document_uri(&self) -> eyre::Result<DocumentUri> {
-        DocumentUri::from_archive_relpath(self.archive().clone(), self.rel_path())
-            .map_err(eyre::Report::new)
+    pub fn document_uri(&self) -> &DocumentUri {
+        &self.0.uri
     }
+
     #[must_use]
-    pub fn get_task_ref(&self, target: BuildTargetId) -> TaskRef {
+    pub fn as_build_spec<'a>(&'a self, backend: &'a AnyBackend) -> BuildSpec<'a> {
+        BuildSpec {
+            uri: &self.0.uri,
+            source: self.source(),
+            backend,
+            rel_path: self.rel_path(),
+        }
+    }
+
+    #[must_use]
+    pub fn as_task_ref(&self, target: BuildTargetId) -> TaskRef {
         TaskRef {
-            archive: self.0.archive.archive_id().clone(),
+            archive: self.0.uri.archive_id().clone(),
             rel_path: self.0.rel_path.clone(),
             target,
         }
@@ -114,12 +142,12 @@ impl BuildTask {
     #[inline]
     #[must_use]
     pub fn archive(&self) -> &ArchiveUri {
-        self.0.archive.archive_uri()
+        self.0.uri.archive_uri()
     }
 
     #[inline]
     #[must_use]
-    pub fn rel_path(&self) -> &str {
+    pub fn rel_path(&self) -> &UriPath {
         &self.0.rel_path
     }
 
@@ -145,7 +173,7 @@ impl BuildTask {
         */
         QueueEntry {
             id: self.0.id,
-            archive: self.0.archive.archive_id().clone(),
+            archive: self.0.uri.archive_id().clone(),
             rel_path: self.0.rel_path.clone(),
             steps: self
                 .steps()
@@ -185,7 +213,7 @@ impl BuildStep {
     }
     */
 }
-
+/*
 pub trait BuildArtifact: Any + 'static {
     fn get_type_id() -> BuildArtifactTypeId
     where
@@ -237,11 +265,13 @@ impl BuildResult {
     }
 }
 
+*/
+
 #[derive(Debug, Clone)]
 pub struct QueueEntry {
     pub id: BuildTaskId,
     pub archive: ArchiveId,
-    pub rel_path: std::sync::Arc<str>,
+    pub rel_path: UriPath,
     pub steps: VecMap<BuildTargetId, TaskState>,
 }
 

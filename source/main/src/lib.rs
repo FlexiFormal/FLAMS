@@ -15,17 +15,10 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 #[cfg(feature = "ssr")]
 pub mod server;
 
+/*
 pub(crate) mod fns {
-    use std::{future::Future, pin::Pin};
-
-    use flams_ontology::{
-        languages::Language,
-        narration::{notations::Notation, LOKind},
-        uris::{ArchiveId, DocumentElementUri, DocumentUri, SymbolUri, Uri},
-    };
-    use flams_utils::CSS;
-    use ftml_viewer_components::components::{omdoc::OMDoc, TOCElem};
     use leptos::prelude::ServerFnError;
+    use std::{future::Future, pin::Pin};
 
     fn fragment(
         uri: Option<Uri>,
@@ -148,13 +141,14 @@ pub(crate) mod fns {
         );
     }
 }
+ */
 
 #[cfg(feature = "hydrate")]
 #[leptos::wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
     console_error_panic_hook::set_once();
     tracing_wasm::set_as_global_default();
-    fns::init();
+    //fns::init();
     leptos::mount::hydrate_body(flams_router_dashboard::Main);
 }
 

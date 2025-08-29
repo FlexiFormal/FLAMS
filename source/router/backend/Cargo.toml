@@ -10,6 +10,7 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "thaw/ssr",
+    "ftml-dom/ssr",
     "flams-web-utils/ssr",
     "flams-router-base/ssr",
     "flams-router-content/ssr",
@@ -17,11 +18,14 @@ ssr = [
     "dep:tokio",
     "dep:futures",
     "dep:flams-system",
+    "dep:flams-math-archives",
+    "dep:ulo",
     "dep:flams-git",
 ]
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
+    "ftml-dom/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
     "flams-router-content/hydrate",
@@ -31,14 +35,20 @@ docs-only = []
 
 [dependencies]
 ftml-uris = { workspace = true, features = ["leptos"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
 
-flams-ontology = { workspace = true, features = ["serde"] }
+flams-backend-types = { workspace = true, features = ["serde"] }
+ftml-dom = { workspace = true }
+
 flams-utils = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-router-base = { workspace = true }
 flams-router-content = { workspace = true }
 flams-router-buildqueue-base = { workspace = true }
-flams-system = { workspace = true, optional = true }
+
+ulo = { workspace = true, optional = true }
+flams-system = { workspace = true, optional = true, features = ["gitlab"] }
+flams-math-archives = { workspace = true, optional = true }
 flams-git = { workspace = true, features = ["git2"], optional = true }
 
 leptos = { workspace = true }

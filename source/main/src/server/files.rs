@@ -1,22 +1,17 @@
-use std::{default, ops::Deref, path::PathBuf, sync::atomic::AtomicU64};
+use std::{path::PathBuf, sync::atomic::AtomicU64};
 
 use axum::body::Body;
-use flams_ontology::{
-    languages::Language,
-    uris::{ArchiveId, DocumentUri},
+use flams_math_archives::{
+    backend::{GlobalBackend, LocalBackend},
+    LocallyBuilt, MathArchive,
 };
-use flams_router_base::uris::DocURIComponents;
-use flams_system::{
-    backend::{Backend, GlobalBackend},
-    settings::Settings,
-};
-use flams_utils::time::Timestamp;
+use flams_system::settings::Settings;
+use ftml_ontology::utils::time::Timestamp;
 use ftml_uris::{
     components::{DocumentUriComponentTuple, DocumentUriComponents},
-    IsNarrativeUri,
+    ArchiveId, DocumentUri, IsNarrativeUri, Language, UriWithArchive, UriWithPath,
 };
 use http::Request;
-use leptos_router::location::LocationProvider;
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
 
@@ -42,7 +37,7 @@ impl ImageSpec {
         match self {
             Self::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p),
             Self::ARp(a, p) => {
-                GlobalBackend::get().with_local_archive(a, |a| a.map(|a| a.path().join(&**p)))
+                GlobalBackend.with_local_archive(a, |a| a.map(|a| a.path().join(&**p)))
             }
             Self::File(p) => Some(std::path::PathBuf::from(p.to_string())),
         }
@@ -125,7 +120,7 @@ pub(crate) async fn doc_handler(
         *resp.status_mut() = http::StatusCode::NOT_FOUND;
         resp
     };
-    let err = |s: &str| {
+    let err = |_: &str| {
         let mut resp = axum::response::Response::new(ServeFileSystemResponseBody::default());
         *resp.status_mut() = http::StatusCode::BAD_REQUEST;
         resp
@@ -169,17 +164,21 @@ pub(crate) async fn doc_handler(
 
     let comps: Result<DocumentUriComponents, _> = comps.try_into();
     let uri = if let Ok(comps) = comps {
-        let Ok(uri) = comps.parse(|a| {
-            flams_system::backend::GlobalBackend::get()
-                .with_archive(a, |a| a.map(|a| a.uri().clone()))
-        }) else {
+        let Ok(uri) =
+            comps.parse(|a| GlobalBackend.with_archive(a, |a| a.map(|a| a.uri().clone())))
+        else {
             return err("Malformed URI components");
         };
         uri
     } else {
         return err("Malformed URI components");
     };
-    let Some(path) = GlobalBackend::get().artifact_path(&uri, format) else {
+    let Some(path) = GlobalBackend.with_local_archive(uri.archive_id(), |a| {
+        a.map(|a| {
+            a.out_path_of(uri.path(), uri.document_name(), None, uri.language)
+                .join(format)
+        })
+    }) else {
         return default();
     };
 

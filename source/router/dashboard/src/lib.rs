@@ -1,4 +1,4 @@
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
@@ -39,6 +39,7 @@ pub mod server_fns {
 }
 
 pub use flams_router_base::LoginState;
+use ftml_dom::FtmlViews;
 use leptos::{
     either::{Either, EitherOf4},
     prelude::*,
@@ -161,9 +162,8 @@ pub fn Dashboard() -> impl IntoView {
 #[component]
 fn MainPage(page: Page) -> impl IntoView {
     use flams_web_utils::components::Themer;
-    use ftml_viewer_components::FTMLGlobalSetup;
     view! {
-      <Themer><FTMLGlobalSetup>
+      <Themer>{flams_router_content::Views::top(move || view!{
         <Layout position=LayoutPosition::Absolute>
           //<Login>
             <LayoutHeader class="flams-header">
@@ -197,7 +197,7 @@ fn MainPage(page: Page) -> impl IntoView {
               </Layout>
           //</Login>
         </Layout>
-      </FTMLGlobalSetup></Themer>
+      })}</Themer>
     }
 }
 

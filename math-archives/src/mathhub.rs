@@ -1,30 +1,99 @@
+use crate::{Archive, utils::path_ext::PathExt};
 use std::path::{Path, PathBuf};
 
-use crate::{Archive, utils::path_ext::PathExt};
-
-pub static MATHHUBS: std::sync::LazyLock<Box<[Box<Path>]>> = std::sync::LazyLock::new(|| {
+#[allow(clippy::doc_markdown)]
+/// The default MathHub directories on the user's file system; determined from environment
+/// variables, or the path stated in `~/.mathhub/mathhub.path`, or `~/MathHub`.
+///
+/// # Panics
+/// If it fails to do any of those
+#[must_use]
+pub fn default_mathhubs() -> Vec<PathBuf> {
     if let Ok(f) = std::env::var("MATHHUB") {
-        return f
-            .split(',')
-            .map(|s| PathBuf::from(s.trim()).into_boxed_path())
-            .collect();
+        return f.split(',').map(|s| PathBuf::from(s.trim())).collect();
     }
     if let Some(d) = simple_home_dir::home_dir() {
         let p = d.join(".mathhub").join("mathhub.path");
         if let Ok(f) = std::fs::read_to_string(p) {
             return f
                 .split('\n')
-                .map(|s| PathBuf::from(s.trim()).into_boxed_path())
+                .map(|s: &str| PathBuf::from(s.trim()))
                 .collect();
         }
-        return Box::new([d.join("MathHub").into_boxed_path()]);
+        return vec![d.join("MathHub")];
     }
     panic!(
         "No MathHub directory found and default ~/MathHub not accessible!\n\
+Please set the MATHHUB environment variable or create a file ~/.mathhub/mathhub.path containing \
+the path to the MathHub directory."
+    )
+}
+
+static MH: std::sync::OnceLock<&'static [&'static Path]> = std::sync::OnceLock::new();
+
+/// The mathhub directories used by this run. Static, initilized as [`default_mathhubs`]
+/// on first access. Can be set *before* any call using [`set_mathhubs`].
+pub fn mathhubs() -> &'static [&'static Path] {
+    MH.get_or_init(|| {
+        &*Box::leak(
+            default_mathhubs()
+                .into_iter()
+                .map(|p| &*Box::leak(p.into_boxed_path()))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    })
+}
+
+/// Sets the mathhub directories used by tis run. May only be used *before* any call
+/// to `mathhubs`.
+///
+/// # Errors
+/// If already set
+#[allow(clippy::result_unit_err)]
+pub fn set_mathhubs(paths: impl IntoIterator<Item = PathBuf>) -> Result<(), ()> {
+    if MH.get().is_some() {
+        return Err(());
+    }
+    MH.get_or_init(|| {
+        &*Box::leak(
+            paths
+                .into_iter()
+                .map(|p| &*Box::leak(p.into_boxed_path()))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    });
+    Ok(())
+}
+
+pub static MATHHUBS: std::sync::LazyLock<&'static [&'static Path]> = std::sync::LazyLock::new(
+    || {
+        if let Ok(f) = std::env::var("MATHHUB") {
+            return Box::leak(
+                f.split(',')
+                    .map(|s| &*PathBuf::from(s.trim()).leak())
+                    .collect::<Box<[_]>>(),
+            );
+        }
+        if let Some(d) = simple_home_dir::home_dir() {
+            let p = d.join(".mathhub").join("mathhub.path");
+            if let Ok(f) = std::fs::read_to_string(p) {
+                return Box::leak(
+                    f.split('\n')
+                        .map(|s| &*PathBuf::from(s.trim()).leak())
+                        .collect::<Box<[_]>>(),
+                );
+            }
+            return Box::leak(Box::new([&*d.join("MathHub").leak()]));
+        }
+        panic!(
+            "No MathHub directory found and default ~/MathHub not accessible!\n\
     Please set the MATHHUB environment variable or create a file ~/.mathhub/mathhub.path containing \
     the path to the MathHub directory."
-    )
-});
+        )
+    },
+);
 
 pub fn load_all_archives(external_url: &str) -> impl rayon::iter::ParallelIterator<Item = Archive> {
     //impl orx_parallel::ParIter<Item = Archive> {
@@ -38,7 +107,15 @@ pub fn load_all_archives(external_url: &str) -> impl rayon::iter::ParallelIterat
             .filter_map(|(mh, p)| {
                 // SAFETY: manifest file is grandchild of root directory of archive
                 let parent = unsafe { p.parent().unwrap_unchecked().parent().unwrap_unchecked() };
-                crate::manifest::parse_manifest(&p, parent.relative_to(mh)?, external_url)
+
+                let rel_path = parent.relative_to(mh)?;
+                match crate::manifest::parse_manifest(&p, rel_path, external_url) {
+                    Ok(r) => Some(r),
+                    Err(e) => {
+                        tracing::warn!("{e} in {rel_path}");
+                        None
+                    }
+                }
             })
             .map(|a| {
                 if let Archive::Local(a) = &a {

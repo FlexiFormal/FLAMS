@@ -1,6 +1,10 @@
-use crate::backend::{AnyBackend, Backend, GlobalBackend, SandboxedBackend, SandboxedRepository};
+use flams_math_archives::backend::{
+    AnyBackend, GlobalBackend, SandboxedBackend, SandboxedRepository,
+};
 use flams_utils::vecmap::VecMap;
 use std::{fmt::Display, num::NonZeroU32, sync::atomic::AtomicU8};
+
+use crate::settings::Settings;
 
 use super::queue::{Queue, QueueName, QueueState, RunningQueue};
 
@@ -52,11 +56,7 @@ impl QueueManager {
             } else {
                 vec![(
                     QueueId::global(),
-                    Queue::new(
-                        QueueId::global(),
-                        QueueName::Global,
-                        GlobalBackend::get().to_any(),
-                    ),
+                    Queue::new(QueueId::global(), QueueName::Global, AnyBackend::Global),
                 )]
                 .into()
             };
@@ -98,7 +98,7 @@ impl QueueManager {
       let sbname = format!("{queue_name}_{count}");
       tracing::info_span!("Build Queue",name = &sbname).in_scope(|| {
         let id = QueueId(NonZeroU32::new(inner.0.iter().map(|(k,_)| k.0.get()).max().unwrap_or_default() + 1).unwrap_or_else(|| unreachable!()));
-        let backend = AnyBackend::Sandbox(SandboxedBackend::new(&sbname));
+        let backend = AnyBackend::Sandbox(SandboxedBackend::new(&sbname,&Settings::get().temp_dir()));
         inner.insert(id,
           Queue::new(id,
             QueueName::Sandbox{name:queue_name.to_string().into(),idx:count},
@@ -187,6 +187,7 @@ impl QueueManager {
         then: impl FnOnce(&SandboxedBackend) -> eyre::Result<R>,
     ) -> eyre::Result<(R, usize)> {
         use eyre::eyre;
+        use flams_math_archives::utils::SyncEngine;
         use flams_utils::impossible;
 
         let mut inner = self.inner.write();
@@ -210,7 +211,10 @@ impl QueueManager {
         let AnyBackend::Sandbox(sandbox) = queue.backend() else {
             impossible!()
         };
-        Ok((r, sandbox.migrate()?))
+        Ok((
+            r,
+            sandbox.migrate::<SyncEngine>(Settings::get().external_url())?,
+        ))
     }
 
     #[allow(clippy::significant_drop_tightening)]
@@ -223,10 +227,7 @@ impl QueueManager {
                 blocked.clear();
             }
             if matches!(q.name(), QueueName::Global) {
-                inner.insert(
-                    id,
-                    Queue::new(id, QueueName::Global, GlobalBackend::get().to_any()),
-                );
+                inner.insert(id, Queue::new(id, QueueName::Global, AnyBackend::Global));
             }
         }
     }

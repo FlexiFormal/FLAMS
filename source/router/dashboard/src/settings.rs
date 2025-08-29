@@ -1,6 +1,7 @@
 use flams_router_base::require_login;
 use flams_utils::settings::SettingsSpec;
-use flams_web_utils::{components::wait_and_then_fn, inject_css};
+use flams_web_utils::components::wait_and_then_fn;
+use ftml_dom::utils::css::inject_css;
 use leptos::prelude::*;
 
 #[server(
@@ -10,8 +11,8 @@ use leptos::prelude::*;
 )]
 #[allow(clippy::unused_async)]
 pub async fn get_settings() -> Result<(SettingsSpec, usize, bool), ServerFnError<String>> {
+    use flams_math_archives::backend::GlobalBackend;
     use flams_router_base::LoginState;
-    use flams_system::backend::GlobalBackend;
     use flams_system::settings::Settings;
     match LoginState::get_server() {
         LoginState::Admin | LoginState::NoAccounts | LoginState::User { is_admin: true, .. } => {
@@ -25,7 +26,7 @@ pub async fn get_settings() -> Result<(SettingsSpec, usize, bool), ServerFnError
             if let Some(secret) = spec.gitlab.app_secret.as_mut() {
                 *secret = "********".to_string().into_boxed_str();
             }
-            let rels = GlobalBackend::get().triple_store().num_relations();
+            let rels = GlobalBackend.triple_store().num_relations();
             Ok((spec, rels, flams_git::gl::GLInstance::global().has_loaded()))
         }
         _ => Err("Not logged in".to_string().into()),
@@ -37,11 +38,16 @@ pub async fn get_settings() -> Result<(SettingsSpec, usize, bool), ServerFnError
   output=server_fn::codec::Json
 )]
 pub async fn reload() -> Result<(), ServerFnError<String>> {
+    use flams_math_archives::backend::GlobalBackend;
     use flams_router_base::LoginState;
-    use flams_system::backend::GlobalBackend;
     match LoginState::get_server() {
         LoginState::Admin | LoginState::NoAccounts | LoginState::User { is_admin: true, .. } => {
-            let _ = tokio::task::spawn_blocking(move || GlobalBackend::get().reset()).await;
+            let _ = tokio::task::spawn_blocking(move || {
+                GlobalBackend.reset::<flams_system::TokioEngine>(
+                    flams_system::settings::Settings::get().external_url(),
+                )
+            })
+            .await;
             Ok(())
         }
         _ => Err("Not logged in".to_string().into()),
@@ -62,7 +68,7 @@ pub(super) fn Settings() -> impl IntoView {
                 },
                 move |()| {
                     loading.set(false);
-                    format!("success")
+                    "success".to_string()
                 },
             );
             view!(

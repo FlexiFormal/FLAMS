@@ -1,10 +1,10 @@
 use clap::Parser;
-use flams_utils::settings::GitlabSettings;
 use core::panic;
 use flams_system::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
+use flams_utils::settings::GitlabSettings;
 use std::path::{Path, PathBuf};
 
-#[derive(Parser,Debug)]
+#[derive(Parser, Debug)]
 #[command(propagate_version = true, version, about, long_about = Some(
 "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System\n\
 --------------------------------------------------------------------\n\
@@ -69,7 +69,7 @@ struct Cli {
     #[arg(long)]
     pub(crate) gitlab_app_secret: Option<String>,
     #[arg(long)]
-    pub(crate) gitlab_redirect_url: Option<String>
+    pub(crate) gitlab_redirect_url: Option<String>,
 }
 impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
     /// #### Panics
@@ -77,11 +77,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
         let settings = SettingsSpec {
             mathhubs: cli
                 .mathhubs
-                .map(|s| {
-                    s.split(',')
-                        .map(|s| PathBuf::from(s.trim()).into_boxed_path())
-                        .collect()
-                })
+                .map(|s| s.split(',').map(|s| PathBuf::from(s.trim())).collect())
                 .unwrap_or_default(),
             debug: cli.debug,
             database: cli.db.map(PathBuf::into_boxed_path),
@@ -91,7 +87,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
                 port: cli.port.unwrap_or_default(),
                 ip: cli.ip.map(|s| s.parse().expect("Illegal ip")),
                 admin_pwd: cli.admin_pwd,
-                external_url: cli.external_url
+                external_url: cli.external_url,
             },
             buildqueue: BuildQueueSettings {
                 num_threads: cli.threads,
@@ -103,14 +99,15 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
                 app_secret: cli.gitlab_app_secret.map(Into::into),
                 redirect_url: cli.gitlab_redirect_url.map(Into::into),
             },
-            lsp: cli.lsp
+            lsp: cli.lsp,
         };
         (cli.config_file, settings)
     }
 }
 
 impl Cli {
-    #[must_use]#[inline]
+    #[must_use]
+    #[inline]
     fn get() -> Self {
         Self::parse()
     }
@@ -119,13 +116,11 @@ impl Cli {
 #[must_use]
 #[allow(clippy::missing_panics_doc)]
 pub fn get_settings() -> SettingsSpec {
-    fn from_file(cfg_file:&Path) -> SettingsSpec {
-        let cfg = std::fs::read_to_string(cfg_file).unwrap_or_else(|e| {
-            panic!("Could not read config file {}: {e}", cfg_file.display())
-        });
-        let cfg: SettingsSpec = toml::from_str(&cfg).unwrap_or_else(|e| {
-            panic!("Could not parse config file {}: {e}", cfg_file.display())
-        });
+    fn from_file(cfg_file: &Path) -> SettingsSpec {
+        let cfg = std::fs::read_to_string(cfg_file)
+            .unwrap_or_else(|e| panic!("Could not read config file {}: {e}", cfg_file.display()));
+        let cfg: SettingsSpec = toml::from_str(&cfg)
+            .unwrap_or_else(|e| panic!("Could not parse config file {}: {e}", cfg_file.display()));
         cfg
     }
     let cli = Cli::get();

@@ -6,43 +6,10 @@ use crate::{
         path_ext::{PathExt, RelPath},
     },
 };
-use ftml_ontology::utils::time::Timestamp;
-use ftml_uris::{ArchiveUri, UriPath};
+use flams_backend_types::archives::FileStateSummary;
+use ftml_ontology::utils::{RefTree, TreeChild, time::Timestamp};
+use ftml_uris::UriPath;
 use std::path::Path;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct FileStateSummary {
-    pub new: u32,
-    pub stale: u32,
-    pub deleted: u32,
-    pub up_to_date: u32,
-    pub last_built: Timestamp,
-    pub last_changed: Timestamp,
-}
-impl Default for FileStateSummary {
-    fn default() -> Self {
-        Self {
-            new: 0,
-            stale: 0,
-            up_to_date: 0,
-            deleted: 0,
-            last_built: Timestamp::zero(),
-            last_changed: Timestamp::zero(),
-        }
-    }
-}
-impl FileStateSummary {
-    pub fn merge(&mut self, other: Self) {
-        self.new += other.new;
-        self.stale += other.stale;
-        self.deleted += other.deleted;
-        self.up_to_date += other.up_to_date;
-        self.last_built = self.last_built.max(other.last_built);
-        self.last_changed = self.last_changed.max(other.last_changed);
-    }
-}
 
 #[derive(Debug)]
 pub enum SourceEntry {
@@ -102,6 +69,25 @@ impl SourceDir {
     }
 }
 
+impl RefTree for SourceDir {
+    type Child<'a>
+        = &'a SourceEntry
+    where
+        Self: 'a;
+    #[inline]
+    fn tree_children(&self) -> impl Iterator<Item = Self::Child<'_>> {
+        self.children.iter()
+    }
+}
+impl<'a> TreeChild<'a> for &'a SourceEntry {
+    fn tree_children(self) -> impl Iterator<Item = Self> {
+        match self {
+            SourceEntry::Dir(d) => d.children.iter(),
+            SourceEntry::File(_) => [].iter(),
+        }
+    }
+}
+
 /*
 impl TreeChild<SourceEntry> for &SourceEntry {
     fn children<'a>(&self) -> Option<<SourceEntry as TreeLike>::RefIter<'a>>
@@ -141,14 +127,133 @@ impl TreeLike for SourceDir {
  */
 
 impl SourceDir {
+    pub(crate) fn new(
+        //&mut self,
+        //archive: &ArchiveUri,
+        source_dir: &Path,
+        ignore: &IgnoreSource,
+        formats: &[SourceFormatId],
+    ) -> Self {
+        let mut slf = Self::default();
+        let filter = |e: &walkdir::DirEntry| {
+            if ignore.ignores(e.path()) {
+                tracing::trace!("Ignoring {} because of {}", e.path().display(), ignore);
+                false
+            } else {
+                true
+            }
+        };
+        //let mut old = std::mem::take(self);
+        /*let Some(topstr) = top.to_str() else {
+            unreachable!()
+        };*/
+
+        for entry in walkdir::WalkDir::new(source_dir)
+            .min_depth(1)
+            .into_iter()
+            .filter_entry(filter)
+            .filter_map(Result::ok)
+        {
+            let Ok(metadata) = entry.metadata() else {
+                tracing::warn!("Invalid metadata: {}", entry.path().display());
+                continue;
+            };
+            if !metadata.is_file() {
+                continue;
+            }
+            let Some(ext) = entry.path().extension().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Some(format) = formats.iter().find(|t| t.file_extensions.contains(&ext)) else {
+                continue;
+            };
+            let path = entry.path();
+            let Some(relpath) = path.relative_to(&source_dir) else {
+                unreachable!(
+                    "{} does not start with {}???",
+                    path.display(),
+                    source_dir.display()
+                )
+            };
+            let Ok(relative_path) = relpath.parse::<UriPath>() else {
+                unreachable!("invalid uri path {relpath}")
+            };
+            /*
+            let Some(relative_path) = entry.path().to_str() else {
+                tracing::warn!("Invalid path: {}", entry.path().display());
+                continue;
+            };
+            let Some(relative_path) = relative_path.strip_prefix(topstr).and_then(|s| {
+                s.strip_prefix(const_format::concatcp!(
+                    std::path::PathBuf::PATH_SEPARATOR,
+                    "source",
+                    std::path::PathBuf::PATH_SEPARATOR
+                ))
+            }) else {
+                unreachable!("{relative_path} does not start with {topstr}???")
+            };
+
+            #[cfg(target_os = "windows")]
+            let relative_path: Arc<str> = relative_path
+                .replace(std::path::PathBuf::PATH_SEPARATOR, "/")
+                .to_string()
+                .into();
+            #[cfg(not(target_os = "windows"))]
+            let relative_path: Arc<str> = relative_path.to_string().into();
+             */
+
+            let states = FileState::from(source_dir, &metadata, relpath, format);
+            let new = SourceFile {
+                relative_path,
+                format: *format,
+                format_state: states
+                    .iter()
+                    .map(|(_, v)| v)
+                    .min()
+                    .cloned()
+                    .unwrap_or(FileState::New),
+                target_state: states,
+            };
+            //old.remove(new.relative_path.as_ref());
+            /*
+            if let Some(SourceEntry::File(previous)) = old.remove(&new.relative_path) {
+                if previous.format_state != new.format_state {
+                    sender.lazy_send(|| BackendChange::FileChange {
+                        archive: URIRefTrait::owned(archive),
+                        relative_path: new.relative_path.to_string(),
+                        format: new.format,
+                        old: Some(previous.format_state),
+                        new: new.format_state.clone(),
+                    });
+                }
+            } else {
+                sender.lazy_send(|| BackendChange::FileChange {
+                    archive: URIRefTrait::owned(archive),
+                    relative_path: new.relative_path.to_string(),
+                    format: new.format,
+                    old: None,
+                    new: new.format_state.clone(),
+                });
+            }
+             */
+            slf.insert(new);
+        }
+        slf
+    }
+
+    pub(crate) fn update(&mut self, new: Self) {
+        // TODO
+        *self = new;
+    }
+
     #[inline]
     fn index(&self, s: &str) -> Result<usize, usize> {
         self.children.binary_search_by_key(&s, SourceEntry::name)
     }
 
     #[must_use]
-    pub fn find<'s>(&'s self, rel_path: &str) -> Option<SourceEntryRef<'s>> {
-        let mut segments = rel_path.split('/');
+    pub fn find<'s>(&'s self, rel_path: RelPath) -> Option<SourceEntryRef<'s>> {
+        let mut segments = rel_path.steps();
         let mut current = self;
         while let Some(seg) = segments.next() {
             match current.index(seg) {
@@ -168,8 +273,8 @@ impl SourceDir {
     }
 
     #[allow(clippy::match_wildcard_for_single_variants)]
-    fn find_mut<'s>(&'s mut self, rel_path: &str) -> Option<SourceEntryRefMut<'s>> {
-        let mut segments = rel_path.split('/');
+    fn find_mut<'s>(&'s mut self, rel_path: RelPath) -> Option<SourceEntryRefMut<'s>> {
+        let mut segments = rel_path.steps();
         let mut current = self;
         while let Some(seg) = segments.next() {
             match current.index(seg) {
@@ -188,9 +293,9 @@ impl SourceDir {
         Some(SourceEntryRefMut::Dir(current))
     }
 
-    fn remove(&mut self, s: &str) -> Option<SourceEntry> {
-        let Some((p, r)) = s.rsplit_once('/') else {
-            return Some(self.children.remove(self.index(s).ok()?));
+    fn remove(&mut self, s: RelPath) -> Option<SourceEntry> {
+        let Some((p, r)) = s.split_last() else {
+            return Some(self.children.remove(self.index(s.steps().next()?).ok()?));
         };
         if let SourceEntryRefMut::Dir(d) = self.find_mut(p)? {
             let i = d.index(r).ok()?;
@@ -271,119 +376,6 @@ impl SourceDir {
             Ok(i) => current.children[i] = SourceEntry::File(f),
             Err(i) => current.children.insert(i, SourceEntry::File(f)),
         }
-    }
-
-    pub(crate) fn update(
-        &mut self,
-        archive: &ArchiveUri,
-        top: &Path,
-        ignore: &IgnoreSource,
-        formats: &[SourceFormatId],
-    ) {
-        let filter = |e: &walkdir::DirEntry| {
-            if ignore.ignores(e.path()) {
-                tracing::trace!("Ignoring {} because of {}", e.path().display(), ignore);
-                false
-            } else {
-                true
-            }
-        };
-        let mut old = std::mem::take(self);
-        /*let Some(topstr) = top.to_str() else {
-            unreachable!()
-        };*/
-
-        for entry in walkdir::WalkDir::new(LocalArchive::source_dir_of(top))
-            .min_depth(1)
-            .into_iter()
-            .filter_entry(filter)
-            .filter_map(Result::ok)
-        {
-            let Ok(metadata) = entry.metadata() else {
-                tracing::warn!("Invalid metadata: {}", entry.path().display());
-                continue;
-            };
-            if !metadata.is_file() {
-                continue;
-            }
-            let Some(ext) = entry.path().extension().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            let Some(format) = formats.iter().find(|t| t.file_extensions.contains(&ext)) else {
-                continue;
-            };
-            let path = entry.path();
-            let Some(relpath) = path.relative_to(&top) else {
-                unreachable!(
-                    "{} does not start with {}???",
-                    path.display(),
-                    top.display()
-                )
-            };
-            let Ok(relative_path) = relpath.parse::<UriPath>() else {
-                unreachable!("invalid uri path {relpath}")
-            };
-            /*
-            let Some(relative_path) = entry.path().to_str() else {
-                tracing::warn!("Invalid path: {}", entry.path().display());
-                continue;
-            };
-            let Some(relative_path) = relative_path.strip_prefix(topstr).and_then(|s| {
-                s.strip_prefix(const_format::concatcp!(
-                    std::path::PathBuf::PATH_SEPARATOR,
-                    "source",
-                    std::path::PathBuf::PATH_SEPARATOR
-                ))
-            }) else {
-                unreachable!("{relative_path} does not start with {topstr}???")
-            };
-
-            #[cfg(target_os = "windows")]
-            let relative_path: Arc<str> = relative_path
-                .replace(std::path::PathBuf::PATH_SEPARATOR, "/")
-                .to_string()
-                .into();
-            #[cfg(not(target_os = "windows"))]
-            let relative_path: Arc<str> = relative_path.to_string().into();
-             */
-
-            let states = FileState::from(top, &metadata, relpath, format);
-            let new = SourceFile {
-                relative_path,
-                format: *format,
-                format_state: states
-                    .iter()
-                    .map(|(_, v)| v)
-                    .min()
-                    .cloned()
-                    .unwrap_or(FileState::New),
-                target_state: states,
-            };
-            old.remove(new.relative_path.as_ref());
-            /*
-            if let Some(SourceEntry::File(previous)) = old.remove(&new.relative_path) {
-                if previous.format_state != new.format_state {
-                    sender.lazy_send(|| BackendChange::FileChange {
-                        archive: URIRefTrait::owned(archive),
-                        relative_path: new.relative_path.to_string(),
-                        format: new.format,
-                        old: Some(previous.format_state),
-                        new: new.format_state.clone(),
-                    });
-                }
-            } else {
-                sender.lazy_send(|| BackendChange::FileChange {
-                    archive: URIRefTrait::owned(archive),
-                    relative_path: new.relative_path.to_string(),
-                    format: new.format,
-                    old: None,
-                    new: new.format_state.clone(),
-                });
-            }
-             */
-            self.insert(new);
-        }
-        // TODO deleted?
     }
 }
 
