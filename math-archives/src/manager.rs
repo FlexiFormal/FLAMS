@@ -60,17 +60,13 @@ impl ArchiveManager {
         f(&self.tree.read())
     }
 
-    pub fn reinit<R>(
-        &self,
-        f: impl FnOnce(&mut ArchiveTree) -> R,
-        paths: &[&Path],
-        external_url: &str,
-    ) -> R {
-        let ls = self.tree.read().load(paths, external_url, false);
+    pub fn reinit<R>(&self, f: impl FnOnce(&mut ArchiveTree) -> R, paths: &[&Path]) -> R {
+        let ls = self.tree.read().load(paths, false);
         let mut tree = self.tree.write();
         let r = f(&mut tree);
         tree.archives.clear();
         tree.top.clear();
+        *tree.index.write() = None;
         self.modules.clear();
         self.documents.clear();
         self.triple_store.clear();
@@ -130,17 +126,14 @@ impl ArchiveManager {
     }
 
     /// # Errors
-    pub fn load_one(
-        &self,
-        manifest: &Path,
-        rel_path: RelPath,
-        external_url: &str,
-    ) -> Result<(), ManifestParseError> {
-        let a = crate::manifest::parse_manifest(manifest, rel_path, external_url)?;
+    pub fn load_one(&self, manifest: &Path, rel_path: RelPath) -> Result<(), ManifestParseError> {
+        let a = crate::manifest::parse_manifest(manifest, rel_path)?;
         if let Archive::Local(a) = &a {
             a.update_sources();
         }
-        self.tree.write().insert(
+        let mut tree = self.tree.write();
+        *tree.index.write() = None;
+        tree.insert(
             a,
             #[cfg(feature = "rdf")]
             &self.triple_store,
@@ -148,8 +141,8 @@ impl ArchiveManager {
         Ok(())
     }
 
-    pub fn load(&self, paths: &[&Path], external_url: &str) {
-        let ls = self.tree.read().load(paths, external_url, true);
+    pub fn load(&self, paths: &[&Path]) {
+        let ls = self.tree.read().load(paths, true);
         let mut lock = self.tree.write();
         for a in ls.into_iter().flatten() {
             lock.insert(
@@ -169,7 +162,6 @@ impl ArchiveManager {
         format: SourceFormatId,
         default_file: &str,
         content: &str,
-        external_url: &str,
     ) -> Result<PathBuf, NewArchiveError> {
         use std::io::Write;
         let mh = *mathhubs().first().ok_or(NewArchiveError::NoMathHub)?;
@@ -217,9 +209,71 @@ impl ArchiveManager {
         err!(() = std::fs::create_dir_all(&source);CreateDir);
         let default = source.join(default_file);
         dump!(default;"{}",content);
-        self.load_one(&manifest, RelPath::from_id(id), external_url)
+        self.load_one(&manifest, RelPath::from_id(id))
             .expect("this is a bug");
         Ok(root.to_path_buf())
+    }
+
+    pub fn index(&self, external_url: &str) -> (Vec<Institution>, Vec<ArchiveIndex>) {
+        let tree = self.tree.read();
+        if let Some(idx) = (*tree.index.read()).clone() {
+            return match idx {
+                either::Left(r) => r,
+                either::Right(r) => r.recv().expect("this is a bug"),
+            };
+        }
+        let (s, r) = flume::bounded(1);
+        *tree.index.write() = Some(either::Right(r));
+        let (is, ars) = tree.load_index(external_url);
+        *tree.index.write() = Some(either::Left((is.clone(), ars.clone())));
+        while s.receiver_count() > 0 {
+            let _ = s.send((is.clone(), ars.clone()));
+        }
+        (is, ars)
+    }
+
+    fn fut1(
+        r: flume::Receiver<(Vec<Institution>, Vec<ArchiveIndex>)>,
+    ) -> impl Future<Output = (Vec<Institution>, Vec<ArchiveIndex>)> + Send {
+        async move { r.recv_async().await.expect("this is a bug") }
+    }
+    fn ft(
+        v: either::Either<
+            (Vec<Institution>, Vec<ArchiveIndex>),
+            flume::Receiver<(Vec<Institution>, Vec<ArchiveIndex>)>,
+        >,
+    ) -> impl Future<Output = (Vec<Institution>, Vec<ArchiveIndex>)> + Send {
+        match v {
+            either::Left(r) => either::Left(std::future::ready(r)),
+            either::Right(r) => either::Right(Self::fut1(r)),
+        }
+    }
+
+    pub fn index_async<A: AsyncEngine>(
+        external_url: impl Fn() -> &'static str + Send + Sync + 'static,
+    ) -> impl Future<Output = (Vec<Institution>, Vec<ArchiveIndex>)> + Send {
+        let tree = crate::backend::GlobalBackend.tree.read();
+        let idx = (*tree.index.read()).clone();
+        if let Some(idx) = idx {
+            return either::Left(Self::ft(idx));
+        }
+        let (s, r) = flume::bounded(1);
+        *tree.index.write() = Some(either::Right(r));
+        drop(tree);
+        either::Right(async move {
+            let (is, ars) = A::block_on(move || {
+                let tree = crate::backend::GlobalBackend.tree.read();
+                let (is, ars) = tree.load_index(external_url());
+                *tree.index.write() = Some(either::Left((is.clone(), ars.clone())));
+                drop(tree);
+                (is, ars)
+            })
+            .await;
+            while s.receiver_count() > 0 {
+                let _ = s.send_async((is.clone(), ars.clone())).await;
+            }
+            (is, ars)
+        })
     }
 }
 
@@ -227,7 +281,14 @@ impl ArchiveManager {
 pub struct ArchiveTree {
     pub archives: Vec<Archive>,
     pub top: Vec<ArchiveOrGroup>,
-    pub index: (Vec<Institution>, Vec<ArchiveIndex>),
+    index: parking_lot::RwLock<
+        Option<
+            either::Either<
+                (Vec<Institution>, Vec<ArchiveIndex>),
+                flume::Receiver<(Vec<Institution>, Vec<ArchiveIndex>)>,
+            >,
+        >,
+    >, //pub index: (Vec<Institution>, Vec<ArchiveIndex>),
 }
 
 #[derive(Debug)]
@@ -313,7 +374,6 @@ impl ArchiveTree {
     fn load(
         &self,
         paths: &[&Path],
-        external_url: &str,
         skip_existent: bool,
     ) -> std::collections::LinkedList<Vec<Archive>> {
         use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -337,7 +397,7 @@ impl ArchiveTree {
                         if skip_existent && self.get(&id).is_some() {
                             return None;
                         }
-                        match crate::manifest::parse_manifest(&p, rel_path, external_url) {
+                        match crate::manifest::parse_manifest(&p, rel_path) {
                             Ok(r) => Some(r),
                             Err(e) => {
                                 tracing::warn!("{e} in {rel_path}");
@@ -463,6 +523,31 @@ impl ArchiveTree {
             Ok(i) => curr[i] = ArchiveOrGroup::Archive(id),
             Err(i) => curr.insert(i, ArchiveOrGroup::Archive(id)),
         }
+    }
+
+    fn load_index(&self, external_url: &str) -> (Vec<Institution>, Vec<ArchiveIndex>) {
+        let mut is = Vec::new();
+        let mut ai = Vec::new();
+        for a in &self.archives {
+            let Some(p) = crate::LocalArchive::manifest_of(a.path()) else {
+                continue;
+            };
+            let Some(p) = p.parent().map(|p| p.join("archive.json")) else {
+                continue;
+            };
+            let (isi, ars) = crate::manifest::read_archive_json(a.uri(), &p, external_url);
+            for i in isi {
+                if !is.contains(&i) {
+                    is.push(i);
+                }
+            }
+            for a in ars {
+                if !ai.contains(&a) {
+                    ai.push(a);
+                }
+            }
+        }
+        (is, ai)
     }
 }
 

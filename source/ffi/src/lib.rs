@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use flams_lsp::LSPStore;
-use flams_utils::prelude::{HMap, TreeChildIter};
+use flams_utils::prelude::HMap;
 use serde::Serialize;
 
 extern crate tokio;
@@ -57,7 +57,7 @@ pub extern "C" fn initialize() {
         .expect("Failed to initialize Tokio runtime")
         .block_on(async {
             flams_system::settings::Settings::initialize(spec);
-            GlobalBackend::initialize::<flams_system::TokioEngine>("");
+            GlobalBackend::initialize::<flams_system::TokioEngine>();
         });
 }
 

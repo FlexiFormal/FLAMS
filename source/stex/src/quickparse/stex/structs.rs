@@ -1825,8 +1825,11 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
             path
         };
 
-        let uri: ModuleUri =
-            (PathUri::from(archive) / path.parse::<UriPath>().ok()?) | module.parse().ok()?;
+        let uri: ModuleUri = if path.trim().is_empty() {
+            PathUri::from(archive) | module.parse().ok()?
+        } else {
+            (PathUri::from(archive) / path.trim().parse::<UriPath>().ok()?) | module.parse().ok()?
+        };
 
         let p = basepath
             .join(last)

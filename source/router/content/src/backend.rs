@@ -2,11 +2,18 @@ use ftml_uris::{FtmlUri, Uri};
 
 pub struct FtmlBackend;
 impl ftml_backend::GlobalBackend for FtmlBackend {
-    type Error = <Self as ftml_backend::FtmlBackend>::Error; // TODO
+    type Error = <Self::Backend as ftml_backend::FtmlBackend>::Error; // TODO
+    #[cfg(feature = "ssr")]
     type Backend = Self;
+    #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
+    type Backend = ftml_backend::CachedBackend<Self>;
     #[inline]
     fn get() -> &'static Self::Backend {
+        #[cfg(feature = "ssr")]
         static SLF: FtmlBackend = FtmlBackend;
+        #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
+        static SLF: std::sync::LazyLock<ftml_backend::CachedBackend<FtmlBackend>> =
+            std::sync::LazyLock::new(|| ftml_backend::CachedBackend::new(FtmlBackend));
         &SLF
     }
 }

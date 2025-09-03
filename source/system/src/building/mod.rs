@@ -96,9 +96,10 @@ impl BuildTask {
         source: Either<PathBuf, String>,
         rel_path: UriPath,
     ) -> eyre::Result<Self> {
+        let uri = DocumentUri::from_archive_relpath(archive, rel_path.as_ref())
+            .map_err(eyre::Report::new)?;
         Ok(Self(Arc::new(BuildTaskI {
-            uri: DocumentUri::from_archive_relpath(archive, rel_path.as_ref())
-                .map_err(eyre::Report::new)?,
+            uri,
             id,
             steps,
             source,

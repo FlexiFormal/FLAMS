@@ -19,9 +19,6 @@ use leptos::prelude::*;
 
 #[component]
 pub fn VSCodeSearch() -> impl IntoView {
-    inject_css("flams-search-block", include_str!("vscode.css"));
-    use flams_web_utils::components::Themer;
-
     let remote = || leptos_router::hooks::use_query_map().with(|q| q.get("remote"));
 
     let selected_radio = RwSignal::new(Some("doc".to_string()));
@@ -137,6 +134,7 @@ pub fn VSCodeSearch() -> impl IntoView {
         }
     });
 
+    inject_css("flams-search-block", include_str!("vscode.css"));
     view! {
         <div style="display:flex;flex-direction:column;">
             <VSCodeTextbox value=query placeholder="Search"/>
@@ -153,13 +151,13 @@ pub fn VSCodeSearch() -> impl IntoView {
                 <VSCodeCheckbox checked=exs disabled>"Examples"</VSCodeCheckbox>
                 <VSCodeCheckbox checked=asss disabled>"Assertions"</VSCodeCheckbox>
                 <VSCodeCheckbox checked=probs disabled>"Problems"</VSCodeCheckbox>
-                <Themer>{
-                    flams_router_content::Views::top(move || view!{
+                /*<Themer>*///{
+                    //flams_router_content::Views::top(move || view!{
                         {do_results("Local Results",None,local_results)}
                         <div style="margin-top:25px;"></div>
                         {do_results("Remote Results",Some(remote),remote_results)}
-                    })
-                }</Themer>
+                    // })
+                //}//</Themer>
             </div>
         </div>
     }
@@ -415,7 +413,7 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                             };
                             view! {<div>{
                               for css in css { css.inject(); }
-                              flams_router_content::Views::render_ftml(html.into_string())
+                              flams_router_content::Views::render_ftml(html.into_string(),None)
                               //FragmentString(FragmentStringProps{html,uri})
                             }</div>}
                         },
@@ -427,7 +425,9 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                 }
             })
         } else {
-            Either::Right(view!(<Fragment uri=UriComponents::Full(uri.into()) />))
+            Either::Right(
+                view!(<Fragment uri=UriComponents::Full(uri.into()) position=ftml_leptos::SidebarPosition::None/>),
+            )
         }
     }
 }

@@ -95,7 +95,7 @@ pub static MATHHUBS: std::sync::LazyLock<&'static [&'static Path]> = std::sync::
     },
 );
 
-pub fn load_all_archives(external_url: &str) -> impl rayon::iter::ParallelIterator<Item = Archive> {
+pub fn load_all_archives() -> impl rayon::iter::ParallelIterator<Item = Archive> {
     //impl orx_parallel::ParIter<Item = Archive> {
     use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
     use spliter::ParallelSpliterator;
@@ -109,7 +109,7 @@ pub fn load_all_archives(external_url: &str) -> impl rayon::iter::ParallelIterat
                 let parent = unsafe { p.parent().unwrap_unchecked().parent().unwrap_unchecked() };
 
                 let rel_path = parent.relative_to(mh)?;
-                match crate::manifest::parse_manifest(&p, rel_path, external_url) {
+                match crate::manifest::parse_manifest(&p, rel_path) {
                     Ok(r) => Some(r),
                     Err(e) => {
                         tracing::warn!("{e} in {rel_path}");
@@ -150,11 +150,12 @@ fn all_archives() {
         name: "stex",
         file_extensions: &["tex", "ltx"],
         description: "foo",
+        dependencies: |_| Vec::new(),
         targets: &[]
     });
 
     let _ = tracing_subscriber::fmt().try_init();
-    let (i, t) = measure(|| load_all_archives("foo").count());
+    let (i, t) = measure(|| load_all_archives().count());
     tracing::info!("Loaded {i} archives in {t}");
     tracing::info!("Memory: {}", ftml_uris::get_memory_state());
 }

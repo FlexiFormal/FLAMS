@@ -69,7 +69,7 @@ sparesults = { workspace = true, features = ["rdf-star"] }
 oxrdfio = { workspace = true }
 
 serde = { workspace = true }
-bincode = { workspace = true }
+#bincode = { workspace = true }
 eyre = { workspace = true }
 
 #flate2 = {workspace=true,optional=true}

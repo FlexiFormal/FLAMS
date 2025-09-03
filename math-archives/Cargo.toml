@@ -70,6 +70,7 @@ parking_lot = { workspace = true }
 either = { workspace = true }
 walkdir = { workspace = true }
 const_format = { workspace = true }
+#postcard = { workspace = true }
 bincode = { workspace = true, features = ["std", "serde"] }
 triomphe = { workspace = true }
 dashmap = { workspace = true }

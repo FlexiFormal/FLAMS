@@ -43,9 +43,7 @@ pub async fn reload() -> Result<(), ServerFnError<String>> {
     match LoginState::get_server() {
         LoginState::Admin | LoginState::NoAccounts | LoginState::User { is_admin: true, .. } => {
             let _ = tokio::task::spawn_blocking(move || {
-                GlobalBackend.reset::<flams_system::TokioEngine>(
-                    flams_system::settings::Settings::get().external_url(),
-                )
+                GlobalBackend.reset::<flams_system::TokioEngine>();
             })
             .await;
             Ok(())

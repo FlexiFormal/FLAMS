@@ -40,10 +40,10 @@ struct TemporaryBackendI {
 }
 
 impl TemporaryBackend {
-    pub fn reset<A: AsyncEngine>(&self, external_url: &str) {
+    pub fn reset<A: AsyncEngine>(&self) {
         self.inner.modules.clear();
         self.inner.documents.clear();
-        GlobalBackend.reset::<A>(external_url);
+        GlobalBackend.reset::<A>();
     }
 
     #[must_use]
@@ -180,14 +180,9 @@ impl LocalBackend for TemporaryBackend {
             |html| {
                 Ok((
                     html.css.clone(),
-                    html.html[html.body.start + html.inner_offset..html.body.end]
+                    html.html[html.body.start..html.body.end]
                         .to_string()
                         .into_boxed_str(),
-                    /*if full {
-                        html.html[html.body.start..html.body.end].to_string()
-                    } else {
-                        html.html[html.body.start + html.inner_offset..html.body.end].to_string()
-                    }*/
                 ))
             },
         )
@@ -208,14 +203,9 @@ impl LocalBackend for TemporaryBackend {
         if let Some(html) = self.inner.html.get(uri) {
             return Box::pin(std::future::ready(Ok((
                 html.css.clone(),
-                html.html[html.body.start + html.inner_offset..html.body.end]
+                html.html[html.body.start..html.body.end]
                     .to_string()
                     .into_boxed_str(),
-                /*if full {
-                    html.html[html.body.start..html.body.end].to_string()
-                } else {
-                    html.html[html.body.start + html.inner_offset..html.body.end].to_string()
-                }*/
             )))) as _;
         }
         Box::pin(self.inner.parent.get_html_body_async::<A>(uri)) as _
@@ -227,7 +217,7 @@ impl LocalBackend for TemporaryBackend {
             |html| {
                 Ok((
                     html.css.clone(),
-                    html.html[html.body.start + html.inner_offset..html.body.end]
+                    html.html[html.body.start + html.inner_offset..html.body.end - "</body>".len()]
                         .to_string()
                         .into_boxed_str(),
                 ))
@@ -250,7 +240,7 @@ impl LocalBackend for TemporaryBackend {
         if let Some(html) = self.inner.html.get(uri) {
             return Box::pin(std::future::ready(Ok((
                 html.css.clone(),
-                html.html[html.body.start + html.inner_offset..html.body.end]
+                html.html[html.body.start + html.inner_offset..html.body.end - "</body>".len()]
                     .to_string()
                     .into_boxed_str(),
             )))) as _;
@@ -304,10 +294,7 @@ impl LocalBackend for TemporaryBackend {
         Box::pin(self.inner.parent.get_html_fragment_async::<A>(uri, range)) as _
     }
 
-    fn get_reference<T: serde::de::DeserializeOwned>(
-        &self,
-        rf: &DocDataRef<T>,
-    ) -> Result<T, BackendError>
+    fn get_reference<T: bincode::Decode<()>>(&self, rf: &DocDataRef<T>) -> Result<T, BackendError>
     where
         Self: Sized,
     {
@@ -318,7 +305,7 @@ impl LocalBackend for TemporaryBackend {
         let Some(bytes) = html.refs.get(rf.start..rf.end) else {
             return Err(BackendError::OutOfRangeError(rf.start, rf.end));
         };
-        let (r, _) = bincode::serde::decode_from_slice(bytes, bincode::config::standard())?;
+        let (r, _) = bincode::decode_from_slice(bytes, bincode::config::standard())?;
         Ok(r)
     }
 

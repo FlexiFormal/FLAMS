@@ -107,7 +107,7 @@ impl SandboxedBackend {
         fields(path = %self.0.path.display()),
         skip_all
     )]
-    pub fn migrate<A: AsyncEngine>(&self, external_url: &str) -> Result<usize, FileError> {
+    pub fn migrate<A: AsyncEngine>(&self) -> Result<usize, FileError> {
         let mut count = 0;
         let cnt = &mut count;
         self.0.manager.reinit::<Result<(), FileError>>(
@@ -151,11 +151,9 @@ impl SandboxedBackend {
                         Ok(())
                     },
                     crate::mathhub::mathhubs(),
-                    external_url,
                 )
             },
             &[&*self.0.path],
-            external_url,
         )?;
         A::background(|| {
             GlobalBackend
@@ -194,9 +192,7 @@ impl SandboxedBackend {
         then();
         let manifest = LocalArchive::manifest_of(&self.0.path.join(id.as_ref()))
             .expect("archive does not exist");
-        self.0
-            .manager
-            .load_one(&manifest, RelPath::from_id(&id), "");
+        self.0.manager.load_one(&manifest, RelPath::from_id(&id));
     }
 
     fn require_meta_infs(
@@ -295,9 +291,7 @@ impl SandboxedBackend {
 
         let manifest = LocalArchive::manifest_of(&self.0.path.join(id.as_ref()))
             .expect("archive does not exist");
-        self.0
-            .manager
-            .load_one(&manifest, RelPath::from_id(&id), "");
+        self.0.manager.load_one(&manifest, RelPath::from_id(&id));
     }
 
     #[deprecated(note = "needs refactoring: should register with manager, but can't")]
@@ -541,7 +535,7 @@ impl LocalBackend for SandboxedBackend {
         }
     }
 
-    fn get_reference<T: serde::de::DeserializeOwned>(
+    fn get_reference<T: bincode::Decode<()>>(
         &self,
         rf: &ftml_ontology::narrative::DocDataRef<T>,
     ) -> Result<T, BackendError>

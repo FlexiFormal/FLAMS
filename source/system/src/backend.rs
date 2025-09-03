@@ -13,17 +13,17 @@ pub fn initialize<A: AsyncEngine>() {
     if settings.lsp {
         MAIN_BACKEND.get_or_init(|| AnyBackend::Temp(TemporaryBackend::new(AnyBackend::Global)));
     }
-    GlobalBackend.load(settings.mathhubs(), settings.external_url());
+    GlobalBackend.load(settings.mathhubs());
     A::background(|| {
         GlobalBackend
             .triple_store()
             .load_archives(&GlobalBackend.all_archives());
     });
-    #[cfg(feature = "tantivy")]
+    /*#[cfg(feature = "tantivy")]
     {
         #[cfg(feature = "tokio")]
         flams_utils::background(|| crate::search::Searcher::get().reload());
         #[cfg(not(feature = "tokio"))]
         crate::search::Searcher::get().reload();
-    }
+    }*/
 }

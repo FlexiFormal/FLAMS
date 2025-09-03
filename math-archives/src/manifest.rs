@@ -14,17 +14,13 @@ pub struct RepositoryData {
     pub attributes: Vec<(Box<str>, Box<str>)>,
     pub formats: smallvec::SmallVec<SourceFormatId, 1>,
     //pub dependencies: Box<[ArchiveId]>,
-    pub institutions: Box<[Institution]>,
-    pub index: Box<[ArchiveIndex]>,
+    //pub institutions: Box<[Institution]>,
+    //pub index: Box<[ArchiveIndex]>,
 }
 
 #[allow(clippy::too_many_lines)]
 /// # Errors
-pub fn parse_manifest(
-    path: &Path,
-    id: RelPath,
-    external_url: &str,
-) -> Result<Archive, ManifestParseError> {
+pub fn parse_manifest(path: &Path, id: RelPath) -> Result<Archive, ManifestParseError> {
     use std::io::BufRead;
     let Some(top_dir) = path.parent().and_then(Path::parent) else {
         return Err(ManifestParseError::NoParent);
@@ -103,15 +99,16 @@ pub fn parse_manifest(
         return Err(ManifestParseError::NoUrlBase);
     };
     let uri = dom_uri & id;
-    let (institutions, index) =
-        read_archive_json(&uri, &path.with_file_name("archive.json"), external_url);
+    /*let (institutions, index) =
+    read_archive_json(&uri, &path.with_file_name("archive.json"), external_url);
+     */
     if let Some(kind) = kind {
         let data = RepositoryData {
             uri,
             attributes,
             formats,
-            institutions,
-            index, //dependencies: dependencies.into(),
+            //institutions,
+            //index, //dependencies: dependencies.into(),
         };
         (kind.make_new)(data, top_dir).map_or_else(
             |e| Err(ManifestParseError::InvalidKind(kind.name, e)),
@@ -122,8 +119,8 @@ pub fn parse_manifest(
             uri,
             //attributes,
             formats,
-            institutions,
-            index,
+            //institutions,
+            //index,
             ignore,
             out_path,
             source,

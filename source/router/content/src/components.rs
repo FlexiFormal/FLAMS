@@ -2,7 +2,7 @@
 
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_dom::{FtmlViews, utils::css::CssExt};
-use ftml_ontology::utils::Css;
+use ftml_leptos::SidebarPosition;
 use ftml_uris::{
     DocumentUri, Uri,
     components::{
@@ -15,6 +15,7 @@ use leptos_router::hooks::use_query_map;
 
 #[component(transparent)]
 pub fn URITop() -> impl IntoView {
+    use crate::components::Fragment;
     use leptos::either::EitherOf3::{A, B, C};
     use leptos_meta::Stylesheet;
     view! {
@@ -24,7 +25,7 @@ pub fn URITop() -> impl IntoView {
                 m.as_document().map_or_else(
                     |_| match m.as_comps() {
                         Ok(uri) => B(
-                            view!(<Fragment uri=uri.into()/>)
+                            view!(<Fragment uri=uri.into() position=SidebarPosition::Next/>)
                         ),
                         Err(e) => C(flams_web_utils::components::display_error(
                             format!("Invalid URI: {e}").into(),
@@ -94,19 +95,21 @@ pub fn DocumentOfTop(uri: Uri) -> impl IntoView {
 }
 
 #[component]
-pub fn Fragment(uri: UriComponents) -> impl IntoView {
+pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView {
     use ftml_dom::utils::css::CssExt;
     ftml_leptos::utils::wait_and_then(
-        move || UriComponentTuple::from(uri.clone()).apply1(super::server_fns::fragment, None),
+        move || UriComponentTuple::from(uri).apply1(super::server_fns::fragment, None),
         move |(uri, css, html)| {
             for css in css {
-                css.inject()
+                css.inject();
             }
             //leptos::logging::log!("Here 2: {html}");
             if let Uri::DocumentElement(uri) = uri {
                 leptos::either::Either::Left(crate::Views::document(
                     DocumentUri::no_doc().clone(),
-                    || crate::Views::render_ftml(html.into_string()),
+                    SidebarPosition::None,
+                    true,
+                    move || crate::Views::render_ftml(html.into_string(), None),
                 ))
             } else {
                 leptos::either::Either::Right(view! {
@@ -114,7 +117,9 @@ pub fn Fragment(uri: UriComponents) -> impl IntoView {
                     <div style="padding: 0 60px;--rustex-this-width:590px;">
                     {crate::Views::document(
                         DocumentUri::no_doc().clone(),
-                        || crate::Views::render_ftml(html.into_string()),
+                        position,
+                        true,
+                        move || crate::Views::render_ftml(html.into_string(),None),
                     )}
                     </div>
                 })
@@ -128,11 +133,13 @@ pub fn Fragment(uri: UriComponents) -> impl IntoView {
 pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
     wait_and_then_fn(
         move || DocumentUriComponentTuple::from(doc.clone()).apply(super::server_fns::document),
-        |(uri, css, html)| {
+        move |(uri, css, html)| {
             for css in css {
                 css.inject();
             }
-            crate::Views::document(uri, || crate::Views::render_ftml(html.into_string()))
+            crate::Views::document(uri, SidebarPosition::Next, true, move || {
+                crate::Views::render_ftml(html.into_string(), None)
+            })
             /*view! {<div>
                 <DocumentString html uri toc=TOCSource::Get omdoc=OMDocSource::Get/>
             </div>}*/
@@ -145,10 +152,14 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> impl IntoView {
     let doc: UriComponents = doc.into();
     wait_and_then_fn(
         move || UriComponentTuple::from(doc.clone()).apply1(super::server_fns::fragment, None),
-        |(uri, css, html)| {
+        move |(uri, css, html)| {
             view! {<div>{
                 for css in css { css.inject(); }
-                crate::Views::document(DocumentUri::no_doc().clone(), || crate::Views::render_ftml(html.into_string()))
+                crate::Views::document(
+                    DocumentUri::no_doc().clone(),
+                    SidebarPosition::Next,
+                    true,
+                    move || crate::Views::render_ftml(html.into_string(),None))
             }</div>}
         },
     )

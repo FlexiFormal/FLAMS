@@ -119,10 +119,7 @@ pub trait LocalBackend {
         Self: Sized;
 
     /// # Errors
-    fn get_reference<T: serde::de::DeserializeOwned>(
-        &self,
-        rf: &DocDataRef<T>,
-    ) -> Result<T, BackendError>
+    fn get_reference<T: bincode::Decode<()>>(&self, rf: &DocDataRef<T>) -> Result<T, BackendError>
     where
         Self: Sized;
 
@@ -355,7 +352,7 @@ impl LocalBackend for AnyBackend {
         }
     }
 
-    fn get_reference<T: serde::de::DeserializeOwned>(
+    fn get_reference<T: bincode::Decode<()>>(
         &self,
         rf: &ftml_ontology::narrative::DocDataRef<T>,
     ) -> Result<T, BackendError>

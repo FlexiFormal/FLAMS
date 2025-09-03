@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 #[cfg(feature = "ssr")]
 fn main() {
     use flams::server::settings;

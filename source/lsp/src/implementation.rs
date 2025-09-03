@@ -19,7 +19,7 @@ use flams_math_archives::{
     backend::{GlobalBackend, LocalBackend},
     formats::FormatOrTargets,
     utils::path_ext::RelPath,
-    LocalArchive, MathArchive,
+    MathArchive,
 };
 use flams_stex::quickparse::stex::{AnnotIter, STeXAnnot};
 use flams_system::TokioEngine;
@@ -140,7 +140,6 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 flams_stex::STEX.id(),
                 "helloworld.tex",
                 include_str!("stex_default.txt"),
-                "",
             ) {
                 Ok(path) => {
                     let _ = client.show_message(lsp::ShowMessageParams {
@@ -434,7 +433,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
         tracing::info!("LSP: reload");
-        state.backend().reset::<TokioEngine>("");
+        state.backend().reset::<TokioEngine>();
         let _ = tokio::task::spawn_blocking(move || {
             state.load_mathhubs(client.clone());
             client.update_mathhub();
@@ -488,7 +487,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             let client = progress.client();
             drop(progress);
             if rescan {
-                state.backend().reset::<TokioEngine>("");
+                state.backend().reset::<TokioEngine>();
                 let _ = tokio::task::spawn_blocking(move || {
                     // <- necessary, but I don't quite understand why
                     state.load_mathhubs(client.clone());

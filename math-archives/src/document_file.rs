@@ -67,7 +67,7 @@ impl DocumentFile {
 
     /// # Errors
     #[inline]
-    pub fn get_data<T: serde::de::DeserializeOwned>(
+    pub fn get_data<T: bincode::de::Decode<()>>(
         &self,
         start: usize,
         end: usize,

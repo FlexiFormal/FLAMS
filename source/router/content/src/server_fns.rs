@@ -434,7 +434,7 @@ ftml_uris::compfun! {
         uri: Uri
     ) -> Result<String, ServerFnError<String>> {
         use ftml_uris::NarrativeUri;
-        use flams_utils::Hexable;
+        use ftml_ontology::utils::Hexable;
         use flams_web_utils::blocking_server_fn;
         let Result::<UriComponents, _>::Ok(comps) = uri else {
             return Err("invalid uri components".to_string().into());
@@ -662,18 +662,10 @@ mod server {
                             .ok_or_else(|| format!("Error retrieving title").into())
                              */
                     }
-                    DocumentElement::Problem(Problem { data, .. }) => {
-                        let Some(title) = &data.title else {
-                            return Ok((
-                                Vec::new().into_boxed_slice(),
-                                String::new().into_boxed_str(),
-                            ));
-                        };
-                        backend()
-                            .get_html_fragment_async::<TokioEngine>(uri.document_uri(), *title)
-                            .await
-                            .map_err(|_| format!("Error retrieving title").into())
-                    }
+                    DocumentElement::Problem(Problem { data, .. }) => Ok((
+                        Vec::new().into_boxed_slice(),
+                        data.title.clone().unwrap_or_default(),
+                    )),
                     _ => Err(format!("Narrative element has no title").into()),
                 }
             }
@@ -906,7 +898,6 @@ mod server {
     }
 
     async fn get_definitions(uri: SymbolUri) -> Option<(Box<[Css]>, Box<str>)> {
-        //println!("Getting definitions using query: {}",query);
         tokio::task::spawn_blocking(move || {
             let iri = uri.to_iri();
             let query = flams_math_archives::sparql!(SELECT DISTINCT ?x WHERE {

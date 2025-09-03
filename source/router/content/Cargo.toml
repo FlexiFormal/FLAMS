@@ -28,6 +28,7 @@ hydrate = [
     "thaw/hydrate",
     "ftml-leptos/hydrate",
     "flams-web-utils/hydrate",
+    "ftml-backend/cached",
 ]
 docs-only = []
 

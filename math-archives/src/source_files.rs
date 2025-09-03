@@ -8,7 +8,7 @@ use crate::{
 };
 use flams_backend_types::archives::FileStateSummary;
 use ftml_ontology::utils::{RefTree, TreeChild, time::Timestamp};
-use ftml_uris::UriPath;
+use ftml_uris::{Language, UriPath};
 use std::path::Path;
 
 #[derive(Debug)]
@@ -88,44 +88,6 @@ impl<'a> TreeChild<'a> for &'a SourceEntry {
     }
 }
 
-/*
-impl TreeChild<SourceEntry> for &SourceEntry {
-    fn children<'a>(&self) -> Option<<SourceEntry as TreeLike>::RefIter<'a>>
-    where
-        Self: 'a,
-    {
-        TreeLike::children(*self)
-    }
-}
-impl TreeLike for SourceEntry {
-    type Child<'a> = &'a Self;
-    type RefIter<'a> = std::slice::Iter<'a, Self>;
-    fn children(&self) -> Option<Self::RefIter<'_>> {
-        match self {
-            Self::Dir(dir) => Some(dir.children.iter()),
-            Self::File(_) => None,
-        }
-    }
-}
-
-impl TreeChild<SourceDir> for &SourceEntry {
-    fn children<'a>(&self) -> Option<<SourceEntry as TreeLike>::RefIter<'a>>
-    where
-        Self: 'a,
-    {
-        TreeLike::children(*self)
-    }
-}
-
-impl TreeLike for SourceDir {
-    type Child<'a> = &'a SourceEntry;
-    type RefIter<'a> = std::slice::Iter<'a, SourceEntry>;
-    fn children(&self) -> Option<Self::RefIter<'_>> {
-        Some(self.children.iter())
-    }
-}
- */
-
 impl SourceDir {
     pub(crate) fn new(
         //&mut self,
@@ -147,6 +109,9 @@ impl SourceDir {
         /*let Some(topstr) = top.to_str() else {
             unreachable!()
         };*/
+        let Some(top_dir) = source_dir.parent() else {
+            return slf;
+        };
 
         for entry in walkdir::WalkDir::new(source_dir)
             .min_depth(1)
@@ -202,7 +167,7 @@ impl SourceDir {
             let relative_path: Arc<str> = relative_path.to_string().into();
              */
 
-            let states = FileState::from(source_dir, &metadata, relpath, format);
+            let states = FileState::from(top_dir, &metadata, relpath, format);
             let new = SourceFile {
                 relative_path,
                 format: *format,
@@ -422,7 +387,20 @@ impl FileState {
         relative_path: RelPath<'_>,
         format: &SourceFormat,
     ) -> Vec<(BuildTargetId, Self)> {
-        let out = LocalArchive::out_dir_of(top).join(relative_path);
+        use std::str::FromStr;
+        let mut steps = relative_path.steps();
+        let Some(mut last) = steps.next_back() else {
+            unreachable!("empty RelPath");
+        };
+        let out = steps.fold(LocalArchive::out_dir_of(top), |p, s| p.join(s));
+        if let Some((first, lang)) = last.rsplit_once('.')
+            && Language::from_str(lang).is_err()
+        {
+            last = first;
+        }
+        let out = out.join(last);
+
+        //let out = LocalArchive::out_dir_of(top).join(relative_path);
         let mut ret = Vec::new();
         for t in format.targets {
             let t = *t;

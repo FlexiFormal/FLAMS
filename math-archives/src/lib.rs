@@ -43,6 +43,7 @@ use ftml_uris::{
     UriWithPath,
 };
 use std::{
+    hint::unreachable_unchecked,
     path::{Path, PathBuf},
     str,
 };
@@ -289,8 +290,8 @@ pub struct LocalArchive {
     pub(crate) formats: smallvec::SmallVec<SourceFormatId, 1>,
     //pub dependencies: Box<[ArchiveId]>,
     pub(crate) file_state: parking_lot::RwLock<SourceDir>,
-    pub(crate) institutions: Box<[Institution]>,
-    pub(crate) index: Box<[ArchiveIndex]>,
+    //pub(crate) institutions: Box<[Institution]>,
+    //pub(crate) index: Box<[ArchiveIndex]>,
     pub ignore: IgnoreSource,
     #[cfg(feature = "git")]
     pub(crate) is_managed: std::sync::OnceLock<Option<flams_git::GitUrl>>,
@@ -320,7 +321,7 @@ impl MathArchive for LocalArchive {
             return Err(BackendError::NotFound);
         }
         let file = std::io::BufReader::new(std::fs::File::open(out)?);
-        let ret = bincode::serde::decode_from_reader(file, bincode::config::standard())?;
+        let ret = bincode::decode_from_reader(file, bincode::config::standard())?;
         Ok(ret)
     }
 
@@ -342,7 +343,7 @@ impl MathArchive for LocalArchive {
                 return Err(BackendError::NotFound);
             }
             let file = std::io::BufReader::new(std::fs::File::open(out)?);
-            let ret = bincode::serde::decode_from_reader(file, bincode::config::standard())?;
+            let ret = bincode::decode_from_reader(file, bincode::config::standard())?;
             Ok(ret)
         })
     }
@@ -374,7 +375,6 @@ impl BuildableArchive for LocalArchive {
         #[cfg(feature = "rdf")] relational: &RDFStore,
         #[cfg(feature = "rdf")] load: bool,
     ) -> std::result::Result<(), ArtifactSaveError> {
-        // TODO TANTIVY
         let out = self.out_path_of(in_doc.path(), &in_doc.name, rel_path, in_doc.language);
         if let Err(e) = std::fs::create_dir_all(&out) {
             return Err(ArtifactSaveError::Fs(FileError::Creation(out, e)));
@@ -413,7 +413,8 @@ impl BuildableArchive for LocalArchive {
                 let file = std::fs::File::create(&out)
                     .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out, e)))?;
                 let mut buf = std::io::BufWriter::new(file);
-                bincode::serde::encode_into_std_write(m, &mut buf, bincode::config::standard())?;
+                bincode::encode_into_std_write(m, &mut buf, bincode::config::standard())?;
+                //postcard::to_io(m, &mut buf)?;
             }
         }
         Ok(())
@@ -454,14 +455,19 @@ impl LocallyBuilt for LocalArchive {
     ) -> PathBuf {
         if let Some(rp) = rel_path {
             use std::str::FromStr;
-            let mut rel_path = rp.as_ref();
-            if let Some((first, last)) = rp.steps().last().and_then(|s| s.rsplit_once('.'))
-                && Language::from_str(last).is_err()
+            let mut steps = rp.steps();
+            let Some(mut last) = steps.next_back() else {
+                //SAFETY steps is never empty
+                unsafe { unreachable_unchecked() }
+            };
+            let out = steps.fold(self.out_dir().to_path_buf(), |p, s| p.join(s));
+            if let Some((first, lang)) = last.rsplit_once('.')
+                && Language::from_str(lang).is_err()
             {
-                rel_path = first;
+                last = first;
             }
 
-            return self.out_dir().join(rel_path);
+            return out.join(last);
         }
         self.rel_path_of(path, doc_name, language).map_or_else(
             || {
@@ -577,50 +583,4 @@ impl LocalArchive {
         }
         None
     }
-    /*
-    pub(crate) fn out_path_from_doc(
-        &self,
-        path: Option<&UriPath>,
-        doc_name: &SimpleUriName,
-        language: Language,
-        filename: &str,
-    ) -> Option<PathBuf> {
-        let out = path.map_or_else(
-            || self.out_dir().to_path_buf(),
-            |n| {
-                n.steps()
-                    .fold(self.out_dir().to_path_buf(), |p, n| p.join(n))
-            },
-        );
-
-        for d in std::fs::read_dir(&out).ok()? {
-            let Ok(dir) = d else { continue };
-            let Ok(m) = dir.metadata() else { continue };
-            if !m.is_dir() {
-                continue;
-            }
-            let dname = dir.file_name();
-            let Some(d) = dname.to_str() else { continue };
-            if !d.starts_with(doc_name) {
-                continue;
-            }
-            let rest = &d[doc_name.len()..];
-            if !rest.is_empty() && !rest.starts_with('.') {
-                continue;
-            }
-            let rest = rest.strip_prefix('.').unwrap_or(rest);
-            if rest.contains('.') {
-                let lang: &'static str = language.into();
-                if !rest.starts_with(lang) {
-                    continue;
-                }
-            }
-            let p = dir.path().join(filename);
-            if p.exists() {
-                return Some(p);
-            }
-        }
-        None
-    }
-     */
 }

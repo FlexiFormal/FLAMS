@@ -37,16 +37,21 @@ impl std::ops::Deref for GlobalBackend {
 }
 
 impl GlobalBackend {
-    pub fn initialize<A: AsyncEngine>(external_url: &str) {
-        Self.load(crate::mathhub::mathhubs(), external_url);
+    #[inline]
+    #[must_use]
+    pub fn get(&self) -> &'static ArchiveManager {
+        &GLOBAL
+    }
+    pub fn initialize<A: AsyncEngine>() {
+        Self.load(crate::mathhub::mathhubs());
         #[cfg(feature = "rdf")]
         {
             A::background(|| Self.triple_store().load_archives(&Self.all_archives()));
         }
     }
 
-    pub fn reset<A: AsyncEngine>(self, external_url: &str) {
-        self.reinit(|_| (), crate::mathhub::mathhubs(), external_url);
+    pub fn reset<A: AsyncEngine>(self) {
+        self.reinit(|_| (), crate::mathhub::mathhubs());
         #[cfg(feature = "rdf")]
         {
             A::background(|| Self.triple_store().load_archives(&Self.all_archives()));
@@ -250,10 +255,7 @@ impl LocalBackend for ArchiveManager {
         )
     }
 
-    fn get_reference<T: serde::de::DeserializeOwned>(
-        &self,
-        rf: &DocDataRef<T>,
-    ) -> Result<T, BackendError>
+    fn get_reference<T: bincode::Decode<()>>(&self, rf: &DocDataRef<T>) -> Result<T, BackendError>
     where
         Self: Sized,
     {
@@ -291,7 +293,7 @@ impl LocalBackend for ArchiveManager {
     {
         if uri.is_top() {
             if let Some(m) = self.modules.has(uri) {
-                return either::Left(std::future::ready(m.clone()));
+                return either::Left(std::future::ready(m));
             }
             let lm =
                 self.load_module_async::<A>(uri.archive_uri(), uri.path(), uri.name().as_ref());
@@ -430,7 +432,6 @@ impl ArchiveManager {
             .into_uris::<DocumentElementUri>()
             .filter_map(|uri| {
                 use ftml_ontology::narrative::elements::notations::NotationReference;
-
                 let notation = self
                     .get_typed_document_element::<NotationReference>(&uri)
                     .ok()?;

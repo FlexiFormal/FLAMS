@@ -182,8 +182,7 @@ impl Artifact for IndexFile {
             &self.0,
             &mut std::io::BufWriter::new(file),
             bincode::config::standard(),
-        )
-        .map_err(ArtifactSaveError::Encode)?;
+        )?;
         Ok(())
     }
 }

@@ -238,7 +238,7 @@ fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> impl IntoVie
                     view!{
                         //<span>"Here: "{uri.to_string()}</span>
                         //<div>"---"</div>
-                        <Fragment uri=UriComponents::Full(uri.into()) />
+                        <Fragment uri=UriComponents::Full(uri.into()) position=ftml_leptos::SidebarPosition::None/>
                         //<div>"---"</div>
                     }
                   }).collect_view()
@@ -336,7 +336,7 @@ fn do_para(
           <CardPreview>
             <div style="padding:0 5px;max-width:100%">
               <div style="width:100%;color:black;background-color:white;">
-                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=UriComponents::Full(uri.into()) /></Scrollbar>
+                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=UriComponents::Full(uri.into()) position=ftml_leptos::SidebarPosition::None /></Scrollbar>
               </div>
             </div>
           </CardPreview>

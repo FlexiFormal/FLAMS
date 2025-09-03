@@ -114,22 +114,22 @@ impl<const NUM_FIELDS: usize> LazyFileReader<NUM_FIELDS> {
         then(file, len)
     }
     /// # Errors
-    pub fn read<T: serde::de::DeserializeOwned>(&mut self, index: usize) -> Result<T, ReadError> {
+    pub fn read<T: bincode::de::Decode<()>>(&mut self, index: usize) -> Result<T, ReadError> {
         self.do_read(index, 0, |file, _| {
-            Ok(bincode::serde::decode_from_reader(
+            Ok(bincode::decode_from_reader(
                 std::io::BufReader::new(file),
                 bincode::config::standard(),
             )?)
         })
     }
     /// # Errors
-    pub fn read_range<T: serde::de::DeserializeOwned>(
+    pub fn read_range<T: bincode::de::Decode<()>>(
         &mut self,
         index: usize,
         offset: usize,
     ) -> Result<T, ReadError> {
         self.do_read(index, offset as u64, |file, _| {
-            Ok(bincode::serde::decode_from_reader(
+            Ok(bincode::decode_from_reader(
                 std::io::BufReader::new(file),
                 bincode::config::standard(),
             )?)
@@ -241,7 +241,7 @@ impl<const NUM_FIELDS: usize> LazyFileWriter<NUM_FIELDS> {
 
     /// # Errors
     #[allow(clippy::cast_possible_truncation)]
-    pub fn write<T: serde::Serialize + std::fmt::Debug>(
+    pub fn write<T: bincode::Encode + std::fmt::Debug>(
         &mut self,
         value: &T,
     ) -> Result<(), WriteError> {
@@ -252,8 +252,7 @@ impl<const NUM_FIELDS: usize> LazyFileWriter<NUM_FIELDS> {
             });
         }
         let mut buf = std::io::BufWriter::new(&mut self.file);
-        let length =
-            bincode::serde::encode_into_std_write(value, &mut buf, bincode::config::standard())?;
+        let length = bincode::encode_into_std_write(value, &mut buf, bincode::config::standard())?;
         buf.flush()?;
         drop(buf);
         self.written += 1;
@@ -435,7 +434,7 @@ impl<V: LazyFieldValue + deepsize::DeepSizeOf, const INDEX: usize> deepsize::Dee
     }
 }
 
-impl<T: serde::de::DeserializeOwned + Clone + Send + Sync> __private::LazyField for T {
+impl<T: bincode::de::Decode<()> + Clone + Send + Sync> __private::LazyField for T {
     fn get<const I: usize>(index: usize, reader: &mut LazyFileReader<I>) -> Result<Self, ReadError>
     where
         Self: Sized,
@@ -504,7 +503,7 @@ impl<const INDEX: usize> BytesField<INDEX> {
     }
 
     /// # Errors
-    pub fn deserialize_range<const TOTAL: usize, T: serde::de::DeserializeOwned>(
+    pub fn deserialize_range<const TOTAL: usize, T: bincode::de::Decode<()>>(
         &self,
         reader: &LazyFile<TOTAL>,
         offset: usize,

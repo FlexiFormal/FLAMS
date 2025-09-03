@@ -84,7 +84,6 @@ impl RDFStore {
         mut q: oxigraph::sparql::Query,
     ) -> Result<sparql::QueryResult, sparql::QueryError> {
         q.dataset_mut().set_default_graph_as_union();
-
         // TODO THIS NEEDS TO BE TIMEOUTED!!
         Ok(self.store.query(q).map(sparql::QueryResult)?)
     }

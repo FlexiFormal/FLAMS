@@ -249,12 +249,12 @@ pub async fn archive_stream(
   output=server_fn::codec::Json
 )]
 pub async fn index() -> Result<(Vec<Institution>, Vec<ArchiveIndex>), ServerFnError<String>> {
-    use flams_math_archives::backend::GlobalBackend;
-    flams_web_utils::blocking_server_fn(|| {
-        let (a, b) = GlobalBackend.with_tree(|t| t.index.clone());
-        Ok((a, b))
-    })
-    .await
+    Ok(
+        flams_math_archives::manager::ArchiveManager::index_async::<flams_system::TokioEngine>(
+            || flams_system::settings::Settings::get().external_url(),
+        )
+        .await,
+    )
 }
 
 #[cfg(feature = "ssr")]

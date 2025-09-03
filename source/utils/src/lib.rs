@@ -54,7 +54,7 @@ pub fn in_span<F: FnOnce() -> R, R>(f: F) -> impl FnOnce() -> R {
         f()
     }
 }
-
+/*
 #[cfg(feature = "serde")]
 pub trait Hexable: Sized {
     /// #### Errors
@@ -88,7 +88,7 @@ impl<T: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>> Hexable for
             .map_err(Into::into)
     }
 }
-
+*/
 pub mod fs {
     use std::path::Path;
 

@@ -1,5 +1,4 @@
 use ftml_uris::{ArchiveId, ArchiveUri, DocumentUri, UriWithArchive, errors::UriParseError};
-use std::path::Path;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

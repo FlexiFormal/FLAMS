@@ -1,6 +1,4 @@
-use flams_math_archives::backend::{
-    AnyBackend, GlobalBackend, SandboxedBackend, SandboxedRepository,
-};
+use flams_math_archives::backend::{AnyBackend, SandboxedBackend, SandboxedRepository};
 use flams_utils::vecmap::VecMap;
 use std::{fmt::Display, num::NonZeroU32, sync::atomic::AtomicU8};
 
@@ -211,10 +209,7 @@ impl QueueManager {
         let AnyBackend::Sandbox(sandbox) = queue.backend() else {
             impossible!()
         };
-        Ok((
-            r,
-            sandbox.migrate::<SyncEngine>(Settings::get().external_url())?,
-        ))
+        Ok((r, sandbox.migrate::<SyncEngine>()?))
     }
 
     #[allow(clippy::significant_drop_tightening)]
