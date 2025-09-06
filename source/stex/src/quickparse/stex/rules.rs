@@ -1444,7 +1444,7 @@ stex!(p => svar[optname:!name]{arg:!name} => {
     (arg.0,None)
   };
   let Ok(name) = Name::from_str(name.as_ref()) else {
-    p.tokenizer.problem(name_range.unwrap().start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
+    p.tokenizer.problem(name_range.unwrap_or_default().start, format!("Invalid uri segment {}",name),DiagnosticLevel::Error);
     return MacroResult::Simple(svar)
   };
   MacroResult::Success(STeXToken::Svar {
