@@ -83,8 +83,8 @@ icondata_ai = { workspace = true }
 icondata_bi = { workspace = true }
 
 serde = { workspace = true }
+serde_json = { workspace = true }
 #async-trait = { workspace = true }
 tokio = { workspace = true, optional = true }
 leptos_axum = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
-#serde_json = { workspace = true, optional = true }

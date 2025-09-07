@@ -38,13 +38,22 @@ const QUERY: &str = r"SELECT ?x ?y WHERE {
 #[component]
 pub fn Query() -> impl IntoView {
     use leptos::form::ActionForm;
+    use thaw::Checkbox;
     inject_css("flams-query", include_str!("query.css"));
 
     let action = ServerAction::<QueryApi>::new();
     let rf = NodeRef::<leptos::html::Div>::new();
+    let pretty_print = RwSignal::new(false);
     let result = Memo::new(move |_| {
         action.value().get().map(|result| match result {
-            Ok(r) => r,
+            Ok(r) => {
+                if rf.get() {
+                    serde_json::from_str::<serde_json::Value>(r)
+                        .map_or_else(|e| format!("Error: {e}"), |v| format!("{v:#}"))
+                } else {
+                    r
+                }
+            }
             Err(e) => format!("Error: {e}"),
         })
     });
@@ -58,6 +67,7 @@ pub fn Query() -> impl IntoView {
             </span>
             <br/><input type="submit" value="Query"/>
         </ActionForm>
+        <Checkbox checked=pretty_print label="pretty printed"/>
         <div node_ref=rf style="text-align:left;margin:10px;font-family:monospace;white-space:pre;border:var(--strokeWidthThickest) solid var(--colorNeutralStroke1);text-wrap:pretty;">
             {move || result.get().unwrap_or_default()}
         </div>
