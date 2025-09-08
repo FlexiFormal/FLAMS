@@ -47,8 +47,8 @@ pub fn Query() -> impl IntoView {
     let result = Memo::new(move |_| {
         action.value().get().map(|result| match result {
             Ok(r) => {
-                if rf.get() {
-                    serde_json::from_str::<serde_json::Value>(r)
+                if pretty_print.get() {
+                    serde_json::from_str::<serde_json::Value>(&r)
                         .map_or_else(|e| format!("Error: {e}"), |v| format!("{v:#}"))
                 } else {
                     r
