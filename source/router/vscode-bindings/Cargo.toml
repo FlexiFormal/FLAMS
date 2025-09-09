@@ -10,7 +10,7 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "leptos_router/ssr",
-    "ftml-leptos/ssr",
+    "ftml-components/ssr",
     "ftml-dom/ssr",
     "flams-web-utils/ssr",
     "flams-router-login/ssr",
@@ -19,7 +19,7 @@ ssr = [
 ]
 hydrate = [
     "leptos/hydrate",
-    "ftml-leptos/hydrate",
+    "ftml-components/hydrate",
     "ftml-dom/hydrate",
     "flams-router-login/hydrate",
     "flams-web-utils/hydrate",
@@ -30,7 +30,7 @@ hydrate = [
 docs-only = []
 
 [dependencies]
-ftml-leptos = { workspace = true }
+ftml-components = { workspace = true }
 ftml-dom = { workspace = true }
 
 flams-web-utils = { workspace = true }

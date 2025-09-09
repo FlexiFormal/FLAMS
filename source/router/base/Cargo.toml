@@ -9,7 +9,7 @@ workspace = true
 
 [features]
 ssr = [
-    #"ftml-leptos/ssr",
+    #"ftml-components/ssr",
     "dep:flams-math-archives",
     "leptos/ssr",
     "thaw/ssr",
@@ -25,7 +25,7 @@ hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
     "flams-web-utils/hydrate",
-    #"ftml-leptos/hydrate",
+    #"ftml-components/hydrate",
     "dep:bytes",
     "dep:http",
     "dep:futures",

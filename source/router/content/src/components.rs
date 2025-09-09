@@ -1,8 +1,8 @@
 #![allow(clippy::must_use_candidate)]
 
 use flams_web_utils::components::wait_and_then_fn;
+use ftml_components::SidebarPosition;
 use ftml_dom::{FtmlViews, utils::css::CssExt};
-use ftml_leptos::SidebarPosition;
 use ftml_uris::{
     DocumentUri, Uri,
     components::{
@@ -97,7 +97,7 @@ pub fn DocumentOfTop(uri: Uri) -> impl IntoView {
 #[component]
 pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView {
     use ftml_dom::utils::css::CssExt;
-    ftml_leptos::utils::wait_and_then(
+    ftml_components::utils::wait_and_then(
         move || UriComponentTuple::from(uri).apply1(super::server_fns::fragment, None),
         move |(uri, css, html)| {
             for css in css {

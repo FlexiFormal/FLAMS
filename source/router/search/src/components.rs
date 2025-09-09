@@ -1,8 +1,8 @@
 use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::components::error_with_toaster;
+use ftml_components::components::content::FtmlViewable;
 use ftml_dom::utils::css::inject_css;
-use ftml_leptos::components::content::FtmlViewable;
 use ftml_uris::{
     DocumentElementUri, DocumentUri, IsNarrativeUri, SymbolUri,
     components::{DocumentUriComponents, UriComponents},
@@ -238,7 +238,7 @@ fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> impl IntoVie
                     view!{
                         //<span>"Here: "{uri.to_string()}</span>
                         //<div>"---"</div>
-                        <Fragment uri=UriComponents::Full(uri.into()) position=ftml_leptos::SidebarPosition::None/>
+                        <Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>
                         //<div>"---"</div>
                     }
                   }).collect_view()
@@ -314,7 +314,7 @@ fn do_para(
       </Popover></div>
     };
 
-    let desc = ftml_leptos::components::content::CommaSep(
+    let desc = ftml_components::components::content::CommaSep(
         "For",
         fors.into_iter()
             .map(|s| s.as_view::<flams_router_content::backend::FtmlBackend>()),
@@ -336,7 +336,7 @@ fn do_para(
           <CardPreview>
             <div style="padding:0 5px;max-width:100%">
               <div style="width:100%;color:black;background-color:white;">
-                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=UriComponents::Full(uri.into()) position=ftml_leptos::SidebarPosition::None /></Scrollbar>
+                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None /></Scrollbar>
               </div>
             </div>
           </CardPreview>

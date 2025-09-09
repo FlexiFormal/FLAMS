@@ -8,8 +8,8 @@ use flams_router_vscode::{
 };
 use flams_utils::{impossible, unwrap};
 use flams_web_utils::components::wait_and_then_fn;
+use ftml_components::components::content::FtmlViewable;
 use ftml_dom::{FtmlViews, utils::css::inject_css};
-use ftml_leptos::components::content::FtmlViewable;
 use ftml_uris::{
     ArchiveId, DocumentElementUri, DocumentUri, IsDomainUri, IsNarrativeUri, NarrativeUri,
     SymbolUri, UriWithArchive, UriWithPath,
@@ -353,7 +353,7 @@ fn do_para(
     use thaw::Scrollbar;
     let uristr = uri.to_string();
     let name = uristr;
-    /*let desc = ftml_leptos::components::content::CommaSep(
+    /*let desc = ftml_components::components::content::CommaSep(
         "For",
         fors.into_iter()
             .map(|s| s.as_view::<flams_router_content::backend::FtmlBackend>()),
@@ -426,7 +426,7 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
             })
         } else {
             Either::Right(
-                view!(<Fragment uri=UriComponents::Full(uri.into()) position=ftml_leptos::SidebarPosition::None/>),
+                view!(<Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>),
             )
         }
     }

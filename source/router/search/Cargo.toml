@@ -11,7 +11,7 @@ ssr = [
     "leptos/ssr",
     "leptos_router/ssr",
     "thaw/ssr",
-    "ftml-leptos/ssr",
+    "ftml-components/ssr",
     "flams-web-utils/ssr",
     "flams-router-vscode/ssr",
     "flams-router-content/ssr",
@@ -24,7 +24,7 @@ ssr = [
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
-    "ftml-leptos/hydrate",
+    "ftml-components/hydrate",
     "flams-router-vscode/hydrate",
     "flams-router-content/hydrate",
     "flams-web-utils/hydrate",
@@ -35,7 +35,7 @@ docs-only = []
 [dependencies]
 ftml-uris = { workspace = true, features = ["leptos"] }
 ftml-ontology = { workspace = true, features = ["serde"] }
-ftml-leptos = { workspace = true }
+ftml-components = { workspace = true }
 ftml-dom = { workspace = true }
 
 flams-utils = { workspace = true }

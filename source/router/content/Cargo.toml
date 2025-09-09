@@ -10,7 +10,7 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "thaw/ssr",
-    "ftml-leptos/ssr",
+    "ftml-components/ssr",
     "flams-web-utils/ssr",
     "flams-router-base/ssr",
     "dep:flams-system",
@@ -26,7 +26,7 @@ ssr = [
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
-    "ftml-leptos/hydrate",
+    "ftml-components/hydrate",
     "flams-web-utils/hydrate",
     "ftml-backend/cached",
 ]
@@ -35,7 +35,7 @@ docs-only = []
 [dependencies]
 ftml-uris = { workspace = true, features = ["leptos"] }
 ftml-ontology = { workspace = true, features = ["serde"] }
-ftml-leptos = { workspace = true }
+ftml-components = { workspace = true }
 ftml-dom = { workspace = true }
 ftml-backend = { workspace = true, features = ["server_fn"] }
 

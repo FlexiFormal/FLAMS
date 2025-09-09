@@ -165,7 +165,7 @@ impl DBBackend {
     }
 }
 
-#[async_trait::async_trait]
+//#[async_trait::async_trait]
 impl AuthnBackend for DBBackend {
     type User = DBUser;
     type Credentials = (i64, String);

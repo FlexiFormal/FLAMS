@@ -178,19 +178,19 @@ ftml-uris = { path = "../../FlexiFormal/FTML/uris", features = [
 ] } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ftml-ontology = { path = "../../FlexiFormal/FTML/ontology" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ftml-backend = { path = "../../FlexiFormal/FTML/backend" } #{ git = "https://github.com/FlexiFormal/FTML" } #
-ftml-core = { path = "../../FlexiFormal/FTML/core" } #{ git = "https://github.com/FlexiFormal/FTML" } #
-ftml-leptos = { path = "../../FlexiFormal/FTML/leptos" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-parser = { path = "../../FlexiFormal/FTML/parser" } #{ git = "https://github.com/FlexiFormal/FTML" } #
+ftml-components = { path = "../../FlexiFormal/FTML/components" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ftml5ever = { path = "../../FlexiFormal/FTML/ftml5ever" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ulo = { path = "../../FlexiFormal/FTML/ulo" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 ftml-dom = { path = "../../FlexiFormal/FTML/dom" } #{ git = "https://github.com/FlexiFormal/FTML" } #
 
-rstest = { version = "0.25" }
+rstest = { version = "0.26" }
 
 # utils
 orx-parallel = "3"
 document-features = "0.2"
 rustc_version = "0.4"
-const-str = "0.6"
+const-str = "0.7"
 triomphe = "0.1"
 parking_lot = "0.12"
 serde-wasm-bindgen = "0.6"
@@ -226,7 +226,7 @@ tokio = { version = "1" }                                                   #, f
 tokio-util = { version = "0.7", features = ["compat"] }
 tokio-stream = { version = "0.1" }
 tempfile = { version = "3" }
-phf = { version = "0.12", default-features = false, features = ["macros"] }
+phf = { version = "0.13", default-features = false, features = ["macros"] }
 crossbeam-channel = { version = "0.5" }
 flate2 = { version = "1.0" }
 tar = { version = "0.4" }
@@ -311,13 +311,13 @@ axum-macros = { version = "0.5" }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
 tower-sessions = { version = "0.14" }
-axum-login = { version = "0.17" }
+axum-login = { version = "0.18" }
 http = { version = "1" }
 mime_guess = "2"
 
 # wasm
 tracing-wasm = "0.2"
-wasm-bindgen = "=0.2.100"
+wasm-bindgen = "=0.2.101"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
@@ -333,7 +333,7 @@ futures-util = "0.3"
 # search
 
 html2text = "0.15"
-tantivy = "0.24"
+tantivy = "0.25"
 
 rustex_lib = { version = "0.1.0", features = ["multithreaded"] }
 tex_engine = { version = "0.1.2", features = ["multithreaded"] }

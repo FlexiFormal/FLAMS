@@ -17,7 +17,7 @@ ssr = [
     "dep:leptos_axum",
     "dep:axum",
     "dep:flams-math-archives",
-    "ftml-leptos/ssr",
+    "ftml-components/ssr",
     "leptos_router/ssr",
     "flams-router-base/ssr",
     "flams-router-content/ssr",
@@ -34,7 +34,7 @@ ssr = [
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
-    "ftml-leptos/hydrate",
+    "ftml-components/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
     "flams-router-content/hydrate",
@@ -53,7 +53,7 @@ docs-only = []
 [dependencies]
 ftml-uris = { workspace = true }
 ftml-ontology = { workspace = true }
-ftml-leptos = { workspace = true }
+ftml-components = { workspace = true }
 ftml-dom = { workspace = true }
 
 flams-math-archives = { workspace = true, optional = true, features = ["rdf"] }

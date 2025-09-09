@@ -14,7 +14,7 @@ pub mod server_fns;
 #[cfg(feature = "ssr")]
 mod toc;
 
-pub type Views = ftml_leptos::Views<backend::FtmlBackend>;
+pub type Views = ftml_components::Views<backend::FtmlBackend>;
 
 #[cfg(feature = "ssr")]
 mod ssr {

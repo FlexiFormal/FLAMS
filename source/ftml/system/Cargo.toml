@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ftml-uris = { workspace = true, features = ["serde"] }
 ftml-ontology = { workspace = true, features = ["serde"] }
-ftml-core = { workspace = true, features = ["rdf"] }
+ftml-parser = { workspace = true, features = ["rdf"] }
 ftml5ever = { workspace = true }
 
 flams-system = { workspace = true }

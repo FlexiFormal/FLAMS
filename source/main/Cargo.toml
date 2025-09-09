@@ -48,7 +48,7 @@ ssr = [
     "dep:argon2",
     "dep:http",
     "flams-web-utils/ssr",
-    "ftml-leptos/ssr",
+    "ftml-components/ssr",
     "dep:flams-lsp",
     "dep:tracing-subscriber",
     "dep:tokio-util",
@@ -73,7 +73,7 @@ hydrate = [
     "dep:tracing-wasm",
     "flams-web-utils/hydrate",
     "leptos-posthoc/hydrate",
-    "ftml-leptos/hydrate",
+    "ftml-components/hydrate",
     "flams-router-dashboard/hydrate",
 ]
 
@@ -87,7 +87,7 @@ workspace = true
 [dependencies]
 ftml-uris = { workspace = true }
 ftml-ontology = { workspace = true, features = ["serde"] }
-ftml-leptos = { workspace = true }
+ftml-components = { workspace = true }
 
 
 flams-router-dashboard = { workspace = true }
