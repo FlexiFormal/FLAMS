@@ -4,7 +4,7 @@
 //mod parser;
 
 use flams_math_archives::{
-    artifacts::{ContentResult, FileOrString},
+    artifacts::{ContentResult, FileOrString, FtmlFile, FtmlString},
     backend::{AnyBackend, LocalBackend},
     build_target,
     formats::{BuildResult, BuildSpec},
@@ -16,18 +16,40 @@ use ftml_uris::{DocumentUri, UriWithArchive, UriWithPath};
 source_format! { FTML {
     name:"ftml",
     description:"Flexiformal HTML",
-    targets:&[FTML_CONTENT.id()],
+    targets:&[FTML_IMPORT.id(),FTML_CONTENT.id()],
     file_extensions: &["html","html","xhtml"],
     dependencies: |_| Vec::new()
 }}
 
+build_target! { FTML_IMPORT {
+    name:"import-ftml",
+    description:"imports existent FTML",
+    run: import
+}}
+
 build_target! { FTML_CONTENT {
     name:"ftml-content",
-    description:"imports existent FTML",
+    description:"extracts content from FTML",
     run: extract
 }}
 
-#[deprecated(note = "uses local archives only; maybe catch tracing/log output?")]
+#[allow(clippy::needless_pass_by_value)]
+fn import(spec: BuildSpec) -> BuildResult {
+    match spec.source {
+        either::Either::Right(s) => BuildResult {
+            log: FileOrString::Str("ok".to_string().into_boxed_str()),
+            result: Ok(Some(
+                Box::new(FtmlString(s.to_string().into_boxed_str())) as _
+            )),
+        },
+        either::Either::Left(p) => BuildResult {
+            log: FileOrString::Str("ok".to_string().into_boxed_str()),
+            result: Ok(Some(Box::new(FtmlFile(p.to_path_buf())) as _)),
+        },
+    }
+}
+
+#[deprecated(note = "uses local archives only")]
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::needless_pass_by_value)]
 fn extract(spec: BuildSpec) -> BuildResult {
@@ -54,10 +76,11 @@ fn extract(spec: BuildSpec) -> BuildResult {
         Ok(h) => h,
     };
     let uri = spec.uri.clone();
-    match build_ftml(spec.backend, &html, uri) {
+    let (lg, r) = flams_system::logging::span_capture(|| build_ftml(spec.backend, &html, uri));
+    match r {
         Err(e) => {
             let mut err = BuildResult::err();
-            err.log = FileOrString::Str(e.into_boxed_str());
+            err.log = FileOrString::Str(format!("{lg}\n{e}").into_boxed_str());
             err
         }
         Ok(FtmlResult {
@@ -70,14 +93,7 @@ fn extract(spec: BuildSpec) -> BuildResult {
         }) => {
             let has_errored = !errors.is_empty();
             BuildResult {
-                log: FileOrString::Str(
-                    errors
-                        .into_vec()
-                        .into_iter()
-                        .map(|e| e.to_string())
-                        .collect::<String>()
-                        .into_boxed_str(),
-                ),
+                log: FileOrString::Str(format!("{lg}\n{errors:?}").into_boxed_str()),
                 result: if has_errored {
                     Err(Vec::new())
                 } else {

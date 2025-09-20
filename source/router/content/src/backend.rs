@@ -1,4 +1,4 @@
-use ftml_uris::{FtmlUri, Uri};
+use ftml_uris::{DocumentUri, FtmlUri, Uri};
 
 pub struct FtmlBackend;
 impl ftml_backend::GlobalBackend for FtmlBackend {
@@ -18,6 +18,10 @@ impl ftml_backend::GlobalBackend for FtmlBackend {
     }
 }
 impl ftml_backend::FlamsBackend for FtmlBackend {
+    #[inline]
+    fn stripped(&self) -> bool {
+        true
+    }
     fn document_link_url(&self, uri: &ftml_uris::DocumentUri) -> String {
         format!("/?uri={}", uri.url_encoded())
     }
@@ -28,6 +32,7 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
     ) -> Option<String> {
         Some(format!("/doc?uri={}&format={kind}", uri.url_encoded()))
     }
+
     fn get_fragment(
         &self,
         uri: Option<ftml_uris::Uri>,
@@ -49,6 +54,23 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         super::server_fns::fragment(uri, rp, a, p, d, m, l, e, s, context)
     }
 
+    fn get_document_html(
+        &self,
+        uri: Option<ftml_uris::DocumentUri>,
+        rp: Option<String>,
+        a: Option<ftml_uris::ArchiveId>,
+        p: Option<String>,
+        d: Option<String>,
+        l: Option<ftml_uris::Language>,
+    ) -> impl Future<
+        Output = Result<
+            (DocumentUri, Box<[ftml_ontology::utils::Css]>, Box<str>),
+            ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+        >,
+    > + Send {
+        super::server_fns::document(uri, rp, a, p, d, l)
+    }
+
     fn get_module(
         &self,
         uri: Option<ftml_uris::ModuleUri>,
@@ -62,6 +84,35 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         >,
     > + Send {
         super::server_fns::get_module(uri, a, p, m)
+    }
+
+    fn get_solutions(
+        &self,
+        uri: ftml_uris::DocumentElementUri,
+    ) -> impl Future<
+        Output = Result<
+            ftml_ontology::narrative::elements::problems::Solutions,
+            ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+        >,
+    > + Send {
+        async move {
+            let r = super::server_fns::solution(
+                Some(uri.into()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))?;
+            ftml_ontology::narrative::elements::problems::Solutions::from_jstring(&r).ok_or_else(
+                || ftml_backend::BackendError::NotFound(ftml_uris::UriKind::DocumentElement),
+            )
+        }
     }
 
     fn get_document(

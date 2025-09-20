@@ -27,8 +27,10 @@ ftml_uris::compfun! {
     )]
     pub async fn document(
         uri: DocumentUri
-    ) -> Result<(DocumentUri, Box<[Css]>, Box<str>), ServerFnError<String>> {
-        let uri = uri.map_err(|e| e.to_string())?.parse(flams_router_base::uris::get_uri).map_err(|e| e.to_string())?;
+    ) -> Result<(DocumentUri, Box<[Css]>, Box<str>),
+        ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>
+    > {
+        let uri = uri?.parse(flams_router_base::uris::get_uri)?;
         server::document(uri).await
 
         /*
@@ -499,11 +501,14 @@ mod server {
 
     pub async fn document(
         uri: DocumentUri,
-    ) -> Result<(DocumentUri, Box<[Css]>, Box<str>), ServerFnError<String>> {
+    ) -> Result<
+        (DocumentUri, Box<[Css]>, Box<str>),
+        ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+    > {
         let (css, doc) = backend()
             .get_html_body_async::<TokioEngine>(&uri)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))?;
         let html = format!(
             "<div{}</div>",
             doc.strip_prefix("<body")

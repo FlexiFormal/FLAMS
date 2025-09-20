@@ -371,7 +371,7 @@ impl<'a, const FULL: bool> LSPStore<'a, FULL> {
     }
 }
 
-impl<'a, const FULL: bool> STeXModuleStore for &mut LSPStore<'a, FULL> {
+impl<const FULL: bool> STeXModuleStore for &mut LSPStore<'_, FULL> {
     const FULL: bool = FULL;
     fn get_module(
         &mut self,

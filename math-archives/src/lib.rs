@@ -359,8 +359,16 @@ impl BuildableArchive for LocalArchive {
         &self.formats
     }
     fn get_log(&self, relative_path: &str, target: BuildTargetId) -> PathBuf {
+        use std::str::FromStr;
+        let rel_path = if let Some((first, lang)) = relative_path.rsplit_once('.')
+            && Language::from_str(lang).is_err()
+        {
+            first
+        } else {
+            relative_path
+        };
         self.out_dir()
-            .join(relative_path)
+            .join(rel_path)
             .join(target.name)
             .with_extension("log")
     }
@@ -466,7 +474,6 @@ impl LocallyBuilt for LocalArchive {
             {
                 last = first;
             }
-
             return out.join(last);
         }
         self.rel_path_of(path, doc_name, language).map_or_else(
@@ -476,7 +483,8 @@ impl LocallyBuilt for LocalArchive {
                     || self.out_path.join(doc_name.as_ref()),
                     |n| self.out_path.join_uri_path(n).join(doc_name.as_ref()),
                 );
-                p.with_extension(lang)
+                let mp = p.with_extension(lang);
+                if mp.exists() { mp } else { p }
             },
             |source| {
                 // SAFETY source is ancestor of source_dir

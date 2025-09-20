@@ -13,7 +13,7 @@ use flams_stex::{
 };
 use flams_utils::{
     impossible,
-    prelude::{HMap, TreeChildIter},
+    prelude::HMap,
     sourcerefs::{LSPLineCol, SourceRange},
 };
 use ftml_ontology::utils::RefTree;
@@ -54,14 +54,14 @@ impl DocData {
                     };
                     merge_a(&mut d2.lock(), &mut d1.annotations.lock());
                 }
-                *d2 = Self::Doc(d1)
+                *d2 = Self::Doc(d1);
             }
             (d1 @ Self::Data(_, false), Self::Data(d2, true)) => {
                 {
                     let Self::Data(_, _) = d1 else { impossible!() };
                     //merge_a(&mut d1.lock(),&mut d2.lock());
                 }
-                *d1 = Self::Data(d2, true)
+                *d1 = Self::Data(d2, true);
             }
             (Self::Data(d1, _), Self::Data(d2, _)) => {
                 merge_a(&mut d2.lock(), &mut d1.lock());
@@ -78,7 +78,7 @@ pub enum UrlOrFile {
 impl UrlOrFile {
     pub fn name(&self) -> &str {
         match self {
-            Self::Url(u) => u.path().split('/').last().unwrap_or(""),
+            Self::Url(u) => u.path().split('/').next_back().unwrap_or(""),
             Self::File(p) => p.file_name().and_then(|s| s.to_str()).unwrap_or(""),
         }
     }
@@ -174,10 +174,10 @@ impl LSPState {
                             });
                             for (glyph, char) in &dt.missing.inner {
                                 lock.diagnostics.insert(STeXDiagnostic {
-                level: DiagnosticLevel::Warning,
-                message: format!("unknown unicode character for glyph {char} ({glyph}) in font {fnt}"),
-                range: SourceRange::default()
-              });
+                                    level: DiagnosticLevel::Warning,
+                                    message: format!("unknown unicode character for glyph {char} ({glyph}) in font {fnt}"),
+                                    range: SourceRange::default()
+                                });
                             }
                         }
                     }
@@ -240,12 +240,14 @@ impl LSPState {
                     None
                 } else {
                     let html = res.to_string();
-                    let rel_path = doc.relative_path().unwrap_or_else(|| unreachable!());
-                    match flams_ftml::build_ftml(
-                        &AnyBackend::Temp(self.backend().clone()),
-                        &html,
-                        doc_uri.clone(),
-                    ) {
+                    //let rel_path = doc.relative_path().unwrap_or_else(|| unreachable!());
+                    match flams_system::logging::ignore_traces(|| {
+                        flams_ftml::build_ftml(
+                            &AnyBackend::Temp(self.backend().clone()),
+                            &html,
+                            doc_uri.clone(),
+                        )
+                    }) {
                         Ok(FtmlResult {
                             doc,
                             ftml,

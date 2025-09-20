@@ -16,6 +16,7 @@ typescript = [
     "dep:tsify",
     "dep:wasm-bindgen",
     "ftml-uris/typescript",
+    "serde"
 ]
 ## adds serde support
 serde = [

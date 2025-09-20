@@ -237,7 +237,9 @@ pub mod server {
         else {
             return Err(format!("Archive {archive} not found").into());
         };
-        let v = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
+        let v = tokio::fs::read(&path)
+            .await
+            .map_err(|e| format!("{e}: {}", path.display()))?;
         Ok(String::from_utf8_lossy(&v).to_string())
     }
 

@@ -206,20 +206,24 @@ pub fn get_deps(task: BuildSpec) -> Vec<(BuildTargetId, TaskDependency)> {
     for d in parse_deps(&source, path, task.uri, task.backend) {
         match d {
             STeXDependency::ImportModule { archive, module }
-            | STeXDependency::UseModule { archive, module } => {
+            | STeXDependency::UseModule { archive, module }
+                if !module.is_empty() =>
+            {
                 deps.push((
                     PDFLATEX_FIRST.id(),
                     TaskDependency::Physical {
                         strict: false,
                         task: TaskRef {
                             archive,
-                            rel_path: module.parse().expect("this is a bug"),
+                            rel_path: module
+                                .parse()
+                                .unwrap_or_else(|e| panic!("this is a bug: {e}: {module}")),
                             target: PDFLATEX_FIRST.id(),
                         },
                     },
                 ));
             }
-            STeXDependency::Inputref { archive, filepath } => {
+            STeXDependency::Inputref { archive, filepath } if !filepath.is_empty() => {
                 deps.push((
                     PDFLATEX_FIRST.id(),
                     TaskDependency::Physical {
@@ -294,7 +298,7 @@ pub fn get_deps(task: BuildSpec) -> Vec<(BuildTargetId, TaskDependency)> {
                     ));
                 }
             }
-            STeXDependency::Img { .. } => (),
+            _ => (),
         }
     }
     deps

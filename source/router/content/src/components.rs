@@ -103,27 +103,14 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView 
             for css in css {
                 css.inject();
             }
-            //leptos::logging::log!("Here 2: {html}");
-            if let Uri::DocumentElement(uri) = uri {
-                leptos::either::Either::Left(crate::Views::document(
-                    DocumentUri::no_doc().clone(),
-                    SidebarPosition::None,
-                    true,
-                    move || crate::Views::render_ftml(html.into_string(), None),
-                ))
-            } else {
-                leptos::either::Either::Right(view! {
-                    //<pre>"Here: "{html.clone()}</pre>
-                    <div style="padding: 0 60px;--rustex-this-width:590px;">
-                    {crate::Views::document(
-                        DocumentUri::no_doc().clone(),
-                        position,
-                        true,
-                        move || crate::Views::render_ftml(html.into_string(),None),
-                    )}
-                    </div>
-                })
-            }
+            let uri = match uri {
+                Uri::Document(d) => Some(d.into()),
+                Uri::DocumentElement(d) => Some(d.into()),
+                _ => None,
+            };
+            crate::Views::render_fragment(uri, position, true, move || {
+                crate::Views::render_ftml(html.into_string(), None)
+            })
         },
         |e| view!(<span style="color:red">{e.to_string()}</span>),
     )
@@ -137,7 +124,7 @@ pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
             for css in css {
                 css.inject();
             }
-            crate::Views::document(uri, SidebarPosition::Next, true, move || {
+            crate::Views::setup_document(uri, SidebarPosition::Next, true, move || {
                 crate::Views::render_ftml(html.into_string(), None)
             })
             /*view! {<div>
@@ -153,11 +140,13 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> impl IntoView {
     wait_and_then_fn(
         move || UriComponentTuple::from(doc.clone()).apply1(super::server_fns::fragment, None),
         move |(uri, css, html)| {
+            for css in css {
+                css.inject();
+            }
             view! {<div>{
-                for css in css { css.inject(); }
-                crate::Views::document(
+                crate::Views::setup_document(
                     DocumentUri::no_doc().clone(),
-                    SidebarPosition::Next,
+                    SidebarPosition::None,
                     true,
                     move || crate::Views::render_ftml(html.into_string(),None))
             }</div>}

@@ -173,16 +173,22 @@ pub(crate) async fn doc_handler(
     } else {
         return err("Malformed URI components");
     };
-    let Some(path) = GlobalBackend.with_local_archive(uri.archive_id(), |a| {
-        a.map(|a| {
-            a.out_path_of(uri.path(), uri.document_name(), None, uri.language)
-                .join(format)
+    let uri2 = uri.clone();
+    let formatstr = format.to_string();
+    let Ok(Some(path)) = tokio::task::spawn_blocking(move || {
+        GlobalBackend.with_local_archive(uri.archive_id(), |a| {
+            a.map(|a| {
+                a.out_path_of(uri.path(), uri.document_name(), None, uri.language)
+                    .join(&formatstr)
+            })
         })
-    }) else {
+    })
+    .await
+    else {
         return default();
     };
 
-    let pandq = format!("/{}.{format}", uri.document_name());
+    let pandq = format!("/{}.{format}", uri2.document_name());
     let mime = mime_guess::from_ext(&format).first_or_octet_stream();
     let req_uri = http::Uri::builder()
         .path_and_query(pandq)

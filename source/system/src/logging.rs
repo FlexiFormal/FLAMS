@@ -9,6 +9,66 @@ use std::{fmt::Display, path::PathBuf};
 use tracing::span::Id;
 use tracing_subscriber::{layer::Context, Layer};
 
+pub fn ignore_traces<R>(f: impl FnOnce() -> R) -> R {
+    use tracing_subscriber::{fmt, layer::SubscriberExt};
+    struct Ignore;
+    impl std::io::Write for &Ignore {
+        #[inline]
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+        #[inline]
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl<'a> fmt::MakeWriter<'a> for Ignore {
+        type Writer = &'a Self;
+        #[inline]
+        fn make_writer(&'a self) -> Self::Writer {
+            self
+        }
+    }
+    let sub =
+        tracing_subscriber::registry().with(fmt::layer().with_writer(Ignore).with_ansi(false));
+    tracing::subscriber::with_default(sub, f)
+}
+
+pub fn span_capture<R>(f: impl FnOnce() -> R) -> (String, R) {
+    use tracing_subscriber::{fmt, layer::SubscriberExt};
+    #[derive(Clone)]
+    struct Buffer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    impl std::io::Write for &Buffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if let Ok(mut l) = self.0.lock() {
+                l.extend_from_slice(buf);
+            }
+            Ok(buf.len())
+        }
+        #[inline]
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl<'a> fmt::MakeWriter<'a> for Buffer {
+        type Writer = &'a Self;
+        #[inline]
+        fn make_writer(&'a self) -> Self::Writer {
+            self
+        }
+    }
+    let buffer = Buffer(std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new())));
+    let bufcl = buffer.clone();
+    let sub = tracing_subscriber::registry().with(fmt::layer().with_writer(bufcl).with_ansi(false));
+    let ret = tracing::subscriber::with_default(sub, f);
+    let s = buffer
+        .0
+        .lock()
+        .map(|mut l| String::from_utf8_lossy(&std::mem::take(&mut *l)).into_owned())
+        .unwrap_or_default();
+    (s, ret)
+}
+
 #[derive(Clone, Debug)]
 pub struct LogStore(Arc<LogStoreI>);
 

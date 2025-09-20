@@ -67,6 +67,26 @@ impl Artifact for FtmlString {
             .map_err(|e| ArtifactSaveError::Fs(FileError::Write(into.to_path_buf(), e)))
     }
 }
+pub struct FtmlFile(pub PathBuf);
+impl Artifact for FtmlFile {
+    #[inline]
+    fn kind(&self) -> &'static str {
+        "ftml"
+    }
+    #[inline]
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self as _
+    }
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self as _
+    }
+    fn write(&self, into: &Path) -> Result<(), ArtifactSaveError> {
+        std::fs::copy(&self.0, into)
+            .map(|_| ())
+            .map_err(|e| ArtifactSaveError::Fs(FileError::Write(into.to_path_buf(), e)))
+    }
+}
 
 #[derive(Debug)]
 pub struct ContentResult {

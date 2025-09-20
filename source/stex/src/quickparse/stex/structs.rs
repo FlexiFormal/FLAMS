@@ -1806,8 +1806,8 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
             },
         )?;
 
-        let (path, module) = if let Some((a, b)) = module.split_once('?') {
-            (a, b)
+        let (mut path, module) = if let Some((a, b)) = module.split_once('?') {
+            (a.trim(), b)
         } else {
             ("", module)
         };
@@ -1835,8 +1835,13 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
             .join(last)
             .join(format!("{top_module}.{}.tex", self.language));
         if p.exists() {
+            let rel_path = if path.is_empty() {
+                format!("{top_module}.{}.tex", self.language)
+            } else {
+                format!("{path}/{top_module}.{}.tex", self.language)
+            };
             return Some(ModuleReference {
-                rel_path: Some(format!("{path}/{top_module}.{}.tex", self.language).into()),
+                rel_path: Some(rel_path.into()),
                 in_doc: uri.path_uri().clone() & (top_module.parse().ok()?, self.language),
                 full_path: Some(p.into()),
                 uri,
@@ -1845,8 +1850,13 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 
         let p = basepath.join(last).join(format!("{top_module}.en.tex"));
         if p.exists() {
+            let rel_path = if path.is_empty() {
+                format!("{top_module}.en.tex")
+            } else {
+                format!("{path}/{top_module}.en.tex")
+            };
             return Some(ModuleReference {
-                rel_path: Some(format!("{path}/{top_module}.en.tex").into()),
+                rel_path: Some(rel_path.into()),
                 in_doc: uri.path_uri().clone() & (top_module.parse().ok()?, Language::English),
                 full_path: Some(p.into()),
                 uri,
@@ -1855,8 +1865,13 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 
         let p = basepath.join(last).join(format!("{top_module}.tex"));
         if p.exists() {
+            let rel_path = if path.is_empty() {
+                format!("{top_module}.tex")
+            } else {
+                format!("{path}/{top_module}.tex")
+            };
             return Some(ModuleReference {
-                rel_path: Some(format!("{path}/{top_module}.tex").into()),
+                rel_path: Some(rel_path.into()),
                 in_doc: uri.path_uri().clone() & (top_module.parse().ok()?, Language::English),
                 full_path: Some(p.into()),
                 uri,
