@@ -20,17 +20,17 @@ pub type Views = ftml_components::Views<backend::FtmlBackend>;
 mod ssr {
     use ftml_ontology::utils::Css;
 
-    pub(crate) fn insert_base_url(mut v: Box<[Css]>) -> Box<[Css]> {
+    pub fn insert_base_url(mut v: Box<[Css]>) -> Box<[Css]> {
         //v.sort();
-        for c in v.iter_mut() {
-            if let Css::Link(lnk) = c {
-                if let Some(r) = lnk.strip_prefix("srv:") {
-                    *lnk = format!(
-                        "{}{r}",
-                        flams_system::settings::Settings::get().external_url()
-                    )
-                    .into_boxed_str()
-                }
+        for c in &mut v {
+            if let Css::Link(lnk) = c
+                && let Some(r) = lnk.strip_prefix("srv:")
+            {
+                *lnk = format!(
+                    "{}{r}",
+                    flams_system::settings::Settings::get().external_url()
+                )
+                .into_boxed_str();
             }
         }
         v

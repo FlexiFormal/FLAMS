@@ -52,12 +52,13 @@ docs-only = []
 
 [dependencies]
 ftml-uris = { workspace = true }
-ftml-ontology = { workspace = true }
+ftml-ontology = { workspace = true, features=["deepsize"] }
 ftml-components = { workspace = true }
 ftml-dom = { workspace = true }
 
 flams-math-archives = { workspace = true, optional = true, features = ["rdf"] }
 
+flams-backend-types = { workspace = true,features=["serde"] }
 flams-utils = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-router-base = { workspace = true }
@@ -81,7 +82,7 @@ thaw = { workspace = true }
 tracing = { workspace = true }
 icondata_ai = { workspace = true }
 icondata_bi = { workspace = true }
-
+bytesize = {workspace = true}
 serde = { workspace = true }
 serde_json = { workspace = true }
 #async-trait = { workspace = true }

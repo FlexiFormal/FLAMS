@@ -24,7 +24,8 @@ pub async fn query_api(query: String) -> Result<String, ServerFnError<String>> {
     .await; //.in_current_span().await;
     match r {
         Ok(Ok(Ok(r))) => Ok(r),
-        Ok(Ok(Err(e)) | Err(e)) => Err(ServerFnError::WrappedServerError(e.to_string())),
+        Ok(Ok(Err(e))) => Err(ServerFnError::WrappedServerError(e.to_string())),
+        Ok(Err(e)) => Err(ServerFnError::WrappedServerError(e.to_string())),
         Err(e) => Err(ServerFnError::WrappedServerError(e.to_string())),
     }
 }

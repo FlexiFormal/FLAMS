@@ -9,7 +9,7 @@ mod rustex;
 use crate::dependencies::STeXDependency;
 use either::Either;
 use eyre::Context;
-use flams_ftml::{FTML, FTML_CONTENT};
+use flams_ftml::FTML_CONTENT;
 use flams_math_archives::{
     artifacts::{FileArtifact, FileOrString, FtmlString},
     backend::{AnyBackend, GlobalBackend, LocalBackend},

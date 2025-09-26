@@ -15,143 +15,28 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 #[cfg(feature = "ssr")]
 pub mod server;
 
-/*
-pub(crate) mod fns {
-    use leptos::prelude::ServerFnError;
-    use std::{future::Future, pin::Pin};
-
-    fn fragment(
-        uri: Option<Uri>,
-        rp: Option<String>,
-        a: Option<ArchiveId>,
-        p: Option<String>,
-        d: Option<String>,
-        m: Option<String>,
-        l: Option<Language>,
-        e: Option<String>,
-        s: Option<String>,
-        context: Option<Uri>,
-    ) -> Pin<Box<dyn Future<Output = Result<(Uri, Vec<CSS>, String), ServerFnError<String>>> + Send>>
-    {
-        Box::pin(flams_router_dashboard::server_fns::content::fragment(
-            uri, rp, a, p, d, m, l, e, s, context,
-        ))
-    }
-    fn full_doc(
-        uri: Option<DocumentUri>,
-        rp: Option<String>,
-        a: Option<ArchiveId>,
-        p: Option<String>,
-        d: Option<String>,
-        l: Option<Language>,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<(DocumentUri, Vec<CSS>, String), ServerFnError<String>>>
-                + Send,
-        >,
-    > {
-        Box::pin(flams_router_dashboard::server_fns::content::document(
-            uri, rp, a, p, d, l,
-        ))
-    }
-    fn toc(
-        uri: Option<DocumentUri>,
-        rp: Option<String>,
-        a: Option<ArchiveId>,
-        p: Option<String>,
-        d: Option<String>,
-        l: Option<Language>,
-    ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, Vec<TOCElem>), ServerFnError<String>>> + Send>>
-    {
-        Box::pin(flams_router_dashboard::server_fns::content::toc(
-            uri, rp, a, p, d, l,
-        ))
-    }
-    fn los(
-        uri: Option<SymbolUri>,
-        a: Option<ArchiveId>,
-        p: Option<String>,
-        m: Option<String>,
-        s: Option<String>,
-        problems: bool,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<Vec<(DocumentElementUri, LOKind)>, ServerFnError<String>>>
-                + Send,
-        >,
-    > {
-        Box::pin(flams_router_dashboard::server_fns::content::los(
-            uri, a, p, m, s, problems,
-        ))
-    }
-    fn omdoc(
-        uri: Option<Uri>,
-        rp: Option<String>,
-        a: Option<ArchiveId>,
-        p: Option<String>,
-        d: Option<String>,
-        m: Option<String>,
-        l: Option<Language>,
-        e: Option<String>,
-        s: Option<String>,
-    ) -> Pin<Box<dyn Future<Output = Result<(Vec<CSS>, OMDoc), ServerFnError<String>>> + Send>>
-    {
-        Box::pin(flams_router_dashboard::server_fns::content::omdoc(
-            uri, rp, a, p, d, m, l, e, s,
-        ))
-    }
-    fn notations(
-        uri: Option<Uri>,
-        rp: Option<String>,
-        a: Option<ArchiveId>,
-        p: Option<String>,
-        d: Option<String>,
-        m: Option<String>,
-        l: Option<Language>,
-        e: Option<String>,
-        s: Option<String>,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<Vec<(DocumentElementUri, Notation)>, ServerFnError<String>>>
-                + Send,
-        >,
-    > {
-        Box::pin(flams_router_dashboard::server_fns::content::notations(
-            uri, rp, a, p, d, m, l, e, s,
-        ))
-    }
-    fn solutions(
-        uri: Option<Uri>,
-        rp: Option<String>,
-        a: Option<ArchiveId>,
-        p: Option<String>,
-        d: Option<String>,
-        m: Option<String>,
-        l: Option<Language>,
-        e: Option<String>,
-        s: Option<String>,
-    ) -> Pin<Box<dyn Future<Output = Result<String, ServerFnError<String>>> + Send>> {
-        Box::pin(flams_router_dashboard::server_fns::content::solution(
-            uri, rp, a, p, d, m, l, e, s,
-        ))
-    }
-    pub(super) fn init() {
-        ftml_viewer_components::remote::ServerConfig::initialize(
-            fragment, full_doc, toc, omdoc, los, notations, solutions,
-        );
-    }
-}
- */
-
 #[cfg(feature = "hydrate")]
 #[leptos::wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
+    use tracing_subscriber::prelude::*;
+    fn filter(lvl: tracing::Level) -> tracing_subscriber::filter::Targets {
+        tracing_subscriber::filter::Targets::new()
+            .with_target("ftml_dom", lvl)
+            .with_target("ftml_components", lvl)
+            .with_target("ftml_parser", lvl)
+            .with_target("ftml_backend", lvl)
+            .with_target("ssr_example", lvl)
+            .with_target(
+                "leptos_posthoc",
+                tracing_subscriber::filter::LevelFilter::ERROR,
+            )
+    }
     console_error_panic_hook::set_once();
-    tracing_wasm::set_as_global_default_with_config(
-        tracing_wasm::WASMLayerConfigBuilder::default()
-            .set_max_level(tracing::Level::WARN)
-            .build(),
-    );
+
+    tracing_subscriber::registry()
+        .with(tracing_wasm::WASMLayer::default())
+        .with(filter(tracing::Level::WARN))
+        .init();
     //fns::init();
     leptos::mount::hydrate_body(flams_router_dashboard::Main);
 }

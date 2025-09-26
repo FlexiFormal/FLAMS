@@ -1,18 +1,17 @@
 use crate::ssr::insert_base_url;
 use flams_math_archives::backend::LocalBackend;
 use flams_utils::{unwrap, vecmap::VecSet};
-use ftml_dom::toc::TOCElem;
 use ftml_ontology::{
     narrative::{
         Narrative,
-        documents::Document,
+        documents::{Document, TocElem},
         elements::{DocumentElement, Problem, Section},
     },
     utils::Css,
 };
 use ftml_uris::IsNarrativeUri;
 
-pub async fn from_document(doc: Document) -> (Box<[Css]>, Box<[TOCElem]>) {
+pub async fn from_document(doc: Document) -> (Box<[Css]>, Box<[TocElem]>) {
     let (css, e) = from_document_i(doc, String::new(), VecSet::default()).await;
     (css.0.into_boxed_slice(), e)
 }
@@ -21,7 +20,7 @@ fn from_document_i(
     doc: Document,
     mut prefix: String,
     mut css: VecSet<Css>,
-) -> impl Future<Output = (VecSet<Css>, Box<[TOCElem]>)> + Send {
+) -> impl Future<Output = (VecSet<Css>, Box<[TocElem]>)> + Send {
     use flams_system::backend::backend;
     async move {
         let mut curr = doc.elements.iter();
@@ -35,7 +34,7 @@ fn from_document_i(
                     } => {
                         let old = std::mem::replace(&mut curr, children.iter());
                         stack.push((old, None));
-                        ret.push(TOCElem::Slide /*{uri:uri.clone()}*/);
+                        ret.push(TocElem::Slide /*{uri:uri.clone()}*/);
                     }
                     DocumentElement::Section(Section {
                         uri,
@@ -46,7 +45,7 @@ fn from_document_i(
                         let old = std::mem::replace(&mut curr, children.iter());
                         stack.push((
                             old,
-                            Some(TOCElem::Section {
+                            Some(TocElem::Section {
                                 title: title.clone(), // TODO
                                 id: prefix.clone(),
                                 uri: uri.clone(),
@@ -77,14 +76,14 @@ fn from_document_i(
                         let fut =
                             Box::pin(from_document_i(d, prefix.clone(), std::mem::take(&mut css)))
                                 as std::pin::Pin<
-                                    Box<dyn Future<Output = (_, Box<[TOCElem]>)> + Send>,
+                                    Box<dyn Future<Output = (_, Box<[TocElem]>)> + Send>,
                                 >;
                         let (ncss, children) = fut.await;
                         css = ncss;
 
                         std::mem::swap(&mut prefix, &mut id);
                         if !children.is_empty() {
-                            ret.push(TOCElem::Inputref {
+                            ret.push(TocElem::Inputref {
                                 uri: target.clone(),
                                 title,
                                 id,
@@ -96,7 +95,7 @@ fn from_document_i(
                         let old = std::mem::replace(&mut curr, d.elements.iter());
                         stack.push((
                             old,
-                            Some(TOCElem::Inputref {
+                            Some(TocElem::Inputref {
                                 id: prefix.clone(),
                                 uri: target.clone(),
                                 title,
@@ -111,7 +110,7 @@ fn from_document_i(
                         */
                     }
                     DocumentElement::Paragraph(p) => {
-                        ret.push(TOCElem::Paragraph {
+                        ret.push(TocElem::Paragraph {
                             styles: p.styles.clone().into_vec(),
                             kind: p.kind, /*,uri:p.uri.clone()*/
                         });
@@ -128,7 +127,7 @@ fn from_document_i(
                         let old = std::mem::replace(&mut curr, children.iter());
                         stack.push((
                             old,
-                            Some(TOCElem::SkippedSection {
+                            Some(TocElem::SkippedSection {
                                 children: std::mem::take(&mut ret),
                             }),
                         ));
@@ -150,7 +149,7 @@ fn from_document_i(
             None => break,
             Some((
                 iter,
-                Some(TOCElem::Inputref {
+                Some(TocElem::Inputref {
                     /*mut id,
                     uri,
                     title,
@@ -162,7 +161,7 @@ fn from_document_i(
             std::mem::swap(&mut prefix, &mut id);
             std::mem::swap(&mut ret, &mut children);
             if !children.is_empty() {
-            ret.push(TOCElem::Inputref {
+            ret.push(TocElem::Inputref {
             id,
             uri,
             title,
@@ -172,7 +171,7 @@ fn from_document_i(
             }*/
             Some((
                 iter,
-                Some(TOCElem::Section {
+                Some(TocElem::Section {
                     mut id,
                     uri,
                     title,
@@ -183,7 +182,7 @@ fn from_document_i(
                 std::mem::swap(&mut prefix, &mut id);
                 std::mem::swap(&mut ret, &mut children);
                 if title.is_some() || !children.is_empty() {
-                    ret.push(TOCElem::Section {
+                    ret.push(TocElem::Section {
                         id,
                         uri,
                         title,
@@ -191,11 +190,11 @@ fn from_document_i(
                     });
                 }
             }
-            Some((iter, Some(TOCElem::SkippedSection { mut children }))) => {
+            Some((iter, Some(TocElem::SkippedSection { mut children }))) => {
                 curr = iter;
                 std::mem::swap(&mut ret, &mut children);
                 if !children.is_empty() {
-                    ret.push(TOCElem::SkippedSection { children });
+                    ret.push(TocElem::SkippedSection { children });
                 }
             }
             Some((iter, _)) => curr = iter,

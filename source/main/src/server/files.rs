@@ -1,5 +1,4 @@
-use std::{path::PathBuf, sync::atomic::AtomicU64};
-
+use super::ServerState;
 use axum::body::Body;
 use flams_math_archives::{
     backend::{GlobalBackend, LocalBackend},
@@ -12,10 +11,9 @@ use ftml_uris::{
     ArchiveId, DocumentUri, IsNarrativeUri, Language, UriWithArchive, UriWithPath,
 };
 use http::Request;
+use std::{path::PathBuf, sync::atomic::AtomicU64};
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
-
-use super::ServerState;
 
 #[derive(Clone, Default)]
 pub struct ImageStore(flams_utils::triomphe::Arc<ImageStoreI>);

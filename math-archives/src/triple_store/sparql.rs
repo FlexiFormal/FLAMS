@@ -3,6 +3,7 @@ pub mod spargebra {
     pub use oxigraph::sparql::*;
     pub use spargebra::{algebra, term};
 }
+use sparesults::QueryResultsSerializer;
 pub use spargebra::*;
 
 use ftml_ontology::narrative::elements::{ParagraphOrProblemKind, problems::CognitiveDimension};
@@ -101,44 +102,53 @@ pub enum QueryError {
     #[error("{0}")]
     Syntax(#[from] spargebra::SparqlSyntaxError),
     #[error("{0}")]
-    Evaluation(#[from] spargebra::EvaluationError),
+    Evaluation(#[from] QueryEvaluationError),
     #[error("{0}")]
     Utf8(#[from] std::string::FromUtf8Error),
 }
 
-pub struct QueryResult(pub(super) QueryResults);
-impl AsRef<QueryResults> for QueryResult {
+pub struct QueryResult<'r>(pub(super) QueryResults<'r>);
+impl<'r> AsRef<QueryResults<'r>> for QueryResult<'r> {
     #[inline]
-    fn as_ref(&self) -> &QueryResults {
+    fn as_ref(&self) -> &QueryResults<'r> {
         &self.0
     }
 }
-impl std::ops::Deref for QueryResult {
-    type Target = QueryResults;
+impl<'r> std::ops::Deref for QueryResult<'r> {
+    type Target = QueryResults<'r>;
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl QueryResult {
+impl<'r> QueryResult<'r> {
     /// ### Errors
-    pub fn into_json(self) -> Result<String, QueryError> {
+    pub fn into_json(self) -> Result<String, std::io::Error> {
         use sparesults::QueryResultsFormat;
         let mut buf = Vec::new();
+        let ser = QueryResultsSerializer::from_format(QueryResultsFormat::Json);
         match self.0 {
-            QueryResults::Boolean(_) | QueryResults::Solutions(_) => {
-                self.0.write(&mut buf, QueryResultsFormat::Json)?;
+            QueryResults::Boolean(b) => {
+                ser.serialize_boolean_to_writer(&mut buf, b)?;
+            }
+            QueryResults::Solutions(sol) => {
+                let mut ser =
+                    ser.serialize_solutions_to_writer(&mut buf, sol.variables().to_vec())?;
+                for s in sol.flatten() {
+                    ser.serialize(s.iter())?;
+                }
+                ser.finish()?;
             }
             QueryResults::Graph(_) => {
-                self.0
-                    .write_graph(&mut buf, oxigraph::io::RdfFormat::Turtle)?;
+                return Ok(String::new());
+                //self.0.write_graph(&mut buf, oxigraph::io::RdfFormat::Turtle)?;
             }
         }
-        Ok(String::from_utf8(buf)?)
+        String::from_utf8(buf).map_err(|e| std::io::Error::other(e.to_string()))
     }
 
     #[must_use]
-    pub fn into_uris<U: FtmlUri>(self) -> RetIter<U> {
+    pub fn into_uris<U: FtmlUri>(self) -> RetIter<'r, U> {
         RetIter(
             match self.0 {
                 QueryResults::Boolean(_) | QueryResults::Graph(_) => RetIterI::None,
@@ -150,21 +160,21 @@ impl QueryResult {
 }
 
 #[derive(Default)]
-enum RetIterI {
+enum RetIterI<'r> {
     #[default]
     None,
-    Sols(QuerySolutionIter),
+    Sols(QuerySolutionIter<'r>),
 }
 
-pub struct RetIter<U: FtmlUri>(RetIterI, PhantomData<U>);
-impl<U: FtmlUri> Default for RetIter<U> {
+pub struct RetIter<'r, U: FtmlUri>(RetIterI<'r>, PhantomData<U>);
+impl<U: FtmlUri> Default for RetIter<'_, U> {
     #[inline]
     fn default() -> Self {
         Self(RetIterI::default(), PhantomData)
     }
 }
 
-impl<U: FtmlUri> Iterator for RetIter<U> {
+impl<U: FtmlUri> Iterator for RetIter<'_, U> {
     type Item = U;
     fn next(&mut self) -> Option<Self::Item> {
         let RetIterI::Sols(s) = &mut self.0 else {
@@ -186,10 +196,10 @@ impl<U: FtmlUri> Iterator for RetIter<U> {
     }
 }
 
-pub struct LOIter {
-    pub(super) inner: QuerySolutionIter,
+pub struct LOIter<'r> {
+    pub(super) inner: QuerySolutionIter<'r>,
 }
-impl Iterator for LOIter {
+impl Iterator for LOIter<'_> {
     type Item = (DocumentElementUri, ParagraphOrProblemKind);
     fn next(&mut self) -> Option<Self::Item> {
         use spargebra::term::Term;

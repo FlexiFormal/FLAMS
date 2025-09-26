@@ -2,12 +2,10 @@
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
-        "runnables": {
+        "cargo": {
           "extraEnv": {
             "DATABASE_URL": "sqlite:./resources/migrations/users.sqlite?mode=rwc"
-          }
-        },
-        "cargo": {
+          },
           "features": [
             //"ts",
             //"ws",

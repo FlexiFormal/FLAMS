@@ -21,7 +21,7 @@ impl RDFStore {
         self.store.len().unwrap_or_default()
     }
     pub fn add_quads(&self, iter: impl Iterator<Item = Quad>) {
-        let loader = self.store.bulk_loader();
+        let mut loader = self.store.bulk_loader();
         let _ = loader.load_quads(iter);
     }
 
@@ -94,7 +94,7 @@ impl RDFStore {
             return;
         };
         let buf = std::io::BufReader::new(file);
-        let loader = self.store.bulk_loader();
+        let mut loader = self.store.bulk_loader();
         let reader = oxigraph::io::RdfParser::from_format(oxigraph::io::RdfFormat::Turtle)
             .with_default_graph(graph)
             .for_reader(buf);

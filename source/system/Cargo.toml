@@ -64,8 +64,8 @@ url = { workspace = true }
 git-url-parse = { workspace = true }
 
 oxigraph = { workspace = true }
-spargebra = { workspace = true, features = ["rdf-star"] }
-sparesults = { workspace = true, features = ["rdf-star"] }
+spargebra = { workspace = true }
+sparesults = { workspace = true }
 oxrdfio = { workspace = true }
 
 serde = { workspace = true }

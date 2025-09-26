@@ -71,6 +71,26 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         super::server_fns::document(uri, rp, a, p, d, l)
     }
 
+    async fn get_toc(
+        &self,
+        uri: Option<DocumentUri>,
+        rp: Option<String>,
+        a: Option<ftml_uris::ArchiveId>,
+        p: Option<String>,
+        d: Option<String>,
+        l: Option<ftml_uris::Language>,
+    ) -> Result<
+        (
+            Box<[ftml_ontology::utils::Css]>,
+            Box<[ftml_ontology::narrative::documents::TocElem]>,
+        ),
+        ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+    > {
+        super::server_fns::toc(uri, rp, a, p, d, l)
+            .await
+            .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))
+    }
+
     fn get_module(
         &self,
         uri: Option<ftml_uris::ModuleUri>,

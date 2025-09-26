@@ -1,22 +1,23 @@
-use flams_utils::unwrap;
-use ftml_dom::toc::TOCElem;
 use ftml_ontology::{
-    narrative::elements::{
-        Notation, ParagraphOrProblemKind, SlideElement,
-        problems::{ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz},
+    narrative::{
+        documents::TocElem,
+        elements::{
+            Notation, ParagraphOrProblemKind, SlideElement,
+            problems::{ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz},
+        },
     },
     utils::Css,
 };
 use ftml_uris::{
     ArchiveId, DocumentElementUri, DocumentUri, FtmlUri, IsDomainUri, IsNarrativeUri, Language,
     NarrativeUri, PathUri, SimpleUriName, SymbolUri, Uri, UriName, UriPath, UriWithArchive,
-    UriWithPath, components::UriComponentTuple,
+    UriWithPath,
 };
 use leptos::prelude::*;
 use std::str::FromStr;
 
 #[cfg(feature = "ssr")]
-use ftml_uris::components::{DocumentUriComponents, SymbolUriComponents, UriComponents};
+use ftml_uris::components::{DocumentUriComponents, UriComponents};
 
 ftml_uris::compfun! {
     #[server(
@@ -157,7 +158,7 @@ ftml_uris::compfun! {
     )]
     pub async fn toc(
         uri: DocumentUri
-    ) -> Result<(Box<[Css]>, Box<[TOCElem]>), ServerFnError<String>> {
+    ) -> Result<(Box<[Css]>, Box<[TocElem]>), ServerFnError<String>> {
         let Result::<DocumentUriComponents, _>::Ok(comps) = uri else {
             return Err("invalid uri components".to_string().into());
         };
@@ -482,10 +483,10 @@ mod server {
     use flams_utils::{unwrap, vecmap::VecSet};
     use flams_web_utils::{blocking_server_fn, not_found};
     use ftml_backend::BackendError;
-    use ftml_dom::toc::TOCElem;
     use ftml_ontology::{
         narrative::{
             Narrative,
+            documents::TocElem,
             elements::{
                 DocumentElement, LogicalParagraph, Notation, ParagraphOrProblemKind, Problem,
                 Section, SlideElement,
@@ -520,7 +521,7 @@ mod server {
 
     pub async fn toc(
         uri: DocumentUri,
-    ) -> Result<(Box<[Css]>, Box<[TOCElem]>), ServerFnError<String>> {
+    ) -> Result<(Box<[Css]>, Box<[TocElem]>), ServerFnError<String>> {
         let doc = backend()
             .get_document_async::<TokioEngine>(&uri)
             .await

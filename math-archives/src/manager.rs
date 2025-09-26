@@ -13,10 +13,15 @@ use crate::{
         path_ext::{PathExt, RelPath},
     },
 };
+#[cfg(feature = "deepsize")]
+use flams_backend_types::ManagerCacheSize;
 use flams_backend_types::archive_json::{ArchiveIndex, Institution};
 use ftml_ontology::{
     domain::modules::Module,
-    utils::{RefTree, TreeChild, awaitable::AsyncCache},
+    utils::{
+        RefTree, TreeChild,
+        awaitable::{AsyncCache, MaybeValue},
+    },
 };
 use ftml_uris::{ArchiveId, ArchiveUri, BaseUri, DocumentUri, ModuleUri, UriPath, UriWithArchive};
 
@@ -42,6 +47,35 @@ impl Default for ArchiveManager {
 }
 
 impl ArchiveManager {
+    #[cfg(feature = "deepsize")]
+    pub fn memory(&self) -> ManagerCacheSize {
+        use deepsize::DeepSizeOf;
+        let relations = self.triple_store.num_relations();
+        let mut num_modules = 0;
+        let mut modules_bytes = 0;
+        self.modules.all(|_, v| {
+            num_modules += 1;
+            if let MaybeValue::Done(Ok(m)) = &*v.read() {
+                modules_bytes += m.deep_size_of();
+            }
+        });
+        let mut num_documents = 0;
+        let mut documents_bytes = 0;
+        self.documents.all(|_, v| {
+            num_documents += 1;
+            if let MaybeValue::Done(Ok(d)) = &*v.read() {
+                documents_bytes += d.deep_size_of();
+            }
+        });
+        ManagerCacheSize {
+            num_modules,
+            modules_bytes,
+            num_documents,
+            documents_bytes,
+            relations,
+        }
+    }
+
     #[inline]
     #[must_use]
     pub fn all_archives(&self) -> impl std::ops::Deref<Target = [Archive]> + '_ {

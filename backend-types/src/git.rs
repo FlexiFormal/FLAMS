@@ -192,6 +192,7 @@ pub struct Branch {
 #[cfg_attr(feature = "typescript", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Commit {
     pub id: String,
+    #[cfg_attr(feature = "typescript", tsify(type = "string"))]
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub parent_ids: Vec<String>,
     pub title: String,

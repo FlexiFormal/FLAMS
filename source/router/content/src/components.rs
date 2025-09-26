@@ -1,7 +1,7 @@
 #![allow(clippy::must_use_candidate)]
 
 use flams_web_utils::components::wait_and_then_fn;
-use ftml_components::SidebarPosition;
+use ftml_components::{SidebarPosition, config::FtmlConfig};
 use ftml_dom::{FtmlViews, utils::css::CssExt};
 use ftml_uris::{
     DocumentUri, Uri,
@@ -108,6 +108,7 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView 
                 Uri::DocumentElement(d) => Some(d.into()),
                 _ => None,
             };
+            FtmlConfig::set_toc_source(ftml_dom::toc::TocSource::Get);
             crate::Views::render_fragment(uri, position, true, move || {
                 crate::Views::render_ftml(html.into_string(), None)
             })
@@ -124,6 +125,7 @@ pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
             for css in css {
                 css.inject();
             }
+            FtmlConfig::set_toc_source(ftml_dom::toc::TocSource::Get);
             crate::Views::setup_document(uri, SidebarPosition::Next, true, move || {
                 crate::Views::render_ftml(html.into_string(), None)
             })
