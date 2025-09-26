@@ -374,7 +374,7 @@ lib-cargo-args = [
     "-Z",
     "build-std=std,panic_abort,core,alloc",
     "-Z",
-    "build-std-features=optimize_for_size,panic_immediate_abort",
+    "build-std-features=optimize_for_size",
     "--timings",
 ]
 bin-cargo-args = ["--timings"]
