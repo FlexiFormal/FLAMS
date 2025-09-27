@@ -58,6 +58,9 @@ impl Drop for SandboxedBackendI {
 }
 
 impl SandboxedBackend {
+    pub fn load_all(&self) {
+        self.0.manager.load(&[&self.0.path]);
+    }
     #[inline]
     #[must_use]
     pub fn root(&self) -> &Path {
@@ -294,7 +297,7 @@ impl SandboxedBackend {
         self.0.manager.load_one(&manifest, RelPath::from_id(&id));
     }
 
-    #[deprecated(note = "needs refactoring: should register with manager, but can't")]
+    //#[deprecated(note = "needs refactoring: should register with manager, but can't")]
     pub fn maybe_copy(&self, archive: &LocalArchive) {
         if !self.0.repos.read().iter().any(|a| a.id() == archive.id()) {
             self.0

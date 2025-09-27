@@ -429,6 +429,9 @@ impl Queue {
                 });
             }
         });
+        if let AnyBackend::Sandbox(b) = &self.0.backend {
+            b.load_all();
+        }
         acc
     }
 

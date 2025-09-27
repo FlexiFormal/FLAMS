@@ -145,7 +145,7 @@ impl TaskState {
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
                       require_login(move || wait_and_then_fn(
-                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
+                          move || get_log(queue,archive.clone(),rel_path.clone(),tc.clone()),
                           |s| {
                             view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
                                 <pre style="width:fit-content;font-size:smaller;">{s}</pre>
