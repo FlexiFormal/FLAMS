@@ -398,20 +398,21 @@ impl Queue {
         self.maybe_restart();
         if let AnyBackend::Sandbox(b) = &self.0.backend {
             b.clear();
-        }
-        let mut acc = 0;
-        backend().with_archives(|archives| {
-            for a in archives {
-                let Archive::Local(archive) = a else { continue };
-
-                if let AnyBackend::Sandbox(b) = &self.0.backend {
+            backend().with_archives(|archives| {
+                for a in archives {
+                    let Archive::Local(archive) = a else { continue };
                     b.maybe_copy(archive);
                     if clean {
                         let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
                     }
-                } else if clean {
-                    let _ = std::fs::remove_dir_all(archive.out_dir());
                 }
+                b.load_all();
+            });
+        };
+        let mut acc = 0;
+        self.0.backend.with_archives(|archives| {
+            for a in archives {
+                let Archive::Local(archive) = a else { continue };
                 acc += archive.with_sources(|d| {
                     let d = d.dfs();
                     let map = &mut *self.0.map.write();
@@ -429,9 +430,6 @@ impl Queue {
                 });
             }
         });
-        if let AnyBackend::Sandbox(b) = &self.0.backend {
-            b.load_all();
-        }
         acc
     }
 
