@@ -55,33 +55,68 @@ ftml_uris::compfun! {
 )]
 pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>> {
     use flams_math_archives::backend::LocalBackend;
-    let m = match uri {
-        Uri::Base(_) | Uri::Archive(_) | Uri::Path(_) => {
-            return Err("not in a document".to_string().into());
-        }
-        Uri::Document(d) => return Ok(d),
-        Uri::DocumentElement(d) => return Ok(d.document_uri().clone()),
-        Uri::Module(ref m) => m,
-        Uri::Symbol(ref s) => s.module_uri(),
-    };
-    flams_math_archives::backend::GlobalBackend.with_local_archive(m.archive_id(), |o| {
-        let Some(archive) = o else {
-            return Err(format!("no local archive {} found", m.archive_id()).into());
-        };
-        let mut mname = m.module_name().first();
-        let mut file = archive.source_dir();
-        let maybe_step = if let Some(path) = m.path() {
-            let mut steps = path.steps();
-            let _ = steps.next_back();
-            for step in steps {
-                file = file.join(step);
+    tokio::task::spawn_blocking(move || {
+        let m = match uri {
+            Uri::Base(_) | Uri::Archive(_) | Uri::Path(_) => {
+                return Err("not in a document".to_string().into());
             }
-            path.steps().next_back()
-        } else {
-            None
+            Uri::Document(d) => return Ok(d),
+            Uri::DocumentElement(d) => return Ok(d.document_uri().clone()),
+            Uri::Module(ref m) => m,
+            Uri::Symbol(ref s) => s.module_uri(),
         };
-        if let Some(step) = maybe_step {
-            if let Ok(mut d) = std::fs::read_dir(file.join(step)) {
+        flams_math_archives::backend::GlobalBackend.with_local_archive(m.archive_id(), |o| {
+            let Some(archive) = o else {
+                return Err(format!("no local archive {} found", m.archive_id()).into());
+            };
+            let mut mname = m.module_name().first();
+            let mut file = archive.source_dir();
+            let maybe_step = if let Some(path) = m.path() {
+                let mut steps = path.steps();
+                let _ = steps.next_back();
+                for step in steps {
+                    file = file.join(step);
+                }
+                path.steps().next_back()
+            } else {
+                None
+            };
+            if let Some(step) = maybe_step {
+                if let Ok(mut d) = std::fs::read_dir(file.join(step)) {
+                    if let Some(rp) =
+                        d.find_map::<String, _>(|p| {
+                            p.ok().and_then(|p| {
+                                let fnm = p.file_name();
+                                let name = fnm.as_os_str().as_encoded_bytes();
+                                let Some(name) = name.strip_prefix(mname.as_bytes()) else {
+                                    return None;
+                                };
+                                let Some(name) = name.strip_prefix(&[b'.']) else {
+                                    return None;
+                                };
+                                let Some(lang) = name.strip_suffix(b".tex") else {
+                                    return None;
+                                };
+                                if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
+                                    Some(
+                                        p.path().as_os_str().to_str()?.strip_prefix(
+                                            archive.source_dir().as_os_str().to_str()?,
+                                        )?[1..]
+                                            .to_string(),
+                                    )
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                    {
+                        return DocumentUri::from_archive_relpath(m.archive_uri().clone(), &rp)
+                            .map_err(|e| e.to_string().into());
+                    }
+                    mname = step;
+                };
+            }
+            if let Ok(mut d) = std::fs::read_dir(file) {
                 if let Some(rp) = d.find_map::<String, _>(|p| {
                     p.ok().and_then(|p| {
                         let fnm = p.file_name();
@@ -111,42 +146,12 @@ pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>>
                     return DocumentUri::from_archive_relpath(m.archive_uri().clone(), &rp)
                         .map_err(|e| e.to_string().into());
                 }
-                mname = step;
             };
-        }
-        if let Ok(mut d) = std::fs::read_dir(file) {
-            if let Some(rp) = d.find_map::<String, _>(|p| {
-                p.ok().and_then(|p| {
-                    let fnm = p.file_name();
-                    let name = fnm.as_os_str().as_encoded_bytes();
-                    let Some(name) = name.strip_prefix(mname.as_bytes()) else {
-                        return None;
-                    };
-                    let Some(name) = name.strip_prefix(&[b'.']) else {
-                        return None;
-                    };
-                    let Some(lang) = name.strip_suffix(b".tex") else {
-                        return None;
-                    };
-                    if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
-                        Some(
-                            p.path()
-                                .as_os_str()
-                                .to_str()?
-                                .strip_prefix(archive.source_dir().as_os_str().to_str()?)?[1..]
-                                .to_string(),
-                        )
-                    } else {
-                        None
-                    }
-                })
-            }) {
-                return DocumentUri::from_archive_relpath(m.archive_uri().clone(), &rp)
-                    .map_err(|e| e.to_string().into());
-            }
-        };
-        Err("Not found".to_string().into())
+            Err("Not found".to_string().into())
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 ftml_uris::compfun! {
@@ -531,7 +536,7 @@ mod server {
 
     pub async fn fragment(
         uri: Uri,
-        _: Option<NarrativeUri>,
+        context: Option<NarrativeUri>,
     ) -> Result<(Uri, Box<[Css]>, Box<str>), BackendError<ServerFnErrorErr>> {
         use ftml_uris::UriKind;
         match &uri {
@@ -547,7 +552,7 @@ mod server {
             }
             Uri::DocumentElement(euri) => {
                 let Ok(e) = backend()
-                    .get_document_element_async::<TokioEngine>(&euri)
+                    .get_document_element_async::<TokioEngine>(euri)
                     .await
                 else {
                     not_found!();
@@ -578,7 +583,7 @@ mod server {
                     _ => return Err(BackendError::NoFragment),
                 }
             }
-            Uri::Symbol(suri) => get_definitions(suri.clone())
+            Uri::Symbol(suri) => get_definitions(suri.clone(), context)
                 .await
                 .ok_or_else(|| {
                     not_found!();
@@ -903,21 +908,77 @@ mod server {
         }
     }
 
-    async fn get_definitions(uri: SymbolUri) -> Option<(Box<[Css]>, Box<str>)> {
-        tokio::task::spawn_blocking(move || {
+    async fn get_definitions(
+        uri: SymbolUri,
+        context: Option<NarrativeUri>,
+    ) -> Option<(Box<[Css]>, Box<str>)> {
+        fn iter(
+            uri: &SymbolUri,
+            context: Option<NarrativeUri>,
+        ) -> impl Iterator<Item = DocumentElementUri> {
+            use flams_math_archives::triple_store::sparql::QueryResult;
             let iri = uri.to_iri();
-            let query = flams_math_archives::sparql!(SELECT DISTINCT ?x WHERE {
-                ?x ulo:defines iri.
-            })
-            .into();
-            let iter = GlobalBackend
+            let i = iri.clone();
+            let base = GlobalBackend
                 .triple_store()
-                .query(query)
-                .map(|r| r.into_uris())
-                .unwrap_or_default()
-                .collect::<Vec<_>>();
-
-            for uri in iter {
+                .query(
+                    flams_math_archives::sparql!(SELECT DISTINCT ?x WHERE {
+                        ?x ulo:defines i.
+                    })
+                    .into(),
+                )
+                .map(QueryResult::into_uris)
+                .unwrap_or_default();
+            match context {
+                None => either::Left(base),
+                Some(ctx) => {
+                    let lang = ctx.language();
+                    let language = format!(
+                        "SELECT DISTINCT ?x WHERE {{ ?x ulo:defines <{}>. ?d (ulo:contains|dc:hasPart)* ?x. ?d dc:language \"{}\". }}",
+                        iri.as_str(),
+                        lang
+                    );
+                    either::Right(
+                        ctx.ancestors()
+                            .flat_map(move |uri| {
+                                let query = if matches!(uri,Uri::Document(_)|Uri::DocumentElement(_)) {
+                                    format!(
+                                        "SELECT DISTINCT ?a WHERE {{ <{}> (ulo:contains|dc:hasPart)* ?x. ?x ulo:defines <{}>. }}",
+                                        uri.to_iri().as_str(),
+                                        iri.as_str()
+                                    )
+                                } else {
+                                    format!(
+                                        "SELECT DISTINCT ?a WHERE {{ <{}> (ulo:contains|dc:hasPart)* ?x. ?x ulo:defines <{}>. ?d (ulo:contains|dc:hasPart)* ?x. ?d dc:language \"{}\" }}",
+                                        uri.to_iri().as_str(),
+                                        iri.as_str(),
+                                        lang
+                                    )
+                                };
+                                GlobalBackend
+                                    .triple_store()
+                                    .query_str(query)
+                                    .map(QueryResult::into_uris)
+                                    .unwrap_or_default()
+                            })
+                            .chain(
+                                GlobalBackend
+                                    .triple_store()
+                                    .query_str(language)
+                                    .map_err(|e| {
+                                        println!("Error: {e}");
+                                        e
+                                    })
+                                    .map(QueryResult::into_uris)
+                                    .unwrap_or_default()
+                            )
+                            .chain(base),
+                    )
+                }
+            }
+        }
+        tokio::task::spawn_blocking(move || {
+            for uri in iter(&uri, context) {
                 if let Ok(def) = backend().get_typed_document_element(&uri) {
                     let LogicalParagraph { range, .. } = &*def;
                     if let Ok((css, r)) = backend().get_html_fragment(uri.document_uri(), *range) {

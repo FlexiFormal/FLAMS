@@ -21,6 +21,7 @@ export enum Settings {
   PreviewOn = "preview",
   SettingsToml = "settings_toml",
   FlamsPath = "flams_path",
+  RemoteFlams = "remote_flams"
 }
 
 export function register_commands(context: FLAMSPreContext) {

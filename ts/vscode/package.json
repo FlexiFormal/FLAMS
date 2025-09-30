@@ -129,6 +129,11 @@
             "type": "string",
             "default": "",
             "markdownDescription": "Path to your flams executable"
+          },
+          "flams.remote_flams": {
+            "type": "string",
+            "default": "https://mathhub.info",
+            "markdownDescription": "URL of your favorite remote flams instance"
           }
         }
       }

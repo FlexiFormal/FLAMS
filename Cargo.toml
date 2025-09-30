@@ -182,6 +182,15 @@ ftml5ever = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../Fle
 ulo = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/ulo" } #
 ftml-dom = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/dom" } #
 
+#ftml-uris = { path = "../../FlexiFormal/FTML/uris", features = ["interned"] }
+#ftml-ontology = { path = "../../FlexiFormal/FTML/ontology" }
+#ftml-backend = { path = "../../FlexiFormal/FTML/backend" }
+#ftml-parser = { path = "../../FlexiFormal/FTML/parser" }
+#ftml-components = { path = "../../FlexiFormal/FTML/components" }
+#ftml5ever = { path = "../../FlexiFormal/FTML/ftml5ever" }
+#ulo = { path = "../../FlexiFormal/FTML/ulo" }
+#ftml-dom = { path = "../../FlexiFormal/FTML/dom" }
+
 rstest = { version = "0.26" }
 
 # utils
@@ -341,13 +350,6 @@ tex_engine = { version = "0.1", features = ["multithreaded"] }
 # ahash = { version = "=0.8.11" } # for wasm; avoids getrandom v3, which needs special wasm support
 ahash = "0.8"
 getrandom = "0.3"
-
-#[patch.crates-io]
-#leptos = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#leptos_axum = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#leptos_meta = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#leptos_router = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
-#reactive_graph = { git = "https://github.com/Jazzpirate/leptos", branch = "patch-1" }
 
 [[workspace.metadata.leptos]]
 # project name

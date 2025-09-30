@@ -23,6 +23,7 @@ impl RDFStore {
     pub fn add_quads(&self, iter: impl Iterator<Item = Quad>) {
         let mut loader = self.store.bulk_loader();
         let _ = loader.load_quads(iter);
+        let _ = loader.commit();
     }
 
     #[must_use]
@@ -51,7 +52,7 @@ impl RDFStore {
                     .unwrap_unchecked()
                     .with_prefix("ulo", "http://mathhub.info/ulo")
                     .unwrap_unchecked()
-                    .with_prefix("dc", "http://purl.org/dc/elements/1.1")
+                    .with_prefix("dc", "http://purl.org/dc/terms")
                     .unwrap_unchecked()
                     .for_writer(writer)
             };
@@ -65,11 +66,14 @@ impl RDFStore {
     }
 
     /// ### Errors
-    pub fn query_str(&self, s: impl AsRef<str>) -> Result<sparql::QueryResult, sparql::QueryError> {
+    pub fn query_str(
+        &self,
+        s: impl AsRef<str>,
+    ) -> Result<sparql::QueryResult<'_>, sparql::QueryError> {
         let mut query_str = String::from(
             r"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
           PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-          PREFIX dc: <http://purl.org/dc/elements/1.1#>
+          PREFIX dc: <http://purl.org/dc/terms#>
           PREFIX ulo: <http://mathhub.info/ulo#>
       ",
         );
@@ -99,6 +103,7 @@ impl RDFStore {
             .with_default_graph(graph)
             .for_reader(buf);
         let _ = loader.load_quads(reader.filter_map(Result::ok));
+        let _ = loader.commit();
     }
 
     #[allow(unreachable_patterns)]
@@ -156,10 +161,13 @@ impl std::fmt::Debug for RDFStore {
 impl Default for RDFStore {
     fn default() -> Self {
         let store = oxigraph::store::Store::new().unwrap_or_else(|_| unreachable!());
-        store
-            .bulk_loader()
+        let mut loader = store.bulk_loader();
+        loader
             .load_quads(ulo::ulo::QUADS.iter().copied())
-            .unwrap_or_else(|_| unreachable!());
+            .expect("error loading ulo base ontology; this is a bug.");
+        loader
+            .commit()
+            .expect("error loading ulo base ontology; this is a bug.");
         Self { store }
     }
 }
