@@ -5,7 +5,7 @@ use ftml_uris::errors::UriParseError;
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
     #[error("element not found")]
-    NotFound,
+    NotFound(ftml_uris::UriKind),
     #[error("archive not found")]
     ArchiveNotFound,
     #[error("{0}")]
@@ -20,12 +20,23 @@ pub enum BackendError {
 impl Clone for BackendError {
     fn clone(&self) -> Self {
         match self {
-            Self::NotFound => Self::NotFound,
+            Self::NotFound(k) => Self::NotFound(*k),
             Self::ArchiveNotFound => Self::ArchiveNotFound,
             Self::Channel(e) => Self::Channel(*e),
             Self::Io(err) => Self::Io(clone_io(err)),
             Self::Decode(e) => Self::Decode(clone_bincode(e)),
             Self::OutOfRangeError(a, b) => Self::OutOfRangeError(*a, *b),
+        }
+    }
+}
+impl<E: std::fmt::Debug> From<BackendError> for ftml_backend::BackendError<E> {
+    fn from(value: BackendError) -> Self {
+        match value {
+            BackendError::NotFound(u) => ftml_backend::BackendError::NotFound(u),
+            BackendError::ArchiveNotFound => {
+                ftml_backend::BackendError::NotFound(ftml_uris::UriKind::Archive)
+            }
+            _ => ftml_backend::BackendError::ToDo(value.to_string()),
         }
     }
 }

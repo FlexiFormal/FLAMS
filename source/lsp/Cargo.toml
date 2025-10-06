@@ -1,7 +1,7 @@
 [package]
 name = "flams-lsp"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [lints]
 workspace = true
@@ -20,6 +20,7 @@ flams-ftml = { workspace = true }
 flams-utils = { workspace = true }
 flams-stex = { workspace = true }
 
+rustc-hash = { workspace = true }
 tracing = { workspace = true }
 async-lsp = { workspace = true }
 futures = { workspace = true }

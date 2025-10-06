@@ -11,7 +11,7 @@ use ftml_uris::{
     ArchiveId, DocumentUri, IsNarrativeUri, Language, UriWithArchive, UriWithPath,
 };
 use http::Request;
-use std::{path::PathBuf, sync::atomic::AtomicU64};
+use std::{borrow::Cow, path::PathBuf, sync::atomic::AtomicU64};
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
 
@@ -118,8 +118,9 @@ pub(crate) async fn doc_handler(
         *resp.status_mut() = http::StatusCode::NOT_FOUND;
         resp
     };
-    let err = |_: &str| {
+    let err = |s: &str| {
         let mut resp = axum::response::Response::new(ServeFileSystemResponseBody::default());
+        tracing::info!("pdf download error: {s}");
         *resp.status_mut() = http::StatusCode::BAD_REQUEST;
         resp
     };
@@ -192,7 +193,10 @@ pub(crate) async fn doc_handler(
         .path_and_query(pandq)
         .build()
         .unwrap_or(req_uri);
-    let req = Request::builder().uri(req_uri).body(Body::empty()).unwrap();
+    let req = Request::builder()
+        .uri(req_uri)
+        .body(Body::empty())
+        .expect("this is a bug");
     ServeFile::new_with_mime(path, &mime)
         .oneshot(req)
         .await
@@ -204,14 +208,15 @@ impl<'a> Params<'a> {
     fn new(uri: &'a http::Uri) -> Option<Self> {
         uri.query().map(Self)
     }
-    fn get_str(&self, name: &str) -> Option<&str> {
+    fn get_str(&self, name: &str) -> Option<Cow<'_, str>> {
         self.0
             .split('&')
             .find(|s| s.starts_with(name) && s.as_bytes().get(name.len()) == Some(&b'='))?
             .split('=')
             .nth(1)
+            .and_then(|s| urlencoding::decode(s).ok())
     }
     fn get(&self, name: &str) -> Option<String> {
-        self.get_str(name).map(|s| s.to_string())
+        self.get_str(name).map(Cow::into_owned)
     }
 }

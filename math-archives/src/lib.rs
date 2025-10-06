@@ -318,7 +318,7 @@ impl MathArchive for LocalArchive {
         );
         let out = Self::escape_module_name(&out, name);
         if !out.exists() {
-            return Err(BackendError::NotFound);
+            return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
         }
         let file = std::io::BufReader::new(std::fs::File::open(out)?);
         let ret = bincode::decode_from_reader(file, bincode::config::standard())?;
@@ -340,7 +340,7 @@ impl MathArchive for LocalArchive {
         let out = Self::escape_module_name(&out, name);
         A::block_on(move || {
             if !out.exists() {
-                return Err(BackendError::NotFound);
+                return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
             }
             let file = std::io::BufReader::new(std::fs::File::open(out)?);
             let ret = bincode::decode_from_reader(file, bincode::config::standard())?;

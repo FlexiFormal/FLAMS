@@ -53,12 +53,16 @@ ftml_uris::compfun! {
   input=server_fn::codec::GetUrl,
   output=server_fn::codec::Json
 )]
-pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>> {
+pub async fn document_of(
+    uri: Uri,
+) -> Result<DocumentUri, ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>> {
     use flams_math_archives::backend::LocalBackend;
     tokio::task::spawn_blocking(move || {
         let m = match uri {
             Uri::Base(_) | Uri::Archive(_) | Uri::Path(_) => {
-                return Err("not in a document".to_string().into());
+                return Err(ftml_backend::BackendError::InvalidArgument(
+                    "not in a document".to_string(),
+                ));
             }
             Uri::Document(d) => return Ok(d),
             Uri::DocumentElement(d) => return Ok(d.document_uri().clone()),
@@ -67,7 +71,9 @@ pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>>
         };
         flams_math_archives::backend::GlobalBackend.with_local_archive(m.archive_id(), |o| {
             let Some(archive) = o else {
-                return Err(format!("no local archive {} found", m.archive_id()).into());
+                return Err(ftml_backend::BackendError::NotFound(
+                    ftml_uris::UriKind::Archive,
+                ));
             };
             let mut mname = m.module_name().first();
             let mut file = archive.source_dir();
@@ -91,7 +97,7 @@ pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>>
                                 let Some(name) = name.strip_prefix(mname.as_bytes()) else {
                                     return None;
                                 };
-                                let Some(name) = name.strip_prefix(&[b'.']) else {
+                                let Some(name) = name.strip_prefix(b".") else {
                                     return None;
                                 };
                                 let Some(lang) = name.strip_suffix(b".tex") else {
@@ -111,7 +117,9 @@ pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>>
                         })
                     {
                         return DocumentUri::from_archive_relpath(m.archive_uri().clone(), &rp)
-                            .map_err(|e| e.to_string().into());
+                            .map_err(|e| {
+                                ftml_backend::BackendError::InvalidArgument(e.to_string())
+                            });
                     }
                     mname = step;
                 };
@@ -124,7 +132,7 @@ pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>>
                         let Some(name) = name.strip_prefix(mname.as_bytes()) else {
                             return None;
                         };
-                        let Some(name) = name.strip_prefix(&[b'.']) else {
+                        let Some(name) = name.strip_prefix(b".") else {
                             return None;
                         };
                         let Some(lang) = name.strip_suffix(b".tex") else {
@@ -144,14 +152,20 @@ pub async fn document_of(uri: Uri) -> Result<DocumentUri, ServerFnError<String>>
                     })
                 }) {
                     return DocumentUri::from_archive_relpath(m.archive_uri().clone(), &rp)
-                        .map_err(|e| e.to_string().into());
+                        .map_err(|e| ftml_backend::BackendError::InvalidArgument(e.to_string()));
                 }
             };
-            Err("Not found".to_string().into())
+            Err(ftml_backend::BackendError::NotFound(
+                ftml_uris::UriKind::Document,
+            ))
         })
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| {
+        ftml_backend::BackendError::Connection(
+            leptos::server_fn::error::ServerFnErrorErr::ServerError(e.to_string()),
+        )
+    })?
 }
 
 ftml_uris::compfun! {
@@ -163,15 +177,10 @@ ftml_uris::compfun! {
     )]
     pub async fn toc(
         uri: DocumentUri
-    ) -> Result<(Box<[Css]>, Box<[TocElem]>), ServerFnError<String>> {
-        let Result::<DocumentUriComponents, _>::Ok(comps) = uri else {
-            return Err("invalid uri components".to_string().into());
-        };
-
-        match comps.parse(flams_router_base::uris::get_uri) {
-            Ok(uri) => server::toc(uri).await,
-            Err(e) => Err(format!("Invalid uri: {e}").into()),
-        }
+    ) -> Result<(Box<[Css]>, Box<[TocElem]>), ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>> {
+        let comps = uri?;
+        let uri = comps.parse(flams_router_base::uris::get_uri)?;
+        server::toc(uri).await
     }
 }
 
@@ -526,11 +535,11 @@ mod server {
 
     pub async fn toc(
         uri: DocumentUri,
-    ) -> Result<(Box<[Css]>, Box<[TocElem]>), ServerFnError<String>> {
-        let doc = backend()
-            .get_document_async::<TokioEngine>(&uri)
-            .await
-            .map_err(|e| e.to_string())?;
+    ) -> Result<
+        (Box<[Css]>, Box<[TocElem]>),
+        ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+    > {
+        let doc = backend().get_document_async::<TokioEngine>(&uri).await?;
         Ok(crate::toc::from_document(doc).await)
     }
 
@@ -560,7 +569,9 @@ mod server {
                 };
                 match &*e {
                     DocumentElement::Paragraph(LogicalParagraph { range, .. })
-                    | DocumentElement::Problem(Problem { range, .. }) => {
+                    | DocumentElement::Problem(Problem { range, .. })
+                    | DocumentElement::Section(Section { range, .. })
+                    | DocumentElement::Slide { range, .. } => {
                         let Ok((css, html)) = backend()
                             .get_html_fragment_async::<TokioEngine>(euri.document_uri(), *range)
                             .await
@@ -570,17 +581,7 @@ mod server {
                         };
                         Ok((uri, insert_base_url(filter_paras(css)), html))
                     }
-                    DocumentElement::Section(Section { range, .. }) => {
-                        let Ok((css, html)) = backend()
-                            .get_html_fragment_async::<TokioEngine>(euri.document_uri(), *range)
-                            .await
-                        else {
-                            not_found!();
-                            return Err(BackendError::HtmlNotFound);
-                        };
-                        Ok((uri, insert_base_url(filter_paras(css)), html))
-                    }
-                    _ => return Err(BackendError::NoFragment),
+                    _ => Err(BackendError::NoFragment),
                 }
             }
             Uri::Symbol(suri) => get_definitions(suri.clone(), context)
@@ -1150,16 +1151,19 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<Uri>>, ServerFnError<S
         Some(m | s.parse::<UriName>().ok()?)
     }
 
-    Ok(uris
-        .into_iter()
-        .map(|s| {
-            get_sym_uri(&s).map_or_else(
-                || {
-                    get_mod_uri(&s)
-                        .map_or_else(|| get_doc_uri(&s).map(Into::into), |s| Some(s.into()))
-                },
-                |s| Some(s.into()),
-            )
-        })
-        .collect())
+    tokio::task::spawn_blocking(move || {
+        uris.into_iter()
+            .map(|s| {
+                get_sym_uri(&s).map_or_else(
+                    || {
+                        get_mod_uri(&s)
+                            .map_or_else(|| get_doc_uri(&s).map(Into::into), |s| Some(s.into()))
+                    },
+                    |s| Some(s.into()),
+                )
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string().into())
 }

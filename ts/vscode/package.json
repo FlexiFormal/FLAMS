@@ -78,6 +78,16 @@
 					"command": "flams.buildOne",
 					"group": "navigation",
 					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+				},
+				{
+					"command": "flams.exportTex",
+					"group": "navigation",
+					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+				},
+				{
+					"command": "flams.exportHtml",
+					"group": "navigation",
+					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
 				}
       ]
     },
@@ -99,6 +109,14 @@
         "command": "flams.buildOne",
         "title": "Build file",
         "icon": "$(testing-run-icon)"
+      },
+      {
+        "command": "flams.exportTex",
+        "title": "Export standalone tex"
+      },
+      {
+        "command": "flams.exportHtml",
+        "title": "Export standalone HTML"
       }
     ],
     "configuration": [

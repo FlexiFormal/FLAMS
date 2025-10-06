@@ -188,6 +188,12 @@ impl lsp::notification::Notification for StandaloneExport {
     const METHOD: &str = "flams/standaloneExport";
 }
 
+pub(crate) struct HtmlExport;
+impl lsp::notification::Notification for HtmlExport {
+    type Params = StandaloneExportParams;
+    const METHOD: &str = "flams/htmlExport";
+}
+
 struct UpdateMathHub;
 impl lsp::notification::Notification for UpdateMathHub {
     type Params = ();
@@ -318,6 +324,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 
         r.notification::<Reload>(Self::reload);
         r.notification::<StandaloneExport>(Self::export_standalone);
+        r.notification::<HtmlExport>(Self::export_html);
         r.notification::<InstallArchives>(Self::install);
         r.notification::<NewArchive>(Self::new_archive);
         //r.request(handler)

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { FLAMSContext, FLAMSPreContext } from "../extension";
+import { FLAMSContext, FLAMSPreContext, getContext } from "../extension";
 import { CancellationToken } from "vscode-languageclient";
 import * as language from "vscode-languageclient";
 import { MathHubTreeProvider } from "./mathhub";
@@ -10,7 +10,9 @@ export enum Commands {
   openFile = "flams.openFile",
   installArchive = "flams.mathhub.install",
   buildOne = "flams.buildOne",
-  buildAll = "flams.buildAll"
+  buildAll = "flams.buildAll",
+  exportTex = "flams.exportTex",
+  exportHtml = "flams.exportHtml"
 }
 
 export enum Lsp {
@@ -189,6 +191,15 @@ export function register_server_commands(context: FLAMSContext) {
       context.mathhub?.install(e),
     ),
   );
+
+  context.vsc.subscriptions.push(
+    vscode.commands.registerCommand(Commands.exportTex, (arg:vscode.Uri) => 
+		exportTex(arg)
+	));
+  context.vsc.subscriptions.push(
+    vscode.commands.registerCommand(Commands.exportHtml, (arg:vscode.Uri) => 
+		exportHtml(arg)
+	));
   context.vsc.subscriptions.push(
     vscode.commands.registerCommand(Commands.buildOne, (arg:vscode.Uri) => 
 		context.client?.sendRequest("flams/buildOne",<BuildFileParams>{uri:arg.toString()})
@@ -209,6 +220,46 @@ export function register_server_commands(context: FLAMSContext) {
   context.client.onNotification("flams/openFile", (v:string) =>{
     const uri = vscode.Uri.parse(v);
     vscode.window.showTextDocument(uri);
+  });
+}
+
+export function exportTex(doc:vscode.Uri) {
+  const context = getContext();
+  vscode.window.showOpenDialog({
+    title: "Export packaged standalone tex",
+    openLabel:"Select directory",
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+  }).then((uri) => {
+    const path = uri?.[0].fsPath;
+    if (!path) { return; }
+    context.client.sendNotification("flams/standaloneExport", 
+      <StandaloneExportParams>{ 
+        uri: doc.toString() ,
+        target:path,
+      }
+    );
+  });
+}
+
+export function exportHtml(doc:vscode.Uri) {
+  const context = getContext();
+  vscode.window.showOpenDialog({
+    title: "Export packaged standalone HTML",
+    openLabel:"Select directory",
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+  }).then((uri) => {
+    const path = uri?.[0].fsPath;
+    if (!path) { return; }
+    context.client.sendNotification("flams/htmlExport", 
+      <StandaloneExportParams>{ 
+        uri: doc.toString() ,
+        target:path,
+      }
+    );
   });
 }
 
@@ -366,22 +417,7 @@ function flamsTools(msg: any, context: FLAMSContext) {
       break;
     case "standalone":
       if (doc) {
-        vscode.window.showOpenDialog({
-          title: "Export packaged standalone document",
-          openLabel:"Select directory",
-          canSelectFiles: false,
-          canSelectFolders: true,
-          canSelectMany: false,
-        }).then((uri) => {
-          const path = uri?.[0].fsPath;
-          if (!path) { return; }
-          context.client.sendNotification("flams/standaloneExport", 
-            <StandaloneExportParams>{ 
-              uri: doc.uri.toString() ,
-              target:path,
-            }
-          );
-        });
+        exportTex(doc.uri);
       } else {
         vscode.window.showInformationMessage("(No sTeX file in focus)");
       }

@@ -51,7 +51,7 @@ tracing-subscriber = { workspace = true }
 document-features = { workspace = true }
 
 ftml-ontology = { workspace = true }
-# ftml-backend = { workspace = true }
+ftml-backend = { workspace = true }
 ftml-uris = { workspace = true, features = ["interned"] }
 flams-backend-types = { workspace = true, features = ["serde"] }
 flams-git = { workspace = true, optional = true, features = ["git2"] }

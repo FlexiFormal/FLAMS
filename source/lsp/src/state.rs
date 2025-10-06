@@ -1,15 +1,15 @@
 use std::{collections::hash_map::Entry, path::Path};
 
-use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
+use async_lsp::{ClientSocket, LanguageClient, lsp_types as lsp};
 use flams_ftml::FtmlResult;
 use flams_math_archives::{
+    Archive, MathArchive,
     backend::{AnyBackend, GlobalBackend, HTMLData, TemporaryBackend},
     source_files::SourceEntry,
-    Archive, MathArchive,
 };
 use flams_stex::{
-    quickparse::stex::{DiagnosticLevel, STeXDiagnostic, STeXParseData, STeXParseDataI},
     OutputCont, RusTeX,
+    quickparse::stex::{DiagnosticLevel, STeXDiagnostic, STeXParseData, STeXParseDataI},
 };
 use flams_utils::{
     impossible,
@@ -20,7 +20,7 @@ use ftml_ontology::utils::RefTree;
 use ftml_uris::DocumentUri;
 
 use crate::{
-    annotations::to_diagnostic, documents::LSPDocument, ClientExt, LSPStore, ProgressCallbackServer,
+    ClientExt, LSPStore, ProgressCallbackServer, annotations::to_diagnostic, documents::LSPDocument,
 };
 
 #[derive(Clone)]
@@ -49,9 +49,7 @@ impl DocData {
             }
             (d2 @ Self::Data(_, _), Self::Doc(d1)) => {
                 {
-                    let Self::Data(ref mut d2, _) = d2 else {
-                        impossible!()
-                    };
+                    let Self::Data(d2, _) = d2 else { impossible!() };
                     merge_a(&mut d2.lock(), &mut d1.annotations.lock());
                 }
                 *d2 = Self::Doc(d1);
@@ -183,7 +181,7 @@ impl LSPState {
                     }
                 }
                 //let progress: ClientOutput = old.take_output().unwrap_or_else(|| unreachable!());
-                if let Some((ref e, ft)) = &mut res.error {
+                if let Some((e, ft)) = &mut res.error {
                     let mut done = None;
                     for ft in std::mem::take(ft) {
                         let url = UrlOrFile::File(ft.file.into());
@@ -302,19 +300,19 @@ impl LSPState {
     }
 
     pub fn relint_dependents(self, path: std::sync::Arc<Path>) { /*
-                                                                 let docs = self.documents.read();
-                                                                 let mut deps = vec![UrlOrFile::File(path.clone())];
-                                                                 for (k,v) in docs.iter() {
-                                                                   if matches!(k,UrlOrFile::File(p) if p == path) { continue }
-                                                                   let d = match v {
-                                                                     DocData::Doc(d) => &d.annotations,
-                                                                     DocData::Data(d,_) => d
-                                                                   };
-                                                                   let lock = d.lock();
-                                                                   if lock.dependencies.contains(&path) {
-                                                                     deps.push(k.clone());
-                                                                   }
-                                                                 } */
+        let docs = self.documents.read();
+        let mut deps = vec![UrlOrFile::File(path.clone())];
+        for (k,v) in docs.iter() {
+        if matches!(k,UrlOrFile::File(p) if p == path) { continue }
+        let d = match v {
+        DocData::Doc(d) => &d.annotations,
+        DocData::Data(d,_) => d
+        };
+        let lock = d.lock();
+        if lock.dependencies.contains(&path) {
+        deps.push(k.clone());
+        }
+        } */
     }
     /*
     fn relint_dependents_i(&mut self,path:std::sync::Arc<Path>,&mut v:Vec<UrlOrFile>) {

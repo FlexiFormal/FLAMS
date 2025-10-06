@@ -6,11 +6,12 @@
 */
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-#[cfg(any(
+/*#[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(doc)),
     not(any(feature = "ssr", feature = "hydrate"))
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
+*/
 
 #[cfg(feature = "ssr")]
 pub mod server;

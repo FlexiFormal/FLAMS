@@ -133,11 +133,14 @@ pub trait LocalBackend {
     {
         if uri.module.name().is_simple() {
             let m = self.get_module(uri.module_uri())?;
-            return m.get_as(uri.name()).ok_or(BackendError::NotFound);
+            return m
+                .get_as(uri.name())
+                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol));
         }
         let uri = uri.clone().simple_module();
         let m = self.get_module(uri.module_uri())?;
-        m.get_as(uri.name()).ok_or(BackendError::NotFound)
+        m.get_as(uri.name())
+            .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
     }
 
     /// # Errors
@@ -159,7 +162,8 @@ pub trait LocalBackend {
         Self: Sized,
     {
         let d = self.get_document(uri.document_uri())?;
-        d.get(uri.name()).ok_or(BackendError::NotFound)
+        d.get(uri.name())
+            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
     }
 
     /// # Errors
@@ -171,7 +175,8 @@ pub trait LocalBackend {
         Self: Sized,
     {
         let d = self.get_document_async::<A>(uri.document_uri()).await?;
-        d.get(uri.name()).ok_or(BackendError::NotFound)
+        d.get(uri.name())
+            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
     }
 
     /// # Errors
@@ -183,7 +188,8 @@ pub trait LocalBackend {
         Self: Sized,
     {
         let d = self.get_document(uri.document_uri())?;
-        d.get_as(uri.name()).ok_or(BackendError::NotFound)
+        d.get_as(uri.name())
+            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
     }
 
     /// # Errors
@@ -195,7 +201,8 @@ pub trait LocalBackend {
         Self: Sized,
     {
         let d = self.get_document_async::<A>(uri.document_uri()).await?;
-        d.get_as(uri.name()).ok_or(BackendError::NotFound)
+        d.get_as(uri.name())
+            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
     }
 
     fn uri_of(&self, p: &Path) -> Option<DocumentUri>

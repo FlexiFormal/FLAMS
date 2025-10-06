@@ -1,15 +1,16 @@
 use crate::capabilities::STeXSemanticTokens;
 use crate::{
-    state::{DocData, LSPState, UrlOrFile},
     IsLSPRange, ProgressCallbackClient,
+    state::{DocData, LSPState, UrlOrFile},
 };
 use async_lsp::lsp_types as lsp;
-use flams_math_archives::backend::{GlobalBackend, LocalBackend};
 use flams_math_archives::LocalArchive;
+use flams_math_archives::backend::{GlobalBackend, LocalBackend};
 use flams_stex::quickparse::stex::rules::IncludeProblemArg;
 use flams_stex::quickparse::{
     latex::ParsedKeyValue,
     stex::{
+        AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI,
         rules::{
             MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg,
             SymdefArg, TextSymdeclArg, VardefArg,
@@ -18,7 +19,6 @@ use flams_stex::quickparse::{
             InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymbolReference,
             SymnameMode,
         },
-        AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI,
     },
 };
 use flams_utils::{
@@ -666,7 +666,7 @@ impl AnnotExt for STeXAnnot {
                         | ParagraphArg::MacroName(ParsedKeyValue { val_range, .. })
                             if val_range.contains(pos) =>
                         {
-                            return here!(*val_range)
+                            return here!(*val_range);
                         }
                         _ => (),
                     }
@@ -2116,7 +2116,8 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = lsp::DocumentDiagnosticReportResult>> {
+    ) -> Option<impl std::future::Future<Output = lsp::DocumentDiagnosticReportResult> + use<>>
+    {
         fn default() -> lsp::DocumentDiagnosticReportResult {
             lsp::DocumentDiagnosticReportResult::Report(lsp::DocumentDiagnosticReport::Full(
                 lsp::RelatedFullDocumentDiagnosticReport::default(),
@@ -2152,7 +2153,8 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::DocumentSymbolResponse>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::DocumentSymbolResponse>> + use<>>
+    {
         #[allow(deprecated)]
         fn to_symbols(v: &[STeXAnnot]) -> Vec<lsp::DocumentSymbol> {
             let mut curr = v.iter();
@@ -2202,7 +2204,7 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::DocumentLink>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::DocumentLink>>> + use<>> {
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let slf = self.clone();
@@ -2224,7 +2226,8 @@ impl LSPState {
         &self,
         uri: UrlOrFile,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyItem>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyItem>>> + use<>>
+    {
         let d = self.get(&uri)?;
         let url: lsp::Url = uri.into();
         d.document_uri().map(|doc| {
@@ -2247,8 +2250,9 @@ impl LSPState {
         kind: lsp::SymbolKind,
         uri: Uri,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyIncomingCall>>>>
-    {
+    ) -> Option<
+        impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyIncomingCall>>> + use<>,
+    > {
         Some(std::future::ready({
             let url = url.into();
             let d = self.documents.read().get(&url).cloned()?;
@@ -2411,7 +2415,7 @@ impl LSPState {
         uri: UrlOrFile,
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::Location>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::Location>>> + use<>> {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
             line: position.line,
@@ -2537,7 +2541,7 @@ impl LSPState {
         uri: &UrlOrFile,
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>> + use<>> {
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let pos = LSPLineCol {
@@ -2559,7 +2563,7 @@ impl LSPState {
         range: lsp::Range,
         _context: lsp::CodeActionContext,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::CodeActionResponse>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::CodeActionResponse>> + use<>> {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
             line: range.start.line,
@@ -2580,7 +2584,8 @@ impl LSPState {
         uri: UrlOrFile,
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::GotoDefinitionResponse>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::GotoDefinitionResponse>> + use<>>
+    {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
             line: position.line,
@@ -2599,7 +2604,7 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::InlayHint>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::InlayHint>>> + use<>> {
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(), move |data| {
             let iter: AnnotIter = data.annotations.iter().into();
@@ -2614,7 +2619,7 @@ impl LSPState {
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
         _range: Option<lsp::Range>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::SemanticTokens>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::SemanticTokens>> + use<>> {
         //let range = range.map(SourceRange::from_range);
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(), |data| {
