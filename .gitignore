@@ -9,7 +9,6 @@ tracing-indicatif
 /old/**
 /settings.toml
 /resources/migrations/users.sqlite
-/resources/assets/ftml*
 /.idea
 /.vscode/launch.json
 /ftml-viewer/ts
