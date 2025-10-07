@@ -1,15 +1,12 @@
-use crate::ssr::insert_base_url;
 use flams_math_archives::backend::LocalBackend;
-use flams_utils::{unwrap, vecmap::VecSet};
+use flams_utils::vecmap::VecSet;
 use ftml_ontology::{
     narrative::{
-        Narrative,
         documents::{Document, TocElem},
         elements::{DocumentElement, Problem, Section},
     },
     utils::Css,
 };
-use ftml_uris::IsNarrativeUri;
 
 pub async fn from_document(doc: Document) -> (Box<[Css]>, Box<[TocElem]>) {
     let (css, e) = from_document_i(doc, String::new(), VecSet::default()).await;
@@ -29,9 +26,10 @@ fn from_document_i(
         loop {
             while let Some(elem) = curr.next() {
                 match elem {
-                    DocumentElement::Slide {
-                        /*uri,*/ children, ..
-                    } => {
+                    DocumentElement::Slide(ftml_ontology::narrative::elements::Slide {
+                        /*uri,*/ children,
+                        ..
+                    }) => {
                         let old = std::mem::replace(&mut curr, children.iter());
                         stack.push((old, None));
                         ret.push(TocElem::Slide /*{uri:uri.clone()}*/);

@@ -173,14 +173,14 @@ flams-backend-types = { path = "backend-types" }
 flams-search = { path = "search" }
 
 # FTML
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] } #{ path = "../../FlexiFormal/FTML/uris", features = ["interned"] } #
-ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/ontology" } #
-ftml-backend = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/backend" } #
-ftml-parser = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/parser" } #
-ftml-components = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/components" } #
-ftml5ever = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/ftml5ever" } #
-ulo = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/ulo" } #
-ftml-dom = { git = "https://github.com/FlexiFormal/FTML" } #{ path = "../../FlexiFormal/FTML/dom" } #
+ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
+ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
+ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
+ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
+ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
+ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
+ulo = { git = "https://github.com/FlexiFormal/FTML" }
+ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 
 #ftml-uris = { path = "../../FlexiFormal/FTML/uris", features = ["interned"] }
 #ftml-ontology = { path = "../../FlexiFormal/FTML/ontology" }

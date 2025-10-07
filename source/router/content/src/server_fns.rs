@@ -571,7 +571,10 @@ mod server {
                     DocumentElement::Paragraph(LogicalParagraph { range, .. })
                     | DocumentElement::Problem(Problem { range, .. })
                     | DocumentElement::Section(Section { range, .. })
-                    | DocumentElement::Slide { range, .. } => {
+                    | DocumentElement::Slide(ftml_ontology::narrative::elements::Slide {
+                        range,
+                        ..
+                    }) => {
                         let Ok((css, html)) = backend()
                             .get_html_fragment_async::<TokioEngine>(euri.document_uri(), *range)
                             .await
@@ -800,7 +803,11 @@ mod server {
                     break;
                 };
                 match next {
-                    DocumentElement::Slide { range, uri, .. } => {
+                    DocumentElement::Slide(ftml_ontology::narrative::elements::Slide {
+                        range,
+                        uri,
+                        ..
+                    }) => {
                         let Ok((c, html)) = backend.get_html_fragment(top, *range) else {
                             return Err(format!("Missing fragment for slide {uri}"));
                         };
