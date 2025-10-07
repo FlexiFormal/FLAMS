@@ -112,11 +112,13 @@
       },
       {
         "command": "flams.exportTex",
-        "title": "Export standalone tex"
+        "title": "Export standalone tex",
+        "icon": "$(package)"
       },
       {
         "command": "flams.exportHtml",
-        "title": "Export standalone HTML"
+        "title": "Export standalone HTML",
+        "icon": "$(preview)"
       }
     ],
     "configuration": [

@@ -2,8 +2,6 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use crate::utils::path_ext::PathExt;
-#[cfg(target_os = "windows")]
-use crate::utils::path_ext::PathExt;
 
 /// A regular expression (using [`Regex`]) used to ignore source files specified as
 /// relative to the source directory of some [`MathArchive`](crate::MathArchive)
@@ -47,8 +45,8 @@ impl IgnoreSource {
         if regex.is_empty() {
             return Self::default();
         }
-        #[cfg(target_os = "windows")]
-        let regex = regex.replace('/', Path::PATH_SEPARATOR);
+        //#[cfg(target_os = "windows")]
+        //let regex = regex.replace('/', PathBuf::PATH_SEPARATOR);
         let s = regex.replace('.', r"\.").replace('*', ".*"); //.replace('/',r"\/");
         let s = s
             .split('|')
@@ -57,7 +55,7 @@ impl IgnoreSource {
             .join("|");
         let p = source_path.display(); //path.to_str().unwrap().replace('/',r"\/");
         #[cfg(target_os = "windows")]
-        let p = p.to_string().replace('\\', Path::PATH_SEPARATOR);
+        let p = p.to_string().replace(PathBuf::PATH_SEPARATOR,"/");
         let s = format!("{p}({})?({s})", PathBuf::PATH_SEPARATOR);
         Self(Regex::new(&s).ok())
     }

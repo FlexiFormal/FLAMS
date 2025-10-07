@@ -29,6 +29,7 @@ impl std::fmt::Display for RelPath<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(target_os = "windows")]
         {
+            use std::fmt::Write;
             let mut first = true;
             for c in self.0.components() {
                 if let std::path::Component::Normal(s) = c {
