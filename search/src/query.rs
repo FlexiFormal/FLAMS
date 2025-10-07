@@ -56,7 +56,7 @@ pub fn build_query(
     }
     write!(s, "({query})").ok()?;
     let schema = crate::schema::SearchSchema::get();
-    let mut parser = tantivy::query::QueryParser::for_index(index, vec![schema.title, schema.body]);
+    let mut parser = tantivy::query::QueryParser::for_index(index, vec![schema.title, schema.uri, schema.body]);
     //parser.set_field_fuzzy(SCHEMA.body, false, 1, true);
     parser.set_conjunction_by_default();
     parser.parse_query(&s).ok()
