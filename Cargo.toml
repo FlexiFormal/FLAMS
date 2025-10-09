@@ -173,23 +173,23 @@ flams-backend-types = { path = "backend-types" }
 flams-search = { path = "search" }
 
 # FTML
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
-ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
-ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
-ulo = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
+#ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
+#ulo = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 
-#ftml-uris = { path = "../../FlexiFormal/FTML/uris", features = ["interned"] }
-#ftml-ontology = { path = "../../FlexiFormal/FTML/ontology" }
-#ftml-backend = { path = "../../FlexiFormal/FTML/backend" }
-#ftml-parser = { path = "../../FlexiFormal/FTML/parser" }
-#ftml-components = { path = "../../FlexiFormal/FTML/components" }
-#ftml5ever = { path = "../../FlexiFormal/FTML/ftml5ever" }
-#ulo = { path = "../../FlexiFormal/FTML/ulo" }
-#ftml-dom = { path = "../../FlexiFormal/FTML/dom" }
+ftml-uris = { path = "../FTML/uris", features = ["interned"] }
+ftml-ontology = { path = "../FTML/ontology" }
+ftml-backend = { path = "../FTML/backend" }
+ftml-parser = { path = "../FTML/parser" }
+ftml-components = { path = "../FTML/components" }
+ftml5ever = { path = "../FTML/ftml5ever" }
+ulo = { path = "../FTML/ulo" }
+ftml-dom = { path = "../FTML/dom" }
 
 rstest = { version = "0.26" }
 
@@ -262,6 +262,7 @@ thiserror = "2"
 clap = { version = "4.5", features = ["derive"] }
 
 oxigraph = { version = "0.5", default-features = false, features=["rdf-12"] }
+oxiri = "*"
 spargebra = "0.4"
 sparesults = {version="0.3",features=["sparql-12"]}
 oxrdfio = { version = "0.2" }                            #, features = ["async-tokio"] }
@@ -347,7 +348,6 @@ tex_engine = { version = "0.1", features = ["multithreaded"] }
 #rustex_lib = { path = "../RusTeXNew/rustex", features = ["multithreaded"] }
 #tex_engine = { path = "../RusTeXNew/tex_engine", features = ["multithreaded"] }
 
-# ahash = { version = "=0.8.11" } # for wasm; avoids getrandom v3, which needs special wasm support
 ahash = "0.8"
 getrandom = "0.3"
 

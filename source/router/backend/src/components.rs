@@ -262,7 +262,6 @@ fn modal(
         },
         |path| format!("[{}]{path}", archive.as_ref().expect("unreachable")),
     );
-    //let toaster = ToasterInjection::expect_context();
     let targets = format.is_some();
     let queue_id = RwSignal::<Option<NonZeroU32>>::new(None);
     let act = message_action(

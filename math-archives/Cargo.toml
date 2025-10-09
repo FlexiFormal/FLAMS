@@ -18,6 +18,7 @@ rdf = [
     "dep:oxigraph",
     "dep:spargebra",
     "dep:sparesults",
+    "dep:oxiri"
 ]
 ## adds memory "monitoring"
 deepsize = ["dep:deepsize", "dep:bytesize", "ftml-ontology/deepsize"]
@@ -86,6 +87,7 @@ ulo = { workspace = true, optional = true }
 tsify = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 oxigraph = { workspace = true, optional = true }
+oxiri = { workspace = true, optional = true }
 spargebra = { workspace = true, optional = true }
 sparesults = { workspace = true, optional = true }
 deepsize = { workspace = true, optional = true }

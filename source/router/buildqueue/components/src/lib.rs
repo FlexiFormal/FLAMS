@@ -426,7 +426,6 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
                               branch.set(first.clone());
                             });
                             let update : UpdateQueues = expect_context();
-                            //let toaster = ToasterInjection::expect_context();
                             //let commit_map:VecMap<_,_> = updates.clone().into();
                             let archive = id.clone();
                             let remote = remote.clone();

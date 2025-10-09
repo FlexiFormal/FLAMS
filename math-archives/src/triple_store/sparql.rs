@@ -243,7 +243,7 @@ impl Iterator for LOIter<'_> {
 }
 
 #[must_use]
-pub fn lo_query(s: &SymbolUri, problems: bool) -> Query {
+pub fn lo_query(s: &SymbolUri, problems: bool) -> ::spargebra::Query {
     if problems {
         crate::sparql!(SELECT DISTINCT ?x ?R ?t WHERE {
             {
@@ -259,7 +259,6 @@ pub fn lo_query(s: &SymbolUri, problems: bool) -> Query {
                 ?x rdf:TYPE ?t.
             }
         })
-        .into()
     } else {
         crate::sparql!(SELECT DISTINCT ?x ?R WHERE {
             {
@@ -270,7 +269,6 @@ pub fn lo_query(s: &SymbolUri, problems: bool) -> Query {
                 BIND("EX" as ?R)
             }
         })
-        .into()
     }
 }
 

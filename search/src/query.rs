@@ -24,39 +24,41 @@ pub fn build_query(
         || !allow_assertions
         || !allow_problems
     {
-        s.push('(');
+        //s.push('(');
         let mut had_first = false;
         if allow_documents {
             had_first = true;
-            s.push_str("kind:0");
+            s.push_str("(kind:0");
         }
         if allow_paragraphs {
-            s.push_str(if had_first { " OR kind:1" } else { "kind:1" });
+            s.push_str(if had_first { " OR kind:1" } else { "(kind:1" });
             had_first = true;
         }
         if allow_definitions {
-            s.push_str(if had_first { " OR kind:2" } else { "kind:2" });
+            s.push_str(if had_first { " OR kind:2" } else { "(kind:2" });
             had_first = true;
         }
         if allow_examples {
-            s.push_str(if had_first { " OR kind:3" } else { "kind:3" });
+            s.push_str(if had_first { " OR kind:3" } else { "(kind:3" });
             had_first = true;
         }
         if allow_assertions {
-            s.push_str(if had_first { " OR kind:4" } else { "kind:4" });
+            s.push_str(if had_first { " OR kind:4" } else { "(kind:4" });
             had_first = true;
         }
         if allow_problems {
-            s.push_str(if had_first { " OR kind:5" } else { "kind:5" });
+            s.push_str(if had_first { " OR kind:5" } else { "(kind:5" });
         }
-        s.push_str(") AND ");
+        if had_first {
+            s.push_str(") AND ");
+        }
     }
     if definition_like_only {
         s.push_str("deflike:true AND ");
     }
     write!(s, "({query})").ok()?;
     let schema = crate::schema::SearchSchema::get();
-    let mut parser = tantivy::query::QueryParser::for_index(index, vec![schema.title, schema.uri, schema.body]);
+    let mut parser = tantivy::query::QueryParser::for_index(index, vec![schema.fors,schema.uri, schema.title, schema.body]);
     //parser.set_field_fuzzy(SCHEMA.body, false, 1, true);
     parser.set_conjunction_by_default();
     parser.parse_query(&s).ok()

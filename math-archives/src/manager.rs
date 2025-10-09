@@ -103,6 +103,7 @@ impl ArchiveManager {
         *tree.index.write() = None;
         self.modules.clear();
         self.documents.clear();
+        #[cfg(feature = "rdf")]
         self.triple_store.clear();
         for a in ls.into_iter().flatten() {
             tree.insert(

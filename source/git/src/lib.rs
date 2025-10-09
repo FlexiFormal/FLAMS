@@ -8,6 +8,8 @@ pub mod repos;
 #[cfg(any(feature = "git2", feature = "gitlab"))]
 pub use git_url_parse::GitUrl;
 
+
+#[cfg(any(feature = "git2", feature = "gitlab"))]
 pub(crate) static REMOTE_SPAN: std::sync::LazyLock<tracing::Span> =
     std::sync::LazyLock::new(|| tracing::info_span!(target:"git",parent:None,"git"));
 

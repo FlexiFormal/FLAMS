@@ -986,7 +986,7 @@ mod server {
             }
         }
         tokio::task::spawn_blocking(move || {
-            for uri in iter(&uri, context) {
+            for uri in iter(&uri, context).collect::<Vec<_>>() {
                 if let Ok(def) = backend().get_typed_document_element(&uri) {
                     let LogicalParagraph { range, .. } = &*def;
                     if let Ok((css, r)) = backend().get_html_fragment(uri.document_uri(), *range) {

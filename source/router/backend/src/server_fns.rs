@@ -463,7 +463,7 @@ mod server {
                         iri.as_str()
                     ))
                     .map_err(|e| e.to_string())?;
-                for i in res.into_uris::<ArchiveUri>() {
+                for i in res.into_uris::<ArchiveUri>().collect::<Vec<_>>() {
                     let id = i.archive_id();
                     if !ret.0.contains(id) {
                         archives.insert(id.clone());

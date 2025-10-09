@@ -287,6 +287,7 @@ pub trait LocalBackend {
     where
         Self: Sized;
 
+    #[cfg(feature = "rdf")]
     fn get_var_notations(
         &self,
         uri: &DocumentElementUri,
@@ -534,6 +535,7 @@ impl LocalBackend for AnyBackend {
         }
     }
 
+    #[cfg(feature = "rdf")]
     #[inline]
     fn get_notations(
         &self,
@@ -550,6 +552,7 @@ impl LocalBackend for AnyBackend {
         GlobalBackend.get_notations(uri)
     }
 
+    #[cfg(feature = "rdf")]
     #[inline]
     fn get_var_notations(
         &self,

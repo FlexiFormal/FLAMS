@@ -309,6 +309,7 @@ impl LocalBackend for TemporaryBackend {
         Ok(r)
     }
 
+    #[cfg(feature = "rdf")]
     #[inline]
     fn get_notations(&self, uri: &SymbolUri) -> impl Iterator<Item = (DocumentElementUri, Notation)>
     where
@@ -317,6 +318,7 @@ impl LocalBackend for TemporaryBackend {
         self.inner.parent.get_notations(uri)
     }
 
+    #[cfg(feature = "rdf")]
     #[inline]
     fn get_var_notations(
         &self,

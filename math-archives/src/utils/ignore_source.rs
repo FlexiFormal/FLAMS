@@ -8,7 +8,7 @@ use crate::utils::path_ext::PathExt;
 ///
 /// # Example
 /// ```
-/// # use math_archives::utils::IgnoreSource;
+/// # use flams_math_archives::utils::ignore_source::IgnoreSource;
 /// # use std::path::Path;
 /// // The source directory of an archive:
 /// let source_path = Path::new("/home/user/MathHub/FTML/doc/source");
@@ -47,23 +47,28 @@ impl IgnoreSource {
         }
         //#[cfg(target_os = "windows")]
         //let regex = regex.replace('/', PathBuf::PATH_SEPARATOR);
-        let s = regex.replace('.', r"\.").replace('*', ".*"); //.replace('/',r"\/");
+        let s = regex.replace('.', r"\.").replace('*', ".*");
         let s = s
             .split('|')
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
             .join("|");
-        let p = source_path.display(); //path.to_str().unwrap().replace('/',r"\/");
+        let p = source_path.display();
         #[cfg(target_os = "windows")]
-        let p = p.to_string().replace(PathBuf::PATH_SEPARATOR,"/");
-        let s = format!("{p}({})?({s})", PathBuf::PATH_SEPARATOR);
+        let p = p.to_string()[3..].replace(PathBuf::PATH_SEPARATOR,"/");
+        let s = format!("{p}(/)?({s})");
         Self(Regex::new(&s).ok())
     }
 
     #[must_use]
     pub fn ignores(&self, p: &Path) -> bool {
         let Some(p) = p.to_str() else { return false };
-        self.0.as_ref().is_some_and(|r| r.is_match(p))
+        if cfg!(target_os = "windows") {
+            let p = p[3..].replace(PathBuf::PATH_SEPARATOR,"/");
+            self.0.as_ref().is_some_and(|r| r.is_match(&p))
+        } else {
+            self.0.as_ref().is_some_and(|r| r.is_match(p))
+        }
     }
 }
 
@@ -76,15 +81,19 @@ mod tests {
 
     #[test]
     fn ignore_test() {
-        let source = Path::new("/home/user/MathHub/sTeX/Documentation/source");
+        let source = Path::new(if cfg!(target_os = "windows") {"C:\\home\\user\\MathHub\\sTeX\\Documentation\\source"} else {"/home/user/MathHub/sTeX/Documentation/source"});
         let ignore = get_ignore(source);
         let path = Path::new(
-            "/home/user/MathHub/sTeX/Documentation/source/tutorial/solution/preamble.tex",
+            if cfg!(target_os = "windows") {
+                "c:\\home\\user\\MathHub\\sTeX\\Documentation\\source\\tutorial/solution\\preamble.tex"
+            } else {"/home/user/MathHub/sTeX/Documentation/source/tutorial/solution/preamble.tex"},
         );
-        assert!(ignore.ignores(path));
+        assert!(ignore.ignores(path),"{ignore} matches {}",path.display());
         let path = Path::new(
-            "/home/user/MathHub/sTeX/Documentation/source/tutorial/math/assertions.en.tex",
+            if cfg!(target_os = "windows") {
+                "C:\\home\\user\\MathHub\\sTeX\\Documentation\\source\\tutorial\\math\\assertions.en.tex"
+            } else {"/home/user/MathHub/sTeX/Documentation/source/tutorial/math/assertions.en.tex"},
         );
-        assert!(!ignore.ignores(path));
+        assert!(!ignore.ignores(path),"{ignore} matches {}",path.display());
     }
 }

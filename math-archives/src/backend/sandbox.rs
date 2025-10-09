@@ -158,6 +158,8 @@ impl SandboxedBackend {
             },
             &[&*self.0.path],
         )?;
+        
+        #[cfg(feature = "rdf")]
         A::background(|| {
             GlobalBackend
                 .triple_store()
@@ -343,7 +345,9 @@ impl LocalBackend for SandboxedBackend {
                     log,
                     from,
                     result,
+        #[cfg(feature = "rdf")]
                     self.0.manager.triple_store(),
+                    #[cfg(feature = "rdf")]
                     false,
                 )
             })
@@ -551,6 +555,7 @@ impl LocalBackend for SandboxedBackend {
             .or_else(|_| GlobalBackend.get_reference(rf))
     }
 
+    #[cfg(feature = "rdf")]
     #[inline]
     fn get_notations(
         &self,
@@ -567,6 +572,7 @@ impl LocalBackend for SandboxedBackend {
         GlobalBackend.get_notations(uri)
     }
 
+    #[cfg(feature = "rdf")]
     #[inline]
     fn get_var_notations(
         &self,

@@ -76,26 +76,28 @@ pub fn index_document_html(doc: &Document, html: &str) -> Option<SearchIndex> {
 }
 
 pub fn index_paragraph(para: &LogicalParagraph, html: &str) -> Option<SearchIndex> {
-    let title = para.title.as_ref().map(|s| html_to_search_text(s));
-    let Some(body) = html.get(para.range.start..para.range.end) else {
-        tracing::error!("Failed to plain textify body of {}", para.uri);
-        return None;
-    };
-    let body = html_to_search_text(body);
-    let fors = para.fors.iter().map(|(f, _)| f.clone()).collect();
+    crate::SPAN.in_scope(move || {
+        let title = para.title.as_ref().map(|s| html_to_search_text(s));
+        let Some(body) = html.get(para.range.start..para.range.end) else {
+            tracing::error!("Failed to plain textify body of {}", para.uri);
+            return None;
+        };
+        let body = html_to_search_text(body);
+        let fors = para.fors.iter().map(|(f, _)| f.clone()).collect();
 
-    let Ok(kind) = para.kind.try_into() else {
-        return None;
-    };
-    let definition_like = para.kind.is_definition_like(&para.styles);
+        let Ok(kind) = para.kind.try_into() else {
+            return None;
+        };
+        let definition_like = para.kind.is_definition_like(&para.styles);
 
-    Some(SearchIndex::Paragraph {
-        uri: para.uri.clone(),
-        kind,
-        definition_like,
-        title,
-        fors,
-        body,
+        Some(SearchIndex::Paragraph {
+            uri: para.uri.clone(),
+            kind,
+            definition_like,
+            title,
+            fors,
+            body,
+        })
     })
 }
 
@@ -114,9 +116,16 @@ pub fn html_to_search_text(html: &str) -> String {
             }
         }
     }
-    let Ok(mut s) = html2text::from_read(html.as_bytes(), usize::MAX / 3) else {
-        return html.to_string();
-    };
-    replacer(&mut s);
-    s
+    crate::SPAN.in_scope(move || {
+        match html2text::from_read(html.as_bytes(), usize::MAX / 3) {
+            Ok(mut s) => {
+                replacer(&mut s);
+                s
+            }
+            Err(e) => {
+                tracing::error!("Error: {e}");
+                html.to_string()
+            }
+        }
+    })
 }
