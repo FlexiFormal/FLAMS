@@ -41,17 +41,17 @@ pub enum DocumentKind {
         title: Box<str>,
         landing: Box<str>,
         acronym: Option<Box<str>>,
-        instructors: Vec<Person>,
+        authors: Vec<Person>,
         institution: Box<str>,
         notes: Box<str>,
         slides: Option<Box<str>>,
         thumbnail: Option<Box<str>>,
-        #[cfg_attr(feature = "serde", serde(default))]
-        quizzes: bool,
-        #[cfg_attr(feature = "serde", serde(default))]
-        homeworks: bool,
-        #[cfg_attr(feature = "serde", serde(default))]
-        instances: Vec<PreInstance>,
+        //#[cfg_attr(feature = "serde", serde(default))]
+        //quizzes: bool,
+        //#[cfg_attr(feature = "serde", serde(default))]
+        //homeworks: bool,
+        //#[cfg_attr(feature = "serde", serde(default))]
+        //instances: Vec<PreInstance>,
         teaser: Option<Box<str>>,
     },
     #[cfg_attr(feature = "serde", serde(rename = "self-study"))]
@@ -158,7 +158,7 @@ impl PartialEq for Institution {
 pub struct Person {
     pub name: Box<str>,
 }
-
+/*
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreInstance {
@@ -169,6 +169,7 @@ pub struct PreInstance {
     #[cfg_attr(feature = "serde", serde(rename = "leadTAs"))]
     pub lead_tas: Option<Vec<Person>>,
 }
+ */
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -214,18 +215,18 @@ pub enum ArchiveIndex {
         title: Box<str>,
         landing: DocumentUri,
         acronym: Option<Box<str>>,
-        instructors: Box<[Box<str>]>,
+        authors: Box<[Box<str>]>,
         institution: Box<str>,
-        instances: Box<[Instance]>,
+        //instances: Box<[Instance]>,
         notes: DocumentUri,
         #[cfg_attr(feature = "serde", serde(default))]
         slides: Option<DocumentUri>,
         #[cfg_attr(feature = "serde", serde(default))]
         thumbnail: Option<Box<str>>,
-        #[cfg_attr(feature = "serde", serde(default))]
-        quizzes: bool,
-        #[cfg_attr(feature = "serde", serde(default))]
-        homeworks: bool,
+        //#[cfg_attr(feature = "serde", serde(default))]
+        //quizzes: bool,
+        //#[cfg_attr(feature = "serde", serde(default))]
+        //homeworks: bool,
         #[cfg_attr(feature = "serde", serde(default))]
         teaser: Option<Box<str>>,
     },
@@ -367,21 +368,21 @@ impl ArchiveIndex {
                 title,
                 landing,
                 acronym,
-                instructors,
+                authors: instructors,
                 institution,
                 notes,
                 slides,
                 thumbnail,
-                quizzes,
-                homeworks,
-                instances,
+                //quizzes,
+                //homeworks,
+                //instances,
                 teaser,
             } => Self::Course {
                 title,
                 acronym,
                 institution,
-                quizzes,
-                homeworks,
+                //quizzes,
+                //homeworks,
                 teaser,
                 landing: DocumentUri::from_archive_relpath(a.clone(), &landing)?,
                 thumbnail: if thumbnail.as_ref().is_some_and(|s| s.is_empty()) {
@@ -397,20 +398,20 @@ impl ArchiveIndex {
                         .map(|s| DocumentUri::from_archive_relpath(a.clone(), &s))
                         .transpose()?
                 },
-                instances: instances
-                    .into_iter()
-                    .map(|i| Instance {
-                        semester: i.semester,
-                        instructors: i
-                            .instructors
-                            .map(|is| is.into_iter().map(|i| i.name).collect()),
-                        tas: i.tas.map(|is| is.into_iter().map(|i| i.name).collect()),
-                        lead_tas: i
-                            .lead_tas
-                            .map(|is| is.into_iter().map(|i| i.name).collect()),
-                    })
-                    .collect(),
-                instructors: instructors.into_iter().map(|is| is.name).collect(),
+                /*instances: instances
+                .into_iter()
+                .map(|i| Instance {
+                    semester: i.semester,
+                    instructors: i
+                        .instructors
+                        .map(|is| is.into_iter().map(|i| i.name).collect()),
+                    tas: i.tas.map(|is| is.into_iter().map(|i| i.name).collect()),
+                    lead_tas: i
+                        .lead_tas
+                        .map(|is| is.into_iter().map(|i| i.name).collect()),
+                })
+                .collect(),*/
+                authors: instructors.into_iter().map(|is| is.name).collect(),
             },
             DocumentKind::SelfStudy {
                 title,

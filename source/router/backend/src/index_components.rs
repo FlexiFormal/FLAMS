@@ -220,7 +220,7 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> impl IntoView + 'stati
         title,
         landing,
         acronym,
-        instructors,
+        authors: instructors,
         institution,
         notes,
         slides,
