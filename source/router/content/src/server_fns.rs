@@ -609,7 +609,7 @@ mod server {
             Ok(GlobalBackend
                 .triple_store()
                 .los(&uri, problems)
-                .map(|i| i.collect())
+                .map(Vec::from_iter)
                 .unwrap_or_default())
         })
         .await
@@ -924,19 +924,19 @@ mod server {
             uri: &SymbolUri,
             context: Option<NarrativeUri>,
         ) -> impl Iterator<Item = DocumentElementUri> {
+            // various hacks to resolve sparql queries quickly
             use flams_math_archives::triple_store::sparql::QueryResult;
             let iri = uri.to_iri();
             let i = iri.clone();
             let base = GlobalBackend
                 .triple_store()
-                .query(
-                    flams_math_archives::sparql!(SELECT DISTINCT ?x WHERE {
-                        ?x ulo:defines i.
-                    })
-                    .into(),
-                )
+                .query(flams_math_archives::sparql!(SELECT DISTINCT ?x WHERE {
+                    ?x ulo:defines i.
+                }))
                 .map(QueryResult::into_uris)
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .collect::<Vec<_>>()
+                .into_iter();
             match context {
                 None => either::Left(base),
                 Some(ctx) => {
@@ -968,6 +968,7 @@ mod server {
                                     .query_str(query)
                                     .map(QueryResult::into_uris)
                                     .unwrap_or_default()
+                                    .collect::<Vec<_>>().into_iter()
                             })
                             .chain(
                                 GlobalBackend
@@ -979,6 +980,7 @@ mod server {
                                     })
                                     .map(QueryResult::into_uris)
                                     .unwrap_or_default()
+                                    .collect::<Vec<_>>().into_iter()
                             )
                             .chain(base),
                     )
@@ -986,7 +988,7 @@ mod server {
             }
         }
         tokio::task::spawn_blocking(move || {
-            for uri in iter(&uri, context).collect::<Vec<_>>() {
+            for uri in iter(&uri, context) {
                 if let Ok(def) = backend().get_typed_document_element(&uri) {
                     let LogicalParagraph { range, .. } = &*def;
                     if let Ok((css, r)) = backend().get_html_fragment(uri.document_uri(), *range) {

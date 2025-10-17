@@ -429,10 +429,11 @@ impl ArchiveManager {
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)> {
         let q = crate::sparql!(SELECT DISTINCT ?n WHERE { ?n ulo:notation_for iri. });
         self.triple_store()
-            .query(q.into())
+            .query(q)
             .expect("Notations query should be valid")
             .into_uris::<DocumentElementUri>()
-            .collect::<Vec<_>>().into_iter()
+            .collect::<Vec<_>>()
+            .into_iter()
             .filter_map(|uri| {
                 use ftml_ontology::narrative::elements::notations::NotationReference;
                 //tracing::warn!("Found {uri}");
@@ -446,7 +447,7 @@ impl ArchiveManager {
                     .map(|n| (uri, n))
             })
     }
-    
+
     #[cfg(feature = "rdf")]
     fn do_var_notations(
         &self,
@@ -454,12 +455,13 @@ impl ArchiveManager {
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)> {
         let q = crate::sparql!(SELECT DISTINCT ?n WHERE { ?n ulo:notation_for iri. });
         self.triple_store()
-            .query(q.into())
+            .query(q)
             .expect("Notations query should be valid")
             .into_uris::<DocumentElementUri>()
-            .collect::<Vec<_>>().into_iter()
+            .collect::<Vec<_>>()
+            .into_iter()
             .filter_map(|uri| {
-                use ftml_ontology::narrative::elements::notations::{VariableNotationReference};
+                use ftml_ontology::narrative::elements::notations::VariableNotationReference;
                 //tracing::warn!("Found {uri}");
                 let notation = self
                     .get_typed_document_element::<VariableNotationReference>(&uri)

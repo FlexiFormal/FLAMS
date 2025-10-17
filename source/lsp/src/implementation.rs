@@ -1214,7 +1214,7 @@ fn do_document(
     let (css, htmlstr) = backend().get_html_body(uri).map_err(|e| e.to_string())?;
     let htmlstr = subst_img(htmlstr, "", images)?;
     let out = std::fs::File::create_new(path).map_err(|e| e.to_string())?;
-    serde_json::to_writer(std::io::BufWriter::new(out), &(css, htmlstr)).map_err(|e| e.to_string())
+    serde_json::to_writer(std::io::BufWriter::new(out), &(htmlstr, css)).map_err(|e| e.to_string())
 }
 
 fn subst_img(
