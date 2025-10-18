@@ -139,14 +139,13 @@ fn from_document_i(
                     | DocumentElement::VariableReference { .. }
                     | DocumentElement::Term { .. }
                     | DocumentElement::UseModule { .. }
-                    | DocumentElement::ImportModule { .. }
-                    | DocumentElement::DocumentReference { .. } => (), //_ => ()
+                    | DocumentElement::ImportModule { .. } => (), //_ => ()
                 }
             }
             match stack.pop() {
             None => break,
             Some((
-                iter,
+                _,
                 Some(TocElem::Inputref {
                     /*mut id,
                     uri,

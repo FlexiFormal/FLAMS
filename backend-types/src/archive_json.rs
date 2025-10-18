@@ -21,6 +21,7 @@ pub enum DocumentKind {
     #[cfg_attr(feature = "serde", serde(rename = "book"))]
     Book {
         title: Box<str>,
+        #[cfg_attr(feature = "serde", serde(default))]
         authors: Vec<Person>,
         file: Box<str>,
         thumbnail: Option<Box<str>>,
@@ -29,6 +30,7 @@ pub enum DocumentKind {
     #[cfg_attr(feature = "serde", serde(rename = "paper"))]
     Paper {
         title: Box<str>,
+        #[cfg_attr(feature = "serde", serde(default))]
         authors: Vec<Person>,
         file: Box<str>,
         thumbnail: Option<Box<str>>,
@@ -41,8 +43,9 @@ pub enum DocumentKind {
         title: Box<str>,
         landing: Box<str>,
         acronym: Option<Box<str>>,
+        #[cfg_attr(feature = "serde", serde(default))]
         authors: Vec<Person>,
-        institution: Box<str>,
+        institution: Option<Box<str>>,
         notes: Box<str>,
         slides: Option<Box<str>>,
         thumbnail: Option<Box<str>>,
@@ -58,6 +61,8 @@ pub enum DocumentKind {
     SelfStudy {
         title: Box<str>,
         landing: Box<str>,
+        #[cfg_attr(feature = "serde", serde(default))]
+        authors: Vec<Person>,
         acronym: Option<Box<str>>,
         notes: Box<str>,
         slides: Option<Box<str>>,
@@ -215,8 +220,9 @@ pub enum ArchiveIndex {
         title: Box<str>,
         landing: DocumentUri,
         acronym: Option<Box<str>>,
+        #[cfg_attr(feature = "serde", serde(default))]
         authors: Box<[Box<str>]>,
-        institution: Box<str>,
+        institution: Option<Box<str>>,
         //instances: Box<[Instance]>,
         notes: DocumentUri,
         #[cfg_attr(feature = "serde", serde(default))]
@@ -235,6 +241,8 @@ pub enum ArchiveIndex {
         title: Box<str>,
         landing: DocumentUri,
         notes: DocumentUri,
+        #[cfg_attr(feature = "serde", serde(default))]
+        authors: Box<[Box<str>]>,
         #[cfg_attr(feature = "serde", serde(default))]
         acronym: Option<Box<str>>,
         #[cfg_attr(feature = "serde", serde(default))]
@@ -421,6 +429,7 @@ impl ArchiveIndex {
                 slides,
                 thumbnail,
                 teaser,
+                authors,
             } => Self::SelfStudy {
                 title,
                 acronym,
@@ -439,6 +448,7 @@ impl ArchiveIndex {
                         .map(|s| DocumentUri::from_archive_relpath(a.clone(), &s))
                         .transpose()?
                 },
+                authors: authors.into_iter().map(|is| is.name).collect(),
             },
         })
     }

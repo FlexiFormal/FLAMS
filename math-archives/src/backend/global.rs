@@ -294,8 +294,8 @@ impl LocalBackend for ArchiveManager {
         Self: Sized,
     {
         if uri.is_top() {
-            if let Some(m) = self.modules.has(uri) {
-                return either::Left(std::future::ready(m));
+            if let Some(m) = self.modules.has_async(uri) {
+                return either::Left(m);
             }
             let lm =
                 self.load_module_async::<A>(uri.archive_uri(), uri.path(), uri.name().as_ref());
@@ -380,13 +380,15 @@ impl ArchiveManager {
         then: Then,
         other: Other,
     ) -> impl Future<Output = Result<R, BackendError>> + Send + use<A, R, T, O, Then, Other> {
-        if let Some(v) = self.documents.has(uri) {
-            let docfile = match v {
-                Ok(f) => f,
-                Err(e) => return either::Left(std::future::ready(Err(e))),
-            };
-            return either::Right(either::Left(then(docfile)));
+        if let Some(v) = self.documents.has_async(uri) {
+            return either::Right(either::Left(async move {
+                match v.await {
+                    Ok(f) => then(f).await,
+                    Err(e) => Err(e)
+                }
+            }));
         }
+        // TODO: a.document_file blocks; avoid!
         let file_or_other = match self.with_archive(uri.archive_id(), |a| {
             let Some(a) = a else {
                 return Err(BackendError::ArchiveNotFound);
