@@ -180,6 +180,7 @@ fn self_study(ss: ArchiveIndex) -> impl IntoView {
         slides,
         thumbnail,
         teaser,
+        ..
     } = ss
     else {
         unreachable!()
@@ -234,7 +235,7 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> impl IntoView + 'stati
     else {
         unreachable!()
     };
-    let inst = insts.iter().find(|i| i.acronym() == &*institution).cloned();
+    let inst = institution.and_then(|inst| insts.iter().find(|i| i.acronym() == &*inst)).cloned();
     view! {<Card class="flams-index-card">
       <CardHeader>
         {link_doc(&landing,|| view!(
