@@ -196,7 +196,7 @@ pub async fn get_module(
     p: Option<String>,
     m: Option<String>,
 ) -> Result<
-    ftml_ontology::domain::modules::Module,
+    ftml_ontology::domain::modules::ModuleLike,
     ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
 > {
     use flams_math_archives::backend::LocalBackend;

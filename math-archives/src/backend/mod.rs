@@ -14,7 +14,11 @@ use crate::{
     },
 };
 use ftml_ontology::{
-    domain::{SharedDeclaration, declarations::IsDeclaration, modules::Module},
+    domain::{
+        SharedDeclaration,
+        declarations::IsDeclaration,
+        modules::{Module, ModuleLike},
+    },
     narrative::{
         DocDataRef, DocumentRange, SharedDocumentElement,
         documents::Document,
@@ -48,13 +52,13 @@ pub trait LocalBackend {
         Self: Sized;
 
     /// # Errors
-    fn get_module(&self, uri: &ModuleUri) -> Result<Module, BackendError>;
+    fn get_module(&self, uri: &ModuleUri) -> Result<ModuleLike, BackendError>;
 
     /// # Errors
     fn get_module_async<A: AsyncEngine>(
         &self,
         uri: &ModuleUri,
-    ) -> impl Future<Output = Result<Module, BackendError>> + Send + use<Self, A>
+    ) -> impl Future<Output = Result<ModuleLike, BackendError>> + Send + use<Self, A>
     where
         Self: Sized;
 
@@ -487,7 +491,7 @@ impl LocalBackend for AnyBackend {
         }
     }
 
-    fn get_module(&self, uri: &ftml_uris::ModuleUri) -> Result<Module, BackendError> {
+    fn get_module(&self, uri: &ftml_uris::ModuleUri) -> Result<ModuleLike, BackendError> {
         match self {
             Self::Global => GlobalBackend.get_module(uri),
             Self::Temp(b) => b.get_module(uri),
@@ -498,7 +502,7 @@ impl LocalBackend for AnyBackend {
     fn get_module_async<A: AsyncEngine>(
         &self,
         uri: &ModuleUri,
-    ) -> impl Future<Output = Result<Module, BackendError>> + Send + use<A>
+    ) -> impl Future<Output = Result<ModuleLike, BackendError>> + Send + use<A>
     where
         Self: Sized,
     {

@@ -5,7 +5,7 @@ use crate::{
     utils::{AsyncEngine, errors::BackendError},
 };
 use ftml_ontology::{
-    domain::modules::Module,
+    domain::modules::{Module, ModuleLike},
     narrative::{DocDataRef, DocumentRange, documents::Document, elements::Notation},
     utils::Css,
 };
@@ -103,46 +103,51 @@ impl LocalBackend for TemporaryBackend {
         Box::pin(self.inner.parent.get_document_async::<A>(uri)) as _
     }
 
-    fn get_module(&self, uri: &ModuleUri) -> Result<Module, BackendError> {
+    fn get_module(&self, uri: &ModuleUri) -> Result<ModuleLike, BackendError> {
         if uri.is_top() {
             self.inner.modules.get(uri).map_or_else(
                 || self.inner.parent.get_module(uri),
-                |e| Ok(e.value().clone()),
+                |e| Ok(ModuleLike::Module(e.value().clone())),
             )
         } else {
             // SAFETY: !is_top()
-            let uri = unsafe { uri.clone().into_symbol().unwrap_unchecked() };
-            let m = self.inner.modules.get(&uri.module).map_or_else(
-                || self.inner.parent.get_module(&uri.module),
-                |e| Ok(e.value().clone()),
-            );
-            todo!()
+            let SymbolUri { name, module } =
+                unsafe { uri.clone().into_symbol().unwrap_unchecked() };
+            let Some(m) = self.inner.modules.get(&module) else {
+                return self.inner.parent.get_module(uri);
+            };
+            m.as_module_like(&name)
+                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
         }
     }
 
     fn get_module_async<A: AsyncEngine>(
         &self,
         uri: &ModuleUri,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Module, BackendError>> + Send>>
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<ModuleLike, BackendError>> + Send>>
     where
         Self: Sized,
     {
         if uri.is_top() {
             if let Some(m) = self.inner.modules.get(uri) {
-                Box::pin(std::future::ready(Ok(m.value().clone())))
+                Box::pin(std::future::ready(Ok(ModuleLike::Module(
+                    m.value().clone(),
+                ))))
             } else {
                 Box::pin(self.inner.parent.get_module_async::<A>(uri)) as _
             }
         } else {
             // SAFETY: !is_top()
-            let uri = unsafe { uri.clone().into_symbol().unwrap_unchecked() };
-            let m = if let Some(m) = self.inner.modules.get(&uri.module) {
-                Box::pin(std::future::ready(Ok(m.value().clone()))) as _
+            let SymbolUri { name, module } =
+                unsafe { uri.clone().into_symbol().unwrap_unchecked() };
+            if let Some(m) = self.inner.modules.get(&module) {
+                let r = m
+                    .as_module_like(&name)
+                    .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol));
+                Box::pin(std::future::ready(r)) as _
             } else {
-                Box::pin(self.inner.parent.get_module_async::<A>(&uri.module)) as _
-            };
-            todo!();
-            m
+                Box::pin(self.inner.parent.get_module_async::<A>(&uri)) as _
+            }
         }
     }
 

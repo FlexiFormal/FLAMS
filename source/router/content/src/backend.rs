@@ -99,7 +99,7 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         m: Option<String>,
     ) -> impl Future<
         Output = Result<
-            ftml_ontology::domain::modules::Module,
+            ftml_ontology::domain::modules::ModuleLike,
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
     > + Send {

@@ -158,7 +158,7 @@ impl SandboxedBackend {
             },
             &[&*self.0.path],
         )?;
-        
+
         #[cfg(feature = "rdf")]
         A::background(|| {
             GlobalBackend
@@ -345,7 +345,7 @@ impl LocalBackend for SandboxedBackend {
                     log,
                     from,
                     result,
-        #[cfg(feature = "rdf")]
+                    #[cfg(feature = "rdf")]
                     self.0.manager.triple_store(),
                     #[cfg(feature = "rdf")]
                     false,
@@ -381,7 +381,8 @@ impl LocalBackend for SandboxedBackend {
     fn get_module(
         &self,
         uri: &ftml_uris::ModuleUri,
-    ) -> Result<ftml_ontology::domain::modules::Module, crate::utils::errors::BackendError> {
+    ) -> Result<ftml_ontology::domain::modules::ModuleLike, crate::utils::errors::BackendError>
+    {
         self.0
             .manager
             .get_module(uri)
@@ -391,7 +392,9 @@ impl LocalBackend for SandboxedBackend {
     fn get_module_async<A: AsyncEngine>(
         &self,
         uri: &ftml_uris::ModuleUri,
-    ) -> impl Future<Output = Result<ftml_ontology::domain::modules::Module, BackendError>> + Send + use<A>
+    ) -> impl Future<Output = Result<ftml_ontology::domain::modules::ModuleLike, BackendError>>
+    + Send
+    + use<A>
     where
         Self: Sized,
     {

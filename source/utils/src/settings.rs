@@ -24,6 +24,8 @@ pub struct SettingsSpec {
     pub database: Option<Box<Path>>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub gitlab: GitlabSettings,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub stack_size: Option<u8>,
 }
 impl Add for SettingsSpec {
     type Output = Self;
@@ -39,6 +41,7 @@ impl Add for SettingsSpec {
             log_dir: self.log_dir.or(rhs.log_dir),
             temp_dir: self.temp_dir.or(rhs.temp_dir),
             database: self.database.or(rhs.database),
+            stack_size: self.stack_size.or(rhs.stack_size),
             buildqueue: self.buildqueue + rhs.buildqueue,
             gitlab: self.gitlab + rhs.gitlab,
             lsp: self.lsp || rhs.lsp,
@@ -55,6 +58,9 @@ impl AddAssign for SettingsSpec {
         self.server += rhs.server;
         if self.log_dir.is_none() {
             self.log_dir = rhs.log_dir;
+        }
+        if self.stack_size.is_none() {
+            self.stack_size = rhs.stack_size;
         }
         if self.temp_dir.is_none() {
             self.temp_dir = rhs.temp_dir;
@@ -85,6 +91,11 @@ impl SettingsSpec {
             database: std::env::var("FLAMS_DATABASE")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
+            stack_size: std::env::var("FLAMS_STACK_SIZE").ok().map(|s| {
+                s.parse().expect(
+                    "Could not parse stack size parameter (environment variable FLAMS_STACK_SIZE)",
+                )
+            }),
             server: ServerSettings {
                 port: std::env::var("FLAMS_PORT")
                     .ok()

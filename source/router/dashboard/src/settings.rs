@@ -145,6 +145,10 @@ pub(super) fn Settings() -> impl IntoView {
                           <td class="flams-settings-col"><b>"Temp Directory"</b></td>
                           <td class="flams-settings-col">{settings.temp_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
                         </tr>
+                        <tr>
+                          <td class="flams-settings-col"><b>"Stack Size"</b></td>
+                          <td class="flams-settings-col">{(settings.stack_size)}{if settings.stack_size.is_some() {"MB"} else {"(System default)"}}</td>
+                        </tr>
                       <tr><td><h3>"Server"</h3></td><td/></tr>
                         <tr>
                           <td class="flams-settings-col"><b>"IP/Port"</b></td>

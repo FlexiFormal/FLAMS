@@ -29,6 +29,10 @@ struct Cli {
     pub(crate) log_dir: Option<PathBuf>,
 
     #[arg(long)]
+    /// The stack size in MB used for every thread
+    pub(crate) stack_size: Option<u8>,
+
+    #[arg(long)]
     /// The directory used for temporary files
     pub(crate) temp_dir: Option<PathBuf>,
 
@@ -80,6 +84,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
                 .map(|s| s.split(',').map(|s| PathBuf::from(s.trim())).collect())
                 .unwrap_or_default(),
             debug: cli.debug,
+            stack_size: cli.stack_size,
             database: cli.db.map(PathBuf::into_boxed_path),
             log_dir: cli.log_dir.map(PathBuf::into_boxed_path),
             temp_dir: cli.temp_dir.map(PathBuf::into_boxed_path),

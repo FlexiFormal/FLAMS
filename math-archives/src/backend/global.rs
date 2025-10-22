@@ -1,16 +1,17 @@
 #[cfg(feature = "rdf")]
 use ftml_ontology::narrative::elements::Notation;
 use ftml_ontology::{
-    domain::modules::Module,
+    domain::modules::{Module, ModuleLike},
     narrative::{DocDataRef, DocumentRange, documents::Document},
     utils::Css,
 };
-use ftml_uris::{
-    ArchiveId, DocumentUri, IsNarrativeUri, ModuleUri, NamedUri, UriPath, UriWithArchive,
-    UriWithPath,
-};
 #[cfg(feature = "rdf")]
-use ftml_uris::{DocumentElementUri, SymbolUri};
+use ftml_uris::DocumentElementUri;
+use ftml_uris::{
+    ArchiveId, DocumentUri, IsNarrativeUri, ModuleUri, NamedUri, SymbolUri, UriPath,
+    UriWithArchive, UriWithPath,
+};
+use futures_util::TryFutureExt;
 
 use crate::{
     Archive, ExternalArchive, LocallyBuilt,
@@ -274,36 +275,62 @@ impl LocalBackend for ArchiveManager {
         )
     }
 
-    fn get_module(&self, uri: &ModuleUri) -> Result<Module, BackendError> {
+    fn get_module(&self, uri: &ModuleUri) -> Result<ModuleLike, BackendError> {
         if uri.is_top() {
-            self.modules.get_sync(uri.clone(), |uri| {
-                self.load_module(uri.archive_uri(), uri.path(), uri.name().as_ref())
-            })
+            self.modules
+                .get_sync(uri.clone(), |uri| {
+                    self.load_module(uri.archive_uri(), uri.path(), uri.name().as_ref())
+                })
+                .map(ModuleLike::Module)
         } else {
             // SAFETY: !uri.is_top()
-            let uri = unsafe { uri.clone().into_symbol().unwrap_unchecked() };
-            todo!()
+            let SymbolUri { name, module } =
+                unsafe { uri.clone().into_symbol().unwrap_unchecked() };
+            let m = self.modules.get_sync(module, |uri| {
+                self.load_module(uri.archive_uri(), uri.path(), uri.name().as_ref())
+            })?;
+            m.as_module_like(&name)
+                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
         }
     }
 
     fn get_module_async<A: AsyncEngine>(
         &self,
         uri: &ModuleUri,
-    ) -> impl Future<Output = Result<Module, BackendError>> + Send + use<A>
+    ) -> impl Future<Output = Result<ModuleLike, BackendError>> + Send + use<A>
     where
         Self: Sized,
     {
         if uri.is_top() {
             if let Some(m) = self.modules.has_async(uri) {
-                return either::Left(m);
+                return either::Left(either::Left(m.map_ok(ModuleLike::Module)));
             }
             let lm =
                 self.load_module_async::<A>(uri.archive_uri(), uri.path(), uri.name().as_ref());
-            either::Right(either::Left(self.modules.get(uri.clone(), |_| lm)))
+            either::Left(either::Right(
+                self.modules
+                    .get(uri.clone(), |_| lm)
+                    .map_ok(ModuleLike::Module),
+            ))
         } else {
             // SAFETY: !uri.is_top()
-            let uri = unsafe { uri.clone().into_symbol().unwrap_unchecked() };
-            either::Right(either::Right(std::future::ready(todo!())))
+            let SymbolUri { name, module } =
+                unsafe { uri.clone().into_symbol().unwrap_unchecked() };
+            let m = if let Some(m) = self.modules.has_async(&module) {
+                either::Left(m)
+            } else {
+                either::Right(self.load_module_async::<A>(
+                    module.archive_uri(),
+                    module.path(),
+                    module.name().as_ref(),
+                ))
+            };
+            either::Right(m.and_then(move |m| {
+                std::future::ready(
+                    m.as_module_like(&name)
+                        .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol)),
+                )
+            }))
         }
     }
 
@@ -384,7 +411,7 @@ impl ArchiveManager {
             return either::Right(either::Left(async move {
                 match v.await {
                     Ok(f) => then(f).await,
-                    Err(e) => Err(e)
+                    Err(e) => Err(e),
                 }
             }));
         }

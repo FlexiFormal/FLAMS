@@ -19,6 +19,7 @@ pub struct Settings {
     pub ip: std::net::IpAddr,
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
+    pub stack_size: Option<u8>,
     external_url: Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
     pub num_threads: u8,
@@ -108,6 +109,7 @@ impl Settings {
                     .or_else(|| Some(format!("http://{}:{port}", self.ip))),
                 admin_pwd: self.admin_pwd.as_ref().map(ToString::to_string),
             },
+            stack_size: self.stack_size,
             buildqueue: BuildQueueSettings {
                 num_threads: Some(self.num_threads),
             },
@@ -144,6 +146,7 @@ impl From<SettingsSpec> for Settings {
                     .join("log")
                     .into_boxed_path()
             }),
+            stack_size: spec.stack_size,
             temp_dir: parking_lot::RwLock::new(Some(spec.temp_dir.map_or_else(
                 || tempfile::TempDir::new().expect("Could not create temp dir"),
                 |p| {
