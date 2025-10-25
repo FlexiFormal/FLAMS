@@ -42,12 +42,12 @@ exclude = [
 [profile.release]
 overflow-checks = false
 strip = true
-panic = 'unwind'
+#split-debuginfo = "off"
+#strip = false
+panic = 'abort'
 opt-level = 'z'
 lto = true
 #debug = true
-#split-debuginfo = "off"
-#strip = "none"
 #opt-level = 2
 
 # this is wasm, actually (because wasm-pack uses --release and --debug directly)
@@ -72,6 +72,7 @@ lto = "fat"
 overflow-checks = false
 panic = "unwind"
 strip = true
+#strip = false
 
 [profile.flams-dev]
 inherits = "dev"
@@ -190,6 +191,8 @@ ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 #ftml5ever = { path = "../FTML/ftml5ever" }
 #ulo = { path = "../FTML/ulo" }
 #ftml-dom = { path = "../FTML/dom" }
+
+dateparser = {git = "https://github.com/Jazzpirate/dateparser"}
 
 rstest = { version = "0.26" }
 

@@ -13,6 +13,7 @@ workspace = true
 ## for wasm target
 typescript = [
     "ftml-ontology/typescript",
+    "ftml-ontology/wasm",
     "dep:tsify",
     "dep:wasm-bindgen",
     "ftml-uris/typescript",

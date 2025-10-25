@@ -129,9 +129,6 @@ pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
             crate::Views::setup_document(uri, SidebarPosition::Next, true, move || {
                 crate::Views::render_ftml(html.into_string(), None)
             })
-            /*view! {<div>
-                <DocumentString html uri toc=TOCSource::Get omdoc=OMDocSource::Get/>
-            </div>}*/
         },
     )
 }

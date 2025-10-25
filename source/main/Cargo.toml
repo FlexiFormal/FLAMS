@@ -74,6 +74,8 @@ hydrate = [
     "leptos-posthoc/hydrate",
     "ftml-components/hydrate",
     "flams-router-dashboard/hydrate",
+    "ftml-ontology/wasm",
+    "dep:dateparser"
 ]
 
 [dev-dependencies]
@@ -167,6 +169,7 @@ dashmap = { workspace = true, optional = true }
 console_error_panic_hook = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 tracing-wasm = { workspace = true, optional = true }
+dateparser = {workspace = true,optional = true,features=["wasm"]}
 
 ahash = { workspace = true }
 
