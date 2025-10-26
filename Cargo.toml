@@ -30,6 +30,7 @@ members = [
     #"ftml-viewer",
     #"experiments",
     "source/ffi",
+    #"maintest"
 ]
 resolver = "2"
 exclude = [
@@ -289,10 +290,6 @@ git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 
 # leptos
-#leptos = { version = "0.7", features = ["nightly"] }
-#leptos_axum = "0.7"
-#leptos_meta = "0.7"
-#leptos_router = { version = "0.7", features = ["nightly"] }
 leptos = { version = "0.8", features = ["nightly"] }
 leptos_axum = "0.8"
 leptos_meta = "0.8"

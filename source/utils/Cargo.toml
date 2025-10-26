@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-serde = ["dep:serde"]                                  #, "dep:bincode"]
+serde = ["dep:serde","ftml-ontology/serde"]                                  #, "dep:bincode"]
 rayon = ["dep:rayon", "dep:spliter"]
 async = ["dep:async-broadcast"]
 tokio = ["dep:tokio"]

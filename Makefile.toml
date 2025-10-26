@@ -163,7 +163,7 @@ args = [
     "--port",
     "3000",
     "-c",
-    "/home/jazzpirate/work/Software/sTeX/FLAMS/settings.toml",
+    "/home/jazzpirate/work/Software/FlexiFormal/FLAMS/settings.toml",
 ]
 
 [tasks.default]

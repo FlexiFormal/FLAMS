@@ -62,6 +62,7 @@ ssr = [
     "flams-git/gitlab",
     "flams-git/git2",
     "flams-router-dashboard/ssr",
+    "flams-router-base/ssr",
 ]
 hydrate = [
     "dep:console_error_panic_hook",
@@ -74,6 +75,7 @@ hydrate = [
     "leptos-posthoc/hydrate",
     "ftml-components/hydrate",
     "flams-router-dashboard/hydrate",
+    "flams-router-base/hydrate",
     "ftml-ontology/wasm",
     "dep:dateparser"
 ]

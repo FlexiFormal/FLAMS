@@ -17,7 +17,7 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 pub mod server;
 
 #[cfg(feature = "hydrate")]
-#[leptos::wasm_bindgen::prelude::wasm_bindgen]
+#[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
     use tracing_subscriber::prelude::*;
     fn filter(lvl: tracing::Level) -> tracing_subscriber::filter::Targets {
@@ -33,12 +33,10 @@ pub fn hydrate() {
             )
     }
     console_error_panic_hook::set_once();
-
     tracing_subscriber::registry()
         .with(tracing_wasm::WASMLayer::default())
-        .with(filter(tracing::Level::WARN))
+        .with(filter(tracing::Level::INFO))
         .init();
-    //fns::init();
     leptos::mount::hydrate_body(flams_router_dashboard::Main);
 }
 
