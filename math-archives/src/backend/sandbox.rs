@@ -250,7 +250,12 @@ impl SandboxedBackend {
                                 return;
                             };
                             repos.push(SandboxedRepository::Copy(a.id().clone()));
-                            self.copy_archive(a);
+                            if self.copy_archive(a).is_ok()
+                                && let Some(manifest) =
+                                    LocalArchive::manifest_of(&self.0.path.join(a.id().as_ref()))
+                            {
+                                self.0.manager.load_one(&manifest, RelPath::from_id(a.id()));
+                            }
                         }
                         current = next;
                         ls = &g.children;
@@ -287,6 +292,11 @@ impl SandboxedBackend {
                     {
                         repos.push(SandboxedRepository::Copy(id.clone()));
                         self.copy_archive(a);
+                        if let Some(manifest) =
+                            LocalArchive::manifest_of(&self.0.path.join(id.as_ref()))
+                        {
+                            self.0.manager.load_one(&manifest, RelPath::from_id(&id));
+                        }
                     }
                 }
             },

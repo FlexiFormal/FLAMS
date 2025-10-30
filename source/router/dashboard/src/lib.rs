@@ -55,60 +55,58 @@ use thaw::{Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, Layout
 #[component]
 pub fn Main() -> impl IntoView {
     provide_meta_context();
-    ftml_dom::global_setup(|| {
-        view! {
-            <Title text="𝖥𝖫∀𝖬∫"/>
-            <Router>{
-                let params = use_query_map();
-                let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
-                //provide_context(UseLSP(params.with_untracked(|p|)))
-                view!{<Routes fallback=|| NotFound()>
-                    <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
-                        <ParentRoute path=path!("/dashboard") view=Dashboard>
-                            <Route path=path!("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
-                            //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
-                            <Route path=path!("log") view=|| view!(<MainPage page=Page::Log/>)/>
-                            <Route path=path!("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
-                            <Route path=path!("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
-                            <Route path=path!("query") view=|| view!(<MainPage page=Page::Query/>)/>
-                            <Route path=path!("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
-                            <Route path=path!("users") view=|| view!(<MainPage page=Page::Users/>)/>
-                            <Route path=path!("search") view=|| view!(<MainPage page=Page::Search/>)/>
-                            <Route path=path!("") view=|| view!(<MainPage page=Page::Home/>)/>
-                            <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
-                        </ParentRoute>
-                        <ParentRoute path=path!("/vscode") view= flams_router_vscode::VSCodeWrap>
-                            <Route path=path!("search") view=flams_router_search::vscode::VSCodeSearch/>
-                        </ParentRoute>
-                        <Route path=path!("/document") view={move || {
-                            use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
-                            let params = params.get();
-                            if let Some(p) = params.get_str("uri") {
-                                let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
-                                    return Either::Right(view! { <Redirect path="/dashboard"/> })
-                                };
-                                Either::Left(DocumentOfTop(DocumentOfTopProps{uri}))
-                            } else {
-                                Either::Right(view! { <Redirect path="/dashboard"/> })
-                            }
-                        }}/>
-                        <Route path=path!("/") view={move || if has_params() {
-                                Either::Left(view! { <flams_router_content::components::URITop/> })
-                            } else {
-                                Either::Right(view! { <Redirect path="/dashboard"/> })
-                            }}
-                        />
+    view! {
+        <Title text="𝖥𝖫∀𝖬∫"/>
+        <Router>{
+            let params = use_query_map();
+            let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
+            //provide_context(UseLSP(params.with_untracked(|p|)))
+            view!{<Routes fallback=|| NotFound()>
+                <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
+                    <ParentRoute path=path!("/dashboard") view=Dashboard>
+                        <Route path=path!("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
+                        //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
+                        <Route path=path!("log") view=|| view!(<MainPage page=Page::Log/>)/>
+                        <Route path=path!("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
+                        <Route path=path!("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
+                        <Route path=path!("query") view=|| view!(<MainPage page=Page::Query/>)/>
+                        <Route path=path!("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
+                        <Route path=path!("users") view=|| view!(<MainPage page=Page::Users/>)/>
+                        <Route path=path!("search") view=|| view!(<MainPage page=Page::Search/>)/>
+                        <Route path=path!("") view=|| view!(<MainPage page=Page::Home/>)/>
+                        <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
                     </ParentRoute>
-                </Routes>}
-            }</Router>
-        }
-    })
+                    <ParentRoute path=path!("/vscode") view= flams_router_vscode::VSCodeWrap>
+                        <Route path=path!("search") view=flams_router_search::vscode::VSCodeSearch/>
+                    </ParentRoute>
+                    <Route path=path!("/document") view={move || {
+                        use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
+                        let params = params.get();
+                        if let Some(p) = params.get_str("uri") {
+                            let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
+                                return Either::Right(view! { <Redirect path="/dashboard"/> })
+                            };
+                            Either::Left(ftml_dom::global_setup(|| DocumentOfTop(DocumentOfTopProps{uri})))
+                        } else {
+                            Either::Right(view! { <Redirect path="/dashboard"/> })
+                        }
+                    }}/>
+                    <Route path=path!("/") view={move || if has_params() {
+                            Either::Left(ftml_dom::global_setup(|| view! { <flams_router_content::components::URITop/> }))
+                        } else {
+                            Either::Right(view! { <Redirect path="/dashboard"/> })
+                        }}
+                    />
+                </ParentRoute>
+            </Routes>}
+        }</Router>
+    }
 }
 
 #[component(transparent)]
 fn Top() -> impl IntoView {
     use flams_router_login::components::LoginProvider;
-    view! {<LoginProvider><leptos_router::components::Outlet/></LoginProvider>}
+    <LoginProvider><leptos_router::components::Outlet/></LoginProvider>
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
