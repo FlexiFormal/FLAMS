@@ -2,7 +2,7 @@
 
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_components::{SidebarPosition, config::FtmlConfig};
-use ftml_dom::{FtmlViews, utils::css::CssExt};
+use ftml_dom::{FtmlViews, structure::TocSource, utils::css::CssExt};
 use ftml_uris::{
     DocumentUri, Uri,
     components::{
@@ -97,24 +97,52 @@ pub fn DocumentOfTop(uri: Uri) -> impl IntoView {
 #[component]
 pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView {
     use ftml_dom::utils::css::CssExt;
-    ftml_components::utils::wait_and_then(
-        move || UriComponentTuple::from(uri).apply1(super::server_fns::fragment, None),
-        move |(uri, css, html)| {
-            for css in css {
-                css.inject();
-            }
-            let uri = match uri {
-                Uri::Document(d) => Some(d.into()),
-                Uri::DocumentElement(d) => Some(d.into()),
-                _ => None,
-            };
-            FtmlConfig::set_toc_source(ftml_dom::toc::TocSource::Get);
-            crate::Views::render_fragment(uri, position, true, move || {
-                crate::Views::render_ftml(html.into_string(), None)
-            })
-        },
-        |e| view!(<span style="color:red">{e.to_string()}</span>),
-    )
+    // make sure this runs client side rather than server side because of hydration errors
+    // I don't understand.
+    let sig = RwSignal::new(false);
+    Effect::new(move || {
+        #[cfg(feature = "hydrate")]
+        {
+            sig.set(true);
+        }
+    });
+    move || {
+        let uri = uri.clone();
+        if sig.get() {
+            Some(ftml_components::utils::wait_and_then(
+                move || UriComponentTuple::from(uri).apply1(super::server_fns::fragment, None),
+                move |(uri, css, html)| {
+                    for css in css {
+                        css.inject();
+                    }
+                    let uri = match uri {
+                        Uri::Document(d) => {
+                            FtmlConfig::set_toc_source(TocSource::Get);
+                            Some(d.into())
+                        }
+                        Uri::DocumentElement(d) => {
+                            FtmlConfig::set_toc_source(TocSource::None);
+                            Some(d.into())
+                        }
+                        _ => {
+                            FtmlConfig::set_toc_source(TocSource::None);
+                            None
+                        }
+                    };
+                    crate::Views::render_fragment::<crate::backend::FtmlBackend, _>(
+                        uri,
+                        position,
+                        true,
+                        move || crate::Views::render_ftml(html.into_string(), None),
+                    )
+                },
+                |e| view!(<span style="color:red">{e.to_string()}</span>),
+            ))
+        } else {
+            None
+        }
+    }
+    //})
 }
 
 #[component]
@@ -125,10 +153,13 @@ pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
             for css in css {
                 css.inject();
             }
-            FtmlConfig::set_toc_source(ftml_dom::toc::TocSource::Get);
-            crate::Views::setup_document(uri, SidebarPosition::Next, true, move || {
-                crate::Views::render_ftml(html.into_string(), None)
-            })
+            FtmlConfig::set_toc_source(TocSource::Get);
+            crate::Views::setup_document::<crate::backend::FtmlBackend, _>(
+                uri,
+                SidebarPosition::Next,
+                true,
+                move || crate::Views::render_ftml(html.into_string(), None),
+            )
         },
     )
 }
@@ -143,7 +174,7 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> impl IntoView {
                 css.inject();
             }
             view! {<div>{
-                crate::Views::setup_document(
+                crate::Views::setup_document::<crate::backend::FtmlBackend,_>(
                     DocumentUri::no_doc().clone(),
                     SidebarPosition::None,
                     true,

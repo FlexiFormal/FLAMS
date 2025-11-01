@@ -106,7 +106,7 @@ pub fn Main() -> impl IntoView {
 #[component(transparent)]
 fn Top() -> impl IntoView {
     use flams_router_login::components::LoginProvider;
-    <LoginProvider><leptos_router::components::Outlet/></LoginProvider>
+    view!(<LoginProvider><leptos_router::components::Outlet/></LoginProvider>)
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

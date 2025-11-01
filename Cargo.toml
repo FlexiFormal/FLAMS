@@ -175,14 +175,14 @@ flams-backend-types = { path = "backend-types" }
 flams-search = { path = "search" }
 
 # FTML
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
-ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
-ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
-ulo = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
+ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"], branch="counters" }
+ftml-ontology = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+ftml-backend = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+ftml-parser = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+ftml-components = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+ftml5ever = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+ulo = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+ftml-dom = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
 
 #ftml-uris = { path = "../FTML/uris", features = ["interned"] }
 #ftml-ontology = { path = "../FTML/ontology" }
@@ -373,10 +373,10 @@ browserquery = "defaults"
 lib-cargo-args = [
     "--target",
     "wasm32-unknown-unknown",
-    "-Z",
-    "build-std=std,panic_abort,core,alloc",
-    "-Z",
-    "build-std-features=optimize_for_size",
+    #"-Z",
+    #"build-std=std,panic_abort,core,alloc",
+    #"-Z",
+    #"build-std-features=optimize_for_size",
     "--timings",
 ]
 bin-cargo-args = ["--timings"]
