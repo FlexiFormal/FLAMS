@@ -35,7 +35,7 @@ pub fn hydrate() {
     console_error_panic_hook::set_once();
     tracing_subscriber::registry()
         .with(tracing_wasm::WASMLayer::default())
-        .with(filter(tracing::Level::INFO))
+        .with(filter(tracing::Level::WARN))
         .init();
     leptos::mount::hydrate_body(flams_router_dashboard::Main);
 }

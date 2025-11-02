@@ -69,7 +69,7 @@ hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
     "dep:wasm-bindgen",
-    "tracing/release_max_level_info",
+    "tracing/release_max_level_warn",
     "dep:tracing-wasm",
     "flams-web-utils/hydrate",
     "leptos-posthoc/hydrate",
