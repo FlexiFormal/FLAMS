@@ -38,8 +38,8 @@ impl Default for ArchiveManager {
     fn default() -> Self {
         Self {
             tree: parking_lot::RwLock::new(ArchiveTree::default()),
-            modules: AsyncCache::default(),
-            documents: AsyncCache::default(),
+            modules: AsyncCache::new(2048),
+            documents: AsyncCache::new(4096),
             #[cfg(feature = "rdf")]
             triple_store: crate::triple_store::RDFStore::default(),
         }
