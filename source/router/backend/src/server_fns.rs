@@ -410,6 +410,7 @@ mod server {
     pub async fn archive_dependencies(
         archives: Vec<ArchiveId>,
     ) -> Result<Vec<ArchiveId>, ServerFnError<String>> {
+        use flams_system::TokioEngine;
         let mut archives: VecSet<_> = archives.into_iter().collect();
         blocking_server_fn(move || {
             let mut ret = VecSet::new();
@@ -450,7 +451,7 @@ mod server {
                 };
                 let res = GlobalBackend
                     .triple_store()
-                    .query_str(format!(
+                    .query_str::<TokioEngine>(format!(
                         "SELECT DISTINCT ?a WHERE {{
                             <{}> ulo:contains ?d.
                             ?d rdf:type ulo:document .

@@ -40,6 +40,12 @@ impl AsyncEngine for TokioEngine {
     ) -> R {
         tokio::task::spawn_blocking(f).await.expect("this is a bug")
     }
+    fn exec_after(delay: std::time::Duration, f: impl FnOnce() + Send + 'static) {
+        tokio::task::spawn(async move {
+            tokio::time::sleep(delay).await;
+            f();
+        });
+    }
 }
 
 inventory::collect!(FlamsExtension);
@@ -48,6 +54,10 @@ inventory::collect!(FlamsExtension);
 pub fn initialize<A: AsyncEngine>(settings: SettingsSpec) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
+    #[cfg(feature = "rocksdb")]
+    if let Some(p) = &settings.rdf_database {
+        flams_math_archives::backend::set_global(p);
+    }
     if settings.lsp {
         use tracing::Level;
         use tracing_subscriber::layer::SubscriberExt;

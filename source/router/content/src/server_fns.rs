@@ -608,7 +608,7 @@ mod server {
         blocking_server_fn(move || {
             Ok(GlobalBackend
                 .triple_store()
-                .los(&uri, problems)
+                .los::<TokioEngine>(&uri, problems)
                 .map(Vec::from_iter)
                 .unwrap_or_default())
         })
@@ -620,12 +620,18 @@ mod server {
     ) -> Result<Vec<(DocumentElementUri, Notation)>, ServerFnError<String>> {
         let v = match uri {
             Uri::Symbol(uri) => {
-                blocking_server_fn(move || Ok(backend().get_notations(&uri).collect::<Vec<_>>()))
-                    .await
+                blocking_server_fn(move || {
+                    Ok(backend()
+                        .get_notations::<TokioEngine>(&uri)
+                        .collect::<Vec<_>>())
+                })
+                .await
             }
             Uri::DocumentElement(uri) => {
                 blocking_server_fn(move || {
-                    Ok(backend().get_var_notations(&uri).collect::<Vec<_>>())
+                    Ok(backend()
+                        .get_var_notations::<TokioEngine>(&uri)
+                        .collect::<Vec<_>>())
                 })
                 .await
             }
@@ -930,13 +936,11 @@ mod server {
             let i = iri.clone();
             let base = GlobalBackend
                 .triple_store()
-                .query(flams_math_archives::sparql!(SELECT DISTINCT ?x WHERE {
+                .query::<TokioEngine>(flams_math_archives::sparql!(SELECT DISTINCT ?x WHERE {
                     ?x ulo:defines i.
                 }))
                 .map(QueryResult::into_uris)
-                .unwrap_or_default()
-                .collect::<Vec<_>>()
-                .into_iter();
+                .unwrap_or_default();
             match context {
                 None => either::Left(base),
                 Some(ctx) => {
@@ -965,22 +969,20 @@ mod server {
                                 };
                                 GlobalBackend
                                     .triple_store()
-                                    .query_str(query)
+                                    .query_str::<TokioEngine>(query)
                                     .map(QueryResult::into_uris)
                                     .unwrap_or_default()
-                                    .collect::<Vec<_>>().into_iter()
                             })
                             .chain(
                                 GlobalBackend
                                     .triple_store()
-                                    .query_str(language)
+                                    .query_str::<TokioEngine>(language)
                                     .map_err(|e| {
                                         println!("Error: {e}");
                                         e
                                     })
                                     .map(QueryResult::into_uris)
                                     .unwrap_or_default()
-                                    .collect::<Vec<_>>().into_iter()
                             )
                             .chain(base),
                     )

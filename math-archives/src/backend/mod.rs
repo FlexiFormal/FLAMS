@@ -284,7 +284,7 @@ pub trait LocalBackend {
     }
 
     #[cfg(feature = "rdf")]
-    fn get_notations(
+    fn get_notations<E: AsyncEngine>(
         &self,
         uri: &SymbolUri,
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)>
@@ -292,7 +292,7 @@ pub trait LocalBackend {
         Self: Sized;
 
     #[cfg(feature = "rdf")]
-    fn get_var_notations(
+    fn get_var_notations<E: AsyncEngine>(
         &self,
         uri: &DocumentElementUri,
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)>
@@ -541,7 +541,7 @@ impl LocalBackend for AnyBackend {
 
     #[cfg(feature = "rdf")]
     #[inline]
-    fn get_notations(
+    fn get_notations<E: AsyncEngine>(
         &self,
         uri: &ftml_uris::SymbolUri,
     ) -> impl Iterator<
@@ -553,12 +553,12 @@ impl LocalBackend for AnyBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_notations(uri)
+        GlobalBackend.get_notations::<E>(uri)
     }
 
     #[cfg(feature = "rdf")]
     #[inline]
-    fn get_var_notations(
+    fn get_var_notations<E: AsyncEngine>(
         &self,
         uri: &ftml_uris::DocumentElementUri,
     ) -> impl Iterator<
@@ -570,6 +570,6 @@ impl LocalBackend for AnyBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_var_notations(uri)
+        GlobalBackend.get_var_notations::<E>(uri)
     }
 }

@@ -19,6 +19,7 @@ pub struct Settings {
     pub ip: std::net::IpAddr,
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
+    pub rdf_database: Option<Box<Path>>,
     pub stack_size: Option<u8>,
     external_url: Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
@@ -99,6 +100,7 @@ impl Settings {
                     .into_boxed_path(),
             ),
             database: Some(self.database.clone()),
+            rdf_database: self.rdf_database.clone(),
             server: ServerSettings {
                 port,
                 ip: Some(self.ip),
@@ -178,6 +180,7 @@ impl From<SettingsSpec> for Settings {
                     .join("users.sqlite")
                     .into_boxed_path()
             }),
+            rdf_database: spec.rdf_database,
             num_threads: spec.buildqueue.num_threads.unwrap_or_else(|| {
                 #[cfg(feature = "tokio")]
                 {

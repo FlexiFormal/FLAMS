@@ -23,6 +23,8 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
     pub database: Option<Box<Path>>,
     #[cfg_attr(feature = "serde", serde(default))]
+    pub rdf_database: Option<Box<Path>>,
+    #[cfg_attr(feature = "serde", serde(default))]
     pub gitlab: GitlabSettings,
     #[cfg_attr(feature = "serde", serde(default))]
     pub stack_size: Option<u8>,
@@ -41,6 +43,7 @@ impl Add for SettingsSpec {
             log_dir: self.log_dir.or(rhs.log_dir),
             temp_dir: self.temp_dir.or(rhs.temp_dir),
             database: self.database.or(rhs.database),
+            rdf_database: self.rdf_database.or(rhs.rdf_database),
             stack_size: self.stack_size.or(rhs.stack_size),
             buildqueue: self.buildqueue + rhs.buildqueue,
             gitlab: self.gitlab + rhs.gitlab,
@@ -68,6 +71,9 @@ impl AddAssign for SettingsSpec {
         if self.database.is_none() {
             self.database = rhs.database;
         }
+        if self.rdf_database.is_none() {
+            self.rdf_database = rhs.rdf_database;
+        }
         self.gitlab += rhs.gitlab;
         self.buildqueue += rhs.buildqueue;
     }
@@ -89,6 +95,9 @@ impl SettingsSpec {
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
             database: std::env::var("FLAMS_DATABASE")
+                .ok()
+                .map(|s| PathBuf::from(s).into_boxed_path()),
+            rdf_database: std::env::var("FLAMS_RDF_DATABASE")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
             stack_size: std::env::var("FLAMS_STACK_SIZE").ok().map(|s| {

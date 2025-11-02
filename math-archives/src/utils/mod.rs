@@ -8,6 +8,7 @@ pub trait AsyncEngine: 'static {
     fn block_on<R: Send + Sync + 'static>(
         f: impl FnOnce() -> R + Send + Sync + 'static,
     ) -> impl std::future::Future<Output = R> + Send + Sync;
+    fn exec_after(delay: std::time::Duration, f: impl FnOnce() + Send + 'static);
 }
 
 pub struct SyncEngine;
@@ -21,5 +22,11 @@ impl AsyncEngine for SyncEngine {
         f: impl FnOnce() -> R + Send + Sync,
     ) -> impl std::future::Future<Output = R> + Send + Sync {
         std::future::ready(f())
+    }
+    fn exec_after(delay: std::time::Duration, f: impl FnOnce() + Send + 'static) {
+        std::thread::spawn(move || {
+            std::thread::sleep(delay);
+            f();
+        });
     }
 }

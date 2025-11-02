@@ -91,7 +91,10 @@ impl SandboxedBackend {
             span: tracing::info_span!(target:"sandbox","sandbox",path=%p.display()),
             path: p.into(),
             repos: parking_lot::RwLock::new(Vec::new()),
+            #[cfg(not(feature = "rocksdb"))]
             manager: ArchiveManager::default(),
+            #[cfg(feature = "rocksdb")]
+            manager: ArchiveManager::new(&temp_dir.join(".rdf")),
         };
         Self(triomphe::Arc::new(i))
     }
@@ -570,7 +573,7 @@ impl LocalBackend for SandboxedBackend {
 
     #[cfg(feature = "rdf")]
     #[inline]
-    fn get_notations(
+    fn get_notations<E: AsyncEngine>(
         &self,
         uri: &ftml_uris::SymbolUri,
     ) -> impl Iterator<
@@ -582,12 +585,12 @@ impl LocalBackend for SandboxedBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_notations(uri)
+        GlobalBackend.get_notations::<E>(uri)
     }
 
     #[cfg(feature = "rdf")]
     #[inline]
-    fn get_var_notations(
+    fn get_var_notations<E: AsyncEngine>(
         &self,
         uri: &ftml_uris::DocumentElementUri,
     ) -> impl Iterator<
@@ -599,6 +602,6 @@ impl LocalBackend for SandboxedBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_var_notations(uri)
+        GlobalBackend.get_var_notations::<E>(uri)
     }
 }

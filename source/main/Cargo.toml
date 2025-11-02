@@ -103,6 +103,7 @@ flams-git = { workspace = true }
 flams-system = { workspace = true, features = [
     "zip",
     "gitlab",
+    "rocksdb"
 ], optional = true }
 flams-search = { workspace = true, optional = true }
 flams-math-archives = { workspace = true, optional = true,features=["deepsize"] }

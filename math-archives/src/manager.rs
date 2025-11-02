@@ -28,18 +28,31 @@ use ftml_uris::{ArchiveId, ArchiveUri, BaseUri, DocumentUri, ModuleUri, UriPath,
 #[derive(Debug)]
 pub struct ArchiveManager {
     pub(crate) tree: parking_lot::RwLock<ArchiveTree>,
-    pub(crate) modules: AsyncCache<ModuleUri, Module, BackendError>,
-    pub(crate) documents: AsyncCache<DocumentUri, triomphe::Arc<DocumentFile>, BackendError>,
+    //pub(crate) modules: AsyncCache<ModuleUri, Module, BackendError>,
+    //pub(crate) documents: AsyncCache<DocumentUri, triomphe::Arc<DocumentFile>, BackendError>,
     #[cfg(feature = "rdf")]
     triple_store: crate::triple_store::RDFStore,
+}
+
+#[cfg(feature = "rocksdb")]
+impl ArchiveManager {
+    pub fn new(rdf_path: &Path) -> Self {
+        Self {
+            tree: parking_lot::RwLock::new(ArchiveTree::default()),
+            //modules: AsyncCache::new(2048),
+            //documents: AsyncCache::new(4096),
+            #[cfg(feature = "rdf")]
+            triple_store: crate::triple_store::RDFStore::new(rdf_path),
+        }
+    }
 }
 
 impl Default for ArchiveManager {
     fn default() -> Self {
         Self {
             tree: parking_lot::RwLock::new(ArchiveTree::default()),
-            modules: AsyncCache::new(2048),
-            documents: AsyncCache::new(4096),
+            //modules: AsyncCache::new(2048),
+            //documents: AsyncCache::new(4096),
             #[cfg(feature = "rdf")]
             triple_store: crate::triple_store::RDFStore::default(),
         }
@@ -53,20 +66,24 @@ impl ArchiveManager {
         let relations = self.triple_store.num_relations();
         let mut num_modules = 0;
         let mut modules_bytes = 0;
+        /*
         self.modules.all(|_, v| {
             num_modules += 1;
             if let MaybeValue::Done(Ok(m)) = &*v.read() {
                 modules_bytes += m.deep_size_of();
             }
         });
+        */
         let mut num_documents = 0;
         let mut documents_bytes = 0;
+        /*
         self.documents.all(|_, v| {
             num_documents += 1;
             if let MaybeValue::Done(Ok(d)) = &*v.read() {
                 documents_bytes += d.deep_size_of();
             }
         });
+         */
         ManagerCacheSize {
             num_modules,
             modules_bytes,
@@ -101,8 +118,8 @@ impl ArchiveManager {
         tree.archives.clear();
         tree.top.clear();
         *tree.index.write() = None;
-        self.modules.clear();
-        self.documents.clear();
+        //self.modules.clear();
+        //self.documents.clear();
         #[cfg(feature = "rdf")]
         self.triple_store.clear();
         for a in ls.into_iter().flatten() {

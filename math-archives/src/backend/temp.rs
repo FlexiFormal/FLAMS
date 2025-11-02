@@ -316,23 +316,26 @@ impl LocalBackend for TemporaryBackend {
 
     #[cfg(feature = "rdf")]
     #[inline]
-    fn get_notations(&self, uri: &SymbolUri) -> impl Iterator<Item = (DocumentElementUri, Notation)>
+    fn get_notations<E: AsyncEngine>(
+        &self,
+        uri: &SymbolUri,
+    ) -> impl Iterator<Item = (DocumentElementUri, Notation)>
     where
         Self: Sized,
     {
-        self.inner.parent.get_notations(uri)
+        self.inner.parent.get_notations::<E>(uri)
     }
 
     #[cfg(feature = "rdf")]
     #[inline]
-    fn get_var_notations(
+    fn get_var_notations<E: AsyncEngine>(
         &self,
         uri: &DocumentElementUri,
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)>
     where
         Self: Sized,
     {
-        self.inner.parent.get_var_notations(uri)
+        self.inner.parent.get_var_notations::<E>(uri)
     }
 
     /*

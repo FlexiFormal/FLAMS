@@ -4,6 +4,7 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
+rocksdb = ["flams-math-archives/rocksdb"]
 tokio = ["dep:tokio", "flams-utils/tokio"]
 gitlab = ["flams-git/gitlab", "tokio", "flams-math-archives/git"]
 zip = [

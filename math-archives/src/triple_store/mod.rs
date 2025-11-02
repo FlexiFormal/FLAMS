@@ -4,21 +4,39 @@ use ftml_uris::{ArchiveUri, DocumentUri, FtmlUri, Language, SymbolUri, UriPath, 
 use std::{path::Path, str::FromStr};
 use ulo::rdf_types::{Quad, Triple};
 
-use crate::{Archive, LocallyBuilt, MathArchive, utils::path_ext::PathExt};
+use crate::{
+    Archive, LocallyBuilt, MathArchive,
+    utils::{AsyncEngine, path_ext::PathExt},
+};
 
 pub struct RDFStore {
     store: oxigraph::store::Store,
 }
 
-#[derive(thiserror::Error,Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum SparqlError {
     #[error("sparql syntax error: {0}")]
     Syntax(#[from] sparql::SparqlSyntaxError),
     #[error("sparql query error: {0}")]
-    Query(#[from] sparql::QueryError)
+    Query(#[from] sparql::QueryError),
 }
 
 impl RDFStore {
+    #[cfg(feature = "rocksdb")]
+    pub fn new(path: &Path) -> Self {
+        let _ = std::fs::remove_dir_all(path);
+        let store = oxigraph::store::Store::open(path).expect("failed to open rdf database");
+        store.clear();
+        let mut loader = store.bulk_loader();
+        loader
+            .load_quads(ulo::ulo::QUADS.iter().copied())
+            .expect("error loading ulo base ontology; this is a bug.");
+        loader
+            .commit()
+            .expect("error loading ulo base ontology; this is a bug.");
+        Self { store }
+    }
+
     #[inline]
     pub fn clear(&self) {
         let _ = self.store.clear();
@@ -35,9 +53,9 @@ impl RDFStore {
     }
 
     #[must_use]
-    pub fn los(&self, s: &SymbolUri, problems: bool) -> Option<sparql::LOIter<'_>> {
+    pub fn los<E: AsyncEngine>(&self, s: &SymbolUri, problems: bool) -> Option<sparql::LOIter<'_>> {
         let q = sparql::lo_query(s, problems);
-        self.query(q).ok().and_then(|s| {
+        self.query::<E>(q).ok().and_then(|s| {
             if let sparql::QueryResults::Solutions(s) = s.0 {
                 Some(sparql::LOIter { inner: s })
             } else {
@@ -74,7 +92,7 @@ impl RDFStore {
     }
 
     /// ### Errors
-    pub fn query_str(
+    pub fn query_str<E: AsyncEngine>(
         &self,
         s: impl AsRef<str>,
     ) -> Result<sparql::QueryResult<'_>, SparqlError> {
@@ -87,21 +105,29 @@ impl RDFStore {
         );
         query_str.push_str(s.as_ref());*/
         let query = spargebra::SparqlParser::new()
-            .with_prefix("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#").expect("bug")
-            .with_prefix("rdfs", "http://www.w3.org/2000/01/rdf-schema#").expect("bug")
-            .with_prefix("dc", "http://purl.org/dc/terms#").expect("bug")
-            .with_prefix("ulo", "http://mathhub.info/ulo#").expect("bug")
+            .with_prefix("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+            .expect("bug")
+            .with_prefix("rdfs", "http://www.w3.org/2000/01/rdf-schema#")
+            .expect("bug")
+            .with_prefix("dc", "http://purl.org/dc/terms#")
+            .expect("bug")
+            .with_prefix("ulo", "http://mathhub.info/ulo#")
+            .expect("bug")
             .parse_query(s.as_ref())?;
         //let query: oxigraph::sparql::Query = query_str.as_str().try_into()?;
-        self.query(query).map_err(Into::into)
+        self.query::<E>(query).map_err(Into::into)
     }
 
     /// ### Errors
-    pub fn query(
+    pub fn query<E: AsyncEngine>(
         &self,
         mut q: spargebra::Query,
     ) -> Result<sparql::QueryResult<'_>, sparql::QueryError> {
         normalize(&mut q);
+
+        let token = oxigraph::sparql::CancellationToken::new();
+        let tk = token.clone();
+        E::exec_after(std::time::Duration::from_secs(5), move || tk.cancel());
         /*
         let token = oxigraph::sparql::CancellationToken::new();
         let tk = token.clone();
@@ -111,7 +137,7 @@ impl RDFStore {
         });
          */
         let mut q = oxigraph::sparql::SparqlEvaluator::new()
-            //.with_cancellation_token(token)
+            .with_cancellation_token(token)
             .for_query(q);
         q.dataset_mut().set_default_graph_as_union();
         Ok(q.on_store(&self.store).execute().map(sparql::QueryResult)?)
@@ -131,33 +157,65 @@ impl RDFStore {
         let _ = loader.commit();
     }
 
-    #[allow(unreachable_patterns)]
     pub fn load_archives(&self, archives: &[Archive]) {
         use rayon::prelude::*;
-        tracing::info!(target:"relational","Loading relational for {} archives...",archives.len());
-        let old = self.store.len().unwrap_or_default();
-        archives
-            .par_iter()
-            .filter_map(|a| match a {
-                Archive::Local(a) => Some(a),
-                Archive::Ext(..) => None,
-            })
-            .for_each(|a| {
-                let out = a.out_dir();
-                if out.exists() && out.is_dir() {
-                    for e in walkdir::WalkDir::new(out)
-                        .into_iter()
-                        .filter_map(Result::ok)
-                        .filter(|entry| entry.file_name() == "index.ttl")
-                    {
-                        let Some(graph) = Self::get_iri(a.uri(), out, &e) else {
-                            continue;
-                        };
-                        self.load(e.path(), graph);
+        tracing::info_span!(target:"relational","loading relational","Loading relational for {} archives...",archives.len()).in_scope(move || {
+            let old = self.store.len().unwrap_or_default();
+            let all_files = archives
+                .par_iter()
+                .filter_map(|a| match a {
+                    Archive::Local(a) => Some(a),
+                    Archive::Ext(..) => None,
+                })
+                .filter_map(|a| {
+                    let out = a.out_dir();
+                    if out.exists() && out.is_dir() {
+                        Some(
+                            walkdir::WalkDir::new(out)
+                                .into_iter()
+                                .filter_map(Result::ok)
+                                .filter(|entry| entry.file_name() == "index.ttl")
+                                .filter_map(|e| {
+                                    let graph = Self::get_iri(a.uri(), out, &e)?;
+                                    Some((e.into_path(), graph))
+                                })
+                                .collect::<Vec<_>>(),
+                        )
+                        /*for e in walkdir::WalkDir::new(out)
+                            .into_iter()
+                            .filter_map(Result::ok)
+                            .filter(|entry| entry.file_name() == "index.ttl")
+                        {
+                            let Some(graph) = Self::get_iri(a.uri(), out, &e) else {
+                                return None;
+                            };
+                            Some((e.into_path(),graph))
+                            //self.load(e.path(), graph);
+                        }*/
+                    } else {
+                        None
                     }
+                })
+                .collect_vec_list();
+            for (i,path_graph) in all_files.into_iter().flatten().enumerate() {//.flatten().flatten().enumerate() {
+                tracing::info!("Loading {}",i+1);
+                let mut loader = self.store.bulk_loader();
+                for (path,graph) in path_graph {
+                    let Ok(file) = std::fs::File::open(&path) else {
+                        tracing::error!("Failed to open file {}", path.display());
+                        continue;
+                    };
+                    let buf = std::io::BufReader::new(file);
+                    let reader = oxigraph::io::RdfParser::from_format(oxigraph::io::RdfFormat::Turtle)
+                        .with_default_graph(graph)
+                        .for_reader(buf);
+                    let _ = loader.load_quads(reader.filter_map(Result::ok));
                 }
-            });
-        tracing::info!(target:"relational","Loaded {} relations", self.store.len().unwrap_or_default() - old);
+                let _ = loader.commit();
+            }
+
+            tracing::info!(target:"relational","Loaded {} relations", self.store.len().unwrap_or_default() - old);
+        });
     }
 
     fn get_iri(
@@ -197,18 +255,18 @@ impl Default for RDFStore {
     }
 }
 
-fn normalize(query:&mut spargebra::Query) {
-    fn norm(n:&mut ulo::rdf_types::NamedNode) {
+fn normalize(query: &mut spargebra::Query) {
+    fn norm(n: &mut ulo::rdf_types::NamedNode) {
         if n.as_str().starts_with("https:") {
-            *n = ulo::rdf_types::NamedNode::new_unchecked(format!("http:{}",&n.as_str()[6..]));
+            *n = ulo::rdf_types::NamedNode::new_unchecked(format!("http:{}", &n.as_str()[6..]));
         }
     }
-    fn norm_i(n:&mut oxiri::Iri<String>) {
+    fn norm_i(n: &mut oxiri::Iri<String>) {
         if n.starts_with("https:") {
-            *n = oxiri::Iri::parse_unchecked(format!("http:{}",&n.as_str()[6..]));
+            *n = oxiri::Iri::parse_unchecked(format!("http:{}", &n.as_str()[6..]));
         }
     }
-    fn dset(d:&mut ::spargebra::algebra::QueryDataset) {
+    fn dset(d: &mut ::spargebra::algebra::QueryDataset) {
         for n in d.default.iter_mut() {
             norm(n);
         }
@@ -218,32 +276,32 @@ fn normalize(query:&mut spargebra::Query) {
             }
         }
     }
-    fn termpat(p:&mut spargebra::term::TermPattern) {
+    fn termpat(p: &mut spargebra::term::TermPattern) {
         use spargebra::term::TermPattern as TP;
         match p {
             TP::BlankNode(_) | TP::Literal(_) | TP::Variable(_) => (),
             TP::NamedNode(n) => norm(n),
-            TP::Triple(t) => trip(t)
+            TP::Triple(t) => trip(t),
         }
     }
-    fn nnpat(p:&mut spargebra::term::NamedNodePattern) {
+    fn nnpat(p: &mut spargebra::term::NamedNodePattern) {
         if let spargebra::term::NamedNodePattern::NamedNode(n) = p {
             norm(n);
         }
     }
-    fn trip(p:&mut spargebra::term::TriplePattern) {
+    fn trip(p: &mut spargebra::term::TriplePattern) {
         termpat(&mut p.subject);
         termpat(&mut p.object);
         nnpat(&mut p.predicate);
     }
-    fn expr(e:&mut spargebra::algebra::Expression) {
+    fn expr(e: &mut spargebra::algebra::Expression) {
         use spargebra::algebra::Expression as Exp;
         match e {
             Exp::NamedNode(n) => norm(n),
-            Exp::Or(a,b)
-            | Exp::Add(a,b)
-            | Exp::And(a,b) 
-            | Exp::Divide(a,b) 
+            Exp::Or(a, b)
+            | Exp::Add(a, b)
+            | Exp::And(a, b)
+            | Exp::Divide(a, b)
             | Exp::Equal(a, b)
             | Exp::SameTerm(a, b)
             | Exp::Greater(a, b)
@@ -251,49 +309,65 @@ fn normalize(query:&mut spargebra::Query) {
             | Exp::Less(a, b)
             | Exp::Subtract(a, b)
             | Exp::Multiply(a, b)
-            | Exp::LessOrEqual(a, b) => {expr(a);expr(b);},
-            Exp::In(a,v) => {
+            | Exp::LessOrEqual(a, b) => {
                 expr(a);
-                for e in v { expr(e);}
+                expr(b);
             }
-            Exp::UnaryPlus(e) 
-            | Exp::UnaryMinus(e)
-            | Exp::Not(e) => expr(e),
+            Exp::In(a, v) => {
+                expr(a);
+                for e in v {
+                    expr(e);
+                }
+            }
+            Exp::UnaryPlus(e) | Exp::UnaryMinus(e) | Exp::Not(e) => expr(e),
             Exp::Exists(p) => pat(p),
-            Exp::If(a,b,c) => {
+            Exp::If(a, b, c) => {
                 expr(a);
                 expr(b);
                 expr(c);
             }
-            Exp::Coalesce(e) | Exp::FunctionCall(_, e) => for e in e {expr(e)},
-            Exp::Bound(_) | Exp::Literal(_) | Exp::Variable(_) => ()
+            Exp::Coalesce(e) | Exp::FunctionCall(_, e) => {
+                for e in e {
+                    expr(e)
+                }
+            }
+            Exp::Bound(_) | Exp::Literal(_) | Exp::Variable(_) => (),
         }
     }
-    fn ppexpr(e:&mut spargebra::algebra::PropertyPathExpression) {
+    fn ppexpr(e: &mut spargebra::algebra::PropertyPathExpression) {
         use spargebra::algebra::PropertyPathExpression as Exp;
         match e {
             Exp::NamedNode(n) => norm(n),
-            Exp::Reverse(n)
-            | Exp::ZeroOrMore(n)
-            | Exp::OneOrMore(n)
-            | Exp::ZeroOrOne(n) => ppexpr(n),
+            Exp::Reverse(n) | Exp::ZeroOrMore(n) | Exp::OneOrMore(n) | Exp::ZeroOrOne(n) => {
+                ppexpr(n)
+            }
             Exp::Sequence(a, b) | Exp::Alternative(a, b) => {
                 ppexpr(a);
                 ppexpr(b);
             }
-            Exp::NegatedPropertySet(v) => for e in v {norm(e);}
+            Exp::NegatedPropertySet(v) => {
+                for e in v {
+                    norm(e);
+                }
+            }
         }
     }
-    fn pat(p:&mut spargebra::algebra::GraphPattern) {
+    fn pat(p: &mut spargebra::algebra::GraphPattern) {
         use spargebra::algebra::GraphPattern as GP;
         match p {
-            GP::Bgp { patterns } => for p in patterns { trip(p)},
+            GP::Bgp { patterns } => {
+                for p in patterns {
+                    trip(p)
+                }
+            }
             GP::Distinct { inner } => pat(inner),
-            GP::Extend { inner,  expression,.. } => {
+            GP::Extend {
+                inner, expression, ..
+            } => {
                 pat(inner);
                 expr(expression);
             }
-            GP::Filter { expr:exp, inner } => {
+            GP::Filter { expr: exp, inner } => {
                 expr(exp);
                 pat(inner);
             }
@@ -301,19 +375,31 @@ fn normalize(query:&mut spargebra::Query) {
                 nnpat(name);
                 pat(inner);
             }
-            GP::Group { inner, aggregates,.. } => {
+            GP::Group {
+                inner, aggregates, ..
+            } => {
                 pat(inner);
-                for (_,e) in aggregates {
-                    if let spargebra::algebra::AggregateExpression::FunctionCall { expr:e, .. } = e {
+                for (_, e) in aggregates {
+                    if let spargebra::algebra::AggregateExpression::FunctionCall {
+                        expr: e, ..
+                    } = e
+                    {
                         expr(e);
                     }
                 }
             }
-            GP::Join { left, right } | GP::Lateral { left, right } | GP::Minus { left, right } | GP::Union { left, right } => {
+            GP::Join { left, right }
+            | GP::Lateral { left, right }
+            | GP::Minus { left, right }
+            | GP::Union { left, right } => {
                 pat(left);
                 pat(right);
             }
-            GP::LeftJoin { left, right, expression } => {
+            GP::LeftJoin {
+                left,
+                right,
+                expression,
+            } => {
                 pat(left);
                 pat(right);
                 if let Some(e) = expression {
@@ -324,16 +410,21 @@ fn normalize(query:&mut spargebra::Query) {
                 pat(inner);
                 for e in expression {
                     match e {
-                        spargebra::algebra::OrderExpression::Asc(e) |spargebra::algebra::OrderExpression::Desc(e) => expr(e)
+                        spargebra::algebra::OrderExpression::Asc(e)
+                        | spargebra::algebra::OrderExpression::Desc(e) => expr(e),
                     }
                 }
             }
-            GP::Path { subject, path, object } => {
+            GP::Path {
+                subject,
+                path,
+                object,
+            } => {
                 termpat(subject);
                 termpat(object);
                 ppexpr(path);
             }
-            GP::Project { inner, .. }  | GP::Reduced { inner } | GP::Slice { inner, .. } => {
+            GP::Project { inner, .. } | GP::Reduced { inner } | GP::Slice { inner, .. } => {
                 pat(inner);
             }
             GP::Values { .. } => (),
@@ -341,7 +432,21 @@ fn normalize(query:&mut spargebra::Query) {
     }
     use spargebra::Query as Q;
     match query {
-        Q::Ask { dataset, pattern, base_iri } | Q::Describe { dataset, pattern, base_iri } | Q::Select { dataset, pattern, base_iri } => {
+        Q::Ask {
+            dataset,
+            pattern,
+            base_iri,
+        }
+        | Q::Describe {
+            dataset,
+            pattern,
+            base_iri,
+        }
+        | Q::Select {
+            dataset,
+            pattern,
+            base_iri,
+        } => {
             if let Some(d) = dataset {
                 dset(d);
             }
@@ -350,7 +455,12 @@ fn normalize(query:&mut spargebra::Query) {
             }
             pat(pattern);
         }
-        Q::Construct { template, dataset, pattern, base_iri } => {
+        Q::Construct {
+            template,
+            dataset,
+            pattern,
+            base_iri,
+        } => {
             if let Some(d) = dataset {
                 dset(d);
             }

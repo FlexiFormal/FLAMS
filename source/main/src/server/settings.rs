@@ -55,6 +55,10 @@ struct Cli {
     /// The database file to use for account management etc.
     pub(crate) db: Option<PathBuf>,
 
+    #[arg(long)]
+    /// The directory to use for the rdf triple store.
+    pub(crate) rdf_database: Option<PathBuf>,
+
     /// The number of threads to use for the buildqueue
     #[arg(short, long)]
     pub(crate) threads: Option<u8>,
@@ -86,6 +90,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
             debug: cli.debug,
             stack_size: cli.stack_size,
             database: cli.db.map(PathBuf::into_boxed_path),
+            rdf_database: cli.rdf_database.map(PathBuf::into_boxed_path),
             log_dir: cli.log_dir.map(PathBuf::into_boxed_path),
             temp_dir: cli.temp_dir.map(PathBuf::into_boxed_path),
             server: ServerSettings {

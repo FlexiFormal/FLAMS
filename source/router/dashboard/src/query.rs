@@ -14,11 +14,12 @@ use leptos::prelude::*;
 pub async fn query_api(query: String) -> Result<String, ServerFnError<String>> {
     use flams_math_archives::backend::GlobalBackend;
     use flams_math_archives::triple_store::sparql::QueryResult;
+    use flams_system::TokioEngine;
     tracing::info!("Query: {query}");
     let r = tokio::task::spawn_blocking(move || {
         GlobalBackend
             .triple_store()
-            .query_str(&query)
+            .query_str::<TokioEngine>(&query)
             .map(QueryResult::into_json)
     })
     .await; //.in_current_span().await;
