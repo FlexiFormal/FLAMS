@@ -253,7 +253,7 @@ pub fn lo_query(s: &SymbolUri, problems: bool) -> ::spargebra::Query {
                 ?x ulo:example_for s.
                 BIND("EX" as ?R)
             } UNION {
-                ?x ulo:objective ?b.
+                ?x ulo:has_objective ?b.
                 ?b ulo:po_has_symbol s.
                 ?b ulo:has_cognitive_dimension ?R.
                 ?x rdf:TYPE ?t.
