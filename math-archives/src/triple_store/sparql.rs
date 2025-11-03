@@ -255,7 +255,7 @@ pub fn lo_query(s: &SymbolUri, problems: bool) -> ::spargebra::Query {
             } UNION {
                 ?x ulo:objective ?b.
                 ?b ulo:po_has_symbol s.
-                ?b ulo:cognitive_dimension ?R.
+                ?b ulo:has_cognitive_dimension ?R.
                 ?x rdf:TYPE ?t.
             }
         })
