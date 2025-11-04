@@ -8,16 +8,17 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
-use flams_ontology::uris::ArchiveId;
 use flams_router_base::ws;
 use flams_router_base::{LoginState, require_login, ws::WebSocket};
 #[cfg(feature = "hydrate")]
 use flams_router_buildqueue_base::server_fns::get_log;
 use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
-use flams_utils::time::{Delta, Eta};
 use flams_utils::vecmap::VecMap;
-use flams_web_utils::{components::wait_and_then_fn, inject_css};
+use flams_web_utils::components::wait_and_then_fn;
+use ftml_dom::utils::css::inject_css;
+use ftml_ontology::utils::time::{Delta, Eta};
+use ftml_uris::ArchiveId;
 use leptos::{either::EitherOf4, prelude::*};
 use leptos_router::hooks::use_params_map;
 use std::num::NonZeroU32;
@@ -144,7 +145,7 @@ impl TaskState {
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
                       require_login(move || wait_and_then_fn(
-                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
+                          move || get_log(queue,archive.clone(),rel_path.clone(),tc.clone()),
                           |s| {
                             view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
                                 <pre style="width:fit-content;font-size:smaller;">{s}</pre>
@@ -380,7 +381,7 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
                   </TableRow>
                 }),
                 RepoInfo::Git{id,branch,commit,remote/*,updates */} => leptos::either::Either::Right({
-                  let updates = RwSignal::<Option<Vec<(String,flams_git::Commit)>>>::new(None);
+                  let updates = RwSignal::<Option<Vec<(String,flams_backend_types::git::Commit)>>>::new(None);
                   let style = move || if allowed {
                     updates.with(|updates| updates.as_ref().map_or("",|updates| if updates.is_empty() {
                       "color:green;"
@@ -425,7 +426,6 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
                               branch.set(first.clone());
                             });
                             let update : UpdateQueues = expect_context();
-                            //let toaster = ToasterInjection::expect_context();
                             //let commit_map:VecMap<_,_> = updates.clone().into();
                             let archive = id.clone();
                             let remote = remote.clone();
@@ -864,7 +864,7 @@ struct RunningQueue {
 }
 
 #[derive(Clone, Copy)]
-struct WrappedEta(RwSignal<flams_utils::time::Eta>);
+struct WrappedEta(RwSignal<ftml_ontology::utils::time::Eta>);
 
 #[allow(clippy::cast_precision_loss)]
 impl WrappedEta {

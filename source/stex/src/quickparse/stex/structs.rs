@@ -1,18 +1,21 @@
-use std::{
-    borrow::Cow,
-    collections::hash_map::Entry,
-    path::{Path, PathBuf},
-};
-
-use flams_ontology::{
-    languages::Language,
-    narration::{paragraphs::ParagraphKind, problems::CognitiveDimension},
-    uris::{
-        ArchiveId, ArchiveURIRef, ArchiveURITrait, ContentURI, ContentURITrait, DocumentURI,
-        ModuleURI, Name, PathURI, PathURITrait, SymbolURI, URIRefTrait,
+use super::{
+    rules::{
+        MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg, SymdefArg,
+        TextSymdeclArg, VardefArg,
     },
+    DiagnosticLevel, STeXParseData,
 };
-use flams_system::backend::{AnyBackend, Backend};
+use crate::quickparse::{
+    latex::{
+        rules::{AnyEnv, AnyMacro, DynMacro},
+        Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
+    },
+    stex::rules::{IncludeProblemArg, MHGraphicsArg},
+};
+use flams_math_archives::{
+    backend::{AnyBackend, LocalBackend},
+    MathArchive,
+};
 use flams_utils::{
     id_counters::IdCounter,
     impossible,
@@ -21,22 +24,16 @@ use flams_utils::{
     sourcerefs::{LSPLineCol, SourcePos, SourceRange},
     vecmap::{VecMap, VecSet},
 };
-use smallvec::SmallVec;
-
-use crate::quickparse::{
-    latex::{
-        rules::{AnyEnv, AnyMacro, DynMacro},
-        Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
-    },
-    stex::rules::{IncludeProblemArg, MHGraphicsArg},
+use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
+use ftml_uris::{
+    ArchiveId, ArchiveUri, DocumentUri, DomainUri, IsDomainUri, Language, ModuleUri, PathUri,
+    SymbolUri, UriName, UriPath, UriWithArchive, UriWithPath,
 };
-
-use super::{
-    rules::{
-        MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg, SymdefArg,
-        TextSymdeclArg, VardefArg,
-    },
-    DiagnosticLevel, STeXParseData,
+use smallvec::SmallVec;
+use std::{
+    borrow::Cow,
+    collections::hash_map::Entry,
+    path::{Path, PathBuf},
 };
 
 #[allow(clippy::large_enum_variant)]
@@ -96,7 +93,7 @@ pub enum STeXToken<Pos: SourcePos> {
         token_range: SourceRange<Pos>,
     },
     Module {
-        uri: ModuleURI,
+        uri: ModuleUri,
         rules: ModuleRules<Pos>,
         name_range: SourceRange<Pos>,
         opts: Vec<SModuleArg<Pos, Self>>,
@@ -126,7 +123,7 @@ pub enum STeXToken<Pos: SourcePos> {
         full_range: SourceRange<Pos>,
         env_range: SourceRange<Pos>,
         name_range: SourceRange<Pos>,
-        uri: SymbolURI,
+        uri: SymbolUri,
         star: bool,
         domain: ModuleOrStruct<Pos>,
         domain_range: SourceRange<Pos>,
@@ -137,7 +134,7 @@ pub enum STeXToken<Pos: SourcePos> {
         full_range: SourceRange<Pos>,
         token_range: SourceRange<Pos>,
         name_range: SourceRange<Pos>,
-        uri: SymbolURI,
+        uri: SymbolUri,
         star: bool,
         domain: ModuleOrStruct<Pos>,
         domain_range: SourceRange<Pos>,
@@ -215,7 +212,7 @@ pub enum STeXToken<Pos: SourcePos> {
     },
     #[allow(clippy::type_complexity)]
     Vardef {
-        name: Name,
+        name: UriName,
         main_name_range: SourceRange<Pos>,
         full_range: SourceRange<Pos>,
         parsed_args: Vec<VardefArg<Pos, Self>>,
@@ -223,7 +220,7 @@ pub enum STeXToken<Pos: SourcePos> {
     },
     #[allow(clippy::type_complexity)]
     Varseq {
-        name: Name,
+        name: UriName,
         main_name_range: SourceRange<Pos>,
         full_range: SourceRange<Pos>,
         parsed_args: Vec<VardefArg<Pos, Self>>,
@@ -236,7 +233,7 @@ pub enum STeXToken<Pos: SourcePos> {
         token_range: SourceRange<Pos>,
     },
     VariableMacro {
-        name: Name,
+        name: UriName,
         orig: SourceRange<Pos>,
         argnum: u8,
         sequence: bool,
@@ -266,7 +263,7 @@ pub enum STeXToken<Pos: SourcePos> {
         full_range: SourceRange<Pos>,
     },
     Svar {
-        name: Name,
+        name: UriName,
         full_range: SourceRange<Pos>,
         token_range: SourceRange<Pos>,
         name_range: Option<SourceRange<Pos>>,
@@ -356,7 +353,7 @@ impl<Pos: SourcePos, T1> InlineMorphAssign<Pos, T1> {
         self,
         mut cont: impl FnMut(Vec<T1>) -> Vec<T2>,
     ) -> InlineMorphAssign<Pos, T2> {
-        let InlineMorphAssign {
+        let Self {
             symbol,
             symbol_range,
             first,
@@ -423,27 +420,31 @@ impl<'a, Pos: SourcePos, T> Iterator for InlineMorphAssIter<'a, Pos, T> {
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum InlineMorphAssKind<Pos: SourcePos, T> {
     Df(Vec<T>),
-    Rename(Option<(Name, SourceRange<Pos>)>, Box<str>, SourceRange<Pos>),
+    Rename(
+        Option<(UriName, SourceRange<Pos>)>,
+        Box<str>,
+        SourceRange<Pos>,
+    ),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolReference<Pos: SourcePos> {
-    pub uri: SymbolURI,
+    pub uri: SymbolUri,
     pub filepath: Option<std::sync::Arc<Path>>,
     pub range: SourceRange<Pos>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ModuleReference {
-    pub uri: ModuleURI,
-    pub in_doc: DocumentURI,
+    pub uri: ModuleUri,
+    pub in_doc: DocumentUri,
     pub rel_path: Option<std::sync::Arc<str>>,
     pub full_path: Option<std::sync::Arc<Path>>,
 }
 impl ModuleReference {
     /*
     #[must_use]
-    pub fn doc_uri(&self) -> Option<DocumentURI> {
+    pub fn doc_uri(&self) -> Option<DocumentUri> {
       let rel_path = &**self.rel_path.as_ref()?;
       let (path,name) = rel_path.rsplit_once('/').map_or_else(
         || (None,rel_path),
@@ -464,19 +465,19 @@ impl ModuleReference {
 }
 
 pub enum GetModuleError {
-    NotFound(ModuleURI),
-    Cycle(Vec<DocumentURI>),
+    NotFound(ModuleUri),
+    Cycle(Vec<DocumentUri>),
 }
 impl std::fmt::Display for GetModuleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GetModuleError::NotFound(uri) => write!(f, "module not found: {}", uri),
-            GetModuleError::Cycle(cycle) => write!(
+            Self::NotFound(uri) => write!(f, "module not found: {uri}"),
+            Self::Cycle(cycle) => write!(
                 f,
                 "cycle in module dependencies: {}",
                 cycle
                     .iter()
-                    .map(|uri| uri.to_string())
+                    .map(DocumentUri::to_string)
                     .collect::<Vec<_>>()
                     .join(" -> ")
             ),
@@ -486,6 +487,7 @@ impl std::fmt::Display for GetModuleError {
 
 pub trait STeXModuleStore {
     const FULL: bool;
+    /// # Errors
     fn get_module(
         &mut self,
         module: &ModuleReference,
@@ -565,13 +567,13 @@ impl<Pos: SourcePos> Default for ModuleRules<Pos> {
 }
 
 pub struct STeXParseState<'a, Pos: SourcePos, MS: STeXModuleStore> {
-    pub(super) archive: Option<ArchiveURIRef<'a>>,
+    pub(super) archive: Option<&'a ArchiveUri>,
     pub(super) in_path: Option<std::sync::Arc<Path>>,
-    pub(super) doc_uri: &'a DocumentURI,
+    pub(super) doc_uri: &'a DocumentUri,
     pub(super) backend: &'a AnyBackend,
     pub(super) language: Language,
     pub(super) dependencies: Vec<std::sync::Arc<Path>>,
-    pub(super) modules: SmallVec<(ModuleURI, ModuleRules<Pos>), 1>,
+    pub(super) modules: SmallVec<(ModuleUri, ModuleRules<Pos>), 1>,
     module_store: MS,
     name_counter: IdCounter,
 }
@@ -590,7 +592,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }*/
         match self.module_store.get_module(module, self.in_path.as_ref()) {
             Ok(d) => {
-                for (uri, m) in d.lock().modules.iter() {
+                for (uri, m) in &d.lock().modules {
                     if *uri == module.uri {
                         return Ok(m.clone());
                     }
@@ -663,7 +665,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     }
                 }
                 ModuleRule::ConservativeExt(s, rls) => {
-                    semantic_rules.push(SemanticRule::ConservativeExt(s.clone(), rls.clone()))
+                    semantic_rules.push(SemanticRule::ConservativeExt(s.clone(), rls.clone()));
                 }
                 _ => (),
             }
@@ -697,6 +699,8 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         false
     }
 
+    /// # Panics
+    #[allow(clippy::needless_pass_by_value)]
     pub fn add_use<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &mut self,
         module: &ModuleReference,
@@ -733,7 +737,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 {
                     groups
                         .tokenizer
-                        .problem(range.start, "Import cycle", DiagnosticLevel::Error)
+                        .problem(range.start, "Import cycle", DiagnosticLevel::Error);
                 }
             }
             Err(e) => groups
@@ -852,7 +856,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
             };
         }
         for rule in irules.rules.iter() {
-            do_rule!(rule)
+            do_rule!(rule);
         }
         for g in prev.iter().rev() {
             for rule in g.semantic_rules.iter().rev() {
@@ -860,13 +864,13 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     //tracing::info!("Checking {} vs {}",s.uri,symbol.uri);
                     if s.uri == symbol.uri {
                         for rule in rls.rules.iter() {
-                            do_rule!(rule)
+                            do_rule!(rule);
                         }
                     }
                 }
             }
         }
-        semantic_rules.push(SemanticRule::StructureImport(symbol, irules))
+        semantic_rules.push(SemanticRule::StructureImport(symbol, irules));
     }
 
     pub fn import_structure<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
@@ -897,9 +901,10 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         let (prev, after) = groups_ls.split_at_mut(i);
         let prev = &*prev;
         let g = &mut after[0];
-        let rules = match &mut g.kind {
-            GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. } => rules,
-            _ => impossible!(),
+        let (GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. }) =
+            &mut g.kind
+        else {
+            impossible!()
         };
         if rules
             .iter()
@@ -948,6 +953,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn add_import<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &mut self,
         module: &ModuleReference,
@@ -975,9 +981,10 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         let (prev, after) = groups_ls.split_at_mut(i);
         let prev = &*prev;
         let g = &mut after[0];
-        let rules = match &mut g.kind {
-            GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. } => rules,
-            _ => unreachable!(),
+        let (GroupKind::Module { rules, .. } | GroupKind::MathStructure { rules, .. }) =
+            &mut g.kind
+        else {
+            unreachable!()
         };
         if rules
             .iter()
@@ -1010,7 +1017,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 {
                     groups
                         .tokenizer
-                        .problem(range.start, "Import cycle", DiagnosticLevel::Error)
+                        .problem(range.start, "Import cycle", DiagnosticLevel::Error);
                 }
             }
             Err(e) => groups
@@ -1019,6 +1026,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn get_symbol_macro_or_name<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1035,7 +1043,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                             }
                             continue;
                         }
-                        if r.uri.uri.name().last_name().as_ref() == namestr {
+                        if r.uri.uri.name().last() == namestr {
                             if !ret.contains(&r.uri) {
                                 ret.push(r.uri.clone());
                             }
@@ -1051,7 +1059,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                                         }
                                         continue;
                                     }
-                                    if r.uri.uri.name().last_name().as_ref() == namestr {
+                                    if r.uri.uri.name().last() == namestr {
                                         if !ret.contains(&r.uri) {
                                             ret.push(r.uri.clone());
                                         }
@@ -1073,7 +1081,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                                         }
                                         continue;
                                     }
-                                    if r.uri.uri.name().last_name().as_ref() == namestr {
+                                    if r.uri.uri.name().last() == namestr {
                                         if !ret.contains(&r.uri) {
                                             ret.push(r.uri.clone());
                                         }
@@ -1083,7 +1091,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                             }
                         }
                     }
-                    _ => (),
+                    SemanticRule::ConservativeExt(..) => (),
                 }
             }
         }
@@ -1094,6 +1102,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn get_structure_macro_or_name<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1106,7 +1115,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                         if symbol.macroname.as_ref().is_some_and(|n| &**n == namestr) {
                             return Some((symbol.uri.clone(), rules.clone()));
                         }
-                        if symbol.uri.uri.name().last_name().as_ref() == namestr {
+                        if symbol.uri.uri.name().last() == namestr {
                             return Some((symbol.uri.clone(), rules.clone()));
                         }
                     }
@@ -1117,7 +1126,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                                     if symbol.macroname.as_ref().is_some_and(|n| &**n == namestr) {
                                         return Some((symbol.uri.clone(), rules.clone()));
                                     }
-                                    if symbol.uri.uri.name().last_name().as_ref() == namestr {
+                                    if symbol.uri.uri.name().last() == namestr {
                                         return Some((symbol.uri.clone(), rules.clone()));
                                     }
                                 }
@@ -1132,17 +1141,17 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         None
     }
 
-    fn compare(symbol: &str, module: &str, path: Option<&str>, uri: &SymbolURI) -> bool {
-        fn compare_names(n1: &str, n2: &Name) -> Option<bool> {
+    fn compare(symbol: &str, module: &str, path: Option<&str>, uri: &SymbolUri) -> bool {
+        fn compare_names(n1: &str, n2: &UriName) -> Option<bool> {
             let mut symbol_steps = n1.split('/').rev();
-            let mut uri_steps = n2.steps().iter().rev().map(|s| s.as_ref());
+            let mut uri_steps = n2.steps().rev();
             loop {
                 let Some(sym) = symbol_steps.next() else {
-                    if uri_steps.next().is_some() {
-                        return None;
+                    return if uri_steps.next().is_some() {
+                        None
                     } else {
-                        return Some(true);
-                    }
+                        Some(true)
+                    };
                 };
                 let Some(uristep) = uri_steps.next() else {
                     return Some(false);
@@ -1158,20 +1167,20 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         if compare_names(symbol, uri.name()) != Some(true) {
             return false;
         }
-        match compare_names(module, uri.module().name()) {
+        match compare_names(module, uri.module_name()) {
             None | Some(true) if path.is_none() => return true,
             Some(false) | None => return false,
             Some(true) => (),
         }
         let Some(mut path) = path else { unreachable!() };
         if let Some(uri_path) = uri.path() {
-            for step in uri_path.steps().iter().rev() {
+            for step in uri_path.steps().rev() {
                 if path.is_empty() {
                     return true;
                 }
-                if let Some(p) = path.strip_suffix(step.as_ref()) {
+                if let Some(p) = path.strip_suffix(step) {
                     if let Some(p) = p.strip_suffix('/') {
-                        path = p
+                        path = p;
                     } else {
                         if p.is_empty() {
                             return true;
@@ -1182,10 +1191,11 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 }
             }
         }
-        let id = uri.archive_id().as_ref();
-        return id.ends_with(path);
+        let id = uri.archive_id();
+        return id.as_ref().ends_with(path);
     }
 
+    #[allow(clippy::unused_self)]
     fn get_symbol_complex<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1245,6 +1255,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn get_structure_uri<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1275,6 +1286,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         None
     }
 
+    #[allow(clippy::unused_self)]
     fn get_structure_complex<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         &self,
         groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
@@ -1333,9 +1345,8 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     );
                 }
                 return Some(r);
-            } else {
-                ""
             }
+            ""
         };
         let path = if steps.next().is_none() {
             None
@@ -1375,6 +1386,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         self.get_structure_complex(groups, name, module, path)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(super) fn resolve_module_or_struct<
         Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
     >(
@@ -1398,7 +1410,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 STeXParseState<'a, LSPLineCol, MS>,
             >,
             rules: &ModuleRules<LSPLineCol>,
-            dones: &mut Vec<ContentURI>,
+            dones: &mut Vec<DomainUri>,
             target: &mut Vec<ModuleRules<LSPLineCol>>,
         ) -> Option<()> {
             for r in rules.rules.iter() {
@@ -1406,16 +1418,16 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     ModuleRule::Import(m)
                         if !dones
                             .iter()
-                            .any(|u| matches!(u,ContentURI::Module(u) if *u == m.uri)) =>
+                            .any(|u| matches!(u,DomainUri::Module(u) if *u == m.uri)) =>
                     {
-                        load_module(slf, groups, m, dones, target)?
+                        load_module(slf, groups, m, dones, target)?;
                     }
                     ModuleRule::StructureImport(s)
                         if !dones
                             .iter()
-                            .any(|u| matches!(u,ContentURI::Symbol(u) if *u == s.uri)) =>
+                            .any(|u| matches!(u,DomainUri::Symbol(u) if *u == s.uri)) =>
                     {
-                        load_structure(slf, groups, s, dones, target)?
+                        load_structure(slf, groups, s, dones, target)?;
                     }
                     _ => (),
                 }
@@ -1437,7 +1449,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 STeXParseState<'a, LSPLineCol, MS>,
             >,
             module: &ModuleReference,
-            dones: &mut Vec<ContentURI>,
+            dones: &mut Vec<DomainUri>,
             target: &mut Vec<ModuleRules<LSPLineCol>>,
         ) -> Option<()> {
             dones.push(module.uri.clone().into());
@@ -1461,7 +1473,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 STeXParseState<'a, LSPLineCol, MS>,
             >,
             structure: &SymbolReference<LSPLineCol>,
-            dones: &mut Vec<ContentURI>,
+            dones: &mut Vec<DomainUri>,
             target: &mut Vec<ModuleRules<LSPLineCol>>,
         ) -> Option<()> {
             dones.push(structure.uri.clone().into());
@@ -1506,13 +1518,13 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
     #[inline]
     #[must_use]
     pub fn new(
-        archive: Option<ArchiveURIRef<'a>>,
+        archive: Option<&'a ArchiveUri>,
         in_path: Option<&'a Path>,
-        uri: &'a DocumentURI,
+        uri: &'a DocumentUri,
         backend: &'a AnyBackend,
         on_module: MS,
     ) -> Self {
-        let language = in_path.map(Language::from_file).unwrap_or_default();
+        let language = in_path.map(Language::from).unwrap_or_default();
         Self {
             archive,
             in_path: in_path.map(Into::into),
@@ -1591,7 +1603,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
     pub fn add_structure<Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel)>(
         &mut self,
         groups: &mut Groups<'a, '_, ParseStr<'a, Pos>, STeXToken<Pos>, Err, Self>,
-        name: Name,
+        name: UriName,
         macroname: Option<std::sync::Arc<str>>,
         range: SourceRange<Pos>,
     ) -> Option<SymbolReference<Pos>> {
@@ -1666,12 +1678,12 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         groups: &mut Groups<'a, '_, ParseStr<'a, Pos>, STeXToken<Pos>, Err, Self>,
         orig: &SymbolReference<Pos>,
         range: SourceRange<Pos>,
-    ) -> Option<ModuleURI> {
+    ) -> Option<ModuleUri> {
         for g in groups.groups.iter_mut().rev() {
             match &mut g.kind {
                 GroupKind::Module { uri, rules, .. } => {
                     let name = self.new_id(Cow::Borrowed("EXTSTRUCT"));
-                    let euri = (uri.clone() / &*name).ok()?;
+                    let euri = uri.clone() / &name.parse().ok()?;
                     g.semantic_rules.push(SemanticRule::ConservativeExt(
                         orig.clone(),
                         ModuleRules::default(),
@@ -1696,7 +1708,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
     pub fn add_symbol<Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel)>(
         &mut self,
         groups: &mut Groups<'a, '_, ParseStr<'a, Pos>, STeXToken<Pos>, Err, Self>,
-        name: Name,
+        name: UriName,
         macroname: Option<std::sync::Arc<str>>,
         range: SourceRange<Pos>,
         has_tp: bool,
@@ -1762,6 +1774,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::too_many_lines)]
     pub(super) fn resolve_module(
         &self,
         module: &'a str,
@@ -1783,18 +1796,18 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
                         .and_then(|p| p.to_str())
                         .and_then(|s| {
                             s.find("source")
-                                .map(|i| (PathBuf::from(&s[..i - 1]).join("source"), a.owned()))
+                                .map(|i| (PathBuf::from(&s[..i - 1]).join("source"), a.clone()))
                         })
                 })
             },
             |a| {
                 self.backend
-                    .with_local_archive(a, |a| a.map(|a| (a.source_dir(), a.uri().owned())))
+                    .with_local_archive(a, |a| a.map(|a| (a.source_dir(), a.uri().clone())))
             },
         )?;
 
-        let (path, module) = if let Some((a, b)) = module.split_once('?') {
-            (a, b)
+        let (mut path, module) = if let Some((a, b)) = module.split_once('?') {
+            (a.trim(), b)
         } else {
             ("", module)
         };
@@ -1812,15 +1825,24 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
             path
         };
 
-        let uri = ((PathURI::from(archive) / path).ok()? | module).ok()?;
+        let uri: ModuleUri = if path.trim().is_empty() {
+            PathUri::from(archive) | module.parse().ok()?
+        } else {
+            (PathUri::from(archive) / path.trim().parse::<UriPath>().ok()?) | module.parse().ok()?
+        };
 
         let p = basepath
             .join(last)
             .join(format!("{top_module}.{}.tex", self.language));
         if p.exists() {
+            let rel_path = if path.is_empty() {
+                format!("{top_module}.{}.tex", self.language)
+            } else {
+                format!("{path}/{top_module}.{}.tex", self.language)
+            };
             return Some(ModuleReference {
-                rel_path: Some(format!("{path}/{top_module}.{}.tex", self.language).into()),
-                in_doc: (uri.as_path().owned() & (top_module, self.language)).ok()?,
+                rel_path: Some(rel_path.into()),
+                in_doc: uri.path_uri().clone() & (top_module.parse().ok()?, self.language),
                 full_path: Some(p.into()),
                 uri,
             });
@@ -1828,9 +1850,14 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 
         let p = basepath.join(last).join(format!("{top_module}.en.tex"));
         if p.exists() {
+            let rel_path = if path.is_empty() {
+                format!("{top_module}.en.tex")
+            } else {
+                format!("{path}/{top_module}.en.tex")
+            };
             return Some(ModuleReference {
-                rel_path: Some(format!("{path}/{top_module}.en.tex").into()),
-                in_doc: (uri.as_path().owned() & (top_module, Language::English)).ok()?,
+                rel_path: Some(rel_path.into()),
+                in_doc: uri.path_uri().clone() & (top_module.parse().ok()?, Language::English),
                 full_path: Some(p.into()),
                 uri,
             });
@@ -1838,21 +1865,26 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 
         let p = basepath.join(last).join(format!("{top_module}.tex"));
         if p.exists() {
+            let rel_path = if path.is_empty() {
+                format!("{top_module}.tex")
+            } else {
+                format!("{path}/{top_module}.tex")
+            };
             return Some(ModuleReference {
-                rel_path: Some(format!("{path}/{top_module}.tex").into()),
-                in_doc: (uri.as_path().owned() & (top_module, Language::English)).ok()?,
+                rel_path: Some(rel_path.into()),
+                in_doc: uri.path_uri().clone() & (top_module.parse().ok()?, Language::English),
                 full_path: Some(p.into()),
                 uri,
             });
         }
 
-        let path_uri = uri.as_path().owned().up();
+        let path_uri = uri.path_uri().clone().up();
 
         let p = basepath.join(format!("{last}.{}.tex", self.language));
         if p.exists() {
             return Some(ModuleReference {
                 uri,
-                in_doc: (path_uri & (last, self.language)).ok()?,
+                in_doc: path_uri & (last.parse().ok()?, self.language),
                 rel_path: Some(format!("{path}.{}.tex", self.language).into()),
                 full_path: Some(p.into()),
             });
@@ -1862,7 +1894,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         if p.exists() {
             return Some(ModuleReference {
                 uri,
-                in_doc: (path_uri & (last, Language::English)).ok()?,
+                in_doc: path_uri & (last.parse().ok()?, Language::English),
                 rel_path: Some(format!("{path}.en.tex").into()),
                 full_path: Some(p.into()),
             });
@@ -1872,7 +1904,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         if p.exists() {
             return Some(ModuleReference {
                 uri,
-                in_doc: (path_uri & (last, Language::English)).ok()?,
+                in_doc: path_uri & (last.parse().ok()?, Language::English),
                 rel_path: Some(format!("{path}.tex").into()),
                 full_path: Some(p.into()),
             });
@@ -1880,10 +1912,10 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         None
     }
 
-    fn find_module(&self, m: &str) -> Option<(&ModuleURI, &ModuleRules<Pos>)> {
+    fn find_module(&self, m: &str) -> Option<(&ModuleUri, &ModuleRules<Pos>)> {
         'top: for (muri, rls) in &self.modules {
             let mut f_steps = m.split('/');
-            let mut m_steps = muri.name().steps().iter();
+            let mut m_steps = muri.module_name().steps();
             loop {
                 let Some(f) = f_steps.next() else {
                     if m_steps.next().is_none() {
@@ -1894,7 +1926,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
                 let Some(m) = m_steps.next() else {
                     continue 'top;
                 };
-                if f != m.as_ref() {
+                if f != m {
                     continue 'top;
                 }
             }
@@ -1910,14 +1942,14 @@ pub enum GroupKind<Pos: SourcePos> {
     None,
     Problem,
     Module {
-        uri: ModuleURI,
+        uri: ModuleUri,
         rules: Vec<ModuleRule<Pos>>,
     },
     MathStructure {
-        uri: ModuleURI,
+        uri: ModuleUri,
         rules: Vec<ModuleRule<Pos>>,
     },
-    ConservativeExt(ModuleURI, Vec<ModuleRule<Pos>>),
+    ConservativeExt(ModuleUri, Vec<ModuleRule<Pos>>),
     DefPara(Vec<SymbolReference<Pos>>),
     Morphism {
         domain: ModuleOrStruct<Pos>,
@@ -1929,7 +1961,7 @@ pub enum GroupKind<Pos: SourcePos> {
 #[derive(Clone, Debug, Default)]
 pub struct MorphismSpec<Pos: SourcePos> {
     pub macroname: Option<Box<str>>,
-    pub new_name: Option<Name>,
+    pub new_name: Option<UriName>,
     pub is_assigned_at: Option<SourceRange<Pos>>,
     pub decl_range: SourceRange<Pos>,
 }
@@ -1950,7 +1982,7 @@ pub struct STeXGroup<
     pub inner: Group<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>>,
     pub kind: GroupKind<Pos>,
     pub semantic_rules: Vec<SemanticRule<Pos>>,
-    pub uses: VecSet<ModuleURI>,
+    pub uses: VecSet<ModuleUri>,
 }
 
 pub enum SemanticRule<Pos: SourcePos> {
@@ -1958,7 +1990,7 @@ pub enum SemanticRule<Pos: SourcePos> {
     Module(ModuleReference, ModuleRules<Pos>),
     Structure {
         symbol: SymbolRule<Pos>,
-        //module_uri:ModuleURI,
+        //module_uri:ModuleUri,
         rules: ModuleRules<Pos>,
     },
     ConservativeExt(SymbolReference<Pos>, ModuleRules<Pos>),
@@ -2037,7 +2069,7 @@ impl<
 #[derive(Clone, Debug)]
 pub enum MacroArg<Pos: SourcePos> {
     Symbol(SymbolReference<Pos>, u8),
-    Variable(Name, SourceRange<Pos>, bool, u8),
+    Variable(UriName, SourceRange<Pos>, bool, u8),
 }
 
 impl<

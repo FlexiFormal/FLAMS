@@ -183,14 +183,14 @@ impl EngineBase {
                 Err(e) => {
                     error!("Error initializing RusTeX engine: {}", e);
                 }
-            };
+            }
             register_primitives_postinit(&mut engine);
             match engine.init_file("rustex_defs.def") {
                 Ok(()) => {}
                 Err(e) => {
                     error!("Error initializing RusTeX engine: {}", e);
                 }
-            };
+            }
             Self {
                 state: engine.state.clone(),
                 memory: engine.aux.memory.clone(),
@@ -211,6 +211,7 @@ impl EngineBase {
 
 pub struct RusTeX(Mutex<EngineBase>);
 impl RusTeX {
+    /// # Errors
     pub fn get() -> Result<Self, ()> {
         Ok(Self(
             ENGINE_BASE
@@ -312,7 +313,7 @@ impl<const HAS_PATH: bool> RusTeXRunBuilder<HAS_PATH> {
         self.inner.filesystem.add_envs(envs);
         self
     }
-    pub fn set_font_debug_info(mut self, b: bool) -> Self {
+    pub const fn set_font_debug_info(mut self, b: bool) -> Self {
         self.settings.insert_font_info = b;
         self
     }

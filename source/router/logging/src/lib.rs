@@ -12,12 +12,9 @@ use flams_router_base::LoginState;
 use flams_router_base::require_login;
 use flams_router_base::ws;
 use flams_utils::logs::{LogFileLine, LogLevel, LogMessage, LogTree};
-use flams_utils::time::Timestamp;
 use flams_utils::vecmap::VecMap;
-use flams_web_utils::{
-    components::{Header, LazySubtree, Leaf, Spinner, Tree},
-    inject_css,
-};
+use flams_web_utils::components::{Header, LazySubtree, Leaf, Spinner, Tree};
+use ftml_ontology::utils::time::Timestamp;
 use leptos::{either::Either, prelude::*};
 use std::num::NonZeroU64;
 use thaw::Caption1Strong;
@@ -44,6 +41,7 @@ async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
 
 #[component]
 pub fn Logger() -> impl IntoView {
+    use ftml_dom::utils::css::inject_css;
     require_login(|| {
         inject_css("flams-logging", include_str!("logs.css"));
         let signals = LogSignals {
@@ -133,13 +131,13 @@ fn LogLineHelper(
         |timestamp| format!("{timestamp} <{level}> "),
     );
     if let Some(target) = target {
-        write!(str, "[{target}] ").unwrap();
+        write!(str, "[{target}] ").expect("this is a bug");
     }
     str.push_str(&message);
     if !args.is_empty() {
         str.push_str(" (");
         for (k, v) in args {
-            write!(str, "{k}:{v} ").unwrap();
+            write!(str, "{k}:{v} ").expect("this is a bug");
         }
         str.push(')');
     }

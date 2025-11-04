@@ -1,11 +1,14 @@
-use flams_ontology::{
-    languages::Language,
-    uris::{
-        ArchiveId, ArchiveURI, DocumentElementURI, DocumentURI, ModuleURI, PathURI, SymbolURI, URI,
-    },
+use flams_math_archives::{
+    MathArchive,
+    backend::{GlobalBackend, LocalBackend},
 };
-use std::str::FromStr;
+use ftml_uris::{ArchiveId, ArchiveUri};
 
+pub fn get_uri(a: &ArchiveId) -> Option<ArchiveUri> {
+    GlobalBackend.with_archive(a, |a| a.map(|a| a.uri().clone()))
+}
+
+/*
 macro_rules! charstr {
     ($c:ident) => {
         const_str::concat!($c::SEPARATOR)
@@ -26,7 +29,7 @@ pub enum URIKind {
 
 #[derive(Clone)]
 pub enum SymURIComponents {
-    Uri(SymbolURI),
+    Uri(SymbolUri),
     Comps {
         a: ArchiveId,
         p: Option<String>,
@@ -39,7 +42,7 @@ impl SymURIComponents {
     pub fn into_args<
         R,
         F: FnOnce(
-            Option<SymbolURI>,
+            Option<SymbolUri>,
             Option<ArchiveId>,
             Option<String>,
             Option<Language>,
@@ -59,7 +62,7 @@ impl SymURIComponents {
 
 impl
     TryFrom<(
-        Option<SymbolURI>,
+        Option<SymbolUri>,
         Option<ArchiveId>,
         Option<String>,
         Option<String>,
@@ -69,7 +72,7 @@ impl
     type Error = ();
     fn try_from(
         (uri, a, p, m, s): (
-            Option<SymbolURI>,
+            Option<SymbolUri>,
             Option<ArchiveId>,
             Option<String>,
             Option<String>,
@@ -95,7 +98,7 @@ impl
 
 #[derive(Clone)]
 pub enum DocURIComponents {
-    Uri(DocumentURI),
+    Uri(DocumentUri),
     RelPath(ArchiveId, String),
     Comps {
         a: ArchiveId,
@@ -108,7 +111,7 @@ impl DocURIComponents {
     pub fn into_args<
         R,
         F: FnOnce(
-            Option<DocumentURI>,
+            Option<DocumentUri>,
             Option<String>,
             Option<ArchiveId>,
             Option<String>,
@@ -129,7 +132,7 @@ impl DocURIComponents {
 
 impl
     TryFrom<(
-        Option<DocumentURI>,
+        Option<DocumentUri>,
         Option<String>,
         Option<ArchiveId>,
         Option<String>,
@@ -140,7 +143,7 @@ impl
     type Error = ();
     fn try_from(
         (uri, rp, a, p, l, d): (
-            Option<DocumentURI>,
+            Option<DocumentUri>,
             Option<String>,
             Option<ArchiveId>,
             Option<String>,
@@ -384,6 +387,7 @@ impl
     }
 }
 
+pub use
 pub trait URIComponentsTrait {
     fn get(&self, key: &str) -> Option<&str>;
     fn get_string(&self, key: &str) -> Option<String>;
@@ -391,22 +395,22 @@ pub trait URIComponentsTrait {
     fn kind(&self) -> Option<URIKind>;
     fn as_doc(&self) -> Option<DocURIComponents> {
         if let Some(uri) = self.get("uri") {
-            return DocumentURI::from_str(uri).ok().map(DocURIComponents::Uri);
+            return DocumentUri::from_str(uri).ok().map(DocURIComponents::Uri);
         }
-        let a = self.get(charstr!(ArchiveURI)).map(ArchiveId::new)?;
+        let a = self.get(charstr!(ArchiveUri)).map(ArchiveId::new)?;
         if let Some(rp) = self.get_string("rp") {
-            if self.get(charstr!(DocumentURI)).is_none()
-                && self.get(charstr!(DocumentElementURI)).is_none()
-                && self.get(charstr!(ModuleURI)).is_none()
-                && self.get(charstr!(SymbolURI)).is_none()
+            if self.get(charstr!(DocumentUri)).is_none()
+                && self.get(charstr!(DocumentElementUri)).is_none()
+                && self.get(charstr!(ModuleUri)).is_none()
+                && self.get(charstr!(SymbolUri)).is_none()
             {
                 Some(DocURIComponents::RelPath(a, rp))
             } else {
                 None
             }
-        } else if self.get(charstr!(DocumentElementURI)).is_none()
-            && self.get(charstr!(ModuleURI)).is_none()
-            && self.get(charstr!(SymbolURI)).is_none()
+        } else if self.get(charstr!(DocumentElementUri)).is_none()
+            && self.get(charstr!(ModuleUri)).is_none()
+            && self.get(charstr!(SymbolUri)).is_none()
         {
             let p = self.get_string(charstr!(PathURI));
             let l = self.get("l").and_then(|s| Language::from_str(s).ok());
@@ -420,22 +424,22 @@ pub trait URIComponentsTrait {
         if let Some(uri) = self.get("uri") {
             return URI::from_str(uri).ok().map(URIComponents::Uri);
         }
-        let a = self.get(charstr!(ArchiveURI)).map(ArchiveId::new)?;
+        let a = self.get(charstr!(ArchiveUri)).map(ArchiveId::new)?;
         if let Some(rp) = self.get_string("rp") {
-            return if self.get(charstr!(DocumentURI)).is_none()
-                && self.get(charstr!(DocumentElementURI)).is_none()
-                && self.get(charstr!(ModuleURI)).is_none()
-                && self.get(charstr!(SymbolURI)).is_none()
+            return if self.get(charstr!(DocumentUri)).is_none()
+                && self.get(charstr!(DocumentElementUri)).is_none()
+                && self.get(charstr!(ModuleUri)).is_none()
+                && self.get(charstr!(SymbolUri)).is_none()
             {
                 Some(URIComponents::RelPath(a, rp))
             } else {
                 None
             };
         }
-        if let Some(e) = self.get(charstr!(DocumentElementURI)) {
-            let d = self.get(charstr!(DocumentURI))?;
-            return if self.get(charstr!(ModuleURI)).is_none()
-                && self.get(charstr!(SymbolURI)).is_none()
+        if let Some(e) = self.get(charstr!(DocumentElementUri)) {
+            let d = self.get(charstr!(DocumentUri))?;
+            return if self.get(charstr!(ModuleUri)).is_none()
+                && self.get(charstr!(SymbolUri)).is_none()
             {
                 Some(URIComponents::ElemComps {
                     a,
@@ -448,9 +452,9 @@ pub trait URIComponentsTrait {
                 None
             };
         }
-        if let Some(d) = self.get(charstr!(DocumentURI)) {
-            return if self.get(charstr!(ModuleURI)).is_none()
-                && self.get(charstr!(SymbolURI)).is_none()
+        if let Some(d) = self.get(charstr!(DocumentUri)) {
+            return if self.get(charstr!(ModuleUri)).is_none()
+                && self.get(charstr!(SymbolUri)).is_none()
             {
                 Some(URIComponents::DocComps {
                     a,
@@ -462,10 +466,10 @@ pub trait URIComponentsTrait {
                 None
             };
         }
-        if let Some(s) = self.get(charstr!(SymbolURI)) {
-            let m = self.get(charstr!(ModuleURI))?;
-            return if self.get(charstr!(DocumentURI)).is_none()
-                && self.get(charstr!(DocumentElementURI)).is_none()
+        if let Some(s) = self.get(charstr!(SymbolUri)) {
+            let m = self.get(charstr!(ModuleUri))?;
+            return if self.get(charstr!(DocumentUri)).is_none()
+                && self.get(charstr!(DocumentElementUri)).is_none()
             {
                 Some(URIComponents::SymComps {
                     a,
@@ -477,9 +481,9 @@ pub trait URIComponentsTrait {
                 None
             };
         }
-        if let Some(m) = self.get(charstr!(ModuleURI)) {
-            return if self.get(charstr!(DocumentURI)).is_none()
-                && self.get(charstr!(DocumentElementURI)).is_none()
+        if let Some(m) = self.get(charstr!(ModuleUri)) {
+            return if self.get(charstr!(DocumentUri)).is_none()
+                && self.get(charstr!(DocumentElementUri)).is_none()
             {
                 Some(URIComponents::ModComps {
                     a,
@@ -498,7 +502,7 @@ pub trait URIComponentsTrait {
         if let Some(uri) = self.get("uri") {
             return URI::from_str(uri).ok();
         }
-        let a = ArchiveId::new(self.get(charstr!(ArchiveURI))?);
+        let a = ArchiveId::new(self.get(charstr!(ArchiveUri))?);
         if let Some(rp) = self.get("rp") {
             return from_archive_relpath(&a, rp).map(|r| URI::Narrative(r.into()));
         }
@@ -522,21 +526,21 @@ impl URIComponentsTrait for leptos_router::params::ParamsMap {
         if self.get("rp").is_some() {
             return Some(URIKind::Rel);
         }
-        self.get(charstr!(ArchiveURI))?;
-        if self.get(charstr!(DocumentURI)).is_some() {
-            if self.get(charstr!(ModuleURI)).is_some() || self.get(charstr!(SymbolURI)).is_some() {
+        self.get(charstr!(ArchiveUri))?;
+        if self.get(charstr!(DocumentUri)).is_some() {
+            if self.get(charstr!(ModuleUri)).is_some() || self.get(charstr!(SymbolUri)).is_some() {
                 return None;
             }
-            if self.get(charstr!(DocumentElementURI)).is_some() {
+            if self.get(charstr!(DocumentElementUri)).is_some() {
                 Some(URIKind::DocumentElement)
             } else {
                 Some(URIKind::Document)
             }
-        } else if self.get(charstr!(ModuleURI)).is_some() {
-            if self.get(charstr!(DocumentElementURI)).is_some() {
+        } else if self.get(charstr!(ModuleUri)).is_some() {
+            if self.get(charstr!(DocumentElementUri)).is_some() {
                 return None;
             }
-            if self.get(charstr!(SymbolURI)).is_some() {
+            if self.get(charstr!(SymbolUri)).is_some() {
                 Some(URIKind::Declaration)
             } else {
                 Some(URIKind::Module)
@@ -555,8 +559,8 @@ mod ssr {
     use flams_ontology::{
         languages::Language,
         uris::{
-            ArchiveId, DocumentElementURI, DocumentURI, ModuleURI, Name, SymbolURI, URI,
-            URIRefTrait,
+            ArchiveId, DocumentElementUri, DocumentUri, ModuleUri, Name, SymbolUri, URI,
+            UriRefTrait,
         },
     };
     use flams_system::backend::{Backend, GlobalBackend};
@@ -564,7 +568,7 @@ mod ssr {
 
     impl SymURIComponents {
         #[must_use]
-        pub fn parse(self) -> Option<SymbolURI> {
+        pub fn parse(self) -> Option<SymbolUri> {
             match self {
                 Self::Uri(uri) => Some(uri),
                 Self::Comps { a, p, m, s } => get_sym_uri(&a, p, &m, &s),
@@ -574,7 +578,7 @@ mod ssr {
 
     impl DocURIComponents {
         #[must_use]
-        pub fn parse(self) -> Option<DocumentURI> {
+        pub fn parse(self) -> Option<DocumentUri> {
             match self {
                 Self::Uri(uri) => Some(uri),
                 Self::RelPath(a, rp) => from_archive_relpath(&a, &rp),
@@ -617,7 +621,7 @@ mod ssr {
     }
 
     #[must_use]
-    pub fn from_archive_relpath(a: &ArchiveId, rp: &str) -> Option<DocumentURI> {
+    pub fn from_archive_relpath(a: &ArchiveId, rp: &str) -> Option<DocumentUri> {
         let (p, n) = if let Some((p, n)) = rp.rsplit_once('/') {
             (
                 Some(Name::from_str(p).unwrap_or_else(|_| unreachable!())),
@@ -661,7 +665,7 @@ mod ssr {
         p: Option<Name>,
         l: Language,
         d: Name,
-    ) -> Option<DocumentURI> {
+    ) -> Option<DocumentUri> {
         let a = GlobalBackend::get().with_archive(a, |a| a.map(|a| a.uri().owned()))?;
         let p = if let Some(p) = p { a % p } else { a.into() };
         Some(p & (d, l))
@@ -675,7 +679,7 @@ mod ssr {
         l: Option<Language>,
         d: &str,
         e: &str,
-    ) -> Option<DocumentElementURI> {
+    ) -> Option<DocumentElementUri> {
         get_doc_uri(
             a,
             p.map(|p| Name::from_str(&p).ok())?,
@@ -687,7 +691,7 @@ mod ssr {
 
     #[must_use]
     #[allow(clippy::many_single_char_names)]
-    pub fn get_mod_uri(a: &ArchiveId, p: Option<String>, m: &str) -> Option<ModuleURI> {
+    pub fn get_mod_uri(a: &ArchiveId, p: Option<String>, m: &str) -> Option<ModuleUri> {
         let a = GlobalBackend::get().with_archive(a, |a| a.map(|a| a.uri().owned()))?;
         let p = if let Some(p) = p {
             a % Name::from_str(&p).ok()?
@@ -699,10 +703,11 @@ mod ssr {
 
     #[must_use]
     #[allow(clippy::many_single_char_names)]
-    pub fn get_sym_uri(a: &ArchiveId, p: Option<String>, m: &str, s: &str) -> Option<SymbolURI> {
+    pub fn get_sym_uri(a: &ArchiveId, p: Option<String>, m: &str, s: &str) -> Option<SymbolUri> {
         get_mod_uri(a, p, m).and_then(|m| (m | s).ok())
     }
 }
 
 #[cfg(feature = "ssr")]
 pub use ssr::*;
+ */

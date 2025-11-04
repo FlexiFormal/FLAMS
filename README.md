@@ -59,4 +59,4 @@ cargo make
 
 Use `cargo make dev` for a (faster) development build.
 
-Code Documentation hosted [here](https://kwarc.github.io/FLAMS).
+Code Documentation hosted [here](https://flexiformal.github.io/FLAMS).

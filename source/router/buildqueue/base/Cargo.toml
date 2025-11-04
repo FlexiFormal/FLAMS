@@ -9,14 +9,17 @@ workspace = true
 
 [features]
 ssr = [
+    "ftml-dom/ssr",
     "leptos/ssr",
     "thaw/ssr",
     "flams-router-base/ssr",
     "flams-web-utils/ssr",
     "dep:flams-system",
+    "dep:flams-math-archives",
     "dep:tokio",
 ]
 hydrate = [
+    "ftml-dom/hydrate",
     "leptos/hydrate",
     "thaw/hydrate",
     "flams-web-utils/hydrate",
@@ -25,12 +28,18 @@ hydrate = [
 docs-only = []
 
 [dependencies]
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-uris = { workspace = true }
+flams-backend-types = { workspace = true, features = ["serde"] }
+ftml-dom = { workspace = true }
+
 flams-utils = { workspace = true }
 flams-git = { workspace = true }
 flams-web-utils = { workspace = true }
-flams-ontology = { workspace = true, features = ["serde"] }
-flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-router-base = { workspace = true }
+
+flams-system = { workspace = true, optional = true, features = ["tokio"] }
+flams-math-archives = { workspace = true, optional = true }
 
 leptos = { workspace = true }
 leptos_router = { workspace = true }

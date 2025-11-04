@@ -14,8 +14,6 @@ ssr = [
     "flams-router-git-base/ssr",
     #"flams-router-base/ssr",
     "flams-web-utils/ssr",
-    #"flams-git/git2",
-    #"dep:flams-system",
     "flams-router-buildqueue-base/ssr",
     #"dep:tokio",
 ]
@@ -30,11 +28,15 @@ hydrate = [
 docs-only = []
 
 [dependencies]
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-uris = { workspace = true, features = ["serde"] }
+
+flams-backend-types = { workspace = true }
+
 flams-router-git-base = { workspace = true }
 flams-utils = { workspace = true }
 flams-git = { workspace = true }
 flams-web-utils = { workspace = true }
-flams-ontology = { workspace = true, features = ["serde"] }
 #flams-router-base = { workspace = true }
 #flams-system = { workspace = true, optional = true }
 flams-router-buildqueue-base = { workspace = true }

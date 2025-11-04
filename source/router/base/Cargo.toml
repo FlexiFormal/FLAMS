@@ -9,6 +9,8 @@ workspace = true
 
 [features]
 ssr = [
+    #"ftml-components/ssr",
+    "dep:flams-math-archives",
     "leptos/ssr",
     "thaw/ssr",
     "flams-database/backend",
@@ -23,6 +25,7 @@ hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
     "flams-web-utils/hydrate",
+    #"ftml-components/hydrate",
     "dep:bytes",
     "dep:http",
     "dep:futures",
@@ -32,12 +35,16 @@ hydrate = [
 docs-only = []
 
 [dependencies]
+ftml-uris = { workspace = true, features = ["leptos"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
+
+
 flams-database = { workspace = true }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }
 flams-web-utils = { workspace = true }
 flams-utils = { workspace = true }
-flams-ontology = { workspace = true, features = ["serde"] }
-flams-system = { workspace = true, optional = true }
+flams-system = { workspace = true, optional = true, features = ["tokio"] }
+flams-math-archives = { workspace = true, optional = true }
 
 leptos = { workspace = true }
 thaw = { workspace = true }

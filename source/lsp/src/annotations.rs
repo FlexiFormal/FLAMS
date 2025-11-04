@@ -1,20 +1,16 @@
 use crate::capabilities::STeXSemanticTokens;
 use crate::{
-    state::{DocData, LSPState, UrlOrFile},
     IsLSPRange, ProgressCallbackClient,
+    state::{DocData, LSPState, UrlOrFile},
 };
 use async_lsp::lsp_types as lsp;
-use flams_ontology::{
-    narration::paragraphs::ParagraphKind,
-    uris::{
-        ArchiveId, ArchiveURI, ArchiveURITrait, ContentURI, ContentURITrait, ModuleURI,
-        PathURITrait, SymbolURI, URIWithLanguage, URI,
-    },
-};
+use flams_math_archives::LocalArchive;
+use flams_math_archives::backend::{GlobalBackend, LocalBackend};
 use flams_stex::quickparse::stex::rules::IncludeProblemArg;
 use flams_stex::quickparse::{
     latex::ParsedKeyValue,
     stex::{
+        AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI,
         rules::{
             MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg,
             SymdefArg, TextSymdeclArg, VardefArg,
@@ -23,33 +19,36 @@ use flams_stex::quickparse::{
             InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymbolReference,
             SymnameMode,
         },
-        AnnotIter, DiagnosticLevel, STeXAnnot, STeXDiagnostic, STeXParseDataI,
     },
 };
-use flams_system::backend::{archives::LocalArchive, Backend, GlobalBackend};
 use flams_utils::{
     prelude::TreeChildIter,
     sourcerefs::{LSPLineCol, SourceRange},
+};
+use ftml_ontology::narrative::elements::paragraphs::ParagraphKind;
+use ftml_uris::{
+    ArchiveId, ArchiveUri, IsDomainUri, IsNarrativeUri, ModuleUri, SymbolUri, Uri, UriWithArchive,
+    UriWithPath,
 };
 use futures::FutureExt;
 use smallvec::SmallVec;
 
 trait AnnotExt: Sized {
     fn as_symbol(&self) -> Option<(lsp::DocumentSymbol, &[Self])>;
-    fn links(&self, top_archive: Option<&ArchiveURI>, f: impl FnMut(lsp::DocumentLink));
+    fn links(&self, top_archive: Option<&ArchiveUri>, f: impl FnMut(lsp::DocumentLink));
     fn goto_definition(
         &self,
         in_doc: &UrlOrFile,
         pos: LSPLineCol,
     ) -> Option<lsp::GotoDefinitionResponse>;
     fn semantic_tokens(&self, cont: &mut impl FnMut(SourceRange<LSPLineCol>, u32));
-    fn hover(&self, top_archive: Option<&ArchiveURI>, pos: LSPLineCol) -> Option<lsp::Hover>;
+    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
     fn code_action(&self, pos: LSPLineCol, url: &lsp::Url) -> lsp::CodeActionResponse;
 }
 
 pub(crate) fn uri_from_archive_relpath(id: &ArchiveId, relpath: &str) -> Option<lsp::Url> {
-    let path = GlobalBackend::get().with_local_archive(id, |a| a.map(LocalArchive::source_dir))?;
+    let path = GlobalBackend.with_local_archive(id, |a| a.map(LocalArchive::source_dir))?;
     let path = relpath.split('/').fold(path, |p, s| p.join(s));
     lsp::Url::from_file_path(path).ok()
 }
@@ -389,15 +388,15 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn links(&self, top_archive: Option<&ArchiveURI>, mut cont: impl FnMut(lsp::DocumentLink)) {
+    fn links(&self, top_archive: Option<&ArchiveUri>, mut cont: impl FnMut(lsp::DocumentLink)) {
         match self {
             Self::IncludeProblem {
                 archive, filepath, ..
             } => {
-                let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
-                    |(a, _)| Some(a),
-                ) else {
+                let Some(a) = archive
+                    .as_ref()
+                    .map_or_else(|| top_archive.map(ArchiveUri::archive_id), |(a, _)| Some(a))
+                else {
                     return;
                 };
                 let Some(uri) = uri_from_archive_relpath(a, &filepath.0) else {
@@ -414,7 +413,7 @@ impl AnnotExt for STeXAnnot {
                 archive, filepath, ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
+                    || top_archive.map(UriWithArchive::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -444,7 +443,7 @@ impl AnnotExt for STeXAnnot {
                 ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
+                    || top_archive.map(UriWithArchive::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return;
@@ -667,7 +666,7 @@ impl AnnotExt for STeXAnnot {
                         | ParagraphArg::MacroName(ParsedKeyValue { val_range, .. })
                             if val_range.contains(pos) =>
                         {
-                            return here!(*val_range)
+                            return here!(*val_range);
                         }
                         _ => (),
                     }
@@ -1641,7 +1640,7 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn hover(&self, top_archive: Option<&ArchiveURI>, pos: LSPLineCol) -> Option<lsp::Hover> {
+    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover> {
         fn uriname(pre: &str, d: &impl std::fmt::Display) -> String {
             format!("{pre}<sup>`{d}`</sup>")
         }
@@ -1812,7 +1811,7 @@ impl AnnotExt for STeXAnnot {
                 ..
             } => {
                 let Some(a) = archive.as_ref().map_or_else(
-                    || top_archive.map(ArchiveURITrait::archive_id),
+                    || top_archive.map(UriWithArchive::archive_id),
                     |(a, _)| Some(a),
                 ) else {
                     return None;
@@ -1876,8 +1875,7 @@ impl AnnotExt for STeXAnnot {
                     .unwrap_or_else(|| unreachable!())
                     .uri
                     .name()
-                    .last_name();
-                let name = name.as_ref();
+                    .last();
                 let name = match mod_ {
                     SymnameMode::Cap {
                         post: Some((_, _, post)),
@@ -1949,18 +1947,18 @@ impl AnnotExt for STeXAnnot {
             v: &[SymbolReference<LSPLineCol>],
             r: SourceRange<LSPLineCol>,
         ) -> lsp::CodeActionResponse {
-            fn disamb(uri: &SymbolURI, all: &[String]) -> String {
+            fn disamb(uri: &SymbolUri, all: &[String]) -> String {
                 let mut ret = format!("?{}", uri.name());
                 if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
                     return ret;
                 }
-                ret = format!("?{}{ret}", uri.module().name());
+                ret = format!("?{}{ret}", uri.module_name());
                 if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
                     return ret;
                 }
                 if let Some(path) = uri.path() {
                     let mut had_path = false;
-                    for s in path.steps().iter().rev() {
+                    for s in path.steps().rev() {
                         if had_path {
                             ret = format!("{s}/{ret}");
                         } else {
@@ -1988,7 +1986,7 @@ impl AnnotExt for STeXAnnot {
                         ret.push('/');
                         ret.push_str(&p.to_string());
                     }
-                    ret.push_str(&format!("?{}?{}", u.uri.module().name(), u.uri.name()));
+                    ret.push_str(&format!("?{}?{}", u.uri.module_name(), u.uri.name()));
                     ret
                 })
                 .collect();
@@ -2118,7 +2116,8 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = lsp::DocumentDiagnosticReportResult>> {
+    ) -> Option<impl std::future::Future<Output = lsp::DocumentDiagnosticReportResult> + use<>>
+    {
         fn default() -> lsp::DocumentDiagnosticReportResult {
             lsp::DocumentDiagnosticReportResult::Report(lsp::DocumentDiagnosticReport::Full(
                 lsp::RelatedFullDocumentDiagnosticReport::default(),
@@ -2154,7 +2153,8 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::DocumentSymbolResponse>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::DocumentSymbolResponse>> + use<>>
+    {
         #[allow(deprecated)]
         fn to_symbols(v: &[STeXAnnot]) -> Vec<lsp::DocumentSymbol> {
             let mut curr = v.iter();
@@ -2204,7 +2204,7 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::DocumentLink>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::DocumentLink>>> + use<>> {
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let slf = self.clone();
@@ -2226,12 +2226,13 @@ impl LSPState {
         &self,
         uri: UrlOrFile,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyItem>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyItem>>> + use<>>
+    {
         let d = self.get(&uri)?;
         let url: lsp::Url = uri.into();
         d.document_uri().map(|doc| {
             std::future::ready(Some(vec![lsp::CallHierarchyItem {
-                name: format!("{}.{}", doc.name(), doc.language()),
+                name: format!("{}.{}", doc.document_name(), doc.language()),
                 kind: lsp::SymbolKind::FILE,
                 tags: None,
                 detail: None,
@@ -2247,10 +2248,11 @@ impl LSPState {
         &self,
         url: lsp::Url,
         kind: lsp::SymbolKind,
-        uri: URI,
+        uri: Uri,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyIncomingCall>>>>
-    {
+    ) -> Option<
+        impl std::future::Future<Output = Option<Vec<lsp::CallHierarchyIncomingCall>>> + use<>,
+    > {
         Some(std::future::ready({
             let url = url.into();
             let d = self.documents.read().get(&url).cloned()?;
@@ -2270,16 +2272,13 @@ impl LSPState {
                             uri: muri,
                             children,
                             ..
-                        } if matches!(&uri,URI::Content(ContentURI::Module(u)) if u == muri) => {
-                            Some(&**children)
-                        }
+                        } if matches!(&uri,Uri::Module(u) if u == muri) => Some(&**children),
                         STeXAnnot::MathStructure {
                             uri: suri,
                             children,
                             extends,
                             ..
-                        } if matches!(&uri,URI::Content(ContentURI::Symbol(u)) if u == &suri.uri) =>
-                        {
+                        } if matches!(&uri,Uri::Symbol(u) if u == &suri.uri) => {
                             for (sym, range) in extends {
                                 if let Some(p) = sym.filepath.as_ref() {
                                     let Ok(url) = lsp::Url::from_file_path(p) else {
@@ -2338,7 +2337,7 @@ impl LSPState {
                                         .1
                                         .to_string(),
                                 ),
-                                name: module.uri.name().to_string(),
+                                name: module.uri.module_name().to_string(),
                                 kind: lsp::SymbolKind::CLASS,
                                 tags: None,
                                 uri: url,
@@ -2363,7 +2362,7 @@ impl LSPState {
                                     .1
                                     .to_string(),
                             ),
-                            name: uri.name().to_string(),
+                            name: uri.module_name().to_string(),
                             kind: lsp::SymbolKind::MODULE,
                             tags: None,
                             uri: url.clone().into(),
@@ -2393,7 +2392,7 @@ impl LSPState {
                                         .1
                                         .to_string(),
                                 ),
-                                name: module.uri.name().to_string(),
+                                name: module.uri.module_name().to_string(),
                                 kind: lsp::SymbolKind::METHOD,
                                 tags: None,
                                 uri: url,
@@ -2416,7 +2415,7 @@ impl LSPState {
         uri: UrlOrFile,
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::Location>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::Location>>> + use<>> {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
             line: position.line,
@@ -2424,10 +2423,10 @@ impl LSPState {
         };
         let slf = self.clone();
         enum Target {
-            Module(ModuleURI),
-            Structure(SymbolURI),
-            Symbol(SymbolURI),
-            Morphism(SymbolURI),
+            Module(ModuleUri),
+            Structure(SymbolUri),
+            Symbol(SymbolUri),
+            Morphism(SymbolUri),
         }
         Some(async move {
             let e = d
@@ -2542,7 +2541,7 @@ impl LSPState {
         uri: &UrlOrFile,
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>> + use<>> {
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let pos = LSPLineCol {
@@ -2564,7 +2563,7 @@ impl LSPState {
         range: lsp::Range,
         _context: lsp::CodeActionContext,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::CodeActionResponse>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::CodeActionResponse>> + use<>> {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
             line: range.start.line,
@@ -2585,7 +2584,8 @@ impl LSPState {
         uri: UrlOrFile,
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::GotoDefinitionResponse>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::GotoDefinitionResponse>> + use<>>
+    {
         let d = self.get(&uri)?;
         let pos = LSPLineCol {
             line: position.line,
@@ -2604,7 +2604,7 @@ impl LSPState {
         &self,
         uri: &UrlOrFile,
         _: Option<ProgressCallbackClient>,
-    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::InlayHint>>>> {
+    ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::InlayHint>>> + use<>> {
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(), move |data| {
             let iter: AnnotIter = data.annotations.iter().into();
@@ -2619,7 +2619,7 @@ impl LSPState {
         uri: &UrlOrFile,
         progress: Option<ProgressCallbackClient>,
         _range: Option<lsp::Range>,
-    ) -> Option<impl std::future::Future<Output = Option<lsp::SemanticTokens>>> {
+    ) -> Option<impl std::future::Future<Output = Option<lsp::SemanticTokens>> + use<>> {
         //let range = range.map(SourceRange::from_range);
         let d = self.get(uri)?;
         Some(d.with_annots(self.clone(), |data| {

@@ -1,10 +1,12 @@
-use flams_ontology::{
-    search::{QueryFilter, SearchResult, SearchResultKind},
-    uris::{DocumentElementURI, DocumentURI, SymbolURI, URI},
-};
-use flams_router_base::uris::{DocURIComponents, URIComponents};
+use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
 use flams_utils::{impossible, vecmap::VecMap};
-use flams_web_utils::{components::error_with_toaster, inject_css};
+use flams_web_utils::components::error_with_toaster;
+use ftml_components::components::content::FtmlViewable;
+use ftml_dom::utils::css::inject_css;
+use ftml_uris::{
+    DocumentElementUri, DocumentUri, IsNarrativeUri, SymbolUri,
+    components::{DocumentUriComponents, UriComponents},
+};
 use leptos::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -12,7 +14,7 @@ pub(crate) enum SearchState {
     None,
     Loading,
     Results(Vec<(f32, SearchResult)>),
-    SymResults(VecMap<SymbolURI, Vec<(f32, SearchResult)>>),
+    SymResults(Vec<(SymbolUri, Vec<(f32, SearchResult)>)>),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -24,13 +26,7 @@ pub(crate) enum Filter {
     Ass,
 }
 impl Filter {
-    const ALL: [Filter; 5] = [
-        Filter::Doc,
-        Filter::Def,
-        Filter::Par,
-        Filter::Ex,
-        Filter::Ass,
-    ];
+    const ALL: [Self; 5] = [Self::Doc, Self::Def, Self::Par, Self::Ex, Self::Ass];
     fn from_value(s: &str) -> Self {
         match s {
             "doc" => Self::Doc,
@@ -41,7 +37,7 @@ impl Filter {
             _ => impossible!(),
         }
     }
-    fn value_str(self) -> &'static str {
+    const fn value_str(self) -> &'static str {
         match self {
             Self::Doc => "doc",
             Self::Def => "def",
@@ -50,7 +46,7 @@ impl Filter {
             Self::Ass => "ass",
         }
     }
-    fn tag_str(self) -> &'static str {
+    const fn tag_str(self) -> &'static str {
         match self {
             Self::Doc => "Documents",
             Self::Def => "Definitions",
@@ -59,7 +55,7 @@ impl Filter {
             Self::Ass => "Assertions",
         }
     }
-    fn long_str(self) -> &'static str {
+    const fn long_str(self) -> &'static str {
         match self {
             Self::Doc => "Full Documents",
             Self::Def => "Definitions",
@@ -222,12 +218,12 @@ fn do_results(results: RwSignal<SearchState>) -> impl IntoView {
     })
 }
 
-fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoView + use<> {
+fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> impl IntoView + use<> {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::ClientOnly;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
-    let name = ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     view! {
       <Card>
           <CardHeader>
@@ -242,7 +238,7 @@ fn do_sym_result(sym: &SymbolURI, res: Vec<(f32, SearchResult)>) -> impl IntoVie
                     view!{
                         //<span>"Here: "{uri.to_string()}</span>
                         //<div>"---"</div>
-                        <Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) />
+                        <Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>
                         //<div>"---"</div>
                     }
                   }).collect_view()
@@ -265,11 +261,11 @@ fn do_result(score: f32, res: &SearchResult) -> impl IntoView + use<> {
     }
 }
 
-fn do_doc(score: f32, uri: DocumentURI) -> impl IntoView {
+fn do_doc(score: f32, uri: DocumentUri) -> impl IntoView {
     use flams_router_content::components::DocumentInner;
-    use ftml_viewer_components::components::omdoc::doc_name;
     use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
-    let name = doc_name(&uri, uri.name().to_string());
+
+    let name = uri.as_view::<flams_router_content::backend::FtmlBackend>(); //doc_name(&uri, uri.document_name().to_string());
     view! {
       <Card>
           <CardHeader>
@@ -286,7 +282,7 @@ fn do_doc(score: f32, uri: DocumentURI) -> impl IntoView {
           <CardPreview>
               <div style="padding:0 5px;max-width:100%">
                 <div style="width:100%;color:black;background-color:white;">
-                    <Scrollbar style="max-height: 100px;;width:100%;max-width:100%;"><DocumentInner doc=DocURIComponents::Uri(uri) /></Scrollbar>
+                    <Scrollbar style="max-height: 100px;;width:100%;max-width:100%;"><DocumentInner doc=DocumentUriComponents::Full(uri) /></Scrollbar>
                 </div>
               </div>
           </CardPreview>
@@ -299,13 +295,12 @@ fn do_doc(score: f32, uri: DocumentURI) -> impl IntoView {
 
 fn do_para(
     score: f32,
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     kind: SearchResultKind,
-    fors: Vec<SymbolURI>,
+    fors: Vec<SymbolUri>,
 ) -> impl IntoView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::{Popover, PopoverTrigger};
-    use ftml_viewer_components::components::omdoc::{comma_sep, symbol_name};
     use thaw::{
         Body1, Caption1, Card, CardHeader, CardHeaderAction, CardHeaderDescription, CardPreview,
         Scrollbar,
@@ -318,11 +313,13 @@ fn do_para(
       <div style="font-size:small;">{uristr}</div>
       </Popover></div>
     };
-    let desc = comma_sep(
+
+    let desc = ftml_components::components::content::CommaSep(
         "For",
         fors.into_iter()
-            .map(|s| symbol_name(&s, s.name().last_name().as_ref())),
-    );
+            .map(|s| s.as_view::<flams_router_content::backend::FtmlBackend>()),
+    )
+    .into_view();
     view! {
       <Card>
           <CardHeader>
@@ -339,7 +336,7 @@ fn do_para(
           <CardPreview>
             <div style="padding:0 5px;max-width:100%">
               <div style="width:100%;color:black;background-color:white;">
-                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=URIComponents::Uri(URI::Narrative(uri.into())) /></Scrollbar>
+                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None /></Scrollbar>
               </div>
             </div>
           </CardPreview>

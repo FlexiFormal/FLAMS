@@ -257,7 +257,8 @@ export class FLAMSContext {
     this.versions = ctx.versions;
     this.client = ctx.client;
     this.server = ctx.server;
-    this.remote_server = new FLAMSServer("https://mathhub.info");
+    const remote = <string|undefined>vscode.workspace.getConfiguration("flams").get(Settings.RemoteFlams);
+    this.remote_server = new FLAMSServer(remote?remote:"https://mathhub.info");
     _context = this;
   }
 

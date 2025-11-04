@@ -1,4 +1,6 @@
-use flams_web_utils::inject_css;
+#![allow(clippy::must_use_candidate)]
+
+use ftml_dom::utils::css::inject_css;
 pub use leptos::prelude::*;
 
 #[component]
@@ -53,7 +55,7 @@ pub fn VSCodeRadio<T: IntoView + 'static>(
     let idc = id.clone();
     let on_click = move |_| {
         if !disabled.is_some_and(|b| b.get()) {
-            selected.set(Some(idc.clone()))
+            selected.set(Some(idc.clone()));
         }
     };
     view! {
@@ -85,7 +87,7 @@ pub fn VSCodeCheckbox<T: IntoView + 'static>(
     });
     let on_click = move |_| {
         if !disabled.is_some_and(|b| b.get()) {
-            checked.update(|v| *v = !*v)
+            checked.update(|v| *v = !*v);
         }
     };
     view! {

@@ -1,22 +1,19 @@
-use std::{default, ops::Deref, path::PathBuf, sync::atomic::AtomicU64};
-
+use super::ServerState;
 use axum::body::Body;
-use flams_ontology::{
-    languages::Language,
-    uris::{ArchiveId, DocumentURI},
+use flams_math_archives::{
+    backend::{GlobalBackend, LocalBackend},
+    LocallyBuilt, MathArchive,
 };
-use flams_router_base::uris::DocURIComponents;
-use flams_system::{
-    backend::{Backend, GlobalBackend},
-    settings::Settings,
+use flams_system::settings::Settings;
+use ftml_ontology::utils::time::Timestamp;
+use ftml_uris::{
+    components::{DocumentUriComponentTuple, DocumentUriComponents},
+    ArchiveId, DocumentUri, IsNarrativeUri, Language, UriWithArchive, UriWithPath,
 };
-use flams_utils::time::Timestamp;
 use http::Request;
-use leptos_router::location::LocationProvider;
+use std::{borrow::Cow, path::PathBuf, sync::atomic::AtomicU64};
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
-
-use super::ServerState;
 
 #[derive(Clone, Default)]
 pub struct ImageStore(flams_utils::triomphe::Arc<ImageStoreI>);
@@ -38,7 +35,7 @@ impl ImageSpec {
         match self {
             Self::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p),
             Self::ARp(a, p) => {
-                GlobalBackend::get().with_local_archive(a, |a| a.map(|a| a.path().join(&**p)))
+                GlobalBackend.with_local_archive(a, |a| a.map(|a| a.path().join(&**p)))
             }
             Self::File(p) => Some(std::path::PathBuf::from(p.to_string())),
         }
@@ -123,6 +120,7 @@ pub(crate) async fn doc_handler(
     };
     let err = |s: &str| {
         let mut resp = axum::response::Response::new(ServeFileSystemResponseBody::default());
+        tracing::info!("pdf download error: {s}");
         *resp.status_mut() = http::StatusCode::BAD_REQUEST;
         resp
     };
@@ -147,33 +145,58 @@ pub(crate) async fn doc_handler(
         return err("Missing format");
     };
 
-    let uri: Option<DocumentURI> = parse!("uri");
+    let uri: Option<DocumentUri> = parse!("uri");
     let rp = params.get("rp");
     let a: Option<ArchiveId> = parse!("a");
     let p = params.get("p");
     let l: Option<Language> = parse!("l");
     let d = params.get("d");
 
-    let comps: Result<DocURIComponents, _> = (uri, rp, a, p, l, d).try_into();
+    let comps = DocumentUriComponentTuple {
+        uri,
+        rp,
+        a,
+        p,
+        d,
+        l,
+    };
+
+    let comps: Result<DocumentUriComponents, _> = comps.try_into();
     let uri = if let Ok(comps) = comps {
-        let Some(uri) = comps.parse() else {
+        let Ok(uri) =
+            comps.parse(|a| GlobalBackend.with_archive(a, |a| a.map(|a| a.uri().clone())))
+        else {
             return err("Malformed URI components");
         };
         uri
     } else {
         return err("Malformed URI components");
     };
-    let Some(path) = GlobalBackend::get().artifact_path(&uri, format) else {
+    let uri2 = uri.clone();
+    let formatstr = format.to_string();
+    let Ok(Some(path)) = tokio::task::spawn_blocking(move || {
+        GlobalBackend.with_local_archive(uri.archive_id(), |a| {
+            a.map(|a| {
+                a.out_path_of(uri.path(), uri.document_name(), None, uri.language)
+                    .join(&formatstr)
+            })
+        })
+    })
+    .await
+    else {
         return default();
     };
 
-    let pandq = format!("/{}.{format}", uri.name().first_name());
+    let pandq = format!("/{}.{format}", uri2.document_name());
     let mime = mime_guess::from_ext(&format).first_or_octet_stream();
     let req_uri = http::Uri::builder()
         .path_and_query(pandq)
         .build()
         .unwrap_or(req_uri);
-    let req = Request::builder().uri(req_uri).body(Body::empty()).unwrap();
+    let req = Request::builder()
+        .uri(req_uri)
+        .body(Body::empty())
+        .expect("this is a bug");
     ServeFile::new_with_mime(path, &mime)
         .oneshot(req)
         .await
@@ -185,14 +208,15 @@ impl<'a> Params<'a> {
     fn new(uri: &'a http::Uri) -> Option<Self> {
         uri.query().map(Self)
     }
-    fn get_str(&self, name: &str) -> Option<&str> {
+    fn get_str(&self, name: &str) -> Option<Cow<'_, str>> {
         self.0
             .split('&')
             .find(|s| s.starts_with(name) && s.as_bytes().get(name.len()) == Some(&b'='))?
             .split('=')
             .nth(1)
+            .and_then(|s| urlencoding::decode(s).ok())
     }
     fn get(&self, name: &str) -> Option<String> {
-        self.get_str(name).map(|s| s.to_string())
+        self.get_str(name).map(Cow::into_owned)
     }
 }

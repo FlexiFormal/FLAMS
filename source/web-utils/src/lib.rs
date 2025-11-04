@@ -4,17 +4,6 @@
 pub mod components;
 pub mod mathml;
 
-use std::borrow::Cow;
-
-use flams_utils::{hashstr, CSS};
-
-#[cfg(feature = "ssr")]
-#[derive(Default, Clone)]
-pub struct CssIds(
-    flams_utils::triomphe::Arc<
-        flams_utils::parking_lot::Mutex<flams_utils::vecmap::VecSet<Cow<'static, str>>>,
-    >,
-);
 
 #[cfg(feature = "ssr")]
 /// #### Errors
@@ -27,7 +16,8 @@ pub async fn blocking_server_fn<T: Send + 'static>(
         .map_err(Into::into)
 }
 
-pub fn do_css(css: CSS) {
+/*
+pub fn do_css(css: Css) {
     match css {
         CSS::Inline(s) => {
             let id = hashstr("id_", &s);
@@ -90,6 +80,7 @@ pub fn do_css(css: CSS) {
 pub fn inject_css(id: &'static str, content: &'static str) {
     do_inject_css(Cow::Borrowed(id), Cow::Borrowed(content));
 }
+ */
 
 #[macro_export]
 macro_rules! console_log {
@@ -105,52 +96,8 @@ macro_rules! console_log {
     };
 }
 
-#[allow(clippy::missing_const_for_fn)]
-#[allow(clippy::needless_pass_by_value)]
-fn do_inject_css(id: Cow<'static, str>, content: Cow<'static, str>) {
-    #[cfg(feature = "ssr")]
-    {
-        use leptos_meta::Style;
-
-        use leptos::prelude::expect_context;
-        let ids = expect_context::<CssIds>();
-        let mut ids = ids.0.lock();
-        if !ids.0.contains(&id) {
-            ids.insert(id.clone());
-            let _ = leptos::view! {
-                <Style id=id>
-                    {content}
-                </Style>
-            };
-        }
-        drop(ids);
-    }
-    #[cfg(not(feature = "ssr"))]
-    {
-        use leptos::prelude::document;
-        let Some(head) = document().head() else {
-            leptos::logging::log!("ERROR: head does not exist");
-            return;
-        };
-        let Ok(style) = head.query_selector(&format!("style#{id}")) else {
-            leptos::logging::log!("ERROR: query style element error");
-            return;
-        };
-        if style.is_some() {
-            return;
-        }
-
-        let Ok(style) = document().create_element("style") else {
-            leptos::logging::log!("ERROR: error creating style element");
-            return;
-        };
-        _ = style.set_attribute("id", &id);
-        style.set_text_content(Some(&content));
-        _ = head.prepend_with_node_1(&style);
-    }
-}
-
 //#[cfg(any(feature = "csr", feature = "ssr"))]
+/// # Errors
 pub fn try_catch<R>(run: impl FnOnce() -> R) -> Result<R, leptos::wasm_bindgen::JsError> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).map_err(|e| {
         if let Some(s) = e.downcast_ref::<&str>() {
@@ -171,6 +118,10 @@ pub use leptos_axum;
 #[cfg(feature = "ssr")]
 #[macro_export]
 macro_rules! not_found{
+    () => {
+        let response = expect_context::<$crate::leptos_axum::ResponseOptions>();
+        response.set_status($crate::http::StatusCode::NOT_FOUND);
+    };
     (! $($e:tt)*) => { {
         let response = expect_context::<$crate::leptos_axum::ResponseOptions>();
         response.set_status($crate::http::StatusCode::NOT_FOUND);

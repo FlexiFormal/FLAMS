@@ -7,7 +7,7 @@ use flams_ontology::{
         DocumentElement, NarrationTrait,
     },
     search::{QueryFilter, SearchResult, SearchResultKind, SearchSchema},
-    uris::{DocumentElementURI, DocumentURI, SymbolURI, URIRefTrait},
+    uris::{DocumentElementUri, DocumentUri, SymbolUri, UriRefTrait},
     Checked,
 };
 use flams_system::{
@@ -35,7 +35,7 @@ fn setup(do_tracing: ()) {
     GlobalBackend::initialize();
 }
 
-fn all_documents() -> Vec<DocumentURI> {
+fn all_documents() -> Vec<DocumentUri> {
     let mut uris = Vec::new();
     for a in GlobalBackend::get().all_archives().iter().filter_map(|a| {
         if let Archive::Local(a) = a {
@@ -46,7 +46,7 @@ fn all_documents() -> Vec<DocumentURI> {
     }) {
         a.with_sources(|f| {
             for c in <_ as TreeChildIter<SourceDir>>::dfs(f.children.iter()) {
-                uris.push(unwrap!(DocumentURI::from_archive_relpath(
+                uris.push(unwrap!(DocumentUri::from_archive_relpath(
                     a.uri().owned(),
                     &c.relative_path()
                 )
@@ -57,7 +57,7 @@ fn all_documents() -> Vec<DocumentURI> {
     uris
 }
 
-fn stex_documents() -> Vec<DocumentURI> {
+fn stex_documents() -> Vec<DocumentUri> {
     let mut uris = Vec::new();
     for a in GlobalBackend::get()
         .all_archives()
@@ -73,7 +73,7 @@ fn stex_documents() -> Vec<DocumentURI> {
     {
         a.with_sources(|f| {
             for c in <_ as TreeChildIter<SourceDir>>::dfs(f.children.iter()) {
-                uris.push(unwrap!(DocumentURI::from_archive_relpath(
+                uris.push(unwrap!(DocumentUri::from_archive_relpath(
                     a.uri().owned(),
                     &c.relative_path()
                 )

@@ -1,4 +1,11 @@
-import {FTML, ftmlSetup,renderDocument,renderFragment,FTMLConfig as FTMLConfigI,initialize as init} from "@kwarc/ftml-viewer";
+import {
+  FTML,
+  ftmlSetup,
+  renderDocument,
+  renderFragment,
+  FTMLConfig as FTMLConfigI,
+  initialize as init,
+} from "@kwarc/ftml-viewer";
 import * as Flams from "@kwarc/flams";
 
 import React, { ReactNode, useContext, useEffect, useRef } from "react";
@@ -10,28 +17,26 @@ export function getFlamsServer(): Flams.FLAMSServer {
   return new Flams.FLAMSServer(FTML.get_server_url());
 }
 
-export {FTML} from "@kwarc/ftml-viewer";
+export { FTML } from "@kwarc/ftml-viewer";
 export * as Flams from "@kwarc/flams";
-
 
 /**
  * Configurables for FTML rendering.
  * Every attribute is inherited from ancestor nodes *unless explicitly overridden*.
  */
 export interface FTMLConfig {
-
   /**
    * whether to allow hovers
    */
-  allowHovers?: boolean,
-  
+  allowHovers?: boolean;
+
   /** may return a react component to *insert* after the title of a section
    * @param uri the uri of the section
    * @param lvl the level of the section
    * @return a react component to insert
    */
   onSectionTitle?: (
-    uri: FTML.DocumentElementURI,
+    uri: FTML.DocumentElementUri,
     lvl: FTML.SectionLevel,
   ) => ReactNode | undefined;
 
@@ -42,7 +47,7 @@ export interface FTMLConfig {
    * @return a react component to wrap around its argument
    */
   onFragment?: (
-    uri: FTML.DocumentElementURI,
+    uri: FTML.DocumentElementUri,
     kind: FTML.FragmentKind,
   ) => ((ch: ReactNode) => ReactNode) | undefined;
 
@@ -187,7 +192,7 @@ const ElemToReact: React.FC<{
 };
 
 function elemToReact(
-  uri: FTML.DocumentElementURI,
+  uri: FTML.DocumentElementUri,
   elem: HTMLDivElement,
   ctx: FTML.LeptosContext,
 ): ReactNode {
@@ -207,7 +212,7 @@ function toConfig(
 ): FTMLConfigI {
   const otO = config.onSectionTitle;
   const onSectionTitle = otO
-    ? (uri: FTML.DocumentElementURI, lvl: FTML.SectionLevel) => {
+    ? (uri: FTML.DocumentElementUri, lvl: FTML.SectionLevel) => {
         const r = otO(uri, lvl);
         return r
           ? (elem: HTMLDivElement, ctx: FTML.LeptosContext) => {
@@ -219,7 +224,7 @@ function toConfig(
 
   const ofO = config.onFragment;
   const onFragment = ofO
-    ? (uri: FTML.DocumentElementURI, kind: FTML.FragmentKind) => {
+    ? (uri: FTML.DocumentElementUri, kind: FTML.FragmentKind) => {
         const r = ofO(uri, kind);
         return r
           ? (elem: HTMLDivElement, ctx: FTML.LeptosContext) => {

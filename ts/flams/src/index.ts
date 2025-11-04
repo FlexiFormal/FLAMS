@@ -41,7 +41,7 @@ export class FLAMSServer {
   async searchSymbols(
     query: string,
     numResults: number,
-  ): Promise<[FLAMS.SymbolURI, [number, FLAMS.SearchResult][]][] | undefined> {
+  ): Promise<[FLAMS.SymbolUri, [number, FLAMS.SearchResult][]][] | undefined> {
     return await this.rawPostRequest("api/search_symbols", {
       query: query,
       num_results: numResults,
@@ -94,7 +94,7 @@ export class FLAMSServer {
    * Return the TOC of the given document
    */
   async contentToc(
-    uri: FLAMS.DocumentURIParams,
+    uri: FLAMS.DocumentUriParams,
   ): Promise<[FLAMS.CSS[], FLAMS.TOCElem[]] | undefined> {
     return await this.rawGetRequest("content/toc", uri);
   }
@@ -104,7 +104,7 @@ export class FLAMSServer {
    * otherwise, only definitions and examples.
    */
   async learningObjects(
-    uri: FLAMS.SymbolURIParams,
+    uri: FLAMS.SymbolUriParams,
     problems?: boolean,
   ): Promise<[[string, FLAMS.LOKind]] | undefined> {
     const exc = problems ? problems : false;
@@ -118,7 +118,7 @@ export class FLAMSServer {
   /**
    * Get the quiz in the given document.
    */
-  async quiz(uri: FLAMS.DocumentURIParams): Promise<FLAMS.Quiz | undefined> {
+  async quiz(uri: FLAMS.DocumentUriParams): Promise<FLAMS.Quiz | undefined> {
     return await this.rawGetRequest("content/quiz", uri);
   }
 
@@ -134,9 +134,7 @@ export class FLAMSServer {
   /**
    * Return a git[lab|hub] link for the source file containing the given element
    */
-  async sourceFile(
-    uri: FLAMS.URIParams,
-  ): Promise<string | undefined> {
+  async sourceFile(uri: FLAMS.URIParams): Promise<string | undefined> {
     return await this.rawGetRequest("api/backend/source_file", uri);
   }
 
@@ -149,26 +147,32 @@ export class FLAMSServer {
    * can be turned into a "proper" ProblemFeedback using ProblemFeedback.from_json().
    */
   async batchGrade(
-    ...submissions: [FLAMS.SolutionData[],(FLAMS.ProblemResponse | undefined)[]][]
-  ): Promise<(FLAMS.ProblemFeedbackJson[])[] | undefined> {
-    return await this.rawPostJson("content/grade", {submissions: submissions});
+    ...submissions: [
+      FLAMS.SolutionData[],
+      (FLAMS.ProblemResponse | undefined)[],
+    ][]
+  ): Promise<FLAMS.ProblemFeedbackJson[][] | undefined> {
+    return await this.rawPostJson("content/grade", {
+      submissions: submissions,
+    });
   }
-   /**
+  /**
    * Like batchGrade, but uses hex-encoded solutions
    */
-   async batchGradeHex(
-    ...submissions: [string,(FLAMS.ProblemResponse | undefined)[]][]
-  ): Promise<(FLAMS.ProblemFeedbackJson[])[] | undefined> {
-    return await this.rawPostJson("content/grade_enc", {submissions: submissions});
+  async batchGradeHex(
+    ...submissions: [string, (FLAMS.ProblemResponse | undefined)[]][]
+  ): Promise<FLAMS.ProblemFeedbackJson[][] | undefined> {
+    return await this.rawPostJson("content/grade_enc", {
+      submissions: submissions,
+    });
   }
-
 
   /**
    * Get the solution for the problem with the given URI. As string, so it can be
    * deserialized by the ts binding for the WASM datastructure
    */
   async solution(
-    uri: FLAMS.DocumentElementURIParams,
+    uri: FLAMS.DocumentElementUriParams,
   ): Promise<string | undefined> {
     let r = await this.getRequestI("content/solution", uri);
     if (r) {
@@ -178,19 +182,19 @@ export class FLAMSServer {
 
   async omdoc(
     uri: FLAMS.URIParams,
-  ): Promise<[FLAMS.CSS[],FLAMS.OMDoc] | undefined> {
-    return await this.rawGetRequest("content/omdoc", {uri:uri});
+  ): Promise<[FLAMS.CSS[], FLAMS.OMDoc] | undefined> {
+    return await this.rawGetRequest("content/omdoc", { uri: uri });
   }
 
   async title(
     uri: FLAMS.URIParams,
-  ): Promise<[FLAMS.CSS[],string] | undefined> {
-    return await this.rawGetRequest("content/title", {uri:uri});
+  ): Promise<[FLAMS.CSS[], string] | undefined> {
+    return await this.rawGetRequest("content/title", { uri: uri });
   }
 
   async contentDocument(
-    uri: FLAMS.DocumentURIParams,
-  ): Promise<[FLAMS.DocumentURI, FLAMS.CSS[], string] | undefined> {
+    uri: FLAMS.DocumentUriParams,
+  ): Promise<[FLAMS.DocumentUri, FLAMS.CSS[], string] | undefined> {
     return await this.rawGetRequest("content/document", uri);
   }
 

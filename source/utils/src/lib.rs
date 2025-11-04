@@ -11,10 +11,10 @@ pub mod id_counters;
 mod inner_arc;
 pub mod logs;
 pub mod parsing;
-pub mod regex;
+//pub mod regex;
 pub mod settings;
 pub mod sourcerefs;
-pub mod time;
+//pub mod time;
 mod treelike;
 pub mod vecmap;
 //pub mod file_id;
@@ -54,7 +54,7 @@ pub fn in_span<F: FnOnce() -> R, R>(f: F) -> impl FnOnce() -> R {
         f()
     }
 }
-
+/*
 #[cfg(feature = "serde")]
 pub trait Hexable: Sized {
     /// #### Errors
@@ -74,7 +74,7 @@ impl<T: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>> Hexable for
         Ok(ret)
     }
     fn from_hex(s: &str) -> eyre::Result<Self> {
-        let bytes: Result<Vec<_>, _> = if s.len() % 2 == 0 {
+        let bytes: Result<Vec<_>, _> = if s.len().is_multiple_of(2) {
             (0..s.len())
                 .step_by(2)
                 .filter_map(|i| s.get(i..i + 2))
@@ -88,7 +88,7 @@ impl<T: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>> Hexable for
             .map_err(Into::into)
     }
 }
-
+*/
 pub mod fs {
     use std::path::Path;
 
@@ -96,31 +96,43 @@ pub mod fs {
 
     /// #### Errors
     pub fn copy_dir_all(src: &Path, dst: &Path) -> eyre::Result<()> {
-        std::fs::create_dir_all(dst).wrap_err_with(|| format!("Error creating {}", dst.display()))?;
-        for entry in std::fs::read_dir(src).wrap_err_with(|| format!("Error reading {}", src.display()))? {
-            let entry = entry.wrap_err_with(|| format!("Error getting file entry for {}", src.display()))?;
-            let ty = entry
-                .file_type()
-                .wrap_err_with(|| format!("Error determining file type of {}", entry.path().display()))?;
+        std::fs::create_dir_all(dst)
+            .wrap_err_with(|| format!("Error creating {}", dst.display()))?;
+        for entry in
+            std::fs::read_dir(src).wrap_err_with(|| format!("Error reading {}", src.display()))?
+        {
+            let entry = entry
+                .wrap_err_with(|| format!("Error getting file entry for {}", src.display()))?;
+            let ty = entry.file_type().wrap_err_with(|| {
+                format!("Error determining file type of {}", entry.path().display())
+            })?;
             let target = dst.join(entry.file_name());
             if ty.is_dir() {
                 copy_dir_all(&entry.path(), &target)?;
             } else {
-                let md = entry
-                    .metadata()
-                    .wrap_err_with(|| format!("Error obtaining metatada for {}", entry.path().display()))?;
+                let md = entry.metadata().wrap_err_with(|| {
+                    format!("Error obtaining metatada for {}", entry.path().display())
+                })?;
                 std::fs::copy(entry.path(), &target).wrap_err_with(|| {
-                    format!("Error copying {} to {}", entry.path().display(), target.display())
+                    format!(
+                        "Error copying {} to {}",
+                        entry.path().display(),
+                        target.display()
+                    )
                 })?;
                 let mtime = filetime::FileTime::from_last_modification_time(&md);
-                filetime::set_file_mtime(&target, mtime)
-                    .wrap_err_with(|| format!("Error setting file modification time for {}", target.display()))?;
+                filetime::set_file_mtime(&target, mtime).wrap_err_with(|| {
+                    format!(
+                        "Error setting file modification time for {}",
+                        target.display()
+                    )
+                })?;
             }
         }
         Ok(())
     }
 }
-
+/*
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -171,38 +183,41 @@ impl Ord for CSS {
     }
 }
 impl CSS {
-
-    pub fn merge(v:Vec<Self>) -> Vec<Self> {
+    pub fn merge(v: Vec<Self>) -> Vec<Self> {
         use lightningcss::traits::ToCss;
         use lightningcss::{
             printer::PrinterOptions,
-            rules::{CssRule,CssRuleList},
+            rules::{CssRule, CssRuleList},
             selector::Component,
-            stylesheet::{ParserOptions, StyleSheet,MinifyOptions},
+            stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
         };
-        
+
         let mut links = Vec::new();
         let mut strings = Vec::new();
         for c in v {
             match c {
                 Self::Link(_) => links.push(c),
-                Self::Inline(css) | Self::Class{ css,..} => strings.push(css)
+                Self::Inline(css) | Self::Class { css, .. } => strings.push(css),
             }
         }
-        
-        let mut sheet = StyleSheet::new(Vec::new(), CssRuleList(Vec::new()), ParserOptions::default());
-        let mut inlines = smallvec::SmallVec::<_,2>::new();
-        for (i,s) in strings.iter().enumerate() {
-            if let Ok(rs) = StyleSheet::parse(s,ParserOptions::default()) {
+
+        let mut sheet = StyleSheet::new(
+            Vec::new(),
+            CssRuleList(Vec::new()),
+            ParserOptions::default(),
+        );
+        let inlines = smallvec::SmallVec::<_, 2>::new();
+        for s in &strings {
+            if let Ok(rs) = StyleSheet::parse(s, ParserOptions::default()) {
                 sheet.rules.0.extend(rs.rules.0.into_iter());
             } else {
                 tracing::warn!("Not class-able: {s}");
             }
         }
         let _ = sheet.minify(MinifyOptions::default());
-        
+
         let mut classes = Vec::new();
-        for rule in std::mem::take(&mut sheet.rules.0)  {
+        for rule in std::mem::take(&mut sheet.rules.0) {
             match rule {
                 CssRule::Style(style) => {
                     if style.vendor_prefix.is_empty()
@@ -235,17 +250,17 @@ impl CSS {
                     }
                 }
                 rule => {
-                        if let Ok(s) = rule.to_css_string(PrinterOptions::default()) {
-                            tracing::warn!("Not class-able: {s}");
-                            links.push(Self::Inline(s.into()));
-                        } else {
-                            tracing::warn!("Illegal CSS: {rule:?}");
-                        }
+                    if let Ok(s) = rule.to_css_string(PrinterOptions::default()) {
+                        tracing::warn!("Not class-able: {s}");
+                        links.push(Self::Inline(s.into()));
+                    } else {
+                        tracing::warn!("Illegal CSS: {rule:?}");
                     }
+                }
             }
         }
         drop(sheet);
-        
+
         links.extend(inlines.into_iter().map(|i| Self::Inline(strings.remove(i))));
         links.extend(classes);
         links
@@ -311,6 +326,7 @@ impl CSS {
             .collect()
     }
 }
+ */
 
 #[macro_export]
 macro_rules! impossible {
@@ -360,6 +376,7 @@ pub trait CondSerialize {}
 #[cfg(not(feature = "serde"))]
 impl<T> CondSerialize for T {}
 
+/*
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::cognitive_complexity)]
 #[allow(clippy::similar_names)]
@@ -415,39 +432,48 @@ fn css_things() {
 pub trait PathExt {
     const PATH_SEPARATOR: char;
     fn as_slash_str(&self) -> String;
-    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool;
-    fn rename_safe<P:AsRef<std::path::Path>>(&self,target:&P) -> eyre::Result<()>;
+    fn same_fs_as<P: AsRef<std::path::Path>>(&self, other: &P) -> bool;
+    fn rename_safe<P: AsRef<std::path::Path>>(&self, target: &P) -> eyre::Result<()>;
 }
-impl<T:AsRef<std::path::Path>> PathExt for T {
-    
+impl<T: AsRef<std::path::Path>> PathExt for T {
     #[cfg(target_os = "windows")]
     const PATH_SEPARATOR: char = '\\';
     #[cfg(not(target_os = "windows"))]
     const PATH_SEPARATOR: char = '/';
     fn as_slash_str(&self) -> String {
         if cfg!(windows) {
-            unwrap!(self.as_ref().as_os_str().to_str()).replace('\\',"/")
+            unwrap!(self.as_ref().as_os_str().to_str()).replace('\\', "/")
         } else {
             unwrap!(self.as_ref().as_os_str().to_str()).to_string()
         }
     }
     #[cfg(target_os = "windows")]
-    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool {
-        let Some(p1) = self.as_ref().components().next().and_then(|c| c.as_os_str().to_str()) else {
+    fn same_fs_as<P: AsRef<std::path::Path>>(&self, other: &P) -> bool {
+        let Some(p1) = self
+            .as_ref()
+            .components()
+            .next()
+            .and_then(|c| c.as_os_str().to_str())
+        else {
             return false;
         };
-        let Some(p2) = other.as_ref().components().next().and_then(|c| c.as_os_str().to_str()) else {
+        let Some(p2) = other
+            .as_ref()
+            .components()
+            .next()
+            .and_then(|c| c.as_os_str().to_str())
+        else {
             return false;
         };
         p1 == p2
     }
-    #[cfg(target_arch="wasm32")]
-    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool {
+    #[cfg(target_arch = "wasm32")]
+    fn same_fs_as<P: AsRef<std::path::Path>>(&self, other: &P) -> bool {
         impossible!()
     }
 
-    #[cfg(not(any(target_os = "windows",target_arch="wasm32")))]
-    fn same_fs_as<P:AsRef<std::path::Path>>(&self,other:&P) -> bool {
+    #[cfg(not(any(target_os = "windows", target_arch = "wasm32")))]
+    fn same_fs_as<P: AsRef<std::path::Path>>(&self, other: &P) -> bool {
         use std::os::unix::fs::MetadataExt;
         fn existent_parent(p: &std::path::Path) -> &std::path::Path {
             if p.exists() {
@@ -461,7 +487,7 @@ impl<T:AsRef<std::path::Path>> PathExt for T {
         let md2 = p2.metadata().unwrap_or_else(|_| unreachable!());
         md1.dev() == md2.dev()
     }
-    fn rename_safe<P:AsRef<std::path::Path>>(&self,target:&P) -> eyre::Result<()> {
+    fn rename_safe<P: AsRef<std::path::Path>>(&self, target: &P) -> eyre::Result<()> {
         Ok(if self.same_fs_as(target) {
             std::fs::rename(self.as_ref(), target.as_ref())?
         } else {
@@ -469,3 +495,4 @@ impl<T:AsRef<std::path::Path>> PathExt for T {
         })
     }
 }
+ */

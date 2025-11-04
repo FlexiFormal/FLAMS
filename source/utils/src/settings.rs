@@ -1,11 +1,13 @@
-use std::{ops::{Add, AddAssign}, path::{Path, PathBuf}};
-
+use std::{
+    ops::{Add, AddAssign},
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
-    pub mathhubs: Vec<Box<Path>>,
+    pub mathhubs: Vec<PathBuf>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub debug: Option<bool>,
     #[cfg_attr(feature = "serde", serde(default))]
@@ -17,11 +19,15 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
     pub buildqueue: BuildQueueSettings,
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub lsp:bool,
+    pub lsp: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     pub database: Option<Box<Path>>,
     #[cfg_attr(feature = "serde", serde(default))]
+    pub rdf_database: Option<Box<Path>>,
+    #[cfg_attr(feature = "serde", serde(default))]
     pub gitlab: GitlabSettings,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub stack_size: Option<u8>,
 }
 impl Add for SettingsSpec {
     type Output = Self;
@@ -37,9 +43,11 @@ impl Add for SettingsSpec {
             log_dir: self.log_dir.or(rhs.log_dir),
             temp_dir: self.temp_dir.or(rhs.temp_dir),
             database: self.database.or(rhs.database),
+            rdf_database: self.rdf_database.or(rhs.rdf_database),
+            stack_size: self.stack_size.or(rhs.stack_size),
             buildqueue: self.buildqueue + rhs.buildqueue,
-            gitlab:self.gitlab + rhs.gitlab,
-            lsp:self.lsp || rhs.lsp
+            gitlab: self.gitlab + rhs.gitlab,
+            lsp: self.lsp || rhs.lsp,
         }
     }
 }
@@ -54,11 +62,17 @@ impl AddAssign for SettingsSpec {
         if self.log_dir.is_none() {
             self.log_dir = rhs.log_dir;
         }
+        if self.stack_size.is_none() {
+            self.stack_size = rhs.stack_size;
+        }
         if self.temp_dir.is_none() {
             self.temp_dir = rhs.temp_dir;
         }
         if self.database.is_none() {
             self.database = rhs.database;
+        }
+        if self.rdf_database.is_none() {
+            self.rdf_database = rhs.rdf_database;
         }
         self.gitlab += rhs.gitlab;
         self.buildqueue += rhs.buildqueue;
@@ -83,6 +97,14 @@ impl SettingsSpec {
             database: std::env::var("FLAMS_DATABASE")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
+            rdf_database: std::env::var("FLAMS_RDF_DATABASE")
+                .ok()
+                .map(|s| PathBuf::from(s).into_boxed_path()),
+            stack_size: std::env::var("FLAMS_STACK_SIZE").ok().map(|s| {
+                s.parse().expect(
+                    "Could not parse stack size parameter (environment variable FLAMS_STACK_SIZE)",
+                )
+            }),
             server: ServerSettings {
                 port: std::env::var("FLAMS_PORT")
                     .ok()
@@ -101,23 +123,20 @@ impl SettingsSpec {
                     .and_then(|s| s.parse().ok()),
             },
             gitlab: GitlabSettings {
-                url:std::env::var("FLAMS_GITLAB_URL")
-                    .ok()
-                    .map( |s| {
-                        s.parse()
-                            .expect("Could not parse URL (environment variable FLAMS_GITLAB_URL)")
-                    }),
-                token:std::env::var("FLAMS_GITLAB_TOKEN")
+                url: std::env::var("FLAMS_GITLAB_URL").ok().map(|s| {
+                    s.parse()
+                        .expect("Could not parse URL (environment variable FLAMS_GITLAB_URL)")
+                }),
+                token: std::env::var("FLAMS_GITLAB_TOKEN").ok().map(Into::into),
+                app_id: std::env::var("FLAMS_GITLAB_APP_ID").ok().map(Into::into),
+                app_secret: std::env::var("FLAMS_GITLAB_APP_SECRET")
                     .ok()
                     .map(Into::into),
-                app_id:std::env::var("FLAMS_GITLAB_APP_ID")
-                    .ok().map(Into::into),
-                app_secret:std::env::var("FLAMS_GITLAB_APP_SECRET")
-                    .ok().map(Into::into),
-                redirect_url:std::env::var("FLAMS_GITLAB_REDIRECT_URL")
-                    .ok().map(Into::into),
+                redirect_url: std::env::var("FLAMS_GITLAB_REDIRECT_URL")
+                    .ok()
+                    .map(Into::into),
             },
-            lsp:false
+            lsp: false,
         }
     }
 }

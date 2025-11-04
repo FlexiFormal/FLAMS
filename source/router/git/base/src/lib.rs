@@ -19,6 +19,6 @@ pub enum GitState {
     },
     Live {
         commit: String,
-        updates: Vec<(String, flams_git::Commit)>,
+        updates: Vec<(String, flams_backend_types::git::Commit)>,
     },
 }

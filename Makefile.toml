@@ -1,6 +1,7 @@
 [env]
 DATABASE_URL = "sqlite:./resources/migrations/users.sqlite?mode=rwc"
-LEPTOS_SASS_VERSION = "1.89.2"
+LEPTOS_WASM_OPT_VERSION="version_124"
+# LEPTOS_SASS_VERSION = "1.91.0"
 RUSTDOCFLAGS = "--cfg docsrs --html-in-header resources/katex-header.html --html-in-header resources/flams-docs.html --enable-index-page -Zunstable-options --generate-link-to-definition"
 
 [tasks.db-create]
@@ -93,11 +94,11 @@ fn main() {
 }
 '''
 
-[tasks.build-viewer]
-workspace = false
-cwd = "./ftml-viewer"
-command = "cargo"
-args = ["make"]
+#[tasks.build-viewer]
+#workspace = false
+#cwd = "./ftml-viewer"
+#command = "cargo"
+#args = ["make"]
 
 [tasks.build-ffi]
 workspace = false
@@ -124,20 +125,20 @@ command = "vsce"
 args = ["package", "--out", "./flams.vsix"]
 dependencies = ["vscode-build"]
 
-[tasks.copy-viewer]
-workspace = false
-dependencies = ["build-viewer"]
-script_runner = "@shell"
-script = '''
-cp ./ftml-viewer/pkg/ftml.js ./resources/assets/ftml.js
-cp ./ftml-viewer/pkg/ftml_bg.wasm ./resources/assets/ftml_bg.wasm
-'''
+#[tasks.copy-viewer]
+#workspace = false
+#dependencies = ["build-viewer"]
+#script_runner = "@shell"
+#script = '''
+#cp ./ftml-viewer/pkg/ftml.js ./resources/assets/ftml.js
+#cp ./ftml-viewer/pkg/ftml_bg.wasm ./resources/assets/ftml_bg.wasm
+#'''
 
 [tasks.all-release]
 workspace = false
 dependencies = [
-    "build-viewer",
-    "copy-viewer",
+    #"build-viewer",
+    #"copy-viewer",
     "db",
     "leptos-release",
     "copy-to-bin",
@@ -162,7 +163,7 @@ args = [
     "--port",
     "3000",
     "-c",
-    "/home/jazzpirate/work/Software/sTeX/FLAMS/settings.toml",
+    "/home/jazzpirate/work/Software/FlexiFormal/FLAMS/settings.toml",
 ]
 
 [tasks.default]

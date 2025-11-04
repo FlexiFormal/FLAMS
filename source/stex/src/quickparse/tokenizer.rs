@@ -13,21 +13,21 @@ pub enum Mode {
     Math { display: bool },
 }
 
-pub struct TeXTokenizer<'a, 
-    Pa:ParseSource<'a>,
-    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
+pub struct TeXTokenizer<
+    'a,
+    Pa: ParseSource<'a>,
+    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
 > {
     pub reader: Pa,
     pub letters: String,
     pub mode: Mode,
-    err:Err,
-    phantom:PhantomData<&'a ()>
+    err: Err,
+    phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, 
-    Pa:ParseSource<'a>,
-    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
-> Iterator for TeXTokenizer<'a, Pa,Err> {
+impl<'a, Pa: ParseSource<'a>, Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel)> Iterator
+    for TeXTokenizer<'a, Pa, Err>
+{
     type Item = TeXToken<Pa::Pos, Pa::Str>;
 
     #[inline]
@@ -36,12 +36,10 @@ impl<'a,
     }
 }
 
-
-impl<'a, 
-    Pa:ParseSource<'a>,
-    Err:FnMut(String,SourceRange<Pa::Pos>,DiagnosticLevel)
-> TeXTokenizer<'a, Pa,Err> {
-    pub(crate) fn new(reader: Pa,err:Err) -> Self {
+impl<'a, Pa: ParseSource<'a>, Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel)>
+    TeXTokenizer<'a, Pa, Err>
+{
+    pub(crate) fn new(reader: Pa, err: Err) -> Self {
         TeXTokenizer {
             reader,
             mode: Mode::Text,
@@ -74,7 +72,11 @@ impl<'a,
                         if self.reader.starts_with('$') {
                             self.reader.pop_head();
                         } else {
-                            self.problem(start,"Missing $ closing display math",DiagnosticLevel::Error);
+                            self.problem(
+                                start,
+                                "Missing $ closing display math",
+                                DiagnosticLevel::Error,
+                            );
                         }
                         self.close_math();
                         Some(TeXToken::EndMath { start })
@@ -126,17 +128,24 @@ impl<'a,
     }
 
     #[inline]
-    pub fn open_math(&mut self, display: bool) {
+    pub const fn open_math(&mut self, display: bool) {
         self.mode = Mode::Math { display };
     }
     #[inline]
-    pub fn close_math(&mut self) {
+    pub const fn close_math(&mut self) {
         self.mode = Mode::Text;
     }
 
     #[inline]
-    pub fn problem(&mut self,start:Pa::Pos, msg: impl std::fmt::Display,level:DiagnosticLevel) {
-        (self.err)(msg.to_string(), SourceRange{start,end: self.reader.curr_pos()},level);
+    pub fn problem(&mut self, start: Pa::Pos, msg: impl std::fmt::Display, level: DiagnosticLevel) {
+        (self.err)(
+            msg.to_string(),
+            SourceRange {
+                start,
+                end: self.reader.curr_pos(),
+            },
+            level,
+        );
     }
 
     fn read_comment(&mut self, start: Pa::Pos) -> TeXToken<Pa::Pos, Pa::Str> {

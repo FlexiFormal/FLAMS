@@ -1,168 +1,168 @@
 use std::fmt::Write;
 
 use crate::components::SearchState;
-use flams_ontology::{
-    search::{QueryFilter, SearchResult, SearchResultKind},
-    uris::{
-        ArchiveId, ArchiveURITrait, ContentURITrait, DocumentElementURI, DocumentURI, NarrativeURI,
-        PathURITrait, SymbolURI, URI,
-    },
-};
-use flams_router_base::uris::{URIComponents, URIComponentsTrait};
+use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
 use flams_router_vscode::{
     VSCode,
     components::{VSCodeButton, VSCodeCheckbox, VSCodeRadio, VSCodeRadioGroup, VSCodeTextbox},
 };
 use flams_utils::{impossible, unwrap};
-use flams_web_utils::{components::wait_and_then_fn, do_css, inject_css};
-use ftml_viewer_components::components::omdoc::{comma_sep, doc_name, symbol_name};
+use flams_web_utils::components::wait_and_then_fn;
+use ftml_components::components::content::FtmlViewable;
+use ftml_dom::{FtmlViews, utils::css::inject_css};
+use ftml_uris::{
+    ArchiveId, DocumentElementUri, DocumentUri, IsDomainUri, IsNarrativeUri, NarrativeUri,
+    SymbolUri, UriWithArchive, UriWithPath,
+    components::{UriComponents, UriComponentsTrait},
+};
 use leptos::prelude::*;
 
 #[component]
 pub fn VSCodeSearch() -> impl IntoView {
-    inject_css("flams-search-block", include_str!("vscode.css"));
-    use flams_web_utils::components::Themer;
-    use ftml_viewer_components::FTMLGlobalSetup;
+    flams_router_content::Views::top(move || {
+        let remote = || leptos_router::hooks::use_query_map().with(|q| q.get("remote"));
 
-    let remote = || leptos_router::hooks::use_query_map().with(|q| q.get_string("remote"));
+        let selected_radio = RwSignal::new(Some("doc".to_string()));
+        let disabled =
+            Memo::new(move |_| selected_radio.with(|s| s.as_ref().is_some_and(|s| s == "symbol")));
 
-    let selected_radio = RwSignal::new(Some("doc".to_string()));
-    let disabled =
-        Memo::new(move |_| selected_radio.with(|s| s.as_ref().is_some_and(|s| s == "symbol")));
-
-    let full_docs = RwSignal::new(false);
-    let paras = RwSignal::new(true);
-    let defs = RwSignal::new(true);
-    let exs = RwSignal::new(true);
-    let asss = RwSignal::new(false);
-    let probs = RwSignal::new(false);
-    let query = RwSignal::new(String::default());
-    let opts = Memo::new(move |_| {
-        let mut ret = QueryFilter::default();
-        ret.allow_documents = full_docs.get();
-        ret.allow_paragraphs = paras.get();
-        ret.allow_definitions = defs.get();
-        ret.allow_examples = exs.get();
-        ret.allow_assertions = asss.get();
-        ret.allow_problems = probs.get();
-        ret
-    });
-    let local_results = RwSignal::new(SearchState::None);
-    let remote_results = RwSignal::new(SearchState::None);
-    let local_act = Action::new(move |&()| {
-        let query = query.get_untracked();
-        local_results.set(SearchState::Loading);
-        let opts = opts.get_untracked();
-        async move {
-            match super::search_query(query, opts, 20).await {
-                Ok(r) => local_results.set(SearchState::Results(r)),
-                Err(_) => {
-                    local_results.set(SearchState::None);
-                }
-            }
-        }
-    });
-    let remote_act = Action::new(move |&()| {
-        let remote = remote();
-        let query = query.get_untracked();
-        remote_results.set(SearchState::Loading);
-        let opts = opts.get_untracked();
-        async move {
-            let Some(remote) = remote else { return };
-            #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
-            {
-                use flams_router_base::ServerFnExt;
-                let query = super::SearchQuery {
-                    query,
-                    opts,
-                    num_results: 20,
-                }
-                .call_remote(remote)
-                .await;
-                match query {
-                    Ok(r) => remote_results.set(SearchState::Results(r)),
+        let full_docs = RwSignal::new(false);
+        let paras = RwSignal::new(true);
+        let defs = RwSignal::new(true);
+        let exs = RwSignal::new(true);
+        let asss = RwSignal::new(false);
+        let probs = RwSignal::new(false);
+        let query = RwSignal::new(String::default());
+        let opts = Memo::new(move |_| {
+            let mut ret = QueryFilter::default();
+            ret.allow_documents = full_docs.get();
+            ret.allow_paragraphs = paras.get();
+            ret.allow_definitions = defs.get();
+            ret.allow_examples = exs.get();
+            ret.allow_assertions = asss.get();
+            ret.allow_problems = probs.get();
+            ret
+        });
+        let local_results = RwSignal::new(SearchState::None);
+        let remote_results = RwSignal::new(SearchState::None);
+        let local_act = Action::new(move |&()| {
+            let query = query.get_untracked();
+            local_results.set(SearchState::Loading);
+            let opts = opts.get_untracked();
+            async move {
+                match super::search_query(query, opts, 20).await {
+                    Ok(r) => local_results.set(SearchState::Results(r)),
                     Err(_) => {
-                        remote_results.set(SearchState::None);
+                        local_results.set(SearchState::None);
                     }
                 }
             }
-        }
-    });
-    let local_sym_act = Action::new(move |&()| {
-        let query = query.get_untracked();
-        local_results.set(SearchState::Loading);
-        async move {
-            match super::search_symbols(query, 20).await {
-                Ok(r) => local_results.set(SearchState::SymResults(r)),
-                Err(_) => {
-                    local_results.set(SearchState::None);
-                }
-            }
-        }
-    });
-    let remote_sym_act = Action::new(move |&()| {
-        let remote = remote();
-        let query = query.get_untracked();
-        remote_results.set(SearchState::Loading);
-        async move {
-            let Some(remote) = remote else { return };
-            #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
-            {
-                use flams_router_base::ServerFnExt;
-                let query = super::SearchSymbols {
-                    query,
-                    num_results: 20,
-                }
-                .call_remote(remote)
-                .await;
-                match query {
-                    Ok(r) => remote_results.set(SearchState::SymResults(r)),
-                    Err(_) => {
-                        remote_results.set(SearchState::None);
+        });
+        let remote_act = Action::new(move |&()| {
+            let remote = remote();
+            let query = query.get_untracked();
+            remote_results.set(SearchState::Loading);
+            let opts = opts.get_untracked();
+            async move {
+                let Some(remote) = remote else { return };
+                #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
+                {
+                    use flams_router_base::ServerFnExt;
+                    let query = super::SearchQuery {
+                        query,
+                        opts,
+                        num_results: 20,
                     }
-                };
+                    .call_remote(remote)
+                    .await;
+                    match query {
+                        Ok(r) => remote_results.set(SearchState::Results(r)),
+                        Err(_) => {
+                            remote_results.set(SearchState::None);
+                        }
+                    }
+                }
             }
-        }
-    });
-    Effect::new(move || {
-        if query.with(String::is_empty) {
-            local_results.set(SearchState::None);
-            return;
-        }
-        if selected_radio.with(|v| v.as_ref().is_some_and(|s| s == "symbol")) {
-            local_sym_act.dispatch(());
-            remote_sym_act.dispatch(());
-        } else {
-            let _ = opts.get();
-            local_act.dispatch(());
-            remote_act.dispatch(());
-        }
-    });
+        });
+        let local_sym_act = Action::new(move |&()| {
+            let query = query.get_untracked();
+            local_results.set(SearchState::Loading);
+            async move {
+                match super::search_symbols(query, 20).await {
+                    Ok(r) => local_results.set(SearchState::SymResults(r)),
+                    Err(_) => {
+                        local_results.set(SearchState::None);
+                    }
+                }
+            }
+        });
+        let remote_sym_act = Action::new(move |&()| {
+            let remote = remote();
+            let query = query.get_untracked();
+            remote_results.set(SearchState::Loading);
+            async move {
+                let Some(remote) = remote else { return };
+                #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
+                {
+                    use flams_router_base::ServerFnExt;
+                    let query = super::SearchSymbols {
+                        query,
+                        num_results: 20,
+                    }
+                    .call_remote(remote)
+                    .await;
+                    match query {
+                        Ok(r) => remote_results.set(SearchState::SymResults(r)),
+                        Err(_) => {
+                            remote_results.set(SearchState::None);
+                        }
+                    };
+                }
+            }
+        });
+        Effect::new(move || {
+            if query.with(String::is_empty) {
+                local_results.set(SearchState::None);
+                return;
+            }
+            if selected_radio.with(|v| v.as_ref().is_some_and(|s| s == "symbol")) {
+                local_sym_act.dispatch(());
+                remote_sym_act.dispatch(());
+            } else {
+                let _ = opts.get();
+                local_act.dispatch(());
+                remote_act.dispatch(());
+            }
+        });
 
-    view! {
-        <div style="display:flex;flex-direction:column;">
-            <VSCodeTextbox value=query placeholder="Search"/>
-            <VSCodeRadioGroup name="flams-vscode-search" selected=selected_radio>
-                <div style="display:flex;flex-direction:row;">
-                    <VSCodeRadio id="symbol">"Symbols"</VSCodeRadio>
-                    <VSCodeRadio id="doc">"Paragraphs"</VSCodeRadio>
+        inject_css("flams-search-block", include_str!("vscode.css"));
+        view! {
+            <div style="display:flex;flex-direction:column;">
+                <VSCodeTextbox value=query placeholder="Search"/>
+                <VSCodeRadioGroup name="flams-vscode-search" selected=selected_radio>
+                    <div style="display:flex;flex-direction:row;">
+                        <VSCodeRadio id="symbol">"Symbols"</VSCodeRadio>
+                        <VSCodeRadio id="doc">"Paragraphs"</VSCodeRadio>
+                    </div>
+                </VSCodeRadioGroup>
+                <div style="display:flex;flex-direction:row;flex-wrap:wrap;">
+                    <VSCodeCheckbox checked=full_docs disabled>"Full Documents"</VSCodeCheckbox>
+                    <VSCodeCheckbox checked=paras disabled>"Paragraphs"</VSCodeCheckbox>
+                    <VSCodeCheckbox checked=defs disabled>"Definitions"</VSCodeCheckbox>
+                    <VSCodeCheckbox checked=exs disabled>"Examples"</VSCodeCheckbox>
+                    <VSCodeCheckbox checked=asss disabled>"Assertions"</VSCodeCheckbox>
+                    <VSCodeCheckbox checked=probs disabled>"Problems"</VSCodeCheckbox>
+                    /*<Themer>*///{
+                        //flams_router_content::Views::top(move || view!{
+                            {do_results("Local Results",None,local_results)}
+                            <div style="margin-top:25px;"></div>
+                            {do_results("Remote Results",Some(remote),remote_results)}
+                        // })
+                    //}//</Themer>
                 </div>
-            </VSCodeRadioGroup>
-            <div style="display:flex;flex-direction:row;flex-wrap:wrap;">
-                <VSCodeCheckbox checked=full_docs disabled>"Full Documents"</VSCodeCheckbox>
-                <VSCodeCheckbox checked=paras disabled>"Paragraphs"</VSCodeCheckbox>
-                <VSCodeCheckbox checked=defs disabled>"Definitions"</VSCodeCheckbox>
-                <VSCodeCheckbox checked=exs disabled>"Examples"</VSCodeCheckbox>
-                <VSCodeCheckbox checked=asss disabled>"Assertions"</VSCodeCheckbox>
-                <VSCodeCheckbox checked=probs disabled>"Problems"</VSCodeCheckbox>
-                <Themer><FTMLGlobalSetup>
-                {do_results("Local Results",None,local_results)}
-                <div style="margin-top:25px;"></div>
-                {do_results("Remote Results",Some(remote),remote_results)}
-                </FTMLGlobalSetup></Themer>
             </div>
-        </div>
-    }
+        }
+    })
 }
 
 fn do_results(
@@ -171,10 +171,10 @@ fn do_results(
     results: RwSignal<SearchState>,
 ) -> impl IntoView {
     use leptos::either::EitherOf6::*;
-    inject_css(
+    /*inject_css(
         "ftml-comp",
         include_str!("../../../ftml/viewer-components/src/components/comp.css"),
-    );
+    );*/
     let pre_view =
         move || view! {<div style="width:100%;font-weight:bold;text-align:center;">{pre}</div>};
     move || {
@@ -219,13 +219,13 @@ struct Usemodule {
     path: String,
 }
 impl Usemodule {
-    fn make(uri: &SymbolURI) -> Self {
-        let module = uri.module();
+    fn make(uri: &SymbolUri) -> Self {
+        let module = uri.module_uri();
         let archive = module.archive_id().clone();
         let path = if let Some(p) = module.path() {
-            format!("{p}?{}", module.name().first_name())
+            format!("{p}?{}", module.module_name().first())
         } else {
-            module.name().first_name().to_string()
+            module.module_name().first().to_string()
         };
         Self {
             kind: "usemodule",
@@ -238,10 +238,10 @@ impl Usemodule {
 #[derive(leptos::server_fn::serde::Serialize, Debug, Clone)]
 struct Preview<'u> {
     kind: &'static str,
-    uri: &'u SymbolURI,
+    uri: &'u SymbolUri,
 }
 impl Preview<'_> {
-    fn make(uri: &SymbolURI) -> Preview<'_> {
+    fn make(uri: &SymbolUri) -> Preview<'_> {
         Preview {
             kind: "preview",
             uri,
@@ -250,7 +250,7 @@ impl Preview<'_> {
 }
 
 #[derive(Copy, Clone)]
-struct Short<'u>(&'u SymbolURI);
+struct Short<'u>(&'u SymbolUri);
 impl std::fmt::Display for Short<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}]{{", self.0.archive_id())?;
@@ -258,13 +258,13 @@ impl std::fmt::Display for Short<'_> {
             p.fmt(f)?;
             f.write_char('?')?;
         }
-        write!(f, "{}}} {}", self.0.module().name(), self.0.name())
+        write!(f, "{}}} {}", self.0.module_name(), self.0.name())
     }
 }
 
-fn do_sym_result_local(sym: &SymbolURI) -> impl IntoView + use<> {
+fn do_sym_result_local(sym: &SymbolUri) -> impl IntoView + use<> {
     let vs = unwrap!(VSCode::get());
-    let name = ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
+    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
     view! {
         <div class="flams-search-block">
             <div><b>{name}</b>
@@ -297,12 +297,12 @@ fn do_sym_result_local(sym: &SymbolURI) -> impl IntoView + use<> {
 }
 
 fn do_sym_result_remote(
-    sym: &SymbolURI,
+    sym: &SymbolUri,
     res: Vec<(f32, SearchResult)>,
     remote: fn() -> Option<String>,
 ) -> impl IntoView + use<> {
     use thaw::Scrollbar;
-    let name = ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     view! {
         <div class="flams-search-block">
             <div><b>{name}</b>
@@ -324,9 +324,9 @@ fn do_sym_result_remote(
     }
 }
 
-fn do_doc(score: f32, uri: DocumentURI, remote: Option<fn() -> Option<String>>) -> impl IntoView {
+fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
     use thaw::Scrollbar;
-    let name = doc_name(&uri, uri.name().to_string());
+    let name = uri.as_view::<flams_router_content::backend::FtmlBackend>(); //doc_name(&uri, uri.document_name().to_string());
     view! {
         <div class="flams-search-block">
             <div><b>"Document "{name}</b>
@@ -347,19 +347,19 @@ fn do_doc(score: f32, uri: DocumentURI, remote: Option<fn() -> Option<String>>) 
 
 fn do_para(
     score: f32,
-    uri: DocumentElementURI,
+    uri: DocumentElementUri,
     kind: SearchResultKind,
-    fors: Vec<SymbolURI>,
+    fors: Vec<SymbolUri>,
     remote: Option<fn() -> Option<String>>,
 ) -> impl IntoView {
     use thaw::Scrollbar;
     let uristr = uri.to_string();
     let name = uristr;
-    let desc = comma_sep(
+    /*let desc = ftml_components::components::content::CommaSep(
         "For",
         fors.into_iter()
-            .map(|s| symbol_name(&s, s.name().last_name().as_ref())),
-    );
+            .map(|s| s.as_view::<flams_router_content::backend::FtmlBackend>()),
+    );*/
     view! {
         <div class="flams-search-block">
             <div><b>{kind.as_str()}" "{name}</b>
@@ -378,7 +378,7 @@ fn do_para(
     }
 }
 
-fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl IntoView {
+fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
     use flams_router_content::components::Fragment;
     use leptos::either::Either;
     move || {
@@ -388,13 +388,10 @@ fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl I
                 #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
                 {
                     use flams_router_base::ServerFnExt;
-                    use ftml_viewer_components::components::documents::{
-                        FragmentString, FragmentStringProps,
-                    };
                     wait_and_then_fn(
                         move || {
                             flams_router_content::server_fns::Fragment {
-                                uri: Some(URI::Narrative(uri.clone())),
+                                uri: Some(uri.clone().into()),
                                 rp: None,
                                 a: None,
                                 p: None,
@@ -408,14 +405,18 @@ fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl I
                             .call_remote(remote.clone())
                         },
                         move |(uri, css, html)| {
-                            let uri = if let URI::Narrative(NarrativeURI::Element(uri)) = uri {
+                            use ftml_dom::utils::css::CssExt;
+                            use ftml_uris::Uri;
+
+                            let uri = if let Uri::DocumentElement(uri) = uri {
                                 Some(uri)
                             } else {
                                 None
                             };
                             view! {<div>{
-                              for css in css { do_css(css); }
-                              FragmentString(FragmentStringProps{html,uri})
+                              for css in css { css.inject(); }
+                              flams_router_content::Views::render_ftml(html.into_string(),None)
+                              //FragmentString(FragmentStringProps{html,uri})
                             }</div>}
                         },
                     )
@@ -426,7 +427,9 @@ fn fragment(uri: NarrativeURI, remote: Option<fn() -> Option<String>>) -> impl I
                 }
             })
         } else {
-            Either::Right(view!(<Fragment uri=URIComponents::Uri(URI::Narrative(uri)) />))
+            Either::Right(
+                view!(<Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>),
+            )
         }
     }
 }

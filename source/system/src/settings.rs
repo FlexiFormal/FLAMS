@@ -2,33 +2,34 @@
 
 use std::{
     fmt::Debug,
-    path::{Path, PathBuf}, sync::atomic::AtomicU16,
+    path::{Path, PathBuf},
+    sync::atomic::AtomicU16,
 };
 
 use flams_utils::settings::GitlabSettings;
-pub use flams_utils::settings::{SettingsSpec,BuildQueueSettings, ServerSettings};
-use lazy_static::lazy_static;
+pub use flams_utils::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
 
 static SETTINGS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
 
 pub struct Settings {
-    pub mathhubs: Box<[Box<Path>]>,
-    pub mathhubs_is_default:bool,
+    pub mathhubs_is_default: bool,
     pub debug: bool,
     pub log_dir: Box<Path>,
     pub port: AtomicU16,
     pub ip: std::net::IpAddr,
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
-    external_url:Option<Box<str>>,
+    pub rdf_database: Option<Box<Path>>,
+    pub stack_size: Option<u8>,
+    external_url: Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
     pub num_threads: u8,
     pub gitlab_url: Option<url::Url>,
     pub gitlab_token: Option<Box<str>>,
-    pub gitlab_app_id:Option<Box<str>>,
-    pub gitlab_app_secret:Option<Box<str>>,
-    pub gitlab_redirect_url:Option<Box<str>>,
-    pub lsp:bool
+    pub gitlab_app_id: Option<Box<str>>,
+    pub gitlab_app_secret: Option<Box<str>>,
+    pub gitlab_redirect_url: Option<Box<str>>,
+    pub lsp: bool,
 }
 impl Debug for Settings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -37,7 +38,13 @@ impl Debug for Settings {
 }
 
 impl Settings {
-    pub fn port(&self) -> u16 { self.port.load(std::sync::atomic::Ordering::Relaxed) }
+    #[inline]
+    pub fn mathhubs(&self) -> &'static [&'static Path] {
+        flams_math_archives::mathhub::mathhubs()
+    }
+    pub fn port(&self) -> u16 {
+        self.port.load(std::sync::atomic::Ordering::Relaxed)
+    }
     #[allow(clippy::missing_panics_doc)]
     pub fn initialize(settings: SettingsSpec) {
         SETTINGS
@@ -51,13 +58,18 @@ impl Settings {
     }
 
     #[inline]
-    pub fn external_url(&self) -> Option<&str> {
-        self.external_url.as_deref()
+    pub fn external_url(&self) -> &str {
+        self.external_url.as_deref().unwrap_or_default()
     }
 
     /// #### Panics
     pub fn temp_dir(&self) -> PathBuf {
-        self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf()
+        self.temp_dir
+            .read()
+            .as_ref()
+            .expect("This should never happen!")
+            .path()
+            .to_path_buf()
     }
 
     #[allow(clippy::significant_drop_in_scrutinee)]
@@ -72,19 +84,34 @@ impl Settings {
     pub fn as_spec(&self) -> SettingsSpec {
         let port = self.port();
         let spec = SettingsSpec {
-            mathhubs: self.mathhubs.to_vec(),
+            mathhubs: flams_math_archives::mathhub::mathhubs()
+                .iter()
+                .map(|m| m.to_path_buf())
+                .collect(), // self.mathhubs.to_vec(),
             debug: Some(self.debug),
             log_dir: Some(self.log_dir.clone()),
-            temp_dir: Some(self.temp_dir.read().as_ref().expect("This should never happen!").path().to_path_buf().into_boxed_path()),
+            temp_dir: Some(
+                self.temp_dir
+                    .read()
+                    .as_ref()
+                    .expect("This should never happen!")
+                    .path()
+                    .to_path_buf()
+                    .into_boxed_path(),
+            ),
             database: Some(self.database.clone()),
+            rdf_database: self.rdf_database.clone(),
             server: ServerSettings {
                 port,
                 ip: Some(self.ip),
-                external_url: self.external_url.as_ref().map(ToString::to_string).or_else(
-                    || Some(format!("http://{}:{port}",self.ip)),
-                ),
+                external_url: self
+                    .external_url
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .or_else(|| Some(format!("http://{}:{port}", self.ip))),
                 admin_pwd: self.admin_pwd.as_ref().map(ToString::to_string),
             },
+            stack_size: self.stack_size,
             buildqueue: BuildQueueSettings {
                 num_threads: Some(self.num_threads),
             },
@@ -95,7 +122,7 @@ impl Settings {
                 app_secret: self.gitlab_app_secret.clone(),
                 redirect_url: self.gitlab_redirect_url.clone(),
             },
-            lsp: self.lsp
+            lsp: self.lsp,
         };
         spec
     }
@@ -103,15 +130,16 @@ impl Settings {
 impl From<SettingsSpec> for Settings {
     #[allow(clippy::cast_possible_truncation)]
     fn from(spec: SettingsSpec) -> Self {
-        let (mathhubs,mathhubs_is_default) = if spec.mathhubs.is_empty() {
-            (MATHHUB_PATHS.clone(),true)
+        let mathhubs_is_default = if spec.mathhubs.is_empty() {
+            true
         } else {
-            let mhs = spec.mathhubs.into_boxed_slice();
-            let is_def = mhs == *MATHHUB_PATHS;
-            (mhs,is_def)
+            let mhs = spec.mathhubs;
+            let _ = flams_math_archives::mathhub::set_mathhubs(mhs);
+            flams_math_archives::mathhub::mathhubs()
+                == flams_math_archives::mathhub::default_mathhubs()
         };
         Self {
-            mathhubs,mathhubs_is_default,
+            mathhubs_is_default,
             debug: spec.debug.unwrap_or(cfg!(debug_assertions)),
             log_dir: spec.log_dir.unwrap_or_else(|| {
                 CONFIG_DIR
@@ -120,11 +148,14 @@ impl From<SettingsSpec> for Settings {
                     .join("log")
                     .into_boxed_path()
             }),
+            stack_size: spec.stack_size,
             temp_dir: parking_lot::RwLock::new(Some(spec.temp_dir.map_or_else(
                 || tempfile::TempDir::new().expect("Could not create temp dir"),
                 |p| {
                     let _ = std::fs::create_dir_all(&p);
-                    tempfile::Builder::new().tempdir_in(p).expect("Could not create temp dir")
+                    tempfile::Builder::new()
+                        .tempdir_in(p)
+                        .expect("Could not create temp dir")
                 },
             ))),
             external_url: spec.server.external_url.map(String::into_boxed_str),
@@ -137,7 +168,11 @@ impl From<SettingsSpec> for Settings {
                 .server
                 .ip
                 .unwrap_or_else(|| "127.0.0.1".parse().unwrap_or_else(|_| unreachable!())),
-            admin_pwd: if spec.lsp {None} else {spec.server.admin_pwd.map(String::into_boxed_str)},
+            admin_pwd: if spec.lsp {
+                None
+            } else {
+                spec.server.admin_pwd.map(String::into_boxed_str)
+            },
             database: spec.database.unwrap_or_else(|| {
                 CONFIG_DIR
                     .as_ref()
@@ -145,6 +180,7 @@ impl From<SettingsSpec> for Settings {
                     .join("users.sqlite")
                     .into_boxed_path()
             }),
+            rdf_database: spec.rdf_database,
             num_threads: spec.buildqueue.num_threads.unwrap_or_else(|| {
                 #[cfg(feature = "tokio")]
                 {
@@ -160,40 +196,19 @@ impl From<SettingsSpec> for Settings {
             gitlab_url: spec.gitlab.url,
             gitlab_app_id: spec.gitlab.app_id,
             gitlab_app_secret: spec.gitlab.app_secret,
-            gitlab_redirect_url: spec.gitlab.redirect_url
+            gitlab_redirect_url: spec.gitlab.redirect_url,
         }
     }
 }
 
-lazy_static! {
-    static ref MATHHUB_PATHS: Box<[Box<Path>]> = mathhubs().into();
-    static ref CONFIG_DIR: Option<Box<Path>> =
-        simple_home_dir::home_dir().map(|d| d.join(".flams").into_boxed_path());
-    static ref EXE_DIR: Option<Box<Path>> = std::env::current_exe()
+static CONFIG_DIR: std::sync::LazyLock<Option<Box<Path>>> = std::sync::LazyLock::new(|| {
+    simple_home_dir::home_dir().map(|d| d.join(".flams").into_boxed_path())
+});
+
+/*
+static EXE_DIR: std::sync::LazyLock<Option<Box<Path>>> = std::sync::LazyLock::new(|| {
+    std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(Into::into));
-}
-
-fn mathhubs() -> Vec<Box<Path>> {
-    if let Ok(f) = std::env::var("MATHHUB") {
-        return f
-            .split(',')
-            .map(|s| PathBuf::from(s.trim()).into_boxed_path())
-            .collect();
-    }
-    if let Some(d) = simple_home_dir::home_dir() {
-        let p = d.join(".mathhub").join("mathhub.path");
-        if let Ok(f) = std::fs::read_to_string(p) {
-            return f
-                .split('\n')
-                .map(|s| PathBuf::from(s.trim()).into_boxed_path())
-                .collect();
-        }
-        return vec![d.join("MathHub").into_boxed_path()];
-    }
-    panic!(
-    "No MathHub directory found and default ~/MathHub not accessible!\n\
-    Please set the MATHHUB environment variable or create a file ~/.mathhub/mathhub.path containing \
-    the path to the MathHub directory."
-  )
-}
+        .and_then(|p| p.parent().map(Into::into))
+});
+ */

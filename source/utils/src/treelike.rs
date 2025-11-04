@@ -459,7 +459,7 @@ mod tests {
   </Foo2>
 </TopFoo>";
         let mut s = String::new();
-        write!(s, "{foo}").unwrap();
+        write!(s, "{foo}").expect("dafuq");
         assert_eq!(s, expect);
     }
     struct TopFoo {

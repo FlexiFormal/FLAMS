@@ -1,12 +1,12 @@
-use leptos::{context::Provider, html, prelude::*};
+use ftml_dom::utils::css::inject_css;
 use leptos::web_sys::{DomRect, Element};
+use leptos::{context::Provider, html, prelude::*};
 
-use crate::inject_css;
 use super::Header;
 
 #[component]
 pub fn AnchorLink(
-    header:Header,
+    header: Header,
     /// The target of link.
     #[prop(into)]
     href: String,
@@ -26,28 +26,28 @@ pub fn AnchorLink(
     });
 
     if !href.is_empty() && href.starts_with('#') {
-      let id = href[1..].to_string();
-      href_id.set_value(Some(id.clone()));
-      anchor.append_id(id);
+        let id = href[1..].to_string();
+        href_id.set_value(Some(id.clone()));
+        anchor.append_id(id);
 
-      on_cleanup(move || {
-          href_id.with_value(|id| {
-              if let Some(id) = id {
-                  anchor.remove_id(id);
-              }
-          });
-      });
+        on_cleanup(move || {
+            href_id.with_value(|id| {
+                if let Some(id) = id {
+                    anchor.remove_id(id);
+                }
+            });
+        });
 
-      Effect::new(move |_| {
-          let Some(title_el) = title_ref.get() else {
-              return;
-          };
+        Effect::new(move |_| {
+            let Some(title_el) = title_ref.get() else {
+                return;
+            };
 
-          if is_active.get() {
-              let title_rect = title_el.get_bounding_client_rect();
-              anchor.update_background_position(&title_rect);
-          }
-      });
+            if is_active.get() {
+                let title_rect = title_el.get_bounding_client_rect();
+                anchor.update_background_position(&title_rect);
+            }
+        });
     }
     let on_click = move |_| {
         href_id.with_value(move |href_id| {
@@ -72,17 +72,14 @@ pub fn AnchorLink(
     }
 }
 
-
 #[component]
-pub fn Anchor(
-  children: Children,
-) -> impl IntoView {
-  inject_css("anchor",include_str!("./anchor.css"));
+pub fn Anchor(children: Children) -> impl IntoView {
+    inject_css("anchor", include_str!("./anchor.css"));
 
-  let anchor_ref = NodeRef::new();
-  let bar_ref = NodeRef::new();
-  let element_ids = RwSignal::new(Vec::<String>::new());
-  let active_id = RwSignal::new(None::<String>);
+    let anchor_ref = NodeRef::new();
+    let bar_ref = NodeRef::new();
+    let element_ids = RwSignal::new(Vec::<String>::new());
+    let active_id = RwSignal::new(None::<String>);
 
     #[cfg(any(feature = "csr", feature = "hydrate"))]
     {
@@ -95,7 +92,8 @@ pub fn Anchor(
             id: String,
         }
 
-        let offset_target : send_wrapper::SendWrapper<Option<OffsetTarget>>  = send_wrapper::SendWrapper::new(None);
+        let offset_target: send_wrapper::SendWrapper<Option<OffsetTarget>> =
+            send_wrapper::SendWrapper::new(None);
 
         let on_scroll = move || {
             element_ids.with(|ids| {
@@ -135,7 +133,7 @@ pub fn Anchor(
                             break;
                         } else if temp_link.is_some() {
                             break;
-                        } 
+                        }
                         temp_link = None;
                     } else {
                         temp_link = Some(link);
@@ -164,29 +162,29 @@ pub fn Anchor(
     }
 
     view! {
-      <div class="thaw-anchor" node_ref=anchor_ref>
-          <div class="thaw-anchor-rail">
-              <div
-                  class="thaw-anchor-rail__bar"
-                  class=(
-                      "thaw-anchor-rail__bar--active",
-                      move || active_id.with(Option::is_some),
-                  )
+        <div class="thaw-anchor" node_ref=anchor_ref>
+            <div class="thaw-anchor-rail">
+                <div
+                    class="thaw-anchor-rail__bar"
+                    class=(
+                        "thaw-anchor-rail__bar--active",
+                        move || active_id.with(Option::is_some),
+                    )
 
-                  node_ref=bar_ref
-              ></div>
-          </div>
-          <Provider value=AnchorInjection::new(
-              anchor_ref,
-              bar_ref,
-              element_ids,
-              active_id,
-          )>{children()}</Provider>
-      </div>
-  }
+                    node_ref=bar_ref
+                ></div>
+            </div>
+            <Provider value=AnchorInjection::new(
+                anchor_ref,
+                bar_ref,
+                element_ids,
+                active_id,
+            )>{children()}</Provider>
+        </div>
+    }
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 struct AnchorInjection {
     anchor_ref: NodeRef<html::Div>,
     bar_ref: NodeRef<html::Div>,
@@ -194,93 +192,95 @@ struct AnchorInjection {
     active_id: RwSignal<Option<String>>,
 }
 
-
 impl AnchorInjection {
-  pub fn expect_context() -> Self {
-      expect_context()
-  }
+    pub fn expect_context() -> Self {
+        expect_context()
+    }
 
-  const fn new(
-      anchor_ref: NodeRef<html::Div>,
-      bar_ref: NodeRef<html::Div>,
-      element_ids: RwSignal<Vec<String>>,
-      active_id: RwSignal<Option<String>>,
-  ) -> Self {
-      Self {
-          anchor_ref,
-          bar_ref,
-          element_ids,
-          active_id,
-      }
-  }
+    const fn new(
+        anchor_ref: NodeRef<html::Div>,
+        bar_ref: NodeRef<html::Div>,
+        element_ids: RwSignal<Vec<String>>,
+        active_id: RwSignal<Option<String>>,
+    ) -> Self {
+        Self {
+            anchor_ref,
+            bar_ref,
+            element_ids,
+            active_id,
+        }
+    }
 
-  pub fn scroll_into_view(id: &str) {
-      let Some(link_el) = document().get_element_by_id(id) else {
-          return;
-      };
-      link_el.scroll_into_view();
-  }
+    pub fn scroll_into_view(id: &str) {
+        let Some(link_el) = document().get_element_by_id(id) else {
+            return;
+        };
+        link_el.scroll_into_view();
+    }
 
-  pub fn append_id(&self, id: String) {
-      self.element_ids.update(|ids| {
-          ids.push(id);
-      });
-  }
+    pub fn append_id(&self, id: String) {
+        self.element_ids.update(|ids| {
+            ids.push(id);
+        });
+    }
 
-  pub fn remove_id(&self, id: &String) {
-      self.element_ids.update(|ids| {
-          if let Some(index) = ids.iter().position(|item_id| item_id == id) {
-              ids.remove(index);
-          }
-      });
-  }
+    pub fn remove_id(&self, id: &String) {
+        self.element_ids.update(|ids| {
+            if let Some(index) = ids.iter().position(|item_id| item_id == id) {
+                ids.remove(index);
+            }
+        });
+    }
 
-  pub fn update_background_position(&self, title_rect: &DomRect) {
-      if let Some(anchor_el) = self.anchor_ref.get_untracked() {
-          let bar_el = self.bar_ref.get_untracked().expect("This should not happen");
-          let anchor_rect = anchor_el.get_bounding_client_rect();
+    pub fn update_background_position(&self, title_rect: &DomRect) {
+        if let Some(anchor_el) = self.anchor_ref.get_untracked() {
+            let bar_el = self
+                .bar_ref
+                .get_untracked()
+                .expect("This should not happen");
+            let anchor_rect = anchor_el.get_bounding_client_rect();
 
-          let offset_top = title_rect.top() - anchor_rect.top();
-          // let offset_left = title_rect.left() - anchor_rect.left();
+            let offset_top = title_rect.top() - anchor_rect.top();
+            // let offset_left = title_rect.left() - anchor_rect.left();
 
-          bar_el.style(("top", format!("{offset_top}px")));
-          bar_el.style(("height", format!("{}px", title_rect.height())));
-      }
-  }
+            bar_el.style(("top", format!("{offset_top}px")));
+            bar_el.style(("height", format!("{}px", title_rect.height())));
+        }
+    }
 }
 
 pub enum OffsetTarget {
-  Selector(String),
-  Element(Element),
+    Selector(String),
+    Element(Element),
 }
 
 #[cfg(any(feature = "csr", feature = "hydrate"))]
 impl OffsetTarget {
-  fn get_bounding_client_rect(&self) -> Option<DomRect> {
-      match self {
-          Self::Selector(selector) => {
-              let el = document().query_selector(selector).ok().flatten()?;
-              Some(el.get_bounding_client_rect())
-          }
-          Self::Element(el) => Some(el.get_bounding_client_rect()),
-      }
-  }
+    fn get_bounding_client_rect(&self) -> Option<DomRect> {
+        match self {
+            Self::Selector(selector) => {
+                let el = document().query_selector(selector).ok().flatten()?;
+                Some(el.get_bounding_client_rect())
+            }
+            Self::Element(el) => Some(el.get_bounding_client_rect()),
+        }
+    }
 }
 
 impl From<&'static str> for OffsetTarget {
-  fn from(value: &'static str) -> Self {
-      Self::Selector(value.to_string())
-  }
+    fn from(value: &'static str) -> Self {
+        Self::Selector(value.to_string())
+    }
 }
 
 impl From<String> for OffsetTarget {
-  fn from(value: String) -> Self {
-      Self::Selector(value)
-  }
+    fn from(value: String) -> Self {
+        Self::Selector(value)
+    }
 }
 
 impl From<Element> for OffsetTarget {
-  fn from(value: Element) -> Self {
-      Self::Element(value)
-  }
+    fn from(value: Element) -> Self {
+        Self::Element(value)
+    }
 }

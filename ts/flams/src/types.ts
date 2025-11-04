@@ -1,8 +1,8 @@
 import * as FTML from "./ftml-viewer-base";
 
-export type DocumentURI = FTML.DocumentURI;
-export type SymbolURI = FTML.SymbolURI;
-export type DocumentElementURI = FTML.DocumentElementURI;
+export type DocumentUri = FTML.DocumentUri;
+export type SymbolUri = FTML.SymbolUri;
+export type DocumentElementUri = FTML.DocumentElementUri;
 export type Name = FTML.Name;
 
 export type ProblemResponse = FTML.ProblemResponse;
@@ -34,24 +34,24 @@ export type ProblemFeedbackJson = FTML.ProblemFeedbackJson;
 export type OMDoc = FTML.OMDoc;
 export type URI = FTML.URI;
 
-export type DocumentURIParams =
-  | { uri: DocumentURI }
+export type DocumentUriParams =
+  | { uri: DocumentUri }
   | { a: string; rp: string }
   | { a: string; p?: string; d: string; l: Language };
 
-export type SymbolURIParams =
-  | { uri: SymbolURI }
+export type SymbolUriParams =
+  | { uri: SymbolUri }
   | { a: string; p?: string; m: string; s: string };
 
-export type DocumentElementURIParams =
-  | { uri: DocumentElementURI }
+export type DocumentElementUriParams =
+  | { uri: DocumentElementUri }
   | { a: string; p?: string; d: string; l: Language; e: string };
 
 export type URIParams =
   | { uri: URI }
-  | { a: string } // ArchiveURI
-  | { a: string; rp: string } // DocumentURI
-  | { a: string; p?: string; d: string; l?: Language } // DocumentURI
-  | { a: string; p?: string; d: string; l?: Language; e: string } // DocumentElementURI
-  | { a: string; p?: string; m: string; l?: Language } // ModuleURI
-  | { a: string; p?: string; m: string; l?: Language; s: string }; // SymbolURI
+  | { a: string } // ArchiveUri
+  | { a: string; rp: string } // DocumentUri
+  | { a: string; p?: string; d: string; l?: Language } // DocumentUri
+  | { a: string; p?: string; d: string; l?: Language; e: string } // DocumentElementUri
+  | { a: string; p?: string; m: string; l?: Language } // ModuleUri
+  | { a: string; p?: string; m: string; l?: Language; s: string }; // SymbolUri

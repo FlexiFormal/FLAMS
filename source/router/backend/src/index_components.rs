@@ -1,8 +1,7 @@
-use flams_ontology::{
-    archive_json::{ArchiveIndex, Institution},
-    uris::DocumentURI,
-};
+use flams_backend_types::archive_json::{ArchiveIndex, Institution};
 use flams_web_utils::components::wait_and_then_fn;
+use ftml_dom::utils::css::inject_css;
+use ftml_uris::DocumentUri;
 use leptos::prelude::*;
 use thaw::{
     Body1, Caption1, Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription,
@@ -11,7 +10,7 @@ use thaw::{
 
 #[component]
 pub fn Index() -> impl IntoView {
-    flams_web_utils::inject_css(
+    inject_css(
         "flams-index-card",
         ".flams-index-card{max-width:400px !important;margin:10px !important;}",
     );
@@ -55,7 +54,7 @@ fn wrap_list<V: IntoView + 'static>(
 }
 
 fn link_doc<V: IntoView + 'static, T: FnOnce() -> V>(
-    uri: &DocumentURI,
+    uri: &DocumentUri,
     i: T,
 ) -> impl IntoView + 'static + use<V, T> {
     view! {
@@ -181,6 +180,7 @@ fn self_study(ss: ArchiveIndex) -> impl IntoView {
         slides,
         thumbnail,
         teaser,
+        ..
     } = ss
     else {
         unreachable!()
@@ -221,7 +221,7 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> impl IntoView + 'stati
         title,
         landing,
         acronym,
-        instructors,
+        authors: instructors,
         institution,
         notes,
         slides,
@@ -235,7 +235,7 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> impl IntoView + 'stati
     else {
         unreachable!()
     };
-    let inst = insts.iter().find(|i| i.acronym() == &*institution).cloned();
+    let inst = institution.and_then(|inst| insts.iter().find(|i| i.acronym() == &*inst)).cloned();
     view! {<Card class="flams-index-card">
       <CardHeader>
         {link_doc(&landing,|| view!(
