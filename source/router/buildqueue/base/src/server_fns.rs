@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use crate::{FormatOrTarget, QueueInfo};
-use flams_ontology::uris::ArchiveId;
+use ftml_uris::ArchiveId;
 use leptos::prelude::*;
 
 #[server(prefix = "/api/buildqueue", endpoint = "get_queues")]
@@ -56,12 +56,13 @@ pub mod server {
     use std::num::NonZeroU32;
 
     use crate::{FormatOrTarget, LoginQueue, QueueInfo, RepoInfo};
-    use flams_ontology::uris::ArchiveId;
+    use flams_math_archives::backend::SandboxedRepository;
+    use flams_math_archives::utils::path_ext::RelPath;
     use flams_router_base::LoginState;
-    use flams_system::backend::SandboxedRepository;
     use flams_system::building::Queue;
     use flams_system::building::queue_manager::QueueManager;
     use flams_web_utils::blocking_server_fn;
+    use ftml_uris::ArchiveId;
     use leptos::prelude::*;
 
     /// #### Errors
@@ -141,9 +142,10 @@ pub mod server {
         queue: Option<NonZeroU32>,
         clean: bool,
     ) -> Result<usize, ServerFnError<String>> {
-        use flams_system::backend::archives::ArchiveOrGroup as AoG;
-        use flams_system::formats::FormatOrTargets;
-        use flams_system::formats::{BuildTarget, SourceFormat};
+        use flams_math_archives::formats::BuildTarget;
+        use flams_math_archives::formats::FormatOrTargets;
+        use flams_math_archives::formats::SourceFormat;
+        use flams_math_archives::manager::ArchiveOrGroup as AoG;
 
         let login = LoginState::get_server();
 
@@ -156,7 +158,7 @@ pub mod server {
                     FormatOrTarget::Targets(t) => {
                         let Some(v) = t
                             .iter()
-                            .map(|s| BuildTarget::get_from_str(s))
+                            .map(|s| BuildTarget::get(s))
                             .collect::<Option<Vec<_>>>()
                         else {
                             return Err("Invalid target".to_string());
@@ -168,7 +170,7 @@ pub mod server {
 
                 let fot = match target {
                     FormatOrTarget::Format(f) => FormatOrTargets::Format(
-                        SourceFormat::get_from_str(&f)
+                        SourceFormat::get(&f)
                             .map_or_else(|| Err("Invalid format".to_string()), Ok)?,
                     ),
                     FormatOrTarget::Targets(_) => FormatOrTargets::Targets(tgts.as_slice()),
@@ -178,9 +180,9 @@ pub mod server {
                     return Ok(queue.enqueue_all(fot, stale_only, clean));
                 };
 
-                let group = flams_system::backend::GlobalBackend::get().with_archive_tree(
+                let group = flams_math_archives::backend::GlobalBackend.with_tree(
                     |tree| -> Result<bool, String> {
-                        match tree.find(&archive) {
+                        match tree.get_group_or_archive(&archive) {
                             Some(AoG::Archive(_)) => Ok(false),
                             Some(AoG::Group(_)) => Ok(true),
                             None => Err(format!("Archive {archive} not found")),
@@ -201,7 +203,7 @@ pub mod server {
                         &archive,
                         fot,
                         stale_only,
-                        path.as_deref(),
+                        path.as_deref().map(RelPath::new),
                         clean && path.is_none(),
                     ))
                 }
@@ -216,9 +218,10 @@ pub mod server {
         rel_path: String,
         target: String,
     ) -> Result<String, ServerFnError<String>> {
-        use flams_system::backend::Backend;
+        use flams_math_archives::BuildableArchive;
+        use flams_math_archives::backend::LocalBackend;
 
-        let Some(target) = flams_system::formats::BuildTarget::get_from_str(&target) else {
+        let Some(target) = flams_math_archives::formats::BuildTarget::get(&target) else {
             return Err(format!("Target {target} not found").into());
         };
         let login = LoginState::get_server();
@@ -226,7 +229,7 @@ pub mod server {
         let Some(path) = tokio::task::spawn_blocking(move || {
             login.with_queue(queue, |q| {
                 q.backend()
-                    .with_archive(&id, |a| a.map(|a| a.get_log(&rel_path, target)))
+                    .with_local_archive(&id, |a| a.map(|a| a.get_log(&rel_path, target)))
             })
         })
         .await
@@ -234,7 +237,9 @@ pub mod server {
         else {
             return Err(format!("Archive {archive} not found").into());
         };
-        let v = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
+        let v = tokio::fs::read(&path)
+            .await
+            .map_err(|e| format!("{e}: {}", path.display()))?;
         Ok(String::from_utf8_lossy(&v).to_string())
     }
 

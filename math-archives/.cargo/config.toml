@@ -1,0 +1,11 @@
+[build]
+rustdocflags = [
+    "--cfg",
+    "docsrs",
+    "-Zunstable-options",
+    "--generate-link-to-definition",
+    "--html-in-header",
+    "math-archives/doc/katex-header.html",
+    "--html-in-header",
+    "math-archives/doc/docs.html",
+]

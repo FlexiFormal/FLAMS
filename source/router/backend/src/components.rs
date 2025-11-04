@@ -1,29 +1,23 @@
-use std::num::NonZeroU32;
-
-use flams_ontology::{
-    archive_json::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
-    file_states::FileStateSummary,
-    uris::ArchiveId,
-};
+use crate::FileStates;
+use flams_backend_types::archives::{ArchiveData, ArchiveGroupData, DirectoryData, FileData};
 use flams_router_base::LoginState;
 use flams_router_buildqueue_base::{FormatOrTarget, select_queue, server_fns::enqueue};
-use flams_utils::{time::Timestamp, unwrap};
-use flams_web_utils::{
-    components::{
-        Header, LazySubtree, Leaf, Subtree, Tree, message_action, wait_and_then, wait_and_then_fn,
-    },
-    inject_css,
+use flams_utils::unwrap;
+use flams_web_utils::components::{
+    Header, LazySubtree, Leaf, Subtree, Tree, message_action, wait_and_then, wait_and_then_fn,
 };
+use ftml_dom::utils::css::inject_css;
+use ftml_ontology::utils::time::Timestamp;
+use ftml_uris::ArchiveId;
 use leptos::prelude::*;
-
-use crate::FileStates;
+use std::num::NonZeroU32;
 
 #[component]
 pub fn ArchivesTop() -> impl IntoView {
     wait_and_then_fn(
         || super::server_fns::group_entries(None),
         |(groups, archives)| {
-            let mut summary = FileStateSummary::default();
+            let mut summary = flams_backend_types::archives::FileStateSummary::default();
             for g in &groups {
                 if let Some(s) = g.summary {
                     summary.merge(s);
@@ -63,7 +57,7 @@ fn group(a: ArchiveGroupData) -> impl IntoView {
     let id = a.id.clone();
     let header = view!(
       <thaw::Icon icon=icondata_bi::BiLibraryRegular/>" "
-      {a.id.last_name().to_string()}
+      {a.id.last().to_string()}
       {a.summary.map(badge)}
       {dialog(move |signal| if signal.get() {
         let id = id.clone();
@@ -94,7 +88,7 @@ fn archive(a: ArchiveData) -> impl IntoView {
     let id = a.id.clone();
     let header = view!(
       <thaw::Icon icon=icondata_bi::BiBookSolid/>" "
-      {a.id.last_name().to_string()}
+      {a.id.last().to_string()}
       {a.summary.map(badge)}
       {dialog(move |signal| if signal.get() {
         let id = id.clone();
@@ -174,8 +168,10 @@ fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
 
     let link = format!("/?a={archive}&rp={}", f.rel_path);
     let button = format!("[{archive}]/{}", f.rel_path);
-    let comps =
-        flams_router_base::uris::DocURIComponents::RelPath(archive.clone(), f.rel_path.clone());
+    let comps = ftml_uris::components::DocumentUriComponents::RelPath {
+        a: archive.clone(),
+        rp: f.rel_path.clone(),
+    };
 
     let pathstr = unwrap!(f.rel_path.split('/').last()).to_string();
     let header = view!(
@@ -207,7 +203,7 @@ fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
     }
 }
 
-fn badge(state: FileStateSummary) -> impl IntoView {
+fn badge(state: crate::FileStateSummary) -> impl IntoView {
     use thaw::{Badge, BadgeAppearance, BadgeColor};
     view! {
       {if state.new == 0 {None} else {Some(view!(
@@ -266,7 +262,6 @@ fn modal(
         },
         |path| format!("[{}]{path}", archive.as_ref().expect("unreachable")),
     );
-    //let toaster = ToasterInjection::expect_context();
     let targets = format.is_some();
     let queue_id = RwSignal::<Option<NonZeroU32>>::new(None);
     let act = message_action(

@@ -3,20 +3,20 @@
 /*!
  *
  * # Public API Endpoints
- * 
+ *
  * ## Encoding
- * 
+ *
  * **POST** requests have their arguments `application/x-www-form-urlencoded`-encoded, unless otherwise
  * specified.
- * 
- * **GET** requests have their arguments url-encoded. Endpoints that take a 
- * (particular kind of) [URI] have those represented via the following encoding: 
- * - Either `uri=<STRING>` ( a full [URI]), or 
- * - `a=<STRING>&rp=<STRING>` (an [ArchiveId] and a relative path to a source file in the archive including file extension) 
- *    can be used for  [DocumentURI]s, or 
- * - the [URI] components with relevant argument names; e.g. for a [DocumentURI]: 
+ *
+ * **GET** requests have their arguments url-encoded. Endpoints that take a
+ * (particular kind of) [URI] have those represented via the following encoding:
+ * - Either `uri=<STRING>` ( a full [URI]), or
+ * - `a=<STRING>&rp=<STRING>` (an [ArchiveId] and a relative path to a source file in the archive including file extension)
+ *    can be used for  [DocumentUri]s, or
+ * - the [URI] components with relevant argument names; e.g. for a [DocumentUri]:
  *    `?a=<STRING>[&p=<STRING>]&l=<LANGUAGE>&d=<NAME>`.
- * 
+ *
  * ## Endpoints
  *
  * | Path         | GET/POST | Arguments | Description / Return Value |
@@ -27,7 +27,7 @@
  * | [`/api/login`](login) | POST | `username=<STRING>`, `password=<STRING>` | log in |
  * | [`/api/login_state`](login_state) | POST | (None) | [LoginState] |
  * | [`/api/search`](search::search_query) | POST | `query=<STRING>&opts=`[`QueryFilter`](flams_ontology::search::QueryFilter)`&num_results=<INT>` | `Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>` |
- * | [`/api/search_symbols`](search::search_symbols) | POST | `query=<STRING>&num_results=<INT>` | `Vec<(`[`SymbolURI`]`Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>)>` |
+ * | [`/api/search_symbols`](search::search_symbols) | POST | `query=<STRING>&num_results=<INT>` | `Vec<(`[`SymbolUri`]`Vec<(<FLOAT>,`[`SearchResult`](flams_ontology::search::SearchResult)`)>)>` |
  * | [`/content/grade`](content::grade()) | POST | TODO |
  * | [`/content/grade_enc`](content::grade_enc()) | POST | TODO |
  * | `/gitlab_login` | POST | | |
@@ -55,32 +55,30 @@
  * | [`/ws/queue`](crate::router::buildqueue::QueueSocket) | | |  |
  * | **Content** |  | | |
  * | [`/img`](img_handler) | GET | `kpse=<STRING>` or `file=<STRING>` (LSP only) or `a=<ArchiveID>&rp=<STRING>` | Images |
- * | [`/content/document`](content::document) | GET | [DocumentURI] | `(`[DocumentURI],`Vec<`[CSS]`>,String)` Returns a pair of CSS rules and the full body of the HTML for the given document (with the `<body>` node replaced by a `<div>`, but preserving all attributes/classes) |
+ * | [`/content/document`](content::document) | GET | [DocumentUri] | `(`[DocumentUri],`Vec<`[CSS]`>,String)` Returns a pair of CSS rules and the full body of the HTML for the given document (with the `<body>` node replaced by a `<div>`, but preserving all attributes/classes) |
  * | [`/content/fragment`](content::fragment) | GET | [URI]`[&context=`[URI]`]` | `(`[URI]`,Vec<`[CSS]`>,String)` Returns a pair of CSS rules and the HTML fragment representing the given element; i.e. the inner HTML of a document (for inputrefs), the HTML of a semantic paragraph, etc. |
  * | [`/content/title`](content::title) | GET | [URI] | `(Vec<`[CSS]`>,String)` Returns a pair of CSS rules and the HTML title of the given element |
  * | [`/content/omdoc`](content::omdoc) | GET | [URI] | [`AnySpec`] Returns the structural representation of the OMDoc content at the given URI |
- * | [`/content/toc`](content::toc()) | GET | [DocumentURI] | `(Vec<`[CSS]`>,Vec<`[TOCElem]`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
- * | [`/content/los`](content::los()) | GET | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
- * | [`/content/notations`](content::notations()) | GET | [SymbolURI] | `(Vec<(`[DocumentElementURI]`,`[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
- * | [`/content/solution`](content::solution()) | GET | [DocumentElementURI] | [`Solutions`](flams_ontology::narration::problems::Solutions) |
- * | [`/content/quiz`](content::get_quiz()) | GET | [DocumentURI] | [`Quiz`](flams_ontology::narration::problems::Quiz) |
- * | [`/content/slides`](content::slides_view()) | GET | [DocumentURI] or [DocumentElementURI] | `(Vec<CSS>,Vec<SlideElement>)` |
+ * | [`/content/toc`](content::toc()) | GET | [DocumentUri] | `(Vec<`[CSS]`>,Vec<`[TOCElem]`>)` Returns a pair of CSS rules and the table of contents of the given document, including section titles |
+ * | [`/content/los`](content::los()) | GET | [SymbolUri] | `(Vec<(`[DocumentElementUri]`,`[LOKind]`)>` Returns a list of all Learning Objects for the given symbol |
+ * | [`/content/notations`](content::notations()) | GET | [SymbolUri] | `(Vec<(`[DocumentElementUri]`,`[Notation]`)>` Returns a list of all Notations for the given symbol or variable |
+ * | [`/content/solution`](content::solution()) | GET | [DocumentElementUri] | [`Solutions`](flams_ontology::narration::problems::Solutions) |
+ * | [`/content/quiz`](content::get_quiz()) | GET | [DocumentUri] | [`Quiz`](flams_ontology::narration::problems::Quiz) |
+ * | [`/content/slides`](content::slides_view()) | GET | [DocumentUri] or [DocumentElementUri] | `(Vec<CSS>,Vec<SlideElement>)` |
  * | [`/content/legacy/uris`](content::uris()) | GET | | |
 */
 
 use crate::server::files::img_handler;
 
-use flams_ontology::{
-    narration::{notations::Notation, LOKind},
-    uris::*,
-};
 use flams_router_dashboard::{
+    query::query_api,
     server_fns::{
-        self, backend, buildqueue, content, git,search,
+        self, backend, buildqueue, content, git,
         login::{login, login_state},
+        search,
     },
     LoginState,
-    query::query_api
 };
-use flams_utils::{settings::SettingsSpec, CSS};
-use ftml_viewer_components::components::{omdoc::OMDoc, TOCElem};
+use flams_utils::settings::SettingsSpec;
+use ftml_ontology::narrative::elements::notations::Notation;
+use ftml_uris::prelude::*;

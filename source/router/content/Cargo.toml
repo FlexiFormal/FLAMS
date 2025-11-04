@@ -10,32 +10,42 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "thaw/ssr",
-    "ftml-viewer-components/ssr",
+    "ftml-components/ssr",
     "flams-web-utils/ssr",
+    "flams-router-base/ssr",
     "dep:flams-system",
+    "dep:flams-math-archives",
     "dep:leptos_axum",
     "dep:http",
     "dep:flams-lsp",
     "dep:tokio",
     "dep:paste",
     "dep:smallvec",
+    "dep:ulo",
 ]
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
-    "ftml-viewer-components/hydrate",
+    "ftml-components/hydrate",
     "flams-web-utils/hydrate",
+    "ftml-backend/cached",
 ]
 docs-only = []
 
 [dependencies]
-flams-ontology = { workspace = true, features = ["serde"] }
+ftml-uris = { workspace = true, features = ["leptos"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-components = { workspace = true }
+ftml-dom = { workspace = true }
+ftml-backend = { workspace = true, features = ["server_fn"] }
+
 flams-utils = { workspace = true }
-ftml-viewer-components = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-router-base = { workspace = true }
 flams-system = { workspace = true, optional = true }
+flams-math-archives = { workspace = true, optional = true }
 flams-lsp = { workspace = true, optional = true }
+ulo = { workspace = true, optional = true }
 
 leptos = { workspace = true }
 leptos_meta = { workspace = true }
@@ -46,6 +56,8 @@ either = { workspace = true }
 tracing = { workspace = true }
 lazy_static = { workspace = true }
 urlencoding = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
 
 tokio = { workspace = true, optional = true }
 paste = { workspace = true, optional = true }

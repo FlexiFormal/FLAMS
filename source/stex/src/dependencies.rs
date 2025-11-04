@@ -10,16 +10,10 @@ use crate::{
     PDFLATEX_FIRST,
 };
 use either::Either;
-use flams_ontology::{
-    languages::Language,
-    uris::{ArchiveId, ArchiveURITrait, DocumentURI},
-};
-use flams_system::{
-    backend::AnyBackend,
-    building::{BuildTask, Dependency, TaskRef},
-    formats::CHECK,
-};
+use flams_math_archives::backend::AnyBackend;
+use flams_math_archives::formats::{BuildSpec, BuildTargetId, TaskDependency, TaskRef, CHECK};
 use flams_utils::{parsing::ParseStr, sourcerefs::SourceRange};
+use ftml_uris::{ArchiveId, DocumentUri, Language, UriWithArchive};
 use std::path::Path;
 
 pub enum STeXDependency {
@@ -36,7 +30,7 @@ pub enum STeXDependency {
         filepath: std::sync::Arc<str>,
     },
     Module {
-        //uri:ModuleURI,
+        //uri:ModuleUri,
         sig: Option<Language>,
         meta: Option<(ArchiveId, std::sync::Arc<str>)>,
     },
@@ -59,10 +53,10 @@ pub struct DepParser<'a> {
     curr: Option<std::vec::IntoIter<STeXToken<()>>>,
 }
 
-pub(super) fn parse_deps<'a>(
+pub fn parse_deps<'a>(
     source: &'a str,
     path: &'a Path,
-    doc: &'a DocumentURI,
+    doc: &'a DocumentUri,
     backend: &'a AnyBackend,
 ) -> impl Iterator<Item = STeXDependency> + use<'a> {
     const NOERR: fn(String, SourceRange<()>, DiagnosticLevel) = |_, _, _| {};
@@ -198,110 +192,114 @@ impl Iterator for DepParser<'_> {
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn get_deps(backend: &AnyBackend, task: &BuildTask) {
-    let Either::Left(path) = task.source() else {
-        return;
+#[deprecated(note = "replace Arc<str>.parse by UriPath everywhere")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn get_deps(task: BuildSpec) -> Vec<(BuildTargetId, TaskDependency)> {
+    let mut deps = Vec::new();
+    let Either::Left(path) = task.source else {
+        return deps;
     };
-    let Ok(uri) = task.document_uri() else { return };
-    let source = std::fs::read_to_string(path);
-    if let Ok(source) = source {
-        //let mut yields = Vec::new();
-        for d in parse_deps(&source, path, &uri, backend) {
-            match d {
-                STeXDependency::ImportModule { archive, module }
-                | STeXDependency::UseModule { archive, module } => {
-                    if let Some(step) = task.get_step(PDFLATEX_FIRST) {
-                        step.add_dependency(Dependency::Physical {
+    let Ok(source) = std::fs::read_to_string(path) else {
+        return deps;
+    };
+    //let mut yields = Vec::new();
+    for d in parse_deps(&source, path, task.uri, task.backend) {
+        match d {
+            STeXDependency::ImportModule { archive, module }
+            | STeXDependency::UseModule { archive, module }
+                if !module.is_empty() =>
+            {
+                deps.push((
+                    PDFLATEX_FIRST.id(),
+                    TaskDependency::Physical {
+                        strict: false,
+                        task: TaskRef {
+                            archive,
+                            rel_path: module
+                                .parse()
+                                .unwrap_or_else(|e| panic!("this is a bug: {e}: {module}")),
+                            target: PDFLATEX_FIRST.id(),
+                        },
+                    },
+                ));
+            }
+            STeXDependency::Inputref { archive, filepath } if !filepath.is_empty() => {
+                deps.push((
+                    PDFLATEX_FIRST.id(),
+                    TaskDependency::Physical {
+                        strict: false,
+                        task: TaskRef {
+                            archive: archive.unwrap_or_else(|| task.uri.archive_id().clone()),
+                            rel_path: filepath.parse().expect("this is a bug"),
+                            target: PDFLATEX_FIRST.id(),
+                        },
+                    },
+                ));
+            }
+            STeXDependency::Module {
+                /*uri:_,*/ sig,
+                meta,
+            } => {
+                //yields.push(uri);
+                if let Some(lang) = sig {
+                    let archive = task.uri.archive_id().clone();
+                    let Some(rel_path) =
+                        task.rel_path.as_ref().rsplit_once('.').and_then(|(a, _)| {
+                            a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
+                        })
+                    else {
+                        continue;
+                    };
+                    deps.push((
+                        PDFLATEX_FIRST.id(),
+                        TaskDependency::Physical {
                             strict: false,
                             task: TaskRef {
                                 archive: archive.clone(),
-                                rel_path: module.clone(),
-                                target: PDFLATEX_FIRST,
+                                rel_path: rel_path.clone().parse().expect("this is a bug"),
+                                target: PDFLATEX_FIRST.id(),
                             },
-                        });
-                    }
-                    if let Some(step) = task.get_step(CHECK) {
-                        step.add_dependency(Dependency::Physical {
+                        },
+                    ));
+                    deps.push((
+                        CHECK.id(),
+                        TaskDependency::Physical {
                             strict: true,
                             task: TaskRef {
                                 archive,
-                                rel_path: module,
-                                target: CHECK,
+                                rel_path: rel_path.clone().parse().expect("this is a bug"),
+                                target: CHECK.id(),
                             },
-                        });
-                    }
+                        },
+                    ));
                 }
-                STeXDependency::Inputref { archive, filepath } => {
-                    if let Some(step) = task.get_step(PDFLATEX_FIRST) {
-                        step.add_dependency(Dependency::Physical {
+                if let Some((archive, module)) = meta {
+                    deps.push((
+                        PDFLATEX_FIRST.id(),
+                        TaskDependency::Physical {
                             strict: false,
                             task: TaskRef {
-                                archive: archive.unwrap_or_else(|| task.archive().id().clone()),
-                                rel_path: filepath,
-                                target: PDFLATEX_FIRST,
+                                archive: archive.clone(),
+                                rel_path: module.parse().expect("this is a bug"),
+                                target: PDFLATEX_FIRST.id(),
                             },
-                        });
-                    }
+                        },
+                    ));
+                    deps.push((
+                        CHECK.id(),
+                        TaskDependency::Physical {
+                            strict: true,
+                            task: TaskRef {
+                                archive,
+                                rel_path: module.parse().expect("this is a bug"),
+                                target: CHECK.id(),
+                            },
+                        },
+                    ));
                 }
-                STeXDependency::Module {
-                    /*uri:_,*/ sig,
-                    meta,
-                } => {
-                    //yields.push(uri);
-                    if let Some(lang) = sig {
-                        let archive = task.archive().id().clone();
-                        let Some(rel_path) = task.rel_path().rsplit_once('.').and_then(|(a, _)| {
-                            a.rsplit_once('.').map(|(a, _)| format!("{a}.{lang}.tex"))
-                        }) else {
-                            continue;
-                        };
-                        //tracing::debug!("Adding dependency: {:?}", rf);
-                        if let Some(step) = task.get_step(PDFLATEX_FIRST) {
-                            step.add_dependency(Dependency::Physical {
-                                strict: false,
-                                task: TaskRef {
-                                    archive: archive.clone(),
-                                    rel_path: rel_path.clone().into(),
-                                    target: PDFLATEX_FIRST,
-                                },
-                            });
-                        }
-                        if let Some(step) = task.get_step(CHECK) {
-                            step.add_dependency(Dependency::Physical {
-                                strict: true,
-                                task: TaskRef {
-                                    archive,
-                                    rel_path: rel_path.into(),
-                                    target: CHECK,
-                                },
-                            });
-                        }
-                    }
-                    if let Some((archive, module)) = meta {
-                        if let Some(step) = task.get_step(PDFLATEX_FIRST) {
-                            step.add_dependency(Dependency::Physical {
-                                strict: false,
-                                task: TaskRef {
-                                    archive: archive.clone(),
-                                    rel_path: module.clone(),
-                                    target: PDFLATEX_FIRST,
-                                },
-                            });
-                        }
-                        if let Some(step) = task.get_step(CHECK) {
-                            step.add_dependency(Dependency::Physical {
-                                strict: true,
-                                task: TaskRef {
-                                    archive,
-                                    rel_path: module,
-                                    target: CHECK,
-                                },
-                            });
-                        }
-                    }
-                }
-                STeXDependency::Img { .. } => (),
             }
+            _ => (),
         }
     }
+    deps
 }

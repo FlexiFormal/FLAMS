@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useEffect, useState } from "react";
+import { createContext, ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
 import { FTML as Base } from "@kwarc/ftml-viewer";
 
@@ -23,9 +23,6 @@ export function useLeptosTunnel() {
   };
 
   const removeTunnel = () => {
-    if (tunnel) {
-      //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
-    }
     setTunnel(undefined);
   };
 
@@ -34,14 +31,6 @@ export function useLeptosTunnel() {
         createPortal(<FTMLContext.Provider value={tunnel.context}>{tunnel.node}</FTMLContext.Provider>, tunnel.element, tunnel.id)
         : <></>
   );
-
-  useEffect(() => {
-    return () => {
-      if (tunnel) {
-        //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
-      }
-    }
-  })
 
   return {
     addTunnel,
@@ -61,9 +50,6 @@ export function useLeptosTunnels() {
 
   const removeTunnel = (id: string) => {
     setTunnels(prev => prev.filter(tunnel => {
-      if (tunnel.id === id) {
-        //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
-      }
       return tunnel.id !== id
     }));
   };
@@ -75,14 +61,6 @@ export function useLeptosTunnels() {
       )}
     </>
   );
-
-  useEffect(() => {
-    return () => {
-      tunnels.forEach(tunnel => {
-        //try{tunnel.context.cleanup();} catch (e){console.log("Error cleaning up leptos context:",e)}
-      });
-    }
-  })
 
   return {
     addTunnel,

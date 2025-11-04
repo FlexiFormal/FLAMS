@@ -1,0 +1,67 @@
+[package]
+name = "flams-backend-types"
+version = "0.0.1"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[features]
+## for wasm target
+typescript = [
+    "ftml-ontology/typescript",
+    "ftml-ontology/wasm",
+    "dep:tsify",
+    "dep:wasm-bindgen",
+    "ftml-uris/typescript",
+    "serde"
+]
+## adds serde support
+serde = [
+    "dep:serde",
+    "dep:serde_json",
+    "ftml-ontology/serde",
+    "ftml-uris/serde",
+    "chrono/serde",
+]
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = [
+    "--cfg",
+    "docsrs",
+    "-Zunstable-options",
+    "--generate-link-to-definition",
+    "--html-in-header",
+    "doc/katex-header.html",
+    "--html-in-header",
+    "doc/docs.html",
+]
+# cargo +nightly doc --no-deps --all-features --release --open
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[dev-dependencies]
+#tracing-subscriber = { workspace = true }
+#rstest = { workspace = true }
+#criterion = { workspace = true }
+
+[dependencies]
+document-features = { workspace = true }
+
+ftml-ontology = { workspace = true }
+ftml-uris = { workspace = true }
+
+tracing = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tsify = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }

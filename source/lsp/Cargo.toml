@@ -1,21 +1,26 @@
 [package]
 name = "flams-lsp"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [lints]
 workspace = true
 
 [features]
-ws = ["dep:axum", "dep:serde_json"]
+ws = ["dep:axum"]
 
 [dependencies]
+ftml-ontology = { workspace = true }
+ftml-uris = { workspace = true, features = ["interned", "serde"] }
+
+flams-math-archives = { workspace = true }
+
 flams-system = { workspace = true, features = ["tokio", "zip"] }
 flams-ftml = { workspace = true }
-flams-ontology = { workspace = true }
 flams-utils = { workspace = true }
 flams-stex = { workspace = true }
 
+rustc-hash = { workspace = true }
 tracing = { workspace = true }
 async-lsp = { workspace = true }
 futures = { workspace = true }
@@ -25,9 +30,9 @@ tokio-util = { workspace = true }
 triomphe = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
-eyre = {workspace = true}
+eyre = { workspace = true }
+serde_json = { workspace = true }
 
 axum = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 smallvec = { workspace = true }

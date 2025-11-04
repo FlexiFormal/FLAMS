@@ -11,17 +11,17 @@ export function set_debug_log(): void;
  * [render_document] and [render_fragment] also inject a context
  * iff none already exists, so this is optional in every case.
  */
-export function ftml_setup(to: HTMLElement, children: LeptosContinuation, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementURI,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
+export function ftml_setup(to: HTMLElement, children: LeptosContinuation, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementUri,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementUri,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentUri) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
 /**
  * render an FTML document to the provided element
  * #### Errors
  */
-export function render_document(to: HTMLElement, document: DocumentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementURI,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
+export function render_document(to: HTMLElement, document: DocumentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementUri,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementUri,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentUri) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
 /**
  * render an FTML document fragment to the provided element
  * #### Errors
  */
-export function render_fragment(to: HTMLElement, fragment: FragmentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementURI,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementURI,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentURI) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
+export function render_fragment(to: HTMLElement, fragment: FragmentOptions, context?: LeptosContext | null, allow_hovers?: boolean | null, on_section_title?: (uri: DocumentElementUri,lvl:SectionLevel) => (LeptosContinuation | undefined) | null, on_fragment?: (uri: DocumentElementUri,kind:FragmentKind) => (LeptosContinuation | undefined) | null, on_inputref?: (uri: DocumentUri) => (LeptosContinuation | undefined) | null, on_problem?: (r:ProblemResponse) => void | null, problem_states?: ProblemStates | null): FTMLMountHandle;
 /**
  * sets the server url used to the provided one; by default `https://mathhub.info`.
  */
@@ -30,6 +30,73 @@ export function set_server_url(server_url: string): void;
  * gets the current server url
  */
 export function get_server_url(): string;
+/**
+ * Represents supported languages in [`DocumentUri`](crate::DocumentUri)s
+ *
+ * This enum provides a ist of supported languages, their Unicode flag representations and SVG flag icons.
+ */
+export enum Language {
+  /**
+   * English language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): en)
+   *
+   * Default language variant. Uses the United Kingdom flag representation.
+   */
+  English = 0,
+  /**
+   * German language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): de)
+   *
+   * Uses the Germany flag representation.
+   */
+  German = 1,
+  /**
+   * French language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): fr)
+   *
+   * Uses the France flag representation.
+   */
+  French = 2,
+  /**
+   * Romanian language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): ro)
+   *
+   * Uses the Romania flag representation.
+   */
+  Romanian = 3,
+  /**
+   * Arabic language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): ar)
+   *
+   * Uses the United Arab Emirates flag representation.
+   */
+  Arabic = 4,
+  /**
+   * Bulgarian language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): bg)
+   *
+   * Uses the Bulgaria flag representation.
+   */
+  Bulgarian = 5,
+  /**
+   * Russian language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): ru)
+   *
+   * Uses the Russia flag representation.
+   */
+  Russian = 6,
+  /**
+   * Finnish language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): fi)
+   *
+   * Uses the Finland flag representation.
+   */
+  Finnish = 7,
+  /**
+   * Turkish language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): tr)
+   *
+   * Uses the Turkey flag representation.
+   */
+  Turkish = 8,
+  /**
+   * Slovenian language ([ISO 639-1](https://en.wikipedia.org/wiki/ISO_639): sl)
+   *
+   * Uses the Slovenia flag representation.
+   */
+  Slovenian = 9,
+}
 /**
  * The `ReadableStreamType` enum.
  *
@@ -41,7 +108,7 @@ type ReadableStreamType = "bytes";
  */
 export type ProblemState = { type: "Interactive"; current_response?: ProblemResponse | undefined; solution?: SolutionData[] | undefined } | { type: "Finished"; current_response?: ProblemResponse | undefined } | { type: "Graded"; feedback: ProblemFeedbackJson };
 
-export type ProblemStates = Map<DocumentElementURI, ProblemState>;
+export type ProblemStates = Map<DocumentElementUri, ProblemState>;
 
 /**
  * Options for rendering an FTML document
@@ -52,7 +119,7 @@ export type ProblemStates = Map<DocumentElementURI, ProblemState>;
  *     html: the HTML String
  *     toc: if defined, will render a table of contents for the document
  */
-export type DocumentOptions = { type: "FromBackend"; uri: DocumentURI; gottos?: Gotto[] | undefined; toc: TOCOptions | undefined } | { type: "HtmlString"; html: string; gottos?: Gotto[] | undefined; toc: TOCElem[] | undefined };
+export type DocumentOptions = { type: "FromBackend"; uri: DocumentUri; gottos?: Gotto[] | undefined; toc: TOCOptions | undefined } | { type: "HtmlString"; html: string; gottos?: Gotto[] | undefined; toc: TOCElem[] | undefined };
 
 /**
  * Options for rendering an FTML document fragment
@@ -61,7 +128,7 @@ export type DocumentOptions = { type: "FromBackend"; uri: DocumentURI; gottos?: 
  * - `HtmlString`: render the provided HTML String
  *     html: the HTML String
  */
-export type FragmentOptions = { type: "FromBackend"; uri: DocumentElementURI } | { type: "HtmlString"; html: string; uri?: DocumentElementURI | undefined };
+export type FragmentOptions = { type: "FromBackend"; uri: DocumentElementUri } | { type: "HtmlString"; html: string; uri?: DocumentElementUri | undefined };
 
 /**
  * Options for rendering a table of contents
@@ -70,59 +137,7 @@ export type FragmentOptions = { type: "FromBackend"; uri: DocumentElementURI } |
  */
 export type TOCOptions = "GET" | { Predefined: TOCElem[] };
 
-export type OMDocDocumentElement = ({ type: "Slide" } & OMDocSlide) | ({ type: "Section" } & OMDocSection) | ({ type: "Module" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDocumentElement>) | { type: "DocumentReference"; uri: DocumentURI; title: string | undefined } | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "TopTerm"; uri: DocumentElementURI; term: Term } | ({ type: "SymbolDeclaration" } & SymbolURI|OMDocSymbol);
-
-export interface OMDocProblem {
-    uri: DocumentElementURI;
-    sub_problem: boolean;
-    autogradable: boolean;
-    points: number | undefined;
-    title: string | undefined;
-    preconditions: [CognitiveDimension, SymbolURI][];
-    objectives: [CognitiveDimension, SymbolURI][];
-    uses: ModuleURI[];
-    children: OMDocDocumentElement[];
-}
-
-export interface OMDocParagraph {
-    uri: DocumentElementURI;
-    kind: ParagraphKind;
-    formatting: ParagraphFormatting;
-    uses: ModuleURI[];
-    fors: ModuleURI[];
-    title: string | undefined;
-    children: OMDocDocumentElement[];
-    definition_like: boolean;
-}
-
-export interface OMDocVariable {
-    uri: DocumentElementURI;
-    arity: ArgSpec;
-    macro_name: string | undefined;
-    tp: Term | undefined;
-    df: Term | undefined;
-    is_seq: boolean;
-}
-
-export interface OMDocSlide {
-    uri: DocumentElementURI;
-    uses: ModuleURI[];
-    children: OMDocDocumentElement[];
-}
-
-export interface OMDocSection {
-    title: string | undefined;
-    uri: DocumentElementURI;
-    uses: ModuleURI[];
-    children: OMDocDocumentElement[];
-}
-
-export interface OMDocDocument {
-    uri: DocumentURI;
-    title: string | undefined;
-    uses: ModuleURI[];
-    children: OMDocDocumentElement[];
-}
+export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
 
 /**
  * An entry in a table of contents. Either:
@@ -131,25 +146,77 @@ export interface OMDocDocument {
  *    inputref itself; not the referenced Document. For the TOC,
  *    which document is inputrefed is actually irrelevant.
  */
-export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementURI; id: string; children: TOCElem[] } | { type: "SkippedSection"; children: TOCElem[] } | { type: "Inputref"; uri: DocumentURI; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: Name[]; kind: ParagraphKind } | { type: "Slide" };
+export type TOCElem = { type: "Section"; title: string | undefined; uri: DocumentElementUri; id: string; children: TOCElem[] } | { type: "SkippedSection"; children: TOCElem[] } | { type: "Inputref"; uri: DocumentUri; title: string | undefined; id: string; children: TOCElem[] } | { type: "Paragraph"; styles: UriName[]; kind: ParagraphKind } | { type: "Slide" };
 
 /**
  * A section that has been \"covered\" at the specified timestamp; will be marked accordingly
  * in the TOC.
  */
 export interface Gotto {
-    uri: DocumentElementURI;
+    uri: DocumentElementUri;
     timestamp?: Timestamp | undefined;
 }
 
-export type OMDoc = ({ type: "Slide" } & OMDocSlide) | ({ type: "Document" } & OMDocDocument) | ({ type: "Section" } & OMDocSection) | ({ type: "DocModule" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Module" } & OMDocModule<OMDocDeclaration>) | ({ type: "DocMorphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDeclaration>) | ({ type: "DocStructure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDeclaration>) | ({ type: "DocExtension" } & OMDocExtension<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDeclaration>) | ({ type: "SymbolDeclaration" } & OMDocSymbol) | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "Term"; uri: DocumentElementURI; term: Term } | { type: "DocReference"; uri: DocumentURI; title: string | undefined } | ({ type: "Other" } & string);
-
 export type LeptosContinuation = (e:HTMLDivElement,o:LeptosContext) => void;
 
-export type FragmentKind = ({ type: "Section" } & SectionLevel) | ({ type: "Paragraph" } & ParagraphKind) | { type: "Slide" } | { type: "Problem"; is_sub_problem: boolean; is_autogradable: boolean };
+export type OMDoc = ({ type: "Slide" } & OMDocSlide) | ({ type: "Document" } & OMDocDocument) | ({ type: "Section" } & OMDocSection) | ({ type: "DocModule" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Module" } & OMDocModule<OMDocDeclaration>) | ({ type: "DocMorphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDeclaration>) | ({ type: "DocStructure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDeclaration>) | ({ type: "DocExtension" } & OMDocExtension<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDeclaration>) | ({ type: "SymbolDeclaration" } & OMDocSymbol) | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "Term"; uri: DocumentElementUri; term: Term } | { type: "DocReference"; uri: DocumentUri; title: string | undefined } | ({ type: "Other" } & string);
+
+export type OMDocDocumentElement = ({ type: "Slide" } & OMDocSlide) | ({ type: "Section" } & OMDocSection) | ({ type: "Module" } & OMDocModule<OMDocDocumentElement>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDocumentElement>) | ({ type: "Structure" } & OMDocStructure<OMDocDocumentElement>) | ({ type: "Extension" } & OMDocExtension<OMDocDocumentElement>) | { type: "DocumentReference"; uri: DocumentUri; title: string | undefined } | ({ type: "Variable" } & OMDocVariable) | ({ type: "Paragraph" } & OMDocParagraph) | ({ type: "Problem" } & OMDocProblem) | { type: "TopTerm"; uri: DocumentElementUri; term: Term } | ({ type: "SymbolDeclaration" } & SymbolUri|OMDocSymbol);
+
+export interface OMDocProblem {
+    uri: DocumentElementUri;
+    sub_problem: boolean;
+    autogradable: boolean;
+    points: number | undefined;
+    title: string | undefined;
+    preconditions: [CognitiveDimension, SymbolUri][];
+    objectives: [CognitiveDimension, SymbolUri][];
+    uses: ModuleUri[];
+    children: OMDocDocumentElement[];
+}
+
+export interface OMDocParagraph {
+    uri: DocumentElementUri;
+    kind: ParagraphKind;
+    formatting: ParagraphFormatting;
+    uses: ModuleUri[];
+    fors: ModuleUri[];
+    title: string | undefined;
+    children: OMDocDocumentElement[];
+    definition_like: boolean;
+}
+
+export interface OMDocVariable {
+    uri: DocumentElementUri;
+    arity: ArgSpec;
+    macro_name: string | undefined;
+    tp: Term | undefined;
+    df: Term | undefined;
+    is_seq: boolean;
+}
+
+export interface OMDocSlide {
+    uri: DocumentElementUri;
+    uses: ModuleUri[];
+    children: OMDocDocumentElement[];
+}
+
+export interface OMDocSection {
+    title: string | undefined;
+    uri: DocumentElementUri;
+    uses: ModuleUri[];
+    children: OMDocDocumentElement[];
+}
+
+export interface OMDocDocument {
+    uri: DocumentUri;
+    title: string | undefined;
+    uses: ModuleUri[];
+    children: OMDocDocumentElement[];
+}
 
 export interface OMDocSymbol {
-    uri: SymbolURI;
+    uri: SymbolUri;
     df: Term | undefined;
     tp: Term | undefined;
     arity: ArgSpec;
@@ -160,34 +227,34 @@ export interface OMDocSymbol {
 export type OMDocDeclaration = ({ type: "Symbol" } & OMDocSymbol) | ({ type: "NestedModule" } & OMDocModule<OMDocDeclaration>) | ({ type: "Structure" } & OMDocStructure<OMDocDeclaration>) | ({ type: "Morphism" } & OMDocMorphism<OMDocDeclaration>) | ({ type: "Extension" } & OMDocExtension<OMDocDeclaration>);
 
 export interface OMDocExtension<E> {
-    uri: SymbolURI;
-    target: SymbolURI;
-    uses: ModuleURI[];
+    uri: SymbolUri;
+    target: SymbolUri;
+    uses: ModuleUri[];
     children: E[];
 }
 
 export interface OMDocStructure<E> {
-    uri: SymbolURI;
+    uri: SymbolUri;
     macro_name: string | undefined;
-    uses: ModuleURI[];
-    extends: ModuleURI[];
+    uses: ModuleUri[];
+    extends: ModuleUri[];
     children: E[];
-    extensions: [SymbolURI, OMDocSymbol[]][];
+    extensions: [SymbolUri, OMDocSymbol[]][];
 }
 
 export interface OMDocMorphism<E> {
-    uri: SymbolURI;
+    uri: SymbolUri;
     total: boolean;
-    target: ModuleURI | undefined;
-    uses: ModuleURI[];
+    target: ModuleUri | undefined;
+    uses: ModuleUri[];
     children: E[];
 }
 
 export interface OMDocModule<E> {
-    uri: ModuleURI;
-    imports: ModuleURI[];
-    uses: ModuleURI[];
-    metatheory: ModuleURI | undefined;
+    uri: ModuleUri;
+    imports: ModuleUri[];
+    uses: ModuleUri[];
+    metatheory: ModuleUri | undefined;
     signature: Language | undefined;
     children: E[];
 }
@@ -239,7 +306,7 @@ export type FillinFeedbackKind = { Exact: string } | { NumRange: { from: number 
 export type CheckedResult = { type: "SingleChoice"; selected: number | undefined; choices: BlockFeedback[] } | { type: "MultipleChoice"; selected: boolean[]; choices: BlockFeedback[] } | { type: "FillinSol"; matching: number | undefined; text: string; options: FillinFeedback[] };
 
 export interface ProblemResponse {
-    uri: DocumentElementURI;
+    uri: DocumentElementUri;
     responses: ProblemResponseType[];
 }
 
@@ -263,8 +330,8 @@ export interface Quiz {
     css: CSS[];
     title: string | undefined;
     elements: QuizElement[];
-    solutions: Map<DocumentElementURI, string>;
-    answer_classes: Map<DocumentElementURI, AnswerClass[]>;
+    solutions: Map<DocumentElementUri, string>;
+    answer_classes: Map<DocumentElementUri, AnswerClass[]>;
 }
 
 export type QuizElement = { Section: { title: string; elements: QuizElement[] } } | { Problem: QuizProblem } | { Paragraph: { html: string } };
@@ -272,17 +339,15 @@ export type QuizElement = { Section: { title: string; elements: QuizElement[] } 
 export interface QuizProblem {
     html: string;
     title_html: string | undefined;
-    uri: DocumentElementURI;
+    uri: DocumentElementUri;
     total_points: number | undefined;
-    preconditions: [CognitiveDimension, SymbolURI][];
-    objectives: [CognitiveDimension, SymbolURI][];
+    preconditions: [CognitiveDimension, SymbolUri][];
+    objectives: [CognitiveDimension, SymbolUri][];
 }
-
-export type ContentURI = string;
 
 export type Informal = { Term: number } | { Node: { tag: string; attributes: [string, string][]; children: Informal[] } } | { Text: string };
 
-export type Var = { Name: Name } | { Ref: { declaration: DocumentElementURI; is_sequence: boolean | undefined } };
+export type Var = { Name: UriName } | { Ref: { declaration: DocumentElementUri; is_sequence: boolean | undefined } };
 
 export type ArgMode = "Normal" | "Sequence" | "Binding" | "BindingSequence";
 
@@ -291,29 +356,11 @@ export interface Arg {
     mode: ArgMode;
 }
 
-export type Term = { OMID: ContentURI } | { OMV: Var } | { OMA: { head: Term; args: Arg[] } } | { Field: { record: Term; key: Name; owner: Term | undefined } } | { OML: { name: Name; df: Term | undefined; tp: Term | undefined } } | { Informal: { tag: string; attributes: [string, string][]; children: Informal[]; terms: Term[] } };
-
-export type ModuleURI = string;
-
-export type SymbolURI = string;
-
-export type DocumentElementURI = string;
-
-export type DocumentURI = string;
-
-export type URI = string;
-
-export type ArgSpec = ArgMode[];
-
-export type ArchiveId = string;
-
-export type Language = "en" | "de" | "fr" | "ro" | "ar" | "bg" | "ru" | "fi" | "tr" | "sl";
-
-export type Name = string;
+export type Term = { OMID: DomainUri } | { OMV: Var } | { OMA: { head: Term; args: Arg[] } } | { Field: { record: Term; key: UriName; owner: Term | undefined } } | { OML: { name: UriName; df: Term | undefined; tp: Term | undefined } } | { Informal: { tag: string; attributes: [string, string][]; children: Informal[]; terms: Term[] } };
 
 export type SearchResultKind = "Document" | "Paragraph" | "Definition" | "Example" | "Assertion" | "Problem";
 
-export type SearchResult = { Document: DocumentURI } | { Paragraph: { uri: DocumentElementURI; fors: SymbolURI[]; def_like: boolean; kind: SearchResultKind } };
+export type SearchResult = { Document: DocumentUri } | { Paragraph: { uri: DocumentElementUri; fors: SymbolUri[]; def_like: boolean; kind: SearchResultKind } };
 
 export interface QueryFilter {
     allow_documents?: boolean;
@@ -325,11 +372,26 @@ export interface QueryFilter {
     definition_like_only?: boolean;
 }
 
-export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
-
 export type SectionLevel = "Part" | "Chapter" | "Section" | "Subsection" | "Subsubsection" | "Paragraph" | "Subparagraph";
 
-export type SlideElement = { type: "Slide"; html: string; uri: DocumentElementURI } | { type: "Paragraph"; html: string; uri: DocumentElementURI } | { type: "Inputref"; uri: DocumentURI } | { type: "Section"; uri: DocumentElementURI; title: string | undefined; children: SlideElement[] };
+export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
+
+export type ParagraphFormatting = "Block" | "Inline" | "Collapsed";
+
+export interface FileStateSummary {
+    new: number;
+    stale: number;
+    deleted: number;
+    up_to_date: number;
+    last_built: Timestamp;
+    last_changed: Timestamp;
+}
+
+export type LOKind = { type: "Definition" } | { type: "Example" } | ({ type: "Problem" } & CognitiveDimension) | ({ type: "SubProblem" } & CognitiveDimension);
+
+export type ArgSpec = ArgMode[];
+
+export type SlideElement = { type: "Slide"; html: string; uri: DocumentElementUri } | { type: "Paragraph"; html: string; uri: DocumentElementUri } | { type: "Inputref"; uri: DocumentUri } | { type: "Section"; uri: DocumentElementUri; title: string | undefined; children: SlideElement[] };
 
 export interface DocumentRange {
     start: number;
@@ -364,22 +426,41 @@ export interface Instance {
     leadTAs?: string[] | undefined;
 }
 
-export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string; teaser?: string | undefined; thumbnail?: string | undefined } | { type: "book"; title: string; authors: string[]; file: DocumentURI; teaser?: string | undefined; thumbnail?: string | undefined } | { type: "paper"; title: string; authors: string[]; file: DocumentURI; thumbnail?: string | undefined; teaser?: string | undefined; venue?: string | undefined; venue_url?: string | undefined } | { type: "course"; title: string; landing: DocumentURI; acronym: string | undefined; instructors: string[]; institution: string; instances: Instance[]; notes: DocumentURI; slides?: DocumentURI | undefined; thumbnail?: string | undefined; quizzes?: boolean; homeworks?: boolean; teaser?: string | undefined } | { type: "self-study"; title: string; landing: DocumentURI; notes: DocumentURI; acronym?: string | undefined; slides?: DocumentURI | undefined; thumbnail?: string | undefined; teaser?: string | undefined };
+export type ArchiveIndex = { type: "library"; archive: ArchiveId; title: string; teaser?: string | undefined; thumbnail?: string | undefined } | { type: "book"; title: string; authors: string[]; file: DocumentUri; teaser?: string | undefined; thumbnail?: string | undefined } | { type: "paper"; title: string; authors: string[]; file: DocumentUri; thumbnail?: string | undefined; teaser?: string | undefined; venue?: string | undefined; venue_url?: string | undefined } | { type: "course"; title: string; landing: DocumentUri; acronym: string | undefined; instructors: string[]; institution: string; instances: Instance[]; notes: DocumentUri; slides?: DocumentUri | undefined; thumbnail?: string | undefined; quizzes?: boolean; homeworks?: boolean; teaser?: string | undefined } | { type: "self-study"; title: string; landing: DocumentUri; notes: DocumentUri; acronym?: string | undefined; slides?: DocumentUri | undefined; thumbnail?: string | undefined; teaser?: string | undefined };
 
 export type Institution = { type: "university"; title: string; place: string; country: string; url: string; acronym: string; logo: string } | { type: "school"; title: string; place: string; country: string; url: string; acronym: string; logo: string };
 
-export type ParagraphKind = "Definition" | "Assertion" | "Paragraph" | "Proof" | "SubProof" | "Example";
+export type ArchiveId = string;
 
-export type ParagraphFormatting = "Block" | "Inline" | "Collapsed";
+export type ArchiveUri = string;
 
-export interface FileStateSummary {
-    new: number;
-    stale: number;
-    deleted: number;
-    up_to_date: number;
-    last_built: Timestamp;
-    last_changed: Timestamp;
-}
+export type SimpleUriName = string;
+
+export type DocumentUri = string;
+
+export type Uri = string;
+
+export type DomainUri = string;
+
+export type NarrativeUri = string;
+
+export type LeafUri = string;
+
+export type UriName = string;
+
+export type ModuleUri = string;
+
+export type DocumentElementUri = string;
+
+export type BaseUri = string;
+
+export type UriPath = string;
+
+export type PathUri = string;
+
+export type SymbolUri = string;
+
+export type Id = string;
 
 export type Timestamp = number;
 
@@ -461,10 +542,10 @@ export interface InitOutput {
   readonly __wbg_ftmlmounthandle_free: (a: number, b: number) => void;
   readonly ftmlmounthandle_unmount: (a: number, b: number) => void;
   readonly set_server_url: (a: number, b: number) => void;
-  readonly get_server_url: (a: number) => void;
   readonly __wbg_leptoscontext_free: (a: number, b: number) => void;
   readonly leptoscontext_cleanup: (a: number, b: number) => void;
   readonly leptoscontext_wasm_clone: (a: number) => number;
+  readonly get_server_url: (a: number) => void;
   readonly __wbg_intounderlyingbytesource_free: (a: number, b: number) => void;
   readonly intounderlyingbytesource_type: (a: number) => number;
   readonly intounderlyingbytesource_autoAllocateChunkSize: (a: number) => number;

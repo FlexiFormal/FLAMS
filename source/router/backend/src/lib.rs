@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-use flams_ontology::file_states::FileStateSummary;
+use flams_backend_types::archives::FileStateSummary;
 use flams_utils::vecmap::VecMap;
 
 #[cfg(any(
@@ -18,8 +18,8 @@ pub mod server_fns;
 pub struct FileStates(VecMap<String, FileStateSummary>);
 
 #[cfg(feature = "ssr")]
-impl From<flams_system::backend::archives::source_files::FileStates> for FileStates {
-    fn from(value: flams_system::backend::archives::source_files::FileStates) -> Self {
+impl From<flams_math_archives::source_files::FileStates> for FileStates {
+    fn from(value: flams_math_archives::source_files::FileStates) -> Self {
         Self(
             value
                 .formats
@@ -33,19 +33,19 @@ impl From<flams_system::backend::archives::source_files::FileStates> for FileSta
 #[cfg(feature = "ssr")]
 impl
     From<
-        &VecMap<
-            flams_system::formats::BuildTargetId,
-            flams_system::backend::archives::source_files::FileState,
-        >,
+        &[(
+            flams_math_archives::formats::BuildTargetId,
+            flams_math_archives::source_files::FileState,
+        )],
     > for FileStates
 {
     fn from(
-        value: &VecMap<
-            flams_system::formats::BuildTargetId,
-            flams_system::backend::archives::source_files::FileState,
-        >,
+        value: &[(
+            flams_math_archives::formats::BuildTargetId,
+            flams_math_archives::source_files::FileState,
+        )],
     ) -> Self {
-        use flams_system::backend::archives::source_files::FileState;
+        use flams_math_archives::source_files::FileState;
         Self(
             value
                 .iter()

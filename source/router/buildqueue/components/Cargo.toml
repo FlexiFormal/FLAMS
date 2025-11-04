@@ -11,6 +11,7 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "thaw/ssr",
+    "ftml-dom/ssr",
     "flams-router-base/ssr",
     "flams-router-buildqueue-base/ssr",
     "flams-router-git-base/ssr",
@@ -21,6 +22,7 @@ ssr = [
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
+    "ftml-dom/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
     "flams-router-buildqueue-base/hydrate",
@@ -29,10 +31,15 @@ hydrate = [
 docs-only = []
 
 [dependencies]
+ftml-uris = { workspace = true, features = ["serde"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-dom = { workspace = true }
+
+flams-backend-types = { workspace = true }
+
 flams-utils = { workspace = true }
 flams-git = { workspace = true }
 flams-web-utils = { workspace = true }
-flams-ontology = { workspace = true, features = ["serde"] }
 flams-router-base = { workspace = true }
 flams-router-buildqueue-base = { workspace = true }
 flams-router-git-base = { workspace = true }

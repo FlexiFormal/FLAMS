@@ -17,9 +17,11 @@ rstest = { workspace = true }
 workspace = true
 
 [dependencies]
+ftml-uris = { workspace = true, features = ["serde", "tantivy"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
+
 flams-utils = { workspace = true, features = ["serde", "tokio"] }
-flams-ontology = { workspace = true, features = ["serde", "tantivy"] }
-flams-system = { workspace = true, features = ["tantivy"] }
+flams-system = { workspace = true }
 flams-lsp = { workspace = true, features = ["ws"] }
 flams-stex = { workspace = true }
 flams-ftml = { workspace = true }

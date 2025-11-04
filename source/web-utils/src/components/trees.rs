@@ -1,5 +1,6 @@
 #![allow(clippy::must_use_candidate)]
-use crate::inject_css;
+
+use ftml_dom::utils::css::inject_css;
 use leptos::prelude::*;
 
 #[component]

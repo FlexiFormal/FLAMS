@@ -4,19 +4,25 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-flams-ontology = { workspace = true, features = ["serde"] }
+ftml-uris = { workspace = true, features = ["serde"] }
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-parser = { workspace = true, features = ["rdf"] }
+ftml5ever = { workspace = true }
+
 flams-system = { workspace = true }
 flams-utils = { workspace = true }
-ftml-extraction = { workspace = true, features = ["rdf", "full"] }
+
+flams-math-archives = { workspace = true }
 
 either = { workspace = true }
-html5ever = { workspace = true }
-lazy_static = { workspace = true }
+#html5ever = { workspace = true }
+#lazy_static = { workspace = true }
 serde = { workspace = true }
-bincode = { workspace = true }
+# bincode = { workspace = true }
 tex_engine = { workspace = true }
 phf = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

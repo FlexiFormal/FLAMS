@@ -1,6 +1,6 @@
 use super::GitLab;
-use flams_ontology::uris::ArchiveId;
 use flams_utils::unwrap;
+use ftml_uris::ArchiveId;
 use gitlab::api::AsyncQuery;
 pub use oauth2::AccessToken;
 use oauth2::{url::Url, TokenResponse};
@@ -51,7 +51,10 @@ impl GitLabOAuth {
     }
 
     /// #### Errors
-    pub async fn get_projects(&self, token: String) -> Result<Vec<crate::Project>, super::Err> {
+    pub async fn get_projects(
+        &self,
+        token: String,
+    ) -> Result<Vec<flams_backend_types::git::Project>, super::Err> {
         self.get_projects_i(token)
             .instrument(crate::REMOTE_SPAN.clone())
             .await
@@ -62,7 +65,10 @@ impl GitLabOAuth {
         name = "getting all projects for user",
         skip_all
     )]
-    async fn get_projects_i(&self, token: String) -> Result<Vec<crate::Project>, super::Err> {
+    async fn get_projects_i(
+        &self,
+        token: String,
+    ) -> Result<Vec<flams_backend_types::git::Project>, super::Err> {
         let mut client = gitlab::ImpersonationClient::new(&self.1 .0.inner, token);
         client.oauth2_token();
         let r = gitlab::api::projects::Projects::builder()
@@ -71,9 +77,10 @@ impl GitLabOAuth {
             //.membership(false)
             .build()
             .unwrap_or_else(|_| unreachable!());
-        let r: Vec<crate::Project> = gitlab::api::paged(r, gitlab::api::Pagination::All)
-            .query_async(&client)
-            .await?;
+        let r: Vec<flams_backend_types::git::Project> =
+            gitlab::api::paged(r, gitlab::api::Pagination::All)
+                .query_async(&client)
+                .await?;
         let mut vs = self.1 .0.projects.lock();
         for p in &r {
             if !vs.contains(&p.id) {
@@ -98,6 +105,8 @@ impl GitLabOAuth {
             .instrument(crate::REMOTE_SPAN.clone())
             .await
     }
+
+    /// # Errors
     #[instrument(
         level = "debug",
         target = "git",
@@ -137,9 +146,11 @@ impl GitLabOAuth {
             .recursive(false)
             .build()
             .unwrap_or_else(|_| unreachable!());
-        let r: Vec<crate::TreeEntry> = r.query_async(&client).await?;
+        let r: Vec<flams_backend_types::git::TreeEntry> = r.query_async(&client).await?;
         let Some(p) = r.into_iter().find_map(|e| {
-            if e.path.eq_ignore_ascii_case("meta-inf") && matches!(e.kind, crate::DirOrFile::Dir) {
+            if e.path.eq_ignore_ascii_case("meta-inf")
+                && matches!(e.tp, flams_backend_types::git::DirOrFile::Dir)
+            {
                 Some(e.path)
             } else {
                 None
@@ -155,10 +166,10 @@ impl GitLabOAuth {
             .recursive(false)
             .build()
             .unwrap_or_else(|_| unreachable!());
-        let r: Vec<crate::TreeEntry> = r.query_async(&client).await?;
+        let r: Vec<flams_backend_types::git::TreeEntry> = r.query_async(&client).await?;
         let Some(p) = r.into_iter().find_map(|e| {
             if e.name.eq_ignore_ascii_case("manifest.mf")
-                && matches!(e.kind, crate::DirOrFile::File)
+                && matches!(e.tp, flams_backend_types::git::DirOrFile::File)
             {
                 Some(e.path)
             } else {
@@ -179,7 +190,7 @@ impl GitLabOAuth {
         let r = r.split('\n').find_map(|line| {
             let line = line.trim();
             line.strip_prefix("id:")
-                .map(|rest| ArchiveId::new(rest.trim()))
+                .and_then(|rest| ArchiveId::new(rest.trim()).ok())
         });
         ret!(r)
     }
@@ -189,11 +200,13 @@ impl GitLabOAuth {
         &self,
         id: u64,
         token: String,
-    ) -> Result<Vec<crate::Branch>, super::Err> {
+    ) -> Result<Vec<flams_backend_types::git::Branch>, super::Err> {
         self.get_branches_i(id, token)
             .instrument(crate::REMOTE_SPAN.clone())
             .await
     }
+
+    /// # Errors
     #[instrument(
         level = "debug",
         target = "git",
@@ -204,13 +217,13 @@ impl GitLabOAuth {
         &self,
         id: u64,
         token: String,
-    ) -> Result<Vec<crate::Branch>, super::Err> {
+    ) -> Result<Vec<flams_backend_types::git::Branch>, super::Err> {
         let mut client = gitlab::ImpersonationClient::new(&self.1 .0.inner, token);
         client.oauth2_token();
         let r = gitlab::api::projects::repository::branches::Branches::builder()
             .project(id)
             .build()
-            .unwrap_or_else(|_| unreachable!())
+            .map_err(|e| super::Err::Other(e.to_string()))?
             .query_async(&client)
             .await?;
         Ok(r)

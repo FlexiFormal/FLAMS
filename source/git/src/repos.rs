@@ -21,19 +21,23 @@ impl From<git2::Repository> for GitRepo {
         Self(r)
     }
 }
-impl From<git2::Commit<'_>> for super::Commit {
-    #[allow(clippy::cast_lossless)]
-    fn from(commit: git2::Commit) -> Self {
+
+pub trait CommitExt {
+    fn into_commit(self) -> flams_backend_types::git::Commit;
+}
+impl CommitExt for git2::Commit<'_> {
+    fn into_commit(self) -> flams_backend_types::git::Commit {
+        let commit = self;
         let time = commit.time();
         let author_name = commit
             .author()
             .name()
             .map(ToString::to_string)
             .unwrap_or_default();
-        Self {
+        flams_backend_types::git::Commit {
             id: commit.id().to_string(),
             created_at: chrono::DateTime::from_timestamp(
-                time.seconds() + (time.offset_minutes() as i64 * 60),
+                time.seconds() + (i64::from(time.offset_minutes()) * 60),
                 0,
             )
             .unwrap_or_else(|| unreachable!()),
@@ -223,7 +227,7 @@ impl GitRepo {
     pub fn get_new_commits_with_oauth(
         &self,
         token: &str,
-    ) -> Result<Vec<(String, super::Commit)>, git2::Error> {
+    ) -> Result<Vec<(String, flams_backend_types::git::Commit)>, git2::Error> {
         self.get_new_commits("oauth2", token)
     }
 
@@ -293,7 +297,7 @@ impl GitRepo {
         &self,
         user: &str,
         password: &str,
-    ) -> Result<Vec<(String, super::Commit)>, git2::Error> {
+    ) -> Result<Vec<(String, flams_backend_types::git::Commit)>, git2::Error> {
         in_git!(("get new commits",path=%self.0.path().display()); {
           let mut remote = self.0.find_remote("origin")?;
           let mut cbs = git2::RemoteCallbacks::new();
@@ -329,7 +333,7 @@ impl GitRepo {
               if id == head_id {found = true;false} else {true}
             );
             if found {
-              new_commits.push((branch_name.to_string(),tip_commit.into()));
+              new_commits.push((branch_name.to_string(),tip_commit.into_commit()));
             }
           }
           Ok(new_commits)
@@ -373,32 +377,41 @@ impl GitRepo {
      */
 
     /// #### Errors
-    pub fn current_commit(&self) -> Result<super::Commit, git2::Error> {
+    pub fn current_commit(&self) -> Result<flams_backend_types::git::Commit, git2::Error> {
         let commit = self.0.head()?.peel_to_commit()?;
-        Ok(commit.into())
+        Ok(commit.into_commit())
     }
 
     /// #### Errors
-    pub fn current_commit_on(&self, branch: &str) -> Result<super::Commit, git2::Error> {
+    pub fn current_commit_on(
+        &self,
+        branch: &str,
+    ) -> Result<flams_backend_types::git::Commit, git2::Error> {
         let commit = self
             .0
             .find_branch(branch, git2::BranchType::Local)?
             .get()
             .peel_to_commit()?;
-        Ok(commit.into())
+        Ok(commit.into_commit())
     }
     /// #### Errors
-    pub fn current_remote_commit_on(&self, branch: &str) -> Result<super::Commit, git2::Error> {
+    pub fn current_remote_commit_on(
+        &self,
+        branch: &str,
+    ) -> Result<flams_backend_types::git::Commit, git2::Error> {
         let commit = self
             .0
             .find_branch(&format!("origin/{branch}"), git2::BranchType::Remote)?
             .get()
             .peel_to_commit()?;
-        Ok(commit.into())
+        Ok(commit.into_commit())
     }
 
     /// #### Errors
-    pub fn commit_all(&self, message: &str) -> Result<super::Commit, git2::Error> {
+    pub fn commit_all(
+        &self,
+        message: &str,
+    ) -> Result<flams_backend_types::git::Commit, git2::Error> {
         in_git!(("commit all",path=%self.0.path().display(),commit_message=message); {
           let mut index = self.0.index()?;
           //let managed = self.get_managed()?;
@@ -415,7 +428,7 @@ impl GitRepo {
           /*if let Some(mg) = managed {
             self.add_note(&mg)?
           }*/
-          Ok(commit.into())
+          Ok(commit.into_commit())
         })
     }
 
@@ -486,7 +499,7 @@ impl GitRepo {
               index.add(&e)?;
             }
             index.write()?;
-          } {
+          } else {
               tracing::debug!("No conflicts");
           }
 

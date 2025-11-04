@@ -1,7 +1,7 @@
 [package]
 name = "flams"
 version = "0.0.2"
-edition = "2021"
+edition = "2024"
 description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 
 [lib]
@@ -20,9 +20,12 @@ name = "flams"
 [features]
 docs = []
 ssr = [
+    "ftml-uris/leptos",
+    "dep:flams-search",
     "dep:flams-system",
     "dep:flams-stex",
     "dep:flams-ftml",
+    "dep:flams-math-archives",
     "dep:tokio",
     "dep:toml",
     "dep:color-eyre",
@@ -45,9 +48,8 @@ ssr = [
     "dep:argon2",
     "dep:http",
     "flams-web-utils/ssr",
-    "ftml-viewer-components/ssr",
+    "ftml-components/ssr",
     "dep:flams-lsp",
-    "dep:tracing-subscriber",
     "dep:tokio-util",
     "dep:rayon",
     "dep:tex_engine",
@@ -60,18 +62,22 @@ ssr = [
     "flams-git/gitlab",
     "flams-git/git2",
     "flams-router-dashboard/ssr",
+    "flams-router-base/ssr",
 ]
 hydrate = [
     "dep:console_error_panic_hook",
     "leptos/hydrate",
     "thaw/hydrate",
     "dep:wasm-bindgen",
-    "tracing/release_max_level_info",
+    "tracing/release_max_level_warn",
     "dep:tracing-wasm",
     "flams-web-utils/hydrate",
     "leptos-posthoc/hydrate",
-    "ftml-viewer-components/hydrate",
+    "ftml-components/hydrate",
     "flams-router-dashboard/hydrate",
+    "flams-router-base/hydrate",
+    "ftml-ontology/wasm",
+    "dep:dateparser"
 ]
 
 [dev-dependencies]
@@ -82,18 +88,25 @@ hydrate = [
 workspace = true
 
 [dependencies]
+ftml-uris = { workspace = true }
+ftml-ontology = { workspace = true, features = ["serde"] }
+ftml-components = { workspace = true }
+
+
 flams-router-dashboard = { workspace = true }
 flams-router-base = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-utils = { workspace = true, features = ["serde"] }
-flams-ontology = { workspace = true, features = ["serde"] }
-ftml-viewer-components = { workspace = true, features = ["omdoc"] }
+#flams-ontology = { workspace = true, features = ["serde"] }
+#ftml-viewer-components = { workspace = true, features = ["omdoc"] }
 flams-git = { workspace = true }
 flams-system = { workspace = true, features = [
     "zip",
     "gitlab",
-    "tantivy",
+    #"rocksdb"
 ], optional = true }
+flams-search = { workspace = true, optional = true }
+flams-math-archives = { workspace = true, optional = true,features=["deepsize"] }
 flams-lsp = { workspace = true, optional = true, features = ["ws"] }
 flams-stex = { workspace = true, optional = true }
 flams-ftml = { workspace = true, optional = true }
@@ -107,6 +120,7 @@ thaw = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 icondata_bi = { workspace = true }
 icondata_ai = { workspace = true }
 either = { workspace = true }
@@ -149,7 +163,6 @@ password-hash = { workspace = true, optional = true }
 argon2 = { workspace = true, optional = true }
 
 tokio-util = { workspace = true, optional = true }
-tracing-subscriber = { workspace = true, optional = true }
 
 image = { workspace = true, optional = true }
 webp = { workspace = true, optional = true }
@@ -159,6 +172,7 @@ dashmap = { workspace = true, optional = true }
 console_error_panic_hook = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 tracing-wasm = { workspace = true, optional = true }
+dateparser = {workspace = true,optional = true,features=["wasm"]}
 
 ahash = { workspace = true }
 

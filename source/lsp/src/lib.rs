@@ -12,21 +12,19 @@ use std::{collections::hash_map::Entry, path::Path};
 
 pub use async_lsp;
 use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
-use flams_ontology::uris::{ArchiveId, BaseURI, DocumentURI};
+use flams_math_archives::backend::AnyBackend;
 use flams_stex::quickparse::stex::{
     structs::{GetModuleError, ModuleReference, STeXModuleStore},
     STeXParseData,
 };
-use flams_system::{
-    backend::{AnyBackend, GlobalBackend},
-    settings::Settings,
-};
+use flams_system::settings::Settings;
 use flams_utils::{
     background,
     prelude::HMap,
     sourcerefs::{LSPLineCol, SourceRange},
     unwrap,
 };
+use ftml_uris::{ArchiveId, BaseUri, DocumentUri};
 use state::{DocData, LSPState, UrlOrFile};
 
 static GLOBAL_STATE: std::sync::OnceLock<LSPState> = std::sync::OnceLock::new();
@@ -171,7 +169,7 @@ impl lsp::notification::Notification for InstallArchives {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct NewArchiveParams {
     pub archive: ArchiveId,
-    pub urlbase: BaseURI,
+    pub urlbase: BaseUri,
 }
 struct NewArchive;
 impl lsp::notification::Notification for NewArchive {
@@ -188,6 +186,12 @@ pub struct StandaloneExportParams {
 impl lsp::notification::Notification for StandaloneExport {
     type Params = StandaloneExportParams;
     const METHOD: &str = "flams/standaloneExport";
+}
+
+pub(crate) struct HtmlExport;
+impl lsp::notification::Notification for HtmlExport {
+    type Params = StandaloneExportParams;
+    const METHOD: &str = "flams/htmlExport";
 }
 
 struct UpdateMathHub;
@@ -260,13 +264,13 @@ impl lsp::notification::Notification for ServerURL {
 }
 
 pub trait ClientExt {
-    fn html_result(&self, uri: &DocumentURI);
+    fn html_result(&self, uri: &DocumentUri);
     fn update_mathhub(&self);
     fn open_file(&self, path: &Path);
 }
 impl ClientExt for ClientSocket {
     #[inline]
-    fn html_result(&self, uri: &DocumentURI) {
+    fn html_result(&self, uri: &DocumentUri) {
         let _ = self.notify::<HTMLResult>(uri.to_string());
     }
     #[inline]
@@ -320,6 +324,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 
         r.notification::<Reload>(Self::reload);
         r.notification::<StandaloneExport>(Self::export_standalone);
+        r.notification::<HtmlExport>(Self::export_html);
         r.notification::<InstallArchives>(Self::install);
         r.notification::<NewArchive>(Self::new_archive);
         //r.request(handler)
@@ -342,7 +347,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 
 pub struct LSPStore<'a, const FULL: bool> {
     pub(crate) map: &'a mut HMap<UrlOrFile, DocData>,
-    cycles: Vec<DocumentURI>,
+    cycles: Vec<DocumentUri>,
 }
 impl<'a, const FULL: bool> LSPStore<'a, FULL> {
     #[inline]
@@ -353,20 +358,14 @@ impl<'a, const FULL: bool> LSPStore<'a, FULL> {
         }
     }
 
-    pub fn load(&mut self, p: &Path, uri: &DocumentURI) -> Option<STeXParseData> {
+    pub fn load(&mut self, p: &Path, uri: &DocumentUri) -> Option<STeXParseData> {
         let text = std::fs::read_to_string(p).ok()?;
-        let r = flams_stex::quickparse::stex::quickparse(
-            uri,
-            &text,
-            p,
-            &AnyBackend::Global(GlobalBackend::get()),
-            self,
-        )
-        .lock();
+        let r = flams_stex::quickparse::stex::quickparse(uri, &text, p, &AnyBackend::Global, self)
+            .lock();
         Some(r)
     }
 
-    fn load_as_false(&mut self, p: &Path, uri: &DocumentURI) -> Option<STeXParseData> {
+    fn load_as_false(&mut self, p: &Path, uri: &DocumentUri) -> Option<STeXParseData> {
         if !FULL {
             self.load(p, uri)
         } else {
@@ -379,7 +378,7 @@ impl<'a, const FULL: bool> LSPStore<'a, FULL> {
     }
 }
 
-impl<'a, const FULL: bool> STeXModuleStore for &mut LSPStore<'a, FULL> {
+impl<const FULL: bool> STeXModuleStore for &mut LSPStore<'_, FULL> {
     const FULL: bool = FULL;
     fn get_module(
         &mut self,

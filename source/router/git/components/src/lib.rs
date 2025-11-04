@@ -1,5 +1,6 @@
 #![recursion_limit = "256"]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![allow(clippy::must_use_candidate)]
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
@@ -7,7 +8,6 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
-use flams_ontology::uris::ArchiveId;
 use flams_router_buildqueue_base::select_queue;
 use flams_router_git_base::{
     GitState,
@@ -15,6 +15,7 @@ use flams_router_git_base::{
 };
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::{Spinner, display_error};
+use ftml_uris::ArchiveId;
 use leptos::{
     either::{Either, EitherOf4},
     prelude::*,
@@ -67,7 +68,9 @@ struct ProjectGroup {
 }
 
 impl ProjectTree {
-    fn add(&mut self, repo: flams_git::Project, id: ArchiveId, state: GitState) {
+    #[allow(clippy::redundant_else)]
+    #[allow(clippy::needless_pass_by_value)]
+    fn add(&mut self, repo: flams_backend_types::git::Project, id: ArchiveId, state: GitState) {
         let mut steps = id.steps().enumerate().peekable();
         let mut current = self;
         while let Some((i, step)) = steps.next() {
@@ -80,7 +83,7 @@ impl ProjectTree {
                                 url: repo.url,
                                 id: repo.id,
                                 path: repo.path,
-                                name: id,
+                                name: id.clone(),
                                 default_branch: repo.default_branch,
                                 state: RwSignal::new(state),
                             }),
@@ -117,7 +120,7 @@ impl ProjectTree {
                         };
                         current = &mut e.children;
                     } else {
-                        insert!(j)
+                        insert!(j);
                     }
                 }
             }
@@ -125,18 +128,11 @@ impl ProjectTree {
     }
 }
 
-fn do_projects(vec: Vec<(flams_git::Project, ArchiveId, GitState)>) -> impl IntoView {
+fn do_projects(
+    vec: Vec<(flams_backend_types::git::Project, ArchiveId, GitState)>,
+) -> impl IntoView {
     use flams_web_utils::components::{Header, Leaf, Subtree, Tree};
     use thaw::Caption1Strong;
-
-    let queue = RwSignal::new(None);
-    let get_queues = RwSignal::new(());
-    provide_context(QueueSignal(queue, get_queues));
-
-    let mut tree = ProjectTree::default();
-    for (p, id, state) in vec {
-        tree.add(p, id, state);
-    }
     fn inner_tree(tree: ProjectTree) -> impl IntoView {
         tree.children.into_iter().map(|c| match c {
         Either::Left(project) => Either::Left(view!{<Leaf><div>{move || project.state.with(|state| {
@@ -155,6 +151,16 @@ fn do_projects(vec: Vec<(flams_git::Project, ArchiveId, GitState)>) -> impl Into
       }
     }).collect_view()
     }
+
+    let queue = RwSignal::new(None);
+    let get_queues = RwSignal::new(());
+    provide_context(QueueSignal(queue, get_queues));
+
+    let mut tree = ProjectTree::default();
+    for (p, id, state) in vec {
+        tree.add(p, id, state);
+    }
+
     view! {
       <Caption1Strong>"Archives on GitLab"</Caption1Strong>
       {move || {get_queues.get(); select_queue(queue)}}
@@ -162,6 +168,7 @@ fn do_projects(vec: Vec<(flams_git::Project, ArchiveId, GitState)>) -> impl Into
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn managed(
     name: ArchiveId,
     _id: u64,
@@ -188,7 +195,7 @@ fn managed(
             if let Some(branch) = default_branch {
                 if let Some(main) = updates.iter().position(|(b, _)| b == &branch) {
                     let main = updates.remove(main);
-                    updates.insert(0, main)
+                    updates.insert(0, main);
                 }
             }
             let first = updates
@@ -197,13 +204,13 @@ fn managed(
                 .unwrap_or_default();
             let branch = RwSignal::new(first.clone());
             let _ = Effect::new(move || {
-                if branch.with(|s| s.is_empty()) {
+                if branch.with(String::is_empty) {
                     branch.set(first.clone());
                 }
             });
             let QueueSignal(queue, get_queues) = expect_context();
             let commit_map: VecMap<_, _> = updates.clone().into();
-            let namecl = name.clone();
+            let namecl = name;
             let (act, v) = flams_web_utils::components::waiting_message_action(
                 move |()| {
                     update_from_branch(
@@ -245,7 +252,7 @@ fn managed(
               </div>
             }
         }),
-        _ => unreachable!(),
+        GitState::None => unreachable!(),
     }
 }
 
@@ -281,7 +288,7 @@ fn unmanaged(
           Some(Ok((branches,has_release))) => leptos::either::EitherOf3::A({
             let first = branches.first().map(|f| f.name.clone()).unwrap_or_default();
             let branch = RwSignal::new(first.clone());
-            let _ = Effect::new(move || if branch.with(|s| s.is_empty()) {
+            let _ = Effect::new(move || if branch.with(String::is_empty) {
               branch.set(first.clone());
             });
             let QueueSignal(queue,get_queues) = expect_context();

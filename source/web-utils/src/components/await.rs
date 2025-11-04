@@ -63,7 +63,7 @@ pub fn wait_and_then_fn<E, Fut, F, T, V: IntoView + 'static>(
     r: impl Fn(T) -> V + 'static + Send,
 ) -> impl IntoView
 where
-    Fut: Future<Output = Result<T, ServerFnError<E>>> + Send + 'static,
+    Fut: Future<Output = Result<T, E>> + Send + 'static,
     F: Fn() -> Fut + 'static + Send + Sync,
     T: Send + Sync + Clone + 'static + serde::Serialize + for<'de> serde::Deserialize<'de>,
     E: std::fmt::Display
@@ -72,6 +72,7 @@ where
         + for<'de> serde::Deserialize<'de>
         + Send
         + Sync
+        + FromServerFnError
         + 'static,
 {
     let res = Resource::new(|| (), move |()| f());

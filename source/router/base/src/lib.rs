@@ -8,16 +8,15 @@
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
 mod login_state;
+use ftml_uris::FtmlUri;
 pub use login_state::*;
+#[cfg(feature = "ssr")]
 pub mod uris;
 pub mod ws;
 
 use leptos::{either::EitherOf3, prelude::*};
 
-pub fn vscode_link(
-    archive: &flams_ontology::uris::ArchiveId,
-    rel_path: &str,
-) -> impl IntoView + use<> {
+pub fn vscode_link(archive: &ftml_uris::ArchiveId, rel_path: &str) -> impl IntoView + use<> {
     let href = format!("vscode://kwarc.flams/open?a={archive}&rp={rel_path}");
     view! {
         <a href=href><thaw::Icon icon=icondata_tb::TbBrandVscodeOutline/></a>
@@ -68,6 +67,7 @@ pub trait ServerFnExt {
     #[allow(async_fn_in_trait)]
     async fn call_remote(self, url: String) -> Result<Self::Output, Self::Error>;
 }
+
 /*
 #[cfg(feature = "hydrate")]
 mod hydrate {
@@ -227,28 +227,20 @@ mod hydrate {
 
     impl<
         In: Encoding,
-        Err: server_fn::serde::Serialize
-            + server_fn::serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone
-            + Send
-            + Sync
-            + std::fmt::Display
-            + std::str::FromStr
-            + 'static,
+        Err: Send + Sync + FromServerFnError,
         F: leptos::server_fn::ServerFn<
                 Client = leptos::server_fn::client::browser::BrowserClient,
                 Server = leptos::server_fn::mock::BrowserMockServer,
                 Protocol = leptos::server_fn::Http<In, server_fn::codec::Json>,
-                Error = ServerFnError<Err>,
-                InputStreamError = ServerFnError<Err>,
-                OutputStreamError = ServerFnError<Err>,
-            > + FromReq<In, BrowserMockReq, ServerFnError<Err>>,
-    > FromReq<EncodingWrap<In>, BrowserMockReq, ServerFnError<Err>> for Paired<In, F>
+                Error = Err,
+                InputStreamError = Err,
+                OutputStreamError = Err,
+            > + FromReq<In, BrowserMockReq, Err>,
+    > FromReq<EncodingWrap<In>, BrowserMockReq, Err> for Paired<In, F>
     {
-        async fn from_req(req: BrowserMockReq) -> Result<Self, ServerFnError<Err>> {
+        async fn from_req(req: BrowserMockReq) -> Result<Self, Err> {
             Ok(Self {
-                sfn: <F as FromReq<In, BrowserMockReq, ServerFnError<Err>>>::from_req(req).await?,
+                sfn: <F as FromReq<In, BrowserMockReq, Err>>::from_req(req).await?,
                 url: String::new(),
             })
         }
@@ -256,30 +248,18 @@ mod hydrate {
 
     impl<
         In: Encoding,
-        Err: server_fn::serde::Serialize
-            + server_fn::serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone
-            + Send
-            + Sync
-            + std::fmt::Display
-            + std::str::FromStr
-            + 'static,
+        Err: Send + Sync + FromServerFnError,
         F: leptos::server_fn::ServerFn<
                 Client = leptos::server_fn::client::browser::BrowserClient,
                 Server = leptos::server_fn::mock::BrowserMockServer,
                 Protocol = leptos::server_fn::Http<In, server_fn::codec::Json>,
-                Error = ServerFnError<Err>,
-                InputStreamError = ServerFnError<Err>,
-                OutputStreamError = ServerFnError<Err>,
-            > + IntoReq<In, OrigBrowserRequest, ServerFnError<Err>>,
-    > IntoReq<EncodingWrap<In>, BrowserRequest, ServerFnError<Err>> for Paired<In, F>
+                Error = Err,
+                InputStreamError = Err,
+                OutputStreamError = Err,
+            > + IntoReq<In, OrigBrowserRequest, Err>,
+    > IntoReq<EncodingWrap<In>, BrowserRequest, Err> for Paired<In, F>
     {
-        fn into_req(
-            self,
-            _path: &str,
-            accepts: &str,
-        ) -> Result<BrowserRequest, ServerFnError<Err>> {
+        fn into_req(self, _path: &str, accepts: &str) -> Result<BrowserRequest, Err> {
             let Paired { sfn, url } = self;
             let path = format!("{}{}", url, F::PATH);
             let req = <F as IntoReq<In, OrigBrowserRequest, _>>::into_req(sfn, &path, accepts)?;
@@ -290,27 +270,19 @@ mod hydrate {
 
     impl<
         In: Encoding,
-        Err: server_fn::serde::Serialize
-            + server_fn::serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone
-            + Send
-            + Sync
-            + std::fmt::Display
-            + std::str::FromStr
-            + 'static,
+        Err: Send + Sync + FromServerFnError,
         F: leptos::server_fn::ServerFn<
                 Client = leptos::server_fn::client::browser::BrowserClient,
                 Server = leptos::server_fn::mock::BrowserMockServer,
                 Protocol = leptos::server_fn::Http<In, server_fn::codec::Json>,
-                Error = ServerFnError<Err>,
-                InputStreamError = ServerFnError<Err>,
-                OutputStreamError = ServerFnError<Err>,
+                Error = Err,
+                InputStreamError = Err,
+                OutputStreamError = Err,
             >,
     > leptos::server_fn::ServerFn for Paired<In, F>
     where
-        F: FromReq<In, BrowserMockReq, ServerFnError<Err>>
-            + IntoReq<In, OrigBrowserRequest, ServerFnError<Err>>
+        F: FromReq<In, BrowserMockReq, Err>
+            + IntoReq<In, OrigBrowserRequest, Err>
             + server_fn::serde::Serialize
             + server_fn::serde::de::DeserializeOwned
             + std::fmt::Debug
@@ -318,11 +290,8 @@ mod hydrate {
             + Send
             + Sync
             + for<'de> server_fn::serde::Deserialize<'de>,
-        /*Paired<In, F>: IntoReq<In, OrigBrowserRequest, ServerFnError<Err>>
-        + FromReq<In, BrowserMockReq, ServerFnError<Err>>
-        + Send,*/
-        F::Output: IntoRes<server_fn::codec::Json, BrowserMockRes, ServerFnError<Err>>
-            + FromRes<server_fn::codec::Json, OrigBrowserResponse, ServerFnError<Err>>
+        F::Output: IntoRes<server_fn::codec::Json, BrowserMockRes, Err>
+            + FromRes<server_fn::codec::Json, OrigBrowserResponse, Err>
             + Send
             + for<'de> server_fn::serde::Deserialize<'de>,
     {
@@ -331,9 +300,9 @@ mod hydrate {
         type Server = F::Server;
         type Protocol = leptos::server_fn::Http<EncodingWrap<In>, server_fn::codec::Json>;
         type Output = F::Output;
-        type Error = ServerFnError<Err>;
-        type InputStreamError = ServerFnError<Err>;
-        type OutputStreamError = ServerFnError<Err>;
+        type Error = Err;
+        type InputStreamError = Err;
+        type OutputStreamError = Err;
         fn middlewares() -> Vec<
             std::sync::Arc<
                 dyn server_fn::middleware::Layer<
@@ -673,27 +642,19 @@ mod hydrate {
 
     impl<
         In: Encoding,
-        Err: server_fn::serde::Serialize
-            + server_fn::serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone
-            + Send
-            + Sync
-            + std::fmt::Display
-            + std::str::FromStr
-            + 'static,
+        Err: Send + Sync + FromServerFnError,
         F: leptos::server_fn::ServerFn<
                 Client = leptos::server_fn::client::browser::BrowserClient,
                 Server = leptos::server_fn::mock::BrowserMockServer,
                 Protocol = leptos::server_fn::Http<In, server_fn::codec::Json>,
-                Error = ServerFnError<Err>,
-                InputStreamError = ServerFnError<Err>,
-                OutputStreamError = ServerFnError<Err>,
+                Error = Err,
+                InputStreamError = Err,
+                OutputStreamError = Err,
             >,
     > ServerFnExt for F
     where
-        F: FromReq<In, BrowserMockReq, ServerFnError<Err>>
-            + IntoReq<In, OrigBrowserRequest, ServerFnError<Err>>
+        F: FromReq<In, BrowserMockReq, Err>
+            + IntoReq<In, OrigBrowserRequest, Err>
             + server_fn::serde::Serialize
             + server_fn::serde::de::DeserializeOwned
             + std::fmt::Debug
@@ -701,8 +662,8 @@ mod hydrate {
             + Send
             + Sync
             + for<'de> server_fn::serde::Deserialize<'de>,
-        F::Output: IntoRes<server_fn::codec::Json, BrowserMockRes, ServerFnError<Err>>
-            + FromRes<server_fn::codec::Json, OrigBrowserResponse, ServerFnError<Err>>
+        F::Output: IntoRes<server_fn::codec::Json, BrowserMockRes, Err>
+            + FromRes<server_fn::codec::Json, OrigBrowserResponse, Err>
             + Send
             + for<'de> server_fn::serde::Deserialize<'de>,
     {

@@ -1,6 +1,5 @@
+use ftml_dom::utils::css::inject_css;
 use leptos::{either::Either, prelude::*};
-
-use crate::inject_css;
 
 #[derive(Default, Clone)]
 pub enum SpinnerSize {

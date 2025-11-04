@@ -113,6 +113,10 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
             "/content/{*fn_name}",
             axum::routing::get(server_fn_handle).post(server_fn_handle),
         )
+        .route(
+            "/domain/{*fn_name}",
+            axum::routing::get(server_fn_handle).post(server_fn_handle),
+        )
         .leptos_routes_with_handler(
             routes,
             axum::routing::get(|a, b, c| routes_handler(a, b, c)), //.in_current_span()),
@@ -137,7 +141,7 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
             .expect("Error sending port address");
     }
 
-    crate::fns::init();
+    //crate::fns::init();
 
     axum::serve(
         listener,

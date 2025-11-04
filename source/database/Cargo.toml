@@ -13,6 +13,7 @@ backend = [
     "dep:axum-login",
     #"dep:leptos_axum",
     "dep:flams-system",
+    "dep:flams-utils",
     "dep:flams-git",
     "dep:sqlx",
     "dep:password-hash",
@@ -24,7 +25,7 @@ backend = [
 serde = { workspace = true }
 strum = { workspace = true }
 
-flams-utils = { workspace = true }
+flams-utils = { workspace = true,optional=true }
 flams-system = { workspace = true, optional = true }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }
 argon2 = { workspace = true, optional = true }

@@ -1,21 +1,21 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use flams_lsp::state::{DocData, UrlOrFile};
-use flams_ontology::uris::DocumentURI;
-use flams_ontology::uris::URIRefTrait;
-use flams_system::backend::archives::source_files::{SourceDir, SourceEntry};
-use flams_system::backend::archives::Archive;
-use flams_system::backend::GlobalBackend;
 
 use flams_lsp::documents::LSPDocument;
 use flams_lsp::state::DocData::{Data, Doc};
 use flams_lsp::state::UrlOrFile::File;
+use flams_math_archives::backend::GlobalBackend;
+use flams_math_archives::source_files::SourceEntry;
+use flams_math_archives::{Archive, MathArchive};
+use ftml_ontology::utils::RefTree;
+use ftml_uris::DocumentUri;
 use std::ffi::{CStr, CString};
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use flams_lsp::LSPStore;
-use flams_utils::prelude::{HMap, TreeChildIter};
+use flams_utils::prelude::HMap;
 use serde::Serialize;
 
 extern crate tokio;
@@ -57,31 +57,33 @@ pub extern "C" fn initialize() {
         .expect("Failed to initialize Tokio runtime")
         .block_on(async {
             flams_system::settings::Settings::initialize(spec);
-            GlobalBackend::initialize();
+            GlobalBackend::initialize::<flams_system::TokioEngine>();
         });
 }
 
-fn _get_all_files() -> Vec<(Arc<Path>, DocumentURI)> {
-    let mut files: Vec<(Arc<Path>, DocumentURI)> = Vec::new();
-    for a in GlobalBackend::get().all_archives().iter() {
+fn _get_all_files() -> Vec<(Arc<Path>, DocumentUri)> {
+    let mut files: Vec<(Arc<Path>, DocumentUri)> = Vec::new();
+    for a in GlobalBackend.all_archives().iter() {
         if let Archive::Local(a) = a {
             a.with_sources(|d| {
-                for e in <_ as TreeChildIter<SourceDir>>::dfs(d.children.iter()) {
-                    match e {
-                        SourceEntry::File(f) => {
-                            let Ok(uri) = DocumentURI::from_archive_relpath(a.uri().owned(), &f.relative_path) else { continue};
-                            files.push((
-                                f.relative_path
-                                    .split('/')
-                                    .fold(a.source_dir(), |p, s| p.join(s))
-                                    .into(),
-                                uri
-                            ));
-                        }
-                        _ => {}
+                for e in d.dfs() {
+                    if let SourceEntry::File(f) = e {
+                        let Ok(uri) = DocumentUri::from_archive_relpath(
+                            a.uri().clone(),
+                            f.relative_path.as_ref(),
+                        ) else {
+                            continue;
+                        };
+                        files.push((
+                            f.relative_path
+                                .steps()
+                                .fold(a.source_dir(), |p, s| p.join(s))
+                                .into(),
+                            uri,
+                        ));
                     }
                 }
-            })
+            });
         }
     }
     files
@@ -110,7 +112,7 @@ pub unsafe extern "C" fn list_of_all_files() -> *const libc::c_char {
         &_get_all_files()
             .into_iter()
             .map(|(p, _)| p.as_ref().to_str().unwrap().to_string())
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
     )
 }
 
@@ -157,7 +159,7 @@ pub unsafe extern "C" fn load_file(path: *const libc::c_char) {
 
     let lspdoc = LSPDocument::new("".to_string(), File(Path::new(path_str).into()));
     let p = Path::new(path_str);
-    let uri: &DocumentURI = lspdoc.document_uri().unwrap();
+    let uri: &DocumentUri = lspdoc.document_uri().unwrap();
     if let Some(ret) = LSPStore::<true>::new(&mut state).load(p.as_ref(), &uri) {
         state.insert(File(p.into()), Data(ret, true));
     }

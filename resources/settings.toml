@@ -2,6 +2,8 @@
 # log_dir = "~/.flams/log"
 # temp_dir = "~/.flams/tmp"
 # database = "~/.flams/users.sqlite"
+# rdf_database = "~/.flams/rdf"
+# stack_size = 2
 
 [server]
 # port = 8095

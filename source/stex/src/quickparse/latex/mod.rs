@@ -2,13 +2,13 @@ pub mod directives;
 pub mod rules;
 
 use crate::quickparse::tokens::TeXToken;
-use flams_ontology::languages::Language;
 use flams_utils::{
     parsing::{ParseSource, ParseStr, StringOrStr},
     prelude::*,
     sourcerefs::{SourcePos, SourceRange},
     CondSerialize,
 };
+use ftml_uris::Language;
 use rules::{AnyEnv, AnyMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule};
 use smallvec::SmallVec;
 use std::convert::Into;
@@ -374,12 +374,11 @@ pub struct Groups<
 
 impl<
         'a,
-        'b,
         Pa: ParseSource<'a>,
         T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
         Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
         State: ParserState<'a, Pa, T, Err>,
-    > Groups<'a, 'b, Pa, T, Err, State>
+    > Groups<'a, '_, Pa, T, Err, State>
 {
     pub fn add_macro_rule(
         &mut self,
@@ -468,7 +467,7 @@ impl<
     }
 
     #[inline]
-    pub fn split<'b>(&'b mut self) -> (&'b mut State, Groups<'a, 'b, Pa, T, Err, State>) {
+    pub const fn split<'b>(&'b mut self) -> (&'b mut State, Groups<'a, 'b, Pa, T, Err, State>) {
         (
             &mut self.state,
             Groups {
@@ -854,19 +853,12 @@ impl<
         } else if self.tokenizer.reader.starts_with('\\') {
             let t = self.tokenizer.next().unwrap_or_else(|| unreachable!());
             in_macro.range.end = self.curr_pos();
-            if let Some(t) = self.default(t) {
-                let range = SourceRange {
-                    start,
-                    end: self.curr_pos(),
-                };
-                (range, vec![t])
-            } else {
-                let range = SourceRange {
-                    start,
-                    end: self.curr_pos(),
-                };
-                (range, Vec::new())
-            }
+            let range = SourceRange {
+                start,
+                end: self.curr_pos(),
+            };
+            self.default(t)
+                .map_or_else(|| (range, Vec::new()), |t| (range, vec![t]))
         } else {
             let n = self.tokenizer.next();
             if n.is_none() {
@@ -1262,6 +1254,7 @@ impl<
     > KeyValParsable<'a, Pos, T, Err, State> for f32
 {
     #[inline]
+    #[allow(clippy::cast_precision_loss)]
     fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
         let Some(s) = parser.read_value_str_normalized() else {
             parser.problem("Missing value", DiagnosticLevel::Error);
@@ -1341,12 +1334,11 @@ pub struct KeyValParser<
 }
 impl<
         'a,
-        'b,
         Pos: SourcePos + 'a,
         T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
         Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
         State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParser<'a, 'b, Pos, T, Err, State>
+    > KeyValParser<'a, '_, Pos, T, Err, State>
 {
     #[inline]
     pub fn parse<R: KeyValParsable<'a, Pos, T, Err, State> + CondSerialize>(
@@ -1356,7 +1348,7 @@ impl<
     }
 
     #[inline]
-    pub fn to_key_value<Tp: CondSerialize>(&self, val: Tp) -> ParsedKeyValue<Pos, Tp> {
+    pub const fn to_key_value<Tp: CondSerialize>(&self, val: Tp) -> ParsedKeyValue<Pos, Tp> {
         ParsedKeyValue {
             key_range: self.key_range,
             val_range: SourceRange {
@@ -1368,12 +1360,12 @@ impl<
     }
     #[inline]
     pub fn problem<D: std::fmt::Display>(&mut self, msg: D, severity: DiagnosticLevel) {
-        self.parser.tokenizer.problem(self.start, msg, severity)
+        self.parser.tokenizer.problem(self.start, msg, severity);
     }
     #[inline]
     pub fn tokens(&mut self) -> Vec<T> {
         self.read_value_str()
-            .map_or(Vec::default(), |s| self.parser.reparse(s, self.start))
+            .map_or_else(Vec::new, |s| self.parser.reparse(s, self.start))
     }
     pub fn read_value_str(&mut self) -> Option<&'a str> {
         if !self.has_value {
@@ -1434,7 +1426,7 @@ impl<
             self.value_end = end_pos;
             if had_braces {
                 self.parser.tokenizer.reader.pop_head();
-            };
+            }
             if nexts.iter().all(|s| s.trim().is_empty()) {
                 Some(normalize_ws(first_str))
             } else {
@@ -1444,7 +1436,7 @@ impl<
             self.value_end = self.parser.curr_pos();
             if had_braces {
                 self.parser.tokenizer.reader.pop_head();
-            };
+            }
             Some(normalize_ws(first_str))
         }
     }
@@ -1455,17 +1447,15 @@ impl<
         }
         self.parser.skip_comments();
         if !self.parser.tokenizer.reader.starts_with('{') {
-            return self
-                .read_value_str_normalized()
-                .map_or(Vec::default(), |s| {
-                    vec![(
-                        s,
-                        SourceRange {
-                            start: self.start,
-                            end: self.value_end,
-                        },
-                    )]
-                });
+            return self.read_value_str_normalized().map_or_else(Vec::new, |s| {
+                vec![(
+                    s,
+                    SourceRange {
+                        start: self.start,
+                        end: self.value_end,
+                    },
+                )]
+            });
         }
         self.parser.tokenizer.reader.pop_head();
         self.parser.skip_comments();
@@ -1499,25 +1489,36 @@ impl<
                     end: end_pos,
                 };
                 if nexts.iter().all(|s| s.trim().is_empty()) {
-                    ret.push((normalize_ws(first_str), range))
+                    ret.push((normalize_ws(first_str), range));
                 } else {
-                    ret.push((Cow::Owned(join_strs(first_str, nexts)), range))
+                    ret.push((Cow::Owned(join_strs(first_str, nexts)), range));
                 }
-                if let Some(',') = self.parser.tokenizer.reader.pop_head() {
-                    continue;
-                }
-                break;
-            } else {
-                let range = SourceRange {
-                    start: value_start,
-                    end: self.parser.curr_pos(),
-                };
-                ret.push((normalize_ws(first_str), range));
-                if let Some(',') = self.parser.tokenizer.reader.pop_head() {
+                if self
+                    .parser
+                    .tokenizer
+                    .reader
+                    .pop_head()
+                    .is_some_and(|c| c == ',')
+                {
                     continue;
                 }
                 break;
             }
+            let range = SourceRange {
+                start: value_start,
+                end: self.parser.curr_pos(),
+            };
+            ret.push((normalize_ws(first_str), range));
+            if self
+                .parser
+                .tokenizer
+                .reader
+                .pop_head()
+                .is_some_and(|c| c == ',')
+            {
+                continue;
+            }
+            break;
         }
         self.value_end = self.parser.curr_pos();
         ret
@@ -1557,6 +1558,7 @@ impl<
         val
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn read_opt_map(
         &mut self,
         in_macro: &mut Macro<'a, Pos, &'a str>,
@@ -1823,25 +1825,24 @@ impl<
                         end: end_pos,
                     };
                     if nexts.iter().all(|s| s.trim().is_empty()) {
-                        ret.push((normalize_ws(first_str), range))
+                        ret.push((normalize_ws(first_str), range));
                     } else {
-                        ret.push((Cow::Owned(join_strs(first_str, nexts)), range))
+                        ret.push((Cow::Owned(join_strs(first_str, nexts)), range));
                     }
-                    if let Some(',') = self.tokenizer.reader.pop_head() {
-                        continue;
-                    }
-                    break;
-                } else {
-                    let range = SourceRange {
-                        start: tstart,
-                        end: first_end,
-                    };
-                    ret.push((normalize_ws(first_str), range));
-                    if let Some(',') = self.tokenizer.reader.pop_head() {
+                    if self.tokenizer.reader.pop_head().is_some_and(|c| c == ',') {
                         continue;
                     }
                     break;
                 }
+                let range = SourceRange {
+                    start: tstart,
+                    end: first_end,
+                };
+                ret.push((normalize_ws(first_str), range));
+                if self.tokenizer.reader.pop_head().is_some_and(|c| c == ',') {
+                    continue;
+                }
+                break;
             }
             r#in.range.end = self.curr_pos();
             ret
@@ -1851,7 +1852,7 @@ impl<
     }
 }
 
-fn normalize_ws<'a>(s: &'a str) -> Cow<'a, str> {
+fn normalize_ws(s: &str) -> Cow<'_, str> {
     if s.contains(&['\t', ' ', '\r', '\n']) {
         let v = s
             .trim()
@@ -1864,11 +1865,11 @@ fn normalize_ws<'a>(s: &'a str) -> Cow<'a, str> {
 }
 
 fn join_strs(first: &str, rest: SmallVec<&str, 2>) -> String {
-    let mut ret = first.trim_start().to_string();
+    let mut ret_str = first.trim_start().to_string();
     for r in rest {
-        ret.push_str(r.trim_start());
+        ret_str.push_str(r.trim_start());
     }
-    let v = ret
+    let v = ret_str
         .trim_end()
         .split_ascii_whitespace()
         .collect::<SmallVec<_, 2>>();

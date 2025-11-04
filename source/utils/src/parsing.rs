@@ -18,13 +18,13 @@ pub trait StringOrStr<'a>:
     /// Will return `Err` if self does not start with prefix.
     fn strip_prefix(self, s: &str) -> Result<Self, Self>;
     #[must_use]
-    fn split_n(self, n:usize) -> (Self,Self);
+    fn split_n(self, n: usize) -> (Self, Self);
     fn trim_ws(&mut self);
     fn split_noparens<const OPEN: char, const CLOSE: char>(
         &'a self,
         split_char: char,
     ) -> impl Iterator<Item = &'a str>;
-    fn as_cow(&self) -> Cow<'a,str>;
+    fn as_cow(&self) -> Cow<'a, str>;
 }
 impl<'a> StringOrStr<'a> for &'a str {
     #[inline]
@@ -32,8 +32,8 @@ impl<'a> StringOrStr<'a> for &'a str {
         str::strip_prefix(self, s).map(str::trim_start).ok_or(self)
     }
     #[inline]
-    fn split_n(self, n: usize) -> (Self,Self) {
-        (&self[..n],&self[n..])
+    fn split_n(self, n: usize) -> (Self, Self) {
+        (&self[..n], &self[n..])
     }
     #[inline]
     fn trim_ws(&mut self) {
@@ -59,7 +59,7 @@ impl<'a> StringOrStr<'a> for &'a str {
         })
     }
     #[inline]
-    fn as_cow(&self) -> Cow<'a,str> {
+    fn as_cow(&self) -> Cow<'a, str> {
         Cow::Borrowed(self)
     }
 }
@@ -75,9 +75,9 @@ impl<'a> StringOrStr<'a> for String {
     fn trim_ws(&mut self) {
         *self = self.trim().to_string();
     }
-    fn split_n(mut self, n:usize) -> (Self,Self) {
+    fn split_n(mut self, n: usize) -> (Self, Self) {
         let r = self.split_off(n);
-        (self,r)
+        (self, r)
     }
     fn split_noparens<const OPEN: char, const CLOSE: char>(
         &'a self,
@@ -99,7 +99,7 @@ impl<'a> StringOrStr<'a> for String {
         })
     }
     #[inline]
-    fn as_cow(&self) -> Cow<'a,str> {
+    fn as_cow(&self) -> Cow<'a, str> {
         Cow::Owned(self.clone())
     }
 }
@@ -168,7 +168,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
                 self.pos.update_newline(false);
                 Some('\n')
             }
-            Some('\r') => { 
+            Some('\r') => {
                 match self.get_char() {
                     Some('\n') => {
                         self.pos.update_newline(true);
@@ -225,7 +225,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
             }
         }
     }
-    
+
     #[allow(clippy::unnecessary_map_or)]
     fn starts_with(&mut self, c: char) -> bool {
         self.get_char().map_or(false, |c2| {
@@ -244,7 +244,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
             if rn && c == '\n' {
                 self.pos.update_newline(true);
                 rn = false;
-                continue
+                continue;
             }
             if rn {
                 self.pos.update_newline(false);
@@ -252,16 +252,18 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
             } else if c == '\n' {
                 self.pos.update_newline(false);
                 ret.push('\n');
-                continue
+                continue;
             } else if c == '\r' {
                 ret.push('\n');
                 rn = true;
-                continue
+                continue;
             }
             self.pos.update(c);
             ret.push(c);
         }
-        if rn {self.pos.update_newline(false);}
+        if rn {
+            self.pos.update_newline(false);
+        }
         ret
     }
     fn read_until_with_brackets<const OPEN: char, const CLOSE: char>(
@@ -286,7 +288,7 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
                 if rn && c == '\n' {
                     self.pos.update_newline(true);
                     rn = false;
-                    continue
+                    continue;
                 }
                 if rn {
                     self.pos.update_newline(false);
@@ -294,11 +296,11 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
                 } else if c == '\n' {
                     self.pos.update_newline(false);
                     ret.push('\n');
-                    continue
+                    continue;
                 } else if c == '\r' {
                     ret.push('\n');
                     rn = true;
-                    continue
+                    continue;
                 }
                 self.pos.update(c);
                 ret.push(c);
@@ -311,7 +313,9 @@ impl<'a, R: Read + 'a, P: SourcePos + 'a> ParseSource<'a> for ParseReader<R, P> 
             self.pos.update(c);
             ret.push(c);
         }
-        if rn {self.pos.update_newline(false);}
+        if rn {
+            self.pos.update_newline(false);
+        }
         ret
     }
     fn peek_head(&mut self) -> Option<char> {
@@ -481,7 +485,7 @@ impl<'a, P: SourcePos> ParseStr<'a, P> {
 }
 impl ParseStr<'_, ByteOffset> {
     #[inline]
-    pub fn offset(&mut self) -> &mut ByteOffset {
+    pub const fn offset(&mut self) -> &mut ByteOffset {
         &mut self.pos
     }
 }
