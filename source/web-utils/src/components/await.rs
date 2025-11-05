@@ -8,30 +8,29 @@ use leptos::{
 };
 
 pub fn wait_local<
-    V: IntoView + 'static,
     Out: 'static + Send + Sync + Clone,
     Fut: Future<Output = Option<Out>> + 'static + Send,
     F: Fn() -> Fut + 'static,
 >(
     future: F,
-    children: impl Fn(Out) -> V + 'static + Send,
+    children: impl Fn(Out) -> AnyView + 'static + Send,
     err: String,
-) -> impl IntoView {
+) -> AnyView {
     let res = LocalResource::new(future);
     view! {
       <Suspense fallback = || view!(<Spinner/>)>{move || {
         res.get().and_then(|mut r| r.take()).map_or_else(
-          || Either::Left(view!(<div>{err.clone()}</div>)),
-          |res| Either::Right(children(res))
+          || view!(<div>{err.clone()}</div>).into_any(),
+          |res| children(res)
         )
       }}</Suspense>
-    }
+    }.into_any()
 }
 
-pub fn wait_and_then<E, Fut, F, T, V: IntoView + 'static>(
+pub fn wait_and_then<E, Fut, F, T>(
     f: F,
-    r: impl FnOnce(T) -> V + Send + 'static,
-) -> impl IntoView
+    r: impl FnOnce(T) -> AnyView + Send + 'static,
+) -> AnyView
 where
     Fut: Future<Output = Result<T, ServerFnError<E>>> + Send + 'static,
     F: Fn() -> Fut + Send + Sync + 'static,
@@ -50,18 +49,18 @@ where
         <Suspense fallback = || view!(<Spinner/>)>{move ||
             match res.get() {
               Some(Ok(t)) =>
-                EitherOf3::A(r.lock().take().map(|r| r(t))),
-              Some(Err(e)) => EitherOf3::B(display_error(e.to_string().into())),
-              None => EitherOf3::C(view!(<Spinner/>)),
+                r.lock().take().map(|r| r(t)).into_any(),
+              Some(Err(e)) => display_error(e.to_string().into()),
+              None => view!(<Spinner/>).into_any(),
             }
         }</Suspense>
-    }
+    }.into_any()
 }
 
-pub fn wait_and_then_fn<E, Fut, F, T, V: IntoView + 'static>(
+pub fn wait_and_then_fn<E, Fut, F, T>(
     f: F,
-    r: impl Fn(T) -> V + 'static + Send,
-) -> impl IntoView
+    r: impl Fn(T) -> AnyView + Send + 'static,
+) -> AnyView
 where
     Fut: Future<Output = Result<T, E>> + Send + 'static,
     F: Fn() -> Fut + 'static + Send + Sync,
@@ -80,10 +79,10 @@ where
         <Suspense fallback = || view!(<Spinner/>)>{move ||
             match res.get() {
               Some(Ok(t)) =>
-                EitherOf3::A(r(t)),
-              Some(Err(e)) => EitherOf3::B(display_error(e.to_string().into())),
-              None => EitherOf3::C(view!(<Spinner/>)),
+                r(t),
+              Some(Err(e)) => display_error(e.to_string().into()),
+              None => view!(<Spinner/>).into_any(),
             }
         }</Suspense>
-    }
+    }.into_any()
 }

@@ -4,10 +4,10 @@ use thaw::{ToastOptions, ToastPosition, ToasterInjection, MessageBar,MessageBarB
 use leptos::prelude::*;
 
 #[inline]
-pub fn display_error(err:Cow<'static,str>) -> impl leptos::IntoView {
+pub fn display_error(err:Cow<'static,str>) -> AnyView {
   #[cfg(any(feature="hydrate",feature="csr"))]
   { error_toast(err.clone()); }
-  view!(<h3 style="color:red">"Error: "{err}</h3>)
+  view!(<h3 style="color:red">"Error: "{err}</h3>).into_any()
 }
 
 pub fn message_action<
@@ -56,7 +56,7 @@ Fut: std::future::Future<Output = Result<O,E>> + Send + 'static
 >(
 run:impl Fn(&I) -> Fut + Send + Sync + Clone + 'static,
 msg:impl Fn(O) + Send + Sync + Clone + 'static
-) -> (Action<I,()>,impl IntoView) {
+) -> (Action<I,()>,AnyView) {
   use thaw::{Dialog,DialogSurface,DialogBody};
   use crate::components::Spinner;
   let toaster = ToasterInjection::expect_context();
@@ -78,7 +78,7 @@ msg:impl Fn(O) + Send + Sync + Clone + 'static
       }
     }
   });
-  (a,view!{<Dialog mask_closeable=false close_on_esc=false open=open ><DialogSurface><DialogBody><Spinner/></DialogBody></DialogSurface></Dialog>})
+  (a,view!{<Dialog mask_closeable=false close_on_esc=false open=open ><DialogSurface><DialogBody><Spinner/></DialogBody></DialogSurface></Dialog>}.into_any())
 }
 
 #[inline]

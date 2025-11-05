@@ -53,7 +53,7 @@ use leptos_router::{
 use thaw::{Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider};
 
 #[component]
-pub fn Main() -> impl IntoView {
+pub fn Main() -> AnyView {
     provide_meta_context();
     view! {
         <Title text="𝖥𝖫∀𝖬∫"/>
@@ -64,17 +64,17 @@ pub fn Main() -> impl IntoView {
             view!{<Routes fallback=|| NotFound()>
                 <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
                     <ParentRoute path=path!("/dashboard") view=Dashboard>
-                        <Route path=path!("mathhub") view=|| view!(<MainPage page=Page::MathHub/>)/>
+                        <Route path=path!("mathhub") view=|| view!(<MainPage page=Page::MathHub/>).into_any()/>
                         //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
-                        <Route path=path!("log") view=|| view!(<MainPage page=Page::Log/>)/>
-                        <Route path=path!("queue") view=|| view!(<MainPage page=Page::Queue/>)/>
-                        <Route path=path!("settings") view=|| view!(<MainPage page=Page::Settings/>)/>
-                        <Route path=path!("query") view=|| view!(<MainPage page=Page::Query/>)/>
-                        <Route path=path!("archives") view=|| view!(<MainPage page=Page::MyArchives/>)/>
-                        <Route path=path!("users") view=|| view!(<MainPage page=Page::Users/>)/>
-                        <Route path=path!("search") view=|| view!(<MainPage page=Page::Search/>)/>
-                        <Route path=path!("") view=|| view!(<MainPage page=Page::Home/>)/>
-                        <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>)/>
+                        <Route path=path!("log") view=|| view!(<MainPage page=Page::Log/>).into_any()/>
+                        <Route path=path!("queue") view=|| view!(<MainPage page=Page::Queue/>).into_any()/>
+                        <Route path=path!("settings") view=|| view!(<MainPage page=Page::Settings/>).into_any()/>
+                        <Route path=path!("query") view=|| view!(<MainPage page=Page::Query/>).into_any()/>
+                        <Route path=path!("archives") view=|| view!(<MainPage page=Page::MyArchives/>).into_any()/>
+                        <Route path=path!("users") view=|| view!(<MainPage page=Page::Users/>).into_any()/>
+                        <Route path=path!("search") view=|| view!(<MainPage page=Page::Search/>).into_any()/>
+                        <Route path=path!("") view=|| view!(<MainPage page=Page::Home/>).into_any()/>
+                        <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>).into_any()/>
                     </ParentRoute>
                     <ParentRoute path=path!("/vscode") view= flams_router_vscode::VSCodeWrap>
                         <Route path=path!("search") view=flams_router_search::vscode::VSCodeSearch/>
@@ -84,29 +84,29 @@ pub fn Main() -> impl IntoView {
                         let params = params.get();
                         if let Some(p) = params.get_str("uri") {
                             let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
-                                return Either::Right(view! { <Redirect path="/dashboard"/> })
+                                return view! { <Redirect path="/dashboard"/> }.into_any()
                             };
-                            Either::Left(ftml_dom::global_setup(|| DocumentOfTop(DocumentOfTopProps{uri})))
+                            ftml_dom::global_setup(|| DocumentOfTop(DocumentOfTopProps{uri}).into_any()).into_any()
                         } else {
-                            Either::Right(view! { <Redirect path="/dashboard"/> })
+                            view! { <Redirect path="/dashboard"/> }.into_any()
                         }
-                    }}/>
+                    }.into_any()}/>
                     <Route path=path!("/") view={move || if has_params() {
-                            Either::Left(ftml_dom::global_setup(|| view! { <flams_router_content::components::URITop/> }))
+                            ftml_dom::global_setup(|| view! { <flams_router_content::components::URITop/> }.into_any()).into_any()
                         } else {
-                            Either::Right(view! { <Redirect path="/dashboard"/> })
+                            view! { <Redirect path="/dashboard"/> }.into_any()
                         }}
                     />
                 </ParentRoute>
             </Routes>}
         }</Router>
-    }
+    }.into_any()
 }
 
 #[component(transparent)]
-fn Top() -> impl IntoView {
+fn Top() -> AnyView {
     use flams_router_login::components::LoginProvider;
-    view!(<LoginProvider><leptos_router::components::Outlet/></LoginProvider>)
+    view!(<LoginProvider><leptos_router::components::Outlet/></LoginProvider>).into_any()
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -150,15 +150,15 @@ impl std::fmt::Display for Page {
 }
 
 #[component(transparent)]
-pub fn Dashboard() -> impl IntoView {
+pub fn Dashboard() -> AnyView {
     view! {
       <Stylesheet id="leptos" href="/pkg/flams.css"/>
       <Outlet/>
-    }
+    }.into_any()
 }
 
 #[component]
-fn MainPage(page: Page) -> impl IntoView {
+fn MainPage(page: Page) -> AnyView {
     //use flams_web_utils::components::Themer;
     /*view! {
     <Themer>{*/
@@ -178,7 +178,7 @@ fn MainPage(page: Page) -> impl IntoView {
                     </GridItem>
                     <GridItem>
                       <div style="width:calc(100% - 20px);text-align:right;padding:10px">
-                        {user_field()}
+                        {user_field().into_any()}
                       </div>
                     </GridItem>
                   </Grid>
@@ -187,42 +187,41 @@ fn MainPage(page: Page) -> impl IntoView {
               </LayoutHeader>
               <Layout position=LayoutPosition::Absolute class="flams-main" content_style="height:100%" has_sider=true>
                   <LayoutSider class="flams-menu" content_style="width:100%;height:100%">
-                    {side_menu(page)}
+                    {side_menu(page).into_any()}
                   </LayoutSider>
                   <Layout>
                     <div style="width:calc(100% - 10px);padding-left:5px;height:calc(100vh - 67px)">
-                      {do_main(page)}
+                      {do_main(page).into_any()}
                       </div>
                   </Layout>
                 </Layout>
             //</Login>
           </Layout>
-        }
-    }) /*}</Themer>
+        }.into_any()
+    }).into_any() /*}</Themer>
     }*/
 }
 
-fn do_main(page: Page) -> impl IntoView {
-    use leptos::either::EitherOf10::*;
+fn do_main(page: Page) -> AnyView {
     let inner = || match page {
-        Page::Home => A(view!(<flams_router_backend::index_components::Index/>)),
-        Page::MathHub => B(view! {<flams_router_backend::components::ArchivesTop/>}),
+        Page::Home => view!(<flams_router_backend::index_components::Index/>).into_any(),
+        Page::MathHub => view! {<flams_router_backend::components::ArchivesTop/>}.into_any(),
         //Page::Graphs => view!{<GraphTest/>},
-        Page::Log => C(view! {<flams_router_logging::Logger/>}),
-        Page::Queue => D(view! {<flams_router_buildqueue_components::QueuesTop/>}),
-        Page::Query => E(view! {<query::Query/>}),
-        Page::Settings => F(view! {<settings::Settings/>}),
-        Page::MyArchives => G(view! {<flams_router_git_components::Archives/>}),
-        Page::Search => H(view! {<flams_router_search::components::SearchTop/>}),
-        Page::Users => I(view! {<flams_router_login::components::Users/>}),
-        _ => J(view!(<span>"TODO"</span>)),
+        Page::Log => view! {<flams_router_logging::Logger/>}.into_any(),
+        Page::Queue => view! {<flams_router_buildqueue_components::QueuesTop/>}.into_any(),
+        Page::Query => view! {<query::Query/>}.into_any(),
+        Page::Settings => view! {<settings::Settings/>}.into_any(),
+        Page::MyArchives => view! {<flams_router_git_components::Archives/>}.into_any(),
+        Page::Search => view! {<flams_router_search::components::SearchTop/>}.into_any(),
+        Page::Users => view! {<flams_router_login::components::Users/>}.into_any(),
+        _ => view!(<span>"TODO"</span>).into_any(),
         //Page::Login => view!{<LoginPage/>}
     };
-    view!(<main style="height:100%">{inner()}</main>)
+    view!(<main style="height:100%">{inner()}</main>).into_any()
 }
 
 #[component]
-fn NotFound() -> impl IntoView {
+fn NotFound() -> AnyView {
     #[cfg(feature = "ssr")]
     {
         let resp = expect_context::<leptos_axum::ResponseOptions>();
@@ -231,10 +230,10 @@ fn NotFound() -> impl IntoView {
 
     view! {
         <h3>"Not Found"</h3>
-    }
+    }.into_any()
 }
 
-fn side_menu(page: Page) -> impl IntoView {
+fn side_menu(page: Page) -> AnyView {
     use thaw::{NavDrawer, NavItem};
     view! {
         <NavDrawer selected_value=page.to_string() class="flams-menu-inner">
@@ -243,33 +242,33 @@ fn side_menu(page: Page) -> impl IntoView {
             <NavItem value="query" href="/dashboard/query">"Queries"</NavItem>
             <NavItem value="search" href="/dashboard/search">"Search Content"</NavItem>
             {move || {let s = LoginState::get(); match s {
-                LoginState::NoAccounts => leptos::either::EitherOf5::A(view!{
+                LoginState::NoAccounts => view!{
                     <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                     <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                     <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
-                }),
-                LoginState::Admin  => leptos::either::EitherOf5::B(view!{
+                }.into_any(),
+                LoginState::Admin  => view!{
                   <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                   <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                   <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
                   <NavItem value="users" href="/dashboard/users">"Manage Users"</NavItem>
-                }),
-                LoginState::User{is_admin:true,..} => leptos::either::EitherOf5::C(view!{
+                }.into_any(),
+                LoginState::User{is_admin:true,..} => view!{
                   <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                   <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                   <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
                   <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
-                }),
-                LoginState::User{..} => leptos::either::EitherOf5::D(view!{
+                }.into_any(),
+                LoginState::User{..} => view!{
                     <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
-                }),
-                LoginState::None | LoginState::Loading => leptos::either::EitherOf5::E(())
+                }.into_any(),
+                LoginState::None | LoginState::Loading => ().into_any()
             }}}
         </NavDrawer>
-    }
+    }.into_any()
 }
 
-fn user_field() -> impl IntoView {
+fn user_field() -> AnyView {
     use flams_web_utils::components::ClientOnly;
     use flams_web_utils::components::{Spinner, SpinnerSize};
     use thaw::{Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType};
@@ -309,30 +308,30 @@ fn user_field() -> impl IntoView {
             <MenuItem value="theme" icon=icon>{text}</MenuItem>
             <Divider/>
             {move || match LoginState::get() {
-                LoginState::None => EitherOf4::A(login_form()),
-                LoginState::NoAccounts => EitherOf4::B(view!(<span>"Admin"</span>)),
-                LoginState::Admin => EitherOf4::C(logout_form("admin".to_string())),
-                LoginState::User{name,..} => EitherOf4::C(logout_form(name)),
-                LoginState::Loading => EitherOf4::D(view!(<Spinner size=SpinnerSize::Tiny/>))
+                LoginState::None => login_form().into_any(),
+                LoginState::NoAccounts => view!(<span>"Admin"</span>).into_any(),
+                LoginState::Admin => logout_form("admin".to_string()).into_any(),
+                LoginState::User{name,..} => logout_form(name).into_any(),
+                LoginState::Loading => view!(<Spinner size=SpinnerSize::Tiny/>).into_any()
             }}
         </Menu>
         }
     }</div>
     //</ClientOnly>
-    }
+    }.into_any()
 }
 
-fn logout_form(user: String) -> impl IntoView {
+fn logout_form(user: String) -> AnyView {
     use thaw::Button;
     let login = expect_context::<RwSignal<LoginState>>();
     let action = Action::new(move |_| {
         login.set(LoginState::None);
         flams_router_login::server_fns::logout()
     });
-    view!(<span>{user}" "<Button on_click=move |_| {action.dispatch(());}>Logout</Button></span>)
+    view!(<span>{user}" "<Button on_click=move |_| {action.dispatch(());}>Logout</Button></span>).into_any()
 }
 
-fn login_form() -> impl IntoView {
+fn login_form() -> AnyView {
     use thaw::{Button, Input, InputType};
     let login = expect_context();
     let action = Action::new(move |pwd: &String| do_login(pwd.clone(), login));
@@ -340,7 +339,7 @@ fn login_form() -> impl IntoView {
     view! {
       <Button on_click=move |_| {action.dispatch(value.get_untracked());}>Login</Button>
       <Input placeholder="admin pwd" value input_type=InputType::Password/>
-    }
+    }.into_any()
 }
 
 #[allow(unused_variables)]

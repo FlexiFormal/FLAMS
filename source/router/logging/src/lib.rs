@@ -40,9 +40,9 @@ async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
 }
 
 #[component]
-pub fn Logger() -> impl IntoView {
+pub fn Logger() -> AnyView {
     use ftml_dom::utils::css::inject_css;
-    require_login(|| {
+    require_login(Box::new(|| {
         inject_css("flams-logging", include_str!("logs.css"));
         let signals = LogSignals {
             top: RwSignal::new(Vec::new()),
@@ -77,11 +77,11 @@ pub fn Logger() -> impl IntoView {
                     )/>
                 </Tree>})}
             }}</div>
-        }
-    })
+        }.into_any()
+    }))
 }
 
-fn do_ls(v: RwSignal<Vec<LogEntrySignal>>) -> impl IntoView {
+fn do_ls(v: RwSignal<Vec<LogEntrySignal>>) -> AnyView {
     view! {
         <For each=move || v.get() key=|e| e.id().to_string() children=|e| {
             match e {
@@ -89,9 +89,9 @@ fn do_ls(v: RwSignal<Vec<LogEntrySignal>>) -> impl IntoView {
                 LogEntrySignal::Span(_,e) => do_span(e).into_any()
             }
         }/>
-    }
+    }.into_any()
 }
-fn do_span(s: SpanSignal) -> impl IntoView {
+fn do_span(s: SpanSignal) -> AnyView {
     let children = s.children;
     view! {<LazySubtree>
         <Header slot>{move || {let s = s.clone(); match s.message.get() {
@@ -99,7 +99,7 @@ fn do_span(s: SpanSignal) -> impl IntoView {
             SpanMessage::Closed(message) => view!(<LogLineHelper message target=s.target level=s.level args=s.args spinner=false />)
         }}}</Header>
         {move || do_ls(children)}
-    </LazySubtree>}
+    </LazySubtree>}.into_any()
 }
 
 #[component]
@@ -122,7 +122,7 @@ fn LogLineHelper(
     level: LogLevel,
     args: VecMap<String, String>,
     #[prop(optional)] spinner: bool,
-) -> impl IntoView {
+) -> AnyView {
     use flams_web_utils::components::SpinnerSize;
     use std::fmt::Write;
     let cls = class_from_level(level);
@@ -142,13 +142,13 @@ fn LogLineHelper(
         str.push(')');
     }
     if spinner {
-        Either::Left(view!(<span class=cls>
+        view!(<span class=cls>
             <span class="flams-spinner-inline">
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
-        </span>))
+        </span>).into_any()
     } else {
-        Either::Right(view!(<span class=cls>{str}</span>))
+        view!(<span class=cls>{str}</span>).into_any()
     }
 }
 

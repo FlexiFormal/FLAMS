@@ -18,7 +18,7 @@ use ftml_uris::{
 use leptos::prelude::*;
 
 #[component]
-pub fn VSCodeSearch() -> impl IntoView {
+pub fn VSCodeSearch() -> AnyView {
     flams_router_content::Views::top(move || {
         let remote = || leptos_router::hooks::use_query_map().with(|q| q.get("remote"));
 
@@ -162,14 +162,14 @@ pub fn VSCodeSearch() -> impl IntoView {
                 </div>
             </div>
         }
-    })
+    }.into_any()).into_any()
 }
 
 fn do_results(
     pre: &'static str,
     remote: Option<fn() -> Option<String>>,
     results: RwSignal<SearchState>,
-) -> impl IntoView {
+) -> AnyView {
     use leptos::either::EitherOf6::*;
     /*inject_css(
         "ftml-comp",
@@ -177,7 +177,7 @@ fn do_results(
     );*/
     let pre_view =
         move || view! {<div style="width:100%;font-weight:bold;text-align:center;">{pre}</div>};
-    move || {
+    (move || {
         results.with(|r| match r {
             SearchState::None => A(()),
             SearchState::Results(v) if v.is_empty() => B(view!({pre_view}"(No results)")),
@@ -195,20 +195,20 @@ fn do_results(
             .map(|(score, res)| do_result(*score, res,remote))
             .collect_view()})),
         })
-    }
+    }).into_any()
 }
 
 fn do_result(
     score: f32,
     res: &SearchResult,
     remote: Option<fn() -> Option<String>>,
-) -> impl IntoView + use<> {
+) -> AnyView {
     use leptos::either::Either::*;
     match res {
-        SearchResult::Document(d) => Left(do_doc(score, d.clone(), remote)),
+        SearchResult::Document(d) => do_doc(score, d.clone(), remote),
         SearchResult::Paragraph {
             uri, fors, kind, ..
-        } => Right(do_para(score, uri.clone(), *kind, fors.clone(), remote)),
+        } => do_para(score, uri.clone(), *kind, fors.clone(), remote),
     }
 }
 
@@ -262,7 +262,7 @@ impl std::fmt::Display for Short<'_> {
     }
 }
 
-fn do_sym_result_local(sym: &SymbolUri) -> impl IntoView + use<> {
+fn do_sym_result_local(sym: &SymbolUri) -> AnyView {
     let vs = unwrap!(VSCode::get());
     let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
     view! {
@@ -293,14 +293,14 @@ fn do_sym_result_local(sym: &SymbolUri) -> impl IntoView + use<> {
                 }
             </div>
         </div>
-    }
+    }.into_any()
 }
 
 fn do_sym_result_remote(
     sym: &SymbolUri,
     res: Vec<(f32, SearchResult)>,
     remote: fn() -> Option<String>,
-) -> impl IntoView + use<> {
+) -> AnyView {
     use thaw::Scrollbar;
     let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     view! {
@@ -321,10 +321,10 @@ fn do_sym_result_remote(
               </div>
             </div>
         </div>
-    }
+    }.into_any()
 }
 
-fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
+fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> AnyView {
     use thaw::Scrollbar;
     let name = uri.as_view::<flams_router_content::backend::FtmlBackend>(); //doc_name(&uri, uri.document_name().to_string());
     view! {
@@ -342,7 +342,7 @@ fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) 
               </div>
             </div>
         </div>
-    }
+    }.into_any()
 }
 
 fn do_para(
@@ -351,7 +351,7 @@ fn do_para(
     kind: SearchResultKind,
     fors: Vec<SymbolUri>,
     remote: Option<fn() -> Option<String>>,
-) -> impl IntoView {
+) -> AnyView {
     use thaw::Scrollbar;
     let uristr = uri.to_string();
     let name = uristr;
@@ -375,16 +375,15 @@ fn do_para(
               </div>
             </div>
         </div>
-    }
+    }.into_any()
 }
 
-fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl IntoView {
+fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> AnyView {
     use flams_router_content::components::Fragment;
-    use leptos::either::Either;
-    move || {
+    (move || {
         let uri = uri.clone();
         if let Some(remote) = remote.and_then(|f| f()) {
-            Either::Left({
+            {
                 #[cfg(all(feature = "hydrate", not(feature = "ssr")))]
                 {
                     use flams_router_base::ServerFnExt;
@@ -417,7 +416,7 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                               for css in css { css.inject(); }
                               flams_router_content::Views::render_ftml(html.into_string(),None)
                               //FragmentString(FragmentStringProps{html,uri})
-                            }</div>}
+                            }</div>}.into_any()
                         },
                     )
                 }
@@ -425,11 +424,9 @@ fn fragment(uri: NarrativeUri, remote: Option<fn() -> Option<String>>) -> impl I
                 {
                     ""
                 }
-            })
+            }.into_any()
         } else {
-            Either::Right(
-                view!(<Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>),
-            )
+            view!(<Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>).into_any()
         }
-    }
+    }).into_any()
 }

@@ -67,7 +67,7 @@ impl Filter {
 }
 
 #[component]
-pub fn SearchTop() -> impl IntoView {
+pub fn SearchTop() -> AnyView {
     use flams_web_utils::components::ClientOnly;
     use thaw::{
         Divider, Flex, FlexAlign, Icon, Input, InputPrefix, Layout, LayoutHeader, Radio,
@@ -198,27 +198,26 @@ pub fn SearchTop() -> impl IntoView {
           <div style="width:fit-content;padding:10px;"><Flex vertical=true align=FlexAlign::Start>{move || do_results(results)}</Flex></div>
         </Layout>
       </Layout>
-    }
+    }.into_any()
 }
 
-fn do_results(results: RwSignal<SearchState>) -> impl IntoView {
-    use leptos::either::EitherOf5::*;
+fn do_results(results: RwSignal<SearchState>) -> AnyView {
     results.with(|r| match r {
-        SearchState::None => A(()),
-        SearchState::Results(v) if v.is_empty() => B("(No results)"),
-        SearchState::Loading => C(view!(<flams_web_utils::components::Spinner/>)),
-        SearchState::SymResults(v) => D(v
+        SearchState::None => ().into_any(),
+        SearchState::Results(v) if v.is_empty() => "(No results)".into_any(),
+        SearchState::Loading => view!(<flams_web_utils::components::Spinner/>).into_any(),
+        SearchState::SymResults(v) => v
             .iter()
             .map(|(sym, res)| do_sym_result(sym, res.clone()))
-            .collect_view()),
-        SearchState::Results(v) => E(v
+            .collect_view().into_any(),
+        SearchState::Results(v) => v
             .iter()
             .map(|(score, res)| do_result(*score, res))
-            .collect_view()),
+            .collect_view().into_any(),
     })
 }
 
-fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> impl IntoView + use<> {
+fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::ClientOnly;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
@@ -248,20 +247,20 @@ fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> impl IntoVie
             </div>
           </CardPreview>
       </Card>
-    }
+    }.into_any()
 }
 
-fn do_result(score: f32, res: &SearchResult) -> impl IntoView + use<> {
+fn do_result(score: f32, res: &SearchResult) -> AnyView {
     use leptos::either::Either::*;
     match res {
-        SearchResult::Document(d) => Left(do_doc(score, d.clone())),
+        SearchResult::Document(d) => do_doc(score, d.clone()),
         SearchResult::Paragraph {
             uri, fors, kind, ..
-        } => Right(do_para(score, uri.clone(), *kind, fors.clone())),
+        } => do_para(score, uri.clone(), *kind, fors.clone()),
     }
 }
 
-fn do_doc(score: f32, uri: DocumentUri) -> impl IntoView {
+fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
     use flams_router_content::components::DocumentInner;
     use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
 
@@ -290,7 +289,7 @@ fn do_doc(score: f32, uri: DocumentUri) -> impl IntoView {
               "sTeX:"<pre></pre>
           </CardFooter>*/
       </Card>
-    }
+    }.into_any()
 }
 
 fn do_para(
@@ -298,7 +297,7 @@ fn do_para(
     uri: DocumentElementUri,
     kind: SearchResultKind,
     fors: Vec<SymbolUri>,
-) -> impl IntoView {
+) -> AnyView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::{Popover, PopoverTrigger};
     use thaw::{
@@ -309,7 +308,7 @@ fn do_para(
     let namestr = uri.name().to_string();
     let name = view! {
       <div style="display:inline-block;"><Popover>
-      <PopoverTrigger slot><span class="ftml-comp">{namestr}</span></PopoverTrigger>
+      <PopoverTrigger slot>{view!(<span class="ftml-comp">{namestr}</span>).into_any()}</PopoverTrigger>
       <div style="font-size:small;">{uristr}</div>
       </Popover></div>
     };
@@ -344,5 +343,5 @@ fn do_para(
               "sTeX:"<pre></pre>
           </CardFooter>*/
       </Card>
-    }
+    }.into_any()
 }

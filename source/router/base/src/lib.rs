@@ -24,23 +24,23 @@ pub fn vscode_link(archive: &ftml_uris::ArchiveId, rel_path: &str) -> impl IntoV
 }
 
 #[component]
-pub fn RequireLogin<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoView {
-    require_login(children.into_inner())
+pub fn RequireLogin(children: Children) -> impl IntoView {
+    require_login(children)
 }
 
-pub fn require_login<Ch: IntoView + 'static>(
-    children: impl FnOnce() -> Ch + Send + 'static,
-) -> impl IntoView {
+pub fn require_login(
+    children: Children,
+) -> AnyView {
     use flams_web_utils::components::{Spinner, display_error};
 
     let children = std::sync::Arc::new(flams_utils::parking_lot::Mutex::new(Some(children)));
-    move || match LoginState::get() {
-        LoginState::Loading => EitherOf3::A(view!(<Spinner/>)),
+    (move || match LoginState::get() {
+        LoginState::Loading => view!(<Spinner/>).into_any(),
         LoginState::Admin | LoginState::NoAccounts | LoginState::User { is_admin: true, .. } => {
-            EitherOf3::B((children.clone().lock().take()).map(|f| f()))
+            (children.clone().lock().take()).map(|f| f()).into_any()
         }
-        _ => EitherOf3::C(view!(<div>{display_error("Not logged in".into())}</div>)),
-    }
+        _ => view!(<div>{display_error("Not logged in".into())}</div>).into_any(),
+    }).into_any()
 }
 
 #[cfg(feature = "ssr")]

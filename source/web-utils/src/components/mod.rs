@@ -52,12 +52,11 @@ pub struct Trigger {
 }
 
 #[component]
-pub fn Collapsible<Ch: IntoView + 'static>(
+pub fn Collapsible(
     #[prop(optional)] header: Option<Header>,
-    children: TypedChildren<Ch>,
+    children: Children,
     #[prop(optional, into)] expanded: Option<RwSignal<bool>>,
 ) -> impl IntoView {
-    let children = children.into_inner();
     let expanded = expanded.unwrap_or_else(|| RwSignal::new(false));
     view! {<details open=move || expanded.get()>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
@@ -68,11 +67,10 @@ pub fn Collapsible<Ch: IntoView + 'static>(
 }
 
 #[component]
-pub fn LazyCollapsible<Ch: IntoView + 'static>(
+pub fn LazyCollapsible(
     #[prop(optional)] header: Option<Header>,
-    children: TypedChildrenMut<Ch>,
+    mut children: ChildrenFnMut,
 ) -> impl IntoView {
-    let mut children = children.into_inner();
     let expanded = RwSignal::new(false);
     view! {<details>
         <summary on:click=move |_| expanded.update(|b| *b = !*b)>{
@@ -85,11 +83,10 @@ pub fn LazyCollapsible<Ch: IntoView + 'static>(
 }
 
 #[component]
-pub fn Burger<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoView {
+pub fn Burger(children: Children) -> impl IntoView {
     use icondata_ch::ChMenuHamburger;
     use thaw::{Menu, MenuPosition, MenuTrigger, MenuTriggerType};
     inject_css("burger", include_str!("burger.css"));
-    let children = children.into_inner();
     view! {<ClientOnly><div class="ftml-burger-outer"><div class="ftml-burger">
       <Menu on_select=|_:String| () trigger_type=MenuTriggerType::Hover position=MenuPosition::Bottom>
           <MenuTrigger slot><div><thaw::Icon width="2.5em" height="2.5em" icon=ChMenuHamburger/></div></MenuTrigger>
@@ -99,8 +96,8 @@ pub fn Burger<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoV
 }
 
 #[component]
-pub fn ClientOnly<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> impl IntoView {
-    let children = std::cell::Cell::new(Some(children.into_inner()));
+pub fn ClientOnly(children: Children) -> impl IntoView {
+    let children = std::cell::Cell::new(Some(children));
     let sig = RwSignal::new(false);
     let rf = NodeRef::new();
     rf.on_load(move |_| sig.set(true));

@@ -34,18 +34,17 @@ impl DrawerSize {
 }
 
 #[component]
-pub fn Drawer<Ch: IntoView + 'static>(
+pub fn Drawer(
     lazy: bool,
     trigger: super::Trigger,
     #[prop(optional)] header: Option<Header>,
     #[prop(optional)] size: DrawerSize,
-    children: TypedChildrenMut<Ch>,
+    mut children: ChildrenFnMut,
 ) -> impl IntoView {
     use thaw::{
         Button, ButtonAppearance, DrawerBody, DrawerHeader, DrawerHeaderTitle,
         DrawerHeaderTitleAction, DrawerPosition, OverlayDrawer,
     };
-    let mut children = children.into_inner();
     //inject_css("flams-drawer", ".flams-wide-drawer { z-index:5;}");
     let open = RwSignal::new(false);
     view! {
