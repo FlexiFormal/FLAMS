@@ -4,8 +4,7 @@ use ftml_dom::utils::css::inject_css;
 use leptos::prelude::*;
 
 #[component]
-pub fn Tree<T: IntoView + 'static>(children: TypedChildren<T>) -> impl IntoView {
-    let children = children.into_inner();
+pub fn Tree(children: Children) -> impl IntoView {
     inject_css("flams-treeview", include_str!("trees.css"));
     view! {
         <ul class="flams-treeview">{children()}</ul>
@@ -13,20 +12,18 @@ pub fn Tree<T: IntoView + 'static>(children: TypedChildren<T>) -> impl IntoView 
 }
 
 #[component]
-pub fn Leaf<T: IntoView + 'static>(children: TypedChildren<T>) -> impl IntoView {
-    let children = children.into_inner();
+pub fn Leaf(children: Children) -> impl IntoView {
     view! {
         <li class="flams-treeview-li">{children()}</li>
     }
 }
 
 #[component]
-pub fn Subtree<T: IntoView + 'static>(
+pub fn Subtree(
     header: super::Header,
-    children: TypedChildren<T>,
+    children: Children,
     #[prop(default = false)] expanded: bool,
 ) -> impl IntoView {
-    let children = children.into_inner();
     let children = move || {
         view! {
             <summary class="flams-treeview-summary">
@@ -48,11 +45,10 @@ pub fn Subtree<T: IntoView + 'static>(
 }
 
 #[component]
-pub fn LazySubtree<T: IntoView + 'static>(
+pub fn LazySubtree(
     header: super::Header,
-    children: TypedChildrenMut<T>,
+    mut children: ChildrenFnMut,
 ) -> impl IntoView {
-    let mut children = children.into_inner();
     let expanded = RwSignal::new(false);
     let children = move || {
         view! {

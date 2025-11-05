@@ -46,7 +46,7 @@ impl Entry {
     }
 
     #[cfg(feature = "hydrate")]
-    fn as_view(&self) -> impl IntoView + use<> {
+    fn as_view(&self) -> AnyView {
         use flams_router_base::vscode_link;
         use flams_web_utils::components::{Collapsible, Header};
 
@@ -88,7 +88,7 @@ impl Entry {
             ).collect_view()}
             </ol>
           </Collapsible></li>
-        }
+        }.into_any()
     }
 }
 
@@ -124,19 +124,19 @@ pub enum TaskState {
 }
 impl TaskState {
     #[cfg(feature = "hydrate")]
-    fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> impl IntoView + use<> {
+    fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> AnyView {
         use flams_web_utils::components::{Header, LazyCollapsible};
         use thaw::Scrollbar;
         match self {
-            Self::Running => EitherOf4::A(view! {<i style="color:yellow">{t}" (Running)"</i>}),
+            Self::Running => view! {<i style="color:yellow">{t}" (Running)"</i>}.into_any(),
             Self::Queued | Self::Blocked | Self::None => {
-                EitherOf4::B(view! {<span style="color:gray">{t}" (...)"</span>})
+                view! {<span style="color:gray">{t}" (...)"</span>}.into_any()
             }
             Self::Done => {
                 let archive = archive.clone();
                 let rel_path = rel_path.to_string();
                 let tc = t.clone();
-                EitherOf4::C(view! {
+                view! {
                   <LazyCollapsible>
                     <Header slot><span style="color:green">{t}" (Done)"</span></Header>
                     {
@@ -144,23 +144,23 @@ impl TaskState {
                       let rel_path = rel_path.clone();
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      require_login(move || wait_and_then_fn(
+                      require_login(Box::new(move || wait_and_then_fn(
                           move || get_log(queue,archive.clone(),rel_path.clone(),tc.clone()),
                           |s| {
                             view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
                                 <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                            </Scrollbar>}
+                            </Scrollbar>}.into_any()
                             }
-                      ))
+                      )))
                     }
                   </LazyCollapsible>
-                })
+                }.into_any()
             }
             Self::Failed => {
                 let archive = archive.clone();
                 let rel_path = rel_path.to_string();
                 let tc = t.clone();
-                EitherOf4::D(view! {
+                view! {
                   <LazyCollapsible>
                     <Header slot><span style="color:red">{t}" (Failed)"</span></Header>
                     {
@@ -168,17 +168,17 @@ impl TaskState {
                       let rel_path = rel_path.clone();
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
-                      require_login(move || wait_and_then_fn(
+                      require_login(Box::new(move || wait_and_then_fn(
                           move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
                           |s| {
                                 view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
                                     <pre style="width:fit-content;font-size:smaller;">{s}</pre>
                                 </Scrollbar>}
-                            }
-                      ))
+                            }.into_any()
+                      )))
                     }
                   </LazyCollapsible>
-                })
+                }.into_any()
             }
         }
     }
@@ -272,21 +272,21 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
 // ----------------------------------------------------------------------------------
 
 #[component]
-pub fn QueuesTop() -> impl IntoView {
+pub fn QueuesTop() -> AnyView {
     use flams_web_utils::components::Spinner;
     use thaw::{Divider, Layout, Tab, TabList};
 
     let update = UpdateQueues(RwSignal::new(()));
     provide_context(update);
-    move || {
+    (move || {
         let () = update.0.get();
         let params = use_params_map();
         let id = move || params.read().get("queue");
 
-        require_login(move || {
+        require_login(Box::new(move || {
             wait_and_then_fn(server_fns::get_queues, move |v| {
                 if v.is_empty() {
-                    return leptos::either::Either::Left(view!(<div>"(No running queues)"</div>));
+                    return view!(<div>"(No running queues)"</div>).into_any();
                 }
                 let queues = AllQueues::new(v);
                 if let Some(id) = id() {
@@ -308,7 +308,7 @@ pub fn QueuesTop() -> impl IntoView {
                     "flams-fullscreen",
                     ".flams-fullscreen { width:100%; height:calc(100% - 44px - 21px) }",
                 );
-                leptos::either::Either::Right(view! {
+                view! {
                   <TabList selected_value>
                     <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
                       <Tab value=i.to_string()>{
@@ -326,44 +326,45 @@ pub fn QueuesTop() -> impl IntoView {
                         let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
                         move || match ls.get() {
                           QueueData::Idle(v) => {
-                              EitherOf4::A(idle(curr,v))
+                              idle(curr,v)
                           },
                           QueueData::Running(r) => {
-                              EitherOf4::B(running(curr,r))
+                              running(curr,r)
                           },
-                          QueueData::Finished(failed,done) => EitherOf4::C(finished(curr,failed,done)),
-                          QueueData::Empty => EitherOf4::D(view!(<div>"Other"</div>))
+                          QueueData::Finished(failed,done) => finished(curr,failed,done),
+                          QueueData::Empty => view!(<div>"Other"</div>).into_any()
                         }
                       }</Show>
                     }
                   }}</Layout>
-                })
+                }.into_any()
             })
-        })
-    }
+        }) as _)
+    }).into_any()
 }
 
 #[allow(clippy::too_many_lines)]
-fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
+fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
     use flams_web_utils::components::{Collapsible, Header};
     use thaw::{
         Caption1Strong, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell,
         TableRow,
     };
     if matches!(LoginState::get(), LoginState::NoAccounts) {
-        return None;
+        return ().into_any();
     }
     let queues: AllQueues = expect_context();
-    let repos = queues
+    let Some(repos) = queues
         .queue_repos
         .with_untracked(|v| v.get(&queue_id).cloned())
-        .flatten()?;
+        .flatten() else {
+            return ().into_any()
+        };
     if repos.is_empty() {
-        return None;
+        return ().into_any();
     }
     let style = if allowed { "" } else { "color:gray;" };
     inject_css("flams-repo-table", include_str!("repo-table.css"));
-    Some(
         view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
           <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
           <Table class="flams-repo-table">
@@ -461,8 +462,8 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> impl IntoView {
               }).collect_view()
             }</TableBody>
           </Table>
-        </Collapsible></div>},
-    )
+        </Collapsible></div>
+    }.into_any()
 }
 
 fn delete_action(id: NonZeroU32) -> Action<(), ()> {
@@ -477,7 +478,7 @@ fn delete_action(id: NonZeroU32) -> Action<(), ()> {
     })
 }
 
-fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> impl IntoView {
+fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
     use thaw::Button;
     let act = Action::<(), Result<(), ServerFnError<String>>>::new(move |()| {
         flams_router_buildqueue_base::server_fns::run(id)
@@ -492,10 +493,10 @@ fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> impl IntoView {
       <ol reversed style="margin-left:30px">
         <For each=move || ls.get() key=|e| e.id children=|e| e.as_view()/>
       </ol>
-    }
+    }.into_any()
 }
 
-fn running(id: NonZeroU32, queue: RunningQueue) -> impl IntoView {
+fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
     use flams_web_utils::components::{Anchor, AnchorLink, Header};
     use thaw::{Button, Layout};
     let del = delete_action(id);
@@ -532,10 +533,10 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> impl IntoView {
           <h3 id="finished">"Finished ("{move || done.with(Vec::len)}")"</h3>
           <ul style="margin-left:30px"><For each=move || done.get() key=|e| e.id children=|e| e.as_view()/></ul>
       </Layout>
-    }
+    }.into_any()
 }
 
-fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> impl IntoView {
+fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
     use flams_web_utils::components::{Anchor, AnchorLink, Header};
     use thaw::{Button, Layout};
     let requeue = Action::new(move |()| flams_router_buildqueue_base::server_fns::requeue(id));
@@ -565,14 +566,14 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> impl IntoVi
             done.iter().map(Entry::as_view).collect_view()
           }</ul>
       </Layout>
-    }
+    }.into_any()
 }
 
-fn migrate_button(id: NonZeroU32, num_failed: usize) -> impl IntoView {
+fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
     use leptos::either::EitherOf3;
     use thaw::{Button, Caption1Strong, Dialog, DialogBody, DialogContent, DialogSurface, Divider};
     if matches!(LoginState::get(), LoginState::NoAccounts) {
-        return EitherOf3::A(());
+        return ().into_any();
     }
     let update: UpdateQueues = expect_context();
     let migrate = flams_web_utils::components::message_action(
@@ -583,12 +584,12 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> impl IntoView {
         },
     );
     if num_failed == 0 {
-        EitherOf3::B(view! {
+        view! {
           <Button on_click=move |_| {migrate.dispatch(());}>"Migrate"</Button>
-        })
+        }.into_any()
     } else {
         let clicked = RwSignal::new(false);
-        EitherOf3::C(view! {
+        view! {
           <Button on_click=move |_| {clicked.set(true);}>"Migrate"</Button>
           <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
             <Caption1Strong><span style="color:red">WARNING</span></Caption1Strong>
@@ -600,7 +601,7 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> impl IntoView {
               </div>
             </div>
           </DialogContent></DialogBody></DialogSurface></Dialog>
-        })
+        }.into_any()
     }
 }
 

@@ -13,7 +13,7 @@ use leptos::prelude::*;
 use std::num::NonZeroU32;
 
 #[component]
-pub fn ArchivesTop() -> impl IntoView {
+pub fn ArchivesTop() -> AnyView {
     wait_and_then_fn(
         || super::server_fns::group_entries(None),
         |(groups, archives)| {
@@ -41,19 +41,19 @@ pub fn ArchivesTop() -> impl IntoView {
             </Header>
             <ArchivesAndGroups archives groups/>
         </Subtree></Tree>)
-        },
-    )
+        }.into_any(),
+    ).into_any()
 }
 
 #[component]
-fn ArchivesAndGroups(groups: Vec<ArchiveGroupData>, archives: Vec<ArchiveData>) -> impl IntoView {
+fn ArchivesAndGroups(groups: Vec<ArchiveGroupData>, archives: Vec<ArchiveData>) -> AnyView {
     view! {
       {groups.into_iter().map(group).collect_view()}
       {archives.into_iter().map(archive).collect_view()}
-    }
+    }.into_any()
 }
 
-fn group(a: ArchiveGroupData) -> impl IntoView {
+fn group(a: ArchiveGroupData) -> AnyView {
     let id = a.id.clone();
     let header = view!(
       <thaw::Icon icon=icondata_bi::BiLibraryRegular/>" "
@@ -76,7 +76,7 @@ fn group(a: ArchiveGroupData) -> impl IntoView {
         {
           wait_and_then(f.clone(),
           |(groups,archives)|
-            view!(<Tree><ArchivesAndGroups groups archives/></Tree>)
+            view!(<Tree><ArchivesAndGroups groups archives/></Tree>).into_any()
           )
         }
       </LazySubtree>
@@ -84,7 +84,7 @@ fn group(a: ArchiveGroupData) -> impl IntoView {
     .into_any()
 }
 
-fn archive(a: ArchiveData) -> impl IntoView {
+fn archive(a: ArchiveData) -> AnyView {
     let id = a.id.clone();
     let header = view!(
       <thaw::Icon icon=icondata_bi::BiBookSolid/>" "
@@ -107,25 +107,25 @@ fn archive(a: ArchiveData) -> impl IntoView {
           let id = id.clone();
           let nid = id.clone();
           wait_and_then(move || super::server_fns::archive_entries(id.clone(),None),move |(dirs,files)|
-            view!(<Tree>{dirs_and_files(&nid,dirs,files)}</Tree>)
+            view!(<Tree>{dirs_and_files(&nid,dirs,files)}</Tree>).into_any()
           )
         }
       </LazySubtree>
-    }
+    }.into_any()
 }
 
 fn dirs_and_files(
     archive: &ArchiveId,
     dirs: Vec<DirectoryData>,
     files: Vec<FileData>,
-) -> impl IntoView + 'static + use<> {
+) -> AnyView {
     view! {
       {dirs.into_iter().map(|d| dir(archive.clone(),d)).collect_view()}
       {files.into_iter().map(|f| file(archive.clone(),f)).collect_view()}
-    }
+    }.into_any()
 }
 
-fn dir(archive: ArchiveId, d: DirectoryData) -> impl IntoView {
+fn dir(archive: ArchiveId, d: DirectoryData) -> AnyView {
     let pathstr = unwrap!(d.rel_path.split('/').last()).to_string();
     let id = archive.clone();
     let rel_path = d.rel_path.clone();
@@ -154,7 +154,7 @@ fn dir(archive: ArchiveId, d: DirectoryData) -> impl IntoView {
           wait_and_then(
               f.clone(),
               move |(dirs,files)|
-            view!(<Tree>{dirs_and_files(&archive,dirs,files)}</Tree>)
+            view!(<Tree>{dirs_and_files(&archive,dirs,files)}</Tree>).into_any()
           )
         }
       </LazySubtree>
@@ -162,7 +162,7 @@ fn dir(archive: ArchiveId, d: DirectoryData) -> impl IntoView {
     .into_any()
 }
 
-fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
+fn file(archive: ArchiveId, f: FileData) -> AnyView {
     use flams_web_utils::components::{Drawer, Header, Trigger};
     use thaw::{Button, ButtonAppearance};
 
@@ -200,10 +200,10 @@ fn file(archive: ArchiveId, f: FileData) -> impl IntoView {
     );
     view! {
       <Leaf>{header}</Leaf>
-    }
+    }.into_any()
 }
 
-fn badge(state: crate::FileStateSummary) -> impl IntoView {
+fn badge(state: crate::FileStateSummary) -> AnyView {
     use thaw::{Badge, BadgeAppearance, BadgeColor};
     view! {
       {if state.new == 0 {None} else {Some(view!(
@@ -215,15 +215,15 @@ fn badge(state: crate::FileStateSummary) -> impl IntoView {
       {if state.deleted == 0 {None} else {Some(view!(
         " "<Badge class="flams-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Danger>{state.deleted}</Badge>
       ))}}
-    }
+    }.into_any()
 }
 
 fn dialog<V: IntoView + 'static>(
     children: impl Fn(RwSignal<bool>) -> V + Send + Clone + 'static,
-) -> impl IntoView {
+) -> AnyView {
     use thaw::{Dialog, DialogBody, DialogContent, DialogSurface, Icon};
     let clicked = RwSignal::new(false);
-    move || {
+    (move || {
         if matches!(
             LoginState::get(),
             LoginState::Admin | LoginState::NoAccounts | LoginState::User { is_admin: true, .. }
@@ -240,7 +240,7 @@ fn dialog<V: IntoView + 'static>(
         } else {
             None
         }
-    }
+    }).into_any()
 }
 
 fn modal(
@@ -248,7 +248,7 @@ fn modal(
     path: Option<String>,
     states: FileStates,
     format: Option<String>,
-) -> impl IntoView {
+) -> AnyView {
     use thaw::{
         Button, ButtonSize, Caption1Strong, Card, CardHeader, CardHeaderAction, Divider, Table,
     };
@@ -354,5 +354,5 @@ fn modal(
           </Table>
 
       </Card></div>
-    }
+    }.into_any()
 }

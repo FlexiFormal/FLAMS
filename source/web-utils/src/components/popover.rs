@@ -15,26 +15,25 @@ pub struct OnClickModal {
 }
 
 #[component]
-pub fn Popover<Ch: IntoView + 'static, T: IntoView + 'static>(
+pub fn Popover(
     #[prop(optional, into)] class: MaybeProp<String>,
     /// Action that displays the popover.
     #[prop(optional)]
     trigger_type: PopoverTriggerType,
     /// The element or component that triggers popover.
-    popover_trigger: PopoverTrigger<T>,
+    popover_trigger: PopoverTrigger<AnyView>,
     /// Configures the position of the Popover.
     #[prop(optional,default=PopoverPosition::Top)]
     position: PopoverPosition,
     #[prop(optional)] on_click_modal: Option<OnClickModal>,
     #[prop(optional)] on_click_signal: Option<RwSignal<bool>>,
-    children: TypedChildren<Ch>,
+    children: Children,
     #[prop(optional, into)] appearance: MaybeProp<PopoverAppearance>,
     #[prop(optional, into)] size: Signal<PopoverSize>,
     #[prop(optional, into)] on_open: Option<BoxCallback>,
     #[prop(optional, into)] on_close: Option<BoxCallback>,
 ) -> impl IntoView {
     let trigger = popover_trigger.children.into_inner();
-    let children = children.into_inner();
 
     let modal_signal = on_click_modal
         .as_ref()
@@ -75,7 +74,7 @@ pub fn Popover<Ch: IntoView + 'static, T: IntoView + 'static>(
                 children().into_any()
             }
         }),
-    })
+    }).into_any()
 }
 
 /*

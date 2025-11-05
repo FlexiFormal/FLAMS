@@ -14,9 +14,8 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
 #[component(transparent)]
-pub fn URITop() -> impl IntoView {
+pub fn URITop() -> AnyView {
     use crate::components::Fragment;
-    use leptos::either::EitherOf3::{A, B, C};
     use leptos_meta::Stylesheet;
     view! {
         <Stylesheet id="leptos" href="/pkg/flams.css"/>
@@ -24,18 +23,18 @@ pub fn URITop() -> impl IntoView {
             use_query_map().with_untracked(|m| {
                 m.as_document().map_or_else(
                     |_| match m.as_comps() {
-                        Ok(uri) => B(
-                            view!(<Fragment uri=uri.into() position=SidebarPosition::Next/>)
-                        ),
-                        Err(e) => C(flams_web_utils::components::display_error(
+                        Ok(uri) => 
+                            view!(<Fragment uri=uri.into() position=SidebarPosition::Next/>).into_any()
+                        ,
+                        Err(e) => flams_web_utils::components::display_error(
                             format!("Invalid URI: {e}").into(),
-                        )),
+                        ).into_any(),
                     },
-                    |doc| A(view!(<Document doc=doc.into()/>)),
+                    |doc| view!(<Document doc=doc.into()/>).into_any(),
                 )
-            })
+            }).into_any()
         )}
-    }
+    }.into_any()
     /*
     use flams_web_utils::components::Themer;
     use ftml_viewer_components::FTMLGlobalSetup;
@@ -86,16 +85,16 @@ pub fn URITop() -> impl IntoView {
 }
 
 #[component]
-pub fn DocumentOfTop(uri: Uri) -> impl IntoView {
+pub fn DocumentOfTop(uri: Uri) -> AnyView {
     use leptos_router::components::Redirect;
     wait_and_then_fn(
         move || super::server_fns::document_of(uri.clone()),
-        |u| view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>),
-    )
+        |u| view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>).into_any(),
+    ).into_any()
 }
 
 #[component]
-pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView {
+pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
     use ftml_dom::utils::css::CssExt;
     // make sure this runs client side rather than server side because of hydration errors
     // I don't understand.
@@ -106,7 +105,7 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView 
             sig.set(true);
         }
     });
-    move || {
+    (move || {
         let uri = uri.clone();
         if sig.get() {
             Some(ftml_components::utils::wait_and_then(
@@ -129,24 +128,24 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> impl IntoView 
                             None
                         }
                     };
-                    crate::Views::render_fragment::<crate::backend::FtmlBackend, _>(
+                    crate::Views::render_fragment::<crate::backend::FtmlBackend>(
                         uri,
                         position,
                         true,
-                        move || crate::Views::render_ftml(html.into_string(), None),
-                    )
+                        move || crate::Views::render_ftml(html.into_string(), None).into_any(),
+                    ).into_any()
                 },
-                |e| view!(<span style="color:red">{e.to_string()}</span>),
+                |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
             ))
         } else {
             None
         }
-    }
+    }).into_any()
     //})
 }
 
 #[component]
-pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
+pub fn Document(doc: DocumentUriComponents) -> AnyView {
     wait_and_then_fn(
         move || DocumentUriComponentTuple::from(doc.clone()).apply(super::server_fns::document),
         move |(uri, css, html)| {
@@ -154,18 +153,18 @@ pub fn Document(doc: DocumentUriComponents) -> impl IntoView {
                 css.inject();
             }
             FtmlConfig::set_toc_source(TocSource::Get);
-            crate::Views::setup_document::<crate::backend::FtmlBackend, _>(
+            crate::Views::setup_document::<crate::backend::FtmlBackend>(
                 uri,
                 SidebarPosition::Next,
                 true,
-                move || crate::Views::render_ftml(html.into_string(), None),
-            )
+                move || crate::Views::render_ftml(html.into_string(), None).into_any(),
+            ).into_any()
         },
-    )
+    ).into_any()
 }
 
 #[component]
-pub fn DocumentInner(doc: DocumentUriComponents) -> impl IntoView {
+pub fn DocumentInner(doc: DocumentUriComponents) -> AnyView {
     let doc: UriComponents = doc.into();
     wait_and_then_fn(
         move || UriComponentTuple::from(doc.clone()).apply1(super::server_fns::fragment, None),
@@ -174,12 +173,13 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> impl IntoView {
                 css.inject();
             }
             view! {<div>{
-                crate::Views::setup_document::<crate::backend::FtmlBackend,_>(
+                crate::Views::setup_document::<crate::backend::FtmlBackend>(
                     DocumentUri::no_doc().clone(),
                     SidebarPosition::None,
                     true,
-                    move || crate::Views::render_ftml(html.into_string(),None))
-            }</div>}
+                    move || crate::Views::render_ftml(html.into_string(),None).into_any()
+                )
+            }</div>}.into_any()
         },
-    )
+    ).into_any()
 }

@@ -4,10 +4,10 @@ use ftml_dom::utils::css::inject_css;
 pub use leptos::prelude::*;
 
 #[component]
-pub fn VSCodeButton<T: IntoView + 'static>(children: TypedChildren<T>) -> impl IntoView {
+pub fn VSCodeButton(children: Children) -> AnyView {
     inject_css("flams-vscode-button", include_str!("button.css"));
-    let children = children.into_inner();
-    view!(<button class="flams-vscode-button">{children()}</button>)
+    //let children = children.into_inner();
+    view!(<button class="flams-vscode-button">{children()}</button>).into_any()
 }
 
 struct RadioGroup {
@@ -16,24 +16,24 @@ struct RadioGroup {
 }
 
 #[component]
-pub fn VSCodeRadioGroup<T: IntoView + 'static>(
+pub fn VSCodeRadioGroup(
     #[prop(into)] name: String,
     selected: RwSignal<Option<String>>,
-    children: TypedChildren<T>,
-) -> impl IntoView {
+    children: Children,
+) -> AnyView {
     inject_css("flams-vscode-radio", include_str!("radio.css"));
-    let children = children.into_inner();
+    //let children = children.into_inner();
     provide_context(RadioGroup { name, selected });
     children()
 }
 
 #[component]
-pub fn VSCodeRadio<T: IntoView + 'static>(
+pub fn VSCodeRadio(
     #[prop(into)] id: String,
-    children: TypedChildren<T>,
+    children: Children,
     #[prop(optional, into)] disabled: Option<Signal<bool>>,
-) -> impl IntoView {
-    let children = children.into_inner();
+) -> AnyView {
+    //let children = children.into_inner();
     let Some((name, selected)) = with_context(|g: &RadioGroup| (g.name.clone(), g.selected)) else {
         panic!("VSCodeRadio outside of VSCodeRadioGroup");
     };
@@ -66,17 +66,17 @@ pub fn VSCodeRadio<T: IntoView + 'static>(
                 {children()}
             </div></label>
         </div></div>
-    }
+    }.into_any()
 }
 
 #[component]
-pub fn VSCodeCheckbox<T: IntoView + 'static>(
+pub fn VSCodeCheckbox(
     checked: RwSignal<bool>,
-    children: TypedChildren<T>,
+    children: Children,
     #[prop(optional, into)] disabled: Option<Signal<bool>>,
-) -> impl IntoView {
+) -> AnyView {
     inject_css("flams-vscode-checkbox", include_str!("checkbox.css"));
-    let children = children.into_inner();
+    //let children = children.into_inner();
 
     let top_class = Memo::new(move |_| {
         if disabled.is_some_and(|b| b.get()) {
@@ -104,7 +104,7 @@ pub fn VSCodeCheckbox<T: IntoView + 'static>(
                 {children()}
             </div></label>
         </div></div>
-    }
+    }.into_any()
 }
 
 #[component]
@@ -116,5 +116,5 @@ pub fn VSCodeTextbox(
     inject_css("flams-vscode-textbox", include_str!("textbox.css"));
     view! {
         <input type="text" placeholder=placeholder bind:value=value class="flams-vscode-textbox" disabled=disabled></input>
-    }
+    }.into_any()
 }

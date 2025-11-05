@@ -90,10 +90,10 @@ pub async fn reload() -> Result<(), ServerFnError<String>> {
 }
 
 #[component]
-pub(super) fn Settings() -> impl IntoView {
+pub(super) fn Settings() -> AnyView {
     use thaw::Table;
     inject_css("flams-settings", include_str!("settings.css"));
-    require_login(|| {
+    require_login(Box::new(|| {
         wait_and_then_fn(
             || async {
                 Ok::<_, ServerFnError<String>>((get_settings().await?, get_memory().await?))
@@ -172,10 +172,10 @@ pub(super) fn Settings() -> impl IntoView {
                           <td class="flams-settings-col">{settings.buildqueue.num_threads}</td>
                         </tr>
                     </tbody></Table>
-                )
+                ).into_any()
             },
         )
-    })
+    }))
 }
 
 fn do_memory(mem: Memory) -> impl IntoView {
