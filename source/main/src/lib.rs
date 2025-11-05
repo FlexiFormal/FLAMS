@@ -4,7 +4,7 @@
  *
  * See [endpoints] for public API endpoints
 */
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 /*#[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(doc)),

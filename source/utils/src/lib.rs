@@ -1,5 +1,5 @@
 //#![feature(ptr_as_ref_unchecked)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod binary;
 #[cfg(feature = "async")]

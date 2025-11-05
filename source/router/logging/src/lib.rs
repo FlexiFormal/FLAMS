@@ -1,5 +1,5 @@
 #![allow(clippy::must_use_candidate)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),

@@ -1,4 +1,4 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 //#![feature(file_buffered)]
 //#![feature(lazy_type_alias)]
 
