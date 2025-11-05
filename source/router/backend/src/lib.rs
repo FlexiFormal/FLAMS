@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 use flams_backend_types::archives::FileStateSummary;
 use flams_utils::vecmap::VecMap;
