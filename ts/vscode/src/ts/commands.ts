@@ -274,6 +274,7 @@ export function openIframe(url: string, title: string,focus:boolean): vscode.Web
     {
       enableScripts: true,
       enableForms: true,
+      retainContextWhenHidden : true,
     },
   );
   panel.webview.html = iframeHtml(url,title);
