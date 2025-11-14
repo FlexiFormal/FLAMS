@@ -1,0 +1,10 @@
+# https://numtide.github.io/devshell
+[[commands]]
+package = "hello"
+
+[devshell]
+packages = [
+  "nodejs_20",
+  "yarn",
+  "vsce",
+]

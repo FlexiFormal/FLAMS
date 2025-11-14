@@ -69,26 +69,26 @@
         }
       ],
       "editor/title": [
-				{
-					"command": "flams.buildAll",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				},
-				{
-					"command": "flams.buildOne",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				},
-				{
-					"command": "flams.exportTex",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				},
-				{
-					"command": "flams.exportHtml",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				}
+        {
+          "command": "flams.buildAll",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        },
+        {
+          "command": "flams.buildOne",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        },
+        {
+          "command": "flams.exportTex",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        },
+        {
+          "command": "flams.exportHtml",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        }
       ]
     },
     "commands": [
@@ -202,6 +202,7 @@
     "@octokit/rest": "^21.1.1",
     "@vscode-elements/elements": "^1.14.0",
     "@vscode/codicons": "^0.0.36",
+    "@vscode/vsce": "^3.7.0",
     "child_process": "^1.0.2",
     "follow-redirects": "^1.15.9",
     "fs": "^0.0.2",
