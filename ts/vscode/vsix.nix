@@ -1,7 +1,9 @@
 {
   buildNpmPackage,
   pkg-config,
-  vsce, 
+  vsce,
+  libsecret,
+  stdenv
 }:
 let
   packageJson = with builtins; fromJSON (readFile ./package.json);
@@ -10,7 +12,7 @@ buildNpmPackage{
   pname = "${packageJson.name}-vsix";
   version = packageJson.version;
   src = ./.;
-  npmDepsHash = "";
+  npmDepsHash = "sha256-NDKF0MfOGHU06vNA0kkxEBZg+7o5CaeuTYN6hfILkzQ=";
 
   nativeBuildInputs = [
     pkg-config
@@ -18,6 +20,9 @@ buildNpmPackage{
   ];
   dontNpmbuild = true;
   dontnpmInstall = true;
+  buildInputs = [
+    libsecret
+  ];
   buildPhase = ''
   vsce package
   '';
