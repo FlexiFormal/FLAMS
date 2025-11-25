@@ -10,6 +10,9 @@ pub mod query;
 mod settings;
 
 pub mod ws {
+    pub use flams_flodown::math::MathSocket;
+    #[cfg(feature = "ssr")]
+    pub use flams_flodown::math::TeXSocket;
     pub use flams_router_base::ws::*;
     pub use flams_router_buildqueue_components::QueueSocket;
     pub use flams_router_logging::LogSocket;
@@ -73,6 +76,7 @@ pub fn Main() -> AnyView {
                         <Route path=path!("archives") view=|| view!(<MainPage page=Page::MyArchives/>).into_any()/>
                         <Route path=path!("users") view=|| view!(<MainPage page=Page::Users/>).into_any()/>
                         <Route path=path!("search") view=|| view!(<MainPage page=Page::Search/>).into_any()/>
+                        <Route path=path!("flodown") view=|| view!(<MainPage page=Page::FloDown/>).into_any()/>
                         <Route path=path!("") view=|| view!(<MainPage page=Page::Home/>).into_any()/>
                         <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>).into_any()/>
                     </ParentRoute>
@@ -121,6 +125,7 @@ enum Page {
     Login,
     Query,
     Search,
+    FloDown,
     MyArchives,
     Users,
 }
@@ -138,6 +143,7 @@ impl Page {
             Query => "query",
             MyArchives => "archives",
             Search => "search",
+            FloDown => "flodown",
             Users => "users",
             NotFound => "notfound",
         }
@@ -154,7 +160,8 @@ pub fn Dashboard() -> AnyView {
     view! {
       <Stylesheet id="leptos" href="/pkg/flams.css"/>
       <Outlet/>
-    }.into_any()
+    }
+    .into_any()
 }
 
 #[component]
@@ -213,6 +220,7 @@ fn do_main(page: Page) -> AnyView {
         Page::Settings => view! {<settings::Settings/>}.into_any(),
         Page::MyArchives => view! {<flams_router_git_components::Archives/>}.into_any(),
         Page::Search => view! {<flams_router_search::components::SearchTop/>}.into_any(),
+        Page::FloDown => view! {<flams_flodown::FloDownEditor/>}.into_any(),
         Page::Users => view! {<flams_router_login::components::Users/>}.into_any(),
         _ => view!(<span>"TODO"</span>).into_any(),
         //Page::Login => view!{<LoginPage/>}
@@ -230,7 +238,8 @@ fn NotFound() -> AnyView {
 
     view! {
         <h3>"Not Found"</h3>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn side_menu(page: Page) -> AnyView {
@@ -246,26 +255,31 @@ fn side_menu(page: Page) -> AnyView {
                     <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                     <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                     <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
+                    <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
                 }.into_any(),
                 LoginState::Admin  => view!{
                   <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                   <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                   <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
                   <NavItem value="users" href="/dashboard/users">"Manage Users"</NavItem>
+                  <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
                 }.into_any(),
                 LoginState::User{is_admin:true,..} => view!{
                   <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                   <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                   <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
                   <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
+                  <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
                 }.into_any(),
                 LoginState::User{..} => view!{
                     <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
+                        <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
                 }.into_any(),
                 LoginState::None | LoginState::Loading => ().into_any()
             }}}
         </NavDrawer>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn user_field() -> AnyView {
@@ -318,7 +332,8 @@ fn user_field() -> AnyView {
         }
     }</div>
     //</ClientOnly>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn logout_form(user: String) -> AnyView {
@@ -328,7 +343,8 @@ fn logout_form(user: String) -> AnyView {
         login.set(LoginState::None);
         flams_router_login::server_fns::logout()
     });
-    view!(<span>{user}" "<Button on_click=move |_| {action.dispatch(());}>Logout</Button></span>).into_any()
+    view!(<span>{user}" "<Button on_click=move |_| {action.dispatch(());}>Logout</Button></span>)
+        .into_any()
 }
 
 fn login_form() -> AnyView {
@@ -339,7 +355,8 @@ fn login_form() -> AnyView {
     view! {
       <Button on_click=move |_| {action.dispatch(value.get_untracked());}>Login</Button>
       <Input placeholder="admin pwd" value input_type=InputType::Password/>
-    }.into_any()
+    }
+    .into_any()
 }
 
 #[allow(unused_variables)]

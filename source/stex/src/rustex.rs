@@ -114,7 +114,7 @@ impl OutputCont for TracingOutput {
 }
 
 #[derive(Clone)]
-struct EngineBase {
+pub(crate) struct EngineBase {
     state: RusTeXState,
     memory: MemoryManager<CompactToken>,
     font_system: Fontsystem,
@@ -122,7 +122,13 @@ struct EngineBase {
 static ENGINE_BASE: Mutex<Option<Result<EngineBase, ()>>> = Mutex::new(None);
 
 impl EngineBase {
-    fn into_engine<O: OutputCont + 'static, I: IntoIterator<Item = (String, String)>>(
+    pub(crate) fn into_engine(self) -> RusTeXEngine {
+        self.into_engine_opts(
+            std::iter::once(("FLAMS_ADMIN_PWD".to_string(), "NOPE".to_string())),
+            TracingOutput,
+        )
+    }
+    fn into_engine_opts<O: OutputCont + 'static, I: IntoIterator<Item = (String, String)>>(
         mut self,
         envs: I,
         out: O,
@@ -171,6 +177,14 @@ impl EngineBase {
         }
     }
 
+    pub(crate) fn from_engine(engine: DefaultEngine<Types>) -> Self {
+        Self {
+            state: engine.state,
+            memory: engine.aux.memory,
+            font_system: engine.fontsystem,
+        }
+    }
+
     #[instrument(level = "info", target = "sTeX", name = "Initializing RusTeX engine")]
     fn initialize() -> Result<Self, ()> {
         use tex_engine::engine::TeXEngine;
@@ -191,11 +205,7 @@ impl EngineBase {
                     error!("Error initializing RusTeX engine: {}", e);
                 }
             }
-            Self {
-                state: engine.state.clone(),
-                memory: engine.aux.memory.clone(),
-                font_system: engine.fontsystem.clone(),
-            }
+            Self::from_engine(engine)
         })
         .map_err(|a| {
             if let Some(s) = a.downcast_ref::<String>() {
@@ -209,7 +219,7 @@ impl EngineBase {
     }
 }
 
-pub struct RusTeX(Mutex<EngineBase>);
+pub struct RusTeX(pub(crate) Mutex<EngineBase>);
 impl RusTeX {
     /// # Errors
     pub fn get() -> Result<Self, ()> {
@@ -243,8 +253,8 @@ impl RusTeX {
     ) -> (DefaultEngine<Types>, RTSettings) {
         let e = self.0.lock().clone();
         let engine = match out {
-            None => e.into_engine(envs, TracingOutput),
-            Some(f) => e.into_engine(envs, FileOutput::new(f)),
+            None => e.into_engine_opts(envs, TracingOutput),
+            Some(f) => e.into_engine_opts(envs, FileOutput::new(f)),
         };
         let settings = RTSettings {
             verbose: false,
@@ -271,7 +281,7 @@ impl RusTeX {
             || {
                 if memorize {
                     let mut base = self.0.lock();
-                    give_back(engine, &mut base);
+                    give_back(engine, &mut base, &[b"c_stex_module_", b"c_stex_mathhub_"]);
                 }
                 Ok(res.to_string())
             },
@@ -281,7 +291,7 @@ impl RusTeX {
 
     pub fn builder(&self) -> RusTeXRunBuilder<false> {
         RusTeXRunBuilder {
-            inner: self.0.lock().clone().into_engine(
+            inner: self.0.lock().clone().into_engine_opts(
                 std::iter::once(("FLAMS_ADMIN_PWD".to_string(), "NOPE".to_string())),
                 TracingOutput,
             ),
@@ -324,7 +334,7 @@ pub struct EngineRemnants(DefaultEngine<Types>);
 impl EngineRemnants {
     pub fn memorize(self, global: &RusTeX) {
         let mut base = global.0.lock();
-        give_back(self.0, &mut base);
+        give_back(self.0, &mut base, &[b"c_stex_module_", b"c_stex_mathhub_"]);
     }
     pub fn take_output<O: OutputCont>(&mut self) -> Option<O> {
         match std::mem::replace(&mut self.0.aux.outputs, RusTeXOutput::None) {
@@ -386,6 +396,15 @@ impl RusTeXRunBuilder<false> {
             inner: self.inner,
             settings: self.settings,
         })
+    }
+    pub fn set_string_noaux(
+        mut self,
+        in_path: &Path,
+        content: &str,
+    ) -> Option<RusTeXRunBuilder<true>> {
+        let aux = in_path.with_extension("aux");
+        self.inner.filesystem.add_file(aux, "");
+        self.set_string(in_path, content)
     }
 }
 
@@ -449,7 +468,7 @@ fn convert_token(
 use tex_engine::tex::tokens::control_sequences::CSNameMap;
 use tex_engine::utils::errors::ErrorThrower;
 
-fn give_back(engine: RusTeXEngine, base: &mut EngineBase) {
+fn give_back(engine: RusTeXEngine, base: &mut EngineBase, prefixes: &'static [&'static [u8]]) {
     let EngineBase {
         state,
         memory,
@@ -458,7 +477,7 @@ fn give_back(engine: RusTeXEngine, base: &mut EngineBase) {
     *font_system = engine.fontsystem;
     let oldinterner = engine.aux.memory.cs_interner();
     let iter = CommandIterator {
-        prefixes: &[b"c_stex_module_", b"c_stex_mathhub_"],
+        prefixes, //: &[b"c_stex_module_", b"c_stex_mathhub_"],
         cmds: engine.state.destruct().into_iter(),
         interner: oldinterner,
     };

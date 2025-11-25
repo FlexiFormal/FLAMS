@@ -11,7 +11,8 @@
             //"ws",
             "git",
             "docs",
-            "ssr" //"hydrate" //
+            "serde",
+            "hydrate" //"ssr" //
           ] // "all"*/
         }
       }

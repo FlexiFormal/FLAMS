@@ -76,7 +76,7 @@ fn extract(spec: BuildSpec) -> BuildResult {
         Ok(h) => h,
     };
     let uri = spec.uri.clone();
-    let (lg, r) = flams_system::logging::span_capture(|| build_ftml(spec.backend, &html, uri));
+    let (lg, r) = flams_system::span_capture(|| build_ftml(spec.backend, &html, uri));
     match r {
         Err(e) => {
             let mut err = BuildResult::err();

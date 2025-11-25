@@ -27,6 +27,7 @@ members = [
     "source/router/login",
     "source/router/search",
     "source/router/vscode-bindings",
+    "source/router/flodown",
     #"ftml-viewer",
     #"experiments",
     "source/ffi",
@@ -162,9 +163,10 @@ flams-router-buildqueue-components = { path = "source/router/buildqueue/componen
 flams-router-git-base = { path = "source/router/git/base", version = "0.0.1" }
 flams-router-git-components = { path = "source/router/git/components", version = "0.0.1" }
 flams-router-login = { path = "source/router/login", version = "0.0.1" }
-flams-router-logging = { path = "source/router/logging", version = "0.0.1" }
-flams-router-search = { path = "source/router/search", version = "0.0.1" }
-flams-router-vscode = { path = "source/router/vscode-bindings", version = "0.0.1" }
+flams-router-logging = { path = "source/router/logging" }
+flams-router-search = { path = "source/router/search" }
+flams-router-vscode = { path = "source/router/vscode-bindings" }
+flams-flodown = { path = "source/router/flodown" }
 
 #ftml-extraction = { path = "source/ftml/extraction", version = "0.0.1" }
 #ftml-viewer-components = { path = "source/ftml/viewer-components", version = "0.0.1" }
@@ -175,23 +177,27 @@ flams-backend-types = { path = "backend-types" }
 flams-search = { path = "search" }
 
 # FTML
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"], branch="counters" }
-ftml-ontology = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
-ftml-backend = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
-ftml-parser = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
-ftml-components = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
-ftml5ever = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
-ulo = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
-ftml-dom = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+#ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"], branch="counters" }
+#ftml-ontology = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+#ftml-backend = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+#ftml-parser = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+#ftml-components = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+#ftml5ever = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+#ulo = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
+#ftml-dom = { git = "https://github.com/FlexiFormal/FTML", branch="counters" }
 
-#ftml-uris = { path = "../FTML/uris", features = ["interned"] }
-#ftml-ontology = { path = "../FTML/ontology" }
-#ftml-backend = { path = "../FTML/backend" }
-#ftml-parser = { path = "../FTML/parser" }
-#ftml-components = { path = "../FTML/components" }
-#ftml5ever = { path = "../FTML/ftml5ever" }
-#ulo = { path = "../FTML/ulo" }
-#ftml-dom = { path = "../FTML/dom" }
+#flodown = { git = "https://github.com/FlexiFormal/FloDown" }
+
+ftml-uris = { path = "../FTML/uris", features = ["interned"] }
+ftml-ontology = { path = "../FTML/ontology" }
+ftml-backend = { path = "../FTML/backend" }
+ftml-parser = { path = "../FTML/parser" }
+ftml-components = { path = "../FTML/components" }
+ftml5ever = { path = "../FTML/ftml5ever" }
+ulo = { path = "../FTML/ulo" }
+ftml-dom = { path = "../FTML/dom" }
+
+flodown = { path="../FloDown/flodown" }
 
 dateparser = {git = "https://github.com/Jazzpirate/dateparser"}
 
@@ -260,6 +266,8 @@ tracing-subscriber = { version = "0.3", features = [
 tracing-error = "0.2"
 
 toml = "0.9"
+serde_yml = "0.0.12"
+serde-value = "0.7"
 eyre = "0.6"
 color-eyre = "0.6"
 thiserror = "2"
