@@ -1,0 +1,49 @@
+[package]
+name = "flams-flodown"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "dep:flams-stex",
+    "dep:tokio",
+    "dep:flams-database",
+    "flams-router-base/ssr",
+    "flams-router-content/ssr",
+    "ftml-components/ssr",
+    "ftml-dom/ssr",
+    "leptos/ssr"
+]
+hydrate = [
+    "flams-router-base/hydrate",
+    "flams-router-content/hydrate",
+    "ftml-components/hydrate",
+    "ftml-dom/hydrate",
+    "leptos/hydrate"
+]
+docs-only = []
+
+[dependencies]
+serde = { workspace = true }
+async-trait = { workspace = true }
+flams-router-base = {workspace = true}
+flams-router-content = {workspace = true}
+ftml-uris = {workspace = true}
+ftml-ontology = {workspace = true}
+leptos = {workspace = true}
+parking_lot = {workspace = true}
+send_wrapper = {workspace = true}
+tracing = {workspace = true}
+ftml-components = {workspace = true}
+ftml-dom = {workspace = true}
+flodown = {workspace = true}
+dashmap = {workspace = true}
+rustc-hash = {workspace = true}
+
+tokio = { workspace = true, optional = true }
+
+flams-stex = {workspace = true, optional = true}
+flams-database = {workspace = true,optional = true}
