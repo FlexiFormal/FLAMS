@@ -40,4 +40,10 @@ void unload_file(char* s);
 
 // Loads a file
 void load_file(char* s);
+
+// Resets the global backend (e.g. clears cache for file list)
+void reset_global_backend();
+
+// The version of the FFI (incremented when significant changes are made)
+extern size_t FFI_VERSION;
 ```

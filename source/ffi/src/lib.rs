@@ -26,6 +26,9 @@ pub extern "C" fn hello_world(arg: usize) {
     println!("Hi from Rust! arg: {}", arg);
 }
 
+#[no_mangle]
+pub static FFI_VERSION: usize = 1;
+
 pub fn to_json<T: Serialize>(data: &T) -> *const libc::c_char {
     CString::new(serde_json::to_string(data).unwrap())
         .unwrap()
@@ -169,4 +172,15 @@ pub unsafe extern "C" fn load_file(path: *const libc::c_char) {
 pub extern "C" fn unload_all_files() {
     let mut state = GLOBAL_STATE.lock().unwrap();
     state.clear();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn reset_global_backend() {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to initialize Tokio runtime")
+        .block_on(async {
+            GlobalBackend.reset::<flams_system::TokioEngine>();
+        });
 }
