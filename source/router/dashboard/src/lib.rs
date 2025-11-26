@@ -210,6 +210,7 @@ fn MainPage(page: Page) -> AnyView {
 }
 
 fn do_main(page: Page) -> AnyView {
+    //leptos::logging::log!("Here!");
     let inner = || match page {
         Page::Home => view!(<flams_router_backend::index_components::Index/>).into_any(),
         Page::MathHub => view! {<flams_router_backend::components::ArchivesTop/>}.into_any(),
@@ -261,8 +262,8 @@ fn side_menu(page: Page) -> AnyView {
                   <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
                   <NavItem value="settings" href="/dashboard/settings">"Settings"</NavItem>
                   <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
-                  <NavItem value="users" href="/dashboard/users">"Manage Users"</NavItem>
                   <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
+                  <NavItem value="users" href="/dashboard/users">"Manage Users"</NavItem>
                 }.into_any(),
                 LoginState::User{is_admin:true,..} => view!{
                   <NavItem value="log" href="/dashboard/log">"Logs"</NavItem>
@@ -272,8 +273,9 @@ fn side_menu(page: Page) -> AnyView {
                   <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
                 }.into_any(),
                 LoginState::User{..} => view!{
+                    <NavItem value="queue" href="/dashboard/queue">"Queue"</NavItem>
                     <NavItem value="archives" href="/dashboard/archives">"My Archives"</NavItem>
-                        <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
+                    <NavItem value="flodown" href="/dashboard/flodown">"FloDown"</NavItem>
                 }.into_any(),
                 LoginState::None | LoginState::Loading => ().into_any()
             }}}

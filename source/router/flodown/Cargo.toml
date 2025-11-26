@@ -22,7 +22,9 @@ hydrate = [
     "flams-router-content/hydrate",
     "ftml-components/hydrate",
     "ftml-dom/hydrate",
-    "leptos/hydrate"
+    "leptos/hydrate",
+    "dep:wasm-bindgen-futures",
+    "dep:gloo-timers"
 ]
 docs-only = []
 
@@ -44,6 +46,8 @@ dashmap = {workspace = true}
 rustc-hash = {workspace = true}
 
 tokio = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true, features=["futures"] }
 
 flams-stex = {workspace = true, optional = true}
 flams-database = {workspace = true,optional = true}

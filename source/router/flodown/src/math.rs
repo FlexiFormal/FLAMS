@@ -1,6 +1,10 @@
+#[cfg(feature = "hydrate")]
+use ftml_ontology::utils::time::Timestamp;
 use ftml_uris::ModuleUri;
 use leptos::prelude::*;
 use std::{collections::BTreeMap, sync::atomic::AtomicUsize};
+
+const SERVER_ENDPOINT: &str = "/ws/mathjx";
 
 #[cfg(feature = "ssr")]
 use flams_router_base::ws::WSSocket;
@@ -70,6 +74,165 @@ impl flams_router_base::ws::WSServerSocket<(usize, TeXMath), (usize, Result<Stri
         .expect("this should not happen")
     }
 }
+
+#[cfg(feature = "hydrate")]
+#[derive(Debug, Clone)]
+pub struct TeXClient {
+    socket: send_wrapper::SendWrapper<
+        flams_router_base::ws::WSClient<(usize, TeXMath), (usize, Result<String, String>)>,
+    >,
+    counter: std::sync::Arc<AtomicUsize>,
+    values: std::sync::Arc<
+        parking_lot::Mutex<BTreeMap<usize, RwSignal<Option<Result<String, String>>>>>,
+    >,
+    cache: std::sync::Arc<
+        dashmap::DashMap<
+            TeXMath,
+            RwSignal<Option<Result<String, String>>>,
+            rustc_hash::FxBuildHasher,
+        >,
+    >,
+    current: std::sync::Arc<parking_lot::Mutex<(Timestamp, Vec<(usize, TeXMath)>)>>,
+    drop: DropFlag,
+}
+
+#[cfg(feature = "hydrate")]
+#[derive(Clone, Debug, Default)]
+struct DropFlag(std::sync::Arc<std::sync::atomic::AtomicBool>);
+#[cfg(feature = "hydrate")]
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        if std::sync::Arc::strong_count(&self.0) == 1 {
+            self.0.store(true, std::sync::atomic::Ordering::Release);
+        }
+    }
+}
+#[cfg(feature = "hydrate")]
+impl DropFlag {
+    pub fn get(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
+
+#[cfg(feature = "hydrate")]
+impl TeXClient {
+    pub fn provide() {
+        let counter = std::sync::Arc::default();
+        let values: std::sync::Arc<
+            parking_lot::Mutex<BTreeMap<usize, RwSignal<Option<Result<String, String>>>>>,
+        > = std::sync::Arc::default();
+        let cache: std::sync::Arc<
+            dashmap::DashMap<
+                TeXMath,
+                RwSignal<Option<Result<String, String>>>,
+                rustc_hash::FxBuildHasher,
+            >,
+        > = std::sync::Arc::default();
+        let drop = DropFlag::default();
+        let current: std::sync::Arc<parking_lot::Mutex<(Timestamp, Vec<(usize, TeXMath)>)>> =
+            std::sync::Arc::default();
+
+        let valuecl = values.clone();
+        let socket = flams_router_base::ws::WSClient::<
+            (usize, TeXMath),
+            (usize, Result<String, String>),
+        >::new(SERVER_ENDPOINT, move |(i, res)| {
+            let Some(e) = valuecl.lock().remove(&i) else {
+                tracing::warn!("Signal {i} disappeared!");
+                return;
+            };
+            e.set(Some(res));
+        })
+        .expect("should be impossible");
+
+        let dropcl = drop.clone();
+        let currentcl = current.clone();
+        let socket_cl = socket.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            tracing::info!("Running wasm future");
+            loop {
+                if dropcl.get() {
+                    tracing::info!("Dropping future");
+                    break;
+                }
+                gloo_timers::future::TimeoutFuture::new(500).await;
+                let (ts, v) = &mut *currentcl.lock();
+                tracing::debug!("Checking {ts} (now: {})", Timestamp::now());
+                if ts.since_now().seconds() >= 0.5 && !v.is_empty() {
+                    tracing::debug!("Sending things");
+                    for msg in v.drain(..) {
+                        socket_cl.send(&msg);
+                    }
+                }
+            }
+        });
+
+        let slf = Self {
+            socket: send_wrapper::SendWrapper::new(socket),
+            counter,
+            cache,
+            values,
+            current,
+            drop,
+        };
+        provide_context(slf);
+    }
+    pub fn add_import(uri: ModuleUri) {
+        let slf = expect_context::<Self>();
+        slf.socket.send(&(0, TeXMath::UseModule(uri)));
+    }
+    pub fn reset() {
+        let slf = expect_context::<Self>();
+        slf.current.lock().1.clear();
+        slf.values.lock().retain(|_, v| {
+            v.update_untracked(|v| {
+                if v.is_none() {
+                    *v = Some(Err("ABORTED".to_string()));
+                }
+            });
+            false
+        });
+    }
+
+    pub fn inline_math(s: &str) -> (usize, RwSignal<Option<Result<String, String>>>) {
+        Self::run(TeXMath::Inline(s.trim().to_string()))
+    }
+
+    pub fn block_math(s: &str) -> (usize, RwSignal<Option<Result<String, String>>>) {
+        Self::run(TeXMath::Block(s.trim().to_string()))
+    }
+
+    fn run(msg: TeXMath) -> (usize, RwSignal<Option<Result<String, String>>>) {
+        let slf = expect_context::<Self>();
+        let counter = slf
+            .counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sig = if let Some(sig) = slf.cache.get(&msg) {
+            if sig.with_untracked(|v| {
+                v.as_ref()
+                    .is_some_and(|v| v.as_ref().is_ok_and(|v| v == "ABORTED"))
+            }) {
+                sig.update_untracked(|v| *v = None);
+                *sig
+            } else {
+                return (counter, *sig);
+            }
+        } else {
+            let sig = RwSignal::new(None);
+            slf.cache.insert(msg.clone(), sig);
+            sig
+        };
+        {
+            slf.values.lock().insert(counter, sig);
+            let (ts, curr) = &mut *slf.current.lock();
+            *ts = Timestamp::now();
+            curr.push((counter, msg));
+        }
+        (counter, sig)
+    }
+}
+
+// ---------------------------------------------------------------------------
 
 #[cfg(feature = "ssr")]
 #[derive(Debug)]

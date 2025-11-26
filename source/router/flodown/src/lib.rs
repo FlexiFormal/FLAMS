@@ -18,7 +18,7 @@ use leptos::prelude::*;
 #[component]
 pub fn FloDownEditor() -> AnyView {
     #[cfg(feature = "hydrate")]
-    math::MathSocket::run();
+    math::TeXClient::provide();
 
     Css::Link("/rustex.css".to_string().into_boxed_str()).inject();
     Css::Link(
@@ -84,20 +84,19 @@ fn md_html(md: RwSignal<String>) -> AnyView {
         #[cfg(feature = "hydrate")]
         {
             signals.update_untracked(Vec::clear);
+            math::TeXClient::reset();
             let s = md.with(|txt| {
                 flodown::to_html_with_math(
                     txt,
                     |s, out| {
                         use std::fmt::Write;
-                        tracing::warn!("Inline: {s}");
-                        let (i, rs) = owner.with(|| math::MathSocket::inline_math(s));
+                        let (i, rs) = owner.with(|| math::TeXClient::inline_math(s));
                         signals.update_untracked(|v| v.push((i, rs)));
                         let _ = write!(out, "<!--math{i}--> ...");
                     },
                     |s, out| {
                         use std::fmt::Write;
-                        tracing::warn!("Block: {s}");
-                        let (i, rs) = owner.with(|| math::MathSocket::block_math(s));
+                        let (i, rs) = owner.with(|| math::TeXClient::block_math(s));
                         signals.update_untracked(|v| v.push((i, rs)));
                         let _ = write!(out, "<!--math{i}--> ...");
                     },

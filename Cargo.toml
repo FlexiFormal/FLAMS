@@ -341,6 +341,7 @@ wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
 gloo-storage = "0.3"
+gloo-timers = "0.3"
 web-sys = { version = "0.3" }
 tsify-next = { version = "0.5", features = ["js"] }
 tsify = { version = "0.5", features = ["js"] }
