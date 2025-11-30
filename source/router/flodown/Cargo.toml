@@ -13,6 +13,7 @@ ssr = [
     "dep:flams-database",
     "flams-router-base/ssr",
     "flams-router-content/ssr",
+    "flams-router-backend/ssr",
     "ftml-components/ssr",
     "ftml-dom/ssr",
     "leptos/ssr"
@@ -20,6 +21,7 @@ ssr = [
 hydrate = [
     "flams-router-base/hydrate",
     "flams-router-content/hydrate",
+    "flams-router-backend/hydrate",
     "ftml-components/hydrate",
     "ftml-dom/hydrate",
     "leptos/hydrate",
@@ -33,17 +35,23 @@ serde = { workspace = true }
 async-trait = { workspace = true }
 flams-router-base = {workspace = true}
 flams-router-content = {workspace = true}
+flams-router-backend = {workspace = true}
+flams-web-utils = {workspace = true}
+flams-backend-types = {workspace = true}
 ftml-uris = {workspace = true}
 ftml-ontology = {workspace = true}
+ftml-components = {workspace = true}
 leptos = {workspace = true}
 parking_lot = {workspace = true}
 send_wrapper = {workspace = true}
 tracing = {workspace = true}
-ftml-components = {workspace = true}
 ftml-dom = {workspace = true}
 flodown = {workspace = true}
 dashmap = {workspace = true}
 rustc-hash = {workspace = true}
+thaw = {workspace = true}
+icondata_bi = {workspace = true}
+ftml-backend = {workspace = true}
 
 tokio = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }

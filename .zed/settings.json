@@ -12,7 +12,7 @@
             "git",
             "docs",
             "serde",
-            "hydrate" //"ssr" //
+            "ssr" //"hydrate" //
           ] // "all"*/
         }
       }

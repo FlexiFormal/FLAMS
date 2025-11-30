@@ -183,7 +183,7 @@ ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
 ulo = { git = "https://github.com/FlexiFormal/FTML" }
 ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 
-flodown = { git = "https://github.com/FlexiFormal/FloDown" }
+#flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
 #ftml-uris = { path = "../FTML/uris", features = ["interned"] }
 #ftml-ontology = { path = "../FTML/ontology" }
@@ -194,7 +194,7 @@ flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 #ulo = { path = "../FTML/ulo" }
 #ftml-dom = { path = "../FTML/dom" }
 
-#flodown = { path="../FloDown/flodown" }
+flodown = { path="../FloDown/flodown" }
 
 
 rustex_lib = { version = "0.1", features = ["multithreaded"] }
@@ -207,6 +207,11 @@ dateparser = {git = "https://github.com/Jazzpirate/dateparser"}
 rstest = { version = "0.26" }
 
 # utils
+
+utoipa-swagger-ui = {version="9",features=["vendored","axum"]}
+utoipa = "5"
+utoipa-axum = "0.2"
+
 orx-parallel = "3"
 document-features = "0.2"
 rustc_version = "0.4"
@@ -336,7 +341,7 @@ mime_guess = "2"
 
 # wasm
 tracing-wasm = "0.2"
-wasm-bindgen = "0.2"
+wasm-bindgen = "=0.2.106"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
@@ -360,6 +365,8 @@ ahash = "0.8"
 getrandom = "0.3"
 
 [[workspace.metadata.leptos]]
+hash-files = true
+hash-file-name = "hash.txt"
 # project name
 name = "flams"
 bin-package = "flams"

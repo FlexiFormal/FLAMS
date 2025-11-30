@@ -4,7 +4,7 @@ use flams_backend_types::{
     archives::{ArchiveData, ArchiveGroupData, DirectoryData, FileData},
 };
 use ftml_uris::{
-    ArchiveId, IsDomainUri, IsNarrativeUri, Language, Uri, UriWithArchive, UriWithPath,
+    ArchiveId, IsDomainUri, IsNarrativeUri, Language, ModuleUri, Uri, UriWithArchive, UriWithPath,
     components::UriComponents,
 };
 use leptos::prelude::*;
@@ -23,6 +23,14 @@ pub async fn archive_entries(
     path: Option<String>,
 ) -> Result<(Vec<DirectoryData>, Vec<FileData>), ServerFnError<String>> {
     server::archive_entries(archive, path).await
+}
+
+#[server(prefix = "/api/backend", endpoint = "archive_modules")]
+pub async fn archive_modules(
+    archive: ArchiveId,
+    path: Option<String>,
+) -> Result<(Vec<DirectoryData>, Vec<ModuleUri>), ServerFnError<String>> {
+    server::archive_modules(archive, path).await
 }
 
 #[server(prefix = "/api/backend", endpoint = "archive_dependencies")]
@@ -261,7 +269,7 @@ pub async fn index() -> Result<(Vec<Institution>, Vec<ArchiveIndex>), ServerFnEr
 mod server {
     use flams_backend_types::archives::{ArchiveData, ArchiveGroupData, DirectoryData, FileData};
     use flams_math_archives::{
-        Archive, BuildableArchive, MathArchive,
+        Archive, BuildableArchive, LocallyBuilt, MathArchive,
         backend::{GlobalBackend, LocalBackend},
         manager::ArchiveOrGroup as AoG,
         source_files::{SourceEntry, SourceEntryRef},
@@ -272,7 +280,7 @@ mod server {
     use flams_system::LocalArchiveExt;
     use flams_utils::vecmap::VecSet;
     use flams_web_utils::blocking_server_fn;
-    use ftml_uris::{ArchiveId, ArchiveUri, FtmlUri, UriPath, UriWithArchive};
+    use ftml_uris::{ArchiveId, ArchiveUri, FtmlUri, ModuleUri, UriName, UriPath, UriWithArchive};
     use leptos::prelude::*;
 
     use crate::FileStates;
@@ -347,6 +355,77 @@ mod server {
         })
         .await
     }
+
+    pub async fn archive_modules(
+        archive: ArchiveId,
+        path: Option<String>,
+    ) -> Result<(Vec<DirectoryData>, Vec<ModuleUri>), ServerFnError<String>> {
+        let login = LoginState::get_server();
+        blocking_server_fn(move || {
+            let allowed = matches!(
+                login,
+                LoginState::Admin
+                    | LoginState::NoAccounts
+                    | LoginState::User { is_admin: true, .. }
+            );
+            GlobalBackend.with_local_archive(&archive, |a| {
+                let Some(a) = a else {
+                    return Err(format!("Archive {archive} not found"));
+                };
+                a.with_sources(|d| {
+                    let d = match &path {
+                        None => d,
+                        Some(p) => match d.find(RelPath::new(p)) {
+                            Some(SourceEntryRef::Dir(d)) => d,
+                            _ => {
+                                return Err(format!(
+                                    "Directory {p} not found in archive {archive}"
+                                ));
+                            }
+                        },
+                    };
+                    let mut ds = Vec::new();
+                    for d in &d.children {
+                        if let SourceEntry::Dir(d) = d {
+                            ds.push(DirectoryData {
+                                rel_path: d
+                                    .relative_path
+                                    .as_ref()
+                                    .map(UriPath::to_string)
+                                    .unwrap_or_default(),
+                                summary: if allowed {
+                                    Some(d.state.summarize())
+                                } else {
+                                    None
+                                },
+                            });
+                        }
+                    }
+                    let mut mods = Vec::new();
+                    let out = path.as_ref().map_or_else(
+                        || a.out_dir().join(".modules"),
+                        |p| a.out_dir().join(p).join(".modules"),
+                    );
+                    let uripath = path.as_ref().and_then(|p| p.parse::<UriPath>().ok());
+                    let path_uri = a.uri().clone() / uripath;
+                    if let Ok(dir) = std::fs::read_dir(out) {
+                        for f in dir {
+                            if let Ok(f) = f
+                                && let Ok(name) = f.file_name().into_string()
+                                && let Ok(name) = name.replace("__AST__", "*").parse::<UriName>()
+                            {
+                                mods.push(path_uri.clone() | name);
+                            }
+                        }
+                    }
+
+                    Ok((ds, mods))
+                })
+            })
+        })
+        .await
+    }
+
     pub async fn archive_entries(
         archive: ArchiveId,
         path: Option<String>,
