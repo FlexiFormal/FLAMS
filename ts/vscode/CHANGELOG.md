@@ -6,6 +6,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### v0.0.4
+- export and build buttons
+
 ### v0.0.3
 
 - Improved Search Interfaces

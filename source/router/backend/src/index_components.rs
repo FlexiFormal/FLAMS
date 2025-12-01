@@ -29,20 +29,32 @@ pub fn Index() -> AnyView {
                 e @ ArchiveIndex::SelfStudy { .. } => self_studies.push(e),
             }
         }
+        //leptos::logging::log!("Here: main");
         view! {
           {do_books(books)}
           {do_papers(papers)}
           {do_self_studies(self_studies)}
-          {do_courses(courses,&is)}
+          {do_courses(courses,is)}
           {do_libraries(libraries)}
-        }.into_any()
+        }
+        .into_any()
     })
 }
 
-fn wrap_list(
-    ttl: &'static str,
-    i: impl FnOnce() -> AnyView,
-) -> AnyView {
+fn client<V: IntoView + Send>(f: impl Fn() -> V + Send + 'static) -> impl IntoView {
+    let sig = RwSignal::new(false);
+    #[cfg(feature = "hydrate")]
+    let _ = Effect::new(move || sig.set(true));
+    move || {
+        if sig.get() {
+            f().into_any()
+        } else {
+            ().into_any()
+        }
+    }
+}
+
+fn wrap_list(ttl: &'static str, i: impl FnOnce() -> AnyView) -> AnyView {
     use thaw::Divider;
     view! {
       <h2 style="color:var(--colorBrandForeground1)">{ttl}</h2>
@@ -50,13 +62,11 @@ fn wrap_list(
       {i()}
       </div>
       <Divider/>
-    }.into_any()
+    }
+    .into_any()
 }
 
-fn link_doc<T: FnOnce() -> AnyView>(
-    uri: &DocumentUri,
-    i: T,
-) -> AnyView {
+fn link_doc<T: FnOnce() -> AnyView>(uri: &DocumentUri, i: T) -> AnyView {
     view! {
       <a target="_blank" href=format!("/?uri={}",urlencoding::encode(&uri.to_string())) style="color:var(--colorBrandForeground1)">
         {i()}
@@ -67,23 +77,33 @@ fn link_doc<T: FnOnce() -> AnyView>(
 fn do_img(url: String) -> AnyView {
     view!(<div style="width:100%"><div style="width:min-content;margin:auto;">
     <img src=url style="max-width:350px;max-height:150px;"/>
-  </div></div>).into_any()
+  </div></div>)
+    .into_any()
 }
 
 fn do_teaser(txt: String) -> AnyView {
     use flams_web_utils::components::ClientOnly;
     view!(<div style="margin:5px;"><Scrollbar style="max-height: 100px;"><Body1>
     <ClientOnly><span inner_html=txt style="font-size:smaller;"/></ClientOnly>
-  </Body1></Scrollbar></div>).into_any()
+  </Body1></Scrollbar></div>)
+    .into_any()
 }
 
 fn do_books(books: Vec<ArchiveIndex>) -> AnyView {
     if books.is_empty() {
         return ().into_any();
     }
-    wrap_list("Books", move || {
-        books.into_iter().map(book).collect_view().into_any()
+    client(move || {
+        wrap_list("Books", || {
+            books
+                .clone()
+                .into_iter()
+                .map(book)
+                .collect_view()
+                .into_any()
+        })
     })
+    .into_any()
 }
 
 fn book(book: ArchiveIndex) -> AnyView {
@@ -116,9 +136,17 @@ fn do_papers(papers: Vec<ArchiveIndex>) -> AnyView {
     if papers.is_empty() {
         return ().into_any();
     }
-    wrap_list("Papers", move || {
-        papers.into_iter().map(paper).collect_view().into_any()
+    client(move || {
+        wrap_list("Papers", || {
+            papers
+                .clone()
+                .into_iter()
+                .map(paper)
+                .collect_view()
+                .into_any()
+        })
     })
+    .into_any()
 }
 
 fn paper(paper: ArchiveIndex) -> AnyView {
@@ -166,9 +194,16 @@ fn do_self_studies(sss: Vec<ArchiveIndex>) -> AnyView {
     if sss.is_empty() {
         return ().into_any();
     }
-    wrap_list("Self-Study Courses", move || {
-        sss.into_iter().map(self_study).collect_view().into_any()
+    client(move || {
+        wrap_list("Self-Study Courses", || {
+            sss.clone()
+                .into_iter()
+                .map(self_study)
+                .collect_view()
+                .into_any()
+        })
     })
+    .into_any()
 }
 
 fn self_study(ss: ArchiveIndex) -> AnyView {
@@ -205,15 +240,21 @@ fn self_study(ss: ArchiveIndex) -> AnyView {
     </Card>}.into_any()
 }
 
-fn do_courses(
-    courses: Vec<ArchiveIndex>,
-    insts: &[Institution],
-) -> AnyView {
+fn do_courses(courses: Vec<ArchiveIndex>, insts: Vec<Institution>) -> AnyView {
     if courses.is_empty() {
         return ().into_any();
     }
-    let r = courses.into_iter().map(|c| course(c, insts)).collect_view().into_any();
-    wrap_list("Courses", move || r)
+    client(move || {
+        wrap_list("Courses", || {
+            courses
+                .clone()
+                .into_iter()
+                .map(|c| course(c, &insts))
+                .collect_view()
+                .into_any()
+        })
+    })
+    .into_any()
 }
 
 fn course(course: ArchiveIndex, insts: &[Institution]) -> AnyView {
@@ -235,7 +276,9 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> AnyView {
     else {
         unreachable!()
     };
-    let inst = institution.and_then(|inst| insts.iter().find(|i| i.acronym() == &*inst)).cloned();
+    let inst = institution
+        .and_then(|inst| insts.iter().find(|i| i.acronym() == &*inst))
+        .cloned();
     view! {<Card class="flams-index-card">
       <CardHeader>
         {link_doc(&landing,|| view!(
@@ -269,9 +312,16 @@ fn do_libraries(libs: Vec<ArchiveIndex>) -> AnyView {
     if libs.is_empty() {
         return ().into_any();
     }
-    wrap_list("Libraries", move || {
-        libs.into_iter().map(library).collect_view().into_any()
+    client(move || {
+        wrap_list("Libraries", || {
+            libs.clone()
+                .into_iter()
+                .map(library)
+                .collect_view()
+                .into_any()
+        })
     })
+    .into_any()
 }
 
 fn library(lib: ArchiveIndex) -> AnyView {
@@ -299,5 +349,6 @@ fn library(lib: ArchiveIndex) -> AnyView {
         {teaser.map(|t| do_teaser(t.to_string()))}
       </CardPreview>
       <div style="margin-top:auto;"/>
-    </Card>}.into_any()
+    </Card>}
+    .into_any()
 }

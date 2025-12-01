@@ -24,13 +24,11 @@ pub fn wait_local<
           |res| children(res)
         )
       }}</Suspense>
-    }.into_any()
+    }
+    .into_any()
 }
 
-pub fn wait_and_then<E, Fut, F, T>(
-    f: F,
-    r: impl FnOnce(T) -> AnyView + Send + 'static,
-) -> AnyView
+pub fn wait_and_then<E, Fut, F, T>(f: F, r: impl FnOnce(T) -> AnyView + Send + 'static) -> AnyView
 where
     Fut: Future<Output = Result<T, ServerFnError<E>>> + Send + 'static,
     F: Fn() -> Fut + Send + Sync + 'static,
@@ -54,13 +52,11 @@ where
               None => view!(<Spinner/>).into_any(),
             }
         }</Suspense>
-    }.into_any()
+    }
+    .into_any()
 }
 
-pub fn wait_and_then_fn<E, Fut, F, T>(
-    f: F,
-    r: impl Fn(T) -> AnyView + Send + 'static,
-) -> AnyView
+pub fn wait_and_then_fn<E, Fut, F, T>(f: F, r: impl Fn(T) -> AnyView + Send + 'static) -> AnyView
 where
     Fut: Future<Output = Result<T, E>> + Send + 'static,
     F: Fn() -> Fut + 'static + Send + Sync,
@@ -84,5 +80,6 @@ where
               None => view!(<Spinner/>).into_any(),
             }
         }</Suspense>
-    }.into_any()
+    }
+    .into_any()
 }

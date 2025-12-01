@@ -85,7 +85,10 @@ impl From<lsp::Url> for UrlOrFile {
     fn from(value: lsp::Url) -> Self {
         match value.to_file_path() {
             Ok(p) => Self::File(p.into()),
-            Err(_) => Self::Url(value),
+            Err(()) => {
+                tracing::error!("Not a file uri: {value}");
+                Self::Url(value)
+            }
         }
     }
 }

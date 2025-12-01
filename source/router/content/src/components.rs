@@ -15,73 +15,24 @@ use leptos_router::hooks::use_query_map;
 
 #[component(transparent)]
 pub fn URITop() -> AnyView {
-    use crate::components::Fragment;
-    use leptos_meta::Stylesheet;
-    view! {
-        <Stylesheet id="leptos" href="/pkg/flams.css"/>
-        {crate::Views::top(||
+    ftml_dom::global_setup(move || {
+        crate::Views::top(move || {
             use_query_map().with_untracked(|m| {
                 m.as_document().map_or_else(
                     |_| match m.as_comps() {
-                        Ok(uri) => 
-                            view!(<Fragment uri=uri.into() position=SidebarPosition::Next/>).into_any()
-                        ,
+                        Ok(uri) => view!(<Fragment uri=uri.into() position=SidebarPosition::Next/>)
+                            .into_any(),
                         Err(e) => flams_web_utils::components::display_error(
                             format!("Invalid URI: {e}").into(),
-                        ).into_any(),
+                        )
+                        .into_any(),
                     },
                     |doc| view!(<Document doc=doc.into()/>).into_any(),
                 )
-            }).into_any()
-        )}
-    }.into_any()
-    /*
-    use flams_web_utils::components::Themer;
-    use ftml_viewer_components::FTMLGlobalSetup;
-    use leptos::either::EitherOf3 as Either;
-    use thaw::Scrollbar;
-    #[cfg(not(feature = "ssr"))]
-    let qm = leptos_router::hooks::use_location();
-    #[cfg(not(feature = "ssr"))]
-    let _ = Effect::new(move |_| {
-        let Ok(origin) = window().location().origin() else {
-            tracing::error!("Getting URL origin failed");
-            panic!("Getting URL origin failed");
-        };
-        let url = format!(
-            "{origin}{}{}{}",
-            qm.pathname.get(),
-            qm.query.get().to_query_string(),
-            qm.hash.get()
-        );
-        let Ok(js_url) = window().location().href() else {
-            tracing::error!("Getting URL failed");
-            panic!("Getting URL failed");
-        };
-        if url != js_url {
-            if !window().location().set_href(&url).is_ok() {
-                tracing::error!("Updating url failed");
-                panic!("Updating url failed");
-            }
-        }
-    });
-    view! {
-      <Stylesheet id="leptos" href="/pkg/flams.css"/>
-      <Themer><FTMLGlobalSetup>//<Login>
-      <Scrollbar style="width:100vw;max-height:100vh;">
-        <div style="min-height:100vh;color:black;width:min-content">{
-          use_query_map().with_untracked(|m| m.as_document().map_or_else(
-            |_| match m.as_comps() {
-                Ok(uri) => Either::B(view!(<Fragment uri=uri.into()/>)),
-                Err(e) => Either::C(flams_web_utils::components::display_error(format!("Invalid URI: {e}").into()))
-            },
-            |doc| Either::A(view!(<Document doc=doc.into()/>))
-          ))
-        }</div>
-      </Scrollbar>//</Login>
-      </FTMLGlobalSetup></Themer>
-    }
-     */
+            })
+        })
+    })
+    .into_any()
 }
 
 #[component]
@@ -89,8 +40,12 @@ pub fn DocumentOfTop(uri: Uri) -> AnyView {
     use leptos_router::components::Redirect;
     wait_and_then_fn(
         move || super::server_fns::document_of(uri.clone()),
-        |u| view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>).into_any(),
-    ).into_any()
+        |u| {
+            view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>)
+                .into_any()
+        },
+    )
+    .into_any()
 }
 
 #[component]
@@ -100,10 +55,11 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
     // I don't understand.
     let sig = RwSignal::new(false);
     Effect::new(move || {
-        #[cfg(feature = "hydrate")]
-        {
-            sig.set(true);
-        }
+        sig.track();
+        //#[cfg(feature = "hydrate")]
+        //{
+        sig.set(true);
+        //}
     });
     (move || {
         let uri = uri.clone();
@@ -133,34 +89,55 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
                         position,
                         true,
                         move || crate::Views::render_ftml(html.into_string(), None).into_any(),
-                    ).into_any()
+                    )
+                    .into_any()
                 },
                 |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
             ))
         } else {
             None
         }
-    }).into_any()
+    })
+    .into_any()
     //})
 }
 
 #[component]
 pub fn Document(doc: DocumentUriComponents) -> AnyView {
-    wait_and_then_fn(
-        move || DocumentUriComponentTuple::from(doc.clone()).apply(super::server_fns::document),
-        move |(uri, css, html)| {
-            for css in css {
-                css.inject();
-            }
-            FtmlConfig::set_toc_source(TocSource::Get);
-            crate::Views::setup_document::<crate::backend::FtmlBackend>(
-                uri,
-                SidebarPosition::Next,
-                true,
-                move || crate::Views::render_ftml(html.into_string(), None).into_any(),
-            ).into_any()
-        },
-    ).into_any()
+    let sig = RwSignal::new(false);
+    let _ = Effect::new(move || {
+        #[cfg(feature = "hydrate")]
+        {
+            sig.set(true);
+        }
+    });
+    (move || {
+        if sig.get() {
+            let doc = doc.clone();
+            Some(ftml_components::utils::wait_and_then(
+                move || DocumentUriComponentTuple::from(doc).apply(super::server_fns::document),
+                move |(uri, css, html)| {
+                    for c in css {
+                        c.inject();
+                    }
+                    {
+                        FtmlConfig::set_toc_source(TocSource::Get);
+                        crate::Views::setup_document::<crate::backend::FtmlBackend>(
+                            uri,
+                            SidebarPosition::Next,
+                            true,
+                            move || crate::Views::render_ftml(html.into_string(), None).into_any(),
+                        )
+                    }
+                    .into_any()
+                },
+                |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
+            ))
+        } else {
+            None
+        }
+    })
+    .into_any()
 }
 
 #[component]
@@ -179,7 +156,9 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> AnyView {
                     true,
                     move || crate::Views::render_ftml(html.into_string(),None).into_any()
                 )
-            }</div>}.into_any()
+            }</div>}
+            .into_any()
         },
-    ).into_any()
+    )
+    .into_any()
 }

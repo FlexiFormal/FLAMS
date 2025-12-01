@@ -2,16 +2,16 @@ use std::{path::Path, sync::atomic::AtomicBool};
 
 use async_lsp::lsp_types::{Position, Range};
 use flams_math_archives::{
+    MathArchive,
     backend::{AnyBackend, GlobalBackend, LocalBackend},
     utils::path_ext::PathExt,
-    MathArchive,
 };
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
 use ftml_uris::{ArchiveUri, DocumentUri};
 
 use crate::{
-    state::{LSPState, UrlOrFile},
     LSPStore,
+    state::{LSPState, UrlOrFile},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -68,7 +68,7 @@ impl LSPDocument {
                 match DocumentUri::from_archive_relpath(a.clone(), rp) {
                     Ok(u) => Some(u),
                     Err(e) => {
-                        tracing::error!("Error in URI {rp} in {a}: {e}");
+                        tracing::error!("Error in URI {rp} in {a}: {e} ({path:?})");
                         None
                     }
                 }

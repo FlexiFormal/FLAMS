@@ -2,7 +2,7 @@
   "name": "flams",
   "displayName": "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System",
   "description": "IDE for the FLAMS system and sTeX",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "license": "GPL3",
   "publisher": "kwarc",
   "icon": "img/flams.png",
@@ -15,7 +15,7 @@
     "Language Packs"
   ],
   "bugs": {
-    "url": "https://github.com/KWARC/FLAMS/issues"
+    "url": "https://github.com/FlexiFormal/FLAMS/issues"
   },
   "activationEvents": [
     "workspaceContains:**/*.tex",

@@ -3,6 +3,7 @@
 
 mod dependencies;
 mod latex;
+pub mod math;
 pub mod quickparse;
 mod rustex;
 
@@ -26,7 +27,10 @@ use std::path::{Path, PathBuf};
 
 flams_system::register_exension!(FlamsExtension {
     name: "stex",
-    on_start: RusTeX::initialize,
+    on_start: || {
+        RusTeX::initialize();
+        math::RusTeXMath::initialize();
+    },
     on_build_result: |_, _, _, _| ()
 });
 

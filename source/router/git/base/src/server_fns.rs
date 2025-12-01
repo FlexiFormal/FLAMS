@@ -98,7 +98,7 @@ mod server {
             match r {
                 Err(e) => return Err(e.to_string().into()),
                 Ok((p, Err(e))) => {
-                    tracing::error!("error obtaining archive ID of {} ({}): {e}", p.path, p.id);
+                    tracing::error!("error obtaining archive ID of {} ({}): {e}", p.name, p.id);
                 }
                 Ok((p, Ok(Some(id)))) => r2.push((p, id)),
                 Ok((_, Ok(None))) => (),
@@ -113,24 +113,23 @@ mod server {
             let backend = GlobalBackend;
             let gitlab_url = unwrap!(flams_system::settings::Settings::get().gitlab_url.as_ref());
             for a in backend.all_archives().iter() {
-                if let Archive::Local(a) = a {
-                    if let Some((p, id)) = r2
+                if let Archive::Local(a) = a
+                    && let Some((p, id)) = r2
                         .iter()
                         .position(|(_, id)| id == a.id())
                         .map(|i| r2.swap_remove(i))
-                    {
-                        if let Ok(git) = flams_git::repos::GitRepo::open(a.path()) {
-                            if gitlab_url
-                                .host_str()
-                                .is_some_and(|s| git.is_managed(s).is_some())
-                            {
-                                ret.push((p, id, Left(git)));
-                            } else {
-                                ret.push((p, id, Right(GitState::None)));
-                            }
+                {
+                    if let Ok(git) = flams_git::repos::GitRepo::open(a.path()) {
+                        if gitlab_url
+                            .host_str()
+                            .is_some_and(|s| git.is_managed(s).is_some())
+                        {
+                            ret.push((p, id, Left(git)));
                         } else {
                             ret.push((p, id, Right(GitState::None)));
                         }
+                    } else {
+                        ret.push((p, id, Right(GitState::None)));
                     }
                 }
             }

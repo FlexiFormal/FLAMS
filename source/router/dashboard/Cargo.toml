@@ -30,6 +30,7 @@ ssr = [
     "flams-router-login/ssr",
     "flams-router-vscode/ssr",
     "flams-router-search/ssr",
+    "flams-flodown/ssr"
 ]
 hydrate = [
     "leptos/hydrate",
@@ -47,6 +48,7 @@ hydrate = [
     "flams-router-login/hydrate",
     "flams-router-vscode/hydrate",
     "flams-router-search/hydrate",
+    "flams-flodown/hydrate"
 ]
 docs-only = []
 
@@ -72,6 +74,7 @@ flams-router-git-components = { workspace = true }
 flams-router-login = { workspace = true }
 flams-router-vscode = { workspace = true }
 flams-router-search = { workspace = true }
+flams-flodown = { workspace = true }
 flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }
 
@@ -86,6 +89,7 @@ bytesize = {workspace = true}
 serde = { workspace = true }
 serde_json = { workspace = true }
 #async-trait = { workspace = true }
+
 tokio = { workspace = true, optional = true }
 leptos_axum = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }

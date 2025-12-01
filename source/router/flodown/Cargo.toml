@@ -1,0 +1,61 @@
+[package]
+name = "flams-flodown"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+ssr = [
+    "dep:flams-stex",
+    "dep:tokio",
+    "dep:flams-database",
+    "flams-router-base/ssr",
+    "flams-router-content/ssr",
+    "flams-router-backend/ssr",
+    "ftml-components/ssr",
+    "ftml-dom/ssr",
+    "leptos/ssr"
+]
+hydrate = [
+    "flams-router-base/hydrate",
+    "flams-router-content/hydrate",
+    "flams-router-backend/hydrate",
+    "ftml-components/hydrate",
+    "ftml-dom/hydrate",
+    "leptos/hydrate",
+    "dep:wasm-bindgen-futures",
+    "dep:gloo-timers"
+]
+docs-only = []
+
+[dependencies]
+serde = { workspace = true }
+async-trait = { workspace = true }
+flams-router-base = {workspace = true}
+flams-router-content = {workspace = true}
+flams-router-backend = {workspace = true}
+flams-web-utils = {workspace = true}
+flams-backend-types = {workspace = true}
+ftml-uris = {workspace = true}
+ftml-ontology = {workspace = true}
+ftml-components = {workspace = true}
+leptos = {workspace = true}
+parking_lot = {workspace = true}
+send_wrapper = {workspace = true}
+tracing = {workspace = true}
+ftml-dom = {workspace = true}
+flodown = {workspace = true}
+dashmap = {workspace = true}
+rustc-hash = {workspace = true}
+thaw = {workspace = true}
+icondata_bi = {workspace = true}
+ftml-backend = {workspace = true}
+
+tokio = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true, features=["futures"] }
+
+flams-stex = {workspace = true, optional = true}
+flams-database = {workspace = true,optional = true}
