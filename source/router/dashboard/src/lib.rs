@@ -61,9 +61,7 @@ pub fn Main() -> AnyView {
     view! {
         <Title text="𝖥𝖫∀𝖬∫"/>
         <Router>{
-            let params = use_query_map();
-            let has_params = move || params.with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
-            //provide_context(UseLSP(params.with_untracked(|p|)))
+            let has_params = Memo::new(move |_| use_query_map().with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some()));
             view!{<Routes fallback=|| NotFound()>
                 <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
                     <ParentRoute path=path!("/dashboard") view=Dashboard>
@@ -85,18 +83,18 @@ pub fn Main() -> AnyView {
                     </ParentRoute>
                     <Route path=path!("/document") view={move || {
                         use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
-                        let params = params.get();
+                        let params = use_query_map().get_untracked();
                         if let Some(p) = params.get_str("uri") {
                             let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
                                 return view! { <Redirect path="/dashboard"/> }.into_any()
                             };
-                            ftml_dom::global_setup(|| DocumentOfTop(DocumentOfTopProps{uri}).into_any()).into_any()
+                            DocumentOfTop(DocumentOfTopProps{uri}).into_any()
                         } else {
                             view! { <Redirect path="/dashboard"/> }.into_any()
                         }
                     }.into_any()}/>
-                    <Route path=path!("/") view={move || if has_params() {
-                            ftml_dom::global_setup(|| view! { <flams_router_content::components::URITop/> }.into_any()).into_any()
+                    <Route path=path!("/") view={move || if has_params.get() {
+                            view! { <flams_router_content::components::URITop/> }.into_any()
                         } else {
                             view! { <Redirect path="/dashboard"/> }.into_any()
                         }}
@@ -158,7 +156,6 @@ impl std::fmt::Display for Page {
 #[component(transparent)]
 pub fn Dashboard() -> AnyView {
     view! {
-      <Stylesheet id="leptos" href="/pkg/flams.css"/>
       <Outlet/>
     }
     .into_any()
@@ -169,8 +166,9 @@ fn MainPage(page: Page) -> AnyView {
     //use flams_web_utils::components::Themer;
     /*view! {
     <Themer>{*/
-    flams_router_content::Views::top(move || {
-        view! {
+    //flams_router_content::Views::top(move || {
+    ftml_dom::global_setup(move || flams_router_content::Views::top(move || {
+    view! {
           <Layout position=LayoutPosition::Absolute>
             //<Login>
               <LayoutHeader class="flams-header">
@@ -204,9 +202,8 @@ fn MainPage(page: Page) -> AnyView {
                 </Layout>
             //</Login>
           </Layout>
-        }.into_any()
-    }).into_any() /*}</Themer>
-    }*/
+        }
+    })).into_any()
 }
 
 fn do_main(page: Page) -> AnyView {

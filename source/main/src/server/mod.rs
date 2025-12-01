@@ -19,6 +19,7 @@ use flams_system::settings::Settings;
 use http::{StatusCode, Uri};
 use leptos::prelude::*;
 use leptos_axum::{LeptosRoutes, generate_route_list};
+use leptos_meta::HashedStylesheet;
 use tower::ServiceBuilder;
 use tower_sessions::{Expiry, MemoryStore};
 use tracing::{Instrument, instrument};
@@ -227,6 +228,8 @@ async fn file_and_error_handler(
     extract::State(state): extract::State<ServerState>,
     request: http::Request<axum::body::Body>,
 ) -> axum::response::Response {
+    (leptos_axum::file_and_error_handler(shell))(uri, extract::State(state), request).await
+    /*
     let r = leptos_axum::file_and_error_handler(shell);
     if uri.path().ends_with("flams_bg.wasm") {
         // change to "flams.wasm"
@@ -238,6 +241,7 @@ async fn file_and_error_handler(
     r(uri, extract::State(state), request)
         //.in_current_span()
         .await
+    */
 }
 
 #[derive(Clone)]
@@ -290,20 +294,30 @@ impl ServerState {
         let mut leptos_cfg =
             leptos::prelude::get_configuration(None).expect("Failed to get leptos config");
         leptos_cfg.leptos_options.site_root = basepath.into();
-        leptos_cfg.leptos_options.output_name = "flams".into();
+        //leptos_cfg.leptos_options.output_name = "flams".into();
+        /*#[cfg(debug_assertions)]
+        {
+            leptos_cfg.leptos_options.hash_files = false;
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            leptos_cfg.leptos_options.hash_files = true;
+        }*/
+        leptos_cfg.leptos_options.hash_files = true;
 
         let settings = Settings::get();
         let ip = settings.ip;
         let port = settings.port();
         leptos_cfg.leptos_options.site_addr = std::net::SocketAddr::new(ip, port);
+        //println!("Config: {:?}", leptos_cfg.leptos_options);
         leptos_cfg
     }
 
     #[cfg(debug_assertions)]
     fn get_basepath() -> String {
-        if std::env::var("LEPTOS_OUTPUT_NAME").is_err() {
+        /*if std::env::var("LEPTOS_OUTPUT_NAME").is_err() {
             unsafe { std::env::set_var("LEPTOS_OUTPUT_NAME", "flams") };
-        }
+        }*/
         if Settings::get().lsp {
             let Ok(p) = std::env::current_exe()
                 .expect("Error setting current web-dir path")
@@ -345,6 +359,7 @@ fn shell(options: LeptosOptions) -> impl IntoView {
                         #[cfg(debug_assertions)]
                         {view!(<AutoReload options=options.clone() />)}
                     }
+                    <HashedStylesheet id="leptos" options=options.clone()/>
                     <HydrationScripts options />//islands=true/>
                     <leptos_meta::MetaTags/>
                 </head>
