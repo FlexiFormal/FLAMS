@@ -1,6 +1,6 @@
 [package]
 name = "flams"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 

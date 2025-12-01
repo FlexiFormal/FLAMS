@@ -346,6 +346,8 @@ impl flams_router_base::ws::WebSocketServer<(usize, TeXMath), (usize, Result<Str
                     queue,
                     #[cfg(feature = "hydrate")]
                     socket: unreachable!(),
+                    #[cfg(all(feature = "hydrate", feature = "docs-only"))]
+                    initialized: unreachable!(),
                 })
             }
             _ => None,
