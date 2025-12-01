@@ -58,7 +58,7 @@ workspace = false
 install_crate = false
 command = "cargo"
 args = [
-    #"+nightly",
+    "+nightly",
     "doc",
     "--workspace",
     "--no-deps",
