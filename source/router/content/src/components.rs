@@ -55,11 +55,11 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
     // I don't understand.
     let sig = RwSignal::new(false);
     Effect::new(move || {
-        sig.track();
-        //#[cfg(feature = "hydrate")]
-        //{
-        sig.set(true);
-        //}
+        //sig.track();
+        #[cfg(feature = "hydrate")]
+        {
+            sig.set(true);
+        }
     });
     (move || {
         let uri = uri.clone();
@@ -104,6 +104,8 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
 
 #[component]
 pub fn Document(doc: DocumentUriComponents) -> AnyView {
+    // make sure this runs client side rather than server side because of hydration errors
+    // I don't understand.
     let sig = RwSignal::new(false);
     let _ = Effect::new(move || {
         #[cfg(feature = "hydrate")]
