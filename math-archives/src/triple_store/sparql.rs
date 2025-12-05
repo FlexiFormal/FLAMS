@@ -3,6 +3,7 @@ pub mod spargebra {
     pub use oxigraph::sparql::*;
     pub use spargebra::{algebra, term};
 }
+use flams_backend_types::sparql::SparqlResultsHead;
 use sparesults::QueryResultsSerializer;
 pub use spargebra::*;
 
@@ -36,66 +37,6 @@ impl<U: FtmlUri> NamedNodePattern for &'_ U {
         spargebra::term::NamedNodePattern::NamedNode(self.to_iri())
     }
 }
-/*
-impl<T> NamedNodePattern for T
-where
-    T: Into<spargebra::term::NamedNodePattern>,
-{
-    #[inline]
-    fn into_named(self) -> spargebra::term::NamedNodePattern {
-        self.into()
-    }
-}
-impl<T> TermPattern for T
-where
-    T: Into<spargebra::term::TermPattern>,
-{
-    #[inline]
-    fn into_term(self) -> spargebra::term::TermPattern {
-        self.into()
-    }
-}
- */
-
-/*
-pub struct Var(pub char);
-impl From<Var> for spargebra::term::TermPattern {
-    fn from(v: Var) -> Self {
-        Self::Variable(ulo::rdf_types::Variable::new_unchecked(v.0))
-    }
-}
-impl From<Var> for spargebra::term::NamedNodePattern {
-    fn from(v: Var) -> Self {
-        Self::Variable(ulo::rdf_types::Variable::new_unchecked(v.0))
-    }
-}
-
-pub struct Select<S: TermPattern, P: NamedNodePattern, O: TermPattern> {
-    pub subject: S,
-    pub pred: P,
-    pub object: O,
-}
-impl<S: TermPattern, P: NamedNodePattern, O: TermPattern> From<Select<S, P, O>>
-    for spargebra::Query
-{
-    fn from(s: Select<S, P, O>) -> Self {
-        spargebra::QueryBuilder::Select {
-            dataset: None,
-            base_iri: None,
-            pattern: spargebra::algebra::GraphPattern::Distinct {
-                inner: Box::new(spargebra::algebra::GraphPattern::Bgp {
-                    patterns: vec![spargebra::term::TriplePattern {
-                        subject: s.subject.into_term(),
-                        predicate: s.pred.into_named(),
-                        object: s.object.into_term(),
-                    }],
-                }),
-            },
-        }
-        .into()
-    }
-}
- */
 
 #[derive(Debug, thiserror::Error)]
 pub enum QueryError {
@@ -122,29 +63,16 @@ impl<'r> std::ops::Deref for QueryResult<'r> {
     }
 }
 impl<'r> QueryResult<'r> {
-    /// ### Errors
-    pub fn into_json(self) -> Result<String, std::io::Error> {
-        use sparesults::QueryResultsFormat;
-        let mut buf = Vec::new();
-        let ser = QueryResultsSerializer::from_format(QueryResultsFormat::Json);
+    #[must_use]
+    pub fn into_json(self) -> flams_backend_types::sparql::SparqlResult {
         match self.0 {
-            QueryResults::Boolean(b) => {
-                ser.serialize_boolean_to_writer(&mut buf, b)?;
-            }
-            QueryResults::Solutions(sol) => {
-                let mut ser =
-                    ser.serialize_solutions_to_writer(&mut buf, sol.variables().to_vec())?;
-                for s in sol.flatten() {
-                    ser.serialize(s.iter())?;
-                }
-                ser.finish()?;
-            }
-            QueryResults::Graph(_) => {
-                return Ok(String::new());
-                //self.0.write_graph(&mut buf, oxigraph::io::RdfFormat::Turtle)?;
-            }
+            QueryResults::Boolean(b) => b.into(),
+            QueryResults::Graph(_) => false.into(),
+            QueryResults::Solutions(sol) => flams_backend_types::sparql::SparqlResult::Bindings {
+                head: sol.variables().into(),
+                results: sol.flatten().into(),
+            },
         }
-        String::from_utf8(buf).map_err(|e| std::io::Error::other(e.to_string()))
     }
 
     #[must_use]

@@ -10,6 +10,7 @@ pub mod archive_json;
 pub mod archives;
 pub mod git;
 pub mod search;
+pub mod sparql;
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

@@ -16,6 +16,7 @@ rocksdb = ["rdf","oxigraph/rocksdb","oxigraph/oxrocksdb-sys"]
 rdf = [
     "ftml-ontology/rdf",
     "ftml-uris/rdf",
+    "flams-backend-types/rdf",
     "dep:ulo",
     "dep:oxigraph",
     "dep:spargebra",

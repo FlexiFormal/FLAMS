@@ -11,7 +11,9 @@ use leptos::prelude::*;
     feature = "ssr",
     tracing::instrument(level = "info", name = "query", target = "query", skip_all)
 )]
-pub async fn query_api(query: String) -> Result<String, ServerFnError<String>> {
+pub async fn query_api(
+    query: String,
+) -> Result<flams_backend_types::sparql::SparqlResult, ServerFnError<String>> {
     use flams_math_archives::backend::GlobalBackend;
     use flams_math_archives::triple_store::sparql::QueryResult;
     use flams_system::TokioEngine;
@@ -24,8 +26,8 @@ pub async fn query_api(query: String) -> Result<String, ServerFnError<String>> {
     })
     .await; //.in_current_span().await;
     match r {
-        Ok(Ok(Ok(r))) => Ok(r),
-        Ok(Ok(Err(e))) => Err(ServerFnError::WrappedServerError(e.to_string())),
+        Ok(Ok(r)) => Ok(r),
+        //Ok(Ok(Err(e))) => Err(ServerFnError::WrappedServerError(e.to_string())),
         Ok(Err(e)) => Err(ServerFnError::WrappedServerError(e.to_string())),
         Err(e) => Err(ServerFnError::WrappedServerError(e.to_string())),
     }
@@ -50,10 +52,10 @@ pub fn Query() -> impl IntoView {
         action.value().get().map(|result| match result {
             Ok(r) => {
                 if pretty_print.get() {
-                    serde_json::from_str::<serde_json::Value>(&r)
+                    serde_json::to_string_pretty(&r)//from_str::<serde_json::Value>(&r)
                         .map_or_else(|e| format!("Error: {e}"), |v| format!("{v:#}"))
                 } else {
-                    r
+                    serde_json::to_string(&r).expect("infallible?")
                 }
             }
             Err(e) => format!("Error: {e}"),

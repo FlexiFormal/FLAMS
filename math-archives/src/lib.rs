@@ -18,6 +18,7 @@ pub mod source_files;
 #[cfg(feature = "rdf")]
 pub mod triple_store;
 pub mod utils;
+pub use flams_backend_types as types;
 
 #[cfg(feature = "rdf")]
 use crate::triple_store::RDFStore;
