@@ -79,7 +79,7 @@ fn query() -> AnyView {
                 <Input value=uri/>
                 <Text tag=TextTag::Code>{
                     move || {
-                        ftml_uris::Uri::rdf_encode(&uri.get()).unwrap_or_else(|| "(invalid URI)".to_string())
+                        ftml_uris::rdf_encode(&uri.get()).unwrap_or_else(|| "(invalid URI)".to_string())
                     }
                 }</Text>
             </div>
