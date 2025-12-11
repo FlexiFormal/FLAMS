@@ -1,6 +1,7 @@
 # debug = true
 # log_dir = "~/.flams/log"
 # temp_dir = "~/.flams/tmp"
+# embedding_dir = "~/.flams/embedding"
 # database = "~/.flams/users.sqlite"
 # rdf_database = "~/.flams/rdf"
 # stack_size = 2

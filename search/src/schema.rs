@@ -1,3 +1,4 @@
+#[cfg(feature = "tantivy")]
 pub struct SearchSchema {
     #[allow(dead_code)]
     pub schema: tantivy::schema::Schema,
@@ -8,6 +9,8 @@ pub struct SearchSchema {
     pub fors: tantivy::schema::Field,
     pub def_like: tantivy::schema::Field,
 }
+
+#[cfg(feature = "tantivy")]
 impl SearchSchema {
     #[inline]
     #[must_use]

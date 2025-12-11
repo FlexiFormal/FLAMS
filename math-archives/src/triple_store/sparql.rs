@@ -3,7 +3,7 @@ pub mod spargebra {
     pub use oxigraph::sparql::*;
     pub use spargebra::{algebra, term};
 }
-use flams_backend_types::sparql::SparqlResultsHead;
+use flams_backend_types::sparql::{SparqlResultBindings, SparqlResultsHead};
 use sparesults::QueryResultsSerializer;
 pub use spargebra::*;
 
@@ -64,13 +64,13 @@ impl<'r> std::ops::Deref for QueryResult<'r> {
 }
 impl<'r> QueryResult<'r> {
     #[must_use]
-    pub fn into_json(self) -> flams_backend_types::sparql::SparqlResult {
+    pub fn into_json(self, decode_uris: bool) -> flams_backend_types::sparql::SparqlResult {
         match self.0 {
             QueryResults::Boolean(b) => b.into(),
             QueryResults::Graph(_) => false.into(),
             QueryResults::Solutions(sol) => flams_backend_types::sparql::SparqlResult::Bindings {
                 head: sol.variables().into(),
-                results: sol.flatten().into(),
+                results: SparqlResultBindings::from_iter(sol.flatten(), decode_uris),
             },
         }
     }

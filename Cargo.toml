@@ -5,15 +5,12 @@ members = [
     "search",
     "source/main",
     "source/utils",
-    #"source/ontology",
     "source/database",
     "source/system",
     "source/web-utils",
     "source/lsp",
     "source/stex",
     "source/ftml/system",
-    #"source/ftml/viewer-components",
-    #"source/ftml/extraction",
     "source/git",
     "source/router/base",
     "source/router/dashboard",
@@ -28,15 +25,14 @@ members = [
     "source/router/search",
     "source/router/vscode-bindings",
     "source/router/flodown",
-    #"ftml-viewer",
     #"experiments",
     "source/ffi",
     #"maintest"
 ]
 resolver = "2"
 exclude = [
-    "old",
-    #"ftml-viewer", #"web/graphs","test-plugin","tests","thaw",
+    "experiments",
+    #"web/graphs","test-plugin","tests","thaw",
     #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm"
 ]
 
@@ -196,7 +192,6 @@ flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
 #flodown = { path="../FloDown/flodown" }
 
-
 rustex_lib = { version = "0.1", features = ["multithreaded"] }
 tex_engine = { version = "0.1", features = ["multithreaded"] }
 #rustex_lib = { path = "../RusTeX/rustex", features = ["multithreaded"] }
@@ -224,7 +219,7 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 rustc-hash = "2"
 chrono = "0.4"
 oxrdf = "0.2.3"
-smallvec = { version = "2.0.0-alpha.11" }
+smallvec = { version = "2.0.0-alpha.10" }
 lazy_static = "1.5"
 url = "2"
 either = "1"
@@ -260,6 +255,7 @@ astral-tokio-tar = "0.5.1"
 strum = { version = "0.27", features = ["derive"] }
 git-url-parse = { version = "0.4" }
 flume = { version = "0.11", features = ["async"] }
+ordered-float = "5"
 
 password-hash = { version = "0.5" }
 argon2 = { version = "0.5" }
@@ -357,8 +353,10 @@ futures-util = "0.3"
 
 # search
 
-html2text = "0.15"
+#html2text = "0.15"
 tantivy = "0.25"
+simsimd = "6"
+fastembed = "5"
 
 
 ahash = "0.8"
@@ -376,7 +374,7 @@ name = "flams"
 #output-name = "flams"
 bin-package = "flams"
 lib-package = "flams"
-bin-features = ["ssr"]
+bin-features = ["ssr","vectorsearch"]
 lib-features = ["hydrate"]
 lib-default-features = false
 bin-profile-release = "flams-release"

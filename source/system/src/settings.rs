@@ -20,6 +20,7 @@ pub struct Settings {
     pub admin_pwd: Option<Box<str>>,
     pub database: Box<Path>,
     pub rdf_database: Option<Box<Path>>,
+    pub embedding_dir: Option<Box<Path>>,
     pub stack_size: Option<u8>,
     external_url: Option<Box<str>>,
     temp_dir: parking_lot::RwLock<Option<tempfile::TempDir>>,
@@ -99,6 +100,7 @@ impl Settings {
                     .to_path_buf()
                     .into_boxed_path(),
             ),
+            embedding_dir: self.embedding_dir.clone(),
             database: Some(self.database.clone()),
             rdf_database: self.rdf_database.clone(),
             server: ServerSettings {
@@ -158,6 +160,7 @@ impl From<SettingsSpec> for Settings {
                         .expect("Could not create temp dir")
                 },
             ))),
+            embedding_dir: spec.embedding_dir,
             external_url: spec.server.external_url.map(String::into_boxed_str),
             port: AtomicU16::new(if spec.server.port == 0 {
                 8095
@@ -201,7 +204,7 @@ impl From<SettingsSpec> for Settings {
     }
 }
 
-static CONFIG_DIR: std::sync::LazyLock<Option<Box<Path>>> = std::sync::LazyLock::new(|| {
+pub static CONFIG_DIR: std::sync::LazyLock<Option<Box<Path>>> = std::sync::LazyLock::new(|| {
     simple_home_dir::home_dir().map(|d| d.join(".flams").into_boxed_path())
 });
 

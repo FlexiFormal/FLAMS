@@ -13,16 +13,18 @@ use leptos::prelude::*;
 )]
 pub async fn query_api(
     query: String,
+    decode_uris: Option<bool>,
 ) -> Result<flams_backend_types::sparql::SparqlResult, ServerFnError<String>> {
     use flams_math_archives::backend::GlobalBackend;
     use flams_math_archives::triple_store::sparql::QueryResult;
     use flams_system::TokioEngine;
-    tracing::info!("Query: {query}");
+    tracing::info!("Query: {query} (decode_uris: {decode_uris:?}");
+    let decode_uris = decode_uris.unwrap_or(true);
     let r = tokio::task::spawn_blocking(move || {
         GlobalBackend
             .triple_store()
             .query_str::<TokioEngine>(&query)
-            .map(QueryResult::into_json)
+            .map(|q| QueryResult::into_json(q, decode_uris))
     })
     .await; //.in_current_span().await;
     match r {
@@ -41,8 +43,13 @@ const QUERY: &str = r"SELECT ?x ?y WHERE {
 
 #[component]
 pub fn Query() -> impl IntoView {
+    query()
+}
+
+fn query() -> AnyView {
     use leptos::form::ActionForm;
     use thaw::Checkbox;
+    use thaw::{Input, Text, TextTag};
     inject_css("flams-query", include_str!("query.css"));
 
     let action = ServerAction::<QueryApi>::new();
@@ -61,10 +68,21 @@ pub fn Query() -> impl IntoView {
             Err(e) => format!("Error: {e}"),
         })
     });
+    let uri = RwSignal::new(String::new());
 
     view! {
       <div>
         <h1>Query</h1>
+            <p>"Note that FTML URIs need to be partially URL-encoded to be valid RDF-IRIs"</p>
+            <div>
+                <Text>"Encode URI: "</Text>
+                <Input value=uri/>
+                <Text tag=TextTag::Code>{
+                    move || {
+                        ftml_uris::Uri::rdf_encode(&uri.get()).unwrap_or_else(|| "(invalid URI)".to_string())
+                    }
+                }</Text>
+            </div>
         <ActionForm action>
             <span class="flams-query-container">
                 <textarea name="query" class="flams-query-inner">{QUERY.to_string()}</textarea>
@@ -76,5 +94,5 @@ pub fn Query() -> impl IntoView {
             {move || result.get().unwrap_or_default()}
         </div>
       </div>
-    }
+    }.into_any()
 }

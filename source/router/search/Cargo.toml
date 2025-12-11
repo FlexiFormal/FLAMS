@@ -16,6 +16,7 @@ ssr = [
     "flams-router-vscode/ssr",
     "flams-router-content/ssr",
     "dep:flams-system",
+    "dep:flams-math-archives",
     "dep:flams-search",
     "dep:tokio",
     #"dep:paste",
@@ -31,6 +32,8 @@ hydrate = [
     "dep:reqwasm",
 ]
 docs-only = []
+tantivy = ["flams-backend-types/tantivy"]
+vectorsearch = ["flams-backend-types/vectorsearch"]
 
 [dependencies]
 ftml-uris = { workspace = true, features = ["leptos"] }
@@ -44,6 +47,7 @@ flams-router-base = { workspace = true }
 flams-router-vscode = { workspace = true }
 flams-router-content = { workspace = true }
 flams-backend-types = { workspace = true, features = ["serde"] }
+flams-math-archives = { workspace = true, optional = true }
 flams-system = { workspace = true, optional = true }
 flams-search = { workspace = true, optional = true }
 

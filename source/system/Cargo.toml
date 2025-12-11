@@ -16,6 +16,8 @@ zip = [
     "dep:tokio-stream",
     "dep:futures",
 ] #["dep:flate2","dep:tar","tokio","dep:tokio-util","dep:reqwest","dep:async-compression"]
+tantivy = []
+vectorsearch = []
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

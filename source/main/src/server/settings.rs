@@ -36,6 +36,10 @@ struct Cli {
     /// The directory used for temporary files
     pub(crate) temp_dir: Option<PathBuf>,
 
+    #[arg(long)]
+    /// The directory used for embedding models for vector search
+    pub(crate) embedding_dir: Option<PathBuf>,
+
     #[arg(short, long)]
     /// The admin password to use for the server
     pub(crate) admin_pwd: Option<String>,
@@ -93,6 +97,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
             rdf_database: cli.rdf_database.map(PathBuf::into_boxed_path),
             log_dir: cli.log_dir.map(PathBuf::into_boxed_path),
             temp_dir: cli.temp_dir.map(PathBuf::into_boxed_path),
+            embedding_dir: cli.embedding_dir.map(PathBuf::into_boxed_path),
             server: ServerSettings {
                 port: cli.port.unwrap_or_default(),
                 ip: cli.ip.map(|s| s.parse().expect("Illegal ip")),

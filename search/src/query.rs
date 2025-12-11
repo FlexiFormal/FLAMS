@@ -1,5 +1,6 @@
 use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
 
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 #[must_use]
 pub fn build_query(
     query: &str,
@@ -58,15 +59,20 @@ pub fn build_query(
     }
     write!(s, "({query})").ok()?;
     let schema = crate::schema::SearchSchema::get();
-    let mut parser = tantivy::query::QueryParser::for_index(index, vec![schema.fors,schema.uri, schema.title, schema.body]);
+    let mut parser = tantivy::query::QueryParser::for_index(
+        index,
+        vec![schema.fors, schema.uri, schema.title, schema.body],
+    );
     //parser.set_field_fuzzy(SCHEMA.body, false, 1, true);
     parser.set_conjunction_by_default();
     parser.parse_query(&s).ok()
 }
 
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 #[derive(Debug)]
 pub(crate) struct Wrapper<T>(pub T);
 
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 impl tantivy::schema::document::ValueDeserialize for Wrapper<bool> {
     fn deserialize<'de, D>(
         deserializer: D,
@@ -78,6 +84,7 @@ impl tantivy::schema::document::ValueDeserialize for Wrapper<bool> {
     }
 }
 
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 impl tantivy::schema::document::ValueDeserialize for Wrapper<SearchResultKind> {
     fn deserialize<'de, D>(
         deserializer: D,
@@ -93,6 +100,7 @@ impl tantivy::schema::document::ValueDeserialize for Wrapper<SearchResultKind> {
     }
 }
 
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 impl tantivy::schema::document::DocumentDeserialize for Wrapper<SearchResult> {
     fn deserialize<'de, D>(
         mut deserializer: D,

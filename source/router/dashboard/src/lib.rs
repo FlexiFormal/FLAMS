@@ -79,7 +79,7 @@ pub fn Main() -> AnyView {
                         <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>).into_any()/>
                     </ParentRoute>
                     <ParentRoute path=path!("/vscode") view= flams_router_vscode::VSCodeWrap>
-                        <Route path=path!("search") view=flams_router_search::vscode::VSCodeSearch/>
+                        <Route path=path!("search") view=flams_router_search::vscode::vscode_search/>
                     </ParentRoute>
                     <Route path=path!("/document") view={move || {
                         use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
@@ -217,7 +217,7 @@ fn do_main(page: Page) -> AnyView {
         Page::Query => view! {<query::Query/>}.into_any(),
         Page::Settings => view! {<settings::Settings/>}.into_any(),
         Page::MyArchives => view! {<flams_router_git_components::Archives/>}.into_any(),
-        Page::Search => view! {<flams_router_search::components::SearchTop/>}.into_any(),
+        Page::Search => flams_router_search::components::search_top().into_any(),
         Page::FloDown => view! {<flams_flodown::FloDownEditor/>}.into_any(),
         Page::Users => view! {<flams_router_login::components::Users/>}.into_any(),
         _ => view!(<span>"TODO"</span>).into_any(),

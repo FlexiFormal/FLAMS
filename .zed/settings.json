@@ -12,6 +12,7 @@
             "git",
             "docs",
             "serde",
+            "vectorsearch",
             "ssr" //"hydrate" //
           ] // "all"*/
         }

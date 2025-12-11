@@ -37,14 +37,30 @@ pub fn URITop() -> AnyView {
 
 #[component]
 pub fn DocumentOfTop(uri: Uri) -> AnyView {
-    use leptos_router::components::Redirect;
-    wait_and_then_fn(
-        move || super::server_fns::document_of(uri.clone()),
-        |u| {
-            view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>)
-                .into_any()
-        },
-    )
+    use leptos_router::components::Redirect; // make sure this runs client side rather than server side because of hydration errors
+    // I don't understand.
+    let sig = RwSignal::new(false);
+    Effect::new(move || {
+        //sig.track();
+        #[cfg(feature = "hydrate")]
+        {
+            sig.set(true);
+        }
+    });
+    (move || {
+        if sig.get() {
+            let uri = uri.clone();
+            Some(wait_and_then_fn(
+                move || super::server_fns::document_of(uri.clone()),
+                |u| {
+                    view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>)
+                        .into_any()
+                },
+            ))
+        } else {
+            None
+        }
+    })
     .into_any()
 }
 

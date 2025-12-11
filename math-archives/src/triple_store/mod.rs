@@ -23,10 +23,11 @@ pub enum SparqlError {
 
 impl RDFStore {
     #[cfg(feature = "rocksdb")]
+    #[must_use]
     pub fn new(path: &Path) -> Self {
         let _ = std::fs::remove_dir_all(path);
         let store = oxigraph::store::Store::open(path).expect("failed to open rdf database");
-        store.clear();
+        let _ = store.clear();
         let mut loader = store.bulk_loader();
         loader
             .load_quads(ulo::ulo::QUADS.iter().copied())
@@ -92,6 +93,7 @@ impl RDFStore {
     }
 
     /// ### Errors
+    /// ### Panics
     pub fn query_str<E: AsyncEngine>(
         &self,
         s: impl AsRef<str>,
@@ -121,9 +123,9 @@ impl RDFStore {
     /// ### Errors
     pub fn query<E: AsyncEngine>(
         &self,
-        mut q: spargebra::Query,
+        q: spargebra::Query,
     ) -> Result<sparql::QueryResult<'_>, sparql::QueryError> {
-        normalize(&mut q);
+        //normalize(&mut q);
 
         let token = oxigraph::sparql::CancellationToken::new();
         let tk = token.clone();

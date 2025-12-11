@@ -30,7 +30,8 @@ ssr = [
     "flams-router-login/ssr",
     "flams-router-vscode/ssr",
     "flams-router-search/ssr",
-    "flams-flodown/ssr"
+    "flams-flodown/ssr",
+    "dep:flams-search"
 ]
 hydrate = [
     "leptos/hydrate",
@@ -51,6 +52,8 @@ hydrate = [
     "flams-flodown/hydrate"
 ]
 docs-only = []
+tantivy = ["flams-router-search/tantivy","flams-search/tantivy"]
+vectorsearch = ["flams-router-search/vectorsearch"]#,"flams-search/vectorsearch"]
 
 [dependencies]
 ftml-uris = { workspace = true }
@@ -77,6 +80,7 @@ flams-router-search = { workspace = true }
 flams-flodown = { workspace = true }
 flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }
+flams-search = { workspace = true, optional = true, features = ["vectorsearch"] }
 
 leptos = { workspace = true }
 leptos_router = { workspace = true }

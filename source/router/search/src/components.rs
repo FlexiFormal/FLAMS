@@ -1,4 +1,6 @@
-use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
+#[cfg(feature = "tantivy")]
+use flams_backend_types::search::QueryFilter;
+use flams_backend_types::search::{SearchResult, SearchResultKind};
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::components::error_with_toaster;
 use ftml_components::components::content::FtmlViewable;
@@ -9,12 +11,22 @@ use ftml_uris::{
 };
 use leptos::prelude::*;
 
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 #[derive(Debug, Clone)]
 pub(crate) enum SearchState {
     None,
     Loading,
     Results(Vec<(f32, SearchResult)>),
     SymResults(Vec<(SymbolUri, Vec<(f32, SearchResult)>)>),
+}
+
+#[cfg(feature = "vectorsearch")]
+#[derive(Debug, Clone)]
+pub(crate) enum SearchState {
+    None,
+    Loading,
+    Results(Vec<(f32, SearchResult)>),
+    SymResults(Vec<(f32, SymbolUri, DocumentElementUri)>),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -66,8 +78,9 @@ impl Filter {
     }
 }
 
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 #[component]
-pub fn SearchTop() -> AnyView {
+pub fn search_top() -> AnyView {
     use flams_web_utils::components::ClientOnly;
     use thaw::{
         Divider, Flex, FlexAlign, Icon, Input, InputPrefix, Layout, LayoutHeader, Radio,
@@ -201,6 +214,144 @@ pub fn SearchTop() -> AnyView {
     }.into_any()
 }
 
+#[cfg(feature = "vectorsearch")]
+pub fn search_top() -> AnyView {
+    use flams_web_utils::components::ClientOnly;
+    use thaw::{
+        Divider, Flex, FlexAlign, Icon, Input, InputPrefix, Layout, LayoutHeader, Radio,
+        RadioGroup, Tag, TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput,
+        TagPickerOption, ToasterInjection,
+    }; //,Combobox,ComboboxOption
+    let query = RwSignal::new(String::new());
+    let search_kind = RwSignal::new(vec![
+        Filter::Def.value_str().to_string(),
+        Filter::Par.value_str().to_string(),
+    ]);
+    let query_opts = Memo::new(move |_| {
+        search_kind.with(|v| {
+            use flams_backend_types::search::FragmentQueryFilter;
+
+            let mut ret = FragmentQueryFilter::default();
+            ret.flags = ret.flags.unset_allow_documents();
+            ret.flags = ret.flags.unset_allow_paragraphs();
+            ret.flags = ret.flags.unset_allow_definitions();
+            ret.flags = ret.flags.unset_allow_examples();
+            ret.flags = ret.flags.unset_allow_assertions();
+            ret.flags = ret.flags.unset_allow_problems();
+            for s in v {
+                match Filter::from_value(s.as_str()) {
+                    Filter::Doc => ret.flags = ret.flags.set_allow_documents(),
+                    Filter::Def => ret.flags = ret.flags.set_allow_definitions(),
+                    Filter::Par => ret.flags = ret.flags.set_allow_paragraphs(),
+                    Filter::Ex => ret.flags = ret.flags.set_allow_examples(),
+                    Filter::Ass => ret.flags = ret.flags.set_allow_assertions(),
+                }
+            }
+            ret
+        })
+    });
+    let results = RwSignal::new(SearchState::None);
+    let toaster = ToasterInjection::expect_context();
+    let action = Action::new(move |&()| {
+        results.set(SearchState::Loading);
+        let s = query.get_untracked();
+        let opts = query_opts.get_untracked();
+        async move {
+            match super::search_query(s, opts, 20).await {
+                Ok(r) => results.set(SearchState::Results(r)),
+                Err(e) => {
+                    results.set(SearchState::None);
+                    error_with_toaster(e, toaster);
+                }
+            }
+        }
+    });
+    let sym_action = Action::new(move |&()| {
+        results.set(SearchState::Loading);
+        let s = query.get_untracked();
+        async move {
+            match super::search_symbols(s, 20).await {
+                Ok(r) => results.set(SearchState::SymResults(r)),
+                Err(e) => {
+                    results.set(SearchState::None);
+                    error_with_toaster(e, toaster);
+                }
+            }
+        }
+    });
+    let radio_value = RwSignal::new("X".to_string());
+    Effect::new(move || {
+        if query.with(|q| q.is_empty()) {
+            return;
+        };
+        if radio_value.with(|s| s == "S") {
+            sym_action.dispatch(());
+        } else {
+            let _ = query_opts.get(); // register dependency
+            action.dispatch(());
+        }
+    });
+    inject_css(
+        "flams-search-picker",
+        ".flams-search-picker{} .flams-search-picker-disabled { display:none; }",
+    );
+    let cls = Memo::new(move |_| match radio_value.get().as_str() {
+        "X" => "flams-search-picker".to_string(),
+        "S" => "flams-search-picker-disabled".to_string(),
+        _ => impossible!(),
+    });
+    view! {
+      <Layout>
+        <LayoutHeader><Flex>
+          <Input value=query placeholder="search...">
+              <InputPrefix slot>
+                  <Icon icon=icondata_ai::AiSearchOutlined/>
+              </InputPrefix>
+          </Input>
+          <RadioGroup value=radio_value>
+            <Radio value="S" label="Symbols"/>
+            <Radio value="X" label="Documents/Paragraphs"/>
+          </RadioGroup>
+          <ClientOnly>
+            <TagPicker selected_options=search_kind class=cls>
+                <TagPickerControl slot>
+                <TagPickerGroup>
+                  {move ||
+                    search_kind.get().into_iter().map(|option| view!{
+                      <Tag value=option.clone() attr:style="background-color:var(--colorBrandBackground2)">
+                          {Filter::from_value(option.as_str()).tag_str()}
+                      </Tag>
+                    }).collect_view()
+                  }
+                  </TagPickerGroup>
+                  <TagPickerInput />
+                </TagPickerControl>
+                {
+                  move ||
+                      search_kind.with(|opts| {
+                          Filter::ALL.iter().filter_map(|option| {
+                              if opts.iter().any(|o| o == option.value_str()) {
+                                  return None
+                              } else {
+                                  Some(view! {
+                                      <TagPickerOption value=option.value_str().to_string() text=option.long_str() />
+                                  })
+                              }
+                          }).collect_view()
+                      })
+                }
+            </TagPicker>
+          </ClientOnly>
+        </Flex></LayoutHeader>
+        <Layout>
+          <Divider/>
+          <div style="width:fit-content;padding:10px;"><Flex vertical=true align=FlexAlign::Start>{move || do_results(results)}</Flex></div>
+        </Layout>
+      </Layout>
+    }.into_any()
+}
+
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 fn do_results(results: RwSignal<SearchState>) -> AnyView {
     results.with(|r| match r {
         SearchState::None => ().into_any(),
@@ -209,14 +360,36 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
         SearchState::SymResults(v) => v
             .iter()
             .map(|(sym, res)| do_sym_result(sym, res.clone()))
-            .collect_view().into_any(),
+            .collect_view()
+            .into_any(),
         SearchState::Results(v) => v
             .iter()
             .map(|(score, res)| do_result(*score, res))
-            .collect_view().into_any(),
+            .collect_view()
+            .into_any(),
     })
 }
 
+#[cfg(feature = "vectorsearch")]
+fn do_results(results: RwSignal<SearchState>) -> AnyView {
+    results.with(|r| match r {
+        SearchState::None => ().into_any(),
+        SearchState::Results(v) if v.is_empty() => "(No results)".into_any(),
+        SearchState::Loading => view!(<flams_web_utils::components::Spinner/>).into_any(),
+        SearchState::SymResults(v) => v
+            .iter()
+            .map(|(score, sym, elem)| do_sym_result(sym, *score, elem))
+            .collect_view()
+            .into_any(),
+        SearchState::Results(v) => v
+            .iter()
+            .map(|(score, res)| do_result(*score, res))
+            .collect_view()
+            .into_any(),
+    })
+}
+
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::ClientOnly;
@@ -242,6 +415,33 @@ fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
                     }
                   }).collect_view()
                 }
+                </Scrollbar>
+              </div>
+            </div>
+          </CardPreview>
+      </Card>
+    }.into_any()
+}
+
+#[cfg(feature = "vectorsearch")]
+fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyView {
+    use flams_router_content::components::Fragment;
+    use flams_web_utils::components::ClientOnly;
+    use ftml_uris::Uri;
+    use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
+
+    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let elem = elem.clone();
+    view! {
+      <Card>
+          <CardHeader>
+              <Body1><b>{name}</b></Body1>
+          </CardHeader>
+          <CardPreview>
+            <div style="padding:0 5px;max-width:100%">
+              <div style="width:100%;color:black;background-color:white;">
+                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">
+          <Fragment uri=UriComponents::Full(Uri::DocumentElement(elem)) position=ftml_components::SidebarPosition::None/>
                 </Scrollbar>
               </div>
             </div>

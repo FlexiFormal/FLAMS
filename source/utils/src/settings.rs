@@ -17,6 +17,8 @@ pub struct SettingsSpec {
     #[cfg_attr(feature = "serde", serde(default))]
     pub temp_dir: Option<Box<Path>>,
     #[cfg_attr(feature = "serde", serde(default))]
+    pub embedding_dir: Option<Box<Path>>,
+    #[cfg_attr(feature = "serde", serde(default))]
     pub buildqueue: BuildQueueSettings,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub lsp: bool,
@@ -44,6 +46,7 @@ impl Add for SettingsSpec {
             temp_dir: self.temp_dir.or(rhs.temp_dir),
             database: self.database.or(rhs.database),
             rdf_database: self.rdf_database.or(rhs.rdf_database),
+            embedding_dir: self.embedding_dir.or(rhs.embedding_dir),
             stack_size: self.stack_size.or(rhs.stack_size),
             buildqueue: self.buildqueue + rhs.buildqueue,
             gitlab: self.gitlab + rhs.gitlab,
@@ -67,6 +70,9 @@ impl AddAssign for SettingsSpec {
         }
         if self.temp_dir.is_none() {
             self.temp_dir = rhs.temp_dir;
+        }
+        if self.embedding_dir.is_none() {
+            self.embedding_dir = rhs.embedding_dir;
         }
         if self.database.is_none() {
             self.database = rhs.database;
@@ -92,6 +98,9 @@ impl SettingsSpec {
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
             temp_dir: std::env::var("FLAMS_TEMP_DIR")
+                .ok()
+                .map(|s| PathBuf::from(s).into_boxed_path()),
+            embedding_dir: std::env::var("FLAMS_EMBEDDING_DIR")
                 .ok()
                 .map(|s| PathBuf::from(s).into_boxed_path()),
             database: std::env::var("FLAMS_DATABASE")

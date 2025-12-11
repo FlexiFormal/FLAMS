@@ -51,17 +51,23 @@ pub struct SparqlResultBindings {
 }
 
 #[cfg(feature = "rdf")]
-impl<I, J: IntoIterator<Item = I>> From<J> for SparqlResultBindings
-where
-    for<'a> &'a I: IntoIterator<Item = (&'a ulo::rdf_types::Variable, &'a ulo::rdf_types::RDFTerm)>,
-{
-    fn from(value: J) -> Self {
+impl SparqlResultBindings {
+    pub fn from_iter<I, J: IntoIterator<Item = I>>(iter: J, decode_uris: bool) -> Self
+    where
+        for<'a> &'a I:
+            IntoIterator<Item = (&'a ulo::rdf_types::Variable, &'a ulo::rdf_types::RDFTerm)>,
+    {
         Self {
-            bindings: value
+            bindings: iter
                 .into_iter()
                 .map(|v| {
                     v.into_iter()
-                        .map(|(v, t)| (v.as_str().to_string(), t.into()))
+                        .map(|(v, t)| {
+                            (
+                                v.as_str().to_string(),
+                                SparqlResultTerm::from_term(t, decode_uris),
+                            )
+                        })
                         .collect()
                 })
                 .collect(),
@@ -91,12 +97,12 @@ pub enum SparqlResultTerm {
     Triple { value: Box<SparqlResultTriple> },
 }
 
-#[cfg(feature = "rdf")]
-impl From<&ulo::rdf_types::RDFTerm> for SparqlResultTerm {
-    fn from(value: &ulo::rdf_types::RDFTerm) -> Self {
+impl SparqlResultTerm {
+    #[cfg(feature = "rdf")]
+    fn from_term(value: &ulo::rdf_types::RDFTerm, decode_uris: bool) -> Self {
         use ulo::rdf_types::RDFTerm as T;
         match value {
-            T::NamedNode(r) => r.into(),
+            T::NamedNode(r) => Self::from_node(r, decode_uris),
             T::Literal(lit) => Self::Literal {
                 value: lit.value().to_string(),
                 lang: lit.language().as_ref().map(|s| (*s).to_string()),
@@ -108,34 +114,32 @@ impl From<&ulo::rdf_types::RDFTerm> for SparqlResultTerm {
             },
             T::Triple(t) => Self::Triple {
                 value: Box::new(SparqlResultTriple {
-                    subject: (&t.subject).into(),
-                    predicate: (&t.predicate).into(),
-                    object: (&t.object).into(),
+                    subject: Self::from_subject(&t.subject, decode_uris),
+                    predicate: Self::from_node(&t.predicate, decode_uris),
+                    object: Self::from_term(&t.object, decode_uris),
                 }),
             },
         }
     }
-}
-
-#[cfg(feature = "rdf")]
-impl From<&ulo::rdf_types::Subject> for SparqlResultTerm {
-    fn from(value: &ulo::rdf_types::Subject) -> Self {
-        match value {
-            ulo::rdf_types::Subject::NamedNode(n) => n.into(),
-            ulo::rdf_types::Subject::BlankNode(b) => Self::BlankNode {
-                value: b.as_str().to_string(),
+    #[cfg(feature = "rdf")]
+    fn from_node(r: &ulo::rdf_types::NamedNode, decode_uris: bool) -> Self {
+        use ftml_uris::{FtmlUri, Uri};
+        Self::Iri {
+            value: if decode_uris {
+                Uri::from_iri(r.as_ref())
+                    .map_or_else(|_| r.as_str().to_string(), |uri| uri.to_string())
+            } else {
+                r.as_str().to_string()
             },
         }
     }
-}
-
-#[cfg(feature = "rdf")]
-impl From<&ulo::rdf_types::NamedNode> for SparqlResultTerm {
-    fn from(r: &ulo::rdf_types::NamedNode) -> Self {
-        use ftml_uris::{FtmlUri, Uri};
-        Self::Iri {
-            value: Uri::from_iri(r.as_ref())
-                .map_or_else(|_| r.as_str().to_string(), |uri| uri.to_string()),
+    #[cfg(feature = "rdf")]
+    fn from_subject(value: &ulo::rdf_types::Subject, decode_uris: bool) -> Self {
+        match value {
+            ulo::rdf_types::Subject::NamedNode(n) => Self::from_node(n, decode_uris),
+            ulo::rdf_types::Subject::BlankNode(b) => Self::BlankNode {
+                value: b.as_str().to_string(),
+            },
         }
     }
 }

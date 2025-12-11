@@ -37,6 +37,8 @@ pub struct Memory {
     uris: ftml_uris::MemoryState,
     terms: ftml_ontology::terms::TermCacheSize,
     backend: ManagerCacheSize,
+    #[cfg(feature = "vectorsearch")]
+    search: (usize, usize),
 }
 
 #[server(
@@ -58,6 +60,8 @@ pub async fn get_memory() -> Result<Memory, ServerFnError<String>> {
                     backend,
                     uris,
                     terms,
+                    #[cfg(feature = "vectorsearch")]
+                    search: flams_search::Searcher::get().size(),
                 })
             })
             .await
@@ -180,6 +184,9 @@ pub(super) fn Settings() -> AnyView {
 
 fn do_memory(mem: Memory) -> impl IntoView {
     let total = mem.terms.total_bytes() + mem.uris.total_bytes() + mem.backend.total_bytes();
+
+    #[cfg(feature = "vectorsearch")]
+    let total = total + mem.search.1;
     macro_rules! disp {
         ($name:literal = $num:expr;$bytes:expr) => {
             view!(<tr>
@@ -194,11 +201,17 @@ fn do_memory(mem: Memory) -> impl IntoView {
                 .to_string()
         };
     }
+
+    #[cfg(feature = "vectorsearch")]
+    let search = disp!("Search Index" = mem.search.0;mem.search.1);
+    #[cfg(not(feature = "vectorsearch"))]
+    let search = ();
     view! {
         <tr>
             <td class="flams-settings-col"><b>"Relations"</b></td>
             <td class="flams-settings-col">{mem.backend.relations}</td>
         </tr>
+        {search}
         <tr><td/><td/></tr>
         <tr><td><b>"Backend"</b></td></tr>
             {disp!("Modules" = mem.backend.num_modules;mem.backend.modules_bytes)}

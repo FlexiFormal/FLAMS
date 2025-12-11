@@ -26,3 +26,4 @@ ts/ftml-viewer/src/base/*
 /rustc-ice-*
 .sqlx
 *storybook.log
+old/*

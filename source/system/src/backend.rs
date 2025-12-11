@@ -19,11 +19,4 @@ pub fn initialize<A: AsyncEngine>() {
             .triple_store()
             .load_archives(&GlobalBackend.all_archives());
     });
-    /*#[cfg(feature = "tantivy")]
-    {
-        #[cfg(feature = "tokio")]
-        flams_utils::background(|| crate::search::Searcher::get().reload());
-        #[cfg(not(feature = "tokio"))]
-        crate::search::Searcher::get().reload();
-    }*/
 }
