@@ -79,7 +79,6 @@ impl Filter {
 }
 
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-#[component]
 pub fn search_top() -> AnyView {
     use flams_web_utils::components::ClientOnly;
     use thaw::{

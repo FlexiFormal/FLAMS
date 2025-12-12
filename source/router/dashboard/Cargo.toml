@@ -49,11 +49,11 @@ hydrate = [
     "flams-router-login/hydrate",
     "flams-router-vscode/hydrate",
     "flams-router-search/hydrate",
-    "flams-flodown/hydrate"
+    "flams-flodown/hydrate",
 ]
 docs-only = []
-tantivy = ["flams-router-search/tantivy","flams-search/tantivy"]
-vectorsearch = ["flams-router-search/vectorsearch"]#,"flams-search/vectorsearch"]
+tantivy = ["flams-router-search/tantivy"] #,"flams-search/tantivy"]
+vectorsearch = ["flams-router-search/vectorsearch"] #,"flams-search/vectorsearch"]
 
 [dependencies]
 ftml-uris = { workspace = true }
@@ -80,7 +80,7 @@ flams-router-search = { workspace = true }
 flams-flodown = { workspace = true }
 flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }
-flams-search = { workspace = true, optional = true, features = ["vectorsearch"] }
+flams-search = { workspace = true, optional = true }
 
 leptos = { workspace = true }
 leptos_router = { workspace = true }

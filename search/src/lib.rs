@@ -94,6 +94,8 @@ pub(crate) static MODEL: std::sync::LazyLock<Option<parking_lot::Mutex<fastembed
     std::sync::LazyLock::new(|| {
         tracing::info_span!("initializing vector search model").in_scope(|| {
             use flams_system::settings::CONFIG_DIR;
+            // https://ort.pyke.io/backends/candle
+            ort::set_api(ort_candle::api());
             let model_path = flams_system::settings::Settings::get()
                 .embedding_dir
                 .as_ref()

@@ -78,9 +78,9 @@ hydrate = [
     "flams-router-base/hydrate",
     "ftml-ontology/wasm",
     "dep:dateparser",
-    "flams-backend-types/vectorsearch",
-    "flams-router-search/vectorsearch",
-    "flams-router-dashboard/vectorsearch"
+    #"flams-backend-types/tantivy",
+    "flams-router-search/tantivy",
+    "flams-router-dashboard/tantivy"
 ]
 tantivy = [
     "flams-search/tantivy",

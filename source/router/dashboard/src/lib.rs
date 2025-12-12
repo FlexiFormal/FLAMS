@@ -2,9 +2,18 @@
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
-    not(any(feature = "ssr", feature = "hydrate"))
+    all(
+        feature = "tantivy",
+        feature = "vectorsearch",
+        not(feature = "docs-only")
+    ),
+    not(any(feature = "ssr", feature = "hydrate")),
+    not(any(feature = "tantivy", feature = "vectorsearch")),
 ))]
-compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
+compile_error!(
+    "exactly one of the features \"ssr\" or \"hydrate\", and one of the
+   features \"tantivy\" or \"vectorsearch\" must be enabled"
+);
 
 pub mod query;
 mod settings;
