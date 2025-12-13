@@ -17,6 +17,7 @@ use ftml_uris::{
 };
 use leptos::prelude::*;
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 pub fn vscode_search() -> AnyView {
     flams_router_content::Views::top(move || {
@@ -169,8 +170,8 @@ pub fn vscode_search() -> AnyView {
     })
     .into_any()
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 pub fn vscode_search() -> AnyView {
     // make sure this runs client side rather than server side because of hydration errors
     // I don't understand.
@@ -350,6 +351,7 @@ pub fn vscode_search() -> AnyView {
     (move || if sig.get() { Some(inner()) } else { None }).into_any()
 }
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 fn do_results(
     pre: &'static str,
@@ -380,8 +382,8 @@ fn do_results(
     })
     .into_any()
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 fn do_results(
     pre: &'static str,
     remote: Option<fn() -> Option<String>>,
@@ -472,6 +474,7 @@ impl std::fmt::Display for Short<'_> {
     }
 }
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 fn do_sym_result_local(sym: &SymbolUri) -> AnyView {
     let vs = unwrap!(VSCode::get());
@@ -506,8 +509,8 @@ fn do_sym_result_local(sym: &SymbolUri) -> AnyView {
         </div>
     }.into_any()
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 fn do_sym_result_local(sym: &SymbolUri, elem: &DocumentElementUri) -> AnyView {
     let vs = unwrap!(VSCode::get());
     let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
@@ -542,6 +545,7 @@ fn do_sym_result_local(sym: &SymbolUri, elem: &DocumentElementUri) -> AnyView {
     }.into_any()
 }
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 fn do_sym_result_remote(
     sym: &SymbolUri,
@@ -571,8 +575,8 @@ fn do_sym_result_remote(
     }
     .into_any()
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 fn do_sym_result_remote(
     sym: &SymbolUri,
     elem: DocumentElementUri,

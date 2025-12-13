@@ -477,6 +477,11 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         let client = self.inner.client().clone();
         tracing::info!("LSP: reload");
         state.backend().reset::<TokioEngine>();
+        let _ = tokio::task::spawn_blocking(|| {
+            for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                (e.on_reload)();
+            }
+        });
         let _ = tokio::task::spawn_blocking(move || {
             state.load_mathhubs(client.clone());
             client.update_mathhub();
@@ -531,6 +536,11 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             drop(progress);
             if rescan {
                 state.backend().reset::<TokioEngine>();
+                let _ = tokio::task::spawn_blocking(|| {
+                    for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                        (e.on_reload)();
+                    }
+                });
                 let _ = tokio::task::spawn_blocking(move || {
                     // <- necessary, but I don't quite understand why
                     state.load_mathhubs(client.clone());

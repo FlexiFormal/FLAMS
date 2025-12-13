@@ -6,9 +6,9 @@
  */
 #![cfg_attr(doc,doc = document_features::document_features!())]
 
-#[cfg(feature = "vectorsearch")]
+use crate::index::SearchIndex;
 use flams_backend_types::search::FragmentQueryFilter;
-use flams_backend_types::search::{QueryFilter, SearchIndex, SearchResult};
+use flams_backend_types::search::SearchResult;
 use flams_math_archives::{
     Archive, LocallyBuilt,
     artifacts::{Artifact, ContentResult, FileOrString},
@@ -18,12 +18,11 @@ use flams_math_archives::{
     utils::errors::{ArtifactSaveError, FileError},
 };
 use flams_system::FlamsExtension;
-#[cfg(feature = "vectorsearch")]
 use ftml_uris::DocumentElementUri;
 use ftml_uris::{DocumentUri, SymbolUri, UriPath, UriWithArchive};
 
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-use crate::{index::SearchIndexExt, schema::SearchSchema};
+use crate::schema::SearchSchema;
 
 pub mod index;
 pub mod query;
@@ -32,7 +31,7 @@ pub mod schema;
 pub mod textify;
 
 #[cfg(feature = "tantivy")]
-const MEMORY_SIZE: usize = 50_000_000;
+const MEMORY_SIZE: usize = 150_000_000;
 
 flams_system::register_exension!(FlamsExtension {
     name: "search",
@@ -41,7 +40,8 @@ flams_system::register_exension!(FlamsExtension {
         a.as_any().downcast_ref::<ContentResult>()
     {
         index(b, uri, rel_path, content);
-    }
+    },
+    on_reload: initialize
 });
 
 #[cfg(feature = "tantivy")]
@@ -158,6 +158,20 @@ impl Searcher {
     }
 
     #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
+    pub fn size(&self) -> (usize, usize) {
+        let reader = self.reader.read();
+        (
+            reader.searcher().num_docs() as usize,
+            reader
+                .searcher()
+                .space_usage()
+                .expect("test")
+                .total()
+                .get_bytes() as usize,
+        )
+    }
+
+    #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
     fn new() -> Self {
         let index =
             tantivy::index::Index::create_in_ram(schema::SearchSchema::get().schema.clone());
@@ -192,11 +206,15 @@ impl Searcher {
     pub fn query(
         &self,
         s: &str,
-        opts: QueryFilter,
+        mut opts: FragmentQueryFilter,
         num_results: usize,
     ) -> Option<Vec<(f32, SearchResult)>> {
         SPAN.in_scope(move || {
             let searcher = self.reader.read().searcher();
+            let in_documents = std::mem::take(&mut opts.in_documents)
+                .into_iter()
+                .map(|u| u.to_string())
+                .collect::<Vec<_>>();
             let query = query::build_query(s, &self.index.read(), opts)?;
             let top_num = if num_results == 0 {
                 usize::MAX / 2
@@ -204,12 +222,36 @@ impl Searcher {
                 num_results
             };
             let mut ret = Vec::new();
-            for (s, a) in searcher
-                .search(&*query, &tantivy::collector::TopDocs::with_limit(top_num))
-                .ok()?
-            {
-                let query::Wrapper(r) = searcher.doc(a).ok()?;
-                ret.push((s, r));
+            let iter = if in_documents.is_empty() {
+                searcher
+                    .search(&*query, &tantivy::collector::TopDocs::with_limit(top_num))
+                    .map_err(|e| tracing::error!("Search Error A: {e}"))
+                    .ok()?
+            } else {
+                searcher
+                    .search(
+                        &*query,
+                        &tantivy::collector::BytesFilterCollector::new(
+                            "uri".to_string(),
+                            move |u: &[u8]| {
+                                in_documents.iter().any(|d| u.starts_with(d.as_bytes()))
+                            },
+                            tantivy::collector::TopDocs::with_limit(top_num),
+                        ),
+                    )
+                    .map_err(|e| tracing::error!("Search Error B: {e}"))
+                    .ok()?
+            };
+            for (s, a) in iter {
+                let Ok(doc) = searcher
+                    .doc::<tantivy::schema::TantivyDocument>(a)
+                    .map_err(|e| tracing::error!("Search Error: {e}"))
+                else {
+                    continue;
+                };
+                if let Some(doc) = SearchIndex::from_document(doc) {
+                    ret.push((s, doc));
+                };
             }
             Some(ret)
         })
@@ -221,16 +263,14 @@ impl Searcher {
         &self,
         s: &str,
         num_results: usize,
-    ) -> Option<Vec<(SymbolUri, Vec<(f32, SearchResult)>)>> {
+    ) -> Option<Vec<(f32, SymbolUri, DocumentElementUri)>> {
         SPAN.in_scope(move || {
-            const FILTER: QueryFilter = QueryFilter {
-                allow_documents: false,
-                allow_paragraphs: true,
-                allow_definitions: true,
-                allow_examples: false,
-                allow_assertions: true,
-                allow_problems: false,
-                definition_like_only: true,
+            const FILTER: FragmentQueryFilter = {
+                use flams_backend_types::search::QueryFilterFlags;
+
+                let mut f = FragmentQueryFilter::new();
+                f.flags = QueryFilterFlags::definition_like_only();
+                f
             };
             let searcher = self.reader.read().searcher();
 
@@ -240,31 +280,37 @@ impl Searcher {
             } else {
                 num_results
             };
-            let mut ret: Vec<(SymbolUri, Vec<(f32, SearchResult)>)> = Vec::new();
-            for (s, a) in searcher
+            let mut ret: Vec<(f32, SymbolUri, DocumentElementUri)> = Vec::new();
+            for (score, a) in searcher
                 .search(
                     &*query,
-                    &tantivy::collector::TopDocs::with_limit(top_num * 2),
+                    &tantivy::collector::TopDocs::with_limit(top_num * 3),
                 )
+                .map_err(|e| tracing::error!("Search Error A: {e}"))
                 .ok()?
             {
-                let query::Wrapper(r): query::Wrapper<SearchResult> = searcher.doc(a).ok()?;
-                if let SearchResult::Paragraph { fors, .. } = &r {
-                    for sym in fors {
-                        if let Some(v) = ret
-                            .iter_mut()
-                            .find_map(|(k, v)| if *k == *sym { Some(v) } else { None })
-                        {
-                            v.push((s, r.clone()));
-                        } else {
-                            ret.push((sym.clone(), vec![(s, r.clone())]));
+                let Ok(doc) = searcher
+                    .doc::<tantivy::schema::TantivyDocument>(a)
+                    .map_err(|e| tracing::error!("Search Error: {e}"))
+                else {
+                    continue;
+                };
+                if let Some(doc) = SearchIndex::from_document(doc) {
+                    if let SearchResult::Paragraph { fors, uri, .. } = doc {
+                        for sym in fors {
+                            if let Some((r, _, e)) = ret.iter_mut().find(|(_, k, _)| *k == sym) {
+                                if score > *r {
+                                    *e = uri.clone();
+                                }
+                            } else {
+                                ret.push((score, sym, uri.clone()));
+                            }
                         }
                     }
                 }
             }
-            if ret.len() > num_results {
-                let _ = ret.split_off(num_results);
-            }
+            ret.sort_by_key(|(s, _, _)| ordered_float::OrderedFloat(-*s));
+            ret.truncate(num_results);
             Some(ret)
         })
     }
@@ -346,7 +392,7 @@ impl Searcher {
     pub fn query(
         &self,
         s: &str,
-        opts: &FragmentQueryFilter,
+        opts: FragmentQueryFilter,
         num_results: usize,
     ) -> Option<Vec<(f32, SearchResult)>> {
         // SAFETY: invariant: input.len() == output.len()
@@ -359,7 +405,7 @@ impl Searcher {
         let mut ret: Vec<(f32, SearchResult)> =
             Vec::with_capacity(if num_results == 0 { 1 } else { num_results + 1 });
         let searcher = self.index.read();
-        for e in searcher.iter().filter(|e| filter(opts, e)) {
+        for e in searcher.iter().filter(|e| filter(&opts, e)) {
             match e {
                 SearchIndex::Document { uri, title, body } => {
                     let title_score = title.as_ref().map(|t| (t % &query) as f32);
@@ -458,7 +504,7 @@ impl Artifact for IndexFile {
             .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(into.to_path_buf(), e)))?;
         #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
         {
-            bincode::serde::encode_into_std_write(
+            bincode::encode_into_std_write(
                 &self.0,
                 &mut std::io::BufWriter::new(file),
                 bincode::config::standard(),
@@ -570,15 +616,14 @@ fn initialize() {
                             let file = std::io::BufReader::new(f);
 
                             let Ok(v): Result<Vec<SearchIndex>, _> =
-                                bincode::serde::decode_from_reader(
-                                    file,
-                                    bincode::config::standard(),
-                                )
+                                bincode::decode_from_reader(file, bincode::config::standard())
                             else {
                                 tracing::error!("error deserializing file {}", e.path().display());
                                 return;
                             };
                             for d in v {
+                                use tantivy::schema::Value;
+
                                 let d: tantivy::TantivyDocument = d.to_document();
                                 if let Err(e) = wr.add_document(d) {
                                     tracing::error!("{e}");

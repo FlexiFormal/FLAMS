@@ -37,7 +37,6 @@ pub struct Memory {
     uris: ftml_uris::MemoryState,
     terms: ftml_ontology::terms::TermCacheSize,
     backend: ManagerCacheSize,
-    #[cfg(feature = "vectorsearch")]
     search: (usize, usize),
 }
 
@@ -60,7 +59,6 @@ pub async fn get_memory() -> Result<Memory, ServerFnError<String>> {
                     backend,
                     uris,
                     terms,
-                    #[cfg(feature = "vectorsearch")]
                     search: flams_search::Searcher::get().size(),
                 })
             })
@@ -87,6 +85,11 @@ pub async fn reload() -> Result<(), ServerFnError<String>> {
                 ftml_ontology::terms::clear_term_cache();
             })
             .await;
+            let _ = tokio::task::spawn_blocking(|| {
+                for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                    (e.on_reload)();
+                }
+            });
             Ok(())
         }
         _ => Err("Not logged in".to_string().into()),
@@ -185,7 +188,6 @@ pub(super) fn Settings() -> AnyView {
 fn do_memory(mem: Memory) -> impl IntoView {
     let total = mem.terms.total_bytes() + mem.uris.total_bytes() + mem.backend.total_bytes();
 
-    #[cfg(feature = "vectorsearch")]
     let total = total + mem.search.1;
     macro_rules! disp {
         ($name:literal = $num:expr;$bytes:expr) => {
@@ -202,10 +204,7 @@ fn do_memory(mem: Memory) -> impl IntoView {
         };
     }
 
-    #[cfg(feature = "vectorsearch")]
     let search = disp!("Search Index" = mem.search.0;mem.search.1);
-    #[cfg(not(feature = "vectorsearch"))]
-    let search = ();
     view! {
         <tr>
             <td class="flams-settings-col"><b>"Relations"</b></td>

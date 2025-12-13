@@ -32,7 +32,6 @@ hydrate = [
     "dep:reqwasm",
 ]
 docs-only = []
-tantivy = ["flams-backend-types/tantivy"]
 vectorsearch = ["flams-backend-types/vectorsearch"]
 
 [dependencies]

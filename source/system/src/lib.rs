@@ -54,12 +54,14 @@ use flams_math_archives::{
 use ftml_uris::{DocumentUri, UriPath};
 use settings::SettingsSpec;
 
+pub use inventory::iter;
 pub use inventory::submit as register_exension;
 
 pub struct FlamsExtension {
     pub name: &'static str,
     pub on_start: fn(),
     pub on_build_result: fn(&AnyBackend, &DocumentUri, &UriPath, &dyn Artifact),
+    pub on_reload: fn(),
 }
 
 #[cfg(feature = "tokio")]

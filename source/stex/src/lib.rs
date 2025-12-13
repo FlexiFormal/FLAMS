@@ -31,7 +31,8 @@ flams_system::register_exension!(FlamsExtension {
         RusTeX::initialize();
         math::RusTeXMath::initialize();
     },
-    on_build_result: |_, _, _, _| ()
+    on_build_result: |_, _, _, _| (),
+    on_reload: || ()
 });
 
 source_format!(STEX {

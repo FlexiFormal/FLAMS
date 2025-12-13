@@ -10,8 +10,8 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [features]
-tantivy = ["dep:tantivy","ftml-uris/tantivy","flams-backend-types/tantivy"]
-vectorsearch = ["dep:fastembed","dep:ordered-float","dep:ort","dep:ort-candle","flams-backend-types/vectorsearch"]
+tantivy = ["dep:tantivy","ftml-uris/tantivy","flams-backend-types/bincode"]
+vectorsearch = ["dep:fastembed","dep:ort","dep:ort-candle","flams-backend-types/vectorsearch"]
 
 
 [package.metadata.docs.rs]
@@ -55,6 +55,7 @@ parking_lot = { workspace = true }
 #html2text = { workspace = true }
 rayon = { workspace = true }
 walkdir = { workspace = true }
+ordered-float = { workspace = true }
 
 html5ever = { workspace = true }
 
@@ -62,4 +63,3 @@ tantivy = { workspace = true,optional=true }
 fastembed = { workspace = true,optional=true }
 ort = { workspace = true,optional=true }
 ort-candle = { workspace = true,optional=true }
-ordered-float = { workspace = true,optional=true }

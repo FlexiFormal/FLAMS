@@ -182,5 +182,10 @@ pub extern "C" fn reset_global_backend() {
         .expect("Failed to initialize Tokio runtime")
         .block_on(async {
             GlobalBackend.reset::<flams_system::TokioEngine>();
+            let _ = tokio::task::spawn_blocking(|| {
+                for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                    (e.on_reload)();
+                }
+            });
         });
 }

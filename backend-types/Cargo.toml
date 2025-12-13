@@ -32,7 +32,6 @@ rdf = ["dep:ulo","ftml-ontology/rdf","ftml-uris/rdf"]
 ## adds bincode support
 bincode = ["dep:bincode"]
 
-tantivy = []
 vectorsearch = ["bincode","dep:simsimd"]
 
 

@@ -1,60 +1,55 @@
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
+use flams_backend_types::search::FragmentQueryFilter;
 use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
+use ftml_uris::{DocumentElementUri, DocumentUri};
 
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 #[must_use]
 pub fn build_query(
     query: &str,
     index: &tantivy::Index,
-    filter: QueryFilter,
+    filter: FragmentQueryFilter,
 ) -> Option<Box<dyn tantivy::query::Query>> {
     use std::fmt::Write;
-    let QueryFilter {
-        allow_documents,
-        allow_paragraphs,
-        allow_definitions,
-        allow_examples,
-        allow_assertions,
-        allow_problems,
-        definition_like_only,
-    } = filter;
     let mut s = String::new();
-    if !allow_documents
-        || !allow_paragraphs
-        || !allow_definitions
-        || !allow_examples
-        || !allow_assertions
-        || !allow_problems
+    if !filter.flags.allow_documents()
+        || !filter.flags.allow_paragraphs()
+        || !filter.flags.allow_definitions()
+        || !filter.flags.allow_examples()
+        || !filter.flags.allow_assertions()
+        || !filter.flags.allow_problems()
     {
         //s.push('(');
         let mut had_first = false;
-        if allow_documents {
+        if filter.flags.allow_documents() {
             had_first = true;
             s.push_str("(kind:0");
         }
-        if allow_paragraphs {
+        if filter.flags.allow_paragraphs() {
             s.push_str(if had_first { " OR kind:1" } else { "(kind:1" });
             had_first = true;
         }
-        if allow_definitions {
+        if filter.flags.allow_definitions() {
             s.push_str(if had_first { " OR kind:2" } else { "(kind:2" });
             had_first = true;
         }
-        if allow_examples {
+        if filter.flags.allow_examples() {
             s.push_str(if had_first { " OR kind:3" } else { "(kind:3" });
             had_first = true;
         }
-        if allow_assertions {
+        if filter.flags.allow_assertions() {
             s.push_str(if had_first { " OR kind:4" } else { "(kind:4" });
             had_first = true;
         }
-        if allow_problems {
+        if filter.flags.allow_problems() {
             s.push_str(if had_first { " OR kind:5" } else { "(kind:5" });
         }
         if had_first {
             s.push_str(") AND ");
         }
     }
-    if definition_like_only {
+    if filter.flags.is_definition_like() {
         s.push_str("deflike:true AND ");
     }
     write!(s, "({query})").ok()?;
@@ -96,7 +91,9 @@ impl tantivy::schema::document::ValueDeserialize for Wrapper<SearchResultKind> {
             .deserialize_u64()?
             .try_into()
             .map(Wrapper)
-            .map_err(|()| tantivy::schema::document::DeserializeError::custom(""))
+            .map_err(|()| {
+                tantivy::schema::document::DeserializeError::custom(format_args!("weird"))
+            })
     }
 }
 
@@ -109,31 +106,42 @@ impl tantivy::schema::document::DocumentDeserialize for Wrapper<SearchResult> {
         D: tantivy::schema::document::DocumentDeserializer<'de>,
     {
         macro_rules! next {
-            () => {{
-                let Some((_, r)) = deserializer.next_field()? else {
+            ($name:literal) => {{
+                let Some((_, r)) = deserializer.next_field()?.map_err(|e| {
+                    tantivy::schema::document::DeserializeError::custom(format_args!(
+                        "weird A: {e} (in {})",
+                        $name
+                    ))
+                }) else {
                     return Err(tantivy::schema::document::DeserializeError::custom(
-                        "Missing value",
+                        format_args!("Missing value {}", $name),
                     ));
                 };
                 r
             }};
-            (!) => {{
-                let Some((_, Wrapper(r))) = deserializer.next_field()? else {
+            ($name:literal!) => {{
+                let Some((_, Wrapper(r))) = deserializer.next_field().map_err(|e| {
+                    tantivy::schema::document::DeserializeError::custom(format_args!(
+                        "weird A: {e} (in {})",
+                        $name
+                    ))
+                })?
+                else {
                     return Err(tantivy::schema::document::DeserializeError::custom(
-                        "Missing value",
+                        format_args!("Missing value {}", $name),
                     ));
                 };
                 r
             }};
         }
-        let Wrapper(kind) = next!();
+        let kind = next!("kind"!);
         match kind {
-            SearchResultKind::Document => Ok(Self(SearchResult::Document(next!()))),
+            SearchResultKind::Document => Ok(Self(SearchResult::Document(next!("uri"!)))),
             kind => {
-                let uri = next!();
-                let def_like = next!(!);
+                let uri = next!("uri"!);
+                let def_like = next!("deflike"!);
                 let mut fors = Vec::new();
-                while let Some((_, s)) = deserializer.next_field()? {
+                while let Ok(Some((_, s))) = deserializer.next_field() {
                     fors.push(s);
                 }
                 Ok(Self(SearchResult::Paragraph {
@@ -144,5 +152,49 @@ impl tantivy::schema::document::DocumentDeserialize for Wrapper<SearchResult> {
                 }))
             }
         }
+    }
+}
+
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
+impl tantivy::schema::document::ValueDeserialize for Wrapper<DocumentUri> {
+    fn deserialize<'de, D>(
+        mut deserializer: D,
+    ) -> Result<Self, tantivy::schema::document::DeserializeError>
+    where
+        D: tantivy::schema::document::ValueDeserializer<'de>,
+    {
+        //SAFETY: it's a string
+        unsafe { String::from_utf8_unchecked(deserializer.deserialize_bytes()?) }
+            .parse()
+            .map_or_else(
+                |_| {
+                    Err(tantivy::schema::document::DeserializeError::custom(
+                        "Invalid DocumentUri",
+                    ))
+                },
+                |u| Ok(Wrapper(u)),
+            )
+    }
+}
+
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
+impl tantivy::schema::document::ValueDeserialize for Wrapper<DocumentElementUri> {
+    fn deserialize<'de, D>(
+        mut deserializer: D,
+    ) -> Result<Self, tantivy::schema::document::DeserializeError>
+    where
+        D: tantivy::schema::document::ValueDeserializer<'de>,
+    {
+        //SAFETY: it's a string
+        unsafe { String::from_utf8_unchecked(deserializer.deserialize_bytes()?) }
+            .parse()
+            .map_or_else(
+                |_| {
+                    Err(tantivy::schema::document::DeserializeError::custom(
+                        "Invalid DocumentElementUri",
+                    ))
+                },
+                |u| Ok(Wrapper(u)),
+            )
     }
 }

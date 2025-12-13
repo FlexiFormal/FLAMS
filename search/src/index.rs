@@ -1,4 +1,9 @@
-use flams_backend_types::search::{SearchIndex, SearchResultKind};
+use crate::textify::textify;
+#[cfg(feature = "vectorsearch")]
+use flams_backend_types::search::Embedding;
+#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
+use flams_backend_types::search::SearchResult;
+use flams_backend_types::search::SearchResultKind;
 use ftml_ontology::{
     narrative::{
         documents::Document,
@@ -6,23 +11,62 @@ use ftml_ontology::{
     },
     utils::RefTree,
 };
-
-use crate::textify::textify;
+use ftml_uris::{DocumentElementUri, DocumentUri, SymbolUri};
 
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-pub trait SearchIndexExt {
-    fn to_document(self) -> tantivy::TantivyDocument;
+#[derive(Debug, Clone, bincode::Encode, bincode::Decode)]
+pub enum SearchIndex {
+    Document {
+        uri: DocumentUri,
+        title: Option<String>,
+        body: String,
+    },
+    Paragraph {
+        uri: DocumentElementUri,
+        kind: SearchResultKind,
+        definition_like: bool,
+        title: Option<String>,
+        fors: Vec<SymbolUri>,
+        body: String,
+    },
 }
 
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-impl SearchIndexExt for SearchIndex {
-    fn to_document(self) -> tantivy::TantivyDocument {
+impl SearchIndex {
+    pub(crate) fn from_document(doc: tantivy::TantivyDocument) -> Option<SearchResult> {
+        use tantivy::schema::Value;
+
+        let schema = crate::schema::SearchSchema::get();
+        let kind = doc.get_first(schema.kind)?.as_u64()?.try_into().ok()?;
+        Some(match kind {
+            SearchResultKind::Document => {
+                SearchResult::Document(doc.get_first(schema.uri_str)?.as_str()?.parse().ok()?)
+            }
+            _ => {
+                let uri = doc.get_first(schema.uri_str)?.as_str()?.parse().ok()?;
+                let def_like = doc.get_first(schema.def_like)?.as_bool()?;
+                let fors = doc
+                    .get_all(schema.fors)
+                    .flat_map(|v| v.as_str().and_then(|s| s.parse().ok()))
+                    .collect::<Vec<_>>();
+                SearchResult::Paragraph {
+                    uri,
+                    fors,
+                    def_like,
+                    kind,
+                }
+            }
+        })
+    }
+    pub(crate) fn to_document(self) -> tantivy::TantivyDocument {
         let mut ret = tantivy::TantivyDocument::default();
         let schema = crate::schema::SearchSchema::get();
         match self {
             Self::Document { uri, title, body } => {
                 ret.add_u64(schema.kind, SearchResultKind::Document.into());
-                ret.add_text(schema.uri, uri.to_string());
+                let uri = uri.to_string();
+                ret.add_bytes(schema.uri, uri.as_bytes());
+                ret.add_text(schema.uri_str, uri);
                 if let Some(t) = title {
                     ret.add_text(schema.title, t);
                 }
@@ -37,7 +81,9 @@ impl SearchIndexExt for SearchIndex {
                 body,
             } => {
                 ret.add_u64(schema.kind, kind.into());
-                ret.add_text(schema.uri, uri.to_string());
+                let uri = uri.to_string();
+                ret.add_bytes(schema.uri, uri.as_bytes());
+                ret.add_text(schema.uri_str, uri);
                 ret.add_bool(schema.def_like, definition_like);
                 for f in fors {
                     //write!(trace,"\n   FOR: {}",f);
@@ -51,6 +97,24 @@ impl SearchIndexExt for SearchIndex {
         }
         ret
     }
+}
+
+#[cfg(feature = "vectorsearch")]
+#[derive(Debug, Clone, bincode::Encode, bincode::Decode)]
+pub enum SearchIndex {
+    Document {
+        uri: DocumentUri,
+        title: Option<Embedding>,
+        body: Embedding,
+    },
+    Paragraph {
+        uri: DocumentElementUri,
+        kind: SearchResultKind,
+        definition_like: bool,
+        title: Option<Embedding>,
+        fors: Vec<SymbolUri>,
+        body: Embedding,
+    },
 }
 
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]

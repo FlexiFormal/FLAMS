@@ -1,5 +1,3 @@
-#[cfg(feature = "tantivy")]
-use flams_backend_types::search::QueryFilter;
 use flams_backend_types::search::{SearchResult, SearchResultKind};
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::components::error_with_toaster;
@@ -11,6 +9,7 @@ use ftml_uris::{
 };
 use leptos::prelude::*;
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 #[derive(Debug, Clone)]
 pub(crate) enum SearchState {
@@ -19,8 +18,8 @@ pub(crate) enum SearchState {
     Results(Vec<(f32, SearchResult)>),
     SymResults(Vec<(SymbolUri, Vec<(f32, SearchResult)>)>),
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 #[derive(Debug, Clone)]
 pub(crate) enum SearchState {
     None,
@@ -78,6 +77,7 @@ impl Filter {
     }
 }
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 pub fn search_top() -> AnyView {
     use flams_web_utils::components::ClientOnly;
@@ -212,16 +212,17 @@ pub fn search_top() -> AnyView {
       </Layout>
     }.into_any()
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 pub fn search_top() -> AnyView {
     use flams_web_utils::components::ClientOnly;
     use thaw::{
         Divider, Flex, FlexAlign, Icon, Input, InputPrefix, Layout, LayoutHeader, Radio,
         RadioGroup, Tag, TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput,
-        TagPickerOption, ToasterInjection,
+        TagPickerOption, Text, ToasterInjection,
     }; //,Combobox,ComboboxOption
     let query = RwSignal::new(String::new());
+    let in_doc_str = RwSignal::new(String::new());
     let search_kind = RwSignal::new(vec![
         Filter::Def.value_str().to_string(),
         Filter::Par.value_str().to_string(),
@@ -246,8 +247,21 @@ pub fn search_top() -> AnyView {
                     Filter::Ass => ret.flags = ret.flags.set_allow_assertions(),
                 }
             }
+            in_doc_str.with(|s| {
+                if let Ok(uri) = s.parse() {
+                    ret.in_documents.push(uri);
+                }
+            });
             ret
         })
+    });
+    let color = Memo::new(move |_| {
+        use std::str::FromStr;
+        if in_doc_str.with(|s| s.is_empty() || DocumentUri::from_str(s).is_ok()) {
+            "background-color:green"
+        } else {
+            "background-color:red"
+        }
     });
     let results = RwSignal::new(SearchState::None);
     let toaster = ToasterInjection::expect_context();
@@ -311,6 +325,11 @@ pub fn search_top() -> AnyView {
             <Radio value="S" label="Symbols"/>
             <Radio value="X" label="Documents/Paragraphs"/>
           </RadioGroup>
+          <div>
+          <Text>"In document: "</Text>
+          <Input value=in_doc_str attr:style=color/>
+
+          </div>
           <ClientOnly>
             <TagPicker selected_options=search_kind class=cls>
                 <TagPickerControl slot>
@@ -350,6 +369,7 @@ pub fn search_top() -> AnyView {
     }.into_any()
 }
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 fn do_results(results: RwSignal<SearchState>) -> AnyView {
     results.with(|r| match r {
@@ -368,8 +388,8 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
             .into_any(),
     })
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 fn do_results(results: RwSignal<SearchState>) -> AnyView {
     results.with(|r| match r {
         SearchState::None => ().into_any(),
@@ -388,6 +408,7 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
     })
 }
 
+/*
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
     use flams_router_content::components::Fragment;
@@ -421,8 +442,8 @@ fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
       </Card>
     }.into_any()
 }
+ */
 
-#[cfg(feature = "vectorsearch")]
 fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::ClientOnly;

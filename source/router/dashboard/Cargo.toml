@@ -52,7 +52,6 @@ hydrate = [
     "flams-flodown/hydrate",
 ]
 docs-only = []
-tantivy = ["flams-router-search/tantivy"] #,"flams-search/tantivy"]
 vectorsearch = ["flams-router-search/vectorsearch"] #,"flams-search/vectorsearch"]
 
 [dependencies]
