@@ -11,7 +11,7 @@ workspace = true
 
 [features]
 ## Uses rocksdb storage for the triple store rather than in-memory
-rocksdb = ["rdf","oxigraph/rocksdb","oxigraph/oxrocksdb-sys"]
+# rocksdb = ["rdf","oxigraph/rocksdb","oxigraph/oxrocksdb-sys"]
 ## Enables RDF support
 rdf = [
     "ftml-ontology/rdf",

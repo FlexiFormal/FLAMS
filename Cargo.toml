@@ -26,7 +26,7 @@ members = [
     "source/router/vscode-bindings",
     "source/router/flodown",
     #"experiments",
-    "source/ffi",
+    "source/ffi", "solver",
     #"maintest"
 ]
 resolver = "2"
@@ -38,46 +38,25 @@ exclude = [
 
 # this is wasm, actually (because wasm-pack uses --release and --debug directly)
 [profile.release]
-overflow-checks = false
 strip = true
-#split-debuginfo = "off"
-#strip = false
 panic = 'abort'
 opt-level = 'z'
 lto = true
-#debug = true
-#opt-level = 2
 
 # this is wasm, actually (because wasm-pack uses --release and --debug directly)
 [profile.dev]
 opt-level = 2
-debug = true
-strip = "none"
 split-debuginfo = "off"
-debug-assertions = true
-overflow-checks = true
-lto = false
-panic = 'unwind'
-incremental = true
-#codegen-units = 256
-rpath = false
 
 [profile.flams-release]
 inherits = "release"
 opt-level = 2
 lto = "fat"
-#codegen-units = 1
-overflow-checks = false
 panic = "unwind"
-strip = true
-#strip = false
 
 [profile.flams-dev]
 inherits = "dev"
-split-debuginfo = "unpacked"
-#opt-level=1
-debug = 1
-#codegen-backend="cranelift"
+opt-level = 0
 
 #[profile.dev.package."*"]
 #opt-level=3
@@ -88,23 +67,10 @@ strip = "none"
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]
 inherits = "release"
-panic = 'abort'
-opt-level = 'z'
-lto = true
-#strip = "none"
 
 [profile.wasm-dev]
 inherits = "dev"
-opt-level = 2
-debug = true
-split-debuginfo = "off"
-debug-assertions = true
-overflow-checks = true
-lto = false
 panic = 'unwind'
-incremental = true
-#codegen-units = 256
-rpath = false
 
 [workspace.metadata.wasm-pack.profile.dev.wasm-bindgen]
 debug-js-glue = true
@@ -170,27 +136,27 @@ flams-backend-types = { path = "backend-types" }
 flams-search = { path = "search" }
 
 # FTML
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
-ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
-ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
-ulo = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
+#ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
+#ulo = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 
-flodown = { git = "https://github.com/FlexiFormal/FloDown" }
+#flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
-#ftml-uris = { path = "../FTML/uris", features = ["interned"] }
-#ftml-ontology = { path = "../FTML/ontology" }
-#ftml-backend = { path = "../FTML/backend" }
-#ftml-parser = { path = "../FTML/parser" }
-#ftml-components = { path = "../FTML/components" }
-#ftml5ever = { path = "../FTML/ftml5ever" }
-#ulo = { path = "../FTML/ulo" }
-#ftml-dom = { path = "../FTML/dom" }
+ftml-uris = { path = "../FTML/uris", features = ["interned"] }
+ftml-ontology = { path = "../FTML/ontology" }
+ftml-backend = { path = "../FTML/backend" }
+ftml-parser = { path = "../FTML/parser" }
+ftml-components = { path = "../FTML/components" }
+ftml5ever = { path = "../FTML/ftml5ever" }
+ulo = { path = "../FTML/ulo" }
+ftml-dom = { path = "../FTML/dom" }
 
-#flodown = { path="../FloDown/flodown" }
+flodown = { path="../FloDown/flodown" }
 
 rustex_lib = { version = "0.1", features = ["multithreaded"] }
 tex_engine = { version = "0.1", features = ["multithreaded"] }

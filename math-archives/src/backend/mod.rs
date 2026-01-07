@@ -35,7 +35,7 @@ pub use sandbox::*;
 use std::path::Path;
 pub use temp::*;
 
-pub trait LocalBackend {
+pub trait LocalBackend: Send + Sync {
     type ArchiveIter<'a>: IntoIterator<Item = &'a Archive>
     where
         Self: Sized;

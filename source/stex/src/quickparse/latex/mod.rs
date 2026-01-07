@@ -1853,7 +1853,7 @@ impl<
 }
 
 fn normalize_ws(s: &str) -> Cow<'_, str> {
-    if s.contains(&['\t', ' ', '\r', '\n']) {
+    if s.contains(['\t', ' ', '\r', '\n']) {
         let v = s
             .trim()
             .split_ascii_whitespace()

@@ -4,19 +4,19 @@
       "initialization_options": {
         "cargo": {
           "extraEnv": {
-            "DATABASE_URL": "sqlite:./resources/migrations/users.sqlite?mode=rwc"
+            "DATABASE_URL": "sqlite:./resources/migrations/users.sqlite?mode=rwc",
           },
           "features": [
             //"ts",
             //"ws",
             "git",
-            "docs",
+            //"docs",
             "serde",
             "tantivy", //"vectorsearch",
-            "ssr" //"hydrate" //
-          ] // "all"*/
-        }
-      }
-    }
-  }
+            "ssr", //"hydrate" //
+          ], // "all"*/
+        },
+      },
+    },
+  },
 }
