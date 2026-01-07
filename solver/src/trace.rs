@@ -690,6 +690,38 @@ impl std::fmt::Display for Indent {
 
 // ---------------------------------------------------------------------------------------
 
+pub enum TraceLineB<'t> {
+    NoRuleApplicable,
+    Inference {
+        term: &'t Term,
+        steps: Vec<TraceLineCow<'t>>,
+    },
+}
+impl<'t> TraceLineB<'t> {
+    pub(crate) fn from_task(task: SolverTask<'t>, steps: SmallVec<TraceLineCow<'t>, 2>) -> Self {
+        todo!()
+    }
+}
+
+pub enum TraceLineCow<'t> {
+    Owned(TraceLineOwned),
+    Borrowed(TraceLineB<'t>),
+}
+impl<'t> From<TraceLineB<'t>> for TraceLineCow<'t> {
+    fn from(value: TraceLineB<'t>) -> Self {
+        Self::Borrowed(value)
+    }
+}
+
+pub enum TraceLineOwned {
+    Inference {
+        term: Term,
+        steps: Box<[Self]>,
+        context: Box<[ComponentVar]>,
+        result: Option<Term>,
+    },
+}
+
 /*
 #[derive(Clone, Debug)]
 pub enum Displayable {

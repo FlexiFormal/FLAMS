@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use ftml_ontology::terms::ComponentVar;
 use smallvec::SmallVec;
 
-pub(crate) const CONTEXT_LEN: usize = 2;
+pub(crate) const CONTEXT_LEN: usize = 4;
 
 pub struct ContextTop<'c>(SmallVec<Cow<'c, ComponentVar>, CONTEXT_LEN>);
 impl<'c> ContextTop<'c> {
