@@ -15,27 +15,18 @@ use crate::{
 pub struct CheckRef<'c, 'm, Split: SplitStrategy> {
     top: &'c Checker<Split>,
     task: Option<SolverTask<'c>>,
-    messages: &'m mut SmallVec<TraceLineCow<'c>, 2>,
     //
     context: ContextWrap<'c, 'm>,
     solutions: &'m mut rustc_hash::FxHashSet<Solvable>,
+    messages: &'m mut SmallVec<TraceLineCow<'c>, 2>,
     //
-    pub(crate) cancel: &'c CancelToken<'c, Split::CancelToken>,
-    parent_solutions: Option<&'c rustc_hash::FxHashSet<Solvable>>,
+    pub(crate) cancel: &'m CancelToken<'m, Split::CancelToken>,
+    parent_solutions: Option<&'m rustc_hash::FxHashSet<Solvable>>,
     added: u8,
     traced: bool,
 }
 
-struct CheckerSplit<'c, 'm> {
-    context: ContextWrap<'c, 'm>,
-    messages: SmallVec<TraceLineCow<'c>, 2>,
-    solutions: rustc_hash::FxHashSet<Solvable>,
-    parent_solutions: Option<&'c rustc_hash::FxHashSet<Solvable>>,
-    added: u8,
-    traced: bool,
-}
-
-impl<'c, Split: SplitStrategy> CheckRef<'c, '_, Split> {
+impl<'c, 'm, Split: SplitStrategy> CheckRef<'c, 'm, Split> {
     pub fn extend_context<C: CowLike<'c>>(&mut self, var: C) {
         self.added += 1;
         self.context.0.push(var.into_cow());
@@ -78,25 +69,48 @@ impl<'c, Split: SplitStrategy> CheckRef<'c, '_, Split> {
         (ret, TraceLineB::from_task(old_task, msgs))
     }
 
-    pub(crate) fn branch<'nt, R: Send + Sync + 'static>(
+    pub fn branch<R>(&mut self, f: impl FnOnce(CheckRef<'c, '_, Split>) -> R) -> R {
+        let mut messages = SmallVec::<TraceLineCow<'c>, _>::new();
+        let mut solutions = rustc_hash::FxHashSet::default();
+        let inner = CheckRef {
+            messages: &mut messages,
+            context: ContextWrap(self.context.0),
+            solutions: &mut solutions,
+            parent_solutions: Some(self.solutions),
+            top: self.top,
+            task: None,
+            cancel: self.cancel,
+            added: 0,
+            traced: self.traced,
+        };
+        let r = f(inner);
+
+        drop(messages);
+        drop(solutions);
+
+        todo!();
+        r
+    }
+
+    pub(crate) fn branch_scoped<'nt, R: Send + Sync + 'static>(
         &'nt mut self,
         f: impl FnOnce(CheckRef<'nt, '_, Split>) -> R,
     ) -> R {
         let nc = ContextWrap(self.context.0);
         let mut messages = SmallVec::<TraceLineCow<'c>, _>::new();
-        // SAFETY: all variables added in `f` with lifetime 'b are popped again when nc is
+        // SAFETY: all variables added in `f` with lifetime 'nt are popped again when nc is
         // dropped, which happens at the end of `f`.
         let nc = unsafe { std::mem::transmute::<ContextWrap<'c, '_>, ContextWrap<'_, '_>>(nc) };
         let mut solutions = rustc_hash::FxHashSet::default();
 
         let inner = CheckRef {
+            messages: &mut messages,
+            solutions: &mut solutions,
+            context: nc,
             top: self.top,
             task: None,
-            messages: &mut messages,
             cancel: self.cancel,
-            context: nc,
             added: 0,
-            solutions: &mut solutions,
             parent_solutions: Some(self.solutions),
             traced: self.traced,
         };
@@ -111,20 +125,22 @@ impl<'c, Split: SplitStrategy> CheckRef<'c, '_, Split> {
 
     pub(crate) fn new_top(checker: &Checker<Split>) -> CheckRefTop<'_, Split> {
         CheckRefTop {
-            top: checker,
             context: SmallVec::new(),
             solutions: rustc_hash::FxHashSet::default(),
             messages: SmallVec::new(),
             cancel: CancelToken::default(),
+            // -----------------
+            top: checker,
         }
     }
 
-    pub(crate) fn copied(&self) -> CheckRefBranch<'c, Split> {
+    pub(crate) fn copied(&self) -> CheckRefBranch<'c, 'm, Split> {
         CheckRefBranch {
-            top: self.top,
             context: SmallVec::default(),
             solutions: rustc_hash::FxHashSet::default(),
             messages: SmallVec::new(),
+            // --------------
+            top: self.top,
             parent_solutions: self.parent_solutions,
             cancel: self.cancel,
             traced: self.traced,
@@ -167,16 +183,16 @@ impl<'c, Split: SplitStrategy> CheckRefTop<'c, Split> {
     }
 }
 
-pub(crate) struct CheckRefBranch<'c, Split: SplitStrategy> {
+pub(crate) struct CheckRefBranch<'c, 'm, Split: SplitStrategy> {
     top: &'c Checker<Split>,
     context: SmallVec<Cow<'c, ComponentVar>, { super::context::CONTEXT_LEN }>,
     solutions: rustc_hash::FxHashSet<Solvable>,
-    parent_solutions: Option<&'c rustc_hash::FxHashSet<Solvable>>,
-    cancel: &'c CancelToken<'c, Split::CancelToken>,
+    parent_solutions: Option<&'m rustc_hash::FxHashSet<Solvable>>,
+    cancel: &'m CancelToken<'m, Split::CancelToken>,
     messages: SmallVec<TraceLineCow<'c>, 2>,
     traced: bool,
 }
-impl<'c, Split: SplitStrategy> CheckRefBranch<'c, Split> {
+impl<'c, Split: SplitStrategy> CheckRefBranch<'c, '_, Split> {
     pub fn get_ref(&mut self) -> CheckRef<'c, '_, Split> {
         CheckRef {
             top: self.top,
@@ -218,22 +234,23 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
     pub(crate) fn check_type_i(&mut self, tm: &'t Term, tp: &'t Term) -> Option<bool> {
-        Split::strategies_test(
-            self,
-            "Using type inference",
-            |slf| {
-                let subtp = slf.infer_type(tm)?;
-                let r = slf.branch(|mut slf| slf.check_subtype(&subtp, tp));
-                r
-            },
-            "Using checking rules",
-            |slf| {
-                let rules: Vec<&'t dyn CheckingRuleB<Split>> = todo!();
-                Split::split_test(slf, rules.into_iter(), |slf, rl| {
-                    slf.branch(|slf| rl.apply(slf, tm, tp))
-                })
-            },
-        )
+        self.cancellable(|slf| {
+            Split::strategies_test(
+                slf,
+                "Using type inference",
+                |slf| {
+                    let subtp = slf.infer_type(tm)?;
+                    slf.branch_scoped(|mut slf| slf.check_subtype(&subtp, tp))
+                },
+                "Using checking rules",
+                |slf| {
+                    let rules: Vec<&'t dyn CheckingRuleB<Split>> = todo!();
+                    Split::split_test(slf, rules.into_iter(), |slf, rl| {
+                        slf.branch(|slf| rl.apply(slf, tm, tp))
+                    })
+                },
+            )
+        })
     }
     pub fn infer_type(&mut self, t: &'t Term) -> Option<Term> {
         todo!()
