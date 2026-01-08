@@ -86,13 +86,13 @@ pub trait SplitStrategy:
     fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
-        then: impl Fn(&mut CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>>;
 
     fn split_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
-        then: impl Fn(&mut CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Option<R> {
         match Self::split_i_test(slf, rules, then) {
             Ok(r) => Some(r),
@@ -219,7 +219,7 @@ impl SplitStrategy for SingleThreadedSplit {
     fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
-        then: impl Fn(&mut CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>> {
         let mut rules = rules.peekable();
         if rules.peek().is_none() {
@@ -227,7 +227,7 @@ impl SplitStrategy for SingleThreadedSplit {
         }
         let mut failures = SmallVec::<_, 2>::new();
         for rule in rules {
-            match slf.traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
+            match slf.branch_traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
                 Ok(r) => {
                     return Ok(r);
                 }
@@ -323,7 +323,7 @@ impl SplitStrategy for RayonStrategiesOnly {
     fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
-        then: impl Fn(&mut CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>> {
         let mut rules = rules.peekable();
         if rules.peek().is_none() {
@@ -331,7 +331,7 @@ impl SplitStrategy for RayonStrategiesOnly {
         }
         let mut failures = SmallVec::<_, 2>::new();
         for rule in rules {
-            match slf.traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
+            match slf.branch_traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
                 Ok(r) => {
                     return Ok(r);
                 }
@@ -488,18 +488,18 @@ impl SplitStrategy for RayonSplit {
     fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>,
-        then: impl Fn(&mut CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>> {
         let then = &then;
         macro_rules! then {
             ($rl:ident !) => {{
                 let mut top = slf.copied();
                 let mut slf = top.get_ref();
-                slf.traced(SolverTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
+                slf.branch_traced(SolverTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
                     .inspect(|_| slf.cancel.cancel())
             }};
             ($rl:expr) => {{
-                slf.traced(SolverTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
+                slf.branch_traced(SolverTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
                     .inspect(|_| slf.cancel.cancel())
             }};
         }
@@ -511,7 +511,7 @@ impl SplitStrategy for RayonSplit {
                 // SAFETY: len == 1
                 let rule = unsafe { rules.pop().unwrap_unchecked() };
                 return slf
-                    .traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule))
+                    .branch_traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule))
                     .map_err(|l| smallvec::smallvec![l]);
             }
             2 => {

@@ -707,9 +707,19 @@ pub enum TraceLineCow<'t> {
     Owned(TraceLineOwned),
     Borrowed(TraceLineB<'t>),
 }
+impl TraceLineCow<'_> {
+    pub fn into_owned(self) -> TraceLineOwned {
+        todo!()
+    }
+}
 impl<'t> From<TraceLineB<'t>> for TraceLineCow<'t> {
     fn from(value: TraceLineB<'t>) -> Self {
         Self::Borrowed(value)
+    }
+}
+impl From<TraceLineOwned> for TraceLineCow<'_> {
+    fn from(value: TraceLineOwned) -> Self {
+        Self::Owned(value)
     }
 }
 

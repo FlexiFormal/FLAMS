@@ -28,7 +28,10 @@ macro_rules! ret {
     };
 }
 
-fn destruct_binder<'t>(t: &'t Term, head: &SymbolUri) -> Option<(&'t ComponentVar, &'t Term)> {
+pub(crate) fn destruct_binder<'t>(
+    t: &'t Term,
+    head: &SymbolUri,
+) -> Option<(&'t ComponentVar, &'t Term)> {
     ret!(
         Term::Bound(b) = t;
         & b.arguments.len() == 2;

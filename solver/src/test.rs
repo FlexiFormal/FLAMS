@@ -1,8 +1,3 @@
-use std::borrow::Cow;
-
-use ftml_ontology::terms::{ComponentVar, Term};
-use smallvec::SmallVec;
-
 use crate::{
     Checker,
     context::CowLike,
@@ -11,22 +6,29 @@ use crate::{
     state::Solvable,
     trace::{SolverTask, TraceLineB, TraceLineCow},
 };
+use ftml_ontology::terms::{ComponentVar, Term, Variable};
+use smallvec::SmallVec;
+use std::borrow::Cow;
 
-pub struct CheckRef<'c, 'm, Split: SplitStrategy> {
+#[derive(Copy, Clone)]
+pub(crate) struct Ancestor<'i> {
+    pub(crate) p: &'i rustc_hash::FxHashSet<Solvable>,
+    pub(crate) gp: Option<&'i Self>,
+}
+
+pub struct CheckRef<'c, 'i, Split: SplitStrategy> {
     top: &'c Checker<Split>,
     task: Option<SolverTask<'c>>,
-    //
-    context: ContextWrap<'c, 'm>,
-    solutions: &'m mut rustc_hash::FxHashSet<Solvable>,
-    messages: &'m mut SmallVec<TraceLineCow<'c>, 2>,
-    //
-    pub(crate) cancel: &'m CancelToken<'m, Split::CancelToken>,
-    parent_solutions: Option<&'m rustc_hash::FxHashSet<Solvable>>,
+    context: ContextWrap<'c, 'i>,
+    pub(crate) solutions: &'i mut rustc_hash::FxHashSet<Solvable>,
+    pub(crate) parent_solutions: Option<Ancestor<'i>>,
+    messages: &'i mut SmallVec<TraceLineCow<'c>, 2>,
+    pub(crate) cancel: &'i CancelToken<'i, Split::CancelToken>,
     added: u8,
     traced: bool,
 }
 
-impl<'c, 'm, Split: SplitStrategy> CheckRef<'c, 'm, Split> {
+impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     pub fn extend_context<C: CowLike<'c>>(&mut self, var: C) {
         self.added += 1;
         self.context.0.push(var.into_cow());
@@ -69,57 +71,58 @@ impl<'c, 'm, Split: SplitStrategy> CheckRef<'c, 'm, Split> {
         (ret, TraceLineB::from_task(old_task, msgs))
     }
 
-    pub fn branch<R>(&mut self, f: impl FnOnce(CheckRef<'c, '_, Split>) -> R) -> R {
+    pub(crate) fn branch_traced<R>(
+        &mut self,
+        tsk: SolverTask<'c>,
+        f: impl FnOnce(CheckRef<'c, '_, Split>) -> Option<R>,
+    ) -> Result<R, TraceLineB<'c>> {
         let mut messages = SmallVec::<TraceLineCow<'c>, _>::new();
         let mut solutions = rustc_hash::FxHashSet::default();
         let inner = CheckRef {
             messages: &mut messages,
             context: ContextWrap(self.context.0),
             solutions: &mut solutions,
-            parent_solutions: Some(self.solutions),
+            parent_solutions: Some(Ancestor {
+                p: self.solutions,
+                gp: self.parent_solutions.as_ref(),
+            }),
             top: self.top,
             task: None,
             cancel: self.cancel,
             added: 0,
             traced: self.traced,
         };
-        let r = f(inner);
-
-        drop(messages);
-        drop(solutions);
-
-        todo!();
-        r
+        if let Some(r) = f(inner) {
+            drop(solutions);
+            self.messages
+                .push(TraceLineB::from_task(tsk, messages).into());
+            Ok(r)
+        } else {
+            Err(TraceLineB::from_task(tsk, messages))
+        }
     }
 
-    pub(crate) fn branch_scoped<'nt, R: Send + Sync + 'static>(
+    pub fn scoped<'nt, R: Send + Sync + 'static>(
         &'nt mut self,
-        f: impl FnOnce(CheckRef<'nt, '_, Split>) -> R,
+        f: impl FnOnce(&mut CheckRef<'nt, '_, Split>) -> R,
     ) -> R {
-        let nc = ContextWrap(self.context.0);
-        let mut messages = SmallVec::<TraceLineCow<'c>, _>::new();
-        // SAFETY: all variables added in `f` with lifetime 'nt are popped again when nc is
-        // dropped, which happens at the end of `f`.
-        let nc = unsafe { std::mem::transmute::<ContextWrap<'c, '_>, ContextWrap<'_, '_>>(nc) };
-        let mut solutions = rustc_hash::FxHashSet::default();
+        let old_added = std::mem::take(&mut self.added);
+        let old_msgs = std::mem::take(self.messages);
 
-        let inner = CheckRef {
-            messages: &mut messages,
-            solutions: &mut solutions,
-            context: nc,
-            top: self.top,
-            task: None,
-            cancel: self.cancel,
-            added: 0,
-            parent_solutions: Some(self.solutions),
-            traced: self.traced,
+        // SAFETY:
+        // - all variables added in `f` with lifetime 'nt are popped again before we return
+        // - all messages added in `f` with lifetime 'nt are turned into owned ones
+        //   before readding
+        let muted = unsafe {
+            std::mem::transmute::<&mut CheckRef<'c, '_, Split>, &mut CheckRef<'nt, '_, Split>>(self)
         };
-        let r = f(inner);
-
-        drop(messages);
-        drop(solutions);
-
-        todo!();
+        let r = f(muted);
+        for _ in 0..std::mem::replace(&mut self.added, old_added) {
+            self.context.0.pop();
+        }
+        for m in std::mem::replace(self.messages, old_msgs) {
+            self.messages.push(m.into_owned().into());
+        }
         r
     }
 
@@ -134,7 +137,7 @@ impl<'c, 'm, Split: SplitStrategy> CheckRef<'c, 'm, Split> {
         }
     }
 
-    pub(crate) fn copied(&self) -> CheckRefBranch<'c, 'm, Split> {
+    pub(crate) fn copied(&self) -> CheckRefBranch<'c, 'i, Split> {
         CheckRefBranch {
             context: SmallVec::default(),
             solutions: rustc_hash::FxHashSet::default(),
@@ -183,12 +186,12 @@ impl<'c, Split: SplitStrategy> CheckRefTop<'c, Split> {
     }
 }
 
-pub(crate) struct CheckRefBranch<'c, 'm, Split: SplitStrategy> {
+pub(crate) struct CheckRefBranch<'c, 'i, Split: SplitStrategy> {
     top: &'c Checker<Split>,
     context: SmallVec<Cow<'c, ComponentVar>, { super::context::CONTEXT_LEN }>,
     solutions: rustc_hash::FxHashSet<Solvable>,
-    parent_solutions: Option<&'m rustc_hash::FxHashSet<Solvable>>,
-    cancel: &'m CancelToken<'m, Split::CancelToken>,
+    parent_solutions: Option<Ancestor<'i>>,
+    cancel: &'i CancelToken<'i, Split::CancelToken>,
     messages: SmallVec<TraceLineCow<'c>, 2>,
     traced: bool,
 }
@@ -240,14 +243,12 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 "Using type inference",
                 |slf| {
                     let subtp = slf.infer_type(tm)?;
-                    slf.branch_scoped(|mut slf| slf.check_subtype(&subtp, tp))
+                    slf.scoped(|slf| slf.check_subtype(&subtp, tp))
                 },
                 "Using checking rules",
                 |slf| {
                     let rules: Vec<&'t dyn CheckingRuleB<Split>> = todo!();
-                    Split::split_test(slf, rules.into_iter(), |slf, rl| {
-                        slf.branch(|slf| rl.apply(slf, tm, tp))
-                    })
+                    Split::split_test(slf, rules.into_iter(), |slf, rl| rl.apply(slf, tm, tp))
                 },
             )
         })
@@ -256,6 +257,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         todo!()
     }
     pub fn check_subtype(&mut self, sub: &'t Term, sup: &'t Term) -> Option<bool> {
+        todo!()
+    }
+    pub fn infer_var_type(&mut self, var: &Variable) -> Option<Term> {
         todo!()
     }
 }
@@ -268,4 +272,43 @@ pub trait CheckingRuleB<Split: SplitStrategy>: SolverRule {
         term: &'t Term,
         tp: &'t Term,
     ) -> Option<bool>;
+}
+
+impl<Split: SplitStrategy> CheckingRuleB<Split> for super::rules::pi::LambdaPiRule {
+    fn applicable(&self, term: &Term, tp: &Term) -> bool {
+        super::rules::pi::destruct_binder(term, &self.lambda).is_some()
+            && super::rules::pi::destruct_binder(tp, &self.pi).is_some()
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+        tp: &'t Term,
+    ) -> Option<bool> {
+        let (var, lambda_body) = super::rules::pi::destruct_binder(term, &self.lambda)?;
+        let (pivar, pi_body) = super::rules::pi::destruct_binder(tp, &self.pi)?;
+        let pi_tp = match &pivar.tp {
+            None => Cow::Owned(checker.infer_var_type(&var.var)?),
+            Some(tp) => Cow::Borrowed(tp),
+        };
+        let lam_tp = match &var.tp {
+            None => Cow::Owned(checker.infer_var_type(&var.var)?),
+            Some(tp) => Cow::Borrowed(tp),
+        };
+        if !checker.scoped(|checker| checker.check_subtype(&lam_tp, &pi_tp))? {
+            return None;
+        }
+        let ntp = pi_body
+            / (
+                pivar.var.name(),
+                &Term::Var {
+                    variable: var.var.clone(),
+                    presentation: None,
+                },
+            );
+        checker.scoped(|checker| {
+            checker.extend_context(var);
+            checker.check_type(lambda_body, &ntp)
+        })
+    }
 }
