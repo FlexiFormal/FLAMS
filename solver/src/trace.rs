@@ -779,6 +779,18 @@ macro_rules! tasks {
                     while let Some(next) = curr.next() {
                         if displayer.line(next,indent,f)? == std::ops::ControlFlow::Continue(()) {
                             match next {
+                                $(
+                                    Self::$name{ $($field,)* steps, context,result } => {
+                                        displayer.task(CheckingTask::$name($($field),*),context,result.is_some(),f)?;
+                                        indent.increase();
+                                        stack.push(std::mem::replace(&mut curr,steps.iter()));
+                                    }
+                                )*
+                                Self::Rule{rule,steps} => {
+                                    rule.display(displayer,None,f)?;
+                                    indent.increase();
+                                    stack.push(std::mem::replace(&mut curr,steps.iter()));
+                                }
                                 Self::Strategy{name,steps} => {
                                     displayer.string(*name,Some(MessageLevel::Header),f)?;
                                     indent.increase();
@@ -799,7 +811,6 @@ macro_rules! tasks {
                                         e.display(displayer,*lvl,f)?;
                                     }
                                 } */
-                                _ => todo!()
                             }
                         }
                     }
@@ -900,33 +911,8 @@ pub trait CheckTraceDisplayable: std::fmt::Debug {
         lvl: Option<MessageLevel>,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result;
-    //fn as_owned(&self) -> CheckTraceCow<'static>;
 }
-#[derive(Debug)]
-pub enum CheckTraceCow<'t> {
-    Borrowed(&'t dyn CheckTraceDisplayable),
-    Owned(Box<dyn CheckTraceDisplayable>),
-}
-impl CheckTraceDisplayable for CheckTraceCow<'_> {
-    fn display(
-        &self,
-        displayer: &dyn TraceDisplay,
-        lvl: Option<MessageLevel>,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        match self {
-            Self::Borrowed(v) => v.display(displayer, lvl, f),
-            Self::Owned(v) => v.display(displayer, lvl, f),
-        }
-    }
-    /*
-    fn as_owned(&self) -> CheckTraceCow<'static> {
-        match self {
-            Self::Borrowed(b) => b.as_owned(),
-            Self::Owned(b) => b.as_owned(),
-        }
-    } */
-}
+/*
 impl<CD: CheckTraceDisplayable> CheckTraceDisplayable for &CD {
     #[inline]
     fn display(
@@ -937,12 +923,7 @@ impl<CD: CheckTraceDisplayable> CheckTraceDisplayable for &CD {
     ) -> std::fmt::Result {
         CD::display(*self, displayer, lvl, f)
     }
-    /*
-    #[inline]
-    fn as_owned(&self) -> CheckTraceCow<'static> {
-        CD::as_owned(*self)
-    } */
-}
+} */
 
 impl<CD: CheckTraceDisplayable> CheckTraceDisplayable for Box<[CD]> {
     fn display(
@@ -981,7 +962,18 @@ impl<CD: CheckTraceDisplayable, const N: usize> CheckTraceDisplayable for [CD; N
     } */
 }
 
-impl CheckTraceDisplayable for &'static str {
+impl CheckTraceDisplayable for &str {
+    #[inline]
+    fn display(
+        &self,
+        displayer: &dyn TraceDisplay,
+        lvl: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        displayer.string(self, lvl, f)
+    }
+}
+impl CheckTraceDisplayable for String {
     #[inline]
     fn display(
         &self,
@@ -1003,7 +995,29 @@ impl CheckTraceDisplayable for Term {
         displayer.term(self, lvl, f)
     }
 }
+impl CheckTraceDisplayable for &Term {
+    #[inline]
+    fn display(
+        &self,
+        displayer: &dyn TraceDisplay,
+        lvl: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        displayer.term(self, lvl, f)
+    }
+}
 impl CheckTraceDisplayable for Variable {
+    #[inline]
+    fn display(
+        &self,
+        displayer: &dyn TraceDisplay,
+        lvl: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        displayer.variable(self, lvl, f)
+    }
+}
+impl CheckTraceDisplayable for &Variable {
     #[inline]
     fn display(
         &self,
@@ -1167,6 +1181,15 @@ pub trait TraceDisplay {
     }
 
     /// ### Errors
+    fn task(
+        &self,
+        task: CheckingTask<'_>,
+        context: &[ComponentVar],
+        success: bool,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result;
+
+    /// ### Errors
     fn uri(
         &self,
         uri: ftml_uris::UriRef,
@@ -1220,6 +1243,95 @@ pub trait TraceDisplay {
 impl TraceDisplay for () {
     fn space(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_char(' ')
+    }
+    fn task(
+        &self,
+        task: CheckingTask<'_>,
+        context: &[ComponentVar],
+        success: bool,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        fn do_context(
+            context: &[ComponentVar],
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            if context.is_empty() {
+                return Ok(());
+            }
+            f.write_str("{... ")?;
+            let mut first = true;
+            for ComponentVar { var, tp, df } in context {
+                if first {
+                    first = false;
+                } else {
+                    f.write_str(", ")?;
+                }
+                ().variable(var, None, f)?;
+                if let Some(tp) = tp {
+                    f.write_str(" : ")?;
+                    ().term(tp, None, f)?;
+                }
+                if let Some(df) = df {
+                    f.write_str(" : ")?;
+                    ().term(df, None, f)?;
+                }
+            }
+            f.write_str(" } ")
+        }
+        if success {
+            f.write_str("[SUCCESS] ")?;
+        } else {
+            f.write_str("[FAILED] ")?;
+        }
+        match task {
+            CheckingTask::Inference(t) => {
+                f.write_str("Inferring type of ")?;
+                do_context(context, f)?;
+                self.term(t, None, f)
+            }
+            CheckingTask::VariableInference(t) => {
+                f.write_str("Inferring type of variable ")?;
+                do_context(context, f)?;
+                f.write_str(t)
+            }
+            CheckingTask::Inhabitable(tm) => {
+                f.write_str("Checking inhabitability ")?;
+                do_context(context, f)?;
+                f.write_str("⊢INH ")?;
+                self.term(tm, None, f)
+            }
+            CheckingTask::Universe(tm) => {
+                f.write_str("Checking universe ")?;
+                do_context(context, f)?;
+                f.write_str("⊢UNIV ")?;
+                self.term(tm, None, f)
+            }
+            CheckingTask::Subtype(sub, sup) => {
+                f.write_str("Checking subtyping ")?;
+                do_context(context, f)?;
+                f.write_str("⊢ ")?;
+                self.term(sub, None, f)?;
+                f.write_str(" <: ")?;
+                self.term(sup, None, f)
+            }
+            CheckingTask::HasType(tm, tp) => {
+                f.write_str("Checking typing ")?;
+                do_context(context, f)?;
+                f.write_str("⊢ ")?;
+                self.term(tm, None, f)?;
+                f.write_str(" : ")?;
+                self.term(tp, None, f)
+            }
+            CheckingTask::Equality(lhs, rhs) => {
+                f.write_str("Checking equality ")?;
+                do_context(context, f)?;
+                f.write_str("⊢ ")?;
+                self.term(lhs, None, f)?;
+                f.write_str(" == ")?;
+                self.term(rhs, None, f)
+            }
+            _ => todo!(),
+        }
     }
     fn uri(
         &self,
@@ -1279,6 +1391,17 @@ impl<D: TraceDisplay> std::fmt::Display for TraceDisplayer<'_, D> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.trace.display_i(self.d, f)
+    }
+}
+
+#[macro_export]
+macro_rules! trace {
+    ($d:ident,$f:ident, $($e:expr),* $(,)? ) => {
+        {$(
+            $crate::trace::CheckTraceDisplayable::display(&$e,$d,None,$f)?;
+        )*
+        Ok(())
+        }
     }
 }
 

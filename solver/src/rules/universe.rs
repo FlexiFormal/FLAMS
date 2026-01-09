@@ -4,11 +4,19 @@ use crate::{
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{Argument, Term};
-use ftml_uris::SymbolUri;
+use ftml_uris::{FtmlUri, SymbolUri};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleInhabitableRule(pub SymbolUri, pub u8);
-impl SizedSolverRule for SimpleInhabitableRule {}
+impl SizedSolverRule for SimpleInhabitableRule {
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(displayer, f, self.0.as_uri(), "is inhabitable")
+    }
+}
 
 impl std::fmt::Display for SimpleInhabitableRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -55,7 +63,20 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleInhabitableRule {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleUniverseRule(pub SymbolUri);
-impl SizedSolverRule for SimpleUniverseRule {}
+impl SizedSolverRule for SimpleUniverseRule {
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(displayer, f, self.0.as_uri(), "is a universe")
+    }
+}
+impl std::fmt::Display for SimpleUniverseRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} is a universe", self.0)
+    }
+}
 impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleUniverseRule {
     fn applicable(&self, term: &Term) -> bool {
         matches!(term,Term::Symbol { uri, .. } if *uri == self.0)
@@ -84,15 +105,18 @@ impl<Split: SplitStrategy> UniverseRule<Split> for SimpleUniverseRule {
         Some(true)
     }
 }
-impl std::fmt::Display for SimpleUniverseRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} is a universe", self.0)
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyRule(pub SymbolUri);
-impl SizedSolverRule for AnyRule {}
+impl SizedSolverRule for AnyRule {
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(displayer, f, self.0.as_uri(), "is any-type")
+    }
+}
 
 impl std::fmt::Display for AnyRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

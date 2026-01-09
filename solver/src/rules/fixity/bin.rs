@@ -7,7 +7,7 @@ use ftml_ontology::{
     narrative::elements::VariableDeclaration,
     terms::{ApplicationTerm, Argument, MaybeSequence, Term},
 };
-use ftml_uris::SymbolUri;
+use ftml_uris::{FtmlUri, SymbolUri};
 use std::ops::ControlFlow;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,6 +15,18 @@ pub struct BinLRule(pub SymbolUri);
 impl SizedSolverRule for BinLRule {
     fn priority(&self) -> isize {
         10_000
+    }
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(
+            displayer,
+            f,
+            self.0.as_uri(),
+            "is a left-associative binary operator"
+        )
     }
 }
 impl std::fmt::Display for BinLRule {
@@ -71,6 +83,18 @@ pub struct BinRRule(pub SymbolUri);
 impl SizedSolverRule for BinRRule {
     fn priority(&self) -> isize {
         10_000
+    }
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(
+            displayer,
+            f,
+            self.0.as_uri(),
+            "is a right-associative binary operator"
+        )
     }
 }
 impl std::fmt::Display for BinRRule {

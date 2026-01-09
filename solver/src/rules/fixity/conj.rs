@@ -5,7 +5,7 @@ use ftml_ontology::{
     narrative::elements::VariableDeclaration,
     terms::{ApplicationTerm, Argument, MaybeSequence, Term},
 };
-use ftml_uris::SymbolUri;
+use ftml_uris::{FtmlUri, SymbolUri};
 
 use crate::{
     rules::{PreparationRule, RuleSet, SizedSolverRule},
@@ -14,7 +14,15 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IsConjunctionRule(pub SymbolUri);
-impl SizedSolverRule for IsConjunctionRule {}
+impl SizedSolverRule for IsConjunctionRule {
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(displayer, f, self.0.as_uri(), "is a conjunction")
+    }
+}
 impl std::fmt::Display for IsConjunctionRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} is a conjunction", self.0)
@@ -39,6 +47,13 @@ pub struct ConjunctiveRule(pub SymbolUri);
 impl SizedSolverRule for ConjunctiveRule {
     fn priority(&self) -> isize {
         10_000
+    }
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(displayer, f, self.0.as_uri(), "is conjunctive")
     }
 }
 impl std::fmt::Display for ConjunctiveRule {
@@ -111,6 +126,13 @@ pub struct PairwiseConjunctiveRule(pub SymbolUri);
 impl SizedSolverRule for PairwiseConjunctiveRule {
     fn priority(&self) -> isize {
         10_000
+    }
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(displayer, f, self.0.as_uri(), "is pairwise conjunctive")
     }
 }
 impl std::fmt::Display for PairwiseConjunctiveRule {

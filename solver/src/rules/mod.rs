@@ -7,7 +7,12 @@ pub mod universe;
 
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::{SolverRef, SolverTrace, context::Context, split::SplitStrategy, trace::RefCheckLog};
+use crate::{
+    SolverRef, SolverTrace,
+    context::Context,
+    split::SplitStrategy,
+    trace::{CheckTraceDisplayable, TraceDisplay},
+};
 use ftml_ontology::{
     domain::declarations::symbols::Symbol, narrative::elements::VariableDeclaration, terms::Term,
 };
@@ -87,7 +92,9 @@ rules! {
     preparation = PreparationRule,
 }
 
-pub trait CheckerRule: std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any {
+pub trait CheckerRule:
+    std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any + CheckTraceDisplayable
+{
     fn priority(&self) -> isize {
         0
     }
@@ -104,7 +111,22 @@ pub trait SizedSolverRule:
     fn priority(&self) -> isize {
         0
     }
+    fn display(
+        &self,
+        displayer: &dyn TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result;
     //fn display(self: Box<Self>) -> RefCheckLog<'static>;
+}
+impl<T: SizedSolverRule> CheckTraceDisplayable for T {
+    fn display(
+        &self,
+        displayer: &dyn TraceDisplay,
+        _: Option<crate::trace::MessageLevel>,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        T::display(self, displayer, f)
+    }
 }
 impl<T: SizedSolverRule> CheckerRule for T {
     #[allow(clippy::inline_always)]

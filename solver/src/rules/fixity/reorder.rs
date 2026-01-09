@@ -8,7 +8,7 @@ use ftml_ontology::{
     terms::{ApplicationTerm, BindingTerm, Term},
     utils::Permutation,
 };
-use ftml_uris::SymbolUri;
+use ftml_uris::{FtmlUri, SymbolUri};
 use std::ops::ControlFlow;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +19,18 @@ pub struct ReorderRule {
 impl SizedSolverRule for ReorderRule {
     fn priority(&self) -> isize {
         100
+    }
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(
+            displayer,
+            f,
+            self.symbol.as_uri(),
+            format!("reorders argument {:?}", self.reorder)
+        )
     }
 }
 impl std::fmt::Display for ReorderRule {

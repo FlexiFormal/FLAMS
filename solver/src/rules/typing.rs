@@ -8,7 +8,7 @@ use ftml_ontology::{
         Term, Variable,
     },
 };
-use ftml_uris::SymbolUri;
+use ftml_uris::{FtmlUri, SymbolUri};
 
 use crate::{
     rules::{PreparationRule, RuleSet, SizedSolverRule},
@@ -20,6 +20,18 @@ pub struct SimpleTypeOperatorRule(pub SymbolUri);
 impl SizedSolverRule for SimpleTypeOperatorRule {
     fn priority(&self) -> isize {
         100_000
+    }
+    fn display(
+        &self,
+        displayer: &dyn crate::trace::TraceDisplay,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        crate::trace!(displayer, f, self.0.as_uri(), "is a typing operator")
+    }
+}
+impl std::fmt::Display for SimpleTypeOperatorRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} is a type operator", self.0)
     }
 }
 impl SimpleTypeOperatorRule {
@@ -197,11 +209,5 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
             nargs,
             b.presentation.clone(),
         )))
-    }
-}
-
-impl std::fmt::Display for SimpleTypeOperatorRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} is a type operator", self.0)
     }
 }
