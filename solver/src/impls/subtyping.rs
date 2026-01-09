@@ -2,7 +2,7 @@ use crate::{
     SolverRef, TermExtSolvable,
     context::Context,
     split::SplitStrategy,
-    trace::{SolverTask, SolverTrace},
+    trace::{CheckingTask, SolverTrace},
 };
 use ftml_ontology::terms::Term;
 
@@ -17,9 +17,11 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         if trace.is_cancelled() {
             return None;
         }
-        let (r, line) = trace.derived(SolverTask::Subtype(sub, sup), context, |trace, context| {
-            self.check_subtype_i(trace, context, sub, sup)
-        });
+        let (r, line) = trace.derived(
+            CheckingTask::Subtype(sub, sup),
+            context,
+            |trace, context| self.check_subtype_i(trace, context, sub, sup),
+        );
         trace.add_line(line);
         r
     }
@@ -58,7 +60,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
             Err(ls) => ls,
         };
         let (r, l) = trace.derived(
-            SolverTask::Strategy("Proving subtyping failed; Falling back to checking equality"),
+            CheckingTask::Strategy("Proving subtyping failed; Falling back to checking equality"),
             context,
             |trace, context| self.check_equality_i(trace, context, sub, sup),
         );

@@ -11,7 +11,7 @@ use crate::{
     rules::RuleSet,
     split::SplitStrategy,
     state::SolverState,
-    trace::{SolverTask, SolverTrace, TraceLine},
+    trace::{CheckingTask, SolverTrace, TraceLine},
 };
 use flams_math_archives::{
     backend::{AnyBackend, LocalBackend},
@@ -382,25 +382,25 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 
     pub fn check_type(&self, tm: &Term, tp: &Term) -> (Option<bool>, TraceLine) {
-        self.wrap(SolverTask::HasType(tm, tp), |slf, trace, context| {
+        self.wrap(CheckingTask::HasType(tm, tp), |slf, trace, context| {
             slf.check_type_i(trace, context, tm, tp)
         })
     }
 
     pub fn check_subtype(&self, sub: &Term, sup: &Term) -> (Option<bool>, TraceLine) {
-        self.wrap(SolverTask::Subtype(sub, sup), |slf, trace, context| {
+        self.wrap(CheckingTask::Subtype(sub, sup), |slf, trace, context| {
             slf.check_subtype_i(trace, context, sub, sup)
         })
     }
 
     pub fn infer_type(&self, t: &Term) -> (Option<Term>, TraceLine) {
-        self.wrap(SolverTask::Infer(t), |slf, trace, context| {
+        self.wrap(CheckingTask::Inference(t), |slf, trace, context| {
             slf.infer_type_i(trace, context, t)
         })
     }
 
     pub fn check_inhabitable(&self, t: &Term) -> (Option<bool>, TraceLine) {
-        self.wrap(SolverTask::Inhabitable(t), |slf, trace, context| {
+        self.wrap(CheckingTask::Inhabitable(t), |slf, trace, context| {
             slf.check_inhabitable_i(trace, context, t)
         })
     }
@@ -423,7 +423,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     fn wrap<'t, R: std::fmt::Debug + 'static>(
         &self,
-        task: SolverTask,
+        task: CheckingTask,
         then: impl FnOnce(SolverRef<Split>, &mut SolverTrace, Context<'t, '_>) -> Option<R>,
     ) -> (Option<R>, TraceLine) {
         let mut trace = SolverTrace::new(task);

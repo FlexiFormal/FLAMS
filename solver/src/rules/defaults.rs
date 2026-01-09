@@ -34,6 +34,11 @@ impl SizedSolverRule for SeqIndexRule {
     fn priority(&self) -> isize {
         1000
     }
+    /*
+    fn display(self: Box<Self>) -> crate::trace::RefCheckLog<'static> {
+        crate::traceline!("sequence index")
+    }
+     */
 }
 impl std::fmt::Display for SeqIndexRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

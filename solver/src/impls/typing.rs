@@ -2,7 +2,7 @@ use crate::{
     SolverRef,
     context::Context,
     split::SplitStrategy,
-    trace::{SolverTask, SolverTrace},
+    trace::{CheckingTask, SolverTrace},
 };
 use ftml_ontology::terms::Term;
 
@@ -17,7 +17,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         if trace.is_cancelled() {
             return None;
         }
-        let (r, l) = trace.derived(SolverTask::HasType(tm, tp), context, |trace, context| {
+        let (r, l) = trace.derived(CheckingTask::HasType(tm, tp), context, |trace, context| {
             self.check_type_i(trace, context, tm, tp)
         });
         trace.add_line(l);

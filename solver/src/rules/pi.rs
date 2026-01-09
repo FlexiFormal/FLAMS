@@ -65,7 +65,11 @@ pub struct LambdaPiRule {
     pub lambda: SymbolUri,
     pub pi: SymbolUri,
 }
-impl SizedSolverRule for LambdaPiRule {}
+impl SizedSolverRule for LambdaPiRule {
+    //fn display(&self) -> crate::trace::RefCheckLog<'static> {
+    //    crate::traceline!()
+    //}
+}
 impl std::fmt::Display for LambdaPiRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

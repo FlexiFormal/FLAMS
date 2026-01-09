@@ -5,9 +5,9 @@ pub mod pi;
 pub mod typing;
 pub mod universe;
 
-use std::ops::ControlFlow;
+use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::{SolverRef, SolverTrace, context::Context, split::SplitStrategy};
+use crate::{SolverRef, SolverTrace, context::Context, split::SplitStrategy, trace::RefCheckLog};
 use ftml_ontology::{
     domain::declarations::symbols::Symbol, narrative::elements::VariableDeclaration, terms::Term,
 };
@@ -87,14 +87,15 @@ rules! {
     preparation = PreparationRule,
 }
 
-pub trait SolverRule: std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any {
+pub trait CheckerRule: std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any {
     fn priority(&self) -> isize {
         0
     }
-    fn as_box_dyn(&self) -> Box<dyn SolverRule>;
-    fn as_dyn(&self) -> &dyn SolverRule;
+    fn as_box_dyn(&self) -> Box<dyn CheckerRule>;
+    fn as_dyn(&self) -> &dyn CheckerRule;
     fn as_any(&self) -> &dyn std::any::Any;
-    fn eq(&self, o: &dyn SolverRule) -> bool;
+    fn eq(&self, o: &dyn CheckerRule) -> bool;
+    //fn display(self: Box<Self>) -> RefCheckLog<'static>;
 }
 
 pub trait SizedSolverRule:
@@ -103,28 +104,37 @@ pub trait SizedSolverRule:
     fn priority(&self) -> isize {
         0
     }
+    //fn display(self: Box<Self>) -> RefCheckLog<'static>;
 }
-impl<T: SizedSolverRule> SolverRule for T {
+impl<T: SizedSolverRule> CheckerRule for T {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     fn priority(&self) -> isize {
         <Self as SizedSolverRule>::priority(self)
     }
-    fn as_box_dyn(&self) -> Box<dyn SolverRule> {
+    /*
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn display(self: Box<Self>) -> RefCheckLog<'static> {
+        <Self as SizedSolverRule>::display(self)
+    }
+     */
+
+    fn as_box_dyn(&self) -> Box<dyn CheckerRule> {
         Box::new(self.clone()) as _
     }
-    fn as_dyn(&self) -> &dyn SolverRule {
+    fn as_dyn(&self) -> &dyn CheckerRule {
         self as _
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self as _
     }
-    fn eq(&self, o: &dyn SolverRule) -> bool {
+    fn eq(&self, o: &dyn CheckerRule) -> bool {
         o.as_any().downcast_ref::<T>().is_some_and(|v| v == self)
     }
 }
 
-pub trait EqualityRule<Split: SplitStrategy>: SolverRule {
+pub trait EqualityRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, lhs: &Term, rhs: &Term) -> bool;
     fn apply<'t>(
         &self,
@@ -136,7 +146,7 @@ pub trait EqualityRule<Split: SplitStrategy>: SolverRule {
     ) -> Option<bool>;
 }
 
-pub trait InferenceRule<Split: SplitStrategy>: SolverRule {
+pub trait InferenceRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term) -> bool;
     fn infer<'t>(
         &self,
@@ -147,7 +157,7 @@ pub trait InferenceRule<Split: SplitStrategy>: SolverRule {
     ) -> Option<Term>;
 }
 
-pub trait CheckingRule<Split: SplitStrategy>: SolverRule {
+pub trait CheckingRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term, tp: &Term) -> bool;
     fn apply<'t>(
         &self,
@@ -159,7 +169,7 @@ pub trait CheckingRule<Split: SplitStrategy>: SolverRule {
     ) -> Option<bool>;
 }
 
-pub trait InhabitableRule<Split: SplitStrategy>: SolverRule {
+pub trait InhabitableRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term) -> bool;
     fn apply<'t>(
         &self,
@@ -170,7 +180,7 @@ pub trait InhabitableRule<Split: SplitStrategy>: SolverRule {
     ) -> Option<bool>;
 }
 
-pub trait UniverseRule<Split: SplitStrategy>: SolverRule {
+pub trait UniverseRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term) -> bool;
     fn apply<'t>(
         &self,
@@ -181,7 +191,7 @@ pub trait UniverseRule<Split: SplitStrategy>: SolverRule {
     ) -> Option<bool>;
 }
 
-pub trait SubtypeRule<Split: SplitStrategy>: SolverRule {
+pub trait SubtypeRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, sub: &Term, sup: &Term) -> bool;
     fn apply<'t>(
         &self,
@@ -193,7 +203,7 @@ pub trait SubtypeRule<Split: SplitStrategy>: SolverRule {
     ) -> Option<bool>;
 }
 
-pub trait PreparationRule<Split: SplitStrategy>: SolverRule {
+pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool;
     fn apply(
         &self,

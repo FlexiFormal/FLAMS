@@ -5,11 +5,11 @@ use crate::{
     SolverRef,
     context::Context,
     rules::{
-        SolverRule,
+        CheckerRule,
         extractors::{RuleExtractor, SymbolRuleExtractor},
     },
     test::CheckRef,
-    trace::{SolverTask, SolverTrace, TraceLine, TraceLineB},
+    trace::{CheckingTask, RefCheckLog, SolverTrace, TraceLine},
 };
 
 pub trait Cancellation: Default + Send + Sync {
@@ -81,15 +81,15 @@ pub trait SplitStrategy:
     where
         A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
         B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
-        R: Send + std::fmt::Debug;
+        R: Send + std::fmt::Debug + Clone;
 
-    fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+    fn split_i_test<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
-    ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>>;
+    ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>>;
 
-    fn split_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+    fn split_test<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
@@ -119,7 +119,7 @@ pub trait SplitStrategy:
         R: Send + std::fmt::Debug;
 
     /// ### Errors
-    fn split_i<'t, 'r, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+    fn split_i<'t, 'r, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: SolverRef<Self>,
         trace: &mut SolverTrace,
         rules: impl Iterator<Item = &'r Rl>, //smallvec::SmallVec<&Rl, 2>,
@@ -129,7 +129,7 @@ pub trait SplitStrategy:
         + Sync,
     ) -> Result<R, smallvec::SmallVec<TraceLine, 2>>;
 
-    fn split<'t, 'r, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+    fn split<'t, 'r, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: SolverRef<Self>,
         trace: &mut SolverTrace,
         rules: impl Iterator<Item = &'r Rl>, //smallvec::SmallVec<&Rl, 2>,
@@ -148,14 +148,10 @@ pub trait SplitStrategy:
             }
         }
     }
-}
 
-#[derive(Copy, Clone, Default, Debug)]
-pub struct SingleThreadedSplit;
-impl SplitStrategy for SingleThreadedSplit {
-    type CancelToken = ();
+    // -----------------------------
 
-    fn strategies_test<'t, A, B, R>(
+    fn strategies_st<'t, A, B, R>(
         solver: &mut CheckRef<'t, '_, Self>,
         strategy_a: &'static str,
         oper_a: A,
@@ -165,13 +161,13 @@ impl SplitStrategy for SingleThreadedSplit {
     where
         A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
         B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
-        R: Send + std::fmt::Debug,
+        R: Send + std::fmt::Debug + Clone,
     {
-        let l1 = match solver.traced(SolverTask::Strategy(strategy_a), oper_a) {
+        let l1 = match solver.traced(CheckingTask::Strategy(strategy_a), oper_a) {
             Ok(r) => return Some(r),
             Err(l) => l,
         };
-        match solver.traced(SolverTask::Strategy(strategy_b), oper_b) {
+        match solver.traced(CheckingTask::Strategy(strategy_b), oper_b) {
             Ok(r) => Some(r),
             Err(l) => {
                 solver.add_msg(l1.into());
@@ -181,53 +177,21 @@ impl SplitStrategy for SingleThreadedSplit {
         }
     }
 
-    #[inline]
-    fn strategies<'t, A, B, R>(
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
-        strategy_a: &'static str,
-        oper_a: A,
-        strategy_b: &'static str,
-        oper_b: B,
-    ) -> Option<R>
-    where
-        A: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
-        B: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
-        R: Send + std::fmt::Debug,
-    {
-        let mut nt = trace.derive(SolverTask::Strategy(strategy_a));
-        let r = oper_a(&mut nt, context.branch());
-        //let (r, l1) = trace.derived(SolverTask::Strategy(strategy_a), context.branch(), oper_a);
-        if r.is_some() {
-            trace.add_line(nt.destroy(r.as_ref(), &context));
-            return r;
-        }
-        let mut nt2 = trace.derive(SolverTask::Strategy(strategy_b));
-        let r2 = oper_b(&mut nt2, context.branch());
-        //let (r, l2) = trace.derived(SolverTask::Strategy(strategy_b), context.branch(), oper_b);
-        if r2.is_none() {
-            let l2 = nt2.destroy(r2.as_ref(), &context);
-            trace.add_line(nt.destroy(r.as_ref(), &context));
-            trace.add_line(l2);
-            None
-        } else {
-            trace.add_line(nt2.destroy(r2.as_ref(), &context));
-            r2
-        }
-    }
-
-    fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+    fn split_i_st<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
-    ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>> {
+    ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
         let mut rules = rules.peekable();
         if rules.peek().is_none() {
-            return Err(smallvec::smallvec![TraceLineB::NoRuleApplicable]);
+            return Err(smallvec::smallvec![RefCheckLog::Msg(
+                "No rule applicable".into(),
+                crate::trace::MessageLevel::Failure
+            )]);
         }
         let mut failures = SmallVec::<_, 2>::new();
         for rule in rules {
-            match slf.branch_traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
+            match slf.branch_traced(CheckingTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
                 Ok(r) => {
                     return Ok(r);
                 }
@@ -237,54 +201,7 @@ impl SplitStrategy for SingleThreadedSplit {
         Err(failures)
     }
 
-    fn split_i<'t, 'r, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
-        slf: SolverRef<Self>,
-        trace: &mut SolverTrace,
-        rules: impl Iterator<Item = &'r Rl>, //smallvec::SmallVec<&Rl, 2>,
-        mut context: Context<'t, '_>,
-        then: impl Fn(SolverRef<Self>, &Rl, &mut SolverTrace, Context<'t, '_>) -> Option<R>
-        + Send
-        + Sync,
-    ) -> Result<R, smallvec::SmallVec<TraceLine, 2>> {
-        let mut rules = rules.peekable();
-        if rules.peek().is_none() {
-            return Err(smallvec::smallvec![TraceLine::NoRuleApplicable]);
-        }
-        let mut failures = SmallVec::<_, 2>::new();
-        for rule in rules {
-            let mut nt = trace.derive(SolverTask::Rule(rule.as_dyn()));
-            let r = then(slf, rule, &mut nt, context.branch());
-            /*
-            let (r, inner) = trace.derived(
-                SolverTask::Rule(rule.as_dyn()),
-                context.branch(),
-                |t, context| then(slf, rule, t, context),
-            );
-            */
-
-            if let Some(r) = r {
-                drop(failures);
-                trace.add_line(nt.destroy(Some(&r), &context));
-                return Ok(r);
-            }
-            failures.push(nt);
-        }
-        // double iteration to get rid of *immutable* borrows of trace first
-        // (add_line requires mutable!)
-        let lines = failures
-            .into_iter()
-            .map(|t| t.destroy(None::<&R>, &context))
-            .collect();
-        Err(lines)
-    }
-}
-
-#[derive(Copy, Clone, Default, Debug)]
-pub struct RayonStrategiesOnly;
-impl SplitStrategy for RayonStrategiesOnly {
-    type CancelToken = std::sync::atomic::AtomicBool;
-
-    fn strategies_test<'t, A, B, R>(
+    fn strategies_mt<'t, A, B, R>(
         solver: &mut CheckRef<'t, '_, Self>,
         strategy_a: &'static str,
         oper_a: A,
@@ -294,19 +211,19 @@ impl SplitStrategy for RayonStrategiesOnly {
     where
         A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
         B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
-        R: Send + std::fmt::Debug,
+        R: Send + std::fmt::Debug + Clone,
     {
         let mut top = solver.copied();
         let (a, b) = rayon::join(
             move || {
                 let mut solver = top.get_ref();
                 solver
-                    .traced(SolverTask::Strategy(strategy_a), oper_a)
+                    .traced(CheckingTask::Strategy(strategy_a), oper_a)
                     .inspect(|_| solver.cancel.cancel())
             },
             || {
                 solver
-                    .traced(SolverTask::Strategy(strategy_b), oper_b)
+                    .traced(CheckingTask::Strategy(strategy_b), oper_b)
                     .inspect(|_| solver.cancel.cancel())
             },
         );
@@ -320,198 +237,38 @@ impl SplitStrategy for RayonStrategiesOnly {
         }
     }
 
-    fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
-        slf: &mut CheckRef<'t, '_, Self>,
-        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
-        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
-    ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>> {
-        let mut rules = rules.peekable();
-        if rules.peek().is_none() {
-            return Err(smallvec::smallvec![TraceLineB::NoRuleApplicable]);
-        }
-        let mut failures = SmallVec::<_, 2>::new();
-        for rule in rules {
-            match slf.branch_traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
-                Ok(r) => {
-                    return Ok(r);
-                }
-                Err(l) => failures.push(l),
-            }
-        }
-        Err(failures)
-    }
-
-    #[inline]
-    fn strategies<'t, A, B, R>(
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        strategy_a: &'static str,
-        oper_a: A,
-        strategy_b: &'static str,
-        oper_b: B,
-    ) -> Option<R>
-    where
-        A: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
-        B: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
-        R: Send + std::fmt::Debug,
-    {
-        RayonSplit::strategies(trace, context, strategy_a, oper_a, strategy_b, oper_b)
-    }
-    fn split_i<'t, 'r, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
-        slf: SolverRef<Self>,
-        trace: &mut SolverTrace,
-        rules: impl Iterator<Item = &'r Rl>, //smallvec::SmallVec<&Rl, 2>,
-        mut context: Context<'t, '_>,
-        then: impl Fn(SolverRef<Self>, &Rl, &mut SolverTrace, Context<'t, '_>) -> Option<R>
-        + Send
-        + Sync,
-    ) -> Result<R, smallvec::SmallVec<TraceLine, 2>> {
-        let mut rules = rules.peekable();
-        if rules.peek().is_none() {
-            return Err(smallvec::smallvec![TraceLine::NoRuleApplicable]);
-        }
-        let mut failures = SmallVec::<_, 2>::new();
-        for rule in rules {
-            let mut nt = trace.derive(SolverTask::Rule(rule.as_dyn()));
-            let r = then(slf, rule, &mut nt, context.branch());
-            /*
-            let (r, inner) = trace.derived(
-                SolverTask::Rule(rule.as_dyn()),
-                context.branch(),
-                |t, context| then(slf, rule, t, context),
-            );
-            */
-
-            if let Some(r) = r {
-                drop(failures);
-                trace.add_line(nt.destroy(Some(&r), &context));
-                return Ok(r);
-            }
-            failures.push(nt);
-        }
-        // double iteration to get rid of *immutable* borrows of trace first
-        // (add_line requires mutable!)
-        let lines = failures
-            .into_iter()
-            .map(|t| t.destroy(None::<&R>, &context))
-            .collect();
-        Err(lines)
-    }
-}
-
-#[derive(Copy, Clone, Default, Debug)]
-pub struct RayonSplit;
-impl SplitStrategy for RayonSplit {
-    type CancelToken = std::sync::atomic::AtomicBool;
-
-    fn strategies_test<'t, A, B, R>(
-        solver: &mut CheckRef<'t, '_, Self>,
-        strategy_a: &'static str,
-        oper_a: A,
-        strategy_b: &'static str,
-        oper_b: B,
-    ) -> Option<R>
-    where
-        A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
-        B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
-        R: Send + std::fmt::Debug,
-    {
-        let mut top = solver.copied();
-        let (a, b) = rayon::join(
-            move || {
-                let mut solver = top.get_ref();
-                solver
-                    .traced(SolverTask::Strategy(strategy_a), oper_a)
-                    .inspect(|_| solver.cancel.cancel())
-            },
-            || {
-                solver
-                    .traced(SolverTask::Strategy(strategy_b), oper_b)
-                    .inspect(|_| solver.cancel.cancel())
-            },
-        );
-        match (a, b) {
-            (Ok(r), _) | (_, Ok(r)) => Some(r),
-            (Err(i1), Err(i2)) => {
-                solver.add_msg(i1.into());
-                solver.add_msg(i2.into());
-                None
-            }
-        }
-    }
-
-    #[inline]
-    fn strategies<'t, A, B, R>(
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        strategy_a: &'static str,
-        oper_a: A,
-        strategy_b: &'static str,
-        oper_b: B,
-    ) -> Option<R>
-    where
-        A: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
-        B: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
-        R: Send + std::fmt::Debug,
-    {
-        let mut top = context.clone_top();
-        let (a, b) = rayon::join(
-            || {
-                let context = top.build();
-                let (r, l) = trace.derived(SolverTask::Strategy(strategy_a), context, oper_a);
-                if r.is_some() {
-                    trace.cancel();
-                }
-                (r, l)
-            },
-            || {
-                let (r, l) = trace.derived(SolverTask::Strategy(strategy_b), context, oper_b);
-                if r.is_some() {
-                    trace.cancel();
-                }
-                (r, l)
-            },
-        );
-        match (a, b) {
-            ((Some(t), inner), _) | (_, (Some(t), inner)) => {
-                trace.add_line(inner);
-                Some(t)
-            }
-            ((None, i1), (None, i2)) => {
-                trace.add_line(i1);
-                trace.add_line(i2);
-                None
-            }
-        }
-    }
-
-    fn split_i_test<'t, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+    fn split_i_mt<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         rules: impl Iterator<Item = &'t Rl>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
-    ) -> Result<R, smallvec::SmallVec<TraceLineB<'t>, 2>> {
+    ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
         let then = &then;
         macro_rules! then {
             ($rl:ident !) => {{
                 let mut top = slf.copied();
                 let mut slf = top.get_ref();
-                slf.branch_traced(SolverTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
+                slf.branch_traced(CheckingTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
                     .inspect(|_| slf.cancel.cancel())
             }};
             ($rl:expr) => {{
-                slf.branch_traced(SolverTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
+                slf.branch_traced(CheckingTask::Rule($rl.as_dyn()), move |slf| then(slf, $rl))
                     .inspect(|_| slf.cancel.cancel())
             }};
         }
 
         let mut rules: smallvec::SmallVec<_, 2> = rules.collect();
         match rules.len() {
-            0 => return Err(smallvec::smallvec![TraceLineB::NoRuleApplicable]),
+            0 => {
+                return Err(smallvec::smallvec![RefCheckLog::Msg(
+                    "No rule applicable".into(),
+                    crate::trace::MessageLevel::Failure
+                )]);
+            }
             1 => {
                 // SAFETY: len == 1
                 let rule = unsafe { rules.pop().unwrap_unchecked() };
                 return slf
-                    .branch_traced(SolverTask::Rule(rule.as_dyn()), |slf| then(slf, rule))
+                    .branch_traced(CheckingTask::Rule(rule.as_dyn()), |slf| then(slf, rule))
                     .map_err(|l| smallvec::smallvec![l]);
             }
             2 => {
@@ -542,8 +299,279 @@ impl SplitStrategy for RayonSplit {
             Err(failures.into_inner())
         }
     }
+}
 
-    fn split_i<'t, 'r, Rl: SolverRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+#[derive(Copy, Clone, Default, Debug)]
+pub struct SingleThreadedSplit;
+impl SplitStrategy for SingleThreadedSplit {
+    type CancelToken = ();
+
+    #[inline]
+    fn strategies_test<'t, A, B, R>(
+        solver: &mut CheckRef<'t, '_, Self>,
+        strategy_a: &'static str,
+        oper_a: A,
+        strategy_b: &'static str,
+        oper_b: B,
+    ) -> Option<R>
+    where
+        A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        R: Send + std::fmt::Debug + Clone,
+    {
+        Self::strategies_st(solver, strategy_a, oper_a, strategy_b, oper_b)
+    }
+
+    #[inline]
+    fn split_i_test<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
+        slf: &mut CheckRef<'t, '_, Self>,
+        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+    ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
+        Self::split_i_st(slf, rules, then)
+    }
+
+    #[inline]
+    fn strategies<'t, A, B, R>(
+        trace: &mut SolverTrace,
+        mut context: Context<'t, '_>,
+        strategy_a: &'static str,
+        oper_a: A,
+        strategy_b: &'static str,
+        oper_b: B,
+    ) -> Option<R>
+    where
+        A: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
+        B: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
+        R: Send + std::fmt::Debug,
+    {
+        let mut nt = trace.derive(CheckingTask::Strategy(strategy_a));
+        let r = oper_a(&mut nt, context.branch());
+        //let (r, l1) = trace.derived(CheckingTask::Strategy(strategy_a), context.branch(), oper_a);
+        if r.is_some() {
+            trace.add_line(nt.destroy(r.as_ref(), &context));
+            return r;
+        }
+        let mut nt2 = trace.derive(CheckingTask::Strategy(strategy_b));
+        let r2 = oper_b(&mut nt2, context.branch());
+        //let (r, l2) = trace.derived(CheckingTask::Strategy(strategy_b), context.branch(), oper_b);
+        if r2.is_none() {
+            let l2 = nt2.destroy(r2.as_ref(), &context);
+            trace.add_line(nt.destroy(r.as_ref(), &context));
+            trace.add_line(l2);
+            None
+        } else {
+            trace.add_line(nt2.destroy(r2.as_ref(), &context));
+            r2
+        }
+    }
+
+    fn split_i<'t, 'r, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+        slf: SolverRef<Self>,
+        trace: &mut SolverTrace,
+        rules: impl Iterator<Item = &'r Rl>, //smallvec::SmallVec<&Rl, 2>,
+        mut context: Context<'t, '_>,
+        then: impl Fn(SolverRef<Self>, &Rl, &mut SolverTrace, Context<'t, '_>) -> Option<R>
+        + Send
+        + Sync,
+    ) -> Result<R, smallvec::SmallVec<TraceLine, 2>> {
+        let mut rules = rules.peekable();
+        if rules.peek().is_none() {
+            return Err(smallvec::smallvec![TraceLine::NoRuleApplicable]);
+        }
+        let mut failures = SmallVec::<_, 2>::new();
+        for rule in rules {
+            let mut nt = trace.derive(CheckingTask::Rule(rule.as_dyn()));
+            let r = then(slf, rule, &mut nt, context.branch());
+            /*
+            let (r, inner) = trace.derived(
+                CheckingTask::Rule(rule.as_dyn()),
+                context.branch(),
+                |t, context| then(slf, rule, t, context),
+            );
+            */
+
+            if let Some(r) = r {
+                drop(failures);
+                trace.add_line(nt.destroy(Some(&r), &context));
+                return Ok(r);
+            }
+            failures.push(nt);
+        }
+        // double iteration to get rid of *immutable* borrows of trace first
+        // (add_line requires mutable!)
+        let lines = failures
+            .into_iter()
+            .map(|t| t.destroy(None::<&R>, &context))
+            .collect();
+        Err(lines)
+    }
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+pub struct RayonStrategiesOnly;
+impl SplitStrategy for RayonStrategiesOnly {
+    type CancelToken = std::sync::atomic::AtomicBool;
+
+    #[inline]
+    fn strategies_test<'t, A, B, R>(
+        solver: &mut CheckRef<'t, '_, Self>,
+        strategy_a: &'static str,
+        oper_a: A,
+        strategy_b: &'static str,
+        oper_b: B,
+    ) -> Option<R>
+    where
+        A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        R: Send + std::fmt::Debug + Clone,
+    {
+        Self::strategies_mt(solver, strategy_a, oper_a, strategy_b, oper_b)
+    }
+
+    #[inline]
+    fn split_i_test<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
+        slf: &mut CheckRef<'t, '_, Self>,
+        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+    ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
+        Self::split_i_st(slf, rules, then)
+    }
+
+    #[inline]
+    fn strategies<'t, A, B, R>(
+        trace: &mut SolverTrace,
+        context: Context<'t, '_>,
+        strategy_a: &'static str,
+        oper_a: A,
+        strategy_b: &'static str,
+        oper_b: B,
+    ) -> Option<R>
+    where
+        A: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
+        B: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
+        R: Send + std::fmt::Debug,
+    {
+        RayonSplit::strategies(trace, context, strategy_a, oper_a, strategy_b, oper_b)
+    }
+    fn split_i<'t, 'r, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
+        slf: SolverRef<Self>,
+        trace: &mut SolverTrace,
+        rules: impl Iterator<Item = &'r Rl>, //smallvec::SmallVec<&Rl, 2>,
+        mut context: Context<'t, '_>,
+        then: impl Fn(SolverRef<Self>, &Rl, &mut SolverTrace, Context<'t, '_>) -> Option<R>
+        + Send
+        + Sync,
+    ) -> Result<R, smallvec::SmallVec<TraceLine, 2>> {
+        let mut rules = rules.peekable();
+        if rules.peek().is_none() {
+            return Err(smallvec::smallvec![TraceLine::NoRuleApplicable]);
+        }
+        let mut failures = SmallVec::<_, 2>::new();
+        for rule in rules {
+            let mut nt = trace.derive(CheckingTask::Rule(rule.as_dyn()));
+            let r = then(slf, rule, &mut nt, context.branch());
+            /*
+            let (r, inner) = trace.derived(
+                CheckingTask::Rule(rule.as_dyn()),
+                context.branch(),
+                |t, context| then(slf, rule, t, context),
+            );
+            */
+
+            if let Some(r) = r {
+                drop(failures);
+                trace.add_line(nt.destroy(Some(&r), &context));
+                return Ok(r);
+            }
+            failures.push(nt);
+        }
+        // double iteration to get rid of *immutable* borrows of trace first
+        // (add_line requires mutable!)
+        let lines = failures
+            .into_iter()
+            .map(|t| t.destroy(None::<&R>, &context))
+            .collect();
+        Err(lines)
+    }
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+pub struct RayonSplit;
+impl SplitStrategy for RayonSplit {
+    type CancelToken = std::sync::atomic::AtomicBool;
+
+    #[inline]
+    fn strategies_test<'t, A, B, R>(
+        solver: &mut CheckRef<'t, '_, Self>,
+        strategy_a: &'static str,
+        oper_a: A,
+        strategy_b: &'static str,
+        oper_b: B,
+    ) -> Option<R>
+    where
+        A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        R: Send + std::fmt::Debug + Clone,
+    {
+        Self::strategies_mt(solver, strategy_a, oper_a, strategy_b, oper_b)
+    }
+
+    #[inline]
+    fn strategies<'t, A, B, R>(
+        trace: &mut SolverTrace,
+        context: Context<'t, '_>,
+        strategy_a: &'static str,
+        oper_a: A,
+        strategy_b: &'static str,
+        oper_b: B,
+    ) -> Option<R>
+    where
+        A: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
+        B: FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R> + Send,
+        R: Send + std::fmt::Debug,
+    {
+        let mut top = context.clone_top();
+        let (a, b) = rayon::join(
+            || {
+                let context = top.build();
+                let (r, l) = trace.derived(CheckingTask::Strategy(strategy_a), context, oper_a);
+                if r.is_some() {
+                    trace.cancel();
+                }
+                (r, l)
+            },
+            || {
+                let (r, l) = trace.derived(CheckingTask::Strategy(strategy_b), context, oper_b);
+                if r.is_some() {
+                    trace.cancel();
+                }
+                (r, l)
+            },
+        );
+        match (a, b) {
+            ((Some(t), inner), _) | (_, (Some(t), inner)) => {
+                trace.add_line(inner);
+                Some(t)
+            }
+            ((None, i1), (None, i2)) => {
+                trace.add_line(i1);
+                trace.add_line(i2);
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn split_i_test<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
+        slf: &mut CheckRef<'t, '_, Self>,
+        rules: impl Iterator<Item = &'t Rl>,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+    ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
+        Self::split_i_mt(slf, rules, then)
+    }
+
+    fn split_i<'t, 'r, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + 'static>(
         slf: SolverRef<Self>,
         trace: &mut SolverTrace,
         rules: impl Iterator<Item = &'r Rl>, //smallvec::SmallVec<&Rl, 2>,
@@ -558,7 +586,7 @@ impl SplitStrategy for RayonSplit {
                 let context = top.build();
                 let then = &then;
                 let r = trace.derived(
-                    SolverTask::Rule($rl.as_dyn()),
+                    CheckingTask::Rule($rl.as_dyn()),
                     context,
                     move |t, context| then(slf, $rl, t, context),
                 );
@@ -568,7 +596,7 @@ impl SplitStrategy for RayonSplit {
                 r
             }};
             ($rl:expr) => {{
-                trace.derived(SolverTask::Rule($rl.as_dyn()), context, |t, context| {
+                trace.derived(CheckingTask::Rule($rl.as_dyn()), context, |t, context| {
                     then(slf, $rl, t, context)
                 })
             }};

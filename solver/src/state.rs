@@ -13,6 +13,12 @@ pub trait TermExtSolvable {
 }
 
 impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
+    pub(crate) fn merge_solutions(&mut self, solutions: rustc_hash::FxHashSet<Solvable>) {
+        for s in solutions.into_iter() {
+            self.solutions.remove(&s);
+            self.solutions.insert(s);
+        }
+    }
     pub(crate) fn add_solvable(&mut self, name: Id) {
         self.solutions.insert(Solvable {
             name,

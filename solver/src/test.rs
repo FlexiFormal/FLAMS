@@ -1,10 +1,10 @@
 use crate::{
     Checker,
     context::CowLike,
-    rules::SolverRule,
+    rules::CheckerRule,
     split::{CancelToken, SplitStrategy},
     state::Solvable,
-    trace::{SolverTask, TraceLineB, TraceLineCow},
+    trace::{CheckLogCow, CheckingTask, RefCheckLog},
 };
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
 use smallvec::SmallVec;
@@ -18,11 +18,11 @@ pub(crate) struct Ancestor<'i> {
 
 pub struct CheckRef<'c, 'i, Split: SplitStrategy> {
     top: &'c Checker<Split>,
-    task: Option<SolverTask<'c>>,
+    task: Option<CheckingTask<'c>>,
     context: ContextWrap<'c, 'i>,
     pub(crate) solutions: &'i mut rustc_hash::FxHashSet<Solvable>,
     pub(crate) parent_solutions: Option<Ancestor<'i>>,
-    messages: &'i mut SmallVec<TraceLineCow<'c>, 2>,
+    messages: &'i mut SmallVec<CheckLogCow<'c>, 2>,
     pub(crate) cancel: &'i CancelToken<'i, Split::CancelToken>,
     added: u8,
     traced: bool,
@@ -34,7 +34,7 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         self.context.0.push(var.into_cow());
     }
 
-    pub fn add_msg(&mut self, line: TraceLineCow<'c>) {
+    pub fn add_msg(&mut self, line: CheckLogCow<'c>) {
         self.messages.push(line);
     }
 
@@ -43,40 +43,43 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         self.context.0.iter().rev().map(|c| &**c)
     }
 
-    pub(crate) fn traced<R>(
+    pub(crate) fn traced<R: Clone>(
         &mut self,
-        tsk: SolverTask<'c>,
+        tsk: CheckingTask<'c>,
         f: impl FnOnce(&mut Self) -> Option<R>,
-    ) -> Result<R, TraceLineB<'c>> {
+    ) -> Result<R, RefCheckLog<'c>> {
         let (r, l) = self.traced_inner(tsk, f);
         if let Some(r) = r {
-            self.messages.push(TraceLineCow::Borrowed(l));
+            self.messages.push(CheckLogCow::Borrowed(l));
             Ok(r)
         } else {
             Err(l)
         }
     }
 
-    pub(crate) fn traced_inner<R>(
+    pub(crate) fn traced_inner<R: Clone>(
         &mut self,
-        tsk: SolverTask<'c>,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> (R, TraceLineB<'c>) {
+        tsk: CheckingTask<'c>,
+        f: impl FnOnce(&mut Self) -> Option<R>,
+    ) -> (Option<R>, RefCheckLog<'c>) {
         let old_msg = std::mem::replace(self.messages, SmallVec::new());
         let old_task = self.task.replace(tsk);
         let ret = f(self);
         let msgs = std::mem::replace(self.messages, old_msg);
         // SAFETY: we just set it
         let old_task = unsafe { std::mem::replace(&mut self.task, old_task).unwrap_unchecked() };
-        (ret, TraceLineB::from_task(old_task, msgs))
+        let ctx = self.context.0.as_slice();
+        let ctx = &ctx[ctx.len() - self.added as usize..ctx.len()];
+        let line = old_task.close(ret.as_ref(), msgs.into_boxed_slice(), ctx);
+        (ret, line)
     }
 
-    pub(crate) fn branch_traced<R>(
+    pub(crate) fn branch_traced<R: Clone>(
         &mut self,
-        tsk: SolverTask<'c>,
+        task: CheckingTask<'c>,
         f: impl FnOnce(CheckRef<'c, '_, Split>) -> Option<R>,
-    ) -> Result<R, TraceLineB<'c>> {
-        let mut messages = SmallVec::<TraceLineCow<'c>, _>::new();
+    ) -> Result<R, RefCheckLog<'c>> {
+        let mut messages = SmallVec::<CheckLogCow<'c>, _>::new();
         let mut solutions = rustc_hash::FxHashSet::default();
         let inner = CheckRef {
             messages: &mut messages,
@@ -92,13 +95,16 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
             added: 0,
             traced: self.traced,
         };
-        if let Some(r) = f(inner) {
-            drop(solutions);
-            self.messages
-                .push(TraceLineB::from_task(tsk, messages).into());
+        let ret = f(inner);
+        let ctx = self.context.0.as_slice();
+        let ctx = &ctx[ctx.len() - self.added as usize..ctx.len()];
+        let line = task.close(ret.as_ref(), messages.into_boxed_slice(), ctx);
+        if let Some(r) = ret {
+            self.merge_solutions(solutions);
+            self.messages.push(line.into());
             Ok(r)
         } else {
-            Err(TraceLineB::from_task(tsk, messages))
+            Err(line)
         }
     }
 
@@ -167,7 +173,7 @@ pub(crate) struct CheckRefTop<'c, Split: SplitStrategy> {
     top: &'c Checker<Split>,
     context: SmallVec<Cow<'c, ComponentVar>, { super::context::CONTEXT_LEN }>,
     solutions: rustc_hash::FxHashSet<Solvable>,
-    messages: SmallVec<TraceLineCow<'c>, 2>,
+    messages: SmallVec<CheckLogCow<'c>, 2>,
     cancel: CancelToken<'c, Split::CancelToken>,
 }
 impl<'c, Split: SplitStrategy> CheckRefTop<'c, Split> {
@@ -192,7 +198,7 @@ pub(crate) struct CheckRefBranch<'c, 'i, Split: SplitStrategy> {
     solutions: rustc_hash::FxHashSet<Solvable>,
     parent_solutions: Option<Ancestor<'i>>,
     cancel: &'i CancelToken<'i, Split::CancelToken>,
-    messages: SmallVec<TraceLineCow<'c>, 2>,
+    messages: SmallVec<CheckLogCow<'c>, 2>,
     traced: bool,
 }
 impl<'c, Split: SplitStrategy> CheckRefBranch<'c, '_, Split> {
@@ -228,7 +234,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         if self.cancel.is_cancelled() {
             return None;
         }
-        match self.traced(SolverTask::HasType(tm, tp), |slf| slf.check_type_i(tm, tp)) {
+        match self.traced(CheckingTask::HasType(tm, tp), |slf| {
+            slf.check_type_i(tm, tp)
+        }) {
             Ok(r) => Some(r),
             Err(l) => {
                 self.add_msg(l.into());
@@ -264,7 +272,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 }
 
-pub trait CheckingRuleB<Split: SplitStrategy>: SolverRule {
+pub trait CheckingRuleB<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term, tp: &Term) -> bool;
     fn apply<'t>(
         &self,

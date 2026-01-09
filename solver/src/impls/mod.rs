@@ -9,7 +9,7 @@ use crate::{
     SolverRef,
     context::Context,
     split::SplitStrategy,
-    trace::{SolverTask, SolverTrace},
+    trace::{CheckingTask, SolverTrace},
 };
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
 
@@ -20,9 +20,11 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         context: Context,
         var: &Variable,
     ) -> Option<Term> {
-        let (r, l) = trace.derived(SolverTask::VarInfer(var), context, |trace, context| {
-            self.infer_var_type_i(trace, &context, var)
-        });
+        let (r, l) = trace.derived(
+            CheckingTask::VariableInference(var.name()),
+            context,
+            |trace, context| self.infer_var_type_i(trace, &context, var),
+        );
         trace.add_line(l);
         r
     }
@@ -212,7 +214,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         if trace.is_cancelled() {
             return None;
         }
-        let (r, line) = trace.derived(SolverTask::Infer(t), context, |trace, context| {
+        let (r, line) = trace.derived(CheckingTask::Inference(t), context, |trace, context| {
             self.infer_type_i(trace, context, t)
         });
         trace.add_line(line);
@@ -267,7 +269,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         if trace.is_cancelled() {
             return None;
         }
-        let (r, line) = trace.derived(SolverTask::Inhabitable(t), context, |trace, context| {
+        let (r, line) = trace.derived(CheckingTask::Inhabitable(t), context, |trace, context| {
             self.check_inhabitable_i(trace, context, t)
         });
         trace.add_line(line);
@@ -312,7 +314,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         if trace.is_cancelled() {
             return None;
         }
-        let (r, line) = trace.derived(SolverTask::Universe(t), context, |trace, context| {
+        let (r, line) = trace.derived(CheckingTask::Universe(t), context, |trace, context| {
             self.check_universe_i(trace, context, t)
         });
         trace.add_line(line);

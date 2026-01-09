@@ -4,7 +4,7 @@ use crate::{
     SolverRef, TermExtSolvable,
     context::Context,
     split::SplitStrategy,
-    trace::{SolverTask, SolverTrace},
+    trace::{CheckingTask, SolverTrace},
 };
 
 impl<Split: SplitStrategy> SolverRef<'_, Split> {
@@ -31,13 +31,17 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         if trace.is_cancelled() {
             return None;
         }
-        let (r, l) = trace.derived(SolverTask::Equality(lhs, rhs), context, |trace, context| {
-            if self.trivially_equal(lhs, rhs) {
-                trace.comment("trivial");
-                return Some(true);
-            }
-            self.check_equality_i(trace, context, lhs, rhs)
-        });
+        let (r, l) = trace.derived(
+            CheckingTask::Equality(lhs, rhs),
+            context,
+            |trace, context| {
+                if self.trivially_equal(lhs, rhs) {
+                    trace.comment("trivial");
+                    return Some(true);
+                }
+                self.check_equality_i(trace, context, lhs, rhs)
+            },
+        );
         trace.add_line(l);
         r
     }
@@ -77,7 +81,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
                 if lhs.arguments.len() == rhs.arguments.len() =>
             {
                 let (r, l) = trace.derived(
-                    SolverTask::Strategy("Trying congruence"),
+                    CheckingTask::Strategy("Trying congruence"),
                     context,
                     |trace, context| self.congruence(trace, context, lhs, rhs),
                 );

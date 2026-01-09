@@ -15,7 +15,7 @@ use crate::{
     SolverRef,
     context::Context,
     split::SplitStrategy,
-    trace::{SolverTask, SolverTrace},
+    trace::{CheckingTask, SolverTrace},
 };
 
 impl<Split: SplitStrategy> SolverRef<'_, Split> {
@@ -41,7 +41,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         let mut ctx = smallvec::SmallVec::<_, 4>::new();
         for v in allvars {
             if !ctx.iter().any(|(var, _)| *var == v) {
-                let mut trace = SolverTrace::new(SolverTask::VarInfer(&v));
+                let mut trace = SolverTrace::new(CheckingTask::VariableInference(v.name()));
                 let name = self.new_solvable();
                 let Variable::Name { name: id, .. } = &name else {
                     // SAFETY: new_solvable always returns Variable::Name
@@ -90,7 +90,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
                 curr -= 1;
                 continue;
             }
-            let mut trace = SolverTrace::new(SolverTask::VarInfer(v));
+            let mut trace = SolverTrace::new(CheckingTask::VarInfer(v));
             if let Some(tp) = self.infer_var_type_i(&mut trace, &ctp.build(), v) {
                 *otp = Some(tp.clone());
                 let mut nfv = tp
@@ -291,7 +291,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         let tp = match &cv.tp {
             Some(t) => Some(self.prepare_i(context.branch(), t.clone())),
             None => self.infer_var_type_i(
-                &mut SolverTrace::new(SolverTask::VarInfer(&cv.var)),
+                &mut SolverTrace::new(CheckingTask::VariableInference(cv.var.name())),
                 context,
                 &cv.var,
             ),
