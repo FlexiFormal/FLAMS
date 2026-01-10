@@ -1,5 +1,4 @@
-use std::{hint::unreachable_unchecked, mem::MaybeUninit};
-
+use crate::{CheckRef, split::SplitStrategy};
 use either::Either;
 use ftml_ontology::{
     domain::{SharedDeclaration, declarations::symbols::Symbol},
@@ -10,23 +9,20 @@ use ftml_ontology::{
     },
 };
 use smallvec::SmallVec;
+use std::{hint::unreachable_unchecked, mem::MaybeUninit};
 
-use crate::{
-    SolverRef,
-    context::Context,
-    split::SplitStrategy,
-    trace::{CheckingTask, SolverTrace},
-};
-
-impl<Split: SplitStrategy> SolverRef<'_, Split> {
-    #[allow(clippy::too_many_lines)]
-    pub(crate) fn prepare(self, t: Term) -> Term {
+impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
+    pub(crate) fn prepare(&self, t: Term) -> Term {
         tracing::trace!("preparing {:?}", t.debug_short());
-        let mut ctx = Context::new_top();
-        self.prepare_i(ctx.build(), t)
+        let mut cp = self.copied();
+        let mut ncp = cp.get_ref();
+        let old = std::mem::replace(ncp.context.0, SmallVec::new());
+        let r = ncp.prepare_i(t);
+        *ncp.context.0 = old;
+        r
     }
 
-    pub(crate) fn bind_implicits(self, nt: Term) -> Term {
+    pub(crate) fn bind_implicits(&mut self, nt: Term) -> Term {
         let allvars = nt
             .free_variables()
             .into_iter()
@@ -37,19 +33,17 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         }
         tracing::trace!("All variables: {allvars:?}");
 
-        let mut ctp = Context::new_top();
         let mut ctx = smallvec::SmallVec::<_, 4>::new();
         for v in allvars {
             if !ctx.iter().any(|(var, _)| *var == v) {
-                let mut trace = SolverTrace::new(CheckingTask::VariableInference(v.name()));
                 let name = self.new_solvable();
                 let Variable::Name { name: id, .. } = &name else {
                     // SAFETY: new_solvable always returns Variable::Name
                     unsafe { unreachable_unchecked() }
                 };
-                let tp = self.infer_var_type_i(&mut trace, &ctp.build(), &v);
+                let tp = self.infer_var_type_i(&v);
                 if let Some(tp) = tp {
-                    self.state.solve_type(id.clone(), tp / ctx.as_slice());
+                    self.solve_type(id.clone(), tp / ctx.as_slice());
                 }
 
                 ctx.push((
@@ -68,102 +62,10 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         let n = nt / ctx.as_slice();
         tracing::trace!("Implicitified: {:?}", n.debug_short());
         n
-        /*
-        let mut allvars = nt
-            .all_variables()
-            .into_iter()
-            .map(|(v, t)| (v.clone(), t, None))
-            .collect::<SmallVec<_, 4>>();
-        tracing::warn!("All variables: {allvars:?}");
-        if allvars.is_empty() {
-            return nt;
-        }
-
-        let mut curr = allvars.len() - 1;
-        let mut ctp = Context::new_top();
-        loop {
-            let (v, _, otp) = &mut allvars[curr];
-            if otp.is_some() {
-                if curr == 0 {
-                    break;
-                }
-                curr -= 1;
-                continue;
-            }
-            let mut trace = SolverTrace::new(CheckingTask::VarInfer(v));
-            if let Some(tp) = self.infer_var_type_i(&mut trace, &ctp.build(), v) {
-                *otp = Some(tp.clone());
-                let mut nfv = tp
-                    .free_variables()
-                    .into_iter()
-                    .map(|v| (v.clone(), FreeOrBound::Free, None))
-                    .collect::<SmallVec<_, 4>>();
-                curr += nfv.len();
-                nfv.append(&mut allvars);
-                allvars = nfv;
-            }
-            if curr == 0 {
-                break;
-            }
-            curr -= 1;
-        }
-        let mut dedup = SmallVec::<_, 4>::new();
-        for (v, f, tp) in allvars {
-            let p = (v, tp);
-            if f == FreeOrBound::Free && !dedup.contains(&p) {
-                dedup.push(p);
-            }
-        }
-        if dedup.is_empty() {
-            return nt;
-        }
-        //tracing::warn!("Free variables: {dedup:?}");
-        let mut ctx = smallvec::SmallVec::<_, 4>::new();
-        for (v, tp) in dedup {
-            // TODO store types of implicits somewhere
-            let tp = tp.map_or_else(
-                || Term::Var {
-                    variable: self.new_solvable(),
-                    presentation: None,
-                },
-                |tp| tp / ctx.as_slice(),
-            );
-            ctx.push((
-                v,
-                Term::Var {
-                    variable: self.new_solvable(),
-                    presentation: None,
-                },
-            ));
-        }
-        /*
-        let nt = dedup.into_iter().fold(nt, |t, (v, tp)| {
-            Term::Bound(BindingTerm::new(
-                Term::Symbol {
-                    uri: ftml_uris::metatheory::IMPLICIT_BIND.clone(),
-                    presentation: None,
-                },
-                Box::new([
-                    BoundArgument::Bound(ComponentVar {
-                        var: v,
-                        tp: None,
-                        df: None,
-                    }),
-                    BoundArgument::Simple(t),
-                ]),
-                None,
-            ))
-        });
-        */
-        tracing::warn!("New context: {ctx:?}");
-        let n = nt / ctx.as_slice();
-        tracing::warn!("Implicitified: {:?}", n.debug_short());
-        n
-        */
     }
 
     fn get_head(
-        self,
+        &self,
         t: &Term,
     ) -> Option<Either<SharedDeclaration<Symbol>, SharedDocumentElement<VariableDeclaration>>> {
         let head = t.head()?;
@@ -176,7 +78,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         })
     }
 
-    fn prepare_i(self, context: Context, t: Term) -> Term {
+    fn prepare_i(&mut self, t: Term) -> Term {
         match &t {
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
@@ -213,28 +115,23 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
             }
         }
         // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(context, unsafe { t.assume_init() })
+        self.prepare_recurse(unsafe { t.assume_init() })
     }
 
-    fn prepare_recurse(self, mut context: Context, term: Term) -> Term {
+    fn prepare_recurse(&mut self, term: Term) -> Term {
         match term {
             Term::Application(a) => Term::Application(ApplicationTerm::new(
-                self.prepare_i(context.branch(), a.head.clone()),
+                self.prepare_i(a.head.clone()),
                 a.arguments
                     .iter()
                     .map(|arg| match arg {
-                        Argument::Simple(t) => {
-                            Argument::Simple(self.prepare_i(context.branch(), t.clone()))
+                        Argument::Simple(t) => Argument::Simple(self.prepare_i(t.clone())),
+                        Argument::Sequence(MaybeSequence::One(t)) => {
+                            Argument::Sequence(MaybeSequence::One(self.prepare_i(t.clone())))
                         }
-                        Argument::Sequence(MaybeSequence::One(t)) => Argument::Sequence(
-                            MaybeSequence::One(self.prepare_i(context.branch(), t.clone())),
-                        ),
                         Argument::Sequence(MaybeSequence::Seq(ts)) => {
                             Argument::Sequence(MaybeSequence::Seq(
-                                ts.iter()
-                                    .cloned()
-                                    .map(|t| self.prepare_i(context.branch(), t))
-                                    .collect(),
+                                ts.iter().cloned().map(|t| self.prepare_i(t)).collect(),
                             ))
                         }
                     })
@@ -242,40 +139,31 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
                 a.presentation.clone(),
             )),
             Term::Bound(b) => Term::Bound(BindingTerm::new(
-                self.prepare_i(context.branch(), b.head.clone()),
-                context.in_branch(|mut context| {
+                self.prepare_i(b.head.clone()),
+                self.scoped(|slf| {
                     b.arguments
                         .iter()
                         .map(|arg| match arg {
                             BoundArgument::Simple(t) => {
-                                BoundArgument::Simple(self.prepare_i(context.branch(), t.clone()))
+                                BoundArgument::Simple(slf.prepare_i(t.clone()))
                             }
                             BoundArgument::Sequence(MaybeSequence::One(t)) => {
                                 BoundArgument::Sequence(MaybeSequence::One(
-                                    self.prepare_i(context.branch(), t.clone()),
+                                    slf.prepare_i(t.clone()),
                                 ))
                             }
                             BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
                                 BoundArgument::Sequence(MaybeSequence::Seq(
-                                    ts.iter()
-                                        .cloned()
-                                        .map(|t| self.prepare_i(context.branch(), t))
-                                        .collect(),
+                                    ts.iter().cloned().map(|t| slf.prepare_i(t)).collect(),
                                 ))
                             }
-                            BoundArgument::Bound(cv) => {
-                                BoundArgument::Bound(self.prepare_cv(&mut context, cv))
-                            }
+                            BoundArgument::Bound(cv) => BoundArgument::Bound(slf.prepare_cv(cv)),
                             BoundArgument::BoundSeq(MaybeSequence::One(cv)) => {
-                                BoundArgument::BoundSeq(MaybeSequence::One(
-                                    self.prepare_cv(&mut context, cv),
-                                ))
+                                BoundArgument::BoundSeq(MaybeSequence::One(slf.prepare_cv(cv)))
                             }
                             BoundArgument::BoundSeq(MaybeSequence::Seq(vars)) => {
                                 BoundArgument::BoundSeq(MaybeSequence::Seq(
-                                    vars.iter()
-                                        .map(|cv| self.prepare_cv(&mut context, cv))
-                                        .collect(),
+                                    vars.iter().map(|cv| slf.prepare_cv(cv)).collect(),
                                 ))
                             }
                         })
@@ -287,25 +175,21 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         }
     }
 
-    fn prepare_cv(self, context: &mut Context, cv: &ComponentVar) -> ComponentVar {
+    fn prepare_cv(&mut self, cv: &'t ComponentVar) -> ComponentVar {
         let tp = match &cv.tp {
-            Some(t) => Some(self.prepare_i(context.branch(), t.clone())),
-            None => self.infer_var_type_i(
-                &mut SolverTrace::new(CheckingTask::VariableInference(cv.var.name())),
-                context,
-                &cv.var,
-            ),
+            Some(t) => Some(self.prepare_i(t.clone())),
+            None => self.infer_var_type_i(&cv.var),
         };
         let df = match &cv.df {
-            Some(t) => Some(self.prepare_i(context.branch(), t.clone())),
-            None => self.get_var_definiens(context, &cv.var),
+            Some(t) => Some(self.prepare_i(t.clone())),
+            None => self.get_var_definiens(&cv.var),
         };
         let cv = ComponentVar {
             var: cv.var.clone(),
             tp,
             df,
         };
-        context.extend(cv.clone());
+        self.extend_context(cv.clone());
         cv
     }
 }

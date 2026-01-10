@@ -5,17 +5,15 @@ pub mod pi;
 pub mod typing;
 pub mod universe;
 
-use std::{fmt::Debug, ops::ControlFlow};
-
 use crate::{
-    SolverRef, SolverTrace,
-    context::Context,
+    CheckRef,
     split::SplitStrategy,
     trace::{CheckTraceDisplayable, TraceDisplay},
 };
 use ftml_ontology::{
     domain::declarations::symbols::Symbol, narrative::elements::VariableDeclaration, terms::Term,
 };
+use std::{fmt::Debug, ops::ControlFlow};
 
 macro_rules! rules{
     ($($name:ident = $tp:ident $(($($e:expr),*))? ),*$(,)?) => {
@@ -160,9 +158,7 @@ pub trait EqualityRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, lhs: &Term, rhs: &Term) -> bool;
     fn apply<'t>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
+        checker: CheckRef<'t, '_, Split>,
         lhs: &'t Term,
         rhs: &'t Term,
     ) -> Option<bool>;
@@ -170,22 +166,14 @@ pub trait EqualityRule<Split: SplitStrategy>: CheckerRule {
 
 pub trait InferenceRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term) -> bool;
-    fn infer<'t>(
-        &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<Term>;
+    fn infer<'t>(&self, checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term>;
 }
 
 pub trait CheckingRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term, tp: &Term) -> bool;
     fn apply<'t>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
+        checker: CheckRef<'t, '_, Split>,
         term: &'t Term,
         tp: &'t Term,
     ) -> Option<bool>;
@@ -193,33 +181,19 @@ pub trait CheckingRule<Split: SplitStrategy>: CheckerRule {
 
 pub trait InhabitableRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term) -> bool;
-    fn apply<'t>(
-        &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<bool>;
+    fn apply<'t>(&self, checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool>;
 }
 
 pub trait UniverseRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, term: &Term) -> bool;
-    fn apply<'t>(
-        &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<bool>;
+    fn apply<'t>(&self, checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool>;
 }
 
 pub trait SubtypeRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, sub: &Term, sup: &Term) -> bool;
     fn apply<'t>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
+        checker: CheckRef<'t, '_, Split>,
         sub: &'t Term,
         sup: &'t Term,
     ) -> Option<bool>;

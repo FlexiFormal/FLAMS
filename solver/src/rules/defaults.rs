@@ -1,7 +1,7 @@
 use ftml_ontology::terms::{Argument, Numeric, Term, Variable};
 
 use crate::{
-    TermExtSeq,
+    CheckRef, TermExtSeq,
     rules::{InferenceRule, SizedSolverRule},
     split::SplitStrategy,
 };
@@ -57,59 +57,10 @@ impl<Split: SplitStrategy> InferenceRule<Split> for SeqIndexRule {
         matches!(term,Term::Application(app) if is_sequence(&app.head) && app.arguments.len() == 1
             && app.arguments.first().is_some_and(is_index))
     }
-    fn infer<'t>(
-        &self,
-        solver: crate::SolverRef<Split>,
-        trace: &mut crate::trace::SolverTrace,
-        context: crate::context::Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<Term> {
+    fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
         let Term::Application(app) = term else {
             return None;
         };
-        solver
-            .infer_type(trace, context, &app.head)?
-            .is_sequence_type()
-            .cloned()
+        checker.infer_type(&app.head)?.is_sequence_type().cloned()
     }
 }
-
-/*
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SeqInhabitableRule;
-impl SizedSolverRule for SeqInhabitableRule {}
-impl std::fmt::Display for SeqInhabitableRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("sequence types are inhabitable")
-    }
-}
-
-fn is_sequence(t: &Term) -> Option<&Term> {
-    if let Term::Application(app) = t
-        && let Term::Symbol { uri, .. } = &app.head
-        && *uri == *ftml_uris::metatheory::SEQUENCE_TYPE
-        && app.arguments.len() == 1
-        && let Some(Argument::Simple(t)) = app.arguments.first()
-    {
-        Some(t)
-    } else {
-        None
-    }
-}
-
-impl<Split: SplitStrategy> InhabitableRule<Split> for SeqInhabitableRule {
-    fn applicable(&self, term: &ftml_ontology::terms::Term) -> bool {
-        is_sequence(term).is_some()
-    }
-    fn apply<'t>(
-        &self,
-        solver: crate::SolverRef<Split>,
-        trace: &mut crate::trace::SolverTrace,
-        context: crate::context::Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<bool> {
-        let arg = is_sequence(term)?;
-        solver.check_inhabitable(trace, context, arg)
-    }
-}
-*/

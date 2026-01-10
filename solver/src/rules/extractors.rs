@@ -45,6 +45,7 @@ macro_rules! rules {
         $( rules!(@I $v $name $(($id))? = ($symbol,$rules) => $b ); )*
     };
     (@I $v:vis $name:ident($id:expr) = ($symbol:ident,$rules:ident) => $b:block) => {
+        #[allow(unused_variables)]
         $v fn $name<Split: SplitStrategy>($symbol:&Symbol,$rules:&mut RuleSet<Split>) {
             static ID: std::sync::LazyLock<Id> =
                 std::sync::LazyLock::new(|| unsafe { $id.parse().unwrap_unchecked() });

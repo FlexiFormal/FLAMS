@@ -104,7 +104,7 @@ async fn get_symbols(mut todos: Vec<ModuleUri>) -> rustc_hash::FxHashMap<Id, Sym
                             ret.insert(mac.clone(), s.uri.clone());
                         }
                     }
-                    AnyDeclarationRef::Import(m) => {
+                    AnyDeclarationRef::Import { uri: m, .. } => {
                         todos.push(m.clone());
                     }
                     _ => (),

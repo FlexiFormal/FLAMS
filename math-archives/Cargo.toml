@@ -29,6 +29,9 @@ deepsize = ["dep:deepsize", "dep:bytesize", "ftml-ontology/deepsize"]
 ## adds git suppert for math archives that are git repos
 git = ["dep:flams-git", "dep:url"]
 
+## caches documents and modules in global backend
+cached = []
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = [

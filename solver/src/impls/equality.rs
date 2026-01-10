@@ -1,19 +1,13 @@
+use crate::{CheckRef, impls::solving::TermExtSolvable, split::SplitStrategy, trace::CheckingTask};
 use ftml_ontology::terms::{ApplicationTerm, Argument, Term};
 
-use crate::{
-    SolverRef, TermExtSolvable,
-    context::Context,
-    split::SplitStrategy,
-    trace::{CheckingTask, SolverTrace},
-};
-
-impl<Split: SplitStrategy> SolverRef<'_, Split> {
+impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     #[allow(clippy::unused_self)]
-    pub(crate) fn trivially_equal(self, tma: &Term, tmb: &Term) -> bool {
-        if tma == tmb {
+    pub(crate) fn trivially_equal(&self, lhs: &Term, rhs: &Term) -> bool {
+        if lhs == rhs {
             return true;
         }
-        match (tma, tmb) {
+        match (lhs, rhs) {
             (Term::Var { variable: v1, .. }, Term::Var { variable: v2, .. }) => {
                 v1.name() == v2.name()
             }
@@ -21,42 +15,21 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
         }
     }
 
-    pub fn check_equality<'t>(
-        self,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        lhs: &'t Term,
-        rhs: &'t Term,
-    ) -> Option<bool> {
-        if trace.is_cancelled() {
-            return None;
-        }
-        let (r, l) = trace.derived(
-            CheckingTask::Equality(lhs, rhs),
-            context,
-            |trace, context| {
-                if self.trivially_equal(lhs, rhs) {
-                    trace.comment("trivial");
-                    return Some(true);
-                }
-                self.check_equality_i(trace, context, lhs, rhs)
-            },
-        );
-        trace.add_line(l);
-        r
+    pub fn check_equality(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
+        self.wrap_check(CheckingTask::Equality(lhs, rhs), |slf| {
+            if slf.trivially_equal(lhs, rhs) {
+                slf.comment("trivial");
+                return Some(true);
+            }
+            slf.check_equality_i(lhs, rhs)
+        })
     }
-    pub(crate) fn check_equality_i<'t>(
-        self,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
-        lhs: &'t Term,
-        rhs: &'t Term,
-    ) -> Option<bool> {
+    pub(crate) fn check_equality_i(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
         if let Some(unk) = lhs.is_solvable() {
-            return self.solve_equality(trace, context, unk, rhs);
+            return self.solve_equality(unk, rhs);
         }
         if let Some(unk) = rhs.is_solvable() {
-            return self.solve_equality(trace, context, unk, lhs);
+            return self.solve_equality(unk, lhs);
         }
 
         let rules = self.top.rules.equality().iter().filter_map(|rl| {
@@ -66,13 +39,7 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
                 None
             }
         });
-        let prev = match Split::split_i(
-            self,
-            trace,
-            rules,
-            context.branch(),
-            |slf, rl, tk, context| rl.apply(slf, tk, context, lhs, rhs),
-        ) {
+        let prev = match Split::split_i(self, rules, |slf, rl| rl.apply(slf, lhs, rhs)) {
             Ok(r) => return Some(r),
             Err(ls) => ls,
         };
@@ -80,25 +47,22 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
             (Term::Application(lhs), Term::Application(rhs))
                 if lhs.arguments.len() == rhs.arguments.len() =>
             {
-                let (r, l) = trace.derived(
-                    CheckingTask::Strategy("Trying congruence"),
-                    context,
-                    |trace, context| self.congruence(trace, context, lhs, rhs),
-                );
-                if let Some(r) = r {
-                    trace.add_line(l);
-                    Some(r)
-                } else {
-                    for l in prev {
-                        trace.add_line(l);
+                match self.traced(CheckingTask::Strategy("Trying congruence"), |slf| {
+                    slf.congruence(lhs, rhs)
+                }) {
+                    Ok(r) => Some(r),
+                    Err(l) => {
+                        for l in prev {
+                            self.add_msg(l.into());
+                        }
+                        self.add_msg(l.into());
+                        None
                     }
-                    trace.add_line(l);
-                    None
                 }
             }
             _ => {
                 for l in prev {
-                    trace.add_line(l);
+                    self.add_msg(l.into());
                 }
                 None
             }
@@ -106,27 +70,21 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
     }
 
     // invariant: lhs.arguments.len() == rhs.arguments.len()
-    fn congruence<'t>(
-        self,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
-        lhs: &'t ApplicationTerm,
-        rhs: &'t ApplicationTerm,
-    ) -> Option<bool> {
-        trace.comment("Comparing operators");
-        if !self.check_equality(trace, context.branch(), &lhs.head, &rhs.head)? {
+    fn congruence(&mut self, lhs: &'t ApplicationTerm, rhs: &'t ApplicationTerm) -> Option<bool> {
+        self.comment("Comparing operators");
+        if !self.check_equality(&lhs.head, &rhs.head)? {
             return None;
         }
         for (i, (a, b)) in lhs.arguments.iter().zip(&rhs.arguments).enumerate() {
-            trace.comment(format!("Comparing arguments {}", i + 1));
+            self.counter("Comparing arguments ", i + 1);
             match (a, b) {
                 (Argument::Simple(a), Argument::Simple(b)) => {
-                    if !self.check_equality(trace, context.branch(), a, b)? {
+                    if !self.check_equality(a, b)? {
                         return None;
                     }
                 }
                 _ => {
-                    trace.failure("Argument not simple");
+                    self.failure("Argument not simple");
                     return None;
                 }
             }

@@ -2,16 +2,16 @@ pub mod context;
 mod impls;
 pub mod rules;
 pub mod split;
-mod state;
-mod test;
 pub mod trace;
 
 use crate::{
-    context::Context,
+    impls::{
+        ContextWrap,
+        solving::{Ancestor, Solvable},
+    },
     rules::RuleSet,
-    split::SplitStrategy,
-    state::SolverState,
-    trace::{CheckingTask, SolverTrace, TraceLine},
+    split::{CancelToken, SplitStrategy},
+    trace::{CheckLog, CheckLogCow, CheckingTask},
 };
 use flams_math_archives::{
     backend::{AnyBackend, LocalBackend},
@@ -30,11 +30,11 @@ use ftml_ontology::{
     utils::RefTree,
 };
 use ftml_uris::ModuleUri;
+pub(crate) use impls::backend::TermExtSeq;
+use smallvec::SmallVec;
 use std::{hint::unreachable_unchecked, marker::PhantomData};
-pub(crate) use {impls::backend::TermExtSeq, state::TermExtSolvable};
 
 type BigSet<T> = dashmap::DashSet<T, rustc_hash::FxBuildHasher>;
-type SmallSet<T> = parking_lot::RwLock<rustc_hash::FxHashSet<T>>;
 
 /*
 static MINIMAL_STACK: std::sync::atomic::AtomicUsize =
@@ -65,10 +65,15 @@ pub struct Checker<Split: SplitStrategy> {
     __phantom: PhantomData<Split>,
 }
 
-#[derive(Copy, Clone)]
-pub struct SolverRef<'s, Split: SplitStrategy> {
-    top: &'s Checker<Split>,
-    state: &'s SolverState<'s>,
+pub struct CheckRef<'c, 'i, Split: SplitStrategy> {
+    pub(crate) top: &'c Checker<Split>,
+    pub(crate) context: ContextWrap<'c, 'i>,
+    pub(crate) solutions: &'i mut rustc_hash::FxHashSet<Solvable>,
+    pub(crate) parent_solutions: Option<Ancestor<'i>>,
+    messages: &'i mut SmallVec<CheckLogCow<'c>, 2>,
+    pub(crate) cancel: &'i CancelToken<'i, Split::CancelToken>,
+    added: u8,
+    traced: bool,
 }
 
 impl<Split: SplitStrategy> Checker<Split> {
@@ -85,7 +90,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
     }
 
-    pub fn check_document(&mut self, d: &Document) -> Vec<TraceLine> {
+    pub fn check_document(&mut self, d: &Document) -> Vec<CheckLog> {
         /*tracing::error!(
             "Current: {}",
             bytesize::ByteSize::b(stacker::remaining_stack().expect("wut") as _)
@@ -95,13 +100,13 @@ impl<Split: SplitStrategy> Checker<Split> {
         let mut all = Vec::new();
         for e in d.dfs() {
             match e {
-                DocumentElementRef::UseModule(module)
+                DocumentElementRef::UseModule { uri: module, .. }
                 | DocumentElementRef::Module { module, .. } => all.push(module.clone()),
                 _ => (),
             }
         }
         let _ = self.set_context_i(all);
-        let mut ret = vec![TraceLine::Msg(
+        let mut ret = vec![CheckLog::Msg(
             format!("Checking document {}", d.uri).into(),
             trace::MessageLevel::Header,
         )];
@@ -114,20 +119,20 @@ impl<Split: SplitStrategy> Checker<Split> {
                     }
                 }
                 DocumentElementRef::VariableDeclaration(v) => {
-                    ret.push(TraceLine::Msg(
+                    ret.push(CheckLog::Msg(
                         format!("Checking variable {}", v.uri).into(),
                         trace::MessageLevel::Header,
                     ));
                     ret.extend(self.check_variable(v).1);
                 }
                 DocumentElementRef::Term(t) => {
-                    ret.push(TraceLine::Msg(
+                    ret.push(CheckLog::Msg(
                         format!("Checking term {}", t.uri).into(),
                         trace::MessageLevel::Header,
                     ));
                     tracing::debug!("Checking term {:?}", t.parsed().debug_short());
                     let tm = self.prepare(t.parsed().clone());
-                    ret.push(self.infer_type(&tm).1);
+                    ret.push(self.infer_type(&tm).2);
                 }
                 _ => (),
             }
@@ -136,14 +141,14 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 
     // TODO return checked Module
-    pub fn check_module(&mut self, m: &Module) -> Vec<TraceLine> {
+    pub fn check_module(&mut self, m: &Module) -> Vec<CheckLog> {
         let mut all = Vec::new();
         self.load_context(m, &mut all);
         self.modules.insert(m.clone());
         if !all.is_empty() {
             let _ = self.set_context_i(all);
         }
-        let mut ret = vec![TraceLine::Msg(
+        let mut ret = vec![CheckLog::Msg(
             format!("Checking module {}", m.uri).into(),
             trace::MessageLevel::Header,
         )];
@@ -154,7 +159,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 None
             }
         }) {
-            ret.push(TraceLine::Msg(
+            ret.push(CheckLog::Msg(
                 format!("Checking symbol {}", d.uri).into(),
                 trace::MessageLevel::Header,
             ));
@@ -258,7 +263,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
         for d in m.dfs() {
             match d {
-                AnyDeclarationRef::Import(m) if !self.modules.contains(m) => {
+                AnyDeclarationRef::Import { uri: m, .. } if !self.modules.contains(m) => {
                     if m.is_top() {
                         todos.push(m.clone());
                     } else {
@@ -273,7 +278,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                         e(s, &mut self.rules);
                     }
                 }
-                AnyDeclarationRef::Rule { id, parameters } => {
+                AnyDeclarationRef::Rule { id, parameters, .. } => {
                     tracing::debug!("Rule: {id}");
                     if let Some(rule) = Split::RULE_EXTRACTORS
                         .iter()
@@ -288,154 +293,188 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 
     // TODO return checked term
-    pub fn check_symbol(&mut self, s: &Symbol) -> (bool, Vec<TraceLine>) {
+    pub fn check_symbol(&mut self, s: &Symbol) -> (bool, SmallVec<CheckLog, 2>) {
         tracing::debug!("Checking Symbol {s:?}");
         match (s.data.tp.parsed(), s.data.df.parsed()) {
             (Some(tp), None) => {
                 tracing::trace!("Checking Type");
                 let tp = self.prepare(tp.clone());
-                let (b, l) = self.check_inhabitable(&tp);
+                let (b, _, l) = self.check_inhabitable(&tp);
 
                 s.data.tp.set_checked(tp);
 
-                (b.unwrap_or(false), vec![l])
+                (b.unwrap_or(false), smallvec::smallvec![l])
             }
             (None, Some(df)) => {
                 tracing::trace!("Checking Definiens");
                 let df = self.prepare(df.clone());
-                let (tp, l) = self.infer_type(&df);
+                let (tp, _, l) = self.infer_type(&df);
+
+                s.data.df.set_checked(df);
+
                 if let Some(tp) = tp {
                     //let (b, l2) = self.check_type(&df, &tp);
 
-                    s.data.df.set_checked(df);
                     s.data.tp.set_checked(tp);
 
-                    (true, vec![l])
+                    (true, smallvec::smallvec![l])
                 } else {
-                    s.data.df.set_checked(df);
-
-                    (false, vec![l])
+                    (false, smallvec::smallvec![l])
                 }
             }
             (Some(tp), Some(df)) => {
                 tracing::trace!("Checking Type and Definiens");
                 let tp = self.prepare(tp.clone());
                 let df = self.prepare(df.clone());
-                let (b, l) = self.check_inhabitable(&tp);
+                let (b, _, l) = self.check_inhabitable(&tp);
+
                 if b.is_some_and(|b| !b) {
-                    return (false, vec![l]);
+                    return (false, smallvec::smallvec![l]);
                 }
-                let (b, l2) = self.check_type(&df, &tp);
+                let (b, _, l2) = self.check_type(&df, &tp);
 
-                s.data.df.set_checked(df);
+                // TODO solve variables in tp; check against solved type
+
                 s.data.tp.set_checked(tp);
+                s.data.df.set_checked(df);
 
-                (b.unwrap_or(false), vec![l, l2])
+                (b.unwrap_or(false), smallvec::smallvec![l, l2])
             }
-            (None, None) => (false, Vec::new()),
+            (None, None) => (false, smallvec::smallvec![]),
         }
     }
 
     // TODO return checked term
-    pub fn check_variable(&mut self, s: &VariableDeclaration) -> (bool, Vec<TraceLine>) {
+    pub fn check_variable(
+        &mut self,
+        s: &VariableDeclaration,
+    ) -> (bool, smallvec::SmallVec<CheckLog, 2>) {
         match (s.data.tp.parsed(), s.data.df.parsed()) {
             (Some(tp), None) => {
                 let tp = self.prepare(tp.clone());
-                let (b, l) = self.check_inhabitable(&tp);
+                let (b, _, l) = self.check_inhabitable(&tp);
 
                 s.data.tp.set_checked(tp);
 
-                (b.unwrap_or(false), vec![l])
+                (b.unwrap_or(false), smallvec::smallvec![l])
             }
             (None, Some(df)) => {
                 let df = self.prepare(df.clone());
-                let (tp, l) = self.infer_type(&df);
+                let (tp, _, l) = self.infer_type(&df);
                 if let Some(tp) = tp {
-                    let (b, l2) = self.check_type(&df, &tp);
+                    let (b, _, l2) = self.check_type(&df, &tp);
 
                     s.data.df.set_checked(df);
                     s.data.tp.set_checked(tp);
 
-                    (b.unwrap_or(false), vec![l, l2])
+                    (b.unwrap_or(false), smallvec::smallvec![l, l2])
                 } else {
                     s.data.df.set_checked(df);
 
-                    (false, vec![l])
+                    (false, smallvec::smallvec![l])
                 }
             }
             (Some(tp), Some(df)) => {
                 let tp = self.prepare(tp.clone());
                 let df = self.prepare(df.clone());
-                let (b, l) = self.check_inhabitable(&tp);
+                let (b, _, l) = self.check_inhabitable(&tp);
                 if b.is_some_and(|b| !b) {
-                    return (false, vec![l]);
+                    return (false, smallvec::smallvec![l]);
                 }
-                let (b, l2) = self.check_type(&df, &tp);
+                let (b, _, l2) = self.check_type(&df, &tp);
 
                 s.data.df.set_checked(df);
                 s.data.tp.set_checked(tp);
 
-                (b.unwrap_or(false), vec![l, l2])
+                (b.unwrap_or(false), smallvec::smallvec![l, l2])
             }
-            (None, None) => (false, Vec::new()),
+            (None, None) => (false, SmallVec::new()),
         }
     }
 
-    pub fn check_type(&self, tm: &Term, tp: &Term) -> (Option<bool>, TraceLine) {
-        self.wrap(CheckingTask::HasType(tm, tp), |slf, trace, context| {
-            slf.check_type_i(trace, context, tm, tp)
+    pub fn check_type(
+        &self,
+        tm: &Term,
+        tp: &Term,
+    ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, CheckLog) {
+        self.wrap_task(CheckingTask::HasType(tm, tp), |mut slf| {
+            slf.check_type_i(tm, tp)
         })
     }
 
-    pub fn check_subtype(&self, sub: &Term, sup: &Term) -> (Option<bool>, TraceLine) {
-        self.wrap(CheckingTask::Subtype(sub, sup), |slf, trace, context| {
-            slf.check_subtype_i(trace, context, sub, sup)
+    pub fn check_subtype(
+        &self,
+        sub: &Term,
+        sup: &Term,
+    ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, CheckLog) {
+        self.wrap_task(CheckingTask::Subtype(sub, sup), |mut slf| {
+            slf.check_subtype_i(sub, sup)
         })
     }
 
-    pub fn infer_type(&self, t: &Term) -> (Option<Term>, TraceLine) {
-        self.wrap(CheckingTask::Inference(t), |slf, trace, context| {
-            slf.infer_type_i(trace, context, t)
-        })
+    pub fn infer_type(
+        &self,
+        t: &Term,
+    ) -> (Option<Term>, rustc_hash::FxHashSet<Solvable>, CheckLog) {
+        self.wrap_task(CheckingTask::Inference(t), |mut slf| slf.infer_type_i(t))
     }
 
-    pub fn check_inhabitable(&self, t: &Term) -> (Option<bool>, TraceLine) {
-        self.wrap(CheckingTask::Inhabitable(t), |slf, trace, context| {
-            slf.check_inhabitable_i(trace, context, t)
+    pub fn check_inhabitable(
+        &self,
+        t: &Term,
+    ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, CheckLog) {
+        self.wrap_task(CheckingTask::Inhabitable(t), |mut slf| {
+            slf.check_inhabitable_i(t)
         })
     }
 
     fn prepare(&self, t: Term) -> Term {
-        let st = SolverState::default();
-        SolverRef {
-            top: self,
-            state: &st,
+        self.wrap_none(|slf| slf.prepare(t))
+    }
+}
+
+#[allow(clippy::useless_let_if_seq)]
+fn topo_sort(
+    new: &mut Vec<ModuleUri>,
+    sorted: &mut Vec<ModuleUri>,
+    get: impl Fn(&ModuleUri) -> Option<Module>,
+) -> usize {
+    let mut added = 0;
+    while let Some(uri) = new.last() {
+        if sorted.contains(uri) {
+            let _ = new.pop();
+            continue;
         }
-        .prepare(t)
-    }
-
-    /*
-    fn prepare_and_bind(&self, t: Term) -> Term {
-        let s = SolverRef { top: self };
-        s.bind_implicits(s.prepare(t))
-    }
-     */
-
-    fn wrap<'t, R: std::fmt::Debug + 'static>(
-        &self,
-        task: CheckingTask,
-        then: impl FnOnce(SolverRef<Split>, &mut SolverTrace, Context<'t, '_>) -> Option<R>,
-    ) -> (Option<R>, TraceLine) {
-        let mut trace = SolverTrace::new(task);
-        let mut top = Context::new_top();
-        let state = SolverState::default();
-        let rf = SolverRef {
-            top: self,
-            state: &state,
+        let Some(m) = get(uri) else {
+            // SAFETY: uris.last() == Some(uri)
+            sorted.push(unsafe { new.pop().unwrap_unchecked() });
+            added += 1;
+            continue;
         };
-        let r = then(rf, &mut trace, top.build());
-        let l = trace.destroy(r.as_ref(), &top.build());
-        // TODO check state
-        (r, l)
+        let curr = new.len();
+
+        let mut changed = false;
+        if let Some(e) = m.meta_module.as_ref()
+            && !sorted.contains(e)
+        {
+            new.insert(curr, e.clone());
+            changed = true;
+        }
+        for e in m.dfs() {
+            let AnyDeclarationRef::Import { uri, .. } = e else {
+                continue;
+            };
+            if sorted.contains(uri) {
+                continue;
+            }
+            new.insert(curr, uri.clone());
+            changed = true;
+        }
+        if !changed {
+            // SAFETY: uris.last() == Some(uri)
+            sorted.push(unsafe { new.pop().unwrap_unchecked() });
+            added += 1;
+        }
     }
+    added
 }

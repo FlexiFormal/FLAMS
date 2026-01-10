@@ -1,339 +1,288 @@
 pub mod backend;
 mod equality;
+mod inference;
 mod preparation;
-mod solving;
-mod subtyping;
+pub mod solving;
 mod typing;
 
 use crate::{
-    SolverRef,
-    context::Context,
-    split::SplitStrategy,
-    trace::{CheckingTask, SolverTrace},
+    CheckRef, Checker,
+    context::CowLike,
+    impls::solving::{Ancestor, Solvable},
+    split::{CancelToken, SplitStrategy},
+    trace::{CheckLog, CheckLogCow, CheckingTask, RefCheckLog},
 };
-use ftml_ontology::terms::{ComponentVar, Term, Variable};
+use ftml_ontology::terms::ComponentVar;
+use smallvec::SmallVec;
+use std::borrow::Cow;
 
-impl<Split: SplitStrategy> SolverRef<'_, Split> {
-    pub fn infer_var_type(
-        self,
-        trace: &mut SolverTrace,
-        context: Context,
-        var: &Variable,
-    ) -> Option<Term> {
-        let (r, l) = trace.derived(
-            CheckingTask::VariableInference(var.name()),
-            context,
-            |trace, context| self.infer_var_type_i(trace, &context, var),
-        );
-        trace.add_line(l);
-        r
+impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
+    pub fn extend_context<C: CowLike<'c>>(&mut self, var: C) {
+        self.added += 1;
+        self.context.0.push(var.into_cow());
     }
 
-    fn infer_var_type_i(
-        self,
-        trace: &mut SolverTrace,
-        context: &Context,
-        var: &Variable,
-    ) -> Option<Term> {
-        for v in context.iter() {
-            match (v, var) {
-                (
-                    ComponentVar {
-                        var: Variable::Name { name, .. },
-                        tp,
-                        ..
-                    },
-                    Variable::Name { name: n2, .. },
-                ) if *name == *n2 => {
-                    if tp.is_some() {
-                        trace.comment("Found type in context");
-                    } else {
-                        trace.failure("variable untyped in context");
-                    }
-                    return tp.clone().map(|t| self.state.subst(t));
-                }
-                (
-                    ComponentVar {
-                        var: Variable::Name { name, .. },
-                        tp,
-                        ..
-                    },
-                    Variable::Ref { declaration, .. },
-                ) if name.as_ref() == declaration.name().last() && tp.is_some() => {
-                    if tp.is_some() {
-                        trace.comment("Found type in context");
-                    } else {
-                        trace.failure("Variable untyped in context");
-                    }
-                    return tp.clone().map(|t| self.state.subst(t));
-                }
-                (
-                    ComponentVar {
-                        var: Variable::Ref { declaration, .. },
-                        tp,
-                        ..
-                    },
-                    Variable::Name { name, .. },
-                ) if name.as_ref() == declaration.name().last() => {
-                    return if tp.is_some() {
-                        trace.comment("Found type in context");
-                        tp.clone().map(|t| self.state.subst(t))
-                    } else {
-                        trace.comment("Getting variable globally");
-                        self.get_variable(declaration)
-                            .ok()?
-                            .data
-                            .tp
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
-                    };
-                }
-                (
-                    ComponentVar {
-                        var: Variable::Ref { declaration, .. },
-                        tp,
-                        ..
-                    },
-                    Variable::Ref {
-                        declaration: d2, ..
-                    },
-                ) if *declaration == *d2 => {
-                    return if tp.is_some() {
-                        trace.comment("Found type in context");
-                        tp.clone().map(|t| self.state.subst(t))
-                    } else {
-                        trace.comment("Getting variable globally");
-                        self.get_variable(declaration)
-                            .ok()?
-                            .data
-                            .tp
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
-                    };
-                }
-                _ => (),
-            }
-        }
-        if let Variable::Ref { declaration, .. } = var {
-            trace.comment("Getting variable globally");
-            self.get_variable(declaration)
-                .ok()?
-                .data
-                .tp
-                .checked_or_parsed()
-                .map(|(t, _)| t)
+    pub fn add_msg(&mut self, line: CheckLogCow<'c>) {
+        self.messages.push(line);
+    }
+    pub fn comment(&mut self, msg: impl Into<Cow<'static, str>>) {
+        self.messages.push(CheckLogCow::Owned(CheckLog::Msg(
+            msg.into(),
+            crate::trace::MessageLevel::Comment,
+        )));
+    }
+    pub fn counter(&mut self, msg: &'static str, num: usize) {
+        self.messages
+            .push(CheckLogCow::Owned(CheckLog::Count(msg, num)))
+    }
+    pub fn failure(&mut self, msg: impl Into<Cow<'static, str>>) {
+        self.messages.push(CheckLogCow::Owned(CheckLog::Msg(
+            msg.into(),
+            crate::trace::MessageLevel::Failure,
+        )));
+    }
+    #[inline]
+    pub(crate) fn split(&mut self) -> (&[Cow<'c, ComponentVar>], Trace<'c, '_>) {
+        (self.context.0, Trace(self.messages))
+    }
+
+    #[must_use]
+    pub fn iter_context(&self) -> impl ExactSizeIterator<Item = &ComponentVar> {
+        self.context.0.iter().rev().map(|c| &**c)
+    }
+
+    pub(crate) fn traced<R: Clone>(
+        &mut self,
+        tsk: CheckingTask<'c>,
+        f: impl FnOnce(&mut Self) -> Option<R>,
+    ) -> Result<R, RefCheckLog<'c>> {
+        let (r, l) = self.traced_inner(tsk, f);
+        if let Some(r) = r {
+            self.messages.push(CheckLogCow::Borrowed(l));
+            Ok(r)
         } else {
-            None
+            Err(l)
         }
     }
 
-    fn get_var_definiens(self, context: &Context, var: &Variable) -> Option<Term> {
-        for v in context.iter() {
-            match (v, var) {
-                (
-                    ComponentVar {
-                        var: Variable::Name { name, .. },
-                        df,
-                        ..
-                    },
-                    Variable::Name { name: n2, .. },
-                ) if *name == *n2 => {
-                    return df.clone().map(|t| self.state.subst(t));
-                }
-                (
-                    ComponentVar {
-                        var: Variable::Name { name, .. },
-                        df,
-                        ..
-                    },
-                    Variable::Ref { declaration, .. },
-                ) if name.as_ref() == declaration.name().last() && df.is_some() => {
-                    return df.clone().map(|t| self.state.subst(t));
-                }
-                (
-                    ComponentVar {
-                        var: Variable::Ref { declaration, .. },
-                        df,
-                        ..
-                    },
-                    Variable::Name { name, .. },
-                ) if name.as_ref() == declaration.name().last() => {
-                    return if df.is_some() {
-                        df.clone().map(|t| self.state.subst(t))
-                    } else {
-                        self.get_variable(declaration)
-                            .ok()?
-                            .data
-                            .df
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
-                    };
-                }
-                (
-                    ComponentVar {
-                        var: Variable::Ref { declaration, .. },
-                        df,
-                        ..
-                    },
-                    Variable::Ref {
-                        declaration: d2, ..
-                    },
-                ) if *declaration == *d2 => {
-                    return if df.is_some() {
-                        df.clone().map(|t| self.state.subst(t))
-                    } else {
-                        self.get_variable(declaration)
-                            .ok()?
-                            .data
-                            .df
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
-                    };
-                }
-                _ => (),
-            }
-        }
-        if let Variable::Ref { declaration, .. } = var {
-            self.get_variable(declaration)
-                .ok()?
-                .data
-                .df
-                .checked_or_parsed()
-                .map(|(t, _)| t)
+    pub(crate) fn traced_inner<R: Clone>(
+        &mut self,
+        task: CheckingTask<'c>,
+        f: impl FnOnce(&mut Self) -> Option<R>,
+    ) -> (Option<R>, RefCheckLog<'c>) {
+        let old_msg = std::mem::replace(self.messages, SmallVec::new());
+        let ret = f(self);
+        let msgs = std::mem::replace(self.messages, old_msg);
+        let ctx = self.context.0.as_slice();
+        let ctx = &ctx[ctx.len() - self.added as usize..ctx.len()];
+        let line = task.close(ret.as_ref(), msgs.into_boxed_slice(), ctx);
+        (ret, line)
+    }
+
+    pub(crate) fn branch_traced<R: Clone>(
+        &mut self,
+        task: CheckingTask<'c>,
+        f: impl FnOnce(CheckRef<'c, '_, Split>) -> Option<R>,
+    ) -> Result<R, RefCheckLog<'c>> {
+        let mut messages = SmallVec::<CheckLogCow<'c>, _>::new();
+        let mut solutions = rustc_hash::FxHashSet::default();
+        let inner = CheckRef {
+            messages: &mut messages,
+            context: ContextWrap(self.context.0),
+            solutions: &mut solutions,
+            parent_solutions: Some(Ancestor {
+                p: self.solutions,
+                gp: self.parent_solutions.as_ref(),
+            }),
+            top: self.top,
+            cancel: self.cancel,
+            added: 0,
+            traced: self.traced,
+        };
+        let ret = f(inner);
+        let ctx = self.context.0.as_slice();
+        let ctx = &ctx[ctx.len() - self.added as usize..ctx.len()];
+        let line = task.close(ret.as_ref(), messages.into_boxed_slice(), ctx);
+        if let Some(r) = ret {
+            self.merge_solutions(solutions);
+            self.messages.push(line.into());
+            Ok(r)
         } else {
-            None
+            Err(line)
         }
     }
 
-    pub fn infer_type<'t>(
-        self,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        t: &'t Term,
-    ) -> Option<Term> {
-        if trace.is_cancelled() {
-            return None;
+    pub fn scoped<'nt, R: Send + Sync + 'static>(
+        &'nt mut self,
+        f: impl FnOnce(&mut CheckRef<'nt, '_, Split>) -> R,
+    ) -> R {
+        let old_added = std::mem::take(&mut self.added);
+        let old_msgs = std::mem::take(self.messages);
+
+        // SAFETY:
+        // - all variables added in `f` with lifetime 'nt are popped again before we return
+        // - all messages added in `f` with lifetime 'nt are turned into owned ones
+        //   before readding
+        let muted = unsafe {
+            std::mem::transmute::<&mut CheckRef<'c, '_, Split>, &mut CheckRef<'nt, '_, Split>>(self)
+        };
+        let r = f(muted);
+        for _ in 0..std::mem::replace(&mut self.added, old_added) {
+            self.context.0.pop();
         }
-        let (r, line) = trace.derived(CheckingTask::Inference(t), context, |trace, context| {
-            self.infer_type_i(trace, context, t)
-        });
-        trace.add_line(line);
+        for m in std::mem::replace(self.messages, old_msgs) {
+            self.messages.push(m.into_owned().into());
+        }
         r
     }
-    pub(super) fn infer_type_i<'t>(
-        self,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        t: &'t Term,
-    ) -> Option<Term> {
-        match t {
-            Term::Symbol { uri, .. } => {
-                trace.comment("Looking up symbol");
-                let Ok(s) = self.get_symbol(uri) else {
-                    trace.failure("Symbol not found");
-                    return None;
-                };
-                let ret = s
-                    .data
-                    .tp
-                    .checked_or_parsed()
-                    .map(|(t, _)| self.bind_implicits(t));
 
-                if ret.is_none() {
-                    trace.failure("Symbol has no type");
-                }
-                return ret;
+    pub(crate) fn copied(&self) -> CheckRefBranch<'c, 'i, Split> {
+        CheckRefBranch {
+            context: SmallVec::default(),
+            solutions: rustc_hash::FxHashSet::default(),
+            messages: SmallVec::new(),
+            // --------------
+            top: self.top,
+            parent_solutions: self.parent_solutions,
+            cancel: self.cancel,
+            traced: self.traced,
+        }
+    }
+
+    pub(crate) fn cancellable<R: Send + Sync>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let old = self.cancel;
+        let cancel = old.derive();
+        let rf = &cancel;
+        let rf: &'c CancelToken<'c, Split::CancelToken> = unsafe { std::mem::transmute(rf) };
+        self.cancel = rf;
+        let r = f(self);
+        self.cancel = old;
+        drop(cancel);
+        r
+    }
+
+    pub(crate) fn wrap_check<R: Clone>(
+        &mut self,
+        task: CheckingTask<'c>,
+        f: impl FnOnce(&mut Self) -> Option<R>,
+    ) -> Option<R> {
+        if self.cancel.is_cancelled() {
+            return None;
+        }
+        match self.traced(task, f) {
+            Ok(r) => Some(r),
+            Err(l) => {
+                self.add_msg(l.into());
+                None
             }
-            Term::Var { variable, .. } => {
-                return self.infer_var_type_i(trace, &context, variable);
-            }
-            _ => (),
         }
-        let rules = self
-            .top
-            .rules
-            .inference()
-            .iter()
-            .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None });
-        Split::split(self, trace, rules, context, |slf, rl, tk, context| {
-            rl.infer(slf, tk, context, t).map(|t| self.state.subst(t))
-        })
+    }
+}
+
+impl<Split: SplitStrategy> Checker<Split> {
+    pub(crate) fn wrap_task<'t, R: std::fmt::Debug + Clone + 'static, F>(
+        &'t self,
+        task: CheckingTask<'t>,
+        then: F,
+    ) -> (Option<R>, rustc_hash::FxHashSet<Solvable>, CheckLog)
+    where
+        F: FnOnce(CheckRef<'t, '_, Split>) -> Option<R>,
+    {
+        let mut context = SmallVec::new();
+        let mut solutions = rustc_hash::FxHashSet::default();
+        let mut messages = SmallVec::new();
+        let cancel = CancelToken::default();
+        let rf = CheckRef {
+            top: self,
+            messages: &mut messages,
+            cancel: &cancel,
+            context: ContextWrap(&mut context),
+            added: 0,
+            solutions: &mut solutions,
+            parent_solutions: None,
+            traced: true,
+        };
+        let r = then(rf);
+        let line = task
+            .close(r.as_ref(), messages.into_boxed_slice(), &context)
+            .into_owned();
+        tracing::debug!("Solutions:{solutions:#?}");
+        (r, solutions, line)
     }
 
-    pub fn check_inhabitable<'t>(
-        self,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        t: &'t Term,
-    ) -> Option<bool> {
-        if trace.is_cancelled() {
-            return None;
-        }
-        let (r, line) = trace.derived(CheckingTask::Inhabitable(t), context, |trace, context| {
-            self.check_inhabitable_i(trace, context, t)
-        });
-        trace.add_line(line);
-        r
+    pub(crate) fn wrap_none<'t, R: std::fmt::Debug + Clone + 'static, F>(&'t self, then: F) -> R
+    where
+        F: FnOnce(CheckRef<'t, '_, Split>) -> R,
+    {
+        let mut context = SmallVec::new();
+        let mut solutions = rustc_hash::FxHashSet::default();
+        let mut messages = SmallVec::new();
+        let cancel = CancelToken::default();
+        let rf = CheckRef {
+            top: self,
+            messages: &mut messages,
+            cancel: &cancel,
+            context: ContextWrap(&mut context),
+            added: 0,
+            solutions: &mut solutions,
+            parent_solutions: None,
+            traced: true,
+        };
+        then(rf)
     }
+}
 
-    pub(super) fn check_inhabitable_i<'t>(
-        self,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        tm: &'t Term,
-    ) -> Option<bool> {
-        Split::strategies(
-            trace,
-            context,
-            "Using type inference",
-            |trace, mut context| {
-                let tp = self.infer_type(trace, context.branch(), tm)?;
-                context.in_branch(|context| self.check_universe(trace, context, &tp))
-            },
-            "Using inhabitable rules",
-            |trace, context| {
-                let rules = self
-                    .top
-                    .rules
-                    .inhabitable()
-                    .iter()
-                    .filter_map(|rl| if rl.applicable(tm) { Some(&**rl) } else { None });
-                Split::split(self, trace, rules, context, |slf, rl, tk, context| {
-                    rl.apply(slf, tk, context, tm)
-                })
-            },
-        )
-    }
-
-    pub fn check_universe<'t>(
-        self,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        t: &'t Term,
-    ) -> Option<bool> {
-        if trace.is_cancelled() {
-            return None;
+pub struct CheckRefBranch<'c, 'i, Split: SplitStrategy> {
+    top: &'c Checker<Split>,
+    context: SmallVec<Cow<'c, ComponentVar>, { super::context::CONTEXT_LEN }>,
+    solutions: rustc_hash::FxHashSet<Solvable>,
+    parent_solutions: Option<Ancestor<'i>>,
+    cancel: &'i CancelToken<'i, Split::CancelToken>,
+    messages: SmallVec<CheckLogCow<'c>, 2>,
+    traced: bool,
+}
+impl<'c, Split: SplitStrategy> CheckRefBranch<'c, '_, Split> {
+    pub const fn get_ref(&mut self) -> CheckRef<'c, '_, Split> {
+        CheckRef {
+            top: self.top,
+            cancel: self.cancel,
+            messages: &mut self.messages,
+            context: ContextWrap(&mut self.context),
+            added: 0,
+            solutions: &mut self.solutions,
+            parent_solutions: self.parent_solutions,
+            traced: self.traced,
         }
-        let (r, line) = trace.derived(CheckingTask::Universe(t), context, |trace, context| {
-            self.check_universe_i(trace, context, t)
-        });
-        trace.add_line(line);
-        r
     }
-    fn check_universe_i<'t>(
-        self,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        t: &'t Term,
-    ) -> Option<bool> {
-        let rules = self
-            .top
-            .rules
-            .universe()
-            .iter()
-            .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None });
-        Split::split(self, trace, rules, context, |slf, rl, tk, context| {
-            rl.apply(slf, tk, context, t)
-        })
+}
+
+impl<Split: SplitStrategy> Drop for CheckRef<'_, '_, Split> {
+    fn drop(&mut self) {
+        for _ in 0..self.added {
+            self.context.0.pop();
+        }
+    }
+}
+
+pub struct ContextWrap<'c, 's>(
+    pub(crate) &'s mut SmallVec<Cow<'c, ComponentVar>, { super::context::CONTEXT_LEN }>,
+);
+
+pub struct Trace<'c, 'i>(&'i mut SmallVec<CheckLogCow<'c>, 2>);
+impl<'c> Trace<'c, '_> {
+    pub fn add_msg(&mut self, line: CheckLogCow<'c>) {
+        self.0.push(line);
+    }
+    pub fn comment(&mut self, msg: impl Into<Cow<'static, str>>) {
+        self.0.push(CheckLogCow::Owned(CheckLog::Msg(
+            msg.into(),
+            crate::trace::MessageLevel::Comment,
+        )));
+    }
+    pub fn failure(&mut self, msg: impl Into<Cow<'static, str>>) {
+        self.0.push(CheckLogCow::Owned(CheckLog::Msg(
+            msg.into(),
+            crate::trace::MessageLevel::Failure,
+        )));
     }
 }

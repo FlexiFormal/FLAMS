@@ -337,25 +337,4 @@ impl LocalBackend for TemporaryBackend {
     {
         self.inner.parent.get_var_notations::<E>(uri)
     }
-
-    /*
-
-
-    #[inline]
-    fn get_base_path(&self, id: &ArchiveId) -> Option<PathBuf> {
-        self.inner.parent.get_base_path(id)
-    }
-
-    #[inline]
-    fn submit_triples(
-        &self,
-        in_doc: &DocumentUri,
-        rel_path: &str,
-        iter: impl Iterator<Item = flams_ontology::rdf::Triple>,
-    ) where
-        Self: Sized,
-    {
-        self.inner.parent.submit_triples(in_doc, rel_path, iter);
-    }
-     */
 }

@@ -1,217 +1,9 @@
-use std::{borrow::Cow, fmt::Write};
-
+use crate::rules::{CheckerRule, CheckingRule};
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
 use ftml_uris::FtmlUri;
 use owo_colors::OwoColorize;
 use smallvec::SmallVec;
-
-use crate::{context::Context, rules::CheckerRule};
-
-#[derive(Debug)]
-pub struct SolverTrace<'s> {
-    cancelled: std::sync::atomic::AtomicBool,
-    task: CheckingTask<'s>,
-    messages: smallvec::SmallVec<TraceLine, 2>,
-    parent: Option<&'s Self>,
-}
-
-impl<'s> SolverTrace<'s> {
-    pub fn add_line(&mut self, line: TraceLine) {
-        self.messages.push(line);
-    }
-    pub fn comment(&mut self, s: impl Into<Cow<'static, str>>) {
-        self.messages
-            .push(TraceLine::Msg(s.into(), MessageLevel::Comment));
-    }
-    pub fn failure(&mut self, s: impl Into<Cow<'static, str>>) {
-        self.messages
-            .push(TraceLine::Msg(s.into(), MessageLevel::Failure));
-    }
-    pub fn cancel(&self) {
-        self.cancelled
-            .store(true, std::sync::atomic::Ordering::Release);
-    }
-
-    //invariant: result matches the trace's task!!
-    pub(crate) fn destroy<R: std::fmt::Debug>(
-        self,
-        result: Option<&R>,
-        context: &Context,
-    ) -> TraceLine {
-        macro_rules! cast {
-            ($r:ident : $tp:ty) => {
-                unsafe { &*std::ptr::from_ref($r).cast::<$tp>() }
-            };
-        }
-        let steps = self.messages.into_vec();
-        match self.task {
-            CheckingTask::Inference(term) => TraceLine::InferenceTask {
-                term: term.clone(),
-                steps,
-                context: context.to_boxed(),
-                result: result.map(|r| cast!(r:Term)).cloned(),
-            },
-            CheckingTask::VariableInference(variable) => TraceLine::VarInferenceTask {
-                variable: variable.to_string(),
-                steps,
-                context: context.to_boxed(),
-                result: result.map(|r| cast!(r:Term)).cloned(),
-            },
-            CheckingTask::Inhabitable(term) => TraceLine::InhabitableTask {
-                term: term.clone(),
-                steps,
-                context: context.to_boxed(),
-                result: result.map(|r| cast!(r:bool)).copied(),
-            },
-            CheckingTask::Universe(term) => TraceLine::UniverseTask {
-                term: term.clone(),
-                steps,
-                context: context.to_boxed(),
-                result: result.map(|r| cast!(r:bool)).copied(),
-            },
-            CheckingTask::Rule(rule) => TraceLine::Rule {
-                rule: rule.as_box_dyn(),
-                steps,
-                success: result.map(|r| {
-                    if std::mem::size_of::<R>() == std::mem::size_of::<bool>() {
-                        *cast!(r:bool)
-                    } else {
-                        true
-                    }
-                }),
-            },
-            CheckingTask::Strategy(name) => TraceLine::Strategy { name, steps },
-            CheckingTask::HasType(term, tp) => TraceLine::HasTypeTask {
-                term: term.clone(),
-                tp: tp.clone(),
-                steps,
-                context: context.to_boxed(),
-                result: result.map(|r| cast!(r:bool)).copied(),
-            },
-            CheckingTask::Equality(lhs, rhs) => TraceLine::Equality {
-                lhs: lhs.clone(),
-                rhs: rhs.clone(),
-                steps,
-                context: context.to_boxed(),
-                result: result.map(|r| cast!(r:bool)).copied(),
-            },
-            CheckingTask::Subtype(sub, sup) => TraceLine::SubtypeTask {
-                sub: sub.clone(),
-                sup: sup.clone(),
-                steps,
-                context: context.to_boxed(),
-                result: result.map(|r| cast!(r:bool)).copied(),
-            },
-        }
-    }
-    #[must_use]
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(std::sync::atomic::Ordering::Acquire)
-            || self.parent.as_ref().is_some_and(|tk| {
-                tk.is_cancelled() && {
-                    self.cancelled
-                        .store(true, std::sync::atomic::Ordering::Release);
-                    true
-                }
-            })
-    }
-
-    pub fn derived<'t, R: std::fmt::Debug>(
-        &self,
-        task: CheckingTask,
-        mut context: Context<'t, '_>,
-        then: impl FnOnce(&mut SolverTrace, Context<'t, '_>) -> Option<R>,
-    ) -> (Option<R>, TraceLine) {
-        let mut new = SolverTrace {
-            task,
-            cancelled: std::sync::atomic::AtomicBool::new(false),
-            messages: SmallVec::default(),
-            parent: Some(self),
-        };
-        let ret = then(&mut new, context.branch());
-        let line = new.destroy(ret.as_ref(), &context);
-        (ret, line)
-    }
-
-    pub fn derive<'t>(&'t self, task: CheckingTask<'t>) -> SolverTrace<'t> {
-        SolverTrace {
-            task,
-            cancelled: std::sync::atomic::AtomicBool::new(false),
-            messages: SmallVec::default(),
-            parent: Some(self),
-        }
-    }
-
-    #[must_use]
-    pub const fn new(task: CheckingTask<'s>) -> Self {
-        Self {
-            task,
-            cancelled: std::sync::atomic::AtomicBool::new(false),
-            messages: SmallVec::new(),
-            parent: None,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum TraceLine {
-    InferenceTask {
-        term: Term,
-        steps: Vec<Self>,
-        context: Box<[ComponentVar]>,
-        result: Option<Term>,
-    },
-    VarInferenceTask {
-        variable: String,
-        steps: Vec<Self>,
-        context: Box<[ComponentVar]>,
-        result: Option<Term>,
-    },
-    InhabitableTask {
-        term: Term,
-        steps: Vec<Self>,
-        context: Box<[ComponentVar]>,
-        result: Option<bool>,
-    },
-    UniverseTask {
-        term: Term,
-        steps: Vec<Self>,
-        context: Box<[ComponentVar]>,
-        result: Option<bool>,
-    },
-    HasTypeTask {
-        term: Term,
-        tp: Term,
-        steps: Vec<Self>,
-        context: Box<[ComponentVar]>,
-        result: Option<bool>,
-    },
-    Equality {
-        lhs: Term,
-        rhs: Term,
-        steps: Vec<Self>,
-        context: Box<[ComponentVar]>,
-        result: Option<bool>,
-    },
-    SubtypeTask {
-        sub: Term,
-        sup: Term,
-        steps: Vec<Self>,
-        context: Box<[ComponentVar]>,
-        result: Option<bool>,
-    },
-    Rule {
-        rule: Box<dyn CheckerRule>,
-        steps: Vec<Self>,
-        success: Option<bool>,
-    },
-    NoRuleApplicable,
-    Strategy {
-        name: &'static str,
-        steps: Vec<Self>,
-    },
-    Msg(Cow<'static, str>, MessageLevel),
-}
+use std::{borrow::Cow, fmt::Write};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MessageLevel {
@@ -221,8 +13,32 @@ pub enum MessageLevel {
     Emph,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Indent(pub usize);
+impl Indent {
+    pub const fn increase(&mut self) {
+        self.0 += 1;
+    }
+    pub const fn decrease(&mut self) {
+        self.0 = self.0.saturating_sub(1);
+    }
+}
+impl std::fmt::Display for Indent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0 == 0 {
+            return Ok(());
+        }
+        for _ in 0..self.0 - 1 {
+            f.write_str("  │")?;
+        }
+        f.write_str("  ├─")?;
+        Ok(())
+    }
+}
+
 // -----------------------------------------------------------------------------------
 
+/*
 impl TraceLine {
     pub fn display(&self) -> TraceLineDisplay<'_> {
         TraceLineDisplay {
@@ -668,29 +484,7 @@ impl std::fmt::Display for TraceLine {
         self.display().fmt(f)
     }
 }
-
-#[derive(Clone, Copy, Default)]
-pub struct Indent(pub usize);
-impl Indent {
-    pub const fn increase(&mut self) {
-        self.0 += 1;
-    }
-    pub const fn decrease(&mut self) {
-        self.0 = self.0.saturating_sub(1);
-    }
-}
-impl std::fmt::Display for Indent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0 == 0 {
-            return Ok(());
-        }
-        for _ in 0..self.0 - 1 {
-            f.write_str("  │")?;
-        }
-        f.write_str("  ├")?;
-        Ok(())
-    }
-}
+ */
 
 // ---------------------------------------------------------------------------------------
 
@@ -743,10 +537,36 @@ macro_rules! tasks {
             Strategy{
                 name: &'static str,
                 steps:Box<[CheckLogCow<'t>]>,
+                success:bool
             },
             Msg(Cow<'static, str>, MessageLevel),
             //Dyn(&'t dyn CheckTraceDisplayable)
             //Interpolated(Box<[DisplayableElem]>, MessageLevel),
+        }
+        impl RefCheckLog<'_> {
+            pub fn into_owned(self) -> CheckLog {
+                match self {
+                    $(
+                        Self::$name{$($field,)* steps,context,result} => CheckLog::$name{
+                            $($field:tasks!(@CONV $tp $field),)*
+                            steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                            context: context.into_iter().map(Cow::into_owned).collect(),
+                            result,
+
+                        },
+                    )*
+                    Self::Msg(txt,lvl) => CheckLog::Msg(txt,lvl),
+                    Self::Rule{rule,steps} => CheckLog::Rule{
+                        rule:rule.as_box_dyn(),
+                        steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                    },
+                    Self::Strategy{name,steps,success} => CheckLog::Strategy{
+                        name,
+                        steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                        success
+                    }
+                }
+            }
         }
         #[derive(Debug)]
         pub enum CheckLog {
@@ -765,9 +585,11 @@ macro_rules! tasks {
             Strategy{
                 name: &'static str,
                 steps:Box<[Self]>,
+                success:bool
             },
             //Dyn(Box<dyn CheckTraceDisplayable>)
             Msg(Cow<'static, str>, MessageLevel),
+            Count(&'static str,usize)
             //Interpolated(Box<[DisplayableElem]>, MessageLevel),
         }
         impl CheckLog {
@@ -782,22 +604,27 @@ macro_rules! tasks {
                                 $(
                                     Self::$name{ $($field,)* steps, context,result } => {
                                         displayer.task(CheckingTask::$name($($field),*),context,result.is_some(),f)?;
+                                        tasks!(@DISPL result displayer f $res);
                                         indent.increase();
                                         stack.push(std::mem::replace(&mut curr,steps.iter()));
                                     }
                                 )*
                                 Self::Rule{rule,steps} => {
-                                    rule.display(displayer,None,f)?;
+                                    displayer.rule(&**rule,f)?;
                                     indent.increase();
                                     stack.push(std::mem::replace(&mut curr,steps.iter()));
                                 }
-                                Self::Strategy{name,steps} => {
-                                    displayer.string(*name,Some(MessageLevel::Header),f)?;
+                                Self::Strategy{name,steps,success} => {
+                                    displayer.task(CheckingTask::Strategy(name),&[],*success,f)?;
                                     indent.increase();
                                     stack.push(std::mem::replace(&mut curr,steps.iter()));
                                 }
                                 Self::Msg(s,lvl) => {
                                     displayer.string(&**s,Some(*lvl),f)?;
+                                }
+                                Self::Count(s,i) => {
+                                    displayer.string(s,None,f)?;
+                                    displayer.num(*i as _,None,f)?;
                                 }
                                 /*
                                 Self::Dyn(d) => d.display(displayer,None,f)?,
@@ -836,7 +663,19 @@ macro_rules! tasks {
                             result: res.map(|r| unsafe{&*std::ptr::from_ref(r).cast::<$res>()}.clone() )
                         },
                     )*
-                    Self::Strategy(name) => RefCheckLog::Strategy { name, steps },
+                    Self::Strategy(name) => RefCheckLog::Strategy {
+                        name,
+                        steps,success:res.is_some_and(|v| {
+                            if std::mem::size_of::<R>() == 1 {
+                                // boolean
+                                unsafe{
+                                    std::mem::transmute_copy::<R,bool>(v)
+                                }
+                            } else {
+                                true
+                            }
+                        })
+                    },
                     Self::Rule(rule) => RefCheckLog::Rule { rule, steps }
                 }
             }
@@ -845,30 +684,19 @@ macro_rules! tasks {
             pub fn into_owned(self) -> CheckLog {
                 match self {
                     Self::Owned(o) => o,
-                    $(
-                        Self::Borrowed(RefCheckLog::$name{$($field,)* steps,context,result}) => CheckLog::$name{
-                            $($field:tasks!(@CONV $tp $field),)*
-                            steps: steps.into_iter().map(Self::into_owned).collect(),
-                            context: context.into_iter().map(Cow::into_owned).collect(),
-                            result,
-
-                        },
-                    )*
-                    Self::Borrowed(RefCheckLog::Msg(txt,lvl)) => CheckLog::Msg(txt,lvl),
-                    /*
-                    Self::Borrowed(RefCheckLog::Interpolated(v, lvl)) => CheckLog::Interpolated(v,lvl),
-                    */
-                    Self::Borrowed(RefCheckLog::Rule{rule,steps}) => CheckLog::Rule{
-                        rule:rule.as_box_dyn(),
-                        steps: steps.into_iter().map(Self::into_owned).collect(),
-                    },
-                    Self::Borrowed(RefCheckLog::Strategy{name,steps}) => CheckLog::Strategy{
-                        name,
-                        steps: steps.into_iter().map(Self::into_owned).collect(),
-                    },
+                    Self::Borrowed(b) => b.into_owned()
                 }
             }
         }
+    };
+    (@DISPL $res:ident $disp:ident $f:ident Term) => {
+        if let Some(t) = $res {
+            $disp.string(": ",None,$f)?;
+            $disp.term(t,None,$f)?;
+        }
+    };
+    (@DISPL $res:ident $disp:ident $f:ident bool) => {
+
     };
     (@TPBORROW Term) => {&'t Term};
     (@TPOWN Term) => {Term};
@@ -900,6 +728,17 @@ impl CheckLog {
             d: displayer,
             trace: self,
         }
+    }
+    pub fn colored(&self) -> impl std::fmt::Display {
+        TraceDisplayer {
+            d: &ColorDisplay,
+            trace: self,
+        }
+    }
+}
+impl std::fmt::Display for CheckLog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.display(&()).fmt(f)
     }
 }
 
@@ -1169,6 +1008,9 @@ impl_num!(u8, i8, u16, i16, u32, i32, u64, i64, i128, usize, isize);
 
 pub trait TraceDisplay {
     /// ### Errors
+    fn rule(&self, rule: &dyn CheckerRule, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+
+    /// ### Errors
     fn line(
         &self,
         _: &CheckLog,
@@ -1244,6 +1086,10 @@ impl TraceDisplay for () {
     fn space(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_char(' ')
     }
+    fn rule(&self, rule: &dyn CheckerRule, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Using rule: ")?;
+        rule.display(self, None, f)
+    }
     fn task(
         &self,
         task: CheckingTask<'_>,
@@ -1297,13 +1143,13 @@ impl TraceDisplay for () {
             CheckingTask::Inhabitable(tm) => {
                 f.write_str("Checking inhabitability ")?;
                 do_context(context, f)?;
-                f.write_str("⊢INH ")?;
+                f.write_str("⊢ INH ")?;
                 self.term(tm, None, f)
             }
             CheckingTask::Universe(tm) => {
                 f.write_str("Checking universe ")?;
                 do_context(context, f)?;
-                f.write_str("⊢UNIV ")?;
+                f.write_str("⊢ UNIV ")?;
                 self.term(tm, None, f)
             }
             CheckingTask::Subtype(sub, sup) => {
@@ -1330,7 +1176,10 @@ impl TraceDisplay for () {
                 f.write_str(" == ")?;
                 self.term(rhs, None, f)
             }
-            _ => todo!(),
+            CheckingTask::Rule(rl) => rl.display(self, None, f),
+            CheckingTask::Strategy(s) => {
+                write!(f, "Strategy: {s}")
+            }
         }
     }
     fn uri(
@@ -1339,7 +1188,14 @@ impl TraceDisplay for () {
         _: Option<MessageLevel>,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
-        std::fmt::Display::fmt(&uri, f)
+        match uri {
+            ftml_uris::UriRef::Symbol(s) => {
+                std::fmt::Display::fmt(&s.module.name, f)?;
+                f.write_char('?')?;
+                std::fmt::Display::fmt(&s.name, f)
+            }
+            _ => std::fmt::Display::fmt(&uri, f),
+        }
     }
     fn indent(
         &self,
@@ -1364,6 +1220,167 @@ impl TraceDisplay for () {
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
         f.write_str(s)
+    }
+    fn variable(
+        &self,
+        var: &Variable,
+        _: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        f.write_str(var.name())
+    }
+    fn num(
+        &self,
+        num: i128,
+        _: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        <i128 as std::fmt::Display>::fmt(&num, f)
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct ColorDisplay;
+impl TraceDisplay for ColorDisplay {
+    fn space(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char(' ')
+    }
+
+    fn rule(&self, rule: &dyn CheckerRule, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ", "Using rule: ".italic())?;
+        rule.display(self, None, f)
+    }
+
+    fn task(
+        &self,
+        task: CheckingTask<'_>,
+        context: &[ComponentVar],
+        success: bool,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        fn do_context(
+            context: &[ComponentVar],
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            if context.is_empty() {
+                return Ok(());
+            }
+            f.write_str("{... ")?;
+            let mut first = true;
+            for ComponentVar { var, tp, df } in context {
+                if first {
+                    first = false;
+                } else {
+                    f.write_str(", ")?;
+                }
+                ColorDisplay.variable(var, None, f)?;
+                if let Some(tp) = tp {
+                    f.write_str(" : ")?;
+                    ColorDisplay.term(tp, None, f)?;
+                }
+                if let Some(df) = df {
+                    f.write_str(" : ")?;
+                    ColorDisplay.term(df, None, f)?;
+                }
+            }
+            f.write_str(" } ")
+        }
+        if success {
+            write!(f, "{} ", "[SUCCESS]".green())?;
+        } else {
+            write!(f, "{} ", "[FAILED]".red())?;
+        }
+        match task {
+            CheckingTask::Inference(t) => {
+                write!(f, "{} ", "Checking type of".bright_white().bold())?;
+                do_context(context, f)?;
+                self.term(t, None, f)
+            }
+            CheckingTask::VariableInference(t) => {
+                write!(f, "{} ", "Inferring type of variable".bright_white().bold())?;
+                do_context(context, f)?;
+                f.write_str(t)
+            }
+            CheckingTask::Inhabitable(tm) => {
+                write!(f, "{} ", "Checking inhabitability".bright_white().bold())?;
+                do_context(context, f)?;
+                write!(f, "{} ", "⊢ INH".bright_white().bold())?;
+                self.term(tm, None, f)
+            }
+            CheckingTask::Universe(tm) => {
+                write!(f, "{} ", "Checking universe".bright_white().bold())?;
+                do_context(context, f)?;
+                write!(f, "{} ", "⊢ UNIV".bright_white().bold())?;
+                self.term(tm, None, f)
+            }
+            CheckingTask::Subtype(sub, sup) => {
+                write!(f, "{} ", "Checking subtyping".bright_white().bold())?;
+                do_context(context, f)?;
+                write!(f, "{} ", "⊢".bright_white().bold())?;
+                self.term(sub, None, f)?;
+                write!(f, " {} ", "<:".bright_white().bold())?;
+                self.term(sup, None, f)
+            }
+            CheckingTask::HasType(tm, tp) => {
+                write!(f, "{} ", "Checking typing".bright_white().bold())?;
+                do_context(context, f)?;
+                write!(f, "{} ", "⊢".bright_white().bold())?;
+                self.term(tm, None, f)?;
+                write!(f, " {} ", ":".bright_white().bold())?;
+                self.term(tp, None, f)
+            }
+            CheckingTask::Equality(lhs, rhs) => {
+                write!(f, "{} ", "Checking equality".bright_white().bold())?;
+                do_context(context, f)?;
+                write!(f, "{} ", "⊢".bright_white().bold())?;
+                self.term(lhs, None, f)?;
+                write!(f, " {} ", "==".bright_white().bold())?;
+                self.term(rhs, None, f)
+            }
+            CheckingTask::Rule(r) => r.display(self, None, f),
+            CheckingTask::Strategy(s) => {
+                write!(f, "Strategy: {}", s.italic())
+            }
+        }
+    }
+    fn uri(
+        &self,
+        uri: ftml_uris::UriRef,
+        _: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        match uri {
+            ftml_uris::UriRef::Symbol(s) => {
+                std::fmt::Display::fmt(&s.module.name, f)?;
+                f.write_char('?')?;
+                std::fmt::Display::fmt(&s.name, f)
+            }
+            _ => std::fmt::Display::fmt(&uri, f),
+        }
+    }
+    fn indent(
+        &self,
+        indent: Indent,
+        _: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{} ", indent.blue())
+    }
+    fn term(
+        &self,
+        term: &Term,
+        _: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{:?}", term.debug_short().yellow())
+    }
+    fn string(
+        &self,
+        s: &str,
+        _: Option<MessageLevel>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", s.black())
     }
     fn variable(
         &self,

@@ -26,7 +26,7 @@ impl SizedSolverRule for SimpleTypeOperatorRule {
         displayer: &dyn crate::trace::TraceDisplay,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is a typing operator")
+        crate::trace!(displayer, f, self.0.as_uri(), " is a typing operator")
     }
 }
 impl std::fmt::Display for SimpleTypeOperatorRule {
@@ -113,15 +113,14 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
     }
     fn apply(
         &self,
-        rules: &RuleSet<Split>,
+        _: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
     ) -> ControlFlow<Term, Term> {
         let b = match t {
             Term::Bound(b) => b,
-            t => {
+            _ => {
                 unreachable!("wut");
-                return ControlFlow::Continue(t);
             }
         };
         let spec = head.either(|s| &s.data.arity, |v| &v.data.arity);

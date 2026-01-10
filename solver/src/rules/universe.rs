@@ -1,5 +1,5 @@
 use crate::{
-    context::Context,
+    CheckRef,
     rules::{CheckingRule, InhabitableRule, SizedSolverRule, SubtypeRule, UniverseRule},
     split::SplitStrategy,
 };
@@ -14,7 +14,7 @@ impl SizedSolverRule for SimpleInhabitableRule {
         displayer: &dyn crate::trace::TraceDisplay,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is inhabitable")
+        crate::trace!(displayer, f, self.0.as_uri(), " is inhabitable")
     }
 }
 
@@ -35,22 +35,16 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleInhabitableRule {
             )
         }
     }
-    fn apply<'t>(
-        &self,
-        solver: crate::SolverRef<Split>,
-        trace: &mut crate::trace::SolverTrace,
-        mut context: Context<'t, '_>,
-        t: &'t Term,
-    ) -> Option<bool> {
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, t: &'t Term) -> Option<bool> {
         if self.1 == 0 {
             return Some(true);
         }
         let Term::Application(a) = t else { return None };
         for (i, arg) in a.arguments.iter().enumerate() {
-            trace.comment(format!("Checking argument {}", i + 1));
+            checker.comment(format!("Checking argument {}", i + 1));
             match arg {
                 Argument::Simple(t) => {
-                    if !solver.check_inhabitable(trace, context.branch(), t)? {
+                    if !checker.check_inhabitable(t)? {
                         return Some(false);
                     }
                 }
@@ -69,7 +63,7 @@ impl SizedSolverRule for SimpleUniverseRule {
         displayer: &dyn crate::trace::TraceDisplay,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is a universe")
+        crate::trace!(displayer, f, self.0.as_uri(), " is a universe")
     }
 }
 impl std::fmt::Display for SimpleUniverseRule {
@@ -81,13 +75,7 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleUniverseRule {
     fn applicable(&self, term: &Term) -> bool {
         matches!(term,Term::Symbol { uri, .. } if *uri == self.0)
     }
-    fn apply(
-        &self,
-        _: crate::SolverRef<Split>,
-        _: &mut crate::trace::SolverTrace,
-        _: Context,
-        _: &Term,
-    ) -> Option<bool> {
+    fn apply<'t>(&self, _: CheckRef<'t, '_, Split>, _: &'t Term) -> Option<bool> {
         Some(true)
     }
 }
@@ -95,13 +83,7 @@ impl<Split: SplitStrategy> UniverseRule<Split> for SimpleUniverseRule {
     fn applicable(&self, term: &Term) -> bool {
         matches!(term,Term::Symbol { uri, .. } if *uri == self.0)
     }
-    fn apply<'t>(
-        &self,
-        _: crate::SolverRef<Split>,
-        _: &mut crate::trace::SolverTrace,
-        _: Context<'t, '_>,
-        _: &'t Term,
-    ) -> Option<bool> {
+    fn apply<'t>(&self, _: CheckRef<'t, '_, Split>, _: &'t Term) -> Option<bool> {
         Some(true)
     }
 }
@@ -114,7 +96,7 @@ impl SizedSolverRule for AnyRule {
         displayer: &dyn crate::trace::TraceDisplay,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is any-type")
+        crate::trace!(displayer, f, self.0.as_uri(), " is any-type")
     }
 }
 
@@ -129,27 +111,18 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for AnyRule {
     }
     fn apply<'t>(
         &self,
-        solver: crate::SolverRef<Split>,
-        trace: &mut crate::trace::SolverTrace,
-        context: Context<'t, '_>,
+        mut checker: CheckRef<'t, '_, Split>,
         tm: &'t Term,
         _: &'t Term,
     ) -> Option<bool> {
-        solver.check_inhabitable(trace, context, tm)
+        checker.check_inhabitable(tm)
     }
 }
 impl<Split: SplitStrategy> CheckingRule<Split> for AnyRule {
     fn applicable(&self, _: &Term, tp: &Term) -> bool {
         matches!(tp,Term::Symbol { uri, .. } if *uri == self.0)
     }
-    fn apply<'t>(
-        &self,
-        _: crate::SolverRef<Split>,
-        _: &mut crate::trace::SolverTrace,
-        _: Context<'t, '_>,
-        _: &'t Term,
-        _: &'t Term,
-    ) -> Option<bool> {
+    fn apply<'t>(&self, _: CheckRef<'t, '_, Split>, _: &'t Term, _: &'t Term) -> Option<bool> {
         Some(true)
     }
 }

@@ -1,5 +1,4 @@
-use std::hint::unreachable_unchecked;
-
+use crate::{CheckRef, Checker, split::SplitStrategy};
 use flams_math_archives::{backend::LocalBackend, utils::errors::BackendError};
 use ftml_ontology::{
     domain::{
@@ -8,11 +7,10 @@ use ftml_ontology::{
         modules::{Module, ModuleLike},
     },
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
-    terms::{ApplicationTerm, Argument, Term},
+    terms::{ApplicationTerm, Argument, ComponentVar, Term, Variable},
 };
 use ftml_uris::{DocumentElementUri, IsNarrativeUri, ModuleUri, SymbolUri};
-
-use crate::{Checker, SolverRef, split::SplitStrategy};
+use std::hint::unreachable_unchecked;
 
 pub trait TermExtSeq {
     fn is_sequence_type(&self) -> Option<&Self>;
@@ -134,11 +132,11 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 }
 
-impl<Split: SplitStrategy> SolverRef<'_, Split> {
+impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     /// ### Errors
     #[inline]
     pub(crate) fn get_symbol(
-        self,
+        &self,
         uri: &SymbolUri,
     ) -> Result<SharedDeclaration<Symbol>, BackendError> {
         self.top.get_symbol(uri, |t| self.prepare(t))
@@ -147,9 +145,87 @@ impl<Split: SplitStrategy> SolverRef<'_, Split> {
     /// ### Errors
     #[inline]
     pub fn get_variable(
-        self,
+        &self,
         uri: &DocumentElementUri,
     ) -> Result<SharedDocumentElement<VariableDeclaration>, BackendError> {
         self.top.get_variable(uri)
+    }
+
+    pub(crate) fn get_var_definiens(&self, var: &Variable) -> Option<Term> {
+        for v in self.iter_context() {
+            match (v, var) {
+                (
+                    ComponentVar {
+                        var: Variable::Name { name, .. },
+                        df,
+                        ..
+                    },
+                    Variable::Name { name: n2, .. },
+                ) if *name == *n2 => {
+                    return df.clone().map(|t| self.subst(t));
+                }
+                (
+                    ComponentVar {
+                        var: Variable::Name { name, .. },
+                        df,
+                        ..
+                    },
+                    Variable::Ref { declaration, .. },
+                ) if name.as_ref() == declaration.name().last() && df.is_some() => {
+                    return df.clone().map(|t| self.subst(t));
+                }
+                (
+                    ComponentVar {
+                        var: Variable::Ref { declaration, .. },
+                        df,
+                        ..
+                    },
+                    Variable::Name { name, .. },
+                ) if name.as_ref() == declaration.name().last() => {
+                    return if df.is_some() {
+                        df.clone().map(|t| self.subst(t))
+                    } else {
+                        self.get_variable(declaration)
+                            .ok()?
+                            .data
+                            .df
+                            .checked_or_parsed()
+                            .map(|(t, _)| t)
+                    };
+                }
+                (
+                    ComponentVar {
+                        var: Variable::Ref { declaration, .. },
+                        df,
+                        ..
+                    },
+                    Variable::Ref {
+                        declaration: d2, ..
+                    },
+                ) if *declaration == *d2 => {
+                    return if df.is_some() {
+                        df.clone().map(|t| self.subst(t))
+                    } else {
+                        self.get_variable(declaration)
+                            .ok()?
+                            .data
+                            .df
+                            .checked_or_parsed()
+                            .map(|(t, _)| t)
+                    };
+                }
+                _ => (),
+            }
+        }
+        if let Variable::Ref { declaration, .. } = var {
+            self.get_variable(declaration)
+                .ok()?
+                .data
+                .df
+                .checked_or_parsed()
+                .map(|(t, _)| t)
+        } else {
+            None
+        }
     }
 }

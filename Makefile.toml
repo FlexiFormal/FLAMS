@@ -1,7 +1,7 @@
 [env]
 DATABASE_URL = "sqlite:./resources/migrations/users.sqlite?mode=rwc"
-LEPTOS_WASM_OPT_VERSION = "version_125"
-LEPTOS_WASM_BINDGEN_VERSION = "0.2.106"
+#LEPTOS_WASM_OPT_VERSION = "version_125"
+#LEPTOS_WASM_BINDGEN_VERSION = "0.2.106"
 # LEPTOS_SASS_VERSION = "1.91.0"
 RUSTDOCFLAGS = "--cfg docsrs --html-in-header resources/katex-header.html --html-in-header resources/flams-docs.html --enable-index-page -Zunstable-options --generate-link-to-definition"
 

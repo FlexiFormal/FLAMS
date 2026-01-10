@@ -1,10 +1,14 @@
-use std::borrow::Cow;
-
+use crate::{
+    CheckRef,
+    rules::{CheckingRule, InferenceRule, InhabitableRule, SizedSolverRule},
+    split::SplitStrategy,
+};
 use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
 };
 use ftml_uris::{FtmlUri, SymbolUri};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 
 macro_rules! ret_i {
     ($(;)?) => {};
@@ -52,14 +56,6 @@ fn construct_binder(var: ComponentVar, body: Term, head: &SymbolUri) -> Term {
     ))
 }
 
-use crate::{
-    SolverRef,
-    context::Context,
-    rules::{CheckingRule, InferenceRule, InhabitableRule, SizedSolverRule},
-    split::SplitStrategy,
-    trace::SolverTrace,
-};
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LambdaPiRule {
     pub lambda: SymbolUri,
@@ -75,7 +71,7 @@ impl SizedSolverRule for LambdaPiRule {
             displayer,
             f,
             self.lambda.as_uri(),
-            "is a λ-operator for Π-operator",
+            " is a λ-operator for Π-operator ",
             self.pi.as_uri()
         )
     }
@@ -93,44 +89,35 @@ impl<Split: SplitStrategy> InferenceRule<Split> for LambdaPiRule {
     fn applicable(&self, term: &Term) -> bool {
         destruct_binder(term, &self.lambda).is_some()
     }
-    fn infer<'t>(
-        &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<Term> {
+    fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
         let (var, body) = destruct_binder(term, &self.lambda)?;
         let btp = match &var.tp {
             None => {
-                if solver
-                    .infer_var_type(trace, context.branch(), &var.var)
-                    .is_some()
-                {
-                    context.in_branch(|mut context| {
-                        context.extend(var);
-                        solver.infer_type(trace, context, body)
+                if checker.infer_var_type(&var.var).is_some() {
+                    checker.scoped(|checker| {
+                        checker.extend_context(var);
+                        checker.infer_type(body)
                     })?
                 } else {
                     let nvar = ComponentVar {
                         var: var.var.clone(),
                         tp: Some(Term::Var {
-                            variable: solver.new_solvable(),
+                            variable: checker.new_solvable(),
                             presentation: None,
                         }),
                         df: var.df.clone(),
                     };
-                    context.in_branch(|mut context| {
-                        context.extend(nvar);
-                        solver.infer_type(trace, context, body)
+                    checker.scoped(|checker| {
+                        checker.extend_context(nvar);
+                        checker.infer_type(body)
                     })?
                 }
             }
             Some(tp) => {
-                ret!(&solver.check_inhabitable(trace, context.branch(), tp) == Some(true));
-                context.in_branch(|mut context| {
-                    context.extend(var);
-                    solver.infer_type(trace, context, body)
+                ret!(&checker.check_inhabitable(tp) == Some(true));
+                checker.scoped(|checker| {
+                    checker.extend_context(var);
+                    checker.infer_type(body)
                 })?
             }
         };
@@ -143,32 +130,27 @@ impl<Split: SplitStrategy> CheckingRule<Split> for LambdaPiRule {
     }
     fn apply<'t>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
+        mut checker: CheckRef<'t, '_, Split>,
         term: &'t Term,
         tp: &'t Term,
     ) -> Option<bool> {
         let (var, lambda_body) = destruct_binder(term, &self.lambda)?;
         let (pivar, pi_body) = destruct_binder(tp, &self.pi)?;
         let pi_tp = match &pivar.tp {
-            None => Cow::Owned(solver.infer_var_type(trace, context.branch(), &var.var)?),
+            None => Cow::Owned(checker.infer_var_type(&var.var)?),
             Some(tp) => {
-                //ret!(&solver.check_inhabitable(trace, context.branch(), tp) == Some(true));
+                //ret!(&checker.check_inhabitable(trace, context.branch(), tp) == Some(true));
                 Cow::Borrowed(tp)
             }
         };
         let lam_tp = match &var.tp {
-            None => Cow::Owned(solver.infer_var_type(trace, context.branch(), &var.var)?),
+            None => Cow::Owned(checker.infer_var_type(&var.var)?),
             Some(tp) => {
-                //ret!(&solver.check_inhabitable(trace, context.branch(), tp) == Some(true));
+                //ret!(&checker.check_inhabitable(trace, context.branch(), tp) == Some(true));
                 Cow::Borrowed(tp)
             }
         };
-        ret!(
-            &context.in_branch(|context| { solver.check_subtype(trace, context, &lam_tp, &pi_tp) })
-                == Some(true)
-        );
+        ret!(&checker.scoped(|checker| { checker.check_subtype(&lam_tp, &pi_tp) }) == Some(true));
         let ntp = pi_body
             / (
                 pivar.var.name(),
@@ -177,9 +159,9 @@ impl<Split: SplitStrategy> CheckingRule<Split> for LambdaPiRule {
                     presentation: None,
                 },
             );
-        context.in_branch(|mut context| {
-            context.extend(var);
-            solver.check_type(trace, context, lambda_body, &ntp)
+        checker.scoped(|checker| {
+            checker.extend_context(var);
+            checker.check_type(lambda_body, &ntp)
         })
     }
 }
@@ -192,7 +174,7 @@ impl SizedSolverRule for PiRule {
         displayer: &dyn crate::trace::TraceDisplay,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is a Π-binding operator")
+        crate::trace!(displayer, f, self.0.as_uri(), " is a Π-binding operator")
     }
 }
 impl std::fmt::Display for PiRule {
@@ -204,13 +186,7 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiRule {
     fn applicable(&self, term: &Term) -> bool {
         matches!(term,Term::Bound(b) if matches!(&b.head,Term::Symbol { uri, .. } if *uri == self.0))
     }
-    fn apply<'t>(
-        &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<bool> {
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
         let Term::Bound(b) = term else { return None };
         let Some(BoundArgument::Simple(body)) = b.arguments.last() else {
             return None;
@@ -219,83 +195,71 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiRule {
         for arg in previous {
             match arg {
                 BoundArgument::Simple(t) | BoundArgument::Sequence(MaybeSequence::One(t)) => {
-                    let _ = solver.infer_type(trace, context.branch(), t)?;
+                    let _ = checker.infer_type(t)?;
                 }
                 BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
                     for t in ts {
-                        let _ = solver.infer_type(trace, context.branch(), t)?;
+                        let _ = checker.infer_type(t)?;
                     }
                 }
                 BoundArgument::Bound(cv @ ComponentVar { var, tp, .. })
                 | BoundArgument::BoundSeq(MaybeSequence::One(cv @ ComponentVar { var, tp, .. })) => {
                     if let Some(tp) = tp {
-                        if !solver.check_inhabitable(trace, context.branch(), tp)? {
+                        if !checker.check_inhabitable(tp)? {
                             return Some(false);
                         }
                     } else {
-                        let _ = solver.infer_var_type(trace, context.branch(), var)?;
-                        /*context.extend_owned(ComponentVar {
-                            var: var.clone(),
-                            tp: Some(tp),
-                            df: None,
-                        });*/
+                        let _ = checker.infer_var_type(var)?;
                     }
-                    context.extend(cv);
+                    checker.extend_context(cv);
                 }
                 BoundArgument::BoundSeq(MaybeSequence::Seq(vars)) => {
                     for cv @ ComponentVar { var, tp, .. } in vars {
                         if let Some(tp) = tp {
-                            if !solver.check_inhabitable(trace, context.branch(), tp)? {
+                            if !checker.check_inhabitable(tp)? {
                                 return Some(false);
                             }
                         } else {
-                            let _ = solver.infer_var_type(trace, context.branch(), var)?;
-                            /*context.extend_owned(ComponentVar {
-                                var: var.clone(),
-                                tp: Some(tp),
-                                df: None,
-                            });*/
+                            let _ = checker.infer_var_type(var)?;
                         }
-                        context.extend(cv);
+                        checker.extend_context(cv);
                     }
                 }
             }
         }
-        solver.check_inhabitable(trace, context, body)
+        checker.check_inhabitable(body)
     }
 }
 
 impl PiRule {
-    fn type_apply<Split: SplitStrategy>(
+    fn type_apply<'t, Split: SplitStrategy>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        mut context: Context,
+        mut checker: CheckRef<'t, '_, Split>,
         tp: Term,
-        args: &[Argument],
+        args: &'t [Argument],
     ) -> Option<Term> {
         args.iter().enumerate().try_fold(tp, |tp, (i, arg)| {
-            trace.comment(format!("Checking Argument {}", i + 1));
+            checker.counter("Checking Argument ", i + 1);
             let Argument::Simple(arg) = arg else {
-                trace.failure("Argument is not simple");
+                checker.failure("Argument is not simple");
                 return None;
             };
             let Term::Bound(b) = tp else {
-                trace.failure("Type is not a binder");
+                checker.failure("Type is not a binder");
                 return None;
             };
             if !matches!(&b.head,Term::Symbol { uri, .. } if *uri == self.0)
                 || b.arguments.len() != 2
             {
-                trace.failure("Type is not a Π anymore");
+                checker.failure("Type is not a Π anymore");
                 return None;
             }
             let Some(BoundArgument::Bound(headvar)) = b.arguments.first() else {
-                trace.failure("First argument is not a bound variable");
+                checker.failure("First argument is not a bound variable");
                 return None;
             };
             let Some(BoundArgument::Simple(body)) = b.arguments.get(1) else {
-                trace.failure("Second argument is not simple");
+                checker.failure("Second argument is not simple");
                 return None;
             };
             let (varname, vartp) = match headvar {
@@ -304,16 +268,16 @@ impl PiRule {
                 } => (var.name(), tp.clone()),
                 ComponentVar { var, .. } => (
                     var.name(),
-                    solver
-                        .infer_var_type(trace, context.branch(), var)
-                        .unwrap_or_else(|| Term::Var {
-                            variable: solver.new_solvable(),
+                    checker.scoped(|checker| {
+                        checker.infer_var_type(var).unwrap_or_else(|| Term::Var {
+                            variable: checker.new_solvable(),
                             presentation: None,
-                        }),
+                        })
+                    }),
                 ),
             };
-            if context
-                .in_branch(|context| solver.check_type(trace, context, arg, &vartp))
+            if checker
+                .scoped(|checker| checker.check_type(arg, &vartp))
                 .is_none_or(|b| !b)
             {
                 return None;
@@ -324,31 +288,29 @@ impl PiRule {
 
     fn type_bound<'t, Split: SplitStrategy>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
+        mut checker: CheckRef<'t, '_, Split>,
         tp: Term,
         args: &'t [BoundArgument],
     ) -> Option<Term> {
         let mut names = SmallVec::<_, 2>::new();
         let r = args.iter().enumerate().try_fold(tp, |tp, (i, arg)| {
-            trace.comment(format!("Checking Argument {}", i + 1));
+            checker.counter("Checking Argument ", i + 1);
             let Term::Bound(b) = tp else {
-                trace.failure("Type is not a binder");
+                checker.failure("Type is not a binder");
                 return None;
             };
             if !matches!(&b.head,Term::Symbol { uri, .. } if *uri == self.0)
                 || b.arguments.len() != 2
             {
-                trace.failure("Type is not a Π anymore");
+                checker.failure("Type is not a Π anymore");
                 return None;
             }
             let Some(BoundArgument::Bound(headvar)) = b.arguments.first() else {
-                trace.failure("Argument is not a bound variable");
+                checker.failure("Argument is not a bound variable");
                 return None;
             };
             let Some(BoundArgument::Simple(body)) = b.arguments.get(1) else {
-                trace.failure("Argument is not simple");
+                checker.failure("Argument is not simple");
                 return None;
             };
             let (varname, vartp) = match headvar {
@@ -357,13 +319,13 @@ impl PiRule {
                 } => (var.name(), tp.clone()),
                 ComponentVar { var, .. } => (
                     var.name(),
-                    solver.infer_var_type(trace, context.branch(), var)?,
+                    checker.scoped(|checker| checker.infer_var_type(var))?,
                 ),
             };
             match arg {
                 BoundArgument::Simple(arg) => {
-                    if context
-                        .in_branch(|context| solver.check_type(trace, context, arg, &vartp))
+                    if checker
+                        .scoped(|checker| checker.check_type(arg, &vartp))
                         .is_none_or(|b| !b)
                     {
                         return None;
@@ -372,20 +334,16 @@ impl PiRule {
                 }
                 BoundArgument::Bound(
                     cv @ ComponentVar {
-                        var: argvar,
-                        tp,
-                        df,
+                        var: argvar, tp, ..
                     },
                 ) => {
                     names.push(argvar.name());
                     if let Some(tp) = tp {
-                        if context
-                            .in_branch(|context| solver.check_subtype(trace, context, tp, &vartp))
-                            != Some(true)
+                        if checker.scoped(|checker| checker.check_subtype(tp, &vartp)) != Some(true)
                         {
                             return None;
                         }
-                        context.extend(cv);
+                        checker.extend_context(cv);
                         Some(
                             (body
                                 / (
@@ -398,12 +356,12 @@ impl PiRule {
                                 .into_owned(),
                         )
                     } else {
-                        trace.failure("Untyped argument");
+                        checker.failure("Untyped argument");
                         None
                     }
                 }
                 _ => {
-                    trace.failure("Argument is not simple");
+                    checker.failure("Argument is not simple");
                     None
                 }
             }
@@ -412,7 +370,7 @@ impl PiRule {
             .into_iter()
             .any(|v| names.contains(&v.name()))
         {
-            trace.failure("Resulting type depends on eliminated variables");
+            checker.failure("Resulting type depends on eliminated variables");
             None
         } else {
             Some(r)
@@ -421,27 +379,23 @@ impl PiRule {
 
     fn infer_app<'t, Split: SplitStrategy>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
+        mut checker: CheckRef<'t, '_, Split>,
         app: &'t ApplicationTerm,
     ) -> Option<Term> {
-        let Some(Argument::Simple(first_arg)) = app.arguments.first() else {
-            trace.failure("Argument is not simple");
+        let Some(Argument::Simple(_)) = app.arguments.first() else {
+            checker.failure("Argument is not simple");
             return None;
         };
-        let tp = solver.infer_type(trace, context.branch(), &app.head)?;
-        self.type_apply(solver, trace, context, tp, &app.arguments)
+        let tp = checker.infer_type(&app.head)?;
+        self.type_apply(checker, tp, &app.arguments)
     }
     fn infer_bind<'t, Split: SplitStrategy>(
         &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        mut context: Context<'t, '_>,
+        mut checker: CheckRef<'t, '_, Split>,
         app: &'t BindingTerm,
     ) -> Option<Term> {
-        let tp = solver.infer_type(trace, context.branch(), &app.head)?;
-        self.type_bound(solver, trace, context, tp, &app.arguments)
+        let tp = checker.infer_type(&app.head)?;
+        self.type_bound(checker, tp, &app.arguments)
     }
 }
 
@@ -449,18 +403,12 @@ impl<Split: SplitStrategy> InferenceRule<Split> for PiRule {
     fn applicable(&self, term: &Term) -> bool {
         matches!(term, Term::Application(_) | Term::Bound(_))
     }
-    fn infer<'t>(
-        &self,
-        solver: SolverRef<Split>,
-        trace: &mut SolverTrace,
-        context: Context<'t, '_>,
-        term: &'t Term,
-    ) -> Option<Term> {
+    fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
         match term {
-            Term::Application(app) => self.infer_app(solver, trace, context, app),
-            Term::Bound(b) => self.infer_bind(solver, trace, context, b),
+            Term::Application(app) => self.infer_app(checker, app),
+            Term::Bound(b) => self.infer_bind(checker, b),
             _ => {
-                trace.failure("Not an application");
+                checker.failure("Not an application");
                 None
             }
         }

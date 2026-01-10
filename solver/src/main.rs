@@ -54,9 +54,9 @@ fn main() {
             "http://mathhub.info?a=FTML/math&p=propositions&d=forall&l=en",
             "http://mathhub.info?a=FTML/math&p=propositions&d=exists&l=en",
             "http://mathhub.info?a=FTML/math&p=propositions&d=equal&l=en",
-            "http://mathhub.info?a=FTML/math&d=functions&l=en",
             */
-            "http://mathhub.info?a=FTML/math&p=sets&d=cons&l=en",
+            "http://mathhub.info?a=FTML/math&d=functions&l=en",
+            //"http://mathhub.info?a=FTML/math&p=sets&d=cons&l=en",
             /*
             "http://mathhub.info?a=FTML/math&p=sets&d=comprehension&l=en",
             "http://mathhub.info?a=FTML/math&p=nat&d=nat&l=en",
@@ -90,7 +90,7 @@ fn check<Split: SplitStrategy>(solver: &mut Checker<Split>, s: &str) {
         .expect("wut");
     let (v, t) = measure(|| solver.check_document(&d));
     for v in v {
-        println!("{}", v.display().colorize_stdout());
+        println!("{}", v.colored());
     }
     println!("Checked after {t}");
 }
