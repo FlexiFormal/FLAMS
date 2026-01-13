@@ -1072,7 +1072,7 @@ pub async fn uris(uris: Vec<String>) -> Result<Vec<Option<Uri>>, ServerFnError<S
             return Some((TUG.clone(), 34));
         }
         if p.starts_with("file://") {
-            return Some((ArchiveUri::no_archive(), 7));
+            return Some((ArchiveUri::no_archive().clone(), 7));
         }
         if let Some(mut p) = p.strip_prefix(MATHHUB) {
             let mut i = MATHHUB.len();

@@ -27,8 +27,12 @@ impl std::fmt::Display for SimpleInhabitableRule {
 impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleInhabitableRule {
     fn applicable(&self, term: &Term) -> bool {
         if self.1 == 0 {
+            //ftml_ontology::matchtm!(sym(= &self.0) = term)
             matches!(term,Term::Symbol { uri, .. } if *uri == self.0)
         } else {
+            /*ftml_ontology::matchtm!(app({sym(=self.0)},[args]) = term
+                => { args.len() == self.1 as usize} else {false}
+            )*/
             matches!(term,Term::Application(a)
                 if matches!(&a.head,Term::Symbol { uri, .. } if *uri == self.0)
                 && a.arguments.len() == self.1 as usize

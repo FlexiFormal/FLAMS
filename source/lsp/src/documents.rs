@@ -47,7 +47,10 @@ impl LSPDocument {
         }; //lsp_uri.to_file_path().ok().map(Into::into);
         let default = || {
             let path = path.as_ref()?.as_slash_str().into_owned();
-            Some((ArchiveUri::no_archive(), Some(path.into_boxed_str())))
+            Some((
+                ArchiveUri::no_archive().clone(),
+                Some(path.into_boxed_str()),
+            ))
         };
         let ap = path
             .as_ref()

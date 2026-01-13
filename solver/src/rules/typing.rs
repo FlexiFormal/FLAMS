@@ -36,6 +36,7 @@ impl std::fmt::Display for SimpleTypeOperatorRule {
 }
 impl SimpleTypeOperatorRule {
     fn is_app(&self, t: &Term) -> bool {
+        //ftml_ontology::matchtm!(app({sym(=self.0)},[]) = t);
         matches!(
             t,
             Term::Application(app)
