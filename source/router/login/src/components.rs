@@ -28,8 +28,20 @@ pub fn LoginProvider<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> imp
     children()
 }
 
-#[component]
-pub fn Users() -> impl IntoView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Users;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for Users {
+    fn data() -> Self {
+        Self
+    }
+    fn view(Users: Self) -> AnyView {
+        users()
+    }
+}
+
+//#[component]
+pub fn users() -> AnyView {
     let r = Resource::new(|| (), |()| super::server_fns::get_users());
     view! {<Suspense fallback = || view!(<Spinner/>)>{move ||
       match r.get() {
@@ -41,6 +53,7 @@ pub fn Users() -> impl IntoView {
         Some(Ok(users)) => EitherOf4::D(user_table(users))
       }
     }</Suspense>}
+    .into_any()
 }
 
 fn user_table(v: Vec<UserData>) -> impl IntoView {

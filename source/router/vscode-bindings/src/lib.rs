@@ -42,6 +42,45 @@ impl VSCode {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct VSCWrap;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for VSCWrap {
+    fn data() -> Self {
+        Self
+    }
+    fn view(VSCWrap: Self) -> AnyView {
+        use flams_router_login::components::LoginProvider;
+        use leptos::either::EitherOf3;
+        ftml_dom::global_setup(|| {
+            flams_router_content::Views::top_safe(|| {
+                inject_css("flams-vscode", include_str!("vscode.css"));
+                let lsp = Resource::new(|| (), |()| is_lsp());
+                if let Some(origin) =
+                    leptos_router::hooks::use_query_map().with_untracked(|q| q.get("origin"))
+                {
+                    provide_context(VSCode { origin });
+                }
+                view!(
+                    <LoginProvider><Suspense>{move ||
+                        match lsp.get() {
+                            Some(Ok(true)) => EitherOf3::A(view!(
+                                <div class="flams-vscode">
+                                    <leptos_router::components::Outlet/>
+                                </div>
+                            )),
+                            Some(_) => EitherOf3::B("ERROR"),
+                            None => EitherOf3::C(view!(<flams_web_utils::components::Spinner/>)),
+                        }
+                    }
+                    </Suspense></LoginProvider>
+                )
+            })
+        })
+        .into_any()
+    }
+}
+
 #[component(transparent)]
 pub fn VSCodeWrap() -> impl IntoView {
     use flams_router_login::components::LoginProvider;

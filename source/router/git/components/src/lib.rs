@@ -22,8 +22,20 @@ use leptos::{
 };
 use std::num::NonZeroU32;
 
-#[component]
-pub fn Archives() -> impl IntoView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Archives;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for Archives {
+    fn data() -> Self {
+        Self
+    }
+    fn view(Archives: Self) -> AnyView {
+        archives()
+    }
+}
+
+//#[component]
+pub fn archives() -> AnyView {
     let r = Resource::new(|| (), |()| get_archives());
     view! {<Suspense fallback = || view!(<Spinner/>)>{move ||
       match r.get() {
@@ -35,6 +47,7 @@ pub fn Archives() -> impl IntoView {
         Some(Ok(projects)) => EitherOf4::D(do_projects(projects))
       }
     }</Suspense>}
+    .into_any()
 }
 
 #[derive(Debug, Copy, Clone)]

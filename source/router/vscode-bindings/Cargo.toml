@@ -43,3 +43,5 @@ leptos = { workspace = true }
 leptos_router = { workspace = true }
 wasm-bindgen = { workspace = true, optional = true }
 serde-wasm-bindgen = { workspace = true, optional = true }
+
+serde = { workspace = true }

@@ -39,8 +39,20 @@ async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
     Ok(tree)
 }
 
-#[component]
-pub fn Logger() -> AnyView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Logger;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for Logger {
+    fn data() -> Self {
+        Self
+    }
+    fn view(Logger: Self) -> AnyView {
+        logger()
+    }
+}
+
+//#[component]
+pub fn logger() -> AnyView {
     use ftml_dom::utils::css::inject_css;
     require_login(Box::new(|| {
         inject_css("flams-logging", include_str!("logs.css"));
@@ -146,7 +158,8 @@ fn LogLineHelper(
             <span class="flams-spinner-inline">
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
-        </span>).into_any()
+        </span>)
+        .into_any()
     } else {
         view!(<span class=cls>{str}</span>).into_any()
     }

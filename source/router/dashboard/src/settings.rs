@@ -96,8 +96,20 @@ pub async fn reload() -> Result<(), ServerFnError<String>> {
     }
 }
 
-#[component]
-pub(super) fn Settings() -> AnyView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Settings;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for Settings {
+    fn data() -> Self {
+        Self
+    }
+    fn view(Settings: Self) -> AnyView {
+        settings()
+    }
+}
+
+//#[component]
+fn settings() -> AnyView {
     use thaw::Table;
     inject_css("flams-settings", include_str!("settings.css"));
     require_login(Box::new(|| {

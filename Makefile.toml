@@ -51,7 +51,7 @@ cargo update
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
-args = ["leptos", "build", "--release"]
+args = ["leptos", "build", "--release","--split"]
 
 [tasks.doc]
 workspace = false
@@ -167,7 +167,7 @@ dependencies = [
 workspace = false
 install_crate = "cargo-leptos"
 command = "cargo"
-args = ["leptos", "build"]
+args = ["leptos", "build","--split"]
 # dependencies = ["db"]
 # dependencies = ["build-viewer","copy-viewer","db"]
 
@@ -178,6 +178,7 @@ command = "cargo"
 args = [
     "leptos",
     "watch",
+    "--split",
     "--",
     "--port",
     "3000",

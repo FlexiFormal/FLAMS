@@ -52,6 +52,7 @@ flams-math-archives = { workspace = true, optional = true }
 flams-git = { workspace = true, features = ["git2"], optional = true }
 
 leptos = { workspace = true }
+leptos_router = { workspace = true }
 thaw = { workspace = true }
 serde = { workspace = true }
 either = { workspace = true }

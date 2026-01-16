@@ -13,6 +13,45 @@ use ftml_uris::{
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TopDocRouter;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for TopDocRouter {
+    fn data() -> Self {
+        Self
+    }
+    fn view(TopDocRouter: Self) -> AnyView {
+        let params = use_query_map().get_untracked();
+        if let Some(p) = params.get_str("uri") {
+            let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
+                return view! { <leptos_router::components::Redirect path="/dashboard"/> }
+                    .into_any();
+            };
+            DocumentOfTop(DocumentOfTopProps { uri }).into_any()
+        } else {
+            view! { <leptos_router::components::Redirect path="/dashboard"/> }.into_any()
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct UriTopRouter;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for UriTopRouter {
+    fn data() -> Self {
+        Self
+    }
+    fn view(UriTopRouter: Self) -> AnyView {
+        let works =
+            use_query_map().with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
+        if works {
+            URITop()
+        } else {
+            view! { <leptos_router::components::Redirect path="/dashboard"/> }.into_any()
+        }
+    }
+}
+
 #[component(transparent)]
 pub fn URITop() -> AnyView {
     ftml_dom::global_setup(move || {

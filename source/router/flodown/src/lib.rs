@@ -20,8 +20,20 @@ use ftml_ontology::{
 use ftml_uris::{DocumentUri, Id, ModuleUri, SymbolUri};
 use leptos::prelude::*;
 
-#[component]
-pub fn FloDownEditor() -> AnyView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct FloDownEditor;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for FloDownEditor {
+    fn data() -> Self {
+        Self
+    }
+    fn view(FloDownEditor: Self) -> AnyView {
+        flodown_editor()
+    }
+}
+
+//#[component]
+pub fn flodown_editor() -> AnyView {
     #[cfg(feature = "hydrate")]
     math::TeXClient::provide();
 

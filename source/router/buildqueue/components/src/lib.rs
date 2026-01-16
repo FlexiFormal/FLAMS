@@ -88,7 +88,8 @@ impl Entry {
             ).collect_view()}
             </ol>
           </Collapsible></li>
-        }.into_any()
+        }
+        .into_any()
     }
 }
 
@@ -271,8 +272,20 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
 
 // ----------------------------------------------------------------------------------
 
-#[component]
-pub fn QueuesTop() -> AnyView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct QueuesTop;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for QueuesTop {
+    fn data() -> Self {
+        Self
+    }
+    fn view(QueuesTop: Self) -> AnyView {
+        queues_top()
+    }
+}
+
+//#[component]
+pub fn queues_top() -> AnyView {
     use flams_web_utils::components::Spinner;
     use thaw::{Divider, Layout, Tab, TabList};
 
@@ -357,15 +370,16 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
     let Some(repos) = queues
         .queue_repos
         .with_untracked(|v| v.get(&queue_id).cloned())
-        .flatten() else {
-            return ().into_any()
-        };
+        .flatten()
+    else {
+        return ().into_any();
+    };
     if repos.is_empty() {
         return ().into_any();
     }
     let style = if allowed { "" } else { "color:gray;" };
     inject_css("flams-repo-table", include_str!("repo-table.css"));
-        view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
+    view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
           <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
           <Table class="flams-repo-table">
             <TableHeader><TableRow>
@@ -493,7 +507,8 @@ fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
       <ol reversed style="margin-left:30px">
         <For each=move || ls.get() key=|e| e.id children=|e| e.as_view()/>
       </ol>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
@@ -566,7 +581,8 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
             done.iter().map(Entry::as_view).collect_view()
           }</ul>
       </Layout>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
@@ -586,7 +602,8 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
     if num_failed == 0 {
         view! {
           <Button on_click=move |_| {migrate.dispatch(());}>"Migrate"</Button>
-        }.into_any()
+        }
+        .into_any()
     } else {
         let clicked = RwSignal::new(false);
         view! {
@@ -601,7 +618,8 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
               </div>
             </div>
           </DialogContent></DialogBody></DialogSurface></Dialog>
-        }.into_any()
+        }
+        .into_any()
     }
 }
 

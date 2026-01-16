@@ -41,9 +41,16 @@ const QUERY: &str = r"SELECT ?x ?y WHERE {
   ?y ulo:notation-for ?x.
 }";
 
-#[component]
-pub fn Query() -> impl IntoView {
-    query()
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Query;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for Query {
+    fn data() -> Self {
+        Self
+    }
+    fn view(Query: Self) -> AnyView {
+        query()
+    }
 }
 
 fn query() -> AnyView {

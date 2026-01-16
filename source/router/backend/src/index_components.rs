@@ -8,8 +8,20 @@ use thaw::{
     CardPreview, Scrollbar,
 };
 
-#[component]
-pub fn Index() -> AnyView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Index;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for Index {
+    fn data() -> Self {
+        Self
+    }
+    fn view(Index: Self) -> AnyView {
+        index()
+    }
+}
+
+//#[component]
+pub fn index() -> AnyView {
     inject_css(
         "flams-index-card",
         ".flams-index-card{max-width:400px !important;margin:10px !important;}",

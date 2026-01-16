@@ -12,23 +12,36 @@ use ftml_uris::ArchiveId;
 use leptos::prelude::*;
 use std::num::NonZeroU32;
 
-#[component]
-pub fn ArchivesTop() -> AnyView {
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ArchivesTop;
+#[leptos_router::lazy_route]
+impl leptos_router::LazyRoute for ArchivesTop {
+    fn data() -> Self {
+        Self
+    }
+    fn view(ArchivesTop: Self) -> AnyView {
+        archives_top()
+    }
+}
+
+//#[component]
+pub fn archives_top() -> AnyView {
     wait_and_then_fn(
         || super::server_fns::group_entries(None),
         |(groups, archives)| {
-            let mut summary = flams_backend_types::archives::FileStateSummary::default();
-            for g in &groups {
-                if let Some(s) = g.summary {
-                    summary.merge(s);
+            {
+                let mut summary = flams_backend_types::archives::FileStateSummary::default();
+                for g in &groups {
+                    if let Some(s) = g.summary {
+                        summary.merge(s);
+                    }
                 }
-            }
-            for a in &archives {
-                if let Some(s) = a.summary {
-                    summary.merge(s);
+                for a in &archives {
+                    if let Some(s) = a.summary {
+                        summary.merge(s);
+                    }
                 }
-            }
-            view!(<Tree><Subtree expanded=true>
+                view!(<Tree><Subtree expanded=true>
             <Header slot>
                 "All Archives "
                 {badge(summary)}
@@ -41,8 +54,11 @@ pub fn ArchivesTop() -> AnyView {
             </Header>
             <ArchivesAndGroups archives groups/>
         </Subtree></Tree>)
-        }.into_any(),
-    ).into_any()
+            }
+            .into_any()
+        },
+    )
+    .into_any()
 }
 
 #[component]
@@ -50,7 +66,8 @@ fn ArchivesAndGroups(groups: Vec<ArchiveGroupData>, archives: Vec<ArchiveData>) 
     view! {
       {groups.into_iter().map(group).collect_view()}
       {archives.into_iter().map(archive).collect_view()}
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn group(a: ArchiveGroupData) -> AnyView {
@@ -114,15 +131,12 @@ fn archive(a: ArchiveData) -> AnyView {
     }.into_any()
 }
 
-fn dirs_and_files(
-    archive: &ArchiveId,
-    dirs: Vec<DirectoryData>,
-    files: Vec<FileData>,
-) -> AnyView {
+fn dirs_and_files(archive: &ArchiveId, dirs: Vec<DirectoryData>, files: Vec<FileData>) -> AnyView {
     view! {
       {dirs.into_iter().map(|d| dir(archive.clone(),d)).collect_view()}
       {files.into_iter().map(|f| file(archive.clone(),f)).collect_view()}
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn dir(archive: ArchiveId, d: DirectoryData) -> AnyView {
@@ -200,7 +214,8 @@ fn file(archive: ArchiveId, f: FileData) -> AnyView {
     );
     view! {
       <Leaf>{header}</Leaf>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn badge(state: crate::FileStateSummary) -> AnyView {
@@ -240,7 +255,8 @@ fn dialog<V: IntoView + 'static>(
         } else {
             None
         }
-    }).into_any()
+    })
+    .into_any()
 }
 
 fn modal(
