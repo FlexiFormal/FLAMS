@@ -6,7 +6,7 @@ use crate::{
 use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
 };
-use ftml_uris::{FtmlUri, SymbolUri};
+use ftml_uris::SymbolUri;
 use smallvec::SmallVec;
 use std::borrow::Cow;
 
@@ -62,18 +62,8 @@ pub struct LambdaPiRule {
     pub pi: SymbolUri,
 }
 impl SizedSolverRule for LambdaPiRule {
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(
-            displayer,
-            f,
-            self.lambda.as_uri(),
-            " is a λ-operator for Π-operator ",
-            self.pi.as_uri()
-        )
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.lambda, " is a λ-operator for Π-operator ", &self.pi)
     }
 }
 impl std::fmt::Display for LambdaPiRule {
@@ -168,13 +158,10 @@ impl<Split: SplitStrategy> CheckingRule<Split> for LambdaPiRule {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PiRule(pub SymbolUri);
+
 impl SizedSolverRule for PiRule {
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), " is a Π-binding operator")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is a Π-binding operator")
     }
 }
 impl std::fmt::Display for PiRule {

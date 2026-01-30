@@ -37,8 +37,17 @@ pub async fn get_log(
     archive: ArchiveId,
     rel_path: String,
     target: String,
-) -> Result<String, ServerFnError<String>> {
-    server::get_log(queue, archive, rel_path, target).await
+) -> Result<
+    either::Either<String, ftml_solver_trace::results::DocumentCheckResult>,
+    ServerFnError<String>,
+> {
+    let is_check = target == ftml_solver::CHECK.name;
+    let log = server::get_log(queue, archive, rel_path, target).await?;
+    if is_check {
+        let log = serde_json::from_str(&log).map_err(|e| e.to_string())?;
+        return Ok(either::Right(log));
+    }
+    Ok(either::Left(log))
 }
 
 #[server(prefix = "/api/buildqueue", endpoint = "migrate")]

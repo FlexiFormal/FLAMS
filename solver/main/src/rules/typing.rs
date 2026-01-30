@@ -1,5 +1,7 @@
-use std::{hint::unreachable_unchecked, ops::ControlFlow};
-
+use crate::{
+    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    split::SplitStrategy,
+};
 use ftml_ontology::{
     domain::declarations::symbols::Symbol,
     narrative::elements::VariableDeclaration,
@@ -8,25 +10,18 @@ use ftml_ontology::{
         Term, Variable,
     },
 };
-use ftml_uris::{FtmlUri, SymbolUri};
-
-use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
-    split::SplitStrategy,
-};
+use ftml_uris::SymbolUri;
+use std::{hint::unreachable_unchecked, ops::ControlFlow};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleTypeOperatorRule(pub SymbolUri);
+
 impl SizedSolverRule for SimpleTypeOperatorRule {
     fn priority(&self) -> isize {
         100_000
     }
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), " is a typing operator")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is a typing operator")
     }
 }
 impl std::fmt::Display for SimpleTypeOperatorRule {
@@ -53,7 +48,7 @@ impl SimpleTypeOperatorRule {
             )) && matches!(app.arguments.get(1),Some(Argument::Simple(_)))
         )
     }
-    /// Only safe to call iff self.is_app(&t)
+    /// Only safe to call iff `self.is_app(&t)`
     unsafe fn get_var(t: &Term) -> (Vec<Variable>, Term) {
         let Term::Application(a) = t else {
             unsafe { unreachable_unchecked() }
@@ -118,11 +113,8 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
     ) -> ControlFlow<Term, Term> {
-        let b = match t {
-            Term::Bound(b) => b,
-            _ => {
-                unreachable!("wut");
-            }
+        let Term::Bound(b) = t else {
+            unreachable!("wut");
         };
         let spec = head.either(|s| &s.data.arity, |v| &v.data.arity);
 
@@ -209,5 +201,20 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
             nargs,
             b.presentation.clone(),
         )))
+    }
+    fn applicable_revert(
+        &self,
+        _: &Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> bool {
+        false
+    }
+    fn revert(
+        &self,
+        _: &RuleSet<Split>,
+        t: Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> ControlFlow<Term, Term> {
+        ControlFlow::Continue(t)
     }
 }

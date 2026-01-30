@@ -227,7 +227,7 @@ mod server {
                 let AnyBackend::Sandbox(backend) = queue.backend() else {
                     unreachable!()
                 };
-                backend.require(&archive);
+                backend.require(&archive, true);
                 let path = backend.path_for(&archive);
                 if !path.exists() {
                     return Err(format!("Archive {archive} not found!"));

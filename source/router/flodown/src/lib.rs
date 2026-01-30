@@ -10,6 +10,7 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 pub mod math;
 mod module_picker;
 
+use flams_router_base::maybe_lazy;
 use flams_router_content::Views;
 use ftml_backend::{FtmlBackend, GlobalBackend};
 use ftml_dom::{FtmlViews, utils::css::CssExt};
@@ -20,17 +21,7 @@ use ftml_ontology::{
 use ftml_uris::{DocumentUri, Id, ModuleUri, SymbolUri};
 use leptos::prelude::*;
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct FloDownEditor;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for FloDownEditor {
-    fn data() -> Self {
-        Self
-    }
-    fn view(FloDownEditor: Self) -> AnyView {
-        flodown_editor()
-    }
-}
+maybe_lazy!(FloDownEditor = flodown_editor());
 
 //#[component]
 pub fn flodown_editor() -> AnyView {

@@ -7,6 +7,7 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
+use flams_router_base::maybe_lazy;
 use ftml_dom::utils::css::inject_css;
 pub use leptos::prelude::*;
 pub mod components;
@@ -42,14 +43,8 @@ impl VSCode {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct VSCWrap;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for VSCWrap {
-    fn data() -> Self {
-        Self
-    }
-    fn view(VSCWrap: Self) -> AnyView {
+maybe_lazy!(
+    VSCWrap = {
         use flams_router_login::components::LoginProvider;
         use leptos::either::EitherOf3;
         ftml_dom::global_setup(|| {
@@ -79,7 +74,7 @@ impl leptos_router::LazyRoute for VSCWrap {
         })
         .into_any()
     }
-}
+);
 
 #[component(transparent)]
 pub fn VSCodeWrap() -> impl IntoView {

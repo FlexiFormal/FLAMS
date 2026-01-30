@@ -39,7 +39,14 @@ pub fn hydrate() {
         .with(tracing_wasm::WASMLayer::default())
         .with(filter(tracing::Level::WARN))
         .init();
-    leptos::mount::hydrate_lazy(flams_router_dashboard::Main);
+    #[cfg(debug_assertions)]
+    {
+        leptos::mount::hydrate_body(flams_router_dashboard::Main);
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        leptos::mount::hydrate_lazy(flams_router_dashboard::Main);
+    }
 }
 
 #[cfg(any(doc, feature = "docs"))]

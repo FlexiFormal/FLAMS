@@ -13,12 +13,13 @@ ws = ["dep:axum"]
 ftml-ontology = { workspace = true }
 ftml-uris = { workspace = true, features = ["interned", "serde"] }
 
-flams-math-archives = { workspace = true }
+flams-math-archives = { workspace = true,features=["rdf"] }
 
 flams-system = { workspace = true, features = ["tokio", "zip"] }
 flams-ftml = { workspace = true }
 flams-utils = { workspace = true }
 flams-stex = { workspace = true }
+ftml-solver = {workspace = true}
 
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
@@ -32,6 +33,7 @@ parking_lot = { workspace = true }
 serde = { workspace = true }
 eyre = { workspace = true }
 serde_json = { workspace = true }
+either_of = { workspace = true }
 
 axum = { workspace = true, optional = true }
 lazy_static = { workspace = true }

@@ -9,7 +9,7 @@ use ftml_ontology::{
         ApplicationTerm, Argument, ArgumentMode, BindingTerm, BoundArgument, MaybeSequence, Term,
     },
 };
-use ftml_uris::{FtmlUri, SymbolUri};
+use ftml_uris::SymbolUri;
 use std::ops::ControlFlow;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,12 +18,8 @@ impl SizedSolverRule for PrenexRule {
     fn priority(&self) -> isize {
         10_000
     }
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is a prenex binder")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is a prenex binder")
     }
 }
 impl std::fmt::Display for PrenexRule {
@@ -186,5 +182,20 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
             }
             o => ControlFlow::Continue(o),
         }
+    }
+    fn applicable_revert(
+        &self,
+        _: &Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> bool {
+        false
+    }
+    fn revert(
+        &self,
+        _: &RuleSet<Split>,
+        t: Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> ControlFlow<Term, Term> {
+        ControlFlow::Continue(t)
     }
 }

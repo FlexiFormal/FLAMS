@@ -26,7 +26,7 @@ members = [
     "source/router/vscode-bindings",
     "source/router/flodown",
     #"experiments",
-    "source/ffi", "solver",
+    "source/ffi", "solver/main","solver/trace"
     #"maintest"
 ]
 resolver = "2"
@@ -115,6 +115,8 @@ flams-database = { path = "source/database", version = "0.0.1" }
 flams-lsp = { path = "source/lsp", version = "0.0.1" }
 flams-git = { path = "source/git", version = "0.0.1" }
 flams-web-utils = { path = "source/web-utils", version = "0.0.1" }
+ftml-solver = { path = "solver/main", version= "0.0.1"}
+ftml-solver-trace = { path = "solver/trace", version= "0.0.1"}
 
 flams-router-base = { path = "source/router/base", version = "0.0.1" }
 flams-router-dashboard = { path = "source/router/dashboard", version = "0.0.1" }
@@ -189,6 +191,7 @@ smallvec = { version = "2.0.0-alpha.10" }
 lazy_static = "1.5"
 url = "2"
 either = "1"
+either_of = "0.1"
 const_format = "0.2"
 paste = "1"
 urlencoding = "2.1"
@@ -251,7 +254,7 @@ oxrdfio = { version = "0.2" }                            #, features = ["async-t
 
 sqlx = { version = "0.8", features = ["sqlite", "macros", "runtime-tokio"] }
 libsqlite3-sys = { version = "*", features = ["bundled"] }
-html5ever = "0.35"                                                           # TODO update once html2text updates markup5ever dependency
+html5ever = "0.38"                                                           # TODO update once html2text updates markup5ever dependency
 
 async-lsp = { version = "0.2", features = ["tokio", "async-io"] }
 futures = { version = "0.3" }

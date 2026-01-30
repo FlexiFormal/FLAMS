@@ -1,7 +1,7 @@
 #![allow(clippy::must_use_candidate)]
 
 use flams_database::UserData;
-use flams_router_base::LoginState;
+use flams_router_base::{LoginState, maybe_lazy};
 use flams_web_utils::components::{Spinner, display_error};
 use leptos::{either::EitherOf4, prelude::*};
 
@@ -28,17 +28,7 @@ pub fn LoginProvider<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> imp
     children()
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Users;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for Users {
-    fn data() -> Self {
-        Self
-    }
-    fn view(Users: Self) -> AnyView {
-        users()
-    }
-}
+maybe_lazy!(Users = users());
 
 //#[component]
 pub fn users() -> AnyView {

@@ -9,6 +9,7 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 
 #[cfg(feature = "ssr")]
 use flams_router_base::LoginState;
+use flams_router_base::maybe_lazy;
 use flams_router_base::require_login;
 use flams_router_base::ws;
 use flams_utils::logs::{LogFileLine, LogLevel, LogMessage, LogTree};
@@ -39,17 +40,7 @@ async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
     Ok(tree)
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Logger;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for Logger {
-    fn data() -> Self {
-        Self
-    }
-    fn view(Logger: Self) -> AnyView {
-        logger()
-    }
-}
+maybe_lazy!(Logger = logger());
 
 //#[component]
 pub fn logger() -> AnyView {

@@ -1,0 +1,18 @@
+[package]
+name = "ftml-solver-trace"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+full = []
+colors=["dep:owo-colors","full"]
+
+[dependencies]
+ftml-uris = {workspace = true}
+ftml-ontology = {workspace = true}
+serde = {workspace = true}
+
+owo-colors = {version="4",features=["supports-colors"],optional=true}

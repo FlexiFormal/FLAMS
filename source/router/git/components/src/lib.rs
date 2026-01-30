@@ -8,6 +8,7 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
+use flams_router_base::maybe_lazy;
 use flams_router_buildqueue_base::select_queue;
 use flams_router_git_base::{
     GitState,
@@ -22,17 +23,7 @@ use leptos::{
 };
 use std::num::NonZeroU32;
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Archives;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for Archives {
-    fn data() -> Self {
-        Self
-    }
-    fn view(Archives: Self) -> AnyView {
-        archives()
-    }
-}
+maybe_lazy!(Archives = archives());
 
 //#[component]
 pub fn archives() -> AnyView {

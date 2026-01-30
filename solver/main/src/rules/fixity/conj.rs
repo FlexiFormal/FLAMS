@@ -1,26 +1,20 @@
-use std::ops::ControlFlow;
-
+use crate::{
+    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    split::SplitStrategy,
+};
 use ftml_ontology::{
     domain::declarations::symbols::Symbol,
     narrative::elements::VariableDeclaration,
     terms::{ApplicationTerm, Argument, MaybeSequence, Term},
 };
-use ftml_uris::{FtmlUri, SymbolUri};
-
-use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
-    split::SplitStrategy,
-};
+use ftml_uris::SymbolUri;
+use std::ops::ControlFlow;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IsConjunctionRule(pub SymbolUri);
 impl SizedSolverRule for IsConjunctionRule {
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is a conjunction")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, "is a conjunction")
     }
 }
 impl std::fmt::Display for IsConjunctionRule {
@@ -40,6 +34,22 @@ impl<Split: SplitStrategy> PreparationRule<Split> for IsConjunctionRule {
     ) -> ControlFlow<Term, Term> {
         ControlFlow::Continue(t)
     }
+
+    fn applicable_revert(
+        &self,
+        _: &Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> bool {
+        false
+    }
+    fn revert(
+        &self,
+        _: &RuleSet<Split>,
+        t: Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> ControlFlow<Term, Term> {
+        ControlFlow::Continue(t)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,12 +58,8 @@ impl SizedSolverRule for ConjunctiveRule {
     fn priority(&self) -> isize {
         10_000
     }
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is conjunctive")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is conjunctive")
     }
 }
 impl std::fmt::Display for ConjunctiveRule {
@@ -119,6 +125,22 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ConjunctiveRule {
         };
         ControlFlow::Continue(t)
     }
+
+    fn applicable_revert(
+        &self,
+        _: &Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> bool {
+        false
+    }
+    fn revert(
+        &self,
+        _: &RuleSet<Split>,
+        t: Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> ControlFlow<Term, Term> {
+        ControlFlow::Continue(t)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,12 +149,8 @@ impl SizedSolverRule for PairwiseConjunctiveRule {
     fn priority(&self) -> isize {
         10_000
     }
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), "is pairwise conjunctive")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is pairwise conjunctive")
     }
 }
 impl std::fmt::Display for PairwiseConjunctiveRule {
@@ -203,6 +221,21 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
                     .unwrap_unchecked()
             }
         };
+        ControlFlow::Continue(t)
+    }
+    fn applicable_revert(
+        &self,
+        _: &Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> bool {
+        false
+    }
+    fn revert(
+        &self,
+        _: &RuleSet<Split>,
+        t: Term,
+        _: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> ControlFlow<Term, Term> {
         ControlFlow::Continue(t)
     }
 }

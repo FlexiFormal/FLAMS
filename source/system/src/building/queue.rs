@@ -449,7 +449,7 @@ impl Queue {
     ) -> usize {
         self.maybe_restart();
         if let AnyBackend::Sandbox(b) = &self.0.backend {
-            b.require(id);
+            b.require(id, false);
         }
         self.0.backend.with_archive_or_group(id, |g| match g {
             None => 0,
@@ -541,7 +541,7 @@ impl Queue {
     ) -> usize {
         self.maybe_restart();
         if let AnyBackend::Sandbox(b) = &self.0.backend {
-            b.require(id);
+            b.require(id, true);
         }
         self.0.backend.with_archive(id, |archive| {
             let Some(archive) = archive else { return 0 };

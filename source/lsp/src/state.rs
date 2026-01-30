@@ -16,8 +16,21 @@ use flams_utils::{
     prelude::HMap,
     sourcerefs::{LSPLineCol, SourceRange},
 };
-use ftml_ontology::utils::RefTree;
-use ftml_uris::DocumentUri;
+use ftml_ontology::{
+    domain::{declarations::symbols::Symbol, modules::Module},
+    narrative::{
+        SharedDocumentElement,
+        documents::Document,
+        elements::{DocumentTerm, VariableDeclaration},
+    },
+    terms::TermContainer,
+    utils::RefTree,
+};
+use ftml_solver::results::{
+    CheckResult, ContentCheckResult, DocumentCheckResult, SymbolCheckResult, TypeCheckResult,
+};
+use ftml_uris::{DocumentElementUri, DocumentUri};
+use smallvec::SmallVec;
 
 use crate::{
     ClientExt, LSPStore, ProgressCallbackServer, annotations::to_diagnostic, documents::LSPDocument,
@@ -96,7 +109,7 @@ impl Into<lsp::Url> for UrlOrFile {
     fn into(self) -> lsp::Url {
         match self {
             Self::Url(u) => u,
-            Self::File(p) => lsp::Url::from_file_path(p).unwrap(),
+            Self::File(p) => lsp::Url::from_file_path(p).expect("this shouldn't happen"),
         }
     }
 }
@@ -250,7 +263,7 @@ impl LSPState {
                         )
                     }) {
                         Ok(FtmlResult {
-                            doc,
+                            doc: docresult,
                             ftml,
                             css,
                             body,
@@ -258,19 +271,46 @@ impl LSPState {
                             ..
                         }) => {
                             self.backend().add_html(
-                                doc.document.uri.clone(),
+                                docresult.document.uri.clone(),
                                 HTMLData {
                                     html: ftml,
                                     css,
                                     body,
                                     inner_offset: inner_offset as _,
-                                    refs: doc.data,
+                                    refs: docresult.data,
                                 },
                             );
-                            for m in doc.modules {
+                            let mut checker = ftml_solver::Checker::<
+                                ftml_solver::split::SingleThreadedSplit,
+                            >::new(AnyBackend::Temp(
+                                self.backend().clone(),
+                            ));
+                            let _ = checker.add_modules(docresult.modules);
+                            let (logs, mods) = checker.check_document(&docresult.document);
+                            let mut lock = doc.annotations.lock();
+                            lock.diagnostics
+                                .0
+                                .extend(check_diagnostics(&logs, (&docresult.document, &mods)));
+                            lock.check = Some(logs);
+                            if !lock.diagnostics.is_empty() {
+                                let _ = client.publish_diagnostics(lsp::PublishDiagnosticsParams {
+                                    uri: uri.clone().into(),
+                                    version: None,
+                                    diagnostics: lock
+                                        .diagnostics
+                                        .iter()
+                                        .map(to_diagnostic)
+                                        .collect(),
+                                });
+                            }
+                            drop(lock);
+
+                            for m in mods {
                                 self.backend().add_module(m);
                             }
-                            self.backend().add_document(doc.document);
+                            self.backend()
+                                .add_triples(&docresult.document.uri, docresult.triples);
+                            self.backend().add_document(docresult.document);
                             old.memorize(self.rustex());
                             Some(doc_uri)
                         }
@@ -547,5 +587,139 @@ impl OutputCont for ClientOutput {
     #[inline]
     fn as_any(self: Box<Self>) -> Box<dyn std::any::Any> {
         self
+    }
+}
+
+fn check_diagnostics(
+    res: &DocumentCheckResult,
+    src: (&Document, &[Module]),
+) -> impl Iterator<Item = STeXDiagnostic> {
+    use either_of::EitherOf4 as E;
+    res.checks.iter().flat_map(|cr| match cr {
+        CheckResult::Missing(u) => E::A(std::iter::once(STeXDiagnostic {
+            level: DiagnosticLevel::Error,
+            message: format!("Module {u} not found"),
+            range: SourceRange::default(),
+        })),
+        CheckResult::Variable(e, r) => {
+            let vd = src.0.get_as::<VariableDeclaration>(e.name());
+            if vd.is_none() {
+                tracing::error!("Variable {e} not found!");
+            }
+            E::B(symbol_check_result(
+                r,
+                e.name().as_ref(),
+                vd.as_ref().map(|v| &v.data.tp),
+                vd.as_ref().map(|v| &v.data.df),
+            ))
+        }
+        CheckResult::Term { uri, inferred, .. } => {
+            if inferred.is_some() {
+                E::C(std::iter::empty())
+            } else {
+                let term = src.0.get_as::<DocumentTerm>(uri.name());
+                if term.is_none() {
+                    tracing::error!("Term {uri} not found!");
+                }
+                let range = term.map(|t| conv_range(t.term.source)).unwrap_or_default();
+                E::A(std::iter::once(STeXDiagnostic {
+                    level: DiagnosticLevel::Info,
+                    message: format!("checking term {} failed", uri.name()),
+                    range,
+                }))
+            }
+        }
+        CheckResult::Module { checks, .. } => E::D(checks.iter().flat_map(|ccr| match ccr {
+            ContentCheckResult::Symbol(uri, res) => {
+                let sym = src
+                    .1
+                    .iter()
+                    .find(|m| m.uri == uri.module)
+                    .and_then(|m| m.get_as::<Symbol>(uri.name()));
+                if sym.is_none() {
+                    tracing::error!("Symbol {uri} not found!");
+                }
+                symbol_check_result(
+                    res,
+                    uri.name().as_ref(),
+                    sym.as_ref().map(|v| &v.data.tp),
+                    sym.as_ref().map(|v| &v.data.df),
+                )
+                .collect::<SmallVec<_, 1>>()
+                .into_iter()
+            }
+        })),
+    })
+}
+
+fn symbol_check_result(
+    result: &SymbolCheckResult,
+    name: &str,
+    tp: Option<&TermContainer>,
+    df: Option<&TermContainer>,
+) -> impl Iterator<Item = STeXDiagnostic> + use<> {
+    use either_of::Either::{Left as A, Right as B};
+    match result {
+        SymbolCheckResult::TypeOnly { result } => {
+            if result.success {
+                A(std::iter::empty())
+            } else {
+                let range = tp.map(|v| conv_range(v.source)).unwrap_or_default();
+                B(std::iter::once(STeXDiagnostic {
+                    level: DiagnosticLevel::Info,
+                    message: format!("checking type of {name} failed"),
+                    range,
+                }))
+            }
+        }
+        SymbolCheckResult::DefiniensOnly { inferred, .. } => {
+            if inferred.is_some() {
+                A(std::iter::empty())
+            } else {
+                let range = df.map(|v| conv_range(v.source)).unwrap_or_default();
+                B(std::iter::once(STeXDiagnostic {
+                    level: DiagnosticLevel::Info,
+                    message: format!("checking definiens of {name} failed ({range:?})"),
+                    range,
+                }))
+            }
+        }
+        SymbolCheckResult::Both { matches: None, .. } => {
+            let range = tp.map(|v| conv_range(v.source)).unwrap_or_default();
+            B(std::iter::once(STeXDiagnostic {
+                level: DiagnosticLevel::Info,
+                message: format!("checking type of {name} failed ({range:?})"),
+                range,
+            }))
+        }
+        SymbolCheckResult::Both {
+            matches: Some(matches),
+            ..
+        } => {
+            if matches.success {
+                return A(std::iter::empty());
+            }
+            let df_range = df.map(|v| conv_range(v.source)).unwrap_or_default();
+            B(std::iter::once(STeXDiagnostic {
+                level: DiagnosticLevel::Info,
+                message: format!("checking definiens of {name} failed"),
+                range: df_range,
+            }))
+        }
+    }
+}
+
+const fn conv_range(
+    ftml_ontology::utils::SourceRange { start, end }: ftml_ontology::utils::SourceRange,
+) -> SourceRange<LSPLineCol> {
+    SourceRange {
+        start: LSPLineCol {
+            line: start.line,
+            col: start.col,
+        },
+        end: LSPLineCol {
+            line: end.line,
+            col: end.col,
+        },
     }
 }

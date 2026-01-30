@@ -4,17 +4,13 @@ use crate::{
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{Argument, Term};
-use ftml_uris::{FtmlUri, SymbolUri};
+use ftml_uris::SymbolUri;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleInhabitableRule(pub SymbolUri, pub u8);
 impl SizedSolverRule for SimpleInhabitableRule {
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), " is inhabitable")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is inhabitable")
     }
 }
 
@@ -52,7 +48,7 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleInhabitableRule {
                         return Some(false);
                     }
                 }
-                _ => return None,
+                Argument::Sequence(_) => return None,
             }
         }
         Some(true)
@@ -61,13 +57,10 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleInhabitableRule {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleUniverseRule(pub SymbolUri);
+
 impl SizedSolverRule for SimpleUniverseRule {
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), " is a universe")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is a universe")
     }
 }
 impl std::fmt::Display for SimpleUniverseRule {
@@ -94,13 +87,10 @@ impl<Split: SplitStrategy> UniverseRule<Split> for SimpleUniverseRule {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyRule(pub SymbolUri);
+
 impl SizedSolverRule for AnyRule {
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(displayer, f, self.0.as_uri(), " is any-type")
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is any-type")
     }
 }
 

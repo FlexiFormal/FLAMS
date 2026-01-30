@@ -14,6 +14,32 @@ pub use login_state::*;
 pub mod uris;
 pub mod ws;
 
+#[macro_export]
+macro_rules! maybe_lazy {
+    ($t:path) => {{
+        #[cfg(debug_assertions)]
+        {$t}
+        #[cfg(not(debug_assertions))]
+        {leptos_router::Lazy::<$t>::new()}
+    }};
+    ($name:ident = $e:expr) => {
+        #[cfg(debug_assertions)]
+        #[component]
+        pub fn $name() -> AnyView { $e }
+        #[cfg(not(debug_assertions))]
+        #[derive(Debug,Clone,serde::Deserialize)]
+        pub struct $name;
+        #[cfg(not(debug_assertions))]
+        #[leptos_router::lazy_route]
+        impl leptos_router::LazyRoute for $name {
+            fn data() -> Self {
+                Self
+            }
+            fn view($name:Self) -> leptos::prelude::AnyView { $e }
+        }
+    }
+}
+
 use leptos::{either::EitherOf3, prelude::*};
 
 pub fn vscode_link(archive: &ftml_uris::ArchiveId, rel_path: &str) -> impl IntoView + use<> {
@@ -28,9 +54,7 @@ pub fn RequireLogin(children: Children) -> impl IntoView {
     require_login(children)
 }
 
-pub fn require_login(
-    children: Children,
-) -> AnyView {
+pub fn require_login(children: Children) -> AnyView {
     use flams_web_utils::components::{Spinner, display_error};
 
     let children = std::sync::Arc::new(flams_utils::parking_lot::Mutex::new(Some(children)));
@@ -40,7 +64,8 @@ pub fn require_login(
             (children.clone().lock().take()).map(|f| f()).into_any()
         }
         _ => view!(<div>{display_error("Not logged in".into())}</div>).into_any(),
-    }).into_any()
+    })
+    .into_any()
 }
 
 #[cfg(feature = "ssr")]

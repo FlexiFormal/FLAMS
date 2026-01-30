@@ -136,6 +136,8 @@ pub enum ArtifactSaveError {
     Encode(#[from] bincode::error::EncodeError),
     #[error("archive not found")]
     NoArchive,
+    #[error("error: {0}")]
+    Other(std::borrow::Cow<'static, str>),
 }
 
 #[derive(Debug, thiserror::Error)]

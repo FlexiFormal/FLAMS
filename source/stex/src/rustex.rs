@@ -258,7 +258,7 @@ impl RusTeX {
         };
         let settings = RTSettings {
             verbose: false,
-            sourcerefs: false,
+            sourcerefs: true,
             log: true,
             insert_font_info: false,
             image_options: ImageOptions::AsIs,

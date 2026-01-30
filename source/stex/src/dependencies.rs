@@ -11,8 +11,9 @@ use crate::{
 };
 use either::Either;
 use flams_math_archives::backend::AnyBackend;
-use flams_math_archives::formats::{BuildSpec, BuildTargetId, TaskDependency, TaskRef, CHECK};
+use flams_math_archives::formats::{BuildSpec, BuildTargetId, TaskDependency, TaskRef};
 use flams_utils::{parsing::ParseStr, sourcerefs::SourceRange};
+use ftml_solver::CHECK;
 use ftml_uris::{ArchiveId, DocumentUri, Language, UriWithArchive};
 use std::path::Path;
 

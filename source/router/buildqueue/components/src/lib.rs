@@ -8,8 +8,9 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
-use flams_router_base::ws;
 use flams_router_base::{LoginState, require_login, ws::WebSocket};
+use flams_router_base::{maybe_lazy, ws};
+use flams_router_buildqueue_base::checklog::{DocumentCheckResult, ResultExt};
 #[cfg(feature = "hydrate")]
 use flams_router_buildqueue_base::server_fns::get_log;
 use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
@@ -18,7 +19,7 @@ use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_dom::utils::css::inject_css;
 use ftml_ontology::utils::time::{Delta, Eta};
-use ftml_uris::ArchiveId;
+use ftml_uris::{ArchiveId, DocumentUri};
 use leptos::{either::EitherOf4, prelude::*};
 use leptos_router::hooks::use_params_map;
 use std::num::NonZeroU32;
@@ -127,7 +128,6 @@ impl TaskState {
     #[cfg(feature = "hydrate")]
     fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> AnyView {
         use flams_web_utils::components::{Header, LazyCollapsible};
-        use thaw::Scrollbar;
         match self {
             Self::Running => view! {<i style="color:yellow">{t}" (Running)"</i>}.into_any(),
             Self::Queued | Self::Blocked | Self::None => {
@@ -147,15 +147,12 @@ impl TaskState {
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
                       require_login(Box::new(move || wait_and_then_fn(
                           move || get_log(queue,archive.clone(),rel_path.clone(),tc.clone()),
-                          |s| {
-                            view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                            </Scrollbar>}.into_any()
-                            }
+                          |s| do_log(s)
                       )))
                     }
                   </LazyCollapsible>
-                }.into_any()
+                }
+                .into_any()
             }
             Self::Failed => {
                 let archive = archive.clone();
@@ -170,19 +167,29 @@ impl TaskState {
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
                       require_login(Box::new(move || wait_and_then_fn(
-                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
-                          |s| {
-                                view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                                    <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                                </Scrollbar>}
-                            }.into_any()
+                          move || get_log(queue,archive.clone(),rel_path.clone(),tc.clone()),
+                          do_log
                       )))
                     }
                   </LazyCollapsible>
-                }.into_any()
+                }
+                .into_any()
             }
         }
     }
+}
+
+fn do_log(s: either::Either<String, DocumentCheckResult>) -> AnyView {
+    use thaw::Scrollbar;
+    view! {<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">{
+        match s {
+            either::Left(s) => leptos::either::Either::Left(view!{
+                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+            }),
+            either::Right(v) => leptos::either::Either::Right(v.render())
+        }
+    }</Scrollbar>}
+    .into_any()
 }
 
 #[cfg(feature = "ssr")]
@@ -272,17 +279,7 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
 
 // ----------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct QueuesTop;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for QueuesTop {
-    fn data() -> Self {
-        Self
-    }
-    fn view(QueuesTop: Self) -> AnyView {
-        queues_top()
-    }
-}
+maybe_lazy!(QueuesTop = queues_top());
 
 //#[component]
 pub fn queues_top() -> AnyView {

@@ -42,7 +42,8 @@ source_format!(STEX {
         PDFLATEX_FIRST.id(),
         PDFLATEX.id(),
         RUSTEX.id(),
-        FTML_CONTENT.id()
+        FTML_CONTENT.id(),
+        ftml_solver::CHECK.id()
     ],
     file_extensions: &["tex", "ltx"],
     dependencies: dependencies::get_deps

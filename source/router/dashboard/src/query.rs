@@ -1,3 +1,4 @@
+use flams_router_base::maybe_lazy;
 use ftml_dom::utils::css::inject_css;
 use leptos::prelude::*;
 
@@ -41,17 +42,7 @@ const QUERY: &str = r"SELECT ?x ?y WHERE {
   ?y ulo:notation-for ?x.
 }";
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Query;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for Query {
-    fn data() -> Self {
-        Self
-    }
-    fn view(Query: Self) -> AnyView {
-        query()
-    }
-}
+maybe_lazy!(Query = query());
 
 fn query() -> AnyView {
     use leptos::form::ActionForm;

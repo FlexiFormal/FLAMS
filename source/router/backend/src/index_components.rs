@@ -1,4 +1,5 @@
 use flams_backend_types::archive_json::{ArchiveIndex, Institution};
+use flams_router_base::maybe_lazy;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_dom::utils::css::inject_css;
 use ftml_uris::DocumentUri;
@@ -8,17 +9,7 @@ use thaw::{
     CardPreview, Scrollbar,
 };
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Index;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for Index {
-    fn data() -> Self {
-        Self
-    }
-    fn view(Index: Self) -> AnyView {
-        index()
-    }
-}
+maybe_lazy!(Index = index());
 
 //#[component]
 pub fn index() -> AnyView {

@@ -1,6 +1,6 @@
 use crate::FileStates;
 use flams_backend_types::archives::{ArchiveData, ArchiveGroupData, DirectoryData, FileData};
-use flams_router_base::LoginState;
+use flams_router_base::{LoginState, maybe_lazy};
 use flams_router_buildqueue_base::{FormatOrTarget, select_queue, server_fns::enqueue};
 use flams_utils::unwrap;
 use flams_web_utils::components::{
@@ -12,17 +12,7 @@ use ftml_uris::ArchiveId;
 use leptos::prelude::*;
 use std::num::NonZeroU32;
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct ArchivesTop;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for ArchivesTop {
-    fn data() -> Self {
-        Self
-    }
-    fn view(ArchivesTop: Self) -> AnyView {
-        archives_top()
-    }
-}
+maybe_lazy!(ArchivesTop = archives_top());
 
 //#[component]
 pub fn archives_top() -> AnyView {

@@ -2,6 +2,7 @@ use std::fmt::Write;
 
 use crate::components::SearchState;
 use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
+use flams_router_base::maybe_lazy;
 use flams_router_vscode::{
     VSCode,
     components::{VSCodeButton, VSCodeCheckbox, VSCodeRadio, VSCodeRadioGroup, VSCodeTextbox},
@@ -17,17 +18,7 @@ use ftml_uris::{
 };
 use leptos::prelude::*;
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct VSCSearch;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for VSCSearch {
-    fn data() -> Self {
-        Self
-    }
-    fn view(this: Self) -> AnyView {
-        vscode_search()
-    }
-}
+maybe_lazy!(VSCSearch = vscode_search());
 
 pub fn vscode_search() -> AnyView {
     // make sure this runs client side rather than server side because of hydration errors

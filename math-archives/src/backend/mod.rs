@@ -330,6 +330,17 @@ impl AnyBackend {
             ),
         }
     }
+
+    #[cfg(feature = "rdf")]
+    pub fn add_triples(&self, doc: &DocumentUri, triples: Vec<ulo::rdf_types::Triple>) {
+        use ftml_uris::FtmlUri;
+        if matches!(*self, Self::Global) {
+            GlobalBackend
+                .get()
+                .triple_store()
+                .add_graph(&doc.to_iri(), triples.into_iter());
+        }
+    }
 }
 
 impl LocalBackend for AnyBackend {

@@ -1,4 +1,5 @@
 use flams_backend_types::search::{SearchResult, SearchResultKind};
+use flams_router_base::maybe_lazy;
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::components::error_with_toaster;
 use ftml_components::components::content::FtmlViewable;
@@ -76,18 +77,7 @@ impl Filter {
         }
     }
 }
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct SearchTop;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for SearchTop {
-    fn data() -> Self {
-        Self
-    }
-    fn view(SearchTop: Self) -> AnyView {
-        search_top()
-    }
-}
+maybe_lazy!(SearchTop = search_top());
 
 pub fn search_top() -> AnyView {
     use flams_web_utils::components::ClientOnly;

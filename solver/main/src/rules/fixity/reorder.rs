@@ -8,7 +8,7 @@ use ftml_ontology::{
     terms::{ApplicationTerm, BindingTerm, Term},
     utils::Permutation,
 };
-use ftml_uris::{FtmlUri, SymbolUri};
+use ftml_uris::SymbolUri;
 use std::ops::ControlFlow;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,15 +20,9 @@ impl SizedSolverRule for ReorderRule {
     fn priority(&self) -> isize {
         100
     }
-    fn display(
-        &self,
-        displayer: &dyn crate::trace::TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        crate::trace!(
-            displayer,
-            f,
-            self.symbol.as_uri(),
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(
+            &self.symbol,
             format!("reorders argument {:?}", self.reorder)
         )
     }
@@ -76,6 +70,43 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
                 unsafe {
                     debug_assert_eq!(app.arguments.len(), self.reorder.len());
                     self.reorder.apply_unchecked(&app.arguments)
+                }
+                .into_boxed_slice(),
+                app.presentation.clone(),
+            )),
+            t => t,
+        })
+    }
+    fn applicable_revert(
+        &self,
+        t: &Term,
+        head: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> bool {
+        <Self as PreparationRule<Split>>::applicable(self, t, head)
+    }
+    fn revert(
+        &self,
+        rules: &RuleSet<Split>,
+        t: Term,
+        head: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> ControlFlow<Term, Term> {
+        ControlFlow::Continue(match t {
+            Term::Application(app) => Term::Application(ApplicationTerm::new(
+                app.head.clone(),
+                // SAFETY: applicable checks `arguments.len() == self.reorder.len()`
+                unsafe {
+                    debug_assert_eq!(app.arguments.len(), self.reorder.len());
+                    self.reorder.revert_unchecked(&app.arguments)
+                }
+                .into_boxed_slice(),
+                app.presentation.clone(),
+            )),
+            Term::Bound(app) => Term::Bound(BindingTerm::new(
+                app.head.clone(),
+                // SAFETY: applicable checks `arguments.len() == self.reorder.len()`
+                unsafe {
+                    debug_assert_eq!(app.arguments.len(), self.reorder.len());
+                    self.reorder.revert_unchecked(&app.arguments)
                 }
                 .into_boxed_slice(),
                 app.presentation.clone(),

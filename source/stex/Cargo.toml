@@ -14,6 +14,7 @@ ftml-uris = { workspace = true }
 flams-ftml = { workspace = true }
 flams-system = { workspace = true }
 flams-utils = { workspace = true, features = ["serde"] }
+ftml-solver = {workspace = true}
 
 flams-math-archives = { workspace = true }
 

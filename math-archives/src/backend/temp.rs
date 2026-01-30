@@ -66,6 +66,12 @@ impl TemporaryBackend {
     pub fn add_html(&self, uri: DocumentUri, d: HTMLData) {
         self.inner.html.insert(uri, d);
     }
+
+    #[cfg(feature = "rdf")]
+    #[inline]
+    pub fn add_triples(&self, doc: &DocumentUri, triples: Vec<ulo::rdf_types::Triple>) {
+        self.inner.parent.add_triples(doc, triples);
+    }
 }
 
 impl LocalBackend for TemporaryBackend {

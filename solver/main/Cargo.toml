@@ -1,6 +1,6 @@
 [package]
-name = "solver"
-version = "0.1.0"
+name = "ftml-solver"
+version = "0.0.1"
 edition = "2024"
 
 [lints]
@@ -10,6 +10,7 @@ workspace = true
 flams-math-archives = {workspace=true}
 ftml-uris = {workspace = true}
 ftml-ontology = {workspace = true}
+ftml-solver-trace = {workspace = true,features=["colors"]}
 rayon = {workspace = true}
 parking_lot = {workspace = true}
 smallvec = {workspace = true}
@@ -18,9 +19,11 @@ dashmap = {workspace = true}
 either = {workspace = true}
 tracing = {workspace = true}
 paste = {workspace = true}
+serde = {workspace = true}
+serde_json = {workspace = true}
+inventory = {workspace = true}
 
 #anstyle = "1"
-owo-colors = {version="4",features=["supports-colors"]}
 enable-ansi-support = {version="0.3"}
 
 tracing-subscriber = {workspace = true}

@@ -42,6 +42,7 @@ pub mod server_fns {
 }
 
 pub use flams_router_base::LoginState;
+use flams_router_base::maybe_lazy;
 use ftml_dom::FtmlViews;
 use leptos::{
     either::{Either, EitherOf4},
@@ -68,44 +69,44 @@ pub fn Main() -> AnyView {
                 <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
                     <ParentRoute path=path!("/dashboard") view=Dashboard>
                         <ParentRoute path=path!("mathhub") view={|| main_page(Page::MathHub)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_router_backend::components::ArchivesTop>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_backend::components::ArchivesTop)}/>
                         </ParentRoute>
                         //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
                         <ParentRoute path=path!("log") view={|| main_page(Page::Log)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_router_logging::Logger>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_logging::Logger)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("queue") view={|| main_page(Page::Queue)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_router_buildqueue_components::QueuesTop>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_buildqueue_components::QueuesTop)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("settings") view={|| main_page(Page::Settings)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<settings::Settings>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(settings::Settings)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("query") view={|| main_page(Page::Query)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<query::Query>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(query::Query)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("archives") view={|| main_page(Page::MyArchives)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_router_git_components::Archives>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_git_components::Archives)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("users") view={|| main_page(Page::Users)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_router_login::components::Users>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_login::components::Users)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("search") view={|| main_page(Page::Search)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_router_search::components::SearchTop>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_search::components::SearchTop)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("flodown") view={|| main_page(Page::FloDown)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_flodown::FloDownEditor>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_flodown::FloDownEditor)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("") view={|| main_page(Page::Home)}>
-                            <Route path=path!("") view={leptos_router::Lazy::<flams_router_backend::index_components::Index>::new()}/>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_backend::index_components::Index)}/>
                         </ParentRoute>
                         <ParentRoute path=path!("*any") view={|| main_page(Page::NotFound)}>
                             <Route path=path!("") view=||view!(<NotFound/>)/>
                         </ParentRoute>
                     </ParentRoute>
-                    <ParentRoute path=path!("/vscode") view={leptos_router::Lazy::<flams_router_vscode::VSCWrap>::new()}>// flams_router_vscode::VSCodeWrap>
-                        <Route path=path!("search") view={leptos_router::Lazy::<flams_router_search::vscode::VSCSearch>::new()}/>//flams_router_search::vscode::vscode_search/>
+                    <ParentRoute path=path!("/vscode") view={maybe_lazy!(flams_router_vscode::VSCWrap)}>// flams_router_vscode::VSCodeWrap>
+                        <Route path=path!("search") view={maybe_lazy!(flams_router_search::vscode::VSCSearch)}/>//flams_router_search::vscode::vscode_search/>
                     </ParentRoute>
-                    <Route path=path!("/document") view={leptos_router::Lazy::<flams_router_content::components::TopDocRouter>::new()}/*{move || {
+                    <Route path=path!("/document") view={maybe_lazy!(flams_router_content::components::TopDocRouter)}/*{move || {
                         use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
                         let params = use_query_map().get_untracked();
                         if let Some(p) = params.get_str("uri") {
@@ -117,7 +118,7 @@ pub fn Main() -> AnyView {
                             view! { <Redirect path="/dashboard"/> }.into_any()
                         }
                     }.into_any()}*//>
-                    <Route path=path!("/") view={leptos_router::Lazy::<flams_router_content::components::UriTopRouter>::new()}/*{move || if has_params.get() {
+                    <Route path=path!("/") view={maybe_lazy!(flams_router_content::components::UriTopRouter)}/*{move || if has_params.get() {
                             view! { <flams_router_content::components::URITop/> }.into_any()
                         } else {
                             view! { <Redirect path="/dashboard"/> }.into_any()

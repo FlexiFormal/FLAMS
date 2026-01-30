@@ -488,6 +488,9 @@ impl Artifact for IndexFile {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self as _
     }
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self as _
+    }
 
     #[cfg(all(not(feature = "tantivy"), feature = "vectorsearch"))]
     fn kind(&self) -> &'static str {

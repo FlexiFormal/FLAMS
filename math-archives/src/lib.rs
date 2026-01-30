@@ -23,7 +23,7 @@ pub use flams_backend_types as types;
 #[cfg(feature = "rdf")]
 use crate::triple_store::RDFStore;
 use crate::{
-    artifacts::{Artifact, ContentResult, FileOrString},
+    artifacts::{Artifact, ContentResult, ContentUpdate, FileOrString},
     formats::{BuildTargetId, SourceFormatId},
     manifest::RepositoryData,
     source_files::{FileStates, SourceDir},
@@ -257,6 +257,10 @@ pub trait BuildableArchive: MathArchive {
         load: bool,
         iter: Vec<ulo::rdf_types::Triple>,
     );
+
+    fn escape_module_name(&self, in_path: &Path, name: &str) -> PathBuf {
+        in_path.join(name.replace('*', "__AST__"))
+    }
 }
 
 pub trait LocallyBuilt: BuildableArchive {
@@ -279,6 +283,26 @@ pub trait LocallyBuilt: BuildableArchive {
     ) -> PathBuf {
         self.out_path_of(path, doc_name, rel_path, language)
             .join("content")
+    }
+
+    fn save_modules(&self, modules: &[Module]) -> std::result::Result<(), ArtifactSaveError> {
+        for m in modules {
+            let path = m.uri.path();
+            let name = m.uri.module_name();
+            let out = path.map_or_else(
+                || self.out_dir().join(".modules"),
+                |n| self.out_dir().join_uri_path(n).join(".modules"),
+            );
+            std::fs::create_dir_all(&out)
+                .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out.clone(), e)))?;
+            let out = self.escape_module_name(&out, name.as_ref());
+            let file = std::fs::File::create(&out)
+                .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out, e)))?;
+            let mut buf = std::io::BufWriter::new(file);
+            bincode::encode_into_std_write(m, &mut buf, bincode::config::standard())?;
+            //postcard::to_io(m, &mut buf)?;
+        }
+        Ok(())
     }
 }
 
@@ -317,7 +341,7 @@ impl MathArchive for LocalArchive {
             || self.out_dir().join(".modules"),
             |n| self.out_dir().join_uri_path(n).join(".modules"),
         );
-        let out = Self::escape_module_name(&out, name);
+        let out = self.escape_module_name(&out, name);
         if !out.exists() {
             return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
         }
@@ -338,7 +362,7 @@ impl MathArchive for LocalArchive {
             || self.out_dir().join(".modules"),
             |n| self.out_dir().join_uri_path(n).join(".modules"),
         );
-        let out = Self::escape_module_name(&out, name);
+        let out = self.escape_module_name(&out, name);
         A::block_on(move || {
             if !out.exists() {
                 return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
@@ -399,6 +423,24 @@ impl BuildableArchive for LocalArchive {
         }
         let Some(mut res) = result else { return Ok(()) };
         let outfile = out.join(res.kind());
+        if res.as_any_mut().downcast_mut::<ContentUpdate>().is_some() {
+            // SAFETY: downcast_mut just succeeded
+            let e = unsafe {
+                res.into_any()
+                    .downcast::<ContentUpdate>()
+                    .unwrap_unchecked()
+            };
+            if let Some(d) = e.document {
+                let mut cr = ContentResult::read(outfile.clone())?;
+                //println!("Parsed result: {cr:#?}");
+                cr.document = d;
+                cr.write(&outfile)?;
+            }
+            if !e.modules.is_empty() {
+                self.save_modules(&e.modules)?;
+            }
+            return Ok(());
+        }
         res.write(&outfile)?;
         if let Some(e) = res.as_any_mut().downcast_mut::<ContentResult>() {
             #[cfg(feature = "rdf")]
@@ -409,22 +451,7 @@ impl BuildableArchive for LocalArchive {
                 load,
                 std::mem::take(&mut e.triples),
             );
-            for m in &e.modules {
-                let path = m.uri.path();
-                let name = m.uri.module_name();
-                let out = path.map_or_else(
-                    || self.out_dir().join(".modules"),
-                    |n| self.out_dir().join_uri_path(n).join(".modules"),
-                );
-                std::fs::create_dir_all(&out)
-                    .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out.clone(), e)))?;
-                let out = Self::escape_module_name(&out, name.as_ref());
-                let file = std::fs::File::create(&out)
-                    .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out, e)))?;
-                let mut buf = std::io::BufWriter::new(file);
-                bincode::encode_into_std_write(m, &mut buf, bincode::config::standard())?;
-                //postcard::to_io(m, &mut buf)?;
-            }
+            self.save_modules(&e.modules)?;
         }
         Ok(())
     }
@@ -444,6 +471,7 @@ impl BuildableArchive for LocalArchive {
         let out = out.join("index.ttl");
         relational.export(iter.into_iter(), &out, in_doc);
         if load {
+            //println!("Loading newly saved rdf triples");
             relational.load(&out, in_doc.to_iri());
         }
     }
@@ -510,10 +538,6 @@ impl LocalArchive {
 
     pub fn state_summary(&self) -> FileStateSummary {
         self.file_state.read().state().summarize()
-    }
-
-    fn escape_module_name(in_path: &Path, name: &str) -> PathBuf {
-        in_path.join(name.replace('*', "__AST__"))
     }
 
     #[must_use]

@@ -4,12 +4,9 @@ pub mod fixity;
 pub mod pi;
 pub mod typing;
 pub mod universe;
+pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
 
-use crate::{
-    CheckRef,
-    split::SplitStrategy,
-    trace::{CheckTraceDisplayable, TraceDisplay},
-};
+use crate::{CheckRef, split::SplitStrategy};
 use ftml_ontology::{
     domain::declarations::symbols::Symbol, narrative::elements::VariableDeclaration, terms::Term,
 };
@@ -90,70 +87,6 @@ rules! {
     preparation = PreparationRule,
 }
 
-pub trait CheckerRule:
-    std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any + CheckTraceDisplayable
-{
-    fn priority(&self) -> isize {
-        0
-    }
-    fn as_box_dyn(&self) -> Box<dyn CheckerRule>;
-    fn as_dyn(&self) -> &dyn CheckerRule;
-    fn as_any(&self) -> &dyn std::any::Any;
-    fn eq(&self, o: &dyn CheckerRule) -> bool;
-    //fn display(self: Box<Self>) -> RefCheckLog<'static>;
-}
-
-pub trait SizedSolverRule:
-    std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any + Clone + Sized + PartialEq + Eq
-{
-    fn priority(&self) -> isize {
-        0
-    }
-    fn display(
-        &self,
-        displayer: &dyn TraceDisplay,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result;
-    //fn display(self: Box<Self>) -> RefCheckLog<'static>;
-}
-impl<T: SizedSolverRule> CheckTraceDisplayable for T {
-    fn display(
-        &self,
-        displayer: &dyn TraceDisplay,
-        _: Option<crate::trace::MessageLevel>,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        T::display(self, displayer, f)
-    }
-}
-impl<T: SizedSolverRule> CheckerRule for T {
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
-    fn priority(&self) -> isize {
-        <Self as SizedSolverRule>::priority(self)
-    }
-    /*
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
-    fn display(self: Box<Self>) -> RefCheckLog<'static> {
-        <Self as SizedSolverRule>::display(self)
-    }
-     */
-
-    fn as_box_dyn(&self) -> Box<dyn CheckerRule> {
-        Box::new(self.clone()) as _
-    }
-    fn as_dyn(&self) -> &dyn CheckerRule {
-        self as _
-    }
-    fn as_any(&self) -> &dyn std::any::Any {
-        self as _
-    }
-    fn eq(&self, o: &dyn CheckerRule) -> bool {
-        o.as_any().downcast_ref::<T>().is_some_and(|v| v == self)
-    }
-}
-
 pub trait EqualityRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, lhs: &Term, rhs: &Term) -> bool;
     fn apply<'t>(
@@ -202,6 +135,17 @@ pub trait SubtypeRule<Split: SplitStrategy>: CheckerRule {
 pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool;
     fn apply(
+        &self,
+        rules: &RuleSet<Split>,
+        t: Term,
+        head: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> ControlFlow<Term, Term>;
+    fn applicable_revert(
+        &self,
+        t: &Term,
+        head: either::Either<&Symbol, &VariableDeclaration>,
+    ) -> bool;
+    fn revert(
         &self,
         rules: &RuleSet<Split>,
         t: Term,

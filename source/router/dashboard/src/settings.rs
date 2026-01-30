@@ -1,5 +1,5 @@
 use flams_backend_types::ManagerCacheSize;
-use flams_router_base::require_login;
+use flams_router_base::{maybe_lazy, require_login};
 use flams_utils::settings::SettingsSpec;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_dom::utils::css::inject_css;
@@ -96,17 +96,7 @@ pub async fn reload() -> Result<(), ServerFnError<String>> {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Settings;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for Settings {
-    fn data() -> Self {
-        Self
-    }
-    fn view(Settings: Self) -> AnyView {
-        settings()
-    }
-}
+maybe_lazy!(Settings = settings());
 
 //#[component]
 fn settings() -> AnyView {

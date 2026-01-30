@@ -2,7 +2,7 @@ pub mod sparql;
 
 use ftml_uris::{ArchiveUri, DocumentUri, FtmlUri, Language, SymbolUri, UriPath, UriWithPath};
 use std::{path::Path, str::FromStr};
-use ulo::rdf_types::{Quad, Triple};
+use ulo::rdf_types::{GraphNameRef, Quad, Triple};
 
 use crate::{
     Archive, LocallyBuilt, MathArchive,
@@ -51,6 +51,21 @@ impl RDFStore {
         let mut loader = self.store.bulk_loader();
         let _ = loader.load_quads(iter);
         let _ = loader.commit();
+    }
+
+    pub fn add_graph<'a>(
+        &self,
+        graph: impl Into<GraphNameRef<'a>>,
+        triples: impl Iterator<Item = Triple>,
+    ) {
+        let graph = graph.into();
+        let _ = self.store.clear_graph(graph);
+        self.add_quads(triples.map(|t| Quad {
+            subject: t.subject,
+            predicate: t.predicate,
+            object: t.object,
+            graph_name: graph.into_owned(),
+        }));
     }
 
     #[must_use]
@@ -150,12 +165,15 @@ impl RDFStore {
             tracing::error!("Failed to open file {}", path.display());
             return;
         };
+        let _ = self.store.clear_graph(&graph);
+
         let buf = std::io::BufReader::new(file);
         let mut loader = self.store.bulk_loader();
         let reader = oxigraph::io::RdfParser::from_format(oxigraph::io::RdfFormat::Turtle)
             .with_default_graph(graph)
             .for_reader(buf);
         let _ = loader.load_quads(reader.filter_map(Result::ok));
+        //println!("commiting new triples");
         let _ = loader.commit();
     }
 

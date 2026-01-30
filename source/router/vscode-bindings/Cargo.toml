@@ -35,6 +35,7 @@ ftml-dom = { workspace = true }
 
 flams-web-utils = { workspace = true }
 flams-router-login = { workspace = true }
+flams-router-base = {workspace = true}
 flams-router-content = { workspace = true }
 flams-utils = { workspace = true }
 flams-system = { workspace = true, optional = true }

@@ -22,6 +22,16 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         r
     }
 
+    pub(crate) fn revert_prepare(&self, t: Term) -> Term {
+        tracing::trace!("reverting preparation {:?}", t.debug_short());
+        let mut cp = self.copied();
+        let mut ncp = cp.get_ref();
+        let old = std::mem::replace(ncp.context.0, SmallVec::new());
+        let r = ncp.revert_i(t);
+        *ncp.context.0 = old;
+        r
+    }
+
     pub(crate) fn bind_implicits(&mut self, nt: Term) -> Term {
         let allvars = nt
             .free_variables()
@@ -115,55 +125,97 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
         }
         // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(unsafe { t.assume_init() })
+        self.prepare_recurse(unsafe { t.assume_init() }, |s, t| s.prepare_i(t))
     }
 
-    fn prepare_recurse(&mut self, term: Term) -> Term {
+    fn revert_i(&mut self, t: Term) -> Term {
+        match &t {
+            Term::Symbol { .. } | Term::Var { .. } => return t,
+            _ => (),
+        }
+        let Some(head) = self.get_head(&t) else {
+            return t;
+        };
+        let head = head.as_ref().map_either(|v| &**v, |v| &**v);
+        tracing::trace!("Head: {:?}", head);
+
+        // this may very much be overkill, but it's nice to do things without cloning,
+        // and terms are composed of potentially multiple Arcs :)
+        let mut t = MaybeUninit::new(t);
+
+        let rules = self.top.rules.preparation();
+        tracing::trace!("Rules: {rules:#?}");
+
+        for rl in self.top.rules.preparation().iter().rev() {
+            tracing::trace!("Rule {rl:?}?");
+            // SAFETY: not yet replaced
+            if !rl.applicable_revert(unsafe { t.assume_init_ref() }, head) {
+                continue;
+            }
+            // SAFETY: not yet replaced
+            let tm = unsafe { t.assume_init_read() };
+            match rl.revert(&self.top.rules, tm, head) {
+                //                                 MaybeUninit doesn't drop the inner value,
+                //                                 vvvvvvvvv  so this is fine
+                std::ops::ControlFlow::Break(t) => return t,
+                std::ops::ControlFlow::Continue(tm) => {
+                    // t is initialized again
+                    t.write(tm);
+                }
+            }
+        }
+        // SAFETY: t has been restored or we've returned early anyway
+        self.prepare_recurse(unsafe { t.assume_init() }, |s, t| s.revert_i(t))
+    }
+
+    fn prepare_recurse(
+        &mut self,
+        term: Term,
+        then: fn(&mut CheckRef<'_, '_, Split>, Term) -> Term,
+    ) -> Term {
         match term {
             Term::Application(a) => Term::Application(ApplicationTerm::new(
-                self.prepare_i(a.head.clone()),
+                then(self, a.head.clone()),
                 a.arguments
                     .iter()
                     .map(|arg| match arg {
-                        Argument::Simple(t) => Argument::Simple(self.prepare_i(t.clone())),
+                        Argument::Simple(t) => Argument::Simple(then(self, t.clone())),
                         Argument::Sequence(MaybeSequence::One(t)) => {
-                            Argument::Sequence(MaybeSequence::One(self.prepare_i(t.clone())))
+                            Argument::Sequence(MaybeSequence::One(then(self, t.clone())))
                         }
-                        Argument::Sequence(MaybeSequence::Seq(ts)) => {
-                            Argument::Sequence(MaybeSequence::Seq(
-                                ts.iter().cloned().map(|t| self.prepare_i(t)).collect(),
-                            ))
-                        }
+                        Argument::Sequence(MaybeSequence::Seq(ts)) => Argument::Sequence(
+                            MaybeSequence::Seq(ts.iter().cloned().map(|t| then(self, t)).collect()),
+                        ),
                     })
                     .collect(),
                 a.presentation.clone(),
             )),
             Term::Bound(b) => Term::Bound(BindingTerm::new(
-                self.prepare_i(b.head.clone()),
+                then(self, b.head.clone()),
                 self.scoped(|slf| {
                     b.arguments
                         .iter()
                         .map(|arg| match arg {
-                            BoundArgument::Simple(t) => {
-                                BoundArgument::Simple(slf.prepare_i(t.clone()))
-                            }
+                            BoundArgument::Simple(t) => BoundArgument::Simple(then(slf, t.clone())),
                             BoundArgument::Sequence(MaybeSequence::One(t)) => {
-                                BoundArgument::Sequence(MaybeSequence::One(
-                                    slf.prepare_i(t.clone()),
-                                ))
+                                BoundArgument::Sequence(MaybeSequence::One(then(slf, t.clone())))
                             }
                             BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
                                 BoundArgument::Sequence(MaybeSequence::Seq(
-                                    ts.iter().cloned().map(|t| slf.prepare_i(t)).collect(),
+                                    ts.iter().cloned().map(|t| then(slf, t)).collect(),
                                 ))
                             }
-                            BoundArgument::Bound(cv) => BoundArgument::Bound(slf.prepare_cv(cv)),
+                            BoundArgument::Bound(cv) => {
+                                BoundArgument::Bound(slf.prepare_cv(cv, then))
+                            }
                             BoundArgument::BoundSeq(MaybeSequence::One(cv)) => {
-                                BoundArgument::BoundSeq(MaybeSequence::One(slf.prepare_cv(cv)))
+                                BoundArgument::BoundSeq(MaybeSequence::One(
+                                    slf.prepare_cv(cv, then),
+                                ))
                             }
                             BoundArgument::BoundSeq(MaybeSequence::Seq(vars)) => {
                                 BoundArgument::BoundSeq(MaybeSequence::Seq(
-                                    vars.iter().map(|cv| slf.prepare_cv(cv)).collect(),
+                                    vars.iter().map(|cv| slf.prepare_cv(cv, then)).collect(),
                                 ))
                             }
                         })
@@ -175,13 +227,13 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
-    fn prepare_cv(&mut self, cv: &'t ComponentVar) -> ComponentVar {
+    fn prepare_cv(&mut self, cv: &ComponentVar, then: fn(&mut Self, Term) -> Term) -> ComponentVar {
         let tp = match &cv.tp {
-            Some(t) => Some(self.prepare_i(t.clone())),
+            Some(t) => Some(then(self, t.clone())),
             None => self.infer_var_type_i(&cv.var),
         };
         let df = match &cv.df {
-            Some(t) => Some(self.prepare_i(t.clone())),
+            Some(t) => Some(then(self, t.clone())),
             None => self.get_var_definiens(&cv.var),
         };
         let cv = ComponentVar {

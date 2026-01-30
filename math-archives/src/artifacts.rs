@@ -1,7 +1,10 @@
-use crate::utils::{
-    errors::{ArtifactSaveError, FileError, WriteError},
-    lazy_file::LazyFileWriter,
-    path_ext::PathExt,
+use crate::{
+    document_file::DocumentFile,
+    utils::{
+        errors::{ArtifactSaveError, FileError, WriteError},
+        lazy_file::{LazyField, LazyFile, LazyFileWriter},
+        path_ext::PathExt,
+    },
 };
 use ftml_ontology::{
     domain::modules::Module,
@@ -21,6 +24,7 @@ pub trait Artifact: std::any::Any {
     fn write(&self, into: &Path) -> Result<(), ArtifactSaveError>;
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
     fn as_any(&self) -> &dyn std::any::Any;
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
 }
 
 pub trait FileArtifact: std::any::Any {
@@ -42,6 +46,10 @@ impl<F: FileArtifact> Artifact for F {
     fn as_any(&self) -> &dyn std::any::Any {
         <Self as FileArtifact>::as_any(self)
     }
+    #[inline]
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self as _
+    }
     fn write(&self, into: &Path) -> Result<(), ArtifactSaveError> {
         self.source().rename_safe(&into)?;
         Ok(())
@@ -60,6 +68,10 @@ impl Artifact for FtmlString {
     }
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
+        self as _
+    }
+    #[inline]
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
         self as _
     }
     fn write(&self, into: &Path) -> Result<(), ArtifactSaveError> {
@@ -81,6 +93,10 @@ impl Artifact for FtmlFile {
     fn as_any(&self) -> &dyn std::any::Any {
         self as _
     }
+    #[inline]
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self as _
+    }
     fn write(&self, into: &Path) -> Result<(), ArtifactSaveError> {
         std::fs::copy(&self.0, into)
             .map(|_| ())
@@ -90,15 +106,45 @@ impl Artifact for FtmlFile {
 
 #[derive(Debug)]
 pub struct ContentResult {
-    pub document: Document,
-    pub modules: Vec<Module>,
-    pub data: Box<[u8]>,
     pub body: DocumentRange,
     pub inner_offset: u32,
     pub css: Box<[Css]>,
+    pub data: Box<[u8]>,
+    pub document: Document,
     pub ftml: Box<str>,
+    pub modules: Vec<Module>,
     #[cfg(feature = "rdf")]
     pub triples: Vec<ulo::rdf_types::Triple>,
+}
+impl ContentResult {
+    const NUM_FIELDS: usize = 6;
+    /// ### Errors
+    pub fn read(path: PathBuf) -> Result<Self, ArtifactSaveError> {
+        macro_rules! err {
+            (F $e:expr) => {
+                match $e {
+                    Ok(r) => r,
+                    Err(e) => return Err(ArtifactSaveError::Fs(FileError::ReadEntry(path, e))),
+                }
+            };
+            ($e:expr) => {
+                $e.map_err(|e| ArtifactSaveError::Other(e.to_string().into()))?
+            };
+        }
+        let f = err!(DocumentFile::from_file(path));
+        let (body, inner_offset, css, data, document, ftml) = err!(f.get_all());
+        Ok(Self {
+            body,
+            inner_offset,
+            css,
+            data,
+            document,
+            ftml,
+            modules: Vec::new(),
+            #[cfg(feature = "rdf")]
+            triples: Vec::new(),
+        })
+    }
 }
 impl Artifact for ContentResult {
     #[inline]
@@ -113,8 +159,12 @@ impl Artifact for ContentResult {
     fn as_any(&self) -> &dyn std::any::Any {
         self as _
     }
+    #[inline]
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self as _
+    }
     fn write(&self, into: &Path) -> Result<(), ArtifactSaveError> {
-        let mut writer = match LazyFileWriter::<6>::new(into) {
+        let mut writer = match LazyFileWriter::<{ Self::NUM_FIELDS }>::new(into) {
             Ok(w) => w,
             Err(e) => {
                 return Err(ArtifactSaveError::Fs(FileError::Write(
@@ -146,5 +196,33 @@ impl Artifact for ContentResult {
         err!(writer.write(&self.document));
         err!(writer.write_string(&self.ftml));
         Ok(())
+    }
+}
+#[derive(Debug)]
+pub struct ContentUpdate {
+    pub document: Option<Document>,
+    pub modules: Vec<Module>,
+}
+impl Artifact for ContentUpdate {
+    #[inline]
+    fn kind(&self) -> &'static str {
+        "content"
+    }
+    #[inline]
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self as _
+    }
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self as _
+    }
+    #[inline]
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self as _
+    }
+    fn write(&self, _: &Path) -> Result<(), ArtifactSaveError> {
+        Err(ArtifactSaveError::Other(
+            "Cannot write update in isolation".into(),
+        ))
     }
 }

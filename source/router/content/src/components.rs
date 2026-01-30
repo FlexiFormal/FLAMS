@@ -1,5 +1,6 @@
 #![allow(clippy::must_use_candidate)]
 
+use flams_router_base::maybe_lazy;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_components::{SidebarPosition, config::FtmlConfig};
 use ftml_dom::{FtmlViews, structure::TocSource, utils::css::CssExt};
@@ -13,14 +14,8 @@ use ftml_uris::{
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct TopDocRouter;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for TopDocRouter {
-    fn data() -> Self {
-        Self
-    }
-    fn view(TopDocRouter: Self) -> AnyView {
+maybe_lazy!(
+    TopDocRouter = {
         let params = use_query_map().get_untracked();
         if let Some(p) = params.get_str("uri") {
             let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
@@ -32,16 +27,10 @@ impl leptos_router::LazyRoute for TopDocRouter {
             view! { <leptos_router::components::Redirect path="/dashboard"/> }.into_any()
         }
     }
-}
+);
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct UriTopRouter;
-#[leptos_router::lazy_route]
-impl leptos_router::LazyRoute for UriTopRouter {
-    fn data() -> Self {
-        Self
-    }
-    fn view(UriTopRouter: Self) -> AnyView {
+maybe_lazy!(
+    UriTopRouter = {
         let works =
             use_query_map().with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
         if works {
@@ -50,7 +39,7 @@ impl leptos_router::LazyRoute for UriTopRouter {
             view! { <leptos_router::components::Redirect path="/dashboard"/> }.into_any()
         }
     }
-}
+);
 
 #[component(transparent)]
 pub fn URITop() -> AnyView {

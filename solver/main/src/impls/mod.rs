@@ -10,7 +10,7 @@ use crate::{
     context::CowLike,
     impls::solving::{Ancestor, Solvable},
     split::{CancelToken, SplitStrategy},
-    trace::{CheckLog, CheckLogCow, CheckingTask, RefCheckLog},
+    trace::{CheckLogCow, CheckingTask, PreCheckLog, RefCheckLog},
 };
 use ftml_ontology::terms::ComponentVar;
 use smallvec::SmallVec;
@@ -26,17 +26,17 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         self.messages.push(line);
     }
     pub fn comment(&mut self, msg: impl Into<Cow<'static, str>>) {
-        self.messages.push(CheckLogCow::Owned(CheckLog::Msg(
+        self.messages.push(CheckLogCow::Owned(PreCheckLog::Msg(
             msg.into(),
             crate::trace::MessageLevel::Comment,
         )));
     }
     pub fn counter(&mut self, msg: &'static str, num: usize) {
         self.messages
-            .push(CheckLogCow::Owned(CheckLog::Count(msg, num)))
+            .push(CheckLogCow::Owned(PreCheckLog::Count(msg, num)))
     }
     pub fn failure(&mut self, msg: impl Into<Cow<'static, str>>) {
-        self.messages.push(CheckLogCow::Owned(CheckLog::Msg(
+        self.messages.push(CheckLogCow::Owned(PreCheckLog::Msg(
             msg.into(),
             crate::trace::MessageLevel::Failure,
         )));
@@ -184,7 +184,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         &'t self,
         task: CheckingTask<'t>,
         then: F,
-    ) -> (Option<R>, rustc_hash::FxHashSet<Solvable>, CheckLog)
+    ) -> (Option<R>, rustc_hash::FxHashSet<Solvable>, PreCheckLog)
     where
         F: FnOnce(CheckRef<'t, '_, Split>) -> Option<R>,
     {
@@ -274,13 +274,13 @@ impl<'c> Trace<'c, '_> {
         self.0.push(line);
     }
     pub fn comment(&mut self, msg: impl Into<Cow<'static, str>>) {
-        self.0.push(CheckLogCow::Owned(CheckLog::Msg(
+        self.0.push(CheckLogCow::Owned(PreCheckLog::Msg(
             msg.into(),
             crate::trace::MessageLevel::Comment,
         )));
     }
     pub fn failure(&mut self, msg: impl Into<Cow<'static, str>>) {
-        self.0.push(CheckLogCow::Owned(CheckLog::Msg(
+        self.0.push(CheckLogCow::Owned(PreCheckLog::Msg(
             msg.into(),
             crate::trace::MessageLevel::Failure,
         )));
