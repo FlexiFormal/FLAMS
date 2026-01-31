@@ -28,7 +28,7 @@ members = [
     #"experiments",
     "source/ffi", "solver/main","solver/trace"
     #"maintest"
-]
+, "source/router/checks"]
 resolver = "2"
 exclude = [
     "experiments",
@@ -130,6 +130,7 @@ flams-router-login = { path = "source/router/login", version = "0.0.1" }
 flams-router-logging = { path = "source/router/logging" }
 flams-router-search = { path = "source/router/search" }
 flams-router-vscode = { path = "source/router/vscode-bindings" }
+flams-router-checks = { path = "source/router/checks" }
 flams-flodown = { path = "source/router/flodown" }
 
 # refactor

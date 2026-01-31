@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 use flams_router_content::backend::FtmlBackend;
 use flams_web_utils::components::{Header, Leaf, Subtree, Tree};
 use ftml_components::components::content::FtmlViewable;
@@ -20,79 +22,85 @@ impl ResultExt for DocumentCheckResult {
             ftml_components::SidebarPosition::None,
             false,
             move || {
-                let inner = self.checks.into_iter().map(do_check_result).collect_view();
+                let inner = self
+                    .checks
+                    .into_iter()
+                    .map(CheckResult::render)
+                    .collect_view();
                 view! {<Tree>{inner}</Tree>}.into_any()
             },
         )
     }
 }
 
-fn do_check_result(cr: CheckResult) -> AnyView {
-    match cr {
-        CheckResult::Missing(e) => view! {
-            <Leaf><Text style="color:red;">
-                {do_success(false)}"Module not found: "
-                {e.as_view::<FtmlBackend>()}
-            </Text></Leaf>
-        }
-        .into_any(),
-        CheckResult::Variable(v, r) => {
-            let success = do_success(r.success());
-            view! {
-                <Subtree expanded=!r.success()>
-                    <Header slot>
-                        <b>{success}"Checking variable "<math>{do_variable_uri(v)}</math></b>
-                    </Header>
-                    {
-                        symbol_result(r)
-                    }
-                </Subtree>
+impl ResultExt for CheckResult {
+    fn render(self) -> AnyView {
+        match self {
+            Self::Missing(e) => view! {
+                <Leaf><Text style="color:red;">
+                    {do_success(false)}"Module not found: "
+                    {e.as_view::<FtmlBackend>()}
+                </Text></Leaf>
             }
-            .into_any()
-        }
-        CheckResult::Module { uri, checks } => {
-            let success = checks.iter().all(ContentCheckResult::success);
-            let succ = do_success(success);
-            view! {
-                <Subtree expanded=!success>
-                    <Header slot>
-                        <b>{succ}"Checking module "{uri.as_view::<FtmlBackend>()}</b>
-                    </Header>
-                    {
-                        checks.into_iter().map(|c| match c {
-                            ContentCheckResult::Symbol(u, s) => {
-                                let success = s.success();
-                                let succ = do_success(success);
-                                view! {
-                                    <Subtree expanded=!success>
-                                        <Header slot>
-                                            <b>{succ}"Checking symbol "{u.as_view::<FtmlBackend>()}</b>
-                                        </Header>
-                                        {
-                                            symbol_result(s)
-                                        }
-                                    </Subtree>
+            .into_any(),
+            Self::Variable(v, r) => {
+                let success = do_success(r.success());
+                view! {
+                    <Subtree expanded=!r.success()>
+                        <Header slot>
+                            <b>{success}"Variable "<math>{do_variable_uri(v)}</math></b>
+                        </Header>
+                        {
+                            symbol_result(r)
+                        }
+                    </Subtree>
+                }
+                .into_any()
+            }
+            Self::Module { uri, checks } => {
+                let success = checks.iter().all(ContentCheckResult::success);
+                let succ = do_success(success);
+                view! {
+                    <Subtree expanded=!success>
+                        <Header slot>
+                            <b>{succ}"Module "{uri.as_view::<FtmlBackend>()}</b>
+                        </Header>
+                        {
+                            checks.into_iter().map(|c| match c {
+                                ContentCheckResult::Symbol(u, s) => {
+                                    let success = s.success();
+                                    let succ = do_success(success);
+                                    view! {
+                                        <Subtree expanded=!success>
+                                            <Header slot>
+                                                <b>{succ}"Symbol "{u.as_view::<FtmlBackend>()}</b>
+                                            </Header>
+                                            {
+                                                symbol_result(s)
+                                            }
+                                        </Subtree>
+                                    }
                                 }
-                            }
-                        }).collect_view()
-                    }
-                </Subtree>
+                            }).collect_view()
+                        }
+                    </Subtree>
+                }
+                .into_any()
             }
-            .into_any()
-        }
-        CheckResult::Term { uri, inferred, log } => {
-            let success = do_success(inferred.is_some());
-            view! {
-                <Subtree expanded=inferred.is_none()>
-                    <Header slot>
-                        <b>{success}"Checking document term "{uri.name().to_string()}</b>
-                    </Header>
-                    {
-                        do_log(log, &mut Vec::new())
-                    }
-                </Subtree>
+            Self::Term { uri, inferred, log } => {
+                let success = do_success(inferred.is_some());
+                view! {
+                    <Subtree expanded=inferred.is_none()>
+                        <Header slot>
+                            <b>{success}"Document term "{uri.name().to_string()}</b>
+                        </Header>
+                        {
+                            do_log(log, &mut Vec::new())
+                        }
+                    </Subtree>
+                }
+                .into_any()
             }
-            .into_any()
         }
     }
 }

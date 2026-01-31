@@ -44,8 +44,8 @@ pub async fn get_log(
     let is_check = target == ftml_solver::CHECK.name;
     let log = server::get_log(queue, archive, rel_path, target).await?;
     if is_check {
-        let log = serde_json::from_str(&log).map_err(|e| e.to_string())?;
-        return Ok(either::Right(log));
+        return serde_json::from_str(&log)
+            .map_or_else(|_| Ok(either::Left(log)), |l| Ok(either::Right(l)));
     }
     Ok(either::Left(log))
 }

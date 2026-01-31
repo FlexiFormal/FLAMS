@@ -512,8 +512,13 @@ impl LocallyBuilt for LocalArchive {
                     || self.out_path.join(doc_name.as_ref()),
                     |n| self.out_path.join_uri_path(n).join(doc_name.as_ref()),
                 );
-                let mp = p.with_extension(lang);
-                if mp.exists() { mp } else { p }
+                let mp = p.with_added_extension(lang);
+                if mp.exists() {
+                    mp
+                } else {
+                    let mp2 = p.with_extension(lang);
+                    if mp2 != mp && mp2.exists() { mp2 } else { p }
+                }
             },
             |source| {
                 // SAFETY source is ancestor of source_dir

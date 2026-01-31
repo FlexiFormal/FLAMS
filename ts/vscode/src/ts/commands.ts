@@ -5,6 +5,7 @@ import * as language from "vscode-languageclient";
 import { MathHubTreeProvider } from "./mathhub";
 import { Clipboard } from "vscode";
 import { insertUsemodule } from "./utils";
+import { FlamsCallHierarchyTreeProvider,FlamsDocumentSymbolTreeProvider } from "./callgraph";
 
 export enum Commands {
   openFile = "flams.openFile",
@@ -131,7 +132,7 @@ function new_archive(context: FLAMSContext) {
         prompt:"Insert the URL base of the archive (where you plan to host it):",
         password:false,
         title:"New Math Archive",
-        value:"https://mathhub.info",
+        value:"http://mathhub.info",
         validateInput(value) {
           return undefined; // TODO
         },
@@ -147,13 +148,105 @@ function new_archive(context: FLAMSContext) {
   });
 }
 
+
+class DocumentView {
+  view:vscode.Webview|undefined;
+  html:string = "";
+  constructor(flamscontext: FLAMSContext) {
+    const self = this;
+    const provider = <vscode.WebviewViewProvider> {
+      resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        context: vscode.WebviewViewResolveContext,
+        token: CancellationToken,
+      ): Thenable<void> | void {
+        webviewView.webview.options = {
+          enableScripts: true,
+          enableForms: true,
+        };
+        self.view = webviewView.webview;
+        const tkuri = webviewView.webview.asWebviewUri(
+          vscode.Uri.joinPath(
+            flamscontext.vsc.extensionUri,
+            "resources",
+            "bundled.js",
+          ),
+        );
+        const cssuri = webviewView.webview.asWebviewUri(
+          vscode.Uri.joinPath(flamscontext.vsc.extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css')
+        );
+          webviewView.webview.onDidReceiveMessage((msg) => flamsTools(msg,flamscontext));
+        const file = vscode.Uri.joinPath(
+          flamscontext.vsc.extensionUri,
+          "resources","document.html",
+        );
+        const url = (vscode.window.activeTextEditor?.document)?vscode.window.activeTextEditor.document.uri.toString():"";
+        
+
+        vscode.workspace.fs.readFile(file).then((c) => {
+          const prehtml = Buffer.from(c)
+            .toString()
+            .replace(
+              "%%HEAD%%",
+              `<link href="${cssuri}" rel="stylesheet"/>
+            <script type="module" src="${tkuri}"></script>
+            <script>const vscode = acquireVsCodeApi();</script>
+            `,
+            ).replace("%%SERVER_URL%%",flamscontext.server.url);
+          self.html = prehtml;
+          webviewView.webview.html = prehtml.replace("%%DOC_URL%%",url);
+        });
+      }
+    };
+    vscode.window.registerWebviewViewProvider("flams-document",provider);
+  }
+  refresh() {
+    if (this.view && this.html) {
+      this.view.html = "";
+      const url = (vscode.window.activeTextEditor?.document)?vscode.window.activeTextEditor.document.uri.toString():"";
+      this.view.html = this.html.replace("%%DOC_URL%%",url);
+    }
+  }
+}
+
+export var DOCUMENT_VIEW : DocumentView | undefined = undefined;
+
 export function register_server_commands(context: FLAMSContext) {
   vscode.commands.executeCommand("setContext", "flams.loaded", true);
 
   vscode.window.registerWebviewViewProvider(
     "flams-tools",
-    webview(context, "stex-tools", (msg) => flamsTools(msg, context)),
+    webview(context, "stex-tools",undefined, (msg) => flamsTools(msg, context)),
   );
+  
+  /*
+  const imports = new FlamsDocumentSymbolTreeProvider();//FlamsCallHierarchyTreeProvider();
+  context.vsc.subscriptions.push(
+    vscode.window.createTreeView("flams.callgraph",{treeDataProvider: imports})
+  );
+  context.vsc.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      imports.refresh();
+    })
+  );
+  context.vsc.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument(e => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor && e.document === editor.document) {
+        imports.refresh();
+      }
+    })
+  );
+  */
+
+  DOCUMENT_VIEW = new DocumentView(context);
+
+  context.vsc.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      DOCUMENT_VIEW?.refresh();
+    })
+  );
+
 
   const remote = context.remote_server
     ? "&remote=" + encodeURIComponent(context.remote_server.url)
@@ -212,6 +305,7 @@ export function register_server_commands(context: FLAMSContext) {
 	));
 
   context.client.onNotification("flams/htmlResult", (s: string) => {
+    DOCUMENT_VIEW?.refresh();
     PREVIEW.open(context.server.url + "?uri=" + encodeURIComponent(s),s.split("&d=")[1]);
   });
   context.client.onNotification("flams/updateMathHub", (_) =>
@@ -333,6 +427,7 @@ export function webview_iframe(
 export function webview(
   flamscontext: FLAMSContext,
   html_file: string,
+  then?:(s:string) => string,
   onMessage?: (e: any) => any,
 ): vscode.WebviewViewProvider {
   return <vscode.WebviewViewProvider>{
@@ -353,11 +448,12 @@ export function webview(
         ),
       );
       const cssuri = webviewView.webview.asWebviewUri(
-        vscode.Uri.joinPath(
+        /*vscode.Uri.joinPath(
           flamscontext.vsc.extensionUri,
           "resources",
           "codicon.css",
-        ),
+        ),*/
+        vscode.Uri.joinPath(flamscontext.vsc.extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css')
       );
       if (onMessage) {
         webviewView.webview.onDidReceiveMessage(onMessage);
@@ -376,7 +472,7 @@ export function webview(
           <script type="module" src="${tkuri}"></script>
           <script>const vscode = acquireVsCodeApi();</script>
           `,
-          );
+          ).replace("%%SERVER_URL%%",flamscontext.server.url);
       });
     },
   };

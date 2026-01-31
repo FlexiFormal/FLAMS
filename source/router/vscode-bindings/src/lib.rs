@@ -7,11 +7,13 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
+pub mod checks;
+pub mod components;
+
 use flams_router_base::maybe_lazy;
+use flams_utils::unwrap;
 use ftml_dom::utils::css::inject_css;
 pub use leptos::prelude::*;
-pub mod components;
-use flams_utils::unwrap;
 
 #[server]
 #[allow(clippy::unused_async)]

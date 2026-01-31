@@ -1,0 +1,26 @@
+[package]
+name = "flams-router-checks"
+version = "0.1.0"
+edition = "2024"
+
+
+[features]
+ssr = [
+]
+hydrate = [
+]
+docs-only = []
+
+[lints]
+workspace = true
+
+[dependencies]
+ftml-solver-trace = { workspace = true }
+flams-router-content = { workspace = true }
+flams-web-utils = { workspace = true }
+ftml-dom = { workspace = true }
+ftml-components = { workspace = true }
+ftml-ontology = { workspace = true }
+ftml-uris = { workspace = true }
+leptos = { workspace = true }
+thaw = { workspace = true }

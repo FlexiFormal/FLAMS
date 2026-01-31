@@ -11,7 +11,6 @@ use flams_utils::unwrap;
 use ftml_dom::utils::css::inject_css;
 use ftml_uris::ArchiveId;
 use std::num::NonZeroU32;
-pub mod checklog;
 
 pub mod server_fns;
 

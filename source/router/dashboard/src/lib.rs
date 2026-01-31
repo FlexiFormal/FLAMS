@@ -104,7 +104,8 @@ pub fn Main() -> AnyView {
                         </ParentRoute>
                     </ParentRoute>
                     <ParentRoute path=path!("/vscode") view={maybe_lazy!(flams_router_vscode::VSCWrap)}>// flams_router_vscode::VSCodeWrap>
-                        <Route path=path!("search") view={maybe_lazy!(flams_router_search::vscode::VSCSearch)}/>//flams_router_search::vscode::vscode_search/>
+                        <Route path=path!("search") view={maybe_lazy!(flams_router_search::vscode::VSCSearch)}/>
+                        <Route path=path!("proofs") view={maybe_lazy!(flams_router_vscode::checks::Checks)}/>
                     </ParentRoute>
                     <Route path=path!("/document") view={maybe_lazy!(flams_router_content::components::TopDocRouter)}/*{move || {
                         use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};

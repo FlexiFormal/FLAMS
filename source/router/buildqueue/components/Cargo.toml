@@ -48,6 +48,7 @@ flams-router-content = {workspace = true}
 flams-router-buildqueue-base = { workspace = true }
 flams-router-git-base = { workspace = true }
 flams-system = { workspace = true, optional = true }
+flams-router-checks = {workspace = true}
 
 either = {workspace = true}
 leptos = { workspace = true }

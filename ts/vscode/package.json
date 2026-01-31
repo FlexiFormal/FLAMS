@@ -51,6 +51,14 @@
           "when": "flams.loaded"
         },
         {
+          "id":"flams-document",
+          "type":"webview",
+          "name": "Current document",
+          "icon": "img/flams.svg",
+          "contextualTitle": "FLAMS Functionality",
+          "when": "flams.loaded"
+        },
+        {
           "id": "flams-search",
           "type": "webview",
           "name": "Search",

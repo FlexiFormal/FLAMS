@@ -10,10 +10,10 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 
 use flams_router_base::{LoginState, require_login, ws::WebSocket};
 use flams_router_base::{maybe_lazy, ws};
-use flams_router_buildqueue_base::checklog::{DocumentCheckResult, ResultExt};
 #[cfg(feature = "hydrate")]
 use flams_router_buildqueue_base::server_fns::get_log;
 use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
+use flams_router_checks::{DocumentCheckResult, ResultExt};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::wait_and_then_fn;
