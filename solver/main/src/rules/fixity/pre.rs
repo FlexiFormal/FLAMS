@@ -150,6 +150,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
         _: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
+        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> std::ops::ControlFlow<Term, Term> {
         tracing::trace!("Prenexing");
         let either::Left(sym) = head else {

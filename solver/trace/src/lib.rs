@@ -820,7 +820,7 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
         write!(self.0, "{:?}", term.debug_short().yellow())
     }
     fn string(&mut self, s: &str, _: Option<MessageLevel>) -> std::fmt::Result {
-        write!(self.0, "{}", s.black())
+        write!(self.0, "{}", s.bright_black())
     }
     fn variable(&mut self, var: &Variable, _: Option<MessageLevel>) -> std::fmt::Result {
         self.0.write_str(var.name())

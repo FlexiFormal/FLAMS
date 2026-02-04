@@ -35,6 +35,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for BinLRule {
         _: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
+        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         tracing::trace!("binl!");
         let Some((app, MaybeSequence::Seq(seq), idx)) =
@@ -150,6 +151,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for BinRRule {
         _: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
+        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         {
             let Some((app, MaybeSequence::Seq(seq), idx)) =

@@ -139,7 +139,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         &self,
         uri: &SymbolUri,
     ) -> Result<SharedDeclaration<Symbol>, BackendError> {
-        self.top.get_symbol(uri, |t| self.prepare(t))
+        self.top.get_symbol(uri, |t| self.prepare(t, None))
     }
 
     /// ### Errors

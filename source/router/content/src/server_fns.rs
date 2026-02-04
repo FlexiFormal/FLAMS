@@ -1,3 +1,4 @@
+use ftml_backend::BackendCheckResult;
 use ftml_ontology::{
     narrative::{
         documents::TocElem,
@@ -18,6 +19,46 @@ use std::str::FromStr;
 
 #[cfg(feature = "ssr")]
 use ftml_uris::components::{DocumentUriComponents, UriComponents};
+
+#[server(prefix = "/content", endpoint = "check_term",input=server_fn::codec::Json)]
+pub async fn check_term(
+    global_context: Vec<ftml_uris::ModuleUri>,
+    term: ftml_ontology::terms::Term,
+    in_path: ftml_ontology::terms::termpaths::TermPath,
+) -> Result<
+    ftml_backend::BackendCheckResult,
+    ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+> {
+    use flams_math_archives::backend::LocalBackend;
+    tokio::task::spawn_blocking(move || {
+        let mut checker = ftml_solver::Checker::<ftml_solver::split::SingleThreadedSplit>::new(
+            flams_system::backend::backend().clone(),
+        );
+        let mut global_context: rustc_hash::FxHashSet<_> = global_context.into_iter().collect();
+        for m in term.full_context(&mut |u| flams_system::backend::backend().get_document(u).ok()) {
+            global_context.insert(m);
+        }
+        //println!("Context: {global_context:#?}");
+        let _ = checker.set_context(global_context.into_iter().collect());
+        checker.check_subterm(term, in_path).map_or_else(
+            || {
+                Err(ftml_backend::BackendError::ToDo(
+                    "Error getting subterm".to_string(),
+                ))
+            },
+            |r| {
+                //println!("{}", r.log.colored());
+                Ok(BackendCheckResult {
+                    context: r.context,
+                    inferred_type: r.inferred_type,
+                    simplified: r.simplified,
+                })
+            },
+        )
+    })
+    .await
+    .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))?
+}
 
 ftml_uris::compfun! {
     #[server(

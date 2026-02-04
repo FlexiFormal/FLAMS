@@ -9,6 +9,7 @@ pub use ftml_solver_trace::results::DocumentCheckResult;
 use ftml_solver_trace::results::{CheckResult, ContentCheckResult, SymbolCheckResult};
 use ftml_solver_trace::{CheckLog, Displayable};
 use ftml_uris::{DocumentElementUri, DocumentUri, Uri};
+use leptos::math::mrow;
 use leptos::prelude::*;
 use thaw::Text;
 
@@ -48,7 +49,7 @@ impl ResultExt for CheckResult {
                 view! {
                     <Subtree expanded=!r.success()>
                         <Header slot>
-                            <b>{success}"Variable "<math>{do_variable_uri(v)}</math></b>
+                            <b>{success}"Variable "{ftml_dom::utils::math(move || do_variable_uri(v))}</b>
                         </Header>
                         {
                             symbol_result(r)
@@ -188,12 +189,12 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     {do_success(success)}
                     "Inferring type of "
-                    <math><mrow>
+                    {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
                         {do_term(term)}
                         {suffix}
-                    </mrow></math>
+                    }))}
                 </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
@@ -220,12 +221,12 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     {do_success(success)}
                     "Inferring type of "
-                    <math><mrow>
+                    {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
                         <mtext style="color:gray">{var.into_string()}</mtext>
                         {suffix}
-                    </mrow></math>
+                    }))}
                 </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
@@ -245,13 +246,13 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     {do_success(result.unwrap_or(false))}
                     "Checking Inhabitability "
-                    <math><mrow>
+                    {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
                         <mtext style="font-weight:bold">"INH"</mtext>
                         <mspace width="5px"/>
                         {do_term(term)}
-                    </mrow></math>
+                    }))}
                 </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
@@ -271,13 +272,13 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     {do_success(result.unwrap_or(false))}
                     "Checking Universe "
-                    <math><mrow>
+                    {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
                         <mtext style="font-weight:bold">"UNIV"</mtext>
                         <mspace width="5px"/>
                         {do_term(term)}
-                    </mrow></math>
+                    }))}
                 </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
@@ -298,13 +299,13 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     {do_success(result.unwrap_or(false))}
                     "Checking Equality "
-                    <math><mrow>
+                    {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
                         {do_term(lhs)}
                         <mo style="font-weight:bold">"=="</mo>
                         {do_term(rhs)}
-                    </mrow></math>
+                    }))}
                 </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
@@ -325,13 +326,13 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     {do_success(result.unwrap_or(false))}
                     "Checking Typing "
-                    <math><mrow>
+                    {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
                         {do_term(tm)}
                         <mo style="font-weight:bold">":"</mo>
                         {do_term(tp)}
-                    </mrow></math>
+                    }))}
                 </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
@@ -352,13 +353,13 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     {do_success(result.unwrap_or(false))}
                     "Checking Subtyping "
-                    <math><mrow>
+                    {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
                         {do_term(sub)}
                         <mo style="font-weight:bold">"<:"</mo>
                         {do_term(sup)}
-                    </mrow></math>
+                    }))}
                 </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
@@ -420,10 +421,14 @@ fn do_displayable(d: Displayable) -> AnyView {
         Displayable::Num(i) => i.into_any(),
         Displayable::String(s) => s.into_any(),
         Displayable::Space => " ".into_any(),
-        Displayable::Term(t) => view!(<math>{do_term(t)}</math>).into_any(),
-        Displayable::Var(v) => {
-            view!(<math>{do_term(Term::Var{variable:v,presentation:None})}</math>).into_any()
-        }
+        Displayable::Term(t) => ftml_dom::utils::math(move || do_term(t)).into_any(),
+        Displayable::Var(v) => ftml_dom::utils::math(move || {
+            do_term(Term::Var {
+                variable: v,
+                presentation: None,
+            })
+        })
+        .into_any(),
         Displayable::Uri(Uri::Symbol(s)) => s.as_view::<FtmlBackend>(),
         Displayable::Uri(Uri::Module(m)) => m.as_view::<FtmlBackend>(),
         Displayable::Uri(Uri::DocumentElement(e)) => e.as_view::<FtmlBackend>(),

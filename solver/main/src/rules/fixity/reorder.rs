@@ -52,7 +52,15 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
         _: &RuleSet<Split>,
         t: Term,
         _: either::Either<&Symbol, &VariableDeclaration>,
+        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
+        if let Some(i) = path.and_then(|(v, i)| {
+            v.get_mut(i)
+                .and_then(|i| if *i > 0 { Some(i) } else { None })
+        }) {
+            *i = self.reorder.of(*i).unwrap_or(*i);
+        }
+
         ControlFlow::Continue(match t {
             Term::Application(app) => Term::Application(ApplicationTerm::new(
                 app.head.clone(),

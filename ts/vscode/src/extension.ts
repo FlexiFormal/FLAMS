@@ -138,8 +138,8 @@ export async function launch_local(context: FLAMSPreContext) {
       },
     },
   );
-  context.client.onNotification("flams/serverURL", (s: string) => {
-    context.server = new FLAMSServer(s);
+  context.client.onNotification("flams/serverURL", (s: {url:string}) => {
+    context.server = new FLAMSServer(s.url);
     const ctx = new FLAMSContext(context);
     register_server_commands(ctx);
   });

@@ -7,8 +7,7 @@ use std::{
 };
 
 use crate::{
-    BuildParams, ClientExt, HtmlRequestParams, NewArchiveParams, ProgressCallbackServer,
-    QuizRequestParams, StandaloneExportParams,
+    ClientExt, NewArchiveParams, ProgressCallbackServer, StandaloneExportParams, UriParams,
     annotations::to_diagnostic,
     documents::LSPDocument,
     state::{LSPState, UrlOrFile},
@@ -125,7 +124,7 @@ fn wrap_fut<T: Send + 'static>(
 }
 
 impl<T: FLAMSLSPServer> ServerWrapper<T> {
-    pub(crate) fn html_request(&mut self, params: HtmlRequestParams) -> Res<Option<String>> {
+    pub(crate) fn html_request(&mut self, params: UriParams) -> Res<Option<String>> {
         let mut client = self.inner.client().clone();
         let state = self.inner.state().clone();
         Box::pin(
@@ -261,7 +260,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         ControlFlow::Continue(())
     }
 
-    pub(crate) fn quiz_request(&mut self, params: QuizRequestParams) -> Res<String> {
+    pub(crate) fn quiz_request(&mut self, params: UriParams) -> Res<String> {
         use flams_system::backend::backend;
         fn get_res(url: UrlOrFile, state: LSPState) -> Result<String, String> {
             let doc = state
@@ -328,7 +327,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         Ok(())
     }
 
-    pub(crate) fn build_one(&mut self, params: BuildParams) -> Res<()> {
+    pub(crate) fn build_one(&mut self, params: UriParams) -> Res<()> {
         let state = self.inner.state().clone();
         fut(move || {
             let url: UrlOrFile = params.uri.into();
@@ -338,7 +337,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             Self::build(&doc, &url, false)
         })
     }
-    pub(crate) fn build_all(&mut self, params: BuildParams) -> Res<()> {
+    pub(crate) fn build_all(&mut self, params: UriParams) -> Res<()> {
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
         wrap_fut(async move {

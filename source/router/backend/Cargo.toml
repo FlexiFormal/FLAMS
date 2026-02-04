@@ -39,6 +39,7 @@ ftml-ontology = { workspace = true, features = ["serde"] }
 
 flams-backend-types = { workspace = true, features = ["serde"] }
 ftml-dom = { workspace = true }
+ftml-components = { workspace = true }
 
 flams-utils = { workspace = true }
 flams-web-utils = { workspace = true }

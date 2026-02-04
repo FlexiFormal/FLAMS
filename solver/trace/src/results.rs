@@ -133,12 +133,12 @@ impl CheckResult {
                 let mut d = D::new(f);
                 match self.0 {
                     CheckResult::Missing(u) => {
-                        d.string("Missing module: ", Some(crate::MessageLevel::Failure))?;
+                        d.string("\nMissing module: ", Some(crate::MessageLevel::Failure))?;
                         d.uri(u.as_uri(), Some(crate::MessageLevel::Failure))?;
                         d.string("\n", None)
                     }
                     CheckResult::Module { uri, checks } => {
-                        d.string("Checking module ", Some(crate::MessageLevel::Header))?;
+                        d.string("\nChecking module ", Some(crate::MessageLevel::Header))?;
                         d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
                         d.string("\n", None)?;
                         drop(d);
@@ -148,14 +148,14 @@ impl CheckResult {
                         Ok(())
                     }
                     CheckResult::Variable(uri, r) => {
-                        d.string("Checking variable ", Some(crate::MessageLevel::Header))?;
+                        d.string("\nChecking variable ", Some(crate::MessageLevel::Header))?;
                         d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
                         d.string("\n", None)?;
                         drop(d);
                         r.display::<D>().fmt(f)
                     }
                     CheckResult::Term { uri, log, .. } => {
-                        d.string("Checking term ", Some(crate::MessageLevel::Header))?;
+                        d.string("\nChecking term ", Some(crate::MessageLevel::Header))?;
                         d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
                         d.string("\n", None)?;
                         drop(d);

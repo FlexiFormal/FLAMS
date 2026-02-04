@@ -5,19 +5,19 @@ use ftml_ontology::{
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
     terms::{
         ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence,
-        Term, Variable,
+        Term, Variable, termpaths::TermPath,
     },
 };
 use smallvec::SmallVec;
 use std::{hint::unreachable_unchecked, mem::MaybeUninit};
 
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
-    pub(crate) fn prepare(&self, t: Term) -> Term {
+    pub(crate) fn prepare(&self, t: Term, path: Option<&mut TermPath>) -> Term {
         tracing::trace!("preparing {:?}", t.debug_short());
         let mut cp = self.copied();
         let mut ncp = cp.get_ref();
         let old = std::mem::replace(ncp.context.0, SmallVec::new());
-        let r = ncp.prepare_i(t);
+        let r = ncp.prepare_i(t, path.map(|p| (p.inner_mut(), 0)));
         *ncp.context.0 = old;
         r
     }
@@ -88,7 +88,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         })
     }
 
-    fn prepare_i(&mut self, t: Term) -> Term {
+    fn prepare_i(
+        &mut self,
+        t: Term,
+        mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
+    ) -> Term {
         match &t {
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
@@ -114,7 +118,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
             // SAFETY: not yet replaced
             let tm = unsafe { t.assume_init_read() };
-            match rl.apply(&self.top.rules, tm, head) {
+            let path = match &mut path {
+                Some((p, t)) => Some((&mut **p, *t)),
+                _ => None,
+            };
+            match rl.apply(&self.top.rules, tm, head, path) {
                 //                                 MaybeUninit doesn't drop the inner value,
                 //                                 vvvvvvvvv  so this is fine
                 std::ops::ControlFlow::Break(t) => return t,
@@ -125,7 +133,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
         }
         // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(unsafe { t.assume_init() }, |s, t| s.prepare_i(t))
+        self.prepare_recurse(
+            unsafe { t.assume_init() },
+            |s, t, p| s.prepare_i(t, p),
+            path,
+        )
     }
 
     fn revert_i(&mut self, t: Term) -> Term {
@@ -165,57 +177,125 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
         }
         // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(unsafe { t.assume_init() }, |s, t| s.revert_i(t))
+        self.prepare_recurse(unsafe { t.assume_init() }, |s, t, _| s.revert_i(t), None)
     }
 
     fn prepare_recurse(
         &mut self,
         term: Term,
-        then: fn(&mut CheckRef<'_, '_, Split>, Term) -> Term,
+        then: fn(
+            &mut CheckRef<'_, '_, Split>,
+            Term,
+            Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
+        ) -> Term,
+        mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
         match term {
             Term::Application(a) => Term::Application(ApplicationTerm::new(
-                then(self, a.head.clone()),
-                a.arguments
-                    .iter()
-                    .map(|arg| match arg {
-                        Argument::Simple(t) => Argument::Simple(then(self, t.clone())),
-                        Argument::Sequence(MaybeSequence::One(t)) => {
-                            Argument::Sequence(MaybeSequence::One(then(self, t.clone())))
-                        }
-                        Argument::Sequence(MaybeSequence::Seq(ts)) => Argument::Sequence(
-                            MaybeSequence::Seq(ts.iter().cloned().map(|t| then(self, t)).collect()),
-                        ),
-                    })
-                    .collect(),
+                then(self, a.head.clone(), get_path(&mut path, 0)),
+                {
+                    let mut idx = 0;
+                    a.arguments
+                        .iter()
+                        .map(|arg| match arg {
+                            Argument::Simple(t) => Argument::Simple(then(
+                                self,
+                                t.clone(),
+                                get_path(&mut path, {
+                                    idx += 1;
+                                    idx
+                                }),
+                            )),
+                            Argument::Sequence(MaybeSequence::One(t)) => {
+                                Argument::Sequence(MaybeSequence::One(then(
+                                    self,
+                                    t.clone(),
+                                    get_path(&mut path, {
+                                        idx += 1;
+                                        idx
+                                    }),
+                                )))
+                            }
+                            Argument::Sequence(MaybeSequence::Seq(ts)) => {
+                                idx += 1;
+                                let mut npath = get_path(&mut path, idx);
+                                Argument::Sequence(MaybeSequence::Seq(
+                                    ts.iter()
+                                        .cloned()
+                                        .enumerate()
+                                        .map(|(i, t)| then(self, t, get_path(&mut npath, i)))
+                                        .collect(),
+                                ))
+                            }
+                        })
+                        .collect()
+                },
                 a.presentation.clone(),
             )),
             Term::Bound(b) => Term::Bound(BindingTerm::new(
-                then(self, b.head.clone()),
+                then(self, b.head.clone(), get_path(&mut path, 0)),
                 self.scoped(|slf| {
+                    let mut idx = 0;
                     b.arguments
                         .iter()
                         .map(|arg| match arg {
-                            BoundArgument::Simple(t) => BoundArgument::Simple(then(slf, t.clone())),
+                            BoundArgument::Simple(t) => BoundArgument::Simple(then(
+                                slf,
+                                t.clone(),
+                                get_path(&mut path, {
+                                    idx += 1;
+                                    idx
+                                }),
+                            )),
                             BoundArgument::Sequence(MaybeSequence::One(t)) => {
-                                BoundArgument::Sequence(MaybeSequence::One(then(slf, t.clone())))
+                                BoundArgument::Sequence(MaybeSequence::One(then(
+                                    slf,
+                                    t.clone(),
+                                    get_path(&mut path, {
+                                        idx += 1;
+                                        idx
+                                    }),
+                                )))
                             }
                             BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
+                                idx += 1;
+                                let mut npath = get_path(&mut path, idx);
                                 BoundArgument::Sequence(MaybeSequence::Seq(
-                                    ts.iter().cloned().map(|t| then(slf, t)).collect(),
+                                    ts.iter()
+                                        .cloned()
+                                        .enumerate()
+                                        .map(|(i, t)| then(slf, t, get_path(&mut npath, i)))
+                                        .collect(),
                                 ))
                             }
-                            BoundArgument::Bound(cv) => {
-                                BoundArgument::Bound(slf.prepare_cv(cv, then))
-                            }
+                            BoundArgument::Bound(cv) => BoundArgument::Bound(slf.prepare_cv(
+                                cv,
+                                then,
+                                get_path(&mut path, {
+                                    idx += 1;
+                                    idx
+                                }),
+                            )),
                             BoundArgument::BoundSeq(MaybeSequence::One(cv)) => {
-                                BoundArgument::BoundSeq(MaybeSequence::One(
-                                    slf.prepare_cv(cv, then),
-                                ))
+                                BoundArgument::BoundSeq(MaybeSequence::One(slf.prepare_cv(
+                                    cv,
+                                    then,
+                                    get_path(&mut path, {
+                                        idx += 1;
+                                        idx
+                                    }),
+                                )))
                             }
                             BoundArgument::BoundSeq(MaybeSequence::Seq(vars)) => {
+                                idx += 1;
+                                let mut npath = get_path(&mut path, idx);
                                 BoundArgument::BoundSeq(MaybeSequence::Seq(
-                                    vars.iter().map(|cv| slf.prepare_cv(cv, then)).collect(),
+                                    vars.iter()
+                                        .enumerate()
+                                        .map(|(i, cv)| {
+                                            slf.prepare_cv(cv, then, get_path(&mut npath, i))
+                                        })
+                                        .collect(),
                                 ))
                             }
                         })
@@ -227,14 +307,43 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
-    fn prepare_cv(&mut self, cv: &ComponentVar, then: fn(&mut Self, Term) -> Term) -> ComponentVar {
+    fn prepare_cv(
+        &mut self,
+        cv: &ComponentVar,
+        then: fn(&mut Self, Term, Option<(&mut smallvec::SmallVec<u8, 16>, usize)>) -> Term,
+        mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
+    ) -> ComponentVar {
+        let mut next = 0;
         let tp = match &cv.tp {
-            Some(t) => Some(then(self, t.clone())),
-            None => self.infer_var_type_i(&cv.var),
+            Some(t) => {
+                next += 1;
+                Some(then(self, t.clone(), get_path(&mut path, 0)))
+            }
+            None => {
+                let r = self.infer_var_type_i(&cv.var);
+                if r.is_some()
+                    && let Some((p, i)) = &mut path
+                    && let Some(i) = p.get_mut(*i)
+                {
+                    *i += 1;
+                    next += 1;
+                }
+                r
+            }
         };
         let df = match &cv.df {
-            Some(t) => Some(then(self, t.clone())),
-            None => self.get_var_definiens(&cv.var),
+            Some(t) => Some(then(self, t.clone(), get_path(&mut path, next))),
+            None => {
+                let r = self.get_var_definiens(&cv.var);
+                if r.is_some()
+                    && let Some((p, i)) = &mut path
+                    && let Some(i) = p.get_mut(*i)
+                {
+                    *i += 1;
+                    next += 1;
+                }
+                r
+            }
         };
         let cv = ComponentVar {
             var: cv.var.clone(),
@@ -244,4 +353,17 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         self.extend_context(cv.clone());
         cv
     }
+}
+
+fn get_path<'a, 'b>(
+    op: &'a mut Option<(&'b mut smallvec::SmallVec<u8, 16>, usize)>,
+    idx: usize,
+) -> Option<(&'a mut smallvec::SmallVec<u8, 16>, usize)> {
+    op.as_mut().and_then(|(s, i)| {
+        if s.get(*i).copied() == Some(idx as u8) {
+            Some((&mut **s, *i + 1))
+        } else {
+            None
+        }
+    })
 }

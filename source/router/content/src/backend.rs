@@ -33,6 +33,21 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         Some(format!("/doc?uri={}&format={kind}", uri.url_encoded()))
     }
 
+    fn check_term(
+        &self,
+        global_context: &[ftml_uris::ModuleUri],
+        term: &ftml_ontology::terms::Term,
+        in_path: &ftml_ontology::terms::termpaths::TermPath,
+    ) -> impl Future<
+        Output = Result<
+            ftml_backend::BackendCheckResult,
+            ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+        >,
+    > + Send
+    + use<> {
+        super::server_fns::check_term(global_context.to_vec(), term.clone(), in_path.clone())
+    }
+
     fn get_fragment(
         &self,
         uri: Option<ftml_uris::Uri>,

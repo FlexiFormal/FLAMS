@@ -8,7 +8,9 @@ pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
 
 use crate::{CheckRef, split::SplitStrategy};
 use ftml_ontology::{
-    domain::declarations::symbols::Symbol, narrative::elements::VariableDeclaration, terms::Term,
+    domain::declarations::symbols::Symbol,
+    narrative::elements::VariableDeclaration,
+    terms::{BoundArgument, ComponentVar, Term},
 };
 use std::{fmt::Debug, ops::ControlFlow};
 
@@ -139,6 +141,7 @@ pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
         rules: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
+        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term>;
     fn applicable_revert(
         &self,
@@ -151,4 +154,11 @@ pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
     ) -> ControlFlow<Term, Term>;
+    fn make_bound<'t>(
+        &self,
+        checker: CheckRef<'t, '_, Split>,
+        t: &BoundArgument,
+    ) -> Option<BoundArgument> {
+        None
+    }
 }

@@ -31,8 +31,8 @@ maybe_lazy!(
 
 maybe_lazy!(
     UriTopRouter = {
-        let works =
-            use_query_map().with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
+        let works = use_query_map()
+            .with_untracked(|p| p.get_str("a").is_some() || p.get_str("uri").is_some());
         if works {
             URITop()
         } else {

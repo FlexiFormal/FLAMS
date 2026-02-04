@@ -36,7 +36,7 @@ use ftml_ontology::{
         documents::{Document, DocumentData},
         elements::{DocumentElementRef, VariableDeclaration},
     },
-    terms::Term,
+    terms::{ComponentVar, Term, termpaths::TermPath},
     utils::RefTree,
 };
 use ftml_solver_trace::CheckLog;
@@ -93,6 +93,13 @@ pub(crate) fn update_stack() {
     }
 }
  */
+
+pub struct SubtermCheckResult {
+    pub simplified: Term,
+    pub inferred_type: Option<Term>,
+    pub context: Vec<ComponentVar>,
+    pub log: CheckLog,
+}
 
 pub struct Checker<Split: SplitStrategy> {
     backend: AnyBackend,
@@ -298,8 +305,94 @@ impl<Split: SplitStrategy> Checker<Split> {
         self.set_context_i(uris)
     }
 
-    pub fn set_context(&mut self, m: ModuleUri) -> Result<(), BackendError> {
-        self.set_context_i(vec![!m])
+    pub fn set_context(&mut self, m: Vec<ModuleUri>) -> Result<(), BackendError> {
+        self.set_context_i(m)
+    }
+
+    pub fn check_subterm(&mut self, term: Term, mut path: TermPath) -> Option<SubtermCheckResult> {
+        let nterm = self.wrap_none(|slf| slf.prepare(term, Some(&mut path)));
+        let (ctx, t) = nterm.subterm_at_path(&path)?;
+        let mut nt = t.clone();
+        //ctx.reverse();
+        let mut ctx = ctx.into_iter().cloned().rev().collect::<Vec<_>>();
+        let (r, s, log) = self.wrap_task(CheckingTask::Inference(t), |mut slf| {
+            let allvars = t.free_variables();
+            for v in allvars {
+                if !ctx.iter().any(|cv| cv.var == *v) {
+                    let tp = slf.infer_var_type_i(v);
+                    ctx.push(ComponentVar {
+                        var: v.clone(),
+                        tp,
+                        df: None,
+                    });
+                }
+            }
+            let mut i = 0;
+            while let Some(vd) = ctx.get(i) {
+                i += 1;
+                let tp = vd.tp.clone();
+                let df = vd.df.clone();
+                if let Some(t) = tp {
+                    let allvars = t
+                        .free_variables()
+                        .into_iter()
+                        .filter(|v| !ctx.iter().any(|cv| cv.var == **v))
+                        .cloned()
+                        .collect::<smallvec::SmallVec<_, 2>>();
+                    for v in allvars {
+                        let tp = slf.infer_var_type_i(&v);
+                        ctx.push(ComponentVar {
+                            var: v,
+                            tp,
+                            df: None,
+                        });
+                    }
+                }
+                if let Some(t) = df {
+                    let allvars = t
+                        .free_variables()
+                        .into_iter()
+                        .filter(|v| !ctx.iter().any(|cv| cv.var == **v))
+                        .cloned()
+                        .collect::<smallvec::SmallVec<_, 2>>();
+                    for v in allvars {
+                        let tp = slf.infer_var_type_i(&v);
+                        ctx.push(ComponentVar {
+                            var: v,
+                            tp,
+                            df: None,
+                        });
+                    }
+                }
+            }
+            ctx.reverse();
+            for c in &ctx {
+                slf.extend_context(c);
+            }
+            nt = slf.revert_prepare(t.clone());
+            slf.infer_type(t).map(|t| slf.revert_prepare(t))
+        });
+        /*
+        let mut frees = nt.free_variables();
+        for v in r.as_ref().map(|t| t.free_variables()).unwrap_or_default() {
+            if !frees.contains(&v) {
+                frees.push(v);
+            }
+        }
+         */
+        /*let context = ctx
+        .into_iter()
+        //.filter(|v| frees.iter().any(|f| f.name() == v.var.name()))
+        .cloned()
+        .collect();*/
+        let log = self.wrap_none(|slf| CheckLog::from_pre(log, &mut |t| slf.revert_prepare(t)));
+        //drop(frees);
+        Some(SubtermCheckResult {
+            simplified: nt,
+            inferred_type: r,
+            context: ctx,
+            log,
+        })
     }
 
     fn set_context_i(&mut self, mut all: Vec<ModuleUri>) -> Result<(), BackendError> {
@@ -530,7 +623,7 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 
     fn prepare(&self, t: Term) -> Term {
-        self.wrap_none(|slf| slf.prepare(t))
+        self.wrap_none(|slf| slf.prepare(t, None))
     }
     fn revert_prepare(&self, t: Term) -> Term {
         self.wrap_none(|slf| slf.revert_prepare(t))

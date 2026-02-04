@@ -37,7 +37,7 @@ docs-only = []
 [dependencies]
 ftml-uris = { workspace = true, features = ["leptos"] }
 ftml-ontology = { workspace = true, features = ["serde"] }
-
+ftml-dom = {workspace = true}
 
 flams-database = { workspace = true }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }

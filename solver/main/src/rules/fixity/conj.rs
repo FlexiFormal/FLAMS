@@ -31,6 +31,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for IsConjunctionRule {
         _: &RuleSet<Split>,
         t: Term,
         _: either::Either<&Symbol, &VariableDeclaration>,
+        _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         ControlFlow::Continue(t)
     }
@@ -76,6 +77,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ConjunctiveRule {
         rules: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
+        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         let Some((app, args, index)) = super::is_sequence_binary(&self.0, &t, head) else {
             return ControlFlow::Continue(t);
@@ -167,6 +169,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
         rules: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
+        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         let Some((app, args, index)) = super::is_sequence_binary(&self.0, &t, head) else {
             return ControlFlow::Continue(t);

@@ -304,15 +304,15 @@ export function register_server_commands(context: FLAMSContext) {
       .then((_) => DASHBOARD.show(context,"queue") )
 	));
 
-  context.client.onNotification("flams/htmlResult", (s: string) => {
+  context.client.onNotification("flams/htmlResult", (s: {url:string}) => {
     DOCUMENT_VIEW?.refresh();
-    PREVIEW.open(context.server.url + "?uri=" + encodeURIComponent(s),s.split("&d=")[1]);
+    PREVIEW.open(context.server.url + "?uri=" + encodeURIComponent(s.url),s.url.split("&d=")[1]);
   });
   context.client.onNotification("flams/updateMathHub", (_) =>
     context.mathhub?.update(),
   );
-  context.client.onNotification("flams/openFile", (v:string) =>{
-    const uri = vscode.Uri.parse(v);
+  context.client.onNotification("flams/openFile", (v:{uri:string}) =>{
+    const uri = vscode.Uri.parse(v.uri);
     vscode.window.showTextDocument(uri);
   });
 }

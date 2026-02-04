@@ -35,7 +35,9 @@ macro_rules! maybe_lazy {
             fn data() -> Self {
                 Self
             }
-            fn view($name:Self) -> leptos::prelude::AnyView { $e }
+            fn view($name:Self) -> leptos::prelude::AnyView {
+                $e//ftml_dom::global_setup(move || flams_router_content::Views::top(move || $e))
+            }
         }
     }
 }

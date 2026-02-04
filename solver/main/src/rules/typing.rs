@@ -107,11 +107,71 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
                 _ => false,
             })
     }
+    fn make_bound<'t>(
+        &self,
+        checker: crate::CheckRef<'t, '_, Split>,
+        t: &BoundArgument,
+    ) -> Option<BoundArgument> {
+        match t {
+            BoundArgument::Simple(t) => {
+                if self.is_app(&t) {
+                    // SAFETY: is_app
+                    let (mut v, tp) = unsafe { Self::get_var(&t) };
+                    if v.len() == 1 {
+                        // SAFETY: len==1
+                        let var = unsafe { v.pop().unwrap_unchecked() };
+                        return Some(BoundArgument::Bound(ComponentVar {
+                            var,
+                            tp: Some(tp),
+                            df: None,
+                        }));
+                    }
+                }
+                None
+            }
+            BoundArgument::Sequence(MaybeSequence::Seq(s)) => {
+                let mut works = true;
+                let mut types = Vec::new();
+                let ns = s
+                    .into_iter()
+                    .flat_map(|t| {
+                        if self.is_app(&t) {
+                            // SAFETY: is_app
+                            let (v, tp) = unsafe { Self::get_var(&t) };
+                            for _ in &v {
+                                types.push(tp.clone());
+                            }
+                            v
+                        } else {
+                            works = false;
+                            Vec::new()
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if works {
+                    return Some(BoundArgument::BoundSeq(MaybeSequence::Seq(
+                        ns.into_iter()
+                            .zip(types)
+                            .map(|(var, tp)| ComponentVar {
+                                var,
+                                tp: Some(tp),
+                                df: None,
+                            })
+                            .collect(),
+                    )));
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     fn apply(
         &self,
         _: &RuleSet<Split>,
         t: Term,
         head: either::Either<&Symbol, &VariableDeclaration>,
+        _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         let Term::Bound(b) = t else {
             unreachable!("wut");
