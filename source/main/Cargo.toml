@@ -78,6 +78,7 @@ hydrate = [
     "flams-router-base/hydrate",
     "ftml-ontology/wasm",
     "dep:dateparser",
+    #"getrandom/wasm_js"
 ]
 tantivy = [
     "flams-search/tantivy",
@@ -186,7 +187,8 @@ wasm-bindgen = { workspace = true, optional = true }
 tracing-wasm = { workspace = true, optional = true }
 dateparser = {workspace = true,optional = true,features=["wasm"]}
 
-ahash = { workspace = true }
+#ahash = { workspace = true }
+#getrandom = {workspace=true}
 
 #tachys = {workspace = true}
 #server_fn = {workspace = true}

@@ -76,12 +76,12 @@ impl<Split: SplitStrategy> Checker<Split> {
         let Some(d) = self.get_module(&uri.module)?.get_as::<Symbol>(uri.name()) else {
             return Err(BackendError::NotFound(ftml_uris::UriKind::Symbol));
         };
-        if let Some(tp) = d.data.tp.parsed()
+        if let Some(tp) = d.data.tp.get_parsed()
             && !d.data.tp.has_checked()
         {
             d.data.tp.set_checked(prepare(tp.clone()));
         }
-        if let Some(df) = d.data.df.parsed()
+        if let Some(df) = d.data.df.get_parsed()
             && !d.data.df.has_checked()
         {
             d.data.df.set_checked(prepare(df.clone()));
@@ -111,7 +111,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
         let d = get(self, uri)?;
 
-        if let Some(tp) = d.data.tp.parsed()
+        if let Some(tp) = d.data.tp.get_parsed()
             && !d.data.tp.has_checked()
         {
             let tp = self.prepare(tp.clone());
@@ -122,7 +122,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 d.data.tp.set_checked(tp);
             }
         }
-        if let Some(df) = d.data.df.parsed()
+        if let Some(df) = d.data.df.get_parsed()
             && !d.data.df.has_checked()
         {
             d.data.df.set_checked(self.prepare(df.clone()));

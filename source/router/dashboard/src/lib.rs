@@ -43,6 +43,7 @@ pub mod server_fns {
 
 pub use flams_router_base::LoginState;
 use flams_router_base::maybe_lazy;
+use ftml_components::config::AllowSubterms;
 use ftml_dom::FtmlViews;
 use leptos::{
     either::{Either, EitherOf4},
@@ -134,6 +135,7 @@ pub fn Main() -> AnyView {
 #[component(transparent)]
 fn Top() -> AnyView {
     use flams_router_login::components::LoginProvider;
+    provide_context(AllowSubterms(true));
     view!(<LoginProvider><leptos_router::components::Outlet/></LoginProvider>).into_any()
 }
 

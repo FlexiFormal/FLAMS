@@ -185,9 +185,13 @@ impl<Split: SplitStrategy> Checker<Split> {
                     }
                 }
                 DocumentElementRef::Term(top) => {
-                    tracing::debug!("Checking term {:?}", top.parsed().debug_short());
-                    let tm = self.prepare(top.parsed().clone());
+                    tracing::debug!("Checking term {:?}", top.get_parsed().debug_short());
+                    let tm = self.prepare(top.get_parsed().clone());
                     let (t, _, log) = self.infer_type(&tm);
+                    let t = t.map(|t| self.revert_prepare(t));
+                    if let Some(t) = &t {
+                        top.set_type(t.clone());
+                    }
                     results.push(CheckResult::Term {
                         uri: top.uri.clone(),
                         inferred: t,
@@ -385,7 +389,17 @@ impl<Split: SplitStrategy> Checker<Split> {
         //.filter(|v| frees.iter().any(|f| f.name() == v.var.name()))
         .cloned()
         .collect();*/
-        let log = self.wrap_none(|slf| CheckLog::from_pre(log, &mut |t| slf.revert_prepare(t)));
+        let log = self.wrap_none(|slf| {
+            for c in &mut ctx {
+                if let Some(tp) = c.tp.take() {
+                    c.tp = Some(slf.revert_prepare(tp));
+                }
+                if let Some(df) = c.df.take() {
+                    c.df = Some(slf.revert_prepare(df));
+                }
+            }
+            CheckLog::from_pre(log, &mut |t| slf.revert_prepare(t))
+        });
         //drop(frees);
         Some(SubtermCheckResult {
             simplified: nt,
@@ -455,7 +469,7 @@ impl<Split: SplitStrategy> Checker<Split> {
     // TODO return checked term
     pub fn check_symbol(&mut self, s: &Symbol) -> Option<SymbolCheckResult> {
         tracing::debug!("Checking Symbol {s:?}");
-        match (s.data.tp.parsed(), s.data.df.parsed()) {
+        match (s.data.tp.get_parsed(), s.data.df.get_parsed()) {
             (Some(tp), None) => {
                 tracing::trace!("Checking Type");
                 let tp = self.prepare(tp.clone());
@@ -477,6 +491,8 @@ impl<Split: SplitStrategy> Checker<Split> {
 
                 if let Some(tp) = tp {
                     s.data.tp.set_checked(tp.clone());
+                    let tp = self.revert_prepare(tp);
+                    s.data.tp.set_presentation(tp.clone());
                     Some(SymbolCheckResult::DefiniensOnly {
                         inferred: Some(tp),
                         log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
@@ -524,7 +540,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     // TODO return checked term
     pub fn check_variable(&mut self, s: &VariableDeclaration) -> Option<SymbolCheckResult> {
-        match (s.data.tp.parsed(), s.data.df.parsed()) {
+        match (s.data.tp.get_parsed(), s.data.df.get_parsed()) {
             (Some(tp), None) => {
                 let tp = self.prepare(tp.clone());
                 let (b, _, l) = self.check_inhabitable(&tp);
@@ -542,6 +558,8 @@ impl<Split: SplitStrategy> Checker<Split> {
                 s.data.df.set_checked(df);
                 if let Some(tp) = tp {
                     s.data.tp.set_checked(tp.clone());
+                    let tp = self.revert_prepare(tp);
+                    s.data.tp.set_presentation(tp.clone());
                     Some(SymbolCheckResult::DefiniensOnly {
                         inferred: Some(tp),
                         log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),

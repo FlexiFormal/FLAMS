@@ -167,6 +167,7 @@ fn rustex(task: BuildSpec) -> BuildResult {
         .collect::<Vec<_>>()
         .join(",");
     let run = move || {
+        //println!("Running rustex");
         RusTeX::get()
             .map_err(|()| "Could not initialize RusTeX".to_string())
             .and_then(|e| {
@@ -206,6 +207,7 @@ fn rustex(task: BuildSpec) -> BuildResult {
     };
     #[cfg(not(debug_assertions))]
     let ret = { run() };
+    //println!("Finished; evaling result");
     match ret {
         Err(s) => BuildResult {
             log: FileOrString::Str(s.into_boxed_str()),

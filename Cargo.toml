@@ -179,7 +179,7 @@ utoipa-axum = "0.2"
 orx-parallel = "3"
 document-features = "0.2"
 rustc_version = "0.4"
-const-str = "0.7"
+const-str = "1"
 triomphe = "0.1"
 parking_lot = "0.12"
 serde-wasm-bindgen = "0.6"
@@ -188,7 +188,7 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 rustc-hash = "2"
 chrono = "0.4"
 oxrdf = "0.2.3"
-smallvec = { version = "2.0.0-alpha.10" }
+smallvec = { version = "2.0.0-alpha.12" }
 lazy_static = "1.5"
 url = "2"
 either = "1"
@@ -224,7 +224,7 @@ async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 astral-tokio-tar = "0.5.1"
 strum = { version = "0.27", features = ["derive"] }
 git-url-parse = { version = "0.4" }
-flume = { version = "0.11", features = ["async"] }
+flume = { version = "0.12", features = ["async"] }
 ordered-float = "5"
 
 password-hash = { version = "0.5" }
@@ -272,7 +272,8 @@ git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 
 # leptos
-leptos = { version = "=0.8.14"}#, features = ["nightly"] }
+# weird hydration error in 0.8.15... check soonish again?
+leptos = "0.8"#{ version = "=0.8.14"}#, features = ["nightly"] }
 leptos_axum = "0.8"
 leptos_meta = "0.8"
 leptos_router = { version = "0.8"}#, features = ["nightly"] }
@@ -300,7 +301,7 @@ axum-macros = { version = "0.5" }
 # leptos_axum requires 0.4:
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
-tower-sessions = { version = "0.14" }
+tower-sessions = { version = "0.14" } # version required by axum-login :-/
 axum-login = { version = "0.18" }
 http = { version = "1" }
 mime_guess = "2"
@@ -326,13 +327,13 @@ futures-util = "0.3"
 #html2text = "0.15"
 tantivy = "0.25"
 simsimd = "6"
-fastembed = "5"
-ort-candle = "0.1.0+0.8"
-ort = { version="2.0.0-rc.10", default-features = false, features = ["alternative-backend"] }
+fastembed = "5.8.1"
+ort-candle = "0.2.0+0.9"
+ort = { version="2.0.0-rc.11", default-features = false, features = ["alternative-backend"] }
 
 
 ahash = "0.8"
-getrandom = "0.3"
+getrandom = "0.3" # version required by ahash :-/
 
 #[patch.crates-io]
 #thaw = { git = 'https://github.com/thaw-ui/thaw' }

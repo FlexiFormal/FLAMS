@@ -125,11 +125,12 @@ fn editor(symbols: RwSignal<rustc_hash::FxHashMap<Id, SymbolUri>>) -> AnyView {
     let checked = RwSignal::new(false);
     let text = RwSignal::new(DEMO.to_string());
 
-    ftml_components::config::FtmlConfig::set_toc_source(ftml_dom::structure::TocSource::None);
+    //ftml_components::config::FtmlConfig::set_toc_source(ftml_dom::structure::TocSource::None);
     Views::setup_document::<flams_router_content::backend::FtmlBackend>(
         DocumentUri::no_doc().clone(),
         ftml_components::SidebarPosition::None,
         false,
+        ftml_dom::toc::TocSource::None,
         move || {
             view! {
                 <div><input type="checkbox" on:change:target=move |ev| {

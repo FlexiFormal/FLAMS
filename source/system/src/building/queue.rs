@@ -285,18 +285,20 @@ impl Queue {
             target,
         });
         let spec = task.as_build_spec(&self.0.backend);
+        //println!("Running task {target}");
         let BuildResult { log, result } = tracing::info_span!(target:"buildqueue","Running task",
           archive = %task.0.uri.archive_id(),
           rel_path = %task.0.rel_path,
           format = %target
         )
         .in_scope(|| (target.run)(spec));
-        let (idx, _) = task
-            .steps()
-            .iter()
-            .enumerate()
-            .find(|(_, s)| s.0.target == target)
-            .unwrap_or_else(|| unreachable!());
+        //println!("Finished running task {target}");
+        /*let (idx, _) = task
+        .steps()
+        .iter()
+        .enumerate()
+        .find(|(_, s)| s.0.target == target)
+        .unwrap_or_else(|| unreachable!());*/
         let mut lock = self.0.state.write();
         let QueueState::Running(ref mut state) = &mut *lock else {
             unreachable!()

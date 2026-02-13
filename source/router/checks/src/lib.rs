@@ -22,6 +22,7 @@ impl ResultExt for DocumentCheckResult {
             DocumentUri::no_doc().clone(),
             ftml_components::SidebarPosition::None,
             false,
+            ftml_dom::toc::TocSource::None,
             move || {
                 let inner = self
                     .checks

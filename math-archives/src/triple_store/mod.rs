@@ -196,7 +196,11 @@ impl RDFStore {
                                 .filter_map(Result::ok)
                                 .filter(|entry| entry.file_name() == "index.ttl")
                                 .filter_map(|e| {
-                                    let graph = Self::get_iri(a.uri(), out, &e)?;
+                                    let Some(graph) = Self::get_iri(a.uri(), out, &e) else {
+                                        println!("wut! {}",e.path().display());
+                                        return None
+                                    };
+                                    //let graph = Self::get_iri(a.uri(), out, &e)?;
                                     Some((e.into_path(), graph))
                                 })
                                 .collect::<Vec<_>>(),
@@ -218,7 +222,7 @@ impl RDFStore {
                 })
                 .collect_vec_list();
             for (i,path_graph) in all_files.into_iter().flatten().enumerate() {//.flatten().flatten().enumerate() {
-                tracing::info!("Loading {}",i+1);
+                //tracing::info!("Loading {}",i+1);
                 let mut loader = self.store.bulk_loader();
                 for (path,graph) in path_graph {
                     let Ok(file) = std::fs::File::open(&path) else {
@@ -245,12 +249,18 @@ impl RDFStore {
     ) -> Option<ulo::rdf_types::NamedNode> {
         let parent = e.path().parent()?;
         let parentname = parent.file_name()?.to_str()?;
-        let parentname = parentname.rsplit_once('.').map_or(parentname, |(s, _)| s);
+        //let parentname = parentname.rsplit_once('.').map_or(parentname, |(s, _)| s);
         let language = Language::from_rel_path(parentname);
         let parentname = parentname
             .strip_suffix(&format!(".{language}"))
             .unwrap_or(parentname);
-        let path: UriPath = parent.parent()?.relative_to(&out)?.parse().ok()?;
+        let grandparent = parent.parent()?;
+        let path: Option<UriPath> = if grandparent == out {
+            None
+        } else {
+            Some(grandparent.relative_to(&out)?.parse().ok()?)
+        };
+        //let path: UriPath = parent.parent()?.relative_to(&out)?.parse().ok()?;
         let doc: DocumentUri = (a.clone() / path) & (parentname.parse().ok()?, language);
         Some(doc.to_iri())
     }

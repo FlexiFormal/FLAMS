@@ -41,7 +41,7 @@ impl STDIOLSPServer {
     }
     fn load_all(&self) {
         let client = self.client.clone();
-        let state = unwrap!(Self::global_state().clone());
+        let state = unwrap!(Self::global_state());
         for (name, uri) in &self.workspaces {
             tracing::info!("workspace: {name}@{uri}");
         }
@@ -279,7 +279,6 @@ impl ClientExt for ClientSocket {
     fn update_mathhub(&self) {
         if let Err(e) = self.notify::<UpdateMathHub>(Vec::new()) {
             tracing::error!("failed to send notification: {}", e);
-            return;
         }
     }
 
@@ -289,7 +288,6 @@ impl ClientExt for ClientSocket {
         };
         if let Err(e) = self.notify::<OpenFile>(UriParams { uri: url }) {
             tracing::error!("failed to send notification: {}", e);
-            return;
         }
     }
 }
@@ -488,7 +486,7 @@ lazy_static::lazy_static! {
 
 impl ProgressCallbackServer {
     #[inline]
-    pub fn client_mut(&mut self) -> &mut ClientSocket {
+    pub const fn client_mut(&mut self) -> &mut ClientSocket {
         &mut self.client
     }
 

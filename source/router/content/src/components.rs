@@ -3,7 +3,7 @@
 use flams_router_base::maybe_lazy;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_components::{SidebarPosition, config::FtmlConfig};
-use ftml_dom::{FtmlViews, structure::TocSource, utils::css::CssExt};
+use ftml_dom::{FtmlViews, toc::TocSource, utils::css::CssExt};
 use ftml_uris::{
     DocumentUri, Uri,
     components::{
@@ -114,27 +114,27 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
                     for css in css {
                         css.inject();
                     }
-                    let uri = match uri {
+                    let (uri, src) = match uri {
                         Uri::Document(d) => {
-                            FtmlConfig::set_toc_source(TocSource::Get);
-                            Some(d.into())
+                            //FtmlConfig::set_toc_source(TocSource::Get);
+                            (Some(d.into()), TocSource::Get)
                         }
                         Uri::DocumentElement(d) => {
-                            FtmlConfig::set_toc_source(TocSource::None);
-                            Some(d.into())
+                            //FtmlConfig::set_toc_source(TocSource::None);
+                            (Some(d.into()), TocSource::None)
                         }
                         _ => {
-                            FtmlConfig::set_toc_source(TocSource::None);
-                            None
+                            //FtmlConfig::set_toc_source(TocSource::None);
+                            (None, TocSource::None)
                         }
                     };
                     crate::Views::render_fragment::<crate::backend::FtmlBackend>(
                         uri,
                         position,
                         true,
+                        src,
                         move || crate::Views::render_ftml(html.into_string(), None).into_any(),
                     )
-                    .into_any()
                 },
                 |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
             ))
@@ -167,11 +167,12 @@ pub fn Document(doc: DocumentUriComponents) -> AnyView {
                         c.inject();
                     }
                     {
-                        FtmlConfig::set_toc_source(TocSource::Get);
+                        //FtmlConfig::set_toc_source(TocSource::Get);
                         crate::Views::setup_document::<crate::backend::FtmlBackend>(
                             uri,
                             SidebarPosition::Next,
                             true,
+                            TocSource::Get,
                             move || crate::Views::render_ftml(html.into_string(), None).into_any(),
                         )
                     }
@@ -200,6 +201,7 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> AnyView {
                     DocumentUri::no_doc().clone(),
                     SidebarPosition::None,
                     true,
+                    TocSource::None,
                     move || crate::Views::render_ftml(html.into_string(),None).into_any()
                 )
             }</div>}

@@ -12,8 +12,8 @@
   </head>
   <body style="height:100%;">
     <div style="height:100%;">
-      <vscode-button onclick="call_vscode('preview')" style="width:fit-content" title="preview"><i class="codicon codicon-open-preview"></i></vscode-button>
-      <vscode-button onclick="call_vscode('browser')" style="width:fit-content" title="open in browser"><i class="codicon codicon-preview"></i></vscode-button>
+      <vscode-button onclick="call_vscode('preview')" style="width:fit-content" title="preview"><i class="codicon codicon-open-preview"></i> Preview</vscode-button>
+      <vscode-button onclick="call_vscode('browser')" style="width:fit-content" title="open in browser"><i class="codicon codicon-preview"></i> Browser</vscode-button>
       <vscode-button onclick="call_vscode('quiz')" style="width:fit-content" title="save quiz json"><i class="codicon codicon-save-as"></i> Quiz</vscode-button>
       <vscode-divider></vscode-divider>
       <iframe style="width:100%;border:0;height:calc(100% - 75px);" src="%%SERVER_URL%%/vscode/proofs?url=%%DOC_URL%%" id="miframe"></iframe>

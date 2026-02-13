@@ -13,3 +13,5 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 Cargo.toml.ignore
+!node_modules/@vscode/codicons/dist/codicon.css
+!node_modules/@vscode/codicons/dist/codicon.ttf
