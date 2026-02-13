@@ -199,39 +199,6 @@ pub fn vscode_search() -> AnyView {
     (move || if sig.get() { Some(inner()) } else { None }).into_any()
 }
 
-/*
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-fn do_results(
-    pre: &'static str,
-    remote: Option<fn() -> Option<String>>,
-    results: RwSignal<SearchState>,
-) -> AnyView {
-    use leptos::either::EitherOf6::*;
-    let pre_view =
-        move || view! {<div style="width:100%;font-weight:bold;text-align:center;">{pre}</div>};
-    (move || {
-        results.with(|r| match r {
-            SearchState::None => A(()),
-            SearchState::Results(v) if v.is_empty() => B(view!({pre_view}"(No results)")),
-            SearchState::Loading => C(view!({pre_view}<flams_web_utils::components::Spinner/>)),
-            SearchState::SymResults(v) if remote.is_none() => D(view!({pre_view}{v
-            .iter()
-            .map(|(sym, _)| do_sym_result_local(sym))
-            .collect_view()})),
-            SearchState::SymResults(v) => E(view!({pre_view}{v
-            .iter()
-            .map(|(sym, res)| do_sym_result_remote(sym, res.clone(),unwrap!(remote)))
-            .collect_view()})),
-            SearchState::Results(v) => F(view!({pre_view}{v
-            .iter()
-            .map(|(score, res)| do_result(*score, res,remote))
-            .collect_view()})),
-        })
-    })
-    .into_any()
-}
- */
-
 fn do_results(
     pre: &'static str,
     remote: Option<fn() -> Option<String>>,
@@ -322,43 +289,6 @@ impl std::fmt::Display for Short<'_> {
     }
 }
 
-/*
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-fn do_sym_result_local(sym: &SymbolUri) -> AnyView {
-    let vs = unwrap!(VSCode::get());
-    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
-    view! {
-        <div class="flams-search-block">
-            <div><b>{name}</b>
-                {
-                    let sym_a = sym.clone();
-                    let vs_a = vs.clone();
-                    let on_use = move |_| {
-                        let _ = vs_a.post_message(Usemodule::make(&sym_a));
-                    };
-                    let sym = sym.clone();
-                    let on_preview = move |_| {
-                        let _ = vs.post_message(Preview::make(&sym));
-                    };
-                    view!{
-                        <div style="width:100%">
-                            <div style="margin-left:auto;width:fit-content;display:flex;flex-direction:row;">
-                                <div style="width:fit-content;margin-right:5px;" on:click=on_preview>
-                                    <VSCodeButton>"preview"</VSCodeButton>
-                                </div>
-                                <div style="width:fit-content;" on:click=on_use>
-                                    <VSCodeButton>"\\usemodule"</VSCodeButton>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                }
-            </div>
-        </div>
-    }.into_any()
-}
- */
-
 fn do_sym_result_local(sym: &SymbolUri, elem: &DocumentElementUri) -> AnyView {
     let vs = unwrap!(VSCode::get());
     let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
@@ -392,38 +322,6 @@ fn do_sym_result_local(sym: &SymbolUri, elem: &DocumentElementUri) -> AnyView {
         </div>
     }.into_any()
 }
-
-/*
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-fn do_sym_result_remote(
-    sym: &SymbolUri,
-    res: Vec<(f32, SearchResult)>,
-    remote: fn() -> Option<String>,
-) -> AnyView {
-    use thaw::Scrollbar;
-    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
-    view! {
-        <div class="flams-search-block">
-            <div><b>{name}</b>
-            </div>
-            <div style="display:block">
-            <div style="padding:0 5px;max-width:100%">
-                <div style="width:100%;color:black;background-color:white;">
-                  <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">{
-                    res.into_iter().map(|(_,r)| {
-                      let SearchResult::Paragraph { uri, .. } = r else { impossible!()};
-                      fragment(uri.into(),Some(remote))
-                    }).collect_view()
-                  }
-                  </Scrollbar>
-                </div>
-              </div>
-            </div>
-        </div>
-    }
-    .into_any()
-}
- */
 
 fn do_sym_result_remote(
     sym: &SymbolUri,

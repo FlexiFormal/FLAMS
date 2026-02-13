@@ -10,17 +10,6 @@ use ftml_uris::{
 };
 use leptos::prelude::*;
 
-/*
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-#[derive(Debug, Clone)]
-pub(crate) enum SearchState {
-    None,
-    Loading,
-    Results(Vec<(f32, SearchResult)>),
-    SymResults(Vec<(SymbolUri, Vec<(f32, SearchResult)>)>),
-}
- */
-
 #[derive(Debug, Clone)]
 pub(crate) enum SearchState {
     None,
@@ -234,27 +223,6 @@ pub fn search_top() -> AnyView {
     }.into_any()
 }
 
-/*
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-fn do_results(results: RwSignal<SearchState>) -> AnyView {
-    results.with(|r| match r {
-        SearchState::None => ().into_any(),
-        SearchState::Results(v) if v.is_empty() => "(No results)".into_any(),
-        SearchState::Loading => view!(<flams_web_utils::components::Spinner/>).into_any(),
-        SearchState::SymResults(v) => v
-            .iter()
-            .map(|(sym, res)| do_sym_result(sym, res.clone()))
-            .collect_view()
-            .into_any(),
-        SearchState::Results(v) => v
-            .iter()
-            .map(|(score, res)| do_result(*score, res))
-            .collect_view()
-            .into_any(),
-    })
-}
- */
-
 fn do_results(results: RwSignal<SearchState>) -> AnyView {
     results.with(|r| match r {
         SearchState::None => ().into_any(),
@@ -272,42 +240,6 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
             .into_any(),
     })
 }
-
-/*
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
-    use flams_router_content::components::Fragment;
-    use flams_web_utils::components::ClientOnly;
-    use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
-
-    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
-    view! {
-      <Card>
-          <CardHeader>
-              <Body1><b>{name}</b></Body1>
-          </CardHeader>
-          <CardPreview>
-            <div style="padding:0 5px;max-width:100%">
-              <div style="width:100%;color:black;background-color:white;">
-                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">{
-                  res.into_iter().map(|(_,r)| {
-                    let SearchResult::Paragraph { uri, .. } = r else { impossible!()};
-                    view!{
-                        //<span>"Here: "{uri.to_string()}</span>
-                        //<div>"---"</div>
-                        <Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>
-                        //<div>"---"</div>
-                    }
-                  }).collect_view()
-                }
-                </Scrollbar>
-              </div>
-            </div>
-          </CardPreview>
-      </Card>
-    }.into_any()
-}
- */
 
 fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyView {
     use flams_router_content::components::Fragment;
@@ -356,9 +288,6 @@ fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
               <Body1>
                   <b>"Document "{name}</b>
               </Body1>
-              /*<CardHeaderDescription slot>
-                  <Caption1>"Description"</Caption1>
-              </CardHeaderDescription>*/
               <CardHeaderAction slot>
                   <span>"Score: "{score}</span>
               </CardHeaderAction>
@@ -370,9 +299,6 @@ fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
                 </div>
               </div>
           </CardPreview>
-          /*<CardFooter>
-              "sTeX:"<pre></pre>
-          </CardFooter>*/
       </Card>
     }.into_any()
 }

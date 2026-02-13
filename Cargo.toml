@@ -328,8 +328,8 @@ futures-util = "0.3"
 tantivy = "0.25"
 simsimd = "6"
 fastembed = "5.8.1"
-ort-candle = "0.2.0+0.9"
-ort = { version="2.0.0-rc.11", default-features = false, features = ["alternative-backend"] }
+#ort-candle = "0.2.0+0.9"
+ort = { version="2.0.0-rc.11"}#, default-features = false, features = ["alternative-backend"] }
 
 
 ahash = "0.8"
@@ -347,7 +347,7 @@ name = "flams"
 #output-name = "flams"
 bin-package = "flams"
 lib-package = "flams"
-bin-features = ["ssr","tantivy"]
+bin-features = ["ssr","tantivy"] #,"vectorsearch"] #,"tantivy"]
 lib-features = ["hydrate"]
 lib-default-features = false
 bin-profile-release = "flams-release"

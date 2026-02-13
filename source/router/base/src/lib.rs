@@ -17,19 +17,19 @@ pub mod ws;
 #[macro_export]
 macro_rules! maybe_lazy {
     ($t:path) => {{
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions,feature="docs-only"))]
         {$t}
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions,feature="docs-only")))]
         {leptos_router::Lazy::<$t>::new()}
     }};
     ($name:ident = $e:expr) => {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions,feature="docs-only"))]
         #[component]
         pub fn $name() -> AnyView { $e }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions,feature="docs-only")))]
         #[derive(Debug,Clone,serde::Deserialize)]
         pub struct $name;
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions,feature="docs-only")))]
         #[leptos_router::lazy_route]
         impl leptos_router::LazyRoute for $name {
             fn data() -> Self {

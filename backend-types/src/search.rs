@@ -202,51 +202,6 @@ impl QueryFilterFlags {
     }
 }
 
-/*
-#[allow(dead_code)]
-const fn get_true() -> bool {
-    true
-}
-
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
-#[cfg_attr(feature = "typescript", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct QueryFilter {
-    #[cfg_attr(feature = "serde", serde(default = "get_true"))]
-    pub allow_documents: bool,
-    #[cfg_attr(feature = "serde", serde(default = "get_true"))]
-    pub allow_paragraphs: bool,
-    #[cfg_attr(feature = "serde", serde(default = "get_true"))]
-    pub allow_definitions: bool,
-    #[cfg_attr(feature = "serde", serde(default = "get_true"))]
-    pub allow_examples: bool,
-    #[cfg_attr(feature = "serde", serde(default = "get_true"))]
-    pub allow_assertions: bool,
-    #[cfg_attr(feature = "serde", serde(default = "get_true"))]
-    pub allow_problems: bool,
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub definition_like_only: bool,
-}
-
-#[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
-impl Default for QueryFilter {
-    fn default() -> Self {
-        Self {
-            allow_documents: true,
-            allow_paragraphs: true,
-            allow_definitions: true,
-            allow_examples: true,
-            allow_assertions: true,
-            allow_problems: true,
-            definition_like_only: false,
-        }
-    }
-}
- */
-
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
