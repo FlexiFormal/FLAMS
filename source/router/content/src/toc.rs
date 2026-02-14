@@ -3,14 +3,15 @@ use flams_utils::vecmap::VecSet;
 use ftml_ontology::{
     narrative::{
         documents::{Document, TocElem},
-        elements::{DocumentElement, Problem, Section},
+        elements::{DocumentElement, Problem, Section, SectionLevel},
     },
     utils::Css,
 };
 
-pub async fn from_document(doc: Document) -> (Box<[Css]>, Box<[TocElem]>) {
+pub async fn from_document(doc: Document) -> (Box<[Css]>, SectionLevel, Box<[TocElem]>) {
+    let lvl = doc.top_section_level;
     let (css, e) = from_document_i(doc, String::new(), VecSet::default()).await;
-    (css.0.into_boxed_slice(), e)
+    (css.0.into_boxed_slice(), lvl, e)
 }
 
 fn from_document_i(

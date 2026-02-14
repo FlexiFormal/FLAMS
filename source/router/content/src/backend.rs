@@ -1,3 +1,4 @@
+use ftml_ontology::narrative::elements::SectionLevel;
 use ftml_uris::{DocumentUri, FtmlUri, Uri};
 
 pub struct FtmlBackend;
@@ -97,6 +98,7 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
     ) -> Result<
         (
             Box<[ftml_ontology::utils::Css]>,
+            SectionLevel,
             Box<[ftml_ontology::narrative::documents::TocElem]>,
         ),
         ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,

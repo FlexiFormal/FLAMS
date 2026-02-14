@@ -3,7 +3,7 @@ use ftml_ontology::{
     narrative::{
         documents::TocElem,
         elements::{
-            Notation, ParagraphOrProblemKind, SlideElement,
+            Notation, ParagraphOrProblemKind, SectionLevel, SlideElement,
             problems::{ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz},
         },
     },
@@ -218,7 +218,7 @@ ftml_uris::compfun! {
     )]
     pub async fn toc(
         uri: DocumentUri
-    ) -> Result<(Box<[Css]>, Box<[TocElem]>), ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>> {
+    ) -> Result<(Box<[Css]>, SectionLevel, Box<[TocElem]>), ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>> {
         let comps = uri?;
         let uri = comps.parse(flams_router_base::uris::get_uri)?;
         server::toc(uri).await
@@ -544,7 +544,7 @@ mod server {
             documents::TocElem,
             elements::{
                 DocumentElement, LogicalParagraph, Notation, ParagraphOrProblemKind, Problem,
-                Section, SlideElement,
+                Section, SectionLevel, SlideElement,
                 problems::{ProblemData, Solutions, quizzes::Quiz},
             },
         },
@@ -577,7 +577,7 @@ mod server {
     pub async fn toc(
         uri: DocumentUri,
     ) -> Result<
-        (Box<[Css]>, Box<[TocElem]>),
+        (Box<[Css]>, SectionLevel, Box<[TocElem]>),
         ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
     > {
         let doc = backend().get_document_async::<TokioEngine>(&uri).await?;
