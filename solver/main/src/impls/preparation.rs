@@ -11,7 +11,13 @@ use ftml_ontology::{
 use smallvec::SmallVec;
 use std::{hint::unreachable_unchecked, mem::MaybeUninit};
 
-impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
+impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
+    #[inline]
+    #[must_use]
+    pub const fn rules(&self) -> &crate::rules::RuleSet<Split> {
+        &self.top.rules
+    }
+
     pub(crate) fn prepare(&self, t: Term, path: Option<&mut TermPath>) -> Term {
         tracing::trace!("preparing {:?}", t.debug_short());
         let mut cp = self.copied();
@@ -33,6 +39,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     pub(crate) fn bind_implicits(&mut self, nt: Term) -> Term {
+        tracing::trace!("Binding implicits for {:?}", nt.debug_short());
         let allvars = nt
             .free_variables()
             .into_iter()
@@ -74,7 +81,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         n
     }
 
-    fn get_head(
+    pub fn get_head(
         &self,
         t: &Term,
     ) -> Option<Either<SharedDeclaration<Symbol>, SharedDocumentElement<VariableDeclaration>>> {
@@ -97,23 +104,16 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
         }
-        let Some(head) = self.get_head(&t) else {
-            return t;
-        };
-        let head = head.as_ref().map_either(|v| &**v, |v| &**v);
-        tracing::trace!("Head: {:?}", head);
 
         // this may very much be overkill, but it's nice to do things without cloning,
         // and terms are composed of potentially multiple Arcs :)
         let mut t = MaybeUninit::new(t);
 
         let rules = self.top.rules.preparation();
-        tracing::trace!("Rules: {rules:#?}");
 
         for rl in self.top.rules.preparation() {
-            tracing::trace!("Rule {rl:?}?");
             // SAFETY: not yet replaced
-            if !rl.applicable(unsafe { t.assume_init_ref() }, head) {
+            if !rl.applicable(self, unsafe { t.assume_init_ref() }) {
                 continue;
             }
             // SAFETY: not yet replaced
@@ -122,7 +122,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 Some((p, t)) => Some((&mut **p, *t)),
                 _ => None,
             };
-            match rl.apply(&self.top.rules, tm, head, path) {
+            match rl.apply(self, tm, path) {
                 //                                 MaybeUninit doesn't drop the inner value,
                 //                                 vvvvvvvvv  so this is fine
                 std::ops::ControlFlow::Break(t) => return t,
@@ -131,6 +131,10 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     t.write(tm);
                 }
             }
+            tracing::trace!(
+                "Rule {rl:?} applied; result: {:?}",
+                unsafe { t.assume_init_ref() }.debug_short()
+            );
         }
         // SAFETY: t has been restored or we've returned early anyway
         self.prepare_recurse(
@@ -145,28 +149,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
         }
-        let Some(head) = self.get_head(&t) else {
-            return t;
-        };
-        let head = head.as_ref().map_either(|v| &**v, |v| &**v);
-        tracing::trace!("Head: {:?}", head);
 
         // this may very much be overkill, but it's nice to do things without cloning,
         // and terms are composed of potentially multiple Arcs :)
         let mut t = MaybeUninit::new(t);
 
-        let rules = self.top.rules.preparation();
-        tracing::trace!("Rules: {rules:#?}");
-
         for rl in self.top.rules.preparation().iter().rev() {
-            tracing::trace!("Rule {rl:?}?");
             // SAFETY: not yet replaced
-            if !rl.applicable_revert(unsafe { t.assume_init_ref() }, head) {
+            if !rl.applicable_revert(self, unsafe { t.assume_init_ref() }) {
                 continue;
             }
             // SAFETY: not yet replaced
             let tm = unsafe { t.assume_init_read() };
-            match rl.revert(&self.top.rules, tm, head) {
+            match rl.revert(self, tm) {
                 //                                 MaybeUninit doesn't drop the inner value,
                 //                                 vvvvvvvvv  so this is fine
                 std::ops::ControlFlow::Break(t) => return t,
@@ -175,6 +170,10 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     t.write(tm);
                 }
             }
+            tracing::trace!(
+                "Rule {rl:?} applied; result: {:?}",
+                unsafe { t.assume_init_ref() }.debug_short()
+            );
         }
         // SAFETY: t has been restored or we've returned early anyway
         self.prepare_recurse(unsafe { t.assume_init() }, |s, t, _| s.revert_i(t), None)

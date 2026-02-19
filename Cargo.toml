@@ -319,7 +319,7 @@ tsify-next = { version = "0.5", features = ["js"] }
 tsify = { version = "0.5", features = ["js"] }
 js-sys = "0.3"
 js-regexp = "0.2"
-wasm-streams = "0.4"
+wasm-streams = "0.5"
 futures-util = "0.3"
 
 # search

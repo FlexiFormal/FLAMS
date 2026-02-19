@@ -1,13 +1,10 @@
 use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    CheckRef,
+    rules::{PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
-use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
-    terms::{
-        ApplicationTerm, Argument, ArgumentMode, BindingTerm, BoundArgument, MaybeSequence, Term,
-    },
+use ftml_ontology::terms::{
+    ApplicationTerm, Argument, ArgumentMode, BindingTerm, BoundArgument, MaybeSequence, Term,
 };
 use ftml_uris::SymbolUri;
 use std::ops::ControlFlow;
@@ -107,7 +104,11 @@ impl PrenexRule {
 }
 
 impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         let either::Left(sym) = head else {
             return false;
         };
@@ -126,7 +127,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
             };
             matches!(
                 b.arguments.get(bound_index),
-                Some(BoundArgument::BoundSeq(_))
+                Some(BoundArgument::BoundSeq(MaybeSequence::Seq(_)))
             )
         } else if let Term::Application(a) = t {
             let Some(seq_index) = sym
@@ -138,7 +139,10 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
                 tracing::trace!("No sequence index");
                 return false;
             };
-            matches!(a.arguments.get(seq_index), Some(Argument::Sequence(_)))
+            matches!(
+                a.arguments.get(seq_index),
+                Some(Argument::Sequence(MaybeSequence::Seq(_)))
+            )
         } else {
             tracing::trace!("Not a binder or application");
             false
@@ -147,12 +151,15 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
 
     fn apply(
         &self,
-        _: &RuleSet<Split>,
+        checker: &CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> std::ops::ControlFlow<Term, Term> {
         tracing::trace!("Prenexing");
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         let either::Left(sym) = head else {
             return ControlFlow::Continue(t);
         };
@@ -184,19 +191,10 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
             o => ControlFlow::Continue(o),
         }
     }
-    fn applicable_revert(
-        &self,
-        _: &Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
+    fn applicable_revert(&self, _: &CheckRef<'_, '_, Split>, _: &Term) -> bool {
         false
     }
-    fn revert(
-        &self,
-        _: &RuleSet<Split>,
-        t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
+    fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
         ControlFlow::Continue(t)
     }
 }

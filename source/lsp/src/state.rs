@@ -594,7 +594,7 @@ fn check_diagnostics(
     res: &DocumentCheckResult,
     src: (&Document, &[Module]),
 ) -> impl Iterator<Item = STeXDiagnostic> {
-    use either_of::EitherOf4 as E;
+    use either_of::EitherOf5 as E;
     res.checks.iter().flat_map(|cr| match cr {
         CheckResult::Missing(u) => E::A(std::iter::once(STeXDiagnostic {
             level: DiagnosticLevel::Error,
@@ -629,7 +629,29 @@ fn check_diagnostics(
                 }))
             }
         }
-        CheckResult::Module { checks, .. } => E::D(checks.iter().flat_map(|ccr| match ccr {
+        CheckResult::Content(ccr) => match ccr {
+            ContentCheckResult::Symbol(uri, res) => {
+                let sym = src
+                    .1
+                    .iter()
+                    .find(|m| m.uri == uri.module)
+                    .and_then(|m| m.get_as::<Symbol>(uri.name()));
+                if sym.is_none() {
+                    tracing::error!("Symbol {uri} not found!");
+                }
+                E::D(
+                    symbol_check_result(
+                        &res,
+                        uri.name().as_ref(),
+                        sym.as_ref().map(|v| &v.data.tp),
+                        sym.as_ref().map(|v| &v.data.df),
+                    )
+                    .collect::<SmallVec<_, 1>>()
+                    .into_iter(),
+                )
+            }
+        },
+        CheckResult::Module { checks, .. } => E::E(checks.iter().flat_map(|ccr| match ccr {
             ContentCheckResult::Symbol(uri, res) => {
                 let sym = src
                     .1

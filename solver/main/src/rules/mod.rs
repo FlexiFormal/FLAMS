@@ -2,16 +2,13 @@ pub mod defaults;
 pub mod extractors;
 pub mod fixity;
 pub mod pi;
+pub mod sequences;
 pub mod typing;
 pub mod universe;
 pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
 
 use crate::{CheckRef, split::SplitStrategy};
-use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
-    terms::{BoundArgument, ComponentVar, Term},
-};
+use ftml_ontology::terms::Term;
 use std::{fmt::Debug, ops::ControlFlow};
 
 macro_rules! rules{
@@ -135,30 +132,13 @@ pub trait SubtypeRule<Split: SplitStrategy>: CheckerRule {
 }
 
 pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool;
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool;
     fn apply(
         &self,
-        rules: &RuleSet<Split>,
+        checker: &CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term>;
-    fn applicable_revert(
-        &self,
-        t: &Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool;
-    fn revert(
-        &self,
-        rules: &RuleSet<Split>,
-        t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term>;
-    fn make_bound<'t>(
-        &self,
-        checker: CheckRef<'t, '_, Split>,
-        t: &BoundArgument,
-    ) -> Option<BoundArgument> {
-        None
-    }
+    fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool;
+    fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term>;
 }

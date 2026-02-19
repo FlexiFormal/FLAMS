@@ -113,7 +113,7 @@ impl SymbolCheckResult {
 pub enum CheckResult {
     Module {
         uri: ModuleUri,
-        checks: Box<[ContentCheckResult]>,
+        checks: Vec<ContentCheckResult>,
     },
     Variable(DocumentElementUri, SymbolCheckResult),
     Term {
@@ -121,6 +121,7 @@ pub enum CheckResult {
         inferred: Option<Term>,
         log: CheckLog,
     },
+    Content(ContentCheckResult),
     Missing(ModuleUri),
 }
 impl CheckResult {
@@ -130,14 +131,15 @@ impl CheckResult {
         struct Displayer<'a, D: FmtTraceDisplay>(&'a CheckResult, PhantomData<D>);
         impl<D: FmtTraceDisplay> std::fmt::Display for Displayer<'_, D> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let mut d = D::new(f);
                 match self.0 {
                     CheckResult::Missing(u) => {
+                        let mut d = D::new(f);
                         d.string("\nMissing module: ", Some(crate::MessageLevel::Failure))?;
                         d.uri(u.as_uri(), Some(crate::MessageLevel::Failure))?;
                         d.string("\n", None)
                     }
                     CheckResult::Module { uri, checks } => {
+                        let mut d = D::new(f);
                         d.string("\nChecking module ", Some(crate::MessageLevel::Header))?;
                         d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
                         d.string("\n", None)?;
@@ -148,6 +150,7 @@ impl CheckResult {
                         Ok(())
                     }
                     CheckResult::Variable(uri, r) => {
+                        let mut d = D::new(f);
                         d.string("\nChecking variable ", Some(crate::MessageLevel::Header))?;
                         d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
                         d.string("\n", None)?;
@@ -155,12 +158,14 @@ impl CheckResult {
                         r.display::<D>().fmt(f)
                     }
                     CheckResult::Term { uri, log, .. } => {
+                        let mut d = D::new(f);
                         d.string("\nChecking term ", Some(crate::MessageLevel::Header))?;
                         d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
                         d.string("\n", None)?;
                         drop(d);
                         log.display::<D>().fmt(f)
                     }
+                    CheckResult::Content(c) => c.display::<D>().fmt(f),
                 }
             }
         }
@@ -179,6 +184,7 @@ impl CheckResult {
             Self::Variable(_, res) => res.success(),
             Self::Term { inferred, .. } => inferred.is_some(),
             Self::Missing(_) => false,
+            Self::Content(c) => c.success(),
         }
     }
 }

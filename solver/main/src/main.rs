@@ -62,15 +62,17 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=propositions&d=disjunction&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=implication&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=equivalence&l=en",
-        "http://mathhub.info?a=FTML/math&p=sets&d=inset&l=en",*/
+        "http://mathhub.info?a=FTML/math&p=sets&d=inset&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=forall&l=en",
-        /*"http://mathhub.info?a=FTML/math&p=propositions&d=exists&l=en",
+        "http://mathhub.info?a=FTML/math&p=propositions&d=exists&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=equal&l=en",
         "http://mathhub.info?a=FTML/math&d=functions&l=en",
         "http://mathhub.info?a=FTML/math&p=sets&d=cons&l=en",
         "http://mathhub.info?a=FTML/math&p=sets&d=comprehension&l=en",
         "http://mathhub.info?a=FTML/math&p=nat&d=nat&l=en",
-        "http://mathhub.info?a=FTML/math&d=test&l=en",*/
+        "http://mathhub.info?a=FTML/math&d=test&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs&d=judgment&l=en",*/
+        "http://mathhub.info?a=FTML/math&p=proofs&d=inference-rule&l=en"
     )
     //}
 }

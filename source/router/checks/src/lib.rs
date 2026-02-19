@@ -59,6 +59,23 @@ impl ResultExt for CheckResult {
                 }
                 .into_any()
             }
+            Self::Content(c) => match c {
+                ContentCheckResult::Symbol(u, s) => {
+                    let success = s.success();
+                    let succ = do_success(success);
+                    view! {
+                        <Subtree expanded=!success>
+                            <Header slot>
+                                <b>{succ}"Symbol "{u.as_view::<FtmlBackend>()}</b>
+                            </Header>
+                            {
+                                symbol_result(s)
+                            }
+                        </Subtree>
+                    }
+                    .into_any()
+                }
+            },
             Self::Module { uri, checks } => {
                 let success = checks.iter().all(ContentCheckResult::success);
                 let succ = do_success(success);

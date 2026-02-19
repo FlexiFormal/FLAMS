@@ -29,6 +29,7 @@ use flams_math_archives::{
 };
 use ftml_ontology::{
     domain::{
+        HasDeclarations,
         declarations::{AnyDeclarationRef, symbols::Symbol},
         modules::{Module, ModuleData, ModuleLike},
     },
@@ -40,10 +41,14 @@ use ftml_ontology::{
     utils::RefTree,
 };
 use ftml_solver_trace::CheckLog;
-use ftml_uris::ModuleUri;
+use ftml_uris::{Id, ModuleUri};
 pub(crate) use impls::backend::TermExtSeq;
 use smallvec::SmallVec;
 use std::{hint::unreachable_unchecked, marker::PhantomData};
+
+pub static DUMMY: std::sync::LazyLock<Id> =
+    // SAFETY: "DUMMY" is a valid ID
+    std::sync::LazyLock::new(|| unsafe { "DUMMY".parse().unwrap_unchecked() });
 
 flams_math_archives::build_target!(CHECK {
     name: "typecheck",
@@ -148,6 +153,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         let mut all = Vec::new();
         let mut modules = Vec::new();
         let mut results = Vec::new();
+        self.documents.insert(d.clone());
         for e in d.dfs() {
             match e {
                 DocumentElementRef::UseModule { uri: module, .. } => all.push(module.clone()),
@@ -159,7 +165,7 @@ impl<Split: SplitStrategy> Checker<Split> {
             }
         }
         let _ = self.set_context_i(all);
-        let modules = modules
+        let modules: Vec<_> = modules
             .into_iter()
             .filter_map(|uri| match self.backend.get_module(&uri) {
                 Ok(ModuleLike::Module(m)) => Some(m),
@@ -170,18 +176,30 @@ impl<Split: SplitStrategy> Checker<Split> {
         for e in d.dfs() {
             match e {
                 DocumentElementRef::Module { module, .. } => {
-                    if let Ok(module) = self.get_module(module) {
-                        results.push(CheckResult::Module {
-                            uri: module.uri.clone(),
-                            checks: self.check_module(&module).into_boxed_slice(),
-                        });
-                    } else {
+                    if self.get_module(module).is_err() {
                         results.push(CheckResult::Missing(module.clone()));
                     }
                 }
                 DocumentElementRef::VariableDeclaration(v) => {
                     if let Some(r) = self.check_variable(v) {
                         results.push(CheckResult::Variable(v.uri.clone(), r));
+                    }
+                }
+                DocumentElementRef::SymbolDeclaration(uri) => {
+                    let top = uri.clone().simple_module();
+                    if let Some(s) = modules
+                        .iter()
+                        .find(|m| m.uri == top.module)
+                        .and_then(|m| m.find::<Symbol>(top.name.steps()))
+                    {
+                        if let Some(r) = self.check_symbol(s) {
+                            results.push(CheckResult::Content(ContentCheckResult::Symbol(
+                                uri.clone(),
+                                r,
+                            )));
+                        }
+                    } else {
+                        results.push(CheckResult::Missing(uri.module.clone()));
                     }
                 }
                 DocumentElementRef::Term(top) => {
@@ -232,70 +250,6 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
         ret
     }
-
-    /*
-    pub fn check_document(
-        &mut self,
-        d: &mut DocumentData,
-        modules: &mut [ModuleData],
-    ) -> Vec<TraceLine> {
-        self.current_document = Some(d.clone());
-        let mut all = Vec::new();
-        for e in d.dfs() {
-            match e {
-                DocumentElementRef::UseModule(module) => all.push(module.clone()),
-                _ => (),
-            }
-        }
-        let _ = self.set_context_i(all);
-        let mut ret = vec![TraceLine::Msg(
-            format!("Checking document {}", d.uri).into(),
-        )];
-        for e in d.dfs() {
-            match e {
-                DocumentElementRef::Module { module, .. } => {
-                    if let Some(m) = modules.iter_mut().find(|m| m.uri == *module) {
-                        ret.extend(self.check_module(m));
-                    }
-                }
-                DocumentElementRef::VariableDeclaration(v) => {
-                    ret.push(TraceLine::Msg(
-                        format!("Checking variable {}", v.uri).into(),
-                    ));
-                    ret.extend(self.check_variable(v).1);
-                }
-                DocumentElementRef::Term(t) => {
-                    ret.push(TraceLine::Msg(format!("Checking term {}", t.uri).into()));
-                    ret.push(self.infer_type(&t.term).1);
-                }
-                _ => (),
-            }
-        }
-        ret
-    }
-
-    // TODO return checked Module
-    pub fn check_module(&mut self, m: &mut ModuleData) -> Vec<TraceLine> {
-        let mut all = Vec::new();
-        self.current_module = Some(m.clone());
-        self.load_context(m, &mut all);
-        if !all.is_empty() {
-            let _ = self.set_context_i(all);
-        }
-        let mut ret = vec![TraceLine::Msg(format!("Checking module {}", m.uri).into())];
-        for d in m.dfs().filter_map(|e| {
-            if let AnyDeclarationRef::Symbol(s) = e {
-                Some(s)
-            } else {
-                None
-            }
-        }) {
-            ret.push(TraceLine::Msg(format!("Checking symbol {}", d.uri).into()));
-            ret.extend(self.check_symbol(d).1);
-        }
-        ret
-    }
-    */
 
     pub fn add_modules(&mut self, modules: Vec<Module>) -> Result<(), BackendError> {
         let uris = modules
@@ -542,7 +496,12 @@ impl<Split: SplitStrategy> Checker<Split> {
     pub fn check_variable(&mut self, s: &VariableDeclaration) -> Option<SymbolCheckResult> {
         match (s.data.tp.get_parsed(), s.data.df.get_parsed()) {
             (Some(tp), None) => {
-                let tp = self.prepare(tp.clone());
+                let tp = if s.data.is_seq && tp.is_sequence_type().is_none() {
+                    tp.clone().into_seq_type()
+                } else {
+                    tp.clone()
+                };
+                let tp = self.prepare(tp);
                 let (b, _, l) = self.check_inhabitable(&tp);
                 s.data.tp.set_checked(tp);
                 Some(SymbolCheckResult::TypeOnly {

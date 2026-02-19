@@ -29,11 +29,16 @@ pub const fn all_symbol_extractors<Split: SplitStrategy>() -> &'static [SymbolRu
         any,
         implicit,
         conjunction,
+        map,
     ]
 }
 #[must_use]
 pub const fn all_rule_extractors<Split: SplitStrategy>() -> &'static [RuleExtractor<Split>] {
-    &[("hoas-lambda-pi-apply", hoas_lpa)]
+    &[
+        ("hoas-lambda-pi-apply", hoas_lpa),
+        ("arrow-for-pi", arrow_for),
+        ("hoas-lambda-bindin-apply", bind_in),
+    ]
 }
 
 macro_rules! rules {
@@ -57,25 +62,51 @@ macro_rules! rules {
     }
 }
 
-pub fn hoas_lpa<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
-    if params.len() != 3 {
-        return;
-    }
-    let (
+pub fn bind_in<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    let [
         Term::Symbol { uri: lambda, .. },
-        Term::Symbol { uri: pi, .. },
+        Term::Symbol { uri: bindin, .. },
         Term::Symbol { uri: apply, .. },
-    ) = (&params[0], &params[1], &params[2])
+    ] = params
     else {
         return;
     };
-    rules.push_inhabitable(Box::new(super::pi::PiRule(pi.clone())));
-    rules.push_inference(Box::new(super::pi::PiRule(pi.clone())));
-    rules.push_inference(Box::new(super::pi::LambdaPiRule {
+    rules.push_inhabitable(Box::new(super::pi::BindInInhabitableRule(bindin.clone())));
+    rules.push_inference(Box::new(super::pi::BindInInferenceRule(bindin.clone())));
+
+    {
+        /*rules.push_preparation(Box::new(super::pi::BindInRule {
+            bind_in: head.clone(),
+            pi: pi.clone(),
+        }));*/
+    }
+}
+
+pub fn arrow_for<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    if let [Term::Symbol { uri: head, .. }, Term::Symbol { uri: pi, .. }] = params {
+        rules.push_preparation(Box::new(super::pi::ArrowRule {
+            arrow: head.clone(),
+            pi: pi.clone(),
+        }));
+    }
+}
+
+pub fn hoas_lpa<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    let [
+        Term::Symbol { uri: lambda, .. },
+        Term::Symbol { uri: pi, .. },
+        Term::Symbol { uri: apply, .. },
+    ] = params
+    else {
+        return;
+    };
+    rules.push_inhabitable(Box::new(super::pi::PiInhabitableRule(pi.clone())));
+    rules.push_inference(Box::new(super::pi::PiInferenceRule(pi.clone())));
+    rules.push_inference(Box::new(super::pi::LambdaPiInferenceRule {
         lambda: lambda.clone(),
         pi: pi.clone(),
     }));
-    rules.push_checking(Box::new(super::pi::LambdaPiRule {
+    rules.push_checking(Box::new(super::pi::LambdaPiCheckingRule {
         lambda: lambda.clone(),
         pi: pi.clone(),
     }));
@@ -156,8 +187,8 @@ rules! {
 
     }
     pub pi = (sym,rules) => {
-        rules.push_inhabitable(Box::new(super::pi::PiRule(sym.uri.clone())));
-        rules.push_inference(Box::new(super::pi::PiRule(sym.uri.clone())));
+        rules.push_inhabitable(Box::new(super::pi::PiInhabitableRule(sym.uri.clone())));
+        rules.push_inference(Box::new(super::pi::PiInferenceRule(sym.uri.clone())));
     }
     pub prop = (sym,rules) => {
 
@@ -175,5 +206,8 @@ rules! {
     }
     pub implicit = (sym,rules) => {
 
+    }
+    pub map = (sym,rules) => {
+        rules.push_inhabitable(Box::new(super::sequences::map::MapInhabitableRule(sym.uri.clone())));
     }
 }

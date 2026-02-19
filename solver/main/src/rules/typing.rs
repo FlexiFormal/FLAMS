@@ -1,5 +1,6 @@
 use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    CheckRef,
+    rules::{PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
 use ftml_ontology::{
@@ -75,12 +76,15 @@ impl SimpleTypeOperatorRule {
     }
 }
 impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, checker: &crate::CheckRef<'_, '_, Split>, t: &Term) -> bool {
         let Term::Bound(b) = t else {
             tracing::trace!("Not bound");
             return false;
         };
-        let spec = head.either(|s| &s.data.arity, |v| &v.data.arity);
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let spec = head.as_ref().either(|s| &s.data.arity, |v| &v.data.arity);
         if spec.num() as usize != b.arguments.len() {
             tracing::trace!("Arguments don't match: {spec:?} != {:?}", b.arguments);
             return false;
@@ -107,76 +111,79 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
                 _ => false,
             })
     }
-    fn make_bound<'t>(
-        &self,
-        checker: crate::CheckRef<'t, '_, Split>,
-        t: &BoundArgument,
-    ) -> Option<BoundArgument> {
-        match t {
-            BoundArgument::Simple(t) => {
-                if self.is_app(&t) {
-                    // SAFETY: is_app
-                    let (mut v, tp) = unsafe { Self::get_var(&t) };
-                    if v.len() == 1 {
-                        // SAFETY: len==1
-                        let var = unsafe { v.pop().unwrap_unchecked() };
-                        return Some(BoundArgument::Bound(ComponentVar {
-                            var,
-                            tp: Some(tp),
-                            df: None,
-                        }));
-                    }
-                }
-                None
-            }
-            BoundArgument::Sequence(MaybeSequence::Seq(s)) => {
-                let mut works = true;
-                let mut types = Vec::new();
-                let ns = s
-                    .into_iter()
-                    .flat_map(|t| {
-                        if self.is_app(&t) {
-                            // SAFETY: is_app
-                            let (v, tp) = unsafe { Self::get_var(&t) };
-                            for _ in &v {
-                                types.push(tp.clone());
-                            }
-                            v
-                        } else {
-                            works = false;
-                            Vec::new()
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                if works {
-                    return Some(BoundArgument::BoundSeq(MaybeSequence::Seq(
-                        ns.into_iter()
-                            .zip(types)
-                            .map(|(var, tp)| ComponentVar {
-                                var,
-                                tp: Some(tp),
-                                df: None,
-                            })
-                            .collect(),
-                    )));
-                }
-                None
-            }
-            _ => None,
-        }
-    }
-
+    /*
+       fn make_bound<'t>(
+           &self,
+           _: crate::CheckRef<'t, '_, Split>,
+           t: &BoundArgument,
+       ) -> Option<BoundArgument> {
+           match t {
+               BoundArgument::Simple(t) => {
+                   if self.is_app(&t) {
+                       // SAFETY: is_app
+                       let (mut v, tp) = unsafe { Self::get_var(&t) };
+                       if v.len() == 1 {
+                           // SAFETY: len==1
+                           let var = unsafe { v.pop().unwrap_unchecked() };
+                           return Some(BoundArgument::Bound(ComponentVar {
+                               var,
+                               tp: Some(tp),
+                               df: None,
+                           }));
+                       }
+                   }
+                   None
+               }
+               BoundArgument::Sequence(MaybeSequence::Seq(s)) => {
+                   let mut works = true;
+                   let mut types = Vec::new();
+                   let ns = s
+                       .into_iter()
+                       .flat_map(|t| {
+                           if self.is_app(&t) {
+                               // SAFETY: is_app
+                               let (v, tp) = unsafe { Self::get_var(&t) };
+                               for _ in &v {
+                                   types.push(tp.clone());
+                               }
+                               v
+                           } else {
+                               works = false;
+                               Vec::new()
+                           }
+                       })
+                       .collect::<Vec<_>>();
+                   if works {
+                       return Some(BoundArgument::BoundSeq(MaybeSequence::Seq(
+                           ns.into_iter()
+                               .zip(types)
+                               .map(|(var, tp)| ComponentVar {
+                                   var,
+                                   tp: Some(tp),
+                                   df: None,
+                               })
+                               .collect(),
+                       )));
+                   }
+                   None
+               }
+               _ => None,
+           }
+       }
+    */
     fn apply(
         &self,
-        _: &RuleSet<Split>,
+        checker: &CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
         _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
         let Term::Bound(b) = t else {
             unreachable!("wut");
         };
-        let spec = head.either(|s| &s.data.arity, |v| &v.data.arity);
+        let spec = head.as_ref().either(|s| &s.data.arity, |v| &v.data.arity);
 
         let nargs = spec
             .iter()
@@ -262,19 +269,10 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
             b.presentation.clone(),
         )))
     }
-    fn applicable_revert(
-        &self,
-        _: &Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
+    fn applicable_revert(&self, _: &CheckRef<'_, '_, Split>, _: &Term) -> bool {
         false
     }
-    fn revert(
-        &self,
-        _: &RuleSet<Split>,
-        t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
+    fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
         ControlFlow::Continue(t)
     }
 }

@@ -1,12 +1,9 @@
 use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    CheckRef,
+    rules::{PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
-use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
-    terms::{ApplicationTerm, Argument, IsTerm, MaybeSequence, Term},
-};
+use ftml_ontology::terms::{ApplicationTerm, Argument, IsTerm, MaybeSequence, Term};
 use ftml_uris::SymbolUri;
 use std::ops::ControlFlow;
 
@@ -27,17 +24,25 @@ impl std::fmt::Display for BinLRule {
     }
 }
 impl<Split: SplitStrategy> PreparationRule<Split> for BinLRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         super::is_sequence_binary(&self.0, t, head).is_some()
     }
     fn apply(
         &self,
-        _: &RuleSet<Split>,
+        checker: &CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
+        _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         tracing::trace!("binl!");
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
+
         let Some((app, MaybeSequence::Seq(seq), idx)) =
             super::is_sequence_binary(&self.0, &t, head)
         else {
@@ -69,20 +74,19 @@ impl<Split: SplitStrategy> PreparationRule<Split> for BinLRule {
             )
         }
     }
-    fn applicable_revert(
-        &self,
-        t: &Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
+    fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         super::was_sequence_binary(&self.0, t, head).is_some()
     }
 
-    fn revert(
-        &self,
-        rules: &RuleSet<Split>,
-        t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
+    fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         let Some((app, first, second, idx)) = super::was_sequence_binary(&self.0, &t, head) else {
             return ControlFlow::Continue(t);
         };
@@ -143,61 +147,65 @@ impl std::fmt::Display for BinRRule {
     }
 }
 impl<Split: SplitStrategy> PreparationRule<Split> for BinRRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         super::is_sequence_binary(&self.0, t, head).is_some()
     }
     fn apply(
         &self,
-        _: &RuleSet<Split>,
+        checker: &CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
+        _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
-        {
-            let Some((app, MaybeSequence::Seq(seq), idx)) =
-                super::is_sequence_binary(&self.0, &t, head)
-            else {
-                return ControlFlow::Continue(t);
-            };
-            if seq.len() < 2 {
-                return ControlFlow::Continue(t);
-            }
-            let preargs = &app.arguments[..idx];
-            let postargs = &app.arguments[idx + 1..];
-            //SAFETY: len() >= 2
-            unsafe {
-                ControlFlow::Continue(seq[..seq.len() - 1].iter().cloned().rfold(
-                    seq.last().unwrap_unchecked().clone(),
-                    |a, b| {
-                        Term::Application(ApplicationTerm::new(
-                            app.head.clone(),
-                            {
-                                let mut args = preargs.to_vec();
-                                args.extend([Argument::Simple(a), Argument::Simple(b)]);
-                                args.extend_from_slice(postargs);
-                                args.into_boxed_slice()
-                            },
-                            app.presentation.clone(),
-                        ))
-                    },
-                ))
-            }
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
+        let Some((app, MaybeSequence::Seq(seq), idx)) =
+            super::is_sequence_binary(&self.0, &t, head)
+        else {
+            return ControlFlow::Continue(t);
+        };
+        if seq.len() < 2 {
+            return ControlFlow::Continue(t);
+        }
+        let preargs = &app.arguments[..idx];
+        let postargs = &app.arguments[idx + 1..];
+        //SAFETY: len() >= 2
+        unsafe {
+            ControlFlow::Continue(seq[..seq.len() - 1].iter().cloned().rfold(
+                seq.last().unwrap_unchecked().clone(),
+                |a, b| {
+                    Term::Application(ApplicationTerm::new(
+                        app.head.clone(),
+                        {
+                            let mut args = preargs.to_vec();
+                            args.extend([Argument::Simple(a), Argument::Simple(b)]);
+                            args.extend_from_slice(postargs);
+                            args.into_boxed_slice()
+                        },
+                        app.presentation.clone(),
+                    ))
+                },
+            ))
         }
     }
 
-    fn applicable_revert(
-        &self,
-        t: &Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
+    fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         super::was_sequence_binary(&self.0, t, head).is_some()
     }
-    fn revert(
-        &self,
-        rules: &RuleSet<Split>,
-        t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
+    fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         let Some((app, first, second, idx)) = super::was_sequence_binary(&self.0, &t, head) else {
             return ControlFlow::Continue(t);
         };

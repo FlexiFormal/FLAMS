@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::{fmt::Write, marker::PhantomData};
 
 #[cfg(feature = "full")]
-pub trait CheckerRule: std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any {
+pub trait CheckerRule: std::fmt::Debug + Send + Sync + std::any::Any {
     fn priority(&self) -> isize {
         0
     }
@@ -21,7 +21,7 @@ pub trait CheckerRule: std::fmt::Display + std::fmt::Debug + Send + Sync + std::
 
 #[cfg(feature = "full")]
 pub trait SizedSolverRule:
-    std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any + Clone + Sized + PartialEq + Eq
+    std::fmt::Debug + Send + Sync + std::any::Any + Clone + Sized + PartialEq + Eq
 {
     fn priority(&self) -> isize {
         0
@@ -741,7 +741,7 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
         }
         match task {
             CheckingTask::Inference(t) => {
-                write!(self.0, "{} ", "Checking type of".bright_white().bold())?;
+                write!(self.0, "{} ", "Inferring type of".bright_white().bold())?;
                 do_context(context, self)?;
                 self.term(t, None)
             }
