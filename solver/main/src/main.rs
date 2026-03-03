@@ -77,7 +77,8 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=conjunction-introduction&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=implication-introduction&l=en",
         */
-        "http://mathhub.info?a=FTML/tests&d=natded&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=conjunction-introduction&l=en",
+        //"http://mathhub.info?a=FTML/tests&d=natded&l=en",
     )
     //}
 }
@@ -154,16 +155,4 @@ fn get_module(s: &str) -> Module {
         panic!("wut")
     };
     m
-}
-
-mod foo {
-
-    struct Rc<T> {
-        ptr: (*const T, std::cell::Cell<usize>),
-    }
-
-    fn foo() {
-        let rc = std::rc::Rc::new("Foo Bar");
-        ()
-    }
 }

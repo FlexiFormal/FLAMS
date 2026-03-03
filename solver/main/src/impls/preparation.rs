@@ -180,47 +180,54 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
         match term {
-            Term::Application(a) => Term::Application(ApplicationTerm::new(
-                then(self, a.head.clone(), get_path(&mut path, 0)),
+            Term::Application(a) => {
+                if let Term::Symbol { uri, .. } = &a.head
+                    && let Ok(m) = self.get_declaration::<Morphism>(uri)
                 {
-                    let mut idx = 0;
-                    a.arguments
-                        .iter()
-                        .map(|arg| match arg {
-                            Argument::Simple(t) => Argument::Simple(then(
-                                self,
-                                t.clone(),
-                                get_path(&mut path, {
-                                    idx += 1;
-                                    idx
-                                }),
-                            )),
-                            Argument::Sequence(MaybeSequence::One(t)) => {
-                                Argument::Sequence(MaybeSequence::One(then(
+                    // TODO @Marcel
+                }
+                Term::Application(ApplicationTerm::new(
+                    then(self, a.head.clone(), get_path(&mut path, 0)),
+                    {
+                        let mut idx = 0;
+                        a.arguments
+                            .iter()
+                            .map(|arg| match arg {
+                                Argument::Simple(t) => Argument::Simple(then(
                                     self,
                                     t.clone(),
                                     get_path(&mut path, {
                                         idx += 1;
                                         idx
                                     }),
-                                )))
-                            }
-                            Argument::Sequence(MaybeSequence::Seq(ts)) => {
-                                idx += 1;
-                                let mut npath = get_path(&mut path, idx);
-                                Argument::Sequence(MaybeSequence::Seq(
-                                    ts.iter()
-                                        .cloned()
-                                        .enumerate()
-                                        .map(|(i, t)| then(self, t, get_path(&mut npath, i)))
-                                        .collect(),
-                                ))
-                            }
-                        })
-                        .collect()
-                },
-                a.presentation.clone(),
-            )),
+                                )),
+                                Argument::Sequence(MaybeSequence::One(t)) => {
+                                    Argument::Sequence(MaybeSequence::One(then(
+                                        self,
+                                        t.clone(),
+                                        get_path(&mut path, {
+                                            idx += 1;
+                                            idx
+                                        }),
+                                    )))
+                                }
+                                Argument::Sequence(MaybeSequence::Seq(ts)) => {
+                                    idx += 1;
+                                    let mut npath = get_path(&mut path, idx);
+                                    Argument::Sequence(MaybeSequence::Seq(
+                                        ts.iter()
+                                            .cloned()
+                                            .enumerate()
+                                            .map(|(i, t)| then(self, t, get_path(&mut npath, i)))
+                                            .collect(),
+                                    ))
+                                }
+                            })
+                            .collect()
+                    },
+                    a.presentation.clone(),
+                ))
+            }
             Term::Bound(b) => Term::Bound(BindingTerm::new(
                 then(self, b.head.clone(), get_path(&mut path, 0)),
                 self.scoped(|slf| {
