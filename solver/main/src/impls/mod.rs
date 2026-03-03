@@ -2,6 +2,7 @@ pub mod backend;
 mod equality;
 mod inference;
 mod preparation;
+pub mod simplify;
 pub mod solving;
 mod typing;
 
@@ -33,7 +34,7 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     }
     pub fn counter(&mut self, msg: &'static str, num: usize) {
         self.messages
-            .push(CheckLogCow::Owned(PreCheckLog::Count(msg, num)))
+            .push(CheckLogCow::Owned(PreCheckLog::Count(msg, num)));
     }
     pub fn failure(&mut self, msg: impl Into<Cow<'static, str>>) {
         self.messages.push(CheckLogCow::Owned(PreCheckLog::Msg(
@@ -131,7 +132,7 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
             self.context.0.pop();
         }
         for m in std::mem::replace(self.messages, old_msgs) {
-            self.messages.push(m.into_owned().into());
+            self.messages.push(m.into_owned(&|t| self.subst(t)).into());
         }
         r
     }
@@ -183,13 +184,14 @@ impl<Split: SplitStrategy> Checker<Split> {
     pub(crate) fn wrap_task<'t, R: std::fmt::Debug + Clone + 'static, F>(
         &'t self,
         task: CheckingTask<'t>,
+        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
         then: F,
     ) -> (Option<R>, rustc_hash::FxHashSet<Solvable>, PreCheckLog)
     where
         F: FnOnce(CheckRef<'t, '_, Split>) -> Option<R>,
     {
         let mut context = SmallVec::new();
-        let mut solutions = rustc_hash::FxHashSet::default();
+        let mut solutions = unknowns.unwrap_or_default();
         let mut messages = SmallVec::new();
         let cancel = CancelToken::default();
         let rf = CheckRef {
@@ -205,17 +207,21 @@ impl<Split: SplitStrategy> Checker<Split> {
         let r = then(rf);
         let line = task
             .close(r.as_ref(), messages.into_boxed_slice(), &context)
-            .into_owned();
+            .into_owned(&|t| CheckRef::<Split>::subst_map(t, &solutions, None));
         tracing::debug!("Solutions:{solutions:#?}");
         (r, solutions, line)
     }
 
-    pub(crate) fn wrap_none<'t, R: std::fmt::Debug + Clone + 'static, F>(&'t self, then: F) -> R
+    pub(crate) fn wrap_none<'t, R: std::fmt::Debug + Clone + 'static, F>(
+        &'t self,
+        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
+        then: F,
+    ) -> (rustc_hash::FxHashSet<Solvable>, R)
     where
         F: FnOnce(CheckRef<'t, '_, Split>) -> R,
     {
         let mut context = SmallVec::new();
-        let mut solutions = rustc_hash::FxHashSet::default();
+        let mut solutions = unknowns.unwrap_or_default();
         let mut messages = SmallVec::new();
         let cancel = CancelToken::default();
         let rf = CheckRef {
@@ -228,7 +234,8 @@ impl<Split: SplitStrategy> Checker<Split> {
             parent_solutions: None,
             traced: true,
         };
-        then(rf)
+        let r = then(rf);
+        (solutions, r)
     }
 }
 

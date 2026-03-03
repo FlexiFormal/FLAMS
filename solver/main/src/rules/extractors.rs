@@ -37,7 +37,7 @@ pub const fn all_rule_extractors<Split: SplitStrategy>() -> &'static [RuleExtrac
     &[
         ("hoas-lambda-pi-apply", hoas_lpa),
         ("arrow-for-pi", arrow_for),
-        ("hoas-lambda-bindin-apply", bind_in),
+        ("hoas-bindin", bind_in),
     ]
 }
 
@@ -64,40 +64,53 @@ macro_rules! rules {
 
 pub fn bind_in<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
     let [
-        Term::Symbol { uri: lambda, .. },
         Term::Symbol { uri: bindin, .. },
-        Term::Symbol { uri: apply, .. },
+        Term::Symbol { uri: bind, .. },
     ] = params
     else {
         return;
     };
-    rules.push_inhabitable(Box::new(super::pi::BindInInhabitableRule(bindin.clone())));
-    rules.push_inference(Box::new(super::pi::BindInInferenceRule(bindin.clone())));
-
-    {
-        /*rules.push_preparation(Box::new(super::pi::BindInRule {
-            bind_in: head.clone(),
-            pi: pi.clone(),
-        }));*/
-    }
+    rules.push_inhabitable(Box::new(super::bindin::BindInInhabitableRule {
+        bindin: bindin.clone(),
+        bind: bind.clone(),
+    }));
+    rules.push_preparation(Box::new(super::pi::NeedsTypeRule(bindin.clone())));
+    rules.push_inference(Box::new(super::bindin::BindInInferenceRule {
+        bindin: bindin.clone(),
+        bind: bind.clone(),
+    }));
+    rules.push_inference(Box::new(super::bindin::BindInApplyRule {
+        bindin: bindin.clone(),
+        bind: bind.clone(),
+    }));
 }
 
 pub fn arrow_for<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
     if let [Term::Symbol { uri: head, .. }, Term::Symbol { uri: pi, .. }] = params {
-        rules.push_preparation(Box::new(super::pi::ArrowRule {
+        let rule = Box::new(super::pi::ArrowRule {
             arrow: head.clone(),
             pi: pi.clone(),
-        }));
+        });
+        rules.push_preparation(rule.clone());
+        rules.push_simplification(rule);
     }
 }
 
 pub fn hoas_lpa<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
-    let [
+    let (lambda, pi, apply) = if let [
         Term::Symbol { uri: lambda, .. },
         Term::Symbol { uri: pi, .. },
         Term::Symbol { uri: apply, .. },
     ] = params
-    else {
+    {
+        (lambda, pi, Some(apply))
+    } else if let [
+        Term::Symbol { uri: lambda, .. },
+        Term::Symbol { uri: pi, .. },
+    ] = params
+    {
+        (lambda, pi, None)
+    } else {
         return;
     };
     rules.push_inhabitable(Box::new(super::pi::PiInhabitableRule(pi.clone())));
@@ -109,6 +122,16 @@ pub fn hoas_lpa<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split
     rules.push_checking(Box::new(super::pi::LambdaPiCheckingRule {
         lambda: lambda.clone(),
         pi: pi.clone(),
+    }));
+    rules.push_simplification(Box::new(super::pi::BetaRule(lambda.clone())));
+    rules.push_preparation(Box::new(super::pi::NeedsTypeRule(lambda.clone())));
+    if lambda != pi {
+        rules.push_preparation(Box::new(super::pi::NeedsTypeRule(pi.clone())));
+    }
+    rules.push_marker(Box::new(super::HOASRule {
+        lambda: lambda.clone(),
+        pi: pi.clone(),
+        apply: apply.cloned(),
     }));
 }
 
@@ -181,7 +204,7 @@ rules! {
         rules.push_preparation(Box::new(super::typing::SimpleTypeOperatorRule(sym.uri.clone())));
     }
     pub apply = (sym,rules) => {
-
+        rules.push_preparation(Box::new(super::pi::ApplyRule(sym.uri.clone())));
     }
     pub lambda = (sym,rules) => {
 
@@ -194,7 +217,7 @@ rules! {
 
     }
     pub judgment = (sym,rules) => {
-
+        rules.push_marker(Box::new(super::IsJudgmentRule(sym.uri.clone())));
     }
     pub inhabitable = (sym,rules) => {
         rules.push_inhabitable(Box::new(super::universe::SimpleInhabitableRule(sym.uri.clone(),sym.data.arity.num())));
@@ -209,5 +232,8 @@ rules! {
     }
     pub map = (sym,rules) => {
         rules.push_inhabitable(Box::new(super::sequences::map::MapInhabitableRule(sym.uri.clone())));
+        rules.push_simplification(Box::new(super::sequences::map::MapSimplificationRule(sym.uri.clone())));
+        rules.push_simplification(Box::new(super::sequences::map::MapArgumentSimplificationRule(sym.uri.clone())));
+        //rules.push_inference(rule);
     }
 }

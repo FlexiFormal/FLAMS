@@ -240,6 +240,7 @@ impl LSPState {
                         }
                     }
                     let mut lock = doc.annotations.lock();
+                    lock.check = None;
                     lock.diagnostics.insert(STeXDiagnostic {
                         level: DiagnosticLevel::Error,
                         message: format!("RusTeX Error: {e}"),
@@ -316,6 +317,7 @@ impl LSPState {
                         }
                         Err(e) => {
                             let mut lock = doc.annotations.lock();
+                            lock.check = None;
                             lock.diagnostics.insert(STeXDiagnostic {
                                 level: DiagnosticLevel::Error,
                                 message: format!("FTML Error: {e}"),
@@ -338,7 +340,7 @@ impl LSPState {
     #[inline]
     pub fn build_html_and_notify(&self, uri: &UrlOrFile, mut client: ClientSocket) {
         if let Some(uri) = self.build_html(uri, &mut client) {
-            client.html_result(&uri)
+            client.html_result(&uri);
         }
     }
 

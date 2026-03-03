@@ -151,7 +151,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
 
     fn apply(
         &self,
-        checker: &CheckRef<'_, '_, Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> std::ops::ControlFlow<Term, Term> {

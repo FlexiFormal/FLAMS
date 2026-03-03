@@ -3,13 +3,9 @@ use crate::{
     rules::{PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
-use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
-    terms::{
-        Argument, ArgumentMode, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence,
-        Term, Variable,
-    },
+use ftml_ontology::terms::{
+    Argument, ArgumentMode, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence, Term,
+    Variable,
 };
 use ftml_uris::SymbolUri;
 use std::{hint::unreachable_unchecked, ops::ControlFlow};
@@ -173,7 +169,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
     */
     fn apply(
         &self,
-        checker: &CheckRef<'_, '_, Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
         _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {

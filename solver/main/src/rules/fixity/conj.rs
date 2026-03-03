@@ -25,7 +25,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for IsConjunctionRule {
     }
     fn apply(
         &self,
-        _: &CheckRef<'_, '_, Split>,
+        _: &mut CheckRef<'_, '_, Split>,
         t: Term,
         _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
@@ -65,7 +65,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ConjunctiveRule {
     }
     fn apply(
         &self,
-        checker: &CheckRef<'_, '_, Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
@@ -156,7 +156,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
     }
     fn apply(
         &self,
-        checker: &CheckRef<'_, '_, Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {

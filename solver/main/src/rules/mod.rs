@@ -1,4 +1,4 @@
-pub mod defaults;
+pub mod bindin;
 pub mod extractors;
 pub mod fixity;
 pub mod pi;
@@ -6,9 +6,10 @@ pub mod sequences;
 pub mod typing;
 pub mod universe;
 pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
+use ftml_uris::SymbolUri;
 
 use crate::{CheckRef, split::SplitStrategy};
-use ftml_ontology::terms::Term;
+use ftml_ontology::terms::{Term, termpaths::TermPath};
 use std::{fmt::Debug, ops::ControlFlow};
 
 macro_rules! rules{
@@ -77,13 +78,24 @@ macro_rules! rules{
 }
 
 rules! {
-    inference = InferenceRule(defaults::SeqIndexRule),
+    inference = InferenceRule(sequences::SeqIndexRule),
     subtyping = SubtypeRule,
     checking = CheckingRule,
     inhabitable = InhabitableRule,//(defaults::SeqInhabitableRule),
     equality = EqualityRule,
     universe = UniverseRule,
     preparation = PreparationRule,
+    simplification = SimplificationRule,
+    marker = MarkerRule
+}
+
+pub trait SimplificationRule<Split: SplitStrategy>: CheckerRule {
+    fn applicable(&self, term: &Term) -> bool;
+    fn apply<'t>(
+        &self,
+        checker: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<TermPath>>;
 }
 
 pub trait EqualityRule<Split: SplitStrategy>: CheckerRule {
@@ -135,10 +147,33 @@ pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
     fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool;
     fn apply(
         &self,
-        checker: &CheckRef<'_, '_, Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term>;
     fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool;
     fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term>;
 }
+pub trait MarkerRule<Split: SplitStrategy>: CheckerRule {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IsJudgmentRule(pub SymbolUri);
+impl SizedSolverRule for IsJudgmentRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, "is a judgment")
+    }
+}
+impl<Split: SplitStrategy> MarkerRule<Split> for IsJudgmentRule {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HOASRule {
+    pub lambda: SymbolUri,
+    pub pi: SymbolUri,
+    pub apply: Option<SymbolUri>,
+}
+impl SizedSolverRule for HOASRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("HOAS using ", &self.lambda, " and ", &self.pi)
+    }
+}
+impl<Split: SplitStrategy> MarkerRule<Split> for HOASRule {}

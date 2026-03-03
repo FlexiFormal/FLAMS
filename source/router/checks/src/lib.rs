@@ -190,6 +190,38 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
             </Subtree>}
             .into_any()
         }
+        CheckLog::Simplify {
+            term,
+            steps,
+            context,
+            result,
+        } => in_context(ctx, context, move |context, ctx| {
+            let success = result.is_some();
+            let suffix = result.map(|result| {
+                view! {
+                    <mo>":"</mo>
+                    {do_term(result)}
+                }
+            });
+            let header = view! {
+                <Text>
+                    {do_success(success)}
+                    "Simplifying "
+                    {ftml_dom::utils::math(move || mrow().child(view!{
+                        {context}
+                        <mo style="font-weight:bold">"⊢"</mo>
+                        {do_term(term)}
+                        {suffix}
+                    }))}
+                </Text>
+            };
+            let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
+            view! {<Subtree expanded=!success>
+                <Header slot>{header}</Header>
+                {steps}
+            </Subtree>}
+            .into_any()
+        }),
         CheckLog::Inference {
             term,
             steps,

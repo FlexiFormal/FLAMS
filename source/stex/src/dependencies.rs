@@ -68,6 +68,7 @@ pub fn parse_deps<'a>(
         NOERR,
         LaTeXParser::default_rules().into_iter().chain([
             ("importmodule", rules::importmodule_deps as _),
+            ("requiremodule", rules::importmodule_deps as _),
             ("setmetatheory", rules::setmetatheory as _),
             ("usemodule", rules::usemodule_deps as _),
             ("inputref", rules::inputref as _),

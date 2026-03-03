@@ -81,18 +81,22 @@ pub trait SplitStrategy:
         B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
         R: Send + std::fmt::Debug + Clone;
 
+    /// ### Errors
+    #[allow(clippy::result_large_err)]
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>>;
 
     fn split<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Option<R> {
-        match Self::split_i(slf, rules, then) {
+        match Self::split_i(slf, msg, rules, then) {
             Ok(r) => Some(r),
             Err(ls) => {
                 for e in ls {
@@ -131,17 +135,24 @@ pub trait SplitStrategy:
         }
     }
 
+    /// ### Errors
+    #[allow(clippy::result_large_err)]
     fn split_i_st<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
         let mut rules = rules.peekable();
         if rules.peek().is_none() {
-            return Err(smallvec::smallvec![RefCheckLog::Msg(
-                "No rule applicable".into(),
-                crate::trace::MessageLevel::Failure
-            )]);
+            return Err(if msg {
+                smallvec::smallvec![RefCheckLog::Msg(
+                    "No rule applicable".into(),
+                    crate::trace::MessageLevel::Failure
+                )]
+            } else {
+                smallvec::SmallVec::default()
+            });
         }
         let mut failures = SmallVec::<_, 2>::new();
         for rule in rules {
@@ -191,8 +202,11 @@ pub trait SplitStrategy:
         }
     }
 
+    /// ### Errors
+    #[allow(clippy::result_large_err)]
     fn split_i_mt<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
         rules: impl Iterator<Item = &'t Rl>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
@@ -213,10 +227,14 @@ pub trait SplitStrategy:
         let mut rules: smallvec::SmallVec<_, 2> = rules.collect();
         match rules.len() {
             0 => {
-                return Err(smallvec::smallvec![RefCheckLog::Msg(
-                    "No rule applicable".into(),
-                    crate::trace::MessageLevel::Failure
-                )]);
+                return Err(if msg {
+                    smallvec::smallvec![RefCheckLog::Msg(
+                        "No rule applicable".into(),
+                        crate::trace::MessageLevel::Failure
+                    )]
+                } else {
+                    smallvec::SmallVec::default()
+                });
             }
             1 => {
                 // SAFETY: len == 1
@@ -247,11 +265,9 @@ pub trait SplitStrategy:
                 Err(l) => failures.lock().push(l),
             }
         });
-        if let Some(r) = result.into_inner() {
-            Ok(r)
-        } else {
-            Err(failures.into_inner())
-        }
+        result
+            .into_inner()
+            .map_or_else(|| Err(failures.into_inner()), Ok)
     }
 }
 
@@ -279,10 +295,11 @@ impl SplitStrategy for SingleThreadedSplit {
     #[inline]
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
-        Self::split_i_st(slf, rules, then)
+        Self::split_i_st(slf, msg, rules, then)
     }
 }
 
@@ -310,10 +327,11 @@ impl SplitStrategy for RayonStrategiesOnly {
     #[inline]
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
         rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
-        Self::split_i_st(slf, rules, then)
+        Self::split_i_st(slf, msg, rules, then)
     }
 }
 
@@ -341,9 +359,10 @@ impl SplitStrategy for RayonSplit {
     #[inline]
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
         rules: impl Iterator<Item = &'t Rl>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
-        Self::split_i_mt(slf, rules, then)
+        Self::split_i_mt(slf, msg, rules, then)
     }
 }

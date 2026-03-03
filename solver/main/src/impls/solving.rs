@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, collections::HashSet};
 
 use ftml_ontology::terms::{Term, Variable};
 use ftml_uris::Id;
@@ -11,18 +11,27 @@ pub trait TermExtSolvable {
     fn is_solvable(&self) -> Option<&Id>;
 }
 
-impl TermExtSolvable for Term {
+impl TermExtSolvable for Variable {
     fn is_solvable(&self) -> Option<&Id> {
-        if let Self::Var {
-            variable: Variable::Name { name, .. },
-            ..
-        } = self
-            && name.as_ref().starts_with(PREFIX)
+        let Self::Name { name, .. } = self else {
+            return None;
+        };
+        if name.as_ref().starts_with(PREFIX)
             && name.as_ref().as_bytes()[PREFIX.len()..]
                 .iter()
                 .all(u8::is_ascii_digit)
         {
             Some(name)
+        } else {
+            None
+        }
+    }
+}
+
+impl TermExtSolvable for Term {
+    fn is_solvable(&self) -> Option<&Id> {
+        if let Self::Var { variable, .. } = self {
+            variable.is_solvable()
         } else {
             None
         }
@@ -192,7 +201,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             tp: BoundedValue::None,
         });
     }
-    pub(crate) fn get_solvable(&self, name: &Id) -> Option<&Solvable> {
+    pub(crate) fn get_solvable<'s>(&'s self, name: &Id) -> Option<&'s Solvable> {
         fn get<'i>(
             sols: &'i rustc_hash::FxHashSet<Solvable>,
             anc: Option<Ancestor<'i>>,
@@ -201,8 +210,39 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             sols.get(name)
                 .or_else(|| anc.and_then(|Ancestor { p, gp }| get(p, gp.copied(), name)))
         }
-        get(self.solutions, self.parent_solutions, name)
+        fn get_solvable_i<'s, Split: SplitStrategy>(
+            slf: &'s CheckRef<Split>,
+            name: &Id,
+            first: Option<&Id>,
+        ) -> Option<&'s Solvable> {
+            let s = get(slf.solutions, slf.parent_solutions, name)?;
+            if let BoundedValue::Solved(s) = &s.solution
+                && let Some(s) = s.is_solvable()
+                && first != Some(s)
+            {
+                get_solvable_i(slf, s, Some(first.unwrap_or(name)))
+            } else {
+                Some(s)
+            }
+        }
+        get_solvable_i(self, name, None)
     }
+    pub(crate) fn get_solvable_type(&mut self, name: &Id) -> Term {
+        if let Some(s) = self.get_solvable(name).and_then(|slv| match &slv.tp {
+            BoundedValue::Solved(t) => Some(t.clone()),
+            _ => None,
+        }) {
+            return s;
+        }
+        let v = self.new_solvable();
+        let t = Term::Var {
+            variable: v,
+            presentation: None,
+        };
+        self.solve_type(name.clone(), t.clone());
+        t
+    }
+
     pub(crate) fn solve(&mut self, name: Id, solution: Term) {
         let solution = self.subst(solution);
         let tp = self
@@ -229,20 +269,54 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         self.solutions.insert(ne);
     }
 
-    pub(crate) fn subst(&self, term: Term) -> Term {
+    pub(crate) fn subst_map(
+        term: Term,
+        solutions: &rustc_hash::FxHashSet<Solvable>,
+        parent: Option<Ancestor>,
+    ) -> Term {
+        fn get(
+            map: &rustc_hash::FxHashSet<Solvable>,
+            parent: Option<Ancestor>,
+            term: &Term,
+        ) -> Term {
+            let Some(mut next) = term.is_solvable() else {
+                return term.clone();
+            };
+            let mut curr = (map, parent);
+            let mut ret = term;
+            loop {
+                let Some(slv) = curr.0.get(next) else {
+                    let Some(Ancestor { p, gp }) = curr.1 else {
+                        return ret.clone();
+                    };
+                    curr = (p, gp.copied());
+                    continue;
+                };
+                if let BoundedValue::Solved(t) = &slv.solution {
+                    if let Some(n) = t.is_solvable() {
+                        ret = t;
+                        next = n;
+                    } else {
+                        return t.clone();
+                    }
+                } else {
+                    return ret.clone();
+                }
+            }
+        }
         let freevars = term.free_variables();
         if freevars.is_empty() {
             drop(freevars);
             return term;
         }
         let mut ret = smallvec::SmallVec::<_, 2>::new();
-        let mut curr = (&*self.solutions, self.parent_solutions);
+        let mut curr = (solutions, parent);
         loop {
             for v in curr.0 {
                 if let BoundedValue::Solved(tm) = &v.solution
                     && freevars.iter().any(|f| f.name() == v.name.as_ref())
                 {
-                    ret.push((v.name.to_string(), tm.clone()));
+                    ret.push((v.name.to_string(), tm.clone())); //get(curr.0, curr.1, tm))); //tm.clone()));
                 }
             }
             if let Some(Ancestor { p, gp }) = curr.1 {
@@ -253,5 +327,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
         drop(freevars);
         term / ret.as_slice()
+    }
+
+    pub(crate) fn subst(&self, term: Term) -> Term {
+        Self::subst_map(term, &self.solutions, self.parent_solutions)
     }
 }

@@ -1,48 +1,37 @@
-use crate::{CheckRef, Checker, split::SplitStrategy};
+use crate::{CheckRef, Checker, rules::sequences::TermExtSeq, split::SplitStrategy};
 use flams_math_archives::{backend::LocalBackend, utils::errors::BackendError};
 use ftml_ontology::{
     domain::{
         SharedDeclaration,
-        declarations::symbols::Symbol,
+        declarations::{IsDeclaration, symbols::Symbol},
         modules::{Module, ModuleLike},
     },
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
-    terms::{ApplicationTerm, Argument, ComponentVar, Term, Variable},
+    terms::{ComponentVar, Term, Variable},
 };
-use ftml_uris::{DocumentElementUri, IsNarrativeUri, ModuleUri, SymbolUri};
+use ftml_uris::{DocumentElementUri, IsDomainUri, IsNarrativeUri, ModuleUri, NamedUri, SymbolUri};
 use std::hint::unreachable_unchecked;
 
-pub trait TermExtSeq {
-    fn is_sequence_type(&self) -> Option<&Self>;
-    fn into_seq_type(self) -> Self;
-}
-impl TermExtSeq for Term {
-    fn is_sequence_type(&self) -> Option<&Self> {
-        if let Self::Application(app) = self
-            && matches!(&app.head,
-                Self::Symbol { uri, .. } if *uri == *ftml_uris::metatheory::SEQUENCE_TYPE
-            )
-            && app.arguments.len() == 1
-            && let Some(Argument::Simple(t)) = app.arguments.first()
-        {
-            Some(t)
+impl<Split: SplitStrategy> Checker<Split> {
+    pub(crate) fn get_module_like(&self, uri: &ModuleUri) -> Result<ModuleLike, BackendError> {
+        if uri.is_top() {
+            if let Some(m) = self.modules.get(uri) {
+                return Ok(ModuleLike::Module(m.clone()));
+            }
+            let ModuleLike::Module(m) = self.backend.get_module(uri)? else {
+                // SAFETY: uri.is_top()
+                unsafe { unreachable_unchecked() }
+            };
+            self.modules.insert(m.clone());
+            Ok(ModuleLike::Module(m))
         } else {
-            None
+            // SAFETY: !uri.is_top()
+            let inner = unsafe { uri.clone().into_top_symbol().unwrap_unchecked() };
+            let m = self.get_module(inner.module_uri())?;
+            m.as_module_like(uri.name())
+                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Module))
         }
     }
-    fn into_seq_type(self) -> Self {
-        Self::Application(ApplicationTerm::new(
-            Self::Symbol {
-                uri: ftml_uris::metatheory::SEQUENCE_TYPE.clone(),
-                presentation: None,
-            },
-            Box::new([Argument::Simple(self)]),
-            None,
-        ))
-    }
-}
-
-impl<Split: SplitStrategy> Checker<Split> {
     pub(crate) fn get_module(&self, uri: &ModuleUri) -> Result<Module, BackendError> {
         if uri.is_top() {
             if let Some(m) = self.modules.get(uri) {
@@ -114,9 +103,9 @@ impl<Split: SplitStrategy> Checker<Split> {
         if let Some(tp) = d.data.tp.get_parsed()
             && !d.data.tp.has_checked()
         {
-            let tp = self.prepare(tp.clone());
+            let (_, tp) = self.prepare(None, tp.clone());
 
-            if d.data.is_seq && tp.is_sequence_type().is_none() {
+            if d.data.is_seq && tp.as_sequence_type().is_none() {
                 d.data.tp.set_checked(tp.into_seq_type());
             } else {
                 d.data.tp.set_checked(tp);
@@ -125,7 +114,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         if let Some(df) = d.data.df.get_parsed()
             && !d.data.df.has_checked()
         {
-            d.data.df.set_checked(self.prepare(df.clone()));
+            d.data.df.set_checked(self.prepare(None, df.clone()).1);
         }
 
         Ok(d)
@@ -134,12 +123,44 @@ impl<Split: SplitStrategy> Checker<Split> {
 
 impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     /// ### Errors
+    pub(crate) fn get_declaration<T: IsDeclaration>(
+        &self,
+        uri: &SymbolUri,
+    ) -> Result<SharedDeclaration<T>, BackendError> {
+        self.top
+            .get_module(&uri.module)?
+            .get_as::<T>(uri.name())
+            .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
+    }
+
+    /// ### Errors
     #[inline]
     pub(crate) fn get_symbol(
         &self,
         uri: &SymbolUri,
     ) -> Result<SharedDeclaration<Symbol>, BackendError> {
-        self.top.get_symbol(uri, |t| self.prepare(t, None))
+        self.top.get_symbol(uri, |t| self.prepare(t, None).1)
+    }
+
+    pub(crate) fn get_symbol_type(&mut self, uri: &SymbolUri) -> Option<Term> {
+        let Ok(s) = self.get_symbol(uri) else {
+            self.failure("Symbol not found");
+            return None;
+        };
+        s.data
+            .tp
+            .checked_or_parsed()
+            .map(|(t, _)| self.bind_implicits(t))
+    }
+    pub(crate) fn get_symbol_definiens(&mut self, uri: &SymbolUri) -> Option<Term> {
+        let Ok(s) = self.get_symbol(uri) else {
+            self.failure("Symbol not found");
+            return None;
+        };
+        s.data
+            .df
+            .checked_or_parsed()
+            .map(|(t, _)| self.bind_implicits(t))
     }
 
     /// ### Errors

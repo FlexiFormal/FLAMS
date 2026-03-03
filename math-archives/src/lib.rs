@@ -577,7 +577,7 @@ impl LocalArchive {
         f(&self.file_state.read())
     }
 
-    pub(crate) fn update_sources(&self) {
+    pub fn update_sources(&self) {
         let dir = SourceDir::new(&self.source_dir(), &self.ignore, self.formats());
         let mut state = self.file_state.write();
         state.update(dir);

@@ -551,6 +551,31 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         });
         ControlFlow::Continue(())
     }
+
+    fn update_backend(
+        files: impl Iterator<Item = PathBuf>,
+    ) -> <Self as LanguageServer>::NotifyResult {
+        let backend = GlobalBackend.get();
+        let mut dones = Vec::new();
+        let mut missing = false;
+        for f in files {
+            if backend
+                .archive_of(&f, |a, _| {
+                    if !dones.contains(a.id()) {
+                        dones.push(a.id().clone());
+                        a.update_sources();
+                    }
+                })
+                .is_none()
+            {
+                missing = true;
+            }
+        }
+        if missing {
+            backend.load(flams_system::settings::Settings::get().mathhubs());
+        }
+        ControlFlow::Continue(())
+    }
 }
 
 type Res<T> = BoxFuture<'static, Result<T, ResponseError>>;
@@ -598,9 +623,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_notification!(!did_change_workspace_folders = DidChangeWorkspaceFolders);
     impl_notification!(!did_change_configuration = DidChangeConfiguration);
     impl_notification!(!did_change_watched_files = DidChangeWatchedFiles);
-    impl_notification!(!did_create_files = DidCreateFiles);
-    impl_notification!(!did_rename_files = DidRenameFiles);
-    impl_notification!(!did_delete_files = DidDeleteFiles);
 
     // textDocument/
     //impl_notification!(! did_open = DidOpenTextDocument);
@@ -1037,8 +1059,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(on_type_formatting = OnTypeFormatting);
     impl_request!(range_formatting = RangeFormatting);
     impl_request!(formatting = Formatting);
-    impl_request!(prepare_rename = PrepareRenameRequest);
-    impl_request!(rename = Rename);
     impl_request!(prepare_type_hierarchy = TypeHierarchyPrepare);
     impl_request!(will_save_wait_until = WillSaveWaitUntil);
 
@@ -1116,6 +1136,30 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
                 Box::pin(std::future::ready(Ok(None)))
             })
     }
+
+    //impl_notification!(!did_create_files = DidCreateFiles);
+    fn did_create_files(&mut self, params: lsp::CreateFilesParams) -> Self::NotifyResult {
+        let files = params.files.into_iter().map(|f| PathBuf::from(f.uri));
+        Self::update_backend(files)
+    }
+
+    //impl_notification!(!did_rename_files = DidRenameFiles);
+    fn did_rename_files(&mut self, params: lsp::RenameFilesParams) -> Self::NotifyResult {
+        let files = params
+            .files
+            .into_iter()
+            .flat_map(|f| vec![PathBuf::from(f.old_uri), PathBuf::from(f.new_uri)]);
+        Self::update_backend(files)
+    }
+
+    //impl_notification!(!did_delete_files = DidDeleteFiles);
+    fn did_delete_files(&mut self, params: lsp::DeleteFilesParams) -> Self::NotifyResult {
+        let files = params.files.into_iter().map(|f| PathBuf::from(f.uri));
+        Self::update_backend(files)
+    }
+
+    impl_request!(prepare_rename = PrepareRenameRequest);
+    impl_request!(rename = Rename);
 
     // workspace/
     impl_request!(will_create_files = WillCreateFiles);

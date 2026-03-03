@@ -33,7 +33,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for BinLRule {
     }
     fn apply(
         &self,
-        checker: &CheckRef<'_, '_, Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
         _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
@@ -156,7 +156,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for BinRRule {
     }
     fn apply(
         &self,
-        checker: &CheckRef<'_, '_, Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
         _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {

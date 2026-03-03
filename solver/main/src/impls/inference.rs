@@ -1,6 +1,9 @@
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
 
-use crate::{CheckRef, split::SplitStrategy, trace::CheckingTask};
+use crate::{
+    CheckRef, TermExtSeq, impls::solving::TermExtSolvable, split::SplitStrategy,
+    trace::CheckingTask,
+};
 
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn infer_type(&mut self, t: &'t Term) -> Option<Term> {
@@ -10,15 +13,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         match t {
             Term::Symbol { uri, .. } => {
                 self.comment("Looking up symbol");
-                let Ok(s) = self.get_symbol(uri) else {
-                    self.failure("Symbol not found");
-                    return None;
-                };
-                let ret = s
-                    .data
-                    .tp
-                    .checked_or_parsed()
-                    .map(|(t, _)| self.bind_implicits(t));
+                let ret = self.get_symbol_type(uri);
 
                 if ret.is_none() {
                     self.failure("Symbol has no type");
@@ -36,8 +31,12 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             .inference()
             .iter()
             .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None });
-        let r = Split::split(self, rules, |slf, rl| rl.infer(slf, t));
-        r.map(|t| self.subst(t))
+        let r = Split::split(self, true, rules, |slf, rl| rl.infer(slf, t));
+        //r.map(|t| self.subst(t))
+        r.map(|t| {
+            let simp = self.scoped(|slf| slf.simplify_full(false, &t)).unwrap_or(t);
+            self.subst(simp)
+        })
     }
 
     pub fn infer_var_type(&mut self, var: &'t Variable) -> Option<Term> {
@@ -47,6 +46,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
     pub(crate) fn infer_var_type_i(&mut self, var: &Variable) -> Option<Term> {
         let (ctx, mut msgs) = self.split();
+        if let Some(id) = var.is_solvable() {
+            return Some(self.get_solvable_type(id));
+        }
         for v in ctx.iter().rev().map(|v| &**v) {
             match (v, var) {
                 (
@@ -93,12 +95,14 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     } else {
                         msgs.comment("Getting variable globally");
                         let declaration = declaration.clone();
-                        self.get_variable(&declaration)
-                            .ok()?
-                            .data
-                            .tp
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
+                        let var = self.get_variable(&declaration).ok()?;
+                        var.data.tp.checked_or_parsed().map(|(t, _)| {
+                            if var.data.is_seq && t.as_sequence_type().is_none() {
+                                t.into_seq_type()
+                            } else {
+                                t
+                            }
+                        })
                     };
                 }
                 (
@@ -117,12 +121,14 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     } else {
                         msgs.comment("Getting variable globally");
                         let declaration = declaration.clone();
-                        self.get_variable(&declaration)
-                            .ok()?
-                            .data
-                            .tp
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
+                        let var = self.get_variable(&declaration).ok()?;
+                        var.data.tp.checked_or_parsed().map(|(t, _)| {
+                            if var.data.is_seq && t.as_sequence_type().is_none() {
+                                t.into_seq_type()
+                            } else {
+                                t
+                            }
+                        })
                     };
                 }
                 _ => (),
@@ -130,14 +136,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
         if let Variable::Ref { declaration, .. } = var {
             self.comment("Getting variable globally");
-            self.get_variable(declaration)
-                .ok()?
-                .data
-                .tp
-                .checked_or_parsed()
-                .map(|(t, _)| t)
+            let var = self.get_variable(declaration).ok()?;
+            var.data.tp.checked_or_parsed().map(|(t, _)| {
+                if var.data.is_seq && t.as_sequence_type().is_none() {
+                    t.into_seq_type()
+                } else {
+                    t
+                }
+            })
         } else {
-            None
+            Some(Term::Var {
+                variable: self.new_solvable(),
+                presentation: None,
+            })
         }
     }
 }

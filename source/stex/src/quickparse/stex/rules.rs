@@ -60,11 +60,12 @@ pub fn all_rules<
         Err,
         STeXParseState<'a, LSPLineCol, MS>,
     >,
-); 43] {
+); 44] {
     [
         ("importmodule", importmodule as _),
         ("setmetatheory", setmetatheory as _),
         ("usemodule", usemodule as _),
+        ("requiremodule", usemodule as _),
         ("usestructure", usestructure as _),
         ("inputref", inputref as _),
         ("includeproblem", includeproblem as _),

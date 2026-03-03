@@ -299,10 +299,8 @@ pub fn queues_top() -> AnyView {
                     return view!(<div>"(No running queues)"</div>).into_any();
                 }
                 let queues = AllQueues::new(v);
-                if let Some(id) = id() {
-                    if let Ok(id) = id.parse() {
-                        queues.selected.update_untracked(|v| *v = id);
-                    }
+                if let Some(id) = id() && let Ok(id) = id.parse() {
+                    queues.selected.update_untracked(|v| *v = id);
                 }
                 provide_context(queues);
                 let selected_value = RwSignal::new(queues.selected.get_untracked().to_string());
@@ -322,7 +320,7 @@ pub fn queues_top() -> AnyView {
                   <TabList selected_value>
                     <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
                       <Tab value=i.to_string()>{
-                        queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
+                        queues.queue_names.with_untracked(|m| m.get(&i).cloned()).unwrap_or_else(|| unreachable!())
                       }</Tab>
                     }/>
                   </TabList>
@@ -333,7 +331,7 @@ pub fn queues_top() -> AnyView {
                     QueueSocket::run(queues);
                     move || view! {
                       <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
-                        let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
+                        let ls = queues.queues.with_untracked(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!());
                         move || match ls.get() {
                           QueueData::Idle(v) => {
                               idle(curr,v)

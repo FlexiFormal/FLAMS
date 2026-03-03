@@ -30,21 +30,26 @@ use flams_math_archives::{
 use ftml_ontology::{
     domain::{
         HasDeclarations,
-        declarations::{AnyDeclarationRef, symbols::Symbol},
-        modules::{Module, ModuleData, ModuleLike},
+        declarations::{AnyDeclarationRef, morphisms::Morphism, symbols::Symbol},
+        modules::{Module, ModuleLike},
     },
     narrative::{
-        documents::{Document, DocumentData},
-        elements::{DocumentElementRef, VariableDeclaration},
+        documents::Document,
+        elements::{
+            DocumentElementRef, LogicalParagraph, VariableDeclaration, paragraphs::ParagraphKind,
+        },
     },
-    terms::{ComponentVar, Term, termpaths::TermPath},
+    terms::{
+        ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, Term, TermContainer,
+        Variable, termpaths::TermPath,
+    },
     utils::RefTree,
 };
 use ftml_solver_trace::CheckLog;
-use ftml_uris::{Id, ModuleUri};
-pub(crate) use impls::backend::TermExtSeq;
+use ftml_uris::{Id, IsDomainUri, ModuleUri, SymbolUri};
+pub(crate) use rules::sequences::TermExtSeq;
 use smallvec::SmallVec;
-use std::{hint::unreachable_unchecked, marker::PhantomData};
+use std::{borrow::Cow, hint::unreachable_unchecked, marker::PhantomData};
 
 pub static DUMMY: std::sync::LazyLock<Id> =
     // SAFETY: "DUMMY" is a valid ID
@@ -70,6 +75,10 @@ fn check(task: flams_math_archives::formats::BuildSpec) -> BuildResult {
     let mut checker = Checker::<SingleThreadedSplit>::new(task.backend.clone());
     let (logs, modules) = checker.check_document(&d);
     let log = serde_json::to_string(&logs).unwrap_or_else(|s| s.to_string());
+    /*println!("Result: {d:#?}");
+    for m in &modules {
+        println!("{m:#?}");
+    }*/
     BuildResult {
         log: FileOrString::Str(log.into_boxed_str()),
         result: Ok(Some(Box::new(ContentUpdate {
@@ -112,8 +121,6 @@ pub struct Checker<Split: SplitStrategy> {
     modules: BigSet<Module>,
     documents: BigSet<Document>,
     implicits: std::sync::atomic::AtomicUsize,
-    current_module: Option<ModuleData>,
-    current_document: Option<DocumentData>,
     __phantom: PhantomData<Split>,
 }
 
@@ -137,8 +144,6 @@ impl<Split: SplitStrategy> Checker<Split> {
             documents: BigSet::default(),
             rules: RuleSet::default(),
             implicits: std::sync::atomic::AtomicUsize::new(1),
-            current_module: None,
-            current_document: None,
             __phantom: PhantomData,
         }
     }
@@ -167,17 +172,29 @@ impl<Split: SplitStrategy> Checker<Split> {
         let _ = self.set_context_i(all);
         let modules: Vec<_> = modules
             .into_iter()
-            .filter_map(|uri| match self.backend.get_module(&uri) {
-                Ok(ModuleLike::Module(m)) => Some(m),
-                _ => None,
-            })
+            .filter_map(|uri| self.get_module(&uri).ok())
             .collect();
-        tracing::debug!("Rules: {:?}", self.rules);
+        tracing::trace!("Rules: {:?}", self.rules);
         for e in d.dfs() {
             match e {
                 DocumentElementRef::Module { module, .. } => {
                     if self.get_module(module).is_err() {
                         results.push(CheckResult::Missing(module.clone()));
+                    }
+                }
+                DocumentElementRef::Morphism { morphism, .. } => {
+                    let top = morphism.clone().simple_module();
+                    let Some(m) = self
+                        .get_module(top.module_uri())
+                        .ok()
+                        .and_then(|m| m.get_as::<Morphism>(top.name()))
+                    else {
+                        results.push(CheckResult::Missing(morphism.module.clone()));
+                        continue;
+                    };
+                    m.initialize(&mut |uri| self.get_module_like(uri));
+                    if let Some(r) = self.check_morphism(&m) {
+                        results.extend(r.into_iter());
                     }
                 }
                 DocumentElementRef::VariableDeclaration(v) => {
@@ -204,8 +221,8 @@ impl<Split: SplitStrategy> Checker<Split> {
                 }
                 DocumentElementRef::Term(top) => {
                     tracing::debug!("Checking term {:?}", top.get_parsed().debug_short());
-                    let tm = self.prepare(top.get_parsed().clone());
-                    let (t, _, log) = self.infer_type(&tm);
+                    let (unks, tm) = self.prepare(None, top.get_parsed().clone());
+                    let (t, _, log) = self.infer_type(Some(unks), &tm);
                     let t = t.map(|t| self.revert_prepare(t));
                     if let Some(t) = &t {
                         top.set_type(t.clone());
@@ -215,6 +232,37 @@ impl<Split: SplitStrategy> Checker<Split> {
                         inferred: t,
                         log: CheckLog::from_pre(log, &mut |t| self.revert_prepare(t)),
                     });
+                }
+                DocumentElementRef::Paragraph(
+                    p @ LogicalParagraph {
+                        kind: ParagraphKind::Proof,
+                        fors,
+                        ..
+                    },
+                ) if fors.len() == 1 => {
+                    if let Some(r) = self.check_proof(p) {
+                        results.push(r);
+                    }
+                }
+                DocumentElementRef::Paragraph(
+                    p @ LogicalParagraph {
+                        kind: ParagraphKind::Assertion,
+                        fors,
+                        ..
+                    },
+                ) if p.fors.iter().any(|(_, t)| t.is_some()) => {
+                    if let Some(r) = self.check_assertion(p) {
+                        results.extend(r.into_iter());
+                    }
+                }
+                DocumentElementRef::Paragraph(
+                    p @ LogicalParagraph {
+                        kind, fors, styles, ..
+                    },
+                ) if kind.is_definition_like(styles) && p.fors.iter().any(|(_, t)| t.is_some()) => {
+                    if let Some(r) = self.check_definition(p) {
+                        results.push(r);
+                    }
                 }
                 _ => (),
             }
@@ -251,29 +299,37 @@ impl<Split: SplitStrategy> Checker<Split> {
         ret
     }
 
+    /// #### Errors
     pub fn add_modules(&mut self, modules: Vec<Module>) -> Result<(), BackendError> {
-        let uris = modules
-            .into_iter()
-            .map(|m| {
-                let uri = m.uri.clone();
-                self.modules.insert(m);
-                uri
-            })
-            .collect();
-        self.set_context_i(uris)
+        let mut todos = Vec::new();
+        for m in modules {
+            if !self.modules.contains(&m.uri) {
+                self.modules.insert(m.clone());
+                self.load_context(&m, &mut todos);
+                if !todos.is_empty() {
+                    self.set_context_i(std::mem::take(&mut todos))?;
+                }
+            }
+        }
+        Ok(())
     }
 
+    /// #### Errors
     pub fn set_context(&mut self, m: Vec<ModuleUri>) -> Result<(), BackendError> {
         self.set_context_i(m)
     }
 
     pub fn check_subterm(&mut self, term: Term, mut path: TermPath) -> Option<SubtermCheckResult> {
-        let nterm = self.wrap_none(|slf| slf.prepare(term, Some(&mut path)));
+        let (unks, nterm) = self.wrap_none(None, |mut slf| {
+            let (s, r) = slf.prepare(term, Some(&mut path));
+            slf.merge_solutions(s);
+            r
+        });
         let (ctx, t) = nterm.subterm_at_path(&path)?;
         let mut nt = t.clone();
         //ctx.reverse();
         let mut ctx = ctx.into_iter().cloned().rev().collect::<Vec<_>>();
-        let (r, s, log) = self.wrap_task(CheckingTask::Inference(t), |mut slf| {
+        let (r, s, log) = self.wrap_task(CheckingTask::Inference(t), Some(unks), |mut slf| {
             let allvars = t.free_variables();
             for v in allvars {
                 if !ctx.iter().any(|cv| cv.var == *v) {
@@ -327,7 +383,8 @@ impl<Split: SplitStrategy> Checker<Split> {
             for c in &ctx {
                 slf.extend_context(c);
             }
-            nt = slf.revert_prepare(t.clone());
+            let simp = slf.simplify_full(true, t).unwrap_or_else(|| t.clone());
+            nt = slf.revert_prepare(slf.subst(simp));
             slf.infer_type(t).map(|t| slf.revert_prepare(t))
         });
         /*
@@ -343,7 +400,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         //.filter(|v| frees.iter().any(|f| f.name() == v.var.name()))
         .cloned()
         .collect();*/
-        let log = self.wrap_none(|slf| {
+        let (_, log) = self.wrap_none(None, |slf| {
             for c in &mut ctx {
                 if let Some(tp) = c.tp.take() {
                     c.tp = Some(slf.revert_prepare(tp));
@@ -364,6 +421,7 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 
     fn set_context_i(&mut self, mut all: Vec<ModuleUri>) -> Result<(), BackendError> {
+        tracing::trace!("Context: {all:?}");
         while let Some(uri) = all.pop() {
             if uri.is_top() && !self.modules.contains(&uri) {
                 let ModuleLike::Module(m) = self.backend.get_module(&uri)? else {
@@ -377,6 +435,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         Ok(())
     }
     fn load_context(&mut self, m: &Module, todos: &mut Vec<ModuleUri>) {
+        tracing::trace!("Loading: {:?}", m.uri);
         if let Some(uri) = m.meta_module.as_ref() {
             if uri.is_top() {
                 if !self.modules.contains(uri) {
@@ -420,15 +479,17 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
     }
 
-    // TODO return checked term
-    pub fn check_symbol(&mut self, s: &Symbol) -> Option<SymbolCheckResult> {
-        tracing::debug!("Checking Symbol {s:?}");
-        match (s.data.tp.get_parsed(), s.data.df.get_parsed()) {
+    fn check_components(
+        &self,
+        tpc: &TermContainer,
+        dfc: &TermContainer,
+    ) -> Option<SymbolCheckResult> {
+        match (tpc.get_parsed(), dfc.get_parsed()) {
             (Some(tp), None) => {
                 tracing::trace!("Checking Type");
-                let tp = self.prepare(tp.clone());
-                let (b, _, l) = self.check_inhabitable(&tp);
-                s.data.tp.set_checked(tp);
+                let (unks, tp) = self.prepare(None, tp.clone());
+                let (b, _, l) = self.check_inhabitable(Some(unks), &tp);
+                tpc.set_checked(tp);
                 Some(SymbolCheckResult::TypeOnly {
                     result: TypeCheckResult {
                         success: b.unwrap_or(false),
@@ -438,15 +499,15 @@ impl<Split: SplitStrategy> Checker<Split> {
             }
             (None, Some(df)) => {
                 tracing::trace!("Checking Definiens");
-                let df = self.prepare(df.clone());
-                let (tp, _, l) = self.infer_type(&df);
+                let (unks, df) = self.prepare(None, df.clone());
+                let (tp, _, l) = self.infer_type(Some(unks), &df);
 
-                s.data.df.set_checked(df);
+                dfc.set_checked(df);
 
                 if let Some(tp) = tp {
-                    s.data.tp.set_checked(tp.clone());
+                    tpc.set_checked(tp.clone());
                     let tp = self.revert_prepare(tp);
-                    s.data.tp.set_presentation(tp.clone());
+                    tpc.set_presentation(tp.clone());
                     Some(SymbolCheckResult::DefiniensOnly {
                         inferred: Some(tp),
                         log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
@@ -460,12 +521,10 @@ impl<Split: SplitStrategy> Checker<Split> {
             }
             (Some(tp), Some(df)) => {
                 tracing::trace!("Checking Type and Definiens");
-                let tp = self.prepare(tp.clone());
-                let df = self.prepare(df.clone());
-                let (b, _, l) = self.check_inhabitable(&tp);
-
+                let (tunks, tp) = self.prepare(None, tp.clone());
+                let (b, tunks, l) = self.check_inhabitable(Some(tunks), &tp);
                 if b.is_some_and(|b| !b) {
-                    s.data.tp.set_checked(tp);
+                    tpc.set_checked(tp);
                     return Some(SymbolCheckResult::Both {
                         inhabitable: TypeCheckResult {
                             success: false,
@@ -474,9 +533,11 @@ impl<Split: SplitStrategy> Checker<Split> {
                         matches: None,
                     });
                 }
-                let (b, _, l2) = self.check_type(&df, &tp);
-                s.data.tp.set_checked(tp);
-                s.data.df.set_checked(df);
+                let (dunks, df) = self.prepare(Some(tunks), df.clone());
+
+                let (b, _, l2) = self.check_type(Some(dunks), &df, &tp);
+                tpc.set_checked(tp);
+                dfc.set_checked(df);
                 Some(SymbolCheckResult::Both {
                     inhabitable: TypeCheckResult {
                         success: true,
@@ -493,118 +554,242 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 
     // TODO return checked term
-    pub fn check_variable(&mut self, s: &VariableDeclaration) -> Option<SymbolCheckResult> {
-        match (s.data.tp.get_parsed(), s.data.df.get_parsed()) {
-            (Some(tp), None) => {
-                let tp = if s.data.is_seq && tp.is_sequence_type().is_none() {
-                    tp.clone().into_seq_type()
-                } else {
-                    tp.clone()
-                };
-                let tp = self.prepare(tp);
-                let (b, _, l) = self.check_inhabitable(&tp);
-                s.data.tp.set_checked(tp);
-                Some(SymbolCheckResult::TypeOnly {
-                    result: TypeCheckResult {
-                        success: b.unwrap_or(false),
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    },
-                })
-            }
-            (None, Some(df)) => {
-                let df = self.prepare(df.clone());
-                let (tp, _, l) = self.infer_type(&df);
-                s.data.df.set_checked(df);
-                if let Some(tp) = tp {
-                    s.data.tp.set_checked(tp.clone());
-                    let tp = self.revert_prepare(tp);
-                    s.data.tp.set_presentation(tp.clone());
-                    Some(SymbolCheckResult::DefiniensOnly {
-                        inferred: Some(tp),
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    })
-                } else {
-                    Some(SymbolCheckResult::DefiniensOnly {
-                        inferred: None,
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    })
-                }
-            }
-            (Some(tp), Some(df)) => {
-                let tp = self.prepare(tp.clone());
-                let df = self.prepare(df.clone());
-                let (b, _, l) = self.check_inhabitable(&tp);
-                if b.is_some_and(|b| !b) {
-                    s.data.tp.set_checked(tp);
-                    return Some(SymbolCheckResult::Both {
-                        inhabitable: TypeCheckResult {
-                            success: false,
-                            log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                        },
-                        matches: None,
-                    });
-                }
-                let (b, _, l2) = self.check_type(&df, &tp);
+    pub fn check_symbol(&mut self, s: &Symbol) -> Option<SymbolCheckResult> {
+        tracing::debug!("Checking Symbol {s:?}");
+        self.check_components(&s.data.tp, &s.data.df)
+    }
 
-                s.data.df.set_checked(df);
-                s.data.tp.set_checked(tp);
-                Some(SymbolCheckResult::Both {
-                    inhabitable: TypeCheckResult {
-                        success: true,
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    },
-                    matches: Some(TypeCheckResult {
-                        success: b.unwrap_or(false),
-                        log: CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
-                    }),
-                })
-            }
-            (None, None) => None,
-        }
+    // TODO return checked term
+    pub fn check_variable(&mut self, s: &VariableDeclaration) -> Option<SymbolCheckResult> {
+        self.check_components(&s.data.tp, &s.data.df)
     }
 
     pub fn check_type(
         &self,
+        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
         tm: &Term,
         tp: &Term,
     ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
-        self.wrap_task(CheckingTask::HasType(tm, tp), |mut slf| {
+        self.wrap_task(CheckingTask::HasType(tm, tp), unknowns, |mut slf| {
             slf.check_type_i(tm, tp)
         })
     }
 
     pub fn check_subtype(
         &self,
+        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
         sub: &Term,
         sup: &Term,
     ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
-        self.wrap_task(CheckingTask::Subtype(sub, sup), |mut slf| {
+        self.wrap_task(CheckingTask::Subtype(sub, sup), unknowns, |mut slf| {
             slf.check_subtype_i(sub, sup)
         })
     }
 
     pub fn infer_type(
         &self,
+        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
         t: &Term,
     ) -> (Option<Term>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
-        self.wrap_task(CheckingTask::Inference(t), |mut slf| slf.infer_type_i(t))
+        self.wrap_task(CheckingTask::Inference(t), unknowns, |mut slf| {
+            slf.infer_type_i(t)
+        })
     }
 
     pub fn check_inhabitable(
         &self,
+        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
         t: &Term,
     ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
-        self.wrap_task(CheckingTask::Inhabitable(t), |mut slf| {
+        self.wrap_task(CheckingTask::Inhabitable(t), unknowns, |mut slf| {
             slf.check_inhabitable_i(t)
         })
     }
 
-    fn prepare(&self, t: Term) -> Term {
-        self.wrap_none(|slf| slf.prepare(t, None))
+    fn prepare(
+        &self,
+        unks: Option<rustc_hash::FxHashSet<Solvable>>,
+        t: Term,
+    ) -> (rustc_hash::FxHashSet<Solvable>, Term) {
+        self.wrap_none(unks, |mut slf| {
+            let (sols, r) = slf.prepare(t, None);
+            slf.merge_solutions(sols);
+            r
+        })
     }
     fn revert_prepare(&self, t: Term) -> Term {
-        self.wrap_none(|slf| slf.revert_prepare(t))
+        self.wrap_none(None, |slf| slf.revert_prepare(t)).1
     }
+
+    pub fn check_morphism(&mut self, m: &Morphism) -> Option<Vec<CheckResult>> {
+        let mut ret = Vec::new();
+        for d in m.declarations() {
+            match d {
+                AnyDeclarationRef::Symbol(s) => {
+                    // TODO:
+                    // - check that a *refined type* is a subtype of the original type's translation
+                    // - check that an *assigned definies* is ???? the original definiens
+                    if let Some(r) = self.check_components(&s.data.tp, &s.data.df) {
+                        ret.push(CheckResult::Content(ContentCheckResult::Symbol(
+                            s.uri.clone(),
+                            r,
+                        )));
+                    }
+                }
+                _ => (),
+            }
+            //println!("Here! Proof {}", p.uri);
+        }
+        Some(ret)
+    }
+
+    pub fn check_proof(&mut self, p: &LogicalParagraph) -> Option<CheckResult> {
+        //println!("Here! Proof {}", p.uri);
+        None
+    }
+
+    pub fn check_definition(&mut self, p: &LogicalParagraph) -> Option<CheckResult> {
+        //println!("Here! Definition {}", p.uri);
+        None
+    }
+
+    pub fn check_assertion(&mut self, p: &LogicalParagraph) -> Option<Vec<CheckResult>> {
+        let judgment = self.rules.marker().iter().rev().find_map(|rl| {
+            rl.as_any()
+                .downcast_ref::<rules::IsJudgmentRule>()
+                .map(|rl| rl.0.clone())
+        });
+        let (lambda, pi, apply) = self.rules.marker().iter().rev().find_map(|rl| {
+            rl.as_any()
+                .downcast_ref::<rules::HOASRule>()
+                .map(|rl| (rl.lambda.clone(), rl.pi.clone(), rl.apply.clone()))
+        })?;
+        let mut ret = Vec::new();
+        for (target, term) in &p.fors {
+            let Ok(target) = self.get_symbol(target, |t| t) else {
+                continue;
+            };
+            let Some(term) = term else { continue };
+            let Some(term) = term.get_parsed() else {
+                continue;
+            };
+            let wrapped = wrap_premises(term, &p.premises, judgment.as_ref(), apply.as_ref(), &pi);
+            let (unks, tp) = self.prepare(None, wrapped.into_owned());
+
+            tracing::trace!("Checking assertion for {}", target.uri);
+            let (b, _, l) = self.check_inhabitable(Some(unks), &tp);
+            target
+                .data
+                .tp
+                .set_presentation(self.revert_prepare(tp.clone()));
+            target.data.tp.set_checked(tp);
+            ret.push(CheckResult::Content(ContentCheckResult::Symbol(
+                target.uri.clone(),
+                SymbolCheckResult::TypeOnly {
+                    result: TypeCheckResult {
+                        success: b.unwrap_or(false),
+                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                    },
+                },
+            )));
+        }
+        Some(ret)
+    }
+}
+
+fn wrap_premises<'c>(
+    conclusion: &'c Term,
+    premises: &[Term],
+    judgment: Option<&SymbolUri>,
+    apply: Option<&SymbolUri>,
+    pi: &SymbolUri,
+) -> Cow<'c, Term> {
+    let conclusion = judgment.map_or_else(
+        || Cow::Borrowed(conclusion),
+        |j| {
+            Cow::Owned(apply.map_or_else(
+                || {
+                    Term::Application(ApplicationTerm::new(
+                        Term::Symbol {
+                            uri: j.clone(),
+                            presentation: None,
+                        },
+                        Box::new([Argument::Simple(conclusion.clone())]),
+                        None,
+                    ))
+                },
+                |app| {
+                    Term::Application(ApplicationTerm::new(
+                        Term::Symbol {
+                            uri: app.clone(),
+                            presentation: None,
+                        },
+                        Box::new([
+                            Argument::Simple(Term::Symbol {
+                                uri: j.clone(),
+                                presentation: None,
+                            }),
+                            Argument::Simple(conclusion.clone()),
+                        ]),
+                        None,
+                    ))
+                },
+            ))
+        },
+    );
+    premises.iter().fold(conclusion, |c, p| {
+        let premise = judgment.map_or_else(
+            || p.clone(),
+            |j| {
+                apply.map_or_else(
+                    || {
+                        Term::Application(ApplicationTerm::new(
+                            Term::Symbol {
+                                uri: j.clone(),
+                                presentation: None,
+                            },
+                            Box::new([Argument::Simple(p.clone())]),
+                            None,
+                        ))
+                    },
+                    |app| {
+                        Term::Application(ApplicationTerm::new(
+                            Term::Symbol {
+                                uri: app.clone(),
+                                presentation: None,
+                            },
+                            Box::new([
+                                Argument::Simple(Term::Symbol {
+                                    uri: j.clone(),
+                                    presentation: None,
+                                }),
+                                Argument::Simple(p.clone()),
+                            ]),
+                            None,
+                        ))
+                    },
+                )
+            },
+        );
+        Cow::Owned(Term::Bound(BindingTerm::new(
+            Term::Symbol {
+                uri: pi.clone(),
+                presentation: None,
+            },
+            Box::new([
+                BoundArgument::Bound(ComponentVar {
+                    var: Variable::Name {
+                        name: crate::DUMMY.clone(),
+                        notated: None,
+                    },
+                    tp: Some(premise),
+                    df: None,
+                }),
+                BoundArgument::Simple(c.into_owned()),
+            ]),
+            None,
+        )))
+    })
 }
 
 #[allow(clippy::useless_let_if_seq)]

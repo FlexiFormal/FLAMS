@@ -42,13 +42,13 @@ fn main() {
 
 fn check_selected() -> usize {
     //for _ in 0..1 {
-    let mut solver = Checker::<SingleThreadedSplit>::new(AnyBackend::Global);
     macro_rules! check {
             ($($s:literal),* $(,)?) => {
                 {
                     let mut i = 0;
                     $(
                         i += 1;
+                        let mut solver = Checker::<SingleThreadedSplit>::new(AnyBackend::Global);
                         check(&mut solver,$s);
                     )*
                     i
@@ -56,7 +56,12 @@ fn check_selected() -> usize {
             }
         }
     check!(
-        /*"http://mathhub.info?a=FTML/math&p=propositions&d=prop&l=en",
+        /*
+        "http://mathhub.info?a=FTML/math&d=functions&l=en",
+        "http://mathhub.info?a=FTML/math&p=sets&d=cons&l=en",
+        "http://mathhub.info?a=FTML/math&p=sets&d=comprehension&l=en",
+        "http://mathhub.info?a=FTML/math&p=nat&d=nat&l=en",
+        "http://mathhub.info?a=FTML/math&p=propositions&d=prop&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=negation&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=conjunction&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=disjunction&l=en",
@@ -66,13 +71,13 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=propositions&d=forall&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=exists&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=equal&l=en",
-        "http://mathhub.info?a=FTML/math&d=functions&l=en",
-        "http://mathhub.info?a=FTML/math&p=sets&d=cons&l=en",
-        "http://mathhub.info?a=FTML/math&p=sets&d=comprehension&l=en",
-        "http://mathhub.info?a=FTML/math&p=nat&d=nat&l=en",
-        "http://mathhub.info?a=FTML/math&d=test&l=en",
-        "http://mathhub.info?a=FTML/math&p=proofs&d=judgment&l=en",*/
-        "http://mathhub.info?a=FTML/math&p=proofs&d=inference-rule&l=en"
+        "http://mathhub.info?a=FTML/math&p=proofs&d=judgment&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs&d=axiom&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs&d=inference-rule&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=conjunction-introduction&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=implication-introduction&l=en",
+        */
+        "http://mathhub.info?a=FTML/tests&d=natded&l=en",
     )
     //}
 }
@@ -149,4 +154,16 @@ fn get_module(s: &str) -> Module {
         panic!("wut")
     };
     m
+}
+
+mod foo {
+
+    struct Rc<T> {
+        ptr: (*const T, std::cell::Cell<usize>),
+    }
+
+    fn foo() {
+        let rc = std::rc::Rc::new("Foo Bar");
+        ()
+    }
 }

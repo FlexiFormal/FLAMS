@@ -148,12 +148,12 @@ macro_rules! tasks {
         }
         #[cfg(feature = "full")]
         impl RefCheckLog<'_> {
-            pub fn into_owned(self) -> PreCheckLog {
+            pub fn into_owned(self,term:&impl Fn(Term) -> Term) -> PreCheckLog {
                 match self {
                     $(
                         Self::$name{$($field,)* steps,context,result} => PreCheckLog::$name{
-                            $($field:tasks!(@CONV $tp $field),)*
-                            steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                            $($field:tasks!(@CONV $tp $field term),)*
+                            steps: steps.into_iter().map(|t| CheckLogCow::into_owned(t,term)).collect(),
                             context: context.into_iter().map(Cow::into_owned).collect(),
                             result,
 
@@ -162,11 +162,11 @@ macro_rules! tasks {
                     Self::Msg(txt,lvl) => PreCheckLog::Msg(txt,lvl),
                     Self::Rule{rule,steps} => PreCheckLog::Rule{
                         rule:rule.as_box_dyn(),
-                        steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                        steps: steps.into_iter().map(|t| CheckLogCow::into_owned(t,term)).collect(),
                     },
                     Self::Strategy{name,steps,success} => PreCheckLog::Strategy{
                         name,
-                        steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                        steps: steps.into_iter().map(|t| CheckLogCow::into_owned(t,term)).collect(),
                         success
                     }
                 }
@@ -262,10 +262,10 @@ macro_rules! tasks {
         }
         #[cfg(feature = "full")]
         impl<'t> CheckLogCow<'t> {
-            pub fn into_owned(self) -> PreCheckLog {
+            pub fn into_owned(self,term:&impl Fn(Term) -> Term) -> PreCheckLog {
                 match self {
                     Self::Owned(o) => o,
-                    Self::Borrowed(b) => b.into_owned()
+                    Self::Borrowed(b) => b.into_owned(term)
                 }
             }
         }
@@ -370,16 +370,16 @@ macro_rules! tasks {
     (@DISPL $res:ident $disp:ident bool) => {};
     (@TPBORROW Term) => {&'t Term};
     (@TPOWN Term) => {Term};
-    (@CONV Term $name:ident) => { $name.clone() };
     (@TPBORROW str) => {&'t str};
     (@TPOWN str) => {Box<str>};
     (@FROMPRE Term $name:ident $f:ident) => {$f($name)};
     (@FROMPRE str $name:ident $f:ident) => {$name};
     (@FROMPRE bool $name:ident $f:ident) => {$name};
-    (@CONV str $name:ident) => { $name.to_string().into_boxed_str() };
+    (@CONV Term $name:ident $f:ident) => {$name.clone()};//{ $f($name.clone()) };
+    (@CONV str $name:ident $f:ident) => { $name.to_string().into_boxed_str() };
     //(@TPBORROW SolverRule) => {&'t dyn SolverRule};
     //(@TPOWN SolverRule) => {Box<dyn SolverRule>};
-    (@CONV SolverRule $name:ident) => { $name.as_box_dyn() };
+    (@CONV SolverRule $name:ident $f:ident) => { $name.as_box_dyn() };
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -408,8 +408,10 @@ impl Displayable {
 }
 
 tasks! {
+    Simplify(term:Term) => Term,
     Inference(term: Term) => Term,
     VariableInference(var: str) => Term,
+    //Simplify(term:Term) => Term,
     Inhabitable(term: Term) => bool,
     Universe(term:Term) => bool,
     Subtype(sub:Term,sup:Term) => bool,
@@ -451,6 +453,7 @@ pub trait TraceDisplay {
     // /// ### Errors
     //fn rule(&mut self, rule: &dyn CheckerRule) -> std::fmt::Result;
 
+    /// ### Errors
     fn displayable(&mut self, d: &Displayable, lvl: Option<MessageLevel>) -> std::fmt::Result {
         match d {
             Displayable::Num(i) => self.num(*i, lvl),
@@ -481,6 +484,7 @@ pub trait TraceDisplay {
         success: bool,
     ) -> std::fmt::Result;
 
+    /// ### Errors
     fn strategy(&mut self, name: &str, context: &[ComponentVar], success: bool)
     -> std::fmt::Result;
 
@@ -507,6 +511,7 @@ pub trait TraceDisplay {
 }
 #[cfg(feature = "full")]
 impl FmtTraceDisplay for () {
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn new(f: &mut std::fmt::Formatter<'_>) -> impl TraceDisplay {
         f
@@ -534,12 +539,7 @@ impl TraceDisplay for &mut std::fmt::Formatter<'_> {
     }
      */
 
-    fn strategy(
-        &mut self,
-        name: &str,
-        context: &[ComponentVar],
-        success: bool,
-    ) -> std::fmt::Result {
+    fn strategy(&mut self, name: &str, _: &[ComponentVar], _: bool) -> std::fmt::Result {
         write!(self, "Strategy: {name}")
     }
     fn task(
@@ -582,6 +582,11 @@ impl TraceDisplay for &mut std::fmt::Formatter<'_> {
             self.write_str("[FAILED] ")?;
         }
         match task {
+            CheckingTask::Simplify(t) => {
+                self.write_str("Simplifying ")?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
             CheckingTask::Inference(t) => {
                 self.write_str("Inferring type of ")?;
                 do_context(context, self)?;
@@ -695,12 +700,7 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
     }
      */
 
-    fn strategy(
-        &mut self,
-        name: &str,
-        context: &[ComponentVar],
-        success: bool,
-    ) -> std::fmt::Result {
+    fn strategy(&mut self, name: &str, _: &[ComponentVar], _: bool) -> std::fmt::Result {
         write!(self.0, "Strategy: {}", name.italic())
     }
 
@@ -740,6 +740,11 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
             write!(self.0, "{} ", "[FAILED]".red())?;
         }
         match task {
+            CheckingTask::Simplify(t) => {
+                write!(self.0, "{} ", "Simplifying".bright_white().bold())?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
             CheckingTask::Inference(t) => {
                 write!(self.0, "{} ", "Inferring type of".bright_white().bold())?;
                 do_context(context, self)?;

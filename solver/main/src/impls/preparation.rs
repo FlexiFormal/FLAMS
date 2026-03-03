@@ -1,7 +1,10 @@
-use crate::{CheckRef, split::SplitStrategy};
+use crate::{CheckRef, impls::solving::Solvable, split::SplitStrategy};
 use either::Either;
 use ftml_ontology::{
-    domain::{SharedDeclaration, declarations::symbols::Symbol},
+    domain::{
+        SharedDeclaration,
+        declarations::{morphisms::Morphism, symbols::Symbol},
+    },
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
     terms::{
         ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence,
@@ -18,14 +21,20 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         &self.top.rules
     }
 
-    pub(crate) fn prepare(&self, t: Term, path: Option<&mut TermPath>) -> Term {
+    pub(crate) fn prepare(
+        &self,
+        t: Term,
+        path: Option<&mut TermPath>,
+    ) -> (rustc_hash::FxHashSet<Solvable>, Term) {
         tracing::trace!("preparing {:?}", t.debug_short());
         let mut cp = self.copied();
         let mut ncp = cp.get_ref();
         let old = std::mem::replace(ncp.context.0, SmallVec::new());
         let r = ncp.prepare_i(t, path.map(|p| (p.inner_mut(), 0)));
         *ncp.context.0 = old;
-        r
+        drop(ncp);
+        let sols = std::mem::take(&mut cp.solutions);
+        (sols, r)
     }
 
     pub(crate) fn revert_prepare(&self, t: Term) -> Term {
@@ -60,6 +69,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                 };
                 let tp = self.infer_var_type_i(&v);
                 if let Some(tp) = tp {
+                    self.comment(format!("Solving type of {id}"));
                     self.solve_type(id.clone(), tp / ctx.as_slice());
                 }
 
@@ -97,7 +107,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
 
     fn prepare_i(
         &mut self,
-        t: Term,
+        mut t: Term,
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
         match &t {
@@ -105,43 +115,23 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             _ => (),
         }
 
-        // this may very much be overkill, but it's nice to do things without cloning,
-        // and terms are composed of potentially multiple Arcs :)
-        let mut t = MaybeUninit::new(t);
-
-        let rules = self.top.rules.preparation();
-
         for rl in self.top.rules.preparation() {
-            // SAFETY: not yet replaced
-            if !rl.applicable(self, unsafe { t.assume_init_ref() }) {
+            if !rl.applicable(self, &t) {
                 continue;
             }
-            // SAFETY: not yet replaced
-            let tm = unsafe { t.assume_init_read() };
             let path = match &mut path {
                 Some((p, t)) => Some((&mut **p, *t)),
                 _ => None,
             };
-            match rl.apply(self, tm, path) {
-                //                                 MaybeUninit doesn't drop the inner value,
-                //                                 vvvvvvvvv  so this is fine
+            match rl.apply(self, t, path) {
                 std::ops::ControlFlow::Break(t) => return t,
                 std::ops::ControlFlow::Continue(tm) => {
-                    // t is initialized again
-                    t.write(tm);
+                    t = tm;
                 }
             }
-            tracing::trace!(
-                "Rule {rl:?} applied; result: {:?}",
-                unsafe { t.assume_init_ref() }.debug_short()
-            );
+            tracing::trace!("Rule {rl:?} applied; result: {:?}", t.debug_short());
         }
-        // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(
-            unsafe { t.assume_init() },
-            |s, t, p| s.prepare_i(t, p),
-            path,
-        )
+        self.prepare_recurse(t, |s, t, p| s.prepare_i(t, p), path)
     }
 
     fn revert_i(&mut self, t: Term) -> Term {
@@ -306,6 +296,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         }
     }
 
+    #[allow(clippy::single_match_else)]
     fn prepare_cv(
         &mut self,
         cv: &ComponentVar,

@@ -48,7 +48,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
     }
     fn apply(
         &self,
-        _: &CheckRef<'_, '_, Split>,
+        _: &mut CheckRef<'_, '_, Split>,
         t: Term,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
