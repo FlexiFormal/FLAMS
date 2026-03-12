@@ -1,6 +1,6 @@
 use crate::{
     CheckRef,
-    rules::{PreparationRule, SizedSolverRule},
+    rules::{MarkerRule, PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{ApplicationTerm, Argument, MaybeSequence, Term};
@@ -14,31 +14,7 @@ impl SizedSolverRule for IsConjunctionRule {
         ftml_solver_trace::trace!(&self.0, "is a conjunction")
     }
 }
-impl std::fmt::Display for IsConjunctionRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} is a conjunction", self.0)
-    }
-}
-impl<Split: SplitStrategy> PreparationRule<Split> for IsConjunctionRule {
-    fn applicable(&self, _: &CheckRef<'_, '_, Split>, _: &Term) -> bool {
-        false
-    }
-    fn apply(
-        &self,
-        _: &mut CheckRef<'_, '_, Split>,
-        t: Term,
-        _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
-    ) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(t)
-    }
-
-    fn applicable_revert(&self, _: &CheckRef<'_, '_, Split>, _: &Term) -> bool {
-        false
-    }
-    fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(t)
-    }
-}
+impl<Split: SplitStrategy> MarkerRule<Split> for IsConjunctionRule {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConjunctiveRule(pub SymbolUri);
@@ -78,7 +54,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ConjunctiveRule {
         };
         let Some(conj): Option<&IsConjunctionRule> = checker
             .rules()
-            .preparation()
+            .marker()
             .iter()
             .find_map(|rl| rl.as_any().downcast_ref())
         else {
@@ -169,7 +145,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
         };
         let Some(conj): Option<&IsConjunctionRule> = checker
             .rules()
-            .preparation()
+            .marker()
             .iter()
             .find_map(|rl| rl.as_any().downcast_ref())
         else {
@@ -220,10 +196,10 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
         };
         ControlFlow::Continue(t)
     }
-    fn applicable_revert(&self, _: &CheckRef<'_, '_, Split>, _: &Term) -> bool {
-        false
+    fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        super::bin::BinLRule::app_rev(&self.0, checker, t)
     }
-    fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(t)
+    fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
+        super::bin::BinLRule::rev(&self.0, checker, t)
     }
 }

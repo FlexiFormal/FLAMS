@@ -62,6 +62,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         uri: &SymbolUri,
         prepare: impl Fn(Term) -> Term,
     ) -> Result<SharedDeclaration<Symbol>, BackendError> {
+        let uri = uri.as_simple_module();
         let Some(d) = self.get_module(&uri.module)?.get_as::<Symbol>(uri.name()) else {
             return Err(BackendError::NotFound(ftml_uris::UriKind::Symbol));
         };

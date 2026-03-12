@@ -2,8 +2,8 @@ use crate::{
     CheckRef, TermExtSeq,
     impls::solving::TermExtSolvable,
     rules::{
-        CheckingRule, InferenceRule, InhabitableRule, PreparationRule, SimplificationRule,
-        SizedSolverRule,
+        CheckingRule, InferenceRule, InhabitableRule, MarkerRule, PreparationRule,
+        SimplificationRule, SizedSolverRule,
     },
     split::SplitStrategy,
 };
@@ -11,9 +11,32 @@ use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
     Variable,
 };
+use ftml_solver_trace::CheckerRule;
 use ftml_uris::SymbolUri;
 use smallvec::SmallVec;
 use std::{borrow::Cow, hint::unreachable_unchecked};
+
+#[allow(unpredictable_function_pointer_comparisons)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PiExtensionRule<Split: SplitStrategy> {
+    pub extension: SymbolUri,
+    pub pi: SymbolUri,
+    pub applicable: fn(&Self, &Term, &Argument) -> bool,
+    pub infer: for<'t> fn(
+        &Self,
+        &super::pi::PiInferenceRule,
+        &mut CheckRef<'t, '_, Split>,
+        &Term,
+        &'t [Argument],
+        &mut usize,
+    ) -> Option<Term>,
+}
+impl<Split: SplitStrategy> SizedSolverRule for PiExtensionRule<Split> {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.extension, "is extension of", &self.pi)
+    }
+}
+impl<Split: SplitStrategy> MarkerRule<Split> for PiExtensionRule<Split> {}
 
 macro_rules! ret_i {
     ($(;)?) => {};
@@ -563,7 +586,7 @@ impl SizedSolverRule for LambdaPiCheckingRule {
     }
 }
 impl<Split: SplitStrategy> CheckingRule<Split> for LambdaPiCheckingRule {
-    fn applicable(&self, term: &Term, tp: &Term) -> bool {
+    fn applicable(&self, _: &CheckRef<'_, '_, Split>, term: &Term, tp: &Term) -> bool {
         destruct_binder(term, &self.lambda).is_some_and(|(v, _)| v.is_left())
             && destruct_binder(tp, &self.pi).is_some_and(|(v, _)| v.is_left())
     }
@@ -677,35 +700,26 @@ impl<Split: SplitStrategy> InferenceRule<Split> for PiInferenceRule {
         matches!(term, Term::Application(_)) // | Term::Bound(_))
     }
     fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
-        match term {
-            Term::Application(app) => {
-                let tp = checker.infer_type(&app.head)?;
-                if app.arguments.is_empty() {
-                    return None;
-                }
-                self.type_apply(&mut checker, tp, &app.arguments)
+        if let Term::Application(app) = term {
+            if app.arguments.is_empty() {
+                return None;
             }
-            /*
-            Term::Bound(app) => {
-                //todo!();
-                let tp = checker.infer_type(&app.head)?;
-                self.type_bound(checker, tp, &app.arguments)
-            } */
-            _ => {
-                checker.failure("Not an application");
-                None
-            }
+            let tp = checker.infer_type(&app.head)?;
+            self.type_apply(&mut checker, tp, &app.arguments)
+        } else {
+            checker.failure("Not an application");
+            None
         }
     }
 }
 
 impl PiInferenceRule {
     // INVARIANT: return has 2 arguments, the second one being simple
-    fn deconstruct_tp<Split: SplitStrategy>(
+    pub fn deconstruct_tp<Split: SplitStrategy>(
         bind_uri: &SymbolUri,
         checker: &mut CheckRef<'_, '_, Split>,
         tp: Term,
-    ) -> Option<BindingTerm> {
+    ) -> Result<BindingTerm, Term> {
         let Some(nret) = checker.scoped(|checker| {
             match checker.simplify_until(&tp, |t| matches!(t, Term::Bound(_)))? {
                 Cow::Borrowed(_) => Some(None),
@@ -713,7 +727,7 @@ impl PiInferenceRule {
             }
         }) else {
             checker.failure(format!("type is not a binder: {:?}", tp.debug_short()));
-            return None;
+            return Err(tp);
         };
         let Term::Bound(b) = nret.unwrap_or(tp) else {
             // SAFETY: simplify_until above would have returned None otherwise
@@ -724,9 +738,9 @@ impl PiInferenceRule {
             || !matches!(b.arguments.get(1), Some(BoundArgument::Simple(_)))
         {
             checker.failure("Type is not a Π anymore");
-            return None;
+            return Err(Term::Bound(b));
         }
-        Some(b)
+        Ok(b)
     }
 
     // INVARIANT: tp.is_concrete_sequence()
@@ -771,9 +785,9 @@ impl PiInferenceRule {
         // SAFETY: !seq.is_empty()
         let first = unsafe { seq.first().unwrap_unchecked() };
         let rest = &seq[1..];
-        let mut ret = Self::simple_apply(checker, &b, first, body)?;
+        let mut ret = Self::simple_apply(checker, b, first, body)?;
         for arg in rest {
-            let b = Self::deconstruct_tp(uri, checker, ret)?;
+            let b = Self::deconstruct_tp(uri, checker, ret).ok()?;
             let [_, BoundArgument::Simple(body)] = &*b.arguments else {
                 // SAFETY: invariant of deconstruct_tp
                 unsafe { unreachable_unchecked() }
@@ -783,7 +797,38 @@ impl PiInferenceRule {
         Some(ret)
     }
 
-    fn type_apply<'t, Split: SplitStrategy>(
+    fn try_extension<'t, Split: SplitStrategy>(
+        &self,
+        checker: &mut CheckRef<'t, '_, Split>,
+        tp: &'t Term,
+        args: &'t [Argument],
+        index: &mut usize,
+    ) -> Option<Term> {
+        let exts = checker
+            .rules()
+            .marker()
+            .iter()
+            .filter_map(|rl| rl.as_any().downcast_ref::<PiExtensionRule<Split>>())
+            .cloned()
+            .collect::<SmallVec<_, 1>>();
+        let arg = &args[*index];
+        let Some(ntp) =
+            checker.simplify_until(tp, |t| exts.iter().any(|rl| (rl.applicable)(rl, t, arg)))
+        else {
+            checker.failure("type is not a pi");
+            return None;
+        };
+        for rl in exts {
+            if (rl.applicable)(&rl, &ntp, arg)
+                && let Some(t) = (rl.infer)(&rl, self, checker, &ntp, args, index)
+            {
+                return Some(t);
+            }
+        }
+        None
+    }
+
+    pub fn type_apply<'t, Split: SplitStrategy>(
         &self,
         checker: &mut CheckRef<'t, '_, Split>,
         tp: Term,
@@ -792,16 +837,22 @@ impl PiInferenceRule {
         let mut ret = tp;
         let mut i = 0;
         loop {
-            if args.get(i).is_none() {
+            let Some(arg) = args.get(i) else {
                 return Some(ret);
-            }
-            let b = Self::deconstruct_tp(&self.0, checker, ret)?;
+            };
+            let dec = Self::deconstruct_tp(&self.0, checker, ret);
+            let b = match dec {
+                Ok(b) => b,
+                Err(t) => {
+                    ret =
+                        checker.scoped(|checker| self.try_extension(checker, &t, args, &mut i))?;
+                    continue;
+                }
+            };
             let [first, BoundArgument::Simple(body)] = &*b.arguments else {
                 // SAFETY: invariant of deconstruct_tp
                 unsafe { unreachable_unchecked() }
             };
-            // SAFETY: !args.get(i).is_none() above
-            let arg = unsafe { args.get(i).unwrap_unchecked() };
             match (first, arg) {
                 (
                     BoundArgument::Bound(ComponentVar {
@@ -847,17 +898,31 @@ impl PiInferenceRule {
         arg: &'t Term,
         body: &Term,
     ) -> Option<Term> {
-        let headvar = if let Some(BoundArgument::Bound(headvar)) = b.arguments.first() {
-            headvar
-        } else if let Some(BoundArgument::BoundSeq(MaybeSequence::Seq(vs))) = b.arguments.first()
-            && let [headvar] = &**vs
-        {
-            headvar
-        } else {
-            checker.failure("First argument is not a bound variable");
-            //checker.comment(format!("Here: {:?}{:?}", b.head.debug_short(), b.arguments));
-            //println!("Here: {:?}", b.arguments.first());
-            return None;
+        let headvar = match b.arguments.first() {
+            Some(BoundArgument::Bound(headvar)) => headvar,
+            Some(BoundArgument::BoundSeq(MaybeSequence::Seq(vs))) => {
+                if let [headvar] = &**vs {
+                    headvar
+                } else {
+                    checker.failure("First argument is not a bound variable");
+                    return None;
+                }
+            }
+            Some(BoundArgument::BoundSeq(MaybeSequence::One(v))) if arg.is_sequence() => v,
+            Some(BoundArgument::BoundSeq(MaybeSequence::One(_))) => {
+                let seq = Term::into_seq(std::iter::once(arg.clone()));
+                return checker.scoped(|slf| Self::simple_apply(slf, b, &seq, body));
+            }
+            _ => {
+                checker.failure("First argument is not a bound variable");
+                checker.comment(format!(
+                    "Here: {:?}{:?}  <-- {:?}",
+                    b.head.debug_short(),
+                    b.arguments,
+                    arg.debug_short()
+                ));
+                return None;
+            }
         };
 
         let (varname, vartp) = match headvar {
@@ -913,11 +978,11 @@ impl PiInferenceRule {
 
         let Some(BoundArgument::BoundSeq(MaybeSequence::One(headvar))) = b.arguments.first() else {
             checker.failure("First argument is not a bound variable sequence");
-            checker.comment(format!(
+            /*checker.comment(format!(
                 "Here: {:?}{:?}  <-- {arg:?}",
                 b.head.debug_short(),
                 b.arguments
-            ));
+            ));*/
             return None;
         };
 
@@ -970,106 +1035,6 @@ impl PiInferenceRule {
             }
         }
     }
-
-    /*
-    fn type_bound<'t, Split: SplitStrategy>(
-        &self,
-        mut checker: CheckRef<'t, '_, Split>,
-        tp: Term,
-        args: &'t [BoundArgument],
-    ) -> Option<Term> {
-        let mut names = SmallVec::<_, 2>::new();
-        let r = args.iter().enumerate().try_fold(tp, |tp, (i, arg)| {
-            checker.counter("Checking Argument ", i + 1);
-            let Term::Bound(b) = tp else {
-                checker.failure("Type is not a binder");
-                return None;
-            };
-            if !matches!(&b.head,Term::Symbol { uri, .. } if *uri == self.0)
-                || b.arguments.len() != 2
-            {
-                checker.failure("Type is not a Π anymore");
-                return None;
-            }
-            let Some(BoundArgument::Bound(headvar)) = b.arguments.first() else {
-                checker.failure("Argument is not a bound variable");
-                return None;
-            };
-            let Some(BoundArgument::Simple(body)) = b.arguments.get(1) else {
-                checker.failure("Argument is not simple 2");
-                return None;
-            };
-            let (varname, vartp) = match headvar {
-                ComponentVar {
-                    var, tp: Some(tp), ..
-                } => (var.name(), tp.clone()),
-                ComponentVar { var, .. } => (
-                    var.name(),
-                    checker.scoped(|checker| checker.infer_var_type(var))?,
-                ),
-            };
-            match arg {
-                BoundArgument::Simple(arg) => {
-                    if checker
-                        .scoped(|checker| checker.check_type(arg, &vartp))
-                        .is_none_or(|b| !b)
-                    {
-                        return None;
-                    }
-                    Some((body / (varname, arg)).into_owned())
-                }
-                BoundArgument::Bound(
-                    cv @ ComponentVar {
-                        var: argvar, tp, ..
-                    },
-                ) => {
-                    names.push(argvar.name());
-                    if let Some(tp) = tp {
-                        if checker.scoped(|checker| checker.check_subtype(tp, &vartp)) != Some(true)
-                        {
-                            return None;
-                        }
-                        checker.extend_context(cv);
-                        Some(
-                            (body
-                                / (
-                                    varname,
-                                    &Term::Var {
-                                        variable: cv.var.clone(),
-                                        presentation: None,
-                                    },
-                                ))
-                                .into_owned(),
-                        )
-                    } else {
-                        checker.failure("Untyped argument");
-                        None
-                    }
-                }
-                _ => {
-                    checker.failure("Argument is not simple 3");
-                    None
-                }
-            }
-        })?;
-        Some(r)
-        /*
-        let mut fails = r
-            .free_variables()
-            .into_iter()
-            .filter(|v| names.contains(&v.name()));
-        #[allow(clippy::option_if_let_else)]
-        if let Some(fail) = fails.next() {
-            checker.failure(format!(
-                "Resulting type depends on eliminated variables: {}",
-                fail.name()
-            ));
-            None
-        } else {
-            drop(fails);
-            Some(r)
-        } */
-    } */
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

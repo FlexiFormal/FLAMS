@@ -14,5 +14,7 @@ colors=["dep:owo-colors","full"]
 ftml-uris = {workspace = true}
 ftml-ontology = {workspace = true}
 serde = {workspace = true}
+serde_stacker = {workspace = true}
+serde_json = {workspace = true}
 
 owo-colors = {version="4",features=["supports-colors"],optional=true}

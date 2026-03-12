@@ -10,9 +10,12 @@ use ftml_ontology::{
 };
 use ftml_solver::{
     Checker,
-    split::{RayonSplit, RayonStrategiesOnly, SingleThreadedSplit, SplitStrategy},
+    results::DocumentCheckResult,
+    split::{
+        RayonSplit, RayonStrategiesDepth, RayonStrategiesOnly, SingleThreadedSplit, SplitStrategy,
+    },
 };
-use ftml_uris::DocumentUri;
+use ftml_uris::{ArchiveId, DocumentUri};
 
 flams_math_archives::source_format!(STEX {
     name: "stex",
@@ -30,7 +33,7 @@ fn main() {
     GlobalBackend::initialize::<AllSyncEngine>();
 
     //pause();
-    let (i, t) = measure(check_selected); //measure(check_all); //
+    let (i, t) = measure(check_all); // measure(check_selected); //
     println!("Checked {i} documents in {t}");
     /*println!(
         "minimal stack: {}",
@@ -57,7 +60,6 @@ fn check_selected() -> usize {
         }
     check!(
         /*
-        "http://mathhub.info?a=FTML/math&d=functions&l=en",
         "http://mathhub.info?a=FTML/math&p=sets&d=cons&l=en",
         "http://mathhub.info?a=FTML/math&p=sets&d=comprehension&l=en",
         "http://mathhub.info?a=FTML/math&p=nat&d=nat&l=en",
@@ -76,29 +78,43 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=proofs&d=inference-rule&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=conjunction-introduction&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=implication-introduction&l=en",
-        */
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=conjunction-introduction&l=en",
-        //"http://mathhub.info?a=FTML/tests&d=natded&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=exists-elimination&l=en",
+        "http://mathhub.info?a=FTML/tests&d=natded&l=en",
+        "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
+        */
+        "http://mathhub.info?a=FTML/math&d=functions&l=en",
     )
     //}
 }
 
 fn check_all() -> usize {
-    let alldocs = all_documents();
+    let alldocs = all_documents(|a| a.as_ref().starts_with("FTML"));
     let mut dones = 0;
+    let mut failures = 0;
 
     for d in alldocs {
-        let mut solver = Checker::<SingleThreadedSplit>::new(AnyBackend::Global);
+        let mut solver =
+            Checker::<SingleThreadedSplit /*RayonStrategiesDepth<4> */>::new(AnyBackend::Global);
         let Ok(d) = GlobalBackend.get_document(&d) else {
             continue;
         };
         println!("{}", d.uri);
-        let ((v, _), t) = measure(|| solver.check_document(&d));
-        println!("{}", v.colored());
+        let ((v, _), t) = measure(|| solver.check_document(&d).expect("dependency missing"));
+        let fails = count_fails(&v);
+        failures += fails;
+        if fails != 0 {
+            println!("{}", v.colored());
+        }
         println!("Checked after {t}");
         dones += 1;
     }
+    println!("Total failures: {failures}");
     dones
+}
+
+fn count_fails(res: &DocumentCheckResult) -> usize {
+    res.checks.iter().filter(|c| !c.success()).count()
 }
 
 fn pause() {
@@ -110,13 +126,17 @@ fn pause() {
     let _ = stdin.read(&mut [0u8]);
 }
 
-pub fn all_documents() -> Vec<DocumentUri> {
+pub fn all_documents(filter: fn(&ArchiveId) -> bool) -> Vec<DocumentUri> {
+    use flams_math_archives::MathArchive;
     let backend = flams_math_archives::backend::GlobalBackend.get();
     let uris = backend
         .all_archives()
         .iter()
         .filter_map(|a| {
             let Archive::Local(a) = a else { return None };
+            if !filter(a.id()) {
+                return None;
+            };
             Some(a.with_sources(|src| {
                 src.dfs()
                     .filter_map(|d| {
@@ -141,7 +161,7 @@ fn check<Split: SplitStrategy>(solver: &mut Checker<Split>, s: &str) {
     let d = GlobalBackend
         .get_document(&s.parse().expect("uri wut"))
         .expect("wut");
-    let ((v, _), t) = measure(|| solver.check_document(&d));
+    let ((v, _), t) = measure(|| solver.check_document(&d).expect("dependency missing"));
     println!("{}", v.colored());
     println!("Checked after {t}");
 }

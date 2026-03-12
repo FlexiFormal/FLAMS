@@ -40,6 +40,7 @@ ftml-ontology = { workspace = true, features = ["serde"] }
 ftml-components = { workspace = true }
 ftml-dom = { workspace = true }
 ftml-backend = { workspace = true, features = ["server_fn"] }
+ftml-solver-trace = { workspace = true }
 
 flams-utils = { workspace = true }
 flams-web-utils = { workspace = true }

@@ -3,11 +3,13 @@ mod impls;
 pub mod results {
     pub use ftml_solver_trace::results::*;
 }
+pub mod paragraphs;
 pub mod rules;
 pub mod split;
 pub mod trace {
     pub use ftml_solver_trace::*;
 }
+pub mod patterns;
 
 use crate::{
     impls::{
@@ -18,13 +20,13 @@ use crate::{
         CheckResult, ContentCheckResult, DocumentCheckResult, SymbolCheckResult, TypeCheckResult,
     },
     rules::RuleSet,
-    split::{CancelToken, SingleThreadedSplit, SplitStrategy},
+    split::{CancelToken, RayonStrategiesDepth, SingleThreadedSplit, SplitStrategy},
     trace::{CheckLogCow, CheckingTask, PreCheckLog},
 };
 use flams_math_archives::{
     artifacts::{ContentUpdate, FileOrString},
     backend::{AnyBackend, LocalBackend},
-    formats::BuildResult,
+    formats::{BuildResult, TaskDependency},
     utils::errors::BackendError,
 };
 use ftml_ontology::{
@@ -39,17 +41,14 @@ use ftml_ontology::{
             DocumentElementRef, LogicalParagraph, VariableDeclaration, paragraphs::ParagraphKind,
         },
     },
-    terms::{
-        ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, Term, TermContainer,
-        Variable, termpaths::TermPath,
-    },
+    terms::{ComponentVar, Term, TermContainer, termpaths::TermPath},
     utils::RefTree,
 };
 use ftml_solver_trace::CheckLog;
-use ftml_uris::{Id, IsDomainUri, ModuleUri, SymbolUri};
+use ftml_uris::{Id, IsDomainUri, ModuleUri};
 pub(crate) use rules::sequences::TermExtSeq;
 use smallvec::SmallVec;
-use std::{borrow::Cow, hint::unreachable_unchecked, marker::PhantomData};
+use std::{hint::unreachable_unchecked, marker::PhantomData};
 
 pub static DUMMY: std::sync::LazyLock<Id> =
     // SAFETY: "DUMMY" is a valid ID
@@ -72,19 +71,26 @@ fn check(task: flams_math_archives::formats::BuildSpec) -> BuildResult {
             };
         }
     };
-    let mut checker = Checker::<SingleThreadedSplit>::new(task.backend.clone());
-    let (logs, modules) = checker.check_document(&d);
-    let log = serde_json::to_string(&logs).unwrap_or_else(|s| s.to_string());
-    /*println!("Result: {d:#?}");
-    for m in &modules {
-        println!("{m:#?}");
-    }*/
-    BuildResult {
-        log: FileOrString::Str(log.into_boxed_str()),
-        result: Ok(Some(Box::new(ContentUpdate {
-            document: Some(d),
-            modules,
-        }) as _)),
+    let mut checker =
+        Checker::</*RayonStrategiesDepth<4>*/ SingleThreadedSplit>::new(task.backend.clone());
+    match checker.check_document(&d) {
+        Ok((logs, modules)) => {
+            let log = logs.to_json();
+            BuildResult {
+                log: FileOrString::Str(log.into_boxed_str()),
+                result: Ok(Some(Box::new(ContentUpdate {
+                    document: Some(d),
+                    modules,
+                }) as _)),
+            }
+        }
+        Err(e) => BuildResult {
+            log: FileOrString::Str(format!("Module missing: {e}").into_boxed_str()),
+            result: Err(vec![TaskDependency::Logical {
+                uri: e,
+                strict: true,
+            }]),
+        },
     }
 }
 
@@ -148,7 +154,10 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
     }
 
-    pub fn check_document(&mut self, d: &Document) -> (DocumentCheckResult, Vec<Module>) {
+    pub fn check_document(
+        &mut self,
+        d: &Document,
+    ) -> Result<(DocumentCheckResult, Vec<Module>), ModuleUri> {
         /*tracing::error!(
             "Current: {}",
             bytesize::ByteSize::b(stacker::remaining_stack().expect("wut") as _)
@@ -169,7 +178,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 _ => (),
             }
         }
-        let _ = self.set_context_i(all);
+        self.set_context_i(all)?;
         let modules: Vec<_> = modules
             .into_iter()
             .filter_map(|uri| self.get_module(&uri).ok())
@@ -240,9 +249,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                         ..
                     },
                 ) if fors.len() == 1 => {
-                    if let Some(r) = self.check_proof(p) {
-                        results.push(r);
-                    }
+                    results.extend(self.check_proof(p));
                 }
                 DocumentElementRef::Paragraph(
                     p @ LogicalParagraph {
@@ -267,22 +274,22 @@ impl<Split: SplitStrategy> Checker<Split> {
                 _ => (),
             }
         }
-        (
+        Ok((
             DocumentCheckResult {
                 uri: d.uri.clone(),
                 checks: results.into_boxed_slice(),
             },
             modules,
-        )
+        ))
     }
 
     // TODO return checked Module
-    pub fn check_module(&mut self, m: &Module) -> Vec<ContentCheckResult> {
+    pub fn check_module(&mut self, m: &Module) -> Result<Vec<ContentCheckResult>, ModuleUri> {
         let mut all = Vec::new();
         self.load_context(m, &mut all);
         self.modules.insert(m.clone());
         if !all.is_empty() {
-            let _ = self.set_context_i(all);
+            self.set_context_i(all)?;
         }
         let mut ret = Vec::new();
         for d in m.dfs().filter_map(|e| {
@@ -296,11 +303,11 @@ impl<Split: SplitStrategy> Checker<Split> {
                 ret.push(ContentCheckResult::Symbol(d.uri.clone(), r));
             }
         }
-        ret
+        Ok(ret)
     }
 
     /// #### Errors
-    pub fn add_modules(&mut self, modules: Vec<Module>) -> Result<(), BackendError> {
+    pub fn add_modules(&mut self, modules: Vec<Module>) -> Result<(), ModuleUri> {
         let mut todos = Vec::new();
         for m in modules {
             if !self.modules.contains(&m.uri) {
@@ -315,7 +322,7 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 
     /// #### Errors
-    pub fn set_context(&mut self, m: Vec<ModuleUri>) -> Result<(), BackendError> {
+    pub fn set_context(&mut self, m: Vec<ModuleUri>) -> Result<(), ModuleUri> {
         self.set_context_i(m)
     }
 
@@ -420,11 +427,13 @@ impl<Split: SplitStrategy> Checker<Split> {
         })
     }
 
-    fn set_context_i(&mut self, mut all: Vec<ModuleUri>) -> Result<(), BackendError> {
+    fn set_context_i(&mut self, mut all: Vec<ModuleUri>) -> Result<(), ModuleUri> {
         tracing::trace!("Context: {all:?}");
         while let Some(uri) = all.pop() {
             if uri.is_top() && !self.modules.contains(&uri) {
-                let ModuleLike::Module(m) = self.backend.get_module(&uri)? else {
+                let ModuleLike::Module(m) =
+                    self.backend.get_module(&uri).map_err(|_| uri.clone())?
+                else {
                     // SAFETY: uri.is_top()
                     unsafe { unreachable_unchecked() };
                 };
@@ -638,158 +647,9 @@ impl<Split: SplitStrategy> Checker<Split> {
                 }
                 _ => (),
             }
-            //println!("Here! Proof {}", p.uri);
         }
         Some(ret)
     }
-
-    pub fn check_proof(&mut self, p: &LogicalParagraph) -> Option<CheckResult> {
-        //println!("Here! Proof {}", p.uri);
-        None
-    }
-
-    pub fn check_definition(&mut self, p: &LogicalParagraph) -> Option<CheckResult> {
-        //println!("Here! Definition {}", p.uri);
-        None
-    }
-
-    pub fn check_assertion(&mut self, p: &LogicalParagraph) -> Option<Vec<CheckResult>> {
-        let judgment = self.rules.marker().iter().rev().find_map(|rl| {
-            rl.as_any()
-                .downcast_ref::<rules::IsJudgmentRule>()
-                .map(|rl| rl.0.clone())
-        });
-        let (lambda, pi, apply) = self.rules.marker().iter().rev().find_map(|rl| {
-            rl.as_any()
-                .downcast_ref::<rules::HOASRule>()
-                .map(|rl| (rl.lambda.clone(), rl.pi.clone(), rl.apply.clone()))
-        })?;
-        let mut ret = Vec::new();
-        for (target, term) in &p.fors {
-            let Ok(target) = self.get_symbol(target, |t| t) else {
-                continue;
-            };
-            let Some(term) = term else { continue };
-            let Some(term) = term.get_parsed() else {
-                continue;
-            };
-            let wrapped = wrap_premises(term, &p.premises, judgment.as_ref(), apply.as_ref(), &pi);
-            let (unks, tp) = self.prepare(None, wrapped.into_owned());
-
-            tracing::trace!("Checking assertion for {}", target.uri);
-            let (b, _, l) = self.check_inhabitable(Some(unks), &tp);
-            target
-                .data
-                .tp
-                .set_presentation(self.revert_prepare(tp.clone()));
-            target.data.tp.set_checked(tp);
-            ret.push(CheckResult::Content(ContentCheckResult::Symbol(
-                target.uri.clone(),
-                SymbolCheckResult::TypeOnly {
-                    result: TypeCheckResult {
-                        success: b.unwrap_or(false),
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    },
-                },
-            )));
-        }
-        Some(ret)
-    }
-}
-
-fn wrap_premises<'c>(
-    conclusion: &'c Term,
-    premises: &[Term],
-    judgment: Option<&SymbolUri>,
-    apply: Option<&SymbolUri>,
-    pi: &SymbolUri,
-) -> Cow<'c, Term> {
-    let conclusion = judgment.map_or_else(
-        || Cow::Borrowed(conclusion),
-        |j| {
-            Cow::Owned(apply.map_or_else(
-                || {
-                    Term::Application(ApplicationTerm::new(
-                        Term::Symbol {
-                            uri: j.clone(),
-                            presentation: None,
-                        },
-                        Box::new([Argument::Simple(conclusion.clone())]),
-                        None,
-                    ))
-                },
-                |app| {
-                    Term::Application(ApplicationTerm::new(
-                        Term::Symbol {
-                            uri: app.clone(),
-                            presentation: None,
-                        },
-                        Box::new([
-                            Argument::Simple(Term::Symbol {
-                                uri: j.clone(),
-                                presentation: None,
-                            }),
-                            Argument::Simple(conclusion.clone()),
-                        ]),
-                        None,
-                    ))
-                },
-            ))
-        },
-    );
-    premises.iter().fold(conclusion, |c, p| {
-        let premise = judgment.map_or_else(
-            || p.clone(),
-            |j| {
-                apply.map_or_else(
-                    || {
-                        Term::Application(ApplicationTerm::new(
-                            Term::Symbol {
-                                uri: j.clone(),
-                                presentation: None,
-                            },
-                            Box::new([Argument::Simple(p.clone())]),
-                            None,
-                        ))
-                    },
-                    |app| {
-                        Term::Application(ApplicationTerm::new(
-                            Term::Symbol {
-                                uri: app.clone(),
-                                presentation: None,
-                            },
-                            Box::new([
-                                Argument::Simple(Term::Symbol {
-                                    uri: j.clone(),
-                                    presentation: None,
-                                }),
-                                Argument::Simple(p.clone()),
-                            ]),
-                            None,
-                        ))
-                    },
-                )
-            },
-        );
-        Cow::Owned(Term::Bound(BindingTerm::new(
-            Term::Symbol {
-                uri: pi.clone(),
-                presentation: None,
-            },
-            Box::new([
-                BoundArgument::Bound(ComponentVar {
-                    var: Variable::Name {
-                        name: crate::DUMMY.clone(),
-                        notated: None,
-                    },
-                    tp: Some(premise),
-                    df: None,
-                }),
-                BoundArgument::Simple(c.into_owned()),
-            ]),
-            None,
-        )))
-    })
 }
 
 #[allow(clippy::useless_let_if_seq)]

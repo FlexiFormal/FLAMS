@@ -1,5 +1,5 @@
 pub mod backend;
-mod equality;
+pub mod equality;
 mod inference;
 mod preparation;
 pub mod simplify;
@@ -80,6 +80,16 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         (ret, line)
     }
 
+    pub const fn depth(&self) -> usize {
+        let mut curr = self.parent_solutions;
+        let mut ret = 0;
+        while let Some(c) = curr {
+            ret += 1;
+            curr = c.gp.copied();
+        }
+        ret
+    }
+
     pub(crate) fn branch_traced<R: Clone>(
         &mut self,
         task: CheckingTask<'c>,
@@ -138,19 +148,25 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     }
 
     pub(crate) fn copied(&self) -> CheckRefBranch<'c, 'i, Split> {
+        let ancestor = Ancestor {
+            p: self.solutions,
+            gp: self.parent_solutions.as_ref(),
+        };
         CheckRefBranch {
             context: SmallVec::default(),
             solutions: rustc_hash::FxHashSet::default(),
             messages: SmallVec::new(),
             // --------------
             top: self.top,
-            parent_solutions: self.parent_solutions,
+            // SAFETY: will not live longer than 'i; only immutable borrows, 'i is only stack reference
+            // to parent
+            parent_solutions: Some(unsafe { std::mem::transmute::<Ancestor, Ancestor>(ancestor) }), //self.parent_solutions,
             cancel: self.cancel,
             traced: self.traced,
         }
     }
 
-    pub(crate) fn cancellable<R: Send + Sync>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+    pub(crate) fn cancellable<R: Send>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         let old = self.cancel;
         let cancel = old.derive();
         let rf = &cancel;
@@ -168,6 +184,7 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         f: impl FnOnce(&mut Self) -> Option<R>,
     ) -> Option<R> {
         if self.cancel.is_cancelled() {
+            self.failure("CANCELLED!");
             return None;
         }
         match self.traced(task, f) {
@@ -260,6 +277,10 @@ impl<'c, Split: SplitStrategy> CheckRefBranch<'c, '_, Split> {
             parent_solutions: self.parent_solutions,
             traced: self.traced,
         }
+    }
+    pub fn close(self, checker: &mut CheckRef<'c, '_, Split>) {
+        checker.merge_solutions(self.solutions);
+        checker.messages.extend(self.messages);
     }
 }
 

@@ -1,3 +1,5 @@
+use std::hint::unreachable_unchecked;
+
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use smallvec::SmallVec;
 
@@ -60,7 +62,7 @@ impl Cancellation for () {
 }
 
 pub trait SplitStrategy:
-    Send + Sync + Sized + 'static + Copy + Clone + Default + std::fmt::Debug
+    Send + Sync + Sized + 'static + Copy + Clone + Default + std::fmt::Debug + PartialEq + Eq
 {
     type CancelToken: Cancellation;
     const SYMBOL_EXTRACTORS: &[SymbolRuleExtractor<Self>] =
@@ -86,14 +88,14 @@ pub trait SplitStrategy:
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         msg: bool,
-        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
+        rules: smallvec::SmallVec<&'t Rl, 2>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>>;
 
     fn split<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         msg: bool,
-        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
+        rules: smallvec::SmallVec<&'t Rl, 2>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Option<R> {
         match Self::split_i(slf, msg, rules, then) {
@@ -140,11 +142,11 @@ pub trait SplitStrategy:
     fn split_i_st<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         msg: bool,
-        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
+        rules: smallvec::SmallVec<&'t Rl, 2>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
-        let mut rules = rules.peekable();
-        if rules.peek().is_none() {
+        //let mut rules = rules.peekable();
+        if rules.is_empty() {
             return Err(if msg {
                 smallvec::smallvec![RefCheckLog::Msg(
                     "No rule applicable".into(),
@@ -178,28 +180,44 @@ pub trait SplitStrategy:
         B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
         R: Send + std::fmt::Debug + Clone,
     {
-        let mut top = solver.copied();
-        let (a, b) = rayon::join(
-            move || {
-                let mut solver = top.get_ref();
-                solver
-                    .traced(CheckingTask::Strategy(strategy_a), oper_a)
-                    .inspect(|_| solver.cancel.cancel())
-            },
-            || {
-                solver
-                    .traced(CheckingTask::Strategy(strategy_b), oper_b)
-                    .inspect(|_| solver.cancel.cancel())
-            },
-        );
-        match (a, b) {
-            (Ok(r), _) | (_, Ok(r)) => Some(r),
-            (Err(i1), Err(i2)) => {
-                solver.add_msg(i1.into());
-                solver.add_msg(i2.into());
-                None
+        //solver.comment("Splitting");
+        solver.cancellable(|solver| {
+            let mut top1 = solver.copied();
+            let mut top2 = solver.copied();
+            let (a, b) = rayon::join(
+                || {
+                    let mut solver = top1.get_ref();
+                    solver
+                        .traced(CheckingTask::Strategy(strategy_a), oper_a)
+                        .inspect(|_| solver.cancel.cancel())
+                },
+                || {
+                    let mut solver = top2.get_ref();
+                    solver
+                        .traced(CheckingTask::Strategy(strategy_b), oper_b)
+                        .inspect(|_| solver.cancel.cancel())
+                },
+            );
+            match (a, b) {
+                (Ok(r), b) => {
+                    drop(b);
+                    //solver.comment("1 Succeeded");
+                    top1.close(solver);
+                    Some(r)
+                }
+                (a, Ok(r)) => {
+                    drop(a);
+                    //solver.comment("2 Succeeded");
+                    top2.close(solver);
+                    Some(r)
+                }
+                (Err(i1), Err(i2)) => {
+                    solver.add_msg(i1.into());
+                    solver.add_msg(i2.into());
+                    None
+                }
             }
-        }
+        })
     }
 
     /// ### Errors
@@ -207,7 +225,7 @@ pub trait SplitStrategy:
     fn split_i_mt<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         msg: bool,
-        rules: impl Iterator<Item = &'t Rl>,
+        rules: smallvec::SmallVec<&'t Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
         let then = &then;
@@ -224,7 +242,6 @@ pub trait SplitStrategy:
             }};
         }
 
-        let mut rules: smallvec::SmallVec<_, 2> = rules.collect();
         match rules.len() {
             0 => {
                 return Err(if msg {
@@ -238,15 +255,16 @@ pub trait SplitStrategy:
             }
             1 => {
                 // SAFETY: len == 1
-                let rule = unsafe { rules.pop().unwrap_unchecked() };
+                let rule = unsafe { rules.first().unwrap_unchecked() };
                 return slf
                     .branch_traced(CheckingTask::Rule(rule.as_dyn()), |slf| then(slf, rule))
                     .map_err(|l| smallvec::smallvec![l]);
             }
             2 => {
                 // SAFETY: len == 2
-                let rule_a = unsafe { rules.pop().unwrap_unchecked() };
-                let rule_b = unsafe { rules.pop().unwrap_unchecked() };
+                let [rule_a, rule_b] = &*rules else {
+                    unsafe { unreachable_unchecked() }
+                };
                 return match rayon::join(|| then!(rule_a!), || then!(rule_b!)) {
                     (Ok(t), _) | (_, Ok(t)) => Ok(t),
                     (Err(i1), Err(i2)) => Err(smallvec::smallvec_inline![i1, i2]),
@@ -271,7 +289,7 @@ pub trait SplitStrategy:
     }
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct SingleThreadedSplit;
 impl SplitStrategy for SingleThreadedSplit {
     type CancelToken = ();
@@ -296,14 +314,49 @@ impl SplitStrategy for SingleThreadedSplit {
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         msg: bool,
-        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
+        rules: smallvec::SmallVec<&'t Rl, 2>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
         Self::split_i_st(slf, msg, rules, then)
     }
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub struct RayonStrategiesDepth<const DEPTH: usize>;
+impl<const DEPTH: usize> SplitStrategy for RayonStrategiesDepth<DEPTH> {
+    type CancelToken = std::sync::atomic::AtomicBool;
+    #[inline]
+    fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
+        slf: &mut CheckRef<'t, '_, Self>,
+        msg: bool,
+        rules: smallvec::SmallVec<&'t Rl, 2>, //smallvec::SmallVec<&Rl, 2>,
+        then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
+    ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
+        Self::split_i_st(slf, msg, rules, then)
+    }
+
+    #[inline]
+    fn strategies<'t, A, B, R>(
+        solver: &mut CheckRef<'t, '_, Self>,
+        strategy_a: &'static str,
+        oper_a: A,
+        strategy_b: &'static str,
+        oper_b: B,
+    ) -> Option<R>
+    where
+        A: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
+        R: Send + std::fmt::Debug + Clone,
+    {
+        if solver.depth() <= DEPTH {
+            Self::strategies_mt(solver, strategy_a, oper_a, strategy_b, oper_b)
+        } else {
+            Self::strategies_st(solver, strategy_a, oper_a, strategy_b, oper_b)
+        }
+    }
+}
+
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct RayonStrategiesOnly;
 impl SplitStrategy for RayonStrategiesOnly {
     type CancelToken = std::sync::atomic::AtomicBool;
@@ -328,14 +381,14 @@ impl SplitStrategy for RayonStrategiesOnly {
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         msg: bool,
-        rules: impl Iterator<Item = &'t Rl>, //smallvec::SmallVec<&Rl, 2>,
+        rules: smallvec::SmallVec<&'t Rl, 2>, //smallvec::SmallVec<&Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
         Self::split_i_st(slf, msg, rules, then)
     }
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct RayonSplit;
 impl SplitStrategy for RayonSplit {
     type CancelToken = std::sync::atomic::AtomicBool;
@@ -360,7 +413,7 @@ impl SplitStrategy for RayonSplit {
     fn split_i<'t, Rl: CheckerRule + ?Sized, R: Send + std::fmt::Debug + Clone + 'static>(
         slf: &mut CheckRef<'t, '_, Self>,
         msg: bool,
-        rules: impl Iterator<Item = &'t Rl>,
+        rules: smallvec::SmallVec<&'t Rl, 2>,
         then: impl Fn(CheckRef<'t, '_, Self>, &Rl) -> Option<R> + Send + Sync,
     ) -> Result<R, smallvec::SmallVec<RefCheckLog<'t>, 2>> {
         Self::split_i_mt(slf, msg, rules, then)

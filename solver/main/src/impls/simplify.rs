@@ -152,7 +152,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     where
         R: Send + Sync + std::fmt::Debug + Clone + 'static,
     {
-        let mut applicables = smallvec::SmallVec::<_, 1>::default();
+        let mut applicables = smallvec::SmallVec::<_, 2>::default();
         match self.simplify_until(term, |t| {
             applicables = rules
                 .iter()
@@ -167,9 +167,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             !applicables.is_empty()
         }) {
             Some(Cow::Borrowed(term)) => {
-                if let Some(r) = Split::split(self, true, applicables.into_iter(), |slf, rl| {
-                    apply(slf, rl, term)
-                }) {
+                if let Some(r) =
+                    Split::split(self, true, applicables, |slf, rl| apply(slf, rl, term))
+                {
                     return Some(r);
                 }
                 self.simplify_one(true, term).and_then(|term| {
@@ -177,9 +177,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 })
             }
             Some(Cow::Owned(term)) => self.scoped(|slf| {
-                if let Some(r) = Split::split(slf, true, applicables.into_iter(), |slf, rl| {
-                    apply(slf, rl, &term)
-                }) {
+                if let Some(r) =
+                    Split::split(slf, true, applicables, |slf, rl| apply(slf, rl, &term))
+                {
                     return Some(r);
                 }
                 slf.simplify_one(true, &term).and_then(|term| {
@@ -194,13 +194,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     pub(crate) fn simplify_one(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
-        let applicables = self.top.rules.simplification().iter().filter_map(|rl| {
-            if rl.applicable(term) {
-                Some(&**rl)
-            } else {
-                None
-            }
-        });
+        let applicables = self
+            .top
+            .rules
+            .simplification()
+            .iter()
+            .filter_map(|rl| {
+                if rl.applicable(term) {
+                    Some(&**rl)
+                } else {
+                    None
+                }
+            })
+            .collect::<smallvec::SmallVec<_, 2>>();
         match Split::split(self, false, applicables, |slf, rl| {
             match rl.apply(slf, term) {
                 Ok(t) => Some(either::Left(t)),
@@ -224,6 +230,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).inspect(|_| {
                 self.comment("expanded definition");
             }),
+            Term::Var { variable, .. } if expand => {
+                self.get_var_definiens(variable).inspect(|_| {
+                    self.comment("expanded definition");
+                })
+            }
             Term::Application(app) => self.simplify_one(expand, &app.head).map(|nh| {
                 Term::Application(ApplicationTerm::new(
                     nh,

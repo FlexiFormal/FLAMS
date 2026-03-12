@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use ftml_ontology::terms::Term;
 use ftml_uris::{DocumentElementUri, DocumentUri, FtmlUri, ModuleUri, SymbolUri};
+use serde_json::de;
 
 use crate::CheckLog;
 
@@ -16,6 +17,21 @@ pub struct DocumentCheckResult {
     pub checks: Box<[CheckResult]>,
 }
 impl DocumentCheckResult {
+    #[must_use]
+    pub fn to_json(&self) -> String {
+        let mut s = Vec::<u8>::new();
+        let mut serializer = serde_json::Serializer::new(&mut s);
+        let serializer = serde_stacker::Serializer::new(&mut serializer);
+        let _ = <Self as serde::Serialize>::serialize(self, serializer);
+        String::from_utf8(s).unwrap_or_default()
+    }
+    /// #### Errors
+    pub fn from_json(s: &str) -> Result<Self, String> {
+        let mut deserializer = serde_json::Deserializer::from_str(s);
+        deserializer.disable_recursion_limit();
+        let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+        <Self as serde::Deserialize>::deserialize(deserializer).map_err(|e| e.to_string())
+    }
     #[cfg(feature = "full")]
     #[must_use]
     pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {
@@ -116,6 +132,7 @@ pub enum CheckResult {
         checks: Vec<ContentCheckResult>,
     },
     Variable(DocumentElementUri, SymbolCheckResult),
+    Proof(DocumentElementUri, Vec<ProofStepResult>),
     Term {
         uri: DocumentElementUri,
         inferred: Option<Term>,
@@ -166,6 +183,17 @@ impl CheckResult {
                         log.display::<D>().fmt(f)
                     }
                     CheckResult::Content(c) => c.display::<D>().fmt(f),
+                    CheckResult::Proof(uri, checks) => {
+                        let mut d = D::new(f);
+                        d.string("\nChecking proof ", Some(crate::MessageLevel::Header))?;
+                        d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
+                        d.string("\n", None)?;
+                        drop(d);
+                        for c in checks {
+                            c.display::<D>().fmt(f)?;
+                        }
+                        Ok(())
+                    }
                 }
             }
         }
@@ -185,7 +213,100 @@ impl CheckResult {
             Self::Term { inferred, .. } => inferred.is_some(),
             Self::Missing(_) => false,
             Self::Content(c) => c.success(),
+            Self::Proof(_, s) => s.iter().all(ProofStepResult::success),
         }
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ProofStepResult {
+    Assumption {
+        var: Option<DocumentElementUri>,
+        result: ProofStepCheckResult,
+    },
+    Conclusion {
+        var: Option<DocumentElementUri>,
+        result: ProofStepCheckResult,
+    },
+    Step {
+        var: Option<DocumentElementUri>,
+        result: ProofStepCheckResult,
+    },
+    Subproof {
+        uri: DocumentElementUri,
+        var: Option<DocumentElementUri>,
+        results: Vec<Self>,
+    },
+}
+impl ProofStepResult {
+    pub fn success(&self) -> bool {
+        match self {
+            Self::Assumption { result, .. }
+            | Self::Conclusion { result, .. }
+            | Self::Step { result, .. } => result.success(),
+            Self::Subproof { results, .. } => results.iter().all(Self::success),
+        }
+    }
+    #[cfg(feature = "full")]
+    #[must_use]
+    pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {
+        struct Displayer<'a, D: FmtTraceDisplay>(&'a ProofStepResult, PhantomData<D>);
+        impl<D: FmtTraceDisplay> std::fmt::Display for Displayer<'_, D> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mut d = D::new(f);
+                match self.0 {
+                    ProofStepResult::Assumption { var, result } => {
+                        d.string("\nChecking Assumption ", Some(crate::MessageLevel::Header))?;
+                        if let Some(var) = var {
+                            d.uri(var.as_uri(), Some(crate::MessageLevel::Header))?;
+                        }
+                        d.string("\n", None)?;
+                        drop(d);
+                        result.display::<D>().fmt(f)
+                    }
+                    ProofStepResult::Conclusion { var, result } => {
+                        d.string("\nChecking Conclusion ", Some(crate::MessageLevel::Header))?;
+                        if let Some(var) = var {
+                            d.uri(var.as_uri(), Some(crate::MessageLevel::Header))?;
+                        }
+                        d.string("\n", None)?;
+                        drop(d);
+                        result.display::<D>().fmt(f)
+                    }
+                    ProofStepResult::Step { var, result } => {
+                        d.string("\nChecking Step ", Some(crate::MessageLevel::Header))?;
+                        if let Some(var) = var {
+                            d.uri(var.as_uri(), Some(crate::MessageLevel::Header))?;
+                        }
+                        d.string("\n", None)?;
+                        drop(d);
+                        result.display::<D>().fmt(f)
+                    }
+                    ProofStepResult::Subproof { uri, var, results } => {
+                        d.string("\nChecking Subproof ", Some(crate::MessageLevel::Header))?;
+                        d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
+                        if let Some(var) = var {
+                            d.string(" = ", Some(crate::MessageLevel::Header))?;
+                            d.uri(var.as_uri(), Some(crate::MessageLevel::Header))?;
+                        }
+                        d.string("\n", None)?;
+                        drop(d);
+                        for r in results {
+                            r.display::<D>().fmt(f)?;
+                        }
+                        Ok(())
+                    }
+                }
+            }
+        }
+
+        Displayer(self, PhantomData::<D>)
+    }
+    #[cfg(feature = "colors")]
+    #[must_use]
+    pub fn colored(&self) -> impl std::fmt::Display {
+        self.display::<ColorDisplay>()
     }
 }
 
@@ -203,7 +324,7 @@ impl ContentCheckResult {
                 let mut d = D::new(f);
                 match self.0 {
                     ContentCheckResult::Symbol(uri, s) => {
-                        d.string("Checking symbol ", Some(crate::MessageLevel::Header))?;
+                        d.string("\nChecking symbol ", Some(crate::MessageLevel::Header))?;
                         d.uri(uri.as_uri(), Some(crate::MessageLevel::Header))?;
                         d.string("\n", None)?;
                         drop(d);
@@ -243,5 +364,64 @@ impl TypeCheckResult {
     #[must_use]
     pub fn colored(&self) -> impl std::fmt::Display {
         self.display::<ColorDisplay>()
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ProofStepCheckResult {
+    GoalOnly {
+        result: TypeCheckResult,
+    },
+    ProofOnly {
+        inferred: Option<Term>,
+        log: CheckLog,
+    },
+    Both {
+        inhabitable: TypeCheckResult,
+        matches: Option<TypeCheckResult>,
+    },
+}
+impl ProofStepCheckResult {
+    #[cfg(feature = "full")]
+    #[must_use]
+    pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {
+        struct Displayer<'a, D: FmtTraceDisplay>(&'a ProofStepCheckResult, PhantomData<D>);
+        impl<D: FmtTraceDisplay> std::fmt::Display for Displayer<'_, D> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self.0 {
+                    ProofStepCheckResult::GoalOnly { result } => result.display::<D>().fmt(f),
+                    ProofStepCheckResult::ProofOnly { log, .. } => log.display::<D>().fmt(f),
+                    ProofStepCheckResult::Both {
+                        inhabitable,
+                        matches,
+                    } => {
+                        inhabitable.display::<D>().fmt(f)?;
+                        if let Some(r) = matches.as_ref() {
+                            r.display::<D>().fmt(f)?;
+                        }
+                        Ok(())
+                    }
+                }
+            }
+        }
+        Displayer(self, PhantomData::<D>)
+    }
+
+    #[cfg(feature = "colors")]
+    #[must_use]
+    pub fn colored(&self) -> impl std::fmt::Display {
+        self.display::<ColorDisplay>()
+    }
+    #[must_use]
+    pub fn success(&self) -> bool {
+        match self {
+            Self::GoalOnly { result } => result.success,
+            Self::ProofOnly { inferred, .. } => inferred.is_some(),
+            Self::Both {
+                inhabitable,
+                matches,
+            } => inhabitable.success && matches.as_ref().is_some_and(|r| r.success),
+        }
     }
 }

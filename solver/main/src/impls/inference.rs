@@ -30,7 +30,8 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             .rules
             .inference()
             .iter()
-            .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None });
+            .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None })
+            .collect::<smallvec::SmallVec<_, 2>>();
         let r = Split::split(self, true, rules, |slf, rl| rl.infer(slf, t));
         //r.map(|t| self.subst(t))
         r.map(|t| {

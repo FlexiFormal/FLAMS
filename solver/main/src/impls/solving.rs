@@ -3,7 +3,7 @@ use std::{borrow::Borrow, collections::HashSet};
 use ftml_ontology::terms::{Term, Variable};
 use ftml_uris::Id;
 
-use crate::{CheckRef, split::SplitStrategy};
+use crate::{CheckRef, Checker, split::SplitStrategy};
 
 const PREFIX: &str = "SOLVE!";
 
@@ -67,7 +67,7 @@ impl std::fmt::Debug for BoundedValue {
 
 #[derive(Clone)]
 pub struct Solvable {
-    name: Id,
+    pub(crate) name: Id,
     pub(crate) solution: BoundedValue,
     pub(crate) tp: BoundedValue,
 }
@@ -96,16 +96,20 @@ impl std::hash::Hash for Solvable {
     }
 }
 
+impl<Split: SplitStrategy> Checker<Split> {
+    pub(crate) fn new_solvable(&self) -> Id {
+        let i = self
+            .implicits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // SAFETY: is a valid Id
+        unsafe { format!("{PREFIX}{i}").parse().unwrap_unchecked() }
+    }
+}
+
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     #[must_use]
     pub fn new_solvable(&mut self) -> Variable {
-        let i = self
-            .top
-            .implicits
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let name: Id =
-            // SAFETY: is a valid Id
-            unsafe { format!("{PREFIX}{i}").parse().unwrap_unchecked() };
+        let name = self.top.new_solvable();
         self.add_solvable(name.clone());
         Variable::Name {
             name,

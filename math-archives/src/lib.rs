@@ -346,7 +346,7 @@ impl MathArchive for LocalArchive {
             return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
         }
         let file = std::io::BufReader::new(std::fs::File::open(out)?);
-        let ret = bincode::decode_from_reader(file, bincode::config::standard())?;
+        let ret: Module = bincode::decode_from_reader(file, bincode::config::standard())?;
         Ok(ret)
     }
 
@@ -520,9 +520,9 @@ impl LocallyBuilt for LocalArchive {
                     if mp2 != mp && mp2.exists() { mp2 } else { p }
                 }
             },
-            |source| {
+            |rel_path| {
                 // SAFETY source is ancestor of source_dir
-                let rel_path = unsafe { source.relative_to(&self.source_dir()).unwrap_unchecked() };
+                //let rel_path = unsafe { source.relative_to(&self.source_dir()).unwrap_unchecked() };
                 self.out_path.join(rel_path)
             },
         )
@@ -583,7 +583,7 @@ impl LocalArchive {
         state.update(dir);
     }
 
-    /// blocks!
+    /// blocks! removes File extension!
     pub fn rel_path_of(
         &self,
         path: Option<&UriPath>,
@@ -591,17 +591,55 @@ impl LocalArchive {
         language: Language,
     ) -> Option<PathBuf> {
         let dir = path.map_or_else(|| self.source_dir(), |n| self.source_dir().join_uri_path(n));
-
         for f in std::fs::read_dir(&dir)
             .ok()?
             .filter_map(std::result::Result::ok)
         {
-            let Ok(m) = dir.metadata() else { continue };
+            static SKIP: &[&str] = &[
+                ".log",
+                ".aux",
+                ".sms",
+                ".sref",
+                ".sms2",
+                ".upa",
+                ".upb",
+                ".mw",
+                ".deps",
+                ".fdb_latexmk",
+                ".dvi",
+                ".fls",
+                ".tmp",
+                ".pdf",
+                ".pdflog",
+                ".errlog",
+                ".bbl",
+                ".blg",
+                ".out",
+                ".synctex.gz",
+                ".run.xml",
+                ".thm",
+                ".bak",
+                ".idx",
+                ".ind",
+                ".ilg",
+                ".toc",
+                ".vrb",
+                ".nav",
+                ".snm",
+                ".ltxlog",
+                ".eps",
+                ".ps",
+                "-blx.bib",
+            ];
+            let Ok(m) = f.metadata() else { continue };
             if !m.is_file() {
                 continue;
             }
             let fname = f.file_name();
             let Some(name) = fname.to_str() else { continue };
+            if SKIP.iter().any(|s| name.ends_with(*s)) {
+                continue;
+            }
 
             if !name.starts_with(doc_name.as_ref()) {
                 continue;
@@ -617,7 +655,12 @@ impl LocalArchive {
                     continue;
                 }
             }
-            return Some(f.path());
+            let path = f
+                .path()
+                .strip_prefix(self.source_dir())
+                .ok()?
+                .with_extension("");
+            return Some(path);
         }
         None
     }

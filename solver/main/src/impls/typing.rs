@@ -8,6 +8,7 @@ use crate::{
     trace::CheckingTask,
 };
 use ftml_ontology::terms::Term;
+use smallvec::SmallVec;
 
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn check_type(&mut self, tm: &'t Term, tp: &'t Term) -> Option<bool> {
@@ -42,27 +43,33 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     pub(crate) fn check_type_i(&mut self, tm: &'t Term, tp: &'t Term) -> Option<bool> {
-        self.cancellable(|slf| {
-            Split::strategies(
-                slf,
-                "Using type inference",
-                |slf| {
-                    let subtp = slf.infer_type(tm)?;
-                    slf.scoped(|slf| slf.check_subtype(&subtp, tp))
-                },
-                "Using checking rules",
-                |slf| {
-                    let rules = self.top.rules.checking().iter().filter_map(|rl| {
-                        if rl.applicable(tm, tp) {
+        //self.cancellable(|slf| {
+        Split::strategies(
+            self,
+            "Using type inference",
+            |slf| {
+                let subtp = slf.infer_type(tm)?;
+                slf.scoped(|slf| slf.check_subtype(&subtp, tp))
+            },
+            "Using checking rules",
+            |slf| {
+                let rules = slf
+                    .top
+                    .rules
+                    .checking()
+                    .iter()
+                    .filter_map(|rl| {
+                        if rl.applicable(slf, tm, tp) {
                             Some(&**rl)
                         } else {
                             None
                         }
-                    });
-                    Split::split(slf, true, rules, |slf, rl| rl.apply(slf, tm, tp))
-                },
-            )
-        })
+                    })
+                    .collect::<smallvec::SmallVec<_, 2>>();
+                Split::split(slf, true, rules, |slf, rl| rl.apply(slf, tm, tp))
+            },
+        )
+        //})
     }
 
     pub(crate) fn check_subtype_i(&mut self, sub: &'t Term, sup: &'t Term) -> Option<bool> {
@@ -87,13 +94,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             if let Some(unk) = sup.is_solvable() {
                 return slf.solve_lower_bound(unk, &sub);
             }
-            let rules = slf.top.rules.subtyping().iter().filter_map(|rl| {
-                if rl.applicable(&sub, &sup) {
-                    Some(&**rl)
-                } else {
-                    None
-                }
-            });
+            let rules = slf
+                .top
+                .rules
+                .subtyping()
+                .iter()
+                .filter_map(|rl| {
+                    if rl.applicable(slf, &sub, &sup) {
+                        Some(&**rl)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<smallvec::SmallVec<_, 2>>();
             let lines = match Split::split_i(slf, true, rules, |slf, rl| rl.apply(slf, &sub, &sup))
             {
                 Ok(r) => return Some(r),

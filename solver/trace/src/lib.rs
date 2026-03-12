@@ -285,7 +285,7 @@ macro_rules! tasks {
             $(
                 $name {
                     $($field: tasks!(@TPOWN $tp),)*
-                    steps:Box<[Self]>,
+                    steps:Vec<Self>,
                     context:Box<[ComponentVar]>,
                     result:Option<$res>
                 },
@@ -380,6 +380,29 @@ macro_rules! tasks {
     //(@TPBORROW SolverRule) => {&'t dyn SolverRule};
     //(@TPOWN SolverRule) => {Box<dyn SolverRule>};
     (@CONV SolverRule $name:ident $f:ident) => { $name.as_box_dyn() };
+}
+
+impl CheckLog {
+    pub fn steps_mut(&mut self) -> Option<&mut Vec<CheckLog>> {
+        match self {
+            Self::Equality { steps, .. }
+            | Self::HasType { steps, .. }
+            | Self::Inference { steps, .. }
+            | Self::Inhabitable { steps, .. }
+            | Self::Rule { steps, .. }
+            | Self::Simplify { steps, .. }
+            | Self::Strategy { steps, .. }
+            | Self::Subtype { steps, .. }
+            | Self::Universe { steps, .. }
+            | Self::VariableInference { steps, .. } => Some(steps),
+            _ => None,
+        }
+    }
+    pub fn add_failure(&mut self, s: &'static str) {
+        if let Some(steps) = self.steps_mut() {
+            steps.push(CheckLog::Fail(s.to_string()));
+        }
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -861,6 +884,11 @@ impl From<&str> for Displayable {
 impl From<String> for Displayable {
     fn from(value: String) -> Self {
         Self::String(value)
+    }
+}
+impl From<Term> for Displayable {
+    fn from(value: Term) -> Self {
+        Self::Term(value)
     }
 }
 

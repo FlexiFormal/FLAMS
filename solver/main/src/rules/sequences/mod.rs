@@ -1,7 +1,11 @@
 use ftml_ontology::terms::{ApplicationTerm, Argument, MaybeSequence, Numeric, Term, Variable};
 use ftml_solver_trace::SizedSolverRule;
 
-use crate::{CheckRef, rules::InferenceRule, split::SplitStrategy};
+use crate::{
+    CheckRef,
+    rules::{InferenceRule, InhabitableRule, UniverseRule},
+    split::SplitStrategy,
+};
 
 pub mod map;
 
@@ -11,6 +15,7 @@ pub trait TermExtSeq: Sized {
     #[must_use]
     fn into_seq_type(self) -> Self;
     fn is_sequence_variable(&self) -> bool;
+    fn is_sequence(&self) -> bool;
     fn is_concrete_sequence(&self) -> bool;
     fn make_concrete_sequence(&self) -> Option<Vec<Self>>;
     fn into_seq(seqs: impl Iterator<Item = Self>) -> Self;
@@ -25,6 +30,10 @@ impl TermExtSeq for Term {
             Box::new([Argument::Sequence(MaybeSequence::Seq(seqs.collect()))]),
             None,
         ))
+    }
+
+    fn is_sequence(&self) -> bool {
+        self.is_sequence_variable() || self.is_concrete_sequence()
     }
 
     fn is_sequence_variable(&self) -> bool {
@@ -116,13 +125,36 @@ impl TermExtSeq for Term {
     }
     fn as_sequence_type(&self) -> Option<&Self> {
         if let Self::Application(app) = self
-            && matches!(&app.head,
-                Self::Symbol { uri, .. } if *uri == *ftml_uris::metatheory::SEQUENCE_TYPE
-            )
-            && app.arguments.len() == 1
-            && let Some(Argument::Simple(t)) = app.arguments.first()
+            && let Self::Symbol { uri, .. } = &app.head
         {
-            Some(t)
+            if *uri == *ftml_uris::metatheory::SEQUENCE_TYPE
+                && app.arguments.len() == 1
+                && let Some(Argument::Simple(t)) = app.arguments.first()
+            {
+                Some(t)
+            }
+            // TODO: needs simplifcation to make sure MAP reduces to inhabitables
+            /* else if *uri == *ftml_uris::metatheory::SEQUENCE_MAP &&
+            let [
+                Argument::Simple(seq) | Argument::Sequence(MaybeSequence::One(seq)),
+                Argument::Simple(f),
+            ] = &*app.arguments {
+
+            }  */
+            else {
+                None
+            }
+        } else if let Self::Var {
+            variable:
+                Variable::Ref {
+                    is_sequence: Some(true),
+                    ..
+                },
+            ..
+        } = self
+        {
+            // TODO check that variable is inhabitable?
+            Some(self)
         } else {
             None
         }
@@ -172,5 +204,58 @@ impl<Split: SplitStrategy> InferenceRule<Split> for SeqIndexRule {
             return None;
         };
         checker.infer_type(&app.head)?.as_sequence_type().cloned()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeqUniverseRule;
+impl SizedSolverRule for SeqUniverseRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("sequences of inhabitables/universes are inhabitable/universes")
+    }
+}
+impl<Split: SplitStrategy> UniverseRule<Split> for SeqUniverseRule {
+    fn applicable(&self, term: &Term) -> bool {
+        term.as_sequence_type().is_some()
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
+        let univ = term.as_sequence_type()?;
+        checker.check_universe(univ)
+    }
+}
+impl<Split: SplitStrategy> InhabitableRule<Split> for SeqUniverseRule {
+    fn applicable(&self, term: &Term) -> bool {
+        term.as_sequence_type().is_some()
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
+        let univ = term.as_sequence_type()?;
+        checker.check_inhabitable(univ)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeqInferenceRule;
+impl SizedSolverRule for SeqInferenceRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("sequences have sequence types")
+    }
+}
+impl<Split: SplitStrategy> InferenceRule<Split> for SeqInferenceRule {
+    fn applicable(&self, term: &Term) -> bool {
+        term.as_sequence().is_some()
+    }
+    fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
+        let elems = term.as_sequence()?;
+        let mut curr = None;
+        for e in elems {
+            if let Some(tp) = &curr {
+                if checker.scoped(|checker| checker.check_type(e, tp)) != Some(true) {
+                    return None;
+                }
+            } else {
+                curr = Some(checker.infer_type(e)?);
+            }
+        }
+        curr.map(Term::into_seq_type)
     }
 }

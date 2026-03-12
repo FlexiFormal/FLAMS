@@ -21,7 +21,7 @@ use ftml_ontology::{
     narrative::{
         SharedDocumentElement,
         documents::Document,
-        elements::{DocumentTerm, VariableDeclaration},
+        elements::{DocumentTerm, LogicalParagraph, VariableDeclaration},
     },
     terms::TermContainer,
     utils::RefTree,
@@ -287,7 +287,27 @@ impl LSPState {
                                 self.backend().clone(),
                             ));
                             let _ = checker.add_modules(docresult.modules);
-                            let (logs, mods) = checker.check_document(&docresult.document);
+                            let Ok((logs, mods)) = checker
+                                .check_document(&docresult.document)
+                                .inspect_err(|m| {
+                                    let _ =
+                                        client.publish_diagnostics(lsp::PublishDiagnosticsParams {
+                                            uri: uri.clone().into(),
+                                            version: None,
+                                            diagnostics: vec![to_diagnostic(&STeXDiagnostic {
+                                                level: DiagnosticLevel::Error,
+                                                message: format!("Module {m} not found"),
+                                                range: SourceRange::default(),
+                                            })],
+                                        });
+                                })
+                            else {
+                                self.backend()
+                                    .add_triples(&docresult.document.uri, docresult.triples);
+                                self.backend().add_document(docresult.document);
+                                old.memorize(self.rustex());
+                                return Some(doc_uri);
+                            };
                             let mut lock = doc.annotations.lock();
                             lock.diagnostics
                                 .0
@@ -615,6 +635,19 @@ fn check_diagnostics(
                 vd.as_ref().map(|v| &v.data.df),
             ))
         }
+        CheckResult::Proof(uri, res) if res.iter().any(|r| !r.success()) => {
+            let prf = src.0.get_as::<LogicalParagraph>(uri.name());
+            E::A(std::iter::once(STeXDiagnostic {
+                level: DiagnosticLevel::Error,
+                message: format!("Checking proof {uri} failed"),
+                range: if let Some(prf) = prf {
+                    conv_range(prf.source)
+                } else {
+                    SourceRange::default()
+                },
+            }))
+        }
+        CheckResult::Proof(..) => E::C(std::iter::empty()),
         CheckResult::Term { uri, inferred, .. } => {
             if inferred.is_some() {
                 E::C(std::iter::empty())
@@ -633,6 +666,7 @@ fn check_diagnostics(
         }
         CheckResult::Content(ccr) => match ccr {
             ContentCheckResult::Symbol(uri, res) => {
+                let uri = uri.as_simple_module();
                 let sym = src
                     .1
                     .iter()
@@ -643,7 +677,7 @@ fn check_diagnostics(
                 }
                 E::D(
                     symbol_check_result(
-                        &res,
+                        res,
                         uri.name().as_ref(),
                         sym.as_ref().map(|v| &v.data.tp),
                         sym.as_ref().map(|v| &v.data.df),
@@ -655,6 +689,7 @@ fn check_diagnostics(
         },
         CheckResult::Module { checks, .. } => E::E(checks.iter().flat_map(|ccr| match ccr {
             ContentCheckResult::Symbol(uri, res) => {
+                let uri = uri.as_simple_module();
                 let sym = src
                     .1
                     .iter()

@@ -28,7 +28,7 @@ members = [
     #"experiments",
     "source/ffi", "solver/main","solver/trace"
     #"maintest"
-, "source/router/checks"]
+]
 resolver = "2"
 exclude = [
     "experiments",
@@ -45,8 +45,12 @@ lto = true
 
 # this is wasm, actually (because wasm-pack uses --release and --debug directly)
 [profile.dev]
-opt-level = 2
-split-debuginfo = "off"
+panic = 'abort'
+opt-level = 'z'
+lto = true
+debug=true
+#opt-level = 2
+#split-debuginfo = "off"
 
 [profile.flams-release]
 inherits = "release"
@@ -130,7 +134,6 @@ flams-router-login = { path = "source/router/login", version = "0.0.1" }
 flams-router-logging = { path = "source/router/logging" }
 flams-router-search = { path = "source/router/search" }
 flams-router-vscode = { path = "source/router/vscode-bindings" }
-flams-router-checks = { path = "source/router/checks" }
 flams-flodown = { path = "source/router/flodown" }
 
 # refactor
@@ -185,6 +188,7 @@ parking_lot = "0.12"
 serde-wasm-bindgen = "0.6"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["unbounded_depth"] }
+serde_stacker = "0.1"
 rustc-hash = "2"
 chrono = "0.4"
 oxrdf = "0.2.3"

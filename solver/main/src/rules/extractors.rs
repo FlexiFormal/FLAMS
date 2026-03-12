@@ -1,4 +1,5 @@
-use crate::{rules::RuleSet, split::SplitStrategy};
+use super::operators::*;
+use crate::{patterns::Pattern, rules::RuleSet, split::SplitStrategy};
 use ftml_ontology::{
     domain::declarations::symbols::{AssocType, Symbol},
     terms::Term,
@@ -30,6 +31,20 @@ pub const fn all_symbol_extractors<Split: SplitStrategy>() -> &'static [SymbolRu
         implicit,
         conjunction,
         map,
+        letrule,
+        numnat,
+        numposnat,
+        numint,
+        numnegint,
+        numnonzeroint,
+        numrat,
+        numposrat,
+        numnegrat,
+        numnonzerorat,
+        numreal,
+        numposreal,
+        numnegreal,
+        numnonzeroreal,
     ]
 }
 #[must_use]
@@ -38,6 +53,10 @@ pub const fn all_rule_extractors<Split: SplitStrategy>() -> &'static [RuleExtrac
         ("hoas-lambda-pi-apply", hoas_lpa),
         ("arrow-for-pi", arrow_for),
         ("hoas-bindin", bind_in),
+        ("intersection-type", intersection),
+        ("inhabitable", inhab),
+        ("universe", univ),
+        ("subtype", subtp),
     ]
 }
 
@@ -62,6 +81,49 @@ macro_rules! rules {
     }
 }
 
+pub fn subtp<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    let [sub, sup] = params else { return };
+    rules.push_subtyping(Box::new(typing::Subtyping {
+        sub: Pattern::from(sub.clone()),
+        sup: Pattern::from(sup.clone()),
+    }));
+}
+
+pub fn inhab<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    let [term] = params else { return };
+    rules.push_inhabitable(Box::new(universe::ComplexInhabitableRule(Pattern::from(
+        term.clone(),
+    ))));
+}
+
+pub fn univ<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    let [term] = params else { return };
+    rules.push_inhabitable(Box::new(universe::ComplexUniverseRule(Pattern::from(
+        term.clone(),
+    ))));
+}
+
+pub fn intersection<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    let [
+        Term::Symbol { uri: intersect, .. },
+        Term::Symbol { uri: lambda, .. },
+        Term::Symbol { uri: pi, .. },
+    ] = params
+    else {
+        return;
+    };
+    rules.push_inhabitable(Box::new(intersection::IntersectionTypeInhabitable(
+        intersect.clone(),
+    )));
+    rules.push_universe(Box::new(intersection::IntersectionTypeInhabitable(
+        intersect.clone(),
+    )));
+    rules.push_marker(Box::new(intersection::intersect_pi_extension(
+        intersect.clone(),
+        pi.clone(),
+    )));
+}
+
 pub fn bind_in<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
     let [
         Term::Symbol { uri: bindin, .. },
@@ -70,16 +132,16 @@ pub fn bind_in<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>
     else {
         return;
     };
-    rules.push_inhabitable(Box::new(super::bindin::BindInInhabitableRule {
+    rules.push_inhabitable(Box::new(bindin::BindInInhabitableRule {
         bindin: bindin.clone(),
         bind: bind.clone(),
     }));
-    rules.push_preparation(Box::new(super::pi::NeedsTypeRule(bindin.clone())));
-    rules.push_inference(Box::new(super::bindin::BindInInferenceRule {
+    rules.push_preparation(Box::new(pi::NeedsTypeRule(bindin.clone())));
+    rules.push_inference(Box::new(bindin::BindInInferenceRule {
         bindin: bindin.clone(),
         bind: bind.clone(),
     }));
-    rules.push_inference(Box::new(super::bindin::BindInApplyRule {
+    rules.push_inference(Box::new(bindin::BindInApplyRule {
         bindin: bindin.clone(),
         bind: bind.clone(),
     }));
@@ -87,7 +149,7 @@ pub fn bind_in<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>
 
 pub fn arrow_for<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
     if let [Term::Symbol { uri: head, .. }, Term::Symbol { uri: pi, .. }] = params {
-        let rule = Box::new(super::pi::ArrowRule {
+        let rule = Box::new(pi::ArrowRule {
             arrow: head.clone(),
             pi: pi.clone(),
         });
@@ -113,20 +175,20 @@ pub fn hoas_lpa<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split
     } else {
         return;
     };
-    rules.push_inhabitable(Box::new(super::pi::PiInhabitableRule(pi.clone())));
-    rules.push_inference(Box::new(super::pi::PiInferenceRule(pi.clone())));
-    rules.push_inference(Box::new(super::pi::LambdaPiInferenceRule {
+    rules.push_inhabitable(Box::new(pi::PiInhabitableRule(pi.clone())));
+    rules.push_inference(Box::new(pi::PiInferenceRule(pi.clone())));
+    rules.push_inference(Box::new(pi::LambdaPiInferenceRule {
         lambda: lambda.clone(),
         pi: pi.clone(),
     }));
-    rules.push_checking(Box::new(super::pi::LambdaPiCheckingRule {
+    rules.push_checking(Box::new(pi::LambdaPiCheckingRule {
         lambda: lambda.clone(),
         pi: pi.clone(),
     }));
-    rules.push_simplification(Box::new(super::pi::BetaRule(lambda.clone())));
-    rules.push_preparation(Box::new(super::pi::NeedsTypeRule(lambda.clone())));
+    rules.push_simplification(Box::new(pi::BetaRule(lambda.clone())));
+    rules.push_preparation(Box::new(pi::NeedsTypeRule(lambda.clone())));
     if lambda != pi {
-        rules.push_preparation(Box::new(super::pi::NeedsTypeRule(pi.clone())));
+        rules.push_preparation(Box::new(pi::NeedsTypeRule(pi.clone())));
     }
     rules.push_marker(Box::new(super::HOASRule {
         lambda: lambda.clone(),
@@ -194,24 +256,24 @@ pub fn binr<Split: SplitStrategy>(sym: &Symbol, rules: &mut RuleSet<Split>) {
 
 rules! {
     pub conjunction = (sym,rules) => {
-        rules.push_preparation(Box::new(super::fixity::IsConjunctionRule(sym.uri.clone())));
+        rules.push_marker(Box::new(super::fixity::IsConjunctionRule(sym.uri.clone())));
     }
     pub universe = (sym,rules) => {
-        rules.push_inhabitable(Box::new(super::universe::SimpleUniverseRule(sym.uri.clone())));
-        rules.push_universe(Box::new(super::universe::SimpleUniverseRule(sym.uri.clone())));
+        rules.push_inhabitable(Box::new(universe::SimpleUniverseRule(sym.uri.clone())));
+        rules.push_universe(Box::new(universe::SimpleUniverseRule(sym.uri.clone())));
     }
     pub of_type("oftype") = (sym,rules) => {
-        rules.push_preparation(Box::new(super::typing::SimpleTypeOperatorRule(sym.uri.clone())));
+        rules.push_preparation(Box::new(typing::SimpleTypeOperatorRule(sym.uri.clone())));
     }
     pub apply = (sym,rules) => {
-        rules.push_preparation(Box::new(super::pi::ApplyRule(sym.uri.clone())));
+        rules.push_preparation(Box::new(pi::ApplyRule(sym.uri.clone())));
     }
     pub lambda = (sym,rules) => {
 
     }
     pub pi = (sym,rules) => {
-        rules.push_inhabitable(Box::new(super::pi::PiInhabitableRule(sym.uri.clone())));
-        rules.push_inference(Box::new(super::pi::PiInferenceRule(sym.uri.clone())));
+        rules.push_inhabitable(Box::new(pi::PiInhabitableRule(sym.uri.clone())));
+        rules.push_inference(Box::new(pi::PiInferenceRule(sym.uri.clone())));
     }
     pub prop = (sym,rules) => {
 
@@ -220,12 +282,12 @@ rules! {
         rules.push_marker(Box::new(super::IsJudgmentRule(sym.uri.clone())));
     }
     pub inhabitable = (sym,rules) => {
-        rules.push_inhabitable(Box::new(super::universe::SimpleInhabitableRule(sym.uri.clone(),sym.data.arity.num())));
+        rules.push_inhabitable(Box::new(universe::SimpleInhabitableRule(sym.uri.clone(),sym.data.arity.num())));
     }
     pub any = (sym,rules) => {
-        rules.push_inhabitable(Box::new(super::universe::SimpleInhabitableRule(sym.uri.clone(),0)));
-        rules.push_subtyping(Box::new(super::universe::AnyRule(sym.uri.clone())));
-        rules.push_checking(Box::new(super::universe::AnyRule(sym.uri.clone())));
+        rules.push_inhabitable(Box::new(universe::SimpleInhabitableRule(sym.uri.clone(),0)));
+        rules.push_subtyping(Box::new(universe::AnyRule(sym.uri.clone())));
+        rules.push_checking(Box::new(universe::AnyRule(sym.uri.clone())));
     }
     pub implicit = (sym,rules) => {
 
@@ -235,5 +297,87 @@ rules! {
         rules.push_simplification(Box::new(super::sequences::map::MapSimplificationRule(sym.uri.clone())));
         rules.push_simplification(Box::new(super::sequences::map::MapArgumentSimplificationRule(sym.uri.clone())));
         //rules.push_inference(rule);
+    }
+    pub letrule("let") = (sym,rules) => {
+        rules.push_simplification(Box::new(letin::LetinComputation(sym.uri.clone())));
+    }
+
+    pub numnat = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::Naturals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numposnat = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ: numbers::NumberType::PositiveNaturals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numint = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::Integers,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numnegint = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::NegativeIntegers,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numnonzeroint = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::NonZeroIntegers,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numrat = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::Rationals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numposrat = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::PositiveRationals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numnegrat = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::NegativeRationals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numnonzerorat = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::NonZeroRationals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numreal = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::Reals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numposreal = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::PositiveReals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numnegreal = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::NegativeReals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numnonzeroreal = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::NonZeroReals,
+            sym:sym.uri.clone()
+        }));
     }
 }

@@ -13,7 +13,7 @@ use flams_router_base::{maybe_lazy, ws};
 #[cfg(feature = "hydrate")]
 use flams_router_buildqueue_base::server_fns::get_log;
 use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
-use flams_router_checks::{DocumentCheckResult, ResultExt};
+use flams_router_content::checks::{DocumentCheckResult, ResultExt};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::wait_and_then_fn;
@@ -179,14 +179,17 @@ impl TaskState {
     }
 }
 
-fn do_log(s: either::Either<String, DocumentCheckResult>) -> AnyView {
+fn do_log(s: either::Either<String, String>) -> AnyView {
     use thaw::Scrollbar;
     view! {<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">{
         match s {
             either::Left(s) => leptos::either::Either::Left(view!{
                 <pre style="width:fit-content;font-size:smaller;">{s}</pre>
             }),
-            either::Right(v) => leptos::either::Either::Right(v.render())
+            either::Right(v) => leptos::either::Either::Right({
+                ftml_solver_trace::results::DocumentCheckResult::from_json(&v)
+                    .map_or_else(|e| e.into_any(),|e| e.render())
+            })
         }
     }</Scrollbar>}
     .into_any()

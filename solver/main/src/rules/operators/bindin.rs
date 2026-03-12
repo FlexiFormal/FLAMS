@@ -278,25 +278,35 @@ impl<Split: SplitStrategy> InferenceRule<Split> for BindInApplyRule {
                     checker.failure("TODO: multiple bound variables / type inference 1");
                     return None;
                 };
-                let BoundArgument::Bound(cv @ ComponentVar { df: None, .. }) = arg else {
+
+                if let BoundArgument::Bound(cv @ ComponentVar { df: None, .. })
+                | BoundArgument::BoundSeq(MaybeSequence::One(
+                    cv @ ComponentVar { df: None, .. },
+                )) = arg
+                {
+                    let f = Term::Bound(BindingTerm::new(
+                        Term::Symbol {
+                            uri: self.bind.clone(),
+                            presentation: None,
+                        },
+                        Box::new([
+                            if matches!(arg, BoundArgument::BoundSeq(_)) {
+                                BoundArgument::BoundSeq(MaybeSequence::One(cv.clone()))
+                            } else {
+                                BoundArgument::Bound(cv.clone())
+                            },
+                            BoundArgument::Simple(next_arg.clone()),
+                        ]),
+                        None,
+                    ));
+                    if !checker.scoped(|checker| checker.check_type(&f, expected))? {
+                        return None;
+                    }
+                    ret = (body / (tpvar.name(), &f)).into_owned();
+                } else {
                     checker.failure("TODO: multiple bound variables / type inference 2");
                     return None;
-                };
-                let f = Term::Bound(BindingTerm::new(
-                    Term::Symbol {
-                        uri: self.bind.clone(),
-                        presentation: None,
-                    },
-                    Box::new([
-                        BoundArgument::Bound(cv.clone()),
-                        BoundArgument::Simple(next_arg.clone()),
-                    ]),
-                    None,
-                ));
-                if !checker.scoped(|checker| checker.check_type(&f, expected))? {
-                    return None;
                 }
-                ret = (body / (tpvar.name(), &f)).into_owned();
             } else {
                 ret = self.do_app(&mut checker, first, arg, body, &b, &mut i)?;
             }

@@ -1,10 +1,7 @@
-pub mod bindin;
 pub mod extractors;
 pub mod fixity;
-pub mod pi;
+pub mod operators;
 pub mod sequences;
-pub mod typing;
-pub mod universe;
 pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
 use ftml_uris::SymbolUri;
 
@@ -78,12 +75,16 @@ macro_rules! rules{
 }
 
 rules! {
-    inference = InferenceRule(sequences::SeqIndexRule),
-    subtyping = SubtypeRule,
-    checking = CheckingRule,
-    inhabitable = InhabitableRule,//(defaults::SeqInhabitableRule),
+    inference = InferenceRule(
+        sequences::SeqIndexRule,
+        sequences::SeqInferenceRule,
+        operators::numbers::NumberTypes
+    ),
+    subtyping = SubtypeRule(operators::numbers::NumberTypes),
+    checking = CheckingRule(operators::numbers::NumberTypes),
+    inhabitable = InhabitableRule(sequences::SeqUniverseRule),
     equality = EqualityRule,
-    universe = UniverseRule,
+    universe = UniverseRule(sequences::SeqUniverseRule),
     preparation = PreparationRule,
     simplification = SimplificationRule,
     marker = MarkerRule
@@ -114,7 +115,7 @@ pub trait InferenceRule<Split: SplitStrategy>: CheckerRule {
 }
 
 pub trait CheckingRule<Split: SplitStrategy>: CheckerRule {
-    fn applicable(&self, term: &Term, tp: &Term) -> bool;
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, term: &Term, tp: &Term) -> bool;
     fn apply<'t>(
         &self,
         checker: CheckRef<'t, '_, Split>,
@@ -134,7 +135,7 @@ pub trait UniverseRule<Split: SplitStrategy>: CheckerRule {
 }
 
 pub trait SubtypeRule<Split: SplitStrategy>: CheckerRule {
-    fn applicable(&self, sub: &Term, sup: &Term) -> bool;
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool;
     fn apply<'t>(
         &self,
         checker: CheckRef<'t, '_, Split>,
