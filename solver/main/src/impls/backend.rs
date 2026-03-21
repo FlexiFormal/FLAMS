@@ -1,24 +1,79 @@
-use crate::{CheckRef, Checker, rules::sequences::TermExtSeq, split::SplitStrategy};
-use flams_math_archives::{backend::LocalBackend, utils::errors::BackendError};
+use crate::{
+    CheckRef, Checker, impls::solving::Solutions, rules::sequences::TermExtSeq,
+    split::SplitStrategy,
+};
+use dashmap::DashSet;
+use flams_math_archives::{
+    backend::{AnyBackend, LocalBackend},
+    utils::errors::BackendError,
+};
 use ftml_ontology::{
     domain::{
         SharedDeclaration,
         declarations::{IsDeclaration, symbols::Symbol},
         modules::{Module, ModuleLike},
     },
-    narrative::{SharedDocumentElement, elements::VariableDeclaration},
+    narrative::{SharedDocumentElement, documents::Document, elements::VariableDeclaration},
     terms::{ComponentVar, Term, Variable},
 };
-use ftml_uris::{DocumentElementUri, IsDomainUri, IsNarrativeUri, ModuleUri, NamedUri, SymbolUri};
+use ftml_uris::{
+    DocumentElementUri, IsDomainUri, IsNarrativeUri, LeafUri, ModuleUri, NamedUri, SymbolUri,
+};
 use std::hint::unreachable_unchecked;
 
+pub fn get_variable(
+    backend: &AnyBackend,
+    documents: &DashSet<Document, rustc_hash::FxBuildHasher>,
+    current: &[LeafUri],
+    uri: &DocumentElementUri,
+    prepare: impl Fn(Term) -> Term,
+) -> Result<SharedDocumentElement<VariableDeclaration>, ()> {
+    fn get(
+        backend: &AnyBackend,
+        documents: &DashSet<Document, rustc_hash::FxBuildHasher>,
+        uri: &DocumentElementUri,
+    ) -> Result<SharedDocumentElement<VariableDeclaration>, ()> {
+        let doc = uri.document_uri();
+        if let Some(d) = documents.get(doc) {
+            return d.get_as(uri.name()).ok_or(());
+        }
+        let doc = backend.get_document(doc).map_err(|_| ())?;
+        documents.insert(doc.clone());
+        doc.get_as(uri.name()).ok_or(())
+    }
+
+    if current.iter().any(|u| u == uri) {
+        return Err(());
+    }
+    let d = get(backend, documents, uri)?;
+
+    if let Some(tp) = d.data.tp.get_parsed()
+        && !d.data.tp.has_checked()
+    {
+        let tp = prepare(tp.clone());
+
+        if d.data.is_seq && tp.as_sequence_type().is_none() {
+            d.data.tp.set_checked(tp.into_seq_type());
+        } else {
+            d.data.tp.set_checked(tp);
+        }
+    }
+    if let Some(df) = d.data.df.get_parsed()
+        && !d.data.df.has_checked()
+    {
+        d.data.df.set_checked(prepare(df.clone()));
+    }
+
+    Ok(d)
+}
+
 impl<Split: SplitStrategy> Checker<Split> {
-    pub(crate) fn get_module_like(&self, uri: &ModuleUri) -> Result<ModuleLike, BackendError> {
+    pub(crate) fn get_module_like(&self, uri: &ModuleUri) -> Result<ModuleLike, ()> {
         if uri.is_top() {
             if let Some(m) = self.modules.get(uri) {
                 return Ok(ModuleLike::Module(m.clone()));
             }
-            let ModuleLike::Module(m) = self.backend.get_module(uri)? else {
+            let ModuleLike::Module(m) = self.backend.get_module(uri).map_err(|_| ())? else {
                 // SAFETY: uri.is_top()
                 unsafe { unreachable_unchecked() }
             };
@@ -28,16 +83,15 @@ impl<Split: SplitStrategy> Checker<Split> {
             // SAFETY: !uri.is_top()
             let inner = unsafe { uri.clone().into_top_symbol().unwrap_unchecked() };
             let m = self.get_module(inner.module_uri())?;
-            m.as_module_like(uri.name())
-                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Module))
+            m.as_module_like(uri.name()).ok_or(())
         }
     }
-    pub(crate) fn get_module(&self, uri: &ModuleUri) -> Result<Module, BackendError> {
+    pub(crate) fn get_module(&self, uri: &ModuleUri) -> Result<Module, ()> {
         if uri.is_top() {
             if let Some(m) = self.modules.get(uri) {
                 return Ok(m.clone());
             }
-            let ModuleLike::Module(m) = self.backend.get_module(uri)? else {
+            let ModuleLike::Module(m) = self.backend.get_module(uri).map_err(|_| ())? else {
                 // SAFETY: uri.is_top()
                 unsafe { unreachable_unchecked() }
             };
@@ -48,7 +102,7 @@ impl<Split: SplitStrategy> Checker<Split> {
             if let Some(m) = self.modules.get(&uri) {
                 return Ok(m.clone());
             }
-            let ModuleLike::Module(m) = self.backend.get_module(&uri)? else {
+            let ModuleLike::Module(m) = self.backend.get_module(&uri).map_err(|_| ())? else {
                 // SAFETY: uri = !uri enforces top-level
                 unsafe { unreachable_unchecked() }
             };
@@ -61,10 +115,17 @@ impl<Split: SplitStrategy> Checker<Split> {
         &self,
         uri: &SymbolUri,
         prepare: impl Fn(Term) -> Term,
-    ) -> Result<SharedDeclaration<Symbol>, BackendError> {
+    ) -> Result<SharedDeclaration<Symbol>, ()> {
+        if self.current.iter().any(|u| u == uri) {
+            return Err(());
+        }
         let uri = uri.as_simple_module();
-        let Some(d) = self.get_module(&uri.module)?.get_as::<Symbol>(uri.name()) else {
-            return Err(BackendError::NotFound(ftml_uris::UriKind::Symbol));
+        let Some(d) = self
+            .get_module(&uri.module)
+            .map_err(|_| ())?
+            .get_as::<Symbol>(uri.name())
+        else {
+            return Err(());
         };
         if let Some(tp) = d.data.tp.get_parsed()
             && !d.data.tp.has_checked()
@@ -83,21 +144,25 @@ impl<Split: SplitStrategy> Checker<Split> {
     pub(crate) fn get_variable(
         &self,
         uri: &DocumentElementUri,
-    ) -> Result<SharedDocumentElement<VariableDeclaration>, BackendError> {
+    ) -> Result<SharedDocumentElement<VariableDeclaration>, ()> {
+        get_variable(&self.backend, &self.documents, &self.current, uri, |t| {
+            self.prepare(None, t).1
+        })
+        /*
         fn get<Split: SplitStrategy>(
             slf: &Checker<Split>,
             uri: &DocumentElementUri,
-        ) -> Result<SharedDocumentElement<VariableDeclaration>, BackendError> {
+        ) -> Result<SharedDocumentElement<VariableDeclaration>, ()> {
             let doc = uri.document_uri();
             if let Some(d) = slf.documents.get(doc) {
-                return d
-                    .get_as(uri.name())
-                    .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement));
+                return d.get_as(uri.name()).ok_or(());
             }
-            let doc = slf.backend.get_document(doc)?;
+            let doc = slf.backend.get_document(doc).map_err(|_| ())?;
             slf.documents.insert(doc.clone());
-            doc.get_as(uri.name())
-                .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            doc.get_as(uri.name()).ok_or(())
+        }
+        if self.current.iter().any(|u| u == uri) {
+            return Err(());
         }
         let d = get(self, uri)?;
 
@@ -119,6 +184,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
 
         Ok(d)
+         */
     }
 }
 
@@ -127,19 +193,16 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     pub(crate) fn get_declaration<T: IsDeclaration>(
         &self,
         uri: &SymbolUri,
-    ) -> Result<SharedDeclaration<T>, BackendError> {
+    ) -> Result<SharedDeclaration<T>, ()> {
         self.top
             .get_module(&uri.module)?
             .get_as::<T>(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
+            .ok_or(())
     }
 
     /// ### Errors
     #[inline]
-    pub(crate) fn get_symbol(
-        &self,
-        uri: &SymbolUri,
-    ) -> Result<SharedDeclaration<Symbol>, BackendError> {
+    pub(crate) fn get_symbol(&self, uri: &SymbolUri) -> Result<SharedDeclaration<Symbol>, ()> {
         self.top.get_symbol(uri, |t| self.prepare(t, None).1)
     }
 
@@ -148,20 +211,26 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             self.failure("Symbol not found");
             return None;
         };
-        s.data
-            .tp
-            .checked_or_parsed()
-            .map(|(t, _)| self.bind_implicits(t))
+        s.data.tp.checked_or_parsed().map(|(t, _)| {
+            if super::preparation::NEW_VERSION {
+                t
+            } else {
+                self.bind_implicits(t)
+            }
+        })
     }
     pub(crate) fn get_symbol_definiens(&mut self, uri: &SymbolUri) -> Option<Term> {
         let Ok(s) = self.get_symbol(uri) else {
             self.failure("Symbol not found");
             return None;
         };
-        s.data
-            .df
-            .checked_or_parsed()
-            .map(|(t, _)| self.bind_implicits(t))
+        s.data.df.checked_or_parsed().map(|(t, _)| {
+            if super::preparation::NEW_VERSION {
+                t
+            } else {
+                self.bind_implicits(t)
+            }
+        })
     }
 
     /// ### Errors
@@ -169,7 +238,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     pub fn get_variable(
         &self,
         uri: &DocumentElementUri,
-    ) -> Result<SharedDocumentElement<VariableDeclaration>, BackendError> {
+    ) -> Result<SharedDocumentElement<VariableDeclaration>, ()> {
         self.top.get_variable(uri)
     }
 

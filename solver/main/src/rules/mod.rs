@@ -1,5 +1,6 @@
 pub mod extractors;
 pub mod fixity;
+pub mod implicits;
 pub mod operators;
 pub mod sequences;
 pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
@@ -78,7 +79,8 @@ rules! {
     inference = InferenceRule(
         sequences::SeqIndexRule,
         sequences::SeqInferenceRule,
-        operators::numbers::NumberTypes
+        operators::numbers::NumberTypes,
+        implicits::ImplicitRule
     ),
     subtyping = SubtypeRule(operators::numbers::NumberTypes),
     checking = CheckingRule(operators::numbers::NumberTypes),
@@ -87,7 +89,8 @@ rules! {
     universe = UniverseRule(sequences::SeqUniverseRule),
     preparation = PreparationRule,
     simplification = SimplificationRule,
-    marker = MarkerRule
+    marker = MarkerRule,
+    proof = ProofRule
 }
 
 pub trait SimplificationRule<Split: SplitStrategy>: CheckerRule {
@@ -156,6 +159,11 @@ pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
     fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term>;
 }
 pub trait MarkerRule<Split: SplitStrategy>: CheckerRule {}
+
+pub trait ProofRule<Split: SplitStrategy>: CheckerRule {
+    fn applicable(&self, term: &Term) -> bool;
+    fn prove<'t>(&self, checker: CheckRef<'t, '_, Split>, goal: &'t Term) -> Option<Term>;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IsJudgmentRule(pub SymbolUri);

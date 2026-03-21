@@ -69,7 +69,7 @@ impl NumberType {
         self,
         checker: &'c CheckRef<'_, '_, Split>,
     ) -> Option<&'c SymbolUri> {
-        checker.rules().marker().iter().find_map(|rl| {
+        checker.rules().marker().iter().rev().find_map(|rl| {
             rl.as_any()
                 .downcast_ref::<NumberRule>()
                 .and_then(|rl| if rl.typ == self { Some(&rl.sym) } else { None })
@@ -107,7 +107,7 @@ impl PartialOrd for NumberType {
                 | Self::NonZeroReals,
             ) => Some(Less),
             (Self::Integers, Self::PositiveNaturals | Self::Naturals) => Some(Greater),
-            (Self::Integers, Self::Rationals) => Some(Less),
+            (Self::Integers, Self::Rationals | Self::PositiveReals) => Some(Less),
             (Self::NonZeroIntegers, Self::PositiveNaturals | Self::NegativeIntegers) => {
                 Some(Greater)
             }
@@ -163,9 +163,9 @@ impl NumberRule {
         uri: &SymbolUri,
         checker: &CheckRef<'_, '_, Split>,
     ) -> Option<NumberType> {
-        checker.rules().marker().iter().find_map(|rl| {
+        checker.rules().marker().iter().rev().find_map(|rl| {
             rl.as_any()
-                .downcast_ref::<NumberRule>()
+                .downcast_ref::<Self>()
                 .and_then(|rl| if rl.sym == *uri { Some(rl.typ) } else { None })
         })
     }
@@ -190,7 +190,21 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for NumberTypes {
             false
         }
     }
-    fn apply<'t>(&self, _: CheckRef<'t, '_, Split>, _: &'t Term, _: &'t Term) -> Option<bool> {
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        sub: &'t Term,
+        sup: &'t Term,
+    ) -> Option<bool> {
+        let Term::Symbol { uri: n1, .. } = sub else {
+            return None;
+        };
+        let Term::Symbol { uri: n2, .. } = sup else {
+            return None;
+        };
+        let type1 = NumberRule::is_number(n1, &checker)?;
+        let type2 = NumberRule::is_number(n2, &checker)?;
+        checker.comment(format!("{} <= {}", type1.as_str(), type2.as_str()));
         // by applicability
         Some(true)
     }

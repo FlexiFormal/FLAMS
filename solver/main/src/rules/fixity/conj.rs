@@ -56,6 +56,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ConjunctiveRule {
             .rules()
             .marker()
             .iter()
+            .rev()
             .find_map(|rl| rl.as_any().downcast_ref())
         else {
             return ControlFlow::Continue(t);
@@ -147,6 +148,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
             .rules()
             .marker()
             .iter()
+            .rev()
             .find_map(|rl| rl.as_any().downcast_ref())
         else {
             return ControlFlow::Continue(t);
@@ -160,6 +162,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
         if args.len() < 2 {
             return ControlFlow::Continue(t);
         }
+        //tracing::debug!("In: {:?}", t.debug_short());
         let mut conjuncts = (0..args.len() - 1).map(|i| {
             let (a, b) = (&args[i], &args[i + 1]);
             Term::Application(ApplicationTerm::new(
@@ -194,6 +197,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
                     .unwrap_unchecked()
             }
         };
+        //tracing::debug!("Out: {:?}", t.debug_short());
         ControlFlow::Continue(t)
     }
     fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {

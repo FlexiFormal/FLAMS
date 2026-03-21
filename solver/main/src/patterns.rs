@@ -1,28 +1,56 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt::Write};
 
-use crate::{TermExtSeq, impls::equality::Alpha};
+use crate::{
+    TermExtSeq,
+    impls::{equality::Alpha, solving::TermExtSolvable},
+};
 use ftml_ontology::terms::{Argument, BoundArgument, ComponentVar, MaybeSequence, Term, Variable};
 use ftml_uris::Id;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Pattern {
     pub vars: Box<[Id]>,
     pub body: Term,
+    allow_references: bool,
+}
+impl std::fmt::Debug for Pattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Pattern{{{:?} => {:?}}}",
+            self.vars,
+            self.body.debug_short()
+        )
+    }
 }
 impl Pattern {
-    pub fn from(t: Term) -> Self {
+    #[must_use]
+    pub fn from(t: Term, allow_references: bool) -> Self {
+        //let mut substs = Vec::<(String, Term)>::new();
         let vars = t
             .free_variables()
             .into_iter()
             .filter_map(|v| {
-                if let Variable::Name { name, .. } = v {
+                if allow_references {
+                    Some(v.name_id().into_owned())
+                }
+                /*else if v.is_solvable().is_some() {
+                    let fv = t.fresh_variable(&crate::DUMMY, None);
+                    substs.push((v.name().to_string(), fv.0.clone().into()));
+                    Some(fv.0.name_id().into_owned())
+                }*/
+                else if let Variable::Name { name, .. } = v {
                     Some(name.clone())
                 } else {
                     None
                 }
             })
             .collect();
-        Self { vars, body: t }
+        Self {
+            vars,
+            body: t, // / &*substs,
+            allow_references,
+        }
     }
     #[must_use]
     pub fn matches<'t>(&self, term: &'t Term) -> Option<Vec<Cow<'t, Term>>> {
@@ -36,7 +64,7 @@ impl Pattern {
         Some(terms)
     }
 
-    #[allow(clippy::option_if_let_else)]
+    #[allow(clippy::option_if_let_else, clippy::too_many_lines)]
     fn match_rec<'t: 's, 's>(
         &self,
         term: &'t Term,
@@ -53,6 +81,33 @@ impl Pattern {
                 },
             ) if self.vars.contains(name) => {
                 let idx = self.vars.iter().position(|n| *n == *name)?;
+                if let Some(t) = &vars[idx] {
+                    if crate::impls::equality::alpha_equal(term, t) {
+                        Some(())
+                    } else {
+                        None
+                    }
+                } else {
+                    vars[idx] = Some(Cow::Borrowed(term));
+                    Some(())
+                }
+            }
+            (
+                _,
+                Term::Var {
+                    variable: Variable::Ref { declaration, .. },
+                    ..
+                },
+            ) if self.allow_references
+                && self
+                    .vars
+                    .iter()
+                    .any(|v| v.as_ref() == declaration.name().last()) =>
+            {
+                let idx = self
+                    .vars
+                    .iter()
+                    .position(|n| n.as_ref() == declaration.name().last())?;
                 if let Some(t) = &vars[idx] {
                     if crate::impls::equality::alpha_equal(term, t) {
                         Some(())

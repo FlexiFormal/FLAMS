@@ -1,5 +1,6 @@
 use crate::{
     CheckRef,
+    impls::solving::TermExtSolvable,
     patterns::Pattern,
     rules::{CheckingRule, InhabitableRule, SizedSolverRule, SubtypeRule, UniverseRule},
     split::SplitStrategy,
@@ -156,7 +157,17 @@ impl<Split: SplitStrategy> CheckingRule<Split> for AnyRule {
     fn applicable(&self, _: &CheckRef<'_, '_, Split>, _: &Term, tp: &Term) -> bool {
         matches!(tp,Term::Symbol { uri, .. } if *uri == self.0)
     }
-    fn apply<'t>(&self, _: CheckRef<'t, '_, Split>, _: &'t Term, _: &'t Term) -> Option<bool> {
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        tm: &'t Term,
+        tp: &'t Term,
+    ) -> Option<bool> {
+        if let Some(ntp) = checker.infer_type(tm)
+            && let Some(unk) = ntp.is_solvable()
+        {
+            return checker.solve_upper_bound(unk, tp);
+        }
         Some(true)
     }
 }

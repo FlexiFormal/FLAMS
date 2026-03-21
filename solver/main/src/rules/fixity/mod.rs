@@ -30,7 +30,7 @@ fn is_sequence_binary<'t>(
         tracing::trace!("Not an application");
         return None;
     };
-    let Some(seq_index) = sym
+    let Some(mut seq_index) = sym
         .data
         .arity
         .iter()
@@ -39,6 +39,11 @@ fn is_sequence_binary<'t>(
         tracing::trace!("No sequence index");
         return None;
     };
+    if let Some(perm) = sym.data.reordering.as_ref()
+        && let Some(new) = perm.of(seq_index as u8)
+    {
+        seq_index = new as _;
+    }
     match a.arguments.get(seq_index) {
         Some(Argument::Sequence(s)) => Some((a, s, seq_index)),
         _ => None,
@@ -59,14 +64,16 @@ fn was_sequence_binary<'t>(
     let Term::Application(a) = t else {
         return None;
     };
-    let Some(seq_index) = sym
+    let mut seq_index = sym
         .data
         .arity
         .iter()
-        .position(|m| matches!(m, ArgumentMode::Sequence))
-    else {
-        return None;
-    };
+        .position(|m| matches!(m, ArgumentMode::Sequence))?;
+    if let Some(perm) = sym.data.reordering.as_ref()
+        && let Some(new) = perm.of(seq_index as u8)
+    {
+        seq_index = new as _;
+    }
     let num_args = sym.data.arity.num() as usize;
     let actual_args = a.arguments.len();
     if actual_args < num_args {

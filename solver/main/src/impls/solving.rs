@@ -1,14 +1,19 @@
-use std::{borrow::Borrow, collections::HashSet};
+use std::borrow::Borrow;
 
 use ftml_ontology::terms::{Term, Variable};
 use ftml_uris::Id;
 
-use crate::{CheckRef, Checker, split::SplitStrategy};
+use crate::{
+    CheckRef, Checker,
+    split::SplitStrategy,
+    utils::{Merge, MutableRefList},
+};
 
 const PREFIX: &str = "SOLVE!";
 
 pub trait TermExtSolvable {
     fn is_solvable(&self) -> Option<&Id>;
+    fn has_solvable(&self) -> bool;
 }
 
 impl TermExtSolvable for Variable {
@@ -26,6 +31,10 @@ impl TermExtSolvable for Variable {
             None
         }
     }
+    #[inline]
+    fn has_solvable(&self) -> bool {
+        self.is_solvable().is_some()
+    }
 }
 
 impl TermExtSolvable for Term {
@@ -35,6 +44,9 @@ impl TermExtSolvable for Term {
         } else {
             None
         }
+    }
+    fn has_solvable(&self) -> bool {
+        self.has_free_such_that(|v| v.is_solvable().is_some())
     }
 }
 
@@ -96,6 +108,81 @@ impl std::hash::Hash for Solvable {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct Solutions(pub(crate) rustc_hash::FxHashSet<Solvable>);
+impl Merge for Solutions {
+    fn merge(&mut self, other: Self) {
+        for e in other.0 {
+            self.0.remove(&e);
+            self.0.insert(e);
+        }
+    }
+}
+
+impl MutableRefList<'_, Solutions> {
+    #[inline]
+    fn get_solvable<'s>(&'s self, name: &Id) -> Option<&'s Solvable> {
+        fn get_i<'s>(
+            slf: &'s MutableRefList<Solutions>,
+            name: &Id,
+            first: Option<&Id>,
+        ) -> Option<&'s Solvable> {
+            let s = slf.find(|s| s.0.get(name))?;
+            if let BoundedValue::Solved(s) = &s.solution
+                && let Some(s) = s.is_solvable()
+                && first != Some(s)
+            {
+                get_i(slf, s, Some(first.unwrap_or(name)))
+            } else {
+                Some(s)
+            }
+        }
+        get_i(self, name, None)
+    }
+
+    fn set_solution(&mut self, name: Id, solution: Term) {
+        let tp = self
+            .get_solvable(&name)
+            .map_or(BoundedValue::None, |e| e.tp.clone());
+        self.0.remove(&name);
+        let ne = Solvable {
+            name,
+            solution: BoundedValue::Solved(solution),
+            tp,
+        };
+        self.0.insert(ne);
+    }
+    fn set_type(&mut self, name: Id, tp: Term) {
+        let solution = self
+            .get_solvable(&name)
+            .map_or(BoundedValue::None, |e| e.solution.clone());
+        let ne = Solvable {
+            name,
+            solution,
+            tp: BoundedValue::Solved(tp),
+        };
+        self.0.remove(&ne);
+        self.0.insert(ne);
+    }
+    pub fn subst(&self, term: Term) -> Term {
+        let freevars = term.free_variables();
+        if freevars.is_empty() {
+            drop(freevars);
+            return term;
+        }
+        let mut ret = smallvec::SmallVec::<_, 2>::new();
+        for v in self.iter().flat_map(|m| m.0.iter()) {
+            if let BoundedValue::Solved(tm) = &v.solution
+                && freevars.iter().any(|f| f.name() == v.name.as_ref())
+            {
+                ret.push((v.name.to_string(), tm.clone())); //get(curr.0, curr.1, tm))); //tm.clone()));
+            }
+        }
+        drop(freevars);
+        term / ret.as_slice()
+    }
+}
+
 impl<Split: SplitStrategy> Checker<Split> {
     pub(crate) fn new_solvable(&self) -> Id {
         let i = self
@@ -127,7 +214,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             self.comment("already solved");
             return self.scoped(|slf| slf.check_equality(&tm, solution));
         }
-        self.comment("Solved");
+        self.comment(format!(
+            "Solved as {:?} in context {:?}",
+            solution.debug_short(),
+            self.context
+        ));
         self.solve(unk.clone(), solution.clone());
         Some(true)
     }
@@ -168,7 +259,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
 
         trace.comment(format!("Solving upper type bound of {unk}"));
          */
-        self.comment("Solved");
+        self.comment(format!(
+            "Solved as {:?} on context {:?}",
+            bound.debug_short(),
+            self.context
+        ));
         self.solve(unk.clone(), bound.clone());
         Some(true)
     }
@@ -187,25 +282,29 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             self.comment("already solved");
             return self.scoped(|slf| slf.check_subtype(bound, &tm));
         }
-        self.comment("Solved");
+        self.comment(format!(
+            "Solved as {:?} on context {:?}",
+            bound.debug_short(),
+            self.context
+        ));
         self.solve(unk.clone(), bound.clone());
         Some(true)
     }
 
-    pub(crate) fn merge_solutions(&mut self, solutions: rustc_hash::FxHashSet<Solvable>) {
-        for s in solutions {
-            self.solutions.remove(&s);
-            self.solutions.insert(s);
-        }
+    #[inline]
+    pub(crate) fn merge_solutions(&mut self, solutions: Solutions) {
+        self.solutions.merge(solutions);
     }
-    pub(crate) fn add_solvable(&mut self, name: Id) {
-        self.solutions.insert(Solvable {
+    fn add_solvable(&mut self, name: Id) {
+        self.solutions.0.insert(Solvable {
             name,
             solution: BoundedValue::None,
             tp: BoundedValue::None,
         });
     }
     pub(crate) fn get_solvable<'s>(&'s self, name: &Id) -> Option<&'s Solvable> {
+        self.solutions.get_solvable(name)
+        /*
         fn get<'i>(
             sols: &'i rustc_hash::FxHashSet<Solvable>,
             anc: Option<Ancestor<'i>>,
@@ -230,6 +329,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
         }
         get_solvable_i(self, name, None)
+         */
     }
     pub(crate) fn get_solvable_type(&mut self, name: &Id) -> Term {
         if let Some(s) = self.get_solvable(name).and_then(|slv| match &slv.tp {
@@ -249,7 +349,8 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
 
     pub(crate) fn solve(&mut self, name: Id, solution: Term) {
         let solution = self.subst(solution);
-        let tp = self
+        self.solutions.set_solution(name, solution);
+        /*let tp = self
             .get_solvable(&name)
             .map_or(BoundedValue::None, |e| e.tp.clone());
         self.solutions.remove(&name);
@@ -258,9 +359,12 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             solution: BoundedValue::Solved(solution),
             tp,
         };
-        self.solutions.insert(ne);
+        self.solutions.insert(ne);*/
     }
     pub(crate) fn solve_type(&mut self, name: Id, tp: Term) {
+        let tp = self.subst(tp);
+        self.solutions.set_type(name, tp);
+        /*
         let solution = self
             .get_solvable(&name)
             .map_or(BoundedValue::None, |e| e.solution.clone());
@@ -271,6 +375,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         };
         self.solutions.remove(&ne);
         self.solutions.insert(ne);
+         */
     }
 
     pub(crate) fn subst_map(
@@ -334,6 +439,6 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     pub(crate) fn subst(&self, term: Term) -> Term {
-        Self::subst_map(term, &self.solutions, self.parent_solutions)
+        self.solutions.subst(term) //Self::subst_map(term, self.solutions, self.parent_solutions)
     }
 }

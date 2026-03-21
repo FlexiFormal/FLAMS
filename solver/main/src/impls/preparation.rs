@@ -1,4 +1,9 @@
-use crate::{CheckRef, impls::solving::Solvable, split::SplitStrategy};
+use crate::{
+    CheckRef, Checker,
+    impls::solving::{Solutions, Solvable},
+    rules::implicits::{ImplicitExtApp, ImplicitExtBound, ImplicitExtTerm},
+    split::SplitStrategy,
+};
 use either::Either;
 use ftml_ontology::{
     domain::{
@@ -8,11 +13,14 @@ use ftml_ontology::{
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
     terms::{
         ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence,
-        Term, Variable, termpaths::TermPath,
+        Term, Variable, helpers::IntoTerm, termpaths::TermPath,
     },
 };
+use ftml_uris::Id;
 use smallvec::SmallVec;
-use std::{hint::unreachable_unchecked, mem::MaybeUninit};
+use std::hint::unreachable_unchecked;
+
+pub const NEW_VERSION: bool = true;
 
 impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     #[inline]
@@ -21,17 +29,13 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         &self.top.rules
     }
 
-    pub(crate) fn prepare(
-        &self,
-        t: Term,
-        path: Option<&mut TermPath>,
-    ) -> (rustc_hash::FxHashSet<Solvable>, Term) {
+    pub(crate) fn prepare(&self, t: Term, path: Option<&mut TermPath>) -> (Solutions, Term) {
         tracing::trace!("preparing {:?}", t.debug_short());
         let mut cp = self.copied();
         let mut ncp = cp.get_ref();
-        let old = std::mem::replace(ncp.context.0, SmallVec::new());
+        let old = ncp.context.take();
         let r = ncp.prepare_i(t, path.map(|p| (p.inner_mut(), 0)));
-        *ncp.context.0 = old;
+        ncp.context.set(old);
         drop(ncp);
         let sols = std::mem::take(&mut cp.solutions);
         (sols, r)
@@ -41,21 +45,41 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         tracing::trace!("reverting preparation {:?}", t.debug_short());
         let mut cp = self.copied();
         let mut ncp = cp.get_ref();
-        let old = std::mem::replace(ncp.context.0, SmallVec::new());
+        let old = ncp.context.take();
         let r = ncp.revert_i(t);
-        *ncp.context.0 = old;
+        ncp.context.set(old);
         r
     }
 
     pub(crate) fn bind_implicits(&mut self, nt: Term) -> Term {
         tracing::trace!("Binding implicits for {:?}", nt.debug_short());
-        let allvars = nt
+        let mut allvars = nt
             .free_variables()
             .into_iter()
             .cloned()
             .collect::<SmallVec<_, 4>>();
+        let mut curr_idx = 0;
         if allvars.is_empty() {
             return nt;
+        }
+        while curr_idx < allvars.len() {
+            if let Variable::Ref { declaration, .. } = &allvars[curr_idx]
+                && let Ok(v) = self.get_variable(declaration)
+                && let Some((tp, _)) = v.data.tp.checked_or_parsed()
+            {
+                let vars = tp.free_variables();
+                let mut changed = false;
+                for v in vars {
+                    if !allvars[..curr_idx].contains(v) {
+                        allvars.insert(curr_idx, v.clone());
+                        changed = true;
+                    }
+                }
+                if changed {
+                    continue;
+                }
+            }
+            curr_idx += 1;
         }
         tracing::trace!("All variables: {allvars:?}");
 
@@ -111,6 +135,28 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
         match &t {
+            Term::Symbol { uri, presentation } if NEW_VERSION => {
+                return if let Ok(sym) = self.get_symbol(uri)
+                    && sym.data.tp.has_checked()
+                {
+                    sym.data
+                        .tp
+                        .with_checked(|t| {
+                            let (_, vars) = t.get_bound_implicits()?;
+                            Some(
+                                Term::Symbol {
+                                    uri: uri.clone(),
+                                    presentation: presentation.clone(),
+                                }
+                                .apply_implicits(vars.len(), |_| self.new_solvable().into()),
+                            )
+                        })
+                        .flatten()
+                        .unwrap_or(t)
+                } else {
+                    t
+                };
+            }
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
         }
@@ -136,37 +182,58 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
 
     fn revert_i(&mut self, t: Term) -> Term {
         match &t {
+            /*Term::Application(b) if NEW_VERSION && b.head.unapply_implicits().is_some() => {
+                // SAFETY: pattern match
+                let (t, args) = unsafe { b.head.unapply_implicits().unwrap_unchecked() };
+                {
+                    return self.revert_i(
+                        Term::Application(ApplicationTerm::new(
+                            t.clone(),
+                            b.arguments.clone(),
+                            b.presentation.clone(),
+                        ))
+                        .apply_implicits(args.len(), |i| args[i].clone()),
+                    );
+                }
+            }
+            Term::Bound(b) if NEW_VERSION && b.head.unapply_implicits().is_some() => {
+                // SAFETY: pattern match
+                let (t, args) = unsafe { b.head.unapply_implicits().unwrap_unchecked() };
+                {
+                    return self.revert_i(
+                        Term::Bound(BindingTerm::new(
+                            t.clone(),
+                            b.arguments.clone(),
+                            b.presentation.clone(),
+                        ))
+                        .apply_implicits(args.len(), |i| args[i].clone()),
+                    );
+                }
+            }
+
+            Term::Application(a) if NEW_VERSION && a.unapply_implicits().is_some() => {
+                // SAFETY: pattern match
+                let (t, _) = unsafe { a.unapply_implicits().unwrap_unchecked() };
+                return t.clone();
+            }*/
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
         }
 
-        // this may very much be overkill, but it's nice to do things without cloning,
-        // and terms are composed of potentially multiple Arcs :)
-        let mut t = MaybeUninit::new(t);
+        let mut tm = t;
 
         for rl in self.top.rules.preparation().iter().rev() {
             // SAFETY: not yet replaced
-            if !rl.applicable_revert(self, unsafe { t.assume_init_ref() }) {
+            if !rl.applicable_revert(self, &tm) {
                 continue;
             }
-            // SAFETY: not yet replaced
-            let tm = unsafe { t.assume_init_read() };
-            match rl.revert(self, tm) {
-                //                                 MaybeUninit doesn't drop the inner value,
-                //                                 vvvvvvvvv  so this is fine
+            tm = match rl.revert(self, tm) {
                 std::ops::ControlFlow::Break(t) => return t,
-                std::ops::ControlFlow::Continue(tm) => {
-                    // t is initialized again
-                    t.write(tm);
-                }
-            }
-            tracing::trace!(
-                "Rule {rl:?} applied; result: {:?}",
-                unsafe { t.assume_init_ref() }.debug_short()
-            );
+                std::ops::ControlFlow::Continue(t) => t,
+            };
+            tracing::trace!("Rule {rl:?} applied; result: {:?}", tm.debug_short());
         }
-        // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(unsafe { t.assume_init() }, |s, t, _| s.revert_i(t), None)
+        self.prepare_recurse(tm, |s, t, _| s.revert_i(t), None)
     }
 
     fn prepare_recurse(

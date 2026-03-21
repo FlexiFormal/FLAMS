@@ -8,6 +8,7 @@ use ftml_solver_trace::{CheckerRule, CheckingTask};
 use crate::{
     CheckRef,
     impls::solving::{BoundedValue, Solvable, TermExtSolvable},
+    rules::implicits::{ImplicitExtApp, ImplicitExtBound},
     split::SplitStrategy,
 };
 
@@ -16,89 +17,99 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         if matches!(term, Term::Symbol { .. } | Term::Number(_)) {
             return None;
         }
-        self.wrap_check(CheckingTask::Simplify(term), |slf| {
+        self./*wrap_check*/untraced(CheckingTask::Simplify(term), |slf| {
             slf.simplify_full_i(expand, term)
         })
     }
     fn simplify_full_i(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
-        let mut current = match term {
-            Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).map(|t| {
-                self.comment("expanded definition");
-                Cow::Owned(t)
-            })?,
-            Term::Var { variable, .. } => {
-                if let Some(name) = variable.is_solvable()
-                    && let Some(Solvable {
-                        solution: BoundedValue::Solved(t),
-                        ..
-                    }) = self.get_solvable(name)
-                {
-                    Cow::Owned(t.clone())
-                } else if expand && let Some(df) = self.get_var_definiens(variable) {
-                    Cow::Owned(df)
-                } else {
-                    return None;
+        let mut current = if expand && let Some(t) = self.simplify_implicit(term) {
+            Cow::Owned(t)
+        } else
+        /*if term.unapply_implicits().is_some() {
+            return None;
+        } else*/
+        {
+            match term {
+                Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).map(|t| {
+                    self.comment("expanded definition");
+                    Cow::Owned(t)
+                })?,
+                Term::Var { variable, .. } => {
+                    if let Some(name) = variable.is_solvable()
+                        && let Some(Solvable {
+                            solution: BoundedValue::Solved(t),
+                            ..
+                        }) = self.get_solvable(name)
+                    {
+                        Cow::Owned(t.clone())
+                    } else if expand && let Some(df) = self.get_var_definiens(variable) {
+                        Cow::Owned(df)
+                    } else {
+                        return None;
+                    }
                 }
-            }
-            Term::Number(_) => return None,
-            Term::Application(app) => {
-                let mut changed = false;
-                let nhead =
-                    self.simplify_full_i(true, &app.head)
-                        .map_or(Cow::Borrowed(&app.head), |t| {
+                Term::Number(_) => return None,
+                Term::Application(app) => {
+                    let mut changed = false;
+                    let nhead = self.simplify_full_i(true, &app.head).map_or(
+                        Cow::Borrowed(&app.head),
+                        |t| {
                             changed = true;
                             Cow::Owned(t)
-                        });
-                let args = app
-                    .arguments
-                    .iter()
-                    .map(|a| {
-                        self.arg_full(expand, a).map_or(Cow::Borrowed(a), |a| {
-                            changed = true;
-                            Cow::Owned(a)
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                if changed {
-                    Cow::Owned(Term::Application(ApplicationTerm::new(
-                        nhead.into_owned(),
-                        args.into_iter().map(Cow::into_owned).collect(),
-                        app.presentation.clone(),
-                    )))
-                } else {
-                    Cow::Borrowed(term)
-                }
-            }
-            Term::Bound(app) => {
-                let mut changed = false;
-                let nhead =
-                    self.simplify_full_i(true, &app.head)
-                        .map_or(Cow::Borrowed(&app.head), |t| {
-                            changed = true;
-                            Cow::Owned(t)
-                        });
-                let args = app
-                    .arguments
-                    .iter()
-                    .map(|a| {
-                        self.bound_arg_full(expand, a)
-                            .map_or(Cow::Borrowed(a), |a| {
+                        },
+                    );
+                    let args = app
+                        .arguments
+                        .iter()
+                        .map(|a| {
+                            self.arg_full(expand, a).map_or(Cow::Borrowed(a), |a| {
                                 changed = true;
                                 Cow::Owned(a)
                             })
-                    })
-                    .collect::<Vec<_>>();
-                if changed {
-                    Cow::Owned(Term::Bound(BindingTerm::new(
-                        nhead.into_owned(),
-                        args.into_iter().map(Cow::into_owned).collect(),
-                        app.presentation.clone(),
-                    )))
-                } else {
-                    Cow::Borrowed(term)
+                        })
+                        .collect::<Vec<_>>();
+                    if changed {
+                        Cow::Owned(Term::Application(ApplicationTerm::new(
+                            nhead.into_owned(),
+                            args.into_iter().map(Cow::into_owned).collect(),
+                            app.presentation.clone(),
+                        )))
+                    } else {
+                        Cow::Borrowed(term)
+                    }
                 }
+                Term::Bound(app) => {
+                    let mut changed = false;
+                    let nhead = self.simplify_full_i(true, &app.head).map_or(
+                        Cow::Borrowed(&app.head),
+                        |t| {
+                            changed = true;
+                            Cow::Owned(t)
+                        },
+                    );
+                    let args = app
+                        .arguments
+                        .iter()
+                        .map(|a| {
+                            self.bound_arg_full(expand, a)
+                                .map_or(Cow::Borrowed(a), |a| {
+                                    changed = true;
+                                    Cow::Owned(a)
+                                })
+                        })
+                        .collect::<Vec<_>>();
+                    if changed {
+                        Cow::Owned(Term::Bound(BindingTerm::new(
+                            nhead.into_owned(),
+                            args.into_iter().map(Cow::into_owned).collect(),
+                            app.presentation.clone(),
+                        )))
+                    } else {
+                        Cow::Borrowed(term)
+                    }
+                }
+                _ => Cow::Borrowed(term),
             }
-            _ => Cow::Borrowed(term),
         };
         loop {
             if let Some(next) = self.scoped(|slf| slf.simplify_one(expand, &current)) {
@@ -115,9 +126,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn simplify_until(
         &mut self,
         term: &'t Term,
-        mut until: impl FnMut(&Term) -> bool,
+        mut until: impl FnMut(&Self, &Term) -> bool,
     ) -> Option<Cow<'t, Term>> {
-        if until(term) {
+        if until(self, term) {
             return Some(Cow::Borrowed(term));
         }
         self.wrap_check(CheckingTask::Simplify(term), |slf| {
@@ -127,7 +138,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     fn simplify_until_i(
         &mut self,
         term: &'t Term,
-        mut until: impl FnMut(&Term) -> bool,
+        mut until: impl FnMut(&Self, &Term) -> bool,
     ) -> Option<Cow<'t, Term>> {
         let mut current = Cow::<'t, _>::Borrowed(term);
         loop {
@@ -135,7 +146,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 self.comment(format!("Final simplification: {:?}", current.debug_short()));
                 return None;
             };
-            if until(&next) {
+            if until(self, &next) {
                 return Some(Cow::Owned(next));
             }
             current = Cow::Owned(next);
@@ -153,7 +164,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         R: Send + Sync + std::fmt::Debug + Clone + 'static,
     {
         let mut applicables = smallvec::SmallVec::<_, 2>::default();
-        match self.simplify_until(term, |t| {
+        match self.simplify_until(term, |_, t| {
             applicables = rules
                 .iter()
                 .filter_map(|rl| {
@@ -221,10 +232,36 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             None => (),
         }
 
-        self.simplify_default(expand, term)
+        self.simplify_one_default(expand, term)
     }
 
-    fn simplify_default(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
+    pub(crate) fn simplify_implicit(&mut self, term: &'t Term) -> Option<Term> {
+        if crate::impls::preparation::NEW_VERSION
+            && let Some((Term::Symbol { uri, .. }, args)) = term.unapply_implicits()
+            && let Some(def) = self.get_symbol_definiens(uri)
+            && let Some((def, vars)) = def.get_bound_implicits()
+            && args.len() == vars.len()
+        {
+            let mut substs = Vec::new();
+            for (ComponentVar { var, tp, .. }, arg) in vars.iter().zip(args) {
+                if let Some(tp) = tp {
+                    let tp: Cow<Term> = tp / &*substs;
+                    if self.scoped(|checker| checker.check_type(arg, &tp)) != Some(true) {
+                        return None;
+                    }
+                    substs.push((var.name(), arg));
+                }
+            }
+            Some((def / &*substs).into_owned())
+        } else {
+            None
+        }
+    }
+
+    fn simplify_one_default(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
+        if expand && let Some(t) = self.simplify_implicit(term) {
+            return Some(t);
+        }
         match term {
             // Definition Expansion
             Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).inspect(|_| {

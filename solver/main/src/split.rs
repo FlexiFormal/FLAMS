@@ -123,7 +123,9 @@ pub trait SplitStrategy:
         B: FnOnce(&mut CheckRef<'t, '_, Self>) -> Option<R> + Send,
         R: Send + std::fmt::Debug + Clone,
     {
-        let l1 = match solver.traced(CheckingTask::Strategy(strategy_a), oper_a) {
+        let l1 = match solver
+            .branch_traced(CheckingTask::Strategy(strategy_a), |mut c| oper_a(&mut c))
+        {
             Ok(r) => return Some(r),
             Err(l) => l,
         };

@@ -62,7 +62,7 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for BindInInhabitableRule {
                     // technically unreachable
                     return None;
                 };
-                let Some(bind) = checker.simplify_until(tp, |t| {
+                let Some(bind) = checker.simplify_until(tp, |_, t| {
                     if let Term::Bound(b) = t
                         && let Term::Symbol { uri, .. } = &b.head
                         && *uri == self.bind
@@ -161,7 +161,7 @@ impl<Split: SplitStrategy> InferenceRule<Split> for BindInInferenceRule {
                 // to potentially solve variables
                 let body = checker.infer_type(ret)?;
 
-                let Some(bind) = checker.simplify_until(tp, |t| {
+                let Some(bind) = checker.simplify_until(tp, |_, t| {
                     if let Term::Bound(b) = t
                         && let Term::Symbol { uri, .. } = &b.head
                         && *uri == self.bind
@@ -322,7 +322,7 @@ impl BindInApplyRule {
         tp: Term,
     ) -> Option<(BindingTerm, bool)> {
         let Some(nret) = checker.scoped(|checker| {
-            match checker.simplify_until(&tp, |t| matches!(t, Term::Bound(_)))? {
+            match checker.simplify_until(&tp, |_, t| matches!(t, Term::Bound(_)))? {
                 Cow::Borrowed(_) => Some(None),
                 Cow::Owned(tp) => Some(Some(tp)),
             }

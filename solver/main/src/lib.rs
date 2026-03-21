@@ -9,12 +9,18 @@ pub mod split;
 pub mod trace {
     pub use ftml_solver_trace::*;
 }
+pub mod facts;
+pub mod hoas;
 pub mod patterns;
+pub mod utils;
 
 use crate::{
+    context::ContextWrap,
+    facts::GlobalFacts,
+    hoas::HOASSymbols,
     impls::{
-        ContextWrap,
-        solving::{Ancestor, Solvable},
+        proving::ProverState,
+        solving::{Solutions, TermExtSolvable},
     },
     results::{
         CheckResult, ContentCheckResult, DocumentCheckResult, SymbolCheckResult, TypeCheckResult,
@@ -22,18 +28,18 @@ use crate::{
     rules::RuleSet,
     split::{CancelToken, RayonStrategiesDepth, SingleThreadedSplit, SplitStrategy},
     trace::{CheckLogCow, CheckingTask, PreCheckLog},
+    utils::MutableRefList,
 };
 use flams_math_archives::{
     artifacts::{ContentUpdate, FileOrString},
     backend::{AnyBackend, LocalBackend},
     formats::{BuildResult, TaskDependency},
-    utils::errors::BackendError,
 };
 use ftml_ontology::{
     domain::{
         HasDeclarations,
         declarations::{AnyDeclarationRef, morphisms::Morphism, symbols::Symbol},
-        modules::{Module, ModuleLike},
+        modules::Module,
     },
     narrative::{
         documents::Document,
@@ -41,14 +47,14 @@ use ftml_ontology::{
             DocumentElementRef, LogicalParagraph, VariableDeclaration, paragraphs::ParagraphKind,
         },
     },
-    terms::{ComponentVar, Term, TermContainer, termpaths::TermPath},
+    terms::{ComponentVar, Term, TermContainer, helpers::IntoTerm, termpaths::TermPath},
     utils::RefTree,
 };
 use ftml_solver_trace::CheckLog;
-use ftml_uris::{Id, IsDomainUri, ModuleUri};
+use ftml_uris::{Id, IsDomainUri, LeafUri, ModuleUri};
 pub(crate) use rules::sequences::TermExtSeq;
 use smallvec::SmallVec;
-use std::{hint::unreachable_unchecked, marker::PhantomData};
+use std::marker::PhantomData;
 
 pub static DUMMY: std::sync::LazyLock<Id> =
     // SAFETY: "DUMMY" is a valid ID
@@ -126,22 +132,54 @@ pub struct Checker<Split: SplitStrategy> {
     rules: RuleSet<Split>,
     modules: BigSet<Module>,
     documents: BigSet<Document>,
+    facts: GlobalFacts,
+    hoas: Option<HOASSymbols>,
     implicits: std::sync::atomic::AtomicUsize,
+    current: Vec<LeafUri>,
+    context: Vec<ModuleUri>,
     __phantom: PhantomData<Split>,
 }
 
 pub struct CheckRef<'c, 'i, Split: SplitStrategy> {
     pub(crate) top: &'c Checker<Split>,
     pub(crate) context: ContextWrap<'c, 'i>,
-    pub(crate) solutions: &'i mut rustc_hash::FxHashSet<Solvable>,
-    pub(crate) parent_solutions: Option<Ancestor<'i>>,
+    pub(crate) proof_state: &'i ProverState,
+    pub(crate) solutions: MutableRefList<'i, Solutions>,
     messages: &'i mut SmallVec<CheckLogCow<'c>, 2>,
     pub(crate) cancel: &'i CancelToken<'i, Split::CancelToken>,
     added: u8,
     traced: bool,
 }
 
+macro_rules! update {
+    ($slf:ident $t:ident if $bind:expr) => {
+        if impls::preparation::NEW_VERSION
+            && $bind
+            && let Some(t) = $slf.bind_implicits(&$t)
+        {
+            //println!("update: {:?}", t); //t.debug_short());
+            $t = t;
+        }
+    };
+}
+
+#[derive(Default)]
+pub struct CheckerCache {
+    modules: BigSet<Module>,
+    documents: BigSet<Document>,
+}
+
 impl<Split: SplitStrategy> Checker<Split> {
+    pub fn into_cache(self) -> CheckerCache {
+        CheckerCache {
+            modules: self.modules,
+            documents: self.documents,
+        }
+    }
+    pub fn set_cache(&mut self, cache: CheckerCache) {
+        self.modules = cache.modules;
+        self.documents = cache.documents;
+    }
     #[must_use]
     pub fn new(backend: AnyBackend) -> Self {
         Self {
@@ -149,9 +187,20 @@ impl<Split: SplitStrategy> Checker<Split> {
             modules: BigSet::default(),
             documents: BigSet::default(),
             rules: RuleSet::default(),
+            current: Vec::default(),
+            facts: GlobalFacts::default(),
+            context: Vec::default(),
+            hoas: None,
             implicits: std::sync::atomic::AtomicUsize::new(1),
             __phantom: PhantomData,
         }
+    }
+
+    fn set_hoas(&mut self) {
+        self.hoas = HOASSymbols::get(self);
+    }
+    pub fn hoas(&self) -> Option<&HOASSymbols> {
+        self.hoas.as_ref()
     }
 
     pub fn check_document(
@@ -164,21 +213,22 @@ impl<Split: SplitStrategy> Checker<Split> {
                 .display()
                 .iec_short()
         );*/
-        let mut all = Vec::new();
+
+        //let mut all = Vec::new();
         let mut modules = Vec::new();
         let mut results = Vec::new();
         self.documents.insert(d.clone());
         for e in d.dfs() {
             match e {
-                DocumentElementRef::UseModule { uri: module, .. } => all.push(module.clone()),
+                //DocumentElementRef::UseModule { uri: module, .. } => all.push(module.clone()),
                 DocumentElementRef::Module { module, .. } => {
-                    all.push(module.clone());
+                    //all.push(module.clone());
                     modules.push(module.clone());
                 }
                 _ => (),
             }
         }
-        self.set_context_i(all)?;
+        //self.set_context_i(all)?;
         let modules: Vec<_> = modules
             .into_iter()
             .filter_map(|uri| self.get_module(&uri).ok())
@@ -186,10 +236,13 @@ impl<Split: SplitStrategy> Checker<Split> {
         tracing::trace!("Rules: {:?}", self.rules);
         for e in d.dfs() {
             match e {
-                DocumentElementRef::Module { module, .. } => {
-                    if self.get_module(module).is_err() {
+                DocumentElementRef::Module { module, .. }
+                | DocumentElementRef::UseModule { uri: module, .. } => {
+                    self.set_context(vec![module.clone()])?;
+                    //let _ = self.get_module(module).map_err(|_| module.clone())?;
+                    /*if self.get_module(module).is_err() {
                         results.push(CheckResult::Missing(module.clone()));
-                    }
+                    }*/
                 }
                 DocumentElementRef::Morphism { morphism, .. } => {
                     let top = morphism.clone().simple_module();
@@ -201,7 +254,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                         results.push(CheckResult::Missing(morphism.module.clone()));
                         continue;
                     };
-                    m.initialize(&mut |uri| self.get_module_like(uri));
+                    m.initialize(&mut |uri| self.get_module_like(uri).map_err(|()| "not found"));
                     if let Some(r) = self.check_morphism(&m) {
                         results.extend(r.into_iter());
                     }
@@ -229,6 +282,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     }
                 }
                 DocumentElementRef::Term(top) => {
+                    //self.set_hoas();
                     tracing::debug!("Checking term {:?}", top.get_parsed().debug_short());
                     let (unks, tm) = self.prepare(None, top.get_parsed().clone());
                     let (t, _, log) = self.infer_type(Some(unks), &tm);
@@ -249,6 +303,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                         ..
                     },
                 ) if fors.len() == 1 => {
+                    //self.set_hoas();
                     results.extend(self.check_proof(p));
                 }
                 DocumentElementRef::Paragraph(
@@ -258,6 +313,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                         ..
                     },
                 ) if p.fors.iter().any(|(_, t)| t.is_some()) => {
+                    //self.set_hoas();
                     if let Some(r) = self.check_assertion(p) {
                         results.extend(r.into_iter());
                     }
@@ -267,6 +323,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                         kind, fors, styles, ..
                     },
                 ) if kind.is_definition_like(styles) && p.fors.iter().any(|(_, t)| t.is_some()) => {
+                    //self.set_hoas();
                     if let Some(r) = self.check_definition(p) {
                         results.push(r);
                     }
@@ -285,12 +342,9 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     // TODO return checked Module
     pub fn check_module(&mut self, m: &Module) -> Result<Vec<ContentCheckResult>, ModuleUri> {
-        let mut all = Vec::new();
-        self.load_context(m, &mut all);
         self.modules.insert(m.clone());
-        if !all.is_empty() {
-            self.set_context_i(all)?;
-        }
+        self.set_context(vec![m.uri.clone()])?;
+        //self.set_hoas();
         let mut ret = Vec::new();
         for d in m.dfs().filter_map(|e| {
             if let AnyDeclarationRef::Symbol(s) = e {
@@ -306,27 +360,8 @@ impl<Split: SplitStrategy> Checker<Split> {
         Ok(ret)
     }
 
-    /// #### Errors
-    pub fn add_modules(&mut self, modules: Vec<Module>) -> Result<(), ModuleUri> {
-        let mut todos = Vec::new();
-        for m in modules {
-            if !self.modules.contains(&m.uri) {
-                self.modules.insert(m.clone());
-                self.load_context(&m, &mut todos);
-                if !todos.is_empty() {
-                    self.set_context_i(std::mem::take(&mut todos))?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// #### Errors
-    pub fn set_context(&mut self, m: Vec<ModuleUri>) -> Result<(), ModuleUri> {
-        self.set_context_i(m)
-    }
-
     pub fn check_subterm(&mut self, term: Term, mut path: TermPath) -> Option<SubtermCheckResult> {
+        //self.set_hoas();
         let (unks, nterm) = self.wrap_none(None, |mut slf| {
             let (s, r) = slf.prepare(term, Some(&mut path));
             slf.merge_solutions(s);
@@ -427,77 +462,33 @@ impl<Split: SplitStrategy> Checker<Split> {
         })
     }
 
-    fn set_context_i(&mut self, mut all: Vec<ModuleUri>) -> Result<(), ModuleUri> {
-        tracing::trace!("Context: {all:?}");
-        while let Some(uri) = all.pop() {
-            if uri.is_top() && !self.modules.contains(&uri) {
-                let ModuleLike::Module(m) =
-                    self.backend.get_module(&uri).map_err(|_| uri.clone())?
-                else {
-                    // SAFETY: uri.is_top()
-                    unsafe { unreachable_unchecked() };
-                };
-                self.load_context(&m, &mut all);
-                self.modules.insert(m);
-            }
-        }
-        Ok(())
-    }
-    fn load_context(&mut self, m: &Module, todos: &mut Vec<ModuleUri>) {
-        tracing::trace!("Loading: {:?}", m.uri);
-        if let Some(uri) = m.meta_module.as_ref() {
-            if uri.is_top() {
-                if !self.modules.contains(uri) {
-                    todos.push(uri.clone());
-                }
-            } else {
-                let uri = !uri.clone();
-                if !self.modules.contains(&uri) {
-                    todos.push(uri);
-                }
-            }
-        }
-        for d in m.dfs() {
-            match d {
-                AnyDeclarationRef::Import { uri: m, .. } if !self.modules.contains(m) => {
-                    if m.is_top() {
-                        todos.push(m.clone());
-                    } else {
-                        let uri = !m.clone();
-                        if !self.modules.contains(&uri) {
-                            todos.push(uri);
-                        }
-                    }
-                }
-                AnyDeclarationRef::Symbol(s) => {
-                    for e in Split::SYMBOL_EXTRACTORS {
-                        e(s, &mut self.rules);
-                    }
-                }
-                AnyDeclarationRef::Rule { id, parameters, .. } => {
-                    tracing::debug!("Rule: {id}");
-                    if let Some(rule) = Split::RULE_EXTRACTORS
-                        .iter()
-                        .find_map(|(s, f)| if id.as_ref() == *s { Some(f) } else { None })
-                    {
-                        rule(parameters, &mut self.rules);
-                    }
-                }
-                _ => (),
-            }
-        }
-    }
-
     fn check_components(
         &self,
         tpc: &TermContainer,
         dfc: &TermContainer,
+        bind: bool,
     ) -> Option<SymbolCheckResult> {
+        //self.set_hoas();
         match (tpc.get_parsed(), dfc.get_parsed()) {
             (Some(tp), None) => {
-                tracing::trace!("Checking Type");
+                tracing::debug!("Checking Type");
+                //tracing::debug!("Facts: {:#?}", self.facts);
                 let (unks, tp) = self.prepare(None, tp.clone());
-                let (b, _, l) = self.check_inhabitable(Some(unks), &tp);
+                let (b, unks, mut l) = self.check_inhabitable(Some(unks), &tp);
+                let mut tp = self.wrap_none(Some(unks), |slf| slf.subst(tp)).1;
+                if tp.has_solvable() {
+                    l.push(PreCheckLog::Msg(
+                        "Unsolved unkowns remain".into(),
+                        ftml_solver_trace::MessageLevel::Failure,
+                    ));
+                    return Some(SymbolCheckResult::TypeOnly {
+                        result: TypeCheckResult {
+                            success: false,
+                            log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                        },
+                    });
+                }
+                update!(self tp if bind);
                 tpc.set_checked(tp);
                 Some(SymbolCheckResult::TypeOnly {
                     result: TypeCheckResult {
@@ -507,13 +498,28 @@ impl<Split: SplitStrategy> Checker<Split> {
                 })
             }
             (None, Some(df)) => {
-                tracing::trace!("Checking Definiens");
+                tracing::debug!("Checking Definiens");
+                //tracing::debug!("Facts: {:#?}", self.facts);
                 let (unks, df) = self.prepare(None, df.clone());
-                let (tp, _, l) = self.infer_type(Some(unks), &df);
+                let (tp, unks, mut l) = self.infer_type(Some(unks), &df);
+                let mut df = self.wrap_none(Some(unks), |slf| slf.subst(df)).1;
 
+                if df.has_solvable() {
+                    l.push(PreCheckLog::Msg(
+                        "Unsolved unkowns remain".into(),
+                        ftml_solver_trace::MessageLevel::Failure,
+                    ));
+                    return Some(SymbolCheckResult::DefiniensOnly {
+                        inferred: None,
+                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                    });
+                }
+
+                update!(self df if bind);
                 dfc.set_checked(df);
 
-                if let Some(tp) = tp {
+                if let Some(mut tp) = tp {
+                    update!(self tp if bind);
                     tpc.set_checked(tp.clone());
                     let tp = self.revert_prepare(tp);
                     tpc.set_presentation(tp.clone());
@@ -529,97 +535,250 @@ impl<Split: SplitStrategy> Checker<Split> {
                 }
             }
             (Some(tp), Some(df)) => {
-                tracing::trace!("Checking Type and Definiens");
-                let (tunks, tp) = self.prepare(None, tp.clone());
-                let (b, tunks, l) = self.check_inhabitable(Some(tunks), &tp);
-                if b.is_some_and(|b| !b) {
-                    tpc.set_checked(tp);
-                    return Some(SymbolCheckResult::Both {
-                        inhabitable: TypeCheckResult {
-                            success: false,
-                            log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                        },
-                        matches: None,
-                    });
+                tracing::debug!("Checking Type and Definiens");
+                if ftml_uris::metatheory::AUTO_PROVE.term_is(df) {
+                    Some(self.infer_df(dfc, tp, tpc, bind))
+                } else {
+                    //tracing::debug!("Facts: {:#?}", self.facts);
+                    Some(self.df_and_tp(df, dfc, tp, tpc, bind))
                 }
-                let (dunks, df) = self.prepare(Some(tunks), df.clone());
-
-                let (b, _, l2) = self.check_type(Some(dunks), &df, &tp);
-                tpc.set_checked(tp);
-                dfc.set_checked(df);
-                Some(SymbolCheckResult::Both {
-                    inhabitable: TypeCheckResult {
-                        success: true,
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    },
-                    matches: Some(TypeCheckResult {
-                        success: b.unwrap_or(false),
-                        log: CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
-                    }),
-                })
             }
             (None, None) => None,
         }
     }
 
+    fn infer_df(
+        &self,
+        dfc: &TermContainer,
+        tp: &Term,
+        tpc: &TermContainer,
+        bind: bool,
+    ) -> SymbolCheckResult {
+        let (tunks, tp) = self.prepare(None, tp.clone());
+        let (b, tunks, mut l) = self.check_inhabitable(Some(tunks), &tp);
+        if b.is_some_and(|b| !b) {
+            let mut tp = self.wrap_none(Some(tunks), |slf| slf.subst(tp)).1;
+            update!(self tp if bind);
+            tpc.set_checked(tp);
+            return SymbolCheckResult::Both {
+                inhabitable: TypeCheckResult {
+                    success: false,
+                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                },
+                matches: None,
+            };
+        }
+        let (tunks, mut tp) = self.wrap_none(Some(tunks), |slf| slf.subst(tp));
+
+        if tp.has_solvable() {
+            l.push(PreCheckLog::Msg(
+                "Unsolved unkowns remain".into(),
+                ftml_solver_trace::MessageLevel::Failure,
+            ));
+            return SymbolCheckResult::TypeOnly {
+                result: TypeCheckResult {
+                    success: false,
+                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                },
+            };
+        }
+        let (ndf, _, mut l2) = self.prove(Some(tunks), &tp);
+
+        update!(self tp if bind);
+        tpc.set_checked(tp);
+        if let Some(mut df) = ndf {
+            if df.has_solvable() {
+                l2.push(PreCheckLog::Msg(
+                    "Unsolved unkowns remain".into(),
+                    ftml_solver_trace::MessageLevel::Failure,
+                ));
+                return SymbolCheckResult::Both {
+                    inhabitable: TypeCheckResult {
+                        success: true,
+                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                    },
+                    matches: Some(TypeCheckResult {
+                        success: false,
+                        log: CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
+                    }),
+                };
+            }
+
+            update!(self df if bind);
+            dfc.set_checked(df.clone());
+            let df = self.revert_prepare(df);
+            dfc.set_presentation(df);
+            SymbolCheckResult::Both {
+                inhabitable: TypeCheckResult {
+                    success: true,
+                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                },
+                matches: Some(TypeCheckResult {
+                    success: true,
+                    log: CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
+                }),
+            }
+        } else {
+            SymbolCheckResult::Both {
+                inhabitable: TypeCheckResult {
+                    success: true,
+                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                },
+                matches: Some(TypeCheckResult {
+                    success: false,
+                    log: CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
+                }),
+            }
+        }
+    }
+
+    fn df_and_tp(
+        &self,
+        df: &Term,
+        dfc: &TermContainer,
+        tp: &Term,
+        tpc: &TermContainer,
+        bind: bool,
+    ) -> SymbolCheckResult {
+        let (tunks, tp) = self.prepare(None, tp.clone());
+        let (b, tunks, mut l) = self.check_inhabitable(Some(tunks), &tp);
+        if b.is_some_and(|b| !b) {
+            let mut tp = self.wrap_none(Some(tunks), |slf| slf.subst(tp)).1;
+            if tp.has_solvable() {
+                l.push(PreCheckLog::Msg(
+                    "Unsolved unkowns remain".into(),
+                    ftml_solver_trace::MessageLevel::Failure,
+                ));
+                return SymbolCheckResult::TypeOnly {
+                    result: TypeCheckResult {
+                        success: false,
+                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                    },
+                };
+            }
+
+            update!(self tp if bind);
+            tpc.set_checked(tp);
+            return SymbolCheckResult::Both {
+                inhabitable: TypeCheckResult {
+                    success: false,
+                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                },
+                matches: None,
+            };
+        }
+        let (tunks, mut tp) = self.wrap_none(Some(tunks), |slf| slf.subst(tp));
+        let (dunks, df) = self.prepare(Some(tunks), df.clone());
+
+        let (b, unks, mut l2) = self.check_type(Some(dunks), &df, &tp);
+        let mut df = self.wrap_none(Some(unks), |slf| slf.subst(df)).1;
+
+        if df.has_solvable() {
+            l2.push(PreCheckLog::Msg(
+                "Unsolved unkowns remain".into(),
+                ftml_solver_trace::MessageLevel::Failure,
+            ));
+            return SymbolCheckResult::Both {
+                inhabitable: TypeCheckResult {
+                    success: true,
+                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                },
+                matches: Some(TypeCheckResult {
+                    success: false,
+                    log: CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
+                }),
+            };
+        }
+
+        update!(self tp if bind);
+        update!(self df if bind);
+        tracing::debug!("Result:\n{:?}\n : {:?}", df.debug_short(), tp.debug_short());
+        tpc.set_checked(tp);
+        dfc.set_checked(df);
+        SymbolCheckResult::Both {
+            inhabitable: TypeCheckResult {
+                success: true,
+                log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+            },
+            matches: Some(TypeCheckResult {
+                success: b.unwrap_or(false),
+                log: CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
+            }),
+        }
+    }
+
     // TODO return checked term
     pub fn check_symbol(&mut self, s: &Symbol) -> Option<SymbolCheckResult> {
-        tracing::debug!("Checking Symbol {s:?}");
-        self.check_components(&s.data.tp, &s.data.df)
+        tracing::debug!("Checking Symbol {}", s.uri);
+        tracing::trace!("{s:?}");
+        self.current.push(s.uri.clone().into());
+        let r = self.check_components(&s.data.tp, &s.data.df, true);
+        self.current.pop();
+        self.add_fact(s);
+        r
     }
 
     // TODO return checked term
     pub fn check_variable(&mut self, s: &VariableDeclaration) -> Option<SymbolCheckResult> {
-        self.check_components(&s.data.tp, &s.data.df)
+        self.current.push(s.uri.clone().into());
+        let r = self.check_components(&s.data.tp, &s.data.df, false);
+        self.current.pop();
+        r
     }
 
-    pub fn check_type(
+    fn check_type(
         &self,
-        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
+        unknowns: Option<Solutions>,
         tm: &Term,
         tp: &Term,
-    ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
+    ) -> (Option<bool>, Solutions, PreCheckLog) {
         self.wrap_task(CheckingTask::HasType(tm, tp), unknowns, |mut slf| {
             slf.check_type_i(tm, tp)
         })
     }
 
-    pub fn check_subtype(
+    fn prove(
         &self,
-        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
+        unknowns: Option<Solutions>,
+        goal: &Term,
+    ) -> (Option<Term>, Solutions, PreCheckLog) {
+        self.wrap_task(CheckingTask::Proving(goal), unknowns, |mut slf| {
+            slf.prove(goal)
+        })
+    }
+
+    fn check_subtype(
+        &self,
+        unknowns: Option<Solutions>,
         sub: &Term,
         sup: &Term,
-    ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
+    ) -> (Option<bool>, Solutions, PreCheckLog) {
         self.wrap_task(CheckingTask::Subtype(sub, sup), unknowns, |mut slf| {
             slf.check_subtype_i(sub, sup)
         })
     }
 
-    pub fn infer_type(
+    fn infer_type(
         &self,
-        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
+        unknowns: Option<Solutions>,
         t: &Term,
-    ) -> (Option<Term>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
+    ) -> (Option<Term>, Solutions, PreCheckLog) {
         self.wrap_task(CheckingTask::Inference(t), unknowns, |mut slf| {
             slf.infer_type_i(t)
         })
     }
 
-    pub fn check_inhabitable(
+    fn check_inhabitable(
         &self,
-        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
+        unknowns: Option<Solutions>,
         t: &Term,
-    ) -> (Option<bool>, rustc_hash::FxHashSet<Solvable>, PreCheckLog) {
+    ) -> (Option<bool>, Solutions, PreCheckLog) {
         self.wrap_task(CheckingTask::Inhabitable(t), unknowns, |mut slf| {
             slf.check_inhabitable_i(t)
         })
     }
 
-    fn prepare(
-        &self,
-        unks: Option<rustc_hash::FxHashSet<Solvable>>,
-        t: Term,
-    ) -> (rustc_hash::FxHashSet<Solvable>, Term) {
+    fn prepare(&self, unks: Option<Solutions>, t: Term) -> (Solutions, Term) {
         self.wrap_none(unks, |mut slf| {
             let (sols, r) = slf.prepare(t, None);
             slf.merge_solutions(sols);
@@ -630,7 +789,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         self.wrap_none(None, |slf| slf.revert_prepare(t)).1
     }
 
-    pub fn check_morphism(&mut self, m: &Morphism) -> Option<Vec<CheckResult>> {
+    fn check_morphism(&mut self, m: &Morphism) -> Option<Vec<CheckResult>> {
         let mut ret = Vec::new();
         for d in m.declarations() {
             match d {
@@ -638,7 +797,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     // TODO:
                     // - check that a *refined type* is a subtype of the original type's translation
                     // - check that an *assigned definies* is ???? the original definiens
-                    if let Some(r) = self.check_components(&s.data.tp, &s.data.df) {
+                    if let Some(r) = self.check_components(&s.data.tp, &s.data.df, true) {
                         ret.push(CheckResult::Content(ContentCheckResult::Symbol(
                             s.uri.clone(),
                             r,
@@ -650,11 +809,89 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
         Some(ret)
     }
+
+    /// #### Errors
+    pub fn add_modules(&mut self, modules: Vec<Module>) -> Result<(), ModuleUri> {
+        let mut todos = Vec::new();
+        for m in modules {
+            let _ = self.modules.remove(&m);
+            todos.push(m.uri.clone());
+            self.modules.insert(m);
+        }
+        self.set_context(todos)?;
+        Ok(())
+    }
+
+    /// #### Errors
+    pub fn set_context(&mut self, m: Vec<ModuleUri>) -> Result<(), ModuleUri> {
+        let new = self.sort(m);
+        for i in self.context.len() - new..self.context.len() {
+            let uri = &self.context[i];
+            let m = self.get_module(uri).map_err(|()| uri.clone())?;
+            self.load_context(&m);
+        }
+        Ok(())
+    }
+
+    fn load_context(&mut self, m: &Module) {
+        //, todos: &mut Vec<ModuleUri>) {
+        tracing::trace!("Loading: {}", m.uri);
+        for d in m.dfs() {
+            match d {
+                /*
+                AnyDeclarationRef::Import { uri: m, .. } if !self.modules.contains(m) => {
+                    if m.is_top() {
+                        todos.push(m.clone());
+                    } else {
+                        let uri = !m.clone();
+                        if !self.modules.contains(&uri) {
+                            todos.push(uri);
+                        }
+                    }
+                } */
+                AnyDeclarationRef::Symbol(s) => {
+                    let markers = self.rules.marker().len();
+                    for e in Split::SYMBOL_EXTRACTORS {
+                        e(s, &mut self.rules);
+                    }
+                    if self.rules.marker().len() > markers {
+                        self.set_hoas();
+                    }
+                    self.add_fact(s);
+                }
+                AnyDeclarationRef::Rule { id, parameters, .. } => {
+                    tracing::debug!("Rule: {id}");
+                    let markers = self.rules.marker().len();
+                    if let Some(rule) = Split::RULE_EXTRACTORS
+                        .iter()
+                        .find_map(|(s, f)| if id.as_ref() == *s { Some(f) } else { None })
+                    {
+                        let parameters = parameters
+                            .iter()
+                            .map(|t| self.prepare(None, t.clone()).1)
+                            .collect::<Vec<_>>();
+                        rule(&parameters, &mut self.rules);
+                    }
+                    if self.rules.marker().len() > markers {
+                        self.set_hoas();
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
+
+    fn sort(&mut self, modules: Vec<ModuleUri>) -> usize {
+        let mut ctx = std::mem::take(&mut self.context);
+        let new = topo_sort(modules, &mut ctx, |uri| self.get_module(uri).ok());
+        self.context = ctx;
+        new
+    }
 }
 
 #[allow(clippy::useless_let_if_seq)]
 fn topo_sort(
-    new: &mut Vec<ModuleUri>,
+    mut new: Vec<ModuleUri>,
     sorted: &mut Vec<ModuleUri>,
     get: impl Fn(&ModuleUri) -> Option<Module>,
 ) -> usize {

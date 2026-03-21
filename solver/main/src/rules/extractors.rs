@@ -84,8 +84,8 @@ macro_rules! rules {
 pub fn subtp<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
     let [sub, sup] = params else { return };
     rules.push_subtyping(Box::new(typing::Subtyping {
-        sub: Pattern::from(sub.clone()),
-        sup: Pattern::from(sup.clone()),
+        sub: Pattern::from(sub.clone(), false),
+        sup: Pattern::from(sup.clone(), false),
     }));
 }
 
@@ -93,6 +93,7 @@ pub fn inhab<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) 
     let [term] = params else { return };
     rules.push_inhabitable(Box::new(universe::ComplexInhabitableRule(Pattern::from(
         term.clone(),
+        false,
     ))));
 }
 
@@ -100,6 +101,7 @@ pub fn univ<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
     let [term] = params else { return };
     rules.push_inhabitable(Box::new(universe::ComplexUniverseRule(Pattern::from(
         term.clone(),
+        false,
     ))));
 }
 
@@ -177,6 +179,7 @@ pub fn hoas_lpa<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split
     };
     rules.push_inhabitable(Box::new(pi::PiInhabitableRule(pi.clone())));
     rules.push_inference(Box::new(pi::PiInferenceRule(pi.clone())));
+    rules.push_subtyping(Box::new(pi::PiVarianceRule(pi.clone())));
     rules.push_inference(Box::new(pi::LambdaPiInferenceRule {
         lambda: lambda.clone(),
         pi: pi.clone(),

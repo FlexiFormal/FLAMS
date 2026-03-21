@@ -17,7 +17,7 @@ pub struct ReorderRule {
 }
 impl SizedSolverRule for ReorderRule {
     fn priority(&self) -> isize {
-        100
+        100_000
     }
     fn display(&self) -> Vec<crate::trace::Displayable> {
         ftml_solver_trace::trace!(
@@ -59,7 +59,8 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
             *i = self.reorder.of(*i).unwrap_or(*i);
         }
 
-        ControlFlow::Continue(match t {
+        //tracing::debug!("Reordering {:?}", t.debug_short());
+        let r = match t {
             Term::Application(app) => Term::Application(ApplicationTerm::new(
                 app.head.clone(),
                 // SAFETY: applicable checks `arguments.len() == self.reorder.len()`
@@ -81,13 +82,16 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
                 app.presentation.clone(),
             )),
             t => t,
-        })
+        };
+        //tracing::debug!("Result: {:?}", r.debug_short());
+        ControlFlow::Continue(r)
     }
     fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
         <Self as PreparationRule<Split>>::applicable(self, checker, t)
     }
     fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(match t {
+        //tracing::debug!("Reverting Reordering {:?}", t.debug_short());
+        let r = match t {
             Term::Application(app) => Term::Application(ApplicationTerm::new(
                 app.head.clone(),
                 // SAFETY: applicable checks `arguments.len() == self.reorder.len()`
@@ -109,6 +113,8 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
                 app.presentation.clone(),
             )),
             t => t,
-        })
+        };
+        //tracing::debug!("Result: {:?}", r.debug_short());
+        ControlFlow::Continue(r)
     }
 }

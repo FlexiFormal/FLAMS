@@ -3,7 +3,7 @@ use crate::{
     impls::solving::TermExtSolvable,
     rules::{
         CheckingRule, InferenceRule, InhabitableRule, MarkerRule, PreparationRule,
-        SimplificationRule, SizedSolverRule,
+        SimplificationRule, SizedSolverRule, SubtypeRule,
     },
     split::SplitStrategy,
 };
@@ -11,7 +11,6 @@ use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
     Variable,
 };
-use ftml_solver_trace::CheckerRule;
 use ftml_uris::SymbolUri;
 use smallvec::SmallVec;
 use std::{borrow::Cow, hint::unreachable_unchecked};
@@ -435,6 +434,106 @@ impl<Split: SplitStrategy> PreparationRule<Split> for NeedsTypeRule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PiVarianceRule(pub SymbolUri);
+
+impl SizedSolverRule for PiVarianceRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(
+            &self.0,
+            " is contravariant in arguments and covariant in its return type"
+        )
+    }
+}
+impl<Split: SplitStrategy> SubtypeRule<Split> for PiVarianceRule {
+    fn applicable(&self, _: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool {
+        if let Term::Bound(b) = sub
+            && let Term::Bound(b2) = sup
+            && let Term::Symbol { uri, .. } = &b.head
+            && let Term::Symbol { uri: uri2, .. } = &b2.head
+        {
+            *uri == self.0 && *uri2 == self.0 && b.arguments.len() == b2.arguments.len()
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        sub: &'t Term,
+        sup: &'t Term,
+    ) -> Option<bool> {
+        let Term::Bound(sub) = sub else { return None };
+        let Term::Bound(sup) = sup else { return None };
+        let Some(BoundArgument::Simple(subret)) = sub.arguments.last() else {
+            return None;
+        };
+        let Some(BoundArgument::Simple(supret)) = sup.arguments.last() else {
+            return None;
+        };
+        let mut currsub = Vec::<(&str, Term)>::new();
+        for (sub, sup) in sub.arguments[..sub.arguments.len() - 1]
+            .iter()
+            .zip(sup.arguments[..sup.arguments.len() - 1].iter())
+        {
+            match (sub, sup) {
+                (
+                    BoundArgument::Bound(ComponentVar {
+                        var: varsub,
+                        tp: Some(sub),
+                        ..
+                    }),
+                    BoundArgument::Bound(ComponentVar {
+                        var: varsup,
+                        tp: Some(sup),
+                        ..
+                    }),
+                ) => {
+                    let sup = sup / &*currsub;
+                    if !checker.scoped(|checker| checker.check_subtype(&sup, &sub))? {
+                        return None;
+                    }
+                    currsub.push((varsup.name(), varsub.clone().into()));
+                    checker.extend_context(ComponentVar {
+                        var: varsub.clone(),
+                        tp: Some(sub.clone()),
+                        df: None,
+                    });
+                }
+                (
+                    BoundArgument::BoundSeq(MaybeSequence::One(ComponentVar {
+                        var: varsub,
+                        tp: Some(sub),
+                        ..
+                    })),
+                    BoundArgument::BoundSeq(MaybeSequence::One(ComponentVar {
+                        var: varsup,
+                        tp: Some(sup),
+                        ..
+                    })),
+                ) => {
+                    let sup = sup / &*currsub;
+                    if !checker.scoped(|checker| checker.check_subtype(&sup, sub))? {
+                        return None;
+                    }
+                    currsub.push((varsup.name(), varsub.clone().into()));
+                    checker.extend_context(ComponentVar {
+                        var: varsub.clone(),
+                        tp: Some(sub.clone()),
+                        df: None,
+                    });
+                }
+                _ => {
+                    checker.failure("argument not bound single variable or variable sequence");
+                    return None;
+                }
+            }
+        }
+        let supret = supret / &*currsub;
+        checker.scoped(|checker| checker.check_subtype(subret, &supret))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LambdaPiInferenceRule {
     pub lambda: SymbolUri,
     pub pi: SymbolUri,
@@ -614,7 +713,7 @@ impl<Split: SplitStrategy> CheckingRule<Split> for LambdaPiCheckingRule {
                 Cow::Borrowed(tp)
             }
         };
-        ret!(&checker.scoped(|checker| { checker.check_subtype(&lam_tp, &pi_tp) }) == Some(true));
+        ret!(&checker.scoped(|checker| { checker.check_subtype(&pi_tp, &lam_tp) }) == Some(true));
         let ntp = pi_body
             / (
                 pivar.var.name(),
@@ -648,6 +747,7 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiInhabitableRule {
             return None;
         };
         let previous = &b.arguments[..&b.arguments.len() - 1];
+        let mut deferred = Vec::new();
         for arg in previous {
             match arg {
                 BoundArgument::Simple(t) | BoundArgument::Sequence(MaybeSequence::One(t)) => {
@@ -661,7 +761,9 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiInhabitableRule {
                 BoundArgument::Bound(cv @ ComponentVar { var, tp, .. })
                 | BoundArgument::BoundSeq(MaybeSequence::One(cv @ ComponentVar { var, tp, .. })) => {
                     if let Some(tp) = tp {
-                        if !checker.check_inhabitable(tp)? {
+                        if tp.has_solvable() {
+                            deferred.push(tp);
+                        } else if !checker.check_inhabitable(tp)? {
                             return Some(false);
                         }
                     } else {
@@ -672,7 +774,9 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiInhabitableRule {
                 BoundArgument::BoundSeq(MaybeSequence::Seq(vars)) => {
                     for cv @ ComponentVar { var, tp, .. } in vars {
                         if let Some(tp) = tp {
-                            if !checker.check_inhabitable(tp)? {
+                            if tp.has_solvable() {
+                                deferred.push(tp);
+                            } else if !checker.check_inhabitable(tp)? {
                                 return Some(false);
                             }
                         } else {
@@ -683,7 +787,15 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiInhabitableRule {
                 }
             }
         }
-        checker.check_inhabitable(body)
+        if !checker.check_inhabitable(body)? {
+            return None;
+        }
+        for d in deferred {
+            if !checker.check_inhabitable(d)? {
+                return None;
+            }
+        }
+        Some(true)
     }
 }
 
@@ -721,7 +833,7 @@ impl PiInferenceRule {
         tp: Term,
     ) -> Result<BindingTerm, Term> {
         let Some(nret) = checker.scoped(|checker| {
-            match checker.simplify_until(&tp, |t| matches!(t, Term::Bound(_)))? {
+            match checker.simplify_until(&tp, |_, t| matches!(t, Term::Bound(_)))? {
                 Cow::Borrowed(_) => Some(None),
                 Cow::Owned(tp) => Some(Some(tp)),
             }
@@ -808,12 +920,13 @@ impl PiInferenceRule {
             .rules()
             .marker()
             .iter()
+            .rev()
             .filter_map(|rl| rl.as_any().downcast_ref::<PiExtensionRule<Split>>())
             .cloned()
             .collect::<SmallVec<_, 1>>();
         let arg = &args[*index];
         let Some(ntp) =
-            checker.simplify_until(tp, |t| exts.iter().any(|rl| (rl.applicable)(rl, t, arg)))
+            checker.simplify_until(tp, |_, t| exts.iter().any(|rl| (rl.applicable)(rl, t, arg)))
         else {
             checker.failure("type is not a pi");
             return None;
@@ -1147,7 +1260,7 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     let tp = checker
                         .scoped(|checker| {
                             checker
-                                .simplify_until(&tp, Term::is_concrete_sequence)
+                                .simplify_until(&tp, |_, t| t.is_concrete_sequence())
                                 .map(Cow::into_owned)
                         })
                         .ok_or(None)?;
@@ -1176,7 +1289,7 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     let ntp = checker
                         .scoped(|checker| {
                             checker
-                                .simplify_until(tp, Term::is_concrete_sequence)
+                                .simplify_until(tp, |_, t| t.is_concrete_sequence())
                                 .map(Cow::into_owned)
                         })
                         .ok_or(None)?;
@@ -1268,290 +1381,3 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ApplyRule {
         std::ops::ControlFlow::Continue(t)
     }
 }
-
-/*
- #[derive(Debug, Clone, PartialEq, Eq)]
- pub struct BindInInhabitableRule(pub SymbolUri);
- impl SizedSolverRule for BindInInhabitableRule {
-     fn display(&self) -> Vec<crate::trace::Displayable> {
-         ftml_solver_trace::trace!(
-             "{ INH A, x:A, INH B(x), INH T } ⊢ INH ",
-             &self.0,
-             "(x:A. B(x)) T"
-         )
-     }
- }
- impl<Split: SplitStrategy> InhabitableRule<Split> for BindInInhabitableRule {
-     fn applicable(&self, term: &Term) -> bool {
-         matches!(term,Term::Bound(b) if matches!(&b.head,Term::Symbol { uri, .. } if *uri == self.0))
-     }
-     fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
-         let Term::Bound(b) = term else { return None };
-         let Some(BoundArgument::Simple(body)) = b.arguments.last() else {
-             return None;
-         };
-         let Some(BoundArgument::Simple(inarg)) = &b.arguments.get(b.arguments.len() - 2) else {
-             return None;
-         };
-         let previous = &b.arguments[..&b.arguments.len() - 2];
-         if !checker.scoped(|checker| {
-             for arg in previous {
-                 match arg {
-                     BoundArgument::Simple(t) | BoundArgument::Sequence(MaybeSequence::One(t)) => {
-                         let _ = checker.infer_type(t)?;
-                     }
-                     BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
-                         for t in ts {
-                             let _ = checker.infer_type(t)?;
-                         }
-                     }
-                     BoundArgument::Bound(cv @ ComponentVar { var, tp, .. })
-                     | BoundArgument::BoundSeq(MaybeSequence::One(
-                         cv @ ComponentVar { var, tp, .. },
-                     )) => {
-                         if let Some(tp) = tp {
-                             if !checker.check_inhabitable(tp)? {
-                                 return Some(false);
-                             }
-                         } else {
-                             let _ = checker.infer_var_type(var)?;
-                         }
-                         checker.extend_context(cv);
-                     }
-                     BoundArgument::BoundSeq(MaybeSequence::Seq(vars)) => {
-                         for cv @ ComponentVar { var, tp, .. } in vars {
-                             if let Some(tp) = tp {
-                                 if !checker.check_inhabitable(tp)? {
-                                     return Some(false);
-                                 }
-                             } else {
-                                 let _ = checker.infer_var_type(var)?;
-                             }
-                             checker.extend_context(cv);
-                         }
-                     }
-                 }
-             }
-             checker.check_inhabitable(inarg)
-         })? {
-             return Some(false);
-         }
-
-         checker.check_inhabitable(body)
-     }
- }
-
- #[derive(Debug, Clone, PartialEq, Eq)]
- pub struct BindInInferenceRule(pub SymbolUri);
- impl SizedSolverRule for BindInInferenceRule {
-     fn display(&self) -> Vec<crate::trace::Displayable> {
-         ftml_solver_trace::trace!(
-             "{ f: ",
-             &self.0,
-             " (x:A.B(x)) t, x:A, b:B(x), t:T } ⊢ f(x,b) :=> T"
-         )
-     }
- }
- impl<Split: SplitStrategy> InferenceRule<Split> for BindInInferenceRule {
-     fn applicable(&self, term: &Term) -> bool {
-         matches!(term, Term::Bound(_))
-     }
-     fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
-         let Term::Bound(app) = term else {
-             return None;
-         };
-         let [args, BoundArgument::Simple(boundin)] = &*app.arguments else {
-             checker.failure("number of arguments doesn't match");
-             return None;
-         };
-         let Some(Term::Bound(tp)) = checker.infer_type(&app.head) else {
-             return None;
-         };
-         if !matches!(&tp.head,Term::Symbol { uri, .. } if *uri == self.0) {
-             checker.failure("type doesn't match");
-             return None;
-         }
-         let [
-             argtps,
-             BoundArgument::Simple(boundintp),
-             BoundArgument::Simple(rettp),
-         ] = &*tp.arguments
-         else {
-             checker.failure("number of arguments in type doesn't match");
-             return None;
-         };
-         let scoped = checker.scoped(|checker| {
-             let (v, tp, boundintp) = match (args, argtps) {
-                 (
-                     BoundArgument::Bound(ComponentVar { var, tp, df: None }),
-                     BoundArgument::BoundSeq(MaybeSequence::Seq(s)),
-                 ) => {
-                     let [
-                         ComponentVar {
-                             var: subv,
-                             tp: Some(tptp),
-                             df: None,
-                         },
-                     ] = &**s
-                     else {
-                         checker.failure("number of bound variables don't match");
-                         return None;
-                     };
-                     let tp = if let Some(tp) = tp {
-                         if !checker.check_subtype(tp, tptp)? {
-                             return None;
-                         }
-                         tp
-                     } else {
-                         tptp
-                     };
-                     (
-                         var,
-                         tp,
-                         boundintp
-                             / (
-                                 subv.name(),
-                                 &Term::Var {
-                                     variable: var.clone(),
-                                     presentation: None,
-                                 },
-                             ),
-                     )
-                 }
-                 (BoundArgument::BoundSeq(_), BoundArgument::BoundSeq(_)) => {
-                     checker.failure("TODO: bound sequence");
-                     // TODO
-                     return None;
-                 }
-                 _ => {
-                     checker.failure("argument modes don't match");
-                     return None;
-                 }
-             };
-             checker.extend_context(ComponentVar {
-                 var: v.clone(),
-                 tp: Some(tp.clone()),
-                 df: None,
-             });
-             checker.scoped(|checker| checker.check_type(boundin, &boundintp))
-         })?;
-         if scoped { Some(rettp.clone()) } else { None }
-     }
- }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BindInRule {
-    pub bind_in: SymbolUri,
-    pub pi: SymbolUri,
-}
-impl SizedSolverRule for BindInRule {
-    fn display(&self) -> Vec<crate::trace::Displayable> {
-        ftml_solver_trace::trace!(&self.bind_in, " binds in ", &self.pi)
-    }
-    fn priority(&self) -> isize {
-        100_000_000 // SimpleTypeOperatorRule::priority() * 100
-    }
-}
-
-impl<Split: SplitStrategy> PreparationRule<Split> for BindInRule {
-    fn applicable(
-        &self,
-        t: &Term,
-        _: either::Either<
-            &ftml_ontology::domain::declarations::symbols::Symbol,
-            &ftml_ontology::narrative::elements::VariableDeclaration,
-        >,
-    ) -> bool {
-        if let Term::Bound(app) = t {
-            matches!(&app.head,Term::Symbol { uri, .. } if *uri == self.bind_in)
-        } else {
-            false
-        }
-    }
-    fn applicable_revert(
-        &self,
-        t: &Term,
-        _: either::Either<
-            &ftml_ontology::domain::declarations::symbols::Symbol,
-            &ftml_ontology::narrative::elements::VariableDeclaration,
-        >,
-    ) -> bool {
-        false
-        /*
-        if let Term::Bound(app) = t
-            && matches!(&app.head,Term::Symbol { uri, .. } if *uri == self.pi)
-            && let Some(BoundArgument::Bound(ComponentVar {
-                tp: Some(Term::Bound(app2)),
-                df: None,
-                ..
-            })) = app.arguments.first()
-        {
-            matches!(&app2.head,Term::Symbol { uri, .. } if *uri == self.pi)
-        } else {
-            false
-        } */
-    }
-    fn apply(
-        &self,
-        checker: &CheckRef<'_, '_, Split>,
-        t: Term,
-        head: either::Either<
-            &ftml_ontology::domain::declarations::symbols::Symbol,
-            &ftml_ontology::narrative::elements::VariableDeclaration,
-        >,
-        path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
-    ) -> std::ops::ControlFlow<Term, Term> {
-        let Term::Bound(app) = t else {
-            return std::ops::ControlFlow::Continue(t);
-        };
-        let Some(BoundArgument::Simple(ret)) = app.arguments.last() else {
-            return std::ops::ControlFlow::Continue(Term::Bound(app));
-        };
-        let prev = &app.arguments[..app.arguments.len() - 1];
-        if let Some((p, i)) = path
-            && let Some(j) = p.get_mut(i)
-        {
-            if *j as usize == app.arguments.len() - 1 {
-                *j = 1;
-            } else {
-                p.insert(i, 0);
-                p.insert(i, 0);
-            }
-            //p.insert(*i, value);
-        }
-        std::ops::ControlFlow::Continue(Term::Bound(BindingTerm::new(
-            Term::Symbol {
-                uri: self.pi.clone(),
-                presentation: None,
-            },
-            Box::new([
-                BoundArgument::Bound(ComponentVar {
-                    var: ret.fresh_variable(&crate::DUMMY, None).0,
-                    tp: Some(Term::Bound(BindingTerm::new(
-                        Term::Symbol {
-                            uri: self.pi.clone(),
-                            presentation: None,
-                        },
-                        prev.iter().cloned().collect(),
-                        None,
-                    ))),
-                    df: None,
-                }),
-                BoundArgument::Simple(ret.clone()),
-            ]),
-            None,
-        )))
-    }
-    fn revert(
-        &self,
-        _: &CheckRef<'_, '_, Split>,
-        t: Term,
-        _: either::Either<
-            &ftml_ontology::domain::declarations::symbols::Symbol,
-            &ftml_ontology::narrative::elements::VariableDeclaration,
-        >,
-    ) -> std::ops::ControlFlow<Term, Term> {
-        std::ops::ControlFlow::Continue(t)
-    }
-}
- */

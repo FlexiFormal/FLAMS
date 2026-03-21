@@ -1,26 +1,29 @@
 pub mod backend;
 pub mod equality;
 mod inference;
-mod preparation;
+pub(crate) mod preparation;
+pub mod proving;
 pub mod simplify;
 pub mod solving;
 mod typing;
 
 use crate::{
     CheckRef, Checker,
-    context::CowLike,
-    impls::solving::{Ancestor, Solvable},
+    context::{ContextBase, CowLike},
+    impls::solving::Solutions,
     split::{CancelToken, SplitStrategy},
     trace::{CheckLogCow, CheckingTask, PreCheckLog, RefCheckLog},
+    utils::MutableRefList,
 };
 use ftml_ontology::terms::ComponentVar;
+use proving::ProverState;
 use smallvec::SmallVec;
 use std::borrow::Cow;
 
 impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     pub fn extend_context<C: CowLike<'c>>(&mut self, var: C) {
         self.added += 1;
-        self.context.0.push(var.into_cow());
+        self.context.push(self.top, var.into_cow());
     }
 
     pub fn add_msg(&mut self, line: CheckLogCow<'c>) {
@@ -44,12 +47,12 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     }
     #[inline]
     pub(crate) fn split(&mut self) -> (&[Cow<'c, ComponentVar>], Trace<'c, '_>) {
-        (self.context.0, Trace(self.messages))
+        (self.context.as_ref(), Trace(self.messages))
     }
 
     #[must_use]
     pub fn iter_context(&self) -> impl ExactSizeIterator<Item = &ComponentVar> {
-        self.context.0.iter().rev().map(|c| &**c)
+        self.context.as_ref().iter().rev().map(|c| &**c)
     }
 
     pub(crate) fn traced<R: Clone>(
@@ -66,6 +69,20 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         }
     }
 
+    pub(crate) fn untraced<R: Clone>(
+        &mut self,
+        task: CheckingTask<'c>,
+        f: impl FnOnce(&mut Self) -> Option<R>,
+    ) -> Option<R> {
+        let old_msg = std::mem::replace(self.messages, SmallVec::new());
+        let ret = f(self);
+        *self.messages = old_msg;
+        let ctx = self.context.as_ref();
+        let ctx = &ctx[ctx.len() - self.added as usize..ctx.len()];
+        let line = task.close(ret.as_ref(), Box::new([]), ctx);
+        ret
+    }
+
     pub(crate) fn traced_inner<R: Clone>(
         &mut self,
         task: CheckingTask<'c>,
@@ -74,20 +91,15 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         let old_msg = std::mem::replace(self.messages, SmallVec::new());
         let ret = f(self);
         let msgs = std::mem::replace(self.messages, old_msg);
-        let ctx = self.context.0.as_slice();
+        let ctx = self.context.as_ref();
         let ctx = &ctx[ctx.len() - self.added as usize..ctx.len()];
         let line = task.close(ret.as_ref(), msgs.into_boxed_slice(), ctx);
         (ret, line)
     }
 
+    #[inline]
     pub const fn depth(&self) -> usize {
-        let mut curr = self.parent_solutions;
-        let mut ret = 0;
-        while let Some(c) = curr {
-            ret += 1;
-            curr = c.gp.copied();
-        }
-        ret
+        self.solutions.depth()
     }
 
     pub(crate) fn branch_traced<R: Clone>(
@@ -96,22 +108,19 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         f: impl FnOnce(CheckRef<'c, '_, Split>) -> Option<R>,
     ) -> Result<R, RefCheckLog<'c>> {
         let mut messages = SmallVec::<CheckLogCow<'c>, _>::new();
-        let mut solutions = rustc_hash::FxHashSet::default();
+        let mut solutions = Solutions::default();
         let inner = CheckRef {
             messages: &mut messages,
-            context: ContextWrap(self.context.0),
-            solutions: &mut solutions,
-            parent_solutions: Some(Ancestor {
-                p: self.solutions,
-                gp: self.parent_solutions.as_ref(),
-            }),
+            context: self.context.duplicate(),
+            proof_state: self.proof_state,
+            solutions: MutableRefList::new_with_parent(&mut solutions, &self.solutions),
             top: self.top,
             cancel: self.cancel,
             added: 0,
             traced: self.traced,
         };
         let ret = f(inner);
-        let ctx = self.context.0.as_slice();
+        let ctx = self.context.as_ref();
         let ctx = &ctx[ctx.len() - self.added as usize..ctx.len()];
         let line = task.close(ret.as_ref(), messages.into_boxed_slice(), ctx);
         if let Some(r) = ret {
@@ -138,9 +147,8 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
             std::mem::transmute::<&mut CheckRef<'c, '_, Split>, &mut CheckRef<'nt, '_, Split>>(self)
         };
         let r = f(muted);
-        for _ in 0..std::mem::replace(&mut self.added, old_added) {
-            self.context.0.pop();
-        }
+        self.context
+            .pop(std::mem::replace(&mut self.added, old_added) as usize);
         for m in std::mem::replace(self.messages, old_msgs) {
             self.messages.push(m.into_owned(&|t| self.subst(t)).into());
         }
@@ -148,19 +156,16 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     }
 
     pub(crate) fn copied(&self) -> CheckRefBranch<'c, 'i, Split> {
-        let ancestor = Ancestor {
-            p: self.solutions,
-            gp: self.parent_solutions.as_ref(),
-        };
         CheckRefBranch {
-            context: SmallVec::default(),
-            solutions: rustc_hash::FxHashSet::default(),
+            context: self.context.clone_base(),
+            proof_state: self.proof_state,
             messages: SmallVec::new(),
             // --------------
             top: self.top,
+            solutions: Solutions::default(),
             // SAFETY: will not live longer than 'i; only immutable borrows, 'i is only stack reference
             // to parent
-            parent_solutions: Some(unsafe { std::mem::transmute::<Ancestor, Ancestor>(ancestor) }), //self.parent_solutions,
+            parent_solutions: unsafe { std::mem::transmute(&self.solutions) },
             cancel: self.cancel,
             traced: self.traced,
         }
@@ -201,54 +206,57 @@ impl<Split: SplitStrategy> Checker<Split> {
     pub(crate) fn wrap_task<'t, R: std::fmt::Debug + Clone + 'static, F>(
         &'t self,
         task: CheckingTask<'t>,
-        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
+        unknowns: Option<Solutions>,
         then: F,
-    ) -> (Option<R>, rustc_hash::FxHashSet<Solvable>, PreCheckLog)
+    ) -> (Option<R>, Solutions, PreCheckLog)
     where
         F: FnOnce(CheckRef<'t, '_, Split>) -> Option<R>,
     {
-        let mut context = SmallVec::new();
+        let mut context = ContextBase::new();
         let mut solutions = unknowns.unwrap_or_default();
         let mut messages = SmallVec::new();
         let cancel = CancelToken::default();
+        let proof_state = ProverState::default();
         let rf = CheckRef {
             top: self,
             messages: &mut messages,
             cancel: &cancel,
-            context: ContextWrap(&mut context),
+            context: context.get_ref(),
+            proof_state: &proof_state,
             added: 0,
-            solutions: &mut solutions,
-            parent_solutions: None,
+            solutions: MutableRefList::new(&mut solutions),
             traced: true,
         };
         let r = then(rf);
+        let rl = MutableRefList::new(&mut solutions);
         let line = task
-            .close(r.as_ref(), messages.into_boxed_slice(), &context)
-            .into_owned(&|t| CheckRef::<Split>::subst_map(t, &solutions, None));
-        tracing::debug!("Solutions:{solutions:#?}");
+            .close(r.as_ref(), messages.into_boxed_slice(), context.as_ref())
+            .into_owned(&|t| rl.subst(t));
+        tracing::trace!("Solutions:{solutions:#?}");
         (r, solutions, line)
     }
 
     pub(crate) fn wrap_none<'t, R: std::fmt::Debug + Clone + 'static, F>(
         &'t self,
-        unknowns: Option<rustc_hash::FxHashSet<Solvable>>,
+        unknowns: Option<Solutions>,
         then: F,
-    ) -> (rustc_hash::FxHashSet<Solvable>, R)
+    ) -> (Solutions, R)
     where
         F: FnOnce(CheckRef<'t, '_, Split>) -> R,
     {
-        let mut context = SmallVec::new();
+        let mut context = ContextBase::new();
         let mut solutions = unknowns.unwrap_or_default();
         let mut messages = SmallVec::new();
         let cancel = CancelToken::default();
+        let proof_state = ProverState::default();
         let rf = CheckRef {
             top: self,
             messages: &mut messages,
             cancel: &cancel,
-            context: ContextWrap(&mut context),
+            context: context.get_ref(),
+            proof_state: &proof_state,
             added: 0,
-            solutions: &mut solutions,
-            parent_solutions: None,
+            solutions: MutableRefList::new(&mut solutions),
             traced: true,
         };
         let r = then(rf);
@@ -258,9 +266,10 @@ impl<Split: SplitStrategy> Checker<Split> {
 
 pub struct CheckRefBranch<'c, 'i, Split: SplitStrategy> {
     top: &'c Checker<Split>,
-    context: SmallVec<Cow<'c, ComponentVar>, { super::context::CONTEXT_LEN }>,
-    solutions: rustc_hash::FxHashSet<Solvable>,
-    parent_solutions: Option<Ancestor<'i>>,
+    context: ContextBase<'c>,
+    proof_state: &'i ProverState,
+    solutions: Solutions,
+    parent_solutions: &'i MutableRefList<'i, Solutions>,
     cancel: &'i CancelToken<'i, Split::CancelToken>,
     messages: SmallVec<CheckLogCow<'c>, 2>,
     traced: bool,
@@ -271,10 +280,10 @@ impl<'c, Split: SplitStrategy> CheckRefBranch<'c, '_, Split> {
             top: self.top,
             cancel: self.cancel,
             messages: &mut self.messages,
-            context: ContextWrap(&mut self.context),
+            proof_state: self.proof_state,
+            context: self.context.get_ref(),
             added: 0,
-            solutions: &mut self.solutions,
-            parent_solutions: self.parent_solutions,
+            solutions: MutableRefList::new_with_parent(&mut self.solutions, self.parent_solutions),
             traced: self.traced,
         }
     }
@@ -286,15 +295,9 @@ impl<'c, Split: SplitStrategy> CheckRefBranch<'c, '_, Split> {
 
 impl<Split: SplitStrategy> Drop for CheckRef<'_, '_, Split> {
     fn drop(&mut self) {
-        for _ in 0..self.added {
-            self.context.0.pop();
-        }
+        self.context.pop(self.added as usize);
     }
 }
-
-pub struct ContextWrap<'c, 's>(
-    pub(crate) &'s mut SmallVec<Cow<'c, ComponentVar>, { super::context::CONTEXT_LEN }>,
-);
 
 pub struct Trace<'c, 'i>(&'i mut SmallVec<CheckLogCow<'c>, 2>);
 impl<'c> Trace<'c, '_> {

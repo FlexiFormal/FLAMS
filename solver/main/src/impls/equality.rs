@@ -1,6 +1,9 @@
 use std::borrow::Cow;
 
-use crate::{CheckRef, impls::solving::TermExtSolvable, split::SplitStrategy, trace::CheckingTask};
+use crate::{
+    CheckRef, impls::solving::TermExtSolvable, rules::implicits::ImplicitExtApp,
+    split::SplitStrategy, trace::CheckingTask,
+};
 use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
     Variable,
@@ -9,11 +12,11 @@ use ftml_solver_trace::RefCheckLog;
 
 pub(crate) type Alpha<'t> = smallvec::SmallVec<(&'t str, &'t Variable), 1>;
 
-pub(crate) fn alpha_equal(lhs: &Term, rhs: &Term) -> bool {
-    alpha_i(lhs, rhs, &mut Alpha::default())
+pub fn alpha_equal(lhs: &Term, rhs: &Term) -> bool {
+    alpha_equal_with(lhs, rhs, &mut Alpha::default())
 }
 
-fn alpha_i<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
+pub fn alpha_equal_with<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
     if lhs == rhs {
         return true;
     }
@@ -26,7 +29,7 @@ fn alpha_i<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
                 })
         }
         (Term::Application(a), Term::Application(b)) if a.arguments.len() == b.arguments.len() => {
-            alpha_i(&a.head, &b.head, alpha)
+            alpha_equal_with(&a.head, &b.head, alpha)
                 && a.arguments
                     .iter()
                     .zip(b.arguments.iter())
@@ -34,7 +37,7 @@ fn alpha_i<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
         }
         (Term::Bound(a), Term::Bound(b)) if a.arguments.len() == b.arguments.len() => {
             let mut pop = 0;
-            if !alpha_i(&a.head, &b.head, alpha)
+            if !alpha_equal_with(&a.head, &b.head, alpha)
                 || a.arguments
                     .iter()
                     .zip(b.arguments.iter())
@@ -47,7 +50,9 @@ fn alpha_i<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
             }
             true
         }
-        (Term::Field(a), Term::Field(b)) => alpha_i(&a.record, &b.record, alpha) && a.key == b.key,
+        (Term::Field(a), Term::Field(b)) => {
+            alpha_equal_with(&a.record, &b.record, alpha) && a.key == b.key
+        }
         (
             Term::Label {
                 name: na,
@@ -62,7 +67,7 @@ fn alpha_i<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
         ) if *na == *nb => {
             match (da, db) {
                 (Some(a), Some(b)) => {
-                    if !alpha_i(a, b, alpha) {
+                    if !alpha_equal_with(a, b, alpha) {
                         return false;
                     }
                 }
@@ -70,7 +75,7 @@ fn alpha_i<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
                 _ => return false,
             }
             match (ta, tb) {
-                (Some(a), Some(b)) => alpha_i(a, b, alpha),
+                (Some(a), Some(b)) => alpha_equal_with(a, b, alpha),
                 (None, None) => true,
                 _ => false,
             }
@@ -86,14 +91,14 @@ fn alpha_arg<'t>(lhs: &'t Argument, rhs: &'t Argument, alpha: &mut Alpha<'t>) ->
         | (
             Argument::Sequence(MaybeSequence::One(lhs)),
             Argument::Sequence(MaybeSequence::One(rhs)),
-        ) => alpha_i(lhs, rhs, alpha),
+        ) => alpha_equal_with(lhs, rhs, alpha),
         (
             Argument::Sequence(MaybeSequence::Seq(lhs)),
             Argument::Sequence(MaybeSequence::Seq(rhs)),
         ) if lhs.len() == rhs.len() => lhs
             .iter()
             .zip(rhs.iter())
-            .all(|(lhs, rhs)| alpha_i(lhs, rhs, alpha)),
+            .all(|(lhs, rhs)| alpha_equal_with(lhs, rhs, alpha)),
         _ => false,
     }
 }
@@ -112,14 +117,14 @@ fn alpha_barg<'t>(
         | (
             BoundArgument::Sequence(MaybeSequence::One(lhs)),
             BoundArgument::Sequence(MaybeSequence::One(rhs)),
-        ) => ret!(alpha_i(lhs, rhs, alpha)),
+        ) => ret!(alpha_equal_with(lhs, rhs, alpha)),
         (
             BoundArgument::Sequence(MaybeSequence::Seq(lhs)),
             BoundArgument::Sequence(MaybeSequence::Seq(rhs)),
         ) if lhs.len() == rhs.len() => ret!(
             lhs.iter()
                 .zip(rhs.iter())
-                .all(|(lhs, rhs)| alpha_i(lhs, rhs, alpha))
+                .all(|(lhs, rhs)| alpha_equal_with(lhs, rhs, alpha))
         ),
         (BoundArgument::Bound(lhs), BoundArgument::Bound(rhs))
         | (
@@ -152,7 +157,7 @@ fn alpha_barg<'t>(
 fn alpha_cv<'t>(lhs: &'t ComponentVar, rhs: &'t ComponentVar, alpha: &mut Alpha<'t>) -> bool {
     match (lhs.tp.as_ref(), rhs.tp.as_ref()) {
         (Some(lhs), Some(rhs)) => {
-            if !alpha_i(lhs, rhs, alpha) {
+            if !alpha_equal_with(lhs, rhs, alpha) {
                 return false;
             }
         }
@@ -161,7 +166,7 @@ fn alpha_cv<'t>(lhs: &'t ComponentVar, rhs: &'t ComponentVar, alpha: &mut Alpha<
     }
     match (lhs.df.as_ref(), rhs.df.as_ref()) {
         (Some(lhs), Some(rhs)) => {
-            if !alpha_i(lhs, rhs, alpha) {
+            if !alpha_equal_with(lhs, rhs, alpha) {
                 return false;
             }
         }
@@ -175,7 +180,7 @@ fn alpha_cv<'t>(lhs: &'t ComponentVar, rhs: &'t ComponentVar, alpha: &mut Alpha<
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     #[allow(clippy::unused_self)]
     pub(crate) fn alpha_equal(&self, lhs: &Term, rhs: &Term) -> bool {
-        alpha_i(lhs, rhs, &mut Alpha::default())
+        alpha_equal_with(lhs, rhs, &mut Alpha::default())
     }
 
     pub fn check_equality(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
@@ -222,6 +227,17 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         rhs: &'t Term,
         mut logs: smallvec::SmallVec<RefCheckLog<'t>, 2>,
     ) -> Option<bool> {
+        if super::preparation::NEW_VERSION
+            && (lhs.unapply_implicits().is_some() || rhs.unapply_implicits().is_some())
+        {
+            let lhs = self
+                .simplify_implicit(lhs)
+                .map_or(Cow::Borrowed(lhs), Cow::Owned);
+            let rhs = self
+                .simplify_implicit(rhs)
+                .map_or(Cow::Borrowed(rhs), Cow::Owned);
+            return self.scoped(|slf| slf.congruence(&lhs, &rhs, logs));
+        }
         match (lhs, rhs) {
             (Term::Application(l), Term::Application(r))
                 if l.arguments.len() == r.arguments.len() =>
@@ -299,8 +315,29 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 if !self.check_equality(a, b)? {
                     return None;
                 }
+            } else if let (
+                Argument::Sequence(MaybeSequence::One(a)),
+                Argument::Sequence(MaybeSequence::One(b)),
+            ) = (a, b)
+            {
+                if !self.check_equality(a, b)? {
+                    return None;
+                }
+            } else if let (
+                Argument::Sequence(MaybeSequence::Seq(a)),
+                Argument::Sequence(MaybeSequence::Seq(b)),
+            ) = (a, b)
+            {
+                if a.len() != b.len() {
+                    return None;
+                }
+                for (a, b) in a.iter().zip(b.iter()) {
+                    if !self.check_equality(a, b)? {
+                        return None;
+                    }
+                }
             } else {
-                self.failure("Argument not simple");
+                self.failure("Arguments don't match");
                 return None;
             }
         }
@@ -407,3 +444,217 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         Some(true)
     }
 }
+
+/*
+*
+// -----------------------------------------------------------
+
+pub fn alpha_equal_traced(lhs: &Term, rhs: &Term) -> bool {
+    alpha_equal_with_traced(lhs, rhs, &mut Alpha::default())
+}
+
+const CHECK: bool = true;
+
+macro_rules! rep_eq {
+    (false@$lhs:expr,$rhs:expr) => {
+        if CHECK {
+            ::tracing::error!(
+                "Not equal ({},{}): {:?}    and   {:?}",
+                line!(),
+                column!(),
+                $lhs,
+                $rhs
+            );
+            false
+        } else {
+            false
+        }
+    };
+    ($lhs:expr,$rhs:expr) => {
+        if CHECK {
+            $lhs == $rhs || {
+                ::tracing::error!(
+                    "Not equal ({},{}): {:?}    and   {:?}",
+                    line!(),
+                    column!(),
+                    $lhs,
+                    $rhs
+                );
+                false
+            }
+        } else {
+            $lhs == $rhs
+        }
+    };
+}
+
+pub fn alpha_equal_with_traced<'t>(lhs: &'t Term, rhs: &'t Term, alpha: &mut Alpha<'t>) -> bool {
+    if lhs == rhs {
+        return true;
+    }
+    match (lhs, rhs) {
+        (Term::Var { variable: v1, .. }, Term::Var { variable: v2, .. }) => {
+            rep_eq!(v1.name(), v2.name())
+                || alpha.iter().any(|(a, b)| {
+                    (*a == v1.name() && b.name() == v2.name())
+                        || (b.name() == v1.name() && *a == v2.name())
+                })
+        }
+        (Term::Application(a), Term::Application(b))
+            if rep_eq!(a.arguments.len(), b.arguments.len()) =>
+        {
+            alpha_equal_with_traced(&a.head, &b.head, alpha)
+                && a.arguments
+                    .iter()
+                    .zip(b.arguments.iter())
+                    .all(|(a, b)| alpha_arg_traced(a, b, alpha))
+        }
+        (Term::Bound(a), Term::Bound(b)) if rep_eq!(a.arguments.len(), b.arguments.len()) => {
+            let mut pop = 0;
+            if !alpha_equal_with_traced(&a.head, &b.head, alpha)
+                || a.arguments.iter().zip(b.arguments.iter()).any(|(a, b)| {
+                    alpha_barg_traced(a, b, alpha)
+                        .inspect(|i| pop += i)
+                        .is_none()
+                })
+            {
+                return false;
+            }
+            for _ in 0..pop {
+                alpha.pop();
+            }
+            true
+        }
+        (Term::Field(a), Term::Field(b)) => {
+            alpha_equal_with_traced(&a.record, &b.record, alpha) && a.key == b.key
+        }
+        (
+            Term::Label {
+                name: na,
+                df: da,
+                tp: ta,
+            },
+            Term::Label {
+                name: nb,
+                df: db,
+                tp: tb,
+            },
+        ) if *na == *nb => {
+            match (da, db) {
+                (Some(a), Some(b)) => {
+                    if !alpha_equal_with_traced(a, b, alpha) {
+                        return false;
+                    }
+                }
+                (None, None) => (),
+                _ => return false,
+            }
+            match (ta, tb) {
+                (Some(a), Some(b)) => alpha_equal_with_traced(a, b, alpha),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        (Term::Number(a), Term::Number(b)) => rep_eq!(a, b),
+        _ => rep_eq!(false@lhs,rhs),
+    }
+}
+
+fn alpha_arg_traced<'t>(lhs: &'t Argument, rhs: &'t Argument, alpha: &mut Alpha<'t>) -> bool {
+    match (lhs, rhs) {
+        (Argument::Simple(lhs), Argument::Simple(rhs))
+        | (
+            Argument::Sequence(MaybeSequence::One(lhs)),
+            Argument::Sequence(MaybeSequence::One(rhs)),
+        ) => alpha_equal_with_traced(lhs, rhs, alpha),
+        (
+            Argument::Sequence(MaybeSequence::Seq(lhs)),
+            Argument::Sequence(MaybeSequence::Seq(rhs)),
+        ) if lhs.len() == rhs.len() => lhs
+            .iter()
+            .zip(rhs.iter())
+            .all(|(lhs, rhs)| alpha_equal_with_traced(lhs, rhs, alpha)),
+        _ => rep_eq!(false@lhs,rhs),
+    }
+}
+fn alpha_barg_traced<'t>(
+    lhs: &'t BoundArgument,
+    rhs: &'t BoundArgument,
+    alpha: &mut Alpha<'t>,
+) -> Option<usize> {
+    macro_rules! ret {
+        ($e:expr) => {
+            if $e { Some(0) } else { None }
+        };
+    }
+    match (lhs, rhs) {
+        (BoundArgument::Simple(lhs), BoundArgument::Simple(rhs))
+        | (
+            BoundArgument::Sequence(MaybeSequence::One(lhs)),
+            BoundArgument::Sequence(MaybeSequence::One(rhs)),
+        ) => ret!(alpha_equal_with_traced(lhs, rhs, alpha)),
+        (
+            BoundArgument::Sequence(MaybeSequence::Seq(lhs)),
+            BoundArgument::Sequence(MaybeSequence::Seq(rhs)),
+        ) if rep_eq!(lhs.len(), rhs.len()) => ret!(
+            lhs.iter()
+                .zip(rhs.iter())
+                .all(|(lhs, rhs)| alpha_equal_with_traced(lhs, rhs, alpha))
+        ),
+        (BoundArgument::Bound(lhs), BoundArgument::Bound(rhs))
+        | (
+            BoundArgument::BoundSeq(MaybeSequence::One(lhs)),
+            BoundArgument::BoundSeq(MaybeSequence::One(rhs)),
+        ) => {
+            if alpha_cv_traced(lhs, rhs, alpha) {
+                Some(1)
+            } else {
+                None
+            }
+        }
+        (
+            BoundArgument::BoundSeq(MaybeSequence::Seq(lhs)),
+            BoundArgument::BoundSeq(MaybeSequence::Seq(rhs)),
+        ) if rep_eq!(lhs.len(), rhs.len()) => {
+            if lhs
+                .iter()
+                .zip(rhs.iter())
+                .all(|(a, b)| alpha_cv_traced(a, b, alpha))
+            {
+                Some(lhs.len())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+fn alpha_cv_traced<'t>(
+    lhs: &'t ComponentVar,
+    rhs: &'t ComponentVar,
+    alpha: &mut Alpha<'t>,
+) -> bool {
+    match (lhs.tp.as_ref(), rhs.tp.as_ref()) {
+        (Some(lhs), Some(rhs)) => {
+            if !alpha_equal_with_traced(lhs, rhs, alpha) {
+                return false;
+            }
+        }
+        (None, None) => (),
+        _ => return rep_eq!(false@lhs,rhs),
+    }
+    match (lhs.df.as_ref(), rhs.df.as_ref()) {
+        (Some(lhs), Some(rhs)) => {
+            if !alpha_equal_with_traced(lhs, rhs, alpha) {
+                return false;
+            }
+        }
+        (None, None) => (),
+        _ => return rep_eq!(false@lhs,rhs),
+    }
+    alpha.push((lhs.var.name(), &rhs.var));
+    true
+}
+
+// -----------------------------------------------------------
+*/
