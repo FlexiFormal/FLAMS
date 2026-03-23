@@ -2,7 +2,9 @@ use crate::{
     CheckRef,
     impls::solving::TermExtSolvable,
     patterns::Pattern,
-    rules::{CheckingRule, InhabitableRule, SizedSolverRule, SubtypeRule, UniverseRule},
+    rules::{
+        CheckingRule, InhabitableRule, MarkerRule, SizedSolverRule, SubtypeRule, UniverseRule,
+    },
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{Argument, Term};
@@ -140,6 +142,7 @@ impl std::fmt::Display for AnyRule {
         write!(f, "{} is any-type", self.0)
     }
 }
+impl<Split: SplitStrategy> MarkerRule<Split> for AnyRule {}
 impl<Split: SplitStrategy> SubtypeRule<Split> for AnyRule {
     fn applicable(&self, _: &CheckRef<'_, '_, Split>, _: &Term, sup: &Term) -> bool {
         matches!(sup,Term::Symbol { uri, .. } if *uri == self.0)

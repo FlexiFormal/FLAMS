@@ -108,7 +108,7 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for LetinComputation {
     }
     fn apply<'t>(
         &self,
-        checker: crate::CheckRef<'t, '_, Split>,
+        mut checker: crate::CheckRef<'t, '_, Split>,
         term: &'t Term,
     ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
         let Term::Bound(b) = term else {

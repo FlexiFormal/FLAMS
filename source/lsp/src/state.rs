@@ -160,9 +160,7 @@ impl LSPState {
         if doc.html_up_to_date() {
             return Some(doc_uri);
         };
-        if doc.relative_path().is_none() {
-            return None;
-        };
+        doc.relative_path()?;
         let engine = self
             .rustex()
             .builder()
@@ -271,6 +269,12 @@ impl LSPState {
                             inner_offset,
                             ..
                         }) => {
+                            /*tracing::warn!(
+                                "Adding HTML for {}\nSanity check: {:?}\n{:#?}",
+                                docresult.document.uri,
+                                &docresult.data[0..140],
+                                docresult.document
+                            );*/
                             self.backend().add_html(
                                 docresult.document.uri.clone(),
                                 HTMLData {
@@ -281,6 +285,13 @@ impl LSPState {
                                     refs: docresult.data,
                                 },
                             );
+                            self.backend()
+                                .add_triples(&docresult.document.uri, docresult.triples);
+                            self.backend().add_document(docresult.document.clone());
+                            for m in &docresult.modules {
+                                self.backend().add_module(m.clone());
+                            }
+                            old.memorize(self.rustex());
                             let mut checker = ftml_solver::Checker::<
                                 ftml_solver::split::SingleThreadedSplit,
                             >::new(AnyBackend::Temp(
@@ -302,10 +313,6 @@ impl LSPState {
                                         });
                                 })
                             else {
-                                self.backend()
-                                    .add_triples(&docresult.document.uri, docresult.triples);
-                                self.backend().add_document(docresult.document);
-                                old.memorize(self.rustex());
                                 return Some(doc_uri);
                             };
                             let mut lock = doc.annotations.lock();
@@ -325,14 +332,9 @@ impl LSPState {
                                 });
                             }
                             drop(lock);
-
                             for m in mods {
-                                self.backend().add_module(m);
+                                self.backend().add_module(m.clone());
                             }
-                            self.backend()
-                                .add_triples(&docresult.document.uri, docresult.triples);
-                            self.backend().add_document(docresult.document);
-                            old.memorize(self.rustex());
                             Some(doc_uri)
                         }
                         Err(e) => {

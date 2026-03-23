@@ -20,8 +20,6 @@ use ftml_uris::Id;
 use smallvec::SmallVec;
 use std::hint::unreachable_unchecked;
 
-pub const NEW_VERSION: bool = true;
-
 impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     #[inline]
     #[must_use]
@@ -30,7 +28,6 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     }
 
     pub(crate) fn prepare(&self, t: Term, path: Option<&mut TermPath>) -> (Solutions, Term) {
-        tracing::trace!("preparing {:?}", t.debug_short());
         let mut cp = self.copied();
         let mut ncp = cp.get_ref();
         let old = ncp.context.take();
@@ -51,6 +48,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         r
     }
 
+    /*
     pub(crate) fn bind_implicits(&mut self, nt: Term) -> Term {
         tracing::trace!("Binding implicits for {:?}", nt.debug_short());
         let mut allvars = nt
@@ -114,6 +112,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         tracing::trace!("Implicitified: {:?}", n.debug_short());
         n
     }
+     */
 
     pub fn get_head(
         &self,
@@ -134,8 +133,9 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         mut t: Term,
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
+        tracing::trace!("preparing {:?}", t.debug_short());
         match &t {
-            Term::Symbol { uri, presentation } if NEW_VERSION => {
+            Term::Symbol { uri, presentation } => {
                 return if let Ok(sym) = self.get_symbol(uri)
                     && sym.data.tp.has_checked()
                 {
@@ -148,7 +148,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                                     uri: uri.clone(),
                                     presentation: presentation.clone(),
                                 }
-                                .apply_implicits(vars.len(), |_| self.new_solvable().into()),
+                                .apply_implicits(vars.len(), |_| self.new_solvable()),
                             )
                         })
                         .flatten()
@@ -182,7 +182,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
 
     fn revert_i(&mut self, t: Term) -> Term {
         match &t {
-            /*Term::Application(b) if NEW_VERSION && b.head.unapply_implicits().is_some() => {
+            Term::Application(b) if b.head.unapply_implicits().is_some() => {
                 // SAFETY: pattern match
                 let (t, args) = unsafe { b.head.unapply_implicits().unwrap_unchecked() };
                 {
@@ -196,7 +196,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                     );
                 }
             }
-            Term::Bound(b) if NEW_VERSION && b.head.unapply_implicits().is_some() => {
+            Term::Bound(b) if b.head.unapply_implicits().is_some() => {
                 // SAFETY: pattern match
                 let (t, args) = unsafe { b.head.unapply_implicits().unwrap_unchecked() };
                 {
@@ -211,11 +211,11 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                 }
             }
 
-            Term::Application(a) if NEW_VERSION && a.unapply_implicits().is_some() => {
+            Term::Application(a) if a.unapply_implicits().is_some() => {
                 // SAFETY: pattern match
                 let (t, _) = unsafe { a.unapply_implicits().unwrap_unchecked() };
                 return t.clone();
-            }*/
+            }
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
         }
@@ -246,6 +246,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         ) -> Term,
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
+        tracing::trace!("Recursing {:?}", term.debug_short());
         match term {
             Term::Application(a) => {
                 if let Term::Symbol { uri, .. } = &a.head
@@ -377,6 +378,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         then: fn(&mut Self, Term, Option<(&mut smallvec::SmallVec<u8, 16>, usize)>) -> Term,
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ComponentVar {
+        tracing::trace!("preparing bound variable {}", cv.var.name());
         let mut next = 0;
         let tp = match &cv.tp {
             Some(t) => {
@@ -414,7 +416,9 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             tp,
             df,
         };
+        tracing::trace!("Extending context");
         self.extend_context(cv.clone());
+        tracing::trace!("Done");
         cv
     }
 }

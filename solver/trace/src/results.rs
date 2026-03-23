@@ -17,6 +17,16 @@ pub struct DocumentCheckResult {
     pub checks: Box<[CheckResult]>,
 }
 impl DocumentCheckResult {
+    pub fn filter_failures(&mut self) {
+        self.checks = std::mem::take(&mut self.checks)
+            .into_iter()
+            .filter(|c| !c.success())
+            .map(|mut e| {
+                e.filter_failures();
+                e
+            })
+            .collect();
+    }
     #[must_use]
     pub fn to_json(&self) -> String {
         let mut s = Vec::<u8>::new();
@@ -81,6 +91,21 @@ pub enum SymbolCheckResult {
     },
 }
 impl SymbolCheckResult {
+    pub fn filter_failures(&mut self) {
+        match self {
+            Self::TypeOnly { result } => result.filter_failures(),
+            Self::DefiniensOnly { log, .. } => log.filter_failures(),
+            Self::Both {
+                inhabitable,
+                matches,
+            } => {
+                inhabitable.filter_failures();
+                if let Some(m) = matches {
+                    m.filter_failures();
+                }
+            }
+        }
+    }
     #[cfg(feature = "full")]
     #[must_use]
     pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {
@@ -142,6 +167,34 @@ pub enum CheckResult {
     Missing(ModuleUri),
 }
 impl CheckResult {
+    pub fn filter_failures(&mut self) {
+        match self {
+            Self::Module { checks, .. } => {
+                *checks = std::mem::take(checks)
+                    .into_iter()
+                    .filter(|c| !c.success())
+                    .map(|mut c| {
+                        c.filter_failures();
+                        c
+                    })
+                    .collect();
+            }
+            Self::Variable(_, check) => check.filter_failures(),
+            Self::Proof(_, checks) => {
+                *checks = std::mem::take(checks)
+                    .into_iter()
+                    .filter(|c| !c.success())
+                    .map(|mut c| {
+                        c.filter_failures();
+                        c
+                    })
+                    .collect();
+            }
+            Self::Term { log, .. } => log.filter_failures(),
+            Self::Content(check) => check.filter_failures(),
+            _ => (),
+        }
+    }
     #[cfg(feature = "full")]
     #[must_use]
     pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {
@@ -240,6 +293,23 @@ pub enum ProofStepResult {
     },
 }
 impl ProofStepResult {
+    pub fn filter_failures(&mut self) {
+        match self {
+            Self::Assumption { result, .. }
+            | Self::Conclusion { result, .. }
+            | Self::Step { result, .. } => result.filter_failures(),
+            Self::Subproof { results, .. } => {
+                *results = std::mem::take(results)
+                    .into_iter()
+                    .filter(|s| !s.success())
+                    .map(|mut c| {
+                        c.filter_failures();
+                        c
+                    })
+                    .collect();
+            }
+        }
+    }
     pub fn success(&self) -> bool {
         match self {
             Self::Assumption { result, .. }
@@ -315,6 +385,11 @@ pub enum ContentCheckResult {
     Symbol(SymbolUri, SymbolCheckResult),
 }
 impl ContentCheckResult {
+    pub fn filter_failures(&mut self) {
+        match self {
+            Self::Symbol(_, check) => check.filter_failures(),
+        }
+    }
     #[cfg(feature = "full")]
     #[must_use]
     pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {
@@ -355,6 +430,9 @@ pub struct TypeCheckResult {
     pub log: CheckLog,
 }
 impl TypeCheckResult {
+    pub fn filter_failures(&mut self) {
+        self.log.filter_failures();
+    }
     #[cfg(feature = "full")]
     #[must_use]
     pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {
@@ -383,6 +461,21 @@ pub enum ProofStepCheckResult {
     },
 }
 impl ProofStepCheckResult {
+    pub fn filter_failures(&mut self) {
+        match self {
+            Self::GoalOnly { result } => result.filter_failures(),
+            Self::ProofOnly { log, .. } => log.filter_failures(),
+            Self::Both {
+                inhabitable,
+                matches,
+            } => {
+                inhabitable.filter_failures();
+                if let Some(m) = matches {
+                    m.filter_failures();
+                }
+            }
+        }
+    }
     #[cfg(feature = "full")]
     #[must_use]
     pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {

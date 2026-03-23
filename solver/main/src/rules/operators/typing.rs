@@ -71,7 +71,7 @@ impl SimpleTypeOperatorRule {
 impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
     fn applicable(&self, checker: &crate::CheckRef<'_, '_, Split>, t: &Term) -> bool {
         let Term::Bound(b) = t else {
-            tracing::trace!("Not bound");
+            //tracing::trace!("Not bound");
             return false;
         };
         let Some(head) = checker.get_head(t) else {
@@ -79,7 +79,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
         };
         let spec = head.as_ref().either(|s| &s.data.arity, |v| &v.data.arity);
         if spec.num() as usize != b.arguments.len() {
-            tracing::trace!("Arguments don't match: {spec:?} != {:?}", b.arguments);
+            //tracing::trace!("Arguments don't match: {spec:?} != {:?}", b.arguments);
             return false;
         }
         spec.iter()
@@ -190,7 +190,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
                     }
                 }
                 (m, a) => {
-                    tracing::trace!("Other: {m:?} = {a:?}");
+                    //tracing::trace!("Other: {m:?} = {a:?}");
                     a
                 }
             })
@@ -253,9 +253,9 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for Subtyping {
         sub: &'t Term,
         sup: &'t Term,
     ) -> Option<bool> {
-        // sanity checl
-        checker.infer_type(sub)?;
-        checker.infer_type(sup)?;
+        // sanity check
+        checker.check_inhabitable(sub)?;
+        checker.check_inhabitable(sup)?;
         Some(true)
     }
 }

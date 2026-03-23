@@ -91,12 +91,15 @@ impl<'c> ContextWrap<'c, '_> {
         top: &Checker<Split>,
         var: Cow<'c, ComponentVar>,
     ) {
+        /*
         if let Some(tp) = var.tp.as_ref()
             && let Some(hoas) = top.hoas()
             && let Some(fact) = Fact::from_tp(hoas, tp, top)
         {
             self.0.facts.facts.push((self.0.ctx.len(), fact));
         }
+        */
+        tracing::trace!("Adding");
         self.0.ctx.push(var);
     }
     pub(crate) fn take(&mut self) -> ContextBase<'c> {

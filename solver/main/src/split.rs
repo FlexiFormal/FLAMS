@@ -160,7 +160,10 @@ pub trait SplitStrategy:
         }
         let mut failures = SmallVec::<_, 2>::new();
         for rule in rules {
-            match slf.branch_traced(CheckingTask::Rule(rule.as_dyn()), |slf| then(slf, rule)) {
+            match slf.branch_traced(CheckingTask::Rule(rule.as_dyn()), |slf| {
+                tracing::debug!("Applying rule {rule:?}");
+                then(slf, rule)
+            }) {
                 Ok(r) => {
                     return Ok(r);
                 }

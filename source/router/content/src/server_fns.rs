@@ -113,7 +113,7 @@ pub async fn document_of(
         flams_math_archives::backend::GlobalBackend.with_local_archive(m.archive_id(), |o| {
             let Some(archive) = o else {
                 return Err(ftml_backend::BackendError::NotFound(
-                    ftml_uris::UriKind::Archive,
+                    m.archive_uri().clone().into(),
                 ));
             };
             let mut mname = m.module_name().first();
@@ -196,9 +196,7 @@ pub async fn document_of(
                         .map_err(|e| ftml_backend::BackendError::InvalidArgument(e.to_string()));
                 }
             };
-            Err(ftml_backend::BackendError::NotFound(
-                ftml_uris::UriKind::Document,
-            ))
+            Err(ftml_backend::BackendError::NotFound(m.clone().into()))
         })
     })
     .await
@@ -251,14 +249,14 @@ pub async fn get_module(
         };
         Some(p | m?.parse().ok()?)
     }) else {
-        return Err(ftml_backend::BackendError::NotFound(
-            ftml_uris::UriKind::Archive,
+        return Err(ftml_backend::BackendError::InvalidArgument(
+            "URI components".to_string(),
         ));
     };
     flams_system::backend::backend()
         .get_module_async::<TokioEngine>(&uri)
         .await
-        .map_err(|_| ftml_backend::BackendError::NotFound(ftml_uris::UriKind::Module))
+        .map_err(|_| ftml_backend::BackendError::NotFound(uri.into()))
 }
 
 ftml_uris::compfun! {
@@ -280,7 +278,7 @@ ftml_uris::compfun! {
         let comps = uri?;
         match comps.parse(flams_router_base::uris::get_uri) {
             Ok(uri) => flams_system::backend::backend().get_document_async::<TokioEngine>(&uri).await.map_err(|e| ftml_backend::BackendError::ToDo(e.to_string())),
-            Err(e) => Err(ftml_backend::BackendError::NotFound(ftml_uris::UriKind::Document)),
+            Err(e) => Err(ftml_backend::BackendError::InvalidArgument("URI components".to_string())),
         }
     }
 }
@@ -301,7 +299,7 @@ ftml_uris::compfun! {
         let comps = uri?;
         match comps.parse(flams_router_base::uris::get_uri) {
             Ok(uri) => server::fragment(uri, context).await.map_err(|e| ftml_backend::BackendError::ToDo(e.to_string())),
-            Err(e) => Err(ftml_backend::BackendError::NotFound(ftml_uris::UriKind::Archive)),
+            Err(e) => Err(ftml_backend::BackendError::InvalidArgument("URI components".to_string())),
         }
     }
 }
@@ -596,7 +594,7 @@ mod server {
                     .await
                 else {
                     not_found!();
-                    return Err(BackendError::NotFound(UriKind::Document));
+                    return Err(BackendError::NotFound(uri));
                 };
                 Ok((uri, insert_base_url(filter_paras(css)), html))
             }
@@ -606,7 +604,7 @@ mod server {
                     .await
                 else {
                     not_found!();
-                    return Err(BackendError::NotFound(UriKind::DocumentElement));
+                    return Err(BackendError::NotFound(uri));
                 };
                 match &*e {
                     DocumentElement::Paragraph(LogicalParagraph { range, .. })

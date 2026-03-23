@@ -66,7 +66,9 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
             (ftml_uris::Uri, Box<[ftml_ontology::utils::Css]>, Box<str>),
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
-    > {
+    >
+    + 'static
+    + use<> {
         super::server_fns::fragment(uri, rp, a, p, d, m, l, e, s, context)
     }
 
@@ -83,11 +85,12 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
             (DocumentUri, Box<[ftml_ontology::utils::Css]>, Box<str>),
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
-    > + Send {
+    > + Send
+    + 'static {
         super::server_fns::document(uri, rp, a, p, d, l)
     }
 
-    async fn get_toc(
+    fn get_toc(
         &self,
         uri: Option<DocumentUri>,
         rp: Option<String>,
@@ -95,17 +98,23 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         p: Option<String>,
         d: Option<String>,
         l: Option<ftml_uris::Language>,
-    ) -> Result<
-        (
-            Box<[ftml_ontology::utils::Css]>,
-            SectionLevel,
-            Box<[ftml_ontology::narrative::documents::TocElem]>,
-        ),
-        ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
-    > {
-        super::server_fns::toc(uri, rp, a, p, d, l)
-            .await
-            .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))
+    ) -> impl Future<
+        Output = Result<
+            (
+                Box<[ftml_ontology::utils::Css]>,
+                SectionLevel,
+                Box<[ftml_ontology::narrative::documents::TocElem]>,
+            ),
+            ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
+        >,
+    >
+    + 'static
+    + Send {
+        let fut = super::server_fns::toc(uri, rp, a, p, d, l);
+        async move {
+            fut.await
+                .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))
+        }
     }
 
     fn get_module(
@@ -119,7 +128,8 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
             ftml_ontology::domain::modules::ModuleLike,
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
-    > + Send {
+    > + Send
+    + 'static {
         super::server_fns::get_module(uri, a, p, m)
     }
 
@@ -131,24 +141,26 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
             ftml_ontology::narrative::elements::problems::Solutions,
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
-    > + Send {
+    > + Send
+    + 'static {
+        let uriclone = uri.clone();
+        let r = super::server_fns::solution(
+            Some(uri.into()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
         async move {
-            let r = super::server_fns::solution(
-                Some(uri.into()),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .await
-            .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))?;
-            ftml_ontology::narrative::elements::problems::Solutions::from_jstring(&r).ok_or_else(
-                || ftml_backend::BackendError::NotFound(ftml_uris::UriKind::DocumentElement),
-            )
+            let r = r
+                .await
+                .map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))?;
+            ftml_ontology::narrative::elements::problems::Solutions::from_jstring(&r)
+                .ok_or_else(|| ftml_backend::BackendError::NotFound(uriclone.into()))
         }
     }
 
@@ -165,7 +177,7 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
             ftml_ontology::narrative::documents::Document,
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
-    > {
+    > + 'static {
         super::server_fns::get_document(uri, rp, a, p, d, l)
     }
 
@@ -188,7 +200,8 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
             )>,
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
-    > + Send {
+    > + Send
+    + 'static {
         super::server_fns::notations(uri, rp, a, p, d, m, l, e, s)
     }
     fn get_logical_paragraphs(
@@ -207,7 +220,8 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
             )>,
             ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
         >,
-    > + Send {
+    > + Send
+    + 'static {
         super::server_fns::los(uri, a, p, m, s, problems)
     }
 }

@@ -91,8 +91,14 @@ impl LocalBackend for TemporaryBackend {
 
     fn get_document(&self, uri: &DocumentUri) -> Result<Document, BackendError> {
         self.inner.documents.get(uri).map_or_else(
-            || self.inner.parent.get_document(uri),
-            |e| Ok(e.value().clone()),
+            || {
+                //tracing::info!("Getting document globally");
+                self.inner.parent.get_document(uri)
+            },
+            |e| {
+                //tracing::info!("Got document locally");
+                Ok(e.value().clone())
+            },
         )
     }
 
@@ -104,8 +110,10 @@ impl LocalBackend for TemporaryBackend {
         Self: Sized,
     {
         if let Some(d) = self.inner.documents.get(uri) {
+            //tracing::info!("Got document locally");
             return Box::pin(std::future::ready(Ok(d.value().clone()))) as _;
         }
+        //tracing::info!("Getting document globally");
         Box::pin(self.inner.parent.get_document_async::<A>(uri)) as _
     }
 
@@ -123,7 +131,7 @@ impl LocalBackend for TemporaryBackend {
                 return self.inner.parent.get_module(uri);
             };
             m.as_module_like(&name)
-                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
+                .ok_or_else(|| BackendError::NotFound(SymbolUri { name, module }.into()))
         }
     }
 
@@ -149,7 +157,7 @@ impl LocalBackend for TemporaryBackend {
             if let Some(m) = self.inner.modules.get(&module) {
                 let r = m
                     .as_module_like(&name)
-                    .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol));
+                    .ok_or_else(|| BackendError::NotFound(SymbolUri { name, module }.into()));
                 Box::pin(std::future::ready(r)) as _
             } else {
                 Box::pin(self.inner.parent.get_module_async::<A>(&uri)) as _
@@ -316,6 +324,8 @@ impl LocalBackend for TemporaryBackend {
         let Some(bytes) = html.refs.get(rf.start..rf.end) else {
             return Err(BackendError::OutOfRangeError(rf.start, rf.end));
         };
+        //tracing::warn!("Gettin ({},{}) from {}", rf.start, rf.end, rf.in_doc);
+        //tracing::warn!("Here: {}\n{bytes:?}", String::from_utf8_lossy(bytes));
         let (r, _) = bincode::decode_from_slice(bytes, bincode::config::standard())?;
         Ok(r)
     }
@@ -329,7 +339,15 @@ impl LocalBackend for TemporaryBackend {
     where
         Self: Sized,
     {
-        self.inner.parent.get_notations::<E>(uri)
+        use ftml_uris::FtmlUri;
+
+        GlobalBackend
+            .query_notations::<E, ftml_ontology::narrative::elements::notations::NotationReference>(
+                uri.to_iri(),
+                self,
+                |n| n.notation,
+            )
+        //self.inner.parent.get_notations::<E>(uri)
     }
 
     #[cfg(feature = "rdf")]
@@ -341,6 +359,14 @@ impl LocalBackend for TemporaryBackend {
     where
         Self: Sized,
     {
-        self.inner.parent.get_var_notations::<E>(uri)
+        use ftml_uris::FtmlUri;
+
+        GlobalBackend
+            .query_notations::<E, ftml_ontology::narrative::elements::notations::VariableNotationReference>(
+                uri.to_iri(),
+                self,
+                |n| n.notation,
+            )
+        //self.inner.parent.get_var_notations::<E>(uri)
     }
 }

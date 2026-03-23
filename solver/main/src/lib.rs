@@ -153,10 +153,7 @@ pub struct CheckRef<'c, 'i, Split: SplitStrategy> {
 
 macro_rules! update {
     ($slf:ident $t:ident if $bind:expr) => {
-        if impls::preparation::NEW_VERSION
-            && $bind
-            && let Some(t) = $slf.bind_implicits(&$t)
-        {
+        if $bind && let Some(t) = $slf.bind_implicits(&$t) {
             //println!("update: {:?}", t); //t.debug_short());
             $t = t;
         }
@@ -170,6 +167,10 @@ pub struct CheckerCache {
 }
 
 impl<Split: SplitStrategy> Checker<Split> {
+    fn reset(&self) {
+        self.implicits
+            .store(0, std::sync::atomic::Ordering::Release);
+    }
     pub fn into_cache(self) -> CheckerCache {
         CheckerCache {
             modules: self.modules,
@@ -283,6 +284,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 }
                 DocumentElementRef::Term(top) => {
                     //self.set_hoas();
+                    self.reset();
                     tracing::debug!("Checking term {:?}", top.get_parsed().debug_short());
                     let (unks, tm) = self.prepare(None, top.get_parsed().clone());
                     let (t, _, log) = self.infer_type(Some(unks), &tm);
@@ -304,6 +306,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     },
                 ) if fors.len() == 1 => {
                     //self.set_hoas();
+                    self.reset();
                     results.extend(self.check_proof(p));
                 }
                 DocumentElementRef::Paragraph(
@@ -314,6 +317,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     },
                 ) if p.fors.iter().any(|(_, t)| t.is_some()) => {
                     //self.set_hoas();
+                    self.reset();
                     if let Some(r) = self.check_assertion(p) {
                         results.extend(r.into_iter());
                     }
@@ -324,6 +328,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     },
                 ) if kind.is_definition_like(styles) && p.fors.iter().any(|(_, t)| t.is_some()) => {
                     //self.set_hoas();
+                    self.reset();
                     if let Some(r) = self.check_definition(p) {
                         results.push(r);
                     }
@@ -362,6 +367,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     pub fn check_subterm(&mut self, term: Term, mut path: TermPath) -> Option<SubtermCheckResult> {
         //self.set_hoas();
+        self.reset();
         let (unks, nterm) = self.wrap_none(None, |mut slf| {
             let (s, r) = slf.prepare(term, Some(&mut path));
             slf.merge_solutions(s);
@@ -468,6 +474,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         dfc: &TermContainer,
         bind: bool,
     ) -> Option<SymbolCheckResult> {
+        self.reset();
         //self.set_hoas();
         match (tpc.get_parsed(), dfc.get_parsed()) {
             (Some(tp), None) => {
@@ -668,14 +675,19 @@ impl<Split: SplitStrategy> Checker<Split> {
             };
         }
         let (tunks, mut tp) = self.wrap_none(Some(tunks), |slf| slf.subst(tp));
+        tracing::debug!("Checking definiens");
         let (dunks, df) = self.prepare(Some(tunks), df.clone());
 
         let (b, unks, mut l2) = self.check_type(Some(dunks), &df, &tp);
-        let mut df = self.wrap_none(Some(unks), |slf| slf.subst(df)).1;
+        let (unks, mut df) = self.wrap_none(Some(unks), |slf| slf.subst(df));
 
         if df.has_solvable() {
             l2.push(PreCheckLog::Msg(
-                "Unsolved unkowns remain".into(),
+                "Unsolved unknowns remain".into(), /*format!(
+                                                       "Unsolved unkowns remain in {:?}\n\n{unks:#?}",
+                                                       df.debug_short()
+                                                   )
+                                                   .into()*/
                 ftml_solver_trace::MessageLevel::Failure,
             ));
             return SymbolCheckResult::Both {
@@ -709,7 +721,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     // TODO return checked term
     pub fn check_symbol(&mut self, s: &Symbol) -> Option<SymbolCheckResult> {
-        tracing::debug!("Checking Symbol {}", s.uri);
+        tracing::info!("Checking Symbol {}", s.uri);
         tracing::trace!("{s:?}");
         self.current.push(s.uri.clone().into());
         let r = self.check_components(&s.data.tp, &s.data.df, true);
@@ -720,6 +732,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     // TODO return checked term
     pub fn check_variable(&mut self, s: &VariableDeclaration) -> Option<SymbolCheckResult> {
+        tracing::info!("Checking Variable {}", s.uri);
         self.current.push(s.uri.clone().into());
         let r = self.check_components(&s.data.tp, &s.data.df, false);
         self.current.pop();

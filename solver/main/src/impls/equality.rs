@@ -184,59 +184,70 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     pub fn check_equality(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
+        tracing::debug!(
+            "Checking equality {:?}   ==   {:?}",
+            lhs.debug_short(),
+            rhs.debug_short()
+        );
         self.wrap_check(CheckingTask::Equality(lhs, rhs), |slf| {
-            if slf.alpha_equal(lhs, rhs) {
-                slf.comment("trivial");
-                return Some(true);
-            }
             slf.check_equality_i(lhs, rhs)
         })
     }
     pub(crate) fn check_equality_i(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
+        if alpha_equal(lhs, rhs) {
+            self.comment("trivial");
+            return Some(true);
+        }
         if let Some(unk) = lhs.is_solvable() {
             return self.solve_equality(unk, rhs);
         }
         if let Some(unk) = rhs.is_solvable() {
             return self.solve_equality(unk, lhs);
         }
-
-        let rules = self
-            .top
-            .rules
-            .equality()
-            .iter()
-            .filter_map(|rl| {
-                if rl.applicable(lhs, rhs) {
-                    Some(&**rl)
-                } else {
-                    None
+        match self.simplify_rules_two(
+            self.top.rules.equality(),
+            lhs,
+            rhs,
+            |slf, rl, lhs, rhs| rl.applicable(lhs, rhs),
+            |slf, rl, lhs, rhs| rl.apply(slf, lhs, rhs),
+            |lhs, rhs| {
+                alpha_equal(lhs, rhs) || lhs.is_solvable().is_some() || rhs.is_solvable().is_some()
+            },
+        ) {
+            either::Left(opt) => {
+                if opt.is_some() {
+                    return opt;
                 }
-            })
-            .collect::<smallvec::SmallVec<_, 2>>();
-        let prev = match Split::split_i(self, true, rules, |slf, rl| rl.apply(slf, lhs, rhs)) {
-            Ok(r) => return Some(r),
-            Err(ls) => ls,
-        };
+            }
+            either::Right((lhs, rhs)) => {
+                if alpha_equal(&lhs, &rhs) {
+                    self.comment("trivial");
+                    return Some(true);
+                }
+                if let Some(unk) = lhs.is_solvable() {
+                    return self.solve_equality(unk, &rhs);
+                }
+                if let Some(unk) = rhs.is_solvable() {
+                    return self.solve_equality(unk, &lhs);
+                }
+            }
+        }
 
-        self.congruence(lhs, rhs, prev)
+        self.congruence(lhs, rhs)
     }
 
-    fn congruence(
-        &mut self,
-        lhs: &'t Term,
-        rhs: &'t Term,
-        mut logs: smallvec::SmallVec<RefCheckLog<'t>, 2>,
-    ) -> Option<bool> {
-        if super::preparation::NEW_VERSION
-            && (lhs.unapply_implicits().is_some() || rhs.unapply_implicits().is_some())
-        {
-            let lhs = self
+    fn congruence(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
+        tracing::debug!("Trying congruence");
+        if lhs.unapply_implicits().is_some() || rhs.unapply_implicits().is_some() {
+            let nlhs = self
                 .simplify_implicit(lhs)
                 .map_or(Cow::Borrowed(lhs), Cow::Owned);
-            let rhs = self
+            let nrhs = self
                 .simplify_implicit(rhs)
                 .map_or(Cow::Borrowed(rhs), Cow::Owned);
-            return self.scoped(|slf| slf.congruence(&lhs, &rhs, logs));
+            if !alpha_equal(lhs, &nlhs) || !self.alpha_equal(rhs, &nrhs) {
+                return self.scoped(|slf| slf.congruence(&nlhs, &nrhs));
+            }
         }
         match (lhs, rhs) {
             (Term::Application(l), Term::Application(r))
@@ -247,8 +258,8 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 }) {
                     Ok(r) => Some(r),
                     Err(l) => {
-                        logs.push(l);
-                        self.congruence_cont(lhs, rhs, logs)
+                        self.add_msg(l.into());
+                        self.congruence_cont(lhs, rhs)
                     }
                 }
             }
@@ -258,26 +269,21 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 }) {
                     Ok(r) => Some(r),
                     Err(l) => {
-                        logs.push(l);
-                        self.congruence_cont(lhs, rhs, logs)
+                        self.add_msg(l.into());
+                        self.congruence_cont(lhs, rhs)
                     }
                 }
             }
             (Term::Field(a), Term::Field(b)) if a.key == b.key => {
-                self.congruence_cont(&a.record, &b.record, logs)
+                self.congruence_cont(&a.record, &b.record)
             }
             (Term::Field(a), Term::Field(b)) => Some(false),
             (Term::Number(a), Term::Number(b)) => Some(a == b),
-            _ => self.congruence_cont(lhs, rhs, logs),
+            _ => self.congruence_cont(lhs, rhs),
         }
     }
 
-    fn congruence_cont(
-        &mut self,
-        lhs: &'t Term,
-        rhs: &'t Term,
-        logs: smallvec::SmallVec<RefCheckLog<'t>, 2>,
-    ) -> Option<bool> {
+    fn congruence_cont(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
         // todo: preserve logs on recursive fail
         if let Some(lhs) = self.simplify_one(true, lhs) {
             if self.alpha_equal(&lhs, rhs) {
@@ -293,9 +299,6 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
             return self.scoped(|slf| slf.check_equality_i(lhs, &rhs));
         }
-        for l in logs {
-            self.add_msg(l.into());
-        }
         None
     }
 
@@ -305,11 +308,13 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         lhs: &'t ApplicationTerm,
         rhs: &'t ApplicationTerm,
     ) -> Option<bool> {
+        tracing::trace!("Comparing operators");
         self.comment("Comparing operators");
         if !self.check_equality(&lhs.head, &rhs.head)? {
             return None;
         }
         for (i, (a, b)) in lhs.arguments.iter().zip(&rhs.arguments).enumerate() {
+            tracing::trace!("Comparing argument {}", i + 1);
             self.counter("Comparing arguments ", i + 1);
             if let (Argument::Simple(a), Argument::Simple(b)) = (a, b) {
                 if !self.check_equality(a, b)? {
@@ -412,6 +417,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                         substs.push((a.var.name(), &b.var));
                     }
                 }
+                /*
                 (BoundArgument::BoundSeq(MaybeSequence::One(a)), BoundArgument::Bound(b))
                 | (BoundArgument::Bound(a), BoundArgument::BoundSeq(MaybeSequence::One(b)))
                     if a.var.is_solvable().is_some() || b.var.is_solvable().is_some() =>
@@ -435,6 +441,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                         substs.push((a.var.name(), &b.var));
                     }
                 }
+                 */
                 _ => {
                     self.failure(format!("Argument not simple: {a:?}  <-->  {b:?}"));
                     return None;

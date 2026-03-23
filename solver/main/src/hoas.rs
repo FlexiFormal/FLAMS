@@ -14,6 +14,7 @@ pub struct HOASSymbols {
     pub judgment: Option<SymbolUri>,
     pub lambda: SymbolUri,
     pub pi: SymbolUri,
+    pub any: SymbolUri,
     pub apply: Option<SymbolUri>,
     //dummies: std::sync::atomic::AtomicUsize,
 }
@@ -32,11 +33,8 @@ impl HOASSymbols {
                         h.into_owned(),
                         a.unwrap_or_else(|| {
                             let name = checker.new_solvable();
-                            ret.0.insert(Solvable {
-                                name: name.clone(),
-                                solution: crate::impls::solving::BoundedValue::None,
-                                tp: crate::impls::solving::BoundedValue::None,
-                            });
+                            ret.0
+                                .insert(Solvable::new(name.clone(), std::iter::empty()));
                             name.into()
                         }),
                     ]))
@@ -48,11 +46,8 @@ impl HOASSymbols {
                 .map(|t| {
                     Argument::Simple(t.unwrap_or_else(|| {
                         let name = checker.new_solvable();
-                        ret.0.insert(Solvable {
-                            name: name.clone(),
-                            solution: crate::impls::solving::BoundedValue::None,
-                            tp: crate::impls::solving::BoundedValue::None,
-                        });
+                        ret.0
+                            .insert(Solvable::new(name.clone(), std::iter::empty()));
                         name.into()
                     }))
                 })
@@ -78,6 +73,11 @@ impl HOASSymbols {
                 .downcast_ref::<super::rules::IsJudgmentRule>()
                 .map(|rl| rl.0.clone())
         });
+        let any = checker.rules.marker().iter().rev().find_map(|rl| {
+            rl.as_any()
+                .downcast_ref::<super::rules::operators::universe::AnyRule>()
+                .map(|rl| rl.0.clone())
+        })?;
         let (lambda, pi, apply) = checker.rules.marker().iter().rev().find_map(|rl| {
             rl.as_any()
                 .downcast_ref::<super::rules::HOASRule>()
@@ -87,8 +87,8 @@ impl HOASSymbols {
             judgment,
             lambda,
             pi,
-            apply,
-            //dummies: std::sync::atomic::AtomicUsize::new(0),
+            any,
+            apply, //dummies: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 

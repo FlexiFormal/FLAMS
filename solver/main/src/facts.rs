@@ -262,6 +262,11 @@ impl Fact {
         tp: &Term,
         checker: &Checker<Split>,
     ) -> Option<Self> {
+        return None;
+        if tp.has_solvable() {
+            return None;
+        }
+        tracing::trace!("Fact?");
         let Some(judg) = hoas.judgment.as_ref() else {
             //tracing::warn!("No judgment");
             return None;

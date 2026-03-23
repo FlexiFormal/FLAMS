@@ -354,10 +354,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for NeedsTypeRule {
                             let v = checker.new_solvable();
                             Cow::Owned(BoundArgument::Bound(ComponentVar {
                                 var: var.clone(),
-                                tp: Some(Term::Var {
-                                    variable: v,
-                                    presentation: None,
-                                }),
+                                tp: Some(v),
                                 df: df.clone(),
                             }))
                         } else {
@@ -374,10 +371,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for NeedsTypeRule {
                             let v = checker.new_solvable();
                             Cow::Owned(BoundArgument::BoundSeq(MaybeSequence::One(ComponentVar {
                                 var: var.clone(),
-                                tp: Some(Term::Var {
-                                    variable: v,
-                                    presentation: None,
-                                }),
+                                tp: Some(v),
                                 df: df.clone(),
                             })))
                         } else {
@@ -393,10 +387,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for NeedsTypeRule {
                                     let v = checker.new_solvable();
                                     Cow::Owned(ComponentVar {
                                         var: var.clone(),
-                                        tp: Some(Term::Var {
-                                            variable: v,
-                                            presentation: None,
-                                        }),
+                                        tp: Some(v),
                                         df: df.clone(),
                                     })
                                 } else {
@@ -566,10 +557,7 @@ impl LambdaPiInferenceRule {
                 } else {
                     let nvar = ComponentVar {
                         var: var.var.clone(),
-                        tp: Some(Term::Var {
-                            variable: checker.new_solvable(),
-                            presentation: None,
-                        }),
+                        tp: Some(checker.new_solvable()),
                         df: var.df.clone(),
                     };
                     checker.scoped(|checker| {
@@ -613,10 +601,7 @@ impl LambdaPiInferenceRule {
                 } else {
                     let nvar = ComponentVar {
                         var: var.var.clone(),
-                        tp: Some(Term::Var {
-                            variable: checker.new_solvable(),
-                            presentation: None,
-                        }),
+                        tp: Some(checker.new_solvable()),
                         df: var.df.clone(),
                     };
                     checker.scoped(|checker| {
@@ -1045,10 +1030,9 @@ impl PiInferenceRule {
             ComponentVar { var, .. } => (
                 var.name(),
                 checker.scoped(|checker| {
-                    checker.infer_var_type(var).unwrap_or_else(|| Term::Var {
-                        variable: checker.new_solvable(),
-                        presentation: None,
-                    })
+                    checker
+                        .infer_var_type(var)
+                        .unwrap_or_else(|| checker.new_solvable())
                 }),
             ),
         };
@@ -1106,10 +1090,9 @@ impl PiInferenceRule {
             ComponentVar { var, .. } => (
                 var.name(),
                 checker.scoped(|checker| {
-                    checker.infer_var_type(var).unwrap_or_else(|| Term::Var {
-                        variable: checker.new_solvable(),
-                        presentation: None,
-                    })
+                    checker
+                        .infer_var_type(var)
+                        .unwrap_or_else(|| checker.new_solvable())
                 }),
             ),
         };

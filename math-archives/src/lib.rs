@@ -40,8 +40,8 @@ use flams_backend_types::{
 };
 use ftml_ontology::{domain::modules::Module, narrative::documents::Document};
 use ftml_uris::{
-    ArchiveId, ArchiveUri, IsDomainUri, Language, SimpleUriName, UriPath, UriWithArchive,
-    UriWithPath,
+    ArchiveId, ArchiveUri, IsDomainUri, Language, ModuleUri, SimpleUriName, UriName, UriPath,
+    UriWithArchive, UriWithPath,
 };
 use std::{
     hint::unreachable_unchecked,
@@ -78,13 +78,13 @@ pub trait MathArchive {
     }
 
     /// # Errors
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module>;
+    fn load_module(&self, path: Option<&UriPath>, name: &UriName) -> Result<Module>;
 
     /// # Errors
     fn load_module_async<A: AsyncEngine>(
         &self,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module>> + 'static + use<Self, A>
     where
         Self: Sized;
@@ -186,7 +186,7 @@ impl MathArchive for Archive {
             Self::Ext(_, a) => a.is_meta(),
         }
     }
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module> {
+    fn load_module(&self, path: Option<&UriPath>, name: &UriName) -> Result<Module> {
         match self {
             Self::Local(a) => a.load_module(path, name),
             Self::Ext(_, a) => a.load_module(path, name),
@@ -195,7 +195,7 @@ impl MathArchive for Archive {
     fn load_module_async<A: AsyncEngine>(
         &self,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module>> + 'static + use<A> {
         match self {
             Self::Local(a) => a.load_module_async::<A>(path, name),
@@ -336,14 +336,16 @@ impl MathArchive for LocalArchive {
         self.uri.archive_id().is_meta()
     }
 
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module> {
+    fn load_module(&self, path: Option<&UriPath>, name: &UriName) -> Result<Module> {
         let out = path.map_or_else(
             || self.out_dir().join(".modules"),
             |n| self.out_dir().join_uri_path(n).join(".modules"),
         );
-        let out = self.escape_module_name(&out, name);
+        let out = self.escape_module_name(&out, name.as_ref());
         if !out.exists() {
-            return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
+            return Err(BackendError::NotFound(
+                ((self.uri.clone() / path.cloned()) | name.clone()).into(),
+            ));
         }
         let file = std::io::BufReader::new(std::fs::File::open(out)?);
         let ret: Module = bincode::decode_from_reader(file, bincode::config::standard())?;
@@ -353,7 +355,7 @@ impl MathArchive for LocalArchive {
     fn load_module_async<A: AsyncEngine>(
         &self,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module>> + 'static + use<A>
     where
         Self: Sized,
@@ -362,10 +364,11 @@ impl MathArchive for LocalArchive {
             || self.out_dir().join(".modules"),
             |n| self.out_dir().join_uri_path(n).join(".modules"),
         );
-        let out = self.escape_module_name(&out, name);
+        let out = self.escape_module_name(&out, name.as_ref());
+        let uri = (self.uri.clone() / path.cloned()) | name.clone();
         A::block_on(move || {
             if !out.exists() {
-                return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
+                return Err(BackendError::NotFound(uri.into()));
             }
             let file = std::io::BufReader::new(std::fs::File::open(out)?);
             let ret = bincode::decode_from_reader(file, bincode::config::standard())?;

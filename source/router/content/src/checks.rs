@@ -1,4 +1,3 @@
-use crate::backend::FtmlBackend;
 use flams_web_utils::components::{Header, LazySubtree, Leaf, Subtree, Tree};
 use ftml_components::components::content::FtmlViewable;
 use ftml_dom::notations::TermExt;
@@ -18,7 +17,7 @@ pub trait ResultExt {
 }
 impl ResultExt for DocumentCheckResult {
     fn render(self) -> AnyView {
-        crate::Views::setup_document::<FtmlBackend>(
+        crate::Views::setup_document(
             DocumentUri::no_doc().clone(),
             ftml_components::SidebarPosition::None,
             false,
@@ -41,7 +40,7 @@ impl ResultExt for CheckResult {
             Self::Missing(e) => view! {
                 <Leaf><Text style="color:red;">
                     {do_success(false)}"Module not found: "
-                    {e.as_view::<FtmlBackend>()}
+                    {e.as_view()}
                 </Text></Leaf>
             }
             .into_any(),
@@ -66,7 +65,7 @@ impl ResultExt for CheckResult {
                     view! {
                         <Subtree expanded=!success>
                             <Header slot>
-                                <b>{succ}"Symbol "{u.as_view::<FtmlBackend>()}</b>
+                                <b>{succ}"Symbol "{u.as_view()}</b>
                             </Header>
                             {
                                 symbol_result(s)
@@ -82,7 +81,7 @@ impl ResultExt for CheckResult {
                 view! {
                     <Subtree expanded=!success>
                         <Header slot>
-                            <b>{succ}"Proof "{uri.as_view::<FtmlBackend>()}</b>
+                            <b>{succ}"Proof "{uri.as_view()}</b>
                         </Header>
                         {
                             checks.into_iter().map(proof).collect_view()
@@ -97,7 +96,7 @@ impl ResultExt for CheckResult {
                 view! {
                     <Subtree expanded=!success>
                         <Header slot>
-                            <b>{succ}"Module "{uri.as_view::<FtmlBackend>()}</b>
+                            <b>{succ}"Module "{uri.as_view()}</b>
                         </Header>
                         {
                             checks.into_iter().map(|c| match c {
@@ -107,7 +106,7 @@ impl ResultExt for CheckResult {
                                     view! {
                                         <Subtree expanded=!success>
                                             <Header slot>
-                                                <b>{succ}"Symbol "{u.as_view::<FtmlBackend>()}</b>
+                                                <b>{succ}"Symbol "{u.as_view()}</b>
                                             </Header>
                                             {
                                                 symbol_result(s)
@@ -299,6 +298,49 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
                 <Text>
                     //{do_success(success)}
                     "Simplifying "
+                    {ftml_dom::utils::math(move || mrow().child(view!{
+                        {context}
+                        <mo style="font-weight:bold">"⊢"</mo>
+                        {do_term(term)}
+                        {suffix}
+                    }))}
+                </Text>
+            };
+
+            let mut ctx = ctx.clone();
+            tree(success, header, move || {
+                steps
+                    .iter()
+                    .map(|l| do_log(l.clone(), &mut ctx))
+                    .collect_view()
+            })
+            .into_any()
+            /*
+            let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
+            view! {<Subtree expanded=!success>
+                <Header slot>{header}</Header>
+                {steps}
+            </Subtree>}
+            .into_any()
+            */
+        }),
+        CheckLog::Proving {
+            term,
+            steps,
+            context,
+            result,
+        } => in_context(ctx, context, move |context, ctx| {
+            let success = result.is_some();
+            let suffix = result.map(|result| {
+                view! {
+                    <mo>":"</mo>
+                    {do_term(result)}
+                }
+            });
+            let header = view! {
+                <Text>
+                    //{do_success(success)}
+                    "Proving "
                     {ftml_dom::utils::math(move || mrow().child(view!{
                         {context}
                         <mo style="font-weight:bold">"⊢"</mo>
@@ -602,6 +644,7 @@ fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
     }
 }
 
+/*
 #[allow(clippy::too_many_lines)]
 fn do_log2(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> impl IntoView + use<> + 'static {
     fn do_log_i(
@@ -681,6 +724,40 @@ fn do_log2(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> impl IntoView + use<> 
                         <Text>
                             {do_success(success)}
                             "Simplifying "
+                            {ftml_dom::utils::math(move || mrow().child(view!{
+                                {context}
+                                <mo style="font-weight:bold">"⊢"</mo>
+                                {do_term(term)}
+                                {suffix}
+                            }))}
+                        </Text>
+                    }),
+                    !success,
+                    steps,
+                    clen,
+                )
+            }
+            CheckLog::Proving {
+                term,
+                steps,
+                context,
+                result,
+            } => {
+                let clen = ctx.len();
+                ctx.extend(context);
+                let context = do_context(ctx);
+                let success = result.is_some();
+                let suffix = result.map(|result| {
+                    view! {
+                        <mo>":"</mo>
+                        {do_term(result)}
+                    }
+                });
+                (
+                    F(view! {
+                        <Text>
+                            {do_success(success)}
+                            "Proving "
                             {ftml_dom::utils::math(move || mrow().child(view!{
                                 {context}
                                 <mo style="font-weight:bold">"⊢"</mo>
@@ -991,6 +1068,7 @@ fn do_context(ctx: &[ComponentVar]) -> impl IntoView + use<> + 'static {
         }
     })
 }
+ */
 
 fn in_context(
     current: &mut Vec<ComponentVar>,
@@ -1037,21 +1115,21 @@ fn in_context(
 }
 
 fn do_displayable(d: Displayable) -> impl IntoView {
-    use leptos::either::EitherOf6::{A, B, C, D, E, F};
+    use leptos::either::EitherOf5::{A, B, C, D, E};
     match d {
         Displayable::String(s) => A(s),
         Displayable::Num(i) => B(i),
-        Displayable::Space => C(" "),
-        Displayable::Term(t) => D(ftml_dom::utils::math(move || do_term(t))),
-        Displayable::Var(v) => E(ftml_dom::utils::math(move || {
+        //Displayable::Space => C(" "),
+        Displayable::Term(t) => C(ftml_dom::utils::math(move || do_term(t))),
+        Displayable::Var(v) => D(ftml_dom::utils::math(move || {
             do_term(Term::Var {
                 variable: v,
                 presentation: None,
             })
         })),
-        Displayable::Uri(Uri::Symbol(s)) => F(s.as_view::<FtmlBackend>()),
-        Displayable::Uri(Uri::Module(m)) => F(m.as_view::<FtmlBackend>()),
-        Displayable::Uri(Uri::DocumentElement(e)) => F(e.as_view::<FtmlBackend>()),
+        Displayable::Uri(Uri::Symbol(s)) => E(s.as_view()),
+        Displayable::Uri(Uri::Module(m)) => E(m.as_view()),
+        Displayable::Uri(Uri::DocumentElement(e)) => E(e.as_view()),
         Displayable::Uri(u) => A(u.to_string()),
     }
 }
@@ -1066,24 +1144,25 @@ fn do_success(s: bool) -> impl IntoView {
 
 const ADD_INFO: bool = true;
 
-fn do_term(t: Term) -> AnyView {
+fn do_term(t: Term) -> impl IntoView {
     if ADD_INFO {
         use thaw::{Popover, PopoverSize, PopoverTrigger};
         let s = format!("{:#?}", t.debug_short());
-        view! {<msup>
-            {t.into_view::<crate::Views, FtmlBackend>(false)}
+        leptos::either::Either::Left(view! {<msup>
+            {t.into_view::<crate::Views>(ftml_components::backend(),false)}
             <Popover size=PopoverSize::Small>
                 <PopoverTrigger slot><mi>"🛈"</mi></PopoverTrigger>
                 <pre>{s}</pre>
             </Popover>
-        </msup>}
-        .into_any()
+        </msup>})
     } else {
-        t.into_view::<crate::Views, FtmlBackend>(false)
+        leptos::either::Either::Right(
+            t.into_view::<crate::Views>(ftml_components::backend(), false),
+        )
     }
 }
 
-fn do_variable_uri(v: DocumentElementUri) -> AnyView {
+fn do_variable_uri(v: DocumentElementUri) -> impl IntoView {
     let t = Term::Var {
         variable: Variable::Ref {
             declaration: v,
@@ -1091,7 +1170,7 @@ fn do_variable_uri(v: DocumentElementUri) -> AnyView {
         },
         presentation: None,
     };
-    t.into_view::<crate::Views, FtmlBackend>(false)
+    t.into_view::<crate::Views>(ftml_components::backend(), false)
 }
 
 fn tree<V: IntoView + 'static>(

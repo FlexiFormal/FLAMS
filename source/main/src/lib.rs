@@ -40,6 +40,8 @@ pub fn hydrate() {
         .with(tracing_wasm::WASMLayer::default())
         .with(filter(tracing::Level::WARN))
         .init();
+    ftml_components::set_backend::<flams_router_content::backend::FtmlBackend>();
+    ftml_components::set_continuation(&flams_router_content::Continuations);
     #[cfg(debug_assertions)]
     {
         leptos::mount::hydrate_body(flams_router_dashboard::Main);

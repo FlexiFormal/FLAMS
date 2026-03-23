@@ -38,28 +38,27 @@ lazy_static::lazy_static! {
 
 #[inline]
 pub async fn run(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
-    run_i(port_channel).instrument(SERVER_SPAN.clone()).await
+    run_i(port_channel).instrument(SERVER_SPAN.clone()).await;
 }
 
 /// ### Panics
 #[instrument(level = "info", target = "server", name = "run", skip_all)]
 async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
     let mut state = ServerState::new().in_current_span().await;
-    let mut addr = state.options.site_addr.clone();
+    let mut addr = state.options.site_addr;
     let mut changed = false;
     let mut listener = None;
     //let span = tracing::info_span!(target:"server","request");
     for p in addr.port()..65535 {
         addr.set_port(p);
-        if let Ok(l) = tokio::net::TcpListener::bind(addr.clone())
+        if let Ok(l) = tokio::net::TcpListener::bind(addr)
             //.instrument(span.clone())
             .await
         {
             listener = Some(l);
             break;
-        } else {
-            changed = true;
         }
+        changed = true;
     }
     let listener = listener.expect("Could not bind to any port");
 
@@ -77,6 +76,9 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
             .store(addr.port(), std::sync::atomic::Ordering::Relaxed);
         state.options.site_addr = addr;
     }
+
+    ftml_components::set_backend::<flams_router_content::backend::FtmlBackend>();
+    ftml_components::set_continuation(&flams_router_content::Continuations);
 
     let session_store = MemoryStore::default();
     let session_layer = tower_sessions::SessionManagerLayer::new(session_store)

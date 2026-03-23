@@ -1,7 +1,7 @@
 pub mod results;
 
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
-use ftml_uris::{FtmlUri, Uri};
+use ftml_uris::{FtmlUri, Uri, UriRef};
 #[cfg(feature = "colors")]
 use owo_colors::OwoColorize;
 use std::borrow::Cow;
@@ -178,18 +178,18 @@ macro_rules! tasks {
             $(
                 $name {
                     $($field: tasks!(@TPOWN $tp),)*
-                    steps:Box<[Self]>,
+                    steps:Vec<Self>,
                     context:Box<[ComponentVar]>,
                     result:Option<$res>
                 },
             )*
             Rule{
                 rule:Box<dyn CheckerRule>,
-                steps:Box<[Self]>,
+                steps:Vec<Self>,
             },
             Strategy{
                 name: &'static str,
-                steps:Box<[Self]>,
+                steps:Vec<Self>,
                 success:bool
             },
             //Dyn(Box<dyn CheckTraceDisplayable>)
@@ -382,8 +382,14 @@ macro_rules! tasks {
     (@CONV SolverRule $name:ident $f:ident) => { $name.as_box_dyn() };
 }
 
-impl CheckLog {
-    pub fn steps_mut(&mut self) -> Option<&mut Vec<CheckLog>> {
+#[cfg(feature = "full")]
+impl PreCheckLog {
+    pub fn push(&mut self, msg: Self) {
+        if let Some(steps) = self.steps_mut() {
+            steps.push(msg);
+        }
+    }
+    pub const fn steps_mut(&mut self) -> Option<&mut Vec<Self>> {
         match self {
             Self::Equality { steps, .. }
             | Self::HasType { steps, .. }
@@ -394,13 +400,85 @@ impl CheckLog {
             | Self::Strategy { steps, .. }
             | Self::Subtype { steps, .. }
             | Self::Universe { steps, .. }
-            | Self::VariableInference { steps, .. } => Some(steps),
-            _ => None,
+            | Self::VariableInference { steps, .. }
+            | Self::Proving { steps, .. } => Some(steps),
+            Self::Msg(_, _) | Self::Count(_, _) => None,
+        }
+    }
+}
+
+impl CheckLog {
+    pub fn filter_failures(&mut self) {
+        let Some(steps) = self.steps_mut() else {
+            return;
+        };
+        *steps = std::mem::take(steps)
+            .into_iter()
+            .filter(|s| !s.success())
+            .map(|mut s| {
+                s.filter_failures();
+                s
+            })
+            .collect();
+    }
+    pub const fn steps_mut(&mut self) -> Option<&mut Vec<Self>> {
+        match self {
+            Self::Equality { steps, .. }
+            | Self::HasType { steps, .. }
+            | Self::Inference { steps, .. }
+            | Self::Inhabitable { steps, .. }
+            | Self::Rule { steps, .. }
+            | Self::Simplify { steps, .. }
+            | Self::Strategy { steps, .. }
+            | Self::Subtype { steps, .. }
+            | Self::Universe { steps, .. }
+            | Self::VariableInference { steps, .. }
+            | Self::Proving { steps, .. } => Some(steps),
+            Self::Comment(_) | Self::Emph(_) | Self::Header(_) | Self::Fail(_) => None,
+        }
+    }
+    pub fn success(&self) -> bool {
+        match self {
+            Self::Equality { result, .. }
+            | Self::HasType { result, .. }
+            | Self::Inhabitable { result, .. }
+            | Self::Subtype { result, .. }
+            | Self::Universe { result, .. } => *result == Some(true),
+            Self::Rule { steps, .. } => steps.iter().all(Self::success),
+            Self::Inference { result, .. }
+            | Self::VariableInference { result, .. }
+            | Self::Simplify { result, .. }
+            | Self::Proving { result, .. } => result.is_some(),
+            Self::Strategy { success, .. } => *success,
+            Self::Comment(_) | Self::Header(_) | Self::Emph(_) | Self::Fail(_) => false,
         }
     }
     pub fn add_failure(&mut self, s: &'static str) {
         if let Some(steps) = self.steps_mut() {
-            steps.push(CheckLog::Fail(s.to_string()));
+            steps.push(Self::Fail(s.to_string()));
+        }
+    }
+}
+
+#[cfg(feature = "full")]
+#[derive(Debug, Clone, Copy)]
+pub enum DisplayableRef<'r> {
+    Num(i128),
+    //Space,
+    String(&'static str),
+    Term(&'r Term),
+    Uri(UriRef<'r>),
+    Var(&'r Variable),
+}
+#[cfg(feature = "full")]
+impl DisplayableRef<'_> {
+    pub fn into_owned(self, term: &impl Fn(Term) -> Term) -> Displayable {
+        match self {
+            Self::Num(i) => Displayable::Num(i),
+            Self::String(s) => Displayable::String(s.to_string()),
+            Self::Term(t) => Displayable::Term(term(t.clone())),
+            Self::Uri(u) => Displayable::Uri(u.owned()),
+            Self::Var(v) => Displayable::Var(v.clone()),
         }
     }
 }
@@ -410,7 +488,7 @@ impl CheckLog {
 pub enum Displayable {
     //Log(CheckLog),
     Num(i128),
-    Space,
+    //Space,
     String(String),
     Term(Term),
     Uri(Uri),
@@ -432,6 +510,7 @@ impl Displayable {
 
 tasks! {
     Simplify(term:Term) => Term,
+    Proving(term:Term) => Term,
     Inference(term: Term) => Term,
     VariableInference(var: str) => Term,
     //Simplify(term:Term) => Term,
@@ -480,7 +559,7 @@ pub trait TraceDisplay {
     fn displayable(&mut self, d: &Displayable, lvl: Option<MessageLevel>) -> std::fmt::Result {
         match d {
             Displayable::Num(i) => self.num(*i, lvl),
-            Displayable::Space => self.space(),
+            //Displayable::Space => self.space(),
             Displayable::String(s) => self.string(s, lvl),
             Displayable::Term(t) => self.term(t, lvl),
             Displayable::Uri(u) => self.uri(u.as_uri(), lvl),
@@ -607,6 +686,11 @@ impl TraceDisplay for &mut std::fmt::Formatter<'_> {
         match task {
             CheckingTask::Simplify(t) => {
                 self.write_str("Simplifying ")?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
+            CheckingTask::Proving(t) => {
+                self.write_str("Proving ")?;
                 do_context(context, self)?;
                 self.term(t, None)
             }
@@ -765,6 +849,11 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
         match task {
             CheckingTask::Simplify(t) => {
                 write!(self.0, "{} ", "Simplifying".bright_white().bold())?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
+            CheckingTask::Proving(t) => {
+                write!(self.0, "{} ", "Proving".bright_white().bold())?;
                 do_context(context, self)?;
                 self.term(t, None)
             }

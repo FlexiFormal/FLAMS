@@ -2,7 +2,7 @@
 
 use flams_router_base::maybe_lazy;
 use flams_web_utils::components::wait_and_then_fn;
-use ftml_components::{SidebarPosition, config::FtmlConfig};
+use ftml_components::SidebarPosition;
 use ftml_dom::{FtmlViews, toc::TocSource, utils::css::CssExt};
 use ftml_uris::{
     DocumentUri, Uri,
@@ -128,13 +128,9 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
                             (None, TocSource::None)
                         }
                     };
-                    crate::Views::render_fragment::<crate::backend::FtmlBackend>(
-                        uri,
-                        position,
-                        true,
-                        src,
-                        move || crate::Views::render_ftml(html.into_string(), None).into_any(),
-                    )
+                    crate::Views::render_fragment(uri, position, true, src, move || {
+                        crate::Views::render_ftml(html.into_string(), None).into_any()
+                    })
                 },
                 |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
             ))
@@ -168,7 +164,7 @@ pub fn Document(doc: DocumentUriComponents) -> AnyView {
                     }
                     {
                         //FtmlConfig::set_toc_source(TocSource::Get);
-                        crate::Views::setup_document::<crate::backend::FtmlBackend>(
+                        crate::Views::setup_document(
                             uri,
                             SidebarPosition::Next,
                             true,
@@ -197,7 +193,7 @@ pub fn DocumentInner(doc: DocumentUriComponents) -> AnyView {
                 css.inject();
             }
             view! {<div>{
-                crate::Views::setup_document::<crate::backend::FtmlBackend>(
+                crate::Views::setup_document(
                     DocumentUri::no_doc().clone(),
                     SidebarPosition::None,
                     true,

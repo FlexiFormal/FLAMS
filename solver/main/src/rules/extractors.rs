@@ -291,6 +291,7 @@ rules! {
         rules.push_inhabitable(Box::new(universe::SimpleInhabitableRule(sym.uri.clone(),0)));
         rules.push_subtyping(Box::new(universe::AnyRule(sym.uri.clone())));
         rules.push_checking(Box::new(universe::AnyRule(sym.uri.clone())));
+        rules.push_marker(Box::new(universe::AnyRule(sym.uri.clone())));
     }
     pub implicit = (sym,rules) => {
 

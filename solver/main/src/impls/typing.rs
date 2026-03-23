@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     CheckRef,
-    impls::solving::TermExtSolvable,
+    impls::{equality::alpha_equal, solving::TermExtSolvable},
     rules::{InhabitableRule, UniverseRule},
     split::SplitStrategy,
     trace::CheckingTask,
@@ -12,19 +12,30 @@ use smallvec::SmallVec;
 
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn check_type(&mut self, tm: &'t Term, tp: &'t Term) -> Option<bool> {
+        tracing::debug!(
+            "Checking Typing {:?}   ::   {:?}",
+            tm.debug_short(),
+            tp.debug_short()
+        );
         self.wrap_check(CheckingTask::HasType(tm, tp), |slf| {
             slf.check_type_i(tm, tp)
         })
     }
 
     pub fn check_subtype(&mut self, sub: &'t Term, sup: &'t Term) -> Option<bool> {
+        tracing::debug!(
+            "Checking Subtyping {:?}   <:   {:?}",
+            sub.debug_short(),
+            sup.debug_short()
+        );
         self.wrap_check(CheckingTask::Subtype(sub, sup), |slf| {
             slf.check_subtype_i(sub, sup)
         })
     }
 
     pub fn check_inhabitable(&mut self, t: &'t Term) -> Option<bool> {
-        if t.free_variables().iter().any(|v| v.is_solvable().is_some()) {
+        tracing::debug!("Checking Inhabitability of {:?}", t.debug_short());
+        if t.has_solvable() {
             let nt = self.subst(t.clone());
             self.scoped(|slf| {
                 slf.wrap_check(CheckingTask::Inhabitable(&nt), |slf| {
@@ -39,6 +50,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     pub fn check_universe(&mut self, t: &'t Term) -> Option<bool> {
+        tracing::debug!("Checking Universe {:?}", t.debug_short());
         self.wrap_check(CheckingTask::Universe(t), |slf| slf.check_universe_i(t))
     }
 
@@ -75,8 +87,76 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub(crate) fn check_subtype_i(&mut self, sub: &'t Term, sup: &'t Term) -> Option<bool> {
         if self.alpha_equal(sub, sup) {
             self.comment("trivial");
+            tracing::debug!("trivial");
             return Some(true);
         }
+        if let Some(unk) = sub.is_solvable() {
+            return self.solve_upper_bound(unk, sup);
+        }
+        if let Some(unk) = sup.is_solvable() {
+            return self.solve_lower_bound(unk, sub);
+        }
+        match self.simplify_rules_two(
+            self.top.rules.subtyping(),
+            sub,
+            sup,
+            |slf, rl, sub, sup| rl.applicable(slf, sub, sup),
+            |slf, rl, sub, sup| rl.apply(slf, sub, sup),
+            |sub, sup| {
+                alpha_equal(sub, sup) || sub.is_solvable().is_some() || sup.is_solvable().is_some()
+            },
+        ) {
+            either::Left(opt) => {
+                if opt.is_some() {
+                    return opt;
+                }
+                tracing::debug!("Proving subtyping failed; Falling back to checking equality");
+                match self.traced(
+                    CheckingTask::Strategy(
+                        "Proving subtyping failed; Falling back to checking equality",
+                    ),
+                    |slf| slf.check_equality_i(sub, sup),
+                ) {
+                    Ok(r) => Some(r),
+                    Err(ls) => {
+                        self.add_msg(ls.into());
+                        None
+                    }
+                }
+            }
+            either::Right((sub, sup)) => {
+                if self.alpha_equal(&sub, &sup) {
+                    self.comment("trivial");
+                    tracing::debug!("trivial");
+                    return Some(true);
+                }
+                self.scoped(|slf| {
+                    if let Some(unk) = sub.is_solvable() {
+                        tracing::debug!("solving");
+                        return slf.solve_upper_bound(unk, &sup);
+                    }
+                    if let Some(unk) = sup.is_solvable() {
+                        tracing::debug!("solving");
+                        return slf.solve_lower_bound(unk, &sub);
+                    }
+                    tracing::debug!("Proving subtyping failed; Falling back to checking equality");
+                    match slf.traced(
+                        CheckingTask::Strategy(
+                            "Proving subtyping failed; Falling back to checking equality",
+                        ),
+                        |slf| slf.check_equality_i(&sub, &sup),
+                    ) {
+                        Ok(r) => Some(r),
+                        Err(ls) => {
+                            slf.add_msg(ls.into());
+                            None
+                        }
+                    }
+                })
+            }
+        }
+
+        /*
         let sub = self
             .simplify_full(false, sub)
             .map_or(Cow::Borrowed(sub), Cow::Owned);
@@ -89,9 +169,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
         self.scoped(|slf| {
             if let Some(unk) = sub.is_solvable() {
+                tracing::debug!("solving");
                 return slf.solve_upper_bound(unk, &sup);
             }
             if let Some(unk) = sup.is_solvable() {
+                tracing::debug!("solving");
                 return slf.solve_lower_bound(unk, &sub);
             }
             let rules = slf
@@ -128,6 +210,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 }
             }
         })
+         */
     }
 
     pub(crate) fn check_inhabitable_i(&mut self, tm: &'t Term) -> Option<bool> {

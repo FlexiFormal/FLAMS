@@ -1,5 +1,7 @@
 use crate::{
-    CheckRef, Checker, impls::solving::Solutions, rules::sequences::TermExtSeq,
+    CheckRef, Checker,
+    impls::solving::{Solutions, Solvable, is_solvable_var},
+    rules::sequences::TermExtSeq,
     split::SplitStrategy,
 };
 use dashmap::DashSet;
@@ -211,26 +213,14 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             self.failure("Symbol not found");
             return None;
         };
-        s.data.tp.checked_or_parsed().map(|(t, _)| {
-            if super::preparation::NEW_VERSION {
-                t
-            } else {
-                self.bind_implicits(t)
-            }
-        })
+        s.data.tp.checked_or_parsed().map(|(t, _)| t)
     }
     pub(crate) fn get_symbol_definiens(&mut self, uri: &SymbolUri) -> Option<Term> {
         let Ok(s) = self.get_symbol(uri) else {
             self.failure("Symbol not found");
             return None;
         };
-        s.data.df.checked_or_parsed().map(|(t, _)| {
-            if super::preparation::NEW_VERSION {
-                t
-            } else {
-                self.bind_implicits(t)
-            }
-        })
+        s.data.df.checked_or_parsed().map(|(t, _)| t)
     }
 
     /// ### Errors
@@ -242,7 +232,10 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         self.top.get_variable(uri)
     }
 
-    pub(crate) fn get_var_definiens(&self, var: &Variable) -> Option<Term> {
+    pub(crate) fn get_var_definiens(&mut self, var: &Variable) -> Option<Term> {
+        if let Some(id) = is_solvable_var(var) {
+            return self.get_solution(id);
+        }
         for v in self.iter_context() {
             match (v, var) {
                 (

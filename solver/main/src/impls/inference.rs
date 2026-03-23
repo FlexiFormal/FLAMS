@@ -1,13 +1,22 @@
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
 
 use crate::{
-    CheckRef, TermExtSeq, impls::solving::TermExtSolvable, split::SplitStrategy,
+    CheckRef, TermExtSeq,
+    impls::solving::{TermExtSolvable, is_solvable_var},
+    split::SplitStrategy,
     trace::CheckingTask,
 };
 
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn infer_type(&mut self, t: &'t Term) -> Option<Term> {
-        self.wrap_check(CheckingTask::Inference(t), |slf| slf.infer_type_i(t))
+        tracing::debug!("Inferring type of {:?}", t.debug_short());
+        let r = self.wrap_check(CheckingTask::Inference(t), |slf| slf.infer_type_i(t));
+        if let Some(r) = &r {
+            tracing::debug!("Inferred: {:?}", r.debug_short());
+        } else {
+            tracing::debug!("Inferrence failed");
+        }
+        r
     }
     pub(crate) fn infer_type_i(&mut self, t: &'t Term) -> Option<Term> {
         match t {
@@ -33,11 +42,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None })
             .collect::<smallvec::SmallVec<_, 2>>();
         let r = Split::split(self, true, rules, |slf, rl| rl.infer(slf, t));
-        //r.map(|t| self.subst(t))
-        r.map(|t| {
+        r.map(|t| self.subst(t))
+        /*r.map(|t| {
             let simp = self.scoped(|slf| slf.simplify_full(false, &t)).unwrap_or(t);
             self.subst(simp)
-        })
+        })*/
     }
 
     pub fn infer_var_type(&mut self, var: &'t Variable) -> Option<Term> {
@@ -46,10 +55,10 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         })
     }
     pub(crate) fn infer_var_type_i(&mut self, var: &Variable) -> Option<Term> {
-        let (ctx, mut msgs) = self.split();
-        if let Some(id) = var.is_solvable() {
+        if let Some(id) = is_solvable_var(var) {
             return Some(self.get_solvable_type(id));
         }
+        let (ctx, mut msgs) = self.split();
         for v in ctx.iter().rev().map(|v| &**v) {
             match (v, var) {
                 (
@@ -146,10 +155,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 }
             })
         } else {
-            Some(Term::Var {
-                variable: self.new_solvable(),
-                presentation: None,
-            })
+            Some(self.new_solvable())
         }
     }
 }

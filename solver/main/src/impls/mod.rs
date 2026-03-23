@@ -1,7 +1,9 @@
+#![allow(clippy::absurd_extreme_comparisons)]
+
 pub mod backend;
 pub mod equality;
 mod inference;
-pub(crate) mod preparation;
+pub mod preparation;
 pub mod proving;
 pub mod simplify;
 pub mod solving;
@@ -19,6 +21,8 @@ use ftml_ontology::terms::ComponentVar;
 use proving::ProverState;
 use smallvec::SmallVec;
 use std::borrow::Cow;
+
+const DEPTH_LIMIT: usize = 128;
 
 impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     pub fn extend_context<C: CowLike<'c>>(&mut self, var: C) {
@@ -60,6 +64,13 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         tsk: CheckingTask<'c>,
         f: impl FnOnce(&mut Self) -> Option<R>,
     ) -> Result<R, RefCheckLog<'c>> {
+        if self.depth() >= DEPTH_LIMIT {
+            //self.failure("Depth Limit Reached!");
+            return Err(RefCheckLog::Msg(
+                "Depth Limit Reached!".into(),
+                ftml_solver_trace::MessageLevel::Failure,
+            ));
+        }
         let (r, l) = self.traced_inner(tsk, f);
         if let Some(r) = r {
             self.messages.push(CheckLogCow::Borrowed(l));
@@ -74,6 +85,10 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         task: CheckingTask<'c>,
         f: impl FnOnce(&mut Self) -> Option<R>,
     ) -> Option<R> {
+        if self.depth() >= DEPTH_LIMIT {
+            self.failure("Depth Limit Reached!");
+            return None;
+        }
         let old_msg = std::mem::replace(self.messages, SmallVec::new());
         let ret = f(self);
         *self.messages = old_msg;
@@ -88,6 +103,16 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         task: CheckingTask<'c>,
         f: impl FnOnce(&mut Self) -> Option<R>,
     ) -> (Option<R>, RefCheckLog<'c>) {
+        if self.depth() >= DEPTH_LIMIT {
+            //self.failure("Depth Limit Reached!");
+            return (
+                None,
+                RefCheckLog::Msg(
+                    "Depth Limit Reached!".into(),
+                    ftml_solver_trace::MessageLevel::Failure,
+                ),
+            );
+        }
         let old_msg = std::mem::replace(self.messages, SmallVec::new());
         let ret = f(self);
         let msgs = std::mem::replace(self.messages, old_msg);
@@ -107,6 +132,13 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         task: CheckingTask<'c>,
         f: impl FnOnce(CheckRef<'c, '_, Split>) -> Option<R>,
     ) -> Result<R, RefCheckLog<'c>> {
+        if self.depth() >= DEPTH_LIMIT {
+            //self.failure("Depth Limit Reached!");
+            return Err(RefCheckLog::Msg(
+                "Depth Limit Reached!".into(),
+                ftml_solver_trace::MessageLevel::Failure,
+            ));
+        }
         let mut messages = SmallVec::<CheckLogCow<'c>, _>::new();
         let mut solutions = Solutions::default();
         let inner = CheckRef {
@@ -188,6 +220,10 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
         task: CheckingTask<'c>,
         f: impl FnOnce(&mut Self) -> Option<R>,
     ) -> Option<R> {
+        if self.depth() >= DEPTH_LIMIT {
+            self.failure("Depth Limit Reached!");
+            return None;
+        }
         if self.cancel.is_cancelled() {
             self.failure("CANCELLED!");
             return None;

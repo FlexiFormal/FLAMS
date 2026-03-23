@@ -30,10 +30,12 @@ flams_math_archives::source_format!(STEX {
 fn main() {
     let _ = enable_ansi_support::enable_ansi_support();
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
+        .with_max_level(tracing::Level::INFO)
         .init();
     GlobalBackend::initialize::<AllSyncEngine>();
-
+    /*let _ = std::thread::Builder::new()
+    .stack_size(6 * 1024 * 1024)
+    .spawn(move || {*/
     //pause();
     let (i, t) = measure(check_selected); //measure(check_all); //
     println!("Checked {i} documents in {t}");
@@ -43,6 +45,9 @@ fn main() {
             .display()
             .iec_short()
     );*/
+    /*    })
+    .expect("wut")
+    .join();*/
 }
 
 fn check_selected() -> usize {
@@ -57,9 +62,9 @@ fn check_selected() -> usize {
                     $(
                         i += 1;
                         let mut solver = Checker::<SingleThreadedSplit/*RayonStrategiesDepth<4>*/>::new(AnyBackend::Global);
-                        //solver.set_cache(CACHE.take());
+                        solver.set_cache(CACHE.take());
                         check(&mut solver,$s);
-                        //CACHE.set(solver.into_cache());
+                        CACHE.set(solver.into_cache());
                     )*
                     i
                 }
@@ -91,6 +96,7 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/tests&d=natded&l=en",
         "http://mathhub.info?a=unimarx/werkbank&p=sec/einstimmungundgrundbegriffe/mod&d=evaluationmap&l=de",
         */
+        //
         "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
     )
     //}
@@ -162,9 +168,18 @@ fn pause() {
     use std::io::{Read, Write};
     let mut stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
-    write!(stdout, "Press any key to continue...").expect("wut");
+    write!(
+        stdout,
+        r"
+        --------------------------------------------------------------------------
+        Press any key to continue..
+
+    "
+    )
+    .expect("wut");
     let _ = stdout.flush();
     let _ = stdin.read(&mut [0u8]);
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
 }
 
 #[allow(clippy::needless_collect)]
@@ -204,9 +219,15 @@ fn check<Split: SplitStrategy>(solver: &mut Checker<Split>, s: &str) {
         .get_document(&s.parse().expect("uri wut"))
         .expect("wut");
     let ((mut v, _), t) = measure(|| solver.check_document(&d).expect("dependency missing"));
-    v.filter_failures();
-    println!("{}", v.colored());
-    println!("Checked after {t}");
+    let failures = count_fails(&v);
+    if failures == 0 {
+        println!("Checked after {t}");
+    } else {
+        v.filter_failures();
+        println!("{}", v.colored());
+        println!("Checked after {t}");
+        pause();
+    }
 }
 
 fn get_module(s: &str) -> Module {

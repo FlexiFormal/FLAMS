@@ -3,6 +3,7 @@ pub mod fixity;
 pub mod implicits;
 pub mod operators;
 pub mod sequences;
+pub mod unknowns;
 pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
 use ftml_uris::SymbolUri;
 
@@ -80,7 +81,8 @@ rules! {
         sequences::SeqIndexRule,
         sequences::SeqInferenceRule,
         operators::numbers::NumberTypes,
-        implicits::ImplicitRule
+        implicits::ImplicitRule,
+        unknowns::UnknownsRule
     ),
     subtyping = SubtypeRule(operators::numbers::NumberTypes),
     checking = CheckingRule(operators::numbers::NumberTypes),
@@ -88,7 +90,9 @@ rules! {
     equality = EqualityRule,
     universe = UniverseRule(sequences::SeqUniverseRule),
     preparation = PreparationRule,
-    simplification = SimplificationRule,
+    simplification = SimplificationRule(
+        unknowns::UnknownsRule
+    ),
     marker = MarkerRule,
     proof = ProofRule
 }

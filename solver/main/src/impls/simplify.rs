@@ -7,7 +7,7 @@ use ftml_solver_trace::{CheckerRule, CheckingTask};
 
 use crate::{
     CheckRef,
-    impls::solving::{BoundedValue, Solvable, TermExtSolvable},
+    impls::solving::is_solvable_var,
     rules::implicits::{ImplicitExtApp, ImplicitExtBound},
     split::SplitStrategy,
 };
@@ -19,9 +19,13 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
         self./*wrap_check*/untraced(CheckingTask::Simplify(term), |slf| {
             slf.simplify_full_i(expand, term)
-        })
+        }) //.inspect()
     }
     fn simplify_full_i(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
+        tracing::debug!(
+            "Fully Simplifying {:?} (expand:{expand})",
+            term.debug_short()
+        );
         let mut current = if expand && let Some(t) = self.simplify_implicit(term) {
             Cow::Owned(t)
         } else
@@ -35,13 +39,10 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     Cow::Owned(t)
                 })?,
                 Term::Var { variable, .. } => {
-                    if let Some(name) = variable.is_solvable()
-                        && let Some(Solvable {
-                            solution: BoundedValue::Solved(t),
-                            ..
-                        }) = self.get_solvable(name)
+                    if let Some(name) = is_solvable_var(variable)
+                        && let Some(t) = self.get_solution(name)
                     {
-                        Cow::Owned(t.clone())
+                        Cow::Owned(t)
                     } else if expand && let Some(df) = self.get_var_definiens(variable) {
                         Cow::Owned(df)
                     } else {
@@ -143,7 +144,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         let mut current = Cow::<'t, _>::Borrowed(term);
         loop {
             let Some(next) = self.scoped(|slf| slf.simplify_one(true, &current)) else {
-                self.comment(format!("Final simplification: {:?}", current.debug_short()));
+                //self.comment(format!("Final simplification: {:?}", current.debug_short()));
                 return None;
             };
             if until(self, &next) {
@@ -204,6 +205,104 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
+    pub(crate) fn simplify_rules_two<Rl: CheckerRule + ?Sized + 'static, R>(
+        &mut self,
+        rules: &'t [Box<Rl>],
+        term1: &'t Term,
+        term2: &'t Term,
+        applicable: impl Fn(&CheckRef<'_, '_, Split>, &Rl, &Term, &Term) -> bool,
+        apply: impl for<'s> Fn(CheckRef<'s, '_, Split>, &Rl, &'s Term, &'s Term) -> Option<R> + Sync,
+        abort: impl Fn(&Term, &Term) -> bool + Send + Sync,
+    ) -> either::Either<Option<R>, (Term, Term)>
+    where
+        R: Send + Sync + std::fmt::Debug + Clone + 'static,
+    {
+        let mut applicables = smallvec::SmallVec::<_, 2>::default();
+        let mut left = true;
+        let mut right = true;
+        let mut next_left = true;
+        let mut t1 = Cow::Borrowed(term1);
+        let mut t2 = Cow::Borrowed(term2);
+        loop {
+            macro_rules! set {
+                () => {
+                    if abort(&*t1, &*t2) {
+                        return either::Right((t1.into_owned(), t2.into_owned()));
+                    }
+                    applicables = rules
+                        .iter()
+                        .filter_map(|rl| {
+                            if applicable(self, &**rl, &*t1, &*t2) {
+                                Some(&**rl)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    if !applicables.is_empty() {
+                        break;
+                    }
+                };
+            }
+            loop {
+                if next_left && left {
+                    set!();
+                    next_left = false;
+                    if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t1)) {
+                        t1 = Cow::Owned(next);
+                        continue;
+                    }
+                    left = false;
+                }
+                if right {
+                    set!();
+                    next_left = true;
+                    if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t2)) {
+                        t2 = Cow::Owned(next);
+                        continue;
+                    }
+                    right = false;
+                    continue;
+                }
+                break;
+            }
+            if applicables.is_empty() {
+                self.failure("No rule applicable");
+                return either::Left(None);
+            }
+            if let Some(r) = self.scoped(|slf| {
+                Split::split(slf, true, std::mem::take(&mut applicables), |slf, rl| {
+                    apply(slf, rl, &t1, &t2)
+                })
+            }) {
+                return either::Left(Some(r));
+            }
+            if next_left && left {
+                next_left = false;
+                if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t1)) {
+                    t1 = Cow::Owned(next);
+                    set!();
+                    continue;
+                }
+            }
+            if right {
+                next_left = true;
+                if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t2)) {
+                    t2 = Cow::Owned(next);
+                    set!();
+                    continue;
+                }
+                right = false;
+                if left {
+                    continue;
+                }
+            }
+            break;
+        }
+        self.failure("No rule applicable");
+        either::Left(None)
+    }
+
     pub(crate) fn simplify_one(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
         let applicables = self
             .top
@@ -236,8 +335,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     pub(crate) fn simplify_implicit(&mut self, term: &'t Term) -> Option<Term> {
-        if crate::impls::preparation::NEW_VERSION
-            && let Some((Term::Symbol { uri, .. }, args)) = term.unapply_implicits()
+        if let Some((Term::Symbol { uri, .. }, args)) = term.unapply_implicits()
             && let Some(def) = self.get_symbol_definiens(uri)
             && let Some((def, vars)) = def.get_bound_implicits()
             && args.len() == vars.len()
@@ -252,7 +350,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     substs.push((var.name(), arg));
                 }
             }
-            Some((def / &*substs).into_owned())
+            let r = def / &*substs;
+            tracing::debug!("Unapplied implicits: {:?}", r.debug_short());
+            Some(r.into_owned())
         } else {
             None
         }
@@ -267,7 +367,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).inspect(|_| {
                 self.comment("expanded definition");
             }),
-            Term::Var { variable, .. } if expand => {
+            Term::Var { variable, .. } if expand || is_solvable_var(variable).is_some() => {
                 self.get_var_definiens(variable).inspect(|_| {
                     self.comment("expanded definition");
                 })

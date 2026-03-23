@@ -17,7 +17,7 @@ mod toc;
 
 use leptos::prelude::*;
 
-#[server(prefix = "/api/", endpoint = "checklog")]
+#[server(prefix = "/api", endpoint = "checklog")]
 pub async fn get_check_log(
     uri: ftml_uris::DocumentUri,
 ) -> Result<String /*ftml_solver_trace::results::DocumentCheckResult*/, ServerFnError<String>> {
@@ -47,8 +47,9 @@ pub async fn get_check_log(
 pub struct Continuations;
 impl ftml_components::ViewContinuations for Continuations {
     fn document_drawer(
+        &self,
         doc: &ftml_ontology::narrative::documents::Document,
-    ) -> impl leptos::IntoView {
+    ) -> leptos::prelude::AnyView {
         use crate::checks::ResultExt;
         use flams_web_utils::components::wait_and_then_fn;
         use ftml_components::utils::Header;
@@ -68,10 +69,11 @@ impl ftml_components::ViewContinuations for Continuations {
                 }
             </LazyCollapsible>
         }
+        .into_any()
     }
 }
 
-pub type Views = ftml_components::Views<backend::FtmlBackend, Continuations>;
+pub type Views = ftml_components::Views;
 
 #[cfg(feature = "ssr")]
 mod ssr {

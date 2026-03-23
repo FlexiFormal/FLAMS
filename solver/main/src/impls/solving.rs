@@ -1,10 +1,14 @@
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 
-use ftml_ontology::terms::{Term, Variable};
+use ftml_ontology::terms::{
+    ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
+    Variable,
+};
 use ftml_uris::Id;
 
 use crate::{
     CheckRef, Checker,
+    rules::unknowns::beta_unknowns,
     split::SplitStrategy,
     utils::{Merge, MutableRefList},
 };
@@ -16,6 +20,7 @@ pub trait TermExtSolvable {
     fn has_solvable(&self) -> bool;
 }
 
+/*
 impl TermExtSolvable for Variable {
     fn is_solvable(&self) -> Option<&Id> {
         let Self::Name { name, .. } = self else {
@@ -36,24 +41,38 @@ impl TermExtSolvable for Variable {
         self.is_solvable().is_some()
     }
 }
+ */
+
+pub fn is_solvable_var(var: &Variable) -> Option<&Id> {
+    let Variable::Name { name, .. } = var else {
+        return None;
+    };
+    if name.as_ref().starts_with(PREFIX)
+        && name.as_ref().as_bytes()[PREFIX.len()..]
+            .iter()
+            .all(u8::is_ascii_digit)
+    {
+        Some(name)
+    } else {
+        None
+    }
+}
 
 impl TermExtSolvable for Term {
     fn is_solvable(&self) -> Option<&Id> {
         if let Self::Var { variable, .. } = self {
-            variable.is_solvable()
+            is_solvable_var(variable)
+        } else if let Self::Application(app) = self
+            && let Self::Var { variable, .. } = &app.head
+        {
+            is_solvable_var(variable)
         } else {
             None
         }
     }
     fn has_solvable(&self) -> bool {
-        self.has_free_such_that(|v| v.is_solvable().is_some())
+        self.has_free_such_that(|v| is_solvable_var(v).is_some())
     }
-}
-
-#[derive(Copy, Clone)]
-pub struct Ancestor<'i> {
-    pub(crate) p: &'i rustc_hash::FxHashSet<Solvable>,
-    pub(crate) gp: Option<&'i Self>,
 }
 
 #[derive(Clone)]
@@ -80,12 +99,58 @@ impl std::fmt::Debug for BoundedValue {
 #[derive(Clone)]
 pub struct Solvable {
     pub(crate) name: Id,
-    pub(crate) solution: BoundedValue,
-    pub(crate) tp: BoundedValue,
+    solution: BoundedValue,
+    context: Vec<ComponentVar>,
+    tp: BoundedValue,
+}
+impl Solvable {
+    pub(crate) fn new(name: Id, context: impl Iterator<Item = ComponentVar>) -> Self {
+        Self {
+            name,
+            solution: BoundedValue::None,
+            tp: BoundedValue::None,
+            context: context.collect(),
+        }
+    }
+
+    pub const fn solution(&self) -> Option<&Term> {
+        if let BoundedValue::Solved(t) = &self.solution {
+            Some(t)
+        } else {
+            None
+        }
+    }
 }
 impl std::fmt::Debug for Solvable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} := {:?} (: {:?})", self.name, self.solution, self.tp)
+        struct CtxWrap<'i>(&'i [ComponentVar]);
+        impl std::fmt::Debug for CtxWrap<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mut first = true;
+                for ComponentVar { var, tp, df } in self.0 {
+                    if !first {
+                        f.write_str(", ")?;
+                    }
+                    first = false;
+                    var.name().fmt(f)?;
+                    if let Some(tp) = tp {
+                        write!(f, " : {:?}", tp.debug_short())?;
+                    }
+                    if let Some(df) = df {
+                        write!(f, " := {:?}", df.debug_short())?;
+                    }
+                }
+                Ok(())
+            }
+        }
+        write!(
+            f,
+            "{} := {{{:?}}} {:?} (: {:?})",
+            self.name,
+            CtxWrap(&self.context),
+            self.solution,
+            self.tp
+        )
     }
 }
 impl PartialEq for Solvable {
@@ -141,45 +206,70 @@ impl MutableRefList<'_, Solutions> {
     }
 
     fn set_solution(&mut self, name: Id, solution: Term) {
-        let tp = self
+        let (tp, context) = self
             .get_solvable(&name)
-            .map_or(BoundedValue::None, |e| e.tp.clone());
+            .map_or((BoundedValue::None, Vec::new()), |e| {
+                (e.tp.clone(), e.context.clone())
+            });
         self.0.remove(&name);
+
         let ne = Solvable {
             name,
             solution: BoundedValue::Solved(solution),
             tp,
+            context,
         };
         self.0.insert(ne);
     }
     fn set_type(&mut self, name: Id, tp: Term) {
-        let solution = self
+        let (solution, context) = self
             .get_solvable(&name)
-            .map_or(BoundedValue::None, |e| e.solution.clone());
+            .map_or((BoundedValue::None, Vec::new()), |e| {
+                (e.solution.clone(), e.context.clone())
+            });
         let ne = Solvable {
             name,
             solution,
             tp: BoundedValue::Solved(tp),
+            context,
         };
+
         self.0.remove(&ne);
         self.0.insert(ne);
     }
+    #[must_use]
     pub fn subst(&self, term: Term) -> Term {
-        let freevars = term.free_variables();
-        if freevars.is_empty() {
+        fn subst_i(slf: &MutableRefList<Solutions>, term: Term) -> Term {
+            let freevars = term.free_variables();
+            if freevars.is_empty() {
+                drop(freevars);
+                return term;
+            }
+            let mut ret = smallvec::SmallVec::<_, 2>::new();
+            for v in slf.iter().flat_map(|m| m.0.iter()) {
+                if let BoundedValue::Solved(tm) = &v.solution
+                    && freevars.iter().any(|f| f.name() == v.name.as_ref())
+                {
+                    ret.push((v.name.to_string(), slf.subst(tm.clone()))); //get(curr.0, curr.1, tm))); //tm.clone()));
+                }
+            }
             drop(freevars);
-            return term;
-        }
-        let mut ret = smallvec::SmallVec::<_, 2>::new();
-        for v in self.iter().flat_map(|m| m.0.iter()) {
-            if let BoundedValue::Solved(tm) = &v.solution
-                && freevars.iter().any(|f| f.name() == v.name.as_ref())
-            {
-                ret.push((v.name.to_string(), tm.clone())); //get(curr.0, curr.1, tm))); //tm.clone()));
+
+            //term / ret.as_slice()
+            match &term / ret.as_slice() {
+                Cow::Borrowed(_) => term,
+                Cow::Owned(t) if t.has_solvable() => {
+                    tracing::trace!(
+                        "substituted {:?}\n  =>  {:?}",
+                        term.debug_short(),
+                        t.debug_short()
+                    );
+                    subst_i(slf, t)
+                }
+                Cow::Owned(t) => t,
             }
         }
-        drop(freevars);
-        term / ret.as_slice()
+        beta_unknowns(subst_i(self, term))
     }
 }
 
@@ -193,46 +283,96 @@ impl<Split: SplitStrategy> Checker<Split> {
     }
 }
 
-impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
+fn apply_solvable(name: Id, ctx: impl ExactSizeIterator<Item = Variable>) -> Term {
+    let head: Term = Variable::Name {
+        name,
+        notated: None,
+    }
+    .into();
+    if ctx.len() == 0 {
+        head
+    } else {
+        Term::Application(ApplicationTerm::new(
+            head,
+            Box::new([Argument::Sequence(MaybeSequence::Seq(
+                ctx.map(Into::into).collect(),
+            ))]),
+            None,
+        ))
+    }
+}
+
+impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     #[must_use]
-    pub fn new_solvable(&mut self) -> Variable {
+    pub fn new_solvable(&mut self) -> Term {
         let name = self.top.new_solvable();
         self.add_solvable(name.clone());
-        Variable::Name {
-            name,
-            notated: None,
-        }
+        apply_solvable(name, self.context.as_ref().iter().map(|cv| cv.var.clone()))
     }
-    pub(crate) fn solve_equality(&mut self, unk: &Id, solution: &'t Term) -> Option<bool> {
+    pub(crate) fn solve_equality(&mut self, unk: &Id, solution: &Term) -> Option<bool> {
         self.comment(format!("solving unknown {unk}"));
         let Some(unks) = self.get_solvable(unk) else {
             self.failure("Unknown unknown!");
             return Some(false);
         };
+
         if let BoundedValue::Solved(tm) = &unks.solution {
             let tm = tm.clone();
+            let ctx = unks
+                .context
+                .iter()
+                .cloned()
+                .map(cleanup_cv)
+                .collect::<Vec<_>>();
             self.comment("already solved");
-            return self.scoped(|slf| slf.check_equality(&tm, solution));
+            let solution = if ctx.is_empty() {
+                Cow::Borrowed(solution)
+            } else {
+                Cow::Owned(Term::Bound(BindingTerm::new(
+                    (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
+                    Box::new([
+                        BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
+                        BoundArgument::Simple(solution.clone()),
+                    ]),
+                    None,
+                )))
+            };
+            return self.scoped(|slf| slf.check_equality(&solution, &tm));
         }
-        self.comment(format!(
-            "Solved as {:?} in context {:?}",
-            solution.debug_short(),
-            self.context
-        ));
-        self.solve(unk.clone(), solution.clone());
+        self.solve(unk.clone(), solution.clone())?;
         Some(true)
     }
 
-    pub(crate) fn solve_upper_bound(&mut self, unk: &Id, bound: &'t Term) -> Option<bool> {
+    pub(crate) fn solve_upper_bound(&mut self, unk: &Id, bound: &Term) -> Option<bool> {
+        tracing::debug!("Solving upper bound");
         self.comment(format!("solving boundaries of unknown {unk}"));
         let Some(unks) = self.get_solvable(unk) else {
             self.failure("Unknown unknown!");
             return Some(false);
         };
+
         if let BoundedValue::Solved(tm) = &unks.solution {
             let tm = tm.clone();
+            let ctx = unks
+                .context
+                .iter()
+                .cloned()
+                .map(cleanup_cv)
+                .collect::<Vec<_>>();
             self.comment("already solved");
-            return self.scoped(|slf| slf.check_subtype(&tm, bound));
+            let bound = if ctx.is_empty() {
+                Cow::Borrowed(bound)
+            } else {
+                Cow::Owned(Term::Bound(BindingTerm::new(
+                    (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
+                    Box::new([
+                        BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
+                        BoundArgument::Simple(bound.clone()),
+                    ]),
+                    None,
+                )))
+            };
+            return self.scoped(|slf| slf.check_subtype(&tm, &bound));
         }
         /*
         if let BoundedValue::Bounded(lower, upper) = &unks.solution {
@@ -259,16 +399,12 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
 
         trace.comment(format!("Solving upper type bound of {unk}"));
          */
-        self.comment(format!(
-            "Solved as {:?} on context {:?}",
-            bound.debug_short(),
-            self.context
-        ));
-        self.solve(unk.clone(), bound.clone());
+        self.solve(unk.clone(), bound.clone())?;
         Some(true)
     }
 
-    pub(crate) fn solve_lower_bound(&mut self, unk: &Id, bound: &'t Term) -> Option<bool> {
+    pub(crate) fn solve_lower_bound(&mut self, unk: &Id, bound: &Term) -> Option<bool> {
+        tracing::debug!("Solving lower bound");
         self.comment(format!("solving boundaries of unknown {unk}"));
         let Some(unks) = self.get_solvable(unk) else {
             self.failure("Unknown unknown!");
@@ -279,15 +415,28 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         //
         if let BoundedValue::Solved(tm) = &unks.solution {
             let tm = tm.clone();
+            let ctx = unks
+                .context
+                .iter()
+                .cloned()
+                .map(cleanup_cv)
+                .collect::<Vec<_>>();
             self.comment("already solved");
-            return self.scoped(|slf| slf.check_subtype(bound, &tm));
+            let bound = if ctx.is_empty() {
+                Cow::Borrowed(bound)
+            } else {
+                Cow::Owned(Term::Bound(BindingTerm::new(
+                    (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
+                    Box::new([
+                        BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
+                        BoundArgument::Simple(bound.clone()),
+                    ]),
+                    None,
+                )))
+            };
+            return self.scoped(|slf| slf.check_subtype(&bound, &tm));
         }
-        self.comment(format!(
-            "Solved as {:?} on context {:?}",
-            bound.debug_short(),
-            self.context
-        ));
-        self.solve(unk.clone(), bound.clone());
+        self.solve(unk.clone(), bound.clone())?;
         Some(true)
     }
 
@@ -296,13 +445,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         self.solutions.merge(solutions);
     }
     fn add_solvable(&mut self, name: Id) {
-        self.solutions.0.insert(Solvable {
+        self.solutions.0.insert(Solvable::new(
             name,
-            solution: BoundedValue::None,
-            tp: BoundedValue::None,
-        });
+            self.context.as_ref().iter().map(|v| v.clone().into_owned()),
+        ));
     }
-    pub(crate) fn get_solvable<'s>(&'s self, name: &Id) -> Option<&'s Solvable> {
+
+    pub fn get_solution(&self, name: &Id) -> Option<Term> {
+        self.get_solvable(name)
+            .and_then(Solvable::solution)
+            .map(|t| self.subst(t.clone()))
+    }
+
+    fn get_solvable<'s>(&'s self, name: &Id) -> Option<&'s Solvable> {
         self.solutions.get_solvable(name)
         /*
         fn get<'i>(
@@ -331,114 +486,99 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         get_solvable_i(self, name, None)
          */
     }
+
     pub(crate) fn get_solvable_type(&mut self, name: &Id) -> Term {
-        if let Some(s) = self.get_solvable(name).and_then(|slv| match &slv.tp {
-            BoundedValue::Solved(t) => Some(t.clone()),
-            _ => None,
-        }) {
-            return s;
-        }
-        let v = self.new_solvable();
-        let t = Term::Var {
-            variable: v,
-            presentation: None,
+        let ctx = if let Some(s) = self.get_solvable(name) {
+            if let BoundedValue::Solved(t) = &s.tp {
+                return t.clone();
+            }
+            Some(
+                s.context
+                    .iter()
+                    .cloned()
+                    .map(cleanup_cv)
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            None
         };
-        self.solve_type(name.clone(), t.clone());
-        t
+        let ctx = ctx.unwrap_or(Vec::new());
+        let tp_name = self.top.new_solvable();
+        self.solutions
+            .0
+            .insert(Solvable::new(tp_name.clone(), ctx.iter().cloned()));
+        let tp: Term = if ctx.is_empty() {
+            tp_name.into()
+        } else {
+            let body = apply_solvable(tp_name, ctx.iter().map(|cv| cv.var.clone()));
+            Term::Bound(BindingTerm::new(
+                (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
+                Box::new([
+                    BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
+                    BoundArgument::Simple(body),
+                ]),
+                None,
+            ))
+        };
+        self.solve_type(name.clone(), tp.clone());
+        tp
     }
 
-    pub(crate) fn solve(&mut self, name: Id, solution: Term) {
-        let solution = self.subst(solution);
-        self.solutions.set_solution(name, solution);
-        /*let tp = self
-            .get_solvable(&name)
-            .map_or(BoundedValue::None, |e| e.tp.clone());
-        self.solutions.remove(&name);
-        let ne = Solvable {
-            name,
-            solution: BoundedValue::Solved(solution),
-            tp,
+    fn solve(&mut self, name: Id, solution: Term) -> Option<()> {
+        let Some((ctx, tp)) = self.get_solvable(&name).map(|s| {
+            (
+                s.context
+                    .iter()
+                    .cloned()
+                    .map(cleanup_cv)
+                    .collect::<Vec<_>>(),
+                (), /*s.tp.clone()*/
+            )
+        }) else {
+            self.failure("Unknown not found");
+            return None;
         };
-        self.solutions.insert(ne);*/
+        let solution = self.subst(solution);
+        if solution.has_free_such_that(|v| v.name() == name.as_ref()) {
+            tracing::debug!("Circular solution! {:?}", solution.debug_short());
+            self.failure(format!("Circular solution: {:?}", solution.debug_short()));
+            return None;
+        }
+        let solution = if ctx.is_empty() {
+            solution
+        } else {
+            Term::Bound(BindingTerm::new(
+                (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
+                Box::new([
+                    BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
+                    BoundArgument::Simple(solution),
+                ]),
+                None,
+            ))
+        };
+        tracing::debug!("solving {name} as {:?}", solution.debug_short());
+        self.comment(format!("Solved {name} as {:?}", solution.debug_short()));
+        /*if let BoundedValue::Solved(tp) = tp {
+            self.comment("Checking against previous type solution");
+            self.scoped(|slf| slf.check_type(&solution, &tp))?;
+        }*/
+        self.solutions.set_solution(name, solution);
+        Some(())
     }
-    pub(crate) fn solve_type(&mut self, name: Id, tp: Term) {
+    fn solve_type(&mut self, name: Id, tp: Term) {
         let tp = self.subst(tp);
         self.solutions.set_type(name, tp);
-        /*
-        let solution = self
-            .get_solvable(&name)
-            .map_or(BoundedValue::None, |e| e.solution.clone());
-        let ne = Solvable {
-            name,
-            solution,
-            tp: BoundedValue::Solved(tp),
-        };
-        self.solutions.remove(&ne);
-        self.solutions.insert(ne);
-         */
-    }
-
-    pub(crate) fn subst_map(
-        term: Term,
-        solutions: &rustc_hash::FxHashSet<Solvable>,
-        parent: Option<Ancestor>,
-    ) -> Term {
-        fn get(
-            map: &rustc_hash::FxHashSet<Solvable>,
-            parent: Option<Ancestor>,
-            term: &Term,
-        ) -> Term {
-            let Some(mut next) = term.is_solvable() else {
-                return term.clone();
-            };
-            let mut curr = (map, parent);
-            let mut ret = term;
-            loop {
-                let Some(slv) = curr.0.get(next) else {
-                    let Some(Ancestor { p, gp }) = curr.1 else {
-                        return ret.clone();
-                    };
-                    curr = (p, gp.copied());
-                    continue;
-                };
-                if let BoundedValue::Solved(t) = &slv.solution {
-                    if let Some(n) = t.is_solvable() {
-                        ret = t;
-                        next = n;
-                    } else {
-                        return t.clone();
-                    }
-                } else {
-                    return ret.clone();
-                }
-            }
-        }
-        let freevars = term.free_variables();
-        if freevars.is_empty() {
-            drop(freevars);
-            return term;
-        }
-        let mut ret = smallvec::SmallVec::<_, 2>::new();
-        let mut curr = (solutions, parent);
-        loop {
-            for v in curr.0 {
-                if let BoundedValue::Solved(tm) = &v.solution
-                    && freevars.iter().any(|f| f.name() == v.name.as_ref())
-                {
-                    ret.push((v.name.to_string(), tm.clone())); //get(curr.0, curr.1, tm))); //tm.clone()));
-                }
-            }
-            if let Some(Ancestor { p, gp }) = curr.1 {
-                curr = (p, gp.copied());
-            } else {
-                break;
-            }
-        }
-        drop(freevars);
-        term / ret.as_slice()
     }
 
     pub(crate) fn subst(&self, term: Term) -> Term {
         self.solutions.subst(term) //Self::subst_map(term, self.solutions, self.parent_solutions)
+    }
+}
+
+fn cleanup_cv(cv: ComponentVar) -> ComponentVar {
+    ComponentVar {
+        var: cv.var,
+        tp: None,
+        df: None,
     }
 }
