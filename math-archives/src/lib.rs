@@ -607,7 +607,9 @@ impl LocalArchive {
             let Some((_, ext)) = name.rsplit_once('.') else {
                 continue;
             };
-            if !SourceFormat::all()
+            if !self
+                .formats
+                .iter()
                 .flat_map(|sf| sf.file_extensions.iter())
                 .any(|e| *e == ext)
             {
