@@ -193,20 +193,14 @@ impl Queue {
             let Ok(permit) = tokio::sync::Semaphore::acquire_owned(sem.clone()).await else {
                 break;
             };
-            let selfclone = self.clone();
-            if !tokio::task::spawn_blocking(move || {
-                let Some((task, id)) = selfclone.get_next() else {
-                    return false;
-                };
-                let span = tracing::Span::current();
-                span.in_scope(move || selfclone.run_task_async(&task, id, permit));
-                true
-            })
-            .await
-            .unwrap_or(false)
-            {
+            let Some((task, id)) = self.get_next() else {
                 break;
-            }
+            };
+            let selfclone = self.clone();
+            let span = tracing::Span::current();
+            tokio::task::spawn_blocking(move || {
+                span.in_scope(move || selfclone.run_task_async(&task, id, permit));
+            });
         }
         loop {
             if matches!(&*self.0.state.read(),QueueState::Running(RunningQueue{running,..}) if !running.is_empty())

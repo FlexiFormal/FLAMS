@@ -118,75 +118,52 @@ impl Queue {
         }
     }
 
-    fn get_next_i(&self) -> std::ops::ControlFlow<Option<(BuildTask, BuildTargetId)>> {
-        let mut state = self.0.state.write();
-        let QueueState::Running(RunningQueue {
-            queue,
-            //blocked,
-            running,
-            ..
-        }) = &mut *state
-        else {
-            unreachable!()
-        };
-        if queue.is_empty() /*&& blocked.is_empty()*/ && running.is_empty() {
-            return std::ops::ControlFlow::Break(None);
-        }
-        if let Some((i, target)) = queue
-            .iter()
-            .enumerate()
-            .find_map(|(next, e)| Self::can_be_next(e).map(|t| (next, t)))
-        {
-            let Some(task) = queue.remove(i) else {
-                unreachable!()
-            };
-            *task
-                .get_step(target)
-                .unwrap_or_else(|| unreachable!())
-                .0
-                .state
-                .write() = TaskState::Running;
-            running.push(task.clone());
-            return std::ops::ControlFlow::Break(Some((task, target)));
-        }
-        if !running.is_empty() {
-            drop(state);
-            return std::ops::ControlFlow::Continue(());
-        } else
-        /*if !blocked.is_empty() {
-            todo!()
-        } else {
-            todo!()
-        }*/
-        {
-            return std::ops::ControlFlow::Break(None);
-        }
-    }
-
     pub(super) fn get_next(&self) -> Option<(BuildTask, BuildTargetId)> {
         loop {
-            match self.get_next_i() {
-                std::ops::ControlFlow::Break(r) => return r,
-                std::ops::ControlFlow::Continue(()) => {
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                }
+            let mut state = self.0.state.write();
+            let QueueState::Running(RunningQueue {
+                queue,
+                //blocked,
+                running,
+                ..
+            }) = &mut *state
+            else {
+                unreachable!()
+            };
+            if queue.is_empty() /*&& blocked.is_empty()*/ && running.is_empty() {
+                return None;
+            }
+            if let Some((i, target)) = queue
+                .iter()
+                .enumerate()
+                .find_map(|(next, e)| Self::can_be_next(e).map(|t| (next, t)))
+            {
+                let Some(task) = queue.remove(i) else {
+                    unreachable!()
+                };
+                *task
+                    .get_step(target)
+                    .unwrap_or_else(|| unreachable!())
+                    .0
+                    .state
+                    .write() = TaskState::Running;
+                running.push(task.clone());
+                return Some((task, target));
+            }
+            if !running.is_empty() {
+                drop(state);
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            } else
+            /*if !blocked.is_empty() {
+                todo!()
+            } else {
+                todo!()
+            }*/
+            {
+                return None;
             }
         }
     }
-
-    /*
-    #[cfg(feature = "tokio")]
-    pub(super) async fn get_next_async(&self) -> Option<(BuildTask, BuildTargetId)> {
-        loop {
-            match self.get_next_i() {
-                std::ops::ControlFlow::Break(r) => return r,
-                std::ops::ControlFlow::Continue(()) => {
-                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                }
-            }
-        }
-    }
-     */
 
     fn can_be_next(e: &BuildTask) -> Option<BuildTargetId> {
         let step =
