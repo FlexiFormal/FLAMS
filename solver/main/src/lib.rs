@@ -932,7 +932,7 @@ fn topo_sort(
 ) -> usize {
     let mut added = 0;
     while let Some(uri) = new.last() {
-        if sorted.contains(uri) {
+        if !uri.is_top() || sorted.contains(uri) {
             let _ = new.pop();
             continue;
         }
@@ -943,6 +943,7 @@ fn topo_sort(
             continue;
         };
         let curr = new.len();
+        //println!("Sorting {uri}");
 
         let mut changed = false;
         if let Some(e) = m.meta_module.as_ref()
@@ -955,7 +956,7 @@ fn topo_sort(
             let AnyDeclarationRef::Import { uri, .. } = e else {
                 continue;
             };
-            if sorted.contains(uri) {
+            if !uri.is_top() || sorted.contains(uri) {
                 continue;
             }
             new.insert(curr, uri.clone());

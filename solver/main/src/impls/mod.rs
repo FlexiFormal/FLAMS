@@ -23,7 +23,7 @@ use proving::ProverState;
 use smallvec::SmallVec;
 use std::borrow::Cow;
 
-const DEPTH_LIMIT: usize = 128;
+const DEPTH_LIMIT: usize = 64;
 
 impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     pub fn extend_context<C: CowLike<'c>>(&mut self, var: C) {

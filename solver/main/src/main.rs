@@ -30,7 +30,7 @@ flams_math_archives::source_format!(STEX {
 fn main() {
     let _ = enable_ansi_support::enable_ansi_support();
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_max_level(tracing::Level::TRACE)
         .init();
     GlobalBackend::initialize::<AllSyncEngine>();
     /*let _ = std::thread::Builder::new()
@@ -96,8 +96,9 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/tests&d=natded&l=en",
         "http://mathhub.info?a=unimarx/werkbank&p=sec/einstimmungundgrundbegriffe/mod&d=evaluationmap&l=de",
         "http://mathhub.info?a=FTML/tests&d=othertests&l=en",
-        */
         "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
+        */
+        "http://mathhub.info?a=sTeX/MathBase/Sets&p=mod&d=CartesianProduct&l=en",
     )
     //}
 }

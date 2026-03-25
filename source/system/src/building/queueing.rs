@@ -203,9 +203,9 @@ impl Queue {
 
     fn can_be_next(e: &BuildTask) -> Option<BuildTargetId> {
         let step =
-            e.0.steps
-                .iter()
-                .find(|step| *step.0.state.read() == TaskState::Queued)?;
+            e.0.steps.iter().find(|step| {
+                matches!(*step.0.state.read(), TaskState::Queued | TaskState::Blocked)
+            })?;
         for d in &step.0.requires.read().0 {
             if let Dependency::Resolved { task, step, strict } = d {
                 if *strict
