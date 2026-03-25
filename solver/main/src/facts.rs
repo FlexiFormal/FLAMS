@@ -340,10 +340,10 @@ impl Fact {
             tp.0.get_bound_implicits()
                 .map(|(t, _)| t.clone())
                 .unwrap_or(tp.0);
-        let tp = checker
-            .wrap_none(None, |mut slf| slf.simplify_full(true, &tp))
-            .1
-            .unwrap_or(tp);
+        /*let tp = checker
+        .wrap_none(None, |mut slf| slf.simplify_full(true, &tp))
+        .1
+        .unwrap_or(tp);*/
         let allvars = tp.free_variables();
         let mut type_guards = Vec::new();
         let mut curr = &tp;

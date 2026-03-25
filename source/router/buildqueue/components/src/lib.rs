@@ -188,7 +188,7 @@ fn do_log(s: either::Either<String, String>) -> AnyView {
             }),
             either::Right(v) => leptos::either::Either::Right({
                 ftml_solver_trace::results::DocumentCheckResult::from_json(&v)
-                    .map_or_else(|e| e.into_any(),|e| e.render())
+                    .map_or_else(|_| view!{<pre>v</pre>}.into_any(),|e| e.render())
             })
         }
     }</Scrollbar>}

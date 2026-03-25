@@ -3,12 +3,15 @@ use std::borrow::Cow;
 use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
 };
-use ftml_solver_trace::{CheckerRule, CheckingTask};
+use ftml_solver_trace::{CheckerRule, CheckingTask, traceref};
 
 use crate::{
     CheckRef,
-    impls::solving::is_solvable_var,
-    rules::implicits::{ImplicitExtApp, ImplicitExtBound},
+    impls::solving::{TermExtSolvable, is_solvable_var},
+    rules::{
+        implicits::{ImplicitExtApp, ImplicitExtBound},
+        unknowns::{beta_unknowns, beta_unknowns_cow},
+    },
     split::SplitStrategy,
 };
 
@@ -19,7 +22,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
         self./*wrap_check*/untraced(CheckingTask::Simplify(term), |slf| {
             slf.simplify_full_i(expand, term)
-        }) //.inspect()
+        }).inspect(|t| {
+            self.add_msg(traceref!("Simplified: ",t.clone()).into());
+        })
     }
     fn simplify_full_i(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
         tracing::debug!(
@@ -205,6 +210,55 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
+    pub(crate) fn simplify_until_two(
+        &mut self,
+        term1: &'t Term,
+        term2: &'t Term,
+        mut until: impl FnMut(&Self, &Term, &Term) -> bool,
+    ) -> Option<(Cow<'t, Term>, Cow<'t, Term>)> {
+        let mut left = true;
+        let mut right = true;
+        let mut next_left = true;
+        let mut t1 = Cow::Borrowed(term1);
+        let mut t2 = Cow::Borrowed(term2);
+        loop {
+            if next_left && left {
+                if until(self, &t1, &t2) {
+                    return Some((t1, t2));
+                }
+                next_left = false;
+                if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t1)) {
+                    t1 = Cow::Owned(next);
+                    continue;
+                }
+                left = false;
+            }
+            if right {
+                if until(self, &t1, &t2) {
+                    return Some((t1, t2));
+                }
+                next_left = true;
+                if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t2)) {
+                    t2 = Cow::Owned(next);
+                    continue;
+                }
+                right = false;
+                continue;
+            }
+            break;
+        }
+        self.add_msg(
+            traceref!(FAIL
+                "Final simplifications: ",
+                t1.into_owned(),
+                " and ",
+                t2.into_owned()
+            )
+            .into(),
+        );
+        None
+    }
+
     pub(crate) fn simplify_rules_two<Rl: CheckerRule + ?Sized + 'static, R>(
         &mut self,
         rules: &'t [Box<Rl>],
@@ -303,7 +357,22 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         either::Left(None)
     }
 
-    pub(crate) fn simplify_one(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
+    fn simplify_one(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
+        if term.has_solvable() {
+            let nterm = self.subst(term.clone());
+            if *term != nterm {
+                return Some(nterm); //self.scoped(|slf| slf.simplify_one_i(expand, &nterm));
+            }
+        }
+        if let Cow::Owned(nterm) = beta_unknowns_cow(term)
+            && *term != nterm
+        {
+            return Some(nterm); //self.scoped(|slf| slf.simplify_one_i(expand, &nterm));
+        }
+        self.simplify_one_i(expand, term)
+    }
+    fn simplify_one_i(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
+        /**/
         let applicables = self
             .top
             .rules

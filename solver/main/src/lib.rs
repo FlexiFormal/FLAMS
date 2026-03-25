@@ -319,7 +319,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     //self.set_hoas();
                     self.reset();
                     if let Some(r) = self.check_assertion(p) {
-                        results.extend(r.into_iter());
+                        results.extend(r);
                     }
                 }
                 DocumentElementRef::Paragraph(
@@ -329,9 +329,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 ) if kind.is_definition_like(styles) && p.fors.iter().any(|(_, t)| t.is_some()) => {
                     //self.set_hoas();
                     self.reset();
-                    if let Some(r) = self.check_definition(p) {
-                        results.push(r);
-                    }
+                    results.extend(self.check_definition(p));
                 }
                 _ => (),
             }
@@ -475,8 +473,15 @@ impl<Split: SplitStrategy> Checker<Split> {
         bind: bool,
     ) -> Option<SymbolCheckResult> {
         self.reset();
+        let tp = tpc.get_parsed();
+        let df = dfc.get_parsed();
+        let df = if df.is_some_and(Term::is_marker) {
+            None
+        } else {
+            df
+        };
         //self.set_hoas();
-        match (tpc.get_parsed(), dfc.get_parsed()) {
+        match (tp, df) {
             (Some(tp), None) => {
                 tracing::debug!("Checking Type");
                 //tracing::debug!("Facts: {:#?}", self.facts);
@@ -485,7 +490,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 let mut tp = self.wrap_none(Some(unks), |slf| slf.subst(tp)).1;
                 if tp.has_solvable() {
                     l.push(PreCheckLog::Msg(
-                        "Unsolved unkowns remain".into(),
+                        vec!["Unsolved unkowns remain".into()],
                         ftml_solver_trace::MessageLevel::Failure,
                     ));
                     return Some(SymbolCheckResult::TypeOnly {
@@ -504,53 +509,66 @@ impl<Split: SplitStrategy> Checker<Split> {
                     },
                 })
             }
-            (None, Some(df)) => {
-                tracing::debug!("Checking Definiens");
-                //tracing::debug!("Facts: {:#?}", self.facts);
-                let (unks, df) = self.prepare(None, df.clone());
-                let (tp, unks, mut l) = self.infer_type(Some(unks), &df);
-                let mut df = self.wrap_none(Some(unks), |slf| slf.subst(df)).1;
-
-                if df.has_solvable() {
-                    l.push(PreCheckLog::Msg(
-                        "Unsolved unkowns remain".into(),
-                        ftml_solver_trace::MessageLevel::Failure,
-                    ));
-                    return Some(SymbolCheckResult::DefiniensOnly {
-                        inferred: None,
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    });
-                }
-
-                update!(self df if bind);
-                dfc.set_checked(df);
-
-                if let Some(mut tp) = tp {
-                    update!(self tp if bind);
-                    tpc.set_checked(tp.clone());
-                    let tp = self.revert_prepare(tp);
-                    tpc.set_presentation(tp.clone());
-                    Some(SymbolCheckResult::DefiniensOnly {
-                        inferred: Some(tp),
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    })
-                } else {
-                    Some(SymbolCheckResult::DefiniensOnly {
-                        inferred: None,
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    })
-                }
-            }
+            (None, Some(df)) => Some(self.df_only(df, dfc, tpc, bind, false)),
             (Some(tp), Some(df)) => {
                 tracing::debug!("Checking Type and Definiens");
                 if ftml_uris::metatheory::AUTO_PROVE.term_is(df) {
                     Some(self.infer_df(dfc, tp, tpc, bind))
                 } else {
                     //tracing::debug!("Facts: {:#?}", self.facts);
-                    Some(self.df_and_tp(df, dfc, tp, tpc, bind))
+                    Some(self.df_and_tp(df, dfc, tp, tpc, bind, false))
                 }
             }
             (None, None) => None,
+        }
+    }
+
+    fn df_only(
+        &self,
+        df: &Term,
+        dfc: &TermContainer,
+        tpc: &TermContainer,
+        bind: bool,
+        set_presentation: bool,
+    ) -> SymbolCheckResult {
+        tracing::debug!("Checking Definiens");
+        //tracing::debug!("Facts: {:#?}", self.facts);
+        let (unks, df) = self.prepare(None, df.clone());
+
+        let (tp, unks, mut l) = self.infer_type(Some(unks), &df);
+        let mut df = self.wrap_none(Some(unks), |slf| slf.subst(df)).1;
+
+        if df.has_solvable() {
+            l.push(PreCheckLog::Msg(
+                vec!["Unsolved unkowns remain".into()],
+                ftml_solver_trace::MessageLevel::Failure,
+            ));
+            return SymbolCheckResult::DefiniensOnly {
+                inferred: None,
+                log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+            };
+        }
+
+        update!(self df if bind);
+        if set_presentation {
+            dfc.set_presentation(self.revert_prepare(df.clone()));
+        }
+        dfc.set_checked(df);
+
+        if let Some(mut tp) = tp {
+            update!(self tp if bind);
+            tpc.set_checked(tp.clone());
+            let tp = self.revert_prepare(tp);
+            tpc.set_presentation(tp.clone());
+            SymbolCheckResult::DefiniensOnly {
+                inferred: Some(tp),
+                log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+            }
+        } else {
+            SymbolCheckResult::DefiniensOnly {
+                inferred: None,
+                log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+            }
         }
     }
 
@@ -579,7 +597,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
         if tp.has_solvable() {
             l.push(PreCheckLog::Msg(
-                "Unsolved unkowns remain".into(),
+                vec!["Unsolved unkowns remain".into()],
                 ftml_solver_trace::MessageLevel::Failure,
             ));
             return SymbolCheckResult::TypeOnly {
@@ -596,7 +614,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         if let Some(mut df) = ndf {
             if df.has_solvable() {
                 l2.push(PreCheckLog::Msg(
-                    "Unsolved unkowns remain".into(),
+                    vec!["Unsolved unkowns remain".into()],
                     ftml_solver_trace::MessageLevel::Failure,
                 ));
                 return SymbolCheckResult::Both {
@@ -646,6 +664,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         tp: &Term,
         tpc: &TermContainer,
         bind: bool,
+        set_df_presentation: bool,
     ) -> SymbolCheckResult {
         let (tunks, tp) = self.prepare(None, tp.clone());
         let (b, tunks, mut l) = self.check_inhabitable(Some(tunks), &tp);
@@ -653,7 +672,7 @@ impl<Split: SplitStrategy> Checker<Split> {
             let mut tp = self.wrap_none(Some(tunks), |slf| slf.subst(tp)).1;
             if tp.has_solvable() {
                 l.push(PreCheckLog::Msg(
-                    "Unsolved unkowns remain".into(),
+                    vec!["Unsolved unkowns remain".into()],
                     ftml_solver_trace::MessageLevel::Failure,
                 ));
                 return SymbolCheckResult::TypeOnly {
@@ -683,11 +702,11 @@ impl<Split: SplitStrategy> Checker<Split> {
 
         if df.has_solvable() {
             l2.push(PreCheckLog::Msg(
-                "Unsolved unknowns remain".into(), /*format!(
-                                                       "Unsolved unkowns remain in {:?}\n\n{unks:#?}",
-                                                       df.debug_short()
-                                                   )
-                                                   .into()*/
+                vec!["Unsolved unknowns remain".into()], /*format!(
+                                                             "Unsolved unkowns remain in {:?}\n\n{unks:#?}",
+                                                             df.debug_short()
+                                                         )
+                                                         .into()*/
                 ftml_solver_trace::MessageLevel::Failure,
             ));
             return SymbolCheckResult::Both {
@@ -706,6 +725,9 @@ impl<Split: SplitStrategy> Checker<Split> {
         update!(self df if bind);
         tracing::debug!("Result:\n{:?}\n : {:?}", df.debug_short(), tp.debug_short());
         tpc.set_checked(tp);
+        if set_df_presentation {
+            dfc.set_presentation(self.revert_prepare(df.clone()));
+        }
         dfc.set_checked(df);
         SymbolCheckResult::Both {
             inhabitable: TypeCheckResult {
@@ -721,7 +743,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     // TODO return checked term
     pub fn check_symbol(&mut self, s: &Symbol) -> Option<SymbolCheckResult> {
-        tracing::info!("Checking Symbol {}", s.uri);
+        tracing::debug!("Checking Symbol {}", s.uri);
         tracing::trace!("{s:?}");
         self.current.push(s.uri.clone().into());
         let r = self.check_components(&s.data.tp, &s.data.df, true);
@@ -732,7 +754,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     // TODO return checked term
     pub fn check_variable(&mut self, s: &VariableDeclaration) -> Option<SymbolCheckResult> {
-        tracing::info!("Checking Variable {}", s.uri);
+        tracing::debug!("Checking Variable {}", s.uri);
         self.current.push(s.uri.clone().into());
         let r = self.check_components(&s.data.tp, &s.data.df, false);
         self.current.pop();

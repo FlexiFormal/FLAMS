@@ -1,7 +1,7 @@
 use std::{borrow::Cow, hint::unreachable_unchecked};
 
 use ftml_ontology::terms::{BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term};
-use ftml_solver_trace::SizedSolverRule;
+use ftml_solver_trace::{SizedSolverRule, traceref};
 use ftml_uris::SymbolUri;
 
 use crate::{
@@ -327,7 +327,7 @@ impl BindInApplyRule {
                 Cow::Owned(tp) => Some(Some(tp)),
             }
         }) else {
-            checker.failure(format!("type is not a binder: {:?}", tp.debug_short()));
+            checker.add_msg(traceref!(FAIL "type is not a binder: ",tp).into());
             return None;
         };
         let Term::Bound(b) = nret.unwrap_or(tp) else {

@@ -8,9 +8,41 @@ use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
     Variable,
 };
-use ftml_solver_trace::RefCheckLog;
+use ftml_solver_trace::traceref;
 
-pub(crate) type Alpha<'t> = smallvec::SmallVec<(&'t str, &'t Variable), 1>;
+pub type Alpha<'t> = smallvec::SmallVec<(&'t str, &'t Variable), 1>;
+
+fn same_shape(lhs: &Term, rhs: &Term) -> bool {
+    if lhs.is_solvable().is_some() || rhs.is_solvable().is_some() {
+        return true;
+    }
+    matches!(
+        (lhs, rhs),
+        (Term::Symbol { .. }, Term::Symbol { .. })
+            | (Term::Var { .. }, Term::Var { .. })
+            | (Term::Field(_), Term::Field(_))
+            | (Term::Label { .. }, Term::Label { .. })
+            | (Term::Number(_), Term::Number(_))
+            | (Term::Application(_), Term::Application(_))
+            | (Term::Bound(_), Term::Bound(_))
+    )
+    /*
+    if r {
+        tracing::warn!(
+            "Same shape:\n  - {:?}\n  - {:?}",
+            lhs.debug_short(),
+            rhs.debug_short()
+        );
+    } else {
+        tracing::error!(
+            "Not same shape:\n  - {:?}\n  - {:?}",
+            lhs.debug_short(),
+            rhs.debug_short()
+        );
+    }
+    r
+     */
+}
 
 pub fn alpha_equal(lhs: &Term, rhs: &Term) -> bool {
     alpha_equal_with(lhs, rhs, &mut Alpha::default())
@@ -204,40 +236,64 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         if let Some(unk) = rhs.is_solvable() {
             return self.solve_equality(unk, lhs);
         }
-        match self.simplify_rules_two(
-            self.top.rules.equality(),
-            lhs,
-            rhs,
-            |slf, rl, lhs, rhs| rl.applicable(lhs, rhs),
-            |slf, rl, lhs, rhs| rl.apply(slf, lhs, rhs),
-            |lhs, rhs| {
-                alpha_equal(lhs, rhs) || lhs.is_solvable().is_some() || rhs.is_solvable().is_some()
-            },
-        ) {
-            either::Left(opt) => {
-                if opt.is_some() {
-                    return opt;
+        let lhs = self.subst(lhs.clone());
+        let rhs = self.subst(rhs.clone());
+        self.scoped(|slf| {
+            match slf.simplify_rules_two(
+                slf.top.rules.equality(),
+                &lhs,
+                &rhs,
+                |slf, rl, lhs, rhs| rl.applicable(lhs, rhs),
+                |slf, rl, lhs, rhs| rl.apply(slf, lhs, rhs),
+                |lhs, rhs| {
+                    alpha_equal(lhs, rhs)
+                        || lhs.is_solvable().is_some()
+                        || rhs.is_solvable().is_some()
+                },
+            ) {
+                either::Left(opt) => {
+                    if opt.is_some() {
+                        if opt == Some(false) {
+                            slf.failure("Disproven");
+                        }
+                        return opt;
+                    }
+                }
+                either::Right((lhs, rhs)) => {
+                    if alpha_equal(&lhs, &rhs) {
+                        slf.comment("trivial");
+                        return Some(true);
+                    }
+                    if let Some(unk) = lhs.is_solvable() {
+                        return slf.solve_equality(unk, &rhs);
+                    }
+                    if let Some(unk) = rhs.is_solvable() {
+                        return slf.solve_equality(unk, &lhs);
+                    }
+                    return slf.scoped(|slf| slf.congruence(&lhs, &rhs));
                 }
             }
-            either::Right((lhs, rhs)) => {
-                if alpha_equal(&lhs, &rhs) {
-                    self.comment("trivial");
-                    return Some(true);
-                }
-                if let Some(unk) = lhs.is_solvable() {
-                    return self.solve_equality(unk, &rhs);
-                }
-                if let Some(unk) = rhs.is_solvable() {
-                    return self.solve_equality(unk, &lhs);
-                }
-            }
-        }
 
-        self.congruence(lhs, rhs)
+            slf.congruence(&lhs, &rhs)
+        })
     }
 
     fn congruence(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
         tracing::debug!("Trying congruence");
+        let Some((lhs, rhs)) = self.simplify_until_two(lhs, rhs, |_, lhs, rhs| {
+            lhs.unapply_implicits().is_some()
+                || rhs.unapply_implicits().is_some()
+                || same_shape(lhs, rhs)
+        }) else {
+            return self.congruence_cont(lhs, rhs);
+        };
+        match (lhs, rhs) {
+            (Cow::Borrowed(lhs), Cow::Borrowed(rhs)) => self.congruence_i(lhs, rhs),
+            (lhs, rhs) => self.scoped(|slf| slf.congruence_i(&lhs, &rhs)),
+        }
+    }
+
+    fn congruence_i(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
         if lhs.unapply_implicits().is_some() || rhs.unapply_implicits().is_some() {
             let nlhs = self
                 .simplify_implicit(lhs)
@@ -284,6 +340,20 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     fn congruence_cont(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
+        self.add_msg(traceref!("shapes don't match: ", lhs, " and ", rhs).into());
+        // LAST RESORT
+        let nlhs = self
+            .simplify_full(true, lhs)
+            .map_or(Cow::Borrowed(lhs), Cow::Owned);
+        let nrhs = self
+            .simplify_full(true, rhs)
+            .map_or(Cow::Borrowed(rhs), Cow::Owned);
+        if *lhs != *nlhs || *rhs != *nrhs {
+            self.scoped(|slf| slf.check_equality_i(&nlhs, &nrhs))
+        } else {
+            None
+        }
+        /*
         // todo: preserve logs on recursive fail
         if let Some(lhs) = self.simplify_one(true, lhs) {
             if self.alpha_equal(&lhs, rhs) {
@@ -300,6 +370,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             return self.scoped(|slf| slf.check_equality_i(lhs, &rhs));
         }
         None
+         */
     }
 
     // invariant: lhs.arguments.len() == rhs.arguments.len()

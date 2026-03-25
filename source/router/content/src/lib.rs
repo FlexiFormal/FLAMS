@@ -64,7 +64,7 @@ impl ftml_components::ViewContinuations for Continuations {
                     wait_and_then_fn(
                         move || get_check_log(uri.clone()),
                         |s| ftml_solver_trace::results::DocumentCheckResult::from_json(&s)
-                            .map_or_else(|e| e.into_any(),|e| e.render())//ResultExt::render
+                            .map_or_else(|_| view!{<pre>v</pre>}.into_any(),|e| e.render())//ResultExt::render
                     )
                 }
             </LazyCollapsible>

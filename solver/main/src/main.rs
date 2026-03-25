@@ -95,8 +95,8 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=proofs&d=choice-operator&l=en",
         "http://mathhub.info?a=FTML/tests&d=natded&l=en",
         "http://mathhub.info?a=unimarx/werkbank&p=sec/einstimmungundgrundbegriffe/mod&d=evaluationmap&l=de",
+        "http://mathhub.info?a=FTML/tests&d=othertests&l=en",
         */
-        //
         "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
     )
     //}
@@ -220,14 +220,21 @@ fn check<Split: SplitStrategy>(solver: &mut Checker<Split>, s: &str) {
         .expect("wut");
     let ((mut v, _), t) = measure(|| solver.check_document(&d).expect("dependency missing"));
     let failures = count_fails(&v);
+
+    //v.filter_failures();
+    println!("{}", v.colored());
+    println!("Checked after {t}");
+
+    /*
     if failures == 0 {
         println!("Checked after {t}");
     } else {
-        v.filter_failures();
+        //v.filter_failures();
         println!("{}", v.colored());
         println!("Checked after {t}");
         pause();
     }
+    */
 }
 
 fn get_module(s: &str) -> Module {

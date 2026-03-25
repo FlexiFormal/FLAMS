@@ -11,6 +11,7 @@ use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
     Variable,
 };
+use ftml_solver_trace::traceref;
 use ftml_uris::SymbolUri;
 use smallvec::SmallVec;
 use std::{borrow::Cow, hint::unreachable_unchecked};
@@ -823,7 +824,7 @@ impl PiInferenceRule {
                 Cow::Owned(tp) => Some(Some(tp)),
             }
         }) else {
-            checker.failure(format!("type is not a binder: {:?}", tp.debug_short()));
+            checker.add_msg(traceref!(FAIL "type is not a binder: ",tp.clone()).into());
             return Err(tp);
         };
         let Term::Bound(b) = nret.unwrap_or(tp) else {
@@ -1195,11 +1196,11 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     }),
                     Argument::Simple(a),
                 ) => {
-                    let tp = checker.infer_var_type(var).ok_or(None)?;
-                    if !checker
-                        .scoped(|checker| checker.check_type(a, &tp))
-                        .ok_or(None)?
-                    {
+                    let Some(tp) = checker.infer_var_type(var) else {
+                        checker.add_msg(traceref!(FAIL "untyped variable ",var).into());
+                        return Err(None);
+                    };
+                    if checker.scoped(|checker| checker.check_type(a, &tp)) != Some(true) {
                         return Err(None);
                     }
                     if let Cow::Owned(nr) = &*ret / (var.name(), a) {
@@ -1239,14 +1240,18 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     }),
                     Argument::Sequence(MaybeSequence::Seq(args)),
                 ) => {
-                    let tp = checker.infer_var_type(var).ok_or(None)?;
-                    let tp = checker
-                        .scoped(|checker| {
-                            checker
-                                .simplify_until(&tp, |_, t| t.is_concrete_sequence())
-                                .map(Cow::into_owned)
-                        })
-                        .ok_or(None)?;
+                    let Some(tp) = checker.infer_var_type(var) else {
+                        checker.add_msg(traceref!(FAIL "untyped variable ",var).into());
+                        return Err(None);
+                    };
+                    let Some(tp) = checker.scoped(|checker| {
+                        checker
+                            .simplify_until(&tp, |_, t| t.is_concrete_sequence())
+                            .map(Cow::into_owned)
+                    }) else {
+                        checker.failure("Not a concrete sequence");
+                        return Err(None);
+                    };
                     let vartps = tp.make_concrete_sequence().ok_or(None)?;
                     if vartps.len() != args.len() {
                         checker.failure("sequence lengths don't match");
@@ -1276,7 +1281,10 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                                 .map(Cow::into_owned)
                         })
                         .ok_or(None)?;
-                    let vartps = ntp.make_concrete_sequence().ok_or(None)?;
+                    let Some(vartps) = ntp.make_concrete_sequence() else {
+                        checker.failure("type of bound variable not a concrete sequence");
+                        return Err(None);
+                    };
                     if vartps.len() != args.len() {
                         checker.failure("sequence lengths don't match");
                         return Err(None);

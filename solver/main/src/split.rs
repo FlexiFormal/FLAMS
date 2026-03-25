@@ -1,5 +1,6 @@
 use std::hint::unreachable_unchecked;
 
+use ftml_solver_trace::traceref;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use smallvec::SmallVec;
 
@@ -150,10 +151,7 @@ pub trait SplitStrategy:
         //let mut rules = rules.peekable();
         if rules.is_empty() {
             return Err(if msg {
-                smallvec::smallvec![RefCheckLog::Msg(
-                    "No rule applicable".into(),
-                    crate::trace::MessageLevel::Failure
-                )]
+                smallvec::smallvec![traceref!(FAIL "No rule applicable")]
             } else {
                 smallvec::SmallVec::default()
             });
@@ -250,10 +248,7 @@ pub trait SplitStrategy:
         match rules.len() {
             0 => {
                 return Err(if msg {
-                    smallvec::smallvec![RefCheckLog::Msg(
-                        "No rule applicable".into(),
-                        crate::trace::MessageLevel::Failure
-                    )]
+                    smallvec::smallvec![traceref!(FAIL "No rule applicable")]
                 } else {
                     smallvec::SmallVec::default()
                 });

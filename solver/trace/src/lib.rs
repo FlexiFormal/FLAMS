@@ -142,9 +142,7 @@ macro_rules! tasks {
                 steps:Box<[CheckLogCow<'t>]>,
                 success:bool
             },
-            Msg(Cow<'static, str>, MessageLevel),
-            //Dyn(&'t dyn CheckTraceDisplayable)
-            //Interpolated(Box<[DisplayableElem]>, MessageLevel),
+            Msg(Vec<DisplayableRef<'t>>, MessageLevel),
         }
         #[cfg(feature = "full")]
         impl RefCheckLog<'_> {
@@ -159,7 +157,7 @@ macro_rules! tasks {
 
                         },
                     )*
-                    Self::Msg(txt,lvl) => PreCheckLog::Msg(txt,lvl),
+                    Self::Msg(txt,lvl) => PreCheckLog::Msg(txt.into_iter().map(|s| s.into_owned(term)).collect(),lvl),
                     Self::Rule{rule,steps} => PreCheckLog::Rule{
                         rule:rule.as_box_dyn(),
                         steps: steps.into_iter().map(|t| CheckLogCow::into_owned(t,term)).collect(),
@@ -193,8 +191,8 @@ macro_rules! tasks {
                 success:bool
             },
             //Dyn(Box<dyn CheckTraceDisplayable>)
-            Msg(Cow<'static, str>, MessageLevel),
-            Count(&'static str,usize)
+            Msg(Vec<Displayable>, MessageLevel),
+            //Count(&'static str,usize)
             //Interpolated(Box<[DisplayableElem]>, MessageLevel),
         }
 
@@ -221,12 +219,12 @@ macro_rules! tasks {
                         steps:steps.into_iter().map(|e| Self::from_pre(e,terms)).collect(),
                         success
                     },
-                    P::Msg(s, MessageLevel::Comment) => Self::Comment(s.into_owned()),
-                    P::Msg(s, MessageLevel::Emph) => Self::Emph(s.into_owned()),
-                    P::Msg(s, MessageLevel::Header) => Self::Header(s.into_owned()),
-                    P::Msg(s, MessageLevel::Failure) => Self::Fail(s.into_owned()),
-                    P::Count(s, u) =>
-                        Self::Comment(format!("{s} {u}"))
+                    P::Msg(s, MessageLevel::Comment) => Self::Comment(s),
+                    P::Msg(s, MessageLevel::Emph) => Self::Emph(s),
+                    P::Msg(s, MessageLevel::Header) => Self::Header(s),
+                    P::Msg(s, MessageLevel::Failure) => Self::Fail(s),
+                    //P::Count(s, u) =>
+                    //    Self::Comment(format!("{s} {u}"))
                 }
             }
         }
@@ -290,10 +288,10 @@ macro_rules! tasks {
                     result:Option<$res>
                 },
             )*
-            Comment(String),
-            Emph(String),
-            Header(String),
-            Fail(String),
+            Comment(Vec<Displayable>),
+            Emph(Vec<Displayable>),
+            Header(Vec<Displayable>),
+            Fail(Vec<Displayable>),
             Strategy {
                 name: String,
                 steps: Vec<Self>,
@@ -335,16 +333,24 @@ macro_rules! tasks {
                                     stack.push(std::mem::replace(&mut curr,steps.iter()));
                                 }
                                 Self::Comment(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Comment))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Comment))?;
+                                    }
                                 }
                                 Self::Emph(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Emph))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Emph))?;
+                                    }
                                 }
                                 Self::Header(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Header))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Header))?;
+                                    }
                                 }
                                 Self::Fail(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Failure))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Failure))?;
+                                    }
                                 }
                             }
                         }
@@ -402,7 +408,7 @@ impl PreCheckLog {
             | Self::Universe { steps, .. }
             | Self::VariableInference { steps, .. }
             | Self::Proving { steps, .. } => Some(steps),
-            Self::Msg(_, _) | Self::Count(_, _) => None,
+            Self::Msg(_, _) /*| Self::Count(_, _)*/ => None,
         }
     }
 }
@@ -455,20 +461,20 @@ impl CheckLog {
     }
     pub fn add_failure(&mut self, s: &'static str) {
         if let Some(steps) = self.steps_mut() {
-            steps.push(Self::Fail(s.to_string()));
+            steps.push(Self::Fail(vec![s.to_string().into()]));
         }
     }
 }
 
 #[cfg(feature = "full")]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum DisplayableRef<'r> {
     Num(i128),
     //Space,
-    String(&'static str),
-    Term(&'r Term),
-    Uri(UriRef<'r>),
-    Var(&'r Variable),
+    String(Cow<'static, str>),
+    Term(Cow<'r, Term>),
+    Uri(either::Either<UriRef<'r>, Uri>),
+    Var(Cow<'r, Variable>),
 }
 #[cfg(feature = "full")]
 impl DisplayableRef<'_> {
@@ -476,9 +482,12 @@ impl DisplayableRef<'_> {
         match self {
             Self::Num(i) => Displayable::Num(i),
             Self::String(s) => Displayable::String(s.to_string()),
-            Self::Term(t) => Displayable::Term(term(t.clone())),
-            Self::Uri(u) => Displayable::Uri(u.owned()),
-            Self::Var(v) => Displayable::Var(v.clone()),
+            Self::Term(t) => Displayable::Term(term(t.into_owned())),
+            Self::Uri(u) => Displayable::Uri(match u {
+                either::Left(u) => u.owned(),
+                either::Right(u) => u,
+            }),
+            Self::Var(v) => Displayable::Var(v.into_owned()),
         }
     }
 }
@@ -530,6 +539,7 @@ impl CheckLog {
             d: PhantomData,
         }
     }
+    #[cfg(feature = "colors")]
     #[must_use]
     pub fn colored(&self) -> impl std::fmt::Display {
         TraceDisplayer {
@@ -960,6 +970,67 @@ impl<D: FmtTraceDisplay> std::fmt::Display for TraceDisplayer<'_, D> {
     }
 }
 
+#[cfg(feature = "full")]
+impl From<i128> for DisplayableRef<'_> {
+    fn from(value: i128) -> Self {
+        Self::Num(value)
+    }
+}
+#[cfg(feature = "full")]
+impl From<usize> for DisplayableRef<'_> {
+    fn from(value: usize) -> Self {
+        Self::Num(value as _)
+    }
+}
+#[cfg(feature = "full")]
+impl From<&'static str> for DisplayableRef<'_> {
+    fn from(value: &'static str) -> Self {
+        Self::String(Cow::Borrowed(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<String> for DisplayableRef<'_> {
+    fn from(value: String) -> Self {
+        Self::String(Cow::Owned(value))
+    }
+}
+#[cfg(feature = "full")]
+impl<'r> From<&'r Term> for DisplayableRef<'r> {
+    fn from(value: &'r Term) -> Self {
+        Self::Term(Cow::Borrowed(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<Term> for DisplayableRef<'_> {
+    fn from(value: Term) -> Self {
+        Self::Term(Cow::Owned(value))
+    }
+}
+#[cfg(feature = "full")]
+impl<'r> From<UriRef<'r>> for DisplayableRef<'r> {
+    fn from(value: UriRef<'r>) -> Self {
+        Self::Uri(either::Left(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<Uri> for DisplayableRef<'_> {
+    fn from(value: Uri) -> Self {
+        Self::Uri(either::Right(value))
+    }
+}
+#[cfg(feature = "full")]
+impl<'r> From<&'r Variable> for DisplayableRef<'r> {
+    fn from(value: &'r Variable) -> Self {
+        Self::Var(Cow::Borrowed(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<Variable> for DisplayableRef<'_> {
+    fn from(value: Variable) -> Self {
+        Self::Var(Cow::Owned(value))
+    }
+}
+
 impl<T: FtmlUri> From<&T> for Displayable {
     fn from(value: &T) -> Self {
         Self::Uri(value.as_uri().owned())
@@ -981,6 +1052,17 @@ impl From<Term> for Displayable {
     }
 }
 
+impl From<i128> for Displayable {
+    fn from(value: i128) -> Self {
+        Self::Num(value)
+    }
+}
+impl From<usize> for Displayable {
+    fn from(value: usize) -> Self {
+        Self::Num(value as _)
+    }
+}
+
 #[cfg(feature = "full")]
 #[macro_export]
 macro_rules! trace {
@@ -989,5 +1071,22 @@ macro_rules! trace {
             $e.into()
         ),*]
         }
+    }
+}
+
+#[cfg(feature = "full")]
+#[macro_export]
+macro_rules! traceref {
+    (FAIL $($e:expr),* $(,)? ) => {
+        $crate::RefCheckLog::Msg(
+            vec![$( $e.into() ),*],
+            $crate::MessageLevel::Failure
+        )
+    };
+    ($($e:expr),* $(,)? ) => {
+        $crate::RefCheckLog::Msg(
+            vec![$( $e.into() ),*],
+            $crate::MessageLevel::Comment
+        )
     }
 }

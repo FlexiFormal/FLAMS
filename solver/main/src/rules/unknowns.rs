@@ -83,7 +83,7 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for UnknownsRule {
         checker: crate::CheckRef<'t, '_, Split>,
         term: &'t Term,
     ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
-        match beta_unknowns_i(term) {
+        match beta_unknowns_cow(term) {
             Cow::Owned(term) => Ok(term),
             _ => Err(None),
         }
@@ -121,7 +121,7 @@ impl<Split: SplitStrategy> InferenceRule<Split> for UnknownsRule {
         };
         if app.head.is_solvable().is_some() {
             unsolved(checker, app)
-        } else if let Cow::Owned(t) = beta_unknowns_i(term) {
+        } else if let Cow::Owned(t) = beta_unknowns_cow(term) {
             // TODO should check types ?
             checker.scoped(|slf| slf.infer_type(&t))
         } else {
@@ -131,14 +131,14 @@ impl<Split: SplitStrategy> InferenceRule<Split> for UnknownsRule {
 }
 
 pub(crate) fn beta_unknowns(t: Term) -> Term {
-    if let Cow::Owned(t) = beta_unknowns_i(&t) {
+    if let Cow::Owned(t) = beta_unknowns_cow(&t) {
         t
     } else {
         t
     }
 }
 
-fn beta_unknowns_i(t: &Term) -> Cow<'_, Term> {
+pub(crate) fn beta_unknowns_cow(t: &Term) -> Cow<'_, Term> {
     //tracing::warn!("Applying beta to {:?}", t.debug_short());
     let r = t.modify(|t| {
         if let Term::Application(app) = t

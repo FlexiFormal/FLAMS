@@ -1,10 +1,13 @@
 use crate::{
-    Checker, facts::GlobalOrLocal, hoas::HOASSymbols, impls::solving::Solutions,
+    Checker,
+    facts::GlobalOrLocal,
+    hoas::HOASSymbols,
+    impls::solving::{Solutions, TermExtSolvable},
     split::SplitStrategy,
 };
 use ftml_ontology::{
     narrative::elements::{LogicalParagraph, paragraphs::ParagraphStep},
-    terms::{ComponentVar, Term, Variable},
+    terms::{BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term, Variable},
     utils::SourceRange,
 };
 use ftml_solver_trace::{
@@ -17,9 +20,144 @@ use ftml_solver_trace::{
 use ftml_uris::{DocumentElementUri, Id, SymbolUri};
 
 impl<Split: SplitStrategy> Checker<Split> {
-    pub fn check_definition(&mut self, p: &LogicalParagraph) -> Option<CheckResult> {
-        //println!("Here! Definition {}", p.uri);
-        None
+    pub fn check_assertion(&mut self, p: &LogicalParagraph) -> Option<Vec<CheckResult>> {
+        let hoas = self.hoas()?;
+        let mut ret = Vec::new();
+        for (target, term) in &p.fors {
+            let Ok(target) = self.get_symbol(target, |t| t) else {
+                continue;
+            };
+            let Some(term) = term else { continue };
+            let Some(term) = term.get_parsed() else {
+                continue;
+            };
+            let params = p
+                .binds_variables
+                .iter()
+                .filter_map(|uri| {
+                    self.get_variable(uri).ok().map(|v| ComponentVar {
+                        var: Variable::Ref {
+                            declaration: uri.clone(),
+                            is_sequence: Some(v.data.is_seq),
+                        },
+                        tp: v.data.tp.checked_or_parsed().map(|(t, _)| t),
+                        df: v.data.df.checked_or_parsed().map(|(t, _)| t),
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            let wrapped = hoas.wrap_types(&p.premises, term);
+            let wrapped = if params.is_empty() {
+                wrapped.into_owned()
+            } else {
+                Term::Bound(BindingTerm::new(
+                    hoas.pi.clone().into(),
+                    Box::new([
+                        BoundArgument::BoundSeq(MaybeSequence::Seq(params.into_boxed_slice())),
+                        BoundArgument::Simple(wrapped.into_owned()),
+                    ]),
+                    None,
+                ))
+            };
+            let (unks, tp) = self.prepare(None, wrapped);
+
+            tracing::trace!("Checking assertion for {}", target.uri);
+            let (b, unks, mut l) = self.check_inhabitable(Some(unks), &tp);
+            let mut tp = self.wrap_none(Some(unks), |slf| slf.subst(tp)).1;
+
+            if tp.has_solvable() {
+                l.push(PreCheckLog::Msg(
+                    vec!["Unsolved unkowns remain".into()],
+                    ftml_solver_trace::MessageLevel::Failure,
+                ));
+                ret.push(CheckResult::Content(ContentCheckResult::Symbol(
+                    target.uri.clone(),
+                    SymbolCheckResult::TypeOnly {
+                        result: TypeCheckResult {
+                            success: false,
+                            log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                        },
+                    },
+                )));
+                continue;
+            }
+            if let Some(t) = self.bind_implicits(&tp) {
+                tp = t;
+            }
+
+            target
+                .data
+                .tp
+                .set_presentation(self.revert_prepare(tp.clone()));
+            target.data.tp.set_checked(tp);
+            ret.push(CheckResult::Content(ContentCheckResult::Symbol(
+                target.uri.clone(),
+                SymbolCheckResult::TypeOnly {
+                    result: TypeCheckResult {
+                        success: b.unwrap_or(false),
+                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                    },
+                },
+            )));
+        }
+        Some(ret)
+    }
+
+    pub fn check_definition(&mut self, p: &LogicalParagraph) -> Vec<CheckResult> {
+        let Some(hoas) = self.hoas() else {
+            return Vec::new();
+        };
+        let mut ret = Vec::new();
+        for (target, term) in &p.fors {
+            let Ok(target) = self.get_symbol(target, |t| t) else {
+                continue;
+            };
+            let Some(term) = term else { continue };
+            let Some(term) = term.get_parsed() else {
+                continue;
+            };
+            let params = p
+                .binds_variables
+                .iter()
+                .filter_map(|uri| {
+                    self.get_variable(uri).ok().map(|v| ComponentVar {
+                        var: Variable::Ref {
+                            declaration: uri.clone(),
+                            is_sequence: Some(v.data.is_seq),
+                        },
+                        tp: v.data.tp.checked_or_parsed().map(|(t, _)| t),
+                        df: v.data.df.checked_or_parsed().map(|(t, _)| t),
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            let df = if params.is_empty() {
+                term.clone()
+            } else {
+                Term::Bound(BindingTerm::new(
+                    hoas.lambda.clone().into(),
+                    Box::new([
+                        BoundArgument::BoundSeq(MaybeSequence::Seq(params.into_boxed_slice())),
+                        BoundArgument::Simple(term.clone()),
+                    ]),
+                    None,
+                ))
+            };
+
+            tracing::trace!("Checking definiens for {}", target.uri);
+            if let Some((tp, _)) = target.data.tp.checked_or_parsed() {
+                ret.push(CheckResult::Content(ContentCheckResult::Symbol(
+                    target.uri.clone(),
+                    self.df_and_tp(&df, &target.data.df, &tp, &target.data.tp, true, true),
+                )));
+            } else {
+                ret.push(CheckResult::Content(ContentCheckResult::Symbol(
+                    target.uri.clone(),
+                    self.df_only(&df, &target.data.df, &target.data.tp, true, true),
+                )));
+            }
+        }
+        ret
     }
 
     pub fn check_proof(&mut self, p: &LogicalParagraph) -> Option<CheckResult> {
@@ -409,40 +547,6 @@ impl<Split: SplitStrategy> Checker<Split> {
         let cv = ComponentVar { var, tp, df };
         context.context.push((cv, false));
         r
-    }
-
-    pub fn check_assertion(&mut self, p: &LogicalParagraph) -> Option<Vec<CheckResult>> {
-        let hoas = self.hoas()?;
-        let mut ret = Vec::new();
-        for (target, term) in &p.fors {
-            let Ok(target) = self.get_symbol(target, |t| t) else {
-                continue;
-            };
-            let Some(term) = term else { continue };
-            let Some(term) = term.get_parsed() else {
-                continue;
-            };
-            let wrapped = hoas.wrap_types(&p.premises, term);
-            let (unks, tp) = self.prepare(None, wrapped.into_owned());
-
-            tracing::trace!("Checking assertion for {}", target.uri);
-            let (b, _, l) = self.check_inhabitable(Some(unks), &tp);
-            target
-                .data
-                .tp
-                .set_presentation(self.revert_prepare(tp.clone()));
-            target.data.tp.set_checked(tp);
-            ret.push(CheckResult::Content(ContentCheckResult::Symbol(
-                target.uri.clone(),
-                SymbolCheckResult::TypeOnly {
-                    result: TypeCheckResult {
-                        success: b.unwrap_or(false),
-                        log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                    },
-                },
-            )));
-        }
-        Some(ret)
     }
 }
 

@@ -45,6 +45,7 @@ pub const fn all_symbol_extractors<Split: SplitStrategy>() -> &'static [SymbolRu
         numposreal,
         numnegreal,
         numnonzeroreal,
+        numcomplex,
     ]
 }
 #[must_use]
@@ -381,6 +382,12 @@ rules! {
     pub numnonzeroreal = (sym,rules) => {
         rules.push_marker(Box::new(numbers::NumberRule{
             typ:numbers::NumberType::NonZeroReals,
+            sym:sym.uri.clone()
+        }));
+    }
+    pub numcomplex = (sym,rules) => {
+        rules.push_marker(Box::new(numbers::NumberRule{
+            typ:numbers::NumberType::Complex,
             sym:sym.uri.clone()
         }));
     }

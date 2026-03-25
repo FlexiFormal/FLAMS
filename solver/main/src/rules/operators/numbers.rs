@@ -23,6 +23,7 @@ pub enum NumberType {
     PositiveReals,
     NegativeReals,
     NonZeroReals,
+    Complex,
 }
 impl NumberType {
     pub const fn as_str(self) -> &'static str {
@@ -40,10 +41,12 @@ impl NumberType {
             Self::PositiveReals => "positive real numbers (including zero)",
             Self::NegativeReals => "negative real numbers",
             Self::NonZeroReals => "non-zero real numbers",
+            Self::Complex => "complex numbers",
         }
     }
     pub fn contains(self, num: &Numeric) -> bool {
         match self {
+            Self::Complex => true,
             Self::Reals => true,
             Self::NonZeroReals => match num {
                 Numeric::Int(i) => *i != 0,
@@ -84,8 +87,10 @@ impl PartialOrd for NumberType {
             return Some(std::cmp::Ordering::Equal);
         }
         match (*self, *other) {
-            (_, Self::Reals) => Some(Less),
-            (Self::Reals, _) => Some(Greater),
+            (_, Self::Complex) => Some(Less),
+            (Self::Complex, _) => Some(Greater),
+            //(_, Self::Reals) => Some(Less),
+            //(Self::Reals, _) => Some(Greater),
             (
                 Self::PositiveNaturals,
                 Self::NegativeIntegers | Self::NegativeRationals | Self::NegativeReals,
@@ -94,7 +99,11 @@ impl PartialOrd for NumberType {
             (Self::Naturals, Self::PositiveNaturals) => Some(Greater),
             (
                 Self::Naturals,
-                Self::Integers | Self::Rationals | Self::PositiveRationals | Self::PositiveReals,
+                Self::Integers
+                | Self::Rationals
+                | Self::PositiveRationals
+                | Self::PositiveReals
+                | Self::Reals,
             ) => Some(Less),
             (
                 Self::NegativeIntegers,
@@ -104,10 +113,11 @@ impl PartialOrd for NumberType {
                 | Self::NegativeRationals
                 | Self::NonZeroRationals
                 | Self::NegativeReals
-                | Self::NonZeroReals,
+                | Self::NonZeroReals
+                | Self::Reals,
             ) => Some(Less),
             (Self::Integers, Self::PositiveNaturals | Self::Naturals) => Some(Greater),
-            (Self::Integers, Self::Rationals | Self::PositiveReals) => Some(Less),
+            (Self::Integers, Self::Rationals | Self::PositiveReals | Self::Reals) => Some(Less),
             (Self::NonZeroIntegers, Self::PositiveNaturals | Self::NegativeIntegers) => {
                 Some(Greater)
             }
@@ -120,28 +130,32 @@ impl PartialOrd for NumberType {
                 | Self::NonZeroIntegers,
             ) => Some(Greater),
             (Self::PositiveRationals, Self::PositiveNaturals | Self::Naturals) => Some(Greater),
-            (Self::PositiveRationals, Self::PositiveReals) => Some(Less),
+            (Self::PositiveRationals, Self::PositiveReals | Self::Reals) => Some(Less),
             (Self::NegativeRationals, Self::NegativeIntegers | Self::NonZeroIntegers) => {
                 Some(Greater)
             }
             (
                 Self::NegativeRationals,
-                Self::NonZeroRationals | Self::NegativeReals | Self::NonZeroReals,
+                Self::NonZeroRationals | Self::NegativeReals | Self::NonZeroReals | Self::Reals,
             ) => Some(Less),
             (
                 Self::NonZeroRationals,
                 Self::PositiveNaturals | Self::NegativeIntegers | Self::NonZeroIntegers,
             ) => Some(Greater),
-            (Self::NonZeroRationals, Self::Rationals | Self::NonZeroReals) => Some(Less),
+            (Self::NonZeroRationals, Self::Rationals | Self::NonZeroReals | Self::Reals) => {
+                Some(Less)
+            }
             (
                 Self::PositiveReals,
                 Self::PositiveNaturals | Self::Naturals | Self::PositiveRationals,
             ) => Some(Greater),
-            (Self::PositiveReals, Self::NonZeroReals) => Some(Less),
+            (Self::PositiveReals, Self::NonZeroReals | Self::Reals) => Some(Less),
             (Self::NegativeReals, Self::NegativeIntegers | Self::NegativeRationals) => {
                 Some(Greater)
             }
-            (Self::NegativeReals, Self::NonZeroReals) => Some(Less),
+            (Self::NegativeReals, Self::NonZeroReals | Self::Reals) => Some(Less),
+            (Self::NonZeroReals, Self::Reals) => Some(Less),
+            (Self::Reals, o) if o != Self::Complex => Some(Greater),
             _ => None,
         }
     }

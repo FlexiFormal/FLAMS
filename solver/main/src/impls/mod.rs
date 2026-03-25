@@ -18,6 +18,7 @@ use crate::{
     utils::MutableRefList,
 };
 use ftml_ontology::terms::ComponentVar;
+use ftml_solver_trace::traceref;
 use proving::ProverState;
 use smallvec::SmallVec;
 use std::borrow::Cow;
@@ -35,17 +36,19 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     }
     pub fn comment(&mut self, msg: impl Into<Cow<'static, str>>) {
         self.messages.push(CheckLogCow::Owned(PreCheckLog::Msg(
-            msg.into(),
+            vec![msg.into().into_owned().into()],
             crate::trace::MessageLevel::Comment,
         )));
     }
     pub fn counter(&mut self, msg: &'static str, num: usize) {
-        self.messages
-            .push(CheckLogCow::Owned(PreCheckLog::Count(msg, num)));
+        self.messages.push(CheckLogCow::Owned(PreCheckLog::Msg(
+            vec![msg.into(), num.into()],
+            crate::trace::MessageLevel::Comment,
+        )));
     }
     pub fn failure(&mut self, msg: impl Into<Cow<'static, str>>) {
         self.messages.push(CheckLogCow::Owned(PreCheckLog::Msg(
-            msg.into(),
+            vec![msg.into().into_owned().into()],
             crate::trace::MessageLevel::Failure,
         )));
     }
@@ -66,10 +69,7 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     ) -> Result<R, RefCheckLog<'c>> {
         if self.depth() >= DEPTH_LIMIT {
             //self.failure("Depth Limit Reached!");
-            return Err(RefCheckLog::Msg(
-                "Depth Limit Reached!".into(),
-                ftml_solver_trace::MessageLevel::Failure,
-            ));
+            return Err(traceref!(FAIL "Depth Limit Reached!"));
         }
         let (r, l) = self.traced_inner(tsk, f);
         if let Some(r) = r {
@@ -105,13 +105,7 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     ) -> (Option<R>, RefCheckLog<'c>) {
         if self.depth() >= DEPTH_LIMIT {
             //self.failure("Depth Limit Reached!");
-            return (
-                None,
-                RefCheckLog::Msg(
-                    "Depth Limit Reached!".into(),
-                    ftml_solver_trace::MessageLevel::Failure,
-                ),
-            );
+            return (None, traceref!(FAIL "Depth Limit Reached!"));
         }
         let old_msg = std::mem::replace(self.messages, SmallVec::new());
         let ret = f(self);
@@ -134,10 +128,7 @@ impl<'c, 'i, Split: SplitStrategy> CheckRef<'c, 'i, Split> {
     ) -> Result<R, RefCheckLog<'c>> {
         if self.depth() >= DEPTH_LIMIT {
             //self.failure("Depth Limit Reached!");
-            return Err(RefCheckLog::Msg(
-                "Depth Limit Reached!".into(),
-                ftml_solver_trace::MessageLevel::Failure,
-            ));
+            return Err(traceref!(FAIL "Depth Limit Reached!"));
         }
         let mut messages = SmallVec::<CheckLogCow<'c>, _>::new();
         let mut solutions = Solutions::default();
@@ -342,13 +333,13 @@ impl<'c> Trace<'c, '_> {
     }
     pub fn comment(&mut self, msg: impl Into<Cow<'static, str>>) {
         self.0.push(CheckLogCow::Owned(PreCheckLog::Msg(
-            msg.into(),
+            vec![msg.into().into_owned().into()],
             crate::trace::MessageLevel::Comment,
         )));
     }
     pub fn failure(&mut self, msg: impl Into<Cow<'static, str>>) {
         self.0.push(CheckLogCow::Owned(PreCheckLog::Msg(
-            msg.into(),
+            vec![msg.into().into_owned().into()],
             crate::trace::MessageLevel::Failure,
         )));
     }

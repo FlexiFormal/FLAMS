@@ -233,11 +233,11 @@ fn symbol_result(r: SymbolCheckResult) -> impl IntoView {
 fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
     match log {
         CheckLog::Comment(s) => {
-            view! {<Leaf><Text style="color:cadetblue"><i>{s}</i></Text></Leaf>}.into_any()
+            view! {<Leaf><Text style="color:cadetblue"><i>{s.into_iter().map(do_displayable).collect_view()}</i></Text></Leaf>}.into_any()
         }
-        CheckLog::Emph(s) => view! {<Leaf><Text><b>{s}</b></Text></Leaf>}.into_any(),
-        CheckLog::Header(s) => view! {<Leaf><Text><b>{s}</b></Text></Leaf>}.into_any(),
-        CheckLog::Fail(s) => view! {<Leaf><Text style="color:red">{s}</Text></Leaf>}.into_any(),
+        CheckLog::Emph(s) => view! {<Leaf><Text><b>{s.into_iter().map(do_displayable).collect_view()}</b></Text></Leaf>}.into_any(),
+        CheckLog::Header(s) => view! {<Leaf><Text><b>{s.into_iter().map(do_displayable).collect_view()}</b></Text></Leaf>}.into_any(),
+        CheckLog::Fail(s) => view! {<Leaf><Text style="color:red">{s.into_iter().map(do_displayable).collect_view()}</Text></Leaf>}.into_any(),
         CheckLog::Rule { header, steps } => {
             let header = view! {
                 <Text><i style="color:blueviolet;">

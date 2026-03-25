@@ -315,6 +315,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             self.failure("Unknown unknown!");
             return Some(false);
         };
+        let solution = self.subst(solution.clone());
 
         if let BoundedValue::Solved(tm) = &unks.solution {
             let tm = tm.clone();
@@ -326,20 +327,20 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                 .collect::<Vec<_>>();
             self.comment("already solved");
             let solution = if ctx.is_empty() {
-                Cow::Borrowed(solution)
+                solution
             } else {
-                Cow::Owned(Term::Bound(BindingTerm::new(
+                Term::Bound(BindingTerm::new(
                     (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
                     Box::new([
                         BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
-                        BoundArgument::Simple(solution.clone()),
+                        BoundArgument::Simple(solution),
                     ]),
                     None,
-                )))
+                ))
             };
             return self.scoped(|slf| slf.check_equality(&solution, &tm));
         }
-        self.solve(unk.clone(), solution.clone())?;
+        self.solve(unk.clone(), solution)?;
         Some(true)
     }
 
@@ -350,6 +351,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             self.failure("Unknown unknown!");
             return Some(false);
         };
+        let bound = self.subst(bound.clone());
 
         if let BoundedValue::Solved(tm) = &unks.solution {
             let tm = tm.clone();
@@ -361,16 +363,16 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                 .collect::<Vec<_>>();
             self.comment("already solved");
             let bound = if ctx.is_empty() {
-                Cow::Borrowed(bound)
+                bound
             } else {
-                Cow::Owned(Term::Bound(BindingTerm::new(
+                Term::Bound(BindingTerm::new(
                     (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
                     Box::new([
                         BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
-                        BoundArgument::Simple(bound.clone()),
+                        BoundArgument::Simple(bound),
                     ]),
                     None,
-                )))
+                ))
             };
             return self.scoped(|slf| slf.check_subtype(&tm, &bound));
         }
@@ -399,7 +401,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
 
         trace.comment(format!("Solving upper type bound of {unk}"));
          */
-        self.solve(unk.clone(), bound.clone())?;
+        self.solve(unk.clone(), bound)?;
         Some(true)
     }
 
@@ -410,6 +412,8 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             self.failure("Unknown unknown!");
             return Some(false);
         };
+
+        let bound = self.subst(bound.clone());
 
         // todo boundary checks
         //
@@ -423,20 +427,20 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                 .collect::<Vec<_>>();
             self.comment("already solved");
             let bound = if ctx.is_empty() {
-                Cow::Borrowed(bound)
+                bound
             } else {
-                Cow::Owned(Term::Bound(BindingTerm::new(
+                Term::Bound(BindingTerm::new(
                     (*ftml_uris::metatheory::BIND_UNKNOWNS).clone().into(),
                     Box::new([
                         BoundArgument::BoundSeq(MaybeSequence::Seq(ctx.into_boxed_slice())),
-                        BoundArgument::Simple(bound.clone()),
+                        BoundArgument::Simple(bound),
                     ]),
                     None,
-                )))
+                ))
             };
             return self.scoped(|slf| slf.check_subtype(&bound, &tm));
         }
-        self.solve(unk.clone(), bound.clone())?;
+        self.solve(unk.clone(), bound)?;
         Some(true)
     }
 
