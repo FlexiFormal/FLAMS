@@ -193,7 +193,7 @@ impl Queue {
             let Ok(permit) = tokio::sync::Semaphore::acquire_owned(sem.clone()).await else {
                 break;
             };
-            let Some((task, id)) = self.get_next() else {
+            let Some((task, id)) = self.get_next_async().await else {
                 break;
             };
             let selfclone = self.clone();
