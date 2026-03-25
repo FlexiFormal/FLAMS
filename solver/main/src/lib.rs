@@ -72,7 +72,9 @@ fn check(task: flams_math_archives::formats::BuildSpec) -> BuildResult {
         Ok(d) => d,
         Err(e) => {
             return BuildResult {
-                log: FileOrString::Str(format!("Document not found: {e}").into_boxed_str()),
+                log: FileOrString::Str(
+                    format!("Document not found {}: {e}", task.uri).into_boxed_str(),
+                ),
                 result: Err(Vec::new()),
             };
         }

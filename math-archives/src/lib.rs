@@ -24,7 +24,7 @@ pub use flams_backend_types as types;
 use crate::triple_store::RDFStore;
 use crate::{
     artifacts::{Artifact, ContentResult, ContentUpdate, FileOrString},
-    formats::{BuildTargetId, SourceFormatId},
+    formats::{BuildTargetId, SourceFormat, SourceFormatId},
     manifest::RepositoryData,
     source_files::{FileStates, SourceDir},
     utils::{
@@ -598,49 +598,19 @@ impl LocalArchive {
             .ok()?
             .filter_map(std::result::Result::ok)
         {
-            static SKIP: &[&str] = &[
-                ".log",
-                ".aux",
-                ".sms",
-                ".sref",
-                ".sms2",
-                ".upa",
-                ".upb",
-                ".mw",
-                ".deps",
-                ".fdb_latexmk",
-                ".dvi",
-                ".fls",
-                ".tmp",
-                ".pdf",
-                ".pdflog",
-                ".errlog",
-                ".bbl",
-                ".blg",
-                ".out",
-                ".synctex.gz",
-                ".run.xml",
-                ".thm",
-                ".bak",
-                ".idx",
-                ".ind",
-                ".ilg",
-                ".toc",
-                ".vrb",
-                ".nav",
-                ".snm",
-                ".ltxlog",
-                ".eps",
-                ".ps",
-                "-blx.bib",
-            ];
             let Ok(m) = f.metadata() else { continue };
             if !m.is_file() {
                 continue;
             }
             let fname = f.file_name();
             let Some(name) = fname.to_str() else { continue };
-            if SKIP.iter().any(|s| name.ends_with(*s)) {
+            let Some((_, ext)) = name.rsplit_once('.') else {
+                continue;
+            };
+            if !SourceFormat::all()
+                .flat_map(|sf| sf.file_extensions.iter())
+                .any(|e| *e == ext)
+            {
                 continue;
             }
 
