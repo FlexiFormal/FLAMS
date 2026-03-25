@@ -224,9 +224,13 @@ impl QueueManager {
         let mut inner = self.inner.write();
         if let Some(q) = inner.remove(&id) {
             let mut s = q.0.state.write();
-            if let QueueState::Running(RunningQueue { queue, blocked, .. }) = &mut *s {
+            if let QueueState::Running(RunningQueue {
+                queue, /*blocked,*/
+                ..
+            }) = &mut *s
+            {
                 queue.clear();
-                blocked.clear();
+                //blocked.clear();
             }
             if matches!(q.name(), QueueName::Global) {
                 inner.insert(id, Queue::new(id, QueueName::Global, AnyBackend::Global));

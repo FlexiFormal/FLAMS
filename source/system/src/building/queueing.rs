@@ -21,7 +21,7 @@ impl Queue {
         let RunningQueue {
             queue,
             done,
-            blocked,
+            //blocked,
             failed,
             ..
         } = state;
@@ -61,9 +61,9 @@ impl Queue {
                                 | TaskState::Queued
                                 | TaskState::Failed
                                 | TaskState::Running => (),
-                                TaskState::Blocked => {
+                                /*TaskState::Blocked => {
                                     newstate = TaskState::Blocked;
-                                }
+                                }*/
                                 TaskState::None => {
                                     newstate = TaskState::None;
                                     break;
@@ -82,12 +82,12 @@ impl Queue {
                     if s == step {
                         found = true;
                         *s.0.state.write() = newstate;
-                    } else if found {
-                        *s.0.state.write() = TaskState::Blocked;
-                    }
+                    } /*else if found {
+                          *s.0.state.write() = TaskState::Blocked;
+                      }*/
                 }
                 match newstate {
-                    TaskState::Blocked => blocked.push(t.clone()),
+                    //TaskState::Blocked => blocked.push(t.clone()),
                     TaskState::Queued => queue.push_back(t.clone()),
                     _ => (),
                 }
@@ -98,18 +98,21 @@ impl Queue {
                         .iter()
                         .any(|s| *s.0.state.read() == TaskState::None)
                 });
-            } else if weak {
+            }
+            /*else if weak {
                 weak = false;
-            } else {
+            }*/
+            else {
                 let tasks = std::mem::take(&mut tasks);
                 for t in tasks {
                     for s in t.steps() {
                         let mut s = s.0.state.write();
                         if *s == TaskState::None {
-                            *s = TaskState::Blocked;
+                            *s = TaskState::Failed; //TaskState::Blocked;
                         }
                     }
-                    blocked.push(t);
+                    failed.push(t);
+                    //blocked.push(t);
                 }
             }
         }
@@ -120,14 +123,14 @@ impl Queue {
             let mut state = self.0.state.write();
             let QueueState::Running(RunningQueue {
                 queue,
-                blocked,
+                //blocked,
                 running,
                 ..
             }) = &mut *state
             else {
                 unreachable!()
             };
-            if queue.is_empty() && blocked.is_empty() && running.is_empty() {
+            if queue.is_empty() /*&& blocked.is_empty()*/ && running.is_empty() {
                 return None;
             }
             if let Some((i, target)) = queue
@@ -150,10 +153,14 @@ impl Queue {
             if !running.is_empty() {
                 drop(state);
                 std::thread::sleep(std::time::Duration::from_secs(1));
-            } else if !blocked.is_empty() {
+            } else
+            /*if !blocked.is_empty() {
                 todo!()
             } else {
                 todo!()
+            }*/
+            {
+                return None;
             }
         }
     }

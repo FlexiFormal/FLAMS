@@ -110,14 +110,14 @@ impl Queue {
             QueueState::Running(RunningQueue {
                 running,
                 queue,
-                blocked,
+                //blocked,
                 failed,
                 done,
                 ..
             }) => QueueMessage::Started {
                 running: running.iter().map(BuildTask::as_message).collect(),
                 queue: queue.iter().map(BuildTask::as_message).collect(),
-                blocked: blocked.iter().map(BuildTask::as_message).collect(),
+                //blocked: blocked.iter().map(BuildTask::as_message).collect(),
                 failed: failed.iter().map(BuildTask::as_message).collect(),
                 done: done.iter().map(BuildTask::as_message).collect(),
             },
@@ -163,7 +163,7 @@ impl Queue {
         self.0.sender.lazy_send(|| QueueMessage::Started {
             running: Vec::new(),
             queue: running.queue.iter().map(BuildTask::as_message).collect(),
-            blocked: Vec::new(),
+            //blocked: Vec::new(),
             failed: Vec::new(),
             done: Vec::new(),
         });
@@ -611,7 +611,7 @@ impl Queue {
 #[derive(Debug)]
 pub struct RunningQueue {
     pub(super) queue: VecDeque<BuildTask>,
-    pub(super) blocked: Vec<BuildTask>,
+    //pub(super) blocked: Vec<BuildTask>,
     pub(super) done: Vec<BuildTask>,
     pub(super) failed: Vec<BuildTask>,
     pub(super) running: Vec<BuildTask>,
@@ -622,7 +622,7 @@ impl RunningQueue {
         Self {
             queue: VecDeque::new(),
             failed: Vec::new(),
-            blocked: Vec::new(),
+            //blocked: Vec::new(),
             done: Vec::new(),
             running: Vec::new(),
             timer: Timer::new(total),

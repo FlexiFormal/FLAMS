@@ -119,7 +119,7 @@ impl From<flams_system::building::QueueEntry> for Entry {
 pub enum TaskState {
     Running,
     Queued,
-    Blocked,
+    //Blocked,
     Done,
     Failed,
     None,
@@ -130,7 +130,7 @@ impl TaskState {
         use flams_web_utils::components::{Header, LazyCollapsible};
         match self {
             Self::Running => view! {<i style="color:yellow">{t}" (Running)"</i>}.into_any(),
-            Self::Queued | Self::Blocked | Self::None => {
+            Self::Queued /*| Self::Blocked*/ | Self::None => {
                 view! {<span style="color:gray">{t}" (...)"</span>}.into_any()
             }
             Self::Done => {
@@ -202,7 +202,7 @@ impl From<flams_system::building::TaskState> for TaskState {
         match e {
             TaskState::Running => Self::Running,
             TaskState::Queued => Self::Queued,
-            TaskState::Blocked => Self::Blocked,
+            //TaskState::Blocked => Self::Blocked,
             TaskState::Done => Self::Done,
             TaskState::Failed => Self::Failed,
             TaskState::None => Self::None,
@@ -216,7 +216,7 @@ pub enum QueueMessage {
     Started {
         running: Vec<Entry>,
         queue: Vec<Entry>,
-        blocked: Vec<Entry>,
+        //blocked: Vec<Entry>,
         failed: Vec<Entry>,
         done: Vec<Entry>,
     },
@@ -248,13 +248,13 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
             QueueMessage::Started {
                 running,
                 queue,
-                blocked,
+                //blocked,
                 failed,
                 done,
             } => Self::Started {
                 running: running.into_iter().map(Into::into).collect(),
                 queue: queue.into_iter().map(Into::into).collect(),
-                blocked: blocked.into_iter().map(Into::into).collect(),
+                //blocked: blocked.into_iter().map(Into::into).collect(),
                 failed: failed.into_iter().map(Into::into).collect(),
                 done: done.into_iter().map(Into::into).collect(),
             },
@@ -516,7 +516,7 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
     let RunningQueue {
         running,
         queue,
-        blocked,
+        //blocked,
         failed,
         done,
         eta,
@@ -525,7 +525,7 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
       <div style="position:fixed;right:20px;z-index:5"><Anchor>
           <AnchorLink href="#running"><Header slot>"Running"</Header></AnchorLink>
           <AnchorLink href="#queued"><Header slot>"Queued"</Header></AnchorLink>
-          <AnchorLink href="#blocked"><Header slot>"Blocked"</Header></AnchorLink>
+          //<AnchorLink href="#blocked"><Header slot>"Blocked"</Header></AnchorLink>
           <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
           <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
       </Anchor></div>
@@ -539,8 +539,8 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
           <ul style="margin-left:30px"><For each=move || running.get() key=|e| e.id children=|e| e.as_view()/></ul>
           <h3 id="queued">"Queued ("{move || queue.with(Vec::len)}")"</h3>
           <ul style="margin-left:30px"><For each=move || queue.get() key=|e| e.id children=|e| e.as_view()/></ul>
-          <h3 id="blocked">"Blocked ("{move || blocked.with(Vec::len)}")"</h3>
-          <ul style="margin-left:30px"><For each=move || blocked.get() key=|e| e.id children=|e| e.as_view()/></ul>
+          //<h3 id="blocked">"Blocked ("{move || blocked.with(Vec::len)}")"</h3>
+          //<ul style="margin-left:30px"><For each=move || blocked.get() key=|e| e.id children=|e| e.as_view()/></ul>
           <h3 id="failed">"Failed ("{move || failed.with(Vec::len)}")"</h3>
           <ul style="margin-left:30px"><For each=move || failed.get() key=|e| e.id children=|e| e.as_view()/></ul>
           <h3 id="finished">"Finished ("{move || done.with(Vec::len)}")"</h3>
@@ -750,13 +750,13 @@ impl QueueSocket {
             QueueMessage::Started {
                 running,
                 queue: actual_queue,
-                blocked,
+                //blocked,
                 failed,
                 done,
             } => queue.set(QueueData::Running(RunningQueue {
                 running: RwSignal::new(running),
                 queue: RwSignal::new(actual_queue),
-                blocked: RwSignal::new(blocked),
+                //blocked: RwSignal::new(blocked),
                 failed: RwSignal::new(failed),
                 done: RwSignal::new(done),
                 eta: WrappedEta(RwSignal::new(Eta::default())),
@@ -791,8 +791,9 @@ impl QueueSocket {
                         let e = v.remove(i);
                         e.steps.update(|m| m.insert(target, TaskState::Done));
                         if e.steps.with_untracked(|v| {
-                            v.iter()
-                                .any(|(_, v)| *v == TaskState::Queued || *v == TaskState::Blocked)
+                            v.iter().any(
+                                |(_, v)| *v == TaskState::Queued, /*|| *v == TaskState::Blocked*/
+                            )
                         }) {
                             queue.update(|v| v.push(e));
                         } else {
@@ -874,7 +875,7 @@ enum QueueData {
 struct RunningQueue {
     running: RwSignal<Vec<Entry>>,
     queue: RwSignal<Vec<Entry>>,
-    blocked: RwSignal<Vec<Entry>>,
+    //blocked: RwSignal<Vec<Entry>>,
     failed: RwSignal<Vec<Entry>>,
     done: RwSignal<Vec<Entry>>,
     eta: WrappedEta,
