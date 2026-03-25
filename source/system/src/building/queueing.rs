@@ -176,14 +176,18 @@ impl Queue {
 
     #[cfg(feature = "tokio")]
     pub(super) async fn get_next_async(&self) -> Option<(BuildTask, BuildTargetId)> {
-        loop {
+        tokio::task::spawn_blocking(|| self.get_next())
+            .await
+            .ok()
+            .flatten()
+        /*loop {
             match self.get_next_i() {
                 std::ops::ControlFlow::Break(r) => return r,
                 std::ops::ControlFlow::Continue(()) => {
                     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                 }
             }
-        }
+        }*/
     }
 
     fn can_be_next(e: &BuildTask) -> Option<BuildTargetId> {
