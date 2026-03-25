@@ -21,7 +21,7 @@ impl Queue {
         let RunningQueue {
             queue,
             done,
-            //blocked,
+            blocked,
             failed,
             ..
         } = state;
@@ -61,9 +61,9 @@ impl Queue {
                                 | TaskState::Queued
                                 | TaskState::Failed
                                 | TaskState::Running => (),
-                                /*TaskState::Blocked => {
+                                TaskState::Blocked => {
                                     newstate = TaskState::Blocked;
-                                }*/
+                                }
                                 TaskState::None => {
                                     newstate = TaskState::None;
                                     break;
@@ -82,12 +82,12 @@ impl Queue {
                     if s == step {
                         found = true;
                         *s.0.state.write() = newstate;
-                    } /*else if found {
-                          *s.0.state.write() = TaskState::Blocked;
-                      }*/
+                    } else if found {
+                        *s.0.state.write() = TaskState::Blocked;
+                    }
                 }
                 match newstate {
-                    //TaskState::Blocked => blocked.push(t.clone()),
+                    TaskState::Blocked => blocked.push(t.clone()),
                     TaskState::Queued => queue.push_back(t.clone()),
                     _ => (),
                 }
@@ -98,21 +98,18 @@ impl Queue {
                         .iter()
                         .any(|s| *s.0.state.read() == TaskState::None)
                 });
-            }
-            /*else if weak {
+            } else if weak {
                 weak = false;
-            }*/
-            else {
+            } else {
                 let tasks = std::mem::take(&mut tasks);
                 for t in tasks {
                     for s in t.steps() {
                         let mut s = s.0.state.write();
                         if *s == TaskState::None {
-                            *s = TaskState::Failed; //TaskState::Blocked;
+                            *s = TaskState::Blocked;
                         }
                     }
-                    failed.push(t);
-                    //blocked.push(t);
+                    blocked.push(t);
                 }
             }
         }
@@ -120,27 +117,66 @@ impl Queue {
 
     pub(super) fn get_next(&self) -> Option<(BuildTask, BuildTargetId)> {
         loop {
-            let mut state = self.0.state.write();
-            let QueueState::Running(RunningQueue {
-                queue,
-                //blocked,
-                running,
-                ..
-            }) = &mut *state
-            else {
+            match self.get_next_i() {
+                Ok(r) => return r,
+                Err(()) => std::thread::sleep(std::time::Duration::from_millis(100)),
+            }
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    pub(super) async fn get_next_async(&self) -> Option<(BuildTask, BuildTargetId)> {
+        loop {
+            match self.get_next_i() {
+                Ok(r) => return r,
+                Err(()) => tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+            }
+        }
+    }
+
+    fn get_next_i(&self) -> Result<Option<(BuildTask, BuildTargetId)>, ()> {
+        let mut state = self.0.state.write();
+        let QueueState::Running(RunningQueue {
+            queue,
+            blocked,
+            running,
+            failed,
+            ..
+        }) = &mut *state
+        else {
+            unreachable!()
+        };
+        if queue.is_empty() && blocked.is_empty() && running.is_empty() {
+            return Ok(None);
+        }
+        if let Some((i, target)) = queue
+            .iter()
+            .enumerate()
+            .find_map(|(next, e)| Self::can_be_next(e).map(|t| (next, t)))
+        {
+            let Some(task) = queue.remove(i) else {
                 unreachable!()
             };
-            if queue.is_empty() /*&& blocked.is_empty()*/ && running.is_empty() {
-                return None;
-            }
-            if let Some((i, target)) = queue
+            *task
+                .get_step(target)
+                .unwrap_or_else(|| unreachable!())
+                .0
+                .state
+                .write() = TaskState::Running;
+            running.push(task.clone());
+            return Ok(Some((task, target)));
+        }
+        if !running.is_empty() {
+            drop(state);
+            return Err(());
+            //std::thread::sleep(std::time::Duration::from_secs(1));
+        } else if !blocked.is_empty() {
+            if let Some((i, target)) = blocked
                 .iter()
                 .enumerate()
                 .find_map(|(next, e)| Self::can_be_next(e).map(|t| (next, t)))
             {
-                let Some(task) = queue.remove(i) else {
-                    unreachable!()
-                };
+                let task = blocked.remove(i);
                 *task
                     .get_step(target)
                     .unwrap_or_else(|| unreachable!())
@@ -148,20 +184,20 @@ impl Queue {
                     .state
                     .write() = TaskState::Running;
                 running.push(task.clone());
-                return Some((task, target));
+                return Ok(Some((task, target)));
             }
-            if !running.is_empty() {
-                drop(state);
-                std::thread::sleep(std::time::Duration::from_secs(1));
-            } else
-            /*if !blocked.is_empty() {
-                todo!()
-            } else {
-                todo!()
-            }*/
-            {
-                return None;
+            while let Some(t) = blocked.pop() {
+                for s in t.steps() {
+                    let mut state = s.0.state.write();
+                    if *state != TaskState::Done {
+                        *state = TaskState::Failed;
+                    }
+                }
+                failed.push(t);
             }
+            return Ok(None);
+        } else {
+            return Ok(None);
         }
     }
 

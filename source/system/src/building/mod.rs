@@ -35,7 +35,7 @@ pub use queue::Queue;
 pub enum TaskState {
     Running,
     Queued,
-    //Blocked,
+    Blocked,
     Done,
     Failed,
     None,
@@ -99,8 +99,8 @@ impl BuildTask {
         let uri = DocumentUri::from_archive_relpath(archive, rel_path.as_ref())
             .map_err(eyre::Report::new)?;
         Ok(Self(Arc::new(BuildTaskI {
-            id,
             uri,
+            id,
             steps,
             source,
             rel_path,
@@ -283,7 +283,7 @@ pub enum QueueMessage {
     Started {
         running: Vec<QueueEntry>,
         queue: Vec<QueueEntry>,
-        //blocked: Vec<QueueEntry>,
+        blocked: Vec<QueueEntry>,
         failed: Vec<QueueEntry>,
         done: Vec<QueueEntry>,
     },
