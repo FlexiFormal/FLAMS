@@ -40,13 +40,13 @@ use flams_backend_types::{
 };
 use ftml_ontology::{domain::modules::Module, narrative::documents::Document};
 use ftml_uris::{
-    ArchiveId, ArchiveUri, IsDomainUri, Language, ModuleUri, SimpleUriName, UriName, UriPath,
-    UriWithArchive, UriWithPath,
+    ArchiveId, ArchiveUri, DocumentUri, IsDomainUri, Language, ModuleUri, SimpleUriName, UriName,
+    UriPath, UriWithArchive, UriWithPath,
 };
 use std::{
     hint::unreachable_unchecked,
     path::{Path, PathBuf},
-    str,
+    str::{self, FromStr},
 };
 
 type Result<T> = std::result::Result<T, BackendError>;
@@ -532,6 +532,84 @@ impl LocallyBuilt for LocalArchive {
     }
 }
 impl LocalArchive {
+    pub fn document_of(&self, path: Option<&UriPath>, name: &UriName) -> Option<DocumentUri> {
+        let mut mname = name.first();
+        let mut file = self.source_dir();
+        let maybe_step = if let Some(path) = path {
+            let mut steps = path.steps();
+            let _ = steps.next_back();
+            for step in steps {
+                file = file.join(step);
+            }
+            path.steps().next_back()
+        } else {
+            None
+        };
+        if let Some(step) = maybe_step
+            && let Ok(mut d) = std::fs::read_dir(file.join(step))
+        {
+            if let Some(rp) = d.find_map::<String, _>(|p| {
+                p.ok().and_then(|p| {
+                    let fnm = p.file_name();
+                    let name = fnm.as_os_str().as_encoded_bytes();
+                    let name = name.strip_prefix(mname.as_bytes())?.strip_prefix(b".")?;
+                    let lang = self.formats.iter().find_map(|f| {
+                        f.file_extensions.iter().find_map(|e| {
+                            name.strip_suffix(e.as_bytes())
+                                .and_then(|s| s.strip_suffix(b"."))
+                        })
+                    })?;
+                    if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
+                        Some(
+                            p.path()
+                                .as_os_str()
+                                .to_str()?
+                                .strip_prefix(self.source_dir().as_os_str().to_str()?)?[1..]
+                                .to_string(),
+                        )
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                return DocumentUri::from_archive_relpath(self.uri.clone(), &rp).ok();
+            }
+            mname = step;
+        };
+
+        if let Ok(mut d) = std::fs::read_dir(file) {
+            if let Some(rp) = d.find_map::<String, _>(|p| {
+                p.ok().and_then(|p| {
+                    let fnm = p.file_name();
+                    let name = fnm.as_os_str().as_encoded_bytes();
+                    let Some(name) = name.strip_prefix(mname.as_bytes()) else {
+                        return None;
+                    };
+                    let Some(name) = name.strip_prefix(b".") else {
+                        return None;
+                    };
+                    let Some(lang) = name.strip_suffix(b".tex") else {
+                        return None;
+                    };
+                    if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
+                        Some(
+                            p.path()
+                                .as_os_str()
+                                .to_str()?
+                                .strip_prefix(self.source_dir().as_os_str().to_str()?)?[1..]
+                                .to_string(),
+                        )
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                return DocumentUri::from_archive_relpath(self.uri.clone(), &rp).ok();
+            }
+        };
+        None
+    }
+
     #[cfg(feature = "git")]
     pub fn git_url(&self, on_host: &url::Url) -> Option<&flams_git::GitUrl> {
         self.is_managed

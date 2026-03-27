@@ -11,8 +11,8 @@ use ftml_ontology::{
 };
 use ftml_uris::{
     ArchiveId, DocumentElementUri, DocumentUri, FtmlUri, IsDomainUri, IsNarrativeUri, Language,
-    NarrativeUri, PathUri, SimpleUriName, SymbolUri, Uri, UriName, UriPath, UriWithArchive,
-    UriWithPath,
+    NamedUri, NarrativeUri, PathUri, SimpleUriName, SymbolUri, Uri, UriName, UriPath,
+    UriWithArchive, UriWithPath,
 };
 use leptos::prelude::*;
 use std::str::FromStr;
@@ -116,87 +116,9 @@ pub async fn document_of(
                     m.archive_uri().clone().into(),
                 ));
             };
-            let mut mname = m.module_name().first();
-            let mut file = archive.source_dir();
-            let maybe_step = if let Some(path) = m.path() {
-                let mut steps = path.steps();
-                let _ = steps.next_back();
-                for step in steps {
-                    file = file.join(step);
-                }
-                path.steps().next_back()
-            } else {
-                None
-            };
-            if let Some(step) = maybe_step {
-                if let Ok(mut d) = std::fs::read_dir(file.join(step)) {
-                    if let Some(rp) =
-                        d.find_map::<String, _>(|p| {
-                            p.ok().and_then(|p| {
-                                let fnm = p.file_name();
-                                let name = fnm.as_os_str().as_encoded_bytes();
-                                let Some(name) = name.strip_prefix(mname.as_bytes()) else {
-                                    return None;
-                                };
-                                let Some(name) = name.strip_prefix(b".") else {
-                                    return None;
-                                };
-                                let Some(lang) = name.strip_suffix(b".tex") else {
-                                    return None;
-                                };
-                                if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
-                                    Some(
-                                        p.path().as_os_str().to_str()?.strip_prefix(
-                                            archive.source_dir().as_os_str().to_str()?,
-                                        )?[1..]
-                                            .to_string(),
-                                    )
-                                } else {
-                                    None
-                                }
-                            })
-                        })
-                    {
-                        return DocumentUri::from_archive_relpath(m.archive_uri().clone(), &rp)
-                            .map_err(|e| {
-                                ftml_backend::BackendError::InvalidArgument(e.to_string())
-                            });
-                    }
-                    mname = step;
-                };
-            }
-            if let Ok(mut d) = std::fs::read_dir(file) {
-                if let Some(rp) = d.find_map::<String, _>(|p| {
-                    p.ok().and_then(|p| {
-                        let fnm = p.file_name();
-                        let name = fnm.as_os_str().as_encoded_bytes();
-                        let Some(name) = name.strip_prefix(mname.as_bytes()) else {
-                            return None;
-                        };
-                        let Some(name) = name.strip_prefix(b".") else {
-                            return None;
-                        };
-                        let Some(lang) = name.strip_suffix(b".tex") else {
-                            return None;
-                        };
-                        if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
-                            Some(
-                                p.path()
-                                    .as_os_str()
-                                    .to_str()?
-                                    .strip_prefix(archive.source_dir().as_os_str().to_str()?)?[1..]
-                                    .to_string(),
-                            )
-                        } else {
-                            None
-                        }
-                    })
-                }) {
-                    return DocumentUri::from_archive_relpath(m.archive_uri().clone(), &rp)
-                        .map_err(|e| ftml_backend::BackendError::InvalidArgument(e.to_string()));
-                }
-            };
-            Err(ftml_backend::BackendError::NotFound(m.clone().into()))
+            archive
+                .document_of(m.path(), m.name())
+                .ok_or_else(|| ftml_backend::BackendError::NotFound(uri.clone()))
         })
     })
     .await

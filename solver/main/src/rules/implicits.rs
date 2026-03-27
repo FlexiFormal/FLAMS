@@ -26,7 +26,7 @@ pub trait ImplicitExtTerm: ImplicitExtBound + ImplicitExtApp {
 impl ImplicitExtApp for ApplicationTerm {
     // invariant: return.0 matches Term::Symbol {..}
     fn unapply_implicits(&self) -> Option<(&Term, &[Term])> {
-        if !self.head.is(&*ftml_uris::metatheory::IMPLICIT_BIND) {
+        if !self.head.is(&*ftml_uris::metatheory::APPLY_IMPLICIT) {
             return None;
         }
         if let [
@@ -81,7 +81,7 @@ impl ImplicitExtTerm for Term {
         }
         let mut index = 0;
         Self::Application(ApplicationTerm::new(
-            (*ftml_uris::metatheory::IMPLICIT_BIND).clone().into(),
+            (*ftml_uris::metatheory::APPLY_IMPLICIT).clone().into(),
             Box::new([
                 Argument::Simple(self),
                 Argument::Sequence(MaybeSequence::Seq(

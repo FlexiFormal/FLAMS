@@ -10,6 +10,146 @@ use crate::{
     split::SplitStrategy,
 };
 
+/*
+*
+fn check_bindin<'t, Split: SplitStrategy>(
+    bind: &SymbolUri,
+    checker: &mut crate::CheckRef<'t, '_, Split>,
+    term: &'t Term,
+) -> Option<(
+    &'t MaybeSequence<ComponentVar>,
+    &'t MaybeSequence<Term>,
+    &'t Term,
+    &'t ComponentVar,
+    &'t Term,
+)> {
+    let Term::Bound(b) = term else { return None };
+    let [
+        BoundArgument::BoundSeq(bs),
+        BoundArgument::Sequence(ts),
+        BoundArgument::Simple(b),
+        BoundArgument::Bound(f),
+        BoundArgument::Simple(ret),
+    ] = &*b.arguments
+    else {
+        return None;
+    };
+    let vars = match (bs, ts) {
+        (MaybeSequence::One(bs), MaybeSequence::One(ts)) => {
+            if checker.check_inhabitable(ts) != Some(true) {
+                return None;
+            }
+            let nv = ComponentVar {
+                var: bs.var.clone(),
+                tp: Some(ts.clone()),
+                df: None,
+            };
+            if checker.scoped(|checker| {
+                checker.extend_context(&nv);
+                checker.check_inhabitable(b)
+            }) != Some(true)
+            {
+                return None;
+            }
+            MaybeSequence::One(nv)
+        }
+        (MaybeSequence::Seq(bs), MaybeSequence::Seq(ts)) => {
+            let ret = bs
+                .iter()
+                .zip(ts.iter())
+                .map(|(v, t)| ComponentVar {
+                    var: v.var.clone(),
+                    tp: Some(t.clone()),
+                    df: None,
+                })
+                .collect::<Vec<_>>();
+            checker.scoped(|checker| {
+                for cv in &ret {
+                    // SAFETY: all types are Some(_)
+                    if checker.check_inhabitable(unsafe { cv.tp.as_ref().unwrap_unchecked() })
+                        != Some(true)
+                    {
+                        return None;
+                    }
+                    checker.extend_context(cv);
+                }
+                if checker.check_inhabitable(b) == Some(true) {
+                    Some(())
+                } else {
+                    None
+                }
+            })?;
+            MaybeSequence::Seq(ret.into_boxed_slice())
+        }
+        _ => {
+            checker.failure("types don't match bound variables");
+            return None;
+        }
+    };
+
+    let ftp = match vars {
+        MaybeSequence::One(v) => bind.clone().simple_bind(v.var, v.tp, None, b.clone()),
+        MaybeSequence::Seq(ts) => ts.into_iter().rfold(b.clone(), |t, v| {
+            bind.clone().simple_bind(v.var, v.tp, None, t)
+        }),
+    };
+    let nf = ComponentVar {
+        var: f.var.clone(),
+        df: None,
+        tp: Some(ftp),
+    };
+    checker.extend_context(nf);
+    Some((bs, ts, b, f, ret))
+}
+
+fn applicable(&self, term: &Term) -> bool {
+    if let Term::Bound(b) = term
+        && let Term::Symbol { uri, .. } = &b.head
+        && *uri == self.bindin
+        && let [
+            BoundArgument::BoundSeq(bs), //x
+            BoundArgument::Sequence(ts), //T
+            BoundArgument::Simple(_),    //B
+            BoundArgument::Bound(_),     //f
+            BoundArgument::Simple(_),    //t
+        ] = &*b.arguments
+    {
+        bs.len() == ts.len()
+    } else {
+        false
+    }
+}
+
+fn apply<'t>(
+    &self,
+    mut checker: crate::CheckRef<'t, '_, Split>,
+    term: &'t Term,
+) -> Option<bool> {
+    let (_, _, _, _, ret) = check_bindin(&self.bind, &mut checker, term)?;
+    checker.check_inhabitable(ret)
+}
+
+fn infer<'t>(
+    &self,
+    mut checker: crate::CheckRef<'t, '_, Split>,
+    term: &'t Term,
+) -> Option<Term> {
+    let (bs, ts, b, f, ret) = check_bindin(&self.bind, &mut checker, term)?;
+    let rettp = checker.infer_type(ret)?;
+    Some(Term::Bound(BindingTerm::new(
+        self.bindin.clone().into(),
+        Box::new([
+            BoundArgument::BoundSeq(bs.clone()),
+            BoundArgument::Sequence(ts.clone()),
+            BoundArgument::Simple(b.clone()),
+            BoundArgument::Bound(f.clone()),
+            BoundArgument::Simple(rettp),
+        ]),
+        None,
+    )))
+}
+*/
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindInInhabitableRule {
     pub bindin: SymbolUri,

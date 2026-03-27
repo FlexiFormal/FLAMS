@@ -238,6 +238,11 @@ pub enum QueueMessage {
         target: String,
         eta: Eta,
     },
+    TaskBlocked {
+        id: u32,
+        target: String,
+        eta: Eta,
+    },
 }
 #[cfg(feature = "ssr")]
 impl From<flams_system::building::QueueMessage> for QueueMessage {
@@ -276,6 +281,11 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
                 target: target.to_string(),
                 eta,
             },
+            QueueMessage::TaskBlocked { id, target, eta } => Self::TaskBlocked {
+                id: id.into(),
+                target: target.to_string(),
+                eta,
+            },
         }
     }
 }
@@ -302,7 +312,7 @@ pub fn queues_top() -> AnyView {
                     return view!(<div>"(No running queues)"</div>).into_any();
                 }
                 let queues = AllQueues::new(v);
-                if let Some(id) = id() && let Ok(id) = id.parse() {
+                if let Some(id) = params.read_untracked().get("queue") && let Ok(id) = id.parse() {
                     queues.selected.update_untracked(|v| *v = id);
                 }
                 provide_context(queues);
@@ -329,21 +339,27 @@ pub fn queues_top() -> AnyView {
                   </TabList>
                   <div style="margin:10px"><Divider/></div>
                   <Layout class="flams-fullscreen">{move || {
-                    let curr = queues.selected.get();
+                    //let curr = queues.selected.get();
                     queues.show.update_untracked(|v| *v = false);
                     QueueSocket::run(queues);
                     move || view! {
                       <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
-                        let ls = queues.queues.with_untracked(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!());
-                        move || match ls.get() {
-                          QueueData::Idle(v) => {
-                              idle(curr,v)
-                          },
-                          QueueData::Running(r) => {
-                              running(curr,r)
-                          },
-                          QueueData::Finished(failed,done) => finished(curr,failed,done),
-                          QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                        let ls = move || {
+                            let curr = queues.selected.get();
+                            (curr,queues.queues.with(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!()))
+                        };
+                        move || {
+                            let (curr,ls) = ls();
+                            match ls.get() {
+                                QueueData::Idle(v) => {
+                                    idle(curr,v)
+                                },
+                                QueueData::Running(r) => {
+                                    running(curr,r)
+                                },
+                                QueueData::Finished(failed,done) => finished(curr,failed,done),
+                                QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                            }
                         }
                       }</Show>
                     }
@@ -817,6 +833,25 @@ impl QueueSocket {
                         let e = v.remove(i);
                         e.steps.update(|m| m.insert(target, TaskState::Failed));
                         failed.update(|v| v.push(e));
+                    });
+                }
+            }),
+            QueueMessage::TaskBlocked { id, target, eta } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    running,
+                    blocked,
+                    eta: etasignal,
+                    ..
+                }) = queue
+                {
+                    etasignal.0.set(eta);
+                    running.update(|v| {
+                        let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
+                            return;
+                        };
+                        let e = v.remove(i);
+                        e.steps.update(|m| m.insert(target, TaskState::Blocked));
+                        blocked.update(|v| v.push(e));
                     });
                 }
             }),
