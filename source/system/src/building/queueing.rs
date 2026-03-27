@@ -6,11 +6,12 @@ use flams_math_archives::{
     Archive, MathArchive,
 };
 use flams_utils::{triomphe::Arc, vecmap::VecSet};
+use ftml_ontology::utils::time::Eta;
 use ftml_uris::UriWithArchive;
 use parking_lot::RwLock;
 use std::collections::hash_map::Entry;
 
-use crate::building::AtomicTaskState;
+use crate::building::{AtomicTaskState, QueueMessage};
 
 use super::{
     queue::{Queue, QueueState, RunningQueue, TaskMap},
@@ -189,6 +190,11 @@ impl Queue {
                         s.0.state.set(TaskState::Failed);
                     }
                 }
+                self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
+                    id: t.0.id,
+                    target: t.steps().last().expect("???").0.target,
+                    eta: Eta::default(),
+                });
                 failed.push(t);
             }
             Ok(None)

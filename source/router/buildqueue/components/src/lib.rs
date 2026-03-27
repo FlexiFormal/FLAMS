@@ -778,16 +778,37 @@ impl QueueSocket {
                 eta: WrappedEta(RwSignal::new(Eta::default())),
             })),
             QueueMessage::Finished { failed, done } => queue.set(QueueData::Finished(failed, done)),
-            QueueMessage::TaskStarted { id, target } => queue.with_untracked(|queue| {
-                if let QueueData::Running(RunningQueue { queue, running, .. }) = queue {
+            QueueMessage::TaskStarted { id, mut target } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    queue,
+                    running,
+                    blocked,
+                    ..
+                }) = queue
+                {
+                    let mut worked = false;
                     queue.update(|v| {
                         let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
                             return;
                         };
+                        worked = true;
                         let e = v.remove(i);
-                        e.steps.update(|m| m.insert(target, TaskState::Running));
+                        e.steps
+                            .update(|m| m.insert(std::mem::take(&mut target), TaskState::Running));
                         running.update(|running| running.push(e));
                     });
+                    if !worked {
+                        blocked.update(|v| {
+                            let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id)
+                            else {
+                                return;
+                            };
+                            worked = true;
+                            let e = v.remove(i);
+                            e.steps.update(|m| m.insert(target, TaskState::Running));
+                            running.update(|running| running.push(e));
+                        });
+                    }
                 }
             }),
             QueueMessage::TaskSuccess { id, target, eta } => queue.with_untracked(|queue| {

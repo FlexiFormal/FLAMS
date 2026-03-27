@@ -73,7 +73,7 @@ pub(super) struct QueueI {
     pub id: QueueId,
     span: tracing::Span,
     pub(super) map: RwLock<TaskMap>,
-    sender: ChangeSender<QueueMessage>,
+    pub(super) sender: ChangeSender<QueueMessage>,
     pub(super) state: RwLock<QueueState>,
 }
 
