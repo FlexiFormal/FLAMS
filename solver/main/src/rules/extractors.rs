@@ -46,6 +46,7 @@ pub const fn all_symbol_extractors<Split: SplitStrategy>() -> &'static [SymbolRu
         numnegreal,
         numnonzeroreal,
         numcomplex,
+        addition,
     ]
 }
 #[must_use]
@@ -58,6 +59,7 @@ pub const fn all_rule_extractors<Split: SplitStrategy>() -> &'static [RuleExtrac
         ("inhabitable", inhab),
         ("universe", univ),
         ("subtype", subtp),
+        ("complex", super::symbols::parse),
     ]
 }
 
@@ -99,11 +101,14 @@ pub fn inhab<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) 
 }
 
 pub fn univ<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
-    let [term] = params else { return };
-    rules.push_inhabitable(Box::new(universe::ComplexUniverseRule(Pattern::from(
-        term.clone(),
-        false,
-    ))));
+    let [term] = params else {
+        //tracing::error!("Parameters don't match: {params:?}");
+        return;
+    };
+    let rl = universe::ComplexUniverseRule(Pattern::from(term.clone(), false));
+    //tracing::warn!("New universe rule: {rl:?}");
+    rules.push_inhabitable(Box::new(rl.clone()));
+    rules.push_universe(Box::new(rl));
 }
 
 pub fn intersection<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
@@ -179,6 +184,7 @@ pub fn hoas_lpa<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split
         return;
     };
     rules.push_inhabitable(Box::new(pi::PiInhabitableRule(pi.clone())));
+    rules.push_universe(Box::new(pi::PiUniverseRule(pi.clone())));
     rules.push_inference(Box::new(pi::PiInferenceRule(pi.clone())));
     rules.push_subtyping(Box::new(pi::PiVarianceRule(pi.clone())));
     rules.push_inference(Box::new(pi::LambdaPiInferenceRule {
@@ -301,7 +307,8 @@ rules! {
         rules.push_inhabitable(Box::new(super::sequences::map::MapInhabitableRule(sym.uri.clone())));
         rules.push_simplification(Box::new(super::sequences::map::MapSimplificationRule(sym.uri.clone())));
         rules.push_simplification(Box::new(super::sequences::map::MapArgumentSimplificationRule(sym.uri.clone())));
-        //rules.push_inference(rule);
+        rules.push_simplification(Box::new(super::sequences::map::MapIndexSimplificationRule(sym.uri.clone())));
+        rules.push_inference(Box::new(super::sequences::map::MapInferenceRule(sym.uri.clone())));
     }
     pub letrule("let") = (sym,rules) => {
         rules.push_simplification(Box::new(letin::LetinComputation(sym.uri.clone())));
@@ -390,5 +397,8 @@ rules! {
             typ:numbers::NumberType::Complex,
             sym:sym.uri.clone()
         }));
+    }
+    pub addition = (sym,rules) => {
+        rules.push_simplification(Box::new(numbers::AdditionRule(sym.uri.clone())));
     }
 }

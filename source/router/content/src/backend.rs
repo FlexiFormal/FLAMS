@@ -1,5 +1,5 @@
 use ftml_ontology::narrative::elements::SectionLevel;
-use ftml_uris::{DocumentUri, FtmlUri, Uri};
+use ftml_uris::{DocumentElementUri, DocumentUri, FtmlUri, Uri};
 
 pub struct FtmlBackend;
 impl ftml_backend::GlobalBackend for FtmlBackend {
@@ -37,8 +37,11 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
     fn check_term(
         &self,
         global_context: &[ftml_uris::ModuleUri],
-        term: &ftml_ontology::terms::Term,
-        in_path: &ftml_ontology::terms::termpaths::TermPath,
+        in_term: either::Either<&ftml_ontology::terms::Term, &DocumentElementUri>,
+        subterm: either::Either<
+            &ftml_ontology::terms::Term,
+            &ftml_ontology::terms::termpaths::TermPath,
+        >,
     ) -> impl Future<
         Output = Result<
             ftml_backend::BackendCheckResult,
@@ -46,7 +49,7 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         >,
     > + Send
     + use<> {
-        super::server_fns::check_term(global_context.to_vec(), term.clone(), in_path.clone())
+        super::server_fns::check_term(global_context.to_vec(), in_term.cloned(), subterm.cloned())
     }
 
     fn get_fragment(

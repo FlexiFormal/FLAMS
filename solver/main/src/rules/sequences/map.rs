@@ -1,12 +1,18 @@
+use std::hint::unreachable_unchecked;
+
 use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
+    Variable,
 };
 use ftml_solver_trace::SizedSolverRule;
 use ftml_uris::SymbolUri;
 
 use crate::{
-    TermExtSeq,
-    rules::{InferenceRule, InhabitableRule, SimplificationRule},
+    rules::{
+        InferenceRule, InhabitableRule, SimplificationRule,
+        operators::numbers::{NumberRule, NumberType},
+        sequences::{Sequence, SequenceType},
+    },
     split::SplitStrategy,
 };
 
@@ -109,6 +115,60 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for MapArgumentSimplificati
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapIndexSimplificationRule(pub SymbolUri);
+impl SizedSolverRule for MapIndexSimplificationRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, "(s,f)(i) ==> f(s(i))")
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for MapIndexSimplificationRule {
+    fn applicable(&self, term: &Term) -> bool {
+        if let Term::Application(app) = term
+            && let [Argument::Simple(_)] = &*app.arguments
+            && let Term::Application(map) = &app.head
+            && let Term::Symbol { uri, .. } = &map.head
+            && *uri == self.0
+            && let [_, Argument::Simple(_)] = &*map.arguments
+        {
+            true
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
+        &self,
+        _: crate::CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        let [Argument::Simple(idx)] = &*app.arguments else {
+            return Err(None);
+        };
+        let Term::Application(map) = &app.head else {
+            return Err(None);
+        };
+        let [a, Argument::Simple(f)] = &*map.arguments else {
+            return Err(None);
+        };
+        let s = match a {
+            Argument::Simple(t) | Argument::Sequence(MaybeSequence::One(t)) => t.clone(),
+            Argument::Sequence(MaybeSequence::Seq(ts)) => Term::into_seq(ts.iter().cloned()),
+        };
+        Ok(Term::Application(ApplicationTerm::new(
+            f.clone(),
+            Box::new([Argument::Simple(Term::Application(ApplicationTerm::new(
+                s,
+                Box::new([Argument::Simple(idx.clone())]),
+                None,
+            )))]),
+            None,
+        )))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapSimplificationRule(pub SymbolUri);
 impl SizedSolverRule for MapSimplificationRule {
     fn display(&self) -> Vec<crate::trace::Displayable> {
@@ -128,7 +188,7 @@ impl MapSimplificationRule {
         };
         match a {
             Argument::Simple(s) | Argument::Sequence(MaybeSequence::One(s)) => {
-                let Some(ts) = s.make_concrete_sequence() else {
+                let Some(ts) = s.as_sequence().and_then(|s| s.to_concrete()) else {
                     return Err(None);
                 };
                 Ok(ts
@@ -167,7 +227,7 @@ impl MapSimplificationRule {
             && let [a, Argument::Simple(_)] = &*app.arguments
         {
             if let Argument::Simple(s) | Argument::Sequence(MaybeSequence::One(s)) = a {
-                s.is_concrete_sequence()
+                s.as_sequence().is_some_and(|seq| seq.is_concrete())
             } else {
                 true
             }
@@ -220,9 +280,13 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for MapInhabitableRule {
             return None;
         };
         let seqtp = match seq {
-            MaybeSequence::One(t) if t.as_sequence().is_some() => {
+            MaybeSequence::One(t)
+                if matches!(t.as_sequence(), Some(Sequence::SequenceExpression(_))) =>
+            {
                 // SAFETY: pattern match
-                let args = unsafe { t.as_sequence().unwrap_unchecked() };
+                let Some(Sequence::SequenceExpression(args)) = t.as_sequence() else {
+                    unsafe { unreachable_unchecked() }
+                };
                 let mut curr = None;
                 for t in args {
                     if !checker.scoped::<Option<bool>>(|checker| {
@@ -262,7 +326,67 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for MapInhabitableRule {
                 curr?
             }
         };
-        let seqtp = seqtp.as_sequence_type().cloned().unwrap_or(seqtp);
+        let seqtp = match seqtp.as_sequence_type() {
+            Some(SequenceType::SeqType(t, _)) => t.clone(),
+            Some(SequenceType::Map(seq, f)) => {
+                let nat = checker.rules().marker().iter().rev().find_map(|rl| {
+                    rl.as_any().downcast_ref::<NumberRule>().and_then(|rl| {
+                        if rl.typ == NumberType::Naturals {
+                            Some(rl.sym.clone())
+                        } else {
+                            None
+                        }
+                    })
+                })?;
+                let vname = Variable::Name {
+                    name: unsafe { "index".parse().unwrap_unchecked() },
+                    notated: None,
+                };
+                let nv = ComponentVar {
+                    var: vname.clone(),
+                    tp: Some(nat.into()),
+                    df: None,
+                };
+                checker.extend_context(nv);
+                let arg = Term::Application(ApplicationTerm::new(
+                    seq.to_term(),
+                    Box::new([Argument::Simple(vname.into())]),
+                    None,
+                ));
+                Term::Application(ApplicationTerm::new(
+                    f.clone(),
+                    Box::new([Argument::Simple(arg)]),
+                    None,
+                ))
+            }
+            Some(_) => {
+                let nat = checker.rules().marker().iter().rev().find_map(|rl| {
+                    rl.as_any().downcast_ref::<NumberRule>().and_then(|rl| {
+                        if rl.typ == NumberType::Naturals {
+                            Some(rl.sym.clone())
+                        } else {
+                            None
+                        }
+                    })
+                })?;
+                let vname = Variable::Name {
+                    name: unsafe { "index".parse().unwrap_unchecked() },
+                    notated: None,
+                };
+                let nv = ComponentVar {
+                    var: vname.clone(),
+                    tp: Some(nat.into()),
+                    df: None,
+                };
+                checker.extend_context(nv);
+                Term::Application(ApplicationTerm::new(
+                    seqtp,
+                    Box::new([Argument::Simple(vname.into())]),
+                    None,
+                ))
+            }
+            _ => seqtp,
+        };
         let (v, _) = f.fresh_variable(&crate::DUMMY, None);
         checker.extend_context(ComponentVar {
             var: v.clone(),
@@ -278,5 +402,163 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for MapInhabitableRule {
             None,
         ));
         checker.scoped(|checker| checker.check_inhabitable(&nt))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapInferenceRule(pub SymbolUri);
+impl SizedSolverRule for MapInferenceRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("{ x:A, f(x):T, s:A* } ⊢ ", &self.0, "(s,f): T*")
+    }
+}
+
+impl<Split: SplitStrategy> InferenceRule<Split> for MapInferenceRule {
+    fn applicable(&self, term: &ftml_ontology::terms::Term) -> bool {
+        if let Term::Application(app) = term
+            && let Term::Symbol { uri, .. } = &app.head
+        {
+            *uri == self.0 && app.arguments.len() == 2
+        } else {
+            false
+        }
+    }
+    fn infer<'t>(
+        &self,
+        mut checker: crate::CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Option<Term> {
+        let Term::Application(app) = term else {
+            return None;
+        };
+        let [Argument::Sequence(seq), Argument::Simple(f)] = &*app.arguments else {
+            checker.failure("arguments don't match");
+            return None;
+        };
+        let seqtp = match seq {
+            MaybeSequence::One(t)
+                if matches!(t.as_sequence(), Some(Sequence::SequenceExpression(_))) =>
+            {
+                // SAFETY: pattern match
+                let Some(Sequence::SequenceExpression(args)) = t.as_sequence() else {
+                    unsafe { unreachable_unchecked() }
+                };
+                let mut curr = None;
+                for t in args {
+                    if !checker.scoped::<Option<bool>>(|checker| {
+                        let r = checker.infer_type(t)?;
+                        if let Some(c) = &curr {
+                            if !checker.scoped(|checker| checker.check_equality(c, &r))? {
+                                return None;
+                            }
+                        } else {
+                            curr = Some(r);
+                        }
+                        Some(true)
+                    })? {
+                        return None;
+                    }
+                }
+                curr?
+            }
+            MaybeSequence::One(t) => checker.infer_type(t)?,
+            MaybeSequence::Seq(ts) => {
+                let mut curr = None;
+                for t in ts {
+                    if !checker.scoped::<Option<bool>>(|checker| {
+                        let r = checker.infer_type(t)?;
+                        if let Some(c) = &curr {
+                            if !checker.scoped(|checker| checker.check_equality(c, &r))? {
+                                return None;
+                            }
+                        } else {
+                            curr = Some(r);
+                        }
+                        Some(true)
+                    })? {
+                        return None;
+                    }
+                }
+                curr?
+            }
+        };
+        let seqtp = match seqtp.as_sequence_type() {
+            Some(SequenceType::SeqType(t, _)) => t.clone(),
+            Some(SequenceType::Map(seq, f)) => {
+                let nat = checker.rules().marker().iter().rev().find_map(|rl| {
+                    rl.as_any().downcast_ref::<NumberRule>().and_then(|rl| {
+                        if rl.typ == NumberType::Naturals {
+                            Some(rl.sym.clone())
+                        } else {
+                            None
+                        }
+                    })
+                })?;
+                let vname = Variable::Name {
+                    name: unsafe { "index".parse().unwrap_unchecked() },
+                    notated: None,
+                };
+                let nv = ComponentVar {
+                    var: vname.clone(),
+                    tp: Some(nat.into()),
+                    df: None,
+                };
+                checker.extend_context(nv);
+                let arg = Term::Application(ApplicationTerm::new(
+                    seq.to_term(),
+                    Box::new([Argument::Simple(vname.into())]),
+                    None,
+                ));
+                Term::Application(ApplicationTerm::new(
+                    f.clone(),
+                    Box::new([Argument::Simple(arg)]),
+                    None,
+                ))
+            }
+            Some(_) => {
+                let nat = checker.rules().marker().iter().rev().find_map(|rl| {
+                    rl.as_any().downcast_ref::<NumberRule>().and_then(|rl| {
+                        if rl.typ == NumberType::Naturals {
+                            Some(rl.sym.clone())
+                        } else {
+                            None
+                        }
+                    })
+                })?;
+                let vname = Variable::Name {
+                    name: unsafe { "index".parse().unwrap_unchecked() },
+                    notated: None,
+                };
+                let nv = ComponentVar {
+                    var: vname.clone(),
+                    tp: Some(nat.into()),
+                    df: None,
+                };
+                checker.extend_context(nv);
+                Term::Application(ApplicationTerm::new(
+                    seqtp,
+                    Box::new([Argument::Simple(vname.into())]),
+                    None,
+                ))
+            }
+            _ => seqtp,
+        };
+        let (v, _) = f.fresh_variable(&crate::DUMMY, None);
+        checker.extend_context(ComponentVar {
+            var: v.clone(),
+            tp: Some(seqtp),
+            df: None,
+        });
+        let nt = Term::Application(ApplicationTerm::new(
+            f.clone(),
+            Box::new([Argument::Simple(Term::Var {
+                variable: v,
+                presentation: None,
+            })]),
+            None,
+        ));
+        checker
+            .scoped(|checker| checker.infer_type(&nt))
+            .map(Term::into_seq_type)
     }
 }

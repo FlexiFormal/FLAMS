@@ -51,7 +51,15 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
 
     pub fn check_universe(&mut self, t: &'t Term) -> Option<bool> {
         tracing::debug!("Checking Universe {:?}", t.debug_short());
-        self.wrap_check(CheckingTask::Universe(t), |slf| slf.check_universe_i(t))
+        //self.wrap_check(CheckingTask::Universe(t), |slf| slf.check_universe_i(t))
+        if t.has_solvable() {
+            let nt = self.subst(t.clone());
+            self.scoped(|slf| {
+                slf.wrap_check(CheckingTask::Universe(&nt), |slf| slf.check_universe_i(&nt))
+            })
+        } else {
+            self.wrap_check(CheckingTask::Universe(t), |slf| slf.check_universe_i(t))
+        }
     }
 
     pub(crate) fn check_type_i(&mut self, tm: &'t Term, tp: &'t Term) -> Option<bool> {
@@ -65,6 +73,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             },
             "Using checking rules",
             |slf| {
+                if let either::Left(r) = slf.simplify_rules_two(
+                    self.top.rules.checking(),
+                    tm,
+                    tp,
+                    |slf, rl, tm, tp| rl.applicable(slf, tm, tp),
+                    |slf, rl, tm, tp| rl.apply(slf, tm, tp),
+                    |_, _| false,
+                ) {
+                    r
+                } else {
+                    None
+                }
+                /*
                 let rules = slf
                     .top
                     .rules
@@ -79,6 +100,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     })
                     .collect::<smallvec::SmallVec<_, 2>>();
                 Split::split(slf, true, rules, |slf, rl| rl.apply(slf, tm, tp))
+                */
             },
         )
         //})
@@ -234,6 +256,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     }
 
     fn check_universe_i(&mut self, tm: &'t Term) -> Option<bool> {
+        //self.comment(format!("{:?}", self.top.rules.universe()));
         self.simplify_rules(
             self.top.rules.universe(),
             tm,

@@ -5,7 +5,7 @@ use ftml_solver_trace::{SizedSolverRule, traceref};
 use ftml_uris::SymbolUri;
 
 use crate::{
-    CheckRef, TermExtSeq,
+    CheckRef,
     rules::{InferenceRule, InhabitableRule},
     split::SplitStrategy,
 };
@@ -503,7 +503,7 @@ impl BindInApplyRule {
                 }),
                 BoundArgument::Sequence(seq),
             ) if !body.has_free_such_that(|v| v.name() == var.name())
-                && tp.is_concrete_sequence() =>
+                && tp.as_sequence().is_some_and(|s| s.is_concrete()) =>
             {
                 Some(super::pi::PiInferenceRule::flatten_sequence(
                     checker,

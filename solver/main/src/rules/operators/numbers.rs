@@ -1,10 +1,12 @@
-use ftml_ontology::terms::{Numeric, Term};
+use ftml_ontology::terms::{Argument, Numeric, Term, helpers::IntoTerm};
 use ftml_solver_trace::SizedSolverRule;
-use ftml_uris::SymbolUri;
+use ftml_uris::{Id, SymbolUri};
 
 use crate::{
     CheckRef,
-    rules::{CheckingRule, InferenceRule, MarkerRule, SubtypeRule},
+    rules::{
+        CheckingRule, EqualityRule, InferenceRule, MarkerRule, SimplificationRule, SubtypeRule,
+    },
     split::SplitStrategy,
 };
 
@@ -173,7 +175,17 @@ impl SizedSolverRule for NumberRule {
 }
 impl<Split: SplitStrategy> MarkerRule<Split> for NumberRule {}
 impl NumberRule {
-    pub fn is_number<Split: SplitStrategy>(
+    pub fn is_number_term<Split: SplitStrategy>(
+        term: &Term,
+        checker: &CheckRef<'_, '_, Split>,
+    ) -> Option<NumberType> {
+        if let Term::Symbol { uri, .. } = term {
+            Self::is_number_sym(uri, checker)
+        } else {
+            None
+        }
+    }
+    pub fn is_number_sym<Split: SplitStrategy>(
         uri: &SymbolUri,
         checker: &CheckRef<'_, '_, Split>,
     ) -> Option<NumberType> {
@@ -196,8 +208,8 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for NumberTypes {
     fn applicable(&self, checker: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool {
         if let Term::Symbol { uri: n1, .. } = sub
             && let Term::Symbol { uri: n2, .. } = sup
-            && let Some(type1) = NumberRule::is_number(n1, checker)
-            && let Some(type2) = NumberRule::is_number(n2, checker)
+            && let Some(type1) = NumberRule::is_number_sym(n1, checker)
+            && let Some(type2) = NumberRule::is_number_sym(n2, checker)
         {
             type1 <= type2
         } else {
@@ -216,8 +228,8 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for NumberTypes {
         let Term::Symbol { uri: n2, .. } = sup else {
             return None;
         };
-        let type1 = NumberRule::is_number(n1, &checker)?;
-        let type2 = NumberRule::is_number(n2, &checker)?;
+        let type1 = NumberRule::is_number_sym(n1, &checker)?;
+        let type2 = NumberRule::is_number_sym(n2, &checker)?;
         checker.comment(format!("{} <= {}", type1.as_str(), type2.as_str()));
         // by applicability
         Some(true)
@@ -227,7 +239,7 @@ impl<Split: SplitStrategy> CheckingRule<Split> for NumberTypes {
     fn applicable(&self, checker: &CheckRef<'_, '_, Split>, term: &Term, tp: &Term) -> bool {
         if let Term::Number(n) = term
             && let Term::Symbol { uri, .. } = tp
-            && let Some(typ) = NumberRule::is_number(uri, checker)
+            && let Some(typ) = NumberRule::is_number_sym(uri, checker)
         {
             typ.contains(n)
         } else {
@@ -266,5 +278,83 @@ impl<Split: SplitStrategy> InferenceRule<Split> for NumberTypes {
         get!(PositiveReals, f >= 0.0);
         get!(NegativeReals, f < 0.0);
         None
+    }
+}
+
+impl<Split: SplitStrategy> EqualityRule<Split> for NumberTypes {
+    fn applicable(&self, lhs: &Term, rhs: &Term) -> bool {
+        matches!(lhs, Term::Number(_)) && matches!(rhs, Term::Number(_))
+    }
+    fn apply<'t>(&self, _: CheckRef<'t, '_, Split>, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
+        let (Term::Number(lhs), Term::Number(rhs)) = (lhs, rhs) else {
+            return None;
+        };
+        Some(lhs == rhs)
+    }
+}
+
+// -------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdditionRule(pub SymbolUri);
+impl SizedSolverRule for AdditionRule {
+    fn display(&self) -> Vec<ftml_solver_trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is addition")
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for AdditionRule {
+    fn applicable(&self, term: &Term) -> bool {
+        let Term::Application(app) = term else {
+            return false;
+        };
+        app.head.is(&self.0)
+            && (matches!(
+                &*app.arguments,
+                [
+                    Argument::Simple(Term::Number(_)),
+                    Argument::Simple(Term::Number(_))
+                ] | [Argument::Sequence(_)]
+            ) || matches!(
+            &*app.arguments,
+            [
+                Argument::Simple(Term::Number(n)),
+                Argument::Simple(_)
+            ]
+            if n.as_float() == 0.0
+            ) || matches!(
+            &*app.arguments,
+            [
+                Argument::Simple(_),
+                Argument::Simple(Term::Number(n)),
+            ]
+            if n.as_float() == 0.0
+            ))
+    }
+    fn apply<'t>(
+        &self,
+        _: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        match &*app.arguments {
+            [Argument::Simple(Term::Number(z)), Argument::Simple(o)] if z.as_float() == 0.0 => {
+                Ok(o.clone())
+            }
+            [Argument::Simple(o), Argument::Simple(Term::Number(z))] if z.as_float() == 0.0 => {
+                Ok(o.clone())
+            }
+            [
+                Argument::Simple(Term::Number(a)),
+                Argument::Simple(Term::Number(b)),
+            ] => (*a + *b).map_or(Err(None), |r| Ok(Term::Number(r))),
+            [Argument::Sequence(seq)] => Ok(super::super::sequences::fold::Fold::apply_init(
+                seq.clone(),
+                Term::Number(Numeric::Int(0)),
+                |x, y| self.0.clone().apply_tms([y.into(), x.into()]),
+            )),
+            _ => Err(None),
+        }
     }
 }

@@ -1,15 +1,16 @@
 use crate::{
-    CheckRef, TermExtSeq,
+    CheckRef,
     impls::solving::TermExtSolvable,
     rules::{
         CheckingRule, InferenceRule, InhabitableRule, MarkerRule, PreparationRule,
-        SimplificationRule, SizedSolverRule, SubtypeRule,
+        SimplificationRule, SizedSolverRule, SubtypeRule, UniverseRule,
+        operators::numbers::{NumberRule, NumberType},
     },
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{
     ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
-    Variable,
+    Variable, sequences::SequenceType,
 };
 use ftml_solver_trace::traceref;
 use ftml_uris::SymbolUri;
@@ -481,7 +482,7 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for PiVarianceRule {
                     }),
                 ) => {
                     let sup = sup / &*currsub;
-                    if !checker.scoped(|checker| checker.check_subtype(&sup, &sub))? {
+                    if !checker.scoped(|checker| checker.check_subtype(&sup, sub))? {
                         return None;
                     }
                     currsub.push((varsup.name(), varsub.clone().into()));
@@ -501,7 +502,12 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for PiVarianceRule {
                         var: varsup,
                         tp: Some(sup),
                         ..
-                    })),
+                    }))
+                    | BoundArgument::Bound(ComponentVar {
+                        var: varsup,
+                        tp: Some(sup),
+                        ..
+                    }),
                 ) => {
                     let sup = sup / &*currsub;
                     if !checker.scoped(|checker| checker.check_subtype(&sup, sub))? {
@@ -516,6 +522,7 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for PiVarianceRule {
                 }
                 _ => {
                     checker.failure("argument not bound single variable or variable sequence");
+                    //checker.failure(format!("{sub:?}  vs  {sup:?}"));
                     return None;
                 }
             }
@@ -734,6 +741,7 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiInhabitableRule {
         };
         let previous = &b.arguments[..&b.arguments.len() - 1];
         let mut deferred = Vec::new();
+        //checker.add_msg(traceref!("Here:", body.clone()).into());
         for arg in previous {
             match arg {
                 BoundArgument::Simple(t) | BoundArgument::Sequence(MaybeSequence::One(t)) => {
@@ -786,6 +794,77 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for PiInhabitableRule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PiUniverseRule(pub SymbolUri);
+impl SizedSolverRule for PiUniverseRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("{ INH A, x:A, UNIV B(x) } ⊢ UNIV ", &self.0, " x:A. B")
+    }
+}
+
+impl<Split: SplitStrategy> UniverseRule<Split> for PiUniverseRule {
+    fn applicable(&self, term: &Term) -> bool {
+        matches!(term,Term::Bound(b) if matches!(&b.head,Term::Symbol { uri, .. } if *uri == self.0))
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
+        let Term::Bound(b) = term else { return None };
+        let Some(BoundArgument::Simple(body)) = b.arguments.last() else {
+            return None;
+        };
+        let previous = &b.arguments[..&b.arguments.len() - 1];
+        let mut deferred = Vec::new();
+        //checker.add_msg(traceref!("Here:", body.clone()).into());
+        for arg in previous {
+            match arg {
+                BoundArgument::Simple(t) | BoundArgument::Sequence(MaybeSequence::One(t)) => {
+                    let _ = checker.infer_type(t)?;
+                }
+                BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
+                    for t in ts {
+                        let _ = checker.infer_type(t)?;
+                    }
+                }
+                BoundArgument::Bound(cv @ ComponentVar { var, tp, .. })
+                | BoundArgument::BoundSeq(MaybeSequence::One(cv @ ComponentVar { var, tp, .. })) => {
+                    if let Some(tp) = tp {
+                        if tp.has_solvable() {
+                            deferred.push(tp);
+                        } else if !checker.check_inhabitable(tp)? {
+                            return Some(false);
+                        }
+                    } else {
+                        let _ = checker.infer_var_type(var)?;
+                    }
+                    checker.extend_context(cv);
+                }
+                BoundArgument::BoundSeq(MaybeSequence::Seq(vars)) => {
+                    for cv @ ComponentVar { var, tp, .. } in vars {
+                        if let Some(tp) = tp {
+                            if tp.has_solvable() {
+                                deferred.push(tp);
+                            } else if !checker.check_inhabitable(tp)? {
+                                return Some(false);
+                            }
+                        } else {
+                            let _ = checker.infer_var_type(var)?;
+                        }
+                        checker.extend_context(cv);
+                    }
+                }
+            }
+        }
+        if !checker.check_universe(body)? {
+            return None;
+        }
+        for d in deferred {
+            if !checker.check_inhabitable(d)? {
+                return None;
+            }
+        }
+        Some(true)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PiInferenceRule(pub SymbolUri);
 impl SizedSolverRule for PiInferenceRule {
     fn display(&self) -> Vec<crate::trace::Displayable> {
@@ -803,7 +882,27 @@ impl<Split: SplitStrategy> InferenceRule<Split> for PiInferenceRule {
                 return None;
             }
             let tp = checker.infer_type(&app.head)?;
-            self.type_apply(&mut checker, tp, &app.arguments)
+            if let Some(SequenceType::SeqType(tp, _)) = tp.as_sequence_type()
+                && let [Argument::Simple(idx)] = &*app.arguments
+            {
+                checker.comment("is sequence type");
+                let nat = checker.rules().marker().iter().rev().find_map(|rl| {
+                    rl.as_any().downcast_ref::<NumberRule>().and_then(|rl| {
+                        if rl.typ == NumberType::Naturals {
+                            Some(rl.sym.clone())
+                        } else {
+                            None
+                        }
+                    })
+                })?;
+                let ntp: Term = nat.into();
+                if checker.scoped(|checker| checker.check_type(idx, &ntp)) != Some(true) {
+                    return None;
+                }
+                Some(tp.clone())
+            } else {
+                self.type_apply(&mut checker, tp, &app.arguments)
+            }
         } else {
             checker.failure("Not an application");
             None
@@ -848,7 +947,7 @@ impl PiInferenceRule {
         b: &BindingTerm,
         body: Term,
     ) -> Term {
-        let Some(new_args) = tp.make_concrete_sequence() else {
+        let Some(new_args) = tp.as_sequence().and_then(|s| s.to_concrete()) else {
             // SAFETY: tp.is_concrete_sequence()
             unsafe { unreachable_unchecked() }
         };
@@ -961,7 +1060,7 @@ impl PiInferenceRule {
                     }),
                     Argument::Sequence(seq),
                 ) if !body.has_free_such_that(|v| v.name() == var.name())
-                    && tp.is_concrete_sequence() =>
+                    && tp.as_sequence().is_some_and(|s| s.is_concrete()) =>
                 {
                     ret = Self::flatten_sequence(checker, tp, &b, body.clone());
                 }
@@ -974,17 +1073,17 @@ impl PiInferenceRule {
                     Argument::Sequence(MaybeSequence::Seq(seq)),
                 ) if !seq.is_empty() => {
                     i += 1;
-                    checker.counter("Checking Argument", i);
+                    checker.counter("(a) Checking Argument ", i);
                     ret = Self::recurse_seq_args(&self.0, checker, &b, seq, body)?;
                 }
                 (_, Argument::Simple(arg)) => {
                     i += 1;
-                    checker.counter("Checking Argument", i);
+                    checker.counter("(b) Checking Argument ", i);
                     ret = Self::simple_apply(checker, &b, arg, body)?;
                 }
                 (_, Argument::Sequence(arg)) => {
                     i += 1;
-                    checker.counter("Checking Argument", i);
+                    checker.counter("(c) Checking Argument ", i);
                     ret = checker.scoped(|checker| Self::seq_apply(checker, &b, arg, body))?;
                 }
             }
@@ -1014,12 +1113,12 @@ impl PiInferenceRule {
             }
             _ => {
                 checker.failure("First argument is not a bound variable");
-                checker.comment(format!(
+                /*checker.comment(format!(
                     "Here: {:?}{:?}  <-- {:?}",
                     b.head.debug_short(),
                     b.arguments,
                     arg.debug_short()
-                ));
+                ));*/
                 return None;
             }
         };
@@ -1058,7 +1157,7 @@ impl PiInferenceRule {
             tp: Some(tp),
             df: None,
         })) = b.arguments.first()
-            && let Some(tpargs) = tp.as_sequence()
+            && let Some(tpargs) = tp.as_sequence().and_then(|s| s.to_concrete())
             && !body
                 .free_variables()
                 .into_iter()
@@ -1067,7 +1166,7 @@ impl PiInferenceRule {
             && args.len() == tpargs.len()
         {
             for (a, t) in args.iter().zip(tpargs.iter()) {
-                if !checker.check_type(a, t)? {
+                if !checker.scoped(|checker| checker.check_type(a, t))? {
                     return None;
                 }
             }
@@ -1110,7 +1209,7 @@ impl PiInferenceRule {
             }
             MaybeSequence::Seq(arg) => {
                 let narg = Term::into_seq(arg.iter().cloned());
-                if let Some(vartp) = vartp.as_sequence_type() {
+                if let Some(SequenceType::SeqType(vartp, _)) = vartp.as_sequence_type() {
                     if !checker.scoped(|checker| {
                         for a in arg {
                             if !checker.check_type(a, vartp)? {
@@ -1215,9 +1314,9 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     })),
                     Argument::Sequence(MaybeSequence::Seq(ts)),
                 ) => {
-                    let Some(tp) = tp.as_sequence_type() else {
+                    let Some(SequenceType::SeqType(tp, _)) = tp.as_sequence_type() else {
                         checker.failure("Type of sequence variable is not a sequence type");
-                        checker.comment(format!("Here: {:?} <-> {ts:?}", tp.debug_short()));
+                        //checker.comment(format!("Here: {:?} <-> {ts:?}", tp.debug_short()));
                         return Err(None);
                     };
                     for t in ts {
@@ -1228,6 +1327,26 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     if let Cow::Owned(nr) =
                         &*ret / (var.name(), &Term::into_seq(ts.iter().cloned()))
                     {
+                        ret = Cow::Owned(nr);
+                    }
+                }
+                (
+                    BoundArgument::BoundSeq(MaybeSequence::One(ComponentVar {
+                        var,
+                        tp: Some(tp),
+                        df: None,
+                    })),
+                    Argument::Simple(t),
+                ) => {
+                    if tp.as_sequence_type().is_none() {
+                        checker.failure("Type of sequence variable is not a sequence type");
+                        //checker.comment(format!("Here: {:?} <-> {ts:?}", tp.debug_short()));
+                        return Err(None);
+                    }
+                    if !checker.check_type(t, tp).ok_or(None)? {
+                        return Err(None);
+                    }
+                    if let Cow::Owned(nr) = &*ret / (var.name(), t) {
                         ret = Cow::Owned(nr);
                     }
                 }
@@ -1246,13 +1365,15 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     };
                     let Some(tp) = checker.scoped(|checker| {
                         checker
-                            .simplify_until(&tp, |_, t| t.is_concrete_sequence())
+                            .simplify_until(&tp, |_, t| {
+                                t.as_sequence().is_some_and(|s| s.is_concrete())
+                            })
                             .map(Cow::into_owned)
                     }) else {
                         checker.failure("Not a concrete sequence");
                         return Err(None);
                     };
-                    let vartps = tp.make_concrete_sequence().ok_or(None)?;
+                    let vartps = tp.as_sequence().and_then(|s| s.to_concrete()).ok_or(None)?;
                     if vartps.len() != args.len() {
                         checker.failure("sequence lengths don't match");
                         return Err(None);
@@ -1277,11 +1398,13 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for BetaRule {
                     let ntp = checker
                         .scoped(|checker| {
                             checker
-                                .simplify_until(tp, |_, t| t.is_concrete_sequence())
+                                .simplify_until(tp, |_, t| {
+                                    t.as_sequence().is_some_and(|s| s.is_concrete())
+                                })
                                 .map(Cow::into_owned)
                         })
                         .ok_or(None)?;
-                    let Some(vartps) = ntp.make_concrete_sequence() else {
+                    let Some(vartps) = ntp.as_sequence().and_then(|s| s.to_concrete()) else {
                         checker.failure("type of bound variable not a concrete sequence");
                         return Err(None);
                     };

@@ -1,6 +1,6 @@
 use crate::{
-    CheckRef, Checker,
-    impls::solving::{Solutions, Solvable},
+    CheckRef,
+    impls::solving::Solutions,
     rules::implicits::{ImplicitExtApp, ImplicitExtBound, ImplicitExtTerm},
     split::SplitStrategy,
 };
@@ -13,12 +13,9 @@ use ftml_ontology::{
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
     terms::{
         ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence,
-        Term, Variable, helpers::IntoTerm, termpaths::TermPath,
+        Term, Variable, helpers::IntoTerm, sequences::Sequence, termpaths::TermPath,
     },
 };
-use ftml_uris::Id;
-use smallvec::SmallVec;
-use std::hint::unreachable_unchecked;
 
 impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     #[inline]
@@ -134,6 +131,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
         tracing::trace!("preparing {:?}", t.debug_short());
+        //let mut t = Self::prepare_seqs(t);
         match &t {
             Term::Symbol { uri, presentation } => {
                 return if let Ok(sym) = self.get_symbol(uri)
@@ -157,7 +155,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
                     t
                 };
             }
-            Term::Symbol { .. } | Term::Var { .. } => return t,
+            Term::Var { .. } => return t,
             _ => (),
         }
 

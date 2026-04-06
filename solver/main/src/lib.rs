@@ -52,7 +52,6 @@ use ftml_ontology::{
 };
 use ftml_solver_trace::CheckLog;
 use ftml_uris::{Id, IsDomainUri, LeafUri, ModuleUri};
-pub(crate) use rules::sequences::TermExtSeq;
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 
@@ -365,7 +364,29 @@ impl<Split: SplitStrategy> Checker<Split> {
         Ok(ret)
     }
 
-    pub fn check_subterm(&mut self, term: Term, mut path: TermPath) -> Option<SubtermCheckResult> {
+    pub fn check_subterm_term(&mut self, term: Term, sub: Term) -> Option<SubtermCheckResult> {
+        self.reset();
+        let (unks, nterm) = self.wrap_none(None, |mut slf| {
+            let (s, r) = slf.prepare(term, None);
+            slf.merge_solutions(s);
+            r
+        });
+        let (unks, nsub) = self.wrap_none(Some(unks), |mut slf| {
+            let (s, r) = slf.prepare(sub, None);
+            slf.merge_solutions(s);
+            r
+        });
+        let ctx = nterm
+            .path_of_subterm_with_ctx(&nsub)
+            .map_or(Vec::new(), |p| p.0);
+        Some(self.check_subterm_i(unks, &nsub, ctx))
+    }
+
+    pub fn check_subterm_path(
+        &mut self,
+        term: Term,
+        mut path: TermPath,
+    ) -> Option<SubtermCheckResult> {
         //self.set_hoas();
         self.reset();
         let (unks, nterm) = self.wrap_none(None, |mut slf| {
@@ -374,11 +395,20 @@ impl<Split: SplitStrategy> Checker<Split> {
             r
         });
         let (ctx, t) = nterm.subterm_at_path(&path)?;
-        let mut nt = t.clone();
         //ctx.reverse();
+        Some(self.check_subterm_i(unks, t, ctx))
+    }
+
+    fn check_subterm_i(
+        &self,
+        unks: Solutions,
+        sub: &Term,
+        ctx: Vec<&ComponentVar>,
+    ) -> SubtermCheckResult {
         let mut ctx = ctx.into_iter().cloned().rev().collect::<Vec<_>>();
-        let (r, s, log) = self.wrap_task(CheckingTask::Inference(t), Some(unks), |mut slf| {
-            let allvars = t.free_variables();
+        let mut nt = sub.clone();
+        let (r, s, log) = self.wrap_task(CheckingTask::Inference(sub), Some(unks), |mut slf| {
+            let allvars = sub.free_variables();
             for v in allvars {
                 if !ctx.iter().any(|cv| cv.var == *v) {
                     let tp = slf.infer_var_type_i(v);
@@ -431,9 +461,9 @@ impl<Split: SplitStrategy> Checker<Split> {
             for c in &ctx {
                 slf.extend_context(c);
             }
-            let simp = slf.simplify_full(true, t).unwrap_or_else(|| t.clone());
+            let simp = slf.simplify_full(true, sub).unwrap_or_else(|| sub.clone());
             nt = slf.revert_prepare(slf.subst(simp));
-            slf.infer_type(t).map(|t| slf.revert_prepare(t))
+            slf.infer_type(sub).map(|t| slf.revert_prepare(t))
         });
         /*
         let mut frees = nt.free_variables();
@@ -460,12 +490,12 @@ impl<Split: SplitStrategy> Checker<Split> {
             CheckLog::from_pre(log, &mut |t| slf.revert_prepare(t))
         });
         //drop(frees);
-        Some(SubtermCheckResult {
+        SubtermCheckResult {
             simplified: nt,
             inferred_type: r,
             context: ctx,
             log,
-        })
+        }
     }
 
     fn check_components(
@@ -485,14 +515,14 @@ impl<Split: SplitStrategy> Checker<Split> {
         //self.set_hoas();
         match (tp, df) {
             (Some(tp), None) => {
-                tracing::debug!("Checking Type");
+                tracing::debug!("Checking Type: {:?}", tp.debug_short());
                 //tracing::debug!("Facts: {:#?}", self.facts);
                 let (unks, tp) = self.prepare(None, tp.clone());
                 let (b, unks, mut l) = self.check_inhabitable(Some(unks), &tp);
                 let mut tp = self.wrap_none(Some(unks), |slf| slf.subst(tp)).1;
                 if tp.has_solvable() {
                     l.push(PreCheckLog::Msg(
-                        vec!["Unsolved unkowns remain".into()],
+                        vec![format!("Unsolved unkowns remain: {:?}", tp.solvables()).into()],
                         ftml_solver_trace::MessageLevel::Failure,
                     ));
                     return Some(SymbolCheckResult::TypeOnly {
@@ -542,7 +572,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
         if df.has_solvable() {
             l.push(PreCheckLog::Msg(
-                vec!["Unsolved unkowns remain".into()],
+                vec![format!("Unsolved unkowns remain: {:?}", df.solvables()).into()],
                 ftml_solver_trace::MessageLevel::Failure,
             ));
             return SymbolCheckResult::DefiniensOnly {
@@ -599,7 +629,7 @@ impl<Split: SplitStrategy> Checker<Split> {
 
         if tp.has_solvable() {
             l.push(PreCheckLog::Msg(
-                vec!["Unsolved unkowns remain".into()],
+                vec![format!("Unsolved unkowns remain: {:?}", tp.solvables()).into()],
                 ftml_solver_trace::MessageLevel::Failure,
             ));
             return SymbolCheckResult::TypeOnly {
@@ -616,7 +646,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         if let Some(mut df) = ndf {
             if df.has_solvable() {
                 l2.push(PreCheckLog::Msg(
-                    vec!["Unsolved unkowns remain".into()],
+                    vec![format!("Unsolved unkowns remain: {:?}", df.solvables()).into()],
                     ftml_solver_trace::MessageLevel::Failure,
                 ));
                 return SymbolCheckResult::Both {
@@ -674,7 +704,7 @@ impl<Split: SplitStrategy> Checker<Split> {
             let mut tp = self.wrap_none(Some(tunks), |slf| slf.subst(tp)).1;
             if tp.has_solvable() {
                 l.push(PreCheckLog::Msg(
-                    vec!["Unsolved unkowns remain".into()],
+                    vec![format!("Unsolved unkowns remain: {:?}", tp.solvables()).into()],
                     ftml_solver_trace::MessageLevel::Failure,
                 ));
                 return SymbolCheckResult::TypeOnly {
@@ -704,11 +734,11 @@ impl<Split: SplitStrategy> Checker<Split> {
 
         if df.has_solvable() {
             l2.push(PreCheckLog::Msg(
-                vec!["Unsolved unknowns remain".into()], /*format!(
-                                                             "Unsolved unkowns remain in {:?}\n\n{unks:#?}",
-                                                             df.debug_short()
-                                                         )
-                                                         .into()*/
+                vec![format!("Unsolved unkowns remain: {:?}", df.solvables()).into()], /*format!(
+                                                                                           "Unsolved unkowns remain in {:?}\n\n{unks:#?}",
+                                                                                           df.debug_short()
+                                                                                       )
+                                                                                       .into()*/
                 ftml_solver_trace::MessageLevel::Failure,
             ));
             return SymbolCheckResult::Both {

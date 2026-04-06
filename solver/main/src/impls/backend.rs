@@ -1,14 +1,6 @@
-use crate::{
-    CheckRef, Checker,
-    impls::solving::{Solutions, Solvable, is_solvable_var},
-    rules::sequences::TermExtSeq,
-    split::SplitStrategy,
-};
+use crate::{CheckRef, Checker, impls::solving::is_solvable_var, split::SplitStrategy};
 use dashmap::DashSet;
-use flams_math_archives::{
-    backend::{AnyBackend, LocalBackend},
-    utils::errors::BackendError,
-};
+use flams_math_archives::backend::{AnyBackend, LocalBackend};
 use ftml_ontology::{
     domain::{
         SharedDeclaration,
@@ -55,7 +47,13 @@ pub fn get_variable(
         let tp = prepare(tp.clone());
 
         if d.data.is_seq && tp.as_sequence_type().is_none() {
-            d.data.tp.set_checked(tp.into_seq_type());
+            if d.data.sequence_range.is_empty() {
+                d.data.tp.set_checked(tp.into_seq_type());
+            } else {
+                d.data
+                    .tp
+                    .set_checked(tp.into_ranged_seq_type(d.data.sequence_range.iter().cloned()));
+            }
         } else {
             d.data.tp.set_checked(tp);
         }

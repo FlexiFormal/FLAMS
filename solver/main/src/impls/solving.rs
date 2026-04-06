@@ -5,6 +5,7 @@ use ftml_ontology::terms::{
     Variable,
 };
 use ftml_uris::Id;
+use smallvec::SmallVec;
 
 use crate::{
     CheckRef, Checker,
@@ -18,6 +19,7 @@ const PREFIX: &str = "SOLVE!";
 pub trait TermExtSolvable {
     fn is_solvable(&self) -> Option<&Id>;
     fn has_solvable(&self) -> bool;
+    fn solvables(&self) -> SmallVec<&Variable, 2>;
 }
 
 /*
@@ -72,6 +74,12 @@ impl TermExtSolvable for Term {
     }
     fn has_solvable(&self) -> bool {
         self.has_free_such_that(|v| is_solvable_var(v).is_some())
+    }
+    fn solvables(&self) -> SmallVec<&Variable, 2> {
+        self.free_variables()
+            .into_iter()
+            .filter(|s| is_solvable_var(s).is_some())
+            .collect()
     }
 }
 

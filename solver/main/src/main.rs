@@ -30,14 +30,14 @@ flams_math_archives::source_format!(STEX {
 fn main() {
     let _ = enable_ansi_support::enable_ansi_support();
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
+        .with_max_level(tracing::Level::INFO)
         .init();
     GlobalBackend::initialize::<AllSyncEngine>();
     /*let _ = std::thread::Builder::new()
     .stack_size(6 * 1024 * 1024)
     .spawn(move || {*/
     //pause();
-    let (i, t) = measure(check_selected); //measure(check_all); //
+    let (i, t) = measure(check_all); // measure(check_selected); //
     println!("Checked {i} documents in {t}");
     /*println!(
         "minimal stack: {}",
@@ -76,6 +76,7 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=proofs&d=axiom&l=en",
         "http://mathhub.info?a=FTML/math&p=sets&d=cons&l=en",
         "http://mathhub.info?a=FTML/math&p=sets&d=inset&l=en",
+        "http://mathhub.info?a=FTML/math&p=sets&d=cartesian-product&l=en",
         "http://mathhub.info?a=FTML/math&p=nat&d=nat&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=prop&l=en",
         "http://mathhub.info?a=FTML/math&p=propositions&d=negation&l=en",
@@ -91,14 +92,17 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=proofs&d=inference-rule&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=implication-introduction&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=conjunction-introduction&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=conjunction-elimination&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=exists-elimination&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs&d=choice-operator&l=en",
+        "http://mathhub.info?a=FTML/math&p=arithmetics&d=sqrt&l=en",
         "http://mathhub.info?a=FTML/tests&d=natded&l=en",
         "http://mathhub.info?a=unimarx/werkbank&p=sec/einstimmungundgrundbegriffe/mod&d=evaluationmap&l=de",
         "http://mathhub.info?a=FTML/tests&d=othertests&l=en",
         "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
+        "http://mathhub.info?a=FTML/tests&d=probdists&l=en",
         */
-        "http://mathhub.info?a=sTeX/MathBase/Sets&p=mod&d=CartesianProduct&l=en",
+        "http://mathhub.info?a=Papers/26-ICMS-Semantics&p=mod&d=dump&l=en",
     )
     //}
 }

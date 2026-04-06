@@ -1,7 +1,7 @@
 use crate::{
     CheckRef,
     patterns::Pattern,
-    rules::{PreparationRule, SizedSolverRule, SubtypeRule},
+    rules::{PreparationRule, SimplificationRule, SizedSolverRule, SubtypeRule},
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{
@@ -226,6 +226,13 @@ impl SizedSolverRule for Subtyping {
 }
 impl<Split: SplitStrategy> SubtypeRule<Split> for Subtyping {
     fn applicable(&self, checker: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool {
+        /*println!(
+            "Applicable? ({:?}   <:   {:?})\n {:?}   <:   {:?}",
+            self.sub.body.debug_short(),
+            self.sup.body.debug_short(),
+            sub.debug_short(),
+            sup.debug_short()
+        );*/
         let Some(sub) = self.sub.matches(sub) else {
             return false;
         };
@@ -245,6 +252,7 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for Subtyping {
                 return false;
             }
         }
+        //println!("Applicable!");
         true
     }
     fn apply<'t>(
@@ -257,5 +265,39 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for Subtyping {
         checker.check_inhabitable(sub)?;
         checker.check_inhabitable(sup)?;
         Some(true)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InferredTypeSimplificationRule;
+
+impl SizedSolverRule for InferredTypeSimplificationRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&*ftml_uris::metatheory::TYPE_OF, " infers type")
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for InferredTypeSimplificationRule {
+    fn applicable(&self, term: &Term) -> bool {
+        if let Term::Application(app) = term
+            && app.head.is(&*ftml_uris::metatheory::TYPE_OF)
+            && let [Argument::Simple(_)] = &*app.arguments
+        {
+            true
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        let [Argument::Simple(t)] = &*app.arguments else {
+            return Err(None);
+        };
+        checker.infer_type(t).ok_or(None)
     }
 }

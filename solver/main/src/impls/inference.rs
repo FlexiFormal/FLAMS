@@ -1,9 +1,7 @@
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
 
 use crate::{
-    CheckRef, TermExtSeq,
-    impls::solving::{TermExtSolvable, is_solvable_var},
-    split::SplitStrategy,
+    CheckRef, impls::solving::is_solvable_var, rules::InferenceRule, split::SplitStrategy,
     trace::CheckingTask,
 };
 
@@ -34,6 +32,13 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
             _ => (),
         }
+        self.simplify_rules(
+            self.top.rules.inference(),
+            t,
+            InferenceRule::applicable,
+            |slf, rl, t| rl.infer(slf, t),
+        )
+        /*
         let rules = self
             .top
             .rules
@@ -43,6 +48,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             .collect::<smallvec::SmallVec<_, 2>>();
         let r = Split::split(self, true, rules, |slf, rl| rl.infer(slf, t));
         r.map(|t| self.subst(t))
+        */
         /*r.map(|t| {
             let simp = self.scoped(|slf| slf.simplify_full(false, &t)).unwrap_or(t);
             self.subst(simp)

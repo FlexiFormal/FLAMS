@@ -3,7 +3,7 @@ use crate::{
     rules::{PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
-use ftml_ontology::terms::{ApplicationTerm, Argument, IsTerm, MaybeSequence, Term};
+use ftml_ontology::terms::{ApplicationTerm, Argument, IsTerm, MaybeSequence, Term, VarOrSym};
 use ftml_uris::SymbolUri;
 use std::ops::ControlFlow;
 
@@ -19,6 +19,25 @@ impl SizedSolverRule for BinLRule {
     }
 }
 impl BinLRule {
+    fn app_two(
+        head: Term,
+        pre: &[Argument],
+        a: Term,
+        b: Term,
+        post: &[Argument],
+        presentation: Option<VarOrSym>,
+    ) -> Term {
+        Term::Application(ApplicationTerm::new(
+            head,
+            pre.iter()
+                .cloned()
+                .chain([Argument::Simple(a), Argument::Simple(b)])
+                .chain(post.iter().cloned())
+                .collect(),
+            presentation,
+        ))
+    }
+
     fn applicable<Split: SplitStrategy>(
         uri: &SymbolUri,
         checker: &CheckRef<'_, '_, Split>,
@@ -32,43 +51,57 @@ impl BinLRule {
     }
     fn apply<Split: SplitStrategy>(
         uri: &SymbolUri,
-        checker: &mut CheckRef<'_, '_, Split>,
+        checker: &CheckRef<'_, '_, Split>,
         t: Term,
     ) -> ControlFlow<Term, Term> {
-        tracing::trace!("binl!");
+        //tracing::trace!("binl!");
+        //println!("binl: {:?}", t.debug_short());
         let Some(head) = checker.get_head(&t) else {
             return ControlFlow::Continue(t);
         };
         let head = head.as_ref().map_either(|e| &**e, |e| &**e);
 
-        let Some((app, MaybeSequence::Seq(seq), idx)) = super::is_sequence_binary(uri, &t, head)
-        else {
+        let Some((app, seq, idx)) = super::is_sequence_binary(uri, &t, head) else {
             return ControlFlow::Continue(t);
         };
-        if seq.len() < 2 {
-            return ControlFlow::Continue(t);
-        }
         let preargs = &app.arguments[..idx];
         let postargs = &app.arguments[idx + 1..];
-        //SAFETY: len() >= 2
-        unsafe {
-            ControlFlow::Continue(
-                seq.iter()
-                    .cloned()
-                    .reduce(|a, b| {
-                        Term::Application(ApplicationTerm::new(
-                            app.head.clone(),
-                            {
-                                let mut args = preargs.to_vec();
-                                args.extend([Argument::Simple(a), Argument::Simple(b)]);
-                                args.extend_from_slice(postargs);
-                                args.into_boxed_slice()
-                            },
-                            app.presentation.clone(),
-                        ))
-                    })
-                    .unwrap_unchecked(),
-            )
+        match seq {
+            MaybeSequence::Seq(seq) => {
+                if seq.len() < 2 {
+                    return ControlFlow::Continue(t);
+                }
+                //SAFETY: len() >= 2
+                unsafe {
+                    ControlFlow::Continue(
+                        seq.iter()
+                            .cloned()
+                            .reduce(|a, b| {
+                                Self::app_two(
+                                    app.head.clone(),
+                                    preargs,
+                                    a,
+                                    b,
+                                    postargs,
+                                    app.presentation.clone(),
+                                )
+                            })
+                            .unwrap_unchecked(),
+                    )
+                }
+            }
+            s @ MaybeSequence::One(_) => ControlFlow::Continue(
+                super::super::sequences::fold::Fold::apply(s.clone(), |a, b| {
+                    Self::app_two(
+                        app.head.clone(),
+                        preargs,
+                        a.into(),
+                        b.into(),
+                        postargs,
+                        app.presentation.clone(),
+                    )
+                }),
+            ),
         }
     }
     pub fn app_rev<Split: SplitStrategy>(
@@ -185,37 +218,52 @@ impl<Split: SplitStrategy> PreparationRule<Split> for BinRRule {
         t: Term,
         _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
+        //println!("binr: {:?}", t.debug_short());
         let Some(head) = checker.get_head(&t) else {
             return ControlFlow::Continue(t);
         };
         let head = head.as_ref().map_either(|e| &**e, |e| &**e);
-        let Some((app, MaybeSequence::Seq(seq), idx)) =
-            super::is_sequence_binary(&self.0, &t, head)
-        else {
+        let Some((app, seq, idx)) = super::is_sequence_binary(&self.0, &t, head) else {
             return ControlFlow::Continue(t);
         };
-        if seq.len() < 2 {
-            return ControlFlow::Continue(t);
-        }
         let preargs = &app.arguments[..idx];
         let postargs = &app.arguments[idx + 1..];
-        //SAFETY: len() >= 2
-        unsafe {
-            ControlFlow::Continue(seq[..seq.len() - 1].iter().cloned().rfold(
-                seq.last().unwrap_unchecked().clone(),
-                |a, b| {
-                    Term::Application(ApplicationTerm::new(
-                        app.head.clone(),
-                        {
-                            let mut args = preargs.to_vec();
-                            args.extend([Argument::Simple(a), Argument::Simple(b)]);
-                            args.extend_from_slice(postargs);
-                            args.into_boxed_slice()
+        match seq {
+            MaybeSequence::Seq(seq) => {
+                if seq.len() < 2 {
+                    return ControlFlow::Continue(t);
+                }
+                //SAFETY: len() >= 2
+                unsafe {
+                    ControlFlow::Continue(seq[..seq.len() - 1].iter().cloned().rfold(
+                        seq.last().unwrap_unchecked().clone(),
+                        |a, b| {
+                            Term::Application(ApplicationTerm::new(
+                                app.head.clone(),
+                                {
+                                    let mut args = preargs.to_vec();
+                                    args.extend([Argument::Simple(a), Argument::Simple(b)]);
+                                    args.extend_from_slice(postargs);
+                                    args.into_boxed_slice()
+                                },
+                                app.presentation.clone(),
+                            ))
                         },
-                        app.presentation.clone(),
                     ))
-                },
-            ))
+                }
+            }
+            s @ MaybeSequence::One(_) => ControlFlow::Continue(
+                super::super::sequences::fold::Fold::apply(s.clone(), |a, b| {
+                    BinLRule::app_two(
+                        app.head.clone(),
+                        preargs,
+                        a.into(),
+                        b.into(),
+                        postargs,
+                        app.presentation.clone(),
+                    )
+                }),
+            ),
         }
     }
 

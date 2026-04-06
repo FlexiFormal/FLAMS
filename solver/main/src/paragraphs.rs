@@ -145,10 +145,10 @@ impl<Split: SplitStrategy> Checker<Split> {
             };
 
             tracing::trace!("Checking definiens for {}", target.uri);
-            if let Some((tp, _)) = target.data.tp.checked_or_parsed() {
+            if let Some(tp) = target.data.tp.get_parsed() {
                 ret.push(CheckResult::Content(ContentCheckResult::Symbol(
                     target.uri.clone(),
-                    self.df_and_tp(&df, &target.data.df, &tp, &target.data.tp, true, true),
+                    self.df_and_tp(&df, &target.data.df, tp, &target.data.tp, true, true),
                 )));
             } else {
                 ret.push(CheckResult::Content(ContentCheckResult::Symbol(

@@ -3,7 +3,7 @@ use ftml_ontology::{
     narrative::{
         documents::TocElem,
         elements::{
-            Notation, ParagraphOrProblemKind, SectionLevel, SlideElement,
+            DocumentTerm, Notation, ParagraphOrProblemKind, SectionLevel, SlideElement,
             problems::{ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz},
         },
     },
@@ -23,24 +23,35 @@ use ftml_uris::components::{DocumentUriComponents, UriComponents};
 #[server(prefix = "/content", endpoint = "check_term",input=server_fn::codec::Json)]
 pub async fn check_term(
     global_context: Vec<ftml_uris::ModuleUri>,
-    term: ftml_ontology::terms::Term,
-    in_path: ftml_ontology::terms::termpaths::TermPath,
+    in_term: either::Either<ftml_ontology::terms::Term, DocumentElementUri>,
+    subterm: either::Either<ftml_ontology::terms::Term, ftml_ontology::terms::termpaths::TermPath>,
 ) -> Result<
     ftml_backend::BackendCheckResult,
     ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>,
 > {
     use flams_math_archives::backend::LocalBackend;
     tokio::task::spawn_blocking(move || {
+        let sup = match in_term {
+            either::Left(t) => t,
+            either::Right(uri) => flams_system::backend::backend()
+                .get_typed_document_element::<DocumentTerm>(&uri)?
+                .get_parsed()
+                .clone(),
+        };
         let mut checker = ftml_solver::Checker::<ftml_solver::split::SingleThreadedSplit>::new(
             flams_system::backend::backend().clone(),
         );
         let mut global_context: rustc_hash::FxHashSet<_> = global_context.into_iter().collect();
-        for m in term.full_context(&mut |u| flams_system::backend::backend().get_document(u).ok()) {
+        for m in sup.full_context(&mut |u| flams_system::backend::backend().get_document(u).ok()) {
             global_context.insert(m);
         }
         //println!("Context: {global_context:#?}");
         let _ = checker.set_context(global_context.into_iter().collect());
-        checker.check_subterm(term, in_path).map_or_else(
+        let r = match subterm {
+            either::Left(t) => checker.check_subterm_term(sup, t),
+            either::Right(p) => checker.check_subterm_path(sup, p),
+        };
+        r.map_or_else(
             || {
                 Err(ftml_backend::BackendError::ToDo(
                     "Error getting subterm".to_string(),

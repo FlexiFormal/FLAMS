@@ -10,7 +10,7 @@ use crate::{
     impls::solving::{TermExtSolvable, is_solvable_var},
     rules::{
         implicits::{ImplicitExtApp, ImplicitExtBound},
-        unknowns::{beta_unknowns, beta_unknowns_cow},
+        unknowns::beta_unknowns_cow,
     },
     split::SplitStrategy,
 };
@@ -146,6 +146,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         term: &'t Term,
         mut until: impl FnMut(&Self, &Term) -> bool,
     ) -> Option<Cow<'t, Term>> {
+        if until(self, term) {
+            return Some(Cow::Borrowed(term));
+        }
         let mut current = Cow::<'t, _>::Borrowed(term);
         loop {
             let Some(next) = self.scoped(|slf| slf.simplify_one(true, &current)) else {
@@ -271,6 +274,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     where
         R: Send + Sync + std::fmt::Debug + Clone + 'static,
     {
+        //println!("Simplify rules two {{");
         let mut applicables = smallvec::SmallVec::<_, 2>::default();
         let mut left = true;
         let mut right = true;
@@ -280,7 +284,14 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         loop {
             macro_rules! set {
                 () => {
+                    set!(NOBREAK);
+                    if !applicables.is_empty() {
+                        break;
+                    }
+                };
+                (NOBREAK) => {
                     if abort(&*t1, &*t2) {
+                        //println!("}}");
                         return either::Right((t1.into_owned(), t2.into_owned()));
                     }
                     applicables = rules
@@ -293,15 +304,14 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                             }
                         })
                         .collect();
-                    if !applicables.is_empty() {
-                        break;
-                    }
                 };
             }
             loop {
                 if next_left && left {
                     set!();
-                    next_left = false;
+                    if right {
+                        next_left = false;
+                    }
                     if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t1)) {
                         t1 = Cow::Owned(next);
                         continue;
@@ -310,18 +320,33 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 }
                 if right {
                     set!();
-                    next_left = true;
+                    if left {
+                        next_left = true;
+                    }
                     if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t2)) {
                         t2 = Cow::Owned(next);
                         continue;
                     }
                     right = false;
-                    continue;
+                    if left {
+                        continue;
+                    }
                 }
                 break;
             }
+
             if applicables.is_empty() {
                 self.failure("No rule applicable");
+                self.add_msg(
+                    traceref!(FAIL
+                        "Final simplifications: ",
+                        t1.into_owned(),
+                        " and ",
+                        t2.into_owned()
+                    )
+                    .into(),
+                );
+                //println!("}}");
                 return either::Left(None);
             }
             if let Some(r) = self.scoped(|slf| {
@@ -329,21 +354,27 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     apply(slf, rl, &t1, &t2)
                 })
             }) {
+                //println!("}}");
                 return either::Left(Some(r));
             }
             if next_left && left {
-                next_left = false;
+                if right {
+                    next_left = false;
+                }
                 if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t1)) {
                     t1 = Cow::Owned(next);
-                    set!();
+                    //set!(NOBREAK);
                     continue;
                 }
+                left = false;
             }
             if right {
-                next_left = true;
+                if left {
+                    next_left = true;
+                }
                 if let Some(next) = self.scoped(|slf| slf.simplify_one(true, &t2)) {
                     t2 = Cow::Owned(next);
-                    set!();
+                    //set!(NOBREAK);
                     continue;
                 }
                 right = false;
@@ -354,6 +385,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             break;
         }
         self.failure("No rule applicable");
+        //println!("}}");
         either::Left(None)
     }
 

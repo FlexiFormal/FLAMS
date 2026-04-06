@@ -326,7 +326,7 @@ impl Queue {
                     }
                 } */
                 let mut found = false;
-                if deps.is_empty() {
+                if deps.is_empty() || state.queue.is_empty() {
                     for s in task.steps() {
                         if s.0.target == target {
                             found = true;

@@ -3,16 +3,17 @@ pub mod fixity;
 pub mod implicits;
 pub mod operators;
 pub mod sequences;
+pub mod symbols;
 pub mod unknowns;
 pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
 use ftml_uris::SymbolUri;
 
-use crate::{CheckRef, split::SplitStrategy};
-use ftml_ontology::terms::{Term, termpaths::TermPath};
+use crate::{CheckRef, rules::operators::typing, split::SplitStrategy};
+use ftml_ontology::terms::{Argument, Term, termpaths::TermPath};
 use std::{fmt::Debug, ops::ControlFlow};
 
 macro_rules! rules{
-    ($($name:ident = $tp:ident $(($($e:expr),*))? ),*$(,)?) => {
+    ($($name:ident = $tp:ident $(($($e:expr),* $(,)?))? ),*$(,)?) => {
         #[derive(Debug)]
         pub struct RuleSet<Split: SplitStrategy> {
             $(
@@ -80,18 +81,25 @@ rules! {
     inference = InferenceRule(
         sequences::SeqIndexRule,
         sequences::SeqInferenceRule,
+        sequences::fold::FoldInferenceRule,
+        sequences::SeqConcatInferenceRule,
         operators::numbers::NumberTypes,
         implicits::ImplicitRule,
-        unknowns::UnknownsRule
+        unknowns::UnknownsRule,
     ),
     subtyping = SubtypeRule(operators::numbers::NumberTypes),
     checking = CheckingRule(operators::numbers::NumberTypes),
     inhabitable = InhabitableRule(sequences::SeqUniverseRule),
-    equality = EqualityRule,
+    equality = EqualityRule(
+        operators::numbers::NumberTypes,
+        //sequences::SeqTypeEqRule
+    ),
     universe = UniverseRule(sequences::SeqUniverseRule),
     preparation = PreparationRule,
     simplification = SimplificationRule(
-        unknowns::UnknownsRule
+        unknowns::UnknownsRule,
+        typing::InferredTypeSimplificationRule,
+        CommentRule
     ),
     marker = MarkerRule,
     proof = ProofRule
@@ -190,3 +198,39 @@ impl SizedSolverRule for HOASRule {
     }
 }
 impl<Split: SplitStrategy> MarkerRule<Split> for HOASRule {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CommentRule;
+impl SizedSolverRule for CommentRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("comment")
+    }
+    fn priority(&self) -> isize {
+        1_000_000
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for CommentRule {
+    fn applicable(&self, term: &Term) -> bool {
+        if let Term::Application(app) = term
+            && app.head.is(&*ftml_uris::metatheory::COMMENTED)
+            && let [Argument::Simple(_), Argument::Simple(_)] = &*app.arguments
+        {
+            true
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
+        &self,
+        _: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        let [Argument::Simple(t), Argument::Simple(_)] = &*app.arguments else {
+            return Err(None);
+        };
+        Ok(t.clone())
+    }
+}
