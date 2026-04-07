@@ -20,7 +20,7 @@ use crate::{
     hoas::HOASSymbols,
     impls::{
         proving::ProverState,
-        solving::{Solutions, TermExtSolvable},
+        solving::{Solutions, TermExtSolvable, is_solvable_var},
     },
     results::{
         CheckResult, ContentCheckResult, DocumentCheckResult, SymbolCheckResult, TypeCheckResult,
@@ -410,13 +410,15 @@ impl<Split: SplitStrategy> Checker<Split> {
         let (r, s, log) = self.wrap_task(CheckingTask::Inference(sub), Some(unks), |mut slf| {
             let allvars = sub.free_variables();
             for v in allvars {
-                if !ctx.iter().any(|cv| cv.var == *v) {
-                    let tp = slf.infer_var_type_i(v);
-                    ctx.push(ComponentVar {
-                        var: v.clone(),
-                        tp,
-                        df: None,
-                    });
+                if is_solvable_var(v).is_none() {
+                    if !ctx.iter().any(|cv| cv.var == *v) {
+                        let tp = slf.infer_var_type_i(v);
+                        ctx.push(ComponentVar {
+                            var: v.clone(),
+                            tp,
+                            df: None,
+                        });
+                    }
                 }
             }
             let mut i = 0;
@@ -432,12 +434,14 @@ impl<Split: SplitStrategy> Checker<Split> {
                         .cloned()
                         .collect::<smallvec::SmallVec<_, 2>>();
                     for v in allvars {
-                        let tp = slf.infer_var_type_i(&v);
-                        ctx.push(ComponentVar {
-                            var: v,
-                            tp,
-                            df: None,
-                        });
+                        if is_solvable_var(&v).is_none() {
+                            let tp = slf.infer_var_type_i(&v);
+                            ctx.push(ComponentVar {
+                                var: v,
+                                tp,
+                                df: None,
+                            });
+                        }
                     }
                 }
                 if let Some(t) = df {
@@ -448,12 +452,14 @@ impl<Split: SplitStrategy> Checker<Split> {
                         .cloned()
                         .collect::<smallvec::SmallVec<_, 2>>();
                     for v in allvars {
-                        let tp = slf.infer_var_type_i(&v);
-                        ctx.push(ComponentVar {
-                            var: v,
-                            tp,
-                            df: None,
-                        });
+                        if is_solvable_var(&v).is_none() {
+                            let tp = slf.infer_var_type_i(&v);
+                            ctx.push(ComponentVar {
+                                var: v,
+                                tp,
+                                df: None,
+                            });
+                        }
                     }
                 }
             }
