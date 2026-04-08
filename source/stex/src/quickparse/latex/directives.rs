@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use flams_utils::{
     parsing::{ParseSource, StringOrStr},
     sourcerefs::SourceRange,
@@ -10,6 +12,25 @@ use super::{
     AnyEnv, AnyMacro, Environment, EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro,
     MacroResult, ParserState,
 };
+
+#[allow(clippy::needless_pass_by_value)]
+pub fn copycmd<
+    'a,
+    Pa: ParseSource<'a>,
+    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
+    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
+    State: ParserState<'a, Pa, T, Err>,
+>(
+    parser: &mut LaTeXParser<'a, Pa, T, Err, State>,
+    args: Pa::Str,
+) {
+    if let Some((a, b)) = args.as_ref().split_once(' ') {
+        let a = a.trim();
+        let b = b.trim();
+        let old = parser.macro_rules.get(b);
+        parser.add_macro_rule(Cow::Owned(a.to_string()), old.cloned());
+    }
+}
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn verbcmd<
