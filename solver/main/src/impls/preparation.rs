@@ -1,45 +1,80 @@
-use crate::{CheckRef, split::SplitStrategy};
+use crate::{
+    CheckRef,
+    impls::solving::Solutions,
+    rules::implicits::{ImplicitExtApp, ImplicitExtBound, ImplicitExtTerm},
+    split::SplitStrategy,
+};
 use either::Either;
 use ftml_ontology::{
-    domain::{SharedDeclaration, declarations::symbols::Symbol},
+    domain::{
+        SharedDeclaration,
+        declarations::{morphisms::Morphism, symbols::Symbol},
+    },
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
     terms::{
         ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence,
-        Term, Variable, termpaths::TermPath,
+        Term, Variable, helpers::IntoTerm, sequences::Sequence, termpaths::TermPath,
     },
 };
-use smallvec::SmallVec;
-use std::{hint::unreachable_unchecked, mem::MaybeUninit};
 
-impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
-    pub(crate) fn prepare(&self, t: Term, path: Option<&mut TermPath>) -> Term {
-        tracing::trace!("preparing {:?}", t.debug_short());
+impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
+    #[inline]
+    #[must_use]
+    pub const fn rules(&self) -> &crate::rules::RuleSet<Split> {
+        &self.top.rules
+    }
+
+    pub(crate) fn prepare(&self, t: Term, path: Option<&mut TermPath>) -> (Solutions, Term) {
         let mut cp = self.copied();
         let mut ncp = cp.get_ref();
-        let old = std::mem::replace(ncp.context.0, SmallVec::new());
+        let old = ncp.context.take();
         let r = ncp.prepare_i(t, path.map(|p| (p.inner_mut(), 0)));
-        *ncp.context.0 = old;
-        r
+        ncp.context.set(old);
+        drop(ncp);
+        let sols = std::mem::take(&mut cp.solutions);
+        (sols, r)
     }
 
     pub(crate) fn revert_prepare(&self, t: Term) -> Term {
         tracing::trace!("reverting preparation {:?}", t.debug_short());
         let mut cp = self.copied();
         let mut ncp = cp.get_ref();
-        let old = std::mem::replace(ncp.context.0, SmallVec::new());
+        let old = ncp.context.take();
         let r = ncp.revert_i(t);
-        *ncp.context.0 = old;
+        ncp.context.set(old);
         r
     }
 
+    /*
     pub(crate) fn bind_implicits(&mut self, nt: Term) -> Term {
-        let allvars = nt
+        tracing::trace!("Binding implicits for {:?}", nt.debug_short());
+        let mut allvars = nt
             .free_variables()
             .into_iter()
             .cloned()
             .collect::<SmallVec<_, 4>>();
+        let mut curr_idx = 0;
         if allvars.is_empty() {
             return nt;
+        }
+        while curr_idx < allvars.len() {
+            if let Variable::Ref { declaration, .. } = &allvars[curr_idx]
+                && let Ok(v) = self.get_variable(declaration)
+                && let Some((tp, _)) = v.data.tp.checked_or_parsed()
+            {
+                let vars = tp.free_variables();
+                let mut changed = false;
+                for v in vars {
+                    if !allvars[..curr_idx].contains(v) {
+                        allvars.insert(curr_idx, v.clone());
+                        changed = true;
+                    }
+                }
+                if changed {
+                    continue;
+                }
+            }
+            curr_idx += 1;
         }
         tracing::trace!("All variables: {allvars:?}");
 
@@ -53,6 +88,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 };
                 let tp = self.infer_var_type_i(&v);
                 if let Some(tp) = tp {
+                    self.comment(format!("Solving type of {id}"));
                     self.solve_type(id.clone(), tp / ctx.as_slice());
                 }
 
@@ -73,8 +109,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         tracing::trace!("Implicitified: {:?}", n.debug_short());
         n
     }
+     */
 
-    fn get_head(
+    pub fn get_head(
         &self,
         t: &Term,
     ) -> Option<Either<SharedDeclaration<Symbol>, SharedDocumentElement<VariableDeclaration>>> {
@@ -88,96 +125,155 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         })
     }
 
+    fn push_down_implicits(term: Term) -> Term {
+        if let Term::Application(ref app) = term
+            && app.head.is(&*ftml_uris::metatheory::APPLY_IMPLICIT)
+            && let [
+                Argument::Simple(f @ (Term::Application(_) | Term::Bound(_))),
+                Argument::Sequence(MaybeSequence::Seq(args)),
+            ] = &*app.arguments
+        {
+            let mut iter = args.iter();
+            let next = if let Term::Application(fapp) = f {
+                let napp = fapp
+                    .head
+                    .clone()
+                    .apply_implicits(args.len(), |_| iter.next().expect("bug").clone());
+                Term::Application(ApplicationTerm::new(
+                    napp,
+                    fapp.arguments.clone(),
+                    fapp.presentation.clone(),
+                ))
+            } else if let Term::Bound(fapp) = f {
+                let napp = fapp
+                    .head
+                    .clone()
+                    .apply_implicits(args.len(), |_| iter.next().expect("bug").clone());
+                Term::Bound(BindingTerm::new(
+                    napp,
+                    fapp.arguments.clone(),
+                    fapp.presentation.clone(),
+                ))
+            } else {
+                unreachable!("bug");
+            };
+            Self::push_down_implicits(next)
+        } else {
+            term
+        }
+    }
+
     fn prepare_i(
         &mut self,
-        t: Term,
+        mut t: Term,
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
+        tracing::trace!("preparing {:?}", t.debug_short());
+        //let mut t = Self::prepare_seqs(t);
+        //let mut t = Self::push_down_implicits(t);
+        if t.unapply_implicits().is_some() {
+            return t;
+        }
         match &t {
-            Term::Symbol { .. } | Term::Var { .. } => return t,
+            Term::Symbol { uri, presentation } => {
+                return if let Ok(sym) = self.get_symbol(uri)
+                    && sym.data.tp.has_checked()
+                {
+                    sym.data
+                        .tp
+                        .with_checked(|t| {
+                            let (_, vars) = t.get_bound_implicits()?;
+                            Some(
+                                Term::Symbol {
+                                    uri: uri.clone(),
+                                    presentation: presentation.clone(),
+                                }
+                                .apply_implicits(vars.len(), |_| self.new_solvable()),
+                            )
+                        })
+                        .flatten()
+                        .unwrap_or(t)
+                } else {
+                    t
+                };
+            }
+            Term::Var { .. } => return t,
             _ => (),
         }
-        let Some(head) = self.get_head(&t) else {
-            return t;
-        };
-        let head = head.as_ref().map_either(|v| &**v, |v| &**v);
-        tracing::trace!("Head: {:?}", head);
-
-        // this may very much be overkill, but it's nice to do things without cloning,
-        // and terms are composed of potentially multiple Arcs :)
-        let mut t = MaybeUninit::new(t);
-
-        let rules = self.top.rules.preparation();
-        tracing::trace!("Rules: {rules:#?}");
 
         for rl in self.top.rules.preparation() {
-            tracing::trace!("Rule {rl:?}?");
-            // SAFETY: not yet replaced
-            if !rl.applicable(unsafe { t.assume_init_ref() }, head) {
+            if !rl.applicable(self, &t) {
                 continue;
             }
-            // SAFETY: not yet replaced
-            let tm = unsafe { t.assume_init_read() };
             let path = match &mut path {
                 Some((p, t)) => Some((&mut **p, *t)),
                 _ => None,
             };
-            match rl.apply(&self.top.rules, tm, head, path) {
-                //                                 MaybeUninit doesn't drop the inner value,
-                //                                 vvvvvvvvv  so this is fine
+            match rl.apply(self, t, path) {
                 std::ops::ControlFlow::Break(t) => return t,
                 std::ops::ControlFlow::Continue(tm) => {
-                    // t is initialized again
-                    t.write(tm);
+                    t = tm;
                 }
             }
+            tracing::trace!("Rule {rl:?} applied; result: {:?}", t.debug_short());
         }
-        // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(
-            unsafe { t.assume_init() },
-            |s, t, p| s.prepare_i(t, p),
-            path,
-        )
+        self.prepare_recurse(t, |s, t, p| s.prepare_i(t, p), path)
     }
 
     fn revert_i(&mut self, t: Term) -> Term {
         match &t {
+            Term::Application(b) if b.head.unapply_implicits().is_some() => {
+                // SAFETY: pattern match
+                let (t, args) = unsafe { b.head.unapply_implicits().unwrap_unchecked() };
+                {
+                    return self.revert_i(
+                        Term::Application(ApplicationTerm::new(
+                            t.clone(),
+                            b.arguments.clone(),
+                            b.presentation.clone(),
+                        ))
+                        .apply_implicits(args.len(), |i| args[i].clone()),
+                    );
+                }
+            }
+            Term::Bound(b) if b.head.unapply_implicits().is_some() => {
+                // SAFETY: pattern match
+                let (t, args) = unsafe { b.head.unapply_implicits().unwrap_unchecked() };
+                {
+                    return self.revert_i(
+                        Term::Bound(BindingTerm::new(
+                            t.clone(),
+                            b.arguments.clone(),
+                            b.presentation.clone(),
+                        ))
+                        .apply_implicits(args.len(), |i| args[i].clone()),
+                    );
+                }
+            }
+
+            Term::Application(a) if a.unapply_implicits().is_some() => {
+                // SAFETY: pattern match
+                let (t, _) = unsafe { a.unapply_implicits().unwrap_unchecked() };
+                return t.clone();
+            }
             Term::Symbol { .. } | Term::Var { .. } => return t,
             _ => (),
         }
-        let Some(head) = self.get_head(&t) else {
-            return t;
-        };
-        let head = head.as_ref().map_either(|v| &**v, |v| &**v);
-        tracing::trace!("Head: {:?}", head);
 
-        // this may very much be overkill, but it's nice to do things without cloning,
-        // and terms are composed of potentially multiple Arcs :)
-        let mut t = MaybeUninit::new(t);
-
-        let rules = self.top.rules.preparation();
-        tracing::trace!("Rules: {rules:#?}");
+        let mut tm = t;
 
         for rl in self.top.rules.preparation().iter().rev() {
-            tracing::trace!("Rule {rl:?}?");
             // SAFETY: not yet replaced
-            if !rl.applicable_revert(unsafe { t.assume_init_ref() }, head) {
+            if !rl.applicable_revert(self, &tm) {
                 continue;
             }
-            // SAFETY: not yet replaced
-            let tm = unsafe { t.assume_init_read() };
-            match rl.revert(&self.top.rules, tm, head) {
-                //                                 MaybeUninit doesn't drop the inner value,
-                //                                 vvvvvvvvv  so this is fine
+            tm = match rl.revert(self, tm) {
                 std::ops::ControlFlow::Break(t) => return t,
-                std::ops::ControlFlow::Continue(tm) => {
-                    // t is initialized again
-                    t.write(tm);
-                }
-            }
+                std::ops::ControlFlow::Continue(t) => t,
+            };
+            tracing::trace!("Rule {rl:?} applied; result: {:?}", tm.debug_short());
         }
-        // SAFETY: t has been restored or we've returned early anyway
-        self.prepare_recurse(unsafe { t.assume_init() }, |s, t, _| s.revert_i(t), None)
+        self.prepare_recurse(tm, |s, t, _| s.revert_i(t), None)
     }
 
     fn prepare_recurse(
@@ -190,48 +286,56 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         ) -> Term,
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> Term {
+        tracing::trace!("Recursing {:?}", term.debug_short());
         match term {
-            Term::Application(a) => Term::Application(ApplicationTerm::new(
-                then(self, a.head.clone(), get_path(&mut path, 0)),
+            Term::Application(a) => {
+                if let Term::Symbol { uri, .. } = &a.head
+                    && let Ok(m) = self.get_declaration::<Morphism>(uri)
                 {
-                    let mut idx = 0;
-                    a.arguments
-                        .iter()
-                        .map(|arg| match arg {
-                            Argument::Simple(t) => Argument::Simple(then(
-                                self,
-                                t.clone(),
-                                get_path(&mut path, {
-                                    idx += 1;
-                                    idx
-                                }),
-                            )),
-                            Argument::Sequence(MaybeSequence::One(t)) => {
-                                Argument::Sequence(MaybeSequence::One(then(
+                    // TODO @Marcel
+                }
+                Term::Application(ApplicationTerm::new(
+                    then(self, a.head.clone(), get_path(&mut path, 0)),
+                    {
+                        let mut idx = 0;
+                        a.arguments
+                            .iter()
+                            .map(|arg| match arg {
+                                Argument::Simple(t) => Argument::Simple(then(
                                     self,
                                     t.clone(),
                                     get_path(&mut path, {
                                         idx += 1;
                                         idx
                                     }),
-                                )))
-                            }
-                            Argument::Sequence(MaybeSequence::Seq(ts)) => {
-                                idx += 1;
-                                let mut npath = get_path(&mut path, idx);
-                                Argument::Sequence(MaybeSequence::Seq(
-                                    ts.iter()
-                                        .cloned()
-                                        .enumerate()
-                                        .map(|(i, t)| then(self, t, get_path(&mut npath, i)))
-                                        .collect(),
-                                ))
-                            }
-                        })
-                        .collect()
-                },
-                a.presentation.clone(),
-            )),
+                                )),
+                                Argument::Sequence(MaybeSequence::One(t)) => {
+                                    Argument::Sequence(MaybeSequence::One(then(
+                                        self,
+                                        t.clone(),
+                                        get_path(&mut path, {
+                                            idx += 1;
+                                            idx
+                                        }),
+                                    )))
+                                }
+                                Argument::Sequence(MaybeSequence::Seq(ts)) => {
+                                    idx += 1;
+                                    let mut npath = get_path(&mut path, idx);
+                                    Argument::Sequence(MaybeSequence::Seq(
+                                        ts.iter()
+                                            .cloned()
+                                            .enumerate()
+                                            .map(|(i, t)| then(self, t, get_path(&mut npath, i)))
+                                            .collect(),
+                                    ))
+                                }
+                            })
+                            .collect()
+                    },
+                    a.presentation.clone(),
+                ))
+            }
             Term::Bound(b) => Term::Bound(BindingTerm::new(
                 then(self, b.head.clone(), get_path(&mut path, 0)),
                 self.scoped(|slf| {
@@ -307,12 +411,14 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
+    #[allow(clippy::single_match_else)]
     fn prepare_cv(
         &mut self,
         cv: &ComponentVar,
         then: fn(&mut Self, Term, Option<(&mut smallvec::SmallVec<u8, 16>, usize)>) -> Term,
         mut path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ComponentVar {
+        tracing::trace!("preparing bound variable {}", cv.var.name());
         let mut next = 0;
         let tp = match &cv.tp {
             Some(t) => {
@@ -350,7 +456,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             tp,
             df,
         };
+        tracing::trace!("Extending context");
         self.extend_context(cv.clone());
+        tracing::trace!("Done");
         cv
     }
 }

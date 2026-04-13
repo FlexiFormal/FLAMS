@@ -448,6 +448,7 @@ impl<
             environment_rules.insert(Cow::Borrowed(k), AnyEnv::Ptr(v));
         }
         let mut directives = HMap::default();
+        directives.insert("copycmd", directives::copycmd as _);
         directives.insert("verbcmd", directives::verbcmd as _);
         directives.insert("verbenv", directives::verbenv as _);
         directives.insert("nolint", directives::nolint as _);

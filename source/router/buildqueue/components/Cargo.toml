@@ -37,6 +37,7 @@ ftml-uris = { workspace = true, features = ["serde"] }
 ftml-ontology = { workspace = true, features = ["serde"] }
 ftml-dom = { workspace = true }
 ftml-components = {workspace = true}
+ftml-solver-trace = {workspace = true}
 
 flams-backend-types = { workspace = true }
 
@@ -48,7 +49,6 @@ flams-router-content = {workspace = true}
 flams-router-buildqueue-base = { workspace = true }
 flams-router-git-base = { workspace = true }
 flams-system = { workspace = true, optional = true }
-flams-router-checks = {workspace = true}
 
 either = {workspace = true}
 leptos = { workspace = true }

@@ -1,24 +1,26 @@
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
 
-use crate::{CheckRef, split::SplitStrategy, trace::CheckingTask};
+use crate::{
+    CheckRef, impls::solving::is_solvable_var, rules::InferenceRule, split::SplitStrategy,
+    trace::CheckingTask,
+};
 
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn infer_type(&mut self, t: &'t Term) -> Option<Term> {
-        self.wrap_check(CheckingTask::Inference(t), |slf| slf.infer_type_i(t))
+        tracing::debug!("Inferring type of {:?}", t.debug_short());
+        let r = self.wrap_check(CheckingTask::Inference(t), |slf| slf.infer_type_i(t));
+        if let Some(r) = &r {
+            tracing::debug!("Inferred: {:?}", r.debug_short());
+        } else {
+            tracing::debug!("Inferrence failed");
+        }
+        r
     }
     pub(crate) fn infer_type_i(&mut self, t: &'t Term) -> Option<Term> {
         match t {
             Term::Symbol { uri, .. } => {
                 self.comment("Looking up symbol");
-                let Ok(s) = self.get_symbol(uri) else {
-                    self.failure("Symbol not found");
-                    return None;
-                };
-                let ret = s
-                    .data
-                    .tp
-                    .checked_or_parsed()
-                    .map(|(t, _)| self.bind_implicits(t));
+                let ret = self.get_symbol_type(uri);
 
                 if ret.is_none() {
                     self.failure("Symbol has no type");
@@ -30,14 +32,27 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
             _ => (),
         }
+        self.simplify_rules(
+            self.top.rules.inference(),
+            t,
+            InferenceRule::applicable,
+            |slf, rl, t| rl.infer(slf, t),
+        )
+        /*
         let rules = self
             .top
             .rules
             .inference()
             .iter()
-            .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None });
-        let r = Split::split(self, rules, |slf, rl| rl.infer(slf, t));
+            .filter_map(|rl| if rl.applicable(t) { Some(&**rl) } else { None })
+            .collect::<smallvec::SmallVec<_, 2>>();
+        let r = Split::split(self, true, rules, |slf, rl| rl.infer(slf, t));
         r.map(|t| self.subst(t))
+        */
+        /*r.map(|t| {
+            let simp = self.scoped(|slf| slf.simplify_full(false, &t)).unwrap_or(t);
+            self.subst(simp)
+        })*/
     }
 
     pub fn infer_var_type(&mut self, var: &'t Variable) -> Option<Term> {
@@ -46,6 +61,9 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         })
     }
     pub(crate) fn infer_var_type_i(&mut self, var: &Variable) -> Option<Term> {
+        if let Some(id) = is_solvable_var(var) {
+            return Some(self.get_solvable_type(id));
+        }
         let (ctx, mut msgs) = self.split();
         for v in ctx.iter().rev().map(|v| &**v) {
             match (v, var) {
@@ -93,12 +111,14 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     } else {
                         msgs.comment("Getting variable globally");
                         let declaration = declaration.clone();
-                        self.get_variable(&declaration)
-                            .ok()?
-                            .data
-                            .tp
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
+                        let var = self.get_variable(&declaration).ok()?;
+                        var.data.tp.checked_or_parsed().map(|(t, _)| {
+                            if var.data.is_seq && t.as_sequence_type().is_none() {
+                                t.into_seq_type()
+                            } else {
+                                t
+                            }
+                        })
                     };
                 }
                 (
@@ -117,12 +137,14 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     } else {
                         msgs.comment("Getting variable globally");
                         let declaration = declaration.clone();
-                        self.get_variable(&declaration)
-                            .ok()?
-                            .data
-                            .tp
-                            .checked_or_parsed()
-                            .map(|(t, _)| t)
+                        let var = self.get_variable(&declaration).ok()?;
+                        var.data.tp.checked_or_parsed().map(|(t, _)| {
+                            if var.data.is_seq && t.as_sequence_type().is_none() {
+                                t.into_seq_type()
+                            } else {
+                                t
+                            }
+                        })
                     };
                 }
                 _ => (),
@@ -130,14 +152,16 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
         if let Variable::Ref { declaration, .. } = var {
             self.comment("Getting variable globally");
-            self.get_variable(declaration)
-                .ok()?
-                .data
-                .tp
-                .checked_or_parsed()
-                .map(|(t, _)| t)
+            let var = self.get_variable(declaration).ok()?;
+            var.data.tp.checked_or_parsed().map(|(t, _)| {
+                if var.data.is_seq && t.as_sequence_type().is_none() {
+                    t.into_seq_type()
+                } else {
+                    t
+                }
+            })
         } else {
-            None
+            Some(self.new_solvable())
         }
     }
 }

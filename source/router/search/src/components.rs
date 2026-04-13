@@ -247,7 +247,7 @@ fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyV
     use ftml_uris::Uri;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
-    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let name = sym.as_view(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     let elem = elem.clone();
     view! {
       <Card>
@@ -281,7 +281,7 @@ fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
     use flams_router_content::components::DocumentInner;
     use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
 
-    let name = uri.as_view::<flams_router_content::backend::FtmlBackend>(); //doc_name(&uri, uri.document_name().to_string());
+    let name = uri.as_view(); //doc_name(&uri, uri.document_name().to_string());
     view! {
       <Card>
           <CardHeader>
@@ -326,8 +326,7 @@ fn do_para(
 
     let desc = ftml_components::components::content::CommaSep(
         "For",
-        fors.into_iter()
-            .map(|s| s.as_view::<flams_router_content::backend::FtmlBackend>()),
+        fors.into_iter().map(|s| s.as_view()),
     )
     .into_view();
     view! {

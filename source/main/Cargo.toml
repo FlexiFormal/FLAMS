@@ -105,6 +105,7 @@ ftml-components = { workspace = true }
 
 
 flams-router-dashboard = { workspace = true }
+flams-router-content = {workspace = true}
 flams-backend-types = { workspace = true }
 flams-router-search = { workspace = true }
 flams-router-base = { workspace = true }

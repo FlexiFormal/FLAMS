@@ -73,7 +73,7 @@ pub(super) struct QueueI {
     pub id: QueueId,
     span: tracing::Span,
     pub(super) map: RwLock<TaskMap>,
-    sender: ChangeSender<QueueMessage>,
+    pub(super) sender: ChangeSender<QueueMessage>,
     pub(super) state: RwLock<QueueState>,
 }
 
@@ -193,7 +193,7 @@ impl Queue {
             let Ok(permit) = tokio::sync::Semaphore::acquire_owned(sem.clone()).await else {
                 break;
             };
-            let Some((task, id)) = self.get_next() else {
+            let Some((task, id)) = self.get_next_async().await else {
                 break;
             };
             let selfclone = self.clone();
@@ -246,7 +246,7 @@ impl Queue {
         map.map.clear();
         for t in failed {
             for s in &t.0.steps {
-                *s.0.state.write() = TaskState::None;
+                s.0.state.set(TaskState::None);
             }
             map.map.insert(
                 (t.archive().archive_id().clone(), t.0.rel_path.clone()),
@@ -307,18 +307,58 @@ impl Queue {
         let eta = state.timer.update(1);
 
         match result {
-            Err(_deps) => {
-                // TODO: handle dependencies
+            Err(deps) => {
+                /*
+                let mut block = false;
+                for d in deps {
+                    match d {
+                        flams_math_archives::formats::TaskDependency::Physical { task, strict } => {
+                            if state.running.iter().chain(state.blocked.iter()).any(|t| task.archive == t.archive().id && task.rel_path == *t.rel_path() && t.get_step(task.target).is_some()) {
+                                block = true;
+                            }
+                        }
+                        flams_math_archives::formats::TaskDependency::Logical { uri, strict } => {
+                            self.backend().with_local_archive(uri.archive_id(), |a| if let Some(a) = a {
+                                a.do
+                            })
+                        }
+
+                    }
+                } */
                 let mut found = false;
-                for s in task.steps() {
-                    if s.0.target == target {
-                        found = true;
+                if deps.is_empty() || state.queue.is_empty() {
+                    for s in task.steps() {
+                        if s.0.target == target {
+                            found = true;
+                        }
+                        if found {
+                            s.0.state.set(TaskState::Failed);
+                        }
                     }
-                    if found {
-                        *s.0.state.write() = TaskState::Failed;
+                    state.failed.push(task.clone());
+                    self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
+                        id: task.0.id,
+                        target,
+                        eta,
+                    });
+                } else {
+                    // TODO: handle dependencies
+                    let mut found = false;
+                    for s in task.steps() {
+                        if s.0.target == target {
+                            found = true;
+                        }
+                        if found {
+                            s.0.state.set(TaskState::Blocked);
+                        }
                     }
+                    state.blocked.push(task.clone());
+                    self.0.sender.lazy_send(|| QueueMessage::TaskBlocked {
+                        id: task.0.id,
+                        target,
+                        eta,
+                    });
                 }
-                state.failed.push(task.clone());
                 drop(lock);
 
                 let _ = self.0.backend.save(
@@ -328,11 +368,6 @@ impl Queue {
                     target,
                     None,
                 );
-                self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
-                    id: task.0.id,
-                    target,
-                    eta,
-                });
             }
             Ok(data) => {
                 let mut found = false;
@@ -340,9 +375,9 @@ impl Queue {
                 for s in task.steps() {
                     if s.0.target == target {
                         found = true;
-                        *s.0.state.write() = TaskState::Done;
+                        s.0.state.set(TaskState::Done);
                     } else if found {
-                        *s.0.state.write() = TaskState::Queued;
+                        s.0.state.set(TaskState::Queued);
                         requeue = true;
                         break;
                     }

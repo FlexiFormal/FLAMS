@@ -1,6 +1,10 @@
 use crate::{
     CheckRef,
-    rules::{CheckingRule, InhabitableRule, SizedSolverRule, SubtypeRule, UniverseRule},
+    impls::solving::TermExtSolvable,
+    patterns::Pattern,
+    rules::{
+        CheckingRule, InhabitableRule, MarkerRule, SizedSolverRule, SubtypeRule, UniverseRule,
+    },
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{Argument, Term};
@@ -13,13 +17,6 @@ impl SizedSolverRule for SimpleInhabitableRule {
         ftml_solver_trace::trace!(&self.0, " is inhabitable")
     }
 }
-
-impl std::fmt::Display for SimpleInhabitableRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} is inhabitable", self.0)
-    }
-}
-
 impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleInhabitableRule {
     fn applicable(&self, term: &Term) -> bool {
         if self.1 == 0 {
@@ -56,6 +53,24 @@ impl<Split: SplitStrategy> InhabitableRule<Split> for SimpleInhabitableRule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComplexInhabitableRule(pub Pattern);
+impl SizedSolverRule for ComplexInhabitableRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(self.0.body.clone(), "is inhabitable")
+    }
+}
+impl<Split: SplitStrategy> InhabitableRule<Split> for ComplexInhabitableRule {
+    fn applicable(&self, term: &Term) -> bool {
+        self.0.matches(term).is_some()
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, t: &'t Term) -> Option<bool> {
+        // To be sure:
+        checker.infer_type(t)?;
+        Some(true)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleUniverseRule(pub SymbolUri);
 
 impl SizedSolverRule for SimpleUniverseRule {
@@ -86,6 +101,34 @@ impl<Split: SplitStrategy> UniverseRule<Split> for SimpleUniverseRule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComplexUniverseRule(pub Pattern);
+impl SizedSolverRule for ComplexUniverseRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(self.0.body.clone(), "is a universe")
+    }
+}
+impl<Split: SplitStrategy> InhabitableRule<Split> for ComplexUniverseRule {
+    fn applicable(&self, term: &Term) -> bool {
+        self.0.matches(term).is_some()
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, t: &'t Term) -> Option<bool> {
+        // To be sure:
+        checker.infer_type(t)?;
+        Some(true)
+    }
+}
+impl<Split: SplitStrategy> UniverseRule<Split> for ComplexUniverseRule {
+    fn applicable(&self, term: &Term) -> bool {
+        self.0.matches(term).is_some()
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, t: &'t Term) -> Option<bool> {
+        // To be sure:
+        checker.infer_type(t)?;
+        Some(true)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyRule(pub SymbolUri);
 
 impl SizedSolverRule for AnyRule {
@@ -99,8 +142,9 @@ impl std::fmt::Display for AnyRule {
         write!(f, "{} is any-type", self.0)
     }
 }
+impl<Split: SplitStrategy> MarkerRule<Split> for AnyRule {}
 impl<Split: SplitStrategy> SubtypeRule<Split> for AnyRule {
-    fn applicable(&self, _: &Term, sup: &Term) -> bool {
+    fn applicable(&self, _: &CheckRef<'_, '_, Split>, _: &Term, sup: &Term) -> bool {
         matches!(sup,Term::Symbol { uri, .. } if *uri == self.0)
     }
     fn apply<'t>(
@@ -113,10 +157,20 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for AnyRule {
     }
 }
 impl<Split: SplitStrategy> CheckingRule<Split> for AnyRule {
-    fn applicable(&self, _: &Term, tp: &Term) -> bool {
+    fn applicable(&self, _: &CheckRef<'_, '_, Split>, _: &Term, tp: &Term) -> bool {
         matches!(tp,Term::Symbol { uri, .. } if *uri == self.0)
     }
-    fn apply<'t>(&self, _: CheckRef<'t, '_, Split>, _: &'t Term, _: &'t Term) -> Option<bool> {
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        tm: &'t Term,
+        tp: &'t Term,
+    ) -> Option<bool> {
+        if let Some(ntp) = checker.infer_type(tm)
+            && let Some(unk) = ntp.is_solvable()
+        {
+            return checker.solve_upper_bound(unk, tp);
+        }
         Some(true)
     }
 }

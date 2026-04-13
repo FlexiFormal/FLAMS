@@ -1,14 +1,12 @@
 use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    CheckRef,
+    patterns::Pattern,
+    rules::{PreparationRule, SimplificationRule, SizedSolverRule, SubtypeRule},
     split::SplitStrategy,
 };
-use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
-    terms::{
-        Argument, ArgumentMode, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence,
-        Term, Variable,
-    },
+use ftml_ontology::terms::{
+    Argument, ArgumentMode, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence, Term,
+    Variable,
 };
 use ftml_uris::SymbolUri;
 use std::{hint::unreachable_unchecked, ops::ControlFlow};
@@ -24,11 +22,7 @@ impl SizedSolverRule for SimpleTypeOperatorRule {
         ftml_solver_trace::trace!(&self.0, " is a typing operator")
     }
 }
-impl std::fmt::Display for SimpleTypeOperatorRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} is a type operator", self.0)
-    }
-}
+
 impl SimpleTypeOperatorRule {
     fn is_app(&self, t: &Term) -> bool {
         //ftml_ontology::matchtm!(app({sym(=self.0)},[]) = t);
@@ -75,14 +69,17 @@ impl SimpleTypeOperatorRule {
     }
 }
 impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, checker: &crate::CheckRef<'_, '_, Split>, t: &Term) -> bool {
         let Term::Bound(b) = t else {
-            tracing::trace!("Not bound");
+            //tracing::trace!("Not bound");
             return false;
         };
-        let spec = head.either(|s| &s.data.arity, |v| &v.data.arity);
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let spec = head.as_ref().either(|s| &s.data.arity, |v| &v.data.arity);
         if spec.num() as usize != b.arguments.len() {
-            tracing::trace!("Arguments don't match: {spec:?} != {:?}", b.arguments);
+            //tracing::trace!("Arguments don't match: {spec:?} != {:?}", b.arguments);
             return false;
         }
         spec.iter()
@@ -107,76 +104,19 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
                 _ => false,
             })
     }
-    fn make_bound<'t>(
-        &self,
-        checker: crate::CheckRef<'t, '_, Split>,
-        t: &BoundArgument,
-    ) -> Option<BoundArgument> {
-        match t {
-            BoundArgument::Simple(t) => {
-                if self.is_app(&t) {
-                    // SAFETY: is_app
-                    let (mut v, tp) = unsafe { Self::get_var(&t) };
-                    if v.len() == 1 {
-                        // SAFETY: len==1
-                        let var = unsafe { v.pop().unwrap_unchecked() };
-                        return Some(BoundArgument::Bound(ComponentVar {
-                            var,
-                            tp: Some(tp),
-                            df: None,
-                        }));
-                    }
-                }
-                None
-            }
-            BoundArgument::Sequence(MaybeSequence::Seq(s)) => {
-                let mut works = true;
-                let mut types = Vec::new();
-                let ns = s
-                    .into_iter()
-                    .flat_map(|t| {
-                        if self.is_app(&t) {
-                            // SAFETY: is_app
-                            let (v, tp) = unsafe { Self::get_var(&t) };
-                            for _ in &v {
-                                types.push(tp.clone());
-                            }
-                            v
-                        } else {
-                            works = false;
-                            Vec::new()
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                if works {
-                    return Some(BoundArgument::BoundSeq(MaybeSequence::Seq(
-                        ns.into_iter()
-                            .zip(types)
-                            .map(|(var, tp)| ComponentVar {
-                                var,
-                                tp: Some(tp),
-                                df: None,
-                            })
-                            .collect(),
-                    )));
-                }
-                None
-            }
-            _ => None,
-        }
-    }
-
     fn apply(
         &self,
-        _: &RuleSet<Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
         _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
         let Term::Bound(b) = t else {
             unreachable!("wut");
         };
-        let spec = head.either(|s| &s.data.arity, |v| &v.data.arity);
+        let spec = head.as_ref().either(|s| &s.data.arity, |v| &v.data.arity);
 
         let nargs = spec
             .iter()
@@ -250,7 +190,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
                     }
                 }
                 (m, a) => {
-                    tracing::trace!("Other: {m:?} = {a:?}");
+                    //tracing::trace!("Other: {m:?} = {a:?}");
                     a
                 }
             })
@@ -262,19 +202,102 @@ impl<Split: SplitStrategy> PreparationRule<Split> for SimpleTypeOperatorRule {
             b.presentation.clone(),
         )))
     }
-    fn applicable_revert(
-        &self,
-        _: &Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
+    fn applicable_revert(&self, _: &CheckRef<'_, '_, Split>, _: &Term) -> bool {
         false
     }
-    fn revert(
-        &self,
-        _: &RuleSet<Split>,
-        t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
+    fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
         ControlFlow::Continue(t)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Subtyping {
+    pub sub: Pattern,
+    pub sup: Pattern,
+}
+impl SizedSolverRule for Subtyping {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(
+            self.sub.body.clone(),
+            "is a subtype of",
+            self.sup.body.clone()
+        )
+    }
+}
+impl<Split: SplitStrategy> SubtypeRule<Split> for Subtyping {
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool {
+        /*println!(
+            "Applicable? ({:?}   <:   {:?})\n {:?}   <:   {:?}",
+            self.sub.body.debug_short(),
+            self.sup.body.debug_short(),
+            sub.debug_short(),
+            sup.debug_short()
+        );*/
+        let Some(sub) = self.sub.matches(sub) else {
+            return false;
+        };
+        let Some(sup) = self.sup.matches(sup) else {
+            return false;
+        };
+        for (i, j) in self
+            .sub
+            .vars
+            .iter()
+            .enumerate()
+            .filter_map(|(i, v)| Some((i, self.sup.vars.iter().position(|v2| v2 == v)?)))
+        {
+            let Some(sub) = sub.get(i) else { return false };
+            let Some(sup) = sup.get(j) else { return false };
+            if !checker.alpha_equal(sub, sup) {
+                return false;
+            }
+        }
+        //println!("Applicable!");
+        true
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        sub: &'t Term,
+        sup: &'t Term,
+    ) -> Option<bool> {
+        // sanity check
+        checker.check_inhabitable(sub)?;
+        checker.check_inhabitable(sup)?;
+        Some(true)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InferredTypeSimplificationRule;
+
+impl SizedSolverRule for InferredTypeSimplificationRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&*ftml_uris::metatheory::TYPE_OF, " infers type")
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for InferredTypeSimplificationRule {
+    fn applicable(&self, term: &Term) -> bool {
+        if let Term::Application(app) = term
+            && app.head.is(&*ftml_uris::metatheory::TYPE_OF)
+            && let [Argument::Simple(_)] = &*app.arguments
+        {
+            true
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        let [Argument::Simple(t)] = &*app.arguments else {
+            return Err(None);
+        };
+        checker.infer_type(t).ok_or(None)
     }
 }

@@ -37,15 +37,19 @@ pub async fn get_log(
     archive: ArchiveId,
     rel_path: String,
     target: String,
-) -> Result<
-    either::Either<String, ftml_solver_trace::results::DocumentCheckResult>,
-    ServerFnError<String>,
-> {
+) -> Result<either::Either<String, String>, ServerFnError<String>> {
     let is_check = target == ftml_solver::CHECK.name;
     let log = server::get_log(queue, archive, rel_path, target).await?;
     if is_check {
-        return serde_json::from_str(&log)
-            .map_or_else(|_| Ok(either::Left(log)), |l| Ok(either::Right(l)));
+        return Ok(either::Right(log));
+        /*return ftml_solver_trace::results::DocumentCheckResult::from_json(&log).map_or_else(
+            |err| {
+                Ok(either::Left(format!(
+                    "Error deserializing type check log: {err}\n\n{log}"
+                )))
+            },
+            |l| Ok(either::Right(l)),
+        );*/
     }
     Ok(either::Left(log))
 }

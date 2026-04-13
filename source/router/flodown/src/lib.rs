@@ -1,5 +1,6 @@
 #![allow(clippy::must_use_candidate)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![recursion_limit = "256"]
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
@@ -62,7 +63,7 @@ pub fn flodown_editor() -> AnyView {
                         let mut s = s.iter().collect::<Vec<_>>();
                         s.sort_by_key(|(a,_)| *a);
                         ftml_components::components::content::CommaSep("",
-                            s.into_iter().map(|(id,uri)| ftml_components::components::content::symbol_uri::<flams_router_content::backend::FtmlBackend>(id.to_string(), uri))
+                            s.into_iter().map(|(id,uri)| ftml_components::components::content::symbol_uri(id.to_string(), uri))
                         ).into_view().attr("style", "display:inline;")
                     }   )
                 }
@@ -126,7 +127,7 @@ fn editor(symbols: RwSignal<rustc_hash::FxHashMap<Id, SymbolUri>>) -> AnyView {
     let text = RwSignal::new(DEMO.to_string());
 
     //ftml_components::config::FtmlConfig::set_toc_source(ftml_dom::structure::TocSource::None);
-    Views::setup_document::<flams_router_content::backend::FtmlBackend>(
+    Views::setup_document(
         DocumentUri::no_doc().clone(),
         ftml_components::SidebarPosition::None,
         false,

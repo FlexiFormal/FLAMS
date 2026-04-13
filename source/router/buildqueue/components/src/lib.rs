@@ -13,7 +13,7 @@ use flams_router_base::{maybe_lazy, ws};
 #[cfg(feature = "hydrate")]
 use flams_router_buildqueue_base::server_fns::get_log;
 use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
-use flams_router_checks::{DocumentCheckResult, ResultExt};
+use flams_router_content::checks::{DocumentCheckResult, ResultExt};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::wait_and_then_fn;
@@ -179,14 +179,17 @@ impl TaskState {
     }
 }
 
-fn do_log(s: either::Either<String, DocumentCheckResult>) -> AnyView {
+fn do_log(s: either::Either<String, String>) -> AnyView {
     use thaw::Scrollbar;
     view! {<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">{
         match s {
             either::Left(s) => leptos::either::Either::Left(view!{
                 <pre style="width:fit-content;font-size:smaller;">{s}</pre>
             }),
-            either::Right(v) => leptos::either::Either::Right(v.render())
+            either::Right(v) => leptos::either::Either::Right({
+                ftml_solver_trace::results::DocumentCheckResult::from_json(&v)
+                    .map_or_else(|_| view!{<pre>{v}</pre>}.into_any(),|e| e.render())
+            })
         }
     }</Scrollbar>}
     .into_any()
@@ -235,6 +238,11 @@ pub enum QueueMessage {
         target: String,
         eta: Eta,
     },
+    TaskBlocked {
+        id: u32,
+        target: String,
+        eta: Eta,
+    },
 }
 #[cfg(feature = "ssr")]
 impl From<flams_system::building::QueueMessage> for QueueMessage {
@@ -273,6 +281,11 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
                 target: target.to_string(),
                 eta,
             },
+            QueueMessage::TaskBlocked { id, target, eta } => Self::TaskBlocked {
+                id: id.into(),
+                target: target.to_string(),
+                eta,
+            },
         }
     }
 }
@@ -299,10 +312,8 @@ pub fn queues_top() -> AnyView {
                     return view!(<div>"(No running queues)"</div>).into_any();
                 }
                 let queues = AllQueues::new(v);
-                if let Some(id) = id() {
-                    if let Ok(id) = id.parse() {
-                        queues.selected.update_untracked(|v| *v = id);
-                    }
+                if let Some(id) = params.read_untracked().get("queue") && let Ok(id) = id.parse() {
+                    queues.selected.update_untracked(|v| *v = id);
                 }
                 provide_context(queues);
                 let selected_value = RwSignal::new(queues.selected.get_untracked().to_string());
@@ -322,27 +333,33 @@ pub fn queues_top() -> AnyView {
                   <TabList selected_value>
                     <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
                       <Tab value=i.to_string()>{
-                        queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
+                        queues.queue_names.with_untracked(|m| m.get(&i).cloned()).unwrap_or_else(|| unreachable!())
                       }</Tab>
                     }/>
                   </TabList>
                   <div style="margin:10px"><Divider/></div>
                   <Layout class="flams-fullscreen">{move || {
-                    let curr = queues.selected.get();
+                    //let curr = queues.selected.get();
                     queues.show.update_untracked(|v| *v = false);
                     QueueSocket::run(queues);
                     move || view! {
                       <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
-                        let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
-                        move || match ls.get() {
-                          QueueData::Idle(v) => {
-                              idle(curr,v)
-                          },
-                          QueueData::Running(r) => {
-                              running(curr,r)
-                          },
-                          QueueData::Finished(failed,done) => finished(curr,failed,done),
-                          QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                        let ls = move || {
+                            let curr = queues.selected.get();
+                            (curr,queues.queues.with(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!()))
+                        };
+                        move || {
+                            let (curr,ls) = ls();
+                            match ls.get() {
+                                QueueData::Idle(v) => {
+                                    idle(curr,v)
+                                },
+                                QueueData::Running(r) => {
+                                    running(curr,r)
+                                },
+                                QueueData::Finished(failed,done) => finished(curr,failed,done),
+                                QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                            }
                         }
                       }</Show>
                     }
@@ -761,16 +778,37 @@ impl QueueSocket {
                 eta: WrappedEta(RwSignal::new(Eta::default())),
             })),
             QueueMessage::Finished { failed, done } => queue.set(QueueData::Finished(failed, done)),
-            QueueMessage::TaskStarted { id, target } => queue.with_untracked(|queue| {
-                if let QueueData::Running(RunningQueue { queue, running, .. }) = queue {
+            QueueMessage::TaskStarted { id, mut target } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    queue,
+                    running,
+                    blocked,
+                    ..
+                }) = queue
+                {
+                    let mut worked = false;
                     queue.update(|v| {
                         let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
                             return;
                         };
+                        worked = true;
                         let e = v.remove(i);
-                        e.steps.update(|m| m.insert(target, TaskState::Running));
+                        e.steps
+                            .update(|m| m.insert(std::mem::take(&mut target), TaskState::Running));
                         running.update(|running| running.push(e));
                     });
+                    if !worked {
+                        blocked.update(|v| {
+                            let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id)
+                            else {
+                                return;
+                            };
+                            worked = true;
+                            let e = v.remove(i);
+                            e.steps.update(|m| m.insert(target, TaskState::Running));
+                            running.update(|running| running.push(e));
+                        });
+                    }
                 }
             }),
             QueueMessage::TaskSuccess { id, target, eta } => queue.with_untracked(|queue| {
@@ -816,6 +854,25 @@ impl QueueSocket {
                         let e = v.remove(i);
                         e.steps.update(|m| m.insert(target, TaskState::Failed));
                         failed.update(|v| v.push(e));
+                    });
+                }
+            }),
+            QueueMessage::TaskBlocked { id, target, eta } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    running,
+                    blocked,
+                    eta: etasignal,
+                    ..
+                }) = queue
+                {
+                    etasignal.0.set(eta);
+                    running.update(|v| {
+                        let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
+                            return;
+                        };
+                        let e = v.remove(i);
+                        e.steps.update(|m| m.insert(target, TaskState::Blocked));
+                        blocked.update(|v| v.push(e));
                     });
                 }
             }),

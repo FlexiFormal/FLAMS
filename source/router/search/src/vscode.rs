@@ -291,7 +291,7 @@ impl std::fmt::Display for Short<'_> {
 
 fn do_sym_result_local(sym: &SymbolUri, elem: &DocumentElementUri) -> AnyView {
     let vs = unwrap!(VSCode::get());
-    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
+    let name = sym.as_view(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
     view! {
         <div class="flams-search-block">
             <div><b>{name}</b>
@@ -329,7 +329,7 @@ fn do_sym_result_remote(
     remote: fn() -> Option<String>,
 ) -> AnyView {
     use thaw::Scrollbar;
-    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let name = sym.as_view(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     view! {
         <div class="flams-search-block">
             <div><b>{name}</b>
@@ -351,7 +351,7 @@ fn do_sym_result_remote(
 
 fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> AnyView {
     use thaw::Scrollbar;
-    let name = uri.as_view::<flams_router_content::backend::FtmlBackend>(); //doc_name(&uri, uri.document_name().to_string());
+    let name = uri.as_view(); //doc_name(&uri, uri.document_name().to_string());
     view! {
         <div class="flams-search-block">
             <div><b>"Document "{name}</b>

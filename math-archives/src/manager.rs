@@ -21,7 +21,7 @@ use ftml_ontology::{
     domain::modules::Module,
     utils::{RefTree, TreeChild},
 };
-use ftml_uris::{ArchiveId, ArchiveUri, BaseUri, UriPath, UriWithArchive};
+use ftml_uris::{ArchiveId, ArchiveUri, BaseUri, UriName, UriPath, UriWithArchive};
 #[cfg(feature = "cached")]
 use ftml_uris::{DocumentUri, ModuleUri};
 use std::path::{Path, PathBuf};
@@ -174,11 +174,11 @@ impl ArchiveManager {
         &self,
         archive: &ArchiveUri,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> Result<Module, crate::BackendError> {
         self.with_archive(archive.archive_id(), |a| {
             let Some(a) = a else {
-                return Err(crate::BackendError::ArchiveNotFound);
+                return Err(crate::BackendError::ArchiveNotFound(archive.clone()));
             };
             a.load_module(path, name)
         })
@@ -187,12 +187,12 @@ impl ArchiveManager {
         &self,
         archive: &ArchiveUri,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module, crate::BackendError>> + 'static + use<A> {
         self.with_archive(archive.archive_id(), |a| {
             let Some(a) = a else {
                 return either::Left(std::future::ready(Err(
-                    crate::BackendError::ArchiveNotFound,
+                    crate::BackendError::ArchiveNotFound(archive.clone()),
                 )));
             };
             either::Right(a.load_module_async::<A>(path, name))

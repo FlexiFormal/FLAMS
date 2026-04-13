@@ -1,14 +1,14 @@
 pub mod results;
 
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
-use ftml_uris::{FtmlUri, Uri};
+use ftml_uris::{FtmlUri, Uri, UriRef};
 #[cfg(feature = "colors")]
 use owo_colors::OwoColorize;
 use std::borrow::Cow;
 use std::{fmt::Write, marker::PhantomData};
 
 #[cfg(feature = "full")]
-pub trait CheckerRule: std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any {
+pub trait CheckerRule: std::fmt::Debug + Send + Sync + std::any::Any {
     fn priority(&self) -> isize {
         0
     }
@@ -21,7 +21,7 @@ pub trait CheckerRule: std::fmt::Display + std::fmt::Debug + Send + Sync + std::
 
 #[cfg(feature = "full")]
 pub trait SizedSolverRule:
-    std::fmt::Display + std::fmt::Debug + Send + Sync + std::any::Any + Clone + Sized + PartialEq + Eq
+    std::fmt::Debug + Send + Sync + std::any::Any + Clone + Sized + PartialEq + Eq
 {
     fn priority(&self) -> isize {
         0
@@ -142,31 +142,29 @@ macro_rules! tasks {
                 steps:Box<[CheckLogCow<'t>]>,
                 success:bool
             },
-            Msg(Cow<'static, str>, MessageLevel),
-            //Dyn(&'t dyn CheckTraceDisplayable)
-            //Interpolated(Box<[DisplayableElem]>, MessageLevel),
+            Msg(Vec<DisplayableRef<'t>>, MessageLevel),
         }
         #[cfg(feature = "full")]
         impl RefCheckLog<'_> {
-            pub fn into_owned(self) -> PreCheckLog {
+            pub fn into_owned(self,term:&impl Fn(Term) -> Term) -> PreCheckLog {
                 match self {
                     $(
                         Self::$name{$($field,)* steps,context,result} => PreCheckLog::$name{
-                            $($field:tasks!(@CONV $tp $field),)*
-                            steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                            $($field:tasks!(@CONV $tp $field term),)*
+                            steps: steps.into_iter().map(|t| CheckLogCow::into_owned(t,term)).collect(),
                             context: context.into_iter().map(Cow::into_owned).collect(),
                             result,
 
                         },
                     )*
-                    Self::Msg(txt,lvl) => PreCheckLog::Msg(txt,lvl),
+                    Self::Msg(txt,lvl) => PreCheckLog::Msg(txt.into_iter().map(|s| s.into_owned(term)).collect(),lvl),
                     Self::Rule{rule,steps} => PreCheckLog::Rule{
                         rule:rule.as_box_dyn(),
-                        steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                        steps: steps.into_iter().map(|t| CheckLogCow::into_owned(t,term)).collect(),
                     },
                     Self::Strategy{name,steps,success} => PreCheckLog::Strategy{
                         name,
-                        steps: steps.into_iter().map(CheckLogCow::into_owned).collect(),
+                        steps: steps.into_iter().map(|t| CheckLogCow::into_owned(t,term)).collect(),
                         success
                     }
                 }
@@ -178,23 +176,23 @@ macro_rules! tasks {
             $(
                 $name {
                     $($field: tasks!(@TPOWN $tp),)*
-                    steps:Box<[Self]>,
+                    steps:Vec<Self>,
                     context:Box<[ComponentVar]>,
                     result:Option<$res>
                 },
             )*
             Rule{
                 rule:Box<dyn CheckerRule>,
-                steps:Box<[Self]>,
+                steps:Vec<Self>,
             },
             Strategy{
                 name: &'static str,
-                steps:Box<[Self]>,
+                steps:Vec<Self>,
                 success:bool
             },
             //Dyn(Box<dyn CheckTraceDisplayable>)
-            Msg(Cow<'static, str>, MessageLevel),
-            Count(&'static str,usize)
+            Msg(Vec<Displayable>, MessageLevel),
+            //Count(&'static str,usize)
             //Interpolated(Box<[DisplayableElem]>, MessageLevel),
         }
 
@@ -221,12 +219,12 @@ macro_rules! tasks {
                         steps:steps.into_iter().map(|e| Self::from_pre(e,terms)).collect(),
                         success
                     },
-                    P::Msg(s, MessageLevel::Comment) => Self::Comment(s.into_owned()),
-                    P::Msg(s, MessageLevel::Emph) => Self::Emph(s.into_owned()),
-                    P::Msg(s, MessageLevel::Header) => Self::Header(s.into_owned()),
-                    P::Msg(s, MessageLevel::Failure) => Self::Fail(s.into_owned()),
-                    P::Count(s, u) =>
-                        Self::Comment(format!("{s} {u}"))
+                    P::Msg(s, MessageLevel::Comment) => Self::Comment(s),
+                    P::Msg(s, MessageLevel::Emph) => Self::Emph(s),
+                    P::Msg(s, MessageLevel::Header) => Self::Header(s),
+                    P::Msg(s, MessageLevel::Failure) => Self::Fail(s),
+                    //P::Count(s, u) =>
+                    //    Self::Comment(format!("{s} {u}"))
                 }
             }
         }
@@ -262,10 +260,10 @@ macro_rules! tasks {
         }
         #[cfg(feature = "full")]
         impl<'t> CheckLogCow<'t> {
-            pub fn into_owned(self) -> PreCheckLog {
+            pub fn into_owned(self,term:&impl Fn(Term) -> Term) -> PreCheckLog {
                 match self {
                     Self::Owned(o) => o,
-                    Self::Borrowed(b) => b.into_owned()
+                    Self::Borrowed(b) => b.into_owned(term)
                 }
             }
         }
@@ -285,15 +283,15 @@ macro_rules! tasks {
             $(
                 $name {
                     $($field: tasks!(@TPOWN $tp),)*
-                    steps:Box<[Self]>,
+                    steps:Vec<Self>,
                     context:Box<[ComponentVar]>,
                     result:Option<$res>
                 },
             )*
-            Comment(String),
-            Emph(String),
-            Header(String),
-            Fail(String),
+            Comment(Vec<Displayable>),
+            Emph(Vec<Displayable>),
+            Header(Vec<Displayable>),
+            Fail(Vec<Displayable>),
             Strategy {
                 name: String,
                 steps: Vec<Self>,
@@ -335,16 +333,24 @@ macro_rules! tasks {
                                     stack.push(std::mem::replace(&mut curr,steps.iter()));
                                 }
                                 Self::Comment(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Comment))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Comment))?;
+                                    }
                                 }
                                 Self::Emph(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Emph))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Emph))?;
+                                    }
                                 }
                                 Self::Header(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Header))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Header))?;
+                                    }
                                 }
                                 Self::Fail(s) => {
-                                    displayer.string(&s,Some(MessageLevel::Failure))?;
+                                    for s in s {
+                                        displayer.displayable(s,Some(MessageLevel::Failure))?;
+                                    }
                                 }
                             }
                         }
@@ -370,16 +376,120 @@ macro_rules! tasks {
     (@DISPL $res:ident $disp:ident bool) => {};
     (@TPBORROW Term) => {&'t Term};
     (@TPOWN Term) => {Term};
-    (@CONV Term $name:ident) => { $name.clone() };
     (@TPBORROW str) => {&'t str};
     (@TPOWN str) => {Box<str>};
     (@FROMPRE Term $name:ident $f:ident) => {$f($name)};
     (@FROMPRE str $name:ident $f:ident) => {$name};
     (@FROMPRE bool $name:ident $f:ident) => {$name};
-    (@CONV str $name:ident) => { $name.to_string().into_boxed_str() };
+    (@CONV Term $name:ident $f:ident) => {$name.clone()};//{ $f($name.clone()) };
+    (@CONV str $name:ident $f:ident) => { $name.to_string().into_boxed_str() };
     //(@TPBORROW SolverRule) => {&'t dyn SolverRule};
     //(@TPOWN SolverRule) => {Box<dyn SolverRule>};
-    (@CONV SolverRule $name:ident) => { $name.as_box_dyn() };
+    (@CONV SolverRule $name:ident $f:ident) => { $name.as_box_dyn() };
+}
+
+#[cfg(feature = "full")]
+impl PreCheckLog {
+    pub fn push(&mut self, msg: Self) {
+        if let Some(steps) = self.steps_mut() {
+            steps.push(msg);
+        }
+    }
+    pub const fn steps_mut(&mut self) -> Option<&mut Vec<Self>> {
+        match self {
+            Self::Equality { steps, .. }
+            | Self::HasType { steps, .. }
+            | Self::Inference { steps, .. }
+            | Self::Inhabitable { steps, .. }
+            | Self::Rule { steps, .. }
+            | Self::Simplify { steps, .. }
+            | Self::Strategy { steps, .. }
+            | Self::Subtype { steps, .. }
+            | Self::Universe { steps, .. }
+            | Self::VariableInference { steps, .. }
+            | Self::Proving { steps, .. } => Some(steps),
+            Self::Msg(_, _) /*| Self::Count(_, _)*/ => None,
+        }
+    }
+}
+
+impl CheckLog {
+    pub fn filter_failures(&mut self) {
+        let Some(steps) = self.steps_mut() else {
+            return;
+        };
+        *steps = std::mem::take(steps)
+            .into_iter()
+            .filter(|s| !s.success())
+            .map(|mut s| {
+                s.filter_failures();
+                s
+            })
+            .collect();
+    }
+    pub const fn steps_mut(&mut self) -> Option<&mut Vec<Self>> {
+        match self {
+            Self::Equality { steps, .. }
+            | Self::HasType { steps, .. }
+            | Self::Inference { steps, .. }
+            | Self::Inhabitable { steps, .. }
+            | Self::Rule { steps, .. }
+            | Self::Simplify { steps, .. }
+            | Self::Strategy { steps, .. }
+            | Self::Subtype { steps, .. }
+            | Self::Universe { steps, .. }
+            | Self::VariableInference { steps, .. }
+            | Self::Proving { steps, .. } => Some(steps),
+            Self::Comment(_) | Self::Emph(_) | Self::Header(_) | Self::Fail(_) => None,
+        }
+    }
+    pub fn success(&self) -> bool {
+        match self {
+            Self::Equality { result, .. }
+            | Self::HasType { result, .. }
+            | Self::Inhabitable { result, .. }
+            | Self::Subtype { result, .. }
+            | Self::Universe { result, .. } => *result == Some(true),
+            Self::Rule { steps, .. } => steps.iter().all(Self::success),
+            Self::Inference { result, .. }
+            | Self::VariableInference { result, .. }
+            | Self::Simplify { result, .. }
+            | Self::Proving { result, .. } => result.is_some(),
+            Self::Strategy { success, .. } => *success,
+            Self::Comment(_) | Self::Header(_) | Self::Emph(_) | Self::Fail(_) => false,
+        }
+    }
+    pub fn add_failure(&mut self, s: &'static str) {
+        if let Some(steps) = self.steps_mut() {
+            steps.push(Self::Fail(vec![s.to_string().into()]));
+        }
+    }
+}
+
+#[cfg(feature = "full")]
+#[derive(Debug, Clone)]
+pub enum DisplayableRef<'r> {
+    Num(i128),
+    //Space,
+    String(Cow<'static, str>),
+    Term(Cow<'r, Term>),
+    Uri(either::Either<UriRef<'r>, Uri>),
+    Var(Cow<'r, Variable>),
+}
+#[cfg(feature = "full")]
+impl DisplayableRef<'_> {
+    pub fn into_owned(self, term: &impl Fn(Term) -> Term) -> Displayable {
+        match self {
+            Self::Num(i) => Displayable::Num(i),
+            Self::String(s) => Displayable::String(s.to_string()),
+            Self::Term(t) => Displayable::Term(term(t.into_owned())),
+            Self::Uri(u) => Displayable::Uri(match u {
+                either::Left(u) => u.owned(),
+                either::Right(u) => u,
+            }),
+            Self::Var(v) => Displayable::Var(v.into_owned()),
+        }
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -387,7 +497,7 @@ macro_rules! tasks {
 pub enum Displayable {
     //Log(CheckLog),
     Num(i128),
-    Space,
+    //Space,
     String(String),
     Term(Term),
     Uri(Uri),
@@ -408,8 +518,11 @@ impl Displayable {
 }
 
 tasks! {
+    Simplify(term:Term) => Term,
+    Proving(term:Term) => Term,
     Inference(term: Term) => Term,
     VariableInference(var: str) => Term,
+    //Simplify(term:Term) => Term,
     Inhabitable(term: Term) => bool,
     Universe(term:Term) => bool,
     Subtype(sub:Term,sup:Term) => bool,
@@ -426,6 +539,7 @@ impl CheckLog {
             d: PhantomData,
         }
     }
+    #[cfg(feature = "colors")]
     #[must_use]
     pub fn colored(&self) -> impl std::fmt::Display {
         TraceDisplayer {
@@ -451,10 +565,11 @@ pub trait TraceDisplay {
     // /// ### Errors
     //fn rule(&mut self, rule: &dyn CheckerRule) -> std::fmt::Result;
 
+    /// ### Errors
     fn displayable(&mut self, d: &Displayable, lvl: Option<MessageLevel>) -> std::fmt::Result {
         match d {
             Displayable::Num(i) => self.num(*i, lvl),
-            Displayable::Space => self.space(),
+            //Displayable::Space => self.space(),
             Displayable::String(s) => self.string(s, lvl),
             Displayable::Term(t) => self.term(t, lvl),
             Displayable::Uri(u) => self.uri(u.as_uri(), lvl),
@@ -481,6 +596,7 @@ pub trait TraceDisplay {
         success: bool,
     ) -> std::fmt::Result;
 
+    /// ### Errors
     fn strategy(&mut self, name: &str, context: &[ComponentVar], success: bool)
     -> std::fmt::Result;
 
@@ -507,6 +623,7 @@ pub trait TraceDisplay {
 }
 #[cfg(feature = "full")]
 impl FmtTraceDisplay for () {
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn new(f: &mut std::fmt::Formatter<'_>) -> impl TraceDisplay {
         f
@@ -534,12 +651,7 @@ impl TraceDisplay for &mut std::fmt::Formatter<'_> {
     }
      */
 
-    fn strategy(
-        &mut self,
-        name: &str,
-        context: &[ComponentVar],
-        success: bool,
-    ) -> std::fmt::Result {
+    fn strategy(&mut self, name: &str, _: &[ComponentVar], _: bool) -> std::fmt::Result {
         write!(self, "Strategy: {name}")
     }
     fn task(
@@ -582,6 +694,16 @@ impl TraceDisplay for &mut std::fmt::Formatter<'_> {
             self.write_str("[FAILED] ")?;
         }
         match task {
+            CheckingTask::Simplify(t) => {
+                self.write_str("Simplifying ")?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
+            CheckingTask::Proving(t) => {
+                self.write_str("Proving ")?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
             CheckingTask::Inference(t) => {
                 self.write_str("Inferring type of ")?;
                 do_context(context, self)?;
@@ -695,12 +817,7 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
     }
      */
 
-    fn strategy(
-        &mut self,
-        name: &str,
-        context: &[ComponentVar],
-        success: bool,
-    ) -> std::fmt::Result {
+    fn strategy(&mut self, name: &str, _: &[ComponentVar], _: bool) -> std::fmt::Result {
         write!(self.0, "Strategy: {}", name.italic())
     }
 
@@ -740,8 +857,18 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
             write!(self.0, "{} ", "[FAILED]".red())?;
         }
         match task {
+            CheckingTask::Simplify(t) => {
+                write!(self.0, "{} ", "Simplifying".bright_white().bold())?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
+            CheckingTask::Proving(t) => {
+                write!(self.0, "{} ", "Proving".bright_white().bold())?;
+                do_context(context, self)?;
+                self.term(t, None)
+            }
             CheckingTask::Inference(t) => {
-                write!(self.0, "{} ", "Checking type of".bright_white().bold())?;
+                write!(self.0, "{} ", "Inferring type of".bright_white().bold())?;
                 do_context(context, self)?;
                 self.term(t, None)
             }
@@ -843,6 +970,67 @@ impl<D: FmtTraceDisplay> std::fmt::Display for TraceDisplayer<'_, D> {
     }
 }
 
+#[cfg(feature = "full")]
+impl From<i128> for DisplayableRef<'_> {
+    fn from(value: i128) -> Self {
+        Self::Num(value)
+    }
+}
+#[cfg(feature = "full")]
+impl From<usize> for DisplayableRef<'_> {
+    fn from(value: usize) -> Self {
+        Self::Num(value as _)
+    }
+}
+#[cfg(feature = "full")]
+impl From<&'static str> for DisplayableRef<'_> {
+    fn from(value: &'static str) -> Self {
+        Self::String(Cow::Borrowed(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<String> for DisplayableRef<'_> {
+    fn from(value: String) -> Self {
+        Self::String(Cow::Owned(value))
+    }
+}
+#[cfg(feature = "full")]
+impl<'r> From<&'r Term> for DisplayableRef<'r> {
+    fn from(value: &'r Term) -> Self {
+        Self::Term(Cow::Borrowed(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<Term> for DisplayableRef<'_> {
+    fn from(value: Term) -> Self {
+        Self::Term(Cow::Owned(value))
+    }
+}
+#[cfg(feature = "full")]
+impl<'r> From<UriRef<'r>> for DisplayableRef<'r> {
+    fn from(value: UriRef<'r>) -> Self {
+        Self::Uri(either::Left(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<Uri> for DisplayableRef<'_> {
+    fn from(value: Uri) -> Self {
+        Self::Uri(either::Right(value))
+    }
+}
+#[cfg(feature = "full")]
+impl<'r> From<&'r Variable> for DisplayableRef<'r> {
+    fn from(value: &'r Variable) -> Self {
+        Self::Var(Cow::Borrowed(value))
+    }
+}
+#[cfg(feature = "full")]
+impl From<Variable> for DisplayableRef<'_> {
+    fn from(value: Variable) -> Self {
+        Self::Var(Cow::Owned(value))
+    }
+}
+
 impl<T: FtmlUri> From<&T> for Displayable {
     fn from(value: &T) -> Self {
         Self::Uri(value.as_uri().owned())
@@ -858,6 +1046,22 @@ impl From<String> for Displayable {
         Self::String(value)
     }
 }
+impl From<Term> for Displayable {
+    fn from(value: Term) -> Self {
+        Self::Term(value)
+    }
+}
+
+impl From<i128> for Displayable {
+    fn from(value: i128) -> Self {
+        Self::Num(value)
+    }
+}
+impl From<usize> for Displayable {
+    fn from(value: usize) -> Self {
+        Self::Num(value as _)
+    }
+}
 
 #[cfg(feature = "full")]
 #[macro_export]
@@ -867,5 +1071,22 @@ macro_rules! trace {
             $e.into()
         ),*]
         }
+    }
+}
+
+#[cfg(feature = "full")]
+#[macro_export]
+macro_rules! traceref {
+    (FAIL $($e:expr),* $(,)? ) => {
+        $crate::RefCheckLog::Msg(
+            vec![$( $e.into() ),*],
+            $crate::MessageLevel::Failure
+        )
+    };
+    ($($e:expr),* $(,)? ) => {
+        $crate::RefCheckLog::Msg(
+            vec![$( $e.into() ),*],
+            $crate::MessageLevel::Comment
+        )
     }
 }

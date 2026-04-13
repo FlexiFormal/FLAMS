@@ -1,21 +1,19 @@
-pub mod defaults;
 pub mod extractors;
 pub mod fixity;
-pub mod pi;
-pub mod typing;
-pub mod universe;
+pub mod implicits;
+pub mod operators;
+pub mod sequences;
+pub mod symbols;
+pub mod unknowns;
 pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
+use ftml_uris::SymbolUri;
 
-use crate::{CheckRef, split::SplitStrategy};
-use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
-    terms::{BoundArgument, ComponentVar, Term},
-};
+use crate::{CheckRef, rules::operators::typing, split::SplitStrategy};
+use ftml_ontology::terms::{Argument, Term, termpaths::TermPath};
 use std::{fmt::Debug, ops::ControlFlow};
 
 macro_rules! rules{
-    ($($name:ident = $tp:ident $(($($e:expr),*))? ),*$(,)?) => {
+    ($($name:ident = $tp:ident $(($($e:expr),* $(,)?))? ),*$(,)?) => {
         #[derive(Debug)]
         pub struct RuleSet<Split: SplitStrategy> {
             $(
@@ -80,13 +78,40 @@ macro_rules! rules{
 }
 
 rules! {
-    inference = InferenceRule(defaults::SeqIndexRule),
-    subtyping = SubtypeRule,
-    checking = CheckingRule,
-    inhabitable = InhabitableRule,//(defaults::SeqInhabitableRule),
-    equality = EqualityRule,
-    universe = UniverseRule,
+    inference = InferenceRule(
+        sequences::SeqIndexRule,
+        sequences::SeqInferenceRule,
+        sequences::fold::FoldInferenceRule,
+        sequences::SeqConcatInferenceRule,
+        operators::numbers::NumberTypes,
+        implicits::ImplicitRule,
+        unknowns::UnknownsRule,
+    ),
+    subtyping = SubtypeRule(operators::numbers::NumberTypes),
+    checking = CheckingRule(operators::numbers::NumberTypes),
+    inhabitable = InhabitableRule(sequences::SeqUniverseRule),
+    equality = EqualityRule(
+        operators::numbers::NumberTypes,
+        //sequences::SeqTypeEqRule
+    ),
+    universe = UniverseRule(sequences::SeqUniverseRule),
     preparation = PreparationRule,
+    simplification = SimplificationRule(
+        unknowns::UnknownsRule,
+        typing::InferredTypeSimplificationRule,
+        CommentRule
+    ),
+    marker = MarkerRule,
+    proof = ProofRule
+}
+
+pub trait SimplificationRule<Split: SplitStrategy>: CheckerRule {
+    fn applicable(&self, term: &Term) -> bool;
+    fn apply<'t>(
+        &self,
+        checker: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<TermPath>>;
 }
 
 pub trait EqualityRule<Split: SplitStrategy>: CheckerRule {
@@ -105,7 +130,7 @@ pub trait InferenceRule<Split: SplitStrategy>: CheckerRule {
 }
 
 pub trait CheckingRule<Split: SplitStrategy>: CheckerRule {
-    fn applicable(&self, term: &Term, tp: &Term) -> bool;
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, term: &Term, tp: &Term) -> bool;
     fn apply<'t>(
         &self,
         checker: CheckRef<'t, '_, Split>,
@@ -125,7 +150,7 @@ pub trait UniverseRule<Split: SplitStrategy>: CheckerRule {
 }
 
 pub trait SubtypeRule<Split: SplitStrategy>: CheckerRule {
-    fn applicable(&self, sub: &Term, sup: &Term) -> bool;
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool;
     fn apply<'t>(
         &self,
         checker: CheckRef<'t, '_, Split>,
@@ -135,30 +160,77 @@ pub trait SubtypeRule<Split: SplitStrategy>: CheckerRule {
 }
 
 pub trait PreparationRule<Split: SplitStrategy>: CheckerRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool;
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool;
     fn apply(
         &self,
-        rules: &RuleSet<Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term>;
-    fn applicable_revert(
+    fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool;
+    fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term>;
+}
+pub trait MarkerRule<Split: SplitStrategy>: CheckerRule {}
+
+pub trait ProofRule<Split: SplitStrategy>: CheckerRule {
+    fn applicable(&self, term: &Term) -> bool;
+    fn prove<'t>(&self, checker: CheckRef<'t, '_, Split>, goal: &'t Term) -> Option<Term>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IsJudgmentRule(pub SymbolUri);
+impl SizedSolverRule for IsJudgmentRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, "is a judgment")
+    }
+}
+impl<Split: SplitStrategy> MarkerRule<Split> for IsJudgmentRule {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HOASRule {
+    pub lambda: SymbolUri,
+    pub pi: SymbolUri,
+    pub apply: Option<SymbolUri>,
+}
+impl SizedSolverRule for HOASRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("HOAS using ", &self.lambda, " and ", &self.pi)
+    }
+}
+impl<Split: SplitStrategy> MarkerRule<Split> for HOASRule {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CommentRule;
+impl SizedSolverRule for CommentRule {
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("comment")
+    }
+    fn priority(&self) -> isize {
+        1_000_000
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for CommentRule {
+    fn applicable(&self, term: &Term) -> bool {
+        if let Term::Application(app) = term
+            && app.head.is(&*ftml_uris::metatheory::COMMENTED)
+            && let [Argument::Simple(_), Argument::Simple(_)] = &*app.arguments
+        {
+            true
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
         &self,
-        t: &Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool;
-    fn revert(
-        &self,
-        rules: &RuleSet<Split>,
-        t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term>;
-    fn make_bound<'t>(
-        &self,
-        checker: CheckRef<'t, '_, Split>,
-        t: &BoundArgument,
-    ) -> Option<BoundArgument> {
-        None
+        _: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        let [Argument::Simple(t), Argument::Simple(_)] = &*app.arguments else {
+            return Err(None);
+        };
+        Ok(t.clone())
     }
 }

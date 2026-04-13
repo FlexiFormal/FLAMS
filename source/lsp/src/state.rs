@@ -21,7 +21,7 @@ use ftml_ontology::{
     narrative::{
         SharedDocumentElement,
         documents::Document,
-        elements::{DocumentTerm, VariableDeclaration},
+        elements::{DocumentTerm, LogicalParagraph, VariableDeclaration},
     },
     terms::TermContainer,
     utils::RefTree,
@@ -160,9 +160,7 @@ impl LSPState {
         if doc.html_up_to_date() {
             return Some(doc_uri);
         };
-        if doc.relative_path().is_none() {
-            return None;
-        };
+        doc.relative_path()?;
         let engine = self
             .rustex()
             .builder()
@@ -240,6 +238,7 @@ impl LSPState {
                         }
                     }
                     let mut lock = doc.annotations.lock();
+                    lock.check = None;
                     lock.diagnostics.insert(STeXDiagnostic {
                         level: DiagnosticLevel::Error,
                         message: format!("RusTeX Error: {e}"),
@@ -270,6 +269,12 @@ impl LSPState {
                             inner_offset,
                             ..
                         }) => {
+                            /*tracing::warn!(
+                                "Adding HTML for {}\nSanity check: {:?}\n{:#?}",
+                                docresult.document.uri,
+                                &docresult.data[0..140],
+                                docresult.document
+                            );*/
                             self.backend().add_html(
                                 docresult.document.uri.clone(),
                                 HTMLData {
@@ -280,13 +285,36 @@ impl LSPState {
                                     refs: docresult.data,
                                 },
                             );
+                            self.backend()
+                                .add_triples(&docresult.document.uri, docresult.triples);
+                            self.backend().add_document(docresult.document.clone());
+                            for m in &docresult.modules {
+                                self.backend().add_module(m.clone());
+                            }
+                            old.memorize(self.rustex());
                             let mut checker = ftml_solver::Checker::<
                                 ftml_solver::split::SingleThreadedSplit,
                             >::new(AnyBackend::Temp(
                                 self.backend().clone(),
                             ));
                             let _ = checker.add_modules(docresult.modules);
-                            let (logs, mods) = checker.check_document(&docresult.document);
+                            let Ok((logs, mods)) = checker
+                                .check_document(&docresult.document)
+                                .inspect_err(|m| {
+                                    let _ =
+                                        client.publish_diagnostics(lsp::PublishDiagnosticsParams {
+                                            uri: uri.clone().into(),
+                                            version: None,
+                                            diagnostics: vec![to_diagnostic(&STeXDiagnostic {
+                                                level: DiagnosticLevel::Error,
+                                                message: format!("Module {m} not found"),
+                                                range: SourceRange::default(),
+                                            })],
+                                        });
+                                })
+                            else {
+                                return Some(doc_uri);
+                            };
                             let mut lock = doc.annotations.lock();
                             lock.diagnostics
                                 .0
@@ -304,18 +332,14 @@ impl LSPState {
                                 });
                             }
                             drop(lock);
-
                             for m in mods {
-                                self.backend().add_module(m);
+                                self.backend().add_module(m.clone());
                             }
-                            self.backend()
-                                .add_triples(&docresult.document.uri, docresult.triples);
-                            self.backend().add_document(docresult.document);
-                            old.memorize(self.rustex());
                             Some(doc_uri)
                         }
                         Err(e) => {
                             let mut lock = doc.annotations.lock();
+                            lock.check = None;
                             lock.diagnostics.insert(STeXDiagnostic {
                                 level: DiagnosticLevel::Error,
                                 message: format!("FTML Error: {e}"),
@@ -338,7 +362,7 @@ impl LSPState {
     #[inline]
     pub fn build_html_and_notify(&self, uri: &UrlOrFile, mut client: ClientSocket) {
         if let Some(uri) = self.build_html(uri, &mut client) {
-            client.html_result(&uri)
+            client.html_result(&uri);
         }
     }
 
@@ -594,7 +618,7 @@ fn check_diagnostics(
     res: &DocumentCheckResult,
     src: (&Document, &[Module]),
 ) -> impl Iterator<Item = STeXDiagnostic> {
-    use either_of::EitherOf4 as E;
+    use either_of::EitherOf5 as E;
     res.checks.iter().flat_map(|cr| match cr {
         CheckResult::Missing(u) => E::A(std::iter::once(STeXDiagnostic {
             level: DiagnosticLevel::Error,
@@ -613,6 +637,19 @@ fn check_diagnostics(
                 vd.as_ref().map(|v| &v.data.df),
             ))
         }
+        CheckResult::Proof(uri, res) if res.iter().any(|r| !r.success()) => {
+            let prf = src.0.get_as::<LogicalParagraph>(uri.name());
+            E::A(std::iter::once(STeXDiagnostic {
+                level: DiagnosticLevel::Error,
+                message: format!("Checking proof {uri} failed"),
+                range: if let Some(prf) = prf {
+                    conv_range(prf.source)
+                } else {
+                    SourceRange::default()
+                },
+            }))
+        }
+        CheckResult::Proof(..) => E::C(std::iter::empty()),
         CheckResult::Term { uri, inferred, .. } => {
             if inferred.is_some() {
                 E::C(std::iter::empty())
@@ -629,8 +666,32 @@ fn check_diagnostics(
                 }))
             }
         }
-        CheckResult::Module { checks, .. } => E::D(checks.iter().flat_map(|ccr| match ccr {
+        CheckResult::Content(ccr) => match ccr {
             ContentCheckResult::Symbol(uri, res) => {
+                let uri = uri.as_simple_module();
+                let sym = src
+                    .1
+                    .iter()
+                    .find(|m| m.uri == uri.module)
+                    .and_then(|m| m.get_as::<Symbol>(uri.name()));
+                if sym.is_none() {
+                    tracing::error!("Symbol {uri} not found!");
+                }
+                E::D(
+                    symbol_check_result(
+                        res,
+                        uri.name().as_ref(),
+                        sym.as_ref().map(|v| &v.data.tp),
+                        sym.as_ref().map(|v| &v.data.df),
+                    )
+                    .collect::<SmallVec<_, 1>>()
+                    .into_iter(),
+                )
+            }
+        },
+        CheckResult::Module { checks, .. } => E::E(checks.iter().flat_map(|ccr| match ccr {
+            ContentCheckResult::Symbol(uri, res) => {
+                let uri = uri.as_simple_module();
                 let sym = src
                     .1
                     .iter()
