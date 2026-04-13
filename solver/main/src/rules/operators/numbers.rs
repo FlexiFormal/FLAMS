@@ -295,6 +295,84 @@ impl<Split: SplitStrategy> EqualityRule<Split> for NumberTypes {
 
 // -------------------------------------------------------------------------------------------
 
+macro_rules! arith {
+    ($($name:ident $trace:literal $unit:literal = ($a:ident,$b:ident => $op:expr))*) => {
+        $(
+            #[derive(Debug, Clone, PartialEq, Eq)]
+            pub struct $name(pub SymbolUri);
+            impl SizedSolverRule for $name {
+                fn display(&self) -> Vec<ftml_solver_trace::Displayable> {
+                    ftml_solver_trace::trace!(&self.0, $trace)
+                }
+            }
+            impl<Split: SplitStrategy> SimplificationRule<Split> for $name {
+                fn applicable(&self, term: &Term) -> bool {
+                    let Term::Application(app) = term else {
+                        return false;
+                    };
+                    app.head.is(&self.0)
+                        && (matches!(
+                            &*app.arguments,
+                            [
+                                Argument::Simple(Term::Number(_)),
+                                Argument::Simple(Term::Number(_))
+                            ] | [Argument::Sequence(_)]
+                        ) || matches!(
+                        &*app.arguments,
+                        [
+                            Argument::Simple(Term::Number(n)),
+                            Argument::Simple(_)
+                        ]
+                        if n.as_float() == $unit
+                        ) || matches!(
+                        &*app.arguments,
+                        [
+                            Argument::Simple(_),
+                            Argument::Simple(Term::Number(n)),
+                        ]
+                        if n.as_float() == $unit
+                        ))
+                }
+                fn apply<'t>(
+                    &self,
+                    _: CheckRef<'t, '_, Split>,
+                    term: &'t Term,
+                ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
+                    let Term::Application(app) = term else {
+                        return Err(None);
+                    };
+                    match &*app.arguments {
+                        [Argument::Simple(Term::Number(z)), Argument::Simple(o)] if z.as_float() == $unit => {
+                            Ok(o.clone())
+                        }
+                        [Argument::Simple(o), Argument::Simple(Term::Number(z))] if z.as_float() == $unit => {
+                            Ok(o.clone())
+                        }
+                        [
+                            Argument::Simple(Term::Number($a)),
+                            Argument::Simple(Term::Number($b)),
+                        ] => ($op).map_or(Err(None), |r| Ok(Term::Number(r))),
+                        [Argument::Sequence(seq)] => Ok(super::super::sequences::fold::Fold::apply_init(
+                            seq.clone(),
+                            Term::Number(Numeric::Int(0)),
+                            |x, y| self.0.clone().apply_tms([y.into(), x.into()]),
+                        )),
+                        _ => Err(None),
+                    }
+                }
+            }
+        )*
+    };
+}
+arith! {
+    AdditionRule " is addition" 0.0 = (a,b => *a + *b)
+    SubtractionRule " is subtraction" 0.0 = (a,b => *a - *b)
+    MultiplicationRule " is multiplication" 1.0 = (a,b => *a * *b)
+    DivisionRule " is division" 1.0 = (a,b => *a / *b)
+    ExponentiationRule " is exponentiation" 1.0 = (a,b => *a ^ *b)
+}
+
+/*
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdditionRule(pub SymbolUri);
 impl SizedSolverRule for AdditionRule {
@@ -358,3 +436,4 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for AdditionRule {
         }
     }
 }
+ */

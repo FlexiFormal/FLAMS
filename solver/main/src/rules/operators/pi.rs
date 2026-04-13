@@ -1475,10 +1475,16 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ApplyRule {
         };
         let ret = Term::Application(ApplicationTerm::new(
             f.clone(),
-            Box::new([Argument::Sequence(match a {
+            match a {
+                MaybeSequence::One(o) => {
+                    Box::new([Argument::Sequence(MaybeSequence::One(o.clone()))])
+                }
+                MaybeSequence::Seq(ts) => ts.iter().map(|t| Argument::Simple(t.clone())).collect(),
+            },
+            /*Box::new([Argument::Sequence(match a {
                 MaybeSequence::One(o) => MaybeSequence::One(o.clone()),
                 MaybeSequence::Seq(ts) => MaybeSequence::Seq(ts.clone()),
-            })]),
+            })]),*/
             app.presentation.clone(),
         ));
         if let Some((p, i)) = path

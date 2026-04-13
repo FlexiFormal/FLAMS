@@ -125,6 +125,44 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         })
     }
 
+    fn push_down_implicits(term: Term) -> Term {
+        if let Term::Application(ref app) = term
+            && app.head.is(&*ftml_uris::metatheory::APPLY_IMPLICIT)
+            && let [
+                Argument::Simple(f @ (Term::Application(_) | Term::Bound(_))),
+                Argument::Sequence(MaybeSequence::Seq(args)),
+            ] = &*app.arguments
+        {
+            let mut iter = args.iter();
+            let next = if let Term::Application(fapp) = f {
+                let napp = fapp
+                    .head
+                    .clone()
+                    .apply_implicits(args.len(), |_| iter.next().expect("bug").clone());
+                Term::Application(ApplicationTerm::new(
+                    napp,
+                    fapp.arguments.clone(),
+                    fapp.presentation.clone(),
+                ))
+            } else if let Term::Bound(fapp) = f {
+                let napp = fapp
+                    .head
+                    .clone()
+                    .apply_implicits(args.len(), |_| iter.next().expect("bug").clone());
+                Term::Bound(BindingTerm::new(
+                    napp,
+                    fapp.arguments.clone(),
+                    fapp.presentation.clone(),
+                ))
+            } else {
+                unreachable!("bug");
+            };
+            Self::push_down_implicits(next)
+        } else {
+            term
+        }
+    }
+
     fn prepare_i(
         &mut self,
         mut t: Term,
@@ -132,6 +170,10 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     ) -> Term {
         tracing::trace!("preparing {:?}", t.debug_short());
         //let mut t = Self::prepare_seqs(t);
+        //let mut t = Self::push_down_implicits(t);
+        if t.unapply_implicits().is_some() {
+            return t;
+        }
         match &t {
             Term::Symbol { uri, presentation } => {
                 return if let Ok(sym) = self.get_symbol(uri)

@@ -45,15 +45,18 @@ impl TermExtSolvable for Variable {
 }
  */
 
+pub fn is_solvable_id(name: &Id) -> bool {
+    name.as_ref().starts_with(PREFIX)
+        && name.as_ref().as_bytes()[PREFIX.len()..]
+            .iter()
+            .all(u8::is_ascii_digit)
+}
+
 pub fn is_solvable_var(var: &Variable) -> Option<&Id> {
     let Variable::Name { name, .. } = var else {
         return None;
     };
-    if name.as_ref().starts_with(PREFIX)
-        && name.as_ref().as_bytes()[PREFIX.len()..]
-            .iter()
-            .all(u8::is_ascii_digit)
-    {
+    if is_solvable_id(name) {
         Some(name)
     } else {
         None

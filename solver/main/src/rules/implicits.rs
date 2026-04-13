@@ -36,6 +36,7 @@ impl ImplicitExtApp for ApplicationTerm {
         {
             Some((t, bound))
         } else {
+            //println!("WWWWEEEEIIIIRRRD: {:#?}", self.arguments);
             None
         }
     }

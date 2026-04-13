@@ -9,7 +9,10 @@ use ftml_uris::{DocumentUri, Id, ModuleUri, SymbolUri};
 
 use crate::{
     CheckRef,
-    impls::equality::Alpha,
+    impls::{
+        equality::Alpha,
+        solving::{is_solvable_id, is_solvable_var},
+    },
     patterns::Pattern,
     rules::{RuleSet, implicits::ImplicitExtApp},
     split::SplitStrategy,
@@ -58,6 +61,13 @@ pub trait GenericJudgment: SizedSolverRule {
     fn premises(&self) -> &[Premise];
 }
 pub fn parse<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    /*
+    println!("Here!");
+    for p in params {
+        println!(" - {:?}",p.debug_short());
+    }
+     */
+
     let Some(Term::Application(concl)) = params.last() else {
         return;
     };
@@ -73,18 +83,21 @@ pub fn parse<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) 
 
     if let [Argument::Simple(t)] = &*concl.arguments {
         if concl.head.is(&*INH) {
+            Pattern::from_with_vars(t, true, &mut vars);
             rules.push_inhabitable(Box::new(GenericInhabitable {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
                 concl: t.clone(),
             }));
         } else if concl.head.is(&*UNIV) {
+            Pattern::from_with_vars(t, true, &mut vars);
             rules.push_universe(Box::new(GenericUniverse {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
                 concl: t.clone(),
             }));
         } else if concl.head.is(&*HAS_PROOF) {
+            Pattern::from_with_vars(t, true, &mut vars);
             rules.push_proof(Box::new(GenericProof {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
@@ -93,24 +106,32 @@ pub fn parse<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) 
         }
     } else if let [Argument::Simple(a), Argument::Simple(b)] = &*concl.arguments {
         if concl.head.is(&*HAS_TYPE) {
+            Pattern::from_with_vars(a, true, &mut vars);
+            Pattern::from_with_vars(b, true, &mut vars);
             rules.push_checking(Box::new(GenericTyping {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
                 concl: (a.clone(), b.clone()),
             }));
         } else if concl.head.is(&*SUBTYPE) {
+            Pattern::from_with_vars(a, true, &mut vars);
+            Pattern::from_with_vars(b, true, &mut vars);
             rules.push_subtyping(Box::new(GenericSubtyping {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
                 concl: (a.clone(), b.clone()),
             }));
         } else if concl.head.is(&*SIMPLIFY) {
+            Pattern::from_with_vars(a, true, &mut vars);
+            Pattern::from_with_vars(b, true, &mut vars);
             rules.push_simplification(Box::new(GenericSimplification {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
                 concl: (a.clone(), b.clone()),
             }));
         } else if concl.head.is(&*EQUAL) {
+            Pattern::from_with_vars(a, true, &mut vars);
+            Pattern::from_with_vars(b, true, &mut vars);
             rules.push_equality(Box::new(GenericEquality {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
@@ -120,6 +141,7 @@ pub fn parse<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) 
             && let Term::Var { variable, .. } = a
         {
             let b = undo_implicits(b).unwrap_or_else(|| b.clone());
+            Pattern::from_with_vars(&b, true, &mut vars);
             rules.push_preparation(Box::new(GenericBindPrep {
                 vars: vars.into_boxed_slice(),
                 premises: premises.into_boxed_slice(),
@@ -483,8 +505,10 @@ judg! {
             for p in &self.premises {
                 if p.check(&mut conc, &mut checker) != Some(true) { return Err(None);}
             }
-            if conc.iter().any(|(_,o)| o.is_none()) {return Err(None)}
-            let subst = conc.iter().filter_map(|(v,o)| o.as_ref().map(|t| (v.as_ref(),t))).collect::<Vec<_>>();
+            if conc.iter().any(|(v,o)| !is_solvable_id(v) && o.is_none()) {return Err(None)}
+            let subst = conc.iter().filter_map(|(v,o)| if is_solvable_id(v) && o.is_none() {
+                Some((v.as_ref(),Cow::Owned(checker.new_solvable())))
+            } else {o.as_ref().map(|t| (v.as_ref(),Cow::Borrowed(t)))}).collect::<Vec<_>>();
             Ok(b.clone() / subst.as_slice())
         }
     },

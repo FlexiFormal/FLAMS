@@ -15,118 +15,163 @@ use crate::{
     split::SplitStrategy,
 };
 
+const SIMPLIFY_LIMIT: usize = 64;
+
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn simplify_full(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
         if matches!(term, Term::Symbol { .. } | Term::Number(_)) {
             return None;
         }
         self./*wrap_check*/untraced(CheckingTask::Simplify(term), |slf| {
-            slf.simplify_full_i(expand, term)
+            slf.simplify_full_i(expand, term,&mut 0)
         }).inspect(|t| {
             self.add_msg(traceref!("Simplified: ",t.clone()).into());
         })
     }
-    fn simplify_full_i(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
+    fn simplify_full_first(
+        &mut self,
+        expand: bool,
+        term: &'t Term,
+        limit: &mut usize,
+    ) -> Option<Cow<'t, Term>> {
+        match term {
+            Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).map(|t| {
+                self.comment("expanded definition");
+                Some(Cow::Owned(t))
+            })?,
+            Term::Var { variable, .. } => {
+                if let Some(name) = is_solvable_var(variable)
+                    && let Some(t) = self.get_solution(name)
+                {
+                    Some(Cow::Owned(t))
+                } else if expand && let Some(df) = self.get_var_definiens(variable) {
+                    Some(Cow::Owned(df))
+                } else {
+                    //println!("  : None");
+                    None
+                }
+            }
+            Term::Number(_) => {
+                //println!("  : None");
+                None
+            }
+            Term::Application(app) => {
+                let mut changed = false;
+                let nhead = self.simplify_full_i(true, &app.head, limit).map_or(
+                    Cow::Borrowed(&app.head),
+                    |t| {
+                        changed = true;
+                        Cow::Owned(t)
+                    },
+                );
+                let args = app
+                    .arguments
+                    .iter()
+                    .map(|a| {
+                        self.arg_full(expand, a, limit)
+                            .map_or(Cow::Borrowed(a), |a| {
+                                changed = true;
+                                Cow::Owned(a)
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                Some(if changed {
+                    Cow::Owned(Term::Application(ApplicationTerm::new(
+                        nhead.into_owned(),
+                        args.into_iter().map(Cow::into_owned).collect(),
+                        app.presentation.clone(),
+                    )))
+                } else {
+                    Cow::Borrowed(term)
+                })
+            }
+            Term::Bound(app) => {
+                let mut changed = false;
+                let nhead = self.simplify_full_i(true, &app.head, limit).map_or(
+                    Cow::Borrowed(&app.head),
+                    |t| {
+                        changed = true;
+                        Cow::Owned(t)
+                    },
+                );
+                let args = app
+                    .arguments
+                    .iter()
+                    .map(|a| {
+                        self.bound_arg_full(expand, a, limit)
+                            .map_or(Cow::Borrowed(a), |a| {
+                                changed = true;
+                                Cow::Owned(a)
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                Some(if changed {
+                    Cow::Owned(Term::Bound(BindingTerm::new(
+                        nhead.into_owned(),
+                        args.into_iter().map(Cow::into_owned).collect(),
+                        app.presentation.clone(),
+                    )))
+                } else {
+                    Cow::Borrowed(term)
+                })
+            }
+            _ => Some(Cow::Borrowed(term)),
+        }
+    }
+    fn simplify_full_i(&mut self, expand: bool, term: &'t Term, limit: &mut usize) -> Option<Term> {
         tracing::debug!(
             "Fully Simplifying {:?} (expand:{expand})",
             term.debug_short()
         );
-        let mut current = if expand && let Some(t) = self.simplify_implicit(term) {
-            Cow::Owned(t)
-        } else
+        /*println!(
+            "Fully Simplifying {:?} (expand:{expand})",
+            term.debug_short()
+        );*/
+        if expand && let Some(t) = self.simplify_implicit(term) {
+            //println!("  - implicits: {:?}", t.debug_short());
+            return Some(
+                self.scoped(|slf| slf.simplify_full_i(expand, &t, limit))
+                    .unwrap_or(t),
+            );
+        }
         /*if term.unapply_implicits().is_some() {
             return None;
         } else*/
-        {
-            match term {
-                Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).map(|t| {
-                    self.comment("expanded definition");
-                    Cow::Owned(t)
-                })?,
-                Term::Var { variable, .. } => {
-                    if let Some(name) = is_solvable_var(variable)
-                        && let Some(t) = self.get_solution(name)
-                    {
-                        Cow::Owned(t)
-                    } else if expand && let Some(df) = self.get_var_definiens(variable) {
-                        Cow::Owned(df)
-                    } else {
-                        return None;
-                    }
-                }
-                Term::Number(_) => return None,
-                Term::Application(app) => {
-                    let mut changed = false;
-                    let nhead = self.simplify_full_i(true, &app.head).map_or(
-                        Cow::Borrowed(&app.head),
-                        |t| {
-                            changed = true;
-                            Cow::Owned(t)
-                        },
-                    );
-                    let args = app
-                        .arguments
-                        .iter()
-                        .map(|a| {
-                            self.arg_full(expand, a).map_or(Cow::Borrowed(a), |a| {
-                                changed = true;
-                                Cow::Owned(a)
-                            })
-                        })
-                        .collect::<Vec<_>>();
-                    if changed {
-                        Cow::Owned(Term::Application(ApplicationTerm::new(
-                            nhead.into_owned(),
-                            args.into_iter().map(Cow::into_owned).collect(),
-                            app.presentation.clone(),
-                        )))
-                    } else {
-                        Cow::Borrowed(term)
-                    }
-                }
-                Term::Bound(app) => {
-                    let mut changed = false;
-                    let nhead = self.simplify_full_i(true, &app.head).map_or(
-                        Cow::Borrowed(&app.head),
-                        |t| {
-                            changed = true;
-                            Cow::Owned(t)
-                        },
-                    );
-                    let args = app
-                        .arguments
-                        .iter()
-                        .map(|a| {
-                            self.bound_arg_full(expand, a)
-                                .map_or(Cow::Borrowed(a), |a| {
-                                    changed = true;
-                                    Cow::Owned(a)
-                                })
-                        })
-                        .collect::<Vec<_>>();
-                    if changed {
-                        Cow::Owned(Term::Bound(BindingTerm::new(
-                            nhead.into_owned(),
-                            args.into_iter().map(Cow::into_owned).collect(),
-                            app.presentation.clone(),
-                        )))
-                    } else {
-                        Cow::Borrowed(term)
-                    }
-                }
-                _ => Cow::Borrowed(term),
-            }
-        };
+        //self.scoped(|slf| {
+        let mut current = self.simplify_full_first(expand, term, limit)?;
         loop {
+            *limit += 1;
+            if *limit >= SIMPLIFY_LIMIT {
+                return match current {
+                    Cow::Borrowed(_) => {
+                        //println!("  : None");
+                        None
+                    }
+                    Cow::Owned(t) => {
+                        //println!("  : {:?}", t.debug_short());
+                        Some(t)
+                    }
+                };
+            }
             if let Some(next) = self.scoped(|slf| slf.simplify_one(expand, &current)) {
                 current = Cow::Owned(next);
             } else {
                 return match current {
-                    Cow::Borrowed(_) => None,
-                    Cow::Owned(t) => Some(t),
+                    Cow::Borrowed(_) => {
+                        //println!("  : None");
+                        None
+                    }
+                    Cow::Owned(t) => {
+                        //println!("  : {:?}", t.debug_short());
+                        Some(
+                            self.scoped(|slf| slf.simplify_full_i(expand, &t, limit))
+                                .unwrap_or(t),
+                        )
+                    }
                 };
             }
         }
+        //})
     }
 
     pub fn simplify_until(
@@ -138,19 +183,24 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             return Some(Cow::Borrowed(term));
         }
         self.wrap_check(CheckingTask::Simplify(term), |slf| {
-            slf.simplify_until_i(term, until)
+            slf.simplify_until_i(term, until, &mut 0)
         })
     }
     fn simplify_until_i(
         &mut self,
         term: &'t Term,
         mut until: impl FnMut(&Self, &Term) -> bool,
+        limit: &mut usize,
     ) -> Option<Cow<'t, Term>> {
         if until(self, term) {
             return Some(Cow::Borrowed(term));
         }
         let mut current = Cow::<'t, _>::Borrowed(term);
         loop {
+            *limit += 1;
+            if *limit >= SIMPLIFY_LIMIT {
+                return None;
+            }
             let Some(next) = self.scoped(|slf| slf.simplify_one(true, &current)) else {
                 //self.comment(format!("Final simplification: {:?}", current.debug_short()));
                 return None;
@@ -491,18 +541,18 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
-    fn arg_full(&mut self, expand: bool, arg: &'t Argument) -> Option<Argument> {
+    fn arg_full(&mut self, expand: bool, arg: &'t Argument, limit: &mut usize) -> Option<Argument> {
         match arg {
-            Argument::Simple(t) => self.simplify_full_i(expand, t).map(Argument::Simple),
+            Argument::Simple(t) => self.simplify_full_i(expand, t, limit).map(Argument::Simple),
             Argument::Sequence(MaybeSequence::One(t)) => self
-                .simplify_full_i(expand, t)
+                .simplify_full_i(expand, t, limit)
                 .map(|t| Argument::Sequence(MaybeSequence::One(t))),
             Argument::Sequence(MaybeSequence::Seq(ts)) => {
                 let mut changed = false;
                 let nts = ts
                     .iter()
                     .map(|t| {
-                        self.simplify_full_i(expand, t)
+                        self.simplify_full_i(expand, t, limit)
                             .map_or(Cow::Borrowed(t), |a| {
                                 changed = true;
                                 Cow::Owned(a)
@@ -519,22 +569,29 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
         }
     }
-    fn bound_arg_full(&mut self, expand: bool, arg: &'t BoundArgument) -> Option<BoundArgument> {
+    fn bound_arg_full(
+        &mut self,
+        expand: bool,
+        arg: &'t BoundArgument,
+        limit: &mut usize,
+    ) -> Option<BoundArgument> {
         match arg {
-            BoundArgument::Simple(t) => self.simplify_full_i(expand, t).map(BoundArgument::Simple),
-            BoundArgument::Bound(cv) => self.cv_full(expand, cv).map(BoundArgument::Bound),
+            BoundArgument::Simple(t) => self
+                .simplify_full_i(expand, t, limit)
+                .map(BoundArgument::Simple),
+            BoundArgument::Bound(cv) => self.cv_full(expand, cv, limit).map(BoundArgument::Bound),
             BoundArgument::Sequence(MaybeSequence::One(t)) => self
-                .simplify_full_i(expand, t)
+                .simplify_full_i(expand, t, limit)
                 .map(|t| BoundArgument::Sequence(MaybeSequence::One(t))),
             BoundArgument::BoundSeq(MaybeSequence::One(cv)) => self
-                .cv_full(expand, cv)
+                .cv_full(expand, cv, limit)
                 .map(|t| BoundArgument::BoundSeq(MaybeSequence::One(t))),
             BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
                 let mut changed = false;
                 let nts = ts
                     .iter()
                     .map(|t| {
-                        self.simplify_full_i(expand, t)
+                        self.simplify_full_i(expand, t, limit)
                             .map_or(Cow::Borrowed(t), |a| {
                                 changed = true;
                                 Cow::Owned(a)
@@ -554,10 +611,11 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 let ncvs = cvs
                     .iter()
                     .map(|t| {
-                        self.cv_full(expand, t).map_or(Cow::Borrowed(t), |a| {
-                            changed = true;
-                            Cow::Owned(a)
-                        })
+                        self.cv_full(expand, t, limit)
+                            .map_or(Cow::Borrowed(t), |a| {
+                                changed = true;
+                                Cow::Owned(a)
+                            })
                     })
                     .collect::<Vec<_>>();
                 if changed {
@@ -571,22 +629,31 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
-    fn cv_full(&mut self, expand: bool, arg: &'t ComponentVar) -> Option<ComponentVar> {
+    fn cv_full(
+        &mut self,
+        expand: bool,
+        arg: &'t ComponentVar,
+        limit: &mut usize,
+    ) -> Option<ComponentVar> {
         match (arg.tp.as_ref(), arg.df.as_ref()) {
             (None, None) => None,
-            (Some(tp), None) => self.simplify_full_i(expand, tp).map(|tp| ComponentVar {
-                var: arg.var.clone(),
-                tp: Some(tp),
-                df: None,
-            }),
-            (None, Some(df)) => self.simplify_full_i(expand, df).map(|df| ComponentVar {
-                var: arg.var.clone(),
-                tp: None,
-                df: Some(df),
-            }),
+            (Some(tp), None) => self
+                .simplify_full_i(expand, tp, limit)
+                .map(|tp| ComponentVar {
+                    var: arg.var.clone(),
+                    tp: Some(tp),
+                    df: None,
+                }),
+            (None, Some(df)) => self
+                .simplify_full_i(expand, df, limit)
+                .map(|df| ComponentVar {
+                    var: arg.var.clone(),
+                    tp: None,
+                    df: Some(df),
+                }),
             (Some(tp), Some(df)) => {
-                let ntp = self.simplify_full_i(expand, tp);
-                let ndf = self.simplify_full_i(expand, df);
+                let ntp = self.simplify_full_i(expand, tp, limit);
+                let ndf = self.simplify_full_i(expand, df, limit);
                 if ntp.is_none() && ndf.is_none() {
                     return None;
                 }

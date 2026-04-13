@@ -287,6 +287,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     //self.set_hoas();
                     self.reset();
                     tracing::debug!("Checking term {:?}", top.get_parsed().debug_short());
+                    //println!("All rules: {:#?}", self.rules);
                     let (unks, tm) = self.prepare(None, top.get_parsed().clone());
                     let (t, _, log) = self.infer_type(Some(unks), &tm);
                     let t = t.map(|t| self.revert_prepare(t));
@@ -410,15 +411,14 @@ impl<Split: SplitStrategy> Checker<Split> {
         let (r, s, log) = self.wrap_task(CheckingTask::Inference(sub), Some(unks), |mut slf| {
             let allvars = sub.free_variables();
             for v in allvars {
-                if is_solvable_var(v).is_none() {
-                    if !ctx.iter().any(|cv| cv.var == *v) {
-                        let tp = slf.infer_var_type_i(v);
-                        ctx.push(ComponentVar {
-                            var: v.clone(),
-                            tp,
-                            df: None,
-                        });
-                    }
+                if is_solvable_var(v).is_none() && !ctx.iter().any(|cv| cv.var == *v) {
+                    let tp = slf.infer_var_type_i(v);
+                    let df = slf.get_var_definiens(v);
+                    ctx.push(ComponentVar {
+                        var: v.clone(),
+                        tp,
+                        df,
+                    });
                 }
             }
             let mut i = 0;
@@ -436,11 +436,8 @@ impl<Split: SplitStrategy> Checker<Split> {
                     for v in allvars {
                         if is_solvable_var(&v).is_none() {
                             let tp = slf.infer_var_type_i(&v);
-                            ctx.push(ComponentVar {
-                                var: v,
-                                tp,
-                                df: None,
-                            });
+                            let df = slf.get_var_definiens(&v);
+                            ctx.push(ComponentVar { var: v, tp, df });
                         }
                     }
                 }
@@ -454,11 +451,8 @@ impl<Split: SplitStrategy> Checker<Split> {
                     for v in allvars {
                         if is_solvable_var(&v).is_none() {
                             let tp = slf.infer_var_type_i(&v);
-                            ctx.push(ComponentVar {
-                                var: v,
-                                tp,
-                                df: None,
-                            });
+                            let df = slf.get_var_definiens(&v);
+                            ctx.push(ComponentVar { var: v, tp, df });
                         }
                     }
                 }
@@ -469,7 +463,8 @@ impl<Split: SplitStrategy> Checker<Split> {
             }
             let simp = slf.simplify_full(true, sub).unwrap_or_else(|| sub.clone());
             nt = slf.revert_prepare(slf.subst(simp));
-            slf.infer_type(sub).map(|t| slf.revert_prepare(t))
+            slf.infer_type(sub)
+                .map(|t| slf.revert_prepare(slf.subst(t)))
         });
         /*
         let mut frees = nt.free_variables();

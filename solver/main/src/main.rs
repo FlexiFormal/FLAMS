@@ -37,7 +37,7 @@ fn main() {
     .stack_size(6 * 1024 * 1024)
     .spawn(move || {*/
     //pause();
-    let (i, t) = measure(check_all); // measure(check_selected); //
+    let (i, t) = measure(check_all); //measure(check_selected); //
     println!("Checked {i} documents in {t}");
     /*println!(
         "minimal stack: {}",
@@ -102,7 +102,8 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
         "http://mathhub.info?a=FTML/tests&d=probdists&l=en",
         */
-        "http://mathhub.info?a=Papers/26-ICMS-Semantics&p=mod&d=dump&l=en",
+        //"http://mathhub.info?a=Papers/26-ICMS-Semantics&p=mod&d=dump&l=en",
+        "http://mathhub.info?a=FTML/tests&d=units&l=en",
     )
     //}
 }

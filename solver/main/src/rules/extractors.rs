@@ -47,6 +47,10 @@ pub const fn all_symbol_extractors<Split: SplitStrategy>() -> &'static [SymbolRu
         numnonzeroreal,
         numcomplex,
         addition,
+        multiplication,
+        exponentiation,
+        division,
+        subtraction,
     ]
 }
 #[must_use]
@@ -400,5 +404,17 @@ rules! {
     }
     pub addition = (sym,rules) => {
         rules.push_simplification(Box::new(numbers::AdditionRule(sym.uri.clone())));
+    }
+    pub multiplication = (sym,rules) => {
+        rules.push_simplification(Box::new(numbers::MultiplicationRule(sym.uri.clone())));
+    }
+    pub division = (sym,rules) => {
+        rules.push_simplification(Box::new(numbers::DivisionRule(sym.uri.clone())));
+    }
+    pub exponentiation = (sym,rules) => {
+        rules.push_simplification(Box::new(numbers::ExponentiationRule(sym.uri.clone())));
+    }
+    pub subtraction = (sym,rules) => {
+        rules.push_simplification(Box::new(numbers::SubtractionRule(sym.uri.clone())));
     }
 }
