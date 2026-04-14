@@ -86,15 +86,17 @@ rules! {
         operators::numbers::NumberTypes,
         implicits::ImplicitRule,
         unknowns::UnknownsRule,
+        CommentRule
     ),
-    subtyping = SubtypeRule(operators::numbers::NumberTypes),
+    subtyping = SubtypeRule(operators::numbers::NumberTypes,CommentRule),
     checking = CheckingRule(operators::numbers::NumberTypes),
-    inhabitable = InhabitableRule(sequences::SeqUniverseRule),
+    inhabitable = InhabitableRule(sequences::SeqUniverseRule,CommentRule),
     equality = EqualityRule(
         operators::numbers::NumberTypes,
+        CommentRule
         //sequences::SeqTypeEqRule
     ),
-    universe = UniverseRule(sequences::SeqUniverseRule),
+    universe = UniverseRule(sequences::SeqUniverseRule,CommentRule),
     preparation = PreparationRule,
     simplification = SimplificationRule(
         unknowns::UnknownsRule,
@@ -209,28 +211,87 @@ impl SizedSolverRule for CommentRule {
         1_000_000
     }
 }
+
+fn as_comment(term: &Term) -> Option<&Term> {
+    if let Term::Application(app) = term
+        && app.head.is(&*ftml_uris::metatheory::COMMENTED)
+        && let [Argument::Simple(r), Argument::Simple(_)] = &*app.arguments
+    {
+        Some(r)
+    } else {
+        None
+    }
+}
+
 impl<Split: SplitStrategy> SimplificationRule<Split> for CommentRule {
     fn applicable(&self, term: &Term) -> bool {
-        if let Term::Application(app) = term
-            && app.head.is(&*ftml_uris::metatheory::COMMENTED)
-            && let [Argument::Simple(_), Argument::Simple(_)] = &*app.arguments
-        {
-            true
-        } else {
-            false
-        }
+        as_comment(term).is_some()
     }
     fn apply<'t>(
         &self,
         _: CheckRef<'t, '_, Split>,
         term: &'t Term,
     ) -> Result<Term, Option<TermPath>> {
-        let Term::Application(app) = term else {
-            return Err(None);
-        };
-        let [Argument::Simple(t), Argument::Simple(_)] = &*app.arguments else {
-            return Err(None);
-        };
-        Ok(t.clone())
+        as_comment(term).cloned().ok_or(None)
+    }
+}
+
+impl<Split: SplitStrategy> InferenceRule<Split> for CommentRule {
+    fn applicable(&self, term: &Term) -> bool {
+        as_comment(term).is_some()
+    }
+    fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
+        as_comment(term).and_then(|t| checker.infer_type(t))
+    }
+}
+
+impl<Split: SplitStrategy> InhabitableRule<Split> for CommentRule {
+    fn applicable(&self, term: &Term) -> bool {
+        as_comment(term).is_some()
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
+        as_comment(term).and_then(|t| checker.check_inhabitable(t))
+    }
+}
+
+impl<Split: SplitStrategy> UniverseRule<Split> for CommentRule {
+    fn applicable(&self, term: &Term) -> bool {
+        as_comment(term).is_some()
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
+        as_comment(term).and_then(|t| checker.check_universe(t))
+    }
+}
+impl<Split: SplitStrategy> SubtypeRule<Split> for CommentRule {
+    fn applicable(&self, _: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool {
+        as_comment(sub).is_some() || as_comment(sup).is_some()
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        sub: &'t Term,
+        sup: &'t Term,
+    ) -> Option<bool> {
+        // one of them is different, because .applicable()
+        let sub = as_comment(sub).unwrap_or(sub);
+        let sup = as_comment(sup).unwrap_or(sup);
+        checker.check_subtype(sub, sup)
+    }
+}
+
+impl<Split: SplitStrategy> EqualityRule<Split> for CommentRule {
+    fn applicable(&self, lhs: &Term, rhs: &Term) -> bool {
+        as_comment(lhs).is_some() || as_comment(rhs).is_some()
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        lhs: &'t Term,
+        rhs: &'t Term,
+    ) -> Option<bool> {
+        // one of them is different, because .applicable()
+        let lhs = as_comment(lhs).unwrap_or(lhs);
+        let rhs = as_comment(rhs).unwrap_or(rhs);
+        checker.check_subtype(lhs, rhs)
     }
 }

@@ -192,6 +192,7 @@ impl<Split: SplitStrategy> Checker<Split> {
             let orig_df = &sym.data.df;
             if let Some(tp) = tp {
                 if let Some((orig, _)) = orig_tp.checked_or_parsed() {
+                    let tp = self.bind_implicits(&tp).unwrap_or(tp);
                     let (b, _, l) = self.check_subtype(None, &tp, &orig);
                     ret.push(ProofStepResult::Conclusion {
                         var: None,
@@ -209,6 +210,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 if let Some(df) = df
                     && orig_df.is_none()
                 {
+                    let df = self.bind_implicits(&df).unwrap_or(df);
                     orig_df.set_checked(df.clone());
                     orig_df.set_presentation(self.revert_prepare(df));
                 }
@@ -367,7 +369,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 },
             });
             if Some(true) == b {
-                tp = Some(tm);
+                tp = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
             } else {
                 let tm = hoas.wrap_judg(&tm);
                 let (b, unks, l) = context.check_inhabitable(self, unks, &tm, block);
@@ -377,7 +379,10 @@ impl<Split: SplitStrategy> Checker<Split> {
                         log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
                     },
                 });
-                tp = Some(tm.into_owned());
+                tp = Some(
+                    self.wrap_none(Some(unks), |slf| slf.subst(tm.into_owned()))
+                        .1,
+                );
             }
         }
         if let Some(tm) = justification {
@@ -387,7 +392,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                     panic!("bug");
                 };
                 let (b, unks, l) = context.check_type(self, unks, &tm, tp, block);
-                df = Some(tm);
+                df = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
                 proof_log = Some(ProofStepCheckResult::Both {
                     inhabitable: result,
                     matches: Some(TypeCheckResult {
@@ -396,14 +401,19 @@ impl<Split: SplitStrategy> Checker<Split> {
                     }),
                 });
             } else {
-                let (r, unks, l) = context.infer(self, unks, &tm, block);
+                let (r, mut unks, l) = context.infer(self, unks, &tm, block);
                 let infed = r.clone().map(|t| self.revert_prepare(t));
                 proof_log = Some(ProofStepCheckResult::ProofOnly {
                     inferred: infed,
                     log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
                 });
-                tp = r;
-                df = Some(tm);
+                tp = r.map(|t| {
+                    let (unks2, t) =
+                        self.wrap_none(Some(std::mem::take(&mut unks)), |slf| slf.subst(t));
+                    unks = unks2;
+                    t
+                });
+                df = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
             }
         }
         if df.is_none() {
@@ -413,12 +423,13 @@ impl<Split: SplitStrategy> Checker<Split> {
                     tm,
                     arguments.iter().map(|o| o.as_ref().map(|(t, _)| t.clone())),
                 );
+                let (unks, tm) = self.prepare(Some(unks), tm.into_owned());
                 if let Some(tp) = &tp {
                     let Some(ProofStepCheckResult::GoalOnly { result }) = proof_log.take() else {
                         panic!("bug");
                     };
                     let (b, unks, l) = context.check_type(self, unks, &tm, tp, block);
-                    df = Some(tm.into_owned());
+                    df = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
                     proof_log = Some(ProofStepCheckResult::Both {
                         inhabitable: result,
                         matches: Some(TypeCheckResult {
@@ -427,21 +438,26 @@ impl<Split: SplitStrategy> Checker<Split> {
                         }),
                     });
                 } else {
-                    let (r, unks, l) = context.infer(self, unks, &tm, block);
+                    let (r, mut unks, l) = context.infer(self, unks, &tm, block);
                     let infed = r.clone().map(|t| self.revert_prepare(t));
                     proof_log = Some(ProofStepCheckResult::ProofOnly {
                         inferred: infed,
                         log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
                     });
-                    tp = r;
-                    df = Some(tm.into_owned());
+                    tp = r.map(|t| {
+                        let (unks2, t) =
+                            self.wrap_none(Some(std::mem::take(&mut unks)), |slf| slf.subst(t));
+                        unks = unks2;
+                        t
+                    });
+                    df = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
                 }
             } else if needs_def && let Some(tp) = tp.as_ref() {
                 let Some(ProofStepCheckResult::GoalOnly { result }) = proof_log.take() else {
                     panic!("bug");
                 };
                 let (r, unks, l) = context.prove(self, Solutions::default(), tp, block);
-                df = r;
+                df = r.map(|t| self.wrap_none(Some(unks), |slf| slf.subst(t)).1);
                 proof_log = Some(ProofStepCheckResult::Both {
                     inhabitable: result,
                     matches: Some(TypeCheckResult {

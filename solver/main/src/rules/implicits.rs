@@ -47,8 +47,8 @@ impl ImplicitExtBound for BindingTerm {
             return None;
         }
         if let [
-            BoundArgument::Simple(body),
             BoundArgument::BoundSeq(MaybeSequence::Seq(impls)),
+            BoundArgument::Simple(body),
         ] = &*self.arguments
         {
             Some((body, impls))
@@ -161,8 +161,8 @@ impl<Split: SplitStrategy> Checker<Split> {
                 Term::Bound(BindingTerm::new(
                     ftml_uris::metatheory::IMPLICIT_BIND.clone().into(),
                     Box::new([
-                        BoundArgument::Simple(t),
                         BoundArgument::BoundSeq(MaybeSequence::Seq(cvs.into_boxed_slice())),
+                        BoundArgument::Simple(t),
                     ]),
                     None,
                 ))
@@ -206,14 +206,15 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
         tracing::trace!("All variables: {allvars:?}");
 
-        let mut counter = 1;
+        //let mut counter = 1;
 
         let mut subst = smallvec::SmallVec::<(&str, Term), 4>::new();
+        let mut dones = smallvec::SmallVec::<&str, 4>::new();
         let mut ret = Vec::new();
         for v in &allvars {
-            if !subst.iter().any(|(var, _)| *var == v.name()) {
-                let name = new_name(counter);
-                counter += 1;
+            if !dones.iter().any(|var| *var == v.name()) {
+                //let name = new_name(counter);
+                //counter += 1;
 
                 let tp = if let Variable::Ref { declaration, .. } = v {
                     let var = self.get_variable(declaration).ok();
@@ -229,9 +230,10 @@ impl<Split: SplitStrategy> Checker<Split> {
                     None
                 };
 
-                subst.push((v.name(), name.clone().into()));
+                dones.push(v.name());
+                //subst.push((v.name(), name.clone().into()));
                 ret.push(ComponentVar {
-                    var: name.into(),
+                    var: v.name_id().into_owned().into(), //name.into(),
                     df: None,
                     tp,
                 });

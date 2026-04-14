@@ -37,7 +37,7 @@ fn main() {
     .stack_size(6 * 1024 * 1024)
     .spawn(move || {*/
     //pause();
-    let (i, t) = measure(check_all); //measure(check_selected); //
+    let (i, t) = measure(check_selected); //measure(check_all); //
     println!("Checked {i} documents in {t}");
     /*println!(
         "minimal stack: {}",
@@ -96,14 +96,14 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=exists-elimination&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs&d=choice-operator&l=en",
         "http://mathhub.info?a=FTML/math&p=arithmetics&d=sqrt&l=en",
-        "http://mathhub.info?a=FTML/tests&d=natded&l=en",
         "http://mathhub.info?a=unimarx/werkbank&p=sec/einstimmungundgrundbegriffe/mod&d=evaluationmap&l=de",
         "http://mathhub.info?a=FTML/tests&d=othertests&l=en",
         "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
         "http://mathhub.info?a=FTML/tests&d=probdists&l=en",
         */
-        //"http://mathhub.info?a=Papers/26-ICMS-Semantics&p=mod&d=dump&l=en",
-        "http://mathhub.info?a=FTML/tests&d=units&l=en",
+        //"http://mathhub.info?a=Papers/26-ICMS-Semantics&p=fragments&d=variables&l=en",
+        //"http://mathhub.info?a=FTML/tests&d=units&l=en",
+        "http://mathhub.info?a=FTML/tests&d=natded&l=en",
     )
     //}
 }
