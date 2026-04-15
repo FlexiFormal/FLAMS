@@ -113,7 +113,6 @@ too_many_lines = { level = "warn", priority = 1 }
 flams-ftml = { path = "source/ftml/system", version = "0.0.1" }
 flams-stex = { path = "source/stex", version = "0.0.1" }
 flams-utils = { path = "source/utils", version = "0.0.1" }
-#flams-ontology = { path = "source/ontology", version = "0.0.1" }
 flams-system = { path = "source/system", version = "0.0.1" }
 flams-database = { path = "source/database", version = "0.0.1" }
 flams-lsp = { path = "source/lsp", version = "0.0.1" }
@@ -169,7 +168,7 @@ tex_engine = { version = "0.1", features = ["multithreaded"] }
 #rustex_lib = { path = "../RusTeX/rustex", features = ["multithreaded"] }
 #tex_engine = { path = "../RusTeX/tex_engine", features = ["multithreaded"] }
 
-dateparser = {git = "https://github.com/Jazzpirate/dateparser"}
+dateparser = "0.3.1"#{git = "https://github.com/Jazzpirate/dateparser"}
 
 rstest = { version = "0.26" }
 
@@ -291,7 +290,7 @@ thaw = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
 thaw_utils = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
 thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
 
-leptos-posthoc = { version = "0.2", git = "https://github.com/FlexiFormal/leptos-posthoc.git" }
+leptos-posthoc = "0.2" #{ version = "0.2", git = "https://github.com/FlexiFormal/leptos-posthoc.git" }
 #leptos-posthoc = { path = "../leptos_dyn_dom" }
 
 bytes = "1.10"
