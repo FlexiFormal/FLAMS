@@ -9,7 +9,9 @@ import {
 import { setup } from "./ts/setup";
 import { Versions } from "./ts/versions";
 import * as language from "vscode-languageclient/node";
-import { FLAMSServer } from "@kwarc/flams";
+//import { FLAMSServer } from "@kwarc/flams";
+//import * as FLAMS from "@flexiformal/ftml-backend";
+import { FLAMSServer} from "./ts/flams";
 import { getSettings, MathHubTreeProvider } from "./ts/mathhub";
 import path from "path";
 import * as fs from "fs";
