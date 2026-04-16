@@ -1,7 +1,10 @@
 use std::path::Path;
 
 #[cfg(feature = "rdf")]
-use ftml_ontology::narrative::elements::Notation;
+use ftml_ontology::narrative::{
+    DataRef, SharedDocumentElement,
+    elements::{IsDocumentElement, Notation},
+};
 use ftml_ontology::{
     domain::modules::{Module, ModuleLike},
     narrative::{DocDataRef, DocumentRange, documents::Document},
@@ -298,23 +301,39 @@ impl LocalBackend for ArchiveManager {
 
     fn get_module(&self, uri: &ModuleUri) -> Result<ModuleLike, BackendError> {
         if uri.is_top() {
-            /*self.modules
-            .get_sync(uri.clone(), |uri| {
-                self.load_module(uri.archive_uri(), uri.path(), uri.name().as_ref())
-            })*/
-            self.load_module(uri.archive_uri(), uri.path(), uri.name().as_ref())
-                .map(ModuleLike::Module)
+            #[cfg(feature = "cached")]
+            {
+                self.modules
+                    .get_sync(uri.clone(), |uri| {
+                        self.load_module(uri.archive_uri(), uri.path(), uri.name())
+                    })
+                    .map(ModuleLike::Module)
+            }
+            #[cfg(not(feature = "cached"))]
+            {
+                self.load_module(uri.archive_uri(), uri.path(), uri.name())
+                    .map(ModuleLike::Module)
+            }
         } else {
             // SAFETY: !uri.is_top()
             let SymbolUri { name, module } =
                 unsafe { uri.clone().into_symbol().unwrap_unchecked() };
-            let m = /*self.modules.get_sync(module, |uri| {
-                self.load_module(uri.archive_uri(), uri.path(), uri.name().as_ref())
-            })?;*/
-                self.load_module(module.archive_uri(), module.path(), module.name().as_ref())?;
+            let mcl = module.clone();
+            let m = {
+                #[cfg(feature = "cached")]
+                {
+                    self.modules.get_sync(module, |uri| {
+                        self.load_module(uri.archive_uri(), uri.path(), uri.name())
+                    })?
+                }
+                #[cfg(not(feature = "cached"))]
+                {
+                    self.load_module(module.archive_uri(), module.path(), module.name())?
+                }
+            };
 
             m.as_module_like(&name)
-                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
+                .ok_or_else(|| BackendError::NotFound(SymbolUri { name, module: mcl }.into()))
         }
     }
 
@@ -326,39 +345,51 @@ impl LocalBackend for ArchiveManager {
         Self: Sized,
     {
         if uri.is_top() {
-            /*
-            if let Some(m) = self.modules.has_async(uri) {
-                return either::Left(either::Left(m.map_ok(ModuleLike::Module)));
+            #[cfg(feature = "cached")]
+            {
+                if let Some(m) = self.modules.has_async(uri) {
+                    return either::Left(either::Left(m.map_ok(ModuleLike::Module)));
+                }
+                let lm = self.load_module_async::<A>(uri.archive_uri(), uri.path(), uri.name());
+                either::Left(either::Right(
+                    self.modules
+                        .get(uri.clone(), |_| lm)
+                        .map_ok(ModuleLike::Module),
+                ))
             }
-            let lm =
-                self.load_module_async::<A>(uri.archive_uri(), uri.path(), uri.name().as_ref());
-            either::Left(either::Right(
-                self.modules
-                    .get(uri.clone(), |_| lm)
-                    .map_ok(ModuleLike::Module),
-            )) */
-            either::Left(self.load_module_async::<A>(
-                uri.archive_uri(),
-                uri.path(),
-                uri.name().as_ref(),
-            ).map_ok(ModuleLike::Module))
+            #[cfg(not(feature = "cached"))]
+            {
+                either::Left(
+                    self.load_module_async::<A>(uri.archive_uri(), uri.path(), uri.name())
+                        .map_ok(ModuleLike::Module),
+                )
+            }
         } else {
             // SAFETY: !uri.is_top()
             let SymbolUri { name, module } =
                 unsafe { uri.clone().into_symbol().unwrap_unchecked() };
-            let m = /*if let Some(m) = self.modules.has_async(&module) {
-                either::Left(m)
-            } else {
-                either::Right(*/self.load_module_async::<A>(
-                    module.archive_uri(),
-                    module.path(),
-                    module.name().as_ref(),
-                );//)
-            //};
+            let m = {
+                #[cfg(feature = "cached")]
+                {
+                    if let Some(m) = self.modules.has_async(&module) {
+                        either::Left(m)
+                    } else {
+                        either::Right(self.load_module_async::<A>(
+                            module.archive_uri(),
+                            module.path(),
+                            module.name(),
+                        ))
+                    }
+                }
+                #[cfg(not(feature = "cached"))]
+                {
+                    self.load_module_async::<A>(module.archive_uri(), module.path(), module.name())
+                }
+            };
             either::Right(m.and_then(move |m| {
                 std::future::ready(
                     m.as_module_like(&name)
-                        .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol)),
+                        .ok_or_else(|| BackendError::NotFound(SymbolUri { name, module }.into())),
                 )
             }))
         }
@@ -373,7 +404,11 @@ impl LocalBackend for ArchiveManager {
         Self: Sized,
     {
         use ftml_uris::FtmlUri;
-        self.do_notations::<E>(uri.to_iri())
+        self.query_notations::<E, ftml_ontology::narrative::elements::notations::NotationReference>(
+            uri.to_iri(),
+            self,
+            |n| n.notation,
+        )
     }
 
     #[cfg(feature = "rdf")]
@@ -385,7 +420,11 @@ impl LocalBackend for ArchiveManager {
         Self: Sized,
     {
         use ftml_uris::FtmlUri;
-        self.do_var_notations::<E>(uri.to_iri())
+        self.query_notations::<E,ftml_ontology::narrative::elements::notations::VariableNotationReference>(
+            uri.to_iri(),
+            self,
+            |n| n.notation,
+        )
     }
 }
 
@@ -396,13 +435,16 @@ impl ArchiveManager {
         then: impl FnOnce(&DocumentFile) -> Result<R, BackendError>,
         other: impl FnOnce(&dyn ExternalArchive) -> Result<R, BackendError>,
     ) -> Result<R, BackendError> {
-        /*if let Some(v) = self.documents.has(uri) {
-            let docfile = v?;
-            return then(&docfile);
-        }*/
+        #[cfg(feature = "cached")]
+        {
+            if let Some(v) = self.documents.has(uri) {
+                let docfile = v?;
+                return then(&docfile);
+            }
+        }
         let file_or_other = self.with_archive(uri.archive_id(), |a| {
             let Some(a) = a else {
-                return Err(BackendError::ArchiveNotFound);
+                return Err(BackendError::ArchiveNotFound(uri.archive_uri().clone()));
             };
             match a {
                 Archive::Local(a) => Ok(either::Left(a.document_file(
@@ -416,12 +458,20 @@ impl ArchiveManager {
         })?;
         match file_or_other {
             either::Left(file) => {
-                let docfile = //self.documents.get_sync(uri.clone(), |_| {
-                    DocumentFile::from_file(file)
-                        .map(triomphe::Arc::new)
-                    //.map_err(Into::into)
-                //})?;
-                ?;
+                let docfile = {
+                    #[cfg(feature = "cached")]
+                    {
+                        self.documents.get_sync(uri.clone(), |_| {
+                            DocumentFile::from_file(file)
+                                .map(triomphe::Arc::new)
+                                .map_err(Into::into)
+                        })?
+                    }
+                    #[cfg(not(feature = "cached"))]
+                    {
+                        DocumentFile::from_file(file).map(triomphe::Arc::new)?
+                    }
+                };
                 then(&docfile)
             }
             either::Right(r) => Ok(r),
@@ -441,18 +491,21 @@ impl ArchiveManager {
         then: Then,
         other: Other,
     ) -> impl Future<Output = Result<R, BackendError>> + Send + use<A, R, T, O, Then, Other> {
-        /*if let Some(v) = self.documents.has_async(uri) {
-            return either::Right(either::Left(async move {
-                match v.await {
-                    Ok(f) => then(f).await,
-                    Err(e) => Err(e),
-                }
-            }));
-        }*/
+        #[cfg(feature = "cached")]
+        {
+            if let Some(v) = self.documents.has_async(uri) {
+                return either::Right(either::Left(async move {
+                    match v.await {
+                        Ok(f) => then(f).await,
+                        Err(e) => Err(e),
+                    }
+                }));
+            }
+        }
         // TODO: a.document_file blocks; avoid!
         let file_or_other = match self.with_archive(uri.archive_id(), |a| {
             let Some(a) = a else {
-                return Err(BackendError::ArchiveNotFound);
+                return Err(BackendError::ArchiveNotFound(uri.archive_uri().clone()));
             };
             match a {
                 Archive::Local(a) => Ok(either::Left(a.document_file(
@@ -467,24 +520,68 @@ impl ArchiveManager {
             Ok(v) => v,
             Err(e) => return either::Left(std::future::ready(Err(e))),
         };
-        match file_or_other {
-            either::Left(file) => {
-                let docfile = //self.documents.get(uri.clone(), |_| {
-                    A::block_on(move || {
-                        DocumentFile::from_file(file)
-                            .map(triomphe::Arc::new)
-                        //.map_err(Into::into)
-                        //})
-                });
-                either::Right(/*either::Right(*/either::Left(async move {
-                    let docfile = docfile.await?;
-                    then(docfile).await
-                }))//)
+        #[cfg(feature = "cached")]
+        {
+            match file_or_other {
+                either::Left(file) => {
+                    let docfile = self.documents.get(uri.clone(), |_| {
+                        A::block_on(move || {
+                            DocumentFile::from_file(file)
+                                .map(triomphe::Arc::new)
+                                .map_err(Into::into)
+                        })
+                    });
+                    either::Right(either::Right(either::Left(async move {
+                        let docfile = docfile.await?;
+                        then(docfile).await
+                    })))
+                }
+                either::Right(r) => either::Right(either::Right(either::Right(r))),
             }
-            either::Right(r) => either::Right(either::Right(r))//either::Right(r))),
+        }
+        #[cfg(not(feature = "cached"))]
+        {
+            match file_or_other {
+                either::Left(file) => {
+                    let docfile =
+                        A::block_on(move || DocumentFile::from_file(file).map(triomphe::Arc::new));
+                    either::Right(either::Left(async move {
+                        let docfile = docfile.await?;
+                        then(docfile).await
+                    }))
+                }
+                either::Right(r) => either::Right(either::Right(r)),
+            }
         }
     }
 
+    #[cfg(feature = "rdf")]
+    pub(crate) fn query_notations<E: AsyncEngine, T: IsDocumentElement + 'static>(
+        &self,
+        iri: ulo::rdf_types::NamedNode,
+        backend: &impl LocalBackend,
+        get_not: fn(&SharedDocumentElement<T>) -> DataRef<Notation>,
+        //get_ref: impl Fn(&DocDataRef<Notation>) -> Result<Notation, BackendError>,
+    ) -> impl Iterator<Item = (DocumentElementUri, Notation)> {
+        let q = crate::sparql!(SELECT DISTINCT ?n WHERE { ?n ulo:notation_for iri. });
+        self.triple_store()
+            .query::<E>(q)
+            .expect("Notations query should be valid")
+            .into_uris::<DocumentElementUri>()
+            .filter_map(move |uri| {
+                //tracing::warn!("Found {uri}");
+                let notation = backend.get_typed_document_element::<T>(&uri).ok()?;
+                //tracing::warn!("Found {notation:?}");
+                backend
+                    .get_reference(&get_not(&notation).with_doc(uri.document.clone()))
+                    //self.get_reference(&get_not(&notation).with_doc(uri.document.clone()))
+                    .map_err(|e| tracing::error!("Error getting notation {uri}: {e}"))
+                    .ok()
+                    .map(|n| (uri, n))
+            })
+    }
+
+    /*
     #[cfg(feature = "rdf")]
     fn do_notations<E: AsyncEngine>(
         &self,
@@ -532,4 +629,5 @@ impl ArchiveManager {
                     .map(|n| (uri, n))
             })
     }
+     */
 }

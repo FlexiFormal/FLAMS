@@ -14,6 +14,34 @@ pub use login_state::*;
 pub mod uris;
 pub mod ws;
 
+#[macro_export]
+macro_rules! maybe_lazy {
+    ($t:path) => {{
+        #[cfg(any(debug_assertions,feature="docs-only"))]
+        {$t}
+        #[cfg(not(any(debug_assertions,feature="docs-only")))]
+        {leptos_router::Lazy::<$t>::new()}
+    }};
+    ($name:ident = $e:expr) => {
+        #[cfg(any(debug_assertions,feature="docs-only"))]
+        #[component]
+        pub fn $name() -> AnyView { $e }
+        #[cfg(not(any(debug_assertions,feature="docs-only")))]
+        #[derive(Debug,Clone,serde::Deserialize)]
+        pub struct $name;
+        #[cfg(not(any(debug_assertions,feature="docs-only")))]
+        #[leptos_router::lazy_route]
+        impl leptos_router::LazyRoute for $name {
+            fn data() -> Self {
+                Self
+            }
+            fn view($name:Self) -> leptos::prelude::AnyView {
+                $e//ftml_dom::global_setup(move || flams_router_content::Views::top(move || $e))
+            }
+        }
+    }
+}
+
 use leptos::{either::EitherOf3, prelude::*};
 
 pub fn vscode_link(archive: &ftml_uris::ArchiveId, rel_path: &str) -> impl IntoView + use<> {
@@ -28,9 +56,7 @@ pub fn RequireLogin(children: Children) -> impl IntoView {
     require_login(children)
 }
 
-pub fn require_login(
-    children: Children,
-) -> AnyView {
+pub fn require_login(children: Children) -> AnyView {
     use flams_web_utils::components::{Spinner, display_error};
 
     let children = std::sync::Arc::new(flams_utils::parking_lot::Mutex::new(Some(children)));
@@ -40,7 +66,8 @@ pub fn require_login(
             (children.clone().lock().take()).map(|f| f()).into_any()
         }
         _ => view!(<div>{display_error("Not logged in".into())}</div>).into_any(),
-    }).into_any()
+    })
+    .into_any()
 }
 
 #[cfg(feature = "ssr")]
@@ -67,120 +94,6 @@ pub trait ServerFnExt {
     #[allow(async_fn_in_trait)]
     async fn call_remote(self, url: String) -> Result<Self::Output, Self::Error>;
 }
-
-/*
-#[cfg(feature = "hydrate")]
-mod hydrate {
-    use super::ServerFnExt;
-    use leptos::{
-        prelude::{FromServerFnError, ServerFnError},
-        server_fn::{
-            self,
-            codec::{FromReq, FromRes, IntoReq, IntoRes},
-            request::BrowserMockReq,
-            response::BrowserMockRes,
-        },
-    };
-
-    impl<
-        In: server_fn::codec::Encoding,
-        Out: server_fn::codec::Encoding,
-        Err: server_fn::serde::Serialize
-            + server_fn::serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone
-            + Send
-            + Sync
-            + std::fmt::Display
-            + std::str::FromStr
-            + 'static,
-        F: leptos::server_fn::ServerFn<
-                Client = leptos::server_fn::client::browser::BrowserClient,
-                Server = leptos::server_fn::mock::BrowserMockServer,
-                Protocol = leptos::server_fn::Http<In, Out>,
-                Error = ServerFnError<Err>,
-                InputStreamError = ServerFnError<Err>,
-                OutputStreamError = ServerFnError<Err>,
-            > + FromReq<In, BrowserMockReq, F::Error>
-            + IntoReq<In, server_fn::request::browser::BrowserRequest, F::Error>
-            + server_fn::serde::Serialize
-            + server_fn::serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone
-            + Send
-            + Sync
-            + for<'de> server_fn::serde::Deserialize<'de>,
-    > ServerFnExt for F
-    where
-        F::Output: IntoRes<Out, BrowserMockRes, F::Error>
-            + FromRes<Out, server_fn::response::browser::BrowserResponse, F::Error>
-            + IntoReq<In, server_fn::request::browser::BrowserRequest, F::Error>,
-    {
-        type Output = <Self as leptos::server_fn::ServerFn>::Output;
-        type Error = F::Error;
-        #[cfg(feature = "hydrate")]
-        async fn call_remote(self, url: String) -> Result<Self::Output, Self::Error> {
-            use server_fn::response::ClientRes;
-            let input = self;
-            let path = format!("{}{}", url, F::PATH);
-            let path: &str = &path;
-            // ---------------------------------------
-            /*
-            Ok(<F::Protocol as server_fn::Protocol<
-                F,
-                F::Output,
-                F::Client,
-                F::Server,
-                F::Error,
-                F::Error,
-                F::Error,
-            >>::run_client(path, input)
-            .await?)
-            */
-
-            // create and send request on client
-            let req = input.into_req(path, Out::CONTENT_TYPE)?;
-            let req = TODO SOMETHING ELSE;
-            let res =
-                <leptos::server_fn::client::browser::BrowserClient as server_fn::client::Client<
-                    ServerFnError<Err>,
-                    ServerFnError<Err>,
-                    ServerFnError<Err>,
-                >>::send(req)
-                .await?;
-
-            let status = <server_fn::response::browser::BrowserResponse as ClientRes<
-                ServerFnError<Err>,
-            >>::status(&res);
-            let location = <server_fn::response::browser::BrowserResponse as ClientRes<
-                ServerFnError<Err>,
-            >>::location(&res);
-            let has_redirect_header = <server_fn::response::browser::BrowserResponse as ClientRes<
-                ServerFnError<Err>,
-            >>::has_redirect(&res);
-
-            // if it returns an error status, deserialize the error using the error's decoder.
-            let res = if (400..=599).contains(&status) {
-                let bytes = <server_fn::response::browser::BrowserResponse as ClientRes<
-                    ServerFnError<Err>,
-                >>::try_into_bytes(res);
-                Err(ServerFnError::de(bytes.await?))
-            } else {
-                // otherwise, deserialize the body as is
-                let output =
-                    <Self::Output as FromRes<Out, _, ServerFnError<Err>>>::from_res(res).await?;
-                Ok(output)
-            }?;
-
-            // if redirected, call the redirect hook (if that's been set)
-            if (300..=399).contains(&status) || has_redirect_header {
-                server_fn::redirect::call_redirect_hook(&location);
-            }
-            Ok(res)
-        }
-    }
-}
- */
 
 #[cfg(feature = "hydrate")]
 mod hydrate {

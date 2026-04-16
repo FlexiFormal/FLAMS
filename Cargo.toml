@@ -5,15 +5,12 @@ members = [
     "search",
     "source/main",
     "source/utils",
-    #"source/ontology",
     "source/database",
     "source/system",
     "source/web-utils",
     "source/lsp",
     "source/stex",
     "source/ftml/system",
-    #"source/ftml/viewer-components",
-    #"source/ftml/extraction",
     "source/git",
     "source/router/base",
     "source/router/dashboard",
@@ -28,60 +25,42 @@ members = [
     "source/router/search",
     "source/router/vscode-bindings",
     "source/router/flodown",
-    #"ftml-viewer",
     #"experiments",
-    "source/ffi",
+    "source/ffi", "solver/main","solver/trace"
     #"maintest"
 ]
 resolver = "2"
 exclude = [
-    "old",
-    #"ftml-viewer", #"web/graphs","test-plugin","tests","thaw",
+    "experiments",
+    #"web/graphs","test-plugin","tests","thaw",
     #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm"
 ]
 
 # this is wasm, actually (because wasm-pack uses --release and --debug directly)
 [profile.release]
-overflow-checks = false
 strip = true
-#split-debuginfo = "off"
-#strip = false
 panic = 'abort'
 opt-level = 'z'
 lto = true
-#debug = true
-#opt-level = 2
 
 # this is wasm, actually (because wasm-pack uses --release and --debug directly)
 [profile.dev]
-opt-level = 2
-debug = true
-strip = "none"
-split-debuginfo = "off"
-debug-assertions = true
-overflow-checks = true
-lto = false
-panic = 'unwind'
-incremental = true
-#codegen-units = 256
-rpath = false
+panic = 'abort'
+opt-level = 'z'
+lto = true
+debug=true
+#opt-level = 2
+#split-debuginfo = "off"
 
 [profile.flams-release]
 inherits = "release"
 opt-level = 2
 lto = "fat"
-#codegen-units = 1
-overflow-checks = false
 panic = "unwind"
-strip = true
-#strip = false
 
 [profile.flams-dev]
 inherits = "dev"
-split-debuginfo = "unpacked"
-#opt-level=1
-debug = 1
-#codegen-backend="cranelift"
+opt-level = 0
 
 #[profile.dev.package."*"]
 #opt-level=3
@@ -92,23 +71,10 @@ strip = "none"
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]
 inherits = "release"
-panic = 'abort'
-opt-level = 'z'
-lto = true
-#strip = "none"
 
 [profile.wasm-dev]
 inherits = "dev"
-opt-level = 2
-debug = true
-split-debuginfo = "off"
-debug-assertions = true
-overflow-checks = true
-lto = false
 panic = 'unwind'
-incremental = true
-#codegen-units = 256
-rpath = false
 
 [workspace.metadata.wasm-pack.profile.dev.wasm-bindgen]
 debug-js-glue = true
@@ -147,12 +113,13 @@ too_many_lines = { level = "warn", priority = 1 }
 flams-ftml = { path = "source/ftml/system", version = "0.0.1" }
 flams-stex = { path = "source/stex", version = "0.0.1" }
 flams-utils = { path = "source/utils", version = "0.0.1" }
-#flams-ontology = { path = "source/ontology", version = "0.0.1" }
 flams-system = { path = "source/system", version = "0.0.1" }
 flams-database = { path = "source/database", version = "0.0.1" }
 flams-lsp = { path = "source/lsp", version = "0.0.1" }
 flams-git = { path = "source/git", version = "0.0.1" }
 flams-web-utils = { path = "source/web-utils", version = "0.0.1" }
+ftml-solver = { path = "solver/main", version= "0.0.1"}
+ftml-solver-trace = { path = "solver/trace", version= "0.0.1"}
 
 flams-router-base = { path = "source/router/base", version = "0.0.1" }
 flams-router-dashboard = { path = "source/router/dashboard", version = "0.0.1" }
@@ -196,13 +163,12 @@ flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
 #flodown = { path="../FloDown/flodown" }
 
-
 rustex_lib = { version = "0.1", features = ["multithreaded"] }
 tex_engine = { version = "0.1", features = ["multithreaded"] }
 #rustex_lib = { path = "../RusTeX/rustex", features = ["multithreaded"] }
 #tex_engine = { path = "../RusTeX/tex_engine", features = ["multithreaded"] }
 
-dateparser = {git = "https://github.com/Jazzpirate/dateparser"}
+dateparser = "0.3.1"#{git = "https://github.com/Jazzpirate/dateparser"}
 
 rstest = { version = "0.26" }
 
@@ -215,19 +181,21 @@ utoipa-axum = "0.2"
 orx-parallel = "3"
 document-features = "0.2"
 rustc_version = "0.4"
-const-str = "0.7"
+const-str = "1"
 triomphe = "0.1"
 parking_lot = "0.12"
 serde-wasm-bindgen = "0.6"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["unbounded_depth"] }
+serde_stacker = "0.1"
 rustc-hash = "2"
 chrono = "0.4"
 oxrdf = "0.2.3"
-smallvec = { version = "2.0.0-alpha.11" }
+smallvec = { version = "2.0.0-alpha.12" }
 lazy_static = "1.5"
 url = "2"
 either = "1"
+either_of = "0.1"
 const_format = "0.2"
 paste = "1"
 urlencoding = "2.1"
@@ -259,7 +227,8 @@ async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 astral-tokio-tar = "0.5.1"
 strum = { version = "0.27", features = ["derive"] }
 git-url-parse = { version = "0.4" }
-flume = { version = "0.11", features = ["async"] }
+flume = { version = "0.12", features = ["async"] }
+ordered-float = "5"
 
 password-hash = { version = "0.5" }
 argon2 = { version = "0.5" }
@@ -289,7 +258,7 @@ oxrdfio = { version = "0.2" }                            #, features = ["async-t
 
 sqlx = { version = "0.8", features = ["sqlite", "macros", "runtime-tokio"] }
 libsqlite3-sys = { version = "*", features = ["bundled"] }
-html5ever = "0.35"                                                           # TODO update once html2text updates markup5ever dependency
+html5ever = "0.38"                                                           # TODO update once html2text updates markup5ever dependency
 
 async-lsp = { version = "0.2", features = ["tokio", "async-io"] }
 futures = { version = "0.3" }
@@ -306,7 +275,8 @@ git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 
 # leptos
-leptos = { version = "0.8"}#, features = ["nightly"] }
+# weird hydration error in 0.8.15... check soonish again?
+leptos = "0.8"#{ version = "=0.8.14"}#, features = ["nightly"] }
 leptos_axum = "0.8"
 leptos_meta = "0.8"
 leptos_router = { version = "0.8"}#, features = ["nightly"] }
@@ -316,11 +286,11 @@ leptos_router = { version = "0.8"}#, features = ["nightly"] }
 #thaw_components = { version = "0.4.0-beta" }
 #thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
 
-thaw = { git = "https://github.com/thaw-ui/thaw"}#, features = ["nightly"] }
-thaw_utils = { git = "https://github.com/thaw-ui/thaw"}#, features = ["nightly"] }
-thaw_components = { git = "https://github.com/thaw-ui/thaw" }
+thaw = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
+thaw_utils = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
+thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
 
-leptos-posthoc = { version = "0.2", git = "https://github.com/FlexiFormal/leptos-posthoc.git" }
+leptos-posthoc = "0.2" #{ version = "0.2", git = "https://github.com/FlexiFormal/leptos-posthoc.git" }
 #leptos-posthoc = { path = "../leptos_dyn_dom" }
 
 bytes = "1.10"
@@ -331,17 +301,18 @@ icondata_tb = "0"
 
 axum = { version = "0.8", features = ["ws"] }
 axum-macros = { version = "0.5" }
-# leptos_axum requires 0.4:
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
-tower-sessions = { version = "0.14" }
+tower-sessions = { version = "0.14" } # version required by axum-login :-/
 axum-login = { version = "0.18" }
 http = { version = "1" }
 mime_guess = "2"
 
 # wasm
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
 tracing-wasm = "0.2"
-wasm-bindgen = "=0.2.106"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
 reqwasm = "0.5"
@@ -350,19 +321,22 @@ gloo-timers = "0.3"
 web-sys = { version = "0.3" }
 tsify-next = { version = "0.5", features = ["js"] }
 tsify = { version = "0.5", features = ["js"] }
-js-sys = "0.3"
 js-regexp = "0.2"
-wasm-streams = "0.4"
+wasm-streams = "0.5"
 futures-util = "0.3"
 
 # search
 
-html2text = "0.15"
+#html2text = "0.15"
 tantivy = "0.25"
+simsimd = "6"
+fastembed = "5.8.1"
+#ort-candle = "0.2.0+0.9"
+ort = { version="2.0.0-rc.11"}#, default-features = false, features = ["alternative-backend"] }
 
 
 ahash = "0.8"
-getrandom = "0.3"
+getrandom = "0.3" # version required by ahash :-/
 
 #[patch.crates-io]
 #thaw = { git = 'https://github.com/thaw-ui/thaw' }
@@ -376,7 +350,7 @@ name = "flams"
 #output-name = "flams"
 bin-package = "flams"
 lib-package = "flams"
-bin-features = ["ssr"]
+bin-features = ["ssr","tantivy"] #,"vectorsearch"] #
 lib-features = ["hydrate"]
 lib-default-features = false
 bin-profile-release = "flams-release"

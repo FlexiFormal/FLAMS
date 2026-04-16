@@ -1,4 +1,5 @@
-use flams_backend_types::search::{QueryFilter, SearchResult, SearchResultKind};
+use flams_backend_types::search::{SearchResult, SearchResultKind};
+use flams_router_base::maybe_lazy;
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::components::error_with_toaster;
 use ftml_components::components::content::FtmlViewable;
@@ -14,7 +15,7 @@ pub(crate) enum SearchState {
     None,
     Loading,
     Results(Vec<(f32, SearchResult)>),
-    SymResults(Vec<(SymbolUri, Vec<(f32, SearchResult)>)>),
+    SymResults(Vec<(f32, SymbolUri, DocumentElementUri)>),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -65,40 +66,56 @@ impl Filter {
         }
     }
 }
+maybe_lazy!(SearchTop = search_top());
 
-#[component]
-pub fn SearchTop() -> AnyView {
+pub fn search_top() -> AnyView {
     use flams_web_utils::components::ClientOnly;
     use thaw::{
         Divider, Flex, FlexAlign, Icon, Input, InputPrefix, Layout, LayoutHeader, Radio,
         RadioGroup, Tag, TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput,
-        TagPickerOption, ToasterInjection,
+        TagPickerOption, Text, ToasterInjection,
     }; //,Combobox,ComboboxOption
     let query = RwSignal::new(String::new());
+    let in_doc_str = RwSignal::new(String::new());
     let search_kind = RwSignal::new(vec![
         Filter::Def.value_str().to_string(),
         Filter::Par.value_str().to_string(),
     ]);
     let query_opts = Memo::new(move |_| {
         search_kind.with(|v| {
-            let mut ret = QueryFilter::default();
-            ret.allow_documents = false;
-            ret.allow_paragraphs = false;
-            ret.allow_definitions = false;
-            ret.allow_examples = false;
-            ret.allow_assertions = false;
-            ret.allow_problems = false;
+            use flams_backend_types::search::FragmentQueryFilter;
+
+            let mut ret = FragmentQueryFilter::default();
+            ret.flags = ret.flags.unset_allow_documents();
+            ret.flags = ret.flags.unset_allow_paragraphs();
+            ret.flags = ret.flags.unset_allow_definitions();
+            ret.flags = ret.flags.unset_allow_examples();
+            ret.flags = ret.flags.unset_allow_assertions();
+            ret.flags = ret.flags.unset_allow_problems();
             for s in v {
                 match Filter::from_value(s.as_str()) {
-                    Filter::Doc => ret.allow_documents = true,
-                    Filter::Def => ret.allow_definitions = true,
-                    Filter::Par => ret.allow_paragraphs = true,
-                    Filter::Ex => ret.allow_examples = true,
-                    Filter::Ass => ret.allow_assertions = true,
+                    Filter::Doc => ret.flags = ret.flags.set_allow_documents(),
+                    Filter::Def => ret.flags = ret.flags.set_allow_definitions(),
+                    Filter::Par => ret.flags = ret.flags.set_allow_paragraphs(),
+                    Filter::Ex => ret.flags = ret.flags.set_allow_examples(),
+                    Filter::Ass => ret.flags = ret.flags.set_allow_assertions(),
                 }
             }
+            in_doc_str.with(|s| {
+                if let Ok(uri) = s.parse() {
+                    ret.in_documents.push(uri);
+                }
+            });
             ret
         })
+    });
+    let color = Memo::new(move |_| {
+        use std::str::FromStr;
+        if in_doc_str.with(|s| s.is_empty() || DocumentUri::from_str(s).is_ok()) {
+            "background-color:green"
+        } else {
+            "background-color:red"
+        }
     });
     let results = RwSignal::new(SearchState::None);
     let toaster = ToasterInjection::expect_context();
@@ -162,6 +179,11 @@ pub fn SearchTop() -> AnyView {
             <Radio value="S" label="Symbols"/>
             <Radio value="X" label="Documents/Paragraphs"/>
           </RadioGroup>
+          <div>
+          <Text>"In document: "</Text>
+          <Input value=in_doc_str attr:style=color/>
+
+          </div>
           <ClientOnly>
             <TagPicker selected_options=search_kind class=cls>
                 <TagPickerControl slot>
@@ -208,21 +230,25 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
         SearchState::Loading => view!(<flams_web_utils::components::Spinner/>).into_any(),
         SearchState::SymResults(v) => v
             .iter()
-            .map(|(sym, res)| do_sym_result(sym, res.clone()))
-            .collect_view().into_any(),
+            .map(|(score, sym, elem)| do_sym_result(sym, *score, elem))
+            .collect_view()
+            .into_any(),
         SearchState::Results(v) => v
             .iter()
             .map(|(score, res)| do_result(*score, res))
-            .collect_view().into_any(),
+            .collect_view()
+            .into_any(),
     })
 }
 
-fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
+fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::ClientOnly;
+    use ftml_uris::Uri;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
-    let name = sym.as_view::<flams_router_content::backend::FtmlBackend>(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let name = sym.as_view(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let elem = elem.clone();
     view! {
       <Card>
           <CardHeader>
@@ -231,17 +257,8 @@ fn do_sym_result(sym: &SymbolUri, res: Vec<(f32, SearchResult)>) -> AnyView {
           <CardPreview>
             <div style="padding:0 5px;max-width:100%">
               <div style="width:100%;color:black;background-color:white;">
-                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">{
-                  res.into_iter().map(|(_,r)| {
-                    let SearchResult::Paragraph { uri, .. } = r else { impossible!()};
-                    view!{
-                        //<span>"Here: "{uri.to_string()}</span>
-                        //<div>"---"</div>
-                        <Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None/>
-                        //<div>"---"</div>
-                    }
-                  }).collect_view()
-                }
+                <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">
+          <Fragment uri=UriComponents::Full(Uri::DocumentElement(elem)) position=ftml_components::SidebarPosition::None/>
                 </Scrollbar>
               </div>
             </div>
@@ -264,16 +281,13 @@ fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
     use flams_router_content::components::DocumentInner;
     use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
 
-    let name = uri.as_view::<flams_router_content::backend::FtmlBackend>(); //doc_name(&uri, uri.document_name().to_string());
+    let name = uri.as_view(); //doc_name(&uri, uri.document_name().to_string());
     view! {
       <Card>
           <CardHeader>
               <Body1>
                   <b>"Document "{name}</b>
               </Body1>
-              /*<CardHeaderDescription slot>
-                  <Caption1>"Description"</Caption1>
-              </CardHeaderDescription>*/
               <CardHeaderAction slot>
                   <span>"Score: "{score}</span>
               </CardHeaderAction>
@@ -285,9 +299,6 @@ fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
                 </div>
               </div>
           </CardPreview>
-          /*<CardFooter>
-              "sTeX:"<pre></pre>
-          </CardFooter>*/
       </Card>
     }.into_any()
 }
@@ -315,8 +326,7 @@ fn do_para(
 
     let desc = ftml_components::components::content::CommaSep(
         "For",
-        fors.into_iter()
-            .map(|s| s.as_view::<flams_router_content::backend::FtmlBackend>()),
+        fors.into_iter().map(|s| s.as_view()),
     )
     .into_view();
     view! {

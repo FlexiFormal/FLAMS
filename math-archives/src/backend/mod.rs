@@ -14,11 +14,7 @@ use crate::{
     },
 };
 use ftml_ontology::{
-    domain::{
-        SharedDeclaration,
-        declarations::IsDeclaration,
-        modules::{Module, ModuleLike},
-    },
+    domain::{SharedDeclaration, declarations::IsDeclaration, modules::ModuleLike},
     narrative::{
         DocDataRef, DocumentRange, SharedDocumentElement,
         documents::Document,
@@ -35,7 +31,7 @@ pub use sandbox::*;
 use std::path::Path;
 pub use temp::*;
 
-pub trait LocalBackend {
+pub trait LocalBackend: Send + Sync {
     type ArchiveIter<'a>: IntoIterator<Item = &'a Archive>
     where
         Self: Sized;
@@ -139,12 +135,12 @@ pub trait LocalBackend {
             let m = self.get_module(uri.module_uri())?;
             return m
                 .get_as(uri.name())
-                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol));
+                .ok_or_else(|| BackendError::NotFound(uri.clone().into()));
         }
         let uri = uri.clone().simple_module();
         let m = self.get_module(uri.module_uri())?;
         m.get_as(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
+            .ok_or(BackendError::NotFound(uri.into()))
     }
 
     /// # Errors
@@ -167,7 +163,7 @@ pub trait LocalBackend {
     {
         let d = self.get_document(uri.document_uri())?;
         d.get(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     /// # Errors
@@ -180,7 +176,7 @@ pub trait LocalBackend {
     {
         let d = self.get_document_async::<A>(uri.document_uri()).await?;
         d.get(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     /// # Errors
@@ -193,7 +189,7 @@ pub trait LocalBackend {
     {
         let d = self.get_document(uri.document_uri())?;
         d.get_as(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     /// # Errors
@@ -206,7 +202,7 @@ pub trait LocalBackend {
     {
         let d = self.get_document_async::<A>(uri.document_uri()).await?;
         d.get_as(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     fn uri_of(&self, p: &Path) -> Option<DocumentUri>
@@ -328,6 +324,17 @@ impl AnyBackend {
             Self::Sandbox(sb) => either::Right(
                 std::iter::once(sb.root()).chain(crate::mathhub::mathhubs().iter().copied()),
             ),
+        }
+    }
+
+    #[cfg(feature = "rdf")]
+    pub fn add_triples(&self, doc: &DocumentUri, triples: Vec<ulo::rdf_types::Triple>) {
+        use ftml_uris::FtmlUri;
+        if matches!(*self, Self::Global) {
+            GlobalBackend
+                .get()
+                .triple_store()
+                .add_graph(&doc.to_iri(), triples.into_iter());
         }
     }
 }
@@ -553,7 +560,11 @@ impl LocalBackend for AnyBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_notations::<E>(uri)
+        match self {
+            Self::Temp(b) => either::Left(b.get_notations::<E>(uri)),
+            _ => either::Right(GlobalBackend.get_notations::<E>(uri)),
+        }
+        //GlobalBackend.get_notations::<E>(uri)
     }
 
     #[cfg(feature = "rdf")]
@@ -570,6 +581,9 @@ impl LocalBackend for AnyBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_var_notations::<E>(uri)
+        match self {
+            Self::Temp(b) => either::Left(b.get_var_notations::<E>(uri)),
+            _ => either::Right(GlobalBackend.get_var_notations::<E>(uri)),
+        }
     }
 }

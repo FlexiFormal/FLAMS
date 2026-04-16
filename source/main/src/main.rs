@@ -7,6 +7,7 @@ fn main() {
         #[allow(unused_imports)]
         use flams_ftml::FTML;
         #[allow(unused_imports)]
+        #[cfg(feature = "tantivy")]
         use flams_search::TANTIVY;
         #[allow(unused_imports)]
         use flams_stex::STEX;
@@ -41,7 +42,9 @@ fn main() {
         let settings = settings::get_settings();
         let mut rt = tokio::runtime::Builder::new_multi_thread();
         rt.enable_all();
-        if let Some(mb) = settings.stack_size && mb > 2 {
+        if let Some(mb) = settings.stack_size
+            && mb > 2
+        {
             rt.thread_stack_size((mb as usize) * 1024 * 1024);
         } else {
             if settings.lsp {

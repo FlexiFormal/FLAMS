@@ -22,12 +22,14 @@ ssr = [
     "dep:paste",
     "dep:smallvec",
     "dep:ulo",
+    "dep:ftml-solver"
 ]
 hydrate = [
     "leptos/hydrate",
     "thaw/hydrate",
     "ftml-components/hydrate",
     "flams-web-utils/hydrate",
+    "flams-router-base/hydrate",
     "ftml-backend/cached",
 ]
 docs-only = []
@@ -38,6 +40,7 @@ ftml-ontology = { workspace = true, features = ["serde"] }
 ftml-components = { workspace = true }
 ftml-dom = { workspace = true }
 ftml-backend = { workspace = true, features = ["server_fn"] }
+ftml-solver-trace = { workspace = true }
 
 flams-utils = { workspace = true }
 flams-web-utils = { workspace = true }
@@ -46,6 +49,7 @@ flams-system = { workspace = true, optional = true }
 flams-math-archives = { workspace = true, optional = true }
 flams-lsp = { workspace = true, optional = true }
 ulo = { workspace = true, optional = true }
+ftml-solver = { workspace = true, optional = true }
 
 leptos = { workspace = true }
 leptos_meta = { workspace = true }
@@ -58,6 +62,7 @@ lazy_static = { workspace = true }
 urlencoding = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
+rustc-hash = {workspace = true}
 
 tokio = { workspace = true, optional = true }
 paste = { workspace = true, optional = true }

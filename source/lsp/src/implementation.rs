@@ -7,8 +7,7 @@ use std::{
 };
 
 use crate::{
-    BuildParams, ClientExt, HtmlRequestParams, NewArchiveParams, ProgressCallbackServer,
-    QuizRequestParams, StandaloneExportParams,
+    ClientExt, NewArchiveParams, ProgressCallbackServer, StandaloneExportParams, UriParams,
     annotations::to_diagnostic,
     documents::LSPDocument,
     state::{LSPState, UrlOrFile},
@@ -125,7 +124,7 @@ fn wrap_fut<T: Send + 'static>(
 }
 
 impl<T: FLAMSLSPServer> ServerWrapper<T> {
-    pub(crate) fn html_request(&mut self, params: HtmlRequestParams) -> Res<Option<String>> {
+    pub(crate) fn html_request(&mut self, params: UriParams) -> Res<Option<String>> {
         let mut client = self.inner.client().clone();
         let state = self.inner.state().clone();
         Box::pin(
@@ -261,7 +260,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         ControlFlow::Continue(())
     }
 
-    pub(crate) fn quiz_request(&mut self, params: QuizRequestParams) -> Res<String> {
+    pub(crate) fn quiz_request(&mut self, params: UriParams) -> Res<String> {
         use flams_system::backend::backend;
         fn get_res(url: UrlOrFile, state: LSPState) -> Result<String, String> {
             let doc = state
@@ -328,7 +327,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         Ok(())
     }
 
-    pub(crate) fn build_one(&mut self, params: BuildParams) -> Res<()> {
+    pub(crate) fn build_one(&mut self, params: UriParams) -> Res<()> {
         let state = self.inner.state().clone();
         fut(move || {
             let url: UrlOrFile = params.uri.into();
@@ -338,7 +337,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             Self::build(&doc, &url, false)
         })
     }
-    pub(crate) fn build_all(&mut self, params: BuildParams) -> Res<()> {
+    pub(crate) fn build_all(&mut self, params: UriParams) -> Res<()> {
         let state = self.inner.state().clone();
         let client = self.inner.client().clone();
         wrap_fut(async move {
@@ -477,6 +476,11 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         let client = self.inner.client().clone();
         tracing::info!("LSP: reload");
         state.backend().reset::<TokioEngine>();
+        let _ = tokio::task::spawn_blocking(|| {
+            for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                (e.on_reload)();
+            }
+        });
         let _ = tokio::task::spawn_blocking(move || {
             state.load_mathhubs(client.clone());
             client.update_mathhub();
@@ -531,6 +535,11 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             drop(progress);
             if rescan {
                 state.backend().reset::<TokioEngine>();
+                let _ = tokio::task::spawn_blocking(|| {
+                    for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                        (e.on_reload)();
+                    }
+                });
                 let _ = tokio::task::spawn_blocking(move || {
                     // <- necessary, but I don't quite understand why
                     state.load_mathhubs(client.clone());
@@ -540,6 +549,31 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 client.update_mathhub();
             }
         });
+        ControlFlow::Continue(())
+    }
+
+    fn update_backend(
+        files: impl Iterator<Item = PathBuf>,
+    ) -> <Self as LanguageServer>::NotifyResult {
+        let backend = GlobalBackend.get();
+        let mut dones = Vec::new();
+        let mut missing = false;
+        for f in files {
+            if backend
+                .archive_of(&f, |a, _| {
+                    if !dones.contains(a.id()) {
+                        dones.push(a.id().clone());
+                        a.update_sources();
+                    }
+                })
+                .is_none()
+            {
+                missing = true;
+            }
+        }
+        if missing {
+            backend.load(flams_system::settings::Settings::get().mathhubs());
+        }
         ControlFlow::Continue(())
     }
 }
@@ -589,9 +623,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_notification!(!did_change_workspace_folders = DidChangeWorkspaceFolders);
     impl_notification!(!did_change_configuration = DidChangeConfiguration);
     impl_notification!(!did_change_watched_files = DidChangeWatchedFiles);
-    impl_notification!(!did_create_files = DidCreateFiles);
-    impl_notification!(!did_rename_files = DidRenameFiles);
-    impl_notification!(!did_delete_files = DidDeleteFiles);
 
     // textDocument/
     //impl_notification!(! did_open = DidOpenTextDocument);
@@ -1028,8 +1059,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(on_type_formatting = OnTypeFormatting);
     impl_request!(range_formatting = RangeFormatting);
     impl_request!(formatting = Formatting);
-    impl_request!(prepare_rename = PrepareRenameRequest);
-    impl_request!(rename = Rename);
     impl_request!(prepare_type_hierarchy = TypeHierarchyPrepare);
     impl_request!(will_save_wait_until = WillSaveWaitUntil);
 
@@ -1107,6 +1136,30 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
                 Box::pin(std::future::ready(Ok(None)))
             })
     }
+
+    //impl_notification!(!did_create_files = DidCreateFiles);
+    fn did_create_files(&mut self, params: lsp::CreateFilesParams) -> Self::NotifyResult {
+        let files = params.files.into_iter().map(|f| PathBuf::from(f.uri));
+        Self::update_backend(files)
+    }
+
+    //impl_notification!(!did_rename_files = DidRenameFiles);
+    fn did_rename_files(&mut self, params: lsp::RenameFilesParams) -> Self::NotifyResult {
+        let files = params
+            .files
+            .into_iter()
+            .flat_map(|f| vec![PathBuf::from(f.old_uri), PathBuf::from(f.new_uri)]);
+        Self::update_backend(files)
+    }
+
+    //impl_notification!(!did_delete_files = DidDeleteFiles);
+    fn did_delete_files(&mut self, params: lsp::DeleteFilesParams) -> Self::NotifyResult {
+        let files = params.files.into_iter().map(|f| PathBuf::from(f.uri));
+        Self::update_backend(files)
+    }
+
+    impl_request!(prepare_rename = PrepareRenameRequest);
+    impl_request!(rename = Rename);
 
     // workspace/
     impl_request!(will_create_files = WillCreateFiles);

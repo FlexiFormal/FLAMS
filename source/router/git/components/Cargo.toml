@@ -40,10 +40,12 @@ flams-web-utils = { workspace = true }
 #flams-router-base = { workspace = true }
 #flams-system = { workspace = true, optional = true }
 flams-router-buildqueue-base = { workspace = true }
+flams-router-base = {workspace = true}
 
 leptos = { workspace = true }
+leptos_router = { workspace = true }
 #leptos_router = { workspace = true }
 thaw = { workspace = true }
-#serde = { workspace = true }
+serde = { workspace = true }
 #tracing = { workspace = true }
 #tokio = { workspace = true, optional = true }

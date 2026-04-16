@@ -24,7 +24,13 @@ impl AsRef<Path> for RelPath<'_> {
         self.0
     }
 }
-
+/*
+impl<'s, P: AsRef<Path>> From<&'s P> for RelPath<'s> {
+    fn from(value: &'s P) -> Self {
+        Self(value.as_ref())
+    }
+}
+ */
 impl std::fmt::Display for RelPath<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(target_os = "windows")]

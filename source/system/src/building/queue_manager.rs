@@ -209,7 +209,14 @@ impl QueueManager {
         let AnyBackend::Sandbox(sandbox) = queue.backend() else {
             impossible!()
         };
-        Ok((r, sandbox.migrate::<SyncEngine>()?))
+        let num = sandbox.migrate::<SyncEngine>()?;
+
+        let _ = tokio::task::spawn_blocking(|| {
+            for e in crate::iter::<crate::FlamsExtension>() {
+                (e.on_reload)();
+            }
+        });
+        Ok((r, num))
     }
 
     #[allow(clippy::significant_drop_tightening)]

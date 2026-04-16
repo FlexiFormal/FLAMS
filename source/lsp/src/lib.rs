@@ -11,11 +11,11 @@ pub mod ws;
 use std::{collections::hash_map::Entry, path::Path};
 
 pub use async_lsp;
-use async_lsp::{lsp_types as lsp, ClientSocket, LanguageClient};
+use async_lsp::{ClientSocket, LanguageClient, lsp_types as lsp};
 use flams_math_archives::backend::AnyBackend;
 use flams_stex::quickparse::stex::{
-    structs::{GetModuleError, ModuleReference, STeXModuleStore},
     STeXParseData,
+    structs::{GetModuleError, ModuleReference, STeXModuleStore},
 };
 use flams_system::settings::Settings;
 use flams_utils::{
@@ -41,7 +41,7 @@ impl STDIOLSPServer {
     }
     fn load_all(&self) {
         let client = self.client.clone();
-        let state = unwrap!(Self::global_state().clone());
+        let state = unwrap!(Self::global_state());
         for (name, uri) in &self.workspaces {
             tracing::info!("workspace: {name}@{uri}");
         }
@@ -196,70 +196,70 @@ impl lsp::notification::Notification for HtmlExport {
 
 struct UpdateMathHub;
 impl lsp::notification::Notification for UpdateMathHub {
-    type Params = ();
+    type Params = Vec<()>;
     const METHOD: &str = "flams/updateMathHub";
 }
 
 struct OpenFile;
 impl lsp::notification::Notification for OpenFile {
-    type Params = lsp::Url;
+    type Params = UriParams;
     const METHOD: &str = "flams/openFile";
 }
 
 struct HTMLResult;
 impl lsp::notification::Notification for HTMLResult {
-    type Params = String;
+    type Params = StringParams;
     const METHOD: &str = "flams/htmlResult";
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct HtmlRequestParams {
+pub struct UriParams {
     pub uri: lsp::Url,
 }
 pub(crate) struct HTMLRequest;
 impl lsp::request::Request for HTMLRequest {
-    type Params = HtmlRequestParams;
+    type Params = UriParams;
     type Result = Option<String>;
     const METHOD: &'static str = "flams/htmlRequest";
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct BuildParams {
-    pub uri: lsp::Url,
-}
 struct BuildOne;
 impl lsp::request::Request for BuildOne {
-    type Params = BuildParams;
+    type Params = UriParams;
     type Result = ();
     const METHOD: &str = "flams/buildOne";
 }
 struct BuildAll;
 impl lsp::request::Request for BuildAll {
-    type Params = BuildParams;
+    type Params = UriParams;
     type Result = ();
     const METHOD: &str = "flams/buildAll";
 }
 
 pub(crate) struct QuizRequest;
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct QuizRequestParams {
-    pub uri: lsp::Url,
-}
 impl lsp::request::Request for QuizRequest {
-    type Params = QuizRequestParams;
+    type Params = UriParams;
     type Result = String;
     const METHOD: &'static str = "flams/quizRequest";
 }
 
 pub struct ServerURL;
 impl ServerURL {
-    fn get() -> String {
+    fn get() -> StringParams {
         let settings = Settings::get();
-        format!("http://{}:{}", settings.ip, settings.port())
+        StringParams {
+            url: format!("http://{}:{}", settings.ip, settings.port()),
+        }
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StringParams {
+    url: String,
+}
+
 impl lsp::notification::Notification for ServerURL {
-    type Params = String;
+    type Params = StringParams;
     const METHOD: &str = "flams/serverURL";
 }
 
@@ -271,13 +271,14 @@ pub trait ClientExt {
 impl ClientExt for ClientSocket {
     #[inline]
     fn html_result(&self, uri: &DocumentUri) {
-        let _ = self.notify::<HTMLResult>(uri.to_string());
+        let _ = self.notify::<HTMLResult>(StringParams {
+            url: uri.to_string(),
+        });
     }
     #[inline]
     fn update_mathhub(&self) {
-        if let Err(e) = self.notify::<UpdateMathHub>(()) {
+        if let Err(e) = self.notify::<UpdateMathHub>(Vec::new()) {
             tracing::error!("failed to send notification: {}", e);
-            return;
         }
     }
 
@@ -285,9 +286,8 @@ impl ClientExt for ClientSocket {
         let Ok(url) = lsp::Url::from_file_path(path) else {
             return;
         };
-        if let Err(e) = self.notify::<OpenFile>(url) {
+        if let Err(e) = self.notify::<OpenFile>(UriParams { uri: url }) {
             tracing::error!("failed to send notification: {}", e);
-            return;
         }
     }
 }
@@ -486,7 +486,7 @@ lazy_static::lazy_static! {
 
 impl ProgressCallbackServer {
     #[inline]
-    pub fn client_mut(&mut self) -> &mut ClientSocket {
+    pub const fn client_mut(&mut self) -> &mut ClientSocket {
         &mut self.client
     }
 

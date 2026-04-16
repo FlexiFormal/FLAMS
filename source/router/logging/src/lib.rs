@@ -9,6 +9,7 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 
 #[cfg(feature = "ssr")]
 use flams_router_base::LoginState;
+use flams_router_base::maybe_lazy;
 use flams_router_base::require_login;
 use flams_router_base::ws;
 use flams_utils::logs::{LogFileLine, LogLevel, LogMessage, LogTree};
@@ -39,8 +40,10 @@ async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
     Ok(tree)
 }
 
-#[component]
-pub fn Logger() -> AnyView {
+maybe_lazy!(Logger = logger());
+
+//#[component]
+pub fn logger() -> AnyView {
     use ftml_dom::utils::css::inject_css;
     require_login(Box::new(|| {
         inject_css("flams-logging", include_str!("logs.css"));
@@ -146,7 +149,8 @@ fn LogLineHelper(
             <span class="flams-spinner-inline">
             <Spinner size=SpinnerSize::Tiny/>
             </span>{str}
-        </span>).into_any()
+        </span>)
+        .into_any()
     } else {
         view!(<span class=cls>{str}</span>).into_any()
     }

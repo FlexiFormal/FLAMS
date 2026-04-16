@@ -8,17 +8,18 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
-use flams_router_base::ws;
 use flams_router_base::{LoginState, require_login, ws::WebSocket};
+use flams_router_base::{maybe_lazy, ws};
 #[cfg(feature = "hydrate")]
 use flams_router_buildqueue_base::server_fns::get_log;
 use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
+use flams_router_content::checks::{DocumentCheckResult, ResultExt};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_dom::utils::css::inject_css;
 use ftml_ontology::utils::time::{Delta, Eta};
-use ftml_uris::ArchiveId;
+use ftml_uris::{ArchiveId, DocumentUri};
 use leptos::{either::EitherOf4, prelude::*};
 use leptos_router::hooks::use_params_map;
 use std::num::NonZeroU32;
@@ -88,7 +89,8 @@ impl Entry {
             ).collect_view()}
             </ol>
           </Collapsible></li>
-        }.into_any()
+        }
+        .into_any()
     }
 }
 
@@ -126,7 +128,6 @@ impl TaskState {
     #[cfg(feature = "hydrate")]
     fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> AnyView {
         use flams_web_utils::components::{Header, LazyCollapsible};
-        use thaw::Scrollbar;
         match self {
             Self::Running => view! {<i style="color:yellow">{t}" (Running)"</i>}.into_any(),
             Self::Queued | Self::Blocked | Self::None => {
@@ -146,15 +147,12 @@ impl TaskState {
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
                       require_login(Box::new(move || wait_and_then_fn(
                           move || get_log(queue,archive.clone(),rel_path.clone(),tc.clone()),
-                          |s| {
-                            view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                            </Scrollbar>}.into_any()
-                            }
+                          |s| do_log(s)
                       )))
                     }
                   </LazyCollapsible>
-                }.into_any()
+                }
+                .into_any()
             }
             Self::Failed => {
                 let archive = archive.clone();
@@ -169,19 +167,32 @@ impl TaskState {
                       let tc = tc.clone();
                       let queue = expect_context::<AllQueues>().selected.get_untracked();
                       require_login(Box::new(move || wait_and_then_fn(
-                          move || get_log(queue,archive.clone(),rel_path.to_string(),tc.clone()),
-                          |s| {
-                                view!{<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">
-                                    <pre style="width:fit-content;font-size:smaller;">{s}</pre>
-                                </Scrollbar>}
-                            }.into_any()
+                          move || get_log(queue,archive.clone(),rel_path.clone(),tc.clone()),
+                          do_log
                       )))
                     }
                   </LazyCollapsible>
-                }.into_any()
+                }
+                .into_any()
             }
         }
     }
+}
+
+fn do_log(s: either::Either<String, String>) -> AnyView {
+    use thaw::Scrollbar;
+    view! {<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">{
+        match s {
+            either::Left(s) => leptos::either::Either::Left(view!{
+                <pre style="width:fit-content;font-size:smaller;">{s}</pre>
+            }),
+            either::Right(v) => leptos::either::Either::Right({
+                ftml_solver_trace::results::DocumentCheckResult::from_json(&v)
+                    .map_or_else(|_| view!{<pre>{v}</pre>}.into_any(),|e| e.render())
+            })
+        }
+    }</Scrollbar>}
+    .into_any()
 }
 
 #[cfg(feature = "ssr")]
@@ -227,6 +238,11 @@ pub enum QueueMessage {
         target: String,
         eta: Eta,
     },
+    TaskBlocked {
+        id: u32,
+        target: String,
+        eta: Eta,
+    },
 }
 #[cfg(feature = "ssr")]
 impl From<flams_system::building::QueueMessage> for QueueMessage {
@@ -265,14 +281,21 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
                 target: target.to_string(),
                 eta,
             },
+            QueueMessage::TaskBlocked { id, target, eta } => Self::TaskBlocked {
+                id: id.into(),
+                target: target.to_string(),
+                eta,
+            },
         }
     }
 }
 
 // ----------------------------------------------------------------------------------
 
-#[component]
-pub fn QueuesTop() -> AnyView {
+maybe_lazy!(QueuesTop = queues_top());
+
+//#[component]
+pub fn queues_top() -> AnyView {
     use flams_web_utils::components::Spinner;
     use thaw::{Divider, Layout, Tab, TabList};
 
@@ -289,10 +312,8 @@ pub fn QueuesTop() -> AnyView {
                     return view!(<div>"(No running queues)"</div>).into_any();
                 }
                 let queues = AllQueues::new(v);
-                if let Some(id) = id() {
-                    if let Ok(id) = id.parse() {
-                        queues.selected.update_untracked(|v| *v = id);
-                    }
+                if let Some(id) = params.read_untracked().get("queue") && let Ok(id) = id.parse() {
+                    queues.selected.update_untracked(|v| *v = id);
                 }
                 provide_context(queues);
                 let selected_value = RwSignal::new(queues.selected.get_untracked().to_string());
@@ -312,27 +333,33 @@ pub fn QueuesTop() -> AnyView {
                   <TabList selected_value>
                     <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
                       <Tab value=i.to_string()>{
-                        queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
+                        queues.queue_names.with_untracked(|m| m.get(&i).cloned()).unwrap_or_else(|| unreachable!())
                       }</Tab>
                     }/>
                   </TabList>
                   <div style="margin:10px"><Divider/></div>
                   <Layout class="flams-fullscreen">{move || {
-                    let curr = queues.selected.get();
+                    //let curr = queues.selected.get();
                     queues.show.update_untracked(|v| *v = false);
                     QueueSocket::run(queues);
                     move || view! {
                       <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
-                        let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
-                        move || match ls.get() {
-                          QueueData::Idle(v) => {
-                              idle(curr,v)
-                          },
-                          QueueData::Running(r) => {
-                              running(curr,r)
-                          },
-                          QueueData::Finished(failed,done) => finished(curr,failed,done),
-                          QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                        let ls = move || {
+                            let curr = queues.selected.get();
+                            (curr,queues.queues.with(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!()))
+                        };
+                        move || {
+                            let (curr,ls) = ls();
+                            match ls.get() {
+                                QueueData::Idle(v) => {
+                                    idle(curr,v)
+                                },
+                                QueueData::Running(r) => {
+                                    running(curr,r)
+                                },
+                                QueueData::Finished(failed,done) => finished(curr,failed,done),
+                                QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                            }
                         }
                       }</Show>
                     }
@@ -357,15 +384,16 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
     let Some(repos) = queues
         .queue_repos
         .with_untracked(|v| v.get(&queue_id).cloned())
-        .flatten() else {
-            return ().into_any()
-        };
+        .flatten()
+    else {
+        return ().into_any();
+    };
     if repos.is_empty() {
         return ().into_any();
     }
     let style = if allowed { "" } else { "color:gray;" };
     inject_css("flams-repo-table", include_str!("repo-table.css"));
-        view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
+    view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
           <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
           <Table class="flams-repo-table">
             <TableHeader><TableRow>
@@ -493,7 +521,8 @@ fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
       <ol reversed style="margin-left:30px">
         <For each=move || ls.get() key=|e| e.id children=|e| e.as_view()/>
       </ol>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
@@ -566,7 +595,8 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
             done.iter().map(Entry::as_view).collect_view()
           }</ul>
       </Layout>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
@@ -586,7 +616,8 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
     if num_failed == 0 {
         view! {
           <Button on_click=move |_| {migrate.dispatch(());}>"Migrate"</Button>
-        }.into_any()
+        }
+        .into_any()
     } else {
         let clicked = RwSignal::new(false);
         view! {
@@ -601,7 +632,8 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
               </div>
             </div>
           </DialogContent></DialogBody></DialogSurface></Dialog>
-        }.into_any()
+        }
+        .into_any()
     }
 }
 
@@ -746,16 +778,37 @@ impl QueueSocket {
                 eta: WrappedEta(RwSignal::new(Eta::default())),
             })),
             QueueMessage::Finished { failed, done } => queue.set(QueueData::Finished(failed, done)),
-            QueueMessage::TaskStarted { id, target } => queue.with_untracked(|queue| {
-                if let QueueData::Running(RunningQueue { queue, running, .. }) = queue {
+            QueueMessage::TaskStarted { id, mut target } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    queue,
+                    running,
+                    blocked,
+                    ..
+                }) = queue
+                {
+                    let mut worked = false;
                     queue.update(|v| {
                         let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
                             return;
                         };
+                        worked = true;
                         let e = v.remove(i);
-                        e.steps.update(|m| m.insert(target, TaskState::Running));
+                        e.steps
+                            .update(|m| m.insert(std::mem::take(&mut target), TaskState::Running));
                         running.update(|running| running.push(e));
                     });
+                    if !worked {
+                        blocked.update(|v| {
+                            let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id)
+                            else {
+                                return;
+                            };
+                            worked = true;
+                            let e = v.remove(i);
+                            e.steps.update(|m| m.insert(target, TaskState::Running));
+                            running.update(|running| running.push(e));
+                        });
+                    }
                 }
             }),
             QueueMessage::TaskSuccess { id, target, eta } => queue.with_untracked(|queue| {
@@ -801,6 +854,25 @@ impl QueueSocket {
                         let e = v.remove(i);
                         e.steps.update(|m| m.insert(target, TaskState::Failed));
                         failed.update(|v| v.push(e));
+                    });
+                }
+            }),
+            QueueMessage::TaskBlocked { id, target, eta } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    running,
+                    blocked,
+                    eta: etasignal,
+                    ..
+                }) = queue
+                {
+                    etasignal.0.set(eta);
+                    running.update(|v| {
+                        let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
+                            return;
+                        };
+                        let e = v.remove(i);
+                        e.steps.update(|m| m.insert(target, TaskState::Blocked));
+                        blocked.update(|v| v.push(e));
                     });
                 }
             }),

@@ -2,7 +2,7 @@ pub mod sparql;
 
 use ftml_uris::{ArchiveUri, DocumentUri, FtmlUri, Language, SymbolUri, UriPath, UriWithPath};
 use std::{path::Path, str::FromStr};
-use ulo::rdf_types::{Quad, Triple};
+use ulo::rdf_types::{GraphNameRef, Quad, Triple};
 
 use crate::{
     Archive, LocallyBuilt, MathArchive,
@@ -23,10 +23,11 @@ pub enum SparqlError {
 
 impl RDFStore {
     #[cfg(feature = "rocksdb")]
+    #[must_use]
     pub fn new(path: &Path) -> Self {
         let _ = std::fs::remove_dir_all(path);
         let store = oxigraph::store::Store::open(path).expect("failed to open rdf database");
-        store.clear();
+        let _ = store.clear();
         let mut loader = store.bulk_loader();
         loader
             .load_quads(ulo::ulo::QUADS.iter().copied())
@@ -50,6 +51,21 @@ impl RDFStore {
         let mut loader = self.store.bulk_loader();
         let _ = loader.load_quads(iter);
         let _ = loader.commit();
+    }
+
+    pub fn add_graph<'a>(
+        &self,
+        graph: impl Into<GraphNameRef<'a>>,
+        triples: impl Iterator<Item = Triple>,
+    ) {
+        let graph = graph.into();
+        let _ = self.store.clear_graph(graph);
+        self.add_quads(triples.map(|t| Quad {
+            subject: t.subject,
+            predicate: t.predicate,
+            object: t.object,
+            graph_name: graph.into_owned(),
+        }));
     }
 
     #[must_use]
@@ -92,6 +108,7 @@ impl RDFStore {
     }
 
     /// ### Errors
+    /// ### Panics
     pub fn query_str<E: AsyncEngine>(
         &self,
         s: impl AsRef<str>,
@@ -121,9 +138,9 @@ impl RDFStore {
     /// ### Errors
     pub fn query<E: AsyncEngine>(
         &self,
-        mut q: spargebra::Query,
+        q: spargebra::Query,
     ) -> Result<sparql::QueryResult<'_>, sparql::QueryError> {
-        normalize(&mut q);
+        //normalize(&mut q);
 
         let token = oxigraph::sparql::CancellationToken::new();
         let tk = token.clone();
@@ -148,12 +165,15 @@ impl RDFStore {
             tracing::error!("Failed to open file {}", path.display());
             return;
         };
+        let _ = self.store.clear_graph(&graph);
+
         let buf = std::io::BufReader::new(file);
         let mut loader = self.store.bulk_loader();
         let reader = oxigraph::io::RdfParser::from_format(oxigraph::io::RdfFormat::Turtle)
             .with_default_graph(graph)
             .for_reader(buf);
         let _ = loader.load_quads(reader.filter_map(Result::ok));
+        //println!("commiting new triples");
         let _ = loader.commit();
     }
 
@@ -176,7 +196,11 @@ impl RDFStore {
                                 .filter_map(Result::ok)
                                 .filter(|entry| entry.file_name() == "index.ttl")
                                 .filter_map(|e| {
-                                    let graph = Self::get_iri(a.uri(), out, &e)?;
+                                    let Some(graph) = Self::get_iri(a.uri(), out, &e) else {
+                                        println!("wut! {}",e.path().display());
+                                        return None
+                                    };
+                                    //let graph = Self::get_iri(a.uri(), out, &e)?;
                                     Some((e.into_path(), graph))
                                 })
                                 .collect::<Vec<_>>(),
@@ -198,7 +222,7 @@ impl RDFStore {
                 })
                 .collect_vec_list();
             for (i,path_graph) in all_files.into_iter().flatten().enumerate() {//.flatten().flatten().enumerate() {
-                tracing::info!("Loading {}",i+1);
+                //tracing::info!("Loading {}",i+1);
                 let mut loader = self.store.bulk_loader();
                 for (path,graph) in path_graph {
                     let Ok(file) = std::fs::File::open(&path) else {
@@ -225,12 +249,18 @@ impl RDFStore {
     ) -> Option<ulo::rdf_types::NamedNode> {
         let parent = e.path().parent()?;
         let parentname = parent.file_name()?.to_str()?;
-        let parentname = parentname.rsplit_once('.').map_or(parentname, |(s, _)| s);
+        //let parentname = parentname.rsplit_once('.').map_or(parentname, |(s, _)| s);
         let language = Language::from_rel_path(parentname);
         let parentname = parentname
             .strip_suffix(&format!(".{language}"))
             .unwrap_or(parentname);
-        let path: UriPath = parent.parent()?.relative_to(&out)?.parse().ok()?;
+        let grandparent = parent.parent()?;
+        let path: Option<UriPath> = if grandparent == out {
+            None
+        } else {
+            Some(grandparent.relative_to(&out)?.parse().ok()?)
+        };
+        //let path: UriPath = parent.parent()?.relative_to(&out)?.parse().ok()?;
         let doc: DocumentUri = (a.clone() / path) & (parentname.parse().ok()?, language);
         Some(doc.to_iri())
     }

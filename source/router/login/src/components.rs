@@ -1,7 +1,7 @@
 #![allow(clippy::must_use_candidate)]
 
 use flams_database::UserData;
-use flams_router_base::LoginState;
+use flams_router_base::{LoginState, maybe_lazy};
 use flams_web_utils::components::{Spinner, display_error};
 use leptos::{either::EitherOf4, prelude::*};
 
@@ -28,8 +28,10 @@ pub fn LoginProvider<Ch: IntoView + 'static>(children: TypedChildren<Ch>) -> imp
     children()
 }
 
-#[component]
-pub fn Users() -> impl IntoView {
+maybe_lazy!(Users = users());
+
+//#[component]
+pub fn users() -> AnyView {
     let r = Resource::new(|| (), |()| super::server_fns::get_users());
     view! {<Suspense fallback = || view!(<Spinner/>)>{move ||
       match r.get() {
@@ -41,6 +43,7 @@ pub fn Users() -> impl IntoView {
         Some(Ok(users)) => EitherOf4::D(user_table(users))
       }
     }</Suspense>}
+    .into_any()
 }
 
 fn user_table(v: Vec<UserData>) -> impl IntoView {

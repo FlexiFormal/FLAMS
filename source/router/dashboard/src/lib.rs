@@ -2,7 +2,7 @@
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
-    not(any(feature = "ssr", feature = "hydrate"))
+    not(any(feature = "ssr", feature = "hydrate")),
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
@@ -42,6 +42,8 @@ pub mod server_fns {
 }
 
 pub use flams_router_base::LoginState;
+use flams_router_base::maybe_lazy;
+use ftml_components::config::AllowSubterms;
 use ftml_dom::FtmlViews;
 use leptos::{
     either::{Either, EitherOf4},
@@ -57,31 +59,56 @@ use thaw::{Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, Layout
 
 #[component]
 pub fn Main() -> AnyView {
+    use flams_router_login::components::LoginProvider;
     provide_meta_context();
+    let (is_routing, set_is_routing) = signal(false);
     view! {
         <Title text="𝖥𝖫∀𝖬∫"/>
-        <Router>{
-            let has_params = Memo::new(move |_| use_query_map().with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some()));
+        <Router set_is_routing>{
+            //let has_params = Memo::new(move |_| use_query_map().with(|p| p.get_str("a").is_some() || p.get_str("uri").is_some()));
             view!{<Routes fallback=|| NotFound()>
                 <ParentRoute/* ssr=SsrMode::InOrder*/ path=() view=Top>
                     <ParentRoute path=path!("/dashboard") view=Dashboard>
-                        <Route path=path!("mathhub") view=|| view!(<MainPage page=Page::MathHub/>).into_any()/>
+                        <ParentRoute path=path!("mathhub") view={|| main_page(Page::MathHub)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_backend::components::ArchivesTop)}/>
+                        </ParentRoute>
                         //<Route path="graphs" view=|| view!(<MainPage page=Page::Graphs/>)/>
-                        <Route path=path!("log") view=|| view!(<MainPage page=Page::Log/>).into_any()/>
-                        <Route path=path!("queue") view=|| view!(<MainPage page=Page::Queue/>).into_any()/>
-                        <Route path=path!("settings") view=|| view!(<MainPage page=Page::Settings/>).into_any()/>
-                        <Route path=path!("query") view=|| view!(<MainPage page=Page::Query/>).into_any()/>
-                        <Route path=path!("archives") view=|| view!(<MainPage page=Page::MyArchives/>).into_any()/>
-                        <Route path=path!("users") view=|| view!(<MainPage page=Page::Users/>).into_any()/>
-                        <Route path=path!("search") view=|| view!(<MainPage page=Page::Search/>).into_any()/>
-                        <Route path=path!("flodown") view=|| view!(<MainPage page=Page::FloDown/>).into_any()/>
-                        <Route path=path!("") view=|| view!(<MainPage page=Page::Home/>).into_any()/>
-                        <Route path=path!("*any") view=|| view!(<MainPage page=Page::NotFound/>).into_any()/>
+                        <ParentRoute path=path!("log") view={|| main_page(Page::Log)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_logging::Logger)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("queue") view={|| main_page(Page::Queue)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_buildqueue_components::QueuesTop)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("settings") view={|| main_page(Page::Settings)}>
+                            <Route path=path!("") view={maybe_lazy!(settings::Settings)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("query") view={|| main_page(Page::Query)}>
+                            <Route path=path!("") view={maybe_lazy!(query::Query)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("archives") view={|| main_page(Page::MyArchives)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_git_components::Archives)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("users") view={|| main_page(Page::Users)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_login::components::Users)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("search") view={|| main_page(Page::Search)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_search::components::SearchTop)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("flodown") view={|| main_page(Page::FloDown)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_flodown::FloDownEditor)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("") view={|| main_page(Page::Home)}>
+                            <Route path=path!("") view={maybe_lazy!(flams_router_backend::index_components::Index)}/>
+                        </ParentRoute>
+                        <ParentRoute path=path!("*any") view={|| main_page(Page::NotFound)}>
+                            <Route path=path!("") view=||view!(<NotFound/>)/>
+                        </ParentRoute>
                     </ParentRoute>
-                    <ParentRoute path=path!("/vscode") view= flams_router_vscode::VSCodeWrap>
-                        <Route path=path!("search") view=flams_router_search::vscode::VSCodeSearch/>
+                    <ParentRoute path=path!("/vscode") view={maybe_lazy!(flams_router_vscode::VSCWrap)}>// flams_router_vscode::VSCodeWrap>
+                        <Route path=path!("search") view={maybe_lazy!(flams_router_search::vscode::VSCSearch)}/>
+                        <Route path=path!("proofs") view={maybe_lazy!(flams_router_vscode::checks::Checks)}/>
                     </ParentRoute>
-                    <Route path=path!("/document") view={move || {
+                    <Route path=path!("/document") view={maybe_lazy!(flams_router_content::components::TopDocRouter)}/*{move || {
                         use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
                         let params = use_query_map().get_untracked();
                         if let Some(p) = params.get_str("uri") {
@@ -92,12 +119,12 @@ pub fn Main() -> AnyView {
                         } else {
                             view! { <Redirect path="/dashboard"/> }.into_any()
                         }
-                    }.into_any()}/>
-                    <Route path=path!("/") view={move || if has_params.get() {
+                    }.into_any()}*//>
+                    <Route path=path!("/") view={maybe_lazy!(flams_router_content::components::UriTopRouter)}/*{move || if has_params.get() {
                             view! { <flams_router_content::components::URITop/> }.into_any()
                         } else {
                             view! { <Redirect path="/dashboard"/> }.into_any()
-                        }}
+                        }}*/
                     />
                 </ParentRoute>
             </Routes>}
@@ -108,6 +135,7 @@ pub fn Main() -> AnyView {
 #[component(transparent)]
 fn Top() -> AnyView {
     use flams_router_login::components::LoginProvider;
+    provide_context(AllowSubterms(true));
     view!(<LoginProvider><leptos_router::components::Outlet/></LoginProvider>).into_any()
 }
 
@@ -154,15 +182,13 @@ impl std::fmt::Display for Page {
 }
 
 #[component(transparent)]
-pub fn Dashboard() -> AnyView {
+pub fn Dashboard() -> impl IntoView {
     view! {
       <Outlet/>
     }
-    .into_any()
 }
 
-#[component]
-fn MainPage(page: Page) -> AnyView {
+fn main_page(page: Page) -> AnyView {
     //use flams_web_utils::components::Themer;
     /*view! {
     <Themer>{*/
@@ -196,8 +222,8 @@ fn MainPage(page: Page) -> AnyView {
                   </LayoutSider>
                   <Layout>
                     <div style="width:calc(100% - 10px);padding-left:5px;height:calc(100vh - 67px)">
-                      {do_main(page).into_any()}
-                      </div>
+                      <Outlet/>//{do_main(page).into_any()}
+                    </div>
                   </Layout>
                 </Layout>
             //</Login>
@@ -206,6 +232,7 @@ fn MainPage(page: Page) -> AnyView {
     })).into_any()
 }
 
+/*
 fn do_main(page: Page) -> AnyView {
     //leptos::logging::log!("Here!");
     let inner = || match page {
@@ -217,7 +244,7 @@ fn do_main(page: Page) -> AnyView {
         Page::Query => view! {<query::Query/>}.into_any(),
         Page::Settings => view! {<settings::Settings/>}.into_any(),
         Page::MyArchives => view! {<flams_router_git_components::Archives/>}.into_any(),
-        Page::Search => view! {<flams_router_search::components::SearchTop/>}.into_any(),
+        Page::Search => flams_router_search::components::search_top().into_any(),
         Page::FloDown => view! {<flams_flodown::FloDownEditor/>}.into_any(),
         Page::Users => view! {<flams_router_login::components::Users/>}.into_any(),
         _ => view!(<span>"TODO"</span>).into_any(),
@@ -225,6 +252,7 @@ fn do_main(page: Page) -> AnyView {
     };
     view!(<main style="height:100%">{inner()}</main>).into_any()
 }
+ */
 
 #[component]
 fn NotFound() -> AnyView {

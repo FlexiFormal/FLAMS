@@ -34,7 +34,12 @@ pub fn span_capture<R>(f: impl FnOnce() -> R) -> (String, R) {
     }
     let buffer = Buffer(std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new())));
     let bufcl = buffer.clone();
-    let sub = tracing_subscriber::registry().with(fmt::layer().with_writer(bufcl).with_ansi(false));
+    let sub = tracing_subscriber::registry().with(
+        fmt::layer()
+            .with_writer(bufcl)
+            .with_ansi(false)
+            .with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+    );
     let ret = tracing::subscriber::with_default(sub, f);
     let s = buffer
         .0
@@ -54,12 +59,15 @@ use flams_math_archives::{
 use ftml_uris::{DocumentUri, UriPath};
 use settings::SettingsSpec;
 
+pub use inventory::iter;
 pub use inventory::submit as register_exension;
+use tracing_subscriber::Layer;
 
 pub struct FlamsExtension {
     pub name: &'static str,
     pub on_start: fn(),
     pub on_build_result: fn(&AnyBackend, &DocumentUri, &UriPath, &dyn Artifact),
+    pub on_reload: fn(),
 }
 
 #[cfg(feature = "tokio")]

@@ -2,7 +2,7 @@
   "name": "flams",
   "displayName": "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System",
   "description": "IDE for the FLAMS system and sTeX",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "license": "GPL3",
   "publisher": "kwarc",
   "icon": "img/flams.png",
@@ -46,6 +46,14 @@
           "id": "flams-tools",
           "type": "webview",
           "name": "FLAMS Tools",
+          "icon": "img/flams.svg",
+          "contextualTitle": "FLAMS Functionality",
+          "when": "flams.loaded"
+        },
+        {
+          "id":"flams-document",
+          "type":"webview",
+          "name": "Current document",
           "icon": "img/flams.svg",
           "contextualTitle": "FLAMS Functionality",
           "when": "flams.loaded"

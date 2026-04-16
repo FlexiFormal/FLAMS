@@ -1,5 +1,5 @@
 use flams_backend_types::ManagerCacheSize;
-use flams_router_base::require_login;
+use flams_router_base::{maybe_lazy, require_login};
 use flams_utils::settings::SettingsSpec;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_dom::utils::css::inject_css;
@@ -37,6 +37,7 @@ pub struct Memory {
     uris: ftml_uris::MemoryState,
     terms: ftml_ontology::terms::TermCacheSize,
     backend: ManagerCacheSize,
+    search: (usize, usize),
 }
 
 #[server(
@@ -58,6 +59,7 @@ pub async fn get_memory() -> Result<Memory, ServerFnError<String>> {
                     backend,
                     uris,
                     terms,
+                    search: flams_search::Searcher::get().size(),
                 })
             })
             .await
@@ -83,14 +85,21 @@ pub async fn reload() -> Result<(), ServerFnError<String>> {
                 ftml_ontology::terms::clear_term_cache();
             })
             .await;
+            let _ = tokio::task::spawn_blocking(|| {
+                for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                    (e.on_reload)();
+                }
+            });
             Ok(())
         }
         _ => Err("Not logged in".to_string().into()),
     }
 }
 
-#[component]
-pub(super) fn Settings() -> AnyView {
+maybe_lazy!(Settings = settings());
+
+//#[component]
+fn settings() -> AnyView {
     use thaw::Table;
     inject_css("flams-settings", include_str!("settings.css"));
     require_login(Box::new(|| {
@@ -180,6 +189,8 @@ pub(super) fn Settings() -> AnyView {
 
 fn do_memory(mem: Memory) -> impl IntoView {
     let total = mem.terms.total_bytes() + mem.uris.total_bytes() + mem.backend.total_bytes();
+
+    let total = total + mem.search.1;
     macro_rules! disp {
         ($name:literal = $num:expr;$bytes:expr) => {
             view!(<tr>
@@ -194,11 +205,14 @@ fn do_memory(mem: Memory) -> impl IntoView {
                 .to_string()
         };
     }
+
+    let search = disp!("Search Index" = mem.search.0;mem.search.1);
     view! {
         <tr>
             <td class="flams-settings-col"><b>"Relations"</b></td>
             <td class="flams-settings-col">{mem.backend.relations}</td>
         </tr>
+        {search}
         <tr><td/><td/></tr>
         <tr><td><b>"Backend"</b></td></tr>
             {disp!("Modules" = mem.backend.num_modules;mem.backend.modules_bytes)}

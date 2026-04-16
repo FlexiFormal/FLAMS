@@ -7,10 +7,13 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
+pub mod checks;
+pub mod components;
+
+use flams_router_base::maybe_lazy;
+use flams_utils::unwrap;
 use ftml_dom::utils::css::inject_css;
 pub use leptos::prelude::*;
-pub mod components;
-use flams_utils::unwrap;
 
 #[server]
 #[allow(clippy::unused_async)]
@@ -41,6 +44,39 @@ impl VSCode {
         Ok(())
     }
 }
+
+maybe_lazy!(
+    VSCWrap = {
+        use flams_router_login::components::LoginProvider;
+        use leptos::either::EitherOf3;
+        ftml_dom::global_setup(|| {
+            flams_router_content::Views::top_safe(|| {
+                inject_css("flams-vscode", include_str!("vscode.css"));
+                let lsp = Resource::new(|| (), |()| is_lsp());
+                if let Some(origin) =
+                    leptos_router::hooks::use_query_map().with_untracked(|q| q.get("origin"))
+                {
+                    provide_context(VSCode { origin });
+                }
+                view!(
+                    <LoginProvider><Suspense>{move ||
+                        match lsp.get() {
+                            Some(Ok(true)) => EitherOf3::A(view!(
+                                <div class="flams-vscode">
+                                    <leptos_router::components::Outlet/>
+                                </div>
+                            )),
+                            Some(_) => EitherOf3::B("ERROR"),
+                            None => EitherOf3::C(view!(<flams_web_utils::components::Spinner/>)),
+                        }
+                    }
+                    </Suspense></LoginProvider>
+                )
+            })
+        })
+        .into_any()
+    }
+);
 
 #[component(transparent)]
 pub fn VSCodeWrap() -> impl IntoView {

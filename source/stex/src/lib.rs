@@ -31,7 +31,8 @@ flams_system::register_exension!(FlamsExtension {
         RusTeX::initialize();
         math::RusTeXMath::initialize();
     },
-    on_build_result: |_, _, _, _| ()
+    on_build_result: |_, _, _, _| (),
+    on_reload: || ()
 });
 
 source_format!(STEX {
@@ -41,7 +42,8 @@ source_format!(STEX {
         PDFLATEX_FIRST.id(),
         PDFLATEX.id(),
         RUSTEX.id(),
-        FTML_CONTENT.id()
+        FTML_CONTENT.id(),
+        ftml_solver::CHECK.id()
     ],
     file_extensions: &["tex", "ltx"],
     dependencies: dependencies::get_deps
@@ -165,6 +167,7 @@ fn rustex(task: BuildSpec) -> BuildResult {
         .collect::<Vec<_>>()
         .join(",");
     let run = move || {
+        //println!("Running rustex");
         RusTeX::get()
             .map_err(|()| "Could not initialize RusTeX".to_string())
             .and_then(|e| {
@@ -204,6 +207,7 @@ fn rustex(task: BuildSpec) -> BuildResult {
     };
     #[cfg(not(debug_assertions))]
     let ret = { run() };
+    //println!("Finished; evaling result");
     match ret {
         Err(s) => BuildResult {
             log: FileOrString::Str(s.into_boxed_str()),

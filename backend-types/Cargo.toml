@@ -27,6 +27,12 @@ serde = [
     "ftml-uris/serde",
     "chrono/serde",
 ]
+## rdf
+rdf = ["dep:ulo","ftml-ontology/rdf","ftml-uris/rdf"]
+## adds bincode support
+bincode = ["dep:bincode"]
+
+vectorsearch = ["bincode","dep:simsimd"]
 
 
 [package.metadata.docs.rs]
@@ -60,8 +66,14 @@ ftml-uris = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+rustc-hash = {workspace = true}
 
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+bincode = { workspace = true, optional = true }
 tsify = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
+ulo = { workspace = true, optional = true }
+smallvec = { workspace = true }
+
+simsimd = { workspace = true,optional=true }

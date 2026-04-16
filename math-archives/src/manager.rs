@@ -1,35 +1,38 @@
-use std::path::{Path, PathBuf};
-
 use crate::{
     Archive, MathArchive,
     backend::LocalBackend,
-    document_file::DocumentFile,
     formats::SourceFormatId,
     mathhub::mathhubs,
     source_files::FileStates,
     utils::{
         AsyncEngine,
-        errors::{BackendError, ManifestParseError, NewArchiveError},
+        errors::{ManifestParseError, NewArchiveError},
         path_ext::{PathExt, RelPath},
     },
 };
+#[cfg(feature = "cached")]
+use crate::{document_file::DocumentFile, utils::errors::BackendError};
 #[cfg(feature = "deepsize")]
 use flams_backend_types::ManagerCacheSize;
 use flams_backend_types::archive_json::{ArchiveIndex, Institution};
+#[cfg(feature = "cached")]
+use ftml_ontology::utils::awaitable::{AsyncCache, MaybeValue};
 use ftml_ontology::{
     domain::modules::Module,
-    utils::{
-        RefTree, TreeChild,
-        awaitable::{AsyncCache, MaybeValue},
-    },
+    utils::{RefTree, TreeChild},
 };
-use ftml_uris::{ArchiveId, ArchiveUri, BaseUri, DocumentUri, ModuleUri, UriPath, UriWithArchive};
+use ftml_uris::{ArchiveId, ArchiveUri, BaseUri, UriName, UriPath, UriWithArchive};
+#[cfg(feature = "cached")]
+use ftml_uris::{DocumentUri, ModuleUri};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct ArchiveManager {
     pub(crate) tree: parking_lot::RwLock<ArchiveTree>,
-    //pub(crate) modules: AsyncCache<ModuleUri, Module, BackendError>,
-    //pub(crate) documents: AsyncCache<DocumentUri, triomphe::Arc<DocumentFile>, BackendError>,
+    #[cfg(feature = "cached")]
+    pub(crate) modules: AsyncCache<ModuleUri, Module, BackendError>,
+    #[cfg(feature = "cached")]
+    pub(crate) documents: AsyncCache<DocumentUri, triomphe::Arc<DocumentFile>, BackendError>,
     #[cfg(feature = "rdf")]
     triple_store: crate::triple_store::RDFStore,
 }
@@ -39,8 +42,10 @@ impl ArchiveManager {
     pub fn new(rdf_path: &Path) -> Self {
         Self {
             tree: parking_lot::RwLock::new(ArchiveTree::default()),
-            //modules: AsyncCache::new(2048),
-            //documents: AsyncCache::new(4096),
+            #[cfg(feature = "cached")]
+            modules: AsyncCache::new(2048),
+            #[cfg(feature = "cached")]
+            documents: AsyncCache::new(4096),
             #[cfg(feature = "rdf")]
             triple_store: crate::triple_store::RDFStore::new(rdf_path),
         }
@@ -51,8 +56,10 @@ impl Default for ArchiveManager {
     fn default() -> Self {
         Self {
             tree: parking_lot::RwLock::new(ArchiveTree::default()),
-            //modules: AsyncCache::new(2048),
-            //documents: AsyncCache::new(4096),
+            #[cfg(feature = "cached")]
+            modules: AsyncCache::new(2048),
+            #[cfg(feature = "cached")]
+            documents: AsyncCache::new(4096),
             #[cfg(feature = "rdf")]
             triple_store: crate::triple_store::RDFStore::default(),
         }
@@ -64,32 +71,43 @@ impl ArchiveManager {
     pub fn memory(&self) -> ManagerCacheSize {
         use deepsize::DeepSizeOf;
         let relations = self.triple_store.num_relations();
-        let mut num_modules = 0;
-        let mut modules_bytes = 0;
-        /*
-        self.modules.all(|_, v| {
-            num_modules += 1;
-            if let MaybeValue::Done(Ok(m)) = &*v.read() {
-                modules_bytes += m.deep_size_of();
+        #[cfg(feature = "cached")]
+        {
+            let mut num_modules = 0;
+            let mut modules_bytes = 0;
+            self.modules.all(|_, v| {
+                num_modules += 1;
+                if let MaybeValue::Done(Ok(m)) = &*v.read() {
+                    modules_bytes += m.deep_size_of();
+                }
+            });
+            let mut num_documents = 0;
+            let mut documents_bytes = 0;
+
+            #[cfg(feature = "cached")]
+            self.documents.all(|_, v| {
+                num_documents += 1;
+                if let MaybeValue::Done(Ok(d)) = &*v.read() {
+                    documents_bytes += d.deep_size_of();
+                }
+            });
+            ManagerCacheSize {
+                num_modules,
+                modules_bytes,
+                num_documents,
+                documents_bytes,
+                relations,
             }
-        });
-        */
-        let mut num_documents = 0;
-        let mut documents_bytes = 0;
-        /*
-        self.documents.all(|_, v| {
-            num_documents += 1;
-            if let MaybeValue::Done(Ok(d)) = &*v.read() {
-                documents_bytes += d.deep_size_of();
+        }
+        #[cfg(not(feature = "cached"))]
+        {
+            ManagerCacheSize {
+                num_modules: 0,
+                modules_bytes: 0,
+                num_documents: 0,
+                documents_bytes: 0,
+                relations,
             }
-        });
-         */
-        ManagerCacheSize {
-            num_modules,
-            modules_bytes,
-            num_documents,
-            documents_bytes,
-            relations,
         }
     }
 
@@ -118,8 +136,11 @@ impl ArchiveManager {
         tree.archives.clear();
         tree.top.clear();
         *tree.index.write() = None;
-        //self.modules.clear();
-        //self.documents.clear();
+        #[cfg(feature = "cached")]
+        {
+            self.modules.clear();
+            self.documents.clear();
+        }
         #[cfg(feature = "rdf")]
         self.triple_store.clear();
         for a in ls.into_iter().flatten() {
@@ -131,6 +152,7 @@ impl ArchiveManager {
         }
         r
     }
+
     /*
     pub(crate) fn load_document(
         &self,
@@ -152,11 +174,11 @@ impl ArchiveManager {
         &self,
         archive: &ArchiveUri,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> Result<Module, crate::BackendError> {
         self.with_archive(archive.archive_id(), |a| {
             let Some(a) = a else {
-                return Err(crate::BackendError::ArchiveNotFound);
+                return Err(crate::BackendError::ArchiveNotFound(archive.clone()));
             };
             a.load_module(path, name)
         })
@@ -165,12 +187,12 @@ impl ArchiveManager {
         &self,
         archive: &ArchiveUri,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module, crate::BackendError>> + 'static + use<A> {
         self.with_archive(archive.archive_id(), |a| {
             let Some(a) = a else {
                 return either::Left(std::future::ready(Err(
-                    crate::BackendError::ArchiveNotFound,
+                    crate::BackendError::ArchiveNotFound(archive.clone()),
                 )));
             };
             either::Right(a.load_module_async::<A>(path, name))

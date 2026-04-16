@@ -1,6 +1,6 @@
 [package]
 name = "flams"
-version = "0.0.3"
+version = "0.0.5"
 edition = "2024"
 description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 
@@ -77,7 +77,18 @@ hydrate = [
     "flams-router-dashboard/hydrate",
     "flams-router-base/hydrate",
     "ftml-ontology/wasm",
-    "dep:dateparser"
+    "dep:dateparser",
+    #"getrandom/wasm_js"
+]
+tantivy = [
+    "flams-search/tantivy",
+    "flams-system/tantivy",
+]
+vectorsearch = [
+    "flams-search/vectorsearch",
+    "flams-router-search/vectorsearch",
+    "flams-system/vectorsearch",
+    "flams-router-dashboard/vectorsearch"
 ]
 
 [dev-dependencies]
@@ -94,6 +105,9 @@ ftml-components = { workspace = true }
 
 
 flams-router-dashboard = { workspace = true }
+flams-router-content = {workspace = true}
+flams-backend-types = { workspace = true }
+flams-router-search = { workspace = true }
 flams-router-base = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-utils = { workspace = true, features = ["serde"] }
@@ -174,7 +188,8 @@ wasm-bindgen = { workspace = true, optional = true }
 tracing-wasm = { workspace = true, optional = true }
 dateparser = {workspace = true,optional = true,features=["wasm"]}
 
-ahash = { workspace = true }
+#ahash = { workspace = true }
+#getrandom = {workspace=true}
 
 #tachys = {workspace = true}
 #server_fn = {workspace = true}

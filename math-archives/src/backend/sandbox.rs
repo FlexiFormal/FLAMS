@@ -275,7 +275,7 @@ impl SandboxedBackend {
         name = "require",
         skip(self)
     )]
-    pub fn require(&self, id: &ArchiveId) {
+    pub fn require(&self, id: &ArchiveId, load: bool) {
         // TODO this can be massively optimized
         let mut repos = self.0.repos.write();
         self.require_meta_infs(
@@ -284,7 +284,9 @@ impl SandboxedBackend {
             |a, repos| {
                 if !repos.iter().any(|r| r.id() == id) {
                     repos.push(SandboxedRepository::Copy(id.clone()));
-                    self.copy_archive(a);
+                    if let Err(e) = self.copy_archive(a) {
+                        tracing::error!("Error copying {id}: {e}");
+                    }
                 }
             },
             |g, t, repos| {
@@ -294,11 +296,13 @@ impl SandboxedBackend {
                         && !repos.iter().any(|r| r.id() == id)
                     {
                         repos.push(SandboxedRepository::Copy(id.clone()));
-                        self.copy_archive(a);
+                        if let Err(e) = self.copy_archive(a) {
+                            tracing::error!("Error copying {id}: {e}");
+                        }
                         if let Some(manifest) =
                             LocalArchive::manifest_of(&self.0.path.join(id.as_ref()))
                         {
-                            self.0.manager.load_one(&manifest, RelPath::from_id(&id));
+                            let _ = self.0.manager.load_one(&manifest, RelPath::from_id(id));
                         }
                     }
                 }
@@ -307,9 +311,13 @@ impl SandboxedBackend {
         );
         drop(repos);
 
-        let manifest = LocalArchive::manifest_of(&self.0.path.join(id.as_ref()))
-            .expect("archive does not exist");
-        self.0.manager.load_one(&manifest, RelPath::from_id(&id));
+        if load {
+            let Some(manifest) = LocalArchive::manifest_of(&self.0.path.join(id.as_ref())) else {
+                tracing::error!("Error loading manifest of archive {id}");
+                panic!("archive does not exist")
+            };
+            let _ = self.0.manager.load_one(&manifest, RelPath::from_id(id));
+        }
     }
 
     //#[deprecated(note = "needs refactoring: should register with manager, but can't")]

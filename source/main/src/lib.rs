@@ -26,6 +26,7 @@ pub fn hydrate() {
             .with_target("ftml_components", lvl)
             .with_target("ftml_parser", lvl)
             .with_target("ftml_backend", lvl)
+            .with_target("ftml_ontology", lvl)
             .with_target("ssr_example", lvl)
             .with_target("flams_flodown", lvl)
             .with_target("flams_router_base", lvl)
@@ -39,7 +40,16 @@ pub fn hydrate() {
         .with(tracing_wasm::WASMLayer::default())
         .with(filter(tracing::Level::WARN))
         .init();
-    leptos::mount::hydrate_body(flams_router_dashboard::Main);
+    ftml_components::set_backend::<flams_router_content::backend::FtmlBackend>();
+    ftml_components::set_continuation(&flams_router_content::Continuations);
+    #[cfg(debug_assertions)]
+    {
+        leptos::mount::hydrate_body(flams_router_dashboard::Main);
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        leptos::mount::hydrate_lazy(flams_router_dashboard::Main);
+    }
 }
 
 #[cfg(any(doc, feature = "docs"))]

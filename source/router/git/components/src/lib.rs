@@ -8,6 +8,7 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
+use flams_router_base::maybe_lazy;
 use flams_router_buildqueue_base::select_queue;
 use flams_router_git_base::{
     GitState,
@@ -22,8 +23,10 @@ use leptos::{
 };
 use std::num::NonZeroU32;
 
-#[component]
-pub fn Archives() -> impl IntoView {
+maybe_lazy!(Archives = archives());
+
+//#[component]
+pub fn archives() -> AnyView {
     let r = Resource::new(|| (), |()| get_archives());
     view! {<Suspense fallback = || view!(<Spinner/>)>{move ||
       match r.get() {
@@ -35,6 +38,7 @@ pub fn Archives() -> impl IntoView {
         Some(Ok(projects)) => EitherOf4::D(do_projects(projects))
       }
     }</Suspense>}
+    .into_any()
 }
 
 #[derive(Debug, Copy, Clone)]

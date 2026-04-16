@@ -1,4 +1,5 @@
 use flams_backend_types::archive_json::{ArchiveIndex, Institution};
+use flams_router_base::maybe_lazy;
 use flams_web_utils::components::wait_and_then_fn;
 use ftml_dom::utils::css::inject_css;
 use ftml_uris::DocumentUri;
@@ -8,8 +9,10 @@ use thaw::{
     CardPreview, Scrollbar,
 };
 
-#[component]
-pub fn Index() -> AnyView {
+maybe_lazy!(Index = index());
+
+//#[component]
+pub fn index() -> AnyView {
     inject_css(
         "flams-index-card",
         ".flams-index-card{max-width:400px !important;margin:10px !important;}",

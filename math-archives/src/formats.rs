@@ -118,12 +118,6 @@ macro_rules! build_target {
     };
 }
 
-build_target!(CHECK {
-    name: "check",
-    description: "check content",
-    run: |_| BuildResult::default()
-});
-
 impl BuildTarget {
     #[inline]
     pub fn all() -> impl Iterator<Item = BuildTargetId> {

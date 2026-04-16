@@ -9,6 +9,7 @@ use flams_utils::{
     vecmap::VecSet,
 };
 use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
+use ftml_solver::results::DocumentCheckResult;
 use ftml_uris::{ArchiveId, DocumentUri, Language, ModuleUri, SymbolUri, UriName, UriWithArchive};
 use rules::{
     MathStructureArg, MathStructureArgIter, NotationArg, NotationArgIter, ParagraphArg,
@@ -31,6 +32,7 @@ use super::latex::LaTeXParser;
 pub struct STeXParseDataI {
     pub annotations: Vec<STeXAnnot>,
     pub diagnostics: VecSet<STeXDiagnostic>,
+    pub check: Option<DocumentCheckResult>,
     pub modules: SmallVec<(ModuleUri, ModuleRules<LSPLineCol>), 1>,
     pub dependencies: Vec<std::sync::Arc<Path>>,
 }
@@ -1036,6 +1038,7 @@ pub fn quickparse<'a, S: STeXModuleStore>(
     STeXParseDataI {
         annotations,
         diagnostics,
+        check: None,
         modules,
         dependencies: dependents,
     }

@@ -258,7 +258,7 @@ impl RusTeX {
         };
         let settings = RTSettings {
             verbose: false,
-            sourcerefs: false,
+            sourcerefs: true,
             log: true,
             insert_font_info: false,
             image_options: ImageOptions::AsIs,
@@ -275,7 +275,9 @@ impl RusTeX {
         out: Option<&Path>,
     ) -> Result<String, String> {
         let (mut engine, settings) = self.set_up(envs, out);
+        //println!("Setup done; compiling...");
         let res = engine.run(file.to_str().unwrap_or_else(|| unreachable!()), settings);
+        //println!("Done. Memorizing / evaluating result...");
 
         res.error.as_ref().map_or_else(
             || {

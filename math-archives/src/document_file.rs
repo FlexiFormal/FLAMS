@@ -21,6 +21,28 @@ pub struct DocumentFile {
     html: StreamField<5>,
 }
 impl DocumentFile {
+    pub(crate) fn get_all(
+        self,
+    ) -> Result<
+        (
+            DocumentRange,
+            u32,
+            Box<[Css]>,
+            Box<[u8]>,
+            Document,
+            Box<str>,
+        ),
+        ReadError,
+    > {
+        Ok((
+            self.body.get().clone(),
+            *self.inner_offset.get(),
+            self.css.get().clone(),
+            self.data.get(&self.reader)?,
+            self.document.get(&self.reader)?,
+            self.html.get(&self.reader)?,
+        ))
+    }
     /// # Errors
     #[inline]
     pub fn get_document(&self) -> Result<Document, ReadError> {

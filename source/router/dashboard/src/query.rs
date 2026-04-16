@@ -1,3 +1,4 @@
+use flams_router_base::maybe_lazy;
 use ftml_dom::utils::css::inject_css;
 use leptos::prelude::*;
 
@@ -11,21 +12,25 @@ use leptos::prelude::*;
     feature = "ssr",
     tracing::instrument(level = "info", name = "query", target = "query", skip_all)
 )]
-pub async fn query_api(query: String) -> Result<String, ServerFnError<String>> {
+pub async fn query_api(
+    query: String,
+    decode_uris: Option<bool>,
+) -> Result<flams_backend_types::sparql::SparqlResult, ServerFnError<String>> {
     use flams_math_archives::backend::GlobalBackend;
     use flams_math_archives::triple_store::sparql::QueryResult;
     use flams_system::TokioEngine;
-    tracing::info!("Query: {query}");
+    tracing::info!("Query: {query} (decode_uris: {decode_uris:?}");
+    let decode_uris = decode_uris.unwrap_or(true);
     let r = tokio::task::spawn_blocking(move || {
         GlobalBackend
             .triple_store()
             .query_str::<TokioEngine>(&query)
-            .map(QueryResult::into_json)
+            .map(|q| QueryResult::into_json(q, decode_uris))
     })
     .await; //.in_current_span().await;
     match r {
-        Ok(Ok(Ok(r))) => Ok(r),
-        Ok(Ok(Err(e))) => Err(ServerFnError::WrappedServerError(e.to_string())),
+        Ok(Ok(r)) => Ok(r),
+        //Ok(Ok(Err(e))) => Err(ServerFnError::WrappedServerError(e.to_string())),
         Ok(Err(e)) => Err(ServerFnError::WrappedServerError(e.to_string())),
         Err(e) => Err(ServerFnError::WrappedServerError(e.to_string())),
     }
@@ -37,10 +42,12 @@ const QUERY: &str = r"SELECT ?x ?y WHERE {
   ?y ulo:notation-for ?x.
 }";
 
-#[component]
-pub fn Query() -> impl IntoView {
+maybe_lazy!(Query = query());
+
+fn query() -> AnyView {
     use leptos::form::ActionForm;
     use thaw::Checkbox;
+    use thaw::{Input, Text, TextTag};
     inject_css("flams-query", include_str!("query.css"));
 
     let action = ServerAction::<QueryApi>::new();
@@ -50,19 +57,30 @@ pub fn Query() -> impl IntoView {
         action.value().get().map(|result| match result {
             Ok(r) => {
                 if pretty_print.get() {
-                    serde_json::from_str::<serde_json::Value>(&r)
+                    serde_json::to_string_pretty(&r)//from_str::<serde_json::Value>(&r)
                         .map_or_else(|e| format!("Error: {e}"), |v| format!("{v:#}"))
                 } else {
-                    r
+                    serde_json::to_string(&r).expect("infallible?")
                 }
             }
             Err(e) => format!("Error: {e}"),
         })
     });
+    let uri = RwSignal::new(String::new());
 
     view! {
       <div>
         <h1>Query</h1>
+            <p>"Note that FTML URIs need to be partially URL-encoded to be valid RDF-IRIs"</p>
+            <div>
+                <Text>"Encode URI: "</Text>
+                <Input value=uri/>
+                <Text tag=TextTag::Code>{
+                    move || {
+                        ftml_uris::rdf_encode(&uri.get()).unwrap_or_else(|| "(invalid URI)".to_string())
+                    }
+                }</Text>
+            </div>
         <ActionForm action>
             <span class="flams-query-container">
                 <textarea name="query" class="flams-query-inner">{QUERY.to_string()}</textarea>
@@ -74,5 +92,5 @@ pub fn Query() -> impl IntoView {
             {move || result.get().unwrap_or_default()}
         </div>
       </div>
-    }
+    }.into_any()
 }

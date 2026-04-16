@@ -1,5 +1,6 @@
 #![allow(clippy::must_use_candidate)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![recursion_limit = "256"]
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
@@ -10,6 +11,7 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 pub mod math;
 mod module_picker;
 
+use flams_router_base::maybe_lazy;
 use flams_router_content::Views;
 use ftml_backend::{FtmlBackend, GlobalBackend};
 use ftml_dom::{FtmlViews, utils::css::CssExt};
@@ -20,8 +22,10 @@ use ftml_ontology::{
 use ftml_uris::{DocumentUri, Id, ModuleUri, SymbolUri};
 use leptos::prelude::*;
 
-#[component]
-pub fn FloDownEditor() -> AnyView {
+maybe_lazy!(FloDownEditor = flodown_editor());
+
+//#[component]
+pub fn flodown_editor() -> AnyView {
     #[cfg(feature = "hydrate")]
     math::TeXClient::provide();
 
@@ -59,7 +63,7 @@ pub fn FloDownEditor() -> AnyView {
                         let mut s = s.iter().collect::<Vec<_>>();
                         s.sort_by_key(|(a,_)| *a);
                         ftml_components::components::content::CommaSep("",
-                            s.into_iter().map(|(id,uri)| ftml_components::components::content::symbol_uri::<flams_router_content::backend::FtmlBackend>(id.to_string(), uri))
+                            s.into_iter().map(|(id,uri)| ftml_components::components::content::symbol_uri(id.to_string(), uri))
                         ).into_view().attr("style", "display:inline;")
                     }   )
                 }
@@ -104,7 +108,7 @@ async fn get_symbols(mut todos: Vec<ModuleUri>) -> rustc_hash::FxHashMap<Id, Sym
                             ret.insert(mac.clone(), s.uri.clone());
                         }
                     }
-                    AnyDeclarationRef::Import(m) => {
+                    AnyDeclarationRef::Import { uri: m, .. } => {
                         todos.push(m.clone());
                     }
                     _ => (),
@@ -122,11 +126,12 @@ fn editor(symbols: RwSignal<rustc_hash::FxHashMap<Id, SymbolUri>>) -> AnyView {
     let checked = RwSignal::new(false);
     let text = RwSignal::new(DEMO.to_string());
 
-    ftml_components::config::FtmlConfig::set_toc_source(ftml_dom::structure::TocSource::None);
-    Views::setup_document::<flams_router_content::backend::FtmlBackend>(
+    //ftml_components::config::FtmlConfig::set_toc_source(ftml_dom::structure::TocSource::None);
+    Views::setup_document(
         DocumentUri::no_doc().clone(),
         ftml_components::SidebarPosition::None,
         false,
+        ftml_dom::toc::TocSource::None,
         move || {
             view! {
                 <div><input type="checkbox" on:change:target=move |ev| {

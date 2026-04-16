@@ -18,12 +18,13 @@ pub mod source_files;
 #[cfg(feature = "rdf")]
 pub mod triple_store;
 pub mod utils;
+pub use flams_backend_types as types;
 
 #[cfg(feature = "rdf")]
 use crate::triple_store::RDFStore;
 use crate::{
-    artifacts::{Artifact, ContentResult, FileOrString},
-    formats::{BuildTargetId, SourceFormatId},
+    artifacts::{Artifact, ContentResult, ContentUpdate, FileOrString},
+    formats::{BuildTargetId, SourceFormat, SourceFormatId},
     manifest::RepositoryData,
     source_files::{FileStates, SourceDir},
     utils::{
@@ -39,13 +40,13 @@ use flams_backend_types::{
 };
 use ftml_ontology::{domain::modules::Module, narrative::documents::Document};
 use ftml_uris::{
-    ArchiveId, ArchiveUri, IsDomainUri, Language, SimpleUriName, UriPath, UriWithArchive,
-    UriWithPath,
+    ArchiveId, ArchiveUri, DocumentUri, IsDomainUri, Language, ModuleUri, SimpleUriName, UriName,
+    UriPath, UriWithArchive, UriWithPath,
 };
 use std::{
     hint::unreachable_unchecked,
     path::{Path, PathBuf},
-    str,
+    str::{self, FromStr},
 };
 
 type Result<T> = std::result::Result<T, BackendError>;
@@ -77,13 +78,13 @@ pub trait MathArchive {
     }
 
     /// # Errors
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module>;
+    fn load_module(&self, path: Option<&UriPath>, name: &UriName) -> Result<Module>;
 
     /// # Errors
     fn load_module_async<A: AsyncEngine>(
         &self,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module>> + 'static + use<Self, A>
     where
         Self: Sized;
@@ -185,7 +186,7 @@ impl MathArchive for Archive {
             Self::Ext(_, a) => a.is_meta(),
         }
     }
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module> {
+    fn load_module(&self, path: Option<&UriPath>, name: &UriName) -> Result<Module> {
         match self {
             Self::Local(a) => a.load_module(path, name),
             Self::Ext(_, a) => a.load_module(path, name),
@@ -194,7 +195,7 @@ impl MathArchive for Archive {
     fn load_module_async<A: AsyncEngine>(
         &self,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module>> + 'static + use<A> {
         match self {
             Self::Local(a) => a.load_module_async::<A>(path, name),
@@ -256,6 +257,10 @@ pub trait BuildableArchive: MathArchive {
         load: bool,
         iter: Vec<ulo::rdf_types::Triple>,
     );
+
+    fn escape_module_name(&self, in_path: &Path, name: &str) -> PathBuf {
+        in_path.join(name.replace('*', "__AST__"))
+    }
 }
 
 pub trait LocallyBuilt: BuildableArchive {
@@ -278,6 +283,26 @@ pub trait LocallyBuilt: BuildableArchive {
     ) -> PathBuf {
         self.out_path_of(path, doc_name, rel_path, language)
             .join("content")
+    }
+
+    fn save_modules(&self, modules: &[Module]) -> std::result::Result<(), ArtifactSaveError> {
+        for m in modules {
+            let path = m.uri.path();
+            let name = m.uri.module_name();
+            let out = path.map_or_else(
+                || self.out_dir().join(".modules"),
+                |n| self.out_dir().join_uri_path(n).join(".modules"),
+            );
+            std::fs::create_dir_all(&out)
+                .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out.clone(), e)))?;
+            let out = self.escape_module_name(&out, name.as_ref());
+            let file = std::fs::File::create(&out)
+                .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out, e)))?;
+            let mut buf = std::io::BufWriter::new(file);
+            bincode::encode_into_std_write(m, &mut buf, bincode::config::standard())?;
+            //postcard::to_io(m, &mut buf)?;
+        }
+        Ok(())
     }
 }
 
@@ -311,24 +336,26 @@ impl MathArchive for LocalArchive {
         self.uri.archive_id().is_meta()
     }
 
-    fn load_module(&self, path: Option<&UriPath>, name: &str) -> Result<Module> {
+    fn load_module(&self, path: Option<&UriPath>, name: &UriName) -> Result<Module> {
         let out = path.map_or_else(
             || self.out_dir().join(".modules"),
             |n| self.out_dir().join_uri_path(n).join(".modules"),
         );
-        let out = Self::escape_module_name(&out, name);
+        let out = self.escape_module_name(&out, name.as_ref());
         if !out.exists() {
-            return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
+            return Err(BackendError::NotFound(
+                ((self.uri.clone() / path.cloned()) | name.clone()).into(),
+            ));
         }
         let file = std::io::BufReader::new(std::fs::File::open(out)?);
-        let ret = bincode::decode_from_reader(file, bincode::config::standard())?;
+        let ret: Module = bincode::decode_from_reader(file, bincode::config::standard())?;
         Ok(ret)
     }
 
     fn load_module_async<A: AsyncEngine>(
         &self,
         path: Option<&UriPath>,
-        name: &str,
+        name: &UriName,
     ) -> impl Future<Output = Result<Module>> + 'static + use<A>
     where
         Self: Sized,
@@ -337,10 +364,11 @@ impl MathArchive for LocalArchive {
             || self.out_dir().join(".modules"),
             |n| self.out_dir().join_uri_path(n).join(".modules"),
         );
-        let out = Self::escape_module_name(&out, name);
+        let out = self.escape_module_name(&out, name.as_ref());
+        let uri = (self.uri.clone() / path.cloned()) | name.clone();
         A::block_on(move || {
             if !out.exists() {
-                return Err(BackendError::NotFound(ftml_uris::UriKind::Module));
+                return Err(BackendError::NotFound(uri.into()));
             }
             let file = std::io::BufReader::new(std::fs::File::open(out)?);
             let ret = bincode::decode_from_reader(file, bincode::config::standard())?;
@@ -398,6 +426,24 @@ impl BuildableArchive for LocalArchive {
         }
         let Some(mut res) = result else { return Ok(()) };
         let outfile = out.join(res.kind());
+        if res.as_any_mut().downcast_mut::<ContentUpdate>().is_some() {
+            // SAFETY: downcast_mut just succeeded
+            let e = unsafe {
+                res.into_any()
+                    .downcast::<ContentUpdate>()
+                    .unwrap_unchecked()
+            };
+            if let Some(d) = e.document {
+                let mut cr = ContentResult::read(outfile.clone())?;
+                //println!("Parsed result: {cr:#?}");
+                cr.document = d;
+                cr.write(&outfile)?;
+            }
+            if !e.modules.is_empty() {
+                self.save_modules(&e.modules)?;
+            }
+            return Ok(());
+        }
         res.write(&outfile)?;
         if let Some(e) = res.as_any_mut().downcast_mut::<ContentResult>() {
             #[cfg(feature = "rdf")]
@@ -408,22 +454,7 @@ impl BuildableArchive for LocalArchive {
                 load,
                 std::mem::take(&mut e.triples),
             );
-            for m in &e.modules {
-                let path = m.uri.path();
-                let name = m.uri.module_name();
-                let out = path.map_or_else(
-                    || self.out_dir().join(".modules"),
-                    |n| self.out_dir().join_uri_path(n).join(".modules"),
-                );
-                std::fs::create_dir_all(&out)
-                    .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out.clone(), e)))?;
-                let out = Self::escape_module_name(&out, name.as_ref());
-                let file = std::fs::File::create(&out)
-                    .map_err(|e| ArtifactSaveError::Fs(FileError::Creation(out, e)))?;
-                let mut buf = std::io::BufWriter::new(file);
-                bincode::encode_into_std_write(m, &mut buf, bincode::config::standard())?;
-                //postcard::to_io(m, &mut buf)?;
-            }
+            self.save_modules(&e.modules)?;
         }
         Ok(())
     }
@@ -443,6 +474,7 @@ impl BuildableArchive for LocalArchive {
         let out = out.join("index.ttl");
         relational.export(iter.into_iter(), &out, in_doc);
         if load {
+            //println!("Loading newly saved rdf triples");
             relational.load(&out, in_doc.to_iri());
         }
     }
@@ -483,18 +515,101 @@ impl LocallyBuilt for LocalArchive {
                     || self.out_path.join(doc_name.as_ref()),
                     |n| self.out_path.join_uri_path(n).join(doc_name.as_ref()),
                 );
-                let mp = p.with_extension(lang);
-                if mp.exists() { mp } else { p }
+                let mp = p.with_added_extension(lang);
+                if mp.exists() {
+                    mp
+                } else {
+                    let mp2 = p.with_extension(lang);
+                    if mp2 != mp && mp2.exists() { mp2 } else { p }
+                }
             },
-            |source| {
+            |rel_path| {
                 // SAFETY source is ancestor of source_dir
-                let rel_path = unsafe { source.relative_to(&self.source_dir()).unwrap_unchecked() };
+                //let rel_path = unsafe { source.relative_to(&self.source_dir()).unwrap_unchecked() };
                 self.out_path.join(rel_path)
             },
         )
     }
 }
 impl LocalArchive {
+    pub fn document_of(&self, path: Option<&UriPath>, name: &UriName) -> Option<DocumentUri> {
+        let mut mname = name.first();
+        let mut file = self.source_dir();
+        let maybe_step = if let Some(path) = path {
+            let mut steps = path.steps();
+            let _ = steps.next_back();
+            for step in steps {
+                file = file.join(step);
+            }
+            path.steps().next_back()
+        } else {
+            None
+        };
+        if let Some(step) = maybe_step
+            && let Ok(mut d) = std::fs::read_dir(file.join(step))
+        {
+            if let Some(rp) = d.find_map::<String, _>(|p| {
+                p.ok().and_then(|p| {
+                    let fnm = p.file_name();
+                    let name = fnm.as_os_str().as_encoded_bytes();
+                    let name = name.strip_prefix(mname.as_bytes())?.strip_prefix(b".")?;
+                    let lang = self.formats.iter().find_map(|f| {
+                        f.file_extensions.iter().find_map(|e| {
+                            name.strip_suffix(e.as_bytes())
+                                .and_then(|s| s.strip_suffix(b"."))
+                        })
+                    })?;
+                    if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
+                        Some(
+                            p.path()
+                                .as_os_str()
+                                .to_str()?
+                                .strip_prefix(self.source_dir().as_os_str().to_str()?)?[1..]
+                                .to_string(),
+                        )
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                return DocumentUri::from_archive_relpath(self.uri.clone(), &rp).ok();
+            }
+            mname = step;
+        };
+
+        if let Ok(mut d) = std::fs::read_dir(file) {
+            if let Some(rp) = d.find_map::<String, _>(|p| {
+                p.ok().and_then(|p| {
+                    let fnm = p.file_name();
+                    let name = fnm.as_os_str().as_encoded_bytes();
+                    let Some(name) = name.strip_prefix(mname.as_bytes()) else {
+                        return None;
+                    };
+                    let Some(name) = name.strip_prefix(b".") else {
+                        return None;
+                    };
+                    let Some(lang) = name.strip_suffix(b".tex") else {
+                        return None;
+                    };
+                    if Language::from_str(std::str::from_utf8(lang).ok()?).is_ok() {
+                        Some(
+                            p.path()
+                                .as_os_str()
+                                .to_str()?
+                                .strip_prefix(self.source_dir().as_os_str().to_str()?)?[1..]
+                                .to_string(),
+                        )
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                return DocumentUri::from_archive_relpath(self.uri.clone(), &rp).ok();
+            }
+        };
+        None
+    }
+
     #[cfg(feature = "git")]
     pub fn git_url(&self, on_host: &url::Url) -> Option<&flams_git::GitUrl> {
         self.is_managed
@@ -509,10 +624,6 @@ impl LocalArchive {
 
     pub fn state_summary(&self) -> FileStateSummary {
         self.file_state.read().state().summarize()
-    }
-
-    fn escape_module_name(in_path: &Path, name: &str) -> PathBuf {
-        in_path.join(name.replace('*', "__AST__"))
     }
 
     #[must_use]
@@ -547,13 +658,13 @@ impl LocalArchive {
         f(&self.file_state.read())
     }
 
-    pub(crate) fn update_sources(&self) {
+    pub fn update_sources(&self) {
         let dir = SourceDir::new(&self.source_dir(), &self.ignore, self.formats());
         let mut state = self.file_state.write();
         state.update(dir);
     }
 
-    /// blocks!
+    /// blocks! removes File extension!
     pub fn rel_path_of(
         &self,
         path: Option<&UriPath>,
@@ -561,17 +672,27 @@ impl LocalArchive {
         language: Language,
     ) -> Option<PathBuf> {
         let dir = path.map_or_else(|| self.source_dir(), |n| self.source_dir().join_uri_path(n));
-
         for f in std::fs::read_dir(&dir)
             .ok()?
             .filter_map(std::result::Result::ok)
         {
-            let Ok(m) = dir.metadata() else { continue };
+            let Ok(m) = f.metadata() else { continue };
             if !m.is_file() {
                 continue;
             }
             let fname = f.file_name();
             let Some(name) = fname.to_str() else { continue };
+            let Some((_, ext)) = name.rsplit_once('.') else {
+                continue;
+            };
+            if !self
+                .formats
+                .iter()
+                .flat_map(|sf| sf.file_extensions.iter())
+                .any(|e| *e == ext)
+            {
+                continue;
+            }
 
             if !name.starts_with(doc_name.as_ref()) {
                 continue;
@@ -587,7 +708,12 @@ impl LocalArchive {
                     continue;
                 }
             }
-            return Some(f.path());
+            let path = f
+                .path()
+                .strip_prefix(self.source_dir())
+                .ok()?
+                .with_extension("");
+            return Some(path);
         }
         None
     }
