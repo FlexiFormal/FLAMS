@@ -51,8 +51,8 @@
           "when": "flams.loaded"
         },
         {
-          "id":"flams-document",
-          "type":"webview",
+          "id": "flams-document",
+          "type": "webview",
           "name": "Current document",
           "icon": "img/flams.svg",
           "contextualTitle": "FLAMS Functionality",
@@ -77,26 +77,26 @@
         }
       ],
       "editor/title": [
-				{
-					"command": "flams.buildAll",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				},
-				{
-					"command": "flams.buildOne",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				},
-				{
-					"command": "flams.exportTex",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				},
-				{
-					"command": "flams.exportHtml",
-					"group": "navigation",
-					"when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
-				}
+        {
+          "command": "flams.buildAll",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        },
+        {
+          "command": "flams.buildOne",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        },
+        {
+          "command": "flams.exportTex",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        },
+        {
+          "command": "flams.exportHtml",
+          "group": "navigation",
+          "when": "editorLangId =~ /^tex$|^latex$|^latex-expl3$/"
+        }
       ]
     },
     "commands": [
@@ -191,30 +191,29 @@
   },
   "devDependencies": {
     "@types/follow-redirects": "^1.14.4",
-    "@types/mocha": "^10.0.10",
     "@types/node": "22.13.12",
     "@types/vscode": "^1.94.0",
     "@types/yauzl": "^2.10.3",
-    "@typescript-eslint/eslint-plugin": "^8.27.0",
-    "@typescript-eslint/parser": "^8.27.0",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "eslint": "^9.23.0",
-    "ts-loader": "^9.5.2",
-    "typescript": "^5.8.2",
-    "webpack": "^5.98.0",
-    "webpack-cli": "^6.0.1"
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/parser": "^8.58.2",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^10.2.0",
+    "ts-loader": "^9.5.7",
+    "typescript": "^6.0.2",
+    "webpack": "^5.106.2",
+    "webpack-cli": "^7.0.2"
   },
   "dependencies": {
-    "@kwarc/flams": "=0.0.19",
-    "@octokit/rest": "^21.1.1",
-    "@vscode-elements/elements": "^1.14.0",
-    "@vscode/codicons": "^0.0.36",
+    "@flexiformal/ftml-backend": "=0.0.9",
+    "@octokit/rest": "^22.0.1",
+    "@vscode-elements/elements": "^2.5.1",
+    "@vscode/codicons": "^0.0.45",
     "child_process": "^1.0.2",
-    "follow-redirects": "^1.15.9",
+    "follow-redirects": "^1.16.0",
     "fs": "^0.0.2",
     "mkdirp": "^3.0.1",
     "vscode-languageclient": "^9.0.1",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.3.0"
   }
 }
