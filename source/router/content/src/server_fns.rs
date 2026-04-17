@@ -4,7 +4,9 @@ use ftml_ontology::{
         documents::TocElem,
         elements::{
             DocumentTerm, Notation, ParagraphOrProblemKind, SectionLevel, SlideElement,
-            problems::{ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz},
+            problems::{
+                GradingNote, ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz,
+            },
         },
     },
     utils::Css,
@@ -440,6 +442,28 @@ ftml_uris::compfun! {
 }
 
 ftml_uris::compfun! {
+    #[server(prefix = "/content", endpoint = "gnotes",
+        input=server_fn::codec::GetUrl
+    )]
+    #[allow(clippy::many_single_char_names)]
+    #[allow(clippy::too_many_arguments)]
+    pub async fn gnotes(
+        uri: Uri
+    ) -> Result<Box<[GradingNote]>, ServerFnError<String>> {
+        let Result::<UriComponents, _>::Ok(comps) = uri else {
+            return Err("invalid uri components".to_string().into());
+        };
+        match comps.parse(flams_router_base::uris::get_uri) {
+            Ok(Uri::DocumentElement(uri)) => {
+                server::get_gnotes(&uri).await
+            },
+            Ok(u) => Err(format!("Invalid document element uri: {u}").into()),
+            Err(e) => Err(format!("Invalid uri: {e}").into()),
+        }
+    }
+}
+
+ftml_uris::compfun! {
     #[server(
     prefix="/content",
     endpoint="slides",
@@ -476,7 +500,7 @@ mod server {
             elements::{
                 DocumentElement, LogicalParagraph, Notation, ParagraphOrProblemKind, Problem,
                 Section, SectionLevel, SlideElement,
-                problems::{ProblemData, Solutions, quizzes::Quiz},
+                problems::{GradingNote, ProblemData, Solutions, quizzes::Quiz},
             },
         },
         utils::Css,
@@ -868,6 +892,33 @@ mod server {
             Ok((insert_base_url(css.0.into_boxed_slice()), r))
         })
         .await
+    }
+
+    pub async fn get_gnotes(
+        uri: &DocumentElementUri,
+    ) -> Result<Box<[GradingNote]>, ServerFnError<String>> {
+        use flams_math_archives::backend::LocalBackend;
+        match backend()
+            .get_typed_document_element_async::<TokioEngine, _>(uri)
+            .await
+        {
+            Ok(rf) => {
+                blocking_server_fn(move || {
+                    let e: &Problem = &rf;
+                    Ok(e.data
+                        .gnotes
+                        .iter()
+                        .filter_map(|gn| {
+                            backend()
+                                .get_reference(&gn.with_doc(e.uri.document_uri().clone()))
+                                .ok()
+                        })
+                        .collect())
+                })
+                .await
+            }
+            _ => not_found!("Problem {uri} not found"),
+        }
     }
 
     pub async fn get_solution(uri: &DocumentElementUri) -> Result<Solutions, String> {
