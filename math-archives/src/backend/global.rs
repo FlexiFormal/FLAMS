@@ -98,6 +98,25 @@ impl LocalBackend for ArchiveManager {
         from: crate::formats::BuildTargetId,
         result: Option<Box<dyn crate::artifacts::Artifact>>,
     ) -> std::result::Result<(), crate::utils::errors::ArtifactSaveError> {
+        #[cfg(feature = "cached")]
+        {
+            if let Some(r) = result.as_ref() {
+                if let Some(r) = r.as_any().downcast_ref::<crate::artifacts::ContentUpdate>() {
+                    if let Some(d) = &r.document {
+                        self.documents.remove(&d.uri);
+                    }
+                    for m in &r.modules {
+                        self.modules.remove(&m.uri);
+                    }
+                } else if let Some(r) = r.as_any().downcast_ref::<crate::artifacts::ContentResult>()
+                {
+                    self.documents.remove(&r.document.uri);
+                    for m in &r.modules {
+                        self.modules.remove(&m.uri);
+                    }
+                }
+            }
+        }
         self.with_buildable_archive(in_doc.archive_id(), |a| {
             let Some(a) = a else {
                 return Err(ArtifactSaveError::NoArchive);
@@ -347,7 +366,7 @@ impl LocalBackend for ArchiveManager {
         if uri.is_top() {
             #[cfg(feature = "cached")]
             {
-                if let Some(m) = self.modules.has_async(uri) {
+                if let Some(m) = self.modules.has(uri) {
                     return either::Left(either::Left(m.map_ok(ModuleLike::Module)));
                 }
                 let lm = self.load_module_async::<A>(uri.archive_uri(), uri.path(), uri.name());
@@ -371,7 +390,7 @@ impl LocalBackend for ArchiveManager {
             let m = {
                 #[cfg(feature = "cached")]
                 {
-                    if let Some(m) = self.modules.has_async(&module) {
+                    if let Some(m) = self.modules.has(&module) {
                         either::Left(m)
                     } else {
                         either::Right(self.load_module_async::<A>(
@@ -437,7 +456,7 @@ impl ArchiveManager {
     ) -> Result<R, BackendError> {
         #[cfg(feature = "cached")]
         {
-            if let Some(v) = self.documents.has(uri) {
+            if let Some(v) = self.documents.has_sync(uri) {
                 let docfile = v?;
                 return then(&docfile);
             }
@@ -493,7 +512,7 @@ impl ArchiveManager {
     ) -> impl Future<Output = Result<R, BackendError>> + Send + use<A, R, T, O, Then, Other> {
         #[cfg(feature = "cached")]
         {
-            if let Some(v) = self.documents.has_async(uri) {
+            if let Some(v) = self.documents.has(uri) {
                 return either::Right(either::Left(async move {
                     match v.await {
                         Ok(f) => then(f).await,

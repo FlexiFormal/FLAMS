@@ -26,7 +26,7 @@ members = [
     "source/router/vscode-bindings",
     "source/router/flodown",
     #"experiments",
-    "source/ffi", "solver/main","solver/trace"
+    "source/ffi", "solver/main","solver/trace"#,"solver/new"
     #"maintest"
 ]
 resolver = "2"
@@ -315,11 +315,11 @@ js-sys = "0.3"
 tracing-wasm = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
-reqwasm = "0.5"
+#reqwasm = "0.5"
 gloo-storage = "0.3"
 gloo-timers = "0.3"
 web-sys = { version = "0.3" }
-tsify-next = { version = "0.5", features = ["js"] }
+#tsify-next = { version = "0.5", features = ["js"] }
 tsify = { version = "0.5", features = ["js"] }
 js-regexp = "0.2"
 wasm-streams = "0.5"
@@ -342,6 +342,10 @@ getrandom = "0.3" # version required by ahash :-/
 #thaw = { git = 'https://github.com/thaw-ui/thaw' }
 #thaw_utils = { git = 'https://github.com/thaw-ui/thaw' }
 #thaw_components = { git = 'https://github.com/thaw-ui/thaw' }
+
+
+[replace]
+"serde-lite:0.5.1" = { git = 'https://github.com/Jazzpirate/serde-lite',branch="hashmaps" }
 
 [[workspace.metadata.leptos]]
 hash-files = true

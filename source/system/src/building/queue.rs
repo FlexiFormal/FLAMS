@@ -5,6 +5,7 @@ use super::{
     BuildTask, BuildTaskId, Eta, QueueMessage, TaskRef, TaskState,
 };
 use flams_math_archives::{
+    artifacts::FileOrString,
     backend::{AnyBackend, LocalBackend},
     formats::{BuildResult, BuildTargetId, FormatOrTargets},
     manager::ArchiveOrGroup,
@@ -286,12 +287,13 @@ impl Queue {
         });
         let spec = task.as_build_spec(&self.0.backend);
         //println!("Running task {target}");
-        let BuildResult { log, result } = tracing::info_span!(target:"buildqueue","Running task",
-          archive = %task.0.uri.archive_id(),
-          rel_path = %task.0.rel_path,
-          format = %target
-        )
-        .in_scope(|| (target.run)(spec));
+        let BuildResult { log, mut result } =
+            tracing::info_span!(target:"buildqueue","Running task",
+              archive = %task.0.uri.archive_id(),
+              rel_path = %task.0.rel_path,
+              format = %target
+            )
+            .in_scope(|| (target.run)(spec));
         //println!("Finished running task {target}");
         /*let (idx, _) = task
         .steps()
@@ -305,6 +307,17 @@ impl Queue {
         };
         state.running.retain(|t| t != task);
         let eta = state.timer.update(1);
+
+        if let Err(e) = self.0.backend.save(
+            task.document_uri(),
+            Some(task.rel_path()),
+            log,
+            target,
+            result.as_mut().map_or_else(|_| None, Option::take),
+        ) {
+            result = Err(Vec::new());
+            tracing::error!("Error saving build result: {e}");
+        };
 
         match result {
             Err(deps) => {
@@ -360,14 +373,6 @@ impl Queue {
                     });
                 }
                 drop(lock);
-
-                let _ = self.0.backend.save(
-                    task.document_uri(),
-                    Some(task.rel_path()),
-                    log,
-                    target,
-                    None,
-                );
             }
             Ok(data) => {
                 let mut found = false;
@@ -398,14 +403,6 @@ impl Queue {
                         );
                     }
                 }
-
-                let _ = self.0.backend.save(
-                    task.document_uri(),
-                    Some(task.rel_path()),
-                    log,
-                    target,
-                    data,
-                );
 
                 self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
                     id: task.0.id,

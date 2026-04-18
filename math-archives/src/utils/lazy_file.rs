@@ -160,7 +160,7 @@ impl<const NUM_FIELDS: usize> LazyFileReader<NUM_FIELDS> {
                     .map_err(|e| {
                         ReadError::Decode(bincode::error::DecodeError::OtherString(e.to_string()))
                     })
-                    .map(|s| s.into_boxed_str())
+                    .map(String::into_boxed_str)
             } else {
                 let mut ret = String::new();
                 file.read_to_string(&mut ret)?;
@@ -278,30 +278,54 @@ impl<P: __private::LazyField> LazyFieldValue for P {}
 
 #[derive(Debug)]
 pub struct LazyField<V: LazyFieldValue, const INDEX: usize> {
-    #[allow(clippy::type_complexity)]
-    inner: std::sync::Arc<
-        parking_lot::RwLock<Either<Option<Result<V, ReadError>>, flume::Receiver<()>>>,
-    >,
+    inner: parking_lot::Mutex<Option<ftml_backend::utils::async_cache::Awaitable<V, ReadError>>>, /*#[allow(clippy::type_complexity)]
+                                                                                                  inner: std::sync::Arc<
+                                                                                                      parking_lot::RwLock<Either<Option<Result<V, ReadError>>, flume::Receiver<()>>>,
+                                                                                                  >,*/
 }
 impl<V: LazyFieldValue, const INDEX: usize> Default for LazyField<V, INDEX> {
     #[inline]
     fn default() -> Self {
         Self {
-            inner: std::sync::Arc::new(parking_lot::RwLock::new(Either::Left(None))),
+            inner: parking_lot::Mutex::new(None), //std::sync::Arc::new(parking_lot::RwLock::new(Either::Left(None))),
         }
     }
 }
 impl<V: LazyFieldValue + 'static, const INDEX: usize> LazyField<V, INDEX> {
     #[inline]
+    /// blocks!
     pub fn maybe_get(&self) -> Option<Result<V, ReadError>> {
-        match &*self.inner.read() {
-            Either::Left(v) => v.clone(),
-            Either::Right(_) => None,
-        }
+        let lock = self.inner.lock();
+        let v = lock.as_ref()?.clone();
+        drop(lock);
+        Some(v.get_sync())
     }
 
     /// # Errors
     pub fn get<const TOTAL: usize>(&self, reader: &LazyFile<TOTAL>) -> Result<V, ReadError> {
+        let mut lock = self.inner.lock();
+        if let Some(inner) = &*lock {
+            let a = inner.clone();
+            drop(lock);
+            a.get_sync()
+        } else {
+            let (a, r, sender) = ftml_backend::utils::async_cache::Awaitable::new_sync();
+            *lock = Some(a);
+            drop(lock);
+            let mut reader = reader.read()?;
+            let v = V::get(INDEX, &mut reader);
+            let mut lock = r.0.lock();
+            if let Ok(r) = &mut lock {
+                **r = Some(v.clone());
+            };
+            drop(lock);
+            r.1.notify_all();
+            if sender.receiver_count() > 0 {
+                let _ = sender.broadcast_blocking(true);
+            }
+            v
+        }
+        /*
         let inner = self.inner.read().clone();
         match inner {
             Either::Left(Some(v)) => v,
@@ -320,7 +344,7 @@ impl<V: LazyFieldValue + 'static, const INDEX: usize> LazyField<V, INDEX> {
                 }
                 v
             }
-        }
+        } */
     }
 
     /// # Errors
@@ -331,6 +355,22 @@ impl<V: LazyFieldValue + 'static, const INDEX: usize> LazyField<V, INDEX> {
     where
         V: 'static,
     {
+        let mut lock = self.inner.lock();
+        if let Some(inner) = &*lock {
+            let a = inner.clone();
+            drop(lock);
+            return either::Left(a.get());
+        }
+        let reader = reader.clone();
+        let fut = A::block_on(move || {
+            let mut reader = reader.read()?;
+            V::get(INDEX, &mut reader)
+        });
+        let (a, r) = ftml_backend::utils::async_cache::Awaitable::new_fut(fut);
+        *lock = Some(a);
+        drop(lock);
+        either::Right(r.get())
+        /*
         let inner = self.inner.read().clone();
         match inner {
             Either::Left(Some(v)) => either::Left(std::future::ready(v)),
@@ -353,8 +393,10 @@ impl<V: LazyFieldValue + 'static, const INDEX: usize> LazyField<V, INDEX> {
                 either::Right(either::Right(Self::fut_2::<A, TOTAL>(inner, reader, s)))
             }
         }
+         */
     }
 
+    /*
     async fn fut_1<A: AsyncEngine, const TOTAL: usize>(
         inner: std::sync::Arc<
             parking_lot::RwLock<Either<Option<Result<V, ReadError>>, flume::Receiver<()>>>,
@@ -380,6 +422,7 @@ impl<V: LazyFieldValue + 'static, const INDEX: usize> LazyField<V, INDEX> {
         }
         v
     }
+     */
 
     /*
     /// # Errors
@@ -400,7 +443,9 @@ impl<V: LazyFieldValue + deepsize::DeepSizeOf, const INDEX: usize> deepsize::Dee
     for LazyField<V, INDEX>
 {
     fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
-        if let either::Left(Some(Ok(v))) = &*self.inner.read() {
+        if let Some(v) = &*self.inner.lock()
+            && let Ok(Some(Ok(v))) = v.inner.0.lock().as_deref()
+        {
             v.deep_size_of_children(context)
         } else {
             0
