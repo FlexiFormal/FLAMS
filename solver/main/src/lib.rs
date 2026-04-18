@@ -256,10 +256,10 @@ impl<Split: SplitStrategy> Checker<Split> {
                         results.push(CheckResult::Missing(morphism.module.clone()));
                         continue;
                     };
-                    m.initialize(&mut |uri| self.get_module_like(uri).map_err(|()| "not found"));
+                    /*m.initialize(&mut |uri| self.get_module_like(uri).map_err(|()| "not found"));
                     if let Some(r) = self.check_morphism(&m) {
                         results.extend(r.into_iter());
-                    }
+                    }*/ // let's not touch morphisms for now
                 }
                 DocumentElementRef::VariableDeclaration(v) => {
                     if let Some(r) = self.check_variable(v) {

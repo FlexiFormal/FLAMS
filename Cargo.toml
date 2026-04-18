@@ -26,7 +26,7 @@ members = [
     "source/router/vscode-bindings",
     "source/router/flodown",
     #"experiments",
-    "source/ffi", "solver/main","solver/trace"
+    "source/ffi", "solver/main","solver/trace"#,"solver/new"
     #"maintest"
 ]
 resolver = "2"
