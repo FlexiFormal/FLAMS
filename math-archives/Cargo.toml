@@ -58,7 +58,7 @@ tracing-subscriber = { workspace = true }
 document-features = { workspace = true }
 
 ftml-ontology = { workspace = true }
-ftml-backend = { workspace = true }
+ftml-backend = { workspace = true, features=["cached"] }
 ftml-uris = { workspace = true, features = ["interned"] }
 flams-backend-types = { workspace = true, features = ["serde"] }
 flams-git = { workspace = true, optional = true, features = ["git2"] }
@@ -82,7 +82,7 @@ bincode = { workspace = true, features = ["std", "serde"] }
 triomphe = { workspace = true }
 dashmap = { workspace = true }
 rustc-hash = { workspace = true }
-flume = { workspace = true }
+#flume = { workspace = true }
 futures-util = { workspace = true }
 
 # orx-parallel = { workspace = true }

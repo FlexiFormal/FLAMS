@@ -29,7 +29,7 @@ hydrate = [
     "flams-router-vscode/hydrate",
     "flams-router-content/hydrate",
     "flams-web-utils/hydrate",
-    "dep:reqwasm",
+    #"dep:reqwasm",
 ]
 docs-only = []
 vectorsearch = ["flams-backend-types/vectorsearch"]
@@ -57,7 +57,7 @@ serde = { workspace = true }
 icondata_ai = { workspace = true }
 
 tokio = { workspace = true, optional = true }
-reqwasm = { workspace = true, optional = true }
+#reqwasm = { workspace = true, optional = true }
 #paste = { workspace = true, optional = true }
 #smallvec = { workspace = true, optional = true }
 #lazy_static = { workspace = true }

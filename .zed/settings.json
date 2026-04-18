@@ -13,7 +13,7 @@
             //"docs",
             "serde",
             "tantivy", //"vectorsearch", //
-            "ssr", //"hydrate" //
+            "ssr", //"hydrate", //
           ], // "all"*/
         },
       },
