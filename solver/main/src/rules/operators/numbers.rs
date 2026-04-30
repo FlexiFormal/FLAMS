@@ -5,7 +5,8 @@ use ftml_uris::{Id, SymbolUri};
 use crate::{
     CheckRef,
     rules::{
-        CheckingRule, EqualityRule, InferenceRule, MarkerRule, SimplificationRule, SubtypeRule,
+        CheckingRule, EqualityRule, InferenceRule, MarkerRule, ProofRule, SimplificationRule,
+        SubtypeRule,
     },
     split::SplitStrategy,
 };
@@ -295,6 +296,178 @@ impl<Split: SplitStrategy> EqualityRule<Split> for NumberTypes {
 
 // -------------------------------------------------------------------------------------------
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Max(pub SymbolUri);
+impl SizedSolverRule for Max {
+    fn display(&self) -> Vec<ftml_solver_trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is maximum")
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for Max {
+    fn applicable(&self, term: &Term) -> bool {
+        let Term::Application(app) = term else {
+            return false;
+        };
+        if app.head.is(&self.0)
+            && let [
+                Argument::Simple(Term::Number(_)),
+                Argument::Simple(Term::Number(_)),
+            ] = &*app.arguments
+        {
+            true
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
+        &self,
+        _: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        if let [
+            Argument::Simple(Term::Number(a)),
+            Argument::Simple(Term::Number(b)),
+        ] = &*app.arguments
+        {
+            let a = a.as_float();
+            let b = b.as_float();
+            Ok(Term::Number(Numeric::Float(a.max(b).into())))
+        } else {
+            Err(None)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LessThan(pub SymbolUri);
+impl SizedSolverRule for LessThan {
+    fn display(&self) -> Vec<ftml_solver_trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is <=")
+    }
+}
+impl<Split: SplitStrategy> ProofRule<Split> for LessThan {
+    fn applicable(&self, term: &Term) -> bool {
+        let Term::Application(app) = term else {
+            return false;
+        };
+        if app.head.is(&self.0)
+            && let [
+                Argument::Simple(Term::Number(a)),
+                Argument::Simple(Term::Number(b)),
+            ] = &*app.arguments
+        {
+            true
+        } else {
+            false
+        }
+    }
+    fn prove<'t>(&self, _: CheckRef<'t, '_, Split>, goal: &'t Term) -> Option<Term> {
+        let Term::Application(app) = goal else {
+            return None;
+        };
+        let [
+            Argument::Simple(Term::Number(a)),
+            Argument::Simple(Term::Number(b)),
+        ] = &*app.arguments
+        else {
+            return None;
+        };
+
+        if a.as_float() <= b.as_float() {
+            Some(ftml_uris::metatheory::AUTO_PROVE.clone().into())
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Logarithm(pub SymbolUri);
+impl SizedSolverRule for Logarithm {
+    fn display(&self) -> Vec<ftml_solver_trace::Displayable> {
+        ftml_solver_trace::trace!(&self.0, " is logarithm")
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for Logarithm {
+    fn applicable(&self, term: &Term) -> bool {
+        let Term::Application(app) = term else {
+            return false;
+        };
+        if app.head.is(&self.0)
+            && let [
+                Argument::Simple(Term::Number(b)),
+                Argument::Simple(Term::Number(x)),
+            ] = &*app.arguments
+        {
+            let b = b.as_float();
+            let x = x.as_float();
+            b > 0.0 && x > 0.0 && b != 1.0
+        } else {
+            false
+        }
+    }
+    fn apply<'t>(
+        &self,
+        _: CheckRef<'t, '_, Split>,
+        term: &'t Term,
+    ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
+        let Term::Application(app) = term else {
+            return Err(None);
+        };
+        if let [
+            Argument::Simple(Term::Number(b)),
+            Argument::Simple(Term::Number(x)),
+        ] = &*app.arguments
+        {
+            let b = b.as_float();
+            let x = x.as_float();
+            let r = if b == 2.0 {
+                x.log2()
+            } else if b == 10.0 {
+                x.log10()
+            } else if b == std::f64::consts::E {
+                x.ln()
+            } else {
+                x.log(b)
+            };
+            Ok(Term::Number(Numeric::Float(r.into())))
+        } else {
+            Err(None)
+        }
+    }
+}
+
+fn applicable(uri: &SymbolUri, term: &Term, unit: f64) -> bool {
+    let Term::Application(app) = term else {
+        return false;
+    };
+    app.head.is(uri)
+        && (matches!(
+            &*app.arguments,
+            [
+                Argument::Simple(Term::Number(_)),
+                Argument::Simple(Term::Number(_))
+            ] | [Argument::Sequence(_)]
+        ) || matches!(
+        &*app.arguments,
+        [
+            Argument::Simple(Term::Number(n)),
+            Argument::Simple(_)
+        ]
+        if n.as_float() == unit
+        ) || matches!(
+        &*app.arguments,
+        [
+            Argument::Simple(_),
+            Argument::Simple(Term::Number(n)),
+        ]
+        if n.as_float() == unit
+        ))
+}
+
 macro_rules! arith {
     ($($name:ident $trace:literal $unit:literal = ($a:ident,$b:ident => $op:expr))*) => {
         $(
@@ -307,31 +480,7 @@ macro_rules! arith {
             }
             impl<Split: SplitStrategy> SimplificationRule<Split> for $name {
                 fn applicable(&self, term: &Term) -> bool {
-                    let Term::Application(app) = term else {
-                        return false;
-                    };
-                    app.head.is(&self.0)
-                        && (matches!(
-                            &*app.arguments,
-                            [
-                                Argument::Simple(Term::Number(_)),
-                                Argument::Simple(Term::Number(_))
-                            ] | [Argument::Sequence(_)]
-                        ) || matches!(
-                        &*app.arguments,
-                        [
-                            Argument::Simple(Term::Number(n)),
-                            Argument::Simple(_)
-                        ]
-                        if n.as_float() == $unit
-                        ) || matches!(
-                        &*app.arguments,
-                        [
-                            Argument::Simple(_),
-                            Argument::Simple(Term::Number(n)),
-                        ]
-                        if n.as_float() == $unit
-                        ))
+                    applicable(&self.0,term,$unit)
                 }
                 fn apply<'t>(
                     &self,

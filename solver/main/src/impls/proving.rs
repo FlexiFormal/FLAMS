@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use ftml_ontology::terms::{
-    ApplicationTerm, Argument, ComponentVar, Term, Variable, helpers::IntoTerm,
+    ApplicationTerm, Argument, ComponentVar, Term, Variable, eq::Alpha, helpers::IntoTerm,
 };
 use ftml_solver_trace::CheckingTask;
 use ftml_uris::{Id, SymbolUri};
@@ -12,7 +12,7 @@ use crate::{
     CheckRef,
     facts::{Fact, GlobalOrLocal, GoalPremise, LocalFacts},
     hoas::HOASSymbols,
-    impls::equality::{Alpha, alpha_equal, alpha_equal_with},
+    rules::ProofRule,
     split::SplitStrategy,
 };
 
@@ -37,7 +37,7 @@ impl ProverState {
             .goals
             .iter()
             .enumerate()
-            .find(|(_, (e, _))| alpha_equal(e, t))
+            .find(|(_, (e, _))| e.alpha_equal(t))
         {
             tracing::debug!("Already exists");
             if let Some(d) = lock.get_solution(GoalId(i), checker) {
@@ -195,11 +195,11 @@ impl Premise {
                 },
             ) => {
                 *is_sequence == *is_sequence2
-                    && alpha_equal_with(elem2, elem, alpha)
-                    && alpha_equal_with(tp2, tp, alpha)
+                    && elem2.alpha_equal_under(elem, alpha)
+                    && tp2.alpha_equal_under(tp, alpha)
             }
             (Self::Proof { goal, .. }, GoalPremise::Proof(goal2)) => {
-                alpha_equal_with(goal2, goal, alpha)
+                goal2.alpha_equal_under(goal, alpha)
             }
             (
                 Self::NeedSuchThat {
@@ -216,7 +216,7 @@ impl Premise {
                     premises: premises2,
                 },
             ) => {
-                *is_sequence == *is_sequence2 && alpha_equal_with(tp2, tp, alpha) && {
+                *is_sequence == *is_sequence2 && tp2.alpha_equal_under(tp, alpha) && {
                     alpha.push((name2.as_ref(), name));
                     if premises2
                         .iter()
@@ -331,8 +331,12 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             self.backchain(goal)
         } else {
             tracing::debug!("Does not match {judgment}: {:?}", goal.debug_short());
-            self.failure("TODO: check proof rules");
-            None
+            self.simplify_rules(
+                self.top.rules.proof(),
+                goal,
+                ProofRule::applicable,
+                |slf, rl, t| rl.prove(slf, t),
+            )
         };
         r.map(|t| self.subst(t))
     }
