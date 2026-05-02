@@ -3,13 +3,13 @@ use std::borrow::Cow;
 use ftml_ontology::{
     domain::declarations::symbols::Symbol,
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
-    terms::{Argument, ComponentVar, Term, Variable, helpers::Bound},
+    terms::{Argument, ComponentVar, Term, Variable, helpers::Bound, patterns::Pattern},
 };
 use ftml_uris::{DocumentElementUri, Id, SymbolUri};
 use smallvec::SmallVec;
 
 use crate::{
-    CheckRef, Checker, hoas::HOASSymbols, impls::solving::TermExtSolvable, patterns::Pattern,
+    CheckRef, Checker, hoas::HOASSymbols, impls::solving::TermExtSolvable,
     rules::implicits::ImplicitExtBound, split::SplitStrategy,
 };
 

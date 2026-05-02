@@ -1,13 +1,12 @@
 use crate::{
     CheckRef,
     impls::solving::TermExtSolvable,
-    patterns::Pattern,
     rules::{
         CheckingRule, InhabitableRule, MarkerRule, SizedSolverRule, SubtypeRule, UniverseRule,
     },
     split::SplitStrategy,
 };
-use ftml_ontology::terms::{Argument, Term};
+use ftml_ontology::terms::{Argument, Term, patterns::Pattern};
 use ftml_uris::SymbolUri;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

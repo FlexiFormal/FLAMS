@@ -11,7 +11,7 @@ pub mod trace {
 }
 pub mod facts;
 pub mod hoas;
-pub mod patterns;
+//pub mod patterns;
 pub mod utils;
 
 use crate::{
@@ -289,8 +289,11 @@ impl<Split: SplitStrategy> Checker<Split> {
                     tracing::debug!("Checking term {:?}", top.get_parsed().debug_short());
                     //println!("All rules: {:#?}", self.rules);
                     let (unks, tm) = self.prepare(None, top.get_parsed().clone());
-                    let (t, _, log) = self.infer_type(Some(unks), &tm);
-                    let t = t.map(|t| self.revert_prepare(t));
+                    let (t, unks, log) = self.infer_type(Some(unks), &tm);
+                    let t = t.map(|t| {
+                        self.wrap_none(Some(unks), |slf| slf.revert_prepare(slf.subst(t)))
+                            .1
+                    });
                     if let Some(t) = &t {
                         top.set_type(t.clone());
                     }
