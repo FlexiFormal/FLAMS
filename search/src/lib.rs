@@ -36,10 +36,11 @@ const MEMORY_SIZE: usize = 150_000_000;
 flams_system::register_exension!(FlamsExtension {
     name: "search",
     on_start: initialize,
-    on_build_result: |b, uri, rel_path, a| if let Some(content) =
-        a.as_any().downcast_ref::<ContentResult>()
-    {
-        index(b, uri, rel_path, content);
+    on_build_result: |b, uri, rel_path, a| {
+        //println!("Here");
+        if let Some(content) = a.as_any().downcast_ref::<ContentResult>() {
+            index(b, uri, rel_path, content);
+        }
     },
     on_reload: initialize
 });
@@ -476,6 +477,8 @@ pub fn index(backend: &AnyBackend, uri: &DocumentUri, rel_path: &UriPath, result
                 GlobalBackend.triple_store(),
                 false,
             );
+        } else {
+            tracing::error!("Archive not found! {}", uri.archive_id());
         }
     });
 }

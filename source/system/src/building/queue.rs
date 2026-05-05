@@ -307,6 +307,17 @@ impl Queue {
         };
         state.running.retain(|t| t != task);
         let eta = state.timer.update(1);
+        if let Ok(Some(data)) = result.as_ref() {
+            for e in inventory::iter::<FlamsExtension>() {
+                //println!("Passing {} to {}", data.kind(), e.name);
+                (e.on_build_result)(
+                    &self.0.backend,
+                    task.document_uri(),
+                    task.rel_path(),
+                    &**data,
+                );
+            }
+        }
 
         if let Err(e) = self.0.backend.save(
             task.document_uri(),
@@ -317,7 +328,7 @@ impl Queue {
         ) {
             result = Err(Vec::new());
             tracing::error!("Error saving build result: {e}");
-        };
+        }
 
         match result {
             Err(deps) => {
@@ -393,16 +404,6 @@ impl Queue {
                     state.done.push(task.clone());
                 }
                 drop(lock);
-                if let Some(data) = data.as_ref() {
-                    for e in inventory::iter::<FlamsExtension>() {
-                        (e.on_build_result)(
-                            &self.0.backend,
-                            task.document_uri(),
-                            task.rel_path(),
-                            &**data,
-                        );
-                    }
-                }
 
                 self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
                     id: task.0.id,
