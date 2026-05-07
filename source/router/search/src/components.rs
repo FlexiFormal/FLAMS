@@ -227,7 +227,7 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
     results.with(|r| match r {
         SearchState::None => ().into_any(),
         SearchState::Results(v) if v.is_empty() => "(No results)".into_any(),
-        SearchState::Loading => view!(<flams_web_utils::components::Spinner/>).into_any(),
+        SearchState::Loading => view!(<ftml_component_utils::Spinner/>).into_any(),
         SearchState::SymResults(v) => v
             .iter()
             .map(|(score, sym, elem)| do_sym_result(sym, *score, elem))

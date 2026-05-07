@@ -220,7 +220,7 @@ fn do_results(
         results.with(|r| match r {
             SearchState::None => A(()),
             SearchState::Results(v) if v.is_empty() => B(view!({pre_view}"(No results)")),
-            SearchState::Loading => C(view!({pre_view}<flams_web_utils::components::Spinner/>)),
+            SearchState::Loading => C(view!({pre_view}<ftml_component_utils::Spinner/>)),
             SearchState::SymResults(v) if remote.is_none() => D(view!({pre_view}{v
             .iter()
             .map(|(_,sym, elem)| do_sym_result_local(sym,elem))

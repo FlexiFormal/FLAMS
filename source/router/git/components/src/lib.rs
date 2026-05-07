@@ -286,10 +286,10 @@ fn unmanaged(
     );
     view! {
       <span style="color:grey">{path}" (unmanaged) "</span>
-      <Suspense fallback=|| view!(<flams_web_utils::components::Spinner/>)>{move ||
+      <Suspense fallback=|| view!(<Spinner/>)>{move ||
         match r.get() {
           Some(Err(e)) => leptos::either::EitherOf3::B(flams_web_utils::components::display_error(e.to_string().into())),
-          None => leptos::either::EitherOf3::C(view!(<ftml_component_utils::Spinner/>)),
+          None => leptos::either::EitherOf3::C(view!(<Spinner/>)),
           Some(Ok((branches,has_release))) => leptos::either::EitherOf3::A({
             let first = branches.first().map(|f| f.name.clone()).unwrap_or_default();
             let branch = RwSignal::new(first.clone());

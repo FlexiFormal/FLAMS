@@ -19,7 +19,6 @@ pub use block::*;
 pub use drawer::*;
 pub use popover::*;
 pub use r#await::*;
-pub use spinner::*;
 pub use trees::*;
 
 #[leptos::prelude::slot]

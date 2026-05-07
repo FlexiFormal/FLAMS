@@ -15,10 +15,6 @@ pub struct HeaderRight {
 pub struct HeaderLeft {
     children: Children,
 }
-#[slot]
-pub struct Separator {
-    children: Children,
-}
 
 #[component]
 pub fn Block(
@@ -26,7 +22,6 @@ pub fn Block(
     #[prop(optional)] header_right: Option<HeaderRight>,
     #[prop(optional)] header_left: Option<HeaderLeft>,
     #[prop(optional)] footer: Option<Footer>,
-    #[prop(optional)] separator: Option<Separator>,
     #[prop(optional)] show_separator: Option<bool>,
     children: Children,
 ) -> impl IntoView {
@@ -36,9 +31,7 @@ pub fn Block(
     };
     inject_css("flams-block", include_str!("block.css"));
     let has_header = header.is_some() || header_right.is_some() || header_left.is_some();
-    let has_separator = separator.is_some()
-        || show_separator == Some(true)
-        || (show_separator.is_none() && has_header);
+    let has_separator = show_separator == Some(true) || (show_separator.is_none() && has_header);
     view! {
         <Card class="flams-block-card">
             {if has_header {
@@ -53,10 +46,7 @@ pub fn Block(
                 }))
             } else {None}}
             {if has_separator {
-                Some(separator.map_or_else(
-                  || view!(<div style="margin:5px;"><Divider/></div>),
-                  |c| view!(<div style="margin:5px;"><Divider>{(c.children)()}</Divider></div>)
-                ))
+                Some(view!(<div style="margin:5px;"><Divider/></div>))
             } else {None}}
             <CardPreview class="flams-block-card-inner">
               {children()}

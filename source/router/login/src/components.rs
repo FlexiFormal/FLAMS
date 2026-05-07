@@ -2,7 +2,8 @@
 
 use flams_database::UserData;
 use flams_router_base::{LoginState, maybe_lazy};
-use flams_web_utils::components::{Spinner, display_error};
+use flams_web_utils::components::display_error;
+use ftml_component_utils::Spinner;
 use leptos::{either::EitherOf4, prelude::*};
 
 #[component(transparent)]

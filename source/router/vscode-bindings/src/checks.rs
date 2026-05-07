@@ -26,7 +26,7 @@ maybe_lazy!(
 );
 
 fn checks(url: url::Url) -> impl IntoView {
-    use flams_web_utils::components::Spinner;
+    use ftml_component_utils::Spinner;
     let check = Resource::new(move || url.clone(), get_check);
     view! {<Suspense fallback = || view!(<Spinner/>)>{move ||
         match check.get().map(|s| s.map(|s| s.map(|s| ftml_solver_trace::results::DocumentCheckResult::from_json(&s)))) {

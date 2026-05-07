@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use ftml_component_utils::toasts::{
     MessageBar, MessageBarBody, MessageBarIntent, ToastOptions, ToastPosition, ToasterInjection,
 };
+use ftml_component_utils::Spinner;
 use leptos::prelude::*;
 
 #[inline]
@@ -61,7 +62,6 @@ pub fn waiting_action<
     run: impl Fn(&I) -> Fut + Send + Sync + Clone + 'static,
     msg: impl Fn(O) + Send + Sync + Clone + 'static,
 ) -> (Action<I, ()>, AnyView) {
-    use crate::components::Spinner;
     use ftml_component_utils::{Dialog, DialogBody, DialogSurface};
     let toaster = ToasterInjection::expect_context();
     let open = RwSignal::new(false);

@@ -314,8 +314,7 @@ fn side_menu(page: Page) -> AnyView {
 fn user_field() -> AnyView {
     use flams_web_utils::components::ClientOnly;
     use ftml_component_utils::{
-        Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType, Spinner, SpinnerSize,
-        theming::Theme,
+        Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType, Spinner, theming::Theme,
     };
 
     view! {//<ClientOnly>
