@@ -12,7 +12,7 @@ ssr = [
     #"ftml-components/ssr",
     "dep:flams-math-archives",
     "leptos/ssr",
-    "thaw/ssr",
+    "ftml-component-utils/ssr",
     "flams-database/backend",
     "flams-web-utils/ssr",
     "dep:flams-git",
@@ -23,7 +23,7 @@ ssr = [
 ]
 hydrate = [
     "leptos/hydrate",
-    "thaw/hydrate",
+    "ftml-component-utils/hydrate",
     "flams-web-utils/hydrate",
     #"ftml-components/hydrate",
     "dep:bytes",
@@ -47,7 +47,7 @@ flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-math-archives = { workspace = true, optional = true }
 
 leptos = { workspace = true }
-thaw = { workspace = true }
+ftml-component-utils = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 const-str = { workspace = true }
@@ -58,7 +58,6 @@ tracing = { workspace = true }
 axum-login = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
-icondata_tb = { workspace = true }
 send_wrapper = { workspace = true }
 bytes = { workspace = true, optional = true }
 http = { workspace = true, optional = true }

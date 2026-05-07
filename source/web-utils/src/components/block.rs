@@ -30,7 +30,7 @@ pub fn Block(
     #[prop(optional)] show_separator: Option<bool>,
     children: Children,
 ) -> impl IntoView {
-    use thaw::{
+    use ftml_component_utils::{
         Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription, CardHeaderProps,
         CardPreview, Divider,
     };

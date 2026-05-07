@@ -180,7 +180,7 @@ impl TaskState {
 }
 
 fn do_log(s: either::Either<String, String>) -> AnyView {
-    use thaw::Scrollbar;
+    use ftml_component_utils::Scrollbar;
     view! {<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">{
         match s {
             either::Left(s) => leptos::either::Either::Left(view!{
@@ -296,8 +296,7 @@ maybe_lazy!(QueuesTop = queues_top());
 
 //#[component]
 pub fn queues_top() -> AnyView {
-    use flams_web_utils::components::Spinner;
-    use thaw::{Divider, Layout, Tab, TabList};
+    use ftml_component_utils::{Divider, Layout, Spinner, Tab, TabList};
 
     let update = UpdateQueues(RwSignal::new(()));
     provide_context(update);
@@ -373,8 +372,8 @@ pub fn queues_top() -> AnyView {
 #[allow(clippy::too_many_lines)]
 fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
     use flams_web_utils::components::{Collapsible, Header};
-    use thaw::{
-        Caption1Strong, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell,
+    use ftml_component_utils::{
+        BoldCaption, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell,
         TableRow,
     };
     if matches!(LoginState::get(), LoginState::NoAccounts) {
@@ -394,12 +393,12 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
     let style = if allowed { "" } else { "color:gray;" };
     inject_css("flams-repo-table", include_str!("repo-table.css"));
     view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
-          <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
+          <Header slot><BoldCaption>"Archives"</BoldCaption></Header>
           <Table class="flams-repo-table">
             <TableHeader><TableRow>
-              <TableHeaderCell><Caption1Strong>"Archive"</Caption1Strong></TableHeaderCell>
-              <TableHeaderCell><Caption1Strong>"Branch"</Caption1Strong></TableHeaderCell>
-              <TableHeaderCell><Caption1Strong>"Commit"</Caption1Strong></TableHeaderCell>
+              <TableHeaderCell><BoldCaption>"Archive"</BoldCaption></TableHeaderCell>
+              <TableHeaderCell><BoldCaption>"Branch"</BoldCaption></TableHeaderCell>
+              <TableHeaderCell><BoldCaption>"Commit"</BoldCaption></TableHeaderCell>
             </TableRow></TableHeader>
             <TableBody>{
               repos.into_iter().map(|d| match d {
@@ -428,7 +427,7 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
                         {if allowed {Some(move || updates.with(|up| {
                           let Some(up) = up else {
                             let aid = id.clone();
-                            let toaster = thaw::ToasterInjection::expect_context();
+                            let toaster = ftml_component_utils::toasts::ToasterInjection::expect_context();
                             let get_updates = Action::new(move |()| {
                               let id = aid.clone();
                               async move {
@@ -448,7 +447,7 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
                           let updates = up.clone();
 
                           leptos::either::EitherOf3::C({
-                            use thaw::{Button,ButtonSize,Combobox,ComboboxOption};
+                            use ftml_component_utils::{Button,ButtonSize,Combobox,ComboboxOption};
                             let first = updates.first().map(|(name,_)| name.clone()).unwrap_or_default();
                             let branch = RwSignal::new(first.clone());
                             let _ = Effect::new(move || if branch.with(String::is_empty) {
@@ -495,7 +494,7 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
 }
 
 fn delete_action(id: NonZeroU32) -> Action<(), ()> {
-    use thaw::ToasterInjection;
+    use ftml_component_utils::toasts::ToasterInjection;
     let update: UpdateQueues = expect_context();
     let toaster = ToasterInjection::expect_context();
     Action::new(move |()| async move {
@@ -507,7 +506,7 @@ fn delete_action(id: NonZeroU32) -> Action<(), ()> {
 }
 
 fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
-    use thaw::Button;
+    use ftml_component_utils::Button;
     let act = Action::<(), Result<(), ServerFnError<String>>>::new(move |()| {
         flams_router_buildqueue_base::server_fns::run(id)
     });
@@ -527,7 +526,7 @@ fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
 
 fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
     use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use thaw::{Button, Layout};
+    use ftml_component_utils::{Button, Layout};
     let del = delete_action(id);
     let RunningQueue {
         running,
@@ -567,7 +566,7 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
 
 fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
     use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use thaw::{Button, Layout};
+    use ftml_component_utils::{Button, Layout};
     let requeue = Action::new(move |()| flams_router_buildqueue_base::server_fns::requeue(id));
     let num_failed = failed.len();
     let num_done = done.len();
@@ -600,8 +599,10 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
 }
 
 fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
+    use ftml_component_utils::{
+        BoldCaption, Button, Dialog, DialogBody, DialogContent, DialogSurface, Divider,
+    };
     use leptos::either::EitherOf3;
-    use thaw::{Button, Caption1Strong, Dialog, DialogBody, DialogContent, DialogSurface, Divider};
     if matches!(LoginState::get(), LoginState::NoAccounts) {
         return ().into_any();
     }
@@ -623,7 +624,7 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
         view! {
           <Button on_click=move |_| {clicked.set(true);}>"Migrate"</Button>
           <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
-            <Caption1Strong><span style="color:red">WARNING</span></Caption1Strong>
+            <BoldCaption><span style="color:red">WARNING</span></BoldCaption>
             <Divider/>
             <p>{num_failed}" jobs have failed to build!"<br/>"Migrate anyway?"</p>
             <div>
@@ -942,7 +943,7 @@ struct WrappedEta(RwSignal<ftml_ontology::utils::time::Eta>);
 #[allow(clippy::cast_precision_loss)]
 impl WrappedEta {
     fn into_view(self) -> impl IntoView {
-        use thaw::ProgressBar;
+        use ftml_component_utils::ProgressBar;
         inject_css(
             "flams-eta",
             r"

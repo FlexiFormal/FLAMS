@@ -100,7 +100,7 @@ maybe_lazy!(Settings = settings());
 
 //#[component]
 fn settings() -> AnyView {
-    use thaw::Table;
+    use ftml_component_utils::Table;
     inject_css("flams-settings", include_str!("settings.css"));
     require_login(Box::new(|| {
         wait_and_then_fn(
@@ -126,7 +126,7 @@ fn settings() -> AnyView {
                       <tr>
                         <td></td>
                         <td>{move || if loading.get() {
-                          leptos::either::Either::Left(view!(<flams_web_utils::components::Spinner/>))
+                          leptos::either::Either::Left(view!(<ftml_component_utils::Spinner/>))
                         } else {
                           leptos::either::Either::Right(view!(<button on:click=move |_| {reload_act.dispatch(());}>"Reload"</button>))
                         }
@@ -168,9 +168,9 @@ fn settings() -> AnyView {
                           <td class="flams-settings-col">{settings.gitlab.url.map_or_else(|| leptos::either::Either::Left("(None)".to_string()),|s|
                             leptos::either::Either::Right(view!({s.to_string()}{
                               if gl {
-                                leptos::either::Either::Left(view!(" "<div style="color:green;display:inline;"><thaw::Icon icon=icondata_ai::AiCheckOutlined/></div>))
+                                leptos::either::Either::Left(view!(" "<div style="color:green;display:inline;"><ftml_component_utils::icons::CheckmarkIcon/></div>))
                               } else {
-                                leptos::either::Either::Right(view!(" "<div style="color:red;display:inline;"><thaw::Icon icon=icondata_ai::AiCloseOutlined/></div>))
+                                leptos::either::Either::Right(view!(" "<div style="color:red;display:inline;"><ftml_component_utils::icons::XMarkIcon/></div>))
                               }
                             })
                           ))}</td>

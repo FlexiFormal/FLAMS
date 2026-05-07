@@ -47,7 +47,7 @@ pub fn users() -> AnyView {
 }
 
 fn user_table(v: Vec<UserData>) -> impl IntoView {
-    use thaw::{
+    use ftml_component_utils::{
         Button, ButtonSize, Table, TableBody, TableCell, TableCellLayout, TableHeader,
         TableHeaderCell, TableRow,
     };
@@ -87,7 +87,7 @@ fn user_table(v: Vec<UserData>) -> impl IntoView {
           }
         };
         view! {<TableRow>
-          <TableCell><TableCellLayout><thaw::Avatar src=avatar_url /></TableCellLayout></TableCell>
+          <TableCell><TableCellLayout><ftml_component_utils::Avatar src=avatar_url /></TableCellLayout></TableCell>
           <TableCell><TableCellLayout>{id}</TableCellLayout></TableCell>
           <TableCell><TableCellLayout>{username}</TableCellLayout></TableCell>
           <TableCell><TableCellLayout>{name}</TableCellLayout></TableCell>

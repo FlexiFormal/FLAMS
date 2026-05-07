@@ -9,7 +9,7 @@ workspace = true
 [features]
 ssr = [
     "leptos/ssr",
-    "thaw/ssr",
+    "ftml-component-utils/ssr",
     "ftml-components/ssr",
     "flams-web-utils/ssr",
     "flams-router-base/ssr",
@@ -26,7 +26,7 @@ ssr = [
 ]
 hydrate = [
     "leptos/hydrate",
-    "thaw/hydrate",
+    "ftml-component-utils/hydrate",
     "ftml-components/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
@@ -54,7 +54,7 @@ ftml-solver = { workspace = true, optional = true }
 leptos = { workspace = true }
 leptos_meta = { workspace = true }
 leptos_router = { workspace = true }
-thaw = { workspace = true }
+ftml-component-utils = { workspace = true }
 serde = { workspace = true }
 either = { workspace = true }
 tracing = { workspace = true }

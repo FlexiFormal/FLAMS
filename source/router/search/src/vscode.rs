@@ -21,7 +21,7 @@ use leptos::prelude::*;
 maybe_lazy!(VSCSearch = vscode_search());
 
 pub fn vscode_search() -> AnyView {
-    use thaw::ToasterProvider;
+    use ftml_component_utils::toasts::ToasterProvider;
     // make sure this runs client side rather than server side because of hydration errors
     // I don't understand.
     let sig = RwSignal::new(false);
@@ -340,7 +340,7 @@ fn do_sym_result_remote(
     elem: DocumentElementUri,
     remote: fn() -> Option<String>,
 ) -> AnyView {
-    use thaw::Scrollbar;
+    use ftml_component_utils::Scrollbar;
     let name = sym.as_view(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     view! {
         <div class="flams-search-block">
@@ -362,7 +362,7 @@ fn do_sym_result_remote(
 }
 
 fn do_doc(score: f32, uri: DocumentUri, remote: Option<fn() -> Option<String>>) -> AnyView {
-    use thaw::Scrollbar;
+    use ftml_component_utils::Scrollbar;
     let name = uri.as_view(); //doc_name(&uri, uri.document_name().to_string());
     view! {
         <div class="flams-search-block">
@@ -389,7 +389,7 @@ fn do_para(
     fors: Vec<SymbolUri>,
     remote: Option<fn() -> Option<String>>,
 ) -> AnyView {
-    use thaw::Scrollbar;
+    use ftml_component_utils::Scrollbar;
     let uristr = uri.to_string();
     let name = uristr;
     /*let desc = ftml_components::components::content::CommaSep(

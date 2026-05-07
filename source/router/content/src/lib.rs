@@ -52,13 +52,13 @@ impl ftml_components::ViewContinuations for Continuations {
     ) -> leptos::prelude::AnyView {
         use crate::checks::ResultExt;
         use flams_web_utils::components::wait_and_then_fn;
+        use ftml_component_utils::BoldCaption;
         use ftml_components::utils::Header;
         use ftml_components::utils::collapsible::LazyCollapsible;
-        use thaw::Caption1Strong;
         let uri = doc.uri.clone();
         view! {
             <LazyCollapsible>
-                <Header slot><Caption1Strong>"Checking results"</Caption1Strong></Header>
+                <Header slot><BoldCaption>"Checking results"</BoldCaption></Header>
                 {
                     let uri = uri.clone();
                     wait_and_then_fn(

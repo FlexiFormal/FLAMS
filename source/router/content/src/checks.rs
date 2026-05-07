@@ -1,4 +1,5 @@
 use flams_web_utils::components::{Header, LazySubtree, Leaf, Subtree, Tree};
+use ftml_component_utils::Text;
 use ftml_components::components::content::FtmlViewable;
 use ftml_dom::notations::TermExt;
 use ftml_ontology::terms::{ComponentVar, Term, Variable};
@@ -10,7 +11,6 @@ use ftml_solver_trace::{CheckLog, Displayable};
 use ftml_uris::{DocumentElementUri, DocumentUri, Uri};
 use leptos::math::mrow;
 use leptos::prelude::*;
-use thaw::Text;
 
 pub trait ResultExt {
     fn render(self) -> AnyView;
@@ -1146,7 +1146,7 @@ const ADD_INFO: bool = true;
 
 fn do_term(t: Term) -> impl IntoView {
     if ADD_INFO {
-        use thaw::{Popover, PopoverSize, PopoverTrigger};
+        use ftml_component_utils::{Popover, PopoverSize, PopoverTrigger};
         let s = format!("{:#?}", t.debug_short());
         leptos::either::Either::Left(view! {<msup>
             {t.into_view::<crate::Views>(ftml_components::backend(),false)}

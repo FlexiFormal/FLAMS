@@ -81,11 +81,11 @@ pub fn Anchor(children: Children) -> impl IntoView {
     let element_ids = RwSignal::new(Vec::<String>::new());
     let active_id = RwSignal::new(None::<String>);
 
-    #[cfg(any(feature = "csr", feature = "hydrate"))]
+    #[cfg(feature = "hydrate")]
     {
+        use ftml_component_utils::events::{add_event_listener_with_bool, throttle};
         use leptos::ev;
         use std::cmp::Ordering;
-        use thaw_utils::{add_event_listener_with_bool, throttle};
 
         struct LinkInfo {
             top: f64,
@@ -254,7 +254,7 @@ pub enum OffsetTarget {
     Element(Element),
 }
 
-#[cfg(any(feature = "csr", feature = "hydrate"))]
+#[cfg(feature = "hydrate")]
 impl OffsetTarget {
     fn get_bounding_client_rect(&self) -> Option<DomRect> {
         match self {

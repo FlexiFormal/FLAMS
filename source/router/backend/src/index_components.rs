@@ -1,13 +1,13 @@
 use flams_backend_types::archive_json::{ArchiveIndex, Institution};
 use flams_router_base::maybe_lazy;
 use flams_web_utils::components::wait_and_then_fn;
+use ftml_component_utils::{
+    BodyText, Caption, Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription,
+    CardPreview, Scrollbar,
+};
 use ftml_dom::utils::css::inject_css;
 use ftml_uris::DocumentUri;
 use leptos::prelude::*;
-use thaw::{
-    Body1, Caption1, Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription,
-    CardPreview, Scrollbar,
-};
 
 maybe_lazy!(Index = index());
 
@@ -58,7 +58,7 @@ fn client<V: IntoView + Send>(f: impl Fn() -> V + Send + 'static) -> impl IntoVi
 }
 
 fn wrap_list(ttl: &'static str, i: impl FnOnce() -> AnyView) -> AnyView {
-    use thaw::Divider;
+    use ftml_component_utils::Divider;
     view! {
       <h2 style="color:var(--colorBrandForeground1)">{ttl}</h2>
       <div style="display:flex;flex-flow:wrap;">
@@ -86,9 +86,9 @@ fn do_img(url: String) -> AnyView {
 
 fn do_teaser(txt: String) -> AnyView {
     use flams_web_utils::components::ClientOnly;
-    view!(<div style="margin:5px;"><Scrollbar style="max-height: 100px;"><Body1>
+    view!(<div style="margin:5px;"><Scrollbar style="max-height: 100px;"><BodyText>
     <ClientOnly><span inner_html=txt style="font-size:smaller;"/></ClientOnly>
-  </Body1></Scrollbar></div>)
+  </BodyText></Scrollbar></div>)
     .into_any()
 }
 
@@ -122,10 +122,10 @@ fn book(book: ArchiveIndex) -> AnyView {
     };
     view! {<Card class="flams-index-card">
       <CardHeader>
-        {link_doc(&file,|| view!(<Body1><b inner_html=title.to_string()/></Body1>).into_any())}
-        <CardHeaderDescription slot><Caption1>
+        {link_doc(&file,|| view!(<BodyText><b inner_html=title.to_string()/></BodyText>).into_any())}
+        <CardHeaderDescription slot><Caption>
           {if authors.is_empty() {None} else {Some(IntoIterator::into_iter(authors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
-        </Caption1>
+        </Caption>
         </CardHeaderDescription>
       </CardHeader>
       <CardPreview>
@@ -167,10 +167,10 @@ fn paper(paper: ArchiveIndex) -> AnyView {
     };
     view! {<Card class="flams-index-card">
       <CardHeader>
-        {link_doc(&file,|| view!(<Body1><b inner_html=title.to_string()/></Body1>).into_any())}
-        <CardHeaderDescription slot><Caption1>
+        {link_doc(&file,|| view!(<BodyText><b inner_html=title.to_string()/></BodyText>).into_any())}
+        <CardHeaderDescription slot><Caption>
           {if authors.is_empty() {None} else {Some(IntoIterator::into_iter(authors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
-        </Caption1>
+        </Caption>
         </CardHeaderDescription>
         <CardHeaderAction slot>
         {venue.map(|v| {
@@ -226,7 +226,7 @@ fn self_study(ss: ArchiveIndex) -> AnyView {
     view! {<Card class="flams-index-card">
       <CardHeader>
         {link_doc(&landing,|| view!(
-          <Body1><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></Body1>
+          <BodyText><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></BodyText>
         ).into_any())}
       </CardHeader>
       <CardPreview>
@@ -235,10 +235,10 @@ fn self_study(ss: ArchiveIndex) -> AnyView {
       </CardPreview>
       <div style="margin-top:auto;"/>
       <CardFooter>
-        <Caption1>
+        <Caption>
           {link_doc(&notes,|| "Notes".into_any())}
           {slides.map(|s| view!(", "{link_doc(&s,|| "Slides".into_any())}))}
-        </Caption1>
+        </Caption>
       </CardFooter>
     </Card>}.into_any()
 }
@@ -285,11 +285,11 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> AnyView {
     view! {<Card class="flams-index-card">
       <CardHeader>
         {link_doc(&landing,|| view!(
-          <Body1><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></Body1>
+          <BodyText><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></BodyText>
         ).into_any())}
-        <CardHeaderDescription slot><Caption1>
+        <CardHeaderDescription slot><Caption>
           {if instructors.is_empty() {None} else {Some(IntoIterator::into_iter(instructors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
-        </Caption1>
+        </Caption>
         </CardHeaderDescription>
         <CardHeaderAction slot>{
           {inst.map(|inst| view!(
@@ -303,10 +303,10 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> AnyView {
       </CardPreview>
       <div style="margin-top:auto;"/>
       <CardFooter>
-        <Caption1>
+        <Caption>
           {link_doc(&notes,|| "Notes".into_any())}
           {slides.map(|s| view!(", "{link_doc(&s,|| "Slides".into_any())}))}
-        </Caption1>
+        </Caption>
       </CardFooter>
     </Card>}.into_any()
 }
@@ -339,12 +339,12 @@ fn library(lib: ArchiveIndex) -> AnyView {
     };
     view! {<Card class="flams-index-card">
       <CardHeader>
-        <Body1><b inner_html=title.to_string()/></Body1>
-        <CardHeaderDescription slot><Caption1>
+        <BodyText><b inner_html=title.to_string()/></BodyText>
+        <CardHeaderDescription slot><Caption>
           {archive.to_string()}
-        </Caption1></CardHeaderDescription>
+        </Caption></CardHeaderDescription>
         /*{link_doc(&landing,|| view!(
-          <Body1><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></Body1>
+          <BodyText><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></BodyText>
         ))}*/
       </CardHeader>
       <CardPreview>

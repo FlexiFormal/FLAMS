@@ -70,10 +70,10 @@ maybe_lazy!(SearchTop = search_top());
 
 pub fn search_top() -> AnyView {
     use flams_web_utils::components::ClientOnly;
-    use thaw::{
-        Divider, Flex, FlexAlign, Icon, Input, InputPrefix, Layout, LayoutHeader, Radio,
-        RadioGroup, Tag, TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput,
-        TagPickerOption, Text, ToasterInjection,
+    use ftml_component_utils::{
+        Divider, Flex, FlexAlign, Input, InputPrefix, Layout, LayoutHeader, Radio, RadioGroup, Tag,
+        TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput, TagPickerOption, Text,
+        toasts::ToasterInjection,
     }; //,Combobox,ComboboxOption
     let query = RwSignal::new(String::new());
     let in_doc_str = RwSignal::new(String::new());
@@ -172,7 +172,7 @@ pub fn search_top() -> AnyView {
         <LayoutHeader><Flex>
           <Input value=query placeholder="search...">
               <InputPrefix slot>
-                  <Icon icon=icondata_ai::AiSearchOutlined/>
+                  <ftml_component_utils::icons::SearchIcon/>
               </InputPrefix>
           </Input>
           <RadioGroup value=radio_value>
@@ -244,8 +244,8 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
 fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::ClientOnly;
+    use ftml_component_utils::{BodyText, Card, CardHeader, CardPreview, Scrollbar};
     use ftml_uris::Uri;
-    use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
     let name = symbol_uri(
         format!("{}?{}", sym.module.short_id_string(), sym.name()),
@@ -255,7 +255,7 @@ fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyV
     view! {
       <Card>
           <CardHeader>
-              <Body1><b>{name}</b></Body1>
+              <BodyText><b>{name}</b></BodyText>
           </CardHeader>
           <CardPreview>
             <div style="padding:0 5px;max-width:100%">
@@ -282,15 +282,17 @@ fn do_result(score: f32, res: &SearchResult) -> AnyView {
 
 fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
     use flams_router_content::components::DocumentInner;
-    use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
+    use ftml_component_utils::{
+        BodyText, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar,
+    };
 
     let name = uri.as_view(); //doc_name(&uri, uri.document_name().to_string());
     view! {
       <Card>
           <CardHeader>
-              <Body1>
+              <BodyText>
                   <b>"Document "{name}</b>
-              </Body1>
+              </BodyText>
               <CardHeaderAction slot>
                   <span>"Score: "{score}</span>
               </CardHeaderAction>
@@ -314,8 +316,8 @@ fn do_para(
 ) -> AnyView {
     use flams_router_content::components::Fragment;
     use flams_web_utils::components::{Popover, PopoverTrigger};
-    use thaw::{
-        Body1, Caption1, Card, CardHeader, CardHeaderAction, CardHeaderDescription, CardPreview,
+    use ftml_component_utils::{
+        BodyText, Caption, Card, CardHeader, CardHeaderAction, CardHeaderDescription, CardPreview,
         Scrollbar,
     };
     let uristr = uri.to_string();
@@ -335,11 +337,11 @@ fn do_para(
     view! {
       <Card>
           <CardHeader>
-              <Body1>
+              <BodyText>
                   <b>{kind.as_str()}" "{name}</b>
-              </Body1>
+              </BodyText>
               <CardHeaderDescription slot>
-                  <Caption1>{desc}</Caption1>
+                  <Caption>{desc}</Caption>
               </CardHeaderDescription>
               <CardHeaderAction slot>
                   <span>"Score: "{score}</span>

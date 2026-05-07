@@ -152,7 +152,8 @@ pub use login::*;
 use leptos::prelude::*;
 #[must_use]
 pub fn select_queue(queue_id: RwSignal<Option<NonZeroU32>>) -> impl IntoView {
-    use flams_web_utils::components::{Spinner, display_error};
+    use flams_web_utils::components::display_error;
+    use ftml_component_utils::Spinner;
     move || {
         let user = LoginState::get();
         if matches!(user, LoginState::NoAccounts) {
@@ -172,7 +173,7 @@ pub fn select_queue(queue_id: RwSignal<Option<NonZeroU32>>) -> impl IntoView {
 }
 
 fn do_queues(queue_id: RwSignal<Option<NonZeroU32>>, v: Vec<QueueInfo>) -> impl IntoView {
-    use thaw::Select;
+    use ftml_component_utils::Select;
     inject_css("flams-select-queue", include_str!("select_queue.css"));
     let queues = if v.is_empty() {
         vec![(0u32, "New Build Queue".to_string())]

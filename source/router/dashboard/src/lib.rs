@@ -43,6 +43,9 @@ pub mod server_fns {
 
 pub use flams_router_base::LoginState;
 use flams_router_base::maybe_lazy;
+use ftml_component_utils::{
+    Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider,
+};
 use ftml_components::config::AllowSubterms;
 use ftml_dom::FtmlViews;
 use leptos::{
@@ -55,7 +58,6 @@ use leptos_router::{
     hooks::use_query_map,
     path,
 };
-use thaw::{Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider};
 
 #[component]
 pub fn Main() -> AnyView {
@@ -269,7 +271,7 @@ fn NotFound() -> AnyView {
 }
 
 fn side_menu(page: Page) -> AnyView {
-    use thaw::{NavDrawer, NavItem};
+    use ftml_component_utils::{NavDrawer, NavItem};
     view! {
         <NavDrawer selected_value=page.to_string() class="flams-menu-inner">
             <NavItem value="home" href="/">"Home"</NavItem>
@@ -311,19 +313,21 @@ fn side_menu(page: Page) -> AnyView {
 
 fn user_field() -> AnyView {
     use flams_web_utils::components::ClientOnly;
-    use flams_web_utils::components::{Spinner, SpinnerSize};
-    use thaw::{Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType};
+    use ftml_component_utils::{
+        Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType, Spinner, SpinnerSize,
+        theming::Theme,
+    };
 
     view! {//<ClientOnly>
         <div class="flams-user-menu-trigger">{
-        let theme = expect_context::<RwSignal<thaw::Theme>>();
+        let theme = expect_context::<RwSignal<Theme>>();
         let on_select = move |key: &'static str| match key {
             "theme" => {
                 theme.update(|v| {
                     if v.name == "dark" {
-                        *v = thaw::Theme::light();
+                        *v = Theme::light();
                     } else {
-                        *v = thaw::Theme::dark();
+                        *v = Theme::dark();
                     }
                 });
             }
@@ -343,7 +347,7 @@ fn user_field() -> AnyView {
         view!{
         <Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::Bottom>
             <MenuTrigger slot>
-                <thaw::Avatar src />
+                <ftml_component_utils::Avatar src />
             </MenuTrigger>
             // AiGitlabFilled
             <MenuItem value="theme" icon=icon>{text}</MenuItem>
@@ -353,7 +357,7 @@ fn user_field() -> AnyView {
                 LoginState::NoAccounts => view!(<span>"Admin"</span>).into_any(),
                 LoginState::Admin => logout_form("admin".to_string()).into_any(),
                 LoginState::User{name,..} => logout_form(name).into_any(),
-                LoginState::Loading => view!(<Spinner size=SpinnerSize::Tiny/>).into_any()
+                LoginState::Loading => view!(<Spinner small=true/>).into_any()
             }}
         </Menu>
         }
@@ -364,7 +368,7 @@ fn user_field() -> AnyView {
 }
 
 fn logout_form(user: String) -> AnyView {
-    use thaw::Button;
+    use ftml_component_utils::Button;
     let login = expect_context::<RwSignal<LoginState>>();
     let action = Action::new(move |_| {
         login.set(LoginState::None);
@@ -375,7 +379,7 @@ fn logout_form(user: String) -> AnyView {
 }
 
 fn login_form() -> AnyView {
-    use thaw::{Button, Input, InputType};
+    use ftml_component_utils::{Button, Input, InputType};
     let login = expect_context();
     let action = Action::new(move |pwd: &String| do_login(pwd.clone(), login));
     let value = RwSignal::<String>::new(String::new());

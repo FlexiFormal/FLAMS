@@ -141,27 +141,28 @@ flams-backend-types = { path = "backend-types" }
 flams-search = { path = "search" }
 
 # FTML
-ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
-ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
-ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
-ulo = { git = "https://github.com/FlexiFormal/FTML" }
-ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-uris = { git = "https://github.com/FlexiFormal/FTML", features = ["interned"] }
+#ftml-ontology = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-backend = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-parser = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
+#ulo = { git = "https://github.com/FlexiFormal/FTML" }
+#ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 
-flodown = { git = "https://github.com/FlexiFormal/FloDown" }
+#flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
-#ftml-uris = { path = "../FTML/uris", features = ["interned"] }
-#ftml-ontology = { path = "../FTML/ontology" }
-#ftml-backend = { path = "../FTML/backend" }
-#ftml-parser = { path = "../FTML/parser" }
-#ftml-components = { path = "../FTML/components" }
-#ftml5ever = { path = "../FTML/ftml5ever" }
-#ulo = { path = "../FTML/ulo" }
-#ftml-dom = { path = "../FTML/dom" }
+ftml-uris = { path = "../FTML/uris", features = ["interned"] }
+ftml-ontology = { path = "../FTML/ontology" }
+ftml-backend = { path = "../FTML/backend" }
+ftml-parser = { path = "../FTML/parser" }
+ftml-components = { path = "../FTML/components" }
+ftml5ever = { path = "../FTML/ftml5ever" }
+ulo = { path = "../FTML/ulo" }
+ftml-dom = { path = "../FTML/dom" }
+ftml-component-utils = {path = "../FTML/component-utils"}
 
-#flodown = { path="../FloDown/flodown" }
+flodown = { path="../FloDown/flodown" }
 
 rustex_lib = { version = "0.1", features = ["multithreaded"] }
 tex_engine = { version = "0.1", features = ["multithreaded"] }
@@ -275,29 +276,17 @@ git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 
 # leptos
-# weird hydration error in 0.8.15... check soonish again?
 leptos = "0.8"#{ version = "=0.8.14"}#, features = ["nightly"] }
 leptos_axum = "0.8"
 leptos_meta = "0.8"
 leptos_router = { version = "0.8"}#, features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
 
-#thaw = { version = "0.5.0-beta", features = ["nightly"] }
-#thaw_components = { version = "0.4.0-beta" }
-#thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
-
-thaw = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
-thaw_utils = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
-thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
-
 leptos-posthoc = "0.2" #{ version = "0.2", git = "https://github.com/FlexiFormal/leptos-posthoc.git" }
 #leptos-posthoc = { path = "../leptos_dyn_dom" }
 
 bytes = "1.10"
 icondata_bi = "0"
-icondata_ai = "0"
-icondata_ch = "0"
-icondata_tb = "0"
 
 axum = { version = "0.8", features = ["ws"] }
 axum-macros = { version = "0.5" }
