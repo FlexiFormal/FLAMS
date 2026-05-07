@@ -9,7 +9,7 @@ use flams_router_vscode::{
 };
 use flams_utils::{impossible, unwrap};
 use flams_web_utils::components::wait_and_then_fn;
-use ftml_components::components::content::FtmlViewable;
+use ftml_components::components::content::{FtmlViewable, symbol_uri};
 use ftml_dom::{FtmlViews, utils::css::inject_css};
 use ftml_uris::{
     ArchiveId, DocumentElementUri, DocumentUri, IsDomainUri, IsNarrativeUri, NarrativeUri,
@@ -300,7 +300,10 @@ impl std::fmt::Display for Short<'_> {
 
 fn do_sym_result_local(sym: &SymbolUri, elem: &DocumentElementUri) -> AnyView {
     let vs = unwrap!(VSCode::get());
-    let name = sym.as_view(); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
+    let name = symbol_uri(
+        format!("{}?{}", sym.module.short_id_string(), sym.name()),
+        sym,
+    ); //ftml_viewer_components::components::omdoc::symbol_name(sym, &Short(sym).to_string());
     view! {
         <div class="flams-search-block">
             <div><b>{name}</b>

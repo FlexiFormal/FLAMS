@@ -2,7 +2,7 @@ use flams_backend_types::search::{SearchResult, SearchResultKind};
 use flams_router_base::maybe_lazy;
 use flams_utils::{impossible, vecmap::VecMap};
 use flams_web_utils::components::error_with_toaster;
-use ftml_components::components::content::FtmlViewable;
+use ftml_components::components::content::{FtmlViewable, symbol_uri};
 use ftml_dom::utils::css::inject_css;
 use ftml_uris::{
     DocumentElementUri, DocumentUri, IsNarrativeUri, SymbolUri,
@@ -247,7 +247,10 @@ fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyV
     use ftml_uris::Uri;
     use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
-    let name = sym.as_view(); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
+    let name = symbol_uri(
+        format!("{}?{}", sym.module.short_id_string(), sym.name()),
+        sym,
+    ); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     let elem = elem.clone();
     view! {
       <Card>
