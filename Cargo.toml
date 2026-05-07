@@ -149,6 +149,7 @@ ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
 ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
 ulo = { git = "https://github.com/FlexiFormal/FTML" }
 ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
+ftml-component-utils = { git = "https://github.com/FlexiFormal/FTML" }
 
 flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
