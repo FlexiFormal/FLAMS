@@ -45,6 +45,7 @@ ftml-solver-trace = { workspace = true }
 flams-utils = { workspace = true }
 flams-web-utils = { workspace = true }
 flams-router-base = { workspace = true }
+flams-backend-types = { workspace = true }
 flams-system = { workspace = true, optional = true }
 flams-math-archives = { workspace = true, optional = true }
 flams-lsp = { workspace = true, optional = true }

@@ -177,7 +177,7 @@ fn file(archive: ArchiveId, f: FileData) -> AnyView {
         rp: f.rel_path.clone(),
     };
 
-    let pathstr = unwrap!(f.rel_path.split('/').last()).to_string();
+    let pathstr = unwrap!(f.rel_path.split('/').next_back()).to_string();
     let header = view!(
       <Drawer lazy=true>
         <Trigger slot>
@@ -256,15 +256,15 @@ fn modal(
     format: Option<String>,
 ) -> AnyView {
     use ftml_component_utils::{
-        BoldCaption, Button, ButtonSize, Card, CardHeader, CardHeaderAction, Divider, Table,
+        Block, BoldCaption, Button, ButtonSize, Divider, Header, HeaderRight, Table, TableCell,
+        TableHeader, TableRow,
     };
-    inject_css("flams-filecard", include_str!("filecards.css"));
     let do_clean = path.is_none();
     let title = path.as_ref().map_or_else(
         || {
             archive
                 .as_ref()
-                .map_or_else(|| "All Archives".to_string(), |a| a.to_string())
+                .map_or_else(|| "All Archives".to_string(), ArchiveId::to_string)
         },
         |path| format!("[{}]{path}", archive.as_ref().expect("unreachable")),
     );
@@ -295,52 +295,48 @@ fn modal(
         }
     };
     view! {
-      <div class="flams-treeview-file-card"><Card>
-          <CardHeader>
+      <div style="text-align:left"><Block>
+        <HeaderRight slot>{format.map(|f| {
+            let f2 = f.clone();
+            let f3 = f.clone();
+            view!{
+            <Button size=ButtonSize::Small on_click=move |_|
+                {act.dispatch((FormatOrTarget::Format(f.clone()),true,false));}
+            >"stale"</Button>
+            <Button size=ButtonSize::Small on_click=move |_|
+                {act.dispatch((FormatOrTarget::Format(f2.clone()),false,false));}
+            >"all"</Button>
+            {clean_btn(f3)}
+            }
+        })}</HeaderRight>
+          <Header slot>
             <BoldCaption>{title}</BoldCaption>
-            <CardHeaderAction slot>{format.map(|f| {
-              let f2 = f.clone();
-              let f3 = f.clone();
-              view!{
-                <Button size=ButtonSize::Small on_click=move |_|
-                  {act.dispatch((FormatOrTarget::Format(f.clone()),true,false));}
-                >"stale"</Button>
-                <Button size=ButtonSize::Small on_click=move |_|
-                  {act.dispatch((FormatOrTarget::Format(f2.clone()),false,false));}
-                >"all"</Button>
-                {clean_btn(f3)}
-              }
-            })}</CardHeaderAction>
-          </CardHeader>
+          </Header>
           <Divider/>
           {select_queue(queue_id)}
           <Table>
-              <thead>
-                  <tr>
-                    <td><BoldCaption>{if targets {"Target"} else {"Format"}}</BoldCaption></td>
-                    <td><BoldCaption>"New"</BoldCaption></td>
-                    <td><BoldCaption>"Stale"</BoldCaption></td>
-                    <td><BoldCaption>"Up to date"</BoldCaption></td>
-                    <td><BoldCaption>"Last built"</BoldCaption></td>
-                    <td><BoldCaption>"Last changed"</BoldCaption></td>
-                    <td><BoldCaption>"Build"</BoldCaption></td>
-                  </tr>
-              </thead>
-              <tbody>
-              {states.0.iter().map(|(name,summary)| {
-                let name = name.clone();
+              <TableHeader slot>
+                    <TableCell><BoldCaption>{if targets {"Target"} else {"Format"}}</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"New"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Stale"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Up to date"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Last built"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Last changed"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Build"</BoldCaption></TableCell>
+              </TableHeader>
+              {states.0.into_iter().map(|(name,summary)| {
                 let fmt1 = name.clone();
                 let fmt2 = name.clone();
                 let fmt3 = name.clone();
                 view!{
-                  <tr>
-                    <td><BoldCaption>{name}</BoldCaption></td>
-                    <td>{summary.new}</td>
-                    <td>{summary.stale}</td>
-                    <td>{summary.up_to_date}</td>
-                    <td>{if summary.last_built == Timestamp::zero() {"(Never)".to_string()} else {summary.last_built.to_string()}}</td>
-                    <td>{if summary.last_changed == Timestamp::zero() {"(Never)".to_string()} else {summary.last_changed.to_string()}}</td>
-                    <td><div>
+                  <TableRow>
+                    <TableCell><BoldCaption>{name}</BoldCaption></TableCell>
+                    <TableCell>{summary.new}</TableCell>
+                    <TableCell>{summary.stale}</TableCell>
+                    <TableCell>{summary.up_to_date}</TableCell>
+                    <TableCell>{if summary.last_built == Timestamp::zero() {"(Never)".to_string()} else {summary.last_built.to_string()}}</TableCell>
+                    <TableCell>{if summary.last_changed == Timestamp::zero() {"(Never)".to_string()} else {summary.last_changed.to_string()}}</TableCell>
+                    <TableCell><div style="display:flex;flex-direction:column;">
                       <Button size=ButtonSize::Small on_click=move |_|
                         {act.dispatch((if targets {todo!()} else {
                           FormatOrTarget::Format(fmt1.clone())
@@ -352,13 +348,12 @@ fn modal(
                         },false,false));}
                       >"all"</Button>
                       {clean_btn(fmt3)}
-                    </div></td>
-                  </tr>
+                    </div></TableCell>
+                  </TableRow>
                 }
             }).collect_view()}
-              </tbody>
-          </Table>
-
-      </Card></div>
+        </Table>
+          </Block>
+          </div>
     }.into_any()
 }

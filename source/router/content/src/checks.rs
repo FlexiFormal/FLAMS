@@ -193,11 +193,11 @@ fn proofstep_result(r: ProofStepCheckResult) -> impl IntoView {
             matches: Some(r),
         } => Right(view! {
             <Subtree expanded=!inhabitable.success>
-                <Header slot><Text><b>"Proof goal"</b></Text></Header>
+                <Header slot><Text bold=true>"Proof goal"</Text></Header>
                 {do_log(inhabitable.log, &mut Vec::new())}
             </Subtree>
             <Subtree expanded=!r.success>
-                <Header slot><Text><b>"Proof"</b></Text></Header>
+                <Header slot><Text bold=true>"Proof"</Text></Header>
                 {do_log(r.log, &mut Vec::new())}
             </Subtree>
         }),
@@ -218,11 +218,11 @@ fn symbol_result(r: SymbolCheckResult) -> impl IntoView {
             matches: Some(r),
         } => Right(view! {
             <Subtree expanded=!inhabitable.success>
-                <Header slot><Text><b>"Type"</b></Text></Header>
+                <Header slot><Text bold=true>"Type"</Text></Header>
                 {do_log(inhabitable.log, &mut Vec::new())}
             </Subtree>
             <Subtree expanded=!r.success>
-                <Header slot><Text><b>"Definiens"</b></Text></Header>
+                <Header slot><Text bold=true>"Definiens"</Text></Header>
                 {do_log(r.log, &mut Vec::new())}
             </Subtree>
         }),
@@ -233,17 +233,17 @@ fn symbol_result(r: SymbolCheckResult) -> impl IntoView {
 fn do_log(log: CheckLog, ctx: &mut Vec<ComponentVar>) -> AnyView {
     match log {
         CheckLog::Comment(s) => {
-            view! {<Leaf><Text style="color:cadetblue"><i>{s.into_iter().map(do_displayable).collect_view()}</i></Text></Leaf>}.into_any()
+            view! {<Leaf><Text style="color:cadetblue" italic=true>{s.into_iter().map(do_displayable).collect_view()}</Text></Leaf>}.into_any()
         }
-        CheckLog::Emph(s) => view! {<Leaf><Text><b>{s.into_iter().map(do_displayable).collect_view()}</b></Text></Leaf>}.into_any(),
-        CheckLog::Header(s) => view! {<Leaf><Text><b>{s.into_iter().map(do_displayable).collect_view()}</b></Text></Leaf>}.into_any(),
+        CheckLog::Emph(s) => view! {<Leaf><Text bold=true>{s.into_iter().map(do_displayable).collect_view()}</Text></Leaf>}.into_any(),
+        CheckLog::Header(s) => view! {<Leaf><Text bold=true>{s.into_iter().map(do_displayable).collect_view()}</Text></Leaf>}.into_any(),
         CheckLog::Fail(s) => view! {<Leaf><Text style="color:red">{s.into_iter().map(do_displayable).collect_view()}</Text></Leaf>}.into_any(),
         CheckLog::Rule { header, steps } => {
             let header = view! {
-                <Text><i style="color:blueviolet;">
+                <Text style="color:blueviolet;" italic=true>
                     "Trying rule: "
                     {header.into_iter().map(do_displayable).collect_view()}
-                </i></Text>
+                </Text>
             };
             let steps = steps.into_iter().map(|l| do_log(l, ctx)).collect_view();
             view! {<Subtree expanded=true>

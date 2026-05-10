@@ -254,7 +254,37 @@ pub enum ArchiveIndex {
     },
 }
 impl ArchiveIndex {
-    #[inline]
+    #[must_use]
+    pub fn id(&self) -> &ArchiveId {
+        match self {
+            Self::Library { archive, .. } => archive,
+            Self::Book { file: uri, .. }
+            | Self::Paper { file: uri, .. }
+            | Self::Course { notes: uri, .. }
+            | Self::SelfStudy { notes: uri, .. } => uri.archive_id(),
+        }
+    }
+    #[must_use]
+    pub fn title(&self) -> &str {
+        match self {
+            Self::Library { title, .. }
+            | Self::Book { title, .. }
+            | Self::Paper { title, .. }
+            | Self::Course { title, .. }
+            | Self::SelfStudy { title, .. } => title,
+        }
+    }
+    #[must_use]
+    pub fn thumbnail(&self) -> Option<&str> {
+        match self {
+            Self::Library { thumbnail, .. }
+            | Self::Book { thumbnail, .. }
+            | Self::Paper { thumbnail, .. }
+            | Self::Course { thumbnail, .. }
+            | Self::SelfStudy { thumbnail, .. } => thumbnail.as_deref(),
+        }
+    }
+
     #[must_use]
     pub fn teaser(&self) -> Option<&str> {
         match self {

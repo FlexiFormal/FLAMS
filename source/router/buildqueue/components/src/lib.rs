@@ -17,6 +17,7 @@ use flams_router_content::checks::{DocumentCheckResult, ResultExt};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::wait_and_then_fn;
+use ftml_component_utils::{Collapsible, Header, LazyCollapsible};
 use ftml_dom::utils::css::inject_css;
 use ftml_ontology::utils::time::{Delta, Eta};
 use ftml_uris::{ArchiveId, DocumentUri};
@@ -49,7 +50,6 @@ impl Entry {
     #[cfg(feature = "hydrate")]
     fn as_view(&self) -> AnyView {
         use flams_router_base::vscode_link;
-        use flams_web_utils::components::{Collapsible, Header};
 
         let vscode = vscode_link(&self.archive, &self.rel_path);
 
@@ -127,7 +127,6 @@ pub enum TaskState {
 impl TaskState {
     #[cfg(feature = "hydrate")]
     fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> AnyView {
-        use flams_web_utils::components::{Header, LazyCollapsible};
         match self {
             Self::Running => view! {<i style="color:yellow">{t}" (Running)"</i>}.into_any(),
             Self::Queued | Self::Blocked | Self::None => {
@@ -296,7 +295,8 @@ maybe_lazy!(QueuesTop = queues_top());
 
 //#[component]
 pub fn queues_top() -> AnyView {
-    use ftml_component_utils::{Divider, Layout, Spinner, Tab, TabList};
+    use flams_web_utils::components::{Layout, LayoutHeader};
+    use ftml_component_utils::{Divider, Spinner, Tab, TabList};
 
     let update = UpdateQueues(RwSignal::new(()));
     provide_context(update);
@@ -324,46 +324,44 @@ pub fn queues_top() -> AnyView {
                         queues.selected.set(value);
                     }
                 });
-                inject_css(
-                    "flams-fullscreen",
-                    ".flams-fullscreen { width:100%; height:calc(100% - 44px - 21px) }",
-                );
-                view! {
-                  <TabList selected_value>
-                    <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
-                      <Tab value=i.to_string()>{
-                        queues.queue_names.with_untracked(|m| m.get(&i).cloned()).unwrap_or_else(|| unreachable!())
-                      }</Tab>
-                    }/>
-                  </TabList>
-                  <div style="margin:10px"><Divider/></div>
-                  <Layout class="flams-fullscreen">{move || {
-                    //let curr = queues.selected.get();
-                    queues.show.update_untracked(|v| *v = false);
-                    QueueSocket::run(queues);
-                    move || view! {
-                      <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
-                        let ls = move || {
-                            let curr = queues.selected.get();
-                            (curr,queues.queues.with(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!()))
-                        };
-                        move || {
-                            let (curr,ls) = ls();
-                            match ls.get() {
-                                QueueData::Idle(v) => {
-                                    idle(curr,v)
-                                },
-                                QueueData::Running(r) => {
-                                    running(curr,r)
-                                },
-                                QueueData::Finished(failed,done) => finished(curr,failed,done),
-                                QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                view! {<Layout>
+                    <LayoutHeader slot>
+                        <TabList selected_value>
+                            <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
+                            <Tab value=i.to_string()>{
+                                queues.queue_names.with_untracked(|m| m.get(&i).cloned()).unwrap_or_else(|| unreachable!())
+                            }</Tab>
+                            }/>
+                        </TabList>
+                        <div style="margin:10px"><Divider/></div>
+                    </LayoutHeader>
+                    {move || {
+                        //let curr = queues.selected.get();
+                        queues.show.update_untracked(|v| *v = false);
+                        QueueSocket::run(queues);
+                        move || view! {
+                        <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
+                            let ls = move || {
+                                let curr = queues.selected.get();
+                                (curr,queues.queues.with(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!()))
+                            };
+                            move || {
+                                let (curr,ls) = ls();
+                                match ls.get() {
+                                    QueueData::Idle(v) => {
+                                        idle(curr,v)
+                                    },
+                                    QueueData::Running(r) => {
+                                        running(curr,r)
+                                    },
+                                    QueueData::Finished(failed,done) => finished(curr,failed,done),
+                                    QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                                }
                             }
+                        }</Show>
                         }
-                      }</Show>
-                    }
-                  }}</Layout>
-                }.into_any()
+                    }}
+                </Layout>}.into_any()
             })
         }) as _)
     }).into_any()
@@ -371,11 +369,7 @@ pub fn queues_top() -> AnyView {
 
 #[allow(clippy::too_many_lines)]
 fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
-    use flams_web_utils::components::{Collapsible, Header};
-    use ftml_component_utils::{
-        BoldCaption, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell,
-        TableRow,
-    };
+    use ftml_component_utils::{BoldCaption, Table, TableCell, TableHeader, TableRow};
     if matches!(LoginState::get(), LoginState::NoAccounts) {
         return ().into_any();
     }
@@ -395,17 +389,17 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
     view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
           <Header slot><BoldCaption>"Archives"</BoldCaption></Header>
           <Table class="flams-repo-table">
-            <TableHeader><TableRow>
-              <TableHeaderCell><BoldCaption>"Archive"</BoldCaption></TableHeaderCell>
-              <TableHeaderCell><BoldCaption>"Branch"</BoldCaption></TableHeaderCell>
-              <TableHeaderCell><BoldCaption>"Commit"</BoldCaption></TableHeaderCell>
-            </TableRow></TableHeader>
-            <TableBody>{
+            <TableHeader slot>
+              <TableCell><BoldCaption>"Archive"</BoldCaption></TableCell>
+              <TableCell><BoldCaption>"Branch"</BoldCaption></TableCell>
+              <TableCell><BoldCaption>"Commit"</BoldCaption></TableCell>
+            </TableHeader>
+            {
               repos.into_iter().map(|d| match d {
                 RepoInfo::Copy(id) => leptos::either::Either::Left(view!{
                   <TableRow>
-                    <TableCell><TableCellLayout><span style=style>{id.to_string()}</span></TableCellLayout></TableCell>
-                    <TableCell><TableCellLayout>"(Copied from MathHub)"</TableCellLayout></TableCell>
+                    <TableCell><span style=style>{id.to_string()}</span></TableCell>
+                    <TableCell>"(Copied from MathHub)"</TableCell>
                   </TableRow>
                 }),
                 RepoInfo::Git{id,branch,commit,remote/*,updates */} => leptos::either::Either::Right({
@@ -420,9 +414,9 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
                   let idstr = id.to_string();
                   view!{
                     <TableRow>
-                      <TableCell><TableCellLayout><span style=style>{idstr}</span></TableCellLayout></TableCell>
-                      <TableCell><TableCellLayout>{branch}</TableCellLayout></TableCell>
-                      <TableCell><TableCellLayout>
+                      <TableCell><span style=style>{idstr}</span></TableCell>
+                      <TableCell>{branch}</TableCell>
+                      <TableCell>
                         {commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}
                         {if allowed {Some(move || updates.with(|up| {
                           let Some(up) = up else {
@@ -482,12 +476,12 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
                             }
                           })
                         }))} else {None}}
-                      </TableCellLayout></TableCell>
+                      </TableCell>
                     </TableRow>
                   }
                 }),
               }).collect_view()
-            }</TableBody>
+            }
           </Table>
         </Collapsible></div>
     }.into_any()
@@ -526,7 +520,7 @@ fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
 
 fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
     use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use ftml_component_utils::{Button, Layout};
+    use ftml_component_utils::Button;
     let del = delete_action(id);
     let RunningQueue {
         running,
@@ -545,7 +539,7 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
           <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
       </Anchor></div>
       {repos(id,false)}
-      <Layout content_style="text-align:left;">
+      <div style="text-align:left;">
           {eta.into_view()}
           <div style="width:100%"><div style="position:fixed;right:20px">
               <Button on_click=move |_| {del.dispatch(());}>"Abort and Delete"</Button>
@@ -560,13 +554,13 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
           <ul style="margin-left:30px"><For each=move || failed.get() key=|e| e.id children=|e| e.as_view()/></ul>
           <h3 id="finished">"Finished ("{move || done.with(Vec::len)}")"</h3>
           <ul style="margin-left:30px"><For each=move || done.get() key=|e| e.id children=|e| e.as_view()/></ul>
-      </Layout>
+      </div>
     }.into_any()
 }
 
 fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
     use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use ftml_component_utils::{Button, Layout};
+    use ftml_component_utils::Button;
     let requeue = Action::new(move |()| flams_router_buildqueue_base::server_fns::requeue(id));
     let num_failed = failed.len();
     let num_done = done.len();
@@ -584,7 +578,7 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
           <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
       </Anchor></div>
       {repos(id,true)}
-      <Layout content_style="text-align:left;">
+      <div style="text-align:left;">
           <h3 id="failed">"Failed ("{num_failed}")"</h3>
           <ul style="margin-left:30px">{
             failed.iter().map(Entry::as_view).collect_view()
@@ -593,7 +587,7 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
           <ul style="margin-left:30px">{
             done.iter().map(Entry::as_view).collect_view()
           }</ul>
-      </Layout>
+      </div>
     }
     .into_any()
 }

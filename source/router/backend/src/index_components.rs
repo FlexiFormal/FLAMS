@@ -1,9 +1,8 @@
 use flams_backend_types::archive_json::{ArchiveIndex, Institution};
 use flams_router_base::maybe_lazy;
-use flams_web_utils::components::wait_and_then_fn;
+use flams_web_utils::{client_only, components::wait_and_then_fn};
 use ftml_component_utils::{
-    BodyText, Caption, Card, CardFooter, CardHeader, CardHeaderAction, CardHeaderDescription,
-    CardPreview, Scrollbar,
+    Block, Caption, Footer, Header, HeaderLeft, HeaderRight, Scrollbar, Text,
 };
 use ftml_dom::utils::css::inject_css;
 use ftml_uris::DocumentUri;
@@ -13,10 +12,6 @@ maybe_lazy!(Index = index());
 
 //#[component]
 pub fn index() -> AnyView {
-    inject_css(
-        "flams-index-card",
-        ".flams-index-card{max-width:400px !important;margin:10px !important;}",
-    );
     wait_and_then_fn(super::server_fns::index, |(is, idxs)| {
         let mut libraries = Vec::new();
         let mut books = Vec::new();
@@ -33,17 +28,22 @@ pub fn index() -> AnyView {
             }
         }
         //leptos::logging::log!("Here: main");
-        view! {
+        let r = view! {
           {do_books(books)}
           {do_papers(papers)}
           {do_self_studies(self_studies)}
           {do_courses(courses,is)}
           {do_libraries(libraries)}
         }
-        .into_any()
+        .into_any();
+        inject_css(
+            "flams-index-card",
+            ".flams-index-card{max-width:400px;margin:10px;}",
+        );
+        r
     })
 }
-
+/*
 fn client<V: IntoView + Send>(f: impl Fn() -> V + Send + 'static) -> impl IntoView {
     let sig = RwSignal::new(false);
     #[cfg(feature = "hydrate")]
@@ -56,6 +56,7 @@ fn client<V: IntoView + Send>(f: impl Fn() -> V + Send + 'static) -> impl IntoVi
         }
     }
 }
+ */
 
 fn wrap_list(ttl: &'static str, i: impl FnOnce() -> AnyView) -> AnyView {
     use ftml_component_utils::Divider;
@@ -86,9 +87,9 @@ fn do_img(url: String) -> AnyView {
 
 fn do_teaser(txt: String) -> AnyView {
     use flams_web_utils::components::ClientOnly;
-    view!(<div style="margin:5px;"><Scrollbar style="max-height: 100px;"><BodyText>
+    view!(<div style="margin:5px;"><Scrollbar style="max-height: 100px;"><Text>
     <ClientOnly><span inner_html=txt style="font-size:smaller;"/></ClientOnly>
-  </BodyText></Scrollbar></div>)
+  </Text></Scrollbar></div>)
     .into_any()
 }
 
@@ -96,7 +97,7 @@ fn do_books(books: Vec<ArchiveIndex>) -> AnyView {
     if books.is_empty() {
         return ().into_any();
     }
-    client(move || {
+    client_only!({
         wrap_list("Books", || {
             books
                 .clone()
@@ -120,26 +121,26 @@ fn book(book: ArchiveIndex) -> AnyView {
     else {
         unreachable!()
     };
-    view! {<Card class="flams-index-card">
-      <CardHeader>
-        {link_doc(&file,|| view!(<BodyText><b inner_html=title.to_string()/></BodyText>).into_any())}
-        <CardHeaderDescription slot><Caption>
-          {if authors.is_empty() {None} else {Some(IntoIterator::into_iter(authors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
-        </Caption>
-        </CardHeaderDescription>
-      </CardHeader>
-      <CardPreview>
+    view! {<Block class="flams-index-card">
+      <Header slot>
+        {link_doc(&file,|| view!(<Text bold=true><span inner_html=title.to_string()/></Text>).into_any())}
+      </Header>
+      <HeaderLeft slot><Caption>
+        {if authors.is_empty() {None} else {Some(IntoIterator::into_iter(authors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
+      </Caption>
+      </HeaderLeft>
+      <div style="margin: 0 -12px;">
         {thumbnail.map(|t| do_img(t.to_string()))}
         {teaser.map(|t| do_teaser(t.to_string()))}
-      </CardPreview>
-    </Card>}.into_any()
+      </div>
+    </Block>}.into_any()
 }
 
 fn do_papers(papers: Vec<ArchiveIndex>) -> AnyView {
     if papers.is_empty() {
         return ().into_any();
     }
-    client(move || {
+    client_only!({
         wrap_list("Papers", || {
             papers
                 .clone()
@@ -165,39 +166,37 @@ fn paper(paper: ArchiveIndex) -> AnyView {
     else {
         unreachable!()
     };
-    view! {<Card class="flams-index-card">
-      <CardHeader>
-        {link_doc(&file,|| view!(<BodyText><b inner_html=title.to_string()/></BodyText>).into_any())}
-        <CardHeaderDescription slot><Caption>
-          {if authors.is_empty() {None} else {Some(IntoIterator::into_iter(authors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
-        </Caption>
-        </CardHeaderDescription>
-        <CardHeaderAction slot>
-        {venue.map(|v| {
-          if let Some(url) = venue_url {
+    view! {<Block class="flams-index-card">
+      <Header slot>
+        {link_doc(&file,|| view!(<Text bold=true><span inner_html=title.to_string()/></Text>).into_any())}
+      </Header>
+      <HeaderLeft slot><Caption>
+        {if authors.is_empty() {None} else {Some(IntoIterator::into_iter(authors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
+      </Caption>
+      </HeaderLeft>
+      <HeaderRight slot>
+      {venue.map(|v| venue_url.map_or_else(|| leptos::either::Either::Right(view!(<b>{v.to_string()}</b>)),
+          |url| {
             leptos::either::Either::Left(view!(
               <a target="_blank" href=url.to_string() style="color:var(--colorBrandForeground1)">
                 <b>{v.to_string()}</b>
               </a>
             ))
-          } else {
-            leptos::either::Either::Right(view!(<b>{v.to_string()}</b>))
           }
-        })}
-        </CardHeaderAction>
-      </CardHeader>
-      <CardPreview>
+      ))}
+      </HeaderRight>
+      <div style="margin: 0 -12px;">
         {thumbnail.map(|t| do_img(t.to_string()))}
         {teaser.map(|t| do_teaser(t.to_string()))}
-      </CardPreview>
-    </Card>}.into_any()
+      </div>
+    </Block>}.into_any()
 }
 
 fn do_self_studies(sss: Vec<ArchiveIndex>) -> AnyView {
     if sss.is_empty() {
         return ().into_any();
     }
-    client(move || {
+    client_only!({
         wrap_list("Self-Study Courses", || {
             sss.clone()
                 .into_iter()
@@ -223,31 +222,31 @@ fn self_study(ss: ArchiveIndex) -> AnyView {
     else {
         unreachable!()
     };
-    view! {<Card class="flams-index-card">
-      <CardHeader>
+    view! {<Block class="flams-index-card">
+      <Header slot>
         {link_doc(&landing,|| view!(
-          <BodyText><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></BodyText>
+          <Text bold=true><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</Text>
         ).into_any())}
-      </CardHeader>
-      <CardPreview>
+      </Header>
+      <div style="margin: 0 -12px;">
         {thumbnail.map(|t| do_img(t.to_string()))}
         {teaser.map(|t| do_teaser(t.to_string()))}
-      </CardPreview>
+      </div>
       <div style="margin-top:auto;"/>
-      <CardFooter>
+      <Footer slot>
         <Caption>
           {link_doc(&notes,|| "Notes".into_any())}
           {slides.map(|s| view!(", "{link_doc(&s,|| "Slides".into_any())}))}
         </Caption>
-      </CardFooter>
-    </Card>}.into_any()
+      </Footer>
+    </Block>}.into_any()
 }
 
 fn do_courses(courses: Vec<ArchiveIndex>, insts: Vec<Institution>) -> AnyView {
     if courses.is_empty() {
         return ().into_any();
     }
-    client(move || {
+    client_only!({
         wrap_list("Courses", || {
             courses
                 .clone()
@@ -282,40 +281,40 @@ fn course(course: ArchiveIndex, insts: &[Institution]) -> AnyView {
     let inst = institution
         .and_then(|inst| insts.iter().find(|i| i.acronym() == &*inst))
         .cloned();
-    view! {<Card class="flams-index-card">
-      <CardHeader>
+    view! {<Block class="flams-index-card">
+      <Header slot>
         {link_doc(&landing,|| view!(
-          <BodyText><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></BodyText>
+          <Text bold=true><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</Text>
         ).into_any())}
-        <CardHeaderDescription slot><Caption>
-          {if instructors.is_empty() {None} else {Some(IntoIterator::into_iter(instructors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
-        </Caption>
-        </CardHeaderDescription>
-        <CardHeaderAction slot>{
-          {inst.map(|inst| view!(
-            <img style="max-width:50px;max-height:30px;" src=inst.logo().to_string() title=inst.title().to_string()/>
-          ))}
-        }</CardHeaderAction>
-      </CardHeader>
-      <CardPreview>
+      </Header>
+      <HeaderLeft slot><Caption>
+        {if instructors.is_empty() {None} else {Some(IntoIterator::into_iter(instructors).map(|a| view!{{a.to_string()}<br/>}).collect_view())}}
+      </Caption>
+      </HeaderLeft>
+      <HeaderRight slot>{
+        {inst.map(|inst| view!(
+          <img style="max-width:50px;max-height:30px;" src=inst.logo().to_string() title=inst.title().to_string()/>
+        ))}
+      }</HeaderRight>
+      <div style="margin: 0 -12px;">
         {thumbnail.map(|t| do_img(t.to_string()))}
         {teaser.map(|t| do_teaser(t.to_string()))}
-      </CardPreview>
+      </div>
       <div style="margin-top:auto;"/>
-      <CardFooter>
+      <Footer slot>
         <Caption>
           {link_doc(&notes,|| "Notes".into_any())}
           {slides.map(|s| view!(", "{link_doc(&s,|| "Slides".into_any())}))}
         </Caption>
-      </CardFooter>
-    </Card>}.into_any()
+      </Footer>
+    </Block>}.into_any()
 }
 
 fn do_libraries(libs: Vec<ArchiveIndex>) -> AnyView {
     if libs.is_empty() {
         return ().into_any();
     }
-    client(move || {
+    client_only!({
         wrap_list("Libraries", || {
             libs.clone()
                 .into_iter()
@@ -337,21 +336,21 @@ fn library(lib: ArchiveIndex) -> AnyView {
     else {
         unreachable!()
     };
-    view! {<Card class="flams-index-card">
-      <CardHeader>
-        <BodyText><b inner_html=title.to_string()/></BodyText>
-        <CardHeaderDescription slot><Caption>
-          {archive.to_string()}
-        </Caption></CardHeaderDescription>
+    view! {<Block class="flams-index-card">
+      <Header slot>
+        <Text bold=true><span inner_html=title.to_string()/></Text>
         /*{link_doc(&landing,|| view!(
           <BodyText><b><span inner_html=title.to_string()/>{acronym.map(|s| format!(" ({s})"))}</b></BodyText>
         ))}*/
-      </CardHeader>
-      <CardPreview>
+      </Header>
+      <HeaderLeft slot><Caption>
+        {archive.to_string()}
+      </Caption></HeaderLeft>
+      <div style="margin: 0 -12px;">
         {thumbnail.map(|t| do_img(t.to_string()))}
         {teaser.map(|t| do_teaser(t.to_string()))}
-      </CardPreview>
+      </div>
       <div style="margin-top:auto;"/>
-    </Card>}
+    </Block>}
     .into_any()
 }

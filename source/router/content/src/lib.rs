@@ -7,6 +7,7 @@
 ))]
 compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabled");
 
+pub mod archive_views;
 pub mod backend;
 pub mod checks;
 pub mod components;
@@ -15,12 +16,11 @@ pub mod server_fns;
 #[cfg(feature = "ssr")]
 mod toc;
 
+use ftml_solver_trace::results::DocumentCheckResult;
 use leptos::prelude::*;
 
 #[server(prefix = "/api", endpoint = "checklog")]
-pub async fn get_check_log(
-    uri: ftml_uris::DocumentUri,
-) -> Result<String /*ftml_solver_trace::results::DocumentCheckResult*/, ServerFnError<String>> {
+pub async fn get_check_log(uri: ftml_uris::DocumentUri) -> Result<String, ServerFnError<String>> {
     use flams_math_archives::BuildableArchive;
     use flams_math_archives::backend::LocalBackend;
     use ftml_uris::IsNarrativeUri;
@@ -34,10 +34,7 @@ pub async fn get_check_log(
                 std::fs::read_to_string(f).ok()
             })
         });
-        s.map_or_else(
-            || Err("No checking log found".to_string()),
-            Ok, //|s| ftml_solver_trace::results::DocumentCheckResult::from_json(&s),
-        )
+        s.map_or_else(|| Err("No checking log found".to_string()), Ok)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -52,9 +49,7 @@ impl ftml_components::ViewContinuations for Continuations {
     ) -> leptos::prelude::AnyView {
         use crate::checks::ResultExt;
         use flams_web_utils::components::wait_and_then_fn;
-        use ftml_component_utils::BoldCaption;
-        use ftml_components::utils::Header;
-        use ftml_components::utils::collapsible::LazyCollapsible;
+        use ftml_component_utils::{BoldCaption, Header, LazyCollapsible};
         let uri = doc.uri.clone();
         view! {
             <LazyCollapsible>
@@ -63,8 +58,8 @@ impl ftml_components::ViewContinuations for Continuations {
                     let uri = uri.clone();
                     wait_and_then_fn(
                         move || get_check_log(uri.clone()),
-                        |s| ftml_solver_trace::results::DocumentCheckResult::from_json(&s)
-                            .map_or_else(|v| view!{<pre>{v}</pre>}.into_any(),|e| e.render())//ResultExt::render
+                        |s| DocumentCheckResult::from_json(&s)
+                            .map_or_else(|v| view!{<pre>{v}</pre>}.into_any(),DocumentCheckResult::render)//ResultExt::render
                     )
                 }
             </LazyCollapsible>
