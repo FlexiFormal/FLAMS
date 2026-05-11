@@ -519,8 +519,7 @@ fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
 }
 
 fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
-    use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use ftml_component_utils::Button;
+    use ftml_component_utils::{AnchorMenu, AnchorMenuEntry, Button};
     let del = delete_action(id);
     let RunningQueue {
         running,
@@ -531,13 +530,13 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
         eta,
     } = queue;
     view! {
-      <div style="position:fixed;right:20px;z-index:5"><Anchor>
-          <AnchorLink href="#running"><Header slot>"Running"</Header></AnchorLink>
-          <AnchorLink href="#queued"><Header slot>"Queued"</Header></AnchorLink>
-          <AnchorLink href="#blocked"><Header slot>"Blocked"</Header></AnchorLink>
-          <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
-          <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
-      </Anchor></div>
+      <div style="position:fixed;right:20px;z-index:5"><AnchorMenu>
+          <AnchorMenuEntry href="#running">"Running"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#queued">"Queued"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#blocked">"Blocked"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#failed">"Failed"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#finished">"Finished"</AnchorMenuEntry>
+      </AnchorMenu></div>
       {repos(id,false)}
       <div style="text-align:left;">
           {eta.into_view()}
@@ -559,8 +558,7 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
 }
 
 fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
-    use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use ftml_component_utils::Button;
+    use ftml_component_utils::{AnchorMenu, AnchorMenuEntry, Button};
     let requeue = Action::new(move |()| flams_router_buildqueue_base::server_fns::requeue(id));
     let num_failed = failed.len();
     let num_done = done.len();
@@ -573,10 +571,10 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
           {migrate_button(id,num_failed)}
           <Button on_click=move |_| {del.dispatch(());}>"Delete"</Button>
       </div></div>
-      <div style="position:fixed;right:20px;z-index:5"><Anchor>
-          <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
-          <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
-      </Anchor></div>
+      <div style="position:fixed;right:20px;z-index:5"><AnchorMenu>
+          <AnchorMenuEntry href="#failed">"Failed"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#finished">"Finished"</AnchorMenuEntry>
+      </AnchorMenu></div>
       {repos(id,true)}
       <div style="text-align:left;">
           <h3 id="failed">"Failed ("{num_failed}")"</h3>

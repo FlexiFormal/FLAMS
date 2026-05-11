@@ -8,15 +8,9 @@ mod errors;
 pub use errors::*;
 use leptos::prelude::*;
 
-mod anchors;
-//mod block;
-//pub use block::*;
-//mod popover;
-//pub use popover::*;
 mod layout;
 pub use layout::*;
 
-pub use anchors::*;
 pub use drawer::*;
 pub use r#await::*;
 pub use trees::*;

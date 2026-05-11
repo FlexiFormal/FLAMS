@@ -14,7 +14,7 @@ pub fn ArchiveView(comps: UriComponents) -> impl IntoView {
     let UriComponentTuple { uri, a, p, .. } = comps.into();
     inject_css(
         "flams-archive-block",
-        ".flams-archive-block{ padding-top:0 !important;padding-bottom:0 !important;row-gap:0 !important;box-shadow:-3px 3px 5px -1px var(--colorBrandForeground1) !important;}",
+        ".flams-archive-block{ margin-left:10px;padding-top:0 !important;padding-bottom:0 !important;row-gap:0 !important;box-shadow:-3px 3px 5px -1px var(--colorBrandForeground1) !important;}",
     );
     wait_and_then_fn(
         move || archive_detail(uri.clone(), a.clone(), p.clone()),
@@ -289,7 +289,7 @@ impl DirOrFile {
                     }
                 </LazySubtree>})
             }
-            Self::File { uri, name } => {
+            Self::File { uri, .. } => {
                 let name = format!(" {} ({})", uri.name, uri.language);
                 let namecl = name.clone();
                 let link = format!("/?uri={}", uri.url_encoded());
