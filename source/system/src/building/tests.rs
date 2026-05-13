@@ -65,3 +65,87 @@ lazy_static::lazy_static! {
   };
 }
  */
+
+use crate::building::{BuildTask, queue::TaskMap};
+
+ pub fn find_cycles(map: &TaskMap, task_n: &BuildTask) {
+     // cycles are in the buildstep Individual build steps
+     // Here the taskrefs are the buildstep that in this function exist and it is responsible for finding cylces
+     // TaskRef {
+     //             archive: self.0.uri.archive_id().clone(),
+     //             rel_path: self.0.rel_path.clone(),
+     //             target,
+     //         }
+     let mut paths = task_n
+         .steps()
+         .iter()
+         .map(|b| {
+             (
+                 task_n.as_task_ref(b.target),
+                 vec![task_n.as_task_ref(b.target)],
+             )
+         })
+         .collect::<HashMap<TaskRef, Vec<TaskRef>>>();
+     let mut visited = HashSet::new();
+     // This is depth first search stack
+     let mut stack = paths.keys().cloned().collect::<Vec<_>>();
+     let mut cycles = HashSet::new();
+     while let Some(x) = stack.pop() {
+         // Just a check to see whether the buildtask exist
+         visited.insert(x.clone());
+         let keys = paths
+             .iter()
+             .filter_map(|(k, v)| {
+                 if let Some(ss) = v.last() {
+                     if ss == &x { Some(k.clone()) } else { None }
+                 } else {
+                     None
+                 }
+             })
+             .collect::<Vec<_>>();
+         if let Some(b_task) = map.map.get(&(x.archive, x.rel_path)) {
+             let deps = b_task
+                 .steps()
+                 .iter()
+                 .flat_map(|b| {
+                     let deps = b.requires.read();
+                     let mut dp = Vec::new();
+                     for i in deps.0.iter() {
+                         if let Dependency::Resolved { task, step, strict } = i
+                             && *strict
+                         {
+                             let ref_ta = task.as_task_ref(*step);
+
+                             if !visited.contains(&ref_ta) {
+                                 for i in &keys {
+                                     let ent = paths.get_mut(i).unwrap();
+                                     ent.push(ref_ta.clone());
+                                 }
+                                 dp.push(ref_ta)
+                             } else {
+                                 cycles.insert(ref_ta);
+                             }
+                         }
+                     }
+                     dp
+                 })
+                 .collect::<Vec<_>>();
+             stack.extend_from_slice(&deps);
+         }
+     }
+     paths.retain(|k, v| cycles.contains(k));
+     for i in paths {
+         let mut store = String::new();
+         for j in i.1.iter().rev() {
+             let store2 = format!(
+                 "[archiveId : {} , rel_path : {}, target : {}] -> ",
+                 j.archive, j.rel_path, j.target
+             );
+             store.push_str(&store2);
+         }
+         store.pop();
+         store.pop();
+         store.pop();
+         info!("The cylce is as follows {}", store);
+     }
+ }

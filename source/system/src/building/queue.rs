@@ -22,14 +22,14 @@ use ftml_ontology::utils::{time::Timestamp, RefTree};
 use ftml_uris::{ArchiveId, UriPath, UriWithArchive};
 use parking_lot::RwLock;
 use std::{collections::VecDeque, num::NonZeroU32};
-use tracing::{instrument, Instrument};
+use tracing::{info, instrument, Instrument};
 
 #[derive(Debug)]
-pub(super) struct TaskMap {
-    pub(super) map: HMap<(ArchiveId, UriPath), BuildTask>,
-    pub(super) dependents: HMap<TaskRef, Vec<(BuildTask, BuildTargetId)>>,
-    pub(super) counter: NonZeroU32,
-    pub(super) total: usize,
+pub struct TaskMap {
+    pub map: HMap<(ArchiveId, UriPath), BuildTask>,
+    pub dependents: HMap<TaskRef, Vec<(BuildTask, BuildTargetId)>>,
+    pub counter: NonZeroU32,
+    pub total: usize,
 }
 
 impl Default for TaskMap {
@@ -68,21 +68,21 @@ impl std::fmt::Display for QueueName {
 }
 
 #[derive(Debug)]
-pub(super) struct QueueI {
+pub struct QueueI {
     backend: AnyBackend,
     name: QueueName,
     pub id: QueueId,
     span: tracing::Span,
-    pub(super) map: RwLock<TaskMap>,
-    pub(super) sender: ChangeSender<QueueMessage>,
-    pub(super) state: RwLock<QueueState>,
+    pub map: RwLock<TaskMap>,
+    pub sender: ChangeSender<QueueMessage>,
+    pub state: RwLock<QueueState>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Queue(pub(super) Arc<QueueI>);
+pub struct Queue(pub Arc<QueueI>);
 
 impl Queue {
-    pub(crate) fn new(id: QueueId, name: QueueName, backend: AnyBackend) -> Self {
+    pub fn new(id: QueueId, name: QueueName, backend: AnyBackend) -> Self {
         Self(Arc::new(QueueI {
             id,
             name,
@@ -577,8 +577,10 @@ impl Queue {
         if let AnyBackend::Sandbox(b) = &self.0.backend {
             b.require(id, true);
         }
+        info!("the archive is {}", id);
         self.0.backend.with_archive(id, |archive| {
             let Some(archive) = archive else { return 0 };
+            info!("the archive is {}", archive.id());
             if clean {
                 if let AnyBackend::Sandbox(b) = &self.0.backend {
                     let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
@@ -590,6 +592,7 @@ impl Queue {
                 a.with_sources(|d| match rel_path {
                     None => {
                         let map = &mut *self.0.map.write();
+                        info!("in none here");
                         Self::enqueue(
                             map,
                             &self.0.backend,

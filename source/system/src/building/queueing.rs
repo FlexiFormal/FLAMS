@@ -20,7 +20,7 @@ use super::{
 
 impl Queue {
     #[allow(clippy::significant_drop_in_scrutinee)]
-    pub(super) fn sort(map: &TaskMap, state: &mut RunningQueue) {
+    pub fn sort(map: &TaskMap, state: &mut RunningQueue) {
         let RunningQueue {
             queue,
             done,
@@ -73,6 +73,11 @@ impl Queue {
                                 }
                             }
                         }
+                        // here dependency resolution does not happen what about other deps ?
+                        // do small before you dream big
+                        // dont try to build steps on air start with foundation
+                        // In this case questioning why dep resolution does not happen here ?
+                        // Dependency is specified cleary but here only resolved deps are taken in to consideration where does it happen then ?
                         _ => (),
                     }
                 }
@@ -111,7 +116,7 @@ impl Queue {
         }
     }
 
-    pub(super) fn get_next(&self) -> Option<(BuildTask, BuildTargetId)> {
+    pub fn get_next(&self) -> Option<(BuildTask, BuildTargetId)> {
         loop {
             match self.get_next_i() {
                 Ok(r) => return r,
@@ -121,7 +126,7 @@ impl Queue {
     }
 
     #[cfg(feature = "tokio")]
-    pub(super) async fn get_next_async(&self) -> Option<(BuildTask, BuildTargetId)> {
+    pub async fn get_next_async(&self) -> Option<(BuildTask, BuildTargetId)> {
         loop {
             match self.get_next_i() {
                 Ok(r) => return r,
@@ -202,7 +207,8 @@ impl Queue {
             Ok(None)
         }
     }
-
+    // This method is a method which checks for the task state of the requires dependencies of a build tasks build step which is queued or blocked
+    // now he checks the dependency state if it is running then he doesnot do anything if none of the deps tasks are running then he selects it
     fn can_be_next(e: &BuildTask) -> Option<BuildTargetId> {
         let step =
             e.0.steps.iter().find(|step| {
@@ -307,7 +313,7 @@ impl Queue {
         count
     }
 
-    fn process_dependencies(task: &BuildTask, map: &mut TaskMap) {
+    pub fn process_dependencies(task: &BuildTask, map: &mut TaskMap) {
         for s in task.steps() {
             let key = task.as_task_ref(s.0.target);
             if let Some(v) = map.dependents.remove(&key) {

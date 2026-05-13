@@ -267,7 +267,7 @@ impl QueueManager {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum Semaphore {
+pub enum Semaphore {
     Linear,
     #[cfg(feature = "tokio")]
     Counting {

@@ -11,6 +11,7 @@ use flams_math_archives::{
     formats::{BuildSpec, BuildTargetId, TaskDependency, TaskRef},
 };
 use flams_utils::{
+    prelude::{TreeChild, TreeLike},
     triomphe::Arc,
     vecmap::{VecMap, VecSet},
 };
@@ -18,10 +19,10 @@ use ftml_ontology::utils::time::Eta;
 use ftml_uris::{ArchiveId, ArchiveUri, DocumentUri, Language, ModuleUri, UriPath, UriWithArchive};
 use parking_lot::RwLock;
 
-mod queue;
+pub mod queue;
 pub mod queue_manager;
 pub use queue::QueueName;
-mod queueing;
+pub mod queueing;
 
 pub(crate) static BUILD_QUEUE_SPAN: std::sync::LazyLock<tracing::Span> = std::sync::LazyLock::new(
     || tracing::info_span!(target:"build queue",parent:None,"Build Queue"),
@@ -42,6 +43,8 @@ pub enum TaskState {
     Failed = 4,
     None = 5,
 }
+// I don't Understand this complicated atomictaskstate?
+// read that this is useful for sharing across threads but in this case why ?
 #[derive(Debug)]
 pub struct AtomicTaskState(std::sync::atomic::AtomicU8);
 impl AtomicTaskState {
@@ -49,12 +52,14 @@ impl AtomicTaskState {
         Self(std::sync::atomic::AtomicU8::new(state as _))
     }
     pub fn set_if_is(&self, if_is: TaskState, state: TaskState) {
-        self.0.compare_exchange(
-            if_is as _,
-            state as _,
-            std::sync::atomic::Ordering::Release,
-            std::sync::atomic::Ordering::Acquire,
-        );
+        self.0
+            .compare_exchange(
+                if_is as _,
+                state as _,
+                std::sync::atomic::Ordering::Release,
+                std::sync::atomic::Ordering::Acquire,
+            )
+            .expect("error comparing");
     }
     pub fn get(&self) -> TaskState {
         let b = self.0.load(std::sync::atomic::Ordering::Acquire);
@@ -166,6 +171,10 @@ impl BuildTask {
         }
     }
 
+    pub fn get_id(&self) -> BuildTaskId {
+        self.0.id
+    }
+
     #[inline]
     #[must_use]
     pub fn source(&self) -> Either<&Path, &str> {
@@ -221,19 +230,20 @@ impl BuildTask {
 }
 
 #[derive(Debug)]
-struct BuildStepI {
+pub struct BuildStepI {
     //task:std::sync::Weak<BuildTaskI>,
-    target: BuildTargetId,
-    state: AtomicTaskState,
+    pub target: BuildTargetId,
+    pub state: AtomicTaskState,
     //yields:RwLock<Vec<ModuleUri>>,
-    requires: RwLock<VecSet<Dependency>>,
-    dependents: RwLock<Vec<(BuildTaskId, BuildTargetId)>>,
+    pub requires: RwLock<VecSet<Dependency>>,
+    pub dependents: RwLock<Vec<(BuildTaskId, BuildTargetId)>>,
 }
 impl PartialEq for BuildStepI {
     fn eq(&self, other: &Self) -> bool {
         self.target == other.target
     }
 }
+
 impl Eq for BuildStepI {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,6 +258,14 @@ impl BuildStep {
         BuildTask(self.0.task.upgrade().unwrap_or_else(|| unreachable!()))
     }
     */
+}
+
+impl std::ops::Deref for BuildStep {
+    type Target = BuildStepI;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 /*
 pub trait BuildArtifact: Any + 'static {
