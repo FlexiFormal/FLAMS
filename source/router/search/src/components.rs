@@ -69,11 +69,11 @@ impl Filter {
 maybe_lazy!(SearchTop = search_top());
 
 pub fn search_top() -> AnyView {
-    use flams_web_utils::components::ClientOnly;
-    use thaw::{
-        Divider, Flex, FlexAlign, Icon, Input, InputPrefix, Layout, LayoutHeader, Radio,
-        RadioGroup, Tag, TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput,
-        TagPickerOption, Text, ToasterInjection,
+    use flams_web_utils::components::{ClientOnly, Layout, LayoutHeader};
+    use ftml_component_utils::{
+        Divider, Flex, FlexAlign, Input, InputPrefix, Radio, RadioGroup, Tag, TagPicker,
+        TagPickerControl, TagPickerGroup, TagPickerInput, TagPickerOption, Text,
+        toasts::ToasterInjection,
     }; //,Combobox,ComboboxOption
     let query = RwSignal::new(String::new());
     let in_doc_str = RwSignal::new(String::new());
@@ -169,10 +169,10 @@ pub fn search_top() -> AnyView {
     });
     view! {
       <Layout>
-        <LayoutHeader><Flex>
+        <LayoutHeader slot><Flex>
           <Input value=query placeholder="search...">
               <InputPrefix slot>
-                  <Icon icon=icondata_ai::AiSearchOutlined/>
+                  <ftml_component_utils::icons::SearchIcon/>
               </InputPrefix>
           </Input>
           <RadioGroup value=radio_value>
@@ -215,10 +215,10 @@ pub fn search_top() -> AnyView {
             </TagPicker>
           </ClientOnly>
         </Flex></LayoutHeader>
-        <Layout>
+        <div>
           <Divider/>
           <div style="width:fit-content;padding:10px;"><Flex vertical=true align=FlexAlign::Start>{move || do_results(results)}</Flex></div>
-        </Layout>
+        </div>
       </Layout>
     }.into_any()
 }
@@ -227,7 +227,7 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
     results.with(|r| match r {
         SearchState::None => ().into_any(),
         SearchState::Results(v) if v.is_empty() => "(No results)".into_any(),
-        SearchState::Loading => view!(<flams_web_utils::components::Spinner/>).into_any(),
+        SearchState::Loading => view!(<ftml_component_utils::Spinner/>).into_any(),
         SearchState::SymResults(v) => v
             .iter()
             .map(|(score, sym, elem)| do_sym_result(sym, *score, elem))
@@ -243,9 +243,8 @@ fn do_results(results: RwSignal<SearchState>) -> AnyView {
 
 fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyView {
     use flams_router_content::components::Fragment;
-    use flams_web_utils::components::ClientOnly;
+    use ftml_component_utils::{Block, Header, Scrollbar, Text};
     use ftml_uris::Uri;
-    use thaw::{Body1, Card, CardHeader, CardPreview, Scrollbar};
 
     let name = symbol_uri(
         format!("{}?{}", sym.module.short_id_string(), sym.name()),
@@ -253,11 +252,11 @@ fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyV
     ); // ftml_viewer_components::components::omdoc::symbol_name(sym, &sym.to_string());
     let elem = elem.clone();
     view! {
-      <Card>
-          <CardHeader>
-              <Body1><b>{name}</b></Body1>
-          </CardHeader>
-          <CardPreview>
+      <Block>
+          <Header slot>
+              <Text bold=true>{name}</Text>
+          </Header>
+          <div style="margin: 0 -12px;">
             <div style="padding:0 5px;max-width:100%">
               <div style="width:100%;color:black;background-color:white;">
                 <Scrollbar style="max-height: 100px;width:100%;max-width:100%;">
@@ -265,8 +264,8 @@ fn do_sym_result(sym: &SymbolUri, score: f32, elem: &DocumentElementUri) -> AnyV
                 </Scrollbar>
               </div>
             </div>
-          </CardPreview>
-      </Card>
+          </div>
+      </Block>
     }.into_any()
 }
 
@@ -282,27 +281,25 @@ fn do_result(score: f32, res: &SearchResult) -> AnyView {
 
 fn do_doc(score: f32, uri: DocumentUri) -> AnyView {
     use flams_router_content::components::DocumentInner;
-    use thaw::{Body1, Card, CardHeader, CardHeaderAction, CardPreview, Scrollbar};
+    use ftml_component_utils::{Block, Header, HeaderRight, Scrollbar, Text};
 
     let name = uri.as_view(); //doc_name(&uri, uri.document_name().to_string());
     view! {
-      <Card>
-          <CardHeader>
-              <Body1>
-                  <b>"Document "{name}</b>
-              </Body1>
-              <CardHeaderAction slot>
-                  <span>"Score: "{score}</span>
-              </CardHeaderAction>
-          </CardHeader>
-          <CardPreview>
+      <Block>
+          <Header slot>
+              <Text bold=true>"Document "{name}</Text>
+          </Header>
+          <HeaderRight slot>
+              <span>"Score: "{score}</span>
+          </HeaderRight>
+          <div style="margin: 0 -12px;">
               <div style="padding:0 5px;max-width:100%">
                 <div style="width:100%;color:black;background-color:white;">
                     <Scrollbar style="max-height: 100px;;width:100%;max-width:100%;"><DocumentInner doc=DocumentUriComponents::Full(uri) /></Scrollbar>
                 </div>
               </div>
-          </CardPreview>
-      </Card>
+          </div>
+      </Block>
     }.into_any()
 }
 
@@ -313,10 +310,8 @@ fn do_para(
     fors: Vec<SymbolUri>,
 ) -> AnyView {
     use flams_router_content::components::Fragment;
-    use flams_web_utils::components::{Popover, PopoverTrigger};
-    use thaw::{
-        Body1, Caption1, Card, CardHeader, CardHeaderAction, CardHeaderDescription, CardPreview,
-        Scrollbar,
+    use ftml_component_utils::{
+        Block, Caption, Header, HeaderLeft, HeaderRight, Popover, PopoverTrigger, Scrollbar, Text,
     };
     let uristr = uri.to_string();
     let namestr = uri.name().to_string();
@@ -333,28 +328,23 @@ fn do_para(
     )
     .into_view();
     view! {
-      <Card>
-          <CardHeader>
-              <Body1>
-                  <b>{kind.as_str()}" "{name}</b>
-              </Body1>
-              <CardHeaderDescription slot>
-                  <Caption1>{desc}</Caption1>
-              </CardHeaderDescription>
-              <CardHeaderAction slot>
-                  <span>"Score: "{score}</span>
-              </CardHeaderAction>
-          </CardHeader>
-          <CardPreview>
+      <Block>
+          <Header slot>
+              <Text bold=true>{kind.as_str()}" "{name}</Text>
+          </Header>
+          <HeaderLeft slot>
+              <Caption>{desc}</Caption>
+          </HeaderLeft>
+          <HeaderRight slot>
+              <span>"Score: "{score}</span>
+          </HeaderRight>
+          <div style="margin: 0 -12px;">
             <div style="padding:0 5px;max-width:100%">
               <div style="width:100%;color:black;background-color:white;">
                 <Scrollbar style="max-height: 100px;width:100%;max-width:100%;"><Fragment uri=UriComponents::Full(uri.into()) position=ftml_components::SidebarPosition::None /></Scrollbar>
               </div>
             </div>
-          </CardPreview>
-          /*<CardFooter>
-              "sTeX:"<pre></pre>
-          </CardFooter>*/
-      </Card>
+          </div>
+      </Block>
     }.into_any()
 }

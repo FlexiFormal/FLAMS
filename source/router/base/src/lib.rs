@@ -47,7 +47,7 @@ use leptos::{either::EitherOf3, prelude::*};
 pub fn vscode_link(archive: &ftml_uris::ArchiveId, rel_path: &str) -> impl IntoView + use<> {
     let href = format!("vscode://kwarc.flams/open?a={archive}&rp={rel_path}");
     view! {
-        <a href=href><thaw::Icon icon=icondata_tb::TbBrandVscodeOutline/></a>
+        <a href=href><ftml_component_utils::icons::VSCodeIcon/></a>
     }
 }
 
@@ -57,7 +57,8 @@ pub fn RequireLogin(children: Children) -> impl IntoView {
 }
 
 pub fn require_login(children: Children) -> AnyView {
-    use flams_web_utils::components::{Spinner, display_error};
+    use flams_web_utils::components::display_error;
+    use ftml_component_utils::Spinner;
 
     let children = std::sync::Arc::new(flams_utils::parking_lot::Mutex::new(Some(children)));
     (move || match LoginState::get() {

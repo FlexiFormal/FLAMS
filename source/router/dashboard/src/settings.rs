@@ -100,8 +100,7 @@ maybe_lazy!(Settings = settings());
 
 //#[component]
 fn settings() -> AnyView {
-    use thaw::Table;
-    inject_css("flams-settings", include_str!("settings.css"));
+    use ftml_component_utils::{Table, TableCell, TableRow};
     require_login(Box::new(|| {
         wait_and_then_fn(
             || async {
@@ -119,69 +118,71 @@ fn settings() -> AnyView {
                         "success".to_string()
                     },
                 );
-                view!(
-                  <Table class="flams-settings-table"><thead/><tbody>
-                    <tr><td><h2>"Status"</h2></td><td/></tr>
+                let r = view!(
+                  <Table class="flams-settings-table">
+                    <TableRow><TableCell><h2>"Status"</h2></TableCell><td/></TableRow>
                     {do_memory(mem)}
-                      <tr>
-                        <td></td>
-                        <td>{move || if loading.get() {
-                          leptos::either::Either::Left(view!(<flams_web_utils::components::Spinner/>))
+                    <TableRow>
+                        <TableCell>""</TableCell>
+                        <TableCell>{move || if loading.get() {
+                          leptos::either::Either::Left(view!(<ftml_component_utils::Spinner/>))
                         } else {
                           leptos::either::Either::Right(view!(<button on:click=move |_| {reload_act.dispatch(());}>"Reload"</button>))
                         }
-                      }</td>
-                      </tr>
-                    <tr><td><h2>"Settings"</h2></td><td/></tr>
-                      <tr><td><h3>"General"</h3></td><td/></tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"MathHub"</b></td>
-                          <td class="flams-settings-col">{settings.mathhubs.into_iter().map(|m| m.display().to_string() + " ").collect::<Vec<_>>()}</td>
-                        </tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"Debug Mode"</b></td>
-                          <td class="flams-settings-col">{settings.debug}</td>
-                        </tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"Log Directory"</b></td>
-                          <td class="flams-settings-col">{settings.log_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
-                        </tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"Database Path"</b></td>
-                          <td class="flams-settings-col">{settings.database.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
-                        </tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"Temp Directory"</b></td>
-                          <td class="flams-settings-col">{settings.temp_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</td>
-                        </tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"Stack Size"</b></td>
-                          <td class="flams-settings-col">{(settings.stack_size)}{if settings.stack_size.is_some() {"MB"} else {"(System default)"}}</td>
-                        </tr>
-                      <tr><td><h3>"Server"</h3></td><td/></tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"IP/Port"</b></td>
-                          <td class="flams-settings-col">{settings.server.ip.unwrap_or_else(|| unreachable!())}":"{settings.server.port}</td>
-                        </tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"Gitlab URL"</b></td>
-                          <td class="flams-settings-col">{settings.gitlab.url.map_or_else(|| leptos::either::Either::Left("(None)".to_string()),|s|
+                      }</TableCell>
+                    </TableRow>
+                    <TableRow><TableCell><h2>"Settings"</h2></TableCell><td/></TableRow>
+                    <TableRow><TableCell><h3>"General"</h3></TableCell><td/></TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"MathHub"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.mathhubs.into_iter().map(|m| m.display().to_string() + " ").collect::<Vec<_>>()}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"Debug Mode"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.debug}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"Log Directory"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.log_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"Database Path"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.database.unwrap_or_else(|| unreachable!()).display().to_string()}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"Temp Directory"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.temp_dir.unwrap_or_else(|| unreachable!()).display().to_string()}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"Stack Size"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.stack_size}{if settings.stack_size.is_some() {"MB"} else {"(System default)"}}</TableCell>
+                    </TableRow>
+                    <TableRow><TableCell><h3>"Server"</h3></TableCell><td/></TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"IP/Port"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.server.ip.unwrap_or_else(|| unreachable!())}":"{settings.server.port}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"Gitlab URL"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.gitlab.url.map_or_else(|| leptos::either::Either::Left("(None)".to_string()),|s|
                             leptos::either::Either::Right(view!({s.to_string()}{
                               if gl {
-                                leptos::either::Either::Left(view!(" "<div style="color:green;display:inline;"><thaw::Icon icon=icondata_ai::AiCheckOutlined/></div>))
+                                leptos::either::Either::Left(view!(" "<div style="color:green;display:inline;"><ftml_component_utils::icons::CheckmarkIcon/></div>))
                               } else {
-                                leptos::either::Either::Right(view!(" "<div style="color:red;display:inline;"><thaw::Icon icon=icondata_ai::AiCloseOutlined/></div>))
+                                leptos::either::Either::Right(view!(" "<div style="color:red;display:inline;"><ftml_component_utils::icons::XMarkIcon/></div>))
                               }
                             })
-                          ))}</td>
-                        </tr>
-                      <tr><td><h3>"Build Queue"</h3></td><td/></tr>
-                        <tr>
-                          <td class="flams-settings-col"><b>"Threads:"</b></td>
-                          <td class="flams-settings-col">{settings.buildqueue.num_threads}</td>
-                        </tr>
-                    </tbody></Table>
-                ).into_any()
+                          ))}</TableCell>
+                    </TableRow>
+                    <TableRow><TableCell><h3>"Build Queue"</h3></TableCell><td/></TableRow>
+                    <TableRow>
+                          <TableCell class="flams-settings-col"><b>"Threads:"</b></TableCell>
+                          <TableCell class="flams-settings-col">{settings.buildqueue.num_threads}</TableCell>
+                    </TableRow>
+                    </Table>
+                ).into_any();
+                inject_css("flams-settings", include_str!("settings.css"));
+                r
             },
         )
     }))

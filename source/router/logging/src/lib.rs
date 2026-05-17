@@ -14,11 +14,11 @@ use flams_router_base::require_login;
 use flams_router_base::ws;
 use flams_utils::logs::{LogFileLine, LogLevel, LogMessage, LogTree};
 use flams_utils::vecmap::VecMap;
-use flams_web_utils::components::{Header, LazySubtree, Leaf, Spinner, Tree};
+use flams_web_utils::components::{Header, LazySubtree, Leaf, Tree};
+use ftml_component_utils::{BoldCaption, Spinner};
 use ftml_ontology::utils::time::Timestamp;
 use leptos::{either::Either, prelude::*};
 use std::num::NonZeroU64;
-use thaw::Caption1Strong;
 
 #[cfg(feature = "ssr")]
 async fn full_log() -> Result<flams_utils::logs::LogTree, ()> {
@@ -71,7 +71,7 @@ pub fn logger() -> AnyView {
                 </Tree>})}
             }}</div>
             <div class="flams-warn-frame">
-            <Caption1Strong><span style="color:var(--colorPaletteRedForeground1)">"Warnings"</span></Caption1Strong>{ move || {
+            <BoldCaption><span style="color:var(--colorPaletteRedForeground1)">"Warnings"</span></BoldCaption>{ move || {
                 if signals.top.with(Vec::is_empty) {
                     Either::Left(view!(<div class="flams-spinner-frame"><Spinner/></div>))
                 } else {Either::Right(view!{<Tree>
@@ -126,7 +126,6 @@ fn LogLineHelper(
     args: VecMap<String, String>,
     #[prop(optional)] spinner: bool,
 ) -> AnyView {
-    use flams_web_utils::components::SpinnerSize;
     use std::fmt::Write;
     let cls = class_from_level(level);
     let mut str = timestamp.map_or_else(
@@ -147,7 +146,7 @@ fn LogLineHelper(
     if spinner {
         view!(<span class=cls>
             <span class="flams-spinner-inline">
-            <Spinner size=SpinnerSize::Tiny/>
+            <Spinner small=true/>
             </span>{str}
         </span>)
         .into_any()

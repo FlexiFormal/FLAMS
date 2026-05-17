@@ -10,7 +10,7 @@ workspace = true
 ssr = [
     "ftml-dom/ssr",
     "leptos/ssr",
-    "thaw/ssr",
+    "ftml-component-utils/ssr",
     "flams-web-utils/ssr",
     "flams-router-base/ssr",
     "dep:flams-system",
@@ -20,7 +20,7 @@ ssr = [
 hydrate = [
     "ftml-dom/hydrate",
     "leptos/hydrate",
-    "thaw/hydrate",
+    "ftml-component-utils/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
 ]
@@ -37,7 +37,7 @@ flams-system = { workspace = true, optional = true, features = ["tokio"] }
 
 leptos = { workspace = true }
 leptos_router = { workspace = true }
-thaw = { workspace = true }
+ftml-component-utils = {workspace = true}
 
 serde = { workspace = true }
 async-trait = { workspace = true }

@@ -1,27 +1,48 @@
 use super::ServerState;
 use axum::body::Body;
 use flams_math_archives::{
-    backend::{GlobalBackend, LocalBackend},
     LocallyBuilt, MathArchive,
+    backend::{GlobalBackend, LocalBackend},
 };
 use flams_system::settings::Settings;
 use ftml_ontology::utils::time::Timestamp;
 use ftml_uris::{
-    components::{DocumentUriComponentTuple, DocumentUriComponents},
     ArchiveId, DocumentUri, IsNarrativeUri, Language, UriWithArchive, UriWithPath,
+    components::{DocumentUriComponentTuple, DocumentUriComponents},
 };
-use http::Request;
-use std::{borrow::Cow, path::PathBuf, sync::atomic::AtomicU64};
+use http::{Request, Response};
+use leptos::server_fn::{codec::IntoRes, response::Res};
+use std::{borrow::Cow, ops::DerefMut, path::PathBuf, sync::atomic::AtomicU64};
 use tower::ServiceExt;
-use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
+use tower_http::services::{ServeFile, fs::ServeFileSystemResponseBody};
 
 #[derive(Clone, Default)]
-pub struct ImageStore(flams_utils::triomphe::Arc<ImageStoreI>);
+pub struct ImageStore(/*flams_utils::triomphe::Arc<ImageStoreI>*/ ImageStoreI);
 
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 struct ImageStoreI {
-    map: dashmap::DashMap<ImageSpec, ImageData>,
-    count: AtomicU64,
+    //map: dashmap::DashMap<ImageSpec, ImageData>,
+    //count: AtomicU64,
+}
+impl ImageStoreI {
+    // may cache stuff at some point
+    async fn get(&self, spec: ImageSpec) -> Option<Box<[u8]>> {
+        let path = match spec {
+            ImageSpec::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p)?,
+            ImageSpec::ARp(a, p) => {
+                GlobalBackend.with_local_archive(&a, |a| a.map(|a| a.path().join(&*p)))?
+            }
+            ImageSpec::File(p) => std::path::PathBuf::from(p.to_string()),
+        };
+        let img =
+            tokio::task::spawn_blocking(|| image::ImageReader::open(path).ok()?.decode().ok())
+                .await
+                .ok()??;
+        let mut v = Vec::<u8>::new();
+        img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
+            .ok()?;
+        Some(v.into_boxed_slice())
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -52,6 +73,7 @@ impl ImageData {
         self.timestamp
             .store(now.0.get() as _, std::sync::atomic::Ordering::SeqCst);
     }
+    #[must_use]
     pub fn new(data: &[u8]) -> Self {
         Self {
             img: data.into(),
@@ -60,41 +82,43 @@ impl ImageData {
     }
 }
 
+pub(crate) struct Img(Box<[u8]>);
+impl axum::response::IntoResponse for Img {
+    fn into_response(self) -> axum::response::Response {
+        ([(axum::http::header::CONTENT_TYPE, "image/webp")], self.0).into_response()
+    }
+}
+
+#[axum::debug_handler]
 pub(crate) async fn img_handler(
     uri: http::Uri,
-    axum::extract::State(ServerState { images: _, .. }): axum::extract::State<ServerState>,
+    axum::extract::State(ServerState { images, .. }): axum::extract::State<ServerState>,
     //request: http::Request<axum::body::Body>,
-) -> axum::response::Response<ServeFileSystemResponseBody> {
-    let default = || {
-        let mut resp = axum::response::Response::new(ServeFileSystemResponseBody::default());
-        *resp.status_mut() = http::StatusCode::NOT_FOUND;
-        resp
-    };
-
+) -> Result<Img, axum::http::StatusCode> /*axum::response::Response<ServeFileSystemResponseBody>*/ {
     let Some(s) = uri.query() else {
-        return default();
+        return Err(http::StatusCode::NOT_FOUND);
     };
 
     let spec = if let Some(s) = s.strip_prefix("kpse=") {
         ImageSpec::Kpse(s.into())
-    } else if let Some(f) = s.strip_prefix("file=") {
-        if Settings::get().lsp {
-            ImageSpec::File(f.into())
-        } else {
-            return default();
-        }
-    } else if let Some(s) = s.strip_prefix("a=") {
-        let Some((a, rp)) = s.split_once("&rp=") else {
-            return default();
-        };
+    } else if let Some(f) = s.strip_prefix("file=")
+        && Settings::get().lsp
+    {
+        ImageSpec::File(f.into())
+    } else if let Some(s) = s.strip_prefix("a=")
+        && let Some((a, rp)) = s.split_once("&rp=")
+    {
         let a = a.parse().unwrap_or_else(|_| unreachable!());
         let rp = rp.into();
         ImageSpec::ARp(a, rp)
     } else {
-        return default();
+        return Err(http::StatusCode::NOT_FOUND);
     };
 
-    //tracing::info!("HERE: {spec:?}");
+    if let Some(img) = images.0.get(spec).await {
+        Ok(Img(img))
+    }
+    /*
     if let Some(p) = spec.path() {
         let req = Request::builder()
             .uri(uri.clone())
@@ -104,8 +128,9 @@ pub(crate) async fn img_handler(
             .oneshot(req)
             .await
             .unwrap_or_else(|_| default())
-    } else {
-        default()
+    }*/
+    else {
+        Err(http::StatusCode::NOT_FOUND)
     }
 }
 

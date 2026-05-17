@@ -1,154 +1,17 @@
 use std::{borrow::Cow, hint::unreachable_unchecked};
 
-use ftml_ontology::terms::{BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term};
+use ftml_ontology::terms::{
+    ApplicationTerm, Argument, BindingTerm, BoundArgument, ComponentVar, MaybeSequence, Term,
+    helpers::IntoTerm,
+};
 use ftml_solver_trace::{SizedSolverRule, traceref};
 use ftml_uris::SymbolUri;
 
 use crate::{
     CheckRef,
-    rules::{InferenceRule, InhabitableRule},
+    rules::{InferenceRule, InhabitableRule, SimplificationRule},
     split::SplitStrategy,
 };
-
-/*
-*
-fn check_bindin<'t, Split: SplitStrategy>(
-    bind: &SymbolUri,
-    checker: &mut crate::CheckRef<'t, '_, Split>,
-    term: &'t Term,
-) -> Option<(
-    &'t MaybeSequence<ComponentVar>,
-    &'t MaybeSequence<Term>,
-    &'t Term,
-    &'t ComponentVar,
-    &'t Term,
-)> {
-    let Term::Bound(b) = term else { return None };
-    let [
-        BoundArgument::BoundSeq(bs),
-        BoundArgument::Sequence(ts),
-        BoundArgument::Simple(b),
-        BoundArgument::Bound(f),
-        BoundArgument::Simple(ret),
-    ] = &*b.arguments
-    else {
-        return None;
-    };
-    let vars = match (bs, ts) {
-        (MaybeSequence::One(bs), MaybeSequence::One(ts)) => {
-            if checker.check_inhabitable(ts) != Some(true) {
-                return None;
-            }
-            let nv = ComponentVar {
-                var: bs.var.clone(),
-                tp: Some(ts.clone()),
-                df: None,
-            };
-            if checker.scoped(|checker| {
-                checker.extend_context(&nv);
-                checker.check_inhabitable(b)
-            }) != Some(true)
-            {
-                return None;
-            }
-            MaybeSequence::One(nv)
-        }
-        (MaybeSequence::Seq(bs), MaybeSequence::Seq(ts)) => {
-            let ret = bs
-                .iter()
-                .zip(ts.iter())
-                .map(|(v, t)| ComponentVar {
-                    var: v.var.clone(),
-                    tp: Some(t.clone()),
-                    df: None,
-                })
-                .collect::<Vec<_>>();
-            checker.scoped(|checker| {
-                for cv in &ret {
-                    // SAFETY: all types are Some(_)
-                    if checker.check_inhabitable(unsafe { cv.tp.as_ref().unwrap_unchecked() })
-                        != Some(true)
-                    {
-                        return None;
-                    }
-                    checker.extend_context(cv);
-                }
-                if checker.check_inhabitable(b) == Some(true) {
-                    Some(())
-                } else {
-                    None
-                }
-            })?;
-            MaybeSequence::Seq(ret.into_boxed_slice())
-        }
-        _ => {
-            checker.failure("types don't match bound variables");
-            return None;
-        }
-    };
-
-    let ftp = match vars {
-        MaybeSequence::One(v) => bind.clone().simple_bind(v.var, v.tp, None, b.clone()),
-        MaybeSequence::Seq(ts) => ts.into_iter().rfold(b.clone(), |t, v| {
-            bind.clone().simple_bind(v.var, v.tp, None, t)
-        }),
-    };
-    let nf = ComponentVar {
-        var: f.var.clone(),
-        df: None,
-        tp: Some(ftp),
-    };
-    checker.extend_context(nf);
-    Some((bs, ts, b, f, ret))
-}
-
-fn applicable(&self, term: &Term) -> bool {
-    if let Term::Bound(b) = term
-        && let Term::Symbol { uri, .. } = &b.head
-        && *uri == self.bindin
-        && let [
-            BoundArgument::BoundSeq(bs), //x
-            BoundArgument::Sequence(ts), //T
-            BoundArgument::Simple(_),    //B
-            BoundArgument::Bound(_),     //f
-            BoundArgument::Simple(_),    //t
-        ] = &*b.arguments
-    {
-        bs.len() == ts.len()
-    } else {
-        false
-    }
-}
-
-fn apply<'t>(
-    &self,
-    mut checker: crate::CheckRef<'t, '_, Split>,
-    term: &'t Term,
-) -> Option<bool> {
-    let (_, _, _, _, ret) = check_bindin(&self.bind, &mut checker, term)?;
-    checker.check_inhabitable(ret)
-}
-
-fn infer<'t>(
-    &self,
-    mut checker: crate::CheckRef<'t, '_, Split>,
-    term: &'t Term,
-) -> Option<Term> {
-    let (bs, ts, b, f, ret) = check_bindin(&self.bind, &mut checker, term)?;
-    let rettp = checker.infer_type(ret)?;
-    Some(Term::Bound(BindingTerm::new(
-        self.bindin.clone().into(),
-        Box::new([
-            BoundArgument::BoundSeq(bs.clone()),
-            BoundArgument::Sequence(ts.clone()),
-            BoundArgument::Simple(b.clone()),
-            BoundArgument::Bound(f.clone()),
-            BoundArgument::Simple(rettp),
-        ]),
-        None,
-    )))
-}
-*/
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindInInhabitableRule {
@@ -543,57 +406,150 @@ impl BindInApplyRule {
     }
 }
 
-/*
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WithBoundComputationRule(pub SymbolUri);
-impl SizedSolverRule for WithBoundComputationRule {
+pub struct BindInComputationRule {
+    pub bindin: SymbolUri,
+    pub bind: SymbolUri,
+}
+impl SizedSolverRule for BindInComputationRule {
     fn display(&self) -> Vec<crate::trace::Displayable> {
-        ftml_solver_trace::trace!(&self.0, " replaces bound variables")
+        ftml_solver_trace::trace!(
+            "⊢ ( ",
+            &self.bindin,
+            " f: (",
+            &self.bind,
+            " x:A. B). t(f)) ) y:A. z ==> t(",
+            &self.bind,
+            " y:A. z)"
+        )
     }
 }
-impl<Split: SplitStrategy> SimplificationRule<Split> for WithBoundComputationRule {
-    fn applicable(&self, term: &ftml_ontology::terms::Term) -> bool {
-        let Term::Bound(app) = term else { return false };
-        let Term::Bound(head) = &app.head else {
-            return false;
-        };
-        if let Term::Symbol { uri, .. } = &head.head
-            && *uri == self.0
-            && let [
-                BoundArgument::BoundSeq(MaybeSequence::Seq(_)),
-                BoundArgument::Simple(Term::Bound(ret)),
-            ] = &*head.arguments
+impl<Split: SplitStrategy> SimplificationRule<Split> for BindInComputationRule {
+    fn applicable(&self, term: &Term) -> bool {
+        if let Term::Bound(b) = term
+            && let Term::Bound(b) = &b.head
+            && let Term::Symbol { uri, .. } = &b.head
         {
-            matches!(
-                &app.arguments.first(),
-                Some(BoundArgument::Bound(_) | BoundArgument::BoundSeq(_))
-            ) && matches!(
-                &ret.arguments.first(),
-                Some(BoundArgument::Bound(_) | BoundArgument::BoundSeq(_))
-            )
+            *uri == self.bindin
+                && matches!(
+                    &*b.arguments,
+                    [
+                        BoundArgument::Bound(_) | BoundArgument::BoundSeq(_),
+                        BoundArgument::Simple(_)
+                    ]
+                )
         } else {
             false
         }
     }
     fn apply<'t>(
         &self,
-        checker: crate::CheckRef<'t, '_, Split>,
+        mut checker: CheckRef<'t, '_, Split>,
         term: &'t Term,
     ) -> Result<Term, Option<ftml_ontology::terms::termpaths::TermPath>> {
-        println!("HERE: {:?}", term.debug_short());
-        let Term::Bound(app) = term else {
+        let Term::Bound(top) = term else {
             return Err(None);
         };
-        let Term::Bound(withbound) = &app.head else {
+        let Term::Bound(bindin_term) = &top.head else {
             return Err(None);
         };
-        let [
-            BoundArgument::BoundSeq(MaybeSequence::Seq(vars)),
-            BoundArgument::Simple(Term::Bound(ret)),
-        ] = &*withbound.arguments
-        else {
+        let [bv, BoundArgument::Simple(body)] = &*bindin_term.arguments else {
             return Err(None);
         };
+        let bv = match bv {
+            BoundArgument::Bound(v) => v,
+            BoundArgument::BoundSeq(MaybeSequence::Seq(vs)) if let [v] = &**vs => v,
+            _ => return Err(None),
+        };
+        let f = &bv.var;
+        let Some(Term::Bound(bind)) = &bv.tp else {
+            return Err(None);
+        };
+        match &bind.head {
+            Term::Symbol { uri, .. } if *uri == self.bind => (),
+            _ => return Err(None),
+        }
+
+        let [f_bv, BoundArgument::Simple(f_ret_tp)] = &*bind.arguments else {
+            return Err(None);
+        };
+        let f_bv = match f_bv {
+            BoundArgument::Bound(v) => v,
+            BoundArgument::BoundSeq(MaybeSequence::Seq(vs)) if let [v] = &**vs => v,
+            _ => return Err(None),
+        };
+        let Some(f_arg_tp) = &f_bv.tp else {
+            return Err(None);
+        };
+
+        let top_args = &*top.arguments;
+        let top_bv = match top_args.first() {
+            Some(BoundArgument::Bound(bv)) => bv,
+            Some(BoundArgument::BoundSeq(MaybeSequence::Seq(vs))) if let [bv] = &**vs => bv,
+            _ => return Err(None),
+        };
+        let Some(BoundArgument::Simple(f_body)) = top_args.get(1) else {
+            return Err(None);
+        };
+        let tp = match &top_bv.tp {
+            Some(tp) => {
+                if checker.check_equality(tp, f_arg_tp) != Some(true) {
+                    return Err(None);
+                }
+                tp
+            }
+            _ => f_arg_tp,
+        };
+        let ret_tp = f_ret_tp / (f_bv.var.name(), &top_bv.var.clone().into());
+        if checker.scoped(|checker| {
+            checker.extend_context(ComponentVar {
+                var: top_bv.var.clone(),
+                tp: Some(tp.clone()),
+                df: None,
+            });
+            checker.check_type(f_body, &ret_tp)
+        }) != Some(true)
+        {
+            return Err(None);
+        }
+
+        let resolved = body
+            / (
+                f.name(),
+                &self.bind.clone().simple_bind(
+                    top_bv.var.clone(),
+                    Some(tp.clone()),
+                    None,
+                    f_body.clone(),
+                ),
+            );
+        let resolved = resolved.into_owned();
+        let rest_args = &top_args[2..];
+        Ok(if rest_args.is_empty() {
+            resolved
+        } else if rest_args
+            .iter()
+            .all(|a| matches!(a, BoundArgument::Sequence(_) | BoundArgument::Simple(_)))
+        {
+            Term::Application(ApplicationTerm::new(
+                resolved,
+                rest_args
+                    .iter()
+                    .map(|a| match a {
+                        BoundArgument::Sequence(s) => Argument::Sequence(s.clone()),
+                        BoundArgument::Simple(t) => Argument::Simple(t.clone()),
+                        // SAFETY: iter().all() check above
+                        _ => unsafe { unreachable_unchecked() },
+                    })
+                    .collect(),
+                None,
+            ))
+        } else {
+            Term::Bound(BindingTerm::new(
+                resolved,
+                rest_args.to_vec().into_boxed_slice(),
+                None,
+            ))
+        })
     }
 }
- */

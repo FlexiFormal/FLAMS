@@ -45,9 +45,9 @@ const QUERY: &str = r"SELECT ?x ?y WHERE {
 maybe_lazy!(Query = query());
 
 fn query() -> AnyView {
+    use ftml_component_utils::Checkbox;
+    use ftml_component_utils::{Code, Input, Text};
     use leptos::form::ActionForm;
-    use thaw::Checkbox;
-    use thaw::{Input, Text, TextTag};
     inject_css("flams-query", include_str!("query.css"));
 
     let action = ServerAction::<QueryApi>::new();
@@ -75,11 +75,11 @@ fn query() -> AnyView {
             <div>
                 <Text>"Encode URI: "</Text>
                 <Input value=uri/>
-                <Text tag=TextTag::Code>{
+                <Code>{
                     move || {
                         ftml_uris::rdf_encode(&uri.get()).unwrap_or_else(|| "(invalid URI)".to_string())
                     }
-                }</Text>
+                }</Code>
             </div>
         <ActionForm action>
             <span class="flams-query-container">
