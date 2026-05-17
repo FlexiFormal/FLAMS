@@ -160,6 +160,10 @@ pub fn bind_in<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>
         bindin: bindin.clone(),
         bind: bind.clone(),
     }));
+    rules.push_simplification(Box::new(bindin::BindInComputationRule {
+        bindin: bindin.clone(),
+        bind: bind.clone(),
+    }));
 }
 
 pub fn arrow_for<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {

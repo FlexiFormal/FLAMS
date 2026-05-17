@@ -269,7 +269,7 @@ oauth2 = { version = "5" }
 reqwest = { version = "0", features = ["json"] }
 
 image = { version = "0.25" }
-webp = { version = "0.3" }
+#webp = { version = "0.3" }
 dashmap = { version = "6" }
 
 gitlab = { version = "0" }

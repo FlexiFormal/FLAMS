@@ -54,7 +54,7 @@ ssr = [
     "dep:rayon",
     "dep:tex_engine",
     "dep:image",
-    "dep:webp",
+    #"dep:webp",
     "dep:dashmap",
     "dep:futures",
     "dep:mime_guess",
@@ -161,7 +161,7 @@ rayon = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 libsqlite3-sys = { workspace = true, optional = true }
 
-axum = { workspace = true, optional = true }           #,features=["macros"]}
+axum = { workspace = true, optional = true,features=["macros"] }           #,features=["macros"]}
 axum-macros = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
@@ -177,7 +177,7 @@ argon2 = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 
 image = { workspace = true, optional = true }
-webp = { workspace = true, optional = true }
+#webp = { workspace = true, optional = true }
 dashmap = { workspace = true, optional = true }
 
 #hydrate

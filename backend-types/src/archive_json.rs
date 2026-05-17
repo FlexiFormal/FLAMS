@@ -265,6 +265,16 @@ impl ArchiveIndex {
         }
     }
     #[must_use]
+    pub fn authors(&self) -> &[Box<str>] {
+        match self {
+            Self::Library { .. } => &[],
+            Self::Book { authors, .. }
+            | Self::Paper { authors, .. }
+            | Self::Course { authors, .. }
+            | Self::SelfStudy { authors, .. } => authors,
+        }
+    }
+    #[must_use]
     pub fn title(&self) -> &str {
         match self {
             Self::Library { title, .. }

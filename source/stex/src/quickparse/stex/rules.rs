@@ -60,7 +60,7 @@ pub fn all_rules<
         Err,
         STeXParseState<'a, LSPLineCol, MS>,
     >,
-); 44] {
+); 46] {
     [
         ("importmodule", importmodule as _),
         ("setmetatheory", setmetatheory as _),
@@ -79,7 +79,9 @@ pub fn all_rules<
         ("textsymdecl", textsymdecl as _),
         ("symdef", symdef as _),
         ("vardef", vardef as _),
+        ("newvar", newvar as _),
         ("varseq", varseq as _),
+        ("newseq", newseq as _),
         ("symref", symref as _),
         ("sr", symref as _),
         ("symname", symname as _),
@@ -1417,16 +1419,12 @@ stex!(p => vardef{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
   let args = args.unwrap_or_default();
   let main_name_range = name.1;
   let mut name: (&str,_) = (&name.0,name.1);
-  //let mut has_df = false;
-  //let mut has_tp = false;
   let mut argnum = 0;
 
   for e in &args { match e {
     VardefArg::Name(ParsedKeyValue { key_range, val_range, val }) => {
       name = (val,*val_range);
     }
-    //VardefArg::Tp(_) | VardefArg::Return(_) => has_tp = true,
-    //VardefArg::Df(_) => has_df = true,
     VardefArg::Args(v) => argnum = v.val,
     _ => ()
   }}
@@ -1445,6 +1443,38 @@ stex!(p => vardef{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
     name:fname, main_name_range,
     full_range:vardef.range,parsed_args:args,
     token_range:vardef.token_range
+  })
+});
+
+stex!(p => newvar{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
+  let macroname = format!("v{}",name.0);
+  let args = args.unwrap_or_default();
+  let main_name_range = name.1;
+  let mut name: (&str,_) = (&name.0,name.1);
+  let mut argnum = 0;
+
+  for e in &args { match e {
+    VardefArg::Name(ParsedKeyValue { key_range, val_range, val }) => {
+      name = (val,*val_range);
+    }
+    VardefArg::Args(v) => argnum = v.val,
+    _ => ()
+  }}
+
+  let (state,mut groups) = p.split();
+  let Ok(fname) : Result<UriName,_> = name.0.parse() else {
+    p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(newvar)
+  };
+  let rule = AnyMacro::Ext(DynMacro {
+    ptr: variable_macro as _,
+    arg:MacroArg::Variable(fname.clone(), newvar.range, false,argnum)
+  });
+  p.add_macro_rule(macroname.into(), Some(rule));
+  MacroResult::Success(STeXToken::Vardef {
+    name:fname, main_name_range,
+    full_range:newvar.range,parsed_args:args,
+    token_range:newvar.token_range
   })
 });
 
@@ -1481,6 +1511,42 @@ stex!(p => varseq{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
     name:fname, main_name_range,
     full_range:varseq.range,parsed_args:args,
     token_range:varseq.token_range
+  })
+});
+
+stex!(p => newseq{name:!name}[args:type VardefArg<Pos,STeXToken<Pos>>] => {
+let macroname = format!("v{}",name.0);
+  let args = args.unwrap_or_default();
+  let main_name_range = name.1;
+  let mut name : (&str,_) = (&name.0,name.1);
+  //let mut has_df = false;
+  //let mut has_tp = false;
+  let mut argnum = 0;
+
+  for e in &args { match e {
+    VardefArg::Name(ParsedKeyValue { key_range, val_range, val }) => {
+      name = (val,*val_range);
+    }
+    //VardefArg::Tp(_) | VardefArg::Return(_) => has_tp = true,
+    //VardefArg::Df(_) => has_df = true,
+    VardefArg::Args(v) => argnum = v.val,
+    _ => ()
+  }}
+
+  let (state,mut groups) = p.split();
+  let Ok(fname) : Result<UriName,_> = name.0.parse() else {
+    p.tokenizer.problem(name.1.start, format!("Invalid uri segment {}",name.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(newseq)
+  };
+  let rule = AnyMacro::Ext(DynMacro {
+    ptr: variable_macro as _,
+    arg:MacroArg::Variable(fname.clone(), newseq.range, true,argnum)
+  });
+  p.add_macro_rule(macroname.into(), Some(rule));
+  MacroResult::Success(STeXToken::Varseq {
+    name:fname, main_name_range,
+    full_range:newseq.range,parsed_args:args,
+    token_range:newseq.token_range
   })
 });
 

@@ -3,6 +3,7 @@
 use flams_backend_types::archive_json::ArchiveIndex;
 use flams_web_utils::components::{LazySubtree, Leaf, Tree, wait_and_then_fn};
 use ftml_component_utils::{Header, inject_css};
+use ftml_components::components::content::CommaSep;
 use ftml_uris::{
     ArchiveId, DocumentUri, FtmlUri, Uri, UriPath, UriWithArchive, UriWithPath,
     components::{UriComponentTuple, UriComponents},
@@ -134,12 +135,21 @@ enum ArchiveDetails {
     },
 }
 impl ArchiveDetails {
-    fn do_children(self) -> (String, Option<Box<str>>, Option<Box<str>>, impl IntoView) {
+    fn do_children(
+        self,
+    ) -> (
+        String,
+        Option<Box<str>>,
+        Option<Box<str>>,
+        Box<[Box<str>]>,
+        impl IntoView,
+    ) {
         match self {
             Self::Group { id, children } => (
                 id.to_string(),
                 None,
                 None,
+                Box::new([]),
                 leptos::either::Either::Left(
                     children
                         .into_iter()
@@ -152,30 +162,43 @@ impl ArchiveDetails {
                 index,
                 children,
             } => {
-                let (teaser, logo) = match index {
+                let (teaser, logo, authors) = match index {
                     Some(
                         ArchiveIndex::Book {
-                            teaser, thumbnail, ..
+                            teaser,
+                            thumbnail,
+                            authors,
+                            ..
                         }
                         | ArchiveIndex::Paper {
-                            thumbnail, teaser, ..
-                        }
-                        | ArchiveIndex::Library {
-                            teaser, thumbnail, ..
+                            thumbnail,
+                            teaser,
+                            authors,
+                            ..
                         }
                         | ArchiveIndex::Course {
-                            teaser, thumbnail, ..
+                            teaser,
+                            thumbnail,
+                            authors,
+                            ..
                         }
                         | ArchiveIndex::SelfStudy {
-                            thumbnail, teaser, ..
+                            thumbnail,
+                            teaser,
+                            authors,
+                            ..
                         },
-                    ) => (teaser, thumbnail),
-                    _ => (None, None),
+                    ) => (teaser, thumbnail, authors),
+                    Some(ArchiveIndex::Library {
+                        teaser, thumbnail, ..
+                    }) => (teaser, thumbnail, Box::new([]) as _),
+                    _ => (None, None, Box::new([]) as _),
                 };
                 (
                     id.to_string(),
                     teaser,
                     logo,
+                    authors,
                     leptos::either::Either::Right(view!(<Tree>{
                         children
                             .into_iter()
@@ -188,10 +211,11 @@ impl ArchiveDetails {
     }
     fn into_view(self) -> impl IntoView {
         use flams_web_utils::components::{Layout, LayoutHeader};
-        let (id, teaser, logo, children) = self.do_children();
+        let (id, teaser, logo, authors, children) = self.do_children();
         view! {
             <Layout>
                 <LayoutHeader slot><h2>{id}</h2>
+                    <div>{CommaSep("",authors.into_iter().map(|s| s.into_string())).into_view()}</div>
                     <div>
                         {teaser.map(|t| view!(<div inner_html=t.into_string()/>))}
                         {logo.map(|src| view!(
@@ -221,24 +245,28 @@ impl AorGEntry {
     fn into_view(self) -> impl IntoView {
         use ftml_component_utils::LazyCollapsible;
         use ftml_component_utils::{Block, BoldCaption, HeaderLeft, HeaderRight};
-        let (title, id, teaser, logo) = match self {
-            Self::Group(id) => (id.to_string(), id, None, None),
+        let (title, id, teaser, authors, logo) = match self {
+            Self::Group(id) => (id.to_string(), id, None, Vec::new(), None),
             Self::Archive { id, index } => {
                 if let Some(i) = index {
                     (
                         format!("{} ({id})", i.title()),
                         id,
                         i.teaser().map(str::to_string),
+                        i.authors().to_vec(),
                         i.thumbnail().map(str::to_string),
                     )
                 } else {
-                    (id.to_string(), id, None, None)
+                    (id.to_string(), id, None, Vec::new(), None)
                 }
             }
         };
         view! {
             <Block class="flams-archive-block">
-                <Header slot><BoldCaption>{title}</BoldCaption></Header>
+                <Header slot><div style="display:flex;flex-direction:column;">
+                    <BoldCaption>{title}</BoldCaption>
+                    <div style="font-size:small;">{CommaSep("",authors.into_iter().map(str::into_string)).into_view()}</div>
+                </div></Header>
                 <HeaderLeft slot>
                     <div inner_html=teaser style="font-size:small"/>
                 </HeaderLeft>
@@ -249,7 +277,7 @@ impl AorGEntry {
                         let id = id.clone();
                         wait_and_then_fn(
                             move || archive_detail(None, Some(id.clone()), None),
-                            |a| a.do_children().3.into_any(),
+                            |a| a.do_children().4.into_any(),
                         )
                     }
                 </LazyCollapsible>
@@ -279,7 +307,7 @@ impl DirOrFile {
                 let f = move || {
                     wait_and_then_fn(
                         move || archive_detail(None, Some(id.clone()), Some(path.to_string())),
-                        |a| a.do_children().3.into_any(),
+                        |a| a.do_children().4.into_any(),
                     )
                 };
                 Left(view! {<LazySubtree>
@@ -297,7 +325,7 @@ impl DirOrFile {
                 Right(view! {<Leaf>
                 <Drawer lazy=true>
                     <Trigger slot>
-                        <ftml_component_utils::icons::FileIcon/>{name}
+                        <span style="cursor:pointer;"><ftml_component_utils::icons::FileIcon/>{name}</span>
                     </Trigger>
                     <Header slot><a href=link target="_blank">
                       <Button appearance=ButtonAppearance::Subtle>{namecl}</Button>
