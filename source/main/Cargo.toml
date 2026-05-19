@@ -121,7 +121,7 @@ flams-system = { workspace = true, features = [
     #"rocksdb"
 ], optional = true }
 flams-search = { workspace = true, optional = true }
-flams-math-archives = { workspace = true, optional = true,features=["deepsize","cached"] }
+flams-math-archives = { workspace = true, optional = true,features=["deepsize","cached","img"] }
 flams-lsp = { workspace = true, optional = true, features = ["ws"] }
 flams-stex = { workspace = true, optional = true }
 flams-ftml = { workspace = true, optional = true }

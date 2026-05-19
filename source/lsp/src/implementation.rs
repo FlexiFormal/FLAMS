@@ -191,12 +191,24 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 });
                 return;
             };
-            if let Err(e) = export_html(doc_uri, client.clone(), &target) {
-                let _ = client.show_message(lsp::ShowMessageParams {
+
+            let progress = ProgressCallbackServer::new(
+                client.clone(),
+                format!("Exporting {}", doc_uri.document_name()),
+                None,
+            );
+            let _ = if let Err(e) = backend().export_html(doc_uri, &target) {
+                client.show_message(lsp::ShowMessageParams {
                     typ: lsp::MessageType::ERROR,
                     message: e,
-                });
-            }
+                })
+            } else {
+                client.show_message(lsp::ShowMessageParams {
+                    typ: lsp::MessageType::INFO,
+                    message: "Exported HTML successfully".to_string(),
+                })
+            };
+            drop(progress);
         });
         ControlFlow::Continue(())
     }
@@ -1186,108 +1198,4 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
 
     // documentLink/
     impl_request!(document_link_resolve = DocumentLinkResolve);
-}
-
-fn export_html(uri: &DocumentUri, client: ClientSocket, to: &Path) -> Result<(), String> {
-    use std::fmt::Write;
-    let progress =
-        ProgressCallbackServer::new(client, format!("Exporting {}", uri.document_name()), None);
-    let mut images = rustc_hash::FxHashSet::default();
-    let mut all_documents = Vec::new();
-    let inputs = to.join("aux");
-    std::fs::create_dir_all(&inputs).map_err(|e| e.to_string())?;
-    recurse_export(uri, &progress, &inputs, &mut images, &mut all_documents)?;
-    //
-    let htmlstr = backend().get_html_full(uri).map_err(|e| e.to_string())?;
-    let htmlstr = subst_img(htmlstr, "aux/", &mut images)?.into_string();
-    let mut replaces = String::new();
-    for (i, u) in all_documents.into_iter().enumerate() {
-        if replaces.is_empty() {
-            replaces.push_str(",\nredirects:[");
-        } else {
-            replaces.push(',');
-        }
-        let _ = write!(&mut replaces, "[\"{u}\",\"aux/{i}.json\"]");
-    }
-    if !replaces.is_empty() {
-        replaces.push(']');
-    }
-    let htmlstr = htmlstr.replace(
-        "</head>",
-        &format!(
-            r#"
-        <script type="text/javascript" id="ftml">
-    	window.FTML_CONFIG = {{
-    	  documentUri:"{uri}",
-    	  backendUrl:"https://mathhub.info",
-    	  logLevel:"INFO"
-    	  {replaces}
-    	}};
-    	</script>
-    	<script src="https://mathhub.info/ftml.js"></script>
-        </head>"#
-        ),
-    );
-    let index = to.join("index.html");
-    let mut out = std::fs::File::create_new(index).map_err(|e| e.to_string())?;
-    out.write_all(htmlstr.as_bytes())
-        .map_err(|e| e.to_string())?;
-    out.flush().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-fn recurse_export(
-    uri: &DocumentUri,
-    progress: &ProgressCallbackServer,
-    out: &Path,
-    images: &mut rustc_hash::FxHashSet<Box<str>>,
-    all_documents: &mut Vec<DocumentUri>,
-) -> Result<(), String> {
-    all_documents.push(uri.clone());
-    let doc = backend().get_document(uri).map_err(|e| e.to_string())?;
-    for e in doc.dfs() {
-        if let DocumentElementRef::DocumentReference { target, .. } = e
-            && !all_documents.contains(target)
-        {
-            let idx = all_documents.len();
-            progress.update(format!("{idx}: {target}"), None);
-            let path = out.join(format!("{idx}.json"));
-            do_document(target, &path, images)?;
-            recurse_export(target, progress, out, images, all_documents)?;
-        }
-    }
-    Ok(())
-}
-
-fn do_document(
-    uri: &DocumentUri,
-    path: &Path,
-    images: &mut rustc_hash::FxHashSet<Box<str>>,
-) -> Result<(), String> {
-    let (css, htmlstr) = backend().get_html_body(uri).map_err(|e| e.to_string())?;
-    let htmlstr = subst_img(htmlstr, "", images)?;
-    let out = std::fs::File::create_new(path).map_err(|e| e.to_string())?;
-    serde_json::to_writer(std::io::BufWriter::new(out), &(htmlstr, css)).map_err(|e| e.to_string())
-}
-
-fn subst_img(
-    htmlstr: Box<str>,
-    prefix: &str,
-    images: &mut rustc_hash::FxHashSet<Box<str>>,
-) -> Result<Box<str>, String> {
-    let mut i = 0;
-    let mut htmlstr = htmlstr.into_string();
-    // images:
-    while let Some(j) = htmlstr[i..].find("data-ftml-src=") {
-        i = i + j + "data-ftml-src=".len();
-        let delim: u8 = htmlstr.as_bytes()[i];
-        i += 1;
-        let Some(j) = htmlstr[i..].find(delim as char) else {
-            return Err(format!("Missing delimiter at {}", &htmlstr[i..i + 20]));
-        };
-        let img_url = &htmlstr[i..i + j];
-        // TODO: find image, add to list
-        htmlstr = format!("{}{}{}", &htmlstr[..i], img_url, &htmlstr[i + j..]);
-    }
-    Ok(htmlstr.into_boxed_str())
 }
