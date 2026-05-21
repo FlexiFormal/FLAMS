@@ -29,7 +29,12 @@ impl axum::response::IntoResponse for Img {
         (
             [(
                 axum::http::header::CONTENT_TYPE,
-                format!("image/{}", self.1),
+                // TODO: other MIME types
+                if self.1 == "svg" {
+                    "image/svg+xml"
+                } else {
+                    "image/webp"
+                },
             )],
             self.0,
         )
