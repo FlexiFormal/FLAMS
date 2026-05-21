@@ -30,11 +30,19 @@ impl<'s> ImagePath<'s> {
         }
     }
     pub fn get_webp(path: &Path) -> Option<Box<[u8]>> {
-        let img = image::ImageReader::open(path).ok()?.decode().ok()?;
-        let mut v = Vec::<u8>::new();
-        img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
-            .ok()?;
-        Some(v.into_boxed_slice())
+        static NO_WEBP: &[&str] = &["svg"];
+        if path
+            .extension()
+            .is_some_and(|s| s.to_str().is_some_and(|s| NO_WEBP.contains(&s)))
+        {
+            std::fs::read(path).ok().map(Vec::into_boxed_slice)
+        } else {
+            let img = image::ImageReader::open(path).ok()?.decode().ok()?;
+            let mut v = Vec::<u8>::new();
+            img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
+                .ok()?;
+            Some(v.into_boxed_slice())
+        }
     }
     #[must_use]
     pub fn get(self) -> Option<Box<[u8]>> {
