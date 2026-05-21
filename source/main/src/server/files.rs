@@ -23,10 +23,17 @@ struct ImageStoreI {
     //count: AtomicU64,
 }
 
-pub(crate) struct Img(Box<[u8]>);
+pub(crate) struct Img(Box<[u8]>, String);
 impl axum::response::IntoResponse for Img {
     fn into_response(self) -> axum::response::Response {
-        ([(axum::http::header::CONTENT_TYPE, "image/webp")], self.0).into_response()
+        (
+            [(
+                axum::http::header::CONTENT_TYPE,
+                format!("image/{}", self.1),
+            )],
+            self.0,
+        )
+            .into_response()
     }
 }
 
@@ -45,7 +52,7 @@ pub(crate) async fn img_handler(
     else {
         return Err(http::StatusCode::NOT_FOUND);
     };
-    Ok(Img(img))
+    Ok(Img(img.0, img.1))
 }
 
 pub(crate) async fn doc_handler(

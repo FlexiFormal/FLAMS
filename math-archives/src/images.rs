@@ -20,6 +20,7 @@ pub enum ImagePath<'s> {
 }
 
 impl<'s> ImagePath<'s> {
+    #[must_use]
     pub fn to_path(self) -> Option<PathBuf> {
         match self {
             Self::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p),
@@ -29,24 +30,26 @@ impl<'s> ImagePath<'s> {
             Self::File(p) => Some(p.into()),
         }
     }
-    pub fn get_webp(path: &Path) -> Option<Box<[u8]>> {
+    #[must_use]
+    pub fn get_webp(path: &Path) -> Option<(Box<[u8]>, &str)> {
         static NO_WEBP: &[&str] = &["svg"];
-        if path
-            .extension()
-            .is_some_and(|s| s.to_str().is_some_and(|s| NO_WEBP.contains(&s)))
+        if let Some(ext) = path.extension().and_then(|s| s.to_str())
+            && NO_WEBP.contains(&ext)
         {
-            std::fs::read(path).ok().map(Vec::into_boxed_slice)
+            std::fs::read(path)
+                .ok()
+                .map(|v| (v.into_boxed_slice(), ext))
         } else {
             let img = image::ImageReader::open(path).ok()?.decode().ok()?;
             let mut v = Vec::<u8>::new();
             img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
                 .ok()?;
-            Some(v.into_boxed_slice())
+            Some((v.into_boxed_slice(), "webp"))
         }
     }
     #[must_use]
-    pub fn get(self) -> Option<Box<[u8]>> {
-        Self::get_webp(&self.to_path()?)
+    pub fn get(self) -> Option<(Box<[u8]>, String)> {
+        Self::get_webp(&self.to_path()?).map(|(b, e)| (b, e.to_string()))
     }
     #[must_use]
     #[allow(clippy::option_if_let_else)]
@@ -212,7 +215,7 @@ fn subst_img(
     let cow = REGEX.with(|regex| {
         regex.replace_all(&htmlstr, |cap: &fancy_regex::Captures| {
             macro_rules! ret {
-                ($name:ident = $e:expr) => {
+                ($name:pat = $e:expr) => {
                     let Some($name) = $e else { ret!() };
                 };
                 () => {{
@@ -238,17 +241,19 @@ fn subst_img(
             ret!(img = ImagePath::from_query(capurl, true));
             ret!(img = img.to_path());
             let filestr = if let Some(i) = images.iter().position(|p| **p == *img) {
+                // TODO use correct extension
                 format!("./img/{i}.webp")
             } else {
-                ret!(webp = ImagePath::get_webp(&img));
+                ret!((imgbytes, ext) = ImagePath::get_webp(&img));
                 let i = images.len();
-                images.push(img.into_boxed_path());
-                let out_file = img_path.join(format!("{i}.webp"));
-                if let Err(e) = std::fs::write(out_file, webp) {
+                let out_file = img_path.join(format!("{i}.{ext}"));
+                if let Err(e) = std::fs::write(out_file, imgbytes) {
                     failed = Some(e.to_string());
                     return Cow::Borrowed("");
                 }
-                format!("./img/{i}.webp")
+                let s = format!("./img/{i}.{ext}");
+                images.push(img.into_boxed_path());
+                s
             };
             let pre_a = cap.name("prea").map_or("", |c| c.as_str());
             let pre_b = cap.name("preb").map_or("", |c| c.as_str());
