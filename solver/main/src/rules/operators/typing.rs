@@ -1,12 +1,11 @@
 use crate::{
     CheckRef,
-    patterns::Pattern,
     rules::{PreparationRule, SimplificationRule, SizedSolverRule, SubtypeRule},
     split::SplitStrategy,
 };
 use ftml_ontology::terms::{
     Argument, ArgumentMode, BindingTerm, BoundArgument, ComponentVar, IsTerm, MaybeSequence, Term,
-    Variable,
+    Variable, patterns::Pattern,
 };
 use ftml_uris::SymbolUri;
 use std::{hint::unreachable_unchecked, ops::ControlFlow};
@@ -248,7 +247,7 @@ impl<Split: SplitStrategy> SubtypeRule<Split> for Subtyping {
         {
             let Some(sub) = sub.get(i) else { return false };
             let Some(sup) = sup.get(j) else { return false };
-            if !checker.alpha_equal(sub, sup) {
+            if !sub.alpha_equal(sup) {
                 return false;
             }
         }

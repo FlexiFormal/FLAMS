@@ -254,7 +254,47 @@ pub enum ArchiveIndex {
     },
 }
 impl ArchiveIndex {
-    #[inline]
+    #[must_use]
+    pub fn id(&self) -> &ArchiveId {
+        match self {
+            Self::Library { archive, .. } => archive,
+            Self::Book { file: uri, .. }
+            | Self::Paper { file: uri, .. }
+            | Self::Course { notes: uri, .. }
+            | Self::SelfStudy { notes: uri, .. } => uri.archive_id(),
+        }
+    }
+    #[must_use]
+    pub fn authors(&self) -> &[Box<str>] {
+        match self {
+            Self::Library { .. } => &[],
+            Self::Book { authors, .. }
+            | Self::Paper { authors, .. }
+            | Self::Course { authors, .. }
+            | Self::SelfStudy { authors, .. } => authors,
+        }
+    }
+    #[must_use]
+    pub fn title(&self) -> &str {
+        match self {
+            Self::Library { title, .. }
+            | Self::Book { title, .. }
+            | Self::Paper { title, .. }
+            | Self::Course { title, .. }
+            | Self::SelfStudy { title, .. } => title,
+        }
+    }
+    #[must_use]
+    pub fn thumbnail(&self) -> Option<&str> {
+        match self {
+            Self::Library { thumbnail, .. }
+            | Self::Book { thumbnail, .. }
+            | Self::Paper { thumbnail, .. }
+            | Self::Course { thumbnail, .. }
+            | Self::SelfStudy { thumbnail, .. } => thumbnail.as_deref(),
+        }
+    }
+
     #[must_use]
     pub fn teaser(&self) -> Option<&str> {
         match self {
@@ -406,19 +446,6 @@ impl ArchiveIndex {
                         .map(|s| DocumentUri::from_archive_relpath(a.clone(), &s))
                         .transpose()?
                 },
-                /*instances: instances
-                .into_iter()
-                .map(|i| Instance {
-                    semester: i.semester,
-                    instructors: i
-                        .instructors
-                        .map(|is| is.into_iter().map(|i| i.name).collect()),
-                    tas: i.tas.map(|is| is.into_iter().map(|i| i.name).collect()),
-                    lead_tas: i
-                        .lead_tas
-                        .map(|is| is.into_iter().map(|i| i.name).collect()),
-                })
-                .collect(),*/
                 authors: instructors.into_iter().map(|is| is.name).collect(),
             },
             DocumentKind::SelfStudy {

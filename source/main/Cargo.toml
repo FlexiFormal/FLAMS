@@ -36,7 +36,7 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
     "dep:leptos_axum",
-    "thaw/ssr",
+    "ftml-component-utils/ssr",
     "dep:axum",
     "dep:axum-macros",
     "dep:tower",
@@ -54,7 +54,7 @@ ssr = [
     "dep:rayon",
     "dep:tex_engine",
     "dep:image",
-    "dep:webp",
+    #"dep:webp",
     "dep:dashmap",
     "dep:futures",
     "dep:mime_guess",
@@ -67,7 +67,7 @@ ssr = [
 hydrate = [
     "dep:console_error_panic_hook",
     "leptos/hydrate",
-    "thaw/hydrate",
+    "ftml-component-utils/hydrate",
     "dep:wasm-bindgen",
     "tracing/release_max_level_warn",
     "dep:tracing-wasm",
@@ -103,6 +103,7 @@ ftml-uris = { workspace = true }
 ftml-ontology = { workspace = true, features = ["serde"] }
 ftml-components = { workspace = true }
 
+ftml-component-utils = {workspace = true}
 
 flams-router-dashboard = { workspace = true }
 flams-router-content = {workspace = true}
@@ -120,7 +121,7 @@ flams-system = { workspace = true, features = [
     #"rocksdb"
 ], optional = true }
 flams-search = { workspace = true, optional = true }
-flams-math-archives = { workspace = true, optional = true,features=["deepsize","cached"] }
+flams-math-archives = { workspace = true, optional = true,features=["deepsize","cached","img"] }
 flams-lsp = { workspace = true, optional = true, features = ["ws"] }
 flams-stex = { workspace = true, optional = true }
 flams-ftml = { workspace = true, optional = true }
@@ -130,13 +131,10 @@ flams-database = { workspace = true }
 leptos = { workspace = true }
 leptos_meta = { workspace = true }
 leptos_router = { workspace = true }
-thaw = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-icondata_bi = { workspace = true }
-icondata_ai = { workspace = true }
 either = { workspace = true }
 const-str = { workspace = true }
 leptos-posthoc = { workspace = true }
@@ -163,7 +161,7 @@ rayon = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 libsqlite3-sys = { workspace = true, optional = true }
 
-axum = { workspace = true, optional = true }           #,features=["macros"]}
+axum = { workspace = true, optional = true,features=["macros"] }           #,features=["macros"]}
 axum-macros = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
@@ -179,7 +177,7 @@ argon2 = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 
 image = { workspace = true, optional = true }
-webp = { workspace = true, optional = true }
+#webp = { workspace = true, optional = true }
 dashmap = { workspace = true, optional = true }
 
 #hydrate

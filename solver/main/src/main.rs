@@ -8,10 +8,11 @@ use flams_math_archives::{
 };
 use ftml_ontology::{
     domain::modules::{Module, ModuleLike},
+    terms::Term,
     utils::{RefTree, time::measure},
 };
 use ftml_solver::{
-    Checker, CheckerCache,
+    Checker, CheckerCache, SubtermCheckResult,
     results::DocumentCheckResult,
     split::{
         RayonSplit, RayonStrategiesDepth, RayonStrategiesOnly, SingleThreadedSplit, SplitStrategy,
@@ -37,7 +38,7 @@ fn main() {
     .stack_size(6 * 1024 * 1024)
     .spawn(move || {*/
     //pause();
-    let (i, t) = measure(check_selected); //measure(check_all); //
+    let (i, t) = measure(check_subterm); //(check_selected); //measure(check_all); //
     println!("Checked {i} documents in {t}");
     /*println!(
         "minimal stack: {}",
@@ -48,6 +49,34 @@ fn main() {
     /*    })
     .expect("wut")
     .join();*/
+}
+
+fn check_subterm() -> usize {
+    const TOP: &str = r#"{"Application":{"head":{"Symbol":{"uri":"http://mathhub.info?a=FTML/math&p=propositions&m=equivalence&s=equivalence","presentation":null}},"arguments":[{"Simple":{"Application":{"head":{"Symbol":{"uri":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&m=subset&s=fuzzy subset","presentation":null}},"arguments":[{"Simple":{"Var":{"variable":{"Ref":{"declaration":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&d=subset&l=en&e=vA","is_sequence":false}},"presentation":null}}},{"Simple":{"Var":{"variable":{"Ref":{"declaration":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&d=subset&l=en&e=vB","is_sequence":false}},"presentation":null}}}],"presentation":null}}},{"Simple":{"Application":{"head":{"Symbol":{"uri":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&m=lift&s=less than or equal to","presentation":null}},"arguments":[{"Sequence":{"Seq":[{"Application":{"head":{"Symbol":{"uri":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&m=fuzzyset&s=membership function","presentation":null}},"arguments":[{"Simple":{"Var":{"variable":{"Ref":{"declaration":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&d=subset&l=en&e=vA","is_sequence":false}},"presentation":null}}}],"presentation":null}},{"Application":{"head":{"Symbol":{"uri":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&m=fuzzyset&s=membership function","presentation":null}},"arguments":[{"Simple":{"Var":{"variable":{"Ref":{"declaration":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&d=subset&l=en&e=vB","is_sequence":false}},"presentation":null}}}],"presentation":null}}]}}],"presentation":null}}}],"presentation":null}}"#;
+    const SUB: &str = r#"{"Application":{"head":{"Symbol":{"uri":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&m=subset&s=fuzzy subset","presentation":null}},"arguments":[{"Simple":{"Var":{"variable":{"Ref":{"declaration":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&d=subset&l=en&e=vA","is_sequence":null}},"presentation":null}}},{"Simple":{"Var":{"variable":{"Ref":{"declaration":"http://mathhub.info?a=Papers/26-Intelligencer-sTeX&p=mod&d=subset&l=en&e=vB","is_sequence":null}},"presentation":null}}}],"presentation":null}}"#;
+    let top: Term = serde_json::from_str(TOP).unwrap();
+    let sub: Term = serde_json::from_str(SUB).unwrap();
+    let mut global_context = rustc_hash::FxHashSet::default();
+    for m in top.full_context(&mut |u| AnyBackend::Global.get_document(u).ok()) {
+        global_context.insert(m);
+    }
+    let mut checker =
+        Checker::<SingleThreadedSplit /*RayonStrategiesDepth<4>*/>::new(AnyBackend::Global);
+    checker.set_context(global_context.into_iter().collect());
+    let SubtermCheckResult {
+        simplified,
+        inferred_type,
+        context,
+        log,
+    } = checker.check_subterm_term(top, sub).expect("failed");
+
+    println!("{}", log.colored());
+    println!(
+        "{:?}\n  : {:?}",
+        simplified.debug_short(),
+        inferred_type.as_ref().map(Term::debug_short)
+    );
+    1
 }
 
 fn check_selected() -> usize {
@@ -101,9 +130,10 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/tests&d=sqrt2&l=en",
         "http://mathhub.info?a=FTML/tests&d=probdists&l=en",
         */
+        "http://mathhub.info?a=FTML/math&p=numbers/real&d=order&l=en",
         //"http://mathhub.info?a=Papers/26-ICMS-Semantics&p=fragments&d=variables&l=en",
         //"http://mathhub.info?a=FTML/tests&d=units&l=en",
-        "http://mathhub.info?a=FTML/tests&d=natded&l=en",
+        //"http://mathhub.info?a=FTML/tests&d=natded&l=en",
     )
     //}
 }

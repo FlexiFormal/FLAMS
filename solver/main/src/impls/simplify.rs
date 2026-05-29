@@ -15,7 +15,9 @@ use crate::{
     split::SplitStrategy,
 };
 
-const SIMPLIFY_LIMIT: usize = 64;
+const LOOP_LIMIT: usize = 64;
+const RECURSION_LIMIT: usize = 64;
+const TOTAL_LIMIT: usize = 2048;
 
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn simplify_full(&mut self, expand: bool, term: &'t Term) -> Option<Term> {
@@ -23,7 +25,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             return None;
         }
         self./*wrap_check*/untraced(CheckingTask::Simplify(term), |slf| {
-            slf.simplify_full_i(expand, term,&mut 0)
+            slf.simplify_full_i(expand, term,&mut 0,&mut 0)
         }).inspect(|t| {
             self.add_msg(traceref!("Simplified: ",t.clone()).into());
         })
@@ -32,7 +34,8 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         &mut self,
         expand: bool,
         term: &'t Term,
-        limit: &mut usize,
+        recursion_limit: &mut usize,
+        total_limit: &mut usize,
     ) -> Option<Cow<'t, Term>> {
         match term {
             Term::Symbol { uri, .. } if expand => self.get_symbol_definiens(uri).map(|t| {
@@ -57,18 +60,17 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
             Term::Application(app) => {
                 let mut changed = false;
-                let nhead = self.simplify_full_i(true, &app.head, limit).map_or(
-                    Cow::Borrowed(&app.head),
-                    |t| {
+                let nhead = self
+                    .simplify_full_i(true, &app.head, recursion_limit, total_limit)
+                    .map_or(Cow::Borrowed(&app.head), |t| {
                         changed = true;
                         Cow::Owned(t)
-                    },
-                );
+                    });
                 let args = app
                     .arguments
                     .iter()
                     .map(|a| {
-                        self.arg_full(expand, a, limit)
+                        self.arg_full(expand, a, recursion_limit, total_limit)
                             .map_or(Cow::Borrowed(a), |a| {
                                 changed = true;
                                 Cow::Owned(a)
@@ -87,18 +89,17 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             }
             Term::Bound(app) => {
                 let mut changed = false;
-                let nhead = self.simplify_full_i(true, &app.head, limit).map_or(
-                    Cow::Borrowed(&app.head),
-                    |t| {
+                let nhead = self
+                    .simplify_full_i(true, &app.head, recursion_limit, total_limit)
+                    .map_or(Cow::Borrowed(&app.head), |t| {
                         changed = true;
                         Cow::Owned(t)
-                    },
-                );
+                    });
                 let args = app
                     .arguments
                     .iter()
                     .map(|a| {
-                        self.bound_arg_full(expand, a, limit)
+                        self.bound_arg_full(expand, a, recursion_limit, total_limit)
                             .map_or(Cow::Borrowed(a), |a| {
                                 changed = true;
                                 Cow::Owned(a)
@@ -118,19 +119,21 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             _ => Some(Cow::Borrowed(term)),
         }
     }
-    fn simplify_full_i(&mut self, expand: bool, term: &'t Term, limit: &mut usize) -> Option<Term> {
+    fn simplify_full_i(
+        &mut self,
+        expand: bool,
+        term: &'t Term,
+        recursion_limit: &mut usize,
+        total_limit: &mut usize,
+    ) -> Option<Term> {
         tracing::debug!(
             "Fully Simplifying {:?} (expand:{expand})",
             term.debug_short()
         );
-        /*println!(
-            "Fully Simplifying {:?} (expand:{expand})",
-            term.debug_short()
-        );*/
         if expand && let Some(t) = self.simplify_implicit(term) {
             //println!("  - implicits: {:?}", t.debug_short());
             return Some(
-                self.scoped(|slf| slf.simplify_full_i(expand, &t, limit))
+                self.scoped(|slf| slf.simplify_full_i(expand, &t, recursion_limit, total_limit))
                     .unwrap_or(t),
             );
         }
@@ -138,10 +141,22 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             return None;
         } else*/
         //self.scoped(|slf| {
-        let mut current = self.simplify_full_first(expand, term, limit)?;
+        *recursion_limit += 1;
+        let Some(mut current) =
+            self.simplify_full_first(expand, term, recursion_limit, total_limit)
+        else {
+            *recursion_limit -= 1;
+            return None;
+        };
+        let mut loop_limit = 0;
         loop {
-            *limit += 1;
-            if *limit >= SIMPLIFY_LIMIT {
+            loop_limit += 1;
+            *total_limit += 1;
+            if loop_limit >= LOOP_LIMIT
+                || *recursion_limit >= RECURSION_LIMIT
+                || *total_limit >= TOTAL_LIMIT
+            {
+                *recursion_limit -= 1;
                 return match current {
                     Cow::Borrowed(_) => {
                         //println!("  : None");
@@ -159,14 +174,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 return match current {
                     Cow::Borrowed(_) => {
                         //println!("  : None");
+                        *recursion_limit -= 1;
                         None
                     }
                     Cow::Owned(t) => {
                         //println!("  : {:?}", t.debug_short());
-                        Some(
-                            self.scoped(|slf| slf.simplify_full_i(expand, &t, limit))
-                                .unwrap_or(t),
-                        )
+                        let r = Some(
+                            self.scoped(|slf| {
+                                slf.simplify_full_i(expand, &t, recursion_limit, total_limit)
+                            })
+                            .unwrap_or(t),
+                        );
+                        *recursion_limit -= 1;
+                        r
                     }
                 };
             }
@@ -183,29 +203,39 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             return Some(Cow::Borrowed(term));
         }
         self.wrap_check(CheckingTask::Simplify(term), |slf| {
-            slf.simplify_until_i(term, until, &mut 0)
+            slf.simplify_until_i(term, until, &mut 0, &mut 0)
         })
     }
     fn simplify_until_i(
         &mut self,
         term: &'t Term,
         mut until: impl FnMut(&Self, &Term) -> bool,
-        limit: &mut usize,
+        recursion_limit: &mut usize,
+        total_limit: &mut usize,
     ) -> Option<Cow<'t, Term>> {
         if until(self, term) {
             return Some(Cow::Borrowed(term));
         }
         let mut current = Cow::<'t, _>::Borrowed(term);
+        *recursion_limit += 1;
+        let mut loop_limit = 0;
         loop {
-            *limit += 1;
-            if *limit >= SIMPLIFY_LIMIT {
+            loop_limit += 1;
+            *total_limit += 1;
+            if *recursion_limit >= RECURSION_LIMIT
+                || loop_limit >= LOOP_LIMIT
+                || *total_limit >= TOTAL_LIMIT
+            {
+                *recursion_limit -= 1;
                 return None;
             }
             let Some(next) = self.scoped(|slf| slf.simplify_one(true, &current)) else {
+                *recursion_limit -= 1;
                 //self.comment(format!("Final simplification: {:?}", current.debug_short()));
                 return None;
             };
             if until(self, &next) {
+                *recursion_limit -= 1;
                 return Some(Cow::Owned(next));
             }
             current = Cow::Owned(next);
@@ -541,18 +571,26 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         }
     }
 
-    fn arg_full(&mut self, expand: bool, arg: &'t Argument, limit: &mut usize) -> Option<Argument> {
+    fn arg_full(
+        &mut self,
+        expand: bool,
+        arg: &'t Argument,
+        recursion_limit: &mut usize,
+        total_limit: &mut usize,
+    ) -> Option<Argument> {
         match arg {
-            Argument::Simple(t) => self.simplify_full_i(expand, t, limit).map(Argument::Simple),
+            Argument::Simple(t) => self
+                .simplify_full_i(expand, t, recursion_limit, total_limit)
+                .map(Argument::Simple),
             Argument::Sequence(MaybeSequence::One(t)) => self
-                .simplify_full_i(expand, t, limit)
+                .simplify_full_i(expand, t, recursion_limit, total_limit)
                 .map(|t| Argument::Sequence(MaybeSequence::One(t))),
             Argument::Sequence(MaybeSequence::Seq(ts)) => {
                 let mut changed = false;
                 let nts = ts
                     .iter()
                     .map(|t| {
-                        self.simplify_full_i(expand, t, limit)
+                        self.simplify_full_i(expand, t, recursion_limit, total_limit)
                             .map_or(Cow::Borrowed(t), |a| {
                                 changed = true;
                                 Cow::Owned(a)
@@ -573,25 +611,28 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         &mut self,
         expand: bool,
         arg: &'t BoundArgument,
-        limit: &mut usize,
+        recusion_limit: &mut usize,
+        total_limit: &mut usize,
     ) -> Option<BoundArgument> {
         match arg {
             BoundArgument::Simple(t) => self
-                .simplify_full_i(expand, t, limit)
+                .simplify_full_i(expand, t, recusion_limit, total_limit)
                 .map(BoundArgument::Simple),
-            BoundArgument::Bound(cv) => self.cv_full(expand, cv, limit).map(BoundArgument::Bound),
+            BoundArgument::Bound(cv) => self
+                .cv_full(expand, cv, recusion_limit, total_limit)
+                .map(BoundArgument::Bound),
             BoundArgument::Sequence(MaybeSequence::One(t)) => self
-                .simplify_full_i(expand, t, limit)
+                .simplify_full_i(expand, t, recusion_limit, total_limit)
                 .map(|t| BoundArgument::Sequence(MaybeSequence::One(t))),
             BoundArgument::BoundSeq(MaybeSequence::One(cv)) => self
-                .cv_full(expand, cv, limit)
+                .cv_full(expand, cv, recusion_limit, total_limit)
                 .map(|t| BoundArgument::BoundSeq(MaybeSequence::One(t))),
             BoundArgument::Sequence(MaybeSequence::Seq(ts)) => {
                 let mut changed = false;
                 let nts = ts
                     .iter()
                     .map(|t| {
-                        self.simplify_full_i(expand, t, limit)
+                        self.simplify_full_i(expand, t, recusion_limit, total_limit)
                             .map_or(Cow::Borrowed(t), |a| {
                                 changed = true;
                                 Cow::Owned(a)
@@ -611,11 +652,13 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 let ncvs = cvs
                     .iter()
                     .map(|t| {
-                        self.cv_full(expand, t, limit)
-                            .map_or(Cow::Borrowed(t), |a| {
+                        self.cv_full(expand, t, recusion_limit, total_limit).map_or(
+                            Cow::Borrowed(t),
+                            |a| {
                                 changed = true;
                                 Cow::Owned(a)
-                            })
+                            },
+                        )
                     })
                     .collect::<Vec<_>>();
                 if changed {
@@ -633,27 +676,28 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         &mut self,
         expand: bool,
         arg: &'t ComponentVar,
-        limit: &mut usize,
+        recursion_limit: &mut usize,
+        total_limit: &mut usize,
     ) -> Option<ComponentVar> {
         match (arg.tp.as_ref(), arg.df.as_ref()) {
             (None, None) => None,
             (Some(tp), None) => self
-                .simplify_full_i(expand, tp, limit)
+                .simplify_full_i(expand, tp, recursion_limit, total_limit)
                 .map(|tp| ComponentVar {
                     var: arg.var.clone(),
                     tp: Some(tp),
                     df: None,
                 }),
             (None, Some(df)) => self
-                .simplify_full_i(expand, df, limit)
+                .simplify_full_i(expand, df, recursion_limit, total_limit)
                 .map(|df| ComponentVar {
                     var: arg.var.clone(),
                     tp: None,
                     df: Some(df),
                 }),
             (Some(tp), Some(df)) => {
-                let ntp = self.simplify_full_i(expand, tp, limit);
-                let ndf = self.simplify_full_i(expand, df, limit);
+                let ntp = self.simplify_full_i(expand, tp, recursion_limit, total_limit);
+                let ndf = self.simplify_full_i(expand, df, recursion_limit, total_limit);
                 if ntp.is_none() && ndf.is_none() {
                     return None;
                 }

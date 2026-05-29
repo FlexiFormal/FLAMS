@@ -149,6 +149,7 @@ ftml-components = { git = "https://github.com/FlexiFormal/FTML" }
 ftml5ever = { git = "https://github.com/FlexiFormal/FTML" }
 ulo = { git = "https://github.com/FlexiFormal/FTML" }
 ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
+ftml-component-utils = { git = "https://github.com/FlexiFormal/FTML" }
 
 flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
@@ -160,6 +161,7 @@ flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 #ftml5ever = { path = "../FTML/ftml5ever" }
 #ulo = { path = "../FTML/ulo" }
 #ftml-dom = { path = "../FTML/dom" }
+#ftml-component-utils = {path = "../FTML/component-utils"}
 
 #flodown = { path="../FloDown/flodown" }
 
@@ -206,6 +208,7 @@ spliter = "0.1"
 walkdir = "2.5"
 filetime = "0.2"
 regex = "1.10"
+fancy-regex = "0.18"
 async-broadcast = "0.7"
 simple-home-dir = "0.5"
 async-trait = "0.1"
@@ -267,7 +270,7 @@ oauth2 = { version = "5" }
 reqwest = { version = "0", features = ["json"] }
 
 image = { version = "0.25" }
-webp = { version = "0.3" }
+#webp = { version = "0.3" }
 dashmap = { version = "6" }
 
 gitlab = { version = "0" }
@@ -275,29 +278,17 @@ git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 
 
 # leptos
-# weird hydration error in 0.8.15... check soonish again?
 leptos = "0.8"#{ version = "=0.8.14"}#, features = ["nightly"] }
 leptos_axum = "0.8"
 leptos_meta = "0.8"
 leptos_router = { version = "0.8"}#, features = ["nightly"] }
 # leptos_use = {version="0.15", default-features = false}
 
-#thaw = { version = "0.5.0-beta", features = ["nightly"] }
-#thaw_components = { version = "0.4.0-beta" }
-#thaw_utils = { version = "0.2.0-beta", features = ["nightly"] }
-
-thaw = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
-thaw_utils = { git = "https://github.com/Jazzpirate/thaw"}#, features = ["nightly"] }
-thaw_components = { git = "https://github.com/Jazzpirate/thaw" }
-
 leptos-posthoc = "0.2" #{ version = "0.2", git = "https://github.com/FlexiFormal/leptos-posthoc.git" }
 #leptos-posthoc = { path = "../leptos_dyn_dom" }
 
 bytes = "1.10"
 icondata_bi = "0"
-icondata_ai = "0"
-icondata_ch = "0"
-icondata_tb = "0"
 
 axum = { version = "0.8", features = ["ws"] }
 axum-macros = { version = "0.5" }
@@ -309,7 +300,7 @@ http = { version = "1" }
 mime_guess = "2"
 
 # wasm
-wasm-bindgen = "0.2"
+wasm-bindgen = "0.2.121"
 js-sys = "0.3"
 
 tracing-wasm = "0.2"

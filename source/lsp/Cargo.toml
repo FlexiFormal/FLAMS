@@ -13,7 +13,7 @@ ws = ["dep:axum"]
 ftml-ontology = { workspace = true }
 ftml-uris = { workspace = true, features = ["interned", "serde"] }
 
-flams-math-archives = { workspace = true,features=["rdf"] }
+flams-math-archives = { workspace = true,features=["rdf","img"] }
 
 flams-system = { workspace = true, features = ["tokio", "zip"] }
 flams-ftml = { workspace = true }

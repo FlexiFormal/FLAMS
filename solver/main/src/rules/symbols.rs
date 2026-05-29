@@ -2,18 +2,14 @@ use std::{borrow::Cow, hint::unreachable_unchecked, sync::LazyLock};
 
 use ftml_ontology::terms::{
     ApplicationTerm, Argument, ArgumentMode, BindingTerm, BoundArgument, ComponentVar,
-    MaybeSequence, Term, Variable,
+    MaybeSequence, Term, Variable, eq::Alpha, patterns::Pattern,
 };
 use ftml_solver_trace::SizedSolverRule;
 use ftml_uris::{DocumentUri, Id, ModuleUri, SymbolUri};
 
 use crate::{
     CheckRef,
-    impls::{
-        equality::Alpha,
-        solving::{is_solvable_id, is_solvable_var},
-    },
-    patterns::Pattern,
+    impls::solving::{is_solvable_id, is_solvable_var},
     rules::{RuleSet, implicits::ImplicitExtApp},
     split::SplitStrategy,
 };

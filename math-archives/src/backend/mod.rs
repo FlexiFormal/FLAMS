@@ -294,6 +294,14 @@ pub trait LocalBackend: Send + Sync {
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)>
     where
         Self: Sized;
+
+    #[cfg(feature = "img")]
+    fn export_html(&self, uri: &DocumentUri, to: &Path) -> Result<(), String>
+    where
+        Self: Sized,
+    {
+        crate::images::html_export(uri, to, self)
+    }
 }
 
 #[derive(Clone, Debug)]

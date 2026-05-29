@@ -1,8 +1,8 @@
 use super::operators::*;
-use crate::{patterns::Pattern, rules::RuleSet, split::SplitStrategy};
+use crate::{rules::RuleSet, split::SplitStrategy};
 use ftml_ontology::{
     domain::declarations::symbols::{AssocType, Symbol},
-    terms::Term,
+    terms::{Term, patterns::Pattern},
 };
 use ftml_uris::Id;
 
@@ -51,6 +51,9 @@ pub const fn all_symbol_extractors<Split: SplitStrategy>() -> &'static [SymbolRu
         exponentiation,
         division,
         subtraction,
+        logarithm,
+        leq,
+        max,
     ]
 }
 #[must_use]
@@ -154,6 +157,10 @@ pub fn bind_in<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>
         bind: bind.clone(),
     }));
     rules.push_inference(Box::new(bindin::BindInApplyRule {
+        bindin: bindin.clone(),
+        bind: bind.clone(),
+    }));
+    rules.push_simplification(Box::new(bindin::BindInComputationRule {
         bindin: bindin.clone(),
         bind: bind.clone(),
     }));
@@ -416,5 +423,14 @@ rules! {
     }
     pub subtraction = (sym,rules) => {
         rules.push_simplification(Box::new(numbers::SubtractionRule(sym.uri.clone())));
+    }
+    pub logarithm = (sym,rules) => {
+        rules.push_simplification(Box::new(numbers::Logarithm(sym.uri.clone())));
+    }
+    pub leq = (sym,rules) => {
+        rules.push_proof(Box::new(numbers::LessThan(sym.uri.clone())));
+    }
+    pub max = (sym,rules) => {
+        rules.push_simplification(Box::new(numbers::Max(sym.uri.clone())));
     }
 }

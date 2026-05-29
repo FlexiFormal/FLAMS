@@ -1,112 +1,63 @@
-use super::ServerState;
 use axum::body::Body;
 use flams_math_archives::{
-    backend::{GlobalBackend, LocalBackend},
     LocallyBuilt, MathArchive,
+    backend::{GlobalBackend, LocalBackend},
 };
 use flams_system::settings::Settings;
-use ftml_ontology::utils::time::Timestamp;
 use ftml_uris::{
-    components::{DocumentUriComponentTuple, DocumentUriComponents},
     ArchiveId, DocumentUri, IsNarrativeUri, Language, UriWithArchive, UriWithPath,
+    components::{DocumentUriComponentTuple, DocumentUriComponents},
 };
 use http::Request;
-use std::{borrow::Cow, path::PathBuf, sync::atomic::AtomicU64};
+use std::borrow::Cow;
 use tower::ServiceExt;
-use tower_http::services::{fs::ServeFileSystemResponseBody, ServeFile};
+use tower_http::services::{ServeFile, fs::ServeFileSystemResponseBody};
 
+// May cache images at some point
 #[derive(Clone, Default)]
-pub struct ImageStore(flams_utils::triomphe::Arc<ImageStoreI>);
+pub struct ImageStore(/*flams_utils::triomphe::Arc<ImageStoreI>*/ ImageStoreI);
 
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 struct ImageStoreI {
-    map: dashmap::DashMap<ImageSpec, ImageData>,
-    count: AtomicU64,
+    //map: dashmap::DashMap<ImageSpec, ImageData>,
+    //count: AtomicU64,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum ImageSpec {
-    Kpse(Box<str>),
-    ARp(ArchiveId, Box<str>),
-    File(Box<str>),
-}
-impl ImageSpec {
-    pub fn path(&self) -> Option<PathBuf> {
-        match self {
-            Self::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p),
-            Self::ARp(a, p) => {
-                GlobalBackend.with_local_archive(a, |a| a.map(|a| a.path().join(&**p)))
-            }
-            Self::File(p) => Some(std::path::PathBuf::from(p.to_string())),
-        }
+pub(crate) struct Img(Box<[u8]>, String);
+impl axum::response::IntoResponse for Img {
+    fn into_response(self) -> axum::response::Response {
+        (
+            [(
+                axum::http::header::CONTENT_TYPE,
+                // TODO: other MIME types
+                if self.1 == "svg" {
+                    "image/svg+xml"
+                } else {
+                    "image/webp"
+                },
+            )],
+            self.0,
+        )
+            .into_response()
     }
 }
 
-pub struct ImageData {
-    img: Box<[u8]>,
-    timestamp: AtomicU64,
-}
-impl ImageData {
-    pub fn update(&self) {
-        let now = Timestamp::now();
-        self.timestamp
-            .store(now.0.get() as _, std::sync::atomic::Ordering::SeqCst);
-    }
-    pub fn new(data: &[u8]) -> Self {
-        Self {
-            img: data.into(),
-            timestamp: AtomicU64::new(Timestamp::now().0.get()),
-        }
-    }
-}
-
+#[axum::debug_handler]
 pub(crate) async fn img_handler(
     uri: http::Uri,
-    axum::extract::State(ServerState { images: _, .. }): axum::extract::State<ServerState>,
+    // axum::extract::State(ServerState { images, .. }): axum::extract::State<ServerState>,
     //request: http::Request<axum::body::Body>,
-) -> axum::response::Response<ServeFileSystemResponseBody> {
-    let default = || {
-        let mut resp = axum::response::Response::new(ServeFileSystemResponseBody::default());
-        *resp.status_mut() = http::StatusCode::NOT_FOUND;
-        resp
+) -> Result<Img, axum::http::StatusCode> /*axum::response::Response<ServeFileSystemResponseBody>*/ {
+    let Ok(Some(img)) = tokio::task::spawn_blocking(move || {
+        let query = uri.query()?;
+        let path = flams_math_archives::images::ImagePath::from_query(query, Settings::get().lsp)?;
+        path.get()
+    })
+    .await
+    else {
+        return Err(http::StatusCode::NOT_FOUND);
     };
-
-    let Some(s) = uri.query() else {
-        return default();
-    };
-
-    let spec = if let Some(s) = s.strip_prefix("kpse=") {
-        ImageSpec::Kpse(s.into())
-    } else if let Some(f) = s.strip_prefix("file=") {
-        if Settings::get().lsp {
-            ImageSpec::File(f.into())
-        } else {
-            return default();
-        }
-    } else if let Some(s) = s.strip_prefix("a=") {
-        let Some((a, rp)) = s.split_once("&rp=") else {
-            return default();
-        };
-        let a = a.parse().unwrap_or_else(|_| unreachable!());
-        let rp = rp.into();
-        ImageSpec::ARp(a, rp)
-    } else {
-        return default();
-    };
-
-    //tracing::info!("HERE: {spec:?}");
-    if let Some(p) = spec.path() {
-        let req = Request::builder()
-            .uri(uri.clone())
-            .body(Body::empty())
-            .unwrap();
-        ServeFile::new(p)
-            .oneshot(req)
-            .await
-            .unwrap_or_else(|_| default())
-    } else {
-        default()
-    }
+    Ok(Img(img.0, img.1))
 }
 
 pub(crate) async fn doc_handler(

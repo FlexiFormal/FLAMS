@@ -1,4 +1,5 @@
 #![recursion_limit = "512"]
+#![allow(clippy::must_use_candidate)]
 
 #[cfg(any(
     all(feature = "ssr", feature = "hydrate", not(feature = "docs-only")),
@@ -43,25 +44,21 @@ pub mod server_fns {
 
 pub use flams_router_base::LoginState;
 use flams_router_base::maybe_lazy;
+use flams_web_utils::components::{Layout, LayoutHeader, LayoutSider};
+use ftml_component_utils::{Divider, Grid, GridItem};
 use ftml_components::config::AllowSubterms;
 use ftml_dom::FtmlViews;
-use leptos::{
-    either::{Either, EitherOf4},
-    prelude::*,
-};
-use leptos_meta::{Stylesheet, Title, provide_meta_context};
+use leptos::prelude::*;
+use leptos_meta::{Title, provide_meta_context};
 use leptos_router::{
     components::{Outlet, ParentRoute, Redirect, Route, Router, Routes},
-    hooks::use_query_map,
     path,
 };
-use thaw::{Divider, Grid, GridItem, Layout, LayoutHeader, LayoutPosition, LayoutSider};
 
 #[component]
 pub fn Main() -> AnyView {
-    use flams_router_login::components::LoginProvider;
     provide_meta_context();
-    let (is_routing, set_is_routing) = signal(false);
+    let (_, set_is_routing) = signal(false);
     view! {
         <Title text="𝖥𝖫∀𝖬∫"/>
         <Router set_is_routing>{
@@ -108,24 +105,8 @@ pub fn Main() -> AnyView {
                         <Route path=path!("search") view={maybe_lazy!(flams_router_search::vscode::VSCSearch)}/>
                         <Route path=path!("proofs") view={maybe_lazy!(flams_router_vscode::checks::Checks)}/>
                     </ParentRoute>
-                    <Route path=path!("/document") view={maybe_lazy!(flams_router_content::components::TopDocRouter)}/*{move || {
-                        use flams_router_content::components::{DocumentOfTop,DocumentOfTopProps};
-                        let params = use_query_map().get_untracked();
-                        if let Some(p) = params.get_str("uri") {
-                            let Ok(uri) = <ftml_uris::Uri as std::str::FromStr>::from_str(p) else {
-                                return view! { <Redirect path="/dashboard"/> }.into_any()
-                            };
-                            DocumentOfTop(DocumentOfTopProps{uri}).into_any()
-                        } else {
-                            view! { <Redirect path="/dashboard"/> }.into_any()
-                        }
-                    }.into_any()}*//>
-                    <Route path=path!("/") view={maybe_lazy!(flams_router_content::components::UriTopRouter)}/*{move || if has_params.get() {
-                            view! { <flams_router_content::components::URITop/> }.into_any()
-                        } else {
-                            view! { <Redirect path="/dashboard"/> }.into_any()
-                        }}*/
-                    />
+                    <Route path=path!("/document") view={maybe_lazy!(flams_router_content::components::TopDocRouter)}/>
+                    <Route path=path!("/") view={maybe_lazy!(flams_router_content::components::UriTopRouter)}/>
                 </ParentRoute>
             </Routes>}
         }</Router>
@@ -157,21 +138,20 @@ enum Page {
 }
 impl Page {
     pub const fn key(self) -> &'static str {
-        use Page::*;
         match self {
-            Home => "home",
-            MathHub => "mathhub",
+            Self::Home => "home",
+            Self::MathHub => "mathhub",
             //Graphs => "graphs",
-            Log => "log",
-            Login => "login",
-            Queue => "queue",
-            Settings => "settings",
-            Query => "query",
-            MyArchives => "archives",
-            Search => "search",
-            FloDown => "flodown",
-            Users => "users",
-            NotFound => "notfound",
+            Self::Log => "log",
+            Self::Login => "login",
+            Self::Queue => "queue",
+            Self::Settings => "settings",
+            Self::Query => "query",
+            Self::MyArchives => "archives",
+            Self::Search => "search",
+            Self::FloDown => "flodown",
+            Self::Users => "users",
+            Self::NotFound => "notfound",
         }
     }
 }
@@ -195,9 +175,9 @@ fn main_page(page: Page) -> AnyView {
     //flams_router_content::Views::top(move || {
     ftml_dom::global_setup(move || flams_router_content::Views::top(move || {
     view! {
-          <Layout position=LayoutPosition::Absolute>
+          <div style="width:100vw;height:100vh;"><Layout>
             //<Login>
-              <LayoutHeader class="flams-header">
+              <LayoutHeader style="text-align:center;" slot>
                 <div style="width:100%">
                   <Grid cols=3>
                     <GridItem>""</GridItem>
@@ -216,18 +196,18 @@ fn main_page(page: Page) -> AnyView {
                   <Divider/>
                 </div>
               </LayoutHeader>
-              <Layout position=LayoutPosition::Absolute class="flams-main" content_style="height:100%" has_sider=true>
-                  <LayoutSider class="flams-menu" content_style="width:100%;height:100%">
-                    {side_menu(page).into_any()}
+              //<Layout>
+                  <LayoutSider class="flams-menu" slot>
+                    {side_menu(page)}
                   </LayoutSider>
-                  <Layout>
-                    <div style="width:calc(100% - 10px);padding-left:5px;height:calc(100vh - 67px)">
+                  //<Layout>
+                    //<div style="width:calc(100% - 10px);padding-left:5px;height:calc(100vh - 67px)">
                       <Outlet/>//{do_main(page).into_any()}
-                    </div>
-                  </Layout>
-                </Layout>
+                    //</div>
+                  //</Layout>
+                //</Layout>
             //</Login>
-          </Layout>
+          </Layout></div>
         }
     })).into_any()
 }
@@ -269,7 +249,7 @@ fn NotFound() -> AnyView {
 }
 
 fn side_menu(page: Page) -> AnyView {
-    use thaw::{NavDrawer, NavItem};
+    use ftml_component_utils::{NavDrawer, NavItem};
     view! {
         <NavDrawer selected_value=page.to_string() class="flams-menu-inner">
             <NavItem value="home" href="/">"Home"</NavItem>
@@ -310,20 +290,20 @@ fn side_menu(page: Page) -> AnyView {
 }
 
 fn user_field() -> AnyView {
-    use flams_web_utils::components::ClientOnly;
-    use flams_web_utils::components::{Spinner, SpinnerSize};
-    use thaw::{Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType};
+    use ftml_component_utils::{
+        Menu, MenuItem, MenuPosition, MenuTrigger, MenuTriggerType, Spinner, theming::Theme,
+    };
 
     view! {//<ClientOnly>
         <div class="flams-user-menu-trigger">{
-        let theme = expect_context::<RwSignal<thaw::Theme>>();
+        let theme = expect_context::<RwSignal<Theme>>();
         let on_select = move |key: &'static str| match key {
             "theme" => {
                 theme.update(|v| {
                     if v.name == "dark" {
-                        *v = thaw::Theme::light();
+                        *v = Theme::light();
                     } else {
-                        *v = thaw::Theme::dark();
+                        *v = Theme::dark();
                     }
                 });
             }
@@ -343,7 +323,7 @@ fn user_field() -> AnyView {
         view!{
         <Menu on_select trigger_type=MenuTriggerType::Hover position=MenuPosition::Bottom>
             <MenuTrigger slot>
-                <thaw::Avatar src />
+                <ftml_component_utils::Avatar src />
             </MenuTrigger>
             // AiGitlabFilled
             <MenuItem value="theme" icon=icon>{text}</MenuItem>
@@ -353,7 +333,7 @@ fn user_field() -> AnyView {
                 LoginState::NoAccounts => view!(<span>"Admin"</span>).into_any(),
                 LoginState::Admin => logout_form("admin".to_string()).into_any(),
                 LoginState::User{name,..} => logout_form(name).into_any(),
-                LoginState::Loading => view!(<Spinner size=SpinnerSize::Tiny/>).into_any()
+                LoginState::Loading => view!(<Spinner small=true/>).into_any()
             }}
         </Menu>
         }
@@ -364,7 +344,7 @@ fn user_field() -> AnyView {
 }
 
 fn logout_form(user: String) -> AnyView {
-    use thaw::Button;
+    use ftml_component_utils::Button;
     let login = expect_context::<RwSignal<LoginState>>();
     let action = Action::new(move |_| {
         login.set(LoginState::None);
@@ -375,7 +355,7 @@ fn logout_form(user: String) -> AnyView {
 }
 
 fn login_form() -> AnyView {
-    use thaw::{Button, Input, InputType};
+    use ftml_component_utils::{Button, Input, InputType};
     let login = expect_context();
     let action = Action::new(move |pwd: &String| do_login(pwd.clone(), login));
     let value = RwSignal::<String>::new(String::new());

@@ -1,11 +1,14 @@
 #![allow(clippy::must_use_candidate)]
 
 use flams_router_base::maybe_lazy;
-use flams_web_utils::components::wait_and_then_fn;
-use ftml_components::SidebarPosition;
-use ftml_dom::{FtmlViews, toc::TocSource, utils::css::CssExt};
+use flams_web_utils::{client_only, components::wait_and_then_fn};
+use ftml_components::{
+    SidebarPosition,
+    components::{content::FtmlViewable, terms::inject_comp_css},
+};
+use ftml_dom::{DocumentState, FtmlViews, toc::TocSource, utils::css::CssExt};
 use ftml_uris::{
-    DocumentUri, Uri,
+    DocumentUri, Uri, UriKind,
     components::{
         DocumentUriComponentTuple, DocumentUriComponents, UriComponentTuple, UriComponents,
         UriComponentsTrait,
@@ -43,20 +46,57 @@ maybe_lazy!(
 
 #[component(transparent)]
 pub fn URITop() -> AnyView {
+    // TODO: this can be optimized!
     ftml_dom::global_setup(move || {
         crate::Views::top(move || {
             use_query_map().with_untracked(|m| {
-                m.as_document().map_or_else(
-                    |_| match m.as_comps() {
-                        Ok(uri) => view!(<Fragment uri=uri.into() position=SidebarPosition::Next/>)
-                            .into_any(),
-                        Err(e) => flams_web_utils::components::display_error(
+                if let Ok(doc) = m.as_document() {
+                    return view!(<Document doc=doc.into()/>).into_any();
+                }
+                let kind = match m.kind() {
+                    Ok(k) => k,
+                    Err(e) => {
+                        return flams_web_utils::components::display_error(
                             format!("Invalid URI: {e}").into(),
                         )
-                        .into_any(),
-                    },
-                    |doc| view!(<Document doc=doc.into()/>).into_any(),
-                )
+                        .into_any();
+                    }
+                };
+                let comps = match m.as_comps() {
+                    Ok(k) => k,
+                    Err(e) => {
+                        return flams_web_utils::components::display_error(
+                            format!("Invalid URI: {e}").into(),
+                        )
+                        .into_any();
+                    }
+                };
+                match kind {
+                    UriKind::Base => {
+                        view! { <leptos_router::components::Redirect path="/dashboard"/> }
+                            .into_any()
+                    }
+                    UriKind::Document =>
+                    // unreachable
+                    {
+                        flams_web_utils::components::display_error("Invalid URI".into()).into_any()
+                    }
+                    UriKind::DocumentElement | UriKind::Symbol => {
+                        view!(<Fragment uri=comps.into() position=SidebarPosition::Next/>)
+                            .into_any()
+                    }
+                    UriKind::Module => {
+                        let comps: UriComponents = comps.into();
+                        client_only!(view!(<DoModule comps=comps.clone()/>)).into_any()
+                    }
+                    UriKind::Archive | UriKind::Path => {
+                        let comps: UriComponents = comps.into();
+                        client_only!(
+                            view!(<super::archive_views::ArchiveView comps = comps.clone() />)
+                        )
+                        .into_any()
+                    }
+                }
             })
         })
     })
@@ -64,30 +104,35 @@ pub fn URITop() -> AnyView {
 }
 
 #[component]
+fn DoModule(comps: UriComponents) -> impl IntoView {
+    let comps = UriComponentTuple::from(comps);
+    let uri = if let Some(Uri::Module(uri)) = comps.uri {
+        Some(uri)
+    } else {
+        None
+    };
+    let a = comps.a;
+    let p = comps.p;
+    let m = comps.m;
+    inject_comp_css();
+    wait_and_then_fn(
+        move || crate::server_fns::get_module(uri.clone(), a.clone(), p.clone(), m.clone()),
+        |r| DocumentState::no_document(move || r.as_view()),
+    )
+}
+
+#[component]
 pub fn DocumentOfTop(uri: Uri) -> AnyView {
-    use leptos_router::components::Redirect; // make sure this runs client side rather than server side because of hydration errors
-    // I don't understand.
-    let sig = RwSignal::new(false);
-    Effect::new(move || {
-        //sig.track();
-        #[cfg(feature = "hydrate")]
-        {
-            sig.set(true);
-        }
-    });
-    (move || {
-        if sig.get() {
-            let uri = uri.clone();
-            Some(wait_and_then_fn(
-                move || super::server_fns::document_of(uri.clone()),
-                |u| {
-                    view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>)
-                        .into_any()
-                },
-            ))
-        } else {
-            None
-        }
+    use leptos_router::components::Redirect;
+    client_only!({
+        let uri = uri.clone();
+        wait_and_then_fn(
+            move || super::server_fns::document_of(uri.clone()),
+            |u| {
+                view!(<Redirect path=format!("/?uri={}",urlencoding::encode(&u.to_string()))/>)
+                    .into_any()
+            },
+        )
     })
     .into_any()
 }
@@ -95,48 +140,34 @@ pub fn DocumentOfTop(uri: Uri) -> AnyView {
 #[component]
 pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
     use ftml_dom::utils::css::CssExt;
-    // make sure this runs client side rather than server side because of hydration errors
-    // I don't understand.
-    let sig = RwSignal::new(false);
-    Effect::new(move || {
-        //sig.track();
-        #[cfg(feature = "hydrate")]
-        {
-            sig.set(true);
-        }
-    });
-    (move || {
-        let uri = uri.clone();
-        if sig.get() {
-            Some(ftml_components::utils::wait_and_then(
-                move || UriComponentTuple::from(uri).apply1(super::server_fns::fragment, None),
-                move |(uri, css, html)| {
-                    for css in css {
-                        css.inject();
+    let f = move || UriComponentTuple::from(uri).apply1(super::server_fns::fragment, None);
+    client_only!({
+        ftml_components::utils::wait_and_then(
+            f.clone(),
+            move |(uri, css, html)| {
+                for css in css {
+                    css.inject();
+                }
+                let (uri, src) = match uri {
+                    Uri::Document(d) => {
+                        //FtmlConfig::set_toc_source(TocSource::Get);
+                        (Some(d.into()), TocSource::Get)
                     }
-                    let (uri, src) = match uri {
-                        Uri::Document(d) => {
-                            //FtmlConfig::set_toc_source(TocSource::Get);
-                            (Some(d.into()), TocSource::Get)
-                        }
-                        Uri::DocumentElement(d) => {
-                            //FtmlConfig::set_toc_source(TocSource::None);
-                            (Some(d.into()), TocSource::None)
-                        }
-                        _ => {
-                            //FtmlConfig::set_toc_source(TocSource::None);
-                            (None, TocSource::None)
-                        }
-                    };
-                    crate::Views::render_fragment(uri, position, true, src, move || {
-                        crate::Views::render_ftml(html.into_string(), None).into_any()
-                    })
-                },
-                |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
-            ))
-        } else {
-            None
-        }
+                    Uri::DocumentElement(d) => {
+                        //FtmlConfig::set_toc_source(TocSource::None);
+                        (Some(d.into()), TocSource::None)
+                    }
+                    _ => {
+                        //FtmlConfig::set_toc_source(TocSource::None);
+                        (None, TocSource::None)
+                    }
+                };
+                crate::Views::render_fragment(uri, position, true, src, move || {
+                    crate::Views::render_ftml(html.into_string(), None).into_any()
+                })
+            },
+            |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
+        )
     })
     .into_any()
     //})
@@ -144,41 +175,28 @@ pub fn Fragment(uri: UriComponents, position: SidebarPosition) -> AnyView {
 
 #[component]
 pub fn Document(doc: DocumentUriComponents) -> AnyView {
-    // make sure this runs client side rather than server side because of hydration errors
-    // I don't understand.
-    let sig = RwSignal::new(false);
-    let _ = Effect::new(move || {
-        #[cfg(feature = "hydrate")]
-        {
-            sig.set(true);
-        }
-    });
-    (move || {
-        if sig.get() {
-            let doc = doc.clone();
-            Some(ftml_components::utils::wait_and_then(
-                move || DocumentUriComponentTuple::from(doc).apply(super::server_fns::document),
-                move |(uri, css, html)| {
-                    for c in css {
-                        c.inject();
-                    }
-                    {
-                        //FtmlConfig::set_toc_source(TocSource::Get);
-                        crate::Views::setup_document(
-                            uri,
-                            SidebarPosition::Next,
-                            true,
-                            TocSource::Get,
-                            move || crate::Views::render_ftml(html.into_string(), None).into_any(),
-                        )
-                    }
-                    .into_any()
-                },
-                |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
-            ))
-        } else {
-            None
-        }
+    client_only!({
+        let doc = doc.clone();
+        ftml_components::utils::wait_and_then(
+            move || DocumentUriComponentTuple::from(doc).apply(super::server_fns::document),
+            move |(uri, css, html)| {
+                for c in css {
+                    c.inject();
+                }
+                {
+                    //FtmlConfig::set_toc_source(TocSource::Get);
+                    crate::Views::setup_document(
+                        uri,
+                        SidebarPosition::Next,
+                        true,
+                        TocSource::Get,
+                        move || crate::Views::render_ftml(html.into_string(), None).into_any(),
+                    )
+                }
+                .into_any()
+            },
+            |e| view!(<span style="color:red">{e.to_string()}</span>).into_any(),
+        )
     })
     .into_any()
 }

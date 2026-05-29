@@ -11,7 +11,7 @@ pub mod trace {
 }
 pub mod facts;
 pub mod hoas;
-pub mod patterns;
+//pub mod patterns;
 pub mod utils;
 
 use crate::{
@@ -289,8 +289,11 @@ impl<Split: SplitStrategy> Checker<Split> {
                     tracing::debug!("Checking term {:?}", top.get_parsed().debug_short());
                     //println!("All rules: {:#?}", self.rules);
                     let (unks, tm) = self.prepare(None, top.get_parsed().clone());
-                    let (t, _, log) = self.infer_type(Some(unks), &tm);
-                    let t = t.map(|t| self.revert_prepare(t));
+                    let (t, unks, log) = self.infer_type(Some(unks), &tm);
+                    let t = t.map(|t| {
+                        self.wrap_none(Some(unks), |slf| slf.revert_prepare(slf.subst(t)))
+                            .1
+                    });
                     if let Some(t) = &t {
                         top.set_type(t.clone());
                     }
@@ -461,10 +464,13 @@ impl<Split: SplitStrategy> Checker<Split> {
             for c in &ctx {
                 slf.extend_context(c);
             }
+
+            let tp = slf
+                .infer_type(sub)
+                .map(|t| slf.subst(slf.revert_prepare(t)));
             let simp = slf.simplify_full(true, sub).unwrap_or_else(|| sub.clone());
-            nt = slf.revert_prepare(slf.subst(simp));
-            slf.infer_type(sub)
-                .map(|t| slf.revert_prepare(slf.subst(t)))
+            nt = slf.subst(slf.revert_prepare(simp));
+            tp
         });
         /*
         let mut frees = nt.free_variables();
@@ -589,6 +595,16 @@ impl<Split: SplitStrategy> Checker<Split> {
         dfc.set_checked(df);
 
         if let Some(mut tp) = tp {
+            if tp.has_solvable() {
+                l.push(PreCheckLog::Msg(
+                    vec![format!("Unsolved unkowns remain: {:?}", tp.solvables()).into()],
+                    ftml_solver_trace::MessageLevel::Failure,
+                ));
+                return SymbolCheckResult::DefiniensOnly {
+                    inferred: None,
+                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                };
+            }
             update!(self tp if bind);
             tpc.set_checked(tp.clone());
             let tp = self.revert_prepare(tp);
@@ -832,7 +848,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         t: &Term,
     ) -> (Option<Term>, Solutions, PreCheckLog) {
         self.wrap_task(CheckingTask::Inference(t), unknowns, |mut slf| {
-            slf.infer_type_i(t)
+            slf.infer_type_i(t).map(|t| slf.subst(t))
         })
     }
 
