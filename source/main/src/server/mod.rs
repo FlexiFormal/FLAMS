@@ -128,6 +128,7 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
         )
         .route("/img", axum::routing::get(files::img_handler))
         .route("/doc", axum::routing::get(files::doc_handler))
+        .route("/aux", axum::routing::get(files::aux_handler))
         .fallback(file_and_error_handler)
         .layer(auth_layer)
         .layer(

@@ -115,6 +115,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
                 redirect_url: cli.gitlab_redirect_url.map(Into::into),
             },
             lsp: cli.lsp,
+            remotes: std::collections::HashMap::default(),
         };
         (cli.config_file, settings)
     }
@@ -147,12 +148,12 @@ pub fn get_settings() -> SettingsSpec {
         } else {
             panic!("Could not find config file {}", cfg_file.display());
         }
-    } else if let Ok(path) = std::env::current_exe() {
-        if let Some(path) = path.parent() {
-            let path = path.join("settings.toml");
-            if path.exists() {
-                settings += from_file(&path);
-            }
+    } else if let Ok(path) = std::env::current_exe()
+        && let Some(path) = path.parent()
+    {
+        let path = path.join("settings.toml");
+        if path.exists() {
+            settings += from_file(&path);
         }
     }
     settings

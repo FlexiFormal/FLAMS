@@ -9,7 +9,7 @@ use ftml_uris::{
     components::{DocumentUriComponentTuple, DocumentUriComponents},
 };
 use http::Request;
-use std::borrow::Cow;
+use std::{borrow::Cow, str::FromStr};
 use tower::ServiceExt;
 use tower_http::services::{ServeFile, fs::ServeFileSystemResponseBody};
 
@@ -58,6 +58,45 @@ pub(crate) async fn img_handler(
         return Err(http::StatusCode::NOT_FOUND);
     };
     Ok(Img(img.0, img.1))
+}
+
+pub(crate) async fn aux_handler(uri: http::Uri) -> impl axum::response::IntoResponse {
+    let deflt = || {
+        let mut resp = axum::response::Response::new(ServeFileSystemResponseBody::default());
+        *resp.status_mut() = http::StatusCode::NOT_FOUND;
+        resp
+    };
+    let Some(mut query) = uri.query() else {
+        return deflt();
+    };
+    if let Some((q, _)) = query.rsplit_once('?') {
+        query = q;
+    }
+    let Some(query) = query.strip_prefix("a=") else {
+        return deflt();
+    };
+    let Some((a, p)) = query.split_once("&f=") else {
+        return deflt();
+    };
+    let Ok(a) = ArchiveId::from_str(a) else {
+        return deflt();
+    };
+    let Some(path) = GlobalBackend.with_local_archive(&a, |a| a.map(|a| a.source_dir().join(p)))
+    else {
+        return deflt();
+    };
+    let mime = mime_guess::from_ext(p).first_or_octet_stream();
+
+    let req = Request::builder()
+        .uri(uri)
+        .body(Body::empty())
+        .expect("this is a bug");
+    ServeFile::new_with_mime(path, &mime)
+        .oneshot(req)
+        .await
+        .unwrap_or_else(|_| deflt())
+
+    //axum::response::Response<ServeFileSystemResponseBody> {
 }
 
 pub(crate) async fn doc_handler(
