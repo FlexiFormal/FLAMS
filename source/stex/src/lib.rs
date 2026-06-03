@@ -371,12 +371,12 @@ pub fn export_standalone(doc: &DocumentUri, file: &Path, target_dir: &Path) -> e
                     let Some((d, f)) = GlobalBackend.with_local_archive(archive, |a| {
                         a.and_then(|a| {
                             let f = a.source_dir().join(&*filepath);
-                            let d = DocumentUri::from_archive_relpath(a.uri().clone(), &*filepath)
+                            let d = DocumentUri::from_archive_relpath(a.uri().clone(), &filepath)
                                 .ok()?;
                             Some((d, f))
                         })
                     }) else {
-                        err!("Could not find document for file {}", f.display())
+                        err!("Could not find document for file [{archive}]/{filepath}")
                     };
                     let txt = err!(
                         std::fs::read_to_string(&f) =>
