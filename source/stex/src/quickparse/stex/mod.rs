@@ -3,7 +3,6 @@ pub mod structs;
 
 use flams_math_archives::backend::AnyBackend;
 use flams_utils::{
-    parsing::ParseStr,
     prelude::{TreeChild, TreeLike},
     sourcerefs::{LSPLineCol, SourceRange},
     vecmap::VecSet,
@@ -1005,7 +1004,7 @@ pub fn quickparse<'a, S: STeXModuleStore>(
 ) -> STeXParseDataI {
     let mut diagnostics = VecSet::new();
     let mut modules = SmallVec::new();
-    let err = |message, range, level| {
+    let mut err = |message, range, level| {
         diagnostics.insert(STeXDiagnostic {
             level,
             message,
@@ -1014,9 +1013,9 @@ pub fn quickparse<'a, S: STeXModuleStore>(
     };
     let mut parser = if S::FULL {
         LaTeXParser::with_rules(
-            ParseStr::new(source),
+            source,
             STeXParseState::new(Some(uri.archive_uri()), Some(path), uri, backend, store),
-            err,
+            &mut err,
             LaTeXParser::default_rules()
                 .into_iter()
                 .chain(rules::all_rules()),
@@ -1026,9 +1025,9 @@ pub fn quickparse<'a, S: STeXModuleStore>(
         )
     } else {
         LaTeXParser::with_rules(
-            ParseStr::new(source),
+            source,
             STeXParseState::new(Some(uri.archive_uri()), Some(path), uri, backend, store),
-            err,
+            &mut err,
             LaTeXParser::default_rules()
                 .into_iter()
                 .chain(rules::declarative_rules()),

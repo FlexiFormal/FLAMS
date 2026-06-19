@@ -364,7 +364,7 @@ pub fn export_standalone(doc: &DocumentUri, file: &Path, target_dir: &Path) -> e
         err!(std::fs::create_dir_all(&target_file) => "Failed to create directory {}",target_file.display());
         let target_file = target_file.join(name);
         err!(std::fs::copy(&f, target_file) => "Failed to copy file {}",f.display());
-        for dep in dependencies::parse_deps(&txt, &f, &d, &AnyBackend::Global) {
+        for dep in dependencies::parse_deps(&txt, &f, &d, &AnyBackend::Global, &mut |_, _, _| {}) {
             match dep {
                 STeXDependency::Inputref { archive, filepath } => {
                     let archive = archive.as_ref().unwrap_or(&d.path.archive.id);

@@ -1,9 +1,8 @@
 use crate::quickparse::tokens::TeXToken;
 use flams_utils::{
-    parsing::{ParseSource, StringOrStr},
-    sourcerefs::SourceRange,
+    parsing::{ParseSource, ParseStr},
+    sourcerefs::{SourcePos, SourceRange},
 };
-use std::marker::PhantomData;
 
 use super::stex::DiagnosticLevel;
 
@@ -13,22 +12,15 @@ pub enum Mode {
     Math { display: bool },
 }
 
-pub struct TeXTokenizer<
-    'a,
-    Pa: ParseSource<'a>,
-    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-> {
-    pub reader: Pa,
+pub struct TeXTokenizer<'a, Pos: SourcePos> {
+    pub reader: ParseStr<'a, Pos>,
     pub letters: String,
     pub mode: Mode,
-    err: Err,
-    phantom: PhantomData<&'a ()>,
+    err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
 }
 
-impl<'a, Pa: ParseSource<'a>, Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel)> Iterator
-    for TeXTokenizer<'a, Pa, Err>
-{
-    type Item = TeXToken<Pa::Pos, Pa::Str>;
+impl<'a, Pos: SourcePos> Iterator for TeXTokenizer<'a, Pos> {
+    type Item = TeXToken<Pos, &'a str>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -36,19 +28,19 @@ impl<'a, Pa: ParseSource<'a>, Err: FnMut(String, SourceRange<Pa::Pos>, Diagnosti
     }
 }
 
-impl<'a, Pa: ParseSource<'a>, Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel)>
-    TeXTokenizer<'a, Pa, Err>
-{
-    pub(crate) fn new(reader: Pa, err: Err) -> Self {
+impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
+    pub(crate) fn new(
+        input: &'a str,
+        err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
+    ) -> Self {
         TeXTokenizer {
-            reader,
+            reader: ParseStr::new(input),
             mode: Mode::Text,
-            phantom: PhantomData,
             err,
             letters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string(),
         }
     }
-    fn read_next(&mut self) -> Option<TeXToken<Pa::Pos, Pa::Str>> {
+    fn read_next(&mut self) -> Option<TeXToken<Pos, &'a str>> {
         self.reader.trim_start();
         let start = self.reader.curr_pos();
         match self.reader.peek_head() {
@@ -137,7 +129,7 @@ impl<'a, Pa: ParseSource<'a>, Err: FnMut(String, SourceRange<Pa::Pos>, Diagnosti
     }
 
     #[inline]
-    pub fn problem(&mut self, start: Pa::Pos, msg: impl std::fmt::Display, level: DiagnosticLevel) {
+    pub fn problem(&mut self, start: Pos, msg: impl std::fmt::Display, level: DiagnosticLevel) {
         (self.err)(
             msg.to_string(),
             SourceRange {
@@ -148,9 +140,9 @@ impl<'a, Pa: ParseSource<'a>, Err: FnMut(String, SourceRange<Pa::Pos>, Diagnosti
         );
     }
 
-    fn read_comment(&mut self, start: Pa::Pos) -> TeXToken<Pa::Pos, Pa::Str> {
+    fn read_comment(&mut self, start: Pos) -> TeXToken<Pos, &'a str> {
         let (c, end) = self.reader.read_until_line_end();
-        c.strip_prefix("%STEXIDE").ok().map_or_else(
+        c.strip_prefix("%STEXIDE").map_or_else(
             || TeXToken::Comment(SourceRange { start, end }),
             TeXToken::Directive,
         )

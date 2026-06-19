@@ -19,7 +19,6 @@ use flams_math_archives::{
 use flams_utils::{
     id_counters::IdCounter,
     impossible,
-    parsing::ParseStr,
     prelude::HMap,
     sourcerefs::{LSPLineCol, SourcePos, SourceRange},
     vecmap::{VecMap, VecSet},
@@ -297,7 +296,7 @@ pub enum STeXToken<Pos: SourcePos> {
     Vec(Vec<STeXToken<Pos>>),
 }
 
-impl<'a, P: SourcePos> FromLaTeXToken<'a, P, &'a str> for STeXToken<P> {
+impl<'a, P: SourcePos> FromLaTeXToken<'a, P> for STeXToken<P> {
     fn from_comment(_: SourceRange<P>) -> Option<Self> {
         None
     }
@@ -313,10 +312,10 @@ impl<'a, P: SourcePos> FromLaTeXToken<'a, P, &'a str> for STeXToken<P> {
     fn from_text(_: SourceRange<P>, _: &'a str) -> Option<Self> {
         None
     }
-    fn from_macro_application(_: Macro<'a, P, &'a str>) -> Option<Self> {
+    fn from_macro_application(_: Macro<'a, P>) -> Option<Self> {
         None
     }
-    fn from_environment(e: Environment<'a, P, &'a str, Self>) -> Option<Self> {
+    fn from_environment(e: Environment<'a, P, Self>) -> Option<Self> {
         Some(Self::Vec(e.children))
     }
 }
@@ -530,11 +529,11 @@ pub struct SymbolRule<Pos: SourcePos> {
     pub argnum: u8,
 }
 impl<Pos: SourcePos> SymbolRule<Pos> {
-    fn as_rule<'a, MS: STeXModuleStore, Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel)>(
+    fn as_rule<'a, MS: STeXModuleStore>(
         &self,
     ) -> Option<(
         Cow<'a, str>,
-        AnyMacro<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>>,
+        AnyMacro<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>,
     )> {
         self.macroname.as_ref().map(|m| {
             (
@@ -605,17 +604,14 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
-    fn load_rules<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn load_rules(
         mod_ref: ModuleReference,
         irules: ModuleRules<LSPLineCol>,
-        prev: &[STeXGroup<'a, MS, LSPLineCol, Err>],
-        current: &mut HMap<
-            Cow<'a, str>,
-            AnyMacro<'a, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
-        >,
+        prev: &[STeXGroup<'a, MS, LSPLineCol>],
+        current: &mut HMap<Cow<'a, str>, AnyMacro<'a, LSPLineCol, STeXToken<LSPLineCol>, Self>>,
         changes: &mut HMap<
             Cow<'a, str>,
-            Option<AnyMacro<'a, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>>,
+            Option<AnyMacro<'a, LSPLineCol, STeXToken<LSPLineCol>, Self>>,
         >,
         semantic_rules: &mut Vec<SemanticRule<LSPLineCol>>,
         f: &mut impl FnMut(&ModuleReference) -> Option<ModuleRules<LSPLineCol>>,
@@ -676,8 +672,8 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         Ok(())
     }
 
-    fn has_module<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
-        prev: &[STeXGroup<'a, MS, LSPLineCol, Err>],
+    fn has_module(
+        prev: &[STeXGroup<'a, MS, LSPLineCol>],
         current: &Vec<SemanticRule<LSPLineCol>>,
         mod_ref: &ModuleReference,
     ) -> bool {
@@ -703,10 +699,10 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
 
     /// # Panics
     #[allow(clippy::needless_pass_by_value)]
-    pub fn add_use<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    pub fn add_use(
         &mut self,
         module: &ModuleReference,
-        groups: Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         range: SourceRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
@@ -748,8 +744,8 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
-    fn has_structure<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
-        prev: &[STeXGroup<'a, MS, LSPLineCol, Err>],
+    fn has_structure(
+        prev: &[STeXGroup<'a, MS, LSPLineCol>],
         current: &Vec<SemanticRule<LSPLineCol>>,
         sym_ref: &SymbolReference<LSPLineCol>,
     ) -> bool {
@@ -769,9 +765,9 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
         false
     }
-    fn load_structure<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn load_structure(
         symbol: &SymbolReference<LSPLineCol>,
-        prev: &[STeXGroup<'a, MS, LSPLineCol, Err>],
+        prev: &[STeXGroup<'a, MS, LSPLineCol>],
         semantic_rules: &Vec<SemanticRule<LSPLineCol>>,
     ) -> Option<ModuleRules<LSPLineCol>> {
         for r in semantic_rules.iter().rev() {
@@ -799,17 +795,14 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         None
     }
 
-    fn load_structure_rules<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn load_structure_rules(
         symbol: SymbolReference<LSPLineCol>,
         irules: ModuleRules<LSPLineCol>,
-        prev: &[STeXGroup<'a, MS, LSPLineCol, Err>],
-        current: &mut HMap<
-            Cow<'a, str>,
-            AnyMacro<'a, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
-        >,
+        prev: &[STeXGroup<'a, MS, LSPLineCol>],
+        current: &mut HMap<Cow<'a, str>, AnyMacro<'a, LSPLineCol, STeXToken<LSPLineCol>, Self>>,
         changes: &mut HMap<
             Cow<'a, str>,
-            Option<AnyMacro<'a, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>>,
+            Option<AnyMacro<'a, LSPLineCol, STeXToken<LSPLineCol>, Self>>,
         >,
         semantic_rules: &mut Vec<SemanticRule<LSPLineCol>>,
     ) {
@@ -875,11 +868,11 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         semantic_rules.push(SemanticRule::StructureImport(symbol, irules));
     }
 
-    pub fn import_structure<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    pub fn import_structure(
         &mut self,
         symbol: &SymbolReference<LSPLineCol>,
         srules: &ModuleRules<LSPLineCol>,
-        groups: &mut Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &mut Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         range: SourceRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
@@ -929,11 +922,11 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
-    pub fn use_structure<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    pub fn use_structure(
         &mut self,
         symbol: &SymbolReference<LSPLineCol>,
         srules: &ModuleRules<LSPLineCol>,
-        groups: &mut Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &mut Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         _range: SourceRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
@@ -956,10 +949,10 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    pub fn add_import<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    pub fn add_import(
         &mut self,
         module: &ModuleReference,
-        groups: Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         range: SourceRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
@@ -1029,9 +1022,9 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 
     #[allow(clippy::unused_self)]
-    fn get_symbol_macro_or_name<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn get_symbol_macro_or_name(
         &self,
-        groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         namestr: &str,
     ) -> Option<SmallVec<SymbolReference<LSPLineCol>, 1>> {
         let mut ret = SmallVec::new();
@@ -1105,9 +1098,9 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 
     #[allow(clippy::unused_self)]
-    fn get_structure_macro_or_name<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn get_structure_macro_or_name(
         &self,
-        groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         namestr: &str,
     ) -> Option<(SymbolReference<LSPLineCol>, ModuleRules<LSPLineCol>)> {
         for g in groups.groups.iter().rev() {
@@ -1198,9 +1191,9 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 
     #[allow(clippy::unused_self)]
-    fn get_symbol_complex<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn get_symbol_complex(
         &self,
-        groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         symbol: &str,
         module: &str,
         path: Option<&str>,
@@ -1258,9 +1251,9 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 
     #[allow(clippy::unused_self)]
-    fn get_structure_uri<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn get_structure_uri(
         &self,
-        groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         uri: &SymbolReference<LSPLineCol>,
     ) -> Option<ModuleRules<LSPLineCol>> {
         for g in groups.groups.iter().rev() {
@@ -1289,9 +1282,9 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 
     #[allow(clippy::unused_self)]
-    fn get_structure_complex<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn get_structure_complex(
         &self,
-        groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         namestr: &str,
         module: &str,
         path: Option<&str>,
@@ -1323,10 +1316,10 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         None
     }
 
-    pub fn get_symbol<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    pub fn get_symbol(
         &self,
         start: LSPLineCol,
-        groups: &mut Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &mut Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         namestr: &str,
     ) -> Option<SmallVec<SymbolReference<LSPLineCol>, 1>> {
         //let realname = namestr.trim().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
@@ -1367,9 +1360,9 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         Some(r)
     }
 
-    pub fn get_structure<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    pub fn get_structure(
         &self,
-        groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         namestr: &str,
     ) -> Option<(SymbolReference<LSPLineCol>, ModuleRules<LSPLineCol>)> {
         //let realname = namestr.trim().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
@@ -1389,26 +1382,19 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub(super) fn resolve_module_or_struct<
-        Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
-    >(
+    pub(super) fn resolve_module_or_struct(
         &mut self,
-        groups: &Groups<'a, '_, ParseStr<'a, LSPLineCol>, STeXToken<LSPLineCol>, Err, Self>,
+        groups: &Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
         module_or_struct: &str,
         archive: Option<ArchiveId>,
     ) -> Option<(ModuleOrStruct<LSPLineCol>, Vec<ModuleRules<LSPLineCol>>)> {
-        fn mmatch<
-            'a,
-            MS: STeXModuleStore,
-            Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
-        >(
+        fn mmatch<'a, MS: STeXModuleStore>(
             slf: &mut STeXParseState<'a, LSPLineCol, MS>,
             groups: &Groups<
                 'a,
                 '_,
-                ParseStr<'a, LSPLineCol>,
+                LSPLineCol,
                 STeXToken<LSPLineCol>,
-                Err,
                 STeXParseState<'a, LSPLineCol, MS>,
             >,
             rules: &ModuleRules<LSPLineCol>,
@@ -1436,18 +1422,13 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
             }
             Some(())
         }
-        fn load_module<
-            'a,
-            MS: STeXModuleStore,
-            Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
-        >(
+        fn load_module<'a, MS: STeXModuleStore>(
             slf: &mut STeXParseState<'a, LSPLineCol, MS>,
             groups: &Groups<
                 'a,
                 '_,
-                ParseStr<'a, LSPLineCol>,
+                LSPLineCol,
                 STeXToken<LSPLineCol>,
-                Err,
                 STeXParseState<'a, LSPLineCol, MS>,
             >,
             module: &ModuleReference,
@@ -1460,18 +1441,13 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
             target.push(rls);
             Some(())
         }
-        fn load_structure<
-            'a,
-            MS: STeXModuleStore,
-            Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel),
-        >(
+        fn load_structure<'a, MS: STeXModuleStore>(
             slf: &mut STeXParseState<'a, LSPLineCol, MS>,
             groups: &Groups<
                 'a,
                 '_,
-                ParseStr<'a, LSPLineCol>,
+                LSPLineCol,
                 STeXToken<LSPLineCol>,
-                Err,
                 STeXParseState<'a, LSPLineCol, MS>,
             >,
             structure: &SymbolReference<LSPLineCol>,
@@ -1540,9 +1516,9 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         }
     }
 
-    pub fn set_structure<Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel)>(
+    pub fn set_structure(
         &mut self,
-        groups: &mut Groups<'a, '_, ParseStr<'a, Pos>, STeXToken<Pos>, Err, Self>,
+        groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         rules: ModuleRules<Pos>,
         range: SourceRange<Pos>,
     ) {
@@ -1602,9 +1578,9 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         );
     }
 
-    pub fn add_structure<Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel)>(
+    pub fn add_structure(
         &mut self,
-        groups: &mut Groups<'a, '_, ParseStr<'a, Pos>, STeXToken<Pos>, Err, Self>,
+        groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         name: UriName,
         macroname: Option<std::sync::Arc<str>>,
         range: SourceRange<Pos>,
@@ -1675,9 +1651,9 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         self.name_counter.new_id(prefix)
     }
 
-    pub fn add_conservative_ext<Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel)>(
+    pub fn add_conservative_ext(
         &mut self,
-        groups: &mut Groups<'a, '_, ParseStr<'a, Pos>, STeXToken<Pos>, Err, Self>,
+        groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         orig: &SymbolReference<Pos>,
         range: SourceRange<Pos>,
     ) -> Option<ModuleUri> {
@@ -1707,9 +1683,9 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         None
     }
 
-    pub fn add_symbol<Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel)>(
+    pub fn add_symbol(
         &mut self,
-        groups: &mut Groups<'a, '_, ParseStr<'a, Pos>, STeXToken<Pos>, Err, Self>,
+        groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         name: UriName,
         macroname: Option<std::sync::Arc<str>>,
         range: SourceRange<Pos>,
@@ -1975,13 +1951,8 @@ pub enum ModuleOrStruct<Pos: SourcePos> {
 }
 
 #[non_exhaustive]
-pub struct STeXGroup<
-    'a,
-    MS: STeXModuleStore,
-    Pos: SourcePos + 'a,
-    Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-> {
-    pub inner: Group<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>>,
+pub struct STeXGroup<'a, MS: STeXModuleStore, Pos: SourcePos + 'a> {
+    pub inner: Group<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>,
     pub kind: GroupKind<Pos>,
     pub semantic_rules: Vec<SemanticRule<Pos>>,
     pub uses: VecSet<ModuleUri>,
@@ -1999,13 +1970,8 @@ pub enum SemanticRule<Pos: SourcePos> {
     StructureImport(SymbolReference<Pos>, ModuleRules<Pos>),
 }
 
-impl<
-        'a,
-        MS: STeXModuleStore,
-        Pos: SourcePos + 'a,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-    > GroupState<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>>
-    for STeXGroup<'a, MS, Pos, Err>
+impl<'a, MS: STeXModuleStore, Pos: SourcePos>
+    GroupState<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>> for STeXGroup<'a, MS, Pos>
 {
     #[inline]
     fn new(parent: Option<&mut Self>) -> Self {
@@ -2018,37 +1984,22 @@ impl<
     }
 
     #[inline]
-    fn inner(
-        &self,
-    ) -> &Group<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>> {
+    fn inner(&self) -> &Group<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>> {
         &self.inner
     }
     #[inline]
-    fn inner_mut(
-        &mut self,
-    ) -> &mut Group<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>> {
+    fn inner_mut(&mut self) -> &mut Group<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>> {
         &mut self.inner
     }
     #[inline]
-    fn close(
-        self,
-        parser: &mut LaTeXParser<
-            'a,
-            ParseStr<'a, Pos>,
-            STeXToken<Pos>,
-            Err,
-            STeXParseState<'a, Pos, MS>,
-        >,
-    ) {
+    fn close(self, parser: &mut LaTeXParser<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>) {
         self.inner.close(parser);
     }
     #[inline]
     fn add_macro_rule(
         &mut self,
         name: Cow<'a, str>,
-        old: Option<
-            AnyMacro<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>>,
-        >,
+        old: Option<AnyMacro<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>>,
     ) {
         self.inner.add_macro_rule(name, old);
     }
@@ -2056,9 +2007,7 @@ impl<
     fn add_environment_rule(
         &mut self,
         name: Cow<'a, str>,
-        old: Option<
-            AnyEnv<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err, STeXParseState<'a, Pos, MS>>,
-        >,
+        old: Option<AnyEnv<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>>,
     ) {
         self.inner.add_environment_rule(name, old);
     }
@@ -2074,13 +2023,9 @@ pub enum MacroArg<Pos: SourcePos> {
     Variable(UriName, SourceRange<Pos>, bool, u8),
 }
 
-impl<
-        'a,
-        MS: STeXModuleStore,
-        Pos: SourcePos + 'a,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-    > ParserState<'a, ParseStr<'a, Pos>, STeXToken<Pos>, Err> for STeXParseState<'a, Pos, MS>
+impl<'a, MS: STeXModuleStore, Pos: SourcePos + 'a> ParserState<'a, Pos, STeXToken<Pos>>
+    for STeXParseState<'a, Pos, MS>
 {
-    type Group = STeXGroup<'a, MS, Pos, Err>;
+    type Group = STeXGroup<'a, MS, Pos>;
     type MacroArg = MacroArg<Pos>;
 }

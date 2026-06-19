@@ -12,26 +12,23 @@ use ftml_uris::Language;
 use rules::{AnyEnv, AnyMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule};
 use smallvec::SmallVec;
 use std::convert::Into;
-use std::marker::PhantomData;
 use std::{borrow::Cow, collections::hash_map::Entry};
 use tex_engine::utils::HMap;
 
 use super::stex::DiagnosticLevel;
 
-pub trait FromLaTeXToken<'a, Pos: SourcePos, Str: StringOrStr<'a>>:
-    Sized + std::fmt::Debug
-{
+pub trait FromLaTeXToken<'a, Pos: SourcePos>: Sized + std::fmt::Debug {
     fn from_comment(r: SourceRange<Pos>) -> Option<Self>;
     fn from_group(r: SourceRange<Pos>, children: Vec<Self>) -> Option<Self>;
     fn from_math(display: bool, r: SourceRange<Pos>, children: Vec<Self>) -> Option<Self>;
-    fn from_control_sequence(start: Pos, name: Str) -> Option<Self>;
-    fn from_text(r: SourceRange<Pos>, text: Str) -> Option<Self>;
-    fn from_macro_application(m: Macro<'a, Pos, Str>) -> Option<Self>;
-    fn from_environment(e: Environment<'a, Pos, Str, Self>) -> Option<Self>;
+    fn from_control_sequence(start: Pos, name: &'a str) -> Option<Self>;
+    fn from_text(r: SourceRange<Pos>, text: &'a str) -> Option<Self>;
+    fn from_macro_application(m: Macro<'a, Pos>) -> Option<Self>;
+    fn from_environment(e: Environment<'a, Pos, Self>) -> Option<Self>;
 }
 
 #[derive(Debug)]
-pub enum LaTeXToken<'a, Pos: SourcePos, Str: StringOrStr<'a>> {
+pub enum LaTeXToken<'a, Pos: SourcePos> {
     Comment(SourceRange<Pos>),
     Group {
         range: SourceRange<Pos>,
@@ -44,19 +41,17 @@ pub enum LaTeXToken<'a, Pos: SourcePos, Str: StringOrStr<'a>> {
     },
     ControlSequence {
         start: Pos,
-        name: Str,
+        name: &'a str,
     },
     Text {
         range: SourceRange<Pos>,
-        text: Str,
+        text: &'a str,
     },
-    MacroApplication(Macro<'a, Pos, Str>),
-    Environment(Environment<'a, Pos, Str, Self>),
+    MacroApplication(Macro<'a, Pos>),
+    Environment(Environment<'a, Pos, Self>),
 }
 
-impl<'a, Pos: SourcePos, Str: StringOrStr<'a>> FromLaTeXToken<'a, Pos, Str>
-    for LaTeXToken<'a, Pos, Str>
-{
+impl<'a, Pos: SourcePos> FromLaTeXToken<'a, Pos> for LaTeXToken<'a, Pos> {
     #[inline]
     fn from_comment(r: SourceRange<Pos>) -> Option<Self> {
         Some(LaTeXToken::Comment(r))
@@ -74,55 +69,51 @@ impl<'a, Pos: SourcePos, Str: StringOrStr<'a>> FromLaTeXToken<'a, Pos, Str>
         })
     }
     #[inline]
-    fn from_control_sequence(start: Pos, name: Str) -> Option<Self> {
+    fn from_control_sequence(start: Pos, name: &'a str) -> Option<Self> {
         Some(LaTeXToken::ControlSequence { start, name })
     }
     #[inline]
-    fn from_text(range: SourceRange<Pos>, text: Str) -> Option<Self> {
+    fn from_text(range: SourceRange<Pos>, text: &'a str) -> Option<Self> {
         Some(LaTeXToken::Text { range, text })
     }
     #[inline]
-    fn from_macro_application(m: Macro<'a, Pos, Str>) -> Option<Self> {
+    fn from_macro_application(m: Macro<'a, Pos>) -> Option<Self> {
         Some(LaTeXToken::MacroApplication(m))
     }
     #[inline]
-    fn from_environment(e: Environment<'a, Pos, Str, Self>) -> Option<Self> {
+    fn from_environment(e: Environment<'a, Pos, Self>) -> Option<Self> {
         Some(LaTeXToken::Environment(e))
     }
 }
 
 #[derive(Debug)]
-pub struct Macro<'a, Pos: SourcePos, Str: StringOrStr<'a>> {
+pub struct Macro<'a, Pos: SourcePos> {
     pub token_range: SourceRange<Pos>,
     pub range: SourceRange<Pos>,
-    pub name: Str,
-    //pub args: Vec<T>,
-    phantom: PhantomData<&'a str>,
+    pub name: &'a str,
 }
 
 #[derive(Debug)]
-pub struct Environment<'a, Pos: SourcePos, Str: StringOrStr<'a>, T: FromLaTeXToken<'a, Pos, Str>> {
-    pub begin: Macro<'a, Pos, Str>,
-    pub end: Option<Macro<'a, Pos, Str>>,
-    pub name: Str,
+pub struct Environment<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
+    pub begin: Macro<'a, Pos>,
+    pub end: Option<Macro<'a, Pos>>,
+    pub name: &'a str,
     pub name_range: SourceRange<Pos>,
     //pub args: Vec<T>,
     pub children: Vec<T>,
-    //phantom:PhantomData<&'a T>
 }
 
-pub struct OptArg<'a, Pos: SourcePos, Str: StringOrStr<'a>> {
-    inner: Option<Str>,
+pub struct OptArg<'a, Pos: SourcePos> {
+    inner: Option<&'a str>,
     range: SourceRange<Pos>,
-    phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, Pos: SourcePos, Str: StringOrStr<'a>> OptArg<'a, Pos, Str> {
+impl<'a, Pos: SourcePos> OptArg<'a, Pos> {
     #[inline]
     pub const fn is_some(&self) -> bool {
         self.inner.is_some()
     }
-    pub fn into_name(self) -> Option<(Str, SourceRange<Pos>)> {
+    pub fn into_name(self) -> Option<(&'a str, SourceRange<Pos>)> {
         self.inner.map(|i| (i, self.range))
     }
     pub fn as_keyvals(&'a self) -> VecMap<&'a str, OptVal<'a, Pos>> {
@@ -178,62 +169,39 @@ pub struct OptVal<'a, Pos: SourcePos> {
 }
 
 #[derive(Debug)]
-pub struct OptMapVal<'a, Pos: SourcePos, Str: StringOrStr<'a>, T: FromLaTeXToken<'a, Pos, Str>> {
+pub struct OptMapVal<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
     pub key_range: SourceRange<Pos>,
     pub val_range: SourceRange<Pos>,
     pub val: Vec<T>,
     pub str: &'a str,
-    phantom: PhantomData<Str>,
 }
 
 #[derive(Debug)]
-pub struct OptMap<'a, Pos: SourcePos, Str: StringOrStr<'a>, T: FromLaTeXToken<'a, Pos, Str>> {
-    pub inner: VecMap<&'a str, OptMapVal<'a, Pos, Str, T>>,
-    phantom: PhantomData<&'a Str>,
+pub struct OptMap<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
+    pub inner: VecMap<&'a str, OptMapVal<'a, Pos, T>>,
 }
 
-pub struct Group<
-    'a,
-    Pa: ParseSource<'a>,
-    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-    State: ParserState<'a, Pa, T, Err>,
-> {
+pub struct Group<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> {
     previous_letters: Option<String>,
     #[allow(clippy::type_complexity)]
-    pub macro_rule_changes: HMap<Cow<'a, str>, Option<AnyMacro<'a, Pa, T, Err, State>>>,
+    pub macro_rule_changes: HMap<Cow<'a, str>, Option<AnyMacro<'a, Pos, T, State>>>,
     #[allow(clippy::type_complexity)]
-    pub environment_rule_changes: HMap<Cow<'a, str>, Option<AnyEnv<'a, Pa, T, Err, State>>>,
+    pub environment_rule_changes: HMap<Cow<'a, str>, Option<AnyEnv<'a, Pos, T, State>>>,
 }
 
-pub trait GroupState<
-    'a,
-    Pa: ParseSource<'a>,
-    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-    State: ParserState<'a, Pa, T, Err>,
->
+pub trait GroupState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
 {
     fn new(parent: Option<&mut Self>) -> Self;
-    fn inner(&self) -> &Group<'a, Pa, T, Err, State>;
-    fn inner_mut(&mut self) -> &mut Group<'a, Pa, T, Err, State>;
-    fn close(self, parser: &mut LaTeXParser<'a, Pa, T, Err, State>);
-    fn add_macro_rule(&mut self, name: Cow<'a, str>, old: Option<AnyMacro<'a, Pa, T, Err, State>>);
-    fn add_environment_rule(
-        &mut self,
-        name: Cow<'a, str>,
-        old: Option<AnyEnv<'a, Pa, T, Err, State>>,
-    );
+    fn inner(&self) -> &Group<'a, Pos, T, State>;
+    fn inner_mut(&mut self) -> &mut Group<'a, Pos, T, State>;
+    fn close(self, parser: &mut LaTeXParser<'a, Pos, T, State>);
+    fn add_macro_rule(&mut self, name: Cow<'a, str>, old: Option<AnyMacro<'a, Pos, T, State>>);
+    fn add_environment_rule(&mut self, name: Cow<'a, str>, old: Option<AnyEnv<'a, Pos, T, State>>);
     fn letter_change(&mut self, old: &str);
 }
 
-impl<
-        'a,
-        Pa: ParseSource<'a>,
-        T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-        Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-        State: ParserState<'a, Pa, T, Err>,
-    > GroupState<'a, Pa, T, Err, State> for Group<'a, Pa, T, Err, State>
+impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+    GroupState<'a, Pos, T, State> for Group<'a, Pos, T, State>
 {
     fn new(_: Option<&mut Self>) -> Self {
         Group {
@@ -249,16 +217,12 @@ impl<
         self
     }
 
-    fn add_macro_rule(&mut self, name: Cow<'a, str>, old: Option<AnyMacro<'a, Pa, T, Err, State>>) {
+    fn add_macro_rule(&mut self, name: Cow<'a, str>, old: Option<AnyMacro<'a, Pos, T, State>>) {
         if let Entry::Vacant(e) = self.macro_rule_changes.entry(name) {
             e.insert(old);
         }
     }
-    fn add_environment_rule(
-        &mut self,
-        name: Cow<'a, str>,
-        old: Option<AnyEnv<'a, Pa, T, Err, State>>,
-    ) {
+    fn add_environment_rule(&mut self, name: Cow<'a, str>, old: Option<AnyEnv<'a, Pos, T, State>>) {
         if let Entry::Vacant(e) = self.environment_rule_changes.entry(name) {
             e.insert(old);
         }
@@ -270,7 +234,7 @@ impl<
         }
     }
 
-    fn close(self, parser: &mut LaTeXParser<'a, Pa, T, Err, State>) {
+    fn close(self, parser: &mut LaTeXParser<'a, Pos, T, State>) {
         if let Some(l) = self.previous_letters {
             parser.tokenizer.letters = l;
         }
@@ -284,50 +248,32 @@ impl<
     }
 }
 
-pub trait ParserState<
-    'a,
-    Pa: ParseSource<'a>,
-    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
->: Sized
-{
-    type Group: GroupState<'a, Pa, T, Err, Self>;
+pub trait ParserState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>>: Sized {
+    type Group: GroupState<'a, Pos, T, Self>;
     type MacroArg: Clone;
 }
 
-impl<
-        'a,
-        Pa: ParseSource<'a>,
-        T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-        Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-    > ParserState<'a, Pa, T, Err> for ()
-{
-    type Group = Group<'a, Pa, T, Err, Self>;
+impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> ParserState<'a, Pos, T> for () {
+    type Group = Group<'a, Pos, T, Self>;
     type MacroArg = ();
 }
 
-impl<
-        'a,
-        Pa: ParseSource<'a>,
-        T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-        Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-        State: ParserState<'a, Pa, T, Err>,
-    > Group<'a, Pa, T, Err, State>
+impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+    Group<'a, Pos, T, State>
 {
 }
 
 pub struct LaTeXParser<
     'a,
-    Pa: ParseSource<'a>,
-    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-    State: ParserState<'a, Pa, T, Err>,
+    Pos: SourcePos,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
 > {
-    pub tokenizer: super::tokenizer::TeXTokenizer<'a, Pa, Err>,
-    macro_rules: HMap<Cow<'a, str>, AnyMacro<'a, Pa, T, Err, State>>,
+    pub tokenizer: super::tokenizer::TeXTokenizer<'a, Pos>,
+    macro_rules: HMap<Cow<'a, str>, AnyMacro<'a, Pos, T, State>>,
     pub groups: Vec<State::Group>,
-    environment_rules: HMap<Cow<'a, str>, AnyEnv<'a, Pa, T, Err, State>>,
-    directives: HMap<&'a str, fn(&mut Self, Pa::Str)>,
+    environment_rules: HMap<Cow<'a, str>, AnyEnv<'a, Pos, T, State>>,
+    directives: HMap<&'a str, fn(&mut Self, &'a str)>,
     buf: Vec<T>,
     pub state: State,
 }
@@ -340,7 +286,7 @@ macro_rules! count {
 macro_rules! default_rules {
     ($( $($name:ident)? $(($l:literal,$lname:ident))? ),*) => {
         #[must_use]
-        pub fn default_rules() -> [(&'static str,MacroRule<'a,Pa, T, Err, State>);count!($( $($name;)? $($lname;)? )*)] {[
+        pub fn default_rules() -> [(&'static str,MacroRule<'a,Pos, T, State>);count!($( $($name;)? $($lname;)? )*)] {[
             $($((stringify!($name),rules::$name))?$(($l.into(),rules::$lname))?),*
         ]}
     }
@@ -349,7 +295,7 @@ macro_rules! default_rules {
 macro_rules! default_envs {
     ($( $($name:ident)? $(($l:literal,$lname:ident))? ),*) => {
         #[must_use]
-        pub fn default_env_rules() -> [(&'static str,EnvironmentRule<'a,Pa, T, Err, State>);count!($( $($name;)? $($lname;)? )*)] {[
+        pub fn default_env_rules() -> [(&'static str,EnvironmentRule<'a,Pos, T, State>);count!($( $($name;)? $($lname;)? )*)] {[
             $(paste::paste!(
                 $((stringify!($name),(rules::[<$name _open>],rules::[<$name _close>])))?
                 $(($l.into(),(rules::$lname,rules::rules::[<$lname _close>])))?
@@ -361,29 +307,23 @@ macro_rules! default_envs {
 pub struct Groups<
     'a,
     'b,
-    Pa: ParseSource<'a>,
-    T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-    Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-    State: ParserState<'a, Pa, T, Err>,
+    Pos: SourcePos,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
 > {
     pub groups: &'b mut Vec<State::Group>,
-    pub rules: &'b mut HMap<Cow<'a, str>, AnyMacro<'a, Pa, T, Err, State>>,
-    pub environment_rules: &'b mut HMap<Cow<'a, str>, AnyEnv<'a, Pa, T, Err, State>>,
-    pub tokenizer: &'b mut super::tokenizer::TeXTokenizer<'a, Pa, Err>,
+    pub rules: &'b mut HMap<Cow<'a, str>, AnyMacro<'a, Pos, T, State>>,
+    pub environment_rules: &'b mut HMap<Cow<'a, str>, AnyEnv<'a, Pos, T, State>>,
+    pub tokenizer: &'b mut super::tokenizer::TeXTokenizer<'a, Pos>,
 }
 
-impl<
-        'a,
-        Pa: ParseSource<'a>,
-        T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-        Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-        State: ParserState<'a, Pa, T, Err>,
-    > Groups<'a, '_, Pa, T, Err, State>
+impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+    Groups<'a, '_, Pos, T, State>
 {
     pub fn add_macro_rule(
         &mut self,
         name: Cow<'a, str>,
-        rule: Option<AnyMacro<'a, Pa, T, Err, State>>,
+        rule: Option<AnyMacro<'a, Pos, T, State>>,
     ) {
         let old = if let Some(rule) = rule {
             self.rules.insert(name.clone(), rule)
@@ -398,7 +338,7 @@ impl<
     pub fn add_environment_rule(
         &mut self,
         name: Cow<'a, str>,
-        rule: Option<AnyEnv<'a, Pa, T, Err, State>>,
+        rule: Option<AnyEnv<'a, Pos, T, State>>,
     ) {
         let old = if let Some(rule) = rule {
             self.environment_rules.insert(name.clone(), rule)
@@ -414,15 +354,14 @@ impl<
 /*
 */
 
-impl<
-        'a,
-        Pa: ParseSource<'a>,
-        T: FromLaTeXToken<'a, Pa::Pos, Pa::Str>,
-        Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-        State: ParserState<'a, Pa, T, Err>,
-    > LaTeXParser<'a, Pa, T, Err, State>
+impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+    LaTeXParser<'a, Pos, T, State>
 {
-    pub fn new(input: Pa, state: State, err: Err) -> Self {
+    pub fn new(
+        input: &'a str,
+        state: State,
+        err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
+    ) -> Self {
         Self::with_rules(
             input,
             state,
@@ -433,11 +372,11 @@ impl<
     }
 
     pub fn with_rules(
-        input: Pa,
+        input: &'a str,
         state: State,
-        err: Err,
-        rules: impl Iterator<Item = (&'a str, MacroRule<'a, Pa, T, Err, State>)>,
-        envs: impl Iterator<Item = (&'a str, EnvironmentRule<'a, Pa, T, Err, State>)>,
+        err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
+        rules: impl Iterator<Item = (&'a str, MacroRule<'a, Pos, T, State>)>,
+        envs: impl Iterator<Item = (&'a str, EnvironmentRule<'a, Pos, T, State>)>,
     ) -> Self {
         let mut macro_rules = HMap::default();
         let mut environment_rules = HMap::default();
@@ -468,7 +407,7 @@ impl<
     }
 
     #[inline]
-    pub const fn split<'b>(&'b mut self) -> (&'b mut State, Groups<'a, 'b, Pa, T, Err, State>) {
+    pub const fn split<'b>(&'b mut self) -> (&'b mut State, Groups<'a, 'b, Pos, T, State>) {
         (
             &mut self.state,
             Groups {
@@ -483,7 +422,7 @@ impl<
     pub fn add_macro_rule(
         &mut self,
         name: Cow<'a, str>,
-        rule: Option<AnyMacro<'a, Pa, T, Err, State>>,
+        rule: Option<AnyMacro<'a, Pos, T, State>>,
     ) {
         let old = if let Some(rule) = rule {
             self.macro_rules.insert(name.clone(), rule)
@@ -498,7 +437,7 @@ impl<
     pub fn add_environment_rule(
         &mut self,
         name: Cow<'a, str>,
-        rule: Option<AnyEnv<'a, Pa, T, Err, State>>,
+        rule: Option<AnyEnv<'a, Pos, T, State>>,
     ) {
         let old = if let Some(rule) = rule {
             self.environment_rules.insert(name.clone(), rule)
@@ -560,11 +499,11 @@ impl<
     default_envs!(document, verbatim, lstlisting, stexcode);
 
     #[inline]
-    pub fn curr_pos(&self) -> Pa::Pos {
+    pub fn curr_pos(&self) -> Pos {
         self.tokenizer.reader.curr_pos()
     }
 
-    fn default(&mut self, t: TeXToken<Pa::Pos, Pa::Str>) -> Option<T> {
+    fn default(&mut self, t: TeXToken<Pos, &'a str>) -> Option<T> {
         match t {
             TeXToken::Comment(r) => T::from_comment(r),
             TeXToken::Text { range, text } => T::from_text(range, text),
@@ -633,8 +572,8 @@ impl<
         self.tokenizer.letters.retain(|x| !s.contains(x));
     }
 
-    fn cs(&mut self, name: Pa::Str, start: Pa::Pos) -> Option<T> {
-        match self.macro_rules.get(name.as_ref()).cloned() {
+    fn cs(&mut self, name: &'a str, start: Pos) -> Option<T> {
+        match self.macro_rules.get(name).cloned() {
             Some(r) => {
                 let r#macro = Macro {
                     range: SourceRange {
@@ -647,7 +586,6 @@ impl<
                     },
                     name,
                     //args: Vec::new(),
-                    phantom: PhantomData,
                 };
                 match r.call(r#macro, self) {
                     MacroResult::Success(t) => Some(t),
@@ -664,10 +602,10 @@ impl<
 
     pub(in crate::quickparse) fn environment(
         &mut self,
-        begin: Macro<'a, Pa::Pos, Pa::Str>,
-        name: Pa::Str,
-        name_range: SourceRange<Pa::Pos>,
-    ) -> EnvironmentResult<'a, Pa::Pos, Pa::Str, T> {
+        begin: Macro<'a, Pos>,
+        name: &'a str,
+        name_range: SourceRange<Pos>,
+    ) -> EnvironmentResult<'a, Pos, T> {
         let mut env = Environment {
             begin,
             end: None,
@@ -678,22 +616,18 @@ impl<
             //phantom:PhantomData
         };
         self.open_group();
-        let close = self
-            .environment_rules
-            .get(env.name.as_ref())
-            .cloned()
-            .map(|e| {
-                e.open(&mut env, self);
-                let close = e.close();
-                close
-            });
+        let close = self.environment_rules.get(env.name).cloned().map(|e| {
+            e.open(&mut env, self);
+            let close = e.close();
+            close
+        });
         while let Some(next) = self.tokenizer.next() {
             if let TeXToken::ControlSequence {
                 start,
                 name: endname,
             } = &next
             {
-                if endname.as_ref() == "end" {
+                if *endname == "end" {
                     let mut end_macro = Macro {
                         range: SourceRange {
                             start: *start,
@@ -705,7 +639,6 @@ impl<
                         },
                         name: env.name.clone(),
                         //args: Vec::new(),
-                        phantom: PhantomData,
                     };
                     match self.read_name(&mut end_macro).map(|(n, _)| n) {
                         Some(n) if n == env.name => {
@@ -722,11 +655,7 @@ impl<
                         Some(n) => {
                             self.tokenizer.problem(
                                 end_macro.range.start,
-                                format!(
-                                    "Expected \\end{{{}}}, found \\end{{{}}}",
-                                    env.name.as_ref(),
-                                    n.as_ref()
-                                ),
+                                format!("Expected \\end{{{}}}, found \\end{{{n}}}", env.name),
                                 DiagnosticLevel::Error,
                             );
                             break;
@@ -755,8 +684,8 @@ impl<
         EnvironmentResult::Simple(env)
     }
 
-    fn directive(&mut self, s: Pa::Str) {
-        let mut str = s.as_ref().trim();
+    fn directive(&mut self, s: &'a str) {
+        let mut str = s.trim();
         if let Some(i) = str.find(|c: char| c.is_ascii_whitespace()) {
             str = &str[..i];
         }
@@ -836,10 +765,7 @@ impl<
         v
     }
 
-    pub fn get_argument(
-        &mut self,
-        in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>,
-    ) -> (SourceRange<Pa::Pos>, Vec<T>) {
+    pub fn get_argument(&mut self, in_macro: &mut Macro<'a, Pos>) -> (SourceRange<Pos>, Vec<T>) {
         self.tokenizer.reader.trim_start();
         let start = self.curr_pos();
         if self.tokenizer.reader.starts_with('{') {
@@ -875,7 +801,7 @@ impl<
         }
     }
 
-    pub fn read_argument(&mut self, in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>) {
+    pub fn read_argument(&mut self, in_macro: &mut Macro<'a, Pos>) {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
             self.tokenizer.reader.pop_head();
@@ -888,10 +814,7 @@ impl<
         in_macro.range.end = self.curr_pos();
     }
 
-    pub fn read_opt_str(
-        &mut self,
-        in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>,
-    ) -> OptArg<'a, Pa::Pos, Pa::Str> {
+    pub fn read_opt_str(&mut self, in_macro: &mut Macro<'a, Pos>) -> OptArg<'a, Pos> {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('[') {
             self.tokenizer.reader.pop_head();
@@ -910,25 +833,17 @@ impl<
             OptArg {
                 inner: Some(s),
                 range,
-                phantom: PhantomData,
             }
         } else {
             let range = SourceRange {
                 start: self.curr_pos(),
                 end: self.curr_pos(),
             };
-            OptArg {
-                inner: None,
-                range,
-                phantom: PhantomData,
-            }
+            OptArg { inner: None, range }
         }
     }
 
-    pub fn read_name(
-        &mut self,
-        r#in: &mut Macro<'a, Pa::Pos, Pa::Str>,
-    ) -> Option<(Pa::Str, SourceRange<Pa::Pos>)> {
+    pub fn read_name(&mut self, r#in: &mut Macro<'a, Pos>) -> Option<(&'a str, SourceRange<Pos>)> {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
             self.tokenizer.reader.pop_head();
@@ -950,10 +865,7 @@ impl<
         }
     }
 
-    pub fn read_names(
-        &mut self,
-        r#in: &mut Macro<'a, Pa::Pos, Pa::Str>,
-    ) -> Vec<(Pa::Str, SourceRange<Pa::Pos>)> {
+    pub fn read_names(&mut self, r#in: &mut Macro<'a, Pos>) -> Vec<(&'a str, SourceRange<Pos>)> {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
             let mut ret = Vec::new();
@@ -983,7 +895,7 @@ impl<
         }
     }
 
-    pub fn skip_opt(&mut self, in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>) -> bool {
+    pub fn skip_opt(&mut self, in_macro: &mut Macro<'a, Pos>) -> bool {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('[') {
             self.tokenizer.reader.pop_head();
@@ -999,7 +911,7 @@ impl<
             false
         }
     }
-    pub fn skip_arg(&mut self, in_macro: &mut Macro<'a, Pa::Pos, Pa::Str>) {
+    pub fn skip_arg(&mut self, in_macro: &mut Macro<'a, Pos>) {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
             self.tokenizer.reader.pop_head();
@@ -1027,12 +939,11 @@ impl<
 pub trait KeyValValues<
     'a,
     Pos: SourcePos,
-    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-    Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-    State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
+    T: FromLaTeXToken<'a, Pos> + CondSerialize,
+    State: ParserState<'a, Pos, T>,
 >: Sized + Default
 {
-    fn parse_opt(parser: &mut LaTeXParser<'a, ParseStr<'a, Pos>, T, Err, State>) -> Option<Self> {
+    fn parse_opt(parser: &mut LaTeXParser<'a, Pos, T, State>) -> Option<Self> {
         parser.skip_comments();
         if !parser.tokenizer.reader.starts_with('[') {
             return None;
@@ -1123,29 +1034,27 @@ pub trait KeyValValues<
         }
         Some(ret)
     }
-    fn next(&mut self, parser: KeyValParser<'a, '_, Pos, T, Err, State>, key: &str);
+    fn next(&mut self, parser: KeyValParser<'a, '_, Pos, T, State>, key: &str);
 }
 
 pub trait KeyValKind<
     'a,
     Pos: SourcePos,
-    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-    Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-    State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
+    T: FromLaTeXToken<'a, Pos> + CondSerialize,
+    State: ParserState<'a, Pos, T>,
 >: Sized
 {
-    fn next_val(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>, key: &str) -> Option<Self>;
+    fn next_val(parser: &mut KeyValParser<'a, '_, Pos, T, State>, key: &str) -> Option<Self>;
 }
 impl<
         'a,
         Pos: SourcePos,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-        K: KeyValKind<'a, Pos, T, Err, State>,
-    > KeyValValues<'a, Pos, T, Err, State> for Vec<K>
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+        K: KeyValKind<'a, Pos, T, State>,
+    > KeyValValues<'a, Pos, T, State> for Vec<K>
 {
-    fn next(&mut self, mut parser: KeyValParser<'a, '_, Pos, T, Err, State>, key: &str) {
+    fn next(&mut self, mut parser: KeyValParser<'a, '_, Pos, T, State>, key: &str) {
         if let Some(v) = K::next_val(&mut parser, key) {
             self.push(v);
         } else {
@@ -1169,14 +1078,13 @@ pub struct ParsedKeyValue<Pos: SourcePos, T: CondSerialize> {
 pub trait KeyValParsable<
     'a,
     Pos: SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-    Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-    State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
+    T: FromLaTeXToken<'a, Pos> + CondSerialize,
+    State: ParserState<'a, Pos, T>,
 >: Sized + 'a + CondSerialize
 {
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self>;
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self>;
     fn parse_key_val(
-        parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>,
+        parser: &mut KeyValParser<'a, '_, Pos, T, State>,
     ) -> Option<ParsedKeyValue<Pos, Self>> {
         Self::parse_key_val_inner(parser).map(|val| ParsedKeyValue {
             key_range: parser.key_range,
@@ -1192,13 +1100,12 @@ pub trait KeyValParsable<
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParsable<'a, Pos, T, Err, State> for ()
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParsable<'a, Pos, T, State> for ()
 {
     #[inline]
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self> {
         parser.skip_value();
         Some(())
     }
@@ -1207,13 +1114,12 @@ impl<
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParsable<'a, Pos, T, Err, State> for Language
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParsable<'a, Pos, T, State> for Language
 {
     #[inline]
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self> {
         let Some(s) = parser.read_value_str_normalized() else {
             parser.problem("Missing value", DiagnosticLevel::Error);
             return None;
@@ -1228,13 +1134,12 @@ impl<
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParsable<'a, Pos, T, Err, State> for bool
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParsable<'a, Pos, T, State> for bool
 {
     #[inline]
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self> {
         let Some(s) = parser.read_value_str_normalized() else {
             parser.problem("Missing value", DiagnosticLevel::Error);
             return None;
@@ -1249,14 +1154,13 @@ impl<
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParsable<'a, Pos, T, Err, State> for f32
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParsable<'a, Pos, T, State> for f32
 {
     #[inline]
     #[allow(clippy::cast_precision_loss)]
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self> {
         let Some(s) = parser.read_value_str_normalized() else {
             parser.problem("Missing value", DiagnosticLevel::Error);
             return None;
@@ -1280,12 +1184,11 @@ impl<
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParsable<'a, Pos, T, Err, State> for Box<str>
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParsable<'a, Pos, T, State> for Box<str>
 {
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self> {
         parser.read_value_str_normalized().map(|s| match s {
             Cow::Borrowed(s) => s.to_string().into_boxed_str(),
             Cow::Owned(s) => s.into_boxed_str(),
@@ -1295,25 +1198,23 @@ impl<
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize + 'a,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParsable<'a, Pos, T, Err, State> for Vec<T>
+        T: FromLaTeXToken<'a, Pos> + CondSerialize + 'a,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParsable<'a, Pos, T, State> for Vec<T>
 {
     #[inline]
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self> {
         Some(parser.tokens())
     }
 }
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParsable<'a, Pos, T, Err, State> for u8
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParsable<'a, Pos, T, State> for u8
 {
-    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, Err, State>) -> Option<Self> {
+    fn parse_key_val_inner(parser: &mut KeyValParser<'a, '_, Pos, T, State>) -> Option<Self> {
         parser.read_value_str().and_then(|s| s.parse().ok())
     }
 }
@@ -1322,27 +1223,25 @@ pub struct KeyValParser<
     'a,
     'b,
     Pos: SourcePos + 'a,
-    T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-    Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-    State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
+    T: FromLaTeXToken<'a, Pos> + CondSerialize,
+    State: ParserState<'a, Pos, T>,
 > {
     pub start: Pos,
     pub key_range: SourceRange<Pos>,
     pub key: &'a str,
     value_end: Pos,
     pub has_value: bool,
-    pub parser: &'b mut LaTeXParser<'a, ParseStr<'a, Pos>, T, Err, State>,
+    pub parser: &'b mut LaTeXParser<'a, Pos, T, State>,
 }
 impl<
         'a,
         Pos: SourcePos + 'a,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > KeyValParser<'a, '_, Pos, T, Err, State>
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > KeyValParser<'a, '_, Pos, T, State>
 {
     #[inline]
-    pub fn parse<R: KeyValParsable<'a, Pos, T, Err, State> + CondSerialize>(
+    pub fn parse<R: KeyValParsable<'a, Pos, T, State> + CondSerialize>(
         &mut self,
     ) -> Option<ParsedKeyValue<Pos, R>> {
         R::parse_key_val(self)
@@ -1533,10 +1432,9 @@ impl<
 impl<
         'a,
         Pos: SourcePos,
-        T: FromLaTeXToken<'a, Pos, &'a str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pos>, DiagnosticLevel),
-        State: ParserState<'a, ParseStr<'a, Pos>, T, Err>,
-    > LaTeXParser<'a, ParseStr<'a, Pos>, T, Err, State>
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > LaTeXParser<'a, Pos, T, State>
 {
     pub fn reparse(&mut self, s: &'a str, at: Pos) -> Vec<T> {
         let mut new = ParseStr::new(s);
@@ -1560,10 +1458,7 @@ impl<
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn read_opt_map(
-        &mut self,
-        in_macro: &mut Macro<'a, Pos, &'a str>,
-    ) -> OptMap<'a, Pos, &'a str, T> {
+    pub fn read_opt_map(&mut self, in_macro: &mut Macro<'a, Pos>) -> OptMap<'a, Pos, T> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('[') {
             self.tokenizer.reader.pop_head();
@@ -1594,7 +1489,6 @@ impl<
                                     },
                                     val: Vec::new(),
                                     str: "",
-                                    phantom: PhantomData,
                                 },
                             );
                         }
@@ -1614,7 +1508,6 @@ impl<
                                 },
                                 val: Vec::new(),
                                 str: "",
-                                phantom: PhantomData,
                             },
                         );
                     }
@@ -1640,7 +1533,6 @@ impl<
                                 },
                                 val,
                                 str,
-                                phantom: PhantomData,
                             },
                         );
                     }
@@ -1657,21 +1549,17 @@ impl<
                     }
                 }
             }
-            OptMap {
-                inner: map,
-                phantom: PhantomData,
-            }
+            OptMap { inner: map }
         } else {
             OptMap {
                 inner: VecMap::new(),
-                phantom: PhantomData,
             }
         }
     }
 
     pub fn read_opt_name_normalized(
         &mut self,
-        r#in: &mut Macro<'a, Pos, &'a str>,
+        r#in: &mut Macro<'a, Pos>,
     ) -> Option<(Cow<'a, str>, SourceRange<Pos>)> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('[') {
@@ -1726,7 +1614,7 @@ impl<
 
     pub fn read_name_normalized(
         &mut self,
-        r#in: &mut Macro<'a, Pos, &'a str>,
+        r#in: &mut Macro<'a, Pos>,
     ) -> Option<(Cow<'a, str>, SourceRange<Pos>)> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('{') {
@@ -1789,7 +1677,7 @@ impl<
 
     pub fn read_names_normalized(
         &mut self,
-        r#in: &mut Macro<'a, Pos, &'a str>,
+        r#in: &mut Macro<'a, Pos>,
     ) -> Vec<(Cow<'a, str>, SourceRange<Pos>)> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('{') {
@@ -1879,11 +1767,10 @@ fn join_strs(first: &str, rest: SmallVec<&str, 2>) -> String {
 
 impl<
         'a,
-        Pa: ParseSource<'a>,
-        T: FromLaTeXToken<'a, Pa::Pos, Pa::Str> + CondSerialize,
-        Err: FnMut(String, SourceRange<Pa::Pos>, DiagnosticLevel),
-        State: ParserState<'a, Pa, T, Err>,
-    > Iterator for LaTeXParser<'a, Pa, T, Err, State>
+        Pos: SourcePos,
+        T: FromLaTeXToken<'a, Pos> + CondSerialize,
+        State: ParserState<'a, Pos, T>,
+    > Iterator for LaTeXParser<'a, Pos, T, State>
 {
     type Item = T;
     fn next(&mut self) -> Option<T> {
