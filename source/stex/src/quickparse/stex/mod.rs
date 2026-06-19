@@ -227,6 +227,7 @@ pub enum STeXAnnot {
         full_range: SourceRange<LSPLineCol>,
     },
     SymName {
+        is_def: bool,
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
         full_range: SourceRange<LSPLineCol>,
         token_range: SourceRange<LSPLineCol>,
@@ -247,6 +248,7 @@ pub enum STeXAnnot {
         name_range: SourceRange<LSPLineCol>,
     },
     Symref {
+        is_def: bool,
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
         full_range: SourceRange<LSPLineCol>,
         token_range: SourceRange<LSPLineCol>,
@@ -654,12 +656,14 @@ impl STeXAnnot {
                 }),
                 STeXToken::Symref {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,
                     text,
                 } => v.push(Self::Symref {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,
@@ -697,12 +701,14 @@ impl STeXAnnot {
                 }),
                 STeXToken::SymName {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,
                     mode: mod_,
                 } => v.push(Self::SymName {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,

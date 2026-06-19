@@ -7,6 +7,7 @@ use flams_math_archives::{
     utils::path_ext::PathExt,
 };
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
+use flams_utils::sourcerefs::{LSPLineCol, SourcePos};
 use ftml_uris::{ArchiveUri, DocumentUri};
 
 use crate::{
@@ -149,10 +150,10 @@ impl LSPDocument {
         self.text.lock().delta(text, range);
     }
     #[inline]
-    #[must_use]
+    /*#[must_use]
     pub fn get_range(&self, range: Range) -> (usize, usize) {
         self.text.lock().get_range(range)
-    }
+    }*/
     #[inline]
     #[must_use]
     pub fn get_position(&self, pos: Position) -> usize {
@@ -310,73 +311,18 @@ impl LSPText {
     }
 
     fn get_range(&self, range: Range) -> (usize, usize) {
-        let Range {
-            start:
-                Position {
-                    line: mut start_line,
-                    character: startc,
-                },
-            end:
-                Position {
-                    line: mut end_line,
-                    character: mut endc,
-                },
-        } = range;
-        if start_line == end_line {
-            endc -= startc;
-        }
-        end_line -= start_line;
-
-        let mut start = 0;
-        let mut rest = self.text.as_str();
-        while start_line > 0 {
-            if let Some(i) = rest.find(['\n', '\r']) {
-                start += i + 1;
-                if rest.as_bytes()[i] == b'\r' && rest.as_bytes().get(i + 1) == Some(&b'\n') {
-                    start += 1;
-                    rest = &rest[i + 2..];
-                } else {
-                    rest = &rest[i + 1..];
-                }
-                start_line -= 1;
-            } else {
-                start = self.text.len();
-                rest = "";
-                end_line = 0;
-                break;
-            }
-        }
-        let next = rest
-            .chars()
-            .take(startc as usize)
-            .map(char::len_utf8)
-            .sum::<usize>();
-        start += next;
-        rest = &rest[next..];
-
-        let mut end = start;
-        while end_line > 0 {
-            if let Some(i) = rest.find(['\n', '\r']) {
-                end += i + 1;
-                if rest.as_bytes()[i] == b'\r' && rest.as_bytes().get(i + 1) == Some(&b'\n') {
-                    end += 1;
-                    rest = &rest[i + 2..];
-                } else {
-                    rest = &rest[i + 1..];
-                }
-                end_line -= 1;
-            } else {
-                end = self.text.len();
-                rest = "";
-                break;
-            }
-        }
-        end += rest
-            .chars()
-            .take(endc as usize)
-            .map(char::len_utf8)
-            .sum::<usize>();
-        (start, end)
+        let Range { start, end } = range;
+        LSPLineCol::get_range_offsets(
+            LSPLineCol {
+                line: start.line,
+                col: start.character,
+            },
+            LSPLineCol {
+                line: end.line,
+                col: end.character,
+            },
+            self.text.as_str(),
+        )
     }
 
     #[allow(clippy::cast_possible_truncation)]

@@ -242,6 +242,7 @@ pub enum STeXToken<Pos: SourcePos> {
     },
     SymName {
         uri: SmallVec<SymbolReference<Pos>, 1>,
+        is_def: bool,
         full_range: SourceRange<Pos>,
         token_range: SourceRange<Pos>,
         name_range: SourceRange<Pos>,
@@ -271,6 +272,7 @@ pub enum STeXToken<Pos: SourcePos> {
     },
     Symref {
         uri: SmallVec<SymbolReference<Pos>, 1>,
+        is_def: bool,
         full_range: SourceRange<Pos>,
         token_range: SourceRange<Pos>,
         name_range: SourceRange<Pos>,
@@ -603,7 +605,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         }
     }
 
-    fn load_rules<'b, Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
+    fn load_rules<Err: FnMut(String, SourceRange<LSPLineCol>, DiagnosticLevel)>(
         mod_ref: ModuleReference,
         irules: ModuleRules<LSPLineCol>,
         prev: &[STeXGroup<'a, MS, LSPLineCol, Err>],

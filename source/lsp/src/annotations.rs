@@ -493,439 +493,6 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn goto_definition(
-        &self,
-        in_doc: &UrlOrFile,
-        pos: LSPLineCol,
-    ) -> Option<lsp::GotoDefinitionResponse> {
-        macro_rules! here {
-            ($r:expr) => {
-                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                    uri: in_doc.clone().into(),
-                    range: SourceRange::into_range($r),
-                }))
-            };
-        }
-        match self {
-            Self::Module { name_range, .. } => {
-                if !name_range.contains(pos) {
-                    return None;
-                };
-                here!(*name_range)
-            }
-            Self::MathStructure {
-                extends,
-                name_range,
-                opts,
-                ..
-            } => {
-                if name_range.contains(pos) {
-                    return here!(*name_range);
-                }
-                for o in opts {
-                    if let MathStructureArg::Name(range, _) = o {
-                        if range.contains(pos) {
-                            return here!(*range);
-                        }
-                    }
-                }
-                extends.iter().find_map(|(uri, r)| {
-                    if r.contains(pos) {
-                        let Some(p) = &uri.filepath else { return None };
-                        let Ok(url) = lsp::Url::from_file_path(p) else {
-                            return None;
-                        };
-                        //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
-                        Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                            uri: url,
-                            range: SourceRange::into_range(uri.range),
-                        }))
-                    } else {
-                        None
-                    }
-                })
-            }
-            Self::MorphismEnv {
-                domain_range,
-                name_range,
-                domain,
-                ..
-            } => {
-                if name_range.contains(pos) {
-                    return here!(*name_range);
-                }
-                if domain_range.contains(pos) {
-                    let Some((p, range)) = (match domain {
-                        ModuleOrStruct::Module(uri) => {
-                            uri.full_path.as_ref().map(|r| (r, SourceRange::default()))
-                        }
-                        ModuleOrStruct::Struct(uri) => {
-                            uri.filepath.as_ref().map(|r| (r, uri.range))
-                        }
-                    }) else {
-                        return None;
-                    };
-                    let Ok(url) = lsp::Url::from_file_path(p) else {
-                        return None;
-                    };
-                    return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                        uri: url,
-                        range: SourceRange::into_range(range),
-                    }));
-                } else {
-                    None
-                }
-            }
-            Self::InlineMorphism {
-                domain_range,
-                domain,
-                assignments,
-                name_range,
-                ..
-            } => {
-                if name_range.contains(pos) {
-                    return here!(*name_range);
-                }
-                if domain_range.contains(pos) {
-                    let Some((p, range)) = (match domain {
-                        ModuleOrStruct::Module(uri) => {
-                            uri.full_path.as_ref().map(|r| (r, SourceRange::default()))
-                        }
-                        ModuleOrStruct::Struct(uri) => {
-                            uri.filepath.as_ref().map(|r| (r, uri.range))
-                        }
-                    }) else {
-                        return None;
-                    };
-                    let Ok(url) = lsp::Url::from_file_path(p) else {
-                        return None;
-                    };
-                    return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                        uri: url,
-                        range: SourceRange::into_range(range),
-                    }));
-                }
-                for a in assignments {
-                    if a.symbol_range.contains(pos) {
-                        let Some(p) = &a.symbol.filepath else {
-                            return None;
-                        };
-                        let Ok(url) = lsp::Url::from_file_path(p) else {
-                            return None;
-                        };
-                        return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                            uri: url,
-                            range: SourceRange::into_range(a.symbol_range),
-                        }));
-                    }
-                    if let Some((_, InlineMorphAssKind::Rename(_, _, r))) = &a.first {
-                        if r.contains(pos) {
-                            return here!(*r);
-                        }
-                    }
-                    if let Some((_, InlineMorphAssKind::Rename(_, _, r))) = &a.second {
-                        if r.contains(pos) {
-                            return here!(*r);
-                        }
-                    }
-                }
-                None
-            }
-            Self::Paragraph { parsed_args, .. } | Self::InlineParagraph { parsed_args, .. } => {
-                for p in parsed_args {
-                    match p {
-                        ParagraphArg::Fors(ParsedKeyValue { val_range, val, .. }) => {
-                            if val_range.contains(pos) {
-                                for (s, r) in val {
-                                    if r.contains(pos) {
-                                        let Some(p) =
-                                            &s.first().unwrap_or_else(|| unreachable!()).filepath
-                                        else {
-                                            return None;
-                                        };
-                                        let Ok(url) = lsp::Url::from_file_path(p) else {
-                                            return None;
-                                        };
-                                        //tracing::info!("Going to definition for {}: {}@{:?}",s.uri,url,range);
-                                        return Some(lsp::GotoDefinitionResponse::Scalar(
-                                            lsp::Location {
-                                                uri: url,
-                                                range: SourceRange::into_range(
-                                                    s.first()
-                                                        .unwrap_or_else(|| unreachable!())
-                                                        .range,
-                                                ),
-                                            },
-                                        ));
-                                    }
-                                }
-                            }
-                            return None;
-                        }
-                        ParagraphArg::Name(ParsedKeyValue { val_range, .. })
-                        | ParagraphArg::MacroName(ParsedKeyValue { val_range, .. })
-                            if val_range.contains(pos) =>
-                        {
-                            return here!(*val_range);
-                        }
-                        _ => (),
-                    }
-                }
-                None
-            }
-            Self::Symdecl {
-                main_name_range,
-                parsed_args,
-                ..
-            } => {
-                if main_name_range.contains(pos) {
-                    return here!(*main_name_range);
-                }
-                for a in parsed_args {
-                    if let SymdeclArg::Name(ParsedKeyValue { val_range, .. }) = a {
-                        if val_range.contains(pos) {
-                            return here!(*val_range);
-                        }
-                    }
-                }
-                None
-            }
-            Self::TextSymdecl {
-                main_name_range,
-                parsed_args,
-                ..
-            } => {
-                if main_name_range.contains(pos) {
-                    return here!(*main_name_range);
-                }
-                for a in parsed_args {
-                    if let TextSymdeclArg::Name(ParsedKeyValue { val_range, .. }) = a {
-                        if val_range.contains(pos) {
-                            return here!(*val_range);
-                        }
-                    }
-                }
-                None
-            }
-            Self::Symdef {
-                main_name_range,
-                parsed_args,
-                ..
-            } => {
-                if main_name_range.contains(pos) {
-                    return here!(*main_name_range);
-                }
-                for a in parsed_args {
-                    if let SymdefArg::Name(ParsedKeyValue { val_range, .. }) = a {
-                        if val_range.contains(pos) {
-                            return here!(*val_range);
-                        }
-                    }
-                }
-                None
-            }
-            Self::RenameDecl {
-                uri,
-                orig_range,
-                name_range,
-                macroname_range,
-                ..
-            } => {
-                if let Some(name_range) = name_range {
-                    if name_range.contains(pos) {
-                        return here!(*name_range);
-                    }
-                }
-                if macroname_range.contains(pos) {
-                    return here!(*macroname_range);
-                }
-                if !orig_range.contains(pos) {
-                    return None;
-                };
-                let Some(p) = &uri.filepath else { return None };
-                let Ok(url) = lsp::Url::from_file_path(p) else {
-                    return None;
-                };
-                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
-                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                    uri: url,
-                    range: SourceRange::into_range(uri.range),
-                }))
-            }
-            Self::Vardef {
-                main_name_range,
-                parsed_args,
-                ..
-            }
-            | Self::Varseq {
-                main_name_range,
-                parsed_args,
-                ..
-            } => {
-                if main_name_range.contains(pos) {
-                    return here!(*main_name_range);
-                }
-                for a in parsed_args {
-                    if let VardefArg::Name(ParsedKeyValue { val_range, .. }) = a {
-                        if val_range.contains(pos) {
-                            return here!(*val_range);
-                        }
-                    }
-                }
-                None
-            }
-
-            Self::ImportModule {
-                module,
-                archive_range,
-                path_range,
-                ..
-            }
-            | Self::UseModule {
-                module,
-                archive_range,
-                path_range,
-                ..
-            }
-            | Self::SetMetatheory {
-                archive_range,
-                path_range,
-                module,
-                ..
-            } => {
-                let range = archive_range.map_or(*path_range, |a| SourceRange {
-                    start: a.start,
-                    end: path_range.end,
-                });
-                if !range.contains(pos) {
-                    return None;
-                };
-                let Some(p) = module.full_path.as_ref() else {
-                    return None;
-                };
-                let Ok(uri) = lsp::Url::from_file_path(p) else {
-                    return None;
-                };
-                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                    uri,
-                    range: lsp::Range::default(),
-                }))
-            }
-            Self::ConservativeExt { ext_range, uri, .. } => {
-                if !ext_range.contains(pos) {
-                    return None;
-                };
-                let Some(p) = &uri.filepath else { return None };
-                let Ok(url) = lsp::Url::from_file_path(p) else {
-                    return None;
-                };
-                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
-                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                    uri: url,
-                    range: SourceRange::into_range(uri.range),
-                }))
-            }
-            Self::SymName {
-                uri,
-                name_range: range,
-                ..
-            }
-            | Self::Symref {
-                uri,
-                name_range: range,
-                ..
-            }
-            | Self::Notation {
-                uri,
-                name_range: range,
-                ..
-            }
-            | Self::Symuse {
-                uri,
-                name_range: range,
-                ..
-            }
-            | Self::Precondition {
-                uri,
-                symbol_range: range,
-                ..
-            }
-            | Self::Objective {
-                uri,
-                symbol_range: range,
-                ..
-            }
-            | Self::Definiens {
-                uri,
-                name_range: Some(range),
-                ..
-            } => {
-                if !range.contains(pos) {
-                    return None;
-                };
-                let Some(p) = &uri.first().unwrap_or_else(|| unreachable!()).filepath else {
-                    return None;
-                };
-                let Ok(url) = lsp::Url::from_file_path(p) else {
-                    return None;
-                };
-                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
-                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                    uri: url,
-                    range: SourceRange::into_range(
-                        uri.first().unwrap_or_else(|| unreachable!()).range,
-                    ),
-                }))
-            }
-            Self::SemanticMacro {
-                uri,
-                token_range: range,
-                ..
-            }
-            | Self::UseStructure {
-                structure: uri,
-                structure_range: range,
-                ..
-            }
-            | Self::Assign {
-                uri,
-                orig_range: range,
-                ..
-            } => {
-                if !range.contains(pos) {
-                    return None;
-                };
-                let Some(p) = &uri.filepath else { return None };
-                let Ok(url) = lsp::Url::from_file_path(p) else {
-                    return None;
-                };
-                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
-                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                    uri: url,
-                    range: SourceRange::into_range(uri.range),
-                }))
-            }
-            Self::VariableMacro {
-                orig, full_range, ..
-            } => {
-                if !full_range.contains(pos) {
-                    return None;
-                };
-                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
-                    uri: in_doc.clone().into(),
-                    range: SourceRange::into_range(*orig),
-                }))
-            }
-            Self::Svar { .. }
-            | Self::Inputref { .. }
-            | Self::IncludeProblem { .. }
-            | Self::MHGraphics { .. }
-            | Self::MHInput { .. }
-            | Self::Problem { .. }
-            | Self::Definiens { .. }
-            | Self::Defnotation { .. } => None,
-        }
-    }
     fn semantic_tokens(&self, cont: &mut impl FnMut(SourceRange<LSPLineCol>, u32)) {
         match self {
             Self::Module {
@@ -2106,6 +1673,440 @@ impl AnnotExt for STeXAnnot {
             | Self::Defnotation { .. }
             | Self::Definiens { .. }
             | Self::Assign { .. } => Vec::new(),
+        }
+    }
+
+    fn goto_definition(
+        &self,
+        in_doc: &UrlOrFile,
+        pos: LSPLineCol,
+    ) -> Option<lsp::GotoDefinitionResponse> {
+        macro_rules! here {
+            ($r:expr) => {
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: in_doc.clone().into(),
+                    range: SourceRange::into_range($r),
+                }))
+            };
+        }
+        match self {
+            Self::Module { name_range, .. } => {
+                if !name_range.contains(pos) {
+                    return None;
+                };
+                here!(*name_range)
+            }
+            Self::MathStructure {
+                extends,
+                name_range,
+                opts,
+                ..
+            } => {
+                if name_range.contains(pos) {
+                    return here!(*name_range);
+                }
+                for o in opts {
+                    if let MathStructureArg::Name(range, _) = o {
+                        if range.contains(pos) {
+                            return here!(*range);
+                        }
+                    }
+                }
+                extends.iter().find_map(|(uri, r)| {
+                    if r.contains(pos) {
+                        let Some(p) = &uri.filepath else { return None };
+                        let Ok(url) = lsp::Url::from_file_path(p) else {
+                            return None;
+                        };
+                        //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                        Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                            uri: url,
+                            range: SourceRange::into_range(uri.range),
+                        }))
+                    } else {
+                        None
+                    }
+                })
+            }
+            Self::MorphismEnv {
+                domain_range,
+                name_range,
+                domain,
+                ..
+            } => {
+                if name_range.contains(pos) {
+                    return here!(*name_range);
+                }
+                if domain_range.contains(pos) {
+                    let Some((p, range)) = (match domain {
+                        ModuleOrStruct::Module(uri) => {
+                            uri.full_path.as_ref().map(|r| (r, SourceRange::default()))
+                        }
+                        ModuleOrStruct::Struct(uri) => {
+                            uri.filepath.as_ref().map(|r| (r, uri.range))
+                        }
+                    }) else {
+                        return None;
+                    };
+                    let Ok(url) = lsp::Url::from_file_path(p) else {
+                        return None;
+                    };
+                    return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                        uri: url,
+                        range: SourceRange::into_range(range),
+                    }));
+                } else {
+                    None
+                }
+            }
+            Self::InlineMorphism {
+                domain_range,
+                domain,
+                assignments,
+                name_range,
+                ..
+            } => {
+                if name_range.contains(pos) {
+                    return here!(*name_range);
+                }
+                if domain_range.contains(pos) {
+                    let Some((p, range)) = (match domain {
+                        ModuleOrStruct::Module(uri) => {
+                            uri.full_path.as_ref().map(|r| (r, SourceRange::default()))
+                        }
+                        ModuleOrStruct::Struct(uri) => {
+                            uri.filepath.as_ref().map(|r| (r, uri.range))
+                        }
+                    }) else {
+                        return None;
+                    };
+                    let Ok(url) = lsp::Url::from_file_path(p) else {
+                        return None;
+                    };
+                    return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                        uri: url,
+                        range: SourceRange::into_range(range),
+                    }));
+                }
+                for a in assignments {
+                    if a.symbol_range.contains(pos) {
+                        let Some(p) = &a.symbol.filepath else {
+                            return None;
+                        };
+                        let Ok(url) = lsp::Url::from_file_path(p) else {
+                            return None;
+                        };
+                        return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                            uri: url,
+                            range: SourceRange::into_range(a.symbol_range),
+                        }));
+                    }
+                    if let Some((_, InlineMorphAssKind::Rename(_, _, r))) = &a.first {
+                        if r.contains(pos) {
+                            return here!(*r);
+                        }
+                    }
+                    if let Some((_, InlineMorphAssKind::Rename(_, _, r))) = &a.second {
+                        if r.contains(pos) {
+                            return here!(*r);
+                        }
+                    }
+                }
+                None
+            }
+            Self::Paragraph { parsed_args, .. } | Self::InlineParagraph { parsed_args, .. } => {
+                for p in parsed_args {
+                    match p {
+                        ParagraphArg::Fors(ParsedKeyValue { val_range, val, .. }) => {
+                            if val_range.contains(pos) {
+                                for (s, r) in val {
+                                    if r.contains(pos) {
+                                        let Some(p) =
+                                            &s.first().unwrap_or_else(|| unreachable!()).filepath
+                                        else {
+                                            return None;
+                                        };
+                                        let Ok(url) = lsp::Url::from_file_path(p) else {
+                                            return None;
+                                        };
+                                        //tracing::info!("Going to definition for {}: {}@{:?}",s.uri,url,range);
+                                        return Some(lsp::GotoDefinitionResponse::Scalar(
+                                            lsp::Location {
+                                                uri: url,
+                                                range: SourceRange::into_range(
+                                                    s.first()
+                                                        .unwrap_or_else(|| unreachable!())
+                                                        .range,
+                                                ),
+                                            },
+                                        ));
+                                    }
+                                }
+                            }
+                            return None;
+                        }
+                        ParagraphArg::Name(ParsedKeyValue { val_range, .. })
+                        | ParagraphArg::MacroName(ParsedKeyValue { val_range, .. })
+                            if val_range.contains(pos) =>
+                        {
+                            return here!(*val_range);
+                        }
+                        _ => (),
+                    }
+                }
+                None
+            }
+            Self::Symdecl {
+                main_name_range,
+                parsed_args,
+                ..
+            } => {
+                if main_name_range.contains(pos) {
+                    return here!(*main_name_range);
+                }
+                for a in parsed_args {
+                    if let SymdeclArg::Name(ParsedKeyValue { val_range, .. }) = a {
+                        if val_range.contains(pos) {
+                            return here!(*val_range);
+                        }
+                    }
+                }
+                None
+            }
+            Self::TextSymdecl {
+                main_name_range,
+                parsed_args,
+                ..
+            } => {
+                if main_name_range.contains(pos) {
+                    return here!(*main_name_range);
+                }
+                for a in parsed_args {
+                    if let TextSymdeclArg::Name(ParsedKeyValue { val_range, .. }) = a {
+                        if val_range.contains(pos) {
+                            return here!(*val_range);
+                        }
+                    }
+                }
+                None
+            }
+            Self::Symdef {
+                main_name_range,
+                parsed_args,
+                ..
+            } => {
+                if main_name_range.contains(pos) {
+                    return here!(*main_name_range);
+                }
+                for a in parsed_args {
+                    if let SymdefArg::Name(ParsedKeyValue { val_range, .. }) = a {
+                        if val_range.contains(pos) {
+                            return here!(*val_range);
+                        }
+                    }
+                }
+                None
+            }
+            Self::RenameDecl {
+                uri,
+                orig_range,
+                name_range,
+                macroname_range,
+                ..
+            } => {
+                if let Some(name_range) = name_range {
+                    if name_range.contains(pos) {
+                        return here!(*name_range);
+                    }
+                }
+                if macroname_range.contains(pos) {
+                    return here!(*macroname_range);
+                }
+                if !orig_range.contains(pos) {
+                    return None;
+                };
+                let Some(p) = &uri.filepath else { return None };
+                let Ok(url) = lsp::Url::from_file_path(p) else {
+                    return None;
+                };
+                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: url,
+                    range: SourceRange::into_range(uri.range),
+                }))
+            }
+            Self::Vardef {
+                main_name_range,
+                parsed_args,
+                ..
+            }
+            | Self::Varseq {
+                main_name_range,
+                parsed_args,
+                ..
+            } => {
+                if main_name_range.contains(pos) {
+                    return here!(*main_name_range);
+                }
+                for a in parsed_args {
+                    if let VardefArg::Name(ParsedKeyValue { val_range, .. }) = a {
+                        if val_range.contains(pos) {
+                            return here!(*val_range);
+                        }
+                    }
+                }
+                None
+            }
+
+            Self::ImportModule {
+                module,
+                archive_range,
+                path_range,
+                ..
+            }
+            | Self::UseModule {
+                module,
+                archive_range,
+                path_range,
+                ..
+            }
+            | Self::SetMetatheory {
+                archive_range,
+                path_range,
+                module,
+                ..
+            } => {
+                let range = archive_range.map_or(*path_range, |a| SourceRange {
+                    start: a.start,
+                    end: path_range.end,
+                });
+                if !range.contains(pos) {
+                    return None;
+                };
+                let Some(p) = module.full_path.as_ref() else {
+                    return None;
+                };
+                let Ok(uri) = lsp::Url::from_file_path(p) else {
+                    return None;
+                };
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri,
+                    range: lsp::Range::default(),
+                }))
+            }
+            Self::ConservativeExt { ext_range, uri, .. } => {
+                if !ext_range.contains(pos) {
+                    return None;
+                };
+                let Some(p) = &uri.filepath else { return None };
+                let Ok(url) = lsp::Url::from_file_path(p) else {
+                    return None;
+                };
+                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: url,
+                    range: SourceRange::into_range(uri.range),
+                }))
+            }
+            Self::SymName {
+                uri,
+                name_range: range,
+                ..
+            }
+            | Self::Symref {
+                uri,
+                name_range: range,
+                ..
+            }
+            | Self::Notation {
+                uri,
+                name_range: range,
+                ..
+            }
+            | Self::Symuse {
+                uri,
+                name_range: range,
+                ..
+            }
+            | Self::Precondition {
+                uri,
+                symbol_range: range,
+                ..
+            }
+            | Self::Objective {
+                uri,
+                symbol_range: range,
+                ..
+            }
+            | Self::Definiens {
+                uri,
+                name_range: Some(range),
+                ..
+            } => {
+                if !range.contains(pos) {
+                    return None;
+                };
+                let Some(p) = &uri.first().unwrap_or_else(|| unreachable!()).filepath else {
+                    return None;
+                };
+                let Ok(url) = lsp::Url::from_file_path(p) else {
+                    return None;
+                };
+                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: url,
+                    range: SourceRange::into_range(
+                        uri.first().unwrap_or_else(|| unreachable!()).range,
+                    ),
+                }))
+            }
+            Self::SemanticMacro {
+                uri,
+                token_range: range,
+                ..
+            }
+            | Self::UseStructure {
+                structure: uri,
+                structure_range: range,
+                ..
+            }
+            | Self::Assign {
+                uri,
+                orig_range: range,
+                ..
+            } => {
+                if !range.contains(pos) {
+                    return None;
+                };
+                let Some(p) = &uri.filepath else { return None };
+                let Ok(url) = lsp::Url::from_file_path(p) else {
+                    return None;
+                };
+                //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: url,
+                    range: SourceRange::into_range(uri.range),
+                }))
+            }
+            Self::VariableMacro {
+                orig, full_range, ..
+            } => {
+                if !full_range.contains(pos) {
+                    return None;
+                };
+                Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: in_doc.clone().into(),
+                    range: SourceRange::into_range(*orig),
+                }))
+            }
+            Self::Svar { .. }
+            | Self::Inputref { .. }
+            | Self::IncludeProblem { .. }
+            | Self::MHGraphics { .. }
+            | Self::MHInput { .. }
+            | Self::Problem { .. }
+            | Self::Definiens { .. }
+            | Self::Defnotation { .. } => None,
         }
     }
 }

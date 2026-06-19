@@ -1192,7 +1192,25 @@ stex!(LSP: p => symref[mut args:Map]{name:!name}{text:T} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::Symref {
+    is_def:false,
     uri:s, full_range: symref.range, token_range: symref.token_range,
+    name_range: name.1, text
+  })
+});
+
+stex!(LSP: p => definiendum[mut args:Map]{name:!name}{text:T} => {
+  let (state,mut groups) = p.split();
+  let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
+    p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
+    return MacroResult::Simple(definiendum);
+  };
+  args.inner.remove(&"root");
+  for (k,v) in args.inner.iter() {
+    p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
+  }
+  MacroResult::Success(STeXToken::Symref {
+    is_def:true,
+    uri:s, full_range: definiendum.range, token_range: definiendum.token_range,
     name_range: name.1, text
   })
 });
@@ -1213,6 +1231,7 @@ stex!(LSP: p => symname[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
+    is_def:false,
     uri:s, full_range: symname.range, token_range: symname.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::PrePost{ pre, post }
@@ -1232,6 +1251,7 @@ stex!(LSP: p => Symname[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
+    is_def:false,
     uri:s, full_range: Symname.range, token_range: Symname.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::Cap{ post }
@@ -1251,6 +1271,7 @@ stex!(LSP: p => symnames[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
+    is_def:false,
     uri:s, full_range: symnames.range, token_range: symnames.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::PostS{ pre }
@@ -1264,6 +1285,7 @@ stex!(LSP: p => Symnames{name:!name} => {
     return MacroResult::Simple(Symnames);
   };
   MacroResult::Success(STeXToken::SymName {
+    is_def:false,
     uri:s, full_range: Symnames.range, token_range: Symnames.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::CapAndPostS
@@ -1287,6 +1309,7 @@ stex!(LSP: p => definame[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
+    is_def:true,
     uri:s, full_range: definame.range, token_range: definame.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::PrePost{ pre, post }
@@ -1306,6 +1329,7 @@ stex!(LSP: p => Definame[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
+    is_def:true,
     uri:s, full_range: Definame.range, token_range: Definame.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::Cap{ post }
@@ -1325,6 +1349,7 @@ stex!(LSP: p => definames[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   MacroResult::Success(STeXToken::SymName {
+    is_def:true,
     uri:s, full_range: definames.range, token_range: definames.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::PostS{ pre }
@@ -1338,6 +1363,7 @@ stex!(LSP: p => Definames{name:!name} => {
     return MacroResult::Simple(Definames);
   };
   MacroResult::Success(STeXToken::SymName {
+    is_def:true,
     uri:s, full_range: Definames.range, token_range: Definames.token_range,
     name_range: name.1,
     mode: super::structs::SymnameMode::CapAndPostS
@@ -2027,7 +2053,7 @@ fn do_def_macros<
     );
     p.add_macro_rule(
         Cow::Borrowed("definiendum"),
-        Some(AnyMacro::Ptr(symref as _)),
+        Some(AnyMacro::Ptr(definiendum as _)),
     );
     p.add_macro_rule(
         Cow::Borrowed("defnotation"),

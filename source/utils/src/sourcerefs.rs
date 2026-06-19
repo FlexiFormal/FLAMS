@@ -1,11 +1,14 @@
-use std::fmt::{Debug, Display};
 use crate::CondSerialize;
+use std::fmt::{Debug, Display};
 
-pub trait SourcePos: Clone + Copy + Default + Debug + PartialOrd + Ord + 'static + CondSerialize {
+pub trait SourcePos:
+    Clone + Copy + Default + Debug + PartialOrd + Ord + 'static + CondSerialize
+{
     fn update(&mut self, c: char);
     fn update_newline(&mut self, rn: bool);
     fn update_str_no_newline(&mut self, s: &str);
     fn update_str_maybe_newline(&mut self, s: &str);
+    fn get_range(start: Self, end: Self, text: &str) -> Option<&str>;
 }
 impl SourcePos for () {
     #[inline]
@@ -16,9 +19,13 @@ impl SourcePos for () {
     fn update_str_no_newline(&mut self, _: &str) {}
     #[inline]
     fn update_str_maybe_newline(&mut self, _: &str) {}
+    #[inline]
+    fn get_range(start: Self, end: Self, text: &str) -> Option<&str> {
+        None
+    }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default,PartialOrd,Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ByteOffset {
     pub offset: usize,
@@ -51,9 +58,12 @@ impl SourcePos for ByteOffset {
     fn update_str_maybe_newline(&mut self, s: &str) {
         self.update_str_no_newline(s);
     }
+    fn get_range(start: Self, end: Self, text: &str) -> Option<&str> {
+        text.get(start.offset..end.offset)
+    }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq,Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LSPLineCol {
     pub line: u32,
@@ -81,7 +91,74 @@ impl Debug for LSPLineCol {
         <Self as Display>::fmt(self, f)
     }
 }
+impl LSPLineCol {
+    // TODO use UTF16 instead of UTF8
+    pub fn get_range_offsets(start: Self, end: Self, text: &str) -> (usize, usize) {
+        let Self {
+            line: mut start_line,
+            col: startc,
+        } = start;
+        let Self {
+            line: mut end_line,
+            col: mut endc,
+        } = end;
+        if start_line == end_line {
+            endc -= startc;
+        }
+        end_line -= start_line;
+        let mut start = 0;
+        let mut rest = text;
+        while start_line > 0 {
+            if let Some(i) = rest.find(['\n', '\r']) {
+                start += i + 1;
+                if rest.as_bytes()[i] == b'\r' && rest.as_bytes().get(i + 1) == Some(&b'\n') {
+                    start += 1;
+                    rest = &rest[i + 2..];
+                } else {
+                    rest = &rest[i + 1..];
+                }
+                start_line -= 1;
+            } else {
+                start = text.len();
+                rest = "";
+                end_line = 0;
+                break;
+            }
+        }
 
+        let next = rest
+            .chars()
+            .take(startc as usize)
+            .map(char::len_utf8)
+            .sum::<usize>();
+        start += next;
+        rest = &rest[next..];
+
+        let mut end = start;
+        while end_line > 0 {
+            if let Some(i) = rest.find(['\n', '\r']) {
+                end += i + 1;
+                if rest.as_bytes()[i] == b'\r' && rest.as_bytes().get(i + 1) == Some(&b'\n') {
+                    end += 1;
+                    rest = &rest[i + 2..];
+                } else {
+                    rest = &rest[i + 1..];
+                }
+                end_line -= 1;
+            } else {
+                end = text.len();
+                rest = "";
+                break;
+            }
+        }
+        end += rest
+            .chars()
+            .take(endc as usize)
+            .map(char::len_utf8)
+            .sum::<usize>();
+        (start, end)
+    }
+}
 impl SourcePos for LSPLineCol {
     #[inline]
     #[allow(clippy::cast_possible_truncation)]
@@ -116,6 +193,16 @@ impl SourcePos for LSPLineCol {
         }
         self.col += last.chars().map(|c| char::len_utf16(c) as u32).sum::<u32>();
     }
+    fn get_range(start: Self, end: Self, text: &str) -> Option<&str> {
+        let (nstart, nend) = Self::get_range_offsets(start, end, text);
+        if nstart == nend {
+            Some("")
+        } else if nend < text.len() {
+            text.get(nstart..nend)
+        } else {
+            None
+        }
+    }
 }
 
 impl<A: SourcePos, B: SourcePos> SourcePos for (A, B) {
@@ -139,6 +226,9 @@ impl<A: SourcePos, B: SourcePos> SourcePos for (A, B) {
         self.0.update_str_maybe_newline(s);
         self.1.update_str_maybe_newline(s);
     }
+    fn get_range(start: Self, end: Self, text: &str) -> Option<&str> {
+        A::get_range(start.0, end.0, text)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -158,7 +248,7 @@ impl<P: SourcePos> Debug for SourceRange<P> {
         <Self as Display>::fmt(self, f)
     }
 }
-impl<P:SourcePos> SourceRange<P> {
+impl<P: SourcePos> SourceRange<P> {
     pub fn contains(&self, pos: P) -> bool {
         self.start <= pos && pos <= self.end
     }
@@ -167,6 +257,9 @@ impl<P:SourcePos> SourceRange<P> {
 #[test]
 fn test() {
     let str = "\n\n";
-    let len = str.split("\r\n").flat_map(|s| s.split(['\r', '\n'])).count();
+    let len = str
+        .split("\r\n")
+        .flat_map(|s| s.split(['\r', '\n']))
+        .count();
     assert_eq!(len, 3);
 }
