@@ -591,7 +591,7 @@ tex!(p => begin{n:name} => {
     match p.environment(begin,n.0,n.1) {
         EnvironmentResult::Success(e) => MacroResult::Success(e),
         EnvironmentResult::Other(v) => MacroResult::Other(v),
-        EnvironmentResult::Simple(e) => T::from_environment(e).map_or_else(
+        EnvironmentResult::Simple(e) => p.state.from_environment(e).map_or_else(
             || MacroResult::Other(Vec::new()),
             MacroResult::Success
         )

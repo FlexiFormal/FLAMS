@@ -5,6 +5,7 @@ pub mod capabilities;
 pub mod documents;
 mod implementation;
 pub mod state;
+pub mod verbalizations;
 #[cfg(feature = "ws")]
 pub mod ws;
 
@@ -26,6 +27,8 @@ use flams_utils::{
 };
 use ftml_uris::{ArchiveId, BaseUri, DocumentUri};
 use state::{DocData, LSPState, UrlOrFile};
+
+use crate::verbalizations::VerbalizationTrie;
 
 static GLOBAL_STATE: std::sync::OnceLock<LSPState> = std::sync::OnceLock::new();
 pub struct STDIOLSPServer {
@@ -347,14 +350,16 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 
 pub struct LSPStore<'a, const FULL: bool> {
     pub(crate) map: &'a mut HMap<UrlOrFile, DocData>,
+    verbalizations: VerbalizationTrie,
     cycles: Vec<DocumentUri>,
 }
 impl<'a, const FULL: bool> LSPStore<'a, FULL> {
     #[inline]
-    pub fn new(map: &'a mut HMap<UrlOrFile, DocData>) -> Self {
+    pub fn new(map: &'a mut HMap<UrlOrFile, DocData>, verbalizations: VerbalizationTrie) -> Self {
         Self {
             map,
             cycles: Vec::new(),
+            verbalizations,
         }
     }
 
@@ -369,7 +374,7 @@ impl<'a, const FULL: bool> LSPStore<'a, FULL> {
         if !FULL {
             self.load(p, uri)
         } else {
-            let mut nstore = LSPStore::<'_, false>::new(self.map);
+            let mut nstore = LSPStore::<'_, false>::new(self.map, self.verbalizations.clone());
             nstore.cycles = std::mem::take(&mut self.cycles);
             let r = nstore.load(p, uri);
             self.cycles = nstore.cycles;

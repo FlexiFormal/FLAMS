@@ -33,7 +33,7 @@ pub fn verbcmd<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserStat
 ) {
     if !args.is_empty() {
         parser.add_macro_rule(
-            args.as_cow(),
+            args.trim().as_cow(),
             Some(AnyMacro::Ptr(super::rules::lstinline as _)),
         );
     }
@@ -46,7 +46,7 @@ pub fn verbenv<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserStat
 ) {
     if !args.is_empty() {
         parser.add_environment_rule(
-            args.as_cow(),
+            args.trim().as_cow(),
             Some(AnyEnv::Ptr((
                 super::rules::general_listing_open as _,
                 super::rules::general_listing_close as _,
@@ -65,7 +65,7 @@ pub fn macro_dir<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserSt
             let (m, mut spec) = args.split_n(len);
             spec.trim_ws();
             parser.add_macro_rule(
-                m.as_cow(),
+                m.trim().as_cow(),
                 Some(AnyMacro::Str(DynMacro {
                     ptr: do_macro_dir as _,
                     arg: spec,
@@ -80,7 +80,6 @@ fn do_macro_dir<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserSta
     mut m: Macro<'a, Pos>,
     parser: &mut LaTeXParser<'a, Pos, T, State>,
 ) -> MacroResult<'a, Pos, T> {
-    let arg = arg.as_ref();
     do_spec(arg, &mut m, parser);
     MacroResult::Simple(m)
 }

@@ -19,7 +19,6 @@ use flams_utils::{
 use ftml_ontology::{
     domain::{declarations::symbols::Symbol, modules::Module},
     narrative::{
-        SharedDocumentElement,
         documents::Document,
         elements::{DocumentTerm, LogicalParagraph, VariableDeclaration},
     },
@@ -27,13 +26,14 @@ use ftml_ontology::{
     utils::RefTree,
 };
 use ftml_solver::results::{
-    CheckResult, ContentCheckResult, DocumentCheckResult, SymbolCheckResult, TypeCheckResult,
+    CheckResult, ContentCheckResult, DocumentCheckResult, SymbolCheckResult,
 };
-use ftml_uris::{DocumentElementUri, DocumentUri};
+use ftml_uris::DocumentUri;
 use smallvec::SmallVec;
 
 use crate::{
-    ClientExt, LSPStore, ProgressCallbackServer, annotations::to_diagnostic, documents::LSPDocument,
+    ClientExt, LSPStore, ProgressCallbackServer, annotations::to_diagnostic,
+    documents::LSPDocument, verbalizations::VerbalizationTrie,
 };
 
 #[derive(Clone)]
@@ -126,7 +126,7 @@ impl std::fmt::Display for UrlOrFile {
 pub struct LSPState {
     pub documents: triomphe::Arc<parking_lot::RwLock<HMap<UrlOrFile, DocData>>>,
     rustex: triomphe::Arc<std::sync::OnceLock<RusTeX>>,
-    //backend: TemporaryBackend,
+    pub(crate) verbalizations: VerbalizationTrie, //backend: TemporaryBackend,
 }
 impl LSPState {
     #[inline]
@@ -479,7 +479,7 @@ impl LSPState {
         mut and_then: impl FnMut(&std::sync::Arc<Path>, &STeXParseData),
     ) {
         let mut ndocs = HMap::default();
-        let mut state = LSPStore::<true>::new(&mut ndocs);
+        let mut state = LSPStore::<true>::new(&mut ndocs, self.verbalizations.clone());
         for (p, uri) in iter {
             if let Some(ret) = state.load(p.as_ref(), &uri) {
                 and_then(&p, &ret);
@@ -522,7 +522,7 @@ impl LSPState {
             return;
         }
         let mut docs = self.documents.write();
-        let mut state = LSPStore::<'_, FULL>::new(&mut *docs);
+        let mut state = LSPStore::<'_, FULL>::new(&mut docs, self.verbalizations.clone());
         if let Some(ret) = state.load(path, uri) {
             and_then(&ret);
             drop(state);

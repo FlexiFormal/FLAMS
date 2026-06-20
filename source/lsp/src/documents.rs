@@ -149,8 +149,8 @@ impl LSPDocument {
             .store(false, std::sync::atomic::Ordering::SeqCst);
         self.text.lock().delta(text, range);
     }
-    #[inline]
-    /*#[must_use]
+
+    /*#[inline]#[must_use]
     pub fn get_range(&self, range: Range) -> (usize, usize) {
         self.text.lock().get_range(range)
     }*/
@@ -177,7 +177,7 @@ impl LSPDocument {
         let path = self.data.path.as_ref()?;
 
         let mut docs = state.documents.write();
-        let mut store = LSPStore::<true>::new(&mut *docs);
+        let mut store = LSPStore::<true>::new(&mut *docs, state.verbalizations.clone());
         let data =
     //let (data,t) = measure(||
       flams_stex::quickparse::stex::quickparse(

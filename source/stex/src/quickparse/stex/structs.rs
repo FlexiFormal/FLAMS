@@ -494,6 +494,10 @@ pub trait STeXModuleStore {
         module: &ModuleReference,
         in_path: Option<&std::sync::Arc<Path>>,
     ) -> Result<STeXParseData, GetModuleError>;
+    #[inline]
+    fn add_text(&self, r: SourceRange<LSPLineCol>, text: &str) -> Option<STeXToken<LSPLineCol>> {
+        None
+    }
 }
 impl STeXModuleStore for () {
     const FULL: bool = false;
@@ -2023,9 +2027,13 @@ pub enum MacroArg<Pos: SourcePos> {
     Variable(UriName, SourceRange<Pos>, bool, u8),
 }
 
-impl<'a, MS: STeXModuleStore, Pos: SourcePos + 'a> ParserState<'a, Pos, STeXToken<Pos>>
+impl<'a, MS: STeXModuleStore, Pos: SourcePos> ParserState<'a, Pos, STeXToken<Pos>>
     for STeXParseState<'a, Pos, MS>
 {
     type Group = STeXGroup<'a, MS, Pos>;
     type MacroArg = MacroArg<Pos>;
+    #[inline]
+    fn from_text(&self, r: SourceRange<Pos>, text: &'a str) -> Option<STeXToken<Pos>> {
+        self.module_store.add_text(r, text)
+    }
 }

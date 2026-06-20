@@ -251,6 +251,34 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
 pub trait ParserState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>>: Sized {
     type Group: GroupState<'a, Pos, T, Self>;
     type MacroArg: Clone;
+    #[inline]
+    fn from_comment(&self, r: SourceRange<Pos>) -> Option<T> {
+        T::from_comment(r)
+    }
+    #[inline]
+    fn from_group(&self, r: SourceRange<Pos>, children: Vec<T>) -> Option<T> {
+        T::from_group(r, children)
+    }
+    #[inline]
+    fn from_math(&self, display: bool, r: SourceRange<Pos>, children: Vec<T>) -> Option<T> {
+        T::from_math(display, r, children)
+    }
+    #[inline]
+    fn from_control_sequence(&self, start: Pos, name: &'a str) -> Option<T> {
+        T::from_control_sequence(start, name)
+    }
+    #[inline]
+    fn from_text(&self, r: SourceRange<Pos>, text: &'a str) -> Option<T> {
+        T::from_text(r, text)
+    }
+    #[inline]
+    fn from_macro_application(&self, m: Macro<'a, Pos>) -> Option<T> {
+        T::from_macro_application(m)
+    }
+    #[inline]
+    fn from_environment(&self, e: Environment<'a, Pos, T>) -> Option<T> {
+        T::from_environment(e)
+    }
 }
 
 impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> ParserState<'a, Pos, T> for () {
@@ -505,11 +533,11 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
 
     fn default(&mut self, t: TeXToken<Pos, &'a str>) -> Option<T> {
         match t {
-            TeXToken::Comment(r) => T::from_comment(r),
-            TeXToken::Text { range, text } => T::from_text(range, text),
+            TeXToken::Comment(r) => self.state.from_comment(r),
+            TeXToken::Text { range, text } => self.state.from_text(range, text),
             TeXToken::BeginGroupChar(start) => {
                 let children = self.group();
-                T::from_group(
+                self.state.from_group(
                     SourceRange {
                         start,
                         end: self.tokenizer.reader.curr_pos(),
@@ -519,7 +547,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
             }
             TeXToken::BeginMath { display, start } => {
                 let children = self.math(display);
-                T::from_math(
+                self.state.from_math(
                     display,
                     SourceRange {
                         start,
@@ -589,14 +617,14 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
                 };
                 match r.call(r#macro, self) {
                     MacroResult::Success(t) => Some(t),
-                    MacroResult::Simple(m) => T::from_macro_application(m),
+                    MacroResult::Simple(m) => self.state.from_macro_application(m),
                     MacroResult::Other(v) => {
                         self.buf.extend(v.into_iter().rev());
                         self.buf.pop()
                     }
                 }
             }
-            None => T::from_control_sequence(start, name),
+            None => self.state.from_control_sequence(start, name),
         }
     }
 
@@ -685,15 +713,20 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     }
 
     fn directive(&mut self, s: &'a str) {
+        let name_args = s.trim().split_once(|c: char| c.is_ascii_whitespace());
+        /*
         let mut str = s.trim();
         if let Some(i) = str.find(|c: char| c.is_ascii_whitespace()) {
             str = &str[..i];
-        }
-        if let Some(d) = self.directives.get(str) {
-            let len = str.len();
-            let (_, mut args) = s.split_n(len);
-            args.trim_ws();
-            d(self, args);
+        } */
+        if let Some((d, args)) =
+            name_args.and_then(|(name, args)| self.directives.get(name).map(|d| (d, args)))
+        /*self.directives.get(str)*/
+        {
+            //let len = str.len();
+            //let (_, mut args) = s.split_n(len);
+            //args.trim_ws();
+            d(self, args.trim_start());
         } else {
             self.tokenizer.problem(
                 self.curr_pos(),

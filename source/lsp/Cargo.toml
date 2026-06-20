@@ -38,3 +38,6 @@ either_of = { workspace = true }
 axum = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 smallvec = { workspace = true }
+
+waken_snowball.workspace = true
+radix_trie.workspace = true
