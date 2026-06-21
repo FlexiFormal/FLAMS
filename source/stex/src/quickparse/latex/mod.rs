@@ -3,9 +3,9 @@ pub mod rules;
 
 use crate::quickparse::tokens::TeXToken;
 use flams_utils::{
-    parsing::{ParseSource, ParseStr, StringOrStr},
+    parsing::{SourceParser, StrParser, StringOrStr},
     prelude::*,
-    sourcerefs::{SourcePos, SourceRange},
+    sourcerefs::{StringPosition, StringRange},
     CondSerialize,
 };
 use ftml_uris::Language;
@@ -17,26 +17,26 @@ use tex_engine::utils::HMap;
 
 use super::stex::DiagnosticLevel;
 
-pub trait FromLaTeXToken<'a, Pos: SourcePos>: Sized + std::fmt::Debug {
-    fn from_comment(r: SourceRange<Pos>) -> Option<Self>;
-    fn from_group(r: SourceRange<Pos>, children: Vec<Self>) -> Option<Self>;
-    fn from_math(display: bool, r: SourceRange<Pos>, children: Vec<Self>) -> Option<Self>;
+pub trait FromLaTeXToken<'a, Pos: StringPosition>: Sized + std::fmt::Debug {
+    fn from_comment(r: StringRange<Pos>) -> Option<Self>;
+    fn from_group(r: StringRange<Pos>, children: Vec<Self>) -> Option<Self>;
+    fn from_math(display: bool, r: StringRange<Pos>, children: Vec<Self>) -> Option<Self>;
     fn from_control_sequence(start: Pos, name: &'a str) -> Option<Self>;
-    fn from_text(r: SourceRange<Pos>, text: &'a str) -> Option<Self>;
+    fn from_text(r: StringRange<Pos>, text: &'a str) -> Option<Self>;
     fn from_macro_application(m: Macro<'a, Pos>) -> Option<Self>;
     fn from_environment(e: Environment<'a, Pos, Self>) -> Option<Self>;
 }
 
 #[derive(Debug)]
-pub enum LaTeXToken<'a, Pos: SourcePos> {
-    Comment(SourceRange<Pos>),
+pub enum LaTeXToken<'a, Pos: StringPosition> {
+    Comment(StringRange<Pos>),
     Group {
-        range: SourceRange<Pos>,
+        range: StringRange<Pos>,
         children: Vec<Self>,
     },
     Math {
         display: bool,
-        range: SourceRange<Pos>,
+        range: StringRange<Pos>,
         children: Vec<Self>,
     },
     ControlSequence {
@@ -44,24 +44,24 @@ pub enum LaTeXToken<'a, Pos: SourcePos> {
         name: &'a str,
     },
     Text {
-        range: SourceRange<Pos>,
+        range: StringRange<Pos>,
         text: &'a str,
     },
     MacroApplication(Macro<'a, Pos>),
     Environment(Environment<'a, Pos, Self>),
 }
 
-impl<'a, Pos: SourcePos> FromLaTeXToken<'a, Pos> for LaTeXToken<'a, Pos> {
+impl<'a, Pos: StringPosition> FromLaTeXToken<'a, Pos> for LaTeXToken<'a, Pos> {
     #[inline]
-    fn from_comment(r: SourceRange<Pos>) -> Option<Self> {
+    fn from_comment(r: StringRange<Pos>) -> Option<Self> {
         Some(LaTeXToken::Comment(r))
     }
     #[inline]
-    fn from_group(r: SourceRange<Pos>, children: Vec<Self>) -> Option<Self> {
+    fn from_group(r: StringRange<Pos>, children: Vec<Self>) -> Option<Self> {
         Some(LaTeXToken::Group { range: r, children })
     }
     #[inline]
-    fn from_math(display: bool, r: SourceRange<Pos>, children: Vec<Self>) -> Option<Self> {
+    fn from_math(display: bool, r: StringRange<Pos>, children: Vec<Self>) -> Option<Self> {
         Some(LaTeXToken::Math {
             display,
             range: r,
@@ -73,7 +73,7 @@ impl<'a, Pos: SourcePos> FromLaTeXToken<'a, Pos> for LaTeXToken<'a, Pos> {
         Some(LaTeXToken::ControlSequence { start, name })
     }
     #[inline]
-    fn from_text(range: SourceRange<Pos>, text: &'a str) -> Option<Self> {
+    fn from_text(range: StringRange<Pos>, text: &'a str) -> Option<Self> {
         Some(LaTeXToken::Text { range, text })
     }
     #[inline]
@@ -87,48 +87,48 @@ impl<'a, Pos: SourcePos> FromLaTeXToken<'a, Pos> for LaTeXToken<'a, Pos> {
 }
 
 #[derive(Debug)]
-pub struct Macro<'a, Pos: SourcePos> {
-    pub token_range: SourceRange<Pos>,
-    pub range: SourceRange<Pos>,
+pub struct Macro<'a, Pos: StringPosition> {
+    pub token_range: StringRange<Pos>,
+    pub range: StringRange<Pos>,
     pub name: &'a str,
 }
 
 #[derive(Debug)]
-pub struct Environment<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
+pub struct Environment<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>> {
     pub begin: Macro<'a, Pos>,
     pub end: Option<Macro<'a, Pos>>,
     pub name: &'a str,
-    pub name_range: SourceRange<Pos>,
+    pub name_range: StringRange<Pos>,
     //pub args: Vec<T>,
     pub children: Vec<T>,
 }
 
-pub struct OptArg<'a, Pos: SourcePos> {
+pub struct OptArg<'a, Pos: StringPosition> {
     inner: Option<&'a str>,
-    range: SourceRange<Pos>,
+    range: StringRange<Pos>,
 }
 
-impl<'a, Pos: SourcePos> OptArg<'a, Pos> {
+impl<'a, Pos: StringPosition> OptArg<'a, Pos> {
     #[inline]
     pub const fn is_some(&self) -> bool {
         self.inner.is_some()
     }
-    pub fn into_name(self) -> Option<(&'a str, SourceRange<Pos>)> {
+    pub fn into_name(self) -> Option<(&'a str, StringRange<Pos>)> {
         self.inner.map(|i| (i, self.range))
     }
     pub fn as_keyvals(&'a self) -> VecMap<&'a str, OptVal<'a, Pos>> {
         let mut map = VecMap::default();
         if let Some(s) = &self.inner {
             let mut curr = self.range;
-            for e in s.split_noparens::<'{', '}'>(',') {
+            for e in s.split_noparens_bytes(b'{', b'}', b',') {
                 if let Some((a, b)) = e.split_once('=') {
-                    curr.end.update_str_maybe_newline(a);
+                    curr.end += Pos::len(a);
                     let key_range = curr;
-                    curr.end.update('=');
+                    curr.end.inc_by('=');
                     curr.start = curr.end;
-                    curr.end.update_str_maybe_newline(b);
+                    curr.end += Pos::len(b);
                     let val_range = curr;
-                    curr.end.update(',');
+                    curr.end.inc_by(',');
                     curr.start = curr.end;
                     let a = a.trim();
                     map.insert(
@@ -141,9 +141,9 @@ impl<'a, Pos: SourcePos> OptArg<'a, Pos> {
                         },
                     );
                 } else {
-                    curr.end.update_str_maybe_newline(e);
+                    curr.end += Pos::len(e);
                     let key_range = curr;
-                    curr.end.update(',');
+                    curr.end.inc_by(',');
                     curr.start = curr.end;
                     map.insert(
                         e.trim(),
@@ -161,27 +161,32 @@ impl<'a, Pos: SourcePos> OptArg<'a, Pos> {
     }
 }
 
-pub struct OptVal<'a, Pos: SourcePos> {
+pub struct OptVal<'a, Pos: StringPosition> {
     pub key: &'a str,
-    pub key_range: SourceRange<Pos>,
+    pub key_range: StringRange<Pos>,
     pub val: &'a str,
-    pub val_range: SourceRange<Pos>,
+    pub val_range: StringRange<Pos>,
 }
 
 #[derive(Debug)]
-pub struct OptMapVal<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
-    pub key_range: SourceRange<Pos>,
-    pub val_range: SourceRange<Pos>,
+pub struct OptMapVal<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>> {
+    pub key_range: StringRange<Pos>,
+    pub val_range: StringRange<Pos>,
     pub val: Vec<T>,
     pub str: &'a str,
 }
 
 #[derive(Debug)]
-pub struct OptMap<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
+pub struct OptMap<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>> {
     pub inner: VecMap<&'a str, OptMapVal<'a, Pos, T>>,
 }
 
-pub struct Group<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> {
+pub struct Group<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+> {
     previous_letters: Option<String>,
     #[allow(clippy::type_complexity)]
     pub macro_rule_changes: HMap<Cow<'a, str>, Option<AnyMacro<'a, Pos, T, State>>>,
@@ -189,7 +194,12 @@ pub struct Group<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserSt
     pub environment_rule_changes: HMap<Cow<'a, str>, Option<AnyEnv<'a, Pos, T, State>>>,
 }
 
-pub trait GroupState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+pub trait GroupState<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>
 {
     fn new(parent: Option<&mut Self>) -> Self;
     fn inner(&self) -> &Group<'a, Pos, T, State>;
@@ -200,7 +210,7 @@ pub trait GroupState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: Pars
     fn letter_change(&mut self, old: &str);
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
     GroupState<'a, Pos, T, State> for Group<'a, Pos, T, State>
 {
     fn new(_: Option<&mut Self>) -> Self {
@@ -248,19 +258,19 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     }
 }
 
-pub trait ParserState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>>: Sized {
+pub trait ParserState<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>>: Sized {
     type Group: GroupState<'a, Pos, T, Self>;
     type MacroArg: Clone;
     #[inline]
-    fn from_comment(&self, r: SourceRange<Pos>) -> Option<T> {
+    fn from_comment(&self, r: StringRange<Pos>) -> Option<T> {
         T::from_comment(r)
     }
     #[inline]
-    fn from_group(&self, r: SourceRange<Pos>, children: Vec<T>) -> Option<T> {
+    fn from_group(&self, r: StringRange<Pos>, children: Vec<T>) -> Option<T> {
         T::from_group(r, children)
     }
     #[inline]
-    fn from_math(&self, display: bool, r: SourceRange<Pos>, children: Vec<T>) -> Option<T> {
+    fn from_math(&self, display: bool, r: StringRange<Pos>, children: Vec<T>) -> Option<T> {
         T::from_math(display, r, children)
     }
     #[inline]
@@ -268,7 +278,7 @@ pub trait ParserState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>>: Sized {
         T::from_control_sequence(start, name)
     }
     #[inline]
-    fn from_text(&self, r: SourceRange<Pos>, text: &'a str) -> Option<T> {
+    fn from_text(&self, r: StringRange<Pos>, text: &'a str) -> Option<T> {
         T::from_text(r, text)
     }
     #[inline]
@@ -281,19 +291,19 @@ pub trait ParserState<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>>: Sized {
     }
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> ParserState<'a, Pos, T> for () {
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>> ParserState<'a, Pos, T> for () {
     type Group = Group<'a, Pos, T, Self>;
     type MacroArg = ();
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
     Group<'a, Pos, T, State>
 {
 }
 
 pub struct LaTeXParser<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 > {
@@ -335,7 +345,7 @@ macro_rules! default_envs {
 pub struct Groups<
     'a,
     'b,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 > {
@@ -345,7 +355,7 @@ pub struct Groups<
     pub tokenizer: &'b mut super::tokenizer::TeXTokenizer<'a, Pos>,
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
     Groups<'a, '_, Pos, T, State>
 {
     pub fn add_macro_rule(
@@ -382,13 +392,13 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
 /*
 */
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
     LaTeXParser<'a, Pos, T, State>
 {
     pub fn new(
         input: &'a str,
         state: State,
-        err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
+        err: &'a mut dyn FnMut(String, StringRange<Pos>, DiagnosticLevel),
     ) -> Self {
         Self::with_rules(
             input,
@@ -402,7 +412,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     pub fn with_rules(
         input: &'a str,
         state: State,
-        err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
+        err: &'a mut dyn FnMut(String, StringRange<Pos>, DiagnosticLevel),
         rules: impl Iterator<Item = (&'a str, MacroRule<'a, Pos, T, State>)>,
         envs: impl Iterator<Item = (&'a str, EnvironmentRule<'a, Pos, T, State>)>,
     ) -> Self {
@@ -538,7 +548,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
             TeXToken::BeginGroupChar(start) => {
                 let children = self.group();
                 self.state.from_group(
-                    SourceRange {
+                    StringRange {
                         start,
                         end: self.tokenizer.reader.curr_pos(),
                     },
@@ -549,7 +559,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
                 let children = self.math(display);
                 self.state.from_math(
                     display,
-                    SourceRange {
+                    StringRange {
                         start,
                         end: self.tokenizer.reader.curr_pos(),
                     },
@@ -604,11 +614,11 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
         match self.macro_rules.get(name).cloned() {
             Some(r) => {
                 let r#macro = Macro {
-                    range: SourceRange {
+                    range: StringRange {
                         start,
                         end: self.curr_pos(),
                     },
-                    token_range: SourceRange {
+                    token_range: StringRange {
                         start,
                         end: self.curr_pos(),
                     },
@@ -632,7 +642,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
         &mut self,
         begin: Macro<'a, Pos>,
         name: &'a str,
-        name_range: SourceRange<Pos>,
+        name_range: StringRange<Pos>,
     ) -> EnvironmentResult<'a, Pos, T> {
         let mut env = Environment {
             begin,
@@ -657,11 +667,11 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
             {
                 if *endname == "end" {
                     let mut end_macro = Macro {
-                        range: SourceRange {
+                        range: StringRange {
                             start: *start,
                             end: self.curr_pos(),
                         },
-                        token_range: SourceRange {
+                        token_range: StringRange {
                             start: *start,
                             end: self.curr_pos(),
                         },
@@ -790,7 +800,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
             }
         }
         if self.tokenizer.reader.starts_with('}') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
         } else {
             self.tokenizer
                 .problem(start, "Unclosed group", DiagnosticLevel::Error);
@@ -798,14 +808,14 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
         v
     }
 
-    pub fn get_argument(&mut self, in_macro: &mut Macro<'a, Pos>) -> (SourceRange<Pos>, Vec<T>) {
+    pub fn get_argument(&mut self, in_macro: &mut Macro<'a, Pos>) -> (StringRange<Pos>, Vec<T>) {
         self.tokenizer.reader.trim_start();
         let start = self.curr_pos();
         if self.tokenizer.reader.starts_with('{') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             let v = self.group_i();
             in_macro.range.end = self.curr_pos();
-            let range = SourceRange {
+            let range = StringRange {
                 start,
                 end: self.curr_pos(),
             };
@@ -813,7 +823,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
         } else if self.tokenizer.reader.starts_with('\\') {
             let t = self.tokenizer.next().unwrap_or_else(|| unreachable!());
             in_macro.range.end = self.curr_pos();
-            let range = SourceRange {
+            let range = StringRange {
                 start,
                 end: self.curr_pos(),
             };
@@ -826,7 +836,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
                     .problem(start, "Expected argument", DiagnosticLevel::Error);
             }
             in_macro.range.end = self.curr_pos();
-            let range = SourceRange {
+            let range = StringRange {
                 start,
                 end: self.curr_pos(),
             };
@@ -837,7 +847,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     pub fn read_argument(&mut self, in_macro: &mut Macro<'a, Pos>) {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             let _v = self.group_i();
         } else if self.tokenizer.reader.starts_with('\\') {
             let _t = self.tokenizer.next().unwrap_or_else(|| unreachable!());
@@ -850,25 +860,25 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     pub fn read_opt_str(&mut self, in_macro: &mut Macro<'a, Pos>) -> OptArg<'a, Pos> {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('[') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             self.tokenizer.reader.trim_start();
             let tstart = self.curr_pos();
             let s = self
                 .tokenizer
                 .reader
-                .read_until_with_brackets::<'{', '}'>(|c| c == ']');
-            let range = SourceRange {
+                .read_until_byte_with_brackets(b']', b'{', b'}');
+            let range = StringRange {
                 start: tstart,
                 end: self.curr_pos(),
             };
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             in_macro.range.end = self.curr_pos();
             OptArg {
                 inner: Some(s),
                 range,
             }
         } else {
-            let range = SourceRange {
+            let range = StringRange {
                 start: self.curr_pos(),
                 end: self.curr_pos(),
             };
@@ -876,21 +886,21 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
         }
     }
 
-    pub fn read_name(&mut self, r#in: &mut Macro<'a, Pos>) -> Option<(&'a str, SourceRange<Pos>)> {
+    pub fn read_name(&mut self, r#in: &mut Macro<'a, Pos>) -> Option<(&'a str, StringRange<Pos>)> {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             self.tokenizer.reader.trim_start();
             let tstart = self.curr_pos();
             let s = self
                 .tokenizer
                 .reader
-                .read_until_with_brackets::<'{', '}'>(|c| c == '}');
-            let range = SourceRange {
+                .read_until_byte_with_brackets(b'}', b'{', b'}');
+            let range = StringRange {
                 start: tstart,
                 end: self.curr_pos(),
             };
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             r#in.range.end = self.curr_pos();
             Some((s, range))
         } else {
@@ -898,19 +908,19 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
         }
     }
 
-    pub fn read_names(&mut self, r#in: &mut Macro<'a, Pos>) -> Vec<(&'a str, SourceRange<Pos>)> {
+    pub fn read_names(&mut self, r#in: &mut Macro<'a, Pos>) -> Vec<(&'a str, StringRange<Pos>)> {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
             let mut ret = Vec::new();
             loop {
-                self.tokenizer.reader.pop_head();
+                self.tokenizer.reader.next_char();
                 self.tokenizer.reader.trim_start();
                 let tstart = self.curr_pos();
                 let s = self
                     .tokenizer
                     .reader
-                    .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == ',');
-                let range = SourceRange {
+                    .read_until_with_brackets('{', '}', |c| c == '}' || c == ',');
+                let range = StringRange {
                     start: tstart,
                     end: self.curr_pos(),
                 };
@@ -919,7 +929,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
                     break;
                 }
             }
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
 
             r#in.range.end = self.curr_pos();
             ret
@@ -931,13 +941,13 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     pub fn skip_opt(&mut self, in_macro: &mut Macro<'a, Pos>) -> bool {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('[') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             self.tokenizer.reader.trim_start();
             let _s = self
                 .tokenizer
                 .reader
-                .read_until_with_brackets::<'{', '}'>(|c| c == ']');
-            self.tokenizer.reader.pop_head();
+                .read_until_byte_with_brackets(b']', b'{', b'}');
+            self.tokenizer.reader.next_char();
             in_macro.range.end = self.curr_pos();
             true
         } else {
@@ -947,13 +957,13 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     pub fn skip_arg(&mut self, in_macro: &mut Macro<'a, Pos>) {
         self.tokenizer.reader.trim_start();
         if self.tokenizer.reader.starts_with('{') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             self.tokenizer.reader.trim_start();
             let _s = self
                 .tokenizer
                 .reader
-                .read_until_with_brackets::<'{', '}'>(|c| c == '}');
-            self.tokenizer.reader.pop_head();
+                .read_until_byte_with_brackets(b'}', b'{', b'}');
+            self.tokenizer.reader.next_char();
         } else {
             let _ = self.tokenizer.next();
         }
@@ -971,7 +981,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
 
 pub trait KeyValValues<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos> + CondSerialize,
     State: ParserState<'a, Pos, T>,
 >: Sized + Default
@@ -982,7 +992,7 @@ pub trait KeyValValues<
             return None;
         }
         let mut ret = Self::default();
-        parser.tokenizer.reader.pop_head();
+        parser.tokenizer.reader.next_char();
         loop {
             parser.skip_comments();
             let key_start = parser.curr_pos();
@@ -993,13 +1003,13 @@ pub trait KeyValValues<
                 .trim();
             let key_end = parser.curr_pos();
             parser.skip_comments();
-            match parser.tokenizer.reader.pop_head() {
+            match parser.tokenizer.reader.next_char() {
                 Some(']') => {
                     if !key.is_empty() {
                         let kvp = KeyValParser {
                             start: parser.curr_pos(),
                             key,
-                            key_range: SourceRange {
+                            key_range: StringRange {
                                 start: key_start,
                                 end: key_end,
                             },
@@ -1015,7 +1025,7 @@ pub trait KeyValValues<
                     let kvp = KeyValParser {
                         start: parser.curr_pos(),
                         key,
-                        key_range: SourceRange {
+                        key_range: StringRange {
                             start: key_start,
                             end: key_end,
                         },
@@ -1032,7 +1042,7 @@ pub trait KeyValValues<
                     let kvp = KeyValParser {
                         start,
                         key,
-                        key_range: SourceRange {
+                        key_range: StringRange {
                             start: key_start,
                             end: key_end,
                         },
@@ -1042,7 +1052,7 @@ pub trait KeyValValues<
                     };
                     ret.next(kvp, key);
                     parser.skip_comments();
-                    match parser.tokenizer.reader.pop_head() {
+                    match parser.tokenizer.reader.next_char() {
                         Some(',') => (),
                         Some(']') => break,
                         c => {
@@ -1072,7 +1082,7 @@ pub trait KeyValValues<
 
 pub trait KeyValKind<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos> + CondSerialize,
     State: ParserState<'a, Pos, T>,
 >: Sized
@@ -1081,7 +1091,7 @@ pub trait KeyValKind<
 }
 impl<
         'a,
-        Pos: SourcePos,
+        Pos: StringPosition,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
         K: KeyValKind<'a, Pos, T, State>,
@@ -1102,15 +1112,15 @@ impl<
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
-pub struct ParsedKeyValue<Pos: SourcePos, T: CondSerialize> {
-    pub key_range: SourceRange<Pos>,
-    pub val_range: SourceRange<Pos>,
+pub struct ParsedKeyValue<Pos: StringPosition, T: CondSerialize> {
+    pub key_range: StringRange<Pos>,
+    pub val_range: StringRange<Pos>,
     pub val: T,
 }
 
 pub trait KeyValParsable<
     'a,
-    Pos: SourcePos + 'a,
+    Pos: StringPosition + 'a,
     T: FromLaTeXToken<'a, Pos> + CondSerialize,
     State: ParserState<'a, Pos, T>,
 >: Sized + 'a + CondSerialize
@@ -1121,7 +1131,7 @@ pub trait KeyValParsable<
     ) -> Option<ParsedKeyValue<Pos, Self>> {
         Self::parse_key_val_inner(parser).map(|val| ParsedKeyValue {
             key_range: parser.key_range,
-            val_range: SourceRange {
+            val_range: StringRange {
                 start: parser.start,
                 end: parser.value_end,
             },
@@ -1132,7 +1142,7 @@ pub trait KeyValParsable<
 
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > KeyValParsable<'a, Pos, T, State> for ()
@@ -1146,7 +1156,7 @@ impl<
 
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > KeyValParsable<'a, Pos, T, State> for Language
@@ -1166,7 +1176,7 @@ impl<
 }
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > KeyValParsable<'a, Pos, T, State> for bool
@@ -1186,7 +1196,7 @@ impl<
 }
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > KeyValParsable<'a, Pos, T, State> for f32
@@ -1216,7 +1226,7 @@ impl<
 
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > KeyValParsable<'a, Pos, T, State> for Box<str>
@@ -1230,7 +1240,7 @@ impl<
 }
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize + 'a,
         State: ParserState<'a, Pos, T>,
     > KeyValParsable<'a, Pos, T, State> for Vec<T>
@@ -1242,7 +1252,7 @@ impl<
 }
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > KeyValParsable<'a, Pos, T, State> for u8
@@ -1255,12 +1265,12 @@ impl<
 pub struct KeyValParser<
     'a,
     'b,
-    Pos: SourcePos + 'a,
+    Pos: StringPosition + 'a,
     T: FromLaTeXToken<'a, Pos> + CondSerialize,
     State: ParserState<'a, Pos, T>,
 > {
     pub start: Pos,
-    pub key_range: SourceRange<Pos>,
+    pub key_range: StringRange<Pos>,
     pub key: &'a str,
     value_end: Pos,
     pub has_value: bool,
@@ -1268,7 +1278,7 @@ pub struct KeyValParser<
 }
 impl<
         'a,
-        Pos: SourcePos + 'a,
+        Pos: StringPosition + 'a,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > KeyValParser<'a, '_, Pos, T, State>
@@ -1284,7 +1294,7 @@ impl<
     pub const fn to_key_value<Tp: CondSerialize>(&self, val: Tp) -> ParsedKeyValue<Pos, Tp> {
         ParsedKeyValue {
             key_range: self.key_range,
-            val_range: SourceRange {
+            val_range: StringRange {
                 start: self.start,
                 end: self.value_end,
             },
@@ -1310,7 +1320,7 @@ impl<
             .parser
             .tokenizer
             .reader
-            .read_until_with_brackets::<'{', '}'>(|c| c == ']' || c == ',');
+            .read_until_with_brackets('{', '}', |c| c == ']' || c == ',');
         self.value_end = self.parser.curr_pos();
         Some(str)
     }
@@ -1321,7 +1331,7 @@ impl<
         self.parser.skip_comments();
         let had_braces = self.parser.tokenizer.reader.starts_with('{');
         if had_braces {
-            self.parser.tokenizer.reader.pop_head();
+            self.parser.tokenizer.reader.next_char();
             self.parser.skip_comments();
         }
         let get_next = if had_braces {
@@ -1329,14 +1339,14 @@ impl<
                 s.parser
                     .tokenizer
                     .reader
-                    .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%')
+                    .read_until_with_brackets('{', '}', |c| c == '}' || c == '%')
             }
         } else {
             |s: &mut Self| {
                 s.parser
                     .tokenizer
                     .reader
-                    .read_until_with_brackets::<'{', '}'>(|c| c == ']' || c == ',' || c == '%')
+                    .read_until_with_brackets('{', '}', |c| c == ']' || c == ',' || c == '%')
             }
         };
         let value_start = self.parser.curr_pos();
@@ -1358,7 +1368,7 @@ impl<
             }
             self.value_end = end_pos;
             if had_braces {
-                self.parser.tokenizer.reader.pop_head();
+                self.parser.tokenizer.reader.next_char();
             }
             if nexts.iter().all(|s| s.trim().is_empty()) {
                 Some(normalize_ws(first_str))
@@ -1368,13 +1378,13 @@ impl<
         } else {
             self.value_end = self.parser.curr_pos();
             if had_braces {
-                self.parser.tokenizer.reader.pop_head();
+                self.parser.tokenizer.reader.next_char();
             }
             Some(normalize_ws(first_str))
         }
     }
 
-    pub fn read_value_strs_normalized(&mut self) -> Vec<(Cow<'a, str>, SourceRange<Pos>)> {
+    pub fn read_value_strs_normalized(&mut self) -> Vec<(Cow<'a, str>, StringRange<Pos>)> {
         if !self.has_value {
             return Vec::new();
         }
@@ -1383,14 +1393,14 @@ impl<
             return self.read_value_str_normalized().map_or_else(Vec::new, |s| {
                 vec![(
                     s,
-                    SourceRange {
+                    StringRange {
                         start: self.start,
                         end: self.value_end,
                     },
                 )]
             });
         }
-        self.parser.tokenizer.reader.pop_head();
+        self.parser.tokenizer.reader.next_char();
         self.parser.skip_comments();
         let mut ret = Vec::new();
         loop {
@@ -1399,17 +1409,19 @@ impl<
                 .parser
                 .tokenizer
                 .reader
-                .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%' || c == ',');
+                .read_until_with_brackets('{', '}', |c| c == '}' || c == '%' || c == ',');
             if self.parser.tokenizer.reader.starts_with('%') {
                 let mut nexts = SmallVec::<_, 2>::new();
                 let mut end_pos = self.parser.curr_pos();
                 loop {
                     self.parser.skip_comments();
-                    let next = self
-                        .parser
-                        .tokenizer
-                        .reader
-                        .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%' || c == ',');
+                    let next =
+                        self.parser
+                            .tokenizer
+                            .reader
+                            .read_until_with_brackets('{', '}', |c| {
+                                c == '}' || c == '%' || c == ','
+                            });
                     end_pos = self.parser.curr_pos();
                     nexts.push(next);
                     if self.parser.tokenizer.reader.starts_with('%') {
@@ -1417,7 +1429,7 @@ impl<
                     }
                     break;
                 }
-                let range = SourceRange {
+                let range = StringRange {
                     start: value_start,
                     end: end_pos,
                 };
@@ -1430,14 +1442,14 @@ impl<
                     .parser
                     .tokenizer
                     .reader
-                    .pop_head()
+                    .next_char()
                     .is_some_and(|c| c == ',')
                 {
                     continue;
                 }
                 break;
             }
-            let range = SourceRange {
+            let range = StringRange {
                 start: value_start,
                 end: self.parser.curr_pos(),
             };
@@ -1446,7 +1458,7 @@ impl<
                 .parser
                 .tokenizer
                 .reader
-                .pop_head()
+                .next_char()
                 .is_some_and(|c| c == ',')
             {
                 continue;
@@ -1464,13 +1476,13 @@ impl<
 
 impl<
         'a,
-        Pos: SourcePos,
+        Pos: StringPosition,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > LaTeXParser<'a, Pos, T, State>
 {
     pub fn reparse(&mut self, s: &'a str, at: Pos) -> Vec<T> {
-        let mut new = ParseStr::new(s);
+        let mut new = StrParser::new(s);
         new.pos = at;
         let mut old = std::mem::replace(&mut self.tokenizer.reader, new);
         let mut val = Vec::new();
@@ -1494,7 +1506,7 @@ impl<
     pub fn read_opt_map(&mut self, in_macro: &mut Macro<'a, Pos>) -> OptMap<'a, Pos, T> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('[') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             let mut map = VecMap::new();
             loop {
                 self.skip_comments();
@@ -1506,17 +1518,17 @@ impl<
                     .trim();
                 let key_end = self.curr_pos();
                 self.skip_comments();
-                match self.tokenizer.reader.pop_head() {
+                match self.tokenizer.reader.next_char() {
                     Some(']') => {
                         if !key.is_empty() {
                             map.insert(
                                 key,
                                 OptMapVal {
-                                    key_range: SourceRange {
+                                    key_range: StringRange {
                                         start: key_start,
                                         end: key_end,
                                     },
-                                    val_range: SourceRange {
+                                    val_range: StringRange {
                                         start: self.curr_pos(),
                                         end: self.curr_pos(),
                                     },
@@ -1531,11 +1543,11 @@ impl<
                         map.insert(
                             key,
                             OptMapVal {
-                                key_range: SourceRange {
+                                key_range: StringRange {
                                     start: key_start,
                                     end: key_end,
                                 },
-                                val_range: SourceRange {
+                                val_range: StringRange {
                                     start: self.curr_pos(),
                                     end: self.curr_pos(),
                                 },
@@ -1551,16 +1563,16 @@ impl<
                         let str = self
                             .tokenizer
                             .reader
-                            .read_until_with_brackets::<'{', '}'>(|c| c == ']' || c == ',');
+                            .read_until_with_brackets('{', '}', |c| c == ']' || c == ',');
                         let val = self.reparse(str, value_start);
                         map.insert(
                             key,
                             OptMapVal {
-                                key_range: SourceRange {
+                                key_range: StringRange {
                                     start: key_start,
                                     end: key_end,
                                 },
-                                val_range: SourceRange {
+                                val_range: StringRange {
                                     start: value_start,
                                     end: self.curr_pos(),
                                 },
@@ -1593,16 +1605,16 @@ impl<
     pub fn read_opt_name_normalized(
         &mut self,
         r#in: &mut Macro<'a, Pos>,
-    ) -> Option<(Cow<'a, str>, SourceRange<Pos>)> {
+    ) -> Option<(Cow<'a, str>, StringRange<Pos>)> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('[') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             self.tokenizer.reader.trim_start();
             let tstart = self.curr_pos();
             let first_str = self
                 .tokenizer
                 .reader
-                .read_until_with_brackets::<'{', '}'>(|c| c == ']' || c == '%');
+                .read_until_with_brackets('{', '}', |c| c == ']' || c == '%');
             let first_end = self.curr_pos();
             if self.tokenizer.reader.starts_with('%') {
                 let mut nexts = SmallVec::<_, 2>::new();
@@ -1612,16 +1624,16 @@ impl<
                     let next = self
                         .tokenizer
                         .reader
-                        .read_until_with_brackets::<'{', '}'>(|c| c == ']' || c == '%');
+                        .read_until_with_brackets('{', '}', |c| c == ']' || c == '%');
                     end_pos = self.curr_pos();
                     nexts.push(next);
                     if self.tokenizer.reader.starts_with('%') {
                         continue;
                     }
-                    self.tokenizer.reader.pop_head();
+                    self.tokenizer.reader.next_char();
                     break;
                 }
-                let range = SourceRange {
+                let range = StringRange {
                     start: tstart,
                     end: end_pos,
                 };
@@ -1632,8 +1644,8 @@ impl<
                     Some((Cow::Owned(join_strs(first_str, nexts)), range))
                 }
             } else {
-                self.tokenizer.reader.pop_head();
-                let range = SourceRange {
+                self.tokenizer.reader.next_char();
+                let range = StringRange {
                     start: tstart,
                     end: first_end,
                 };
@@ -1648,16 +1660,16 @@ impl<
     pub fn read_name_normalized(
         &mut self,
         r#in: &mut Macro<'a, Pos>,
-    ) -> Option<(Cow<'a, str>, SourceRange<Pos>)> {
+    ) -> Option<(Cow<'a, str>, StringRange<Pos>)> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('{') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             self.skip_comments();
             let tstart = self.curr_pos();
             let first_str = self
                 .tokenizer
                 .reader
-                .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%');
+                .read_until_with_brackets('{', '}', |c| c == '}' || c == '%');
             let first_end = self.curr_pos();
             if self.tokenizer.reader.starts_with('%') {
                 let mut nexts = SmallVec::<_, 2>::new();
@@ -1667,16 +1679,16 @@ impl<
                     let next = self
                         .tokenizer
                         .reader
-                        .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == '%');
+                        .read_until_with_brackets('{', '}', |c| c == '}' || c == '%');
                     end_pos = self.curr_pos();
                     nexts.push(next);
                     if self.tokenizer.reader.starts_with('%') {
                         continue;
                     }
-                    self.tokenizer.reader.pop_head();
+                    self.tokenizer.reader.next_char();
                     break;
                 }
-                let range = SourceRange {
+                let range = StringRange {
                     start: tstart,
                     end: end_pos,
                 };
@@ -1687,8 +1699,8 @@ impl<
                     Some((Cow::Owned(join_strs(first_str, nexts)), range))
                 }
             } else {
-                self.tokenizer.reader.pop_head();
-                let range = SourceRange {
+                self.tokenizer.reader.next_char();
+                let range = StringRange {
                     start: tstart,
                     end: first_end,
                 };
@@ -1700,7 +1712,7 @@ impl<
             let c = self.tokenizer.reader.read_n(1);
             Some((
                 Cow::Borrowed(c),
-                SourceRange {
+                StringRange {
                     start,
                     end: self.curr_pos(),
                 },
@@ -1711,10 +1723,10 @@ impl<
     pub fn read_names_normalized(
         &mut self,
         r#in: &mut Macro<'a, Pos>,
-    ) -> Vec<(Cow<'a, str>, SourceRange<Pos>)> {
+    ) -> Vec<(Cow<'a, str>, StringRange<Pos>)> {
         self.skip_comments();
         if self.tokenizer.reader.starts_with('{') {
-            self.tokenizer.reader.pop_head();
+            self.tokenizer.reader.next_char();
             let mut ret = Vec::new();
             loop {
                 self.skip_comments();
@@ -1722,19 +1734,19 @@ impl<
                 let first_str = self
                     .tokenizer
                     .reader
-                    .read_until_with_brackets::<'{', '}'>(|c| c == '}' || c == ',' || c == '%');
+                    .read_until_with_brackets('{', '}', |c| c == '}' || c == ',' || c == '%');
                 let first_end = self.curr_pos();
                 if self.tokenizer.reader.starts_with('%') {
                     let mut nexts = SmallVec::<_, 2>::new();
                     let mut end_pos = self.curr_pos();
                     loop {
                         self.skip_comments();
-                        let next =
-                            self.tokenizer
-                                .reader
-                                .read_until_with_brackets::<'{', '}'>(|c| {
-                                    c == '}' || c == '%' || c == ','
-                                });
+                        let next = self
+                            .tokenizer
+                            .reader
+                            .read_until_with_brackets('{', '}', |c| {
+                                c == '}' || c == '%' || c == ','
+                            });
                         end_pos = self.curr_pos();
                         nexts.push(next);
                         if self.tokenizer.reader.starts_with('%') {
@@ -1742,7 +1754,7 @@ impl<
                         }
                         break;
                     }
-                    let range = SourceRange {
+                    let range = StringRange {
                         start: tstart,
                         end: end_pos,
                     };
@@ -1751,17 +1763,17 @@ impl<
                     } else {
                         ret.push((Cow::Owned(join_strs(first_str, nexts)), range));
                     }
-                    if self.tokenizer.reader.pop_head().is_some_and(|c| c == ',') {
+                    if self.tokenizer.reader.next_char().is_some_and(|c| c == ',') {
                         continue;
                     }
                     break;
                 }
-                let range = SourceRange {
+                let range = StringRange {
                     start: tstart,
                     end: first_end,
                 };
                 ret.push((normalize_ws(first_str), range));
-                if self.tokenizer.reader.pop_head().is_some_and(|c| c == ',') {
+                if self.tokenizer.reader.next_char().is_some_and(|c| c == ',') {
                     continue;
                 }
                 break;
@@ -1800,7 +1812,7 @@ fn join_strs(first: &str, rest: SmallVec<&str, 2>) -> String {
 
 impl<
         'a,
-        Pos: SourcePos,
+        Pos: StringPosition,
         T: FromLaTeXToken<'a, Pos> + CondSerialize,
         State: ParserState<'a, Pos, T>,
     > Iterator for LaTeXParser<'a, Pos, T, State>

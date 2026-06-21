@@ -20,7 +20,7 @@ use flams_utils::{
     id_counters::IdCounter,
     impossible,
     prelude::HMap,
-    sourcerefs::{LSPLineCol, SourcePos, SourceRange},
+    sourcerefs::{LSPLineCol, StringPosition, StringRange},
     vecmap::{VecMap, VecSet},
 };
 use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
@@ -32,284 +32,289 @@ use smallvec::SmallVec;
 use std::{
     borrow::Cow,
     collections::hash_map::Entry,
+    fmt::Write,
     path::{Path, PathBuf},
 };
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, serde::Serialize)]
-pub enum STeXToken<Pos: SourcePos> {
+pub enum STeXToken<Pos: StringPosition> {
     ImportModule {
-        archive_range: Option<SourceRange<Pos>>,
-        path_range: SourceRange<Pos>,
+        archive_range: Option<StringRange<Pos>>,
+        path_range: StringRange<Pos>,
         module: ModuleReference,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     UseModule {
-        archive_range: Option<SourceRange<Pos>>,
-        path_range: SourceRange<Pos>,
+        archive_range: Option<StringRange<Pos>>,
+        path_range: StringRange<Pos>,
         module: ModuleReference,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     UseStructure {
         structure: SymbolReference<Pos>,
-        structure_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        structure_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     SetMetatheory {
-        archive_range: Option<SourceRange<Pos>>,
-        path_range: SourceRange<Pos>,
+        archive_range: Option<StringRange<Pos>>,
+        path_range: StringRange<Pos>,
         module: ModuleReference,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     Inputref {
-        archive: Option<(ArchiveId, SourceRange<Pos>)>,
-        filepath: (std::sync::Arc<str>, SourceRange<Pos>),
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        archive: Option<(ArchiveId, StringRange<Pos>)>,
+        filepath: (std::sync::Arc<str>, StringRange<Pos>),
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     IncludeProblem {
-        filepath: (std::sync::Arc<str>, SourceRange<Pos>),
-        archive: Option<(ArchiveId, SourceRange<Pos>)>,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        filepath: (std::sync::Arc<str>, StringRange<Pos>),
+        archive: Option<(ArchiveId, StringRange<Pos>)>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
         args: Vec<IncludeProblemArg<Pos>>,
     },
     MHGraphics {
-        filepath: (std::sync::Arc<str>, SourceRange<Pos>),
-        archive: Option<(ArchiveId, SourceRange<Pos>)>,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        filepath: (std::sync::Arc<str>, StringRange<Pos>),
+        archive: Option<(ArchiveId, StringRange<Pos>)>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
         args: Vec<MHGraphicsArg<Pos>>,
     },
     MHInput {
-        archive: Option<(ArchiveId, SourceRange<Pos>)>,
-        filepath: (std::sync::Arc<str>, SourceRange<Pos>),
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        archive: Option<(ArchiveId, StringRange<Pos>)>,
+        filepath: (std::sync::Arc<str>, StringRange<Pos>),
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     Module {
         uri: ModuleUri,
         rules: ModuleRules<Pos>,
-        name_range: SourceRange<Pos>,
+        name_range: StringRange<Pos>,
         opts: Vec<SModuleArg<Pos, Self>>,
         sig: Option<Language>,
         meta_theory: Option<ModuleReference>,
-        full_range: SourceRange<Pos>,
-        children: Vec<STeXToken<Pos>>,
-        smodule_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        children: Vec<Self>,
+        smodule_range: StringRange<Pos>,
     },
     MathStructure {
         uri: SymbolReference<Pos>,
-        extends: Vec<(SymbolReference<Pos>, SourceRange<Pos>)>,
-        name_range: SourceRange<Pos>,
+        extends: Vec<(SymbolReference<Pos>, StringRange<Pos>)>,
+        name_range: StringRange<Pos>,
         opts: Vec<MathStructureArg<Pos, Self>>,
-        full_range: SourceRange<Pos>,
-        children: Vec<STeXToken<Pos>>,
-        mathstructure_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        children: Vec<Self>,
+        mathstructure_range: StringRange<Pos>,
     },
     ConservativeExt {
         uri: SymbolReference<Pos>,
-        ext_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
-        children: Vec<STeXToken<Pos>>,
-        extstructure_range: SourceRange<Pos>,
+        ext_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
+        children: Vec<Self>,
+        extstructure_range: StringRange<Pos>,
     },
     MorphismEnv {
-        full_range: SourceRange<Pos>,
-        env_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        env_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
         uri: SymbolUri,
         star: bool,
         domain: ModuleOrStruct<Pos>,
-        domain_range: SourceRange<Pos>,
+        domain_range: StringRange<Pos>,
         kind: MorphismKind,
-        children: Vec<STeXToken<Pos>>,
+        children: Vec<Self>,
     },
     InlineMorphism {
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
         uri: SymbolUri,
         star: bool,
         domain: ModuleOrStruct<Pos>,
-        domain_range: SourceRange<Pos>,
+        domain_range: StringRange<Pos>,
         kind: MorphismKind,
         assignments: Vec<InlineMorphAssign<Pos, Self>>,
     },
     Paragraph {
         kind: ParagraphKind,
-        full_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
         symbol: Option<SymbolReference<Pos>>,
-        parsed_args: Vec<ParagraphArg<Pos, STeXToken<Pos>>>,
-        children: Vec<STeXToken<Pos>>,
+        parsed_args: Vec<ParagraphArg<Pos, Self>>,
+        children: Vec<Self>,
     },
     Problem {
         sub: bool,
-        full_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
-        parsed_args: Vec<ProblemArg<Pos, STeXToken<Pos>>>,
-        children: Vec<STeXToken<Pos>>,
+        full_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
+        parsed_args: Vec<ProblemArg<Pos, Self>>,
+        children: Vec<Self>,
     },
     InlineParagraph {
         kind: ParagraphKind,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
         symbol: Option<SymbolReference<Pos>>,
-        parsed_args: Vec<ParagraphArg<Pos, STeXToken<Pos>>>,
-        children: Vec<STeXToken<Pos>>,
-        children_range: SourceRange<Pos>,
+        parsed_args: Vec<ParagraphArg<Pos, Self>>,
+        children: Vec<Self>,
+        children_range: StringRange<Pos>,
     },
     #[allow(clippy::type_complexity)]
     Symdecl {
         uri: SymbolReference<Pos>,
-        main_name_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
+        main_name_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
         parsed_args: Vec<SymdeclArg<Pos, Self>>,
-        token_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     #[allow(clippy::type_complexity)]
     TextSymdecl {
         uri: SymbolReference<Pos>,
-        main_name_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
+        main_name_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
         parsed_args: Vec<TextSymdeclArg<Pos, Self>>,
-        token_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     Notation {
         uri: SmallVec<SymbolReference<Pos>, 1>,
-        token_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
         notation_args: Vec<NotationArg<Pos, Self>>,
-        full_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
     },
     RenameDecl {
         uri: SymbolReference<Pos>,
-        token_range: SourceRange<Pos>,
-        orig_range: SourceRange<Pos>,
-        name_range: Option<SourceRange<Pos>>,
-        macroname_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
+        orig_range: StringRange<Pos>,
+        name_range: Option<StringRange<Pos>>,
+        macroname_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
     },
     Assign {
         uri: SymbolReference<Pos>,
-        token_range: SourceRange<Pos>,
-        orig_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
+        orig_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
     },
     #[allow(clippy::type_complexity)]
     Symdef {
         uri: SymbolReference<Pos>,
-        main_name_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
+        main_name_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
         parsed_args: Vec<SymdefArg<Pos, Self>>,
-        token_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     #[allow(clippy::type_complexity)]
     Vardef {
         name: UriName,
-        main_name_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
+        main_name_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
         parsed_args: Vec<VardefArg<Pos, Self>>,
-        token_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     #[allow(clippy::type_complexity)]
     Varseq {
         name: UriName,
-        main_name_range: SourceRange<Pos>,
-        full_range: SourceRange<Pos>,
+        main_name_range: StringRange<Pos>,
+        full_range: StringRange<Pos>,
         parsed_args: Vec<VardefArg<Pos, Self>>,
-        token_range: SourceRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     SemanticMacro {
         uri: SymbolReference<Pos>,
         argnum: u8,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     VariableMacro {
         name: UriName,
-        orig: SourceRange<Pos>,
+        orig: StringRange<Pos>,
         argnum: u8,
         sequence: bool,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
     },
     SymName {
         uri: SmallVec<SymbolReference<Pos>, 1>,
         is_def: bool,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
         mode: SymnameMode<Pos>,
     },
     Symuse {
         uri: SmallVec<SymbolReference<Pos>, 1>,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
     },
     Definiens {
         uri: SmallVec<SymbolReference<Pos>, 1>,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        name_range: Option<SourceRange<Pos>>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        name_range: Option<StringRange<Pos>>,
     },
     Defnotation {
-        full_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
     },
     Svar {
         name: UriName,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        name_range: Option<SourceRange<Pos>>,
-        arg_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        name_range: Option<StringRange<Pos>>,
+        arg_range: StringRange<Pos>,
     },
     Symref {
         uri: SmallVec<SymbolReference<Pos>, 1>,
         is_def: bool,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        name_range: SourceRange<Pos>,
-        text: (SourceRange<Pos>, Vec<STeXToken<Pos>>),
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        name_range: StringRange<Pos>,
+        text: (StringRange<Pos>, Vec<Self>),
     },
     Precondition {
         uri: SmallVec<SymbolReference<Pos>, 1>,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        dim_range: SourceRange<Pos>,
-        symbol_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        dim_range: StringRange<Pos>,
+        symbol_range: StringRange<Pos>,
         dim: CognitiveDimension,
     },
     Objective {
         uri: SmallVec<SymbolReference<Pos>, 1>,
-        full_range: SourceRange<Pos>,
-        token_range: SourceRange<Pos>,
-        dim_range: SourceRange<Pos>,
-        symbol_range: SourceRange<Pos>,
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        dim_range: StringRange<Pos>,
+        symbol_range: StringRange<Pos>,
         dim: CognitiveDimension,
     },
-    Vec(Vec<STeXToken<Pos>>),
+    SnifySuggestion {
+        range: StringRange<Pos>,
+        symbols: SmallVec<SymbolUri, 1>,
+    },
+    Vec(Vec<Self>),
 }
 
-impl<'a, P: SourcePos> FromLaTeXToken<'a, P> for STeXToken<P> {
-    fn from_comment(_: SourceRange<P>) -> Option<Self> {
+impl<'a, P: StringPosition> FromLaTeXToken<'a, P> for STeXToken<P> {
+    fn from_comment(_: StringRange<P>) -> Option<Self> {
         None
     }
-    fn from_group(_: SourceRange<P>, v: Vec<Self>) -> Option<Self> {
+    fn from_group(_: StringRange<P>, v: Vec<Self>) -> Option<Self> {
         Some(Self::Vec(v))
     }
-    fn from_math(_: bool, _: SourceRange<P>, v: Vec<Self>) -> Option<Self> {
+    fn from_math(_: bool, _: StringRange<P>, v: Vec<Self>) -> Option<Self> {
         Some(Self::Vec(v))
     }
     fn from_control_sequence(_: P, _: &'a str) -> Option<Self> {
         None
     }
-    fn from_text(_: SourceRange<P>, _: &'a str) -> Option<Self> {
+    fn from_text(_: StringRange<P>, _: &'a str) -> Option<Self> {
         None
     }
     fn from_macro_application(_: Macro<'a, P>) -> Option<Self> {
@@ -327,29 +332,105 @@ pub enum MorphismKind {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub enum SymnameMode<Pos: SourcePos> {
+pub enum SymnameMode<Pos: StringPosition> {
     Cap {
-        post: Option<(SourceRange<Pos>, SourceRange<Pos>, String)>,
+        post: Option<(StringRange<Pos>, StringRange<Pos>, String)>,
     },
     PostS {
-        pre: Option<(SourceRange<Pos>, SourceRange<Pos>, String)>,
+        pre: Option<(StringRange<Pos>, StringRange<Pos>, String)>,
     },
     CapAndPostS,
     PrePost {
-        pre: Option<(SourceRange<Pos>, SourceRange<Pos>, String)>,
-        post: Option<(SourceRange<Pos>, SourceRange<Pos>, String)>,
+        pre: Option<(StringRange<Pos>, StringRange<Pos>, String)>,
+        post: Option<(StringRange<Pos>, StringRange<Pos>, String)>,
     },
+}
+impl<Pos: StringPosition> SymnameMode<Pos> {
+    pub fn apply<'s>(&'s self, s: &'s str) -> impl std::fmt::Display + 's {
+        struct Disp<'s, Pos: StringPosition> {
+            sn: &'s SymnameMode<Pos>,
+            txt: &'s str,
+        }
+        impl<Pos: StringPosition> std::fmt::Display for Disp<'_, Pos> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self.sn {
+                    SymnameMode::Cap {
+                        post: Some((_, _, post)),
+                    } => {
+                        if self.txt.is_empty() {
+                            return post.fmt(f);
+                        }
+                        // SAFETY: !self.txt.is_empty()
+                        let cap = unsafe { self.txt.chars().next().unwrap_unchecked() };
+                        for c in cap.to_uppercase() {
+                            f.write_char(c)?;
+                        }
+                        write!(f, "{}{post}", &self.txt[cap.len_utf8()..])
+                    }
+                    SymnameMode::Cap { .. } => {
+                        if self.txt.is_empty() {
+                            return Ok(());
+                        }
+                        // SAFETY: !self.txt.is_empty()
+                        let cap = unsafe { self.txt.chars().next().unwrap_unchecked() };
+                        for c in cap.to_uppercase() {
+                            f.write_char(c)?;
+                        }
+                        self.txt[cap.len_utf8()..].fmt(f)
+                    }
+                    SymnameMode::PostS {
+                        pre: Some((_, _, pre)),
+                    } => write!(f, "{pre}{}s", self.txt),
+                    SymnameMode::PostS { .. } => write!(f, "{}s", self.txt),
+                    SymnameMode::CapAndPostS => {
+                        if self.txt.is_empty() {
+                            return Ok(());
+                        }
+                        // SAFETY: !self.txt.is_empty()
+                        let cap = unsafe { self.txt.chars().next().unwrap_unchecked() };
+                        for c in cap.to_uppercase() {
+                            f.write_char(c)?;
+                        }
+                        write!(f, "{}s", &self.txt[cap.len_utf8()..])
+                    }
+                    SymnameMode::PrePost {
+                        pre: Some((_, _, pre)),
+                        post: Some((_, _, post)),
+                    } => write!(f, "{pre}{}{post}", self.txt),
+                    SymnameMode::PrePost {
+                        pre: Some((_, _, pre)),
+                        ..
+                    } => write!(f, "{pre}{}", self.txt),
+                    SymnameMode::PrePost {
+                        post: Some((_, _, post)),
+                        ..
+                    } => write!(f, "{}{post}", self.txt),
+                    _ => self.txt.fmt(f),
+                }
+            }
+        }
+        Disp { sn: self, txt: s }
+    }
+    pub fn make_cow<'s>(&self, s: &'s str) -> Cow<'s, str> {
+        match self {
+            Self::PrePost {
+                pre: None,
+                post: None,
+            } => Cow::Borrowed(s),
+            _ => Cow::Owned(self.apply(s).to_string()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct InlineMorphAssign<Pos: SourcePos, T> {
+pub struct InlineMorphAssign<Pos: StringPosition, T> {
     pub symbol: SymbolReference<Pos>,
-    pub symbol_range: SourceRange<Pos>,
+    pub symbol_range: StringRange<Pos>,
     pub first: Option<(Pos, InlineMorphAssKind<Pos, T>)>,
     pub second: Option<(Pos, InlineMorphAssKind<Pos, T>)>,
 }
 
-impl<Pos: SourcePos, T1> InlineMorphAssign<Pos, T1> {
+impl<Pos: StringPosition, T1> InlineMorphAssign<Pos, T1> {
     pub fn into_other<T2>(
         self,
         mut cont: impl FnMut(Vec<T1>) -> Vec<T2>,
@@ -385,16 +466,16 @@ impl<Pos: SourcePos, T1> InlineMorphAssign<Pos, T1> {
     }
 }
 
-pub struct InlineMorphAssIter<'a, Pos: SourcePos, T>(
+pub struct InlineMorphAssIter<'a, Pos: StringPosition, T>(
     std::slice::Iter<'a, InlineMorphAssign<Pos, T>>,
     Option<std::slice::Iter<'a, T>>,
 );
-impl<'a, Pos: SourcePos, T> InlineMorphAssIter<'a, Pos, T> {
+impl<'a, Pos: StringPosition, T> InlineMorphAssIter<'a, Pos, T> {
     pub fn new(v: &'a [InlineMorphAssign<Pos, T>]) -> Self {
         Self(v.iter(), None)
     }
 }
-impl<'a, Pos: SourcePos, T> Iterator for InlineMorphAssIter<'a, Pos, T> {
+impl<'a, Pos: StringPosition, T> Iterator for InlineMorphAssIter<'a, Pos, T> {
     type Item = &'a T;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -419,20 +500,20 @@ impl<'a, Pos: SourcePos, T> Iterator for InlineMorphAssIter<'a, Pos, T> {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub enum InlineMorphAssKind<Pos: SourcePos, T> {
+pub enum InlineMorphAssKind<Pos: StringPosition, T> {
     Df(Vec<T>),
     Rename(
-        Option<(UriName, SourceRange<Pos>)>,
+        Option<(UriName, StringRange<Pos>)>,
         Box<str>,
-        SourceRange<Pos>,
+        StringRange<Pos>,
     ),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct SymbolReference<Pos: SourcePos> {
+pub struct SymbolReference<Pos: StringPosition> {
     pub uri: SymbolUri,
     pub filepath: Option<std::sync::Arc<Path>>,
-    pub range: SourceRange<Pos>,
+    pub range: StringRange<Pos>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -495,8 +576,21 @@ pub trait STeXModuleStore {
         in_path: Option<&std::sync::Arc<Path>>,
     ) -> Result<STeXParseData, GetModuleError>;
     #[inline]
-    fn add_text(&self, r: SourceRange<LSPLineCol>, text: &str) -> Option<STeXToken<LSPLineCol>> {
+    fn add_text<Pos: StringPosition>(
+        &self,
+        r: StringRange<Pos>,
+        text: &str,
+        language: Language,
+    ) -> Option<STeXToken<Pos>> {
         None
+    }
+    fn add_verbalization<Pos: StringPosition>(
+        &mut self,
+        s: &str,
+        mode: &SymnameMode<Pos>,
+        symbol: &SymbolUri,
+        language: Language,
+    ) {
     }
 }
 impl STeXModuleStore for () {
@@ -512,7 +606,7 @@ impl STeXModuleStore for () {
 }
 
 #[derive(Debug, serde::Serialize)]
-pub enum ModuleRule<Pos: SourcePos> {
+pub enum ModuleRule<Pos: StringPosition> {
     Import(ModuleReference),
     Symbol(SymbolRule<Pos>),
     Structure {
@@ -525,14 +619,14 @@ pub enum ModuleRule<Pos: SourcePos> {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct SymbolRule<Pos: SourcePos> {
+pub struct SymbolRule<Pos: StringPosition> {
     pub uri: SymbolReference<Pos>,
     pub macroname: Option<std::sync::Arc<str>>,
     pub has_tp: bool,
     pub has_df: bool,
     pub argnum: u8,
 }
-impl<Pos: SourcePos> SymbolRule<Pos> {
+impl<Pos: StringPosition> SymbolRule<Pos> {
     fn as_rule<'a, MS: STeXModuleStore>(
         &self,
     ) -> Option<(
@@ -550,8 +644,8 @@ impl<Pos: SourcePos> SymbolRule<Pos> {
         })
     }
 }
-impl<Pos: SourcePos> Eq for SymbolReference<Pos> {}
-impl<Pos: SourcePos> PartialEq for SymbolReference<Pos> {
+impl<Pos: StringPosition> Eq for SymbolReference<Pos> {}
+impl<Pos: StringPosition> PartialEq for SymbolReference<Pos> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.uri == other.uri
@@ -559,10 +653,10 @@ impl<Pos: SourcePos> PartialEq for SymbolReference<Pos> {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct ModuleRules<Pos: SourcePos> {
+pub struct ModuleRules<Pos: StringPosition> {
     pub rules: std::sync::Arc<[ModuleRule<Pos>]>,
 }
-impl<Pos: SourcePos> Default for ModuleRules<Pos> {
+impl<Pos: StringPosition> Default for ModuleRules<Pos> {
     #[inline]
     fn default() -> Self {
         Self {
@@ -571,7 +665,7 @@ impl<Pos: SourcePos> Default for ModuleRules<Pos> {
     }
 }
 
-pub struct STeXParseState<'a, Pos: SourcePos, MS: STeXModuleStore> {
+pub struct STeXParseState<'a, Pos: StringPosition, MS: STeXModuleStore> {
     pub(super) archive: Option<&'a ArchiveUri>,
     pub(super) in_path: Option<std::sync::Arc<Path>>,
     pub(super) doc_uri: &'a DocumentUri,
@@ -579,7 +673,7 @@ pub struct STeXParseState<'a, Pos: SourcePos, MS: STeXModuleStore> {
     pub(super) language: Language,
     pub(super) dependencies: Vec<std::sync::Arc<Path>>,
     pub(super) modules: SmallVec<(ModuleUri, ModuleRules<Pos>), 1>,
-    module_store: MS,
+    pub(super) module_store: MS,
     name_counter: IdCounter,
 }
 impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
@@ -707,7 +801,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         &mut self,
         module: &ModuleReference,
         groups: Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
-        range: SourceRange<LSPLineCol>,
+        range: StringRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
         assert!(!groups_ls.is_empty());
@@ -877,7 +971,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         symbol: &SymbolReference<LSPLineCol>,
         srules: &ModuleRules<LSPLineCol>,
         groups: &mut Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
-        range: SourceRange<LSPLineCol>,
+        range: StringRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
         let Some(i) = groups_ls.iter().enumerate().rev().find_map(|(i, g)| {
@@ -931,7 +1025,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         symbol: &SymbolReference<LSPLineCol>,
         srules: &ModuleRules<LSPLineCol>,
         groups: &mut Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
-        _range: SourceRange<LSPLineCol>,
+        _range: StringRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
         let i = groups_ls.len() - 1;
@@ -957,7 +1051,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
         &mut self,
         module: &ModuleReference,
         groups: Groups<'a, '_, LSPLineCol, STeXToken<LSPLineCol>, Self>,
-        range: SourceRange<LSPLineCol>,
+        range: StringRange<LSPLineCol>,
     ) {
         let groups_ls = &mut **groups.groups;
         let Some(i) = groups_ls.iter().enumerate().rev().find_map(|(i, g)| {
@@ -1496,7 +1590,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
     }
 }
 
-impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
+impl<'a, Pos: StringPosition, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
     #[inline]
     #[must_use]
     pub fn new(
@@ -1524,7 +1618,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         &mut self,
         groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         rules: ModuleRules<Pos>,
-        range: SourceRange<Pos>,
+        range: StringRange<Pos>,
     ) {
         for g in groups.groups.iter_mut().rev() {
             match &mut g.kind {
@@ -1587,7 +1681,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         name: UriName,
         macroname: Option<std::sync::Arc<str>>,
-        range: SourceRange<Pos>,
+        range: StringRange<Pos>,
     ) -> Option<SymbolReference<Pos>> {
         for g in groups.groups.iter_mut().rev() {
             match &mut g.kind {
@@ -1612,6 +1706,15 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
                             _ => (),
                         }
                     }
+                    self.module_store.add_verbalization::<LSPLineCol>(
+                        uri.uri.name.as_ref(),
+                        &SymnameMode::PrePost {
+                            pre: None,
+                            post: None,
+                        },
+                        &uri.uri,
+                        Language::English,
+                    );
                     let rule = SymbolRule {
                         uri,
                         macroname,
@@ -1659,7 +1762,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         &mut self,
         groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         orig: &SymbolReference<Pos>,
-        range: SourceRange<Pos>,
+        range: StringRange<Pos>,
     ) -> Option<ModuleUri> {
         for g in groups.groups.iter_mut().rev() {
             match &mut g.kind {
@@ -1692,7 +1795,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
         groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
         name: UriName,
         macroname: Option<std::sync::Arc<str>>,
-        range: SourceRange<Pos>,
+        range: StringRange<Pos>,
         has_tp: bool,
         has_df: bool,
         argnum: u8,
@@ -1722,6 +1825,15 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
                             _ => (),
                         }
                     }
+                    self.module_store.add_verbalization::<LSPLineCol>(
+                        uri.uri.name.as_ref(),
+                        &SymnameMode::PrePost {
+                            pre: None,
+                            post: None,
+                        },
+                        &uri.uri,
+                        Language::English,
+                    );
                     let rule = SymbolRule {
                         uri,
                         macroname,
@@ -1919,7 +2031,7 @@ impl<'a, Pos: SourcePos, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
 
 #[derive(Default)]
 #[allow(clippy::large_enum_variant)]
-pub enum GroupKind<Pos: SourcePos> {
+pub enum GroupKind<Pos: StringPosition> {
     #[default]
     None,
     Problem,
@@ -1941,28 +2053,28 @@ pub enum GroupKind<Pos: SourcePos> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct MorphismSpec<Pos: SourcePos> {
+pub struct MorphismSpec<Pos: StringPosition> {
     pub macroname: Option<Box<str>>,
     pub new_name: Option<UriName>,
-    pub is_assigned_at: Option<SourceRange<Pos>>,
-    pub decl_range: SourceRange<Pos>,
+    pub is_assigned_at: Option<StringRange<Pos>>,
+    pub decl_range: StringRange<Pos>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub enum ModuleOrStruct<Pos: SourcePos> {
+pub enum ModuleOrStruct<Pos: StringPosition> {
     Module(ModuleReference),
     Struct(SymbolReference<Pos>),
 }
 
 #[non_exhaustive]
-pub struct STeXGroup<'a, MS: STeXModuleStore, Pos: SourcePos + 'a> {
+pub struct STeXGroup<'a, MS: STeXModuleStore, Pos: StringPosition + 'a> {
     pub inner: Group<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>,
     pub kind: GroupKind<Pos>,
     pub semantic_rules: Vec<SemanticRule<Pos>>,
     pub uses: VecSet<ModuleUri>,
 }
 
-pub enum SemanticRule<Pos: SourcePos> {
+pub enum SemanticRule<Pos: StringPosition> {
     Symbol(SymbolRule<Pos>),
     Module(ModuleReference, ModuleRules<Pos>),
     Structure {
@@ -1974,7 +2086,7 @@ pub enum SemanticRule<Pos: SourcePos> {
     StructureImport(SymbolReference<Pos>, ModuleRules<Pos>),
 }
 
-impl<'a, MS: STeXModuleStore, Pos: SourcePos>
+impl<'a, MS: STeXModuleStore, Pos: StringPosition>
     GroupState<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>> for STeXGroup<'a, MS, Pos>
 {
     #[inline]
@@ -2022,18 +2134,18 @@ impl<'a, MS: STeXModuleStore, Pos: SourcePos>
 }
 
 #[derive(Clone, Debug)]
-pub enum MacroArg<Pos: SourcePos> {
+pub enum MacroArg<Pos: StringPosition> {
     Symbol(SymbolReference<Pos>, u8),
-    Variable(UriName, SourceRange<Pos>, bool, u8),
+    Variable(UriName, StringRange<Pos>, bool, u8),
 }
 
-impl<'a, MS: STeXModuleStore, Pos: SourcePos> ParserState<'a, Pos, STeXToken<Pos>>
+impl<'a, MS: STeXModuleStore, Pos: StringPosition> ParserState<'a, Pos, STeXToken<Pos>>
     for STeXParseState<'a, Pos, MS>
 {
     type Group = STeXGroup<'a, MS, Pos>;
     type MacroArg = MacroArg<Pos>;
     #[inline]
-    fn from_text(&self, r: SourceRange<Pos>, text: &'a str) -> Option<STeXToken<Pos>> {
-        self.module_store.add_text(r, text)
+    fn from_text(&self, r: StringRange<Pos>, text: &'a str) -> Option<STeXToken<Pos>> {
+        self.module_store.add_text(r, text, self.language)
     }
 }

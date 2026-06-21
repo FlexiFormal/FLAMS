@@ -7,7 +7,9 @@ use flams_math_archives::{
     utils::path_ext::PathExt,
 };
 use flams_stex::quickparse::stex::{STeXParseData, STeXParseDataI};
-use flams_utils::sourcerefs::{LSPLineCol, SourcePos};
+use flams_utils::sourcerefs::{
+    ByteOffset, LSPLineCol, PositionConverter, StringPosition, StringRange,
+};
 use ftml_uris::{ArchiveUri, DocumentUri};
 
 use crate::{
@@ -177,7 +179,8 @@ impl LSPDocument {
         let path = self.data.path.as_ref()?;
 
         let mut docs = state.documents.write();
-        let mut store = LSPStore::<true>::new(&mut *docs, state.verbalizations.clone());
+        let mut vlock = state.verbalizations.lock();
+        let mut store = LSPStore::<true>::new(&mut docs, &mut vlock);
         let data =
     //let (data,t) = measure(||
       flams_stex::quickparse::stex::quickparse(
@@ -312,17 +315,13 @@ impl LSPText {
 
     fn get_range(&self, range: Range) -> (usize, usize) {
         let Range { start, end } = range;
-        LSPLineCol::get_range_offsets(
-            LSPLineCol {
-                line: start.line,
-                col: start.character,
+        let off = PositionConverter::<LSPLineCol, ByteOffset>::new(self.text.as_str()).next_range(
+            StringRange {
+                start: LSPLineCol::new(start.line, start.character),
+                end: LSPLineCol::new(end.line, end.character),
             },
-            LSPLineCol {
-                line: end.line,
-                col: end.character,
-            },
-            self.text.as_str(),
-        )
+        );
+        (off.start.0, off.end.0)
     }
 
     #[allow(clippy::cast_possible_truncation)]

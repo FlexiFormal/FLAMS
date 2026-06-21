@@ -23,7 +23,7 @@ use flams_stex::quickparse::{
 };
 use flams_utils::{
     prelude::TreeChildIter,
-    sourcerefs::{LSPLineCol, SourceRange},
+    sourcerefs::{LSPLineCol, StringRange},
 };
 use ftml_ontology::narrative::elements::paragraphs::ParagraphKind;
 use ftml_uris::{
@@ -41,7 +41,7 @@ trait AnnotExt: Sized {
         in_doc: &UrlOrFile,
         pos: LSPLineCol,
     ) -> Option<lsp::GotoDefinitionResponse>;
-    fn semantic_tokens(&self, cont: &mut impl FnMut(SourceRange<LSPLineCol>, u32));
+    fn semantic_tokens(&self, cont: &mut impl FnMut(StringRange<LSPLineCol>, u32));
     fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
     fn code_action(&self, pos: LSPLineCol, url: &lsp::Url) -> lsp::CodeActionResponse;
@@ -384,7 +384,8 @@ impl AnnotExt for STeXAnnot {
             | Self::RenameDecl { .. }
             | Self::Precondition { .. }
             | Self::Objective { .. }
-            | Self::Assign { .. } => None,
+            | Self::Assign { .. }
+            | Self::SnifySuggestion { .. } => None,
         }
     }
 
@@ -489,11 +490,12 @@ impl AnnotExt for STeXAnnot {
             | Self::Precondition { .. }
             | Self::Objective { .. }
             | Self::Assign { .. }
-            | Self::InlineMorphism { .. } => (),
+            | Self::InlineMorphism { .. }
+            | Self::SnifySuggestion { .. } => (),
         }
     }
 
-    fn semantic_tokens(&self, cont: &mut impl FnMut(SourceRange<LSPLineCol>, u32)) {
+    fn semantic_tokens(&self, cont: &mut impl FnMut(StringRange<LSPLineCol>, u32)) {
         match self {
             Self::Module {
                 name_range,
@@ -651,11 +653,8 @@ impl AnnotExt for STeXAnnot {
                 {
                     cont(*symbol_range, STeXSemanticTokens::SYMBOL);
                     if let Some((e, knd)) = first {
-                        let end = LSPLineCol {
-                            line: e.line,
-                            col: e.col + 1,
-                        };
-                        let range = SourceRange { start: *e, end };
+                        let end = LSPLineCol::new(e.line, e.col + 1);
+                        let range = StringRange { start: *e, end };
                         cont(range, STeXSemanticTokens::KEYWORD);
                         match knd {
                             InlineMorphAssKind::Df(v) => {
@@ -672,11 +671,8 @@ impl AnnotExt for STeXAnnot {
                         }
                     }
                     if let Some((e, knd)) = second {
-                        let end = LSPLineCol {
-                            line: e.line,
-                            col: e.col + 1,
-                        };
-                        let range = SourceRange { start: *e, end };
+                        let end = LSPLineCol::new(e.line, e.col + 1);
+                        let range = StringRange { start: *e, end };
                         cont(range, STeXSemanticTokens::KEYWORD);
                         match knd {
                             InlineMorphAssKind::Df(v) => {
@@ -1204,6 +1200,9 @@ impl AnnotExt for STeXAnnot {
                     cont(*r, STeXSemanticTokens::SYMBOL);
                 }
             }
+            Self::SnifySuggestion { range, .. } => {
+                cont(*range, STeXSemanticTokens::KEYWORD);
+            }
         }
     }
 
@@ -1248,7 +1247,7 @@ impl AnnotExt for STeXAnnot {
                 name_range: Some(range),
                 ..
             } => Some(lsp::Hover {
-                range: Some(SourceRange::into_range(*range)),
+                range: Some(StringRange::into_range(*range)),
                 contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                     kind: lsp::MarkupKind::Markdown,
                     value: uriname("", &uri.first().unwrap_or_else(|| unreachable!()).uri),
@@ -1284,7 +1283,7 @@ impl AnnotExt for STeXAnnot {
                 orig_range: range,
                 ..
             } => Some(lsp::Hover {
-                range: Some(SourceRange::into_range(*range)),
+                range: Some(StringRange::into_range(*range)),
                 contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                     kind: lsp::MarkupKind::Markdown,
                     value: uriname("", &uri.uri),
@@ -1302,7 +1301,7 @@ impl AnnotExt for STeXAnnot {
                         _ => return None,
                     };
                     return Some(lsp::Hover {
-                        range: Some(SourceRange::into_range(*domain_range)),
+                        range: Some(StringRange::into_range(*domain_range)),
                         contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                             kind: lsp::MarkupKind::Markdown,
                             value: uriname("", uri),
@@ -1312,7 +1311,7 @@ impl AnnotExt for STeXAnnot {
                 for a in assignments {
                     if a.symbol_range.contains(pos) {
                         return Some(lsp::Hover {
-                            range: Some(SourceRange::into_range(a.symbol_range)),
+                            range: Some(StringRange::into_range(a.symbol_range)),
                             contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                                 kind: lsp::MarkupKind::Markdown,
                                 value: uriname("", &a.symbol.uri),
@@ -1328,7 +1327,7 @@ impl AnnotExt for STeXAnnot {
             | Self::VariableMacro {
                 name, full_range, ..
             } => Some(lsp::Hover {
-                range: Some(SourceRange::into_range(*full_range)),
+                range: Some(StringRange::into_range(*full_range)),
                 contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                     kind: lsp::MarkupKind::Markdown,
                     value: uriname("Variable ", name),
@@ -1337,7 +1336,7 @@ impl AnnotExt for STeXAnnot {
             Self::MathStructure { extends, .. } => extends.iter().find_map(|(s, r)| {
                 if r.contains(pos) {
                     Some(lsp::Hover {
-                        range: Some(SourceRange::into_range(*r)),
+                        range: Some(StringRange::into_range(*r)),
                         contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                             kind: lsp::MarkupKind::Markdown,
                             value: uriname("", &s.uri),
@@ -1354,7 +1353,7 @@ impl AnnotExt for STeXAnnot {
                             for (s, r) in val {
                                 if r.contains(pos) {
                                     return Some(lsp::Hover {
-                                        range: Some(SourceRange::into_range(*r)),
+                                        range: Some(StringRange::into_range(*r)),
                                         contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                                             kind: lsp::MarkupKind::Markdown,
                                             value: uriname(
@@ -1387,7 +1386,7 @@ impl AnnotExt for STeXAnnot {
                     return None;
                 };
                 Some(lsp::Hover {
-                    range: Some(SourceRange::into_range(*full_range)),
+                    range: Some(StringRange::into_range(*full_range)),
                     contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                         kind: lsp::MarkupKind::Markdown,
                         value: format!("![img]({uri})"),
@@ -1400,18 +1399,32 @@ impl AnnotExt for STeXAnnot {
                 full_range,
                 ..
             } => {
-                let range = SourceRange {
+                let range = StringRange {
                     start: full_range.start,
                     end: name_range.end,
                 };
                 Some(lsp::Hover {
-                    range: Some(SourceRange::into_range(range)),
+                    range: Some(StringRange::into_range(range)),
                     contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                         kind: lsp::MarkupKind::Markdown,
                         value: uri.to_string(),
                     }),
                 })
             }
+            Self::SnifySuggestion { range, symbols } => Some(lsp::Hover {
+                range: Some(StringRange::into_range(*range)),
+                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                    kind: lsp::MarkupKind::Markdown,
+                    value: {
+                        use std::fmt::Write;
+                        let mut r = String::new();
+                        for s in symbols {
+                            write!(r, " - <sup>{s}</sup>\n");
+                        }
+                        r
+                    },
+                }),
+            }),
             Self::ImportModule { .. }
             | Self::UseModule { .. }
             | Self::SetMetatheory { .. }
@@ -1443,41 +1456,9 @@ impl AnnotExt for STeXAnnot {
                     .uri
                     .name()
                     .last();
-                let name = match mod_ {
-                    SymnameMode::Cap {
-                        post: Some((_, _, post)),
-                    } => {
-                        let cap = name.chars().next().unwrap().to_uppercase().to_string();
-                        format!("={cap}{}{post}", &name[1..])
-                    }
-                    SymnameMode::Cap { .. } => {
-                        let cap = name.chars().next().unwrap().to_uppercase().to_string();
-                        format!("={cap}{}", &name[1..])
-                    }
-                    SymnameMode::PostS {
-                        pre: Some((_, _, pre)),
-                    } => format!("={pre}{name}s"),
-                    SymnameMode::PostS { .. } => format!("={name}s"),
-                    SymnameMode::CapAndPostS => {
-                        let cap = name.chars().next().unwrap().to_uppercase().to_string();
-                        format!("={cap}{}s", &name[1..])
-                    }
-                    SymnameMode::PrePost {
-                        pre: Some((_, _, pre)),
-                        post: Some((_, _, post)),
-                    } => format!("={pre}{name}{post}"),
-                    SymnameMode::PrePost {
-                        pre: Some((_, _, pre)),
-                        ..
-                    } => format!("={pre}{name}"),
-                    SymnameMode::PrePost {
-                        post: Some((_, _, post)),
-                        ..
-                    } => format!("={name}{post}"),
-                    _ => format!("={name}"),
-                };
+                let name = format!("={}", mod_.apply(name));
                 Some(lsp::InlayHint {
-                    position: SourceRange::into_range(*full_range).end,
+                    position: StringRange::into_range(*full_range).end,
                     label: lsp::InlayHintLabel::String(name),
                     kind: Some(lsp::InlayHintKind::PARAMETER),
                     text_edits: None,
@@ -1493,7 +1474,7 @@ impl AnnotExt for STeXAnnot {
                 full_range,
                 ..
             } => Some(lsp::InlayHint {
-                position: SourceRange::into_range(*full_range).end,
+                position: StringRange::into_range(*full_range).end,
                 label: lsp::InlayHintLabel::String(format!(
                     "[{}]",
                     uri.first().unwrap_or_else(|| unreachable!()).uri.name()
@@ -1512,7 +1493,7 @@ impl AnnotExt for STeXAnnot {
         fn from_syms(
             url: &lsp::Url,
             v: &[SymbolReference<LSPLineCol>],
-            r: SourceRange<LSPLineCol>,
+            r: StringRange<LSPLineCol>,
         ) -> lsp::CodeActionResponse {
             fn disamb(uri: &SymbolUri, all: &[String]) -> String {
                 let mut ret = format!("?{}", uri.name());
@@ -1564,7 +1545,7 @@ impl AnnotExt for STeXAnnot {
                     edits.insert(
                         url.clone(),
                         vec![lsp::TextEdit {
-                            range: SourceRange::into_range(r),
+                            range: StringRange::into_range(r),
                             new_text: disam.clone(),
                         }],
                     );
@@ -1672,7 +1653,8 @@ impl AnnotExt for STeXAnnot {
             | Self::Varseq { .. }
             | Self::Defnotation { .. }
             | Self::Definiens { .. }
-            | Self::Assign { .. } => Vec::new(),
+            | Self::Assign { .. }
+            | Self::SnifySuggestion { .. } => Vec::new(),
         }
     }
 
@@ -1685,7 +1667,7 @@ impl AnnotExt for STeXAnnot {
             ($r:expr) => {
                 Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                     uri: in_doc.clone().into(),
-                    range: SourceRange::into_range($r),
+                    range: StringRange::into_range($r),
                 }))
             };
         }
@@ -1721,7 +1703,7 @@ impl AnnotExt for STeXAnnot {
                         //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
                         Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                             uri: url,
-                            range: SourceRange::into_range(uri.range),
+                            range: StringRange::into_range(uri.range),
                         }))
                     } else {
                         None
@@ -1740,7 +1722,7 @@ impl AnnotExt for STeXAnnot {
                 if domain_range.contains(pos) {
                     let Some((p, range)) = (match domain {
                         ModuleOrStruct::Module(uri) => {
-                            uri.full_path.as_ref().map(|r| (r, SourceRange::default()))
+                            uri.full_path.as_ref().map(|r| (r, StringRange::default()))
                         }
                         ModuleOrStruct::Struct(uri) => {
                             uri.filepath.as_ref().map(|r| (r, uri.range))
@@ -1753,7 +1735,7 @@ impl AnnotExt for STeXAnnot {
                     };
                     return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                         uri: url,
-                        range: SourceRange::into_range(range),
+                        range: StringRange::into_range(range),
                     }));
                 } else {
                     None
@@ -1772,7 +1754,7 @@ impl AnnotExt for STeXAnnot {
                 if domain_range.contains(pos) {
                     let Some((p, range)) = (match domain {
                         ModuleOrStruct::Module(uri) => {
-                            uri.full_path.as_ref().map(|r| (r, SourceRange::default()))
+                            uri.full_path.as_ref().map(|r| (r, StringRange::default()))
                         }
                         ModuleOrStruct::Struct(uri) => {
                             uri.filepath.as_ref().map(|r| (r, uri.range))
@@ -1785,7 +1767,7 @@ impl AnnotExt for STeXAnnot {
                     };
                     return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                         uri: url,
-                        range: SourceRange::into_range(range),
+                        range: StringRange::into_range(range),
                     }));
                 }
                 for a in assignments {
@@ -1798,7 +1780,7 @@ impl AnnotExt for STeXAnnot {
                         };
                         return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                             uri: url,
-                            range: SourceRange::into_range(a.symbol_range),
+                            range: StringRange::into_range(a.symbol_range),
                         }));
                     }
                     if let Some((_, InlineMorphAssKind::Rename(_, _, r))) = &a.first {
@@ -1833,7 +1815,7 @@ impl AnnotExt for STeXAnnot {
                                         return Some(lsp::GotoDefinitionResponse::Scalar(
                                             lsp::Location {
                                                 uri: url,
-                                                range: SourceRange::into_range(
+                                                range: StringRange::into_range(
                                                     s.first()
                                                         .unwrap_or_else(|| unreachable!())
                                                         .range,
@@ -1932,7 +1914,7 @@ impl AnnotExt for STeXAnnot {
                 //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
                 Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                     uri: url,
-                    range: SourceRange::into_range(uri.range),
+                    range: StringRange::into_range(uri.range),
                 }))
             }
             Self::Vardef {
@@ -1976,7 +1958,7 @@ impl AnnotExt for STeXAnnot {
                 module,
                 ..
             } => {
-                let range = archive_range.map_or(*path_range, |a| SourceRange {
+                let range = archive_range.map_or(*path_range, |a| StringRange {
                     start: a.start,
                     end: path_range.end,
                 });
@@ -2005,7 +1987,7 @@ impl AnnotExt for STeXAnnot {
                 //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
                 Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                     uri: url,
-                    range: SourceRange::into_range(uri.range),
+                    range: StringRange::into_range(uri.range),
                 }))
             }
             Self::SymName {
@@ -2055,7 +2037,7 @@ impl AnnotExt for STeXAnnot {
                 //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
                 Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                     uri: url,
-                    range: SourceRange::into_range(
+                    range: StringRange::into_range(
                         uri.first().unwrap_or_else(|| unreachable!()).range,
                     ),
                 }))
@@ -2085,7 +2067,7 @@ impl AnnotExt for STeXAnnot {
                 //tracing::info!("Going to definition for {}: {}@{:?}",uri.uri,url,range);
                 Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                     uri: url,
-                    range: SourceRange::into_range(uri.range),
+                    range: StringRange::into_range(uri.range),
                 }))
             }
             Self::VariableMacro {
@@ -2096,7 +2078,7 @@ impl AnnotExt for STeXAnnot {
                 };
                 Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
                     uri: in_doc.clone().into(),
-                    range: SourceRange::into_range(*orig),
+                    range: StringRange::into_range(*orig),
                 }))
             }
             Self::Svar { .. }
@@ -2106,7 +2088,8 @@ impl AnnotExt for STeXAnnot {
             | Self::MHInput { .. }
             | Self::Problem { .. }
             | Self::Definiens { .. }
-            | Self::Defnotation { .. } => None,
+            | Self::Defnotation { .. }
+            | Self::SnifySuggestion { .. } => None,
         }
     }
 }
@@ -2418,10 +2401,7 @@ impl LSPState {
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::Location>>> + use<>> {
         let d = self.get(&uri)?;
-        let pos = LSPLineCol {
-            line: position.line,
-            col: position.character,
-        };
+        let pos = LSPLineCol::new(position.line, position.character);
         let slf = self.clone();
         enum Target {
             Module(ModuleUri),
@@ -2471,7 +2451,7 @@ impl LSPState {
                                 ($e:expr) => {
                                     lsp::Location {
                                         uri:url.clone().into(),
-                                        range: SourceRange::into_range($e)
+                                        range: StringRange::into_range($e)
                                     }
                                 }
                             }
@@ -2545,10 +2525,7 @@ impl LSPState {
     ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>> + use<>> {
         let d = self.get(uri)?;
         let da = d.archive().cloned();
-        let pos = LSPLineCol {
-            line: position.line,
-            col: position.character,
-        };
+        let pos = LSPLineCol::new(position.line, position.character);
         Some(
             d.with_annots(self.clone(), move |data| {
                 at_position(data, pos).and_then(|e| e.hover(da.as_ref(), pos))
@@ -2566,10 +2543,7 @@ impl LSPState {
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::CodeActionResponse>> + use<>> {
         let d = self.get(&uri)?;
-        let pos = LSPLineCol {
-            line: range.start.line,
-            col: range.start.character,
-        };
+        let pos = LSPLineCol::new(range.start.line, range.start.character);
         let url = uri.into();
         Some(
             d.with_annots(self.clone(), move |data| {
@@ -2588,10 +2562,7 @@ impl LSPState {
     ) -> Option<impl std::future::Future<Output = Option<lsp::GotoDefinitionResponse>> + use<>>
     {
         let d = self.get(&uri)?;
-        let pos = LSPLineCol {
-            line: position.line,
-            col: position.character,
-        };
+        let pos = LSPLineCol::new(position.line, position.character);
         Some(
             d.with_annots(self.clone(), move |data| {
                 at_position(data, pos).and_then(|e| e.goto_definition(&uri, pos))

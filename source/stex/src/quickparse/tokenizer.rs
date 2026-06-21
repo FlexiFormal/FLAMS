@@ -1,7 +1,7 @@
 use crate::quickparse::tokens::TeXToken;
 use flams_utils::{
-    parsing::{ParseSource, ParseStr},
-    sourcerefs::{SourcePos, SourceRange},
+    parsing::{SourceParser, StrParser},
+    sourcerefs::{StringPosition, StringRange},
 };
 
 use super::stex::DiagnosticLevel;
@@ -12,14 +12,14 @@ pub enum Mode {
     Math { display: bool },
 }
 
-pub struct TeXTokenizer<'a, Pos: SourcePos> {
-    pub reader: ParseStr<'a, Pos>,
+pub struct TeXTokenizer<'a, Pos: StringPosition> {
+    pub reader: StrParser<'a, Pos>,
     pub letters: String,
     pub mode: Mode,
-    err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
+    err: &'a mut dyn FnMut(String, StringRange<Pos>, DiagnosticLevel),
 }
 
-impl<'a, Pos: SourcePos> Iterator for TeXTokenizer<'a, Pos> {
+impl<'a, Pos: StringPosition> Iterator for TeXTokenizer<'a, Pos> {
     type Item = TeXToken<Pos, &'a str>;
 
     #[inline]
@@ -28,13 +28,13 @@ impl<'a, Pos: SourcePos> Iterator for TeXTokenizer<'a, Pos> {
     }
 }
 
-impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
+impl<'a, Pos: StringPosition> TeXTokenizer<'a, Pos> {
     pub(crate) fn new(
         input: &'a str,
-        err: &'a mut dyn FnMut(String, SourceRange<Pos>, DiagnosticLevel),
+        err: &'a mut dyn FnMut(String, StringRange<Pos>, DiagnosticLevel),
     ) -> Self {
         TeXTokenizer {
-            reader: ParseStr::new(input),
+            reader: StrParser::new(input),
             mode: Mode::Text,
             err,
             letters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string(),
@@ -46,23 +46,23 @@ impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
         match self.reader.peek_head() {
             None => None,
             Some('%') => {
-                self.reader.pop_head();
+                self.reader.next_char();
                 Some(self.read_comment(start))
             }
             Some('{') => {
-                self.reader.pop_head();
+                self.reader.next_char();
                 Some(TeXToken::BeginGroupChar(start))
             }
             Some('}') => {
-                self.reader.pop_head();
+                self.reader.next_char();
                 Some(TeXToken::EndGroupChar(start))
             }
             Some('$') => {
-                self.reader.pop_head();
+                self.reader.next_char();
                 match self.mode {
                     Mode::Math { display: true } => {
                         if self.reader.starts_with('$') {
-                            self.reader.pop_head();
+                            self.reader.next_char();
                         } else {
                             self.problem(
                                 start,
@@ -79,7 +79,7 @@ impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
                     }
                     Mode::Text => {
                         if self.reader.starts_with('$') {
-                            self.reader.pop_head();
+                            self.reader.next_char();
                             self.open_math(true);
                             Some(TeXToken::BeginMath {
                                 display: true,
@@ -96,7 +96,7 @@ impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
                 }
             }
             Some('\\') => {
-                self.reader.pop_head();
+                self.reader.next_char();
                 let name = match self.reader.peek_head() {
                     Some(c) if self.letters.contains(c) => {
                         self.reader.read_while(|c| self.letters.contains(c))
@@ -109,7 +109,7 @@ impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
             _ => {
                 let text = self.reader.read_while(|c| !"%{}$\\".contains(c));
                 Some(TeXToken::Text {
-                    range: SourceRange {
+                    range: StringRange {
                         start,
                         end: self.reader.curr_pos(),
                     },
@@ -132,7 +132,7 @@ impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
     pub fn problem(&mut self, start: Pos, msg: impl std::fmt::Display, level: DiagnosticLevel) {
         (self.err)(
             msg.to_string(),
-            SourceRange {
+            StringRange {
                 start,
                 end: self.reader.curr_pos(),
             },
@@ -143,7 +143,7 @@ impl<'a, Pos: SourcePos> TeXTokenizer<'a, Pos> {
     fn read_comment(&mut self, start: Pos) -> TeXToken<Pos, &'a str> {
         let (c, end) = self.reader.read_until_line_end();
         c.strip_prefix("%STEXIDE").map_or_else(
-            || TeXToken::Comment(SourceRange { start, end }),
+            || TeXToken::Comment(StringRange { start, end }),
             TeXToken::Directive,
         )
     }

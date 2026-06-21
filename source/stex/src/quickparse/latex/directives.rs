@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
 use flams_utils::{
-    parsing::{ParseSource, StringOrStr},
-    sourcerefs::SourcePos,
+    parsing::{SourceParser, StringOrStr},
+    sourcerefs::StringPosition,
 };
 
 use crate::quickparse::stex::DiagnosticLevel;
@@ -14,7 +14,12 @@ use super::{
 };
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn copycmd<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+pub fn copycmd<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     args: &'a str,
 ) {
@@ -27,7 +32,12 @@ pub fn copycmd<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserStat
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn verbcmd<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+pub fn verbcmd<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     args: &'a str,
 ) {
@@ -40,7 +50,12 @@ pub fn verbcmd<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserStat
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn verbenv<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+pub fn verbenv<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     args: &'a str,
 ) {
@@ -55,7 +70,12 @@ pub fn verbenv<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserStat
     }
 }
 
-pub fn macro_dir<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+pub fn macro_dir<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     args: &'a str,
 ) {
@@ -75,7 +95,12 @@ pub fn macro_dir<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserSt
     }
 }
 
-fn do_macro_dir<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+fn do_macro_dir<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     arg: &&'a str,
     mut m: Macro<'a, Pos>,
     parser: &mut LaTeXParser<'a, Pos, T, State>,
@@ -85,7 +110,7 @@ fn do_macro_dir<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserSta
 }
 
 #[inline]
-fn do_spec<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+fn do_spec<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
     spec: &str,
     m: &mut Macro<'a, Pos>,
     parser: &mut LaTeXParser<'a, Pos, T, State>,
@@ -102,7 +127,12 @@ fn do_spec<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a
     }
 }
 
-pub fn env_dir<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+pub fn env_dir<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     args: &'a str,
 ) {
@@ -127,7 +157,7 @@ fn do_env_dir<
     'a,
     'b,
     'c,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 >(
@@ -142,7 +172,7 @@ fn do_env_dir<
 const fn do_env_dir_close<
     'a,
     'b,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 >(
@@ -152,7 +182,12 @@ const fn do_env_dir_close<
     EnvironmentResult::Simple(e)
 }
 
-pub fn nolint<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+pub fn nolint<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     _: &'a str,
 ) {
@@ -160,7 +195,12 @@ pub fn nolint<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState
 }
 
 #[inline]
-pub fn dolint<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>(
+pub fn dolint<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+>(
     _: &mut LaTeXParser<'a, Pos, T, State>,
     _: &'a str,
 ) {

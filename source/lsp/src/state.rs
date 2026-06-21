@@ -1,4 +1,4 @@
-use std::{collections::hash_map::Entry, path::Path};
+use std::{collections::hash_map::Entry, hint::unreachable_unchecked, path::Path};
 
 use async_lsp::{ClientSocket, LanguageClient, lsp_types as lsp};
 use flams_ftml::FtmlResult;
@@ -14,7 +14,7 @@ use flams_stex::{
 use flams_utils::{
     impossible,
     prelude::HMap,
-    sourcerefs::{LSPLineCol, SourceRange},
+    sourcerefs::{LSPLineCol, StringRange},
 };
 use ftml_ontology::{
     domain::{declarations::symbols::Symbol, modules::Module},
@@ -182,13 +182,13 @@ impl LSPState {
                             lock.diagnostics.insert(STeXDiagnostic {
                                 level: DiagnosticLevel::Warning,
                                 message: format!("Unknown web font for {fnt}"),
-                                range: SourceRange::default(),
+                                range: StringRange::default(),
                             });
                             for (glyph, char) in &dt.missing.inner {
                                 lock.diagnostics.insert(STeXDiagnostic {
                                     level: DiagnosticLevel::Warning,
                                     message: format!("unknown unicode character for glyph {char} ({glyph}) in font {fnt}"),
-                                    range: SourceRange::default()
+                                    range: StringRange::default()
                                 });
                             }
                         }
@@ -200,15 +200,9 @@ impl LSPState {
                     for ft in std::mem::take(ft) {
                         let url = UrlOrFile::File(ft.file.into());
                         if url == *uri {
-                            done = Some(SourceRange {
-                                start: LSPLineCol {
-                                    line: ft.line,
-                                    col: 0,
-                                },
-                                end: LSPLineCol {
-                                    line: ft.line,
-                                    col: ft.col,
-                                },
+                            done = Some(StringRange {
+                                start: LSPLineCol::new(ft.line, 0),
+                                end: LSPLineCol::new(ft.line, ft.col),
                             });
                         } else if let Some(dc) = self.documents.read().get(&url) {
                             let data = match dc {
@@ -219,15 +213,9 @@ impl LSPState {
                             lock.diagnostics.insert(STeXDiagnostic {
                                 level: DiagnosticLevel::Error,
                                 message: format!("RusTeX Error: {e}"),
-                                range: SourceRange {
-                                    start: LSPLineCol {
-                                        line: ft.line,
-                                        col: 0,
-                                    },
-                                    end: LSPLineCol {
-                                        line: ft.line,
-                                        col: ft.col,
-                                    },
+                                range: StringRange {
+                                    start: LSPLineCol::new(ft.line, 0),
+                                    end: LSPLineCol::new(ft.line, ft.col),
                                 },
                             });
                             let _ = client.publish_diagnostics(lsp::PublishDiagnosticsParams {
@@ -308,7 +296,7 @@ impl LSPState {
                                             diagnostics: vec![to_diagnostic(&STeXDiagnostic {
                                                 level: DiagnosticLevel::Error,
                                                 message: format!("Module {m} not found"),
-                                                range: SourceRange::default(),
+                                                range: StringRange::default(),
                                             })],
                                         });
                                 })
@@ -343,7 +331,7 @@ impl LSPState {
                             lock.diagnostics.insert(STeXDiagnostic {
                                 level: DiagnosticLevel::Error,
                                 message: format!("FTML Error: {e}"),
-                                range: SourceRange::default(),
+                                range: StringRange::default(),
                             });
                             let _ = client.publish_diagnostics(lsp::PublishDiagnosticsParams {
                                 uri: uri.clone().into(),
@@ -479,21 +467,39 @@ impl LSPState {
         mut and_then: impl FnMut(&std::sync::Arc<Path>, &STeXParseData),
     ) {
         let mut ndocs = HMap::default();
-        let mut state = LSPStore::<true>::new(&mut ndocs, self.verbalizations.clone());
+        let verbalizations = VerbalizationTrie::default();
+        let mut vlock = verbalizations.lock();
+        let mut state = LSPStore::<true>::new(&mut ndocs, &mut vlock);
         for (p, uri) in iter {
-            if let Some(ret) = state.load(p.as_ref(), &uri) {
-                and_then(&p, &ret);
-                let p = UrlOrFile::File(p);
-                match state.map.entry(p) {
-                    Entry::Vacant(e) => {
-                        e.insert(DocData::Data(ret, true));
-                    }
-                    Entry::Occupied(mut e) => {
-                        e.get_mut().merge(DocData::Data(ret, true));
+            let p = UrlOrFile::File(p);
+            if !state.map.contains_key(&p) {
+                let UrlOrFile::File(p) = p else {
+                    // SAFETY: we just constructed it such
+                    unsafe { unreachable_unchecked() }
+                };
+                if let Some(ret) = state.load(p.as_ref(), &uri) {
+                    and_then(&p, &ret);
+                    let p = UrlOrFile::File(p);
+                    match state.map.entry(p) {
+                        Entry::Vacant(e) => {
+                            e.insert(DocData::Data(ret, true));
+                        }
+                        Entry::Occupied(mut e) => {
+                            e.get_mut().merge(DocData::Data(ret, true));
+                        }
                     }
                 }
             }
         }
+        drop(vlock);
+        self.verbalizations.merge(verbalizations);
+        /*{
+            use radix_trie::TrieCommon;
+            let lck = self.verbalizations.0.lock();
+            for (k, v) in lck.iter() {
+                tracing::warn!(" - {k}: {v:?}");
+            }
+        }*/
         let mut docs = self.documents.write();
         for (k, v) in ndocs {
             match docs.entry(k) {
@@ -522,7 +528,8 @@ impl LSPState {
             return;
         }
         let mut docs = self.documents.write();
-        let mut state = LSPStore::<'_, FULL>::new(&mut docs, self.verbalizations.clone());
+        let mut vlock = self.verbalizations.lock();
+        let mut state = LSPStore::<'_, '_, FULL>::new(&mut docs, &mut vlock);
         if let Some(ret) = state.load(path, uri) {
             and_then(&ret);
             drop(state);
@@ -623,7 +630,7 @@ fn check_diagnostics(
         CheckResult::Missing(u) => E::A(std::iter::once(STeXDiagnostic {
             level: DiagnosticLevel::Error,
             message: format!("Module {u} not found"),
-            range: SourceRange::default(),
+            range: StringRange::default(),
         })),
         CheckResult::Variable(e, r) => {
             let vd = src.0.get_as::<VariableDeclaration>(e.name());
@@ -645,7 +652,7 @@ fn check_diagnostics(
                 range: if let Some(prf) = prf {
                     conv_range(prf.source)
                 } else {
-                    SourceRange::default()
+                    StringRange::default()
                 },
             }))
         }
@@ -772,15 +779,9 @@ fn symbol_check_result(
 
 const fn conv_range(
     ftml_ontology::utils::SourceRange { start, end }: ftml_ontology::utils::SourceRange,
-) -> SourceRange<LSPLineCol> {
-    SourceRange {
-        start: LSPLineCol {
-            line: start.line,
-            col: start.col,
-        },
-        end: LSPLineCol {
-            line: end.line,
-            col: end.col,
-        },
+) -> StringRange<LSPLineCol> {
+    StringRange {
+        start: LSPLineCol::new(start.line, start.col),
+        end: LSPLineCol::new(end.line, end.col),
     }
 }

@@ -2,37 +2,41 @@ use crate::quickparse::{
     latex::{FromLaTeXToken, LaTeXParser, Macro},
     stex::DiagnosticLevel,
 };
-use flams_utils::{parsing::ParseSource, sourcerefs::SourcePos};
+use flams_utils::{parsing::SourceParser, sourcerefs::StringPosition};
 
 use super::{Environment, ParserState};
 
 #[derive(Debug)]
-pub enum MacroResult<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
+pub enum MacroResult<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>> {
     Success(T),
     Simple(Macro<'a, Pos>),
     Other(Vec<T>),
 }
 
 #[derive(Debug)]
-pub enum EnvironmentResult<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>> {
+pub enum EnvironmentResult<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>> {
     Success(T),
     Simple(Environment<'a, Pos, T>),
     Other(Vec<T>),
 }
 
-pub type MacroRule<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> =
-    fn(Macro<'a, Pos>, &mut LaTeXParser<'a, Pos, T, State>) -> MacroResult<'a, Pos, T>;
+pub type MacroRule<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+> = fn(Macro<'a, Pos>, &mut LaTeXParser<'a, Pos, T, State>) -> MacroResult<'a, Pos, T>;
 
 pub type EnvOpenRule<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 > = for<'b, 'c> fn(&'b mut Environment<'a, Pos, T>, &'c mut LaTeXParser<'a, Pos, T, State>);
 
 pub type EnvCloseRule<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 > = for<'b> fn(
@@ -42,7 +46,7 @@ pub type EnvCloseRule<
 
 pub type EnvironmentRule<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 > = (
@@ -53,7 +57,7 @@ pub type EnvironmentRule<
 #[allow(clippy::type_complexity)]
 pub struct DynMacro<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
     Arg,
@@ -66,7 +70,7 @@ pub struct DynMacro<
 #[allow(clippy::type_complexity)]
 pub struct DynEnv<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
     Arg,
@@ -83,13 +87,18 @@ pub struct DynEnv<
     pub arg: Arg,
 }
 
-pub enum AnyMacro<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> {
+pub enum AnyMacro<
+    'a,
+    Pos: StringPosition,
+    T: FromLaTeXToken<'a, Pos>,
+    State: ParserState<'a, Pos, T>,
+> {
     Ptr(MacroRule<'a, Pos, T, State>),
     Str(DynMacro<'a, Pos, T, State, &'a str>),
     Ext(DynMacro<'a, Pos, T, State, State::MacroArg>),
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
     AnyMacro<'a, Pos, T, State>
 {
     pub fn call(
@@ -105,7 +114,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     }
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> Clone
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> Clone
     for AnyMacro<'a, Pos, T, State>
 {
     fn clone(&self) -> Self {
@@ -123,13 +132,14 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     }
 }
 
-pub enum AnyEnv<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> {
+pub enum AnyEnv<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+{
     Ptr(EnvironmentRule<'a, Pos, T, State>),
     Str(DynEnv<'a, Pos, T, State, &'a str>),
     Ext(DynEnv<'a, Pos, T, State, State::MacroArg>),
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>>
     AnyEnv<'a, Pos, T, State>
 {
     pub fn open<'b, 'c>(
@@ -152,7 +162,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
     }
 }
 
-impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> Clone
+impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos, T>> Clone
     for AnyEnv<'a, Pos, T, State>
 {
     fn clone(&self) -> Self {
@@ -174,7 +184,7 @@ impl<'a, Pos: SourcePos, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a, Pos,
 
 pub fn read_verbatim_char<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 >(
@@ -193,7 +203,7 @@ pub fn read_verbatim_char<
     ) {
         mac.args.push(text);
     }*/
-    if let Some(h2) = p.tokenizer.reader.pop_head() {
+    if let Some(h2) = p.tokenizer.reader.next_char() {
         if h2 != end {
             p.tokenizer.problem(
                 mac.range.start,
@@ -212,7 +222,7 @@ pub fn read_verbatim_char<
 
 pub fn read_verbatim_str<
     'a,
-    Pos: SourcePos,
+    Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,
     State: ParserState<'a, Pos, T>,
 >(
@@ -257,7 +267,7 @@ macro_rules! tex {
     ($p:ident => $name:ident$($args:tt)*) => {
         #[allow(unused_mut,non_snake_case)]
         pub fn $name<'a,
-            Pos: ::flams_utils::sourcerefs::SourcePos,
+            Pos: ::flams_utils::sourcerefs::StringPosition,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pos>,
             State: $crate::quickparse::latex::ParserState<'a,Pos,T>
         >(
@@ -271,7 +281,7 @@ macro_rules! tex {
     ($p:ident => @begin{$name:ident}$( ($($args:tt)* ) )? {$($start:tt)*} $($end:tt)*) => {paste::paste!(
         #[allow(unused,unused_mut,non_snake_case,clippy::missing_const_for_fn)]
         pub fn [<$name _open>]<'a,
-            Pos: ::flams_utils::sourcerefs::SourcePos,
+            Pos: ::flams_utils::sourcerefs::StringPosition,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pos>,
             State: $crate::quickparse::latex::ParserState<'a,Pos,T>
         >(
@@ -283,7 +293,7 @@ macro_rules! tex {
         }
         #[allow(unused,unused_mut,non_snake_case,clippy::missing_const_for_fn)]
         pub fn [<$name _close>]<'a,
-            Pos: ::flams_utils::sourcerefs::SourcePos,
+            Pos: ::flams_utils::sourcerefs::StringPosition,
             T: $crate::quickparse::latex::FromLaTeXToken<'a, Pos>,
             State: $crate::quickparse::latex::ParserState<'a,Pos,T>
         >(
@@ -565,12 +575,12 @@ macro_rules! tex {
     };
     (@args $p:ident:$name:ident($c:literal?$t:ident)$($args:tt)*) => {
         let $t = $p.tokenizer.reader.starts_with($c) && {
-            $p.tokenizer.reader.pop_head();true
+            $p.tokenizer.reader.next_char();true
         };
         tex!{@args $p:$name $($args)*}
     };
     (@args $p:ident:$name:ident($t:ident)$($args:tt)*) => {
-        if let Some($t) = $p.tokenizer.reader.pop_head() {
+        if let Some($t) = $p.tokenizer.reader.next_char() {
             tex!{@args $p:$name $($args)*}
         } else {
             $p.tokenizer.problem($name.range.start,"Expected character",DiagnosticLevel::Error);

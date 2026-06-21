@@ -9,7 +9,7 @@ use crate::{
 use either::Either;
 use flams_math_archives::backend::AnyBackend;
 use flams_math_archives::formats::{BuildSpec, BuildTargetId, TaskDependency, TaskRef};
-use flams_utils::sourcerefs::SourceRange;
+use flams_utils::sourcerefs::{NoPosition, StringRange};
 use ftml_solver::CHECK;
 use ftml_uris::{ArchiveId, DocumentUri, Language, UriWithArchive};
 use std::path::Path;
@@ -40,9 +40,9 @@ pub enum STeXDependency {
 
 #[allow(clippy::type_complexity)]
 pub struct DepParser<'a> {
-    parser: LaTeXParser<'a, (), STeXToken<()>, STeXParseState<'a, (), ()>>,
-    stack: Vec<std::vec::IntoIter<STeXToken<()>>>,
-    curr: Option<std::vec::IntoIter<STeXToken<()>>>,
+    parser: LaTeXParser<'a, NoPosition, STeXToken<NoPosition>, STeXParseState<'a, NoPosition, ()>>,
+    stack: Vec<std::vec::IntoIter<STeXToken<NoPosition>>>,
+    curr: Option<std::vec::IntoIter<STeXToken<NoPosition>>>,
 }
 
 pub fn parse_deps<'a>(
@@ -50,12 +50,12 @@ pub fn parse_deps<'a>(
     path: &'a Path,
     doc: &'a DocumentUri,
     backend: &'a AnyBackend,
-    err: &'a mut dyn FnMut(String, SourceRange<()>, DiagnosticLevel),
+    err: &'a mut dyn FnMut(String, StringRange<NoPosition>, DiagnosticLevel),
 ) -> impl Iterator<Item = STeXDependency> + use<'a> {
     let archive = doc.archive_uri();
     let parser = LaTeXParser::with_rules(
         source,
-        STeXParseState::<(), ()>::new(Some(archive), Some(path), doc, backend, ()),
+        STeXParseState::<NoPosition, ()>::new(Some(archive), Some(path), doc, backend, ()),
         err,
         LaTeXParser::default_rules().into_iter().chain([
             ("importmodule", rules::importmodule_deps as _),
@@ -86,7 +86,7 @@ pub fn parse_deps<'a>(
 }
 
 impl DepParser<'_> {
-    fn convert(&mut self, t: STeXToken<()>) -> Option<STeXDependency> {
+    fn convert(&mut self, t: STeXToken<NoPosition>) -> Option<STeXDependency> {
         match t {
             STeXToken::ImportModule {
                 module:

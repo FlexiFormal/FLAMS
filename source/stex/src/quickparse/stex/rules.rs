@@ -21,10 +21,10 @@ use flams_math_archives::{
     backend::{GlobalBackend, LocalBackend},
     MathArchive,
 };
-use flams_utils::parsing::ParseSource;
+use flams_utils::parsing::SourceParser;
 use flams_utils::{
     impossible,
-    sourcerefs::{LSPLineCol, SourcePos, SourceRange},
+    sourcerefs::{LSPLineCol, StringPosition, StringRange},
     vecmap::VecMap,
     CondSerialize,
 };
@@ -225,12 +225,12 @@ pub fn declarative_env_rules<'a, MS: STeXModuleStore>() -> [(
 
 macro_rules! stex {
   ($p:ident => @begin $($stuff:tt)+) => {
-    tex!(<{'a,Pos:SourcePos,MS:STeXModuleStore} E{'a,Pos,STeXToken<Pos>} P{'a,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>} R{'a,Pos,STeXToken<Pos>}>
+    tex!(<{'a,Pos:StringPosition,MS:STeXModuleStore} E{'a,Pos,STeXToken<Pos>} P{'a,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>} R{'a,Pos,STeXToken<Pos>}>
       $p => @begin $($stuff)*
     );
   };
   ($p:ident => $($stuff:tt)+) => {
-    tex!(<{'a,Pos:SourcePos,MS:STeXModuleStore} M{'a,Pos} P{'a,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>} R{'a,Pos,STeXToken<Pos>}>
+    tex!(<{'a,Pos:StringPosition,MS:STeXModuleStore} M{'a,Pos} P{'a,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>} R{'a,Pos,STeXToken<Pos>}>
       $p => $($stuff)*
     );
   };
@@ -246,7 +246,7 @@ macro_rules! stex {
   };
 }
 
-fn parse_id<'a, P: SourcePos>(
+fn parse_id<'a, P: StringPosition>(
     id: &str,
     pos: P,
     tkn: &mut TeXTokenizer<'a, P>,
@@ -460,18 +460,18 @@ fn strip_comments(s: &str) -> Cow<'_, str> {
 macro_rules! optargtype {
   ($parser:ident => $name:ident { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? }) => {
     #[derive(serde::Serialize)]
-    pub enum $name<Pos:SourcePos> {
+    pub enum $name<Pos:StringPosition> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE $($tp)*)>)
       ),*
-      $(, $default(SourceRange<Pos>,Box<str>))?
+      $(, $default(StringRange<Pos>,Box<str>))?
     }
-    impl<Pos:SourcePos> std::fmt::Debug for $name<Pos> {
+    impl<Pos:StringPosition> std::fmt::Debug for $name<Pos> {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(stringify!($name))
       }
     }
-    impl<Pos:SourcePos> Clone for $name<Pos> {
+    impl<Pos:StringPosition> Clone for $name<Pos> {
       fn clone(&self) -> Self {
         match self {
           $(
@@ -480,7 +480,7 @@ macro_rules! optargtype {
         }
       }
     }
-    impl<'a,Pos:SourcePos,MS:STeXModuleStore>
+    impl<'a,Pos:StringPosition,MS:STeXModuleStore>
       KeyValKind<'a,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>> for $name<Pos> {
         fn next_val(
           $parser:&mut crate::quickparse::latex::KeyValParser<'a, '_,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>>,
@@ -499,18 +499,18 @@ macro_rules! optargtype {
   };
   ($parser:ident => $name:ident <T> { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? } @ $iter:ident) => {
     #[derive(serde::Serialize)]
-    pub enum $name<Pos:SourcePos,T:CondSerialize> {
+    pub enum $name<Pos:StringPosition,T:CondSerialize> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE T $($tp)*)>)
       ),*
-      $(, $default(SourceRange<Pos>,Box<str>))?
+      $(, $default(StringRange<Pos>,Box<str>))?
     }
-    impl<Pos:SourcePos,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
+    impl<Pos:StringPosition,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(stringify!($name))
       }
     }
-    impl<Pos:SourcePos,T:Clone+CondSerialize> Clone for $name<Pos,T> {
+    impl<Pos:StringPosition,T:Clone+CondSerialize> Clone for $name<Pos,T> {
       fn clone(&self) -> Self {
         match self {
           $(
@@ -523,7 +523,7 @@ macro_rules! optargtype {
       }
     }
 
-    impl<'a,Pos:SourcePos,MS:STeXModuleStore>
+    impl<'a,Pos:StringPosition,MS:STeXModuleStore>
       KeyValKind<'a,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>> for $name<Pos,STeXToken<Pos>> {
         fn next_val(
           $parser:&mut crate::quickparse::latex::KeyValParser<'a, '_,Pos,STeXToken<Pos>,STeXParseState<'a,Pos,MS>>,
@@ -540,7 +540,7 @@ macro_rules! optargtype {
         }
     }
 
-    impl<Pos:SourcePos,T1:CondSerialize> $name<Pos,T1> {
+    impl<Pos:StringPosition,T1:CondSerialize> $name<Pos,T1> {
       pub fn into_other<T2:CondSerialize>(self,mut cont:impl FnMut(Vec<T1>) -> Vec<T2>) -> $name<Pos,T2> {
         match self {
           $(
@@ -551,16 +551,16 @@ macro_rules! optargtype {
       }
     }
 
-    pub struct $iter<'a,Pos:SourcePos,T:CondSerialize>{
+    pub struct $iter<'a,Pos:StringPosition,T:CondSerialize>{
       current:Option<std::slice::Iter<'a,T>>,
       nexts:std::slice::Iter<'a,$name<Pos,T>>
     }
-    impl<'a,Pos:SourcePos,T:CondSerialize> $iter<'a,Pos,T> {
+    impl<'a,Pos:StringPosition,T:CondSerialize> $iter<'a,Pos,T> {
       pub fn new(sn:&'a[$name<Pos,T>]) -> Self {
         Self { current:None,nexts:sn.iter()}
       }
     }
-    impl<'a,Pos:SourcePos,T:CondSerialize> Iterator for $iter<'a,Pos,T> {
+    impl<'a,Pos:StringPosition,T:CondSerialize> Iterator for $iter<'a,Pos,T> {
       type Item = &'a T;
       fn next(&mut self) -> Option<Self::Item> {
           if let Some(c) = &mut self.current {
@@ -585,18 +585,18 @@ macro_rules! optargtype {
   (LSP $parser:ident => $name:ident <T> { $( {$fieldname:ident = $id:literal : $($tp:tt)+} )* $(_ = $default:ident)? } @ $iter:ident) => {
 
     #[derive(serde::Serialize)]
-    pub enum $name<Pos:SourcePos,T:CondSerialize> {
+    pub enum $name<Pos:StringPosition,T:CondSerialize> {
       $(
         $fieldname(ParsedKeyValue<Pos,optargtype!(@TYPE T $($tp)*)>)
       ),*
-      $(, $default(SourceRange<Pos>,Box<str>))?
+      $(, $default(StringRange<Pos>,Box<str>))?
     }
-    impl<Pos:SourcePos,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
+    impl<Pos:StringPosition,T:CondSerialize> std::fmt::Debug for $name<Pos,T> {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(stringify!($name))
       }
     }
-    impl<Pos:SourcePos,T:Clone+CondSerialize> Clone for $name<Pos,T> {
+    impl<Pos:StringPosition,T:Clone+CondSerialize> Clone for $name<Pos,T> {
       fn clone(&self) -> Self {
         match self {
           $(
@@ -720,7 +720,7 @@ macro_rules! optargtype {
   (@TYPE $(T)? bool?) => {bool};
   (@PARSE $(+)? $parser:ident $fieldname:ident bool? ) => {
     if $parser.has_value {$parser.parse().map(Self::$fieldname)} else { Some(Self::$fieldname(
-      ParsedKeyValue{key_range:$parser.key_range,val_range:SourceRange{start:$parser.start,end:$parser.start},val:true}
+      ParsedKeyValue{key_range:$parser.key_range,val_range:StringRange{start:$parser.start,end:$parser.start},val:true}
     )) }
   };
   (@TRANSLATE $val:ident $cont:ident $name:ident $fieldname:ident bool?) => {
@@ -1262,11 +1262,18 @@ stex!(LSP: p => definame[mut args:Map]{name:!name} => {
   for (k,v) in args.inner.iter() {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
+  let mode =super::structs::SymnameMode::PrePost{ pre, post };
+  p.state.module_store.add_verbalization(
+      &name.0,
+      &mode,
+      &s.first().expect("should be unreachable").uri,
+      p.state.language
+  );
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: definame.range, token_range: definame.token_range,
     name_range: name.1,
-    mode: super::structs::SymnameMode::PrePost{ pre, post }
+    mode
   })
 });
 
@@ -1282,11 +1289,18 @@ stex!(LSP: p => Definame[mut args:Map]{name:!name} => {
   for (k,v) in args.inner.iter() {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
+  let mode = super::structs::SymnameMode::Cap{ post };
+  p.state.module_store.add_verbalization(
+      &name.0,
+      &mode,
+      &s.first().expect("should be unreachable").uri,
+      p.state.language
+  );
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: Definame.range, token_range: Definame.token_range,
     name_range: name.1,
-    mode: super::structs::SymnameMode::Cap{ post }
+    mode
   })
 });
 
@@ -1302,11 +1316,18 @@ stex!(LSP: p => definames[mut args:Map]{name:!name} => {
   for (k,v) in args.inner.iter() {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
+  let mode = super::structs::SymnameMode::PostS{ pre };
+  p.state.module_store.add_verbalization(
+      &name.0,
+      &mode,
+      &s.first().expect("should be unreachable").uri,
+      p.state.language
+  );
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: definames.range, token_range: definames.token_range,
     name_range: name.1,
-    mode: super::structs::SymnameMode::PostS{ pre }
+    mode
   })
 });
 
@@ -1316,6 +1337,12 @@ stex!(LSP: p => Definames{name:!name} => {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(Definames);
   };
+  p.state.module_store.add_verbalization::<LSPLineCol>(
+      &name.0,
+      &super::structs::SymnameMode::CapAndPostS,
+      &s.first().expect("should be unreachable").uri,
+      p.state.language
+  );
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: Definames.range, token_range: Definames.token_range,
@@ -1555,7 +1582,7 @@ static META_FULL_PATH: std::sync::LazyLock<Option<std::sync::Arc<Path>>> =
         })
     });
 
-fn get_module<'a, 'b, Pos: SourcePos + 'a, MS: STeXModuleStore>(
+fn get_module<'a, 'b, Pos: StringPosition + 'a, MS: STeXModuleStore>(
     p: &'b mut LaTeXParser<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>,
 ) -> Option<(&'b ModuleUri, &'b mut Vec<ModuleRule<Pos>>)> {
     p.groups.iter_mut().rev().find_map(|g| match &mut g.kind {
@@ -1952,7 +1979,7 @@ optargtype! {LSP parser =>
     {Argtypes = "argtypes": T*}
     {Reorder = "reorder": ()}
     {Judgment = "judgment": ()}
-    {Fors = "for": {Vec<(SmallVec<SymbolReference<Pos>,1>,SourceRange<LSPLineCol>)> =>
+    {Fors = "for": {Vec<(SmallVec<SymbolReference<Pos>,1>,StringRange<LSPLineCol>)> =>
       let strs = parser.read_value_strs_normalized();
       let (state,mut groups) = parser.parser.split();
       let ret = strs.into_iter().filter_map(|(name,range)|
@@ -2002,7 +2029,7 @@ fn do_def_macros<'a, MS: STeXModuleStore>(
 fn do_paragraph<'a, MS: STeXModuleStore>(
     kind: ParagraphKind,
     p: &mut LaTeXParser<'a, LSPLineCol, STeXToken<LSPLineCol>, STeXParseState<'a, LSPLineCol, MS>>,
-    range: SourceRange<LSPLineCol>,
+    range: StringRange<LSPLineCol>,
     open_group: bool,
 ) -> (
     Option<SymbolReference<LSPLineCol>>,
@@ -2107,7 +2134,7 @@ fn inline_paragraph<'a, MS: STeXModuleStore>(
     kind: ParagraphKind,
     p: &mut LaTeXParser<'a, LSPLineCol, STeXToken<LSPLineCol>, STeXParseState<'a, LSPLineCol, MS>>,
     mut m: Macro<'a, LSPLineCol>,
-    //body:(SourceRange<LSPLineCol>,Vec<STeXToken<LSPLineCol>>)
+    //body:(StringRange<LSPLineCol>,Vec<STeXToken<LSPLineCol>>)
 ) -> MacroResult<'a, LSPLineCol, STeXToken<LSPLineCol>> {
     let (sym, args) = do_paragraph(kind, p, m.range, true);
     let children = p.get_argument(&mut m);
@@ -2331,7 +2358,7 @@ fn get_in_morphism<'b, MS: STeXModuleStore>(
 
 fn set_defined<MS: STeXModuleStore>(
     symbol: &SymbolReference<LSPLineCol>,
-    range: SourceRange<LSPLineCol>,
+    range: StringRange<LSPLineCol>,
     groups: &mut Vec<STeXGroup<'_, MS, LSPLineCol>>,
 ) {
     for g in groups.iter_mut().rev() {
@@ -2384,7 +2411,7 @@ stex!(LSP: p => renamedecl{orig:!name}[name:!name]{macroname:!name} => {
     spec.new_name = Some(name);
   }
   spec.macroname = Some(macroname.0.to_string().into());
-  if spec.decl_range == SourceRange::default() {
+  if spec.decl_range == StringRange::default() {
     spec.decl_range = renamedecl.range;
   }
   MacroResult::Success(STeXToken::RenameDecl {
@@ -2406,7 +2433,7 @@ stex!(LSP: p => assign{orig:!name} => {
     p.tokenizer.problem(assign.range.start, format!("Symbol {} already assigned in morphism",orig.0), DiagnosticLevel::Error);
     return MacroResult::Simple(assign);
   }
-  if spec.decl_range == SourceRange::default() {
+  if spec.decl_range == StringRange::default() {
     spec.decl_range = assign.range;
   }
   spec.is_assigned_at = Some(assign.range);
@@ -2429,7 +2456,7 @@ fn define_assignment_macros<'a, MS: STeXModuleStore>(
 fn setup_morphism<'a, MS: STeXModuleStore>(
     p: &mut LaTeXParser<'a, LSPLineCol, STeXToken<LSPLineCol>, STeXParseState<'a, LSPLineCol, MS>>,
     name: &str,
-    archive: &Option<(&'a str, SourceRange<LSPLineCol>)>,
+    archive: &Option<(&'a str, StringRange<LSPLineCol>)>,
     domain: &str,
     pos: LSPLineCol,
 ) -> Option<(
@@ -2467,7 +2494,7 @@ fn elaborate_morphism<'a, MS: STeXModuleStore>(
     p: &mut LaTeXParser<'a, LSPLineCol, STeXToken<LSPLineCol>, STeXParseState<'a, LSPLineCol, MS>>,
     do_macros: bool,
     check_defined: bool,
-    range: SourceRange<LSPLineCol>,
+    range: StringRange<LSPLineCol>,
     name: &str,
     rules: Vec<ModuleRules<LSPLineCol>>,
     mut specs: VecMap<SymbolReference<LSPLineCol>, MorphismSpec<LSPLineCol>>,
@@ -2546,7 +2573,7 @@ stex!(LSP: p => @begin{copymodule}({name:!name}[archive:str]{domain:!name}){
   p.groups.last_mut().unwrap_or_else(|| unreachable!()).kind = GroupKind::Morphism { domain: mors.clone(), rules, specs: VecMap::default() };
   define_assignment_macros(p);
   let dom_range_start = archive.map_or(domain.1.start,|(_,r)| r.start);
-  let domain_range = SourceRange{ start:dom_range_start, end:domain.1.end};
+  let domain_range = StringRange{ start:dom_range_start, end:domain.1.end};
   copymodule.children.push(STeXToken::MorphismEnv {
     kind:MorphismKind::CopyModule,
     domain:mors,uri,
@@ -2589,7 +2616,7 @@ stex!(LSP: p => @begin{copymodule_ast}({name:!name}[archive:str]{domain:!name}){
   p.groups.last_mut().unwrap_or_else(|| unreachable!()).kind = GroupKind::Morphism { domain: mors.clone(), rules, specs: VecMap::default() };
   define_assignment_macros(p);
   let dom_range_start = archive.map_or(domain.1.start,|(_,r)| r.start);
-  let domain_range = SourceRange{ start:dom_range_start, end:domain.1.end};
+  let domain_range = StringRange{ start:dom_range_start, end:domain.1.end};
   copymodule_ast.children.push(STeXToken::MorphismEnv {
     kind:MorphismKind::CopyModule,
     domain:mors,uri,
@@ -2642,11 +2669,11 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
             .problem(m.range.start, "Group expected", DiagnosticLevel::Error);
         return None;
     }
-    p.tokenizer.reader.pop_head();
+    p.tokenizer.reader.next_char();
     p.skip_comments();
     loop {
         if p.tokenizer.reader.starts_with('}') {
-            p.tokenizer.reader.pop_head();
+            p.tokenizer.reader.next_char();
             break;
         }
         let start = p.curr_pos();
@@ -2655,7 +2682,7 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
             .reader
             .read_until(|c| c == '}' || c == ',' || c == '=' || c == '%' || c == '@')
             .trim();
-        let symbol_range = SourceRange {
+        let symbol_range = StringRange {
             start,
             end: p.tokenizer.reader.curr_pos(),
         };
@@ -2679,7 +2706,7 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
                 let txt = p
                     .tokenizer
                     .reader
-                    .read_until_with_brackets::<'{', '}'>(|c| c == ',' || c == '@' || c == '}');
+                    .read_until_with_brackets('{', '}', |c| c == ',' || c == '@' || c == '}');
                 let ret = p.reparse(txt, start);
                 p.skip_comments();
                 ret
@@ -2689,18 +2716,18 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
             () => {{
                 p.skip_comments();
                 let real_name = if p.tokenizer.reader.starts_with('[') {
-                    p.tokenizer.reader.pop_head();
+                    p.tokenizer.reader.next_char();
                     let start = p.curr_pos();
                     let namestr = p
                         .tokenizer
                         .reader
                         .read_until(|c| c == ']' || c == '=' || c == ',' || c == '}' || c == '%');
-                    let range = SourceRange {
+                    let range = StringRange {
                         start,
                         end: p.curr_pos(),
                     };
                     p.skip_comments();
-                    match p.tokenizer.reader.pop_head() {
+                    match p.tokenizer.reader.next_char() {
                         Some(']') => (),
                         _ => {
                             p.tokenizer
@@ -2708,7 +2735,7 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
                             return None;
                         }
                     }
-                    let range = SourceRange {
+                    let range = StringRange {
                         start,
                         end: p.curr_pos(),
                     };
@@ -2729,7 +2756,7 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
                     .tokenizer
                     .reader
                     .read_until(|c| c == '=' || c == ',' || c == '}' || c == '%');
-                let range = SourceRange {
+                let range = StringRange {
                     start,
                     end: p.curr_pos(),
                 };
@@ -2737,11 +2764,11 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
                 (real_name, namestr.to_string().into(), range)
             }};
         }
-        match p.tokenizer.reader.pop_head() {
+        match p.tokenizer.reader.next_char() {
             Some('=') => {
                 let ret = def!();
                 let infix2 = p.curr_pos();
-                match p.tokenizer.reader.pop_head() {
+                match p.tokenizer.reader.next_char() {
                     Some('}') => {
                         specs.push(InlineMorphAssign {
                             symbol,
@@ -2762,7 +2789,7 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
                     }
                     Some('@') => {
                         let (real_name, macroname, mrange) = rename!();
-                        match p.tokenizer.reader.pop_head() {
+                        match p.tokenizer.reader.next_char() {
                             Some('}') => {
                                 specs.push(InlineMorphAssign {
                                     symbol,
@@ -2810,7 +2837,7 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
             Some('@') => {
                 let (real_name, macroname, mrange) = rename!();
                 let infix2 = p.curr_pos();
-                match p.tokenizer.reader.pop_head() {
+                match p.tokenizer.reader.next_char() {
                     Some('}') => {
                         specs.push(InlineMorphAssign {
                             symbol,
@@ -2837,7 +2864,7 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
                     }
                     Some('=') => {
                         let ret = def!();
-                        match p.tokenizer.reader.pop_head() {
+                        match p.tokenizer.reader.next_char() {
                             Some('}') => {
                                 specs.push(InlineMorphAssign {
                                     symbol,
@@ -2974,7 +3001,7 @@ stex!(LSP: p => @begin{interpretmodule}({name:!name}[archive:str]{domain:!name})
   p.groups.last_mut().unwrap_or_else(|| unreachable!()).kind = GroupKind::Morphism { domain: mors.clone(), rules, specs: VecMap::default() };
   define_assignment_macros(p);
   let dom_range_start = archive.map_or(domain.1.start,|(_,r)| r.start);
-  let domain_range = SourceRange{ start:dom_range_start, end:domain.1.end};
+  let domain_range = StringRange{ start:dom_range_start, end:domain.1.end};
   interpretmodule.children.push(STeXToken::MorphismEnv {
     kind:MorphismKind::InterpretModule,
     domain:mors,uri,
@@ -3017,7 +3044,7 @@ stex!(LSP: p => @begin{interpretmodule_ast}({name:!name}[archive:str]{domain:!na
   p.groups.last_mut().unwrap_or_else(|| unreachable!()).kind = GroupKind::Morphism { domain: mors.clone(), rules, specs: VecMap::default() };
   define_assignment_macros(p);
   let dom_range_start = archive.map_or(domain.1.start,|(_,r)| r.start);
-  let domain_range = SourceRange{ start:dom_range_start, end:domain.1.end};
+  let domain_range = StringRange{ start:dom_range_start, end:domain.1.end};
   interpretmodule_ast.children.push(STeXToken::MorphismEnv {
     kind:MorphismKind::InterpretModule,
     domain:mors,uri,
@@ -3056,7 +3083,7 @@ stex!(LSP: p => @begin{interpretmodule_ast}({name:!name}[archive:str]{domain:!na
 });
 
 #[allow(clippy::needless_pass_by_value)]
-pub(super) fn semantic_macro<'a, MS: STeXModuleStore, Pos: SourcePos + 'a>(
+pub(super) fn semantic_macro<'a, MS: STeXModuleStore, Pos: StringPosition + 'a>(
     arg: &MacroArg<Pos>, //(uri,argnum):&(SymbolReference<Pos>,u8),
     m: Macro<'a, Pos>,
     _parser: &mut LaTeXParser<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>,
@@ -3072,7 +3099,7 @@ pub(super) fn semantic_macro<'a, MS: STeXModuleStore, Pos: SourcePos + 'a>(
     })
 }
 
-pub(super) fn variable_macro<'a, MS: STeXModuleStore, Pos: SourcePos + 'a>(
+pub(super) fn variable_macro<'a, MS: STeXModuleStore, Pos: StringPosition + 'a>(
     arg: &MacroArg<Pos>, //(uri,argnum):&(SymbolReference<Pos>,u8),
     m: Macro<'a, Pos>,
     _parser: &mut LaTeXParser<'a, Pos, STeXToken<Pos>, STeXParseState<'a, Pos, MS>>,
