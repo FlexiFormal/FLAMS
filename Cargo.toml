@@ -27,7 +27,7 @@ members = [
     "source/router/search",
     "source/router/vscode-bindings",
     "source/router/flodown",
-    "experiments",
+    # "experiments",
     "source/ffi", "solver/main","solver/trace"#,"solver/new"
     #"maintest"
 ]
