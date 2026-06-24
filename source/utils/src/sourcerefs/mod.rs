@@ -66,6 +66,11 @@ pub trait StringPosition:
     fn into_many<P: StringPosition>(source: &str) -> PositionConverter<'_, Self, P> {
         PositionConverter::new(source)
     }
+    fn get_range(start: Self, end: Self, text: &str) -> Option<&str> {
+        let off =
+            PositionConverter::<Self, ByteOffset>::new(text).next_range(StringRange { start, end });
+        text.get(off.start.0..off.end.0)
+    }
 
     fn inc_offset_by(&mut self, text: &str);
     fn inc_by(&mut self, c: char);

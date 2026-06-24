@@ -102,7 +102,7 @@ pub extern "C" fn load_all_files() {
     state.clear();
     // let mut lspstore = LSPStore::<true>::new(&mut state);
     for (p, uri) in files {
-        if let Some(ret) = LSPStore::<true>::new(&mut state).load(p.as_ref(), &uri) {
+        if let Some(ret) = LSPStore::<true>::new(&mut state, None, false).load(p.as_ref(), &uri) {
             state.insert(File(p.clone()), Data(ret, true));
         }
     }
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn load_file(path: *const libc::c_char) {
     let lspdoc = LSPDocument::new("".to_string(), File(Path::new(path_str).into()));
     let p = Path::new(path_str);
     let uri: &DocumentUri = lspdoc.document_uri().unwrap();
-    if let Some(ret) = LSPStore::<true>::new(&mut state).load(p.as_ref(), &uri) {
+    if let Some(ret) = LSPStore::<true>::new(&mut state, None, false).load(p.as_ref(), &uri) {
         state.insert(File(p.into()), Data(ret, true));
     }
 }
