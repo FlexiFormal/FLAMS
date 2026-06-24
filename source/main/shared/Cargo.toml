@@ -1,21 +1,18 @@
 [package]
-name = "flams"
+name = "flams-main"
 version = "0.0.5"
 edition = "2024"
 description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 
 [lib]
-name = "flams"
-crate-type = ["cdylib", "rlib"]
+name = "flams_main"
+crate-type = ["rlib"]
 
 #[package.metadata.wasm-pack.profile.release]
 #wasm-opt = ['-Oz','--enable-bulk-memory','--all-features']
 
 #[package.metadata.wasm-pack.profile.dev]
 #wasm-opt = false
-
-[[bin]]
-name = "flams"
 
 [features]
 docs = []

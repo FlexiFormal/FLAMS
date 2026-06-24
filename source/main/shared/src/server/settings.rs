@@ -5,7 +5,7 @@ use flams_utils::settings::GitlabSettings;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(propagate_version = true, version, about, long_about = Some(
+#[command(name="flams",propagate_version = true, version, about, long_about = Some(
 "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System\n\
 --------------------------------------------------------------------\n\
 See the \u{1b}]8;;https://github.com/UniFormal/MMT\u{1b}\\documentation\u{1b}]8;;\u{1b}\\ for details"

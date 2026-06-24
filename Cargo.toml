@@ -3,7 +3,9 @@ members = [
     "math-archives",
     "backend-types",
     "search",
-    "source/main",
+    "source/main/shared",
+    "source/main/flams",
+    "source/main/wasm",
     "source/utils",
     "source/database",
     "source/system",
@@ -49,14 +51,14 @@ panic = 'abort'
 opt-level = 'z'
 lto = true
 debug=true
-#opt-level = 2
-#split-debuginfo = "off"
 
 [profile.flams-release]
 inherits = "release"
 opt-level = 2
-lto = "fat"
+lto = "thin" # "fat" # 
+codegen-units = 16
 panic = "unwind"
+
 
 [profile.flams-dev]
 inherits = "dev"
@@ -120,6 +122,8 @@ flams-git = { path = "source/git", version = "0.0.1" }
 flams-web-utils = { path = "source/web-utils", version = "0.0.1" }
 ftml-solver = { path = "solver/main", version= "0.0.1"}
 ftml-solver-trace = { path = "solver/trace", version= "0.0.1"}
+
+flams-main = { path = "source/main/shared", version = "0.0.5" }
 
 flams-router-base = { path = "source/router/base", version = "0.0.1" }
 flams-router-dashboard = { path = "source/router/dashboard", version = "0.0.1" }
@@ -348,9 +352,9 @@ hash-file-name = "hash.txt"
 name = "flams"
 #output-name = "flams"
 bin-package = "flams"
-lib-package = "flams"
-bin-features = ["ssr","tantivy"] #,"vectorsearch"] #
-lib-features = ["hydrate"]
+lib-package = "flams-wasm"
+bin-features = ["tantivy"] #,"vectorsearch"] #
+lib-features = [] #["hydrate"]
 lib-default-features = false
 bin-profile-release = "flams-release"
 bin-profile-dev = "flams-dev"

@@ -1,0 +1,13 @@
+[package]
+name = "flams-wasm"
+version = "0.0.5"
+edition = "2024"
+description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
+
+[lib]
+name = "flams"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+flams-main = {workspace=true,features=["hydrate"]}
+wasm-bindgen = { workspace = true }
