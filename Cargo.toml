@@ -56,7 +56,7 @@ debug=true
 inherits = "release"
 opt-level = 2
 lto = "fat" # "thin" # 
-codegen-units = 16
+codegen-units = 1
 panic = "unwind"
 
 
