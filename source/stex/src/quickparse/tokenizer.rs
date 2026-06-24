@@ -16,7 +16,7 @@ pub struct TeXTokenizer<'a, Pos: StringPosition> {
     pub reader: StrParser<'a, Pos>,
     pub letters: String,
     pub mode: Mode,
-    err: &'a mut dyn FnMut(String, StringRange<Pos>, DiagnosticLevel),
+    pub(crate) err: &'a mut dyn FnMut(String, StringRange<Pos>, DiagnosticLevel),
 }
 
 impl<'a, Pos: StringPosition> Iterator for TeXTokenizer<'a, Pos> {

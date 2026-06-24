@@ -1200,9 +1200,7 @@ impl AnnotExt for STeXAnnot {
                     cont(*r, STeXSemanticTokens::SYMBOL);
                 }
             }
-            Self::SnifySuggestion { range, .. } => {
-                cont(*range, STeXSemanticTokens::KEYWORD);
-            }
+            Self::SnifySuggestion { .. } => (),
         }
     }
 
@@ -1411,20 +1409,6 @@ impl AnnotExt for STeXAnnot {
                     }),
                 })
             }
-            Self::SnifySuggestion { range, symbols } => Some(lsp::Hover {
-                range: Some(StringRange::into_range(*range)),
-                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                    kind: lsp::MarkupKind::Markdown,
-                    value: {
-                        use std::fmt::Write;
-                        let mut r = String::new();
-                        for s in symbols {
-                            write!(r, " - <sup>{s}</sup>\n");
-                        }
-                        r
-                    },
-                }),
-            }),
             Self::ImportModule { .. }
             | Self::UseModule { .. }
             | Self::SetMetatheory { .. }
@@ -1439,7 +1423,8 @@ impl AnnotExt for STeXAnnot {
             | Self::TextSymdecl { .. }
             | Self::Problem { .. }
             | Self::Defnotation { .. }
-            | Self::MorphismEnv { .. } => None,
+            | Self::MorphismEnv { .. }
+            | Self::SnifySuggestion { .. } => None,
         }
     }
     fn inlay_hint(&self) -> Option<lsp::InlayHint> {
@@ -1495,37 +1480,6 @@ impl AnnotExt for STeXAnnot {
             v: &[SymbolReference<LSPLineCol>],
             r: StringRange<LSPLineCol>,
         ) -> lsp::CodeActionResponse {
-            fn disamb(uri: &SymbolUri, all: &[String]) -> String {
-                let mut ret = format!("?{}", uri.name());
-                if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
-                    return ret;
-                }
-                ret = format!("?{}{ret}", uri.module_name());
-                if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
-                    return ret;
-                }
-                if let Some(path) = uri.path() {
-                    let mut had_path = false;
-                    for s in path.steps().rev() {
-                        if had_path {
-                            ret = format!("{s}/{ret}");
-                        } else {
-                            had_path = true;
-                            ret = format!("{s}{ret}");
-                        }
-                        if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
-                            return ret;
-                        }
-                    }
-                }
-                for i in uri.archive_id().steps().rev() {
-                    ret = format!("{i}/{ret}");
-                    if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
-                        return ret;
-                    }
-                }
-                ret
-            }
             let all_strs: SmallVec<_, 2> = v
                 .iter()
                 .map(|u| {
@@ -1622,12 +1576,39 @@ impl AnnotExt for STeXAnnot {
                         }
                         return Vec::new();
                     }
-                    Vec::new()
+                }
+                Vec::new()
+            }
+            Self::SnifySuggestion { range, symbols } => {
+                if range.contains(pos) {
+                    symbols
+                        .iter()
+                        .map(|(s, needs_usemodule)| {
+                            lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
+                                title: s.to_string(),
+                                kind: Some(lsp::CodeActionKind::QUICKFIX), //::QUICKFIX),
+                                diagnostics: None,
+                                edit: None,
+                                command: Some(lsp::Command {
+                                    title: "insert".to_string(),
+                                    command: "snify/annotate".to_string(),
+                                    arguments: Some(vec![
+                                        s.to_string().into(),
+                                        (*needs_usemodule).into(),
+                                        url.to_string().into(),
+                                        ::serde_json::to_value(*range).expect("wut"),
+                                    ]),
+                                }),
+                                is_preferred: None,
+                                disabled: None,
+                                data: None,
+                            })
+                        })
+                        .collect()
                 } else {
                     Vec::new()
                 }
             }
-
             Self::Problem { .. }
             | Self::Module { .. }
             | Self::MathStructure { .. }
@@ -1653,8 +1634,7 @@ impl AnnotExt for STeXAnnot {
             | Self::Varseq { .. }
             | Self::Defnotation { .. }
             | Self::Definiens { .. }
-            | Self::Assign { .. }
-            | Self::SnifySuggestion { .. } => Vec::new(),
+            | Self::Assign { .. } => Vec::new(),
         }
     }
 
@@ -2110,7 +2090,7 @@ impl LSPState {
         let d = self.get(uri)?;
         let slf = self.clone();
         Some(async move {
-            d.with_annots(slf, |data| {
+            d.with_annots(slf, false, |data| {
                 let diags = &data.diagnostics;
                 let r = lsp::DocumentDiagnosticReportResult::Report(
                     lsp::DocumentDiagnosticReport::Full(lsp::RelatedFullDocumentDiagnosticReport {
@@ -2173,7 +2153,7 @@ impl LSPState {
 
         let d = self.get(uri)?;
         let slf = self.clone();
-        Some(d.with_annots(slf, |data| {
+        Some(d.with_annots(slf, false, |data| {
             let r = lsp::DocumentSymbolResponse::Nested(to_symbols(&data.annotations));
             tracing::trace!("document symbols: {:?}", r);
             if let Some(p) = progress {
@@ -2192,7 +2172,7 @@ impl LSPState {
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let slf = self.clone();
-        Some(d.with_annots(slf, move |data| {
+        Some(d.with_annots(slf, false, move |data| {
             let mut ret = Vec::new();
             let iter: AnnotIter = data.annotations.iter().into();
             for e in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
@@ -2411,37 +2391,40 @@ impl LSPState {
         }
         Some(async move {
             let e = d
-                .with_annots(slf.clone(), move |data| match at_position(data, pos)? {
-                    STeXAnnot::Module { uri, .. } => Some(Target::Module(uri.clone())),
-                    STeXAnnot::MathStructure { uri, .. } => {
-                        Some(Target::Structure(uri.uri.clone()))
+                .with_annots(slf.clone(), false, move |data| {
+                    match at_position(data, pos)? {
+                        STeXAnnot::Module { uri, .. } => Some(Target::Module(uri.clone())),
+                        STeXAnnot::MathStructure { uri, .. } => {
+                            Some(Target::Structure(uri.uri.clone()))
+                        }
+                        STeXAnnot::MorphismEnv { uri, .. }
+                        | STeXAnnot::InlineMorphism { uri, .. } => {
+                            Some(Target::Morphism(uri.clone()))
+                        }
+                        STeXAnnot::Symdecl { uri, .. }
+                        | STeXAnnot::TextSymdecl { uri, .. }
+                        | STeXAnnot::Paragraph {
+                            symbol: Some(uri), ..
+                        }
+                        | STeXAnnot::InlineParagraph {
+                            symbol: Some(uri), ..
+                        }
+                        | STeXAnnot::Symdef { uri, .. } => Some(Target::Symbol(uri.uri.clone())),
+                        STeXAnnot::RenameDecl { .. } => None, // TODO
+                        STeXAnnot::Vardef { .. } | STeXAnnot::Varseq { .. } => {
+                            // TODO
+                            None
+                        }
+                        _ => None,
                     }
-                    STeXAnnot::MorphismEnv { uri, .. } | STeXAnnot::InlineMorphism { uri, .. } => {
-                        Some(Target::Morphism(uri.clone()))
-                    }
-                    STeXAnnot::Symdecl { uri, .. }
-                    | STeXAnnot::TextSymdecl { uri, .. }
-                    | STeXAnnot::Paragraph {
-                        symbol: Some(uri), ..
-                    }
-                    | STeXAnnot::InlineParagraph {
-                        symbol: Some(uri), ..
-                    }
-                    | STeXAnnot::Symdef { uri, .. } => Some(Target::Symbol(uri.uri.clone())),
-                    STeXAnnot::RenameDecl { .. } => None, // TODO
-                    STeXAnnot::Vardef { .. } | STeXAnnot::Varseq { .. } => {
-                        // TODO
-                        None
-                    }
-                    _ => None,
                 })
                 .await??;
             tokio::task::spawn_blocking(move || {
                 let all = slf.documents.read();
                 macro_rules! iter {
                     ($annot:ident => $then:expr) => {
-                        for (url,data) in all.iter() {
-                            let data = match data {
+                        for (k,v) in all.iter() {
+                            let data = match v {
                                 DocData::Data(d,_ ) => d,
                                 DocData::Doc(d) => &d.annotations
                             };
@@ -2450,12 +2433,13 @@ impl LSPState {
                             macro_rules! here {
                                 ($e:expr) => {
                                     lsp::Location {
-                                        uri:url.clone().into(),
+                                        uri:k.clone().into(),
                                         range: StringRange::into_range($e)
                                     }
                                 }
                             }
                             for $annot in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) { $then }
+                            drop(data);
                         }
                     }
                 }
@@ -2527,7 +2511,7 @@ impl LSPState {
         let da = d.archive().cloned();
         let pos = LSPLineCol::new(position.line, position.character);
         Some(
-            d.with_annots(self.clone(), move |data| {
+            d.with_annots(self.clone(), false, move |data| {
                 at_position(data, pos).and_then(|e| e.hover(da.as_ref(), pos))
             })
             .map(|o| o.flatten()),
@@ -2546,7 +2530,7 @@ impl LSPState {
         let pos = LSPLineCol::new(range.start.line, range.start.character);
         let url = uri.into();
         Some(
-            d.with_annots(self.clone(), move |data| {
+            d.with_annots(self.clone(), false, move |data| {
                 at_position(data, pos).map(|e| e.code_action(pos, &url))
             })
             .map(|o| o.flatten()),
@@ -2564,7 +2548,7 @@ impl LSPState {
         let d = self.get(&uri)?;
         let pos = LSPLineCol::new(position.line, position.character);
         Some(
-            d.with_annots(self.clone(), move |data| {
+            d.with_annots(self.clone(), false, move |data| {
                 at_position(data, pos).and_then(|e| e.goto_definition(&uri, pos))
             })
             .map(|o| o.flatten()),
@@ -2578,7 +2562,7 @@ impl LSPState {
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<Vec<lsp::InlayHint>>> + use<>> {
         let d = self.get(uri)?;
-        Some(d.with_annots(self.clone(), move |data| {
+        Some(d.with_annots(self.clone(), false, move |data| {
             let iter: AnnotIter = data.annotations.iter().into();
             <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter)
                 .filter_map(|e| e.inlay_hint())
@@ -2594,7 +2578,7 @@ impl LSPState {
     ) -> Option<impl std::future::Future<Output = Option<lsp::SemanticTokens>> + use<>> {
         //let range = range.map(SourceRange::from_range);
         let d = self.get(uri)?;
-        Some(d.with_annots(self.clone(), |data| {
+        Some(d.with_annots(self.clone(), false, |data| {
             let mut ret = Vec::new();
             let mut curr = (0u32, 0u32);
             for e in data.annotations.iter() {
@@ -2684,4 +2668,55 @@ pub fn to_diagnostic(diag: &STeXDiagnostic) -> lsp::Diagnostic {
         tags: None,
         data: None,
     }
+}
+#[must_use]
+pub fn into_diagnostic(diag: STeXDiagnostic) -> lsp::Diagnostic {
+    lsp::Diagnostic {
+        range: diag.range.into_range(),
+        severity: Some(match diag.level {
+            DiagnosticLevel::Error => lsp::DiagnosticSeverity::ERROR,
+            DiagnosticLevel::Info => lsp::DiagnosticSeverity::INFORMATION,
+            DiagnosticLevel::Warning => lsp::DiagnosticSeverity::WARNING,
+            DiagnosticLevel::Hint => lsp::DiagnosticSeverity::HINT,
+        }),
+        code: None,
+        code_description: None,
+        source: None,
+        message: diag.message,
+        related_information: None,
+        tags: None,
+        data: None,
+    }
+}
+
+fn disamb(uri: &SymbolUri, all: &[String]) -> String {
+    let mut ret = format!("?{}", uri.name());
+    if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+        return ret;
+    }
+    ret = format!("?{}{ret}", uri.module_name());
+    if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+        return ret;
+    }
+    if let Some(path) = uri.path() {
+        let mut had_path = false;
+        for s in path.steps().rev() {
+            if had_path {
+                ret = format!("{s}/{ret}");
+            } else {
+                had_path = true;
+                ret = format!("{s}{ret}");
+            }
+            if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+                return ret;
+            }
+        }
+    }
+    for i in uri.archive_id().steps().rev() {
+        ret = format!("{i}/{ret}");
+        if all.iter().filter(|s| s.ends_with(&ret)).count() == 1 {
+            return ret;
+        }
+    }
+    ret
 }

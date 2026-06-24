@@ -1,20 +1,20 @@
 use super::{
+    DiagnosticLevel, STeXParseData,
     rules::{
         MathStructureArg, NotationArg, ParagraphArg, ProblemArg, SModuleArg, SymdeclArg, SymdefArg,
         TextSymdeclArg, VardefArg,
     },
-    DiagnosticLevel, STeXParseData,
 };
 use crate::quickparse::{
     latex::{
-        rules::{AnyEnv, AnyMacro, DynMacro},
         Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
+        rules::{AnyEnv, AnyMacro, DynMacro},
     },
     stex::rules::{IncludeProblemArg, MHGraphicsArg},
 };
 use flams_math_archives::{
-    backend::{AnyBackend, LocalBackend},
     MathArchive,
+    backend::{AnyBackend, LocalBackend},
 };
 use flams_utils::{
     id_counters::IdCounter,
@@ -296,7 +296,7 @@ pub enum STeXToken<Pos: StringPosition> {
     },
     SnifySuggestion {
         range: StringRange<Pos>,
-        symbols: SmallVec<SymbolUri, 1>,
+        symbols: SmallVec<(SymbolUri, bool), 1>,
     },
     Vec(Vec<Self>),
 }
@@ -581,17 +581,11 @@ pub trait STeXModuleStore {
         r: StringRange<Pos>,
         text: &str,
         language: Language,
+        needs_usemodule: &dyn Fn(&SymbolUri) -> bool,
     ) -> Option<STeXToken<Pos>> {
         None
     }
-    fn add_verbalization<Pos: StringPosition>(
-        &mut self,
-        s: &str,
-        mode: &SymnameMode<Pos>,
-        symbol: &SymbolUri,
-        language: Language,
-    ) {
-    }
+    fn add_verbalization(&mut self, s: &str, symbol: &SymbolUri, language: Language) {}
 }
 impl STeXModuleStore for () {
     const FULL: bool = false;
@@ -1188,11 +1182,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 }
             }
         }
-        if ret.is_empty() {
-            None
-        } else {
-            Some(ret)
-        }
+        if ret.is_empty() { None } else { Some(ret) }
     }
 
     #[allow(clippy::unused_self)]
@@ -1341,11 +1331,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                 }
             }
         }
-        if ret.is_empty() {
-            None
-        } else {
-            Some(ret)
-        }
+        if ret.is_empty() { None } else { Some(ret) }
     }
 
     #[allow(clippy::unused_self)]
@@ -1358,7 +1344,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
             for r in g.semantic_rules.iter().rev() {
                 match r {
                     SemanticRule::Structure { symbol, rules, .. } if symbol.uri.uri == uri.uri => {
-                        return Some(rules.clone())
+                        return Some(rules.clone());
                     }
                     SemanticRule::Module(_, r) => {
                         for r in r.rules.iter().rev() {
@@ -1366,7 +1352,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                                 ModuleRule::Structure { symbol, rules, .. }
                                     if symbol.uri.uri == uri.uri =>
                                 {
-                                    return Some(rules.clone())
+                                    return Some(rules.clone());
                                 }
                                 _ => (),
                             }
@@ -1393,7 +1379,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                     SemanticRule::Structure { symbol, rules, .. }
                         if Self::compare(namestr, module, path, &symbol.uri.uri) =>
                     {
-                        return Some((symbol.uri.clone(), rules.clone()))
+                        return Some((symbol.uri.clone(), rules.clone()));
                     }
                     SemanticRule::Module(_, r) => {
                         for r in r.rules.iter().rev() {
@@ -1401,7 +1387,7 @@ impl<'a, MS: STeXModuleStore> STeXParseState<'a, LSPLineCol, MS> {
                                 ModuleRule::Structure { symbol, rules, .. }
                                     if Self::compare(namestr, module, path, &symbol.uri.uri) =>
                                 {
-                                    return Some((symbol.uri.clone(), rules.clone()))
+                                    return Some((symbol.uri.clone(), rules.clone()));
                                 }
                                 _ => (),
                             }
@@ -1706,12 +1692,8 @@ impl<'a, Pos: StringPosition, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
                             _ => (),
                         }
                     }
-                    self.module_store.add_verbalization::<LSPLineCol>(
-                        uri.uri.name.as_ref(),
-                        &SymnameMode::PrePost {
-                            pre: None,
-                            post: None,
-                        },
+                    self.module_store.add_verbalization(
+                        uri.uri.name.last(),
                         &uri.uri,
                         Language::English,
                     );
@@ -1825,12 +1807,8 @@ impl<'a, Pos: StringPosition, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
                             _ => (),
                         }
                     }
-                    self.module_store.add_verbalization::<LSPLineCol>(
-                        uri.uri.name.as_ref(),
-                        &SymnameMode::PrePost {
-                            pre: None,
-                            post: None,
-                        },
+                    self.module_store.add_verbalization(
+                        uri.uri.name.last(),
                         &uri.uri,
                         Language::English,
                     );
@@ -2145,7 +2123,43 @@ impl<'a, MS: STeXModuleStore, Pos: StringPosition> ParserState<'a, Pos, STeXToke
     type Group = STeXGroup<'a, MS, Pos>;
     type MacroArg = MacroArg<Pos>;
     #[inline]
-    fn from_text(&self, r: StringRange<Pos>, text: &'a str) -> Option<STeXToken<Pos>> {
-        self.module_store.add_text(r, text, self.language)
+    fn from_text(
+        &self,
+        r: StringRange<Pos>,
+        text: &'a str,
+        in_document: bool,
+        in_math: bool,
+        groups: &mut Groups<'a, '_, Pos, STeXToken<Pos>, Self>,
+    ) -> Option<STeXToken<Pos>> {
+        if MS::FULL && in_document && !in_math {
+            let f = |s: &SymbolUri| {
+                for g in groups.groups.iter().rev() {
+                    for r in g.semantic_rules.iter().rev() {
+                        if let SemanticRule::Symbol(sym)
+                        | SemanticRule::Structure { symbol: sym, .. } = r
+                            && sym.uri.uri == *s
+                        {
+                            return false;
+                        }
+                    }
+                }
+                true
+            };
+            let r = self.module_store.add_text(r, text, self.language, &f);
+            if let Some(STeXToken::Vec(v)) = &r {
+                for t in v {
+                    if let STeXToken::SnifySuggestion { range, .. } = t {
+                        (groups.tokenizer.err)(
+                            "snify suggestion".to_string(),
+                            *range,
+                            DiagnosticLevel::Info,
+                        )
+                    }
+                }
+            }
+            r
+        } else {
+            None
+        }
     }
 }

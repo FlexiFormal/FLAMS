@@ -27,10 +27,11 @@ struct DocumentData {
 
 #[derive(Clone, Debug)]
 pub struct LSPDocument {
-    up_to_date: triomphe::Arc<AtomicBool>,
+    pub(crate) up_to_date: triomphe::Arc<AtomicBool>,
     text: triomphe::Arc<parking_lot::Mutex<LSPText>>,
     pub annotations: STeXParseData,
     data: triomphe::Arc<DocumentData>,
+    pub(crate) force_snify: triomphe::Arc<AtomicBool>,
 }
 impl PartialEq for LSPDocument {
     #[inline]
@@ -92,6 +93,7 @@ impl LSPDocument {
             text: triomphe::Arc::new(parking_lot::Mutex::new(r)),
             data: triomphe::Arc::new(data),
             annotations: STeXParseData::default(),
+            force_snify: triomphe::Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -169,9 +171,10 @@ impl LSPDocument {
     }
 
     #[allow(clippy::significant_drop_tightening)]
-    fn load_annotations_and<R>(
+    pub(crate) fn load_annotations_and<R>(
         &self,
         state: LSPState,
+        snify: bool,
         f: impl FnOnce(&STeXParseDataI) -> R,
     ) -> Option<R> {
         let lock = self.text.lock();
@@ -180,18 +183,19 @@ impl LSPDocument {
 
         let mut docs = state.documents.write();
         let mut vlock = state.verbalizations.lock();
-        let mut store = LSPStore::<true>::new(&mut docs, &mut vlock);
-        let data =
-    //let (data,t) = measure(||
-      flams_stex::quickparse::stex::quickparse(
-      uri,&lock.text, path,
-      &AnyBackend::Global,
-      &mut store);
-        //);
+        let mut store = LSPStore::<true>::new(&mut docs, Some(&mut vlock), snify);
+        let data = flams_stex::quickparse::stex::quickparse(
+            uri,
+            &lock.text,
+            path,
+            &AnyBackend::Global,
+            &mut store,
+        );
         data.replace(&self.annotations);
         self.up_to_date
             .store(true, std::sync::atomic::Ordering::SeqCst);
         drop(store);
+        drop(vlock);
         drop(docs);
         //tracing::info!("quickparse took {t}");
         drop(lock);
@@ -213,6 +217,7 @@ impl LSPDocument {
     pub async fn with_annots<R: Send + 'static>(
         self,
         state: LSPState,
+        snify: bool,
         f: impl FnOnce(&STeXParseDataI) -> R + Send + 'static,
     ) -> Option<R> {
         if !self.has_annots() {
@@ -225,7 +230,12 @@ impl LSPDocument {
             }
             return Some(f(&lock));
         }
-        match tokio::task::spawn_blocking(move || self.load_annotations_and(state, f)).await {
+        let snify = snify
+            || (self
+                .force_snify
+                .swap(false, std::sync::atomic::Ordering::AcqRel));
+        match tokio::task::spawn_blocking(move || self.load_annotations_and(state, snify, f)).await
+        {
             Ok(r) => r,
             Err(e) => {
                 tracing::error!("Error computing annots: {}", e);
@@ -239,6 +249,7 @@ impl LSPDocument {
     pub async fn with_annots_block<R: Send + 'static>(
         self,
         state: LSPState,
+        snify: bool,
         f: impl FnOnce(&STeXParseDataI) -> R + Send + 'static,
     ) -> Option<R> {
         if !self.has_annots() {
@@ -257,7 +268,8 @@ impl LSPDocument {
                 }
             };
         }
-        match tokio::task::spawn_blocking(move || self.load_annotations_and(state, f)).await {
+        match tokio::task::spawn_blocking(move || self.load_annotations_and(state, snify, f)).await
+        {
             Ok(r) => r,
             Err(e) => {
                 tracing::error!("Error computing annots: {}", e);
@@ -267,8 +279,8 @@ impl LSPDocument {
     }
 
     #[inline]
-    pub fn compute_annots(&self, state: LSPState) {
-        self.load_annotations_and(state, |_| ());
+    pub fn compute_annots(&self, state: LSPState, snify: bool) {
+        self.load_annotations_and(state, snify, |_| ());
     }
 }
 

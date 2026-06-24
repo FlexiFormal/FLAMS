@@ -1,4 +1,4 @@
-use std::{borrow::Cow, hint::unreachable_unchecked};
+use std::{borrow::Cow};
 
 use flams_utils::{
     CharExt,
@@ -16,6 +16,7 @@ pub struct VerbalizationTrie(
 pub struct UnlockedVerbalizationTrie<'a>(parking_lot::MutexGuard<'a,radix_trie::Trie<Verbalization, SmallVec<SymbolUri, 1>>>);
 impl UnlockedVerbalizationTrie<'_> {
     pub fn insert(&mut self, language: Language, text: &str, uri: &SymbolUri) {
+        if text.len() <= 3 {return;}
         let stem = Verbalization::new(text, language);
         if let Some(e) = self.0.get_mut(&stem) {
             if !e.contains(uri) {
@@ -29,7 +30,8 @@ impl UnlockedVerbalizationTrie<'_> {
         &self,
         language: Language,
         mut text: StrParser<P>,
-    ) -> Vec<(StringRange<P>, SmallVec<SymbolUri, 1>)> {
+        needs_usemodule: &dyn Fn(&SymbolUri) -> bool
+    ) -> Vec<(StringRange<P>, SmallVec<(SymbolUri,bool), 1>)> {
         use radix_trie::TrieCommon;
         struct StackElem<P: StringPosition> {
             verb: Verbalization,
@@ -38,15 +40,12 @@ impl UnlockedVerbalizationTrie<'_> {
             has_singleton: bool,
             merged: Option<(Verbalization, bool)>,
         }
-        let mut stack: Vec<StackElem<P>> = Vec::with_capacity(1);
-        let mut ret = Vec::new();
-        let trie = &self.0;
-        //tracing::warn!("New text fragment: {}",text.rest());
-        macro_rules! clear_stack {
-            () => {{
+        fn clear<P:StringPosition>(stack:&mut Vec<StackElem<P>>,ret:&mut Vec<(StringRange<P>, SmallVec<(SymbolUri,bool), 1>)>,
+            needs_usemodule: &dyn Fn(&SymbolUri) -> bool,
+            trie:&radix_trie::Trie<Verbalization,SmallVec<SymbolUri, 1>>) {
                 let mut readd = Vec::new();
                 if let Some(start) = stack.first().map(|e| e.range.start) {
-                    for e in std::mem::take(&mut stack).into_iter().rev() {
+                    for e in std::mem::take(stack).into_iter().rev() {
                         if let Some((merged, true)) = e.merged {
                             let range = StringRange {
                                 start,
@@ -54,47 +53,44 @@ impl UnlockedVerbalizationTrie<'_> {
                             };
                             // SAFETY: e.merged.1 == true
                             readd.push((range, unsafe {
-                                trie.get(&merged).unwrap_unchecked().clone()
+                                trie.get(&merged).unwrap_unchecked().iter().map(|s| (s.clone(),needs_usemodule(s))).collect()
                             }));
                             break;
                         }
                         if e.has_singleton {
                             // SAFETY: has_singleton == true
                             readd.push((e.range, unsafe {
-                                trie.get(&e.verb).unwrap_unchecked().clone()
+                                trie.get(&e.verb).unwrap_unchecked().iter().map(|s| (s.clone(),needs_usemodule(s))).collect()
                             }));
                         }
                     }
                     ret.extend(readd.into_iter().rev());
                 }
-            }};
-        }
+            }
+        let mut stack: Vec<StackElem<P>> = Vec::with_capacity(1);
+        let mut ret = Vec::new();
+        let trie = &self.0;
+
         while !text.rest().is_empty() {
             text.trim_start();
             let start = text.pos;
             let next = text.read_until(|c| Verbalization::BREAKS.contains(&c));
-            //tracing::warn!("Trying: \"{next}\"");
             let end = text.pos;
             let separator = text.next_char();
             let verb = Verbalization::new(next, language);
             let range = StringRange { start, end };
             let has_singleton = trie.get(&verb).is_some();
-            /*if has_singleton {
-                tracing::warn!("Found!");
-            }*/
             if let Some(last) = stack.last() {
                 let merger = last
                     .merged
                     .as_ref()
                     .map_or_else(|| last.verb.clone(), |(m, _)| m.clone());
                 let merged = merger.merge(&verb, last.separator);
-                //tracing::warn!("Trying: \"{merged}\"");
                 if let Some(sub) = trie.subtrie(&verb)
                     && !sub.is_empty()
                 {
                     if sub.is_leaf() {
                         if let Ok(Some(v)) = sub.get(&merged) {
-                            //tracing::warn!("Found!");
                             // SAFETY: known to be non-empty
                             let start = unsafe { stack.first().unwrap_unchecked() }.range.start;
                             ret.push((
@@ -102,16 +98,13 @@ impl UnlockedVerbalizationTrie<'_> {
                                     start,
                                     end: range.end,
                                 },
-                                v.clone(),
+                                v.iter().map(|s| (s.clone(),needs_usemodule(s))).collect(),
                             ));
                             stack.clear();
                             continue;
                         }
                     } else {
                         let can_merge = trie.get(&merged).is_some();
-                        /*if can_merge {
-                            tracing::warn!("Found!");
-                        }*/
                         stack.push(StackElem {
                             verb,
                             range,
@@ -122,7 +115,7 @@ impl UnlockedVerbalizationTrie<'_> {
                         continue;
                     }
                 } else {
-                    clear_stack!();
+                    clear(&mut stack,&mut ret,needs_usemodule,trie);
                 }
             }
 
@@ -131,7 +124,7 @@ impl UnlockedVerbalizationTrie<'_> {
             {
                 if sub.is_leaf() {
                     if let Ok(Some(v)) = sub.get(&verb) {
-                        ret.push((range, v.clone()));
+                        ret.push((range, v.iter().map(|s| (s.clone(),needs_usemodule(s))).collect()));
                     }
                 } else {
                     stack.push(StackElem {
@@ -144,8 +137,7 @@ impl UnlockedVerbalizationTrie<'_> {
                 }
             }
         }
-        clear_stack!();
-        //tracing::warn!("Result: {ret:?}");
+        clear(&mut stack,&mut ret,needs_usemodule,trie);
         ret
     }
 }
@@ -162,8 +154,9 @@ impl VerbalizationTrie {
         &self,
         language: Language,
         text: StrParser<P>,
-    ) -> Vec<(StringRange<P>, SmallVec<SymbolUri, 1>)> {
-        self.lock().find_all_in(language, text)
+        needs_usemodule: &dyn Fn(&SymbolUri) -> bool
+    ) -> Vec<(StringRange<P>, SmallVec<(SymbolUri,bool), 1>)> {
+        self.lock().find_all_in(language, text,needs_usemodule)
     }
     pub fn merge(&self,other:Self) {
         use radix_trie::TrieCommon;

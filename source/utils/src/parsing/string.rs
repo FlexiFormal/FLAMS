@@ -199,6 +199,11 @@ impl<'a, P: StringPosition> SourceParser<'a> for StrParser<'a, P> {
                     }
                     curroff += 1;
                     in_brackets += 1;
+                } else {
+                    let ret = self.input;
+                    self.input = "";
+                    self.pos += P::len(ret);
+                    return ret;
                 }
             } else if let Some(i) = memchr::memchr2(open, close, &bytes[curroff..]) {
                 curroff += i;

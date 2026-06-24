@@ -11,6 +11,7 @@ where
 {
     pub line: u32,
     pub col: u32,
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) __phantom: PhantomData<Off>,
 }
 impl<Off: OffsetPosition> std::fmt::Display for LineCol<Off>

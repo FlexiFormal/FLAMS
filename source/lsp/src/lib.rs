@@ -9,7 +9,14 @@ pub mod verbalizations;
 #[cfg(feature = "ws")]
 pub mod ws;
 
-use std::{collections::hash_map::Entry, path::Path};
+//use dashmap::Entry;
+pub(crate) use std::collections::hash_map::Entry;
+pub(crate) type HMap<A, B> = rustc_hash::FxHashMap<A, B>;
+// pub(crate) type HMap<A,B> = dashmap::DashMap<A,B,rustc_hash::FxHashBuilder>
+pub(crate) type LMap<A, B> = parking_lot::RwLock<HMap<A, B>>;
+// pub(crate) type LMap<A,B> = dashmap::DashMap<A,B,rustc_hash::FxHashBuilder>
+
+use std::path::Path;
 
 pub use async_lsp;
 use async_lsp::{ClientSocket, LanguageClient, lsp_types as lsp};
@@ -22,14 +29,13 @@ use flams_system::settings::Settings;
 use flams_utils::{
     background,
     parsing::StrParser,
-    prelude::HMap,
     sourcerefs::{LSPLineCol, PositionKind, StringRange},
     unwrap,
 };
-use ftml_uris::{ArchiveId, BaseUri, DocumentUri, Language};
+use ftml_uris::{ArchiveId, BaseUri, DocumentUri, Language, SymbolUri};
 use state::{DocData, LSPState, UrlOrFile};
 
-use crate::verbalizations::{UnlockedVerbalizationTrie, VerbalizationTrie};
+use crate::verbalizations::UnlockedVerbalizationTrie;
 
 static GLOBAL_STATE: std::sync::OnceLock<LSPState> = std::sync::OnceLock::new();
 pub struct STDIOLSPServer {
@@ -216,6 +222,12 @@ impl lsp::notification::Notification for HTMLResult {
     const METHOD: &str = "flams/htmlResult";
 }
 
+pub(crate) struct SnifyNotification;
+impl lsp::notification::Notification for SnifyNotification {
+    type Params = UriParams;
+    const METHOD: &str = "flams/snify";
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct UriParams {
     pub uri: lsp::Url,
@@ -328,6 +340,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 
         r.notification::<Reload>(Self::reload);
         r.notification::<StandaloneExport>(Self::export_standalone);
+        r.notification::<SnifyNotification>(Self::snify);
         r.notification::<HtmlExport>(Self::export_html);
         r.notification::<InstallArchives>(Self::install);
         r.notification::<NewArchive>(Self::new_archive);
@@ -351,19 +364,22 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 
 pub struct LSPStore<'a, 'l, const FULL: bool> {
     pub(crate) map: &'a mut HMap<UrlOrFile, DocData>,
-    verbalizations: &'a mut UnlockedVerbalizationTrie<'l>,
+    verbalizations: Option<&'a mut UnlockedVerbalizationTrie<'l>>,
     cycles: Vec<DocumentUri>,
+    snify: bool,
 }
 impl<'a, 'l, const FULL: bool> LSPStore<'a, 'l, FULL> {
     #[inline]
     pub fn new(
         map: &'a mut HMap<UrlOrFile, DocData>,
-        verbalizations: &'a mut UnlockedVerbalizationTrie<'l>,
+        verbalizations: Option<&'a mut UnlockedVerbalizationTrie<'l>>,
+        snify: bool,
     ) -> Self {
         Self {
             map,
             cycles: Vec::new(),
             verbalizations,
+            snify,
         }
     }
 
@@ -378,7 +394,11 @@ impl<'a, 'l, const FULL: bool> LSPStore<'a, 'l, FULL> {
         if !FULL {
             self.load(p, uri)
         } else {
-            let mut nstore = LSPStore::<'_, '_, false>::new(self.map, self.verbalizations);
+            let mut nstore = if let Some(verb) = &mut self.verbalizations {
+                LSPStore::<'_, '_, false>::new(self.map, Some(verb), false)
+            } else {
+                LSPStore::<'_, '_, false>::new(self.map, None, false)
+            };
             nstore.cycles = std::mem::take(&mut self.cycles);
             let r = nstore.load(p, uri);
             self.cycles = nstore.cycles;
@@ -419,7 +439,7 @@ impl<const FULL: bool> STeXModuleStore for &mut LSPStore<'_, '_, FULL> {
 
         let lsp_uri = UrlOrFile::File(p.clone());
         //let lsp_uri = lsp::Url::from_file_path(p).map_err(|_| GetModuleError::NotFound(module.uri.clone()))?;
-        match self.map.get(&lsp_uri) {
+        match self.map.get(&lsp_uri).as_deref() {
             Some(DocData::Data(d, _)) => do_return!(d.clone()),
             Some(DocData::Doc(d)) if d.is_up_to_date() => do_return!(d.annotations.clone()),
             _ => (),
@@ -448,16 +468,14 @@ impl<const FULL: bool> STeXModuleStore for &mut LSPStore<'_, '_, FULL> {
         self.cycles.pop();
         r.ok_or_else(|| GetModuleError::NotFound(module.uri.clone()))
     }
-    fn add_verbalization<Pos: flams_utils::sourcerefs::StringPosition>(
+    fn add_verbalization(
         &mut self,
         s: &str,
-        mode: &flams_stex::quickparse::stex::structs::SymnameMode<Pos>,
         symbol: &ftml_uris::prelude::SymbolUri,
         language: Language,
     ) {
-        if Pos::KIND == PositionKind::LineColUtf16 {
-            let cow = mode.make_cow(s);
-            self.verbalizations.insert(language, &cow, symbol);
+        if let Some(verb) = &mut self.verbalizations {
+            verb.insert(language, s, symbol);
         }
     }
     fn add_text<Pos: flams_utils::sourcerefs::StringPosition>(
@@ -465,12 +483,17 @@ impl<const FULL: bool> STeXModuleStore for &mut LSPStore<'_, '_, FULL> {
         r: StringRange<Pos>,
         text: &str,
         language: Language,
+        needs_usemodule: &dyn Fn(&SymbolUri) -> bool,
     ) -> Option<flams_stex::quickparse::stex::structs::STeXToken<Pos>> {
         //Vec<(StringRange<Pos>, SmallVec<SymbolUri, 1>)> {
-        if Pos::KIND == PositionKind::LineColUtf16 && Self::FULL {
+        if self.snify
+            && Pos::KIND == PositionKind::LineColUtf16
+            && Self::FULL
+            && let Some(verb) = &self.verbalizations
+        {
             let mut parser = StrParser::new(text);
             parser.pos = r.start;
-            let v = self.verbalizations.find_all_in(language, parser);
+            let v = verb.find_all_in(language, parser, needs_usemodule);
             if v.is_empty() {
                 None
             } else {

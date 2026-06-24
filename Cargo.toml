@@ -112,28 +112,28 @@ too_many_lines = { level = "warn", priority = 1 }
 
 [workspace.dependencies]
 # flams
-flams-ftml = { path = "source/ftml/system", version = "0.0.1" }
-flams-stex = { path = "source/stex", version = "0.0.1" }
-flams-utils = { path = "source/utils", version = "0.0.1" }
-flams-system = { path = "source/system", version = "0.0.1" }
-flams-database = { path = "source/database", version = "0.0.1" }
-flams-lsp = { path = "source/lsp", version = "0.0.1" }
-flams-git = { path = "source/git", version = "0.0.1" }
-flams-web-utils = { path = "source/web-utils", version = "0.0.1" }
-ftml-solver = { path = "solver/main", version= "0.0.1"}
-ftml-solver-trace = { path = "solver/trace", version= "0.0.1"}
+flams-ftml = { path = "source/ftml/system" }
+flams-stex = { path = "source/stex" }
+flams-utils = { path = "source/utils" }
+flams-system = { path = "source/system" }
+flams-database = { path = "source/database" }
+flams-lsp = { path = "source/lsp" }
+flams-git = { path = "source/git" }
+flams-web-utils = { path = "source/web-utils" }
+ftml-solver = { path = "solver/main" }
+ftml-solver-trace = { path = "solver/trace" }
 
-flams-main = { path = "source/main/shared", version = "0.0.5" }
+flams-main = { path = "source/main/shared" }
 
-flams-router-base = { path = "source/router/base", version = "0.0.1" }
-flams-router-dashboard = { path = "source/router/dashboard", version = "0.0.1" }
-flams-router-content = { path = "source/router/content", version = "0.0.1" }
-flams-router-backend = { path = "source/router/backend", version = "0.0.1" }
-flams-router-buildqueue-base = { path = "source/router/buildqueue/base", version = "0.0.1" }
-flams-router-buildqueue-components = { path = "source/router/buildqueue/components", version = "0.0.1" }
-flams-router-git-base = { path = "source/router/git/base", version = "0.0.1" }
-flams-router-git-components = { path = "source/router/git/components", version = "0.0.1" }
-flams-router-login = { path = "source/router/login", version = "0.0.1" }
+flams-router-base = { path = "source/router/base" }
+flams-router-dashboard = { path = "source/router/dashboard" }
+flams-router-content = { path = "source/router/content" }
+flams-router-backend = { path = "source/router/backend" }
+flams-router-buildqueue-base = { path = "source/router/buildqueue/base" }
+flams-router-buildqueue-components = { path = "source/router/buildqueue/components" }
+flams-router-git-base = { path = "source/router/git/base" }
+flams-router-git-components = { path = "source/router/git/components" }
+flams-router-login = { path = "source/router/login" }
 flams-router-logging = { path = "source/router/logging" }
 flams-router-search = { path = "source/router/search" }
 flams-router-vscode = { path = "source/router/vscode-bindings" }

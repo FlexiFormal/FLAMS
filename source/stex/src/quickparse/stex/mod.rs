@@ -312,7 +312,7 @@ pub enum STeXAnnot {
     },
     SnifySuggestion {
         range: StringRange<LSPLineCol>,
-        symbols: SmallVec<SymbolUri, 1>,
+        symbols: SmallVec<(SymbolUri, bool), 1>,
     },
 }
 impl STeXAnnot {

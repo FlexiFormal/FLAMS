@@ -1152,7 +1152,7 @@ stex!(LSP: p => symref[mut args:Map]{name:!name}{text:T} => {
   })
 });
 
-stex!(LSP: p => definiendum[mut args:Map]{name:!name}{text:T} => {
+stex!(LSP: p => definiendum[mut args:Map]{name:!name}{text:T!} => {
   let (state,mut groups) = p.split();
   let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
@@ -1162,10 +1162,16 @@ stex!(LSP: p => definiendum[mut args:Map]{name:!name}{text:T} => {
   for (k,v) in args.inner.iter() {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
+
+p.state.module_store.add_verbalization(
+    text.2,
+    &s.first().expect("should be unreachable").uri,
+    p.state.language
+);
   MacroResult::Success(STeXToken::Symref {
     is_def:true,
     uri:s, full_range: definiendum.range, token_range: definiendum.token_range,
-    name_range: name.1, text
+    name_range: name.1, text:(text.0,text.1)
   })
 });
 
@@ -1263,12 +1269,12 @@ stex!(LSP: p => definame[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   let mode =super::structs::SymnameMode::PrePost{ pre, post };
-  p.state.module_store.add_verbalization(
+  /*p.state.module_store.add_verbalization(
       &name.0,
       &mode,
       &s.first().expect("should be unreachable").uri,
       p.state.language
-  );
+  );*/
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: definame.range, token_range: definame.token_range,
@@ -1290,12 +1296,12 @@ stex!(LSP: p => Definame[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   let mode = super::structs::SymnameMode::Cap{ post };
-  p.state.module_store.add_verbalization(
+  /*p.state.module_store.add_verbalization(
       &name.0,
       &mode,
       &s.first().expect("should be unreachable").uri,
       p.state.language
-  );
+  );*/
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: Definame.range, token_range: Definame.token_range,
@@ -1317,12 +1323,12 @@ stex!(LSP: p => definames[mut args:Map]{name:!name} => {
     p.tokenizer.problem(v.key_range.start, format!("Unknown argument {k}"),DiagnosticLevel::Error);
   }
   let mode = super::structs::SymnameMode::PostS{ pre };
-  p.state.module_store.add_verbalization(
+  /*p.state.module_store.add_verbalization(
       &name.0,
       &mode,
       &s.first().expect("should be unreachable").uri,
       p.state.language
-  );
+  );*/
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: definames.range, token_range: definames.token_range,
@@ -1337,12 +1343,12 @@ stex!(LSP: p => Definames{name:!name} => {
     p.tokenizer.problem(name.1.start, format!("Unknown symbol {}",name.0),DiagnosticLevel::Error);
     return MacroResult::Simple(Definames);
   };
-  p.state.module_store.add_verbalization::<LSPLineCol>(
+  /*p.state.module_store.add_verbalization::<LSPLineCol>(
       &name.0,
       &super::structs::SymnameMode::CapAndPostS,
       &s.first().expect("should be unreachable").uri,
       p.state.language
-  );
+  );*/
   MacroResult::Success(STeXToken::SymName {
     is_def:true,
     uri:s, full_range: Definames.range, token_range: Definames.token_range,
@@ -1370,7 +1376,7 @@ stex!(LSP: p => defnotation => {
 stex!(LSP: p => definiens[name_opt:!name] => {
   let (state,mut groups) = p.split();
   let (s,rng) = if let Some(name) = name_opt {
-    if let Some((s,_)) = get_in_morphism(&mut groups.groups, &name.0) {
+    if let Some((s,_)) = get_in_morphism(groups.groups, &name.0) {
       (smallvec::smallvec![s.uri.clone()],Some(name.1))
     } else {
       let Some(s) = state.get_symbol(name.1.start,&mut groups,&name.0) else {
@@ -1390,7 +1396,7 @@ stex!(LSP: p => definiens[name_opt:!name] => {
     };
     (smallvec::smallvec![s],None)
   };
-  set_defined(s.first().unwrap_or_else(|| unreachable!()), definiens.range, &mut groups.groups);
+  set_defined(s.first().unwrap_or_else(|| unreachable!()), definiens.range, groups.groups);
   MacroResult::Success(STeXToken::Definiens {
     uri:s, full_range: definiens.range, token_range: definiens.token_range,
     name_range: rng

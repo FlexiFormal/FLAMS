@@ -1,5 +1,6 @@
-use std::{collections::hash_map::Entry, hint::unreachable_unchecked, path::Path};
+use std::{hint::unreachable_unchecked, path::Path};
 
+use crate::Entry;
 use async_lsp::{ClientSocket, LanguageClient, lsp_types as lsp};
 use flams_ftml::FtmlResult;
 use flams_math_archives::{
@@ -13,7 +14,7 @@ use flams_stex::{
 };
 use flams_utils::{
     impossible,
-    prelude::HMap,
+    //prelude::HMap,
     sourcerefs::{LSPLineCol, StringRange},
 };
 use ftml_ontology::{
@@ -124,7 +125,7 @@ impl std::fmt::Display for UrlOrFile {
 
 #[derive(Default, Clone)]
 pub struct LSPState {
-    pub documents: triomphe::Arc<parking_lot::RwLock<HMap<UrlOrFile, DocData>>>,
+    pub documents: triomphe::Arc<crate::LMap<UrlOrFile, DocData>>, //parking_lot::RwLock<HMap<UrlOrFile, DocData>>>,
     rustex: triomphe::Arc<std::sync::OnceLock<RusTeX>>,
     pub(crate) verbalizations: VerbalizationTrie, //backend: TemporaryBackend,
 }
@@ -205,7 +206,7 @@ impl LSPState {
                                 end: LSPLineCol::new(ft.line, ft.col),
                             });
                         } else if let Some(dc) = self.documents.read().get(&url) {
-                            let data = match dc {
+                            let data = match &*dc {
                                 DocData::Data(d, _) => d,
                                 DocData::Doc(d) => &d.annotations,
                             };
@@ -466,10 +467,10 @@ impl LSPState {
         iter: I,
         mut and_then: impl FnMut(&std::sync::Arc<Path>, &STeXParseData),
     ) {
-        let mut ndocs = HMap::default();
+        let mut ndocs = crate::HMap::default();
         let verbalizations = VerbalizationTrie::default();
         let mut vlock = verbalizations.lock();
-        let mut state = LSPStore::<true>::new(&mut ndocs, &mut vlock);
+        let mut state = LSPStore::<true>::new(&mut ndocs, Some(&mut vlock), false);
         for (p, uri) in iter {
             let p = UrlOrFile::File(p);
             if !state.map.contains_key(&p) {
@@ -495,12 +496,16 @@ impl LSPState {
         self.verbalizations.merge(verbalizations);
         /*{
             use radix_trie::TrieCommon;
+            use std::fmt::Write;
             let lck = self.verbalizations.0.lock();
+            let mut s = String::new();
             for (k, v) in lck.iter() {
-                tracing::warn!(" - {k}: {v:?}");
+                writeln!(s, " - {k}: {v:?}");
             }
+            drop(lck);
+            tracing::warn!("{s}");
         }*/
-        let mut docs = self.documents.write();
+        let docs = &mut self.documents.write();
         for (k, v) in ndocs {
             match docs.entry(k) {
                 Entry::Vacant(e) => {
@@ -513,6 +518,7 @@ impl LSPState {
         }
     }
 
+    /*
     pub fn load<const FULL: bool>(
         &self,
         p: std::sync::Arc<Path>,
@@ -524,15 +530,16 @@ impl LSPState {
         let UrlOrFile::File(path) = &lsp_uri else {
             unreachable!()
         };
-        if self.documents.read().get(&lsp_uri).is_some() {
+        let mut docs = self.documents.write();
+        if docs.get(&lsp_uri).is_some() {
             return;
         }
-        let mut docs = self.documents.write();
         let mut vlock = self.verbalizations.lock();
-        let mut state = LSPStore::<'_, '_, FULL>::new(&mut docs, &mut vlock);
+        let mut state = LSPStore::<'_, '_, FULL>::new(&mut docs, Some(&mut vlock), true);
         if let Some(ret) = state.load(path, uri) {
-            and_then(&ret);
             drop(state);
+            drop(vlock);
+            and_then(&ret);
             match docs.entry(lsp_uri) {
                 Entry::Vacant(e) => {
                     e.insert(DocData::Data(ret, FULL));
@@ -543,20 +550,21 @@ impl LSPState {
             }
         }
     }
+     */
 
     #[allow(clippy::let_underscore_future)]
     pub fn insert(&self, uri: UrlOrFile, doctext: String) {
-        let doc = self.documents.read().get(&uri).cloned();
+        let doc = self.documents.read().get(&uri).as_deref().cloned();
         match doc {
             Some(DocData::Doc(doc)) => {
                 if doc.set_text(doctext) {
-                    doc.compute_annots(self.clone());
+                    doc.compute_annots(self.clone(), false);
                 }
             }
             _ => {
                 let doc = LSPDocument::new(doctext, uri.clone());
                 if doc.has_annots() {
-                    doc.compute_annots(self.clone());
+                    doc.compute_annots(self.clone(), false);
                 }
                 match self.documents.write().entry(uri) {
                     Entry::Vacant(e) => {

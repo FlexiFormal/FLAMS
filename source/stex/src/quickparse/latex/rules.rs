@@ -381,6 +381,15 @@ macro_rules! tex {
         $p.close_group();
         tex!{@envargs $p:$name $($args)*}
     };
+    (@envargs $p:ident:$name:ident{$arg:ident:T!}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        $p.open_group();
+        $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
+        let $arg = $p.get_argument_with_str(&mut $name.begin);
+        $p.tokenizer.mode = mode;
+        $p.close_group();
+        tex!{@envargs $p:$name $($args)*}
+    };
     (@envargs $p:ident:$name:ident{_:T}$($args:tt)*) => {
         let mode = $p.tokenizer.mode;
         $p.open_group();
@@ -498,6 +507,15 @@ macro_rules! tex {
         $p.open_group();
         $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
         let $arg = $p.get_argument(&mut $name);
+        $p.tokenizer.mode = mode;
+        $p.close_group();
+        tex!{@args $p:$name $($args)*}
+    };
+    (@args $p:ident:$name:ident{$arg:ident:T!}$($args:tt)*) => {
+        let mode = $p.tokenizer.mode;
+        $p.open_group();
+        $p.tokenizer.mode = $crate::quickparse::tokenizer::Mode::Text;
+        let $arg = $p.get_argument_with_str(&mut $name);
         $p.tokenizer.mode = mode;
         $p.close_group();
         tex!{@args $p:$name $($args)*}
@@ -665,6 +683,7 @@ tex!(p => xdef => {def(xdef,p)});
 
 tex!(p => @begin{document} {}{
     let _start = p.curr_pos();
+    p.in_document = true;
     let _rest = p.tokenizer.reader.read_until_str("this string should never occur FOOBARBAZ BLA BLA asdk<ösndkf.k<asfb.mdv <sdasdjn");
 }!);
 tex!(p => @begin{verbatim}(V) {}{}!);
