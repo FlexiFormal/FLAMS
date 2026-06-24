@@ -158,7 +158,7 @@ workspace = false
 dependencies = [
     #"build-viewer",
     #"copy-viewer",
-    #"db",
+    "db",
     "leptos-release",
     "copy-to-bin",
 ]
