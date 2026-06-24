@@ -446,19 +446,6 @@ impl ArchiveIndex {
                         .map(|s| DocumentUri::from_archive_relpath(a.clone(), &s))
                         .transpose()?
                 },
-                /*instances: instances
-                .into_iter()
-                .map(|i| Instance {
-                    semester: i.semester,
-                    instructors: i
-                        .instructors
-                        .map(|is| is.into_iter().map(|i| i.name).collect()),
-                    tas: i.tas.map(|is| is.into_iter().map(|i| i.name).collect()),
-                    lead_tas: i
-                        .lead_tas
-                        .map(|is| is.into_iter().map(|i| i.name).collect()),
-                })
-                .collect(),*/
                 authors: instructors.into_iter().map(|is| is.name).collect(),
             },
             DocumentKind::SelfStudy {

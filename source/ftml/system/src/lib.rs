@@ -134,6 +134,8 @@ pub fn build_ftml(
         "https://raw.githack.com/FlexiFormal/RusTeX/main/rustex/src/resources/rustex.css",
         "srv:/rustex.css",
     )];
+    let path = uri.path().cloned();
+    let archive = uri.archive_uri().clone();
     ftml5ever::run(
         html,
         |src| {
@@ -156,14 +158,47 @@ pub fn build_ftml(
                 },
             )
         },
-        |css| {
-            CSS_SUBSTS.iter().find_map(|(old, new)| {
-                if css == *old {
-                    Some((*new).to_string().into_boxed_str())
-                } else {
-                    None
-                }
-            })
+        |mut css| {
+            CSS_SUBSTS
+                .iter()
+                .find_map(|(old, new)| {
+                    if css == *old {
+                        Some((*new).to_string().into_boxed_str())
+                    } else {
+                        None
+                    }
+                })
+                .or_else(|| {
+                    if css.contains("://") {
+                        return None;
+                    }
+                    let mut path = path.as_ref()?.as_ref();
+                    loop {
+                        if let Some(s) = css.strip_prefix("./") {
+                            css = s;
+                        } else if let Some(s) = css.strip_prefix("../") {
+                            if path.is_empty() {
+                                return None;
+                            }
+                            css = s;
+                            path = if let Some((p, _)) = path.rsplit_once('/') {
+                                p
+                            } else {
+                                ""
+                            };
+                        } else {
+                            break;
+                        }
+                    }
+                    Some(
+                        format!(
+                            "srv:/aux?a={}&f={path}{}{css}",
+                            archive.id,
+                            if path.is_empty() { "" } else { "/" }
+                        )
+                        .into_boxed_str(),
+                    )
+                })
         },
         uri,
         true,

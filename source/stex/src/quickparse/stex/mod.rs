@@ -3,9 +3,8 @@ pub mod structs;
 
 use flams_math_archives::backend::AnyBackend;
 use flams_utils::{
-    parsing::ParseStr,
     prelude::{TreeChild, TreeLike},
-    sourcerefs::{LSPLineCol, SourceRange},
+    sourcerefs::{LSPLineCol, StringRange},
     vecmap::VecSet,
 };
 use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
@@ -60,254 +59,260 @@ pub type STeXParseData = flams_utils::triomphe::Arc<parking_lot::Mutex<STeXParse
 pub enum STeXAnnot {
     Module {
         uri: ModuleUri,
-        name_range: SourceRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
         opts: Vec<SModuleArg<LSPLineCol, Self>>,
         sig: Option<Language>,
         meta_theory: Option<ModuleReference>,
-        full_range: SourceRange<LSPLineCol>,
-        smodule_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        smodule_range: StringRange<LSPLineCol>,
         children: Vec<Self>,
     },
     MathStructure {
         uri: SymbolReference<LSPLineCol>,
-        extends: Vec<(SymbolReference<LSPLineCol>, SourceRange<LSPLineCol>)>,
-        name_range: SourceRange<LSPLineCol>,
+        extends: Vec<(SymbolReference<LSPLineCol>, StringRange<LSPLineCol>)>,
+        name_range: StringRange<LSPLineCol>,
         opts: Vec<MathStructureArg<LSPLineCol, Self>>,
-        full_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
         children: Vec<Self>,
-        mathstructure_range: SourceRange<LSPLineCol>,
+        mathstructure_range: StringRange<LSPLineCol>,
     },
     ConservativeExt {
         uri: SymbolReference<LSPLineCol>,
-        ext_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
-        extstructure_range: SourceRange<LSPLineCol>,
+        ext_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        extstructure_range: StringRange<LSPLineCol>,
         children: Vec<Self>,
     },
     MorphismEnv {
-        full_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
-        env_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
+        env_range: StringRange<LSPLineCol>,
         uri: SymbolUri,
         star: bool,
         domain: ModuleOrStruct<LSPLineCol>,
-        domain_range: SourceRange<LSPLineCol>,
+        domain_range: StringRange<LSPLineCol>,
         kind: MorphismKind,
         children: Vec<Self>,
     },
     InlineMorphism {
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
         uri: SymbolUri,
         domain: ModuleOrStruct<LSPLineCol>,
-        domain_range: SourceRange<LSPLineCol>,
+        domain_range: StringRange<LSPLineCol>,
         kind: MorphismKind,
         assignments: Vec<InlineMorphAssign<LSPLineCol, Self>>,
     },
     SemanticMacro {
         uri: SymbolReference<LSPLineCol>,
         argnum: u8,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     VariableMacro {
         name: UriName,
         argnum: u8,
-        orig: SourceRange<LSPLineCol>,
+        orig: StringRange<LSPLineCol>,
         sequence: bool,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     Svar {
         name: UriName,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
-        arg_range: SourceRange<LSPLineCol>,
-        name_range: Option<SourceRange<LSPLineCol>>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        arg_range: StringRange<LSPLineCol>,
+        name_range: Option<StringRange<LSPLineCol>>,
     },
     ImportModule {
-        archive_range: Option<SourceRange<LSPLineCol>>,
-        path_range: SourceRange<LSPLineCol>,
+        archive_range: Option<StringRange<LSPLineCol>>,
+        path_range: StringRange<LSPLineCol>,
         module: ModuleReference,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     UseModule {
-        archive_range: Option<SourceRange<LSPLineCol>>,
-        path_range: SourceRange<LSPLineCol>,
+        archive_range: Option<StringRange<LSPLineCol>>,
+        path_range: StringRange<LSPLineCol>,
         module: ModuleReference,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     UseStructure {
         structure: SymbolReference<LSPLineCol>,
-        structure_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        structure_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     SetMetatheory {
-        archive_range: Option<SourceRange<LSPLineCol>>,
-        path_range: SourceRange<LSPLineCol>,
+        archive_range: Option<StringRange<LSPLineCol>>,
+        path_range: StringRange<LSPLineCol>,
         module: ModuleReference,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     Inputref {
-        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
-        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        archive: Option<(ArchiveId, StringRange<LSPLineCol>)>,
+        filepath: (std::sync::Arc<str>, StringRange<LSPLineCol>),
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     MHInput {
-        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
-        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        archive: Option<(ArchiveId, StringRange<LSPLineCol>)>,
+        filepath: (std::sync::Arc<str>, StringRange<LSPLineCol>),
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     #[allow(clippy::type_complexity)]
     Symdecl {
         uri: SymbolReference<LSPLineCol>,
-        main_name_range: SourceRange<LSPLineCol>,
+        main_name_range: StringRange<LSPLineCol>,
         parsed_args: Vec<SymdeclArg<LSPLineCol, Self>>,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     #[allow(clippy::type_complexity)]
     TextSymdecl {
         uri: SymbolReference<LSPLineCol>,
-        main_name_range: SourceRange<LSPLineCol>,
+        main_name_range: StringRange<LSPLineCol>,
         parsed_args: Vec<TextSymdeclArg<LSPLineCol, Self>>,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     Notation {
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
-        token_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
         notation_args: Vec<NotationArg<LSPLineCol, Self>>,
-        full_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     RenameDecl {
         uri: SymbolReference<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        orig_range: SourceRange<LSPLineCol>,
-        name_range: Option<SourceRange<LSPLineCol>>,
-        macroname_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        orig_range: StringRange<LSPLineCol>,
+        name_range: Option<StringRange<LSPLineCol>>,
+        macroname_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     Assign {
         uri: SymbolReference<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        orig_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        orig_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     #[allow(clippy::type_complexity)]
     Symdef {
         uri: SymbolReference<LSPLineCol>,
-        main_name_range: SourceRange<LSPLineCol>,
+        main_name_range: StringRange<LSPLineCol>,
         parsed_args: Vec<SymdefArg<LSPLineCol, Self>>,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     #[allow(clippy::type_complexity)]
     Vardef {
         name: UriName,
-        main_name_range: SourceRange<LSPLineCol>,
+        main_name_range: StringRange<LSPLineCol>,
         parsed_args: Vec<VardefArg<LSPLineCol, Self>>,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     #[allow(clippy::type_complexity)]
     Varseq {
         name: UriName,
-        main_name_range: SourceRange<LSPLineCol>,
+        main_name_range: StringRange<LSPLineCol>,
         parsed_args: Vec<VardefArg<LSPLineCol, Self>>,
-        token_range: SourceRange<LSPLineCol>,
-        full_range: SourceRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     SymName {
+        is_def: bool,
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
         mode: SymnameMode<LSPLineCol>,
     },
     IncludeProblem {
-        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
-        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
+        filepath: (std::sync::Arc<str>, StringRange<LSPLineCol>),
+        archive: Option<(ArchiveId, StringRange<LSPLineCol>)>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
         args: Vec<IncludeProblemArg<LSPLineCol>>,
     },
     Symuse {
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
     },
     Symref {
+        is_def: bool,
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
-        text: (SourceRange<LSPLineCol>, Vec<Self>),
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
+        text: (StringRange<LSPLineCol>, Vec<Self>),
     },
     Definiens {
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        name_range: Option<SourceRange<LSPLineCol>>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        name_range: Option<StringRange<LSPLineCol>>,
     },
     Defnotation {
-        full_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
     },
     Paragraph {
         kind: ParagraphKind,
-        full_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
         symbol: Option<SymbolReference<LSPLineCol>>,
         parsed_args: Vec<ParagraphArg<LSPLineCol, Self>>,
         children: Vec<Self>,
     },
     Problem {
         sub: bool,
-        full_range: SourceRange<LSPLineCol>,
-        name_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        name_range: StringRange<LSPLineCol>,
         parsed_args: Vec<ProblemArg<LSPLineCol, Self>>,
         children: Vec<Self>,
     },
     Precondition {
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        dim_range: SourceRange<LSPLineCol>,
-        symbol_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        dim_range: StringRange<LSPLineCol>,
+        symbol_range: StringRange<LSPLineCol>,
         dim: CognitiveDimension,
     },
     Objective {
         uri: SmallVec<SymbolReference<LSPLineCol>, 1>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
-        dim_range: SourceRange<LSPLineCol>,
-        symbol_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        dim_range: StringRange<LSPLineCol>,
+        symbol_range: StringRange<LSPLineCol>,
         dim: CognitiveDimension,
     },
     InlineParagraph {
         kind: ParagraphKind,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
         symbol: Option<SymbolReference<LSPLineCol>>,
         parsed_args: Vec<ParagraphArg<LSPLineCol, Self>>,
         children: Vec<Self>,
-        children_range: SourceRange<LSPLineCol>,
+        children_range: StringRange<LSPLineCol>,
     },
     MHGraphics {
-        filepath: (std::sync::Arc<str>, SourceRange<LSPLineCol>),
-        archive: Option<(ArchiveId, SourceRange<LSPLineCol>)>,
-        full_range: SourceRange<LSPLineCol>,
-        token_range: SourceRange<LSPLineCol>,
+        filepath: (std::sync::Arc<str>, StringRange<LSPLineCol>),
+        archive: Option<(ArchiveId, StringRange<LSPLineCol>)>,
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
         args: Vec<MHGraphicsArg<LSPLineCol>>,
+    },
+    SnifySuggestion {
+        range: StringRange<LSPLineCol>,
+        symbols: SmallVec<(SymbolUri, bool), 1>,
     },
 }
 impl STeXAnnot {
@@ -323,6 +328,9 @@ impl STeXAnnot {
     }
         for t in iter {
             match t {
+                STeXToken::SnifySuggestion { range, symbols } => {
+                    v.push(Self::SnifySuggestion { range, symbols })
+                }
                 STeXToken::Module {
                     uri,
                     name_range,
@@ -654,12 +662,14 @@ impl STeXAnnot {
                 }),
                 STeXToken::Symref {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,
                     text,
                 } => v.push(Self::Symref {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,
@@ -697,12 +707,14 @@ impl STeXAnnot {
                 }),
                 STeXToken::SymName {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,
                     mode: mod_,
                 } => v.push(Self::SymName {
                     uri,
+                    is_def,
                     full_range,
                     token_range,
                     name_range,
@@ -801,7 +813,7 @@ impl STeXAnnot {
 
     #[must_use]
     #[inline]
-    pub const fn range(&self) -> SourceRange<LSPLineCol> {
+    pub const fn range(&self) -> StringRange<LSPLineCol> {
         match self {
             Self::Module { full_range, .. }
             | Self::MathStructure { full_range, .. }
@@ -836,6 +848,9 @@ impl STeXAnnot {
             | Self::Precondition { full_range, .. }
             | Self::Objective { full_range, .. }
             | Self::MHGraphics { full_range, .. }
+            | Self::SnifySuggestion {
+                range: full_range, ..
+            }
             | Self::TextSymdecl { full_range, .. } => *full_range,
         }
     }
@@ -960,7 +975,8 @@ impl TreeLike for STeXAnnot {
             | Self::RenameDecl { .. }
             | Self::IncludeProblem { .. }
             | Self::MHGraphics { .. }
-            | Self::Assign { .. } => None,
+            | Self::Assign { .. }
+            | Self::SnifySuggestion { .. } => None,
         }
     }
 }
@@ -986,7 +1002,7 @@ pub enum DiagnosticLevel {
 pub struct STeXDiagnostic {
     pub level: DiagnosticLevel,
     pub message: String,
-    pub range: SourceRange<LSPLineCol>,
+    pub range: StringRange<LSPLineCol>,
 }
 
 #[must_use]
@@ -999,7 +1015,7 @@ pub fn quickparse<'a, S: STeXModuleStore>(
 ) -> STeXParseDataI {
     let mut diagnostics = VecSet::new();
     let mut modules = SmallVec::new();
-    let err = |message, range, level| {
+    let mut err = |message, range, level| {
         diagnostics.insert(STeXDiagnostic {
             level,
             message,
@@ -1008,9 +1024,9 @@ pub fn quickparse<'a, S: STeXModuleStore>(
     };
     let mut parser = if S::FULL {
         LaTeXParser::with_rules(
-            ParseStr::new(source),
+            source,
             STeXParseState::new(Some(uri.archive_uri()), Some(path), uri, backend, store),
-            err,
+            &mut err,
             LaTeXParser::default_rules()
                 .into_iter()
                 .chain(rules::all_rules()),
@@ -1020,9 +1036,9 @@ pub fn quickparse<'a, S: STeXModuleStore>(
         )
     } else {
         LaTeXParser::with_rules(
-            ParseStr::new(source),
+            source,
             STeXParseState::new(Some(uri.archive_uri()), Some(path), uri, backend, store),
-            err,
+            &mut err,
             LaTeXParser::default_rules()
                 .into_iter()
                 .chain(rules::declarative_rules()),

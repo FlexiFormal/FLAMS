@@ -1,21 +1,19 @@
-use super::ServerState;
 use axum::body::Body;
 use flams_math_archives::{
     LocallyBuilt, MathArchive,
     backend::{GlobalBackend, LocalBackend},
 };
 use flams_system::settings::Settings;
-use ftml_ontology::utils::time::Timestamp;
 use ftml_uris::{
     ArchiveId, DocumentUri, IsNarrativeUri, Language, UriWithArchive, UriWithPath,
     components::{DocumentUriComponentTuple, DocumentUriComponents},
 };
-use http::{Request, Response};
-use leptos::server_fn::{codec::IntoRes, response::Res};
-use std::{borrow::Cow, ops::DerefMut, path::PathBuf, sync::atomic::AtomicU64};
+use http::Request;
+use std::{borrow::Cow, str::FromStr};
 use tower::ServiceExt;
 use tower_http::services::{ServeFile, fs::ServeFileSystemResponseBody};
 
+// May cache images at some point
 #[derive(Clone, Default)]
 pub struct ImageStore(/*flams_utils::triomphe::Arc<ImageStoreI>*/ ImageStoreI);
 
@@ -24,114 +22,81 @@ struct ImageStoreI {
     //map: dashmap::DashMap<ImageSpec, ImageData>,
     //count: AtomicU64,
 }
-impl ImageStoreI {
-    // may cache stuff at some point
-    async fn get(&self, spec: ImageSpec) -> Option<Box<[u8]>> {
-        let path = match spec {
-            ImageSpec::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p)?,
-            ImageSpec::ARp(a, p) => {
-                GlobalBackend.with_local_archive(&a, |a| a.map(|a| a.path().join(&*p)))?
-            }
-            ImageSpec::File(p) => std::path::PathBuf::from(p.to_string()),
-        };
-        let img =
-            tokio::task::spawn_blocking(|| image::ImageReader::open(path).ok()?.decode().ok())
-                .await
-                .ok()??;
-        let mut v = Vec::<u8>::new();
-        img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
-            .ok()?;
-        Some(v.into_boxed_slice())
-    }
-}
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum ImageSpec {
-    Kpse(Box<str>),
-    ARp(ArchiveId, Box<str>),
-    File(Box<str>),
-}
-impl ImageSpec {
-    pub fn path(&self) -> Option<PathBuf> {
-        match self {
-            Self::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p),
-            Self::ARp(a, p) => {
-                GlobalBackend.with_local_archive(a, |a| a.map(|a| a.path().join(&**p)))
-            }
-            Self::File(p) => Some(std::path::PathBuf::from(p.to_string())),
-        }
-    }
-}
-
-pub struct ImageData {
-    img: Box<[u8]>,
-    timestamp: AtomicU64,
-}
-impl ImageData {
-    pub fn update(&self) {
-        let now = Timestamp::now();
-        self.timestamp
-            .store(now.0.get() as _, std::sync::atomic::Ordering::SeqCst);
-    }
-    #[must_use]
-    pub fn new(data: &[u8]) -> Self {
-        Self {
-            img: data.into(),
-            timestamp: AtomicU64::new(Timestamp::now().0.get()),
-        }
-    }
-}
-
-pub(crate) struct Img(Box<[u8]>);
+pub(crate) struct Img(Box<[u8]>, String);
 impl axum::response::IntoResponse for Img {
     fn into_response(self) -> axum::response::Response {
-        ([(axum::http::header::CONTENT_TYPE, "image/webp")], self.0).into_response()
+        (
+            [(
+                axum::http::header::CONTENT_TYPE,
+                // TODO: other MIME types
+                if self.1 == "svg" {
+                    "image/svg+xml"
+                } else {
+                    "image/webp"
+                },
+            )],
+            self.0,
+        )
+            .into_response()
     }
 }
 
-#[axum::debug_handler]
-pub(crate) async fn img_handler(
+//#[axum::debug_handler]
+pub async fn img_handler(
     uri: http::Uri,
-    axum::extract::State(ServerState { images, .. }): axum::extract::State<ServerState>,
+    // axum::extract::State(ServerState { images, .. }): axum::extract::State<ServerState>,
     //request: http::Request<axum::body::Body>,
 ) -> Result<Img, axum::http::StatusCode> /*axum::response::Response<ServeFileSystemResponseBody>*/ {
-    let Some(s) = uri.query() else {
-        return Err(http::StatusCode::NOT_FOUND);
-    };
-
-    let spec = if let Some(s) = s.strip_prefix("kpse=") {
-        ImageSpec::Kpse(s.into())
-    } else if let Some(f) = s.strip_prefix("file=")
-        && Settings::get().lsp
-    {
-        ImageSpec::File(f.into())
-    } else if let Some(s) = s.strip_prefix("a=")
-        && let Some((a, rp)) = s.split_once("&rp=")
-    {
-        let a = a.parse().unwrap_or_else(|_| unreachable!());
-        let rp = rp.into();
-        ImageSpec::ARp(a, rp)
-    } else {
-        return Err(http::StatusCode::NOT_FOUND);
-    };
-
-    if let Some(img) = images.0.get(spec).await {
-        Ok(Img(img))
-    }
-    /*
-    if let Some(p) = spec.path() {
-        let req = Request::builder()
-            .uri(uri.clone())
-            .body(Body::empty())
-            .unwrap();
-        ServeFile::new(p)
-            .oneshot(req)
-            .await
-            .unwrap_or_else(|_| default())
-    }*/
+    let Ok(Some(img)) = tokio::task::spawn_blocking(move || {
+        let query = uri.query()?;
+        let path = flams_math_archives::images::ImagePath::from_query(query, Settings::get().lsp)?;
+        path.get()
+    })
+    .await
     else {
-        Err(http::StatusCode::NOT_FOUND)
+        return Err(http::StatusCode::NOT_FOUND);
+    };
+    Ok(Img(img.0, img.1))
+}
+
+pub(crate) async fn aux_handler(uri: http::Uri) -> impl axum::response::IntoResponse {
+    let deflt = || {
+        let mut resp = axum::response::Response::new(ServeFileSystemResponseBody::default());
+        *resp.status_mut() = http::StatusCode::NOT_FOUND;
+        resp
+    };
+    let Some(mut query) = uri.query() else {
+        return deflt();
+    };
+    if let Some((q, _)) = query.rsplit_once('?') {
+        query = q;
     }
+    let Some(query) = query.strip_prefix("a=") else {
+        return deflt();
+    };
+    let Some((a, p)) = query.split_once("&f=") else {
+        return deflt();
+    };
+    let Ok(a) = ArchiveId::from_str(a) else {
+        return deflt();
+    };
+    let Some(path) = GlobalBackend.with_local_archive(&a, |a| a.map(|a| a.source_dir().join(p)))
+    else {
+        return deflt();
+    };
+    let mime = mime_guess::from_path(&path).first_or_octet_stream();
+
+    let req = Request::builder()
+        .uri(uri)
+        .body(Body::empty())
+        .expect("this is a bug");
+    ServeFile::new_with_mime(path, &mime)
+        .oneshot(req)
+        .await
+        .unwrap_or_else(|_| deflt())
+
+    //axum::response::Response<ServeFileSystemResponseBody> {
 }
 
 pub(crate) async fn doc_handler(

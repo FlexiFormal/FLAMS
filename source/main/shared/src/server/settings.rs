@@ -5,7 +5,7 @@ use flams_utils::settings::GitlabSettings;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(propagate_version = true, version, about, long_about = Some(
+#[command(name="flams",propagate_version = true, version, about, long_about = Some(
 "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System\n\
 --------------------------------------------------------------------\n\
 See the \u{1b}]8;;https://github.com/UniFormal/MMT\u{1b}\\documentation\u{1b}]8;;\u{1b}\\ for details"
@@ -115,6 +115,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
                 redirect_url: cli.gitlab_redirect_url.map(Into::into),
             },
             lsp: cli.lsp,
+            remotes: std::collections::HashMap::default(),
         };
         (cli.config_file, settings)
     }
@@ -147,12 +148,12 @@ pub fn get_settings() -> SettingsSpec {
         } else {
             panic!("Could not find config file {}", cfg_file.display());
         }
-    } else if let Ok(path) = std::env::current_exe() {
-        if let Some(path) = path.parent() {
-            let path = path.join("settings.toml");
-            if path.exists() {
-                settings += from_file(&path);
-            }
+    } else if let Ok(path) = std::env::current_exe()
+        && let Some(path) = path.parent()
+    {
+        let path = path.join("settings.toml");
+        if path.exists() {
+            settings += from_file(&path);
         }
     }
     settings

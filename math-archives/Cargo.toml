@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [lints]
 workspace = true
@@ -25,12 +25,13 @@ rdf = [
 ]
 ## adds memory "monitoring"
 deepsize = ["dep:deepsize", "dep:bytesize", "ftml-ontology/deepsize"]
-
 ## adds git suppert for math archives that are git repos
 git = ["dep:flams-git", "dep:url"]
-
 ## caches documents and modules in global backend
 cached = []
+## resolving image urls/uris and conversion to webp, also html-standalone-export
+img = ["dep:tex_engine","dep:image","dep:fancy-regex"]
+
 
 [package.metadata.docs.rs]
 all-features = true
@@ -100,3 +101,6 @@ sparesults = { workspace = true, optional = true }
 deepsize = { workspace = true, optional = true }
 bytesize = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
+tex_engine = {workspace = true, optional = true}
+image = {workspace = true, optional = true}
+fancy-regex = {workspace = true,optional = true}

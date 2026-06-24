@@ -1,0 +1,31 @@
+[package]
+name = "flams"
+version = "0.0.6"
+edition = "2024"
+description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
+
+[[bin]]
+name = "flams"
+path="src/main.rs"
+
+[features]
+docs = [
+    "dep:flams-router-dashboard",
+    "dep:flams-utils",
+    "dep:ftml-ontology",
+    "dep:ftml-uris"
+]
+tantivy = [
+    "flams-main/tantivy"
+]
+vectorsearch = [
+    "flams-main/vectorsearch"
+]
+
+[dependencies]
+flams-main = {workspace=true,features=["ssr"]}
+
+flams-router-dashboard = {workspace=true,optional=true}
+flams-utils = {workspace=true,optional=true}
+ftml-ontology = {workspace=true,optional=true}
+ftml-uris = {workspace=true,optional=true}
