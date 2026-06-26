@@ -6,7 +6,7 @@ use crate::{
 use async_lsp::lsp_types as lsp;
 use flams_math_archives::LocalArchive;
 use flams_math_archives::backend::{GlobalBackend, LocalBackend};
-use flams_stex::quickparse::stex::rules::IncludeProblemArg;
+use flams_stex::quickparse::stex::rules::{IncludeProblemArg, SRefOptsA, SRefOptsB};
 use flams_stex::quickparse::{
     latex::ParsedKeyValue,
     stex::{
@@ -385,6 +385,7 @@ impl AnnotExt for STeXAnnot {
             | Self::Precondition { .. }
             | Self::Objective { .. }
             | Self::Assign { .. }
+            | Self::SRef { .. }
             | Self::SnifySuggestion { .. } => None,
         }
     }
@@ -409,6 +410,51 @@ impl AnnotExt for STeXAnnot {
                     tooltip: None,
                     data: None,
                 });
+            }
+            Self::SRef {
+                label_range,
+                opt_args,
+                in_opt_args,
+                target_path,
+                in_doc,
+                ..
+            } => {
+                if let Ok(url) = lsp::Url::from_file_path(target_path) {
+                    for o in opt_args {
+                        if let SRefOptsA::File(f) = o {
+                            cont(lsp::DocumentLink {
+                                range: f.val_range.into_range(),
+                                target: Some(url.clone()),
+                                tooltip: None,
+                                data: None,
+                            });
+                            break;
+                        }
+                    }
+                    cont(lsp::DocumentLink {
+                        range: label_range.into_range(),
+                        target: Some(url),
+                        tooltip: None,
+                        data: None,
+                    });
+                }
+                if let Some((_, id)) = in_doc
+                    && let Ok(url) = lsp::Url::from_file_path(id)
+                    && let Some(rng) = in_opt_args.iter().find_map(|a| {
+                        if let SRefOptsB::File(f) = a {
+                            Some(f.val_range)
+                        } else {
+                            None
+                        }
+                    })
+                {
+                    cont(lsp::DocumentLink {
+                        range: rng.into_range(),
+                        target: Some(url),
+                        tooltip: None,
+                        data: None,
+                    })
+                }
             }
             Self::MHGraphics {
                 archive, filepath, ..
@@ -497,6 +543,54 @@ impl AnnotExt for STeXAnnot {
 
     fn semantic_tokens(&self, cont: &mut impl FnMut(StringRange<LSPLineCol>, u32)) {
         match self {
+            Self::SRef {
+                token_range,
+                opt_args,
+                in_opt_args,
+                ..
+            } => {
+                use SRefOptsA as A;
+                use SRefOptsB as B;
+                cont(*token_range, STeXSemanticTokens::REF_MACRO);
+                for o in opt_args {
+                    match o {
+                        A::Archive(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                        A::File(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                        A::Fallback(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                            for e in &a.val {
+                                e.semantic_tokens(cont);
+                            }
+                        }
+                        A::Pre(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                        A::Post(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                    }
+                }
+                for o in in_opt_args {
+                    match o {
+                        B::Archive(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                        B::File(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                        B::Title(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                            for e in &a.val {
+                                e.semantic_tokens(cont);
+                            }
+                        }
+                    }
+                }
+            }
             Self::Module {
                 name_range,
                 full_range,
@@ -1424,7 +1518,8 @@ impl AnnotExt for STeXAnnot {
             | Self::Problem { .. }
             | Self::Defnotation { .. }
             | Self::MorphismEnv { .. }
-            | Self::SnifySuggestion { .. } => None,
+            | Self::SnifySuggestion { .. }
+            | Self::SRef { .. } => None,
         }
     }
     fn inlay_hint(&self) -> Option<lsp::InlayHint> {
@@ -1634,7 +1729,8 @@ impl AnnotExt for STeXAnnot {
             | Self::Varseq { .. }
             | Self::Defnotation { .. }
             | Self::Definiens { .. }
-            | Self::Assign { .. } => Vec::new(),
+            | Self::Assign { .. }
+            | Self::SRef { .. } => Vec::new(),
         }
     }
 
@@ -2069,7 +2165,8 @@ impl AnnotExt for STeXAnnot {
             | Self::Problem { .. }
             | Self::Definiens { .. }
             | Self::Defnotation { .. }
-            | Self::SnifySuggestion { .. } => None,
+            | Self::SnifySuggestion { .. }
+            | Self::SRef { .. } => None,
         }
     }
 }

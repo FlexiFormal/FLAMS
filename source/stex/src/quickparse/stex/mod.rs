@@ -9,7 +9,10 @@ use flams_utils::{
 };
 use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
 use ftml_solver::results::DocumentCheckResult;
-use ftml_uris::{ArchiveId, DocumentUri, Language, ModuleUri, SymbolUri, UriName, UriWithArchive};
+use ftml_uris::{
+    ArchiveId, DocumentElementUri, DocumentUri, Language, ModuleUri, SymbolUri, UriName,
+    UriWithArchive,
+};
 use rules::{
     MathStructureArg, MathStructureArgIter, NotationArg, NotationArgIter, ParagraphArg,
     ParagraphArgIter, ProblemArg, ProblemArgIter, SModuleArg, SModuleArgIter, SymdeclArg,
@@ -23,7 +26,9 @@ use structs::{
     MorphismKind, STeXModuleStore, STeXParseState, STeXToken, SymbolReference, SymnameMode,
 };
 
-use crate::quickparse::stex::rules::{IncludeProblemArg, MHGraphicsArg};
+use crate::quickparse::stex::rules::{
+    IncludeProblemArg, MHGraphicsArg, SRefOptsA, SRefOptsAIter, SRefOptsB, SRefOptsBIter,
+};
 
 use super::latex::LaTeXParser;
 
@@ -310,6 +315,16 @@ pub enum STeXAnnot {
         token_range: StringRange<LSPLineCol>,
         args: Vec<MHGraphicsArg<LSPLineCol>>,
     },
+    SRef {
+        full_range: StringRange<LSPLineCol>,
+        token_range: StringRange<LSPLineCol>,
+        opt_args: Vec<SRefOptsA<LSPLineCol, Self>>,
+        label_range: StringRange<LSPLineCol>,
+        in_opt_args: Vec<SRefOptsB<LSPLineCol, Self>>,
+        target: DocumentElementUri,
+        target_path: std::sync::Arc<Path>,
+        in_doc: Option<(DocumentUri, std::sync::Arc<Path>)>,
+    },
     SnifySuggestion {
         range: StringRange<LSPLineCol>,
         symbols: SmallVec<(SymbolUri, bool), 1>,
@@ -356,6 +371,25 @@ impl STeXAnnot {
                         children: Self::from_tokens(children, None),
                     });
                 }
+                STeXToken::SRef {
+                    full_range,
+                    token_range,
+                    opt_args,
+                    label_range,
+                    in_opt_args,
+                    target,
+                    target_path,
+                    in_doc,
+                } => v.push(Self::SRef {
+                    full_range,
+                    token_range,
+                    opt_args: cont!(opt_args),
+                    label_range,
+                    in_opt_args: cont!(in_opt_args),
+                    target,
+                    target_path,
+                    in_doc,
+                }),
                 STeXToken::MHGraphics {
                     filepath,
                     archive,
@@ -848,6 +882,7 @@ impl STeXAnnot {
             | Self::Precondition { full_range, .. }
             | Self::Objective { full_range, .. }
             | Self::MHGraphics { full_range, .. }
+            | Self::SRef { full_range, .. }
             | Self::SnifySuggestion {
                 range: full_range, ..
             }
@@ -873,6 +908,12 @@ pub enum AnnotIter<'a> {
             std::slice::Iter<'a, STeXAnnot>,
         >,
     ),
+    SRef(
+        std::iter::Chain<
+            SRefOptsAIter<'a, LSPLineCol, STeXAnnot>,
+            SRefOptsBIter<'a, LSPLineCol, STeXAnnot>,
+        >,
+    ),
     Symdecl(SymdeclArgIter<'a, LSPLineCol, STeXAnnot>),
     TextSymdecl(TextSymdeclArgIter<'a, LSPLineCol, STeXAnnot>),
     Notation(NotationArgIter<'a, LSPLineCol, STeXAnnot>),
@@ -890,6 +931,7 @@ impl<'a> Iterator for AnnotIter<'a> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match self {
+            Self::SRef(i) => i.next(),
             Self::Module(i) => i.next(),
             Self::Structure(i) => i.next(),
             Self::InlineAss(i) => i.next(),
@@ -916,6 +958,13 @@ impl TreeLike for STeXAnnot {
             Self::InlineMorphism { assignments, .. } => {
                 Some(AnnotIter::InlineAss(InlineMorphAssIter::new(assignments)))
             }
+            Self::SRef {
+                opt_args,
+                in_opt_args,
+                ..
+            } => Some(AnnotIter::SRef(
+                SRefOptsAIter::new(opt_args).chain(SRefOptsBIter::new(in_opt_args)),
+            )),
             Self::Paragraph {
                 parsed_args,
                 children,

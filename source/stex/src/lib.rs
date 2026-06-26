@@ -12,12 +12,13 @@ use either::Either;
 use eyre::Context;
 use flams_ftml::FTML_CONTENT;
 use flams_math_archives::{
+    Archive, LocalArchive, MathArchive,
     artifacts::{FileArtifact, FileOrString, FtmlString},
     backend::{AnyBackend, GlobalBackend, LocalBackend},
     build_target,
     formats::{BuildResult, BuildSpec},
     manager::ArchiveOrGroup,
-    source_format, Archive, LocalArchive, MathArchive,
+    source_format,
 };
 use flams_system::FlamsExtension;
 use flams_utils::vecmap::VecSet;
@@ -406,7 +407,8 @@ pub fn export_standalone(doc: &DocumentUri, file: &Path, target_dir: &Path) -> e
                 }
                 STeXDependency::ImportModule { .. }
                 | STeXDependency::UseModule { .. }
-                | STeXDependency::Module { .. } => (),
+                | STeXDependency::Module { .. }
+                | STeXDependency::SRef { .. } => (),
             }
         }
     }

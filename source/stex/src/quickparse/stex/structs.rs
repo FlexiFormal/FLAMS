@@ -10,7 +10,7 @@ use crate::quickparse::{
         Environment, FromLaTeXToken, Group, GroupState, Groups, LaTeXParser, Macro, ParserState,
         rules::{AnyEnv, AnyMacro, DynMacro},
     },
-    stex::rules::{IncludeProblemArg, MHGraphicsArg},
+    stex::rules::{IncludeProblemArg, MHGraphicsArg, SRefOptsA, SRefOptsB},
 };
 use flams_math_archives::{
     MathArchive,
@@ -25,8 +25,8 @@ use flams_utils::{
 };
 use ftml_ontology::narrative::elements::{paragraphs::ParagraphKind, problems::CognitiveDimension};
 use ftml_uris::{
-    ArchiveId, ArchiveUri, DocumentUri, DomainUri, IsDomainUri, Language, ModuleUri, PathUri,
-    SymbolUri, UriName, UriPath, UriWithArchive, UriWithPath,
+    ArchiveId, ArchiveUri, DocumentElementUri, DocumentUri, DomainUri, IsDomainUri, Language,
+    ModuleUri, PathUri, SymbolUri, UriName, UriPath, UriWithArchive, UriWithPath,
 };
 use smallvec::SmallVec;
 use std::{
@@ -71,6 +71,16 @@ pub enum STeXToken<Pos: StringPosition> {
         filepath: (std::sync::Arc<str>, StringRange<Pos>),
         full_range: StringRange<Pos>,
         token_range: StringRange<Pos>,
+    },
+    SRef {
+        full_range: StringRange<Pos>,
+        token_range: StringRange<Pos>,
+        opt_args: Vec<SRefOptsA<Pos, Self>>,
+        label_range: StringRange<Pos>,
+        in_opt_args: Vec<SRefOptsB<Pos, Self>>,
+        target: DocumentElementUri,
+        target_path: std::sync::Arc<Path>,
+        in_doc: Option<(DocumentUri, std::sync::Arc<Path>)>,
     },
     IncludeProblem {
         filepath: (std::sync::Arc<str>, StringRange<Pos>),

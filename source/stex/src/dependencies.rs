@@ -1,17 +1,19 @@
-use crate::quickparse::stex::{rules, DiagnosticLevel};
+use crate::PDFLATEX;
+use crate::quickparse::stex::{DiagnosticLevel, rules};
 use crate::{
+    PDFLATEX_FIRST,
     quickparse::{
         latex::LaTeXParser,
         stex::structs::{ModuleReference, STeXParseState, STeXToken},
     },
-    PDFLATEX_FIRST,
 };
 use either::Either;
-use flams_math_archives::backend::AnyBackend;
+use flams_math_archives::MathArchive;
+use flams_math_archives::backend::{AnyBackend, LocalBackend};
 use flams_math_archives::formats::{BuildSpec, BuildTargetId, TaskDependency, TaskRef};
 use flams_utils::sourcerefs::{NoPosition, StringRange};
 use ftml_solver::CHECK;
-use ftml_uris::{ArchiveId, DocumentUri, Language, UriWithArchive};
+use ftml_uris::{ArchiveId, DocumentUri, Language, UriPath, UriWithArchive};
 use std::path::Path;
 
 pub enum STeXDependency {
@@ -35,6 +37,10 @@ pub enum STeXDependency {
     Img {
         archive: Option<ArchiveId>,
         filepath: std::sync::Arc<str>,
+    },
+    SRef {
+        filepath: std::sync::Arc<Path>,
+        in_doc: Option<std::sync::Arc<Path>>,
     },
 }
 
@@ -69,6 +75,7 @@ pub fn parse_deps<'a>(
             ("stexstyleassertion", rules::stexstyleassertion as _),
             ("stexstyledefinition", rules::stexstyledefinition as _),
             ("stexstyleparagraph", rules::stexstyleparagraph as _),
+            ("sref", rules::sref as _),
         ]),
         LaTeXParser::default_env_rules().into_iter().chain([(
             "smodule",
@@ -120,6 +127,14 @@ impl DepParser<'_> {
             } => Some(STeXDependency::UseModule {
                 archive: uri.archive_id().clone(),
                 module: rel_path,
+            }),
+            STeXToken::SRef {
+                target_path,
+                in_doc,
+                ..
+            } => Some(STeXDependency::SRef {
+                filepath: target_path,
+                in_doc: in_doc.map(|(_, p)| p),
             }),
             STeXToken::Module {
                 /*uri,*/ sig,
@@ -291,7 +306,53 @@ pub fn get_deps(task: BuildSpec) -> Vec<(BuildTargetId, TaskDependency)> {
                     ));
                 }
             }
-            _ => (),
+            STeXDependency::SRef { filepath, in_doc } => {
+                if let Some((archive, rel_path)) = task
+                    .backend
+                    .archive_of(&filepath, |a, rp| {
+                        let rp = rp.as_os_str().to_str()?;
+                        rp.parse::<UriPath>().ok().map(|p| (a.id().clone(), p))
+                    })
+                    .flatten()
+                {
+                    deps.push((
+                        PDFLATEX.id(),
+                        TaskDependency::Physical {
+                            strict: false,
+                            task: TaskRef {
+                                archive,
+                                rel_path,
+                                target: PDFLATEX_FIRST.id(),
+                            },
+                        },
+                    ));
+                }
+                if let Some(id) = in_doc
+                    && let Some((archive, rel_path)) = task
+                        .backend
+                        .archive_of(&id, |a, rp| {
+                            let rp = rp.as_os_str().to_str()?;
+                            rp.parse::<UriPath>().ok().map(|p| (a.id().clone(), p))
+                        })
+                        .flatten()
+                {
+                    deps.push((
+                        PDFLATEX.id(),
+                        TaskDependency::Physical {
+                            strict: false,
+                            task: TaskRef {
+                                archive,
+                                rel_path,
+                                target: PDFLATEX_FIRST.id(),
+                            },
+                        },
+                    ));
+                }
+            }
+            STeXDependency::Img { .. }
+            | STeXDependency::ImportModule { .. }
+            | STeXDependency::UseModule { .. }
+            | STeXDependency::Inputref { .. } => (),
         }
     }
     deps
