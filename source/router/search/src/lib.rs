@@ -29,7 +29,7 @@ pub async fn search_query(
         opts.close(|u| flams_system::backend::backend().get_document(u).ok());
         Searcher::get()
             .query(&query, opts, num_results)
-            .ok_or_else(|| ServerFnError::ServerError("Search error".to_string()))
+            .map_err(|e| ServerFnError::ServerError(format!("Search error: {e}")))
     })
     .await
     .map_err(|e| ServerFnError::ServerError(e.to_string()))?
