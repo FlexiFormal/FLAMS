@@ -287,13 +287,12 @@ impl Queue {
         });
         let spec = task.as_build_spec(&self.0.backend);
         //println!("Running task {target}");
-        let BuildResult { log, mut result } =
-            tracing::info_span!(target:"buildqueue","Running task",
-              archive = %task.0.uri.archive_id(),
-              rel_path = %task.0.rel_path,
-              format = %target
-            )
-            .in_scope(|| (target.run)(spec));
+        let BuildResult { log, result } = tracing::info_span!(target:"buildqueue","Running task",
+          archive = %task.0.uri.archive_id(),
+          rel_path = %task.0.rel_path,
+          format = %target
+        )
+        .in_scope(|| (target.run)(spec));
         //println!("Finished running task {target}");
         /*let (idx, _) = task
         .steps()
@@ -307,31 +306,51 @@ impl Queue {
         };
         state.running.retain(|t| t != task);
         let eta = state.timer.update(1);
-        if let Ok(Some(data)) = result.as_ref() {
-            for e in inventory::iter::<FlamsExtension>() {
-                //println!("Passing {} to {}", data.kind(), e.name);
-                (e.on_build_result)(
-                    &self.0.backend,
-                    task.document_uri(),
-                    task.rel_path(),
-                    &**data,
-                );
+
+        let (mut err, res) = match result {
+            Ok(res) => (None, res),
+            Err(e) => (Some(e), None),
+        };
+
+        if let Err(e) =
+            self.0
+                .backend
+                .save(task.document_uri(), Some(task.rel_path()), log, target, res)
+        {
+            tracing::error!("Error saving build result: {e}");
+            if err.is_none() {
+                err = Some(Vec::new());
             }
         }
 
-        if let Err(e) = self.0.backend.save(
-            task.document_uri(),
-            Some(task.rel_path()),
-            log,
-            target,
-            result.as_mut().map_or_else(|_| None, Option::take),
-        ) {
-            result = Err(Vec::new());
-            tracing::error!("Error saving build result: {e}");
-        }
+        match err {
+            None => {
+                let mut found = false;
+                let mut requeue = false;
+                for s in task.steps() {
+                    if s.0.target == target {
+                        found = true;
+                        s.0.state.set(TaskState::Done);
+                    } else if found {
+                        s.0.state.set(TaskState::Queued);
+                        requeue = true;
+                        break;
+                    }
+                }
+                if requeue {
+                    state.queue.push_front(task.clone());
+                } else {
+                    state.done.push(task.clone());
+                }
+                drop(lock);
 
-        match result {
-            Err(deps) => {
+                self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
+                    id: task.0.id,
+                    target,
+                    eta,
+                });
+            }
+            Some(deps) => {
                 /*
                 let mut block = false;
                 for d in deps {
@@ -384,32 +403,6 @@ impl Queue {
                     });
                 }
                 drop(lock);
-            }
-            Ok(data) => {
-                let mut found = false;
-                let mut requeue = false;
-                for s in task.steps() {
-                    if s.0.target == target {
-                        found = true;
-                        s.0.state.set(TaskState::Done);
-                    } else if found {
-                        s.0.state.set(TaskState::Queued);
-                        requeue = true;
-                        break;
-                    }
-                }
-                if requeue {
-                    state.queue.push_front(task.clone());
-                } else {
-                    state.done.push(task.clone());
-                }
-                drop(lock);
-
-                self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
-                    id: task.0.id,
-                    target,
-                    eta,
-                });
             }
         }
     }

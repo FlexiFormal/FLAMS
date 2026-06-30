@@ -365,19 +365,22 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
 pub struct LSPStore<'a, 'l, const FULL: bool> {
     pub(crate) map: &'a mut HMap<UrlOrFile, DocData>,
     verbalizations: Option<&'a mut UnlockedVerbalizationTrie<'l>>,
+    ignore_verbalizations: &'a [&'a str],
     cycles: Vec<DocumentUri>,
     snify: bool,
 }
 impl<'a, 'l, const FULL: bool> LSPStore<'a, 'l, FULL> {
     #[inline]
-    pub fn new(
+    pub const fn new(
         map: &'a mut HMap<UrlOrFile, DocData>,
         verbalizations: Option<&'a mut UnlockedVerbalizationTrie<'l>>,
+        ignore_verbalizations: &'a [&'a str],
         snify: bool,
     ) -> Self {
         Self {
             map,
             cycles: Vec::new(),
+            ignore_verbalizations,
             verbalizations,
             snify,
         }
@@ -395,9 +398,9 @@ impl<'a, 'l, const FULL: bool> LSPStore<'a, 'l, FULL> {
             self.load(p, uri)
         } else {
             let mut nstore = if let Some(verb) = &mut self.verbalizations {
-                LSPStore::<'_, '_, false>::new(self.map, Some(verb), false)
+                LSPStore::<'_, '_, false>::new(self.map, Some(verb), &[], false)
             } else {
-                LSPStore::<'_, '_, false>::new(self.map, None, false)
+                LSPStore::<'_, '_, false>::new(self.map, None, &[], false)
             };
             nstore.cycles = std::mem::take(&mut self.cycles);
             let r = nstore.load(p, uri);
@@ -491,9 +494,13 @@ impl<const FULL: bool> STeXModuleStore for &mut LSPStore<'_, '_, FULL> {
             && Self::FULL
             && let Some(verb) = &self.verbalizations
         {
-            let mut parser = StrParser::new(text);
-            parser.pos = r.start;
-            let v = verb.find_all_in(language, parser, needs_usemodule);
+            let v = verb.find_all_in(
+                language,
+                text,
+                r.start,
+                self.ignore_verbalizations,
+                needs_usemodule,
+            );
             if v.is_empty() {
                 None
             } else {

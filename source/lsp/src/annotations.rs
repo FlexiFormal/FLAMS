@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use crate::capabilities::STeXSemanticTokens;
 use crate::{
     IsLSPRange, ProgressCallbackClient,
@@ -17,7 +19,6 @@ use flams_stex::quickparse::{
         },
         structs::{
             InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymbolReference,
-            SymnameMode,
         },
     },
 };
@@ -74,7 +75,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::MathStructure {
                 uri,
@@ -93,7 +94,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::ConservativeExt {
                 uri,
@@ -112,7 +113,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: extstructure_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::MorphismEnv {
                 full_range,
@@ -131,7 +132,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: env_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::InlineMorphism {
                 full_range,
@@ -175,7 +176,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::Problem {
                 full_range,
@@ -193,7 +194,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::Symdecl {
                 uri,
@@ -230,20 +231,8 @@ impl AnnotExt for STeXAnnot {
                 main_name_range,
                 full_range,
                 ..
-            } => Some((
-                lsp::DocumentSymbol {
-                    name: name.to_string(),
-                    detail: None,
-                    kind: lsp::SymbolKind::VARIABLE,
-                    tags: None,
-                    deprecated: None,
-                    range: full_range.into_range(),
-                    selection_range: main_name_range.into_range(),
-                    children: None,
-                },
-                &[],
-            )),
-            Self::Varseq {
+            }
+            | Self::Varseq {
                 name,
                 main_name_range,
                 full_range,
@@ -453,7 +442,7 @@ impl AnnotExt for STeXAnnot {
                         target: Some(url),
                         tooltip: None,
                         data: None,
-                    })
+                    });
                 }
             }
             Self::MHGraphics {
@@ -554,10 +543,7 @@ impl AnnotExt for STeXAnnot {
                 cont(*token_range, STeXSemanticTokens::REF_MACRO);
                 for o in opt_args {
                     match o {
-                        A::Archive(a) => {
-                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
-                        }
-                        A::File(a) => {
+                        A::Archive(a) | A::File(a) => {
                             cont(a.key_range, STeXSemanticTokens::KEYWORD);
                         }
                         A::Fallback(a) => {
@@ -566,20 +552,14 @@ impl AnnotExt for STeXAnnot {
                                 e.semantic_tokens(cont);
                             }
                         }
-                        A::Pre(a) => {
-                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
-                        }
-                        A::Post(a) => {
+                        A::Pre(a) | A::Post(a) => {
                             cont(a.key_range, STeXSemanticTokens::KEYWORD);
                         }
                     }
                 }
                 for o in in_opt_args {
                     match o {
-                        B::Archive(a) => {
-                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
-                        }
-                        B::File(a) => {
+                        B::Archive(a) | B::File(a) => {
                             cont(a.key_range, STeXSemanticTokens::KEYWORD);
                         }
                         B::Title(a) => {
@@ -630,7 +610,10 @@ impl AnnotExt for STeXAnnot {
                 let mut end_range = *full_range;
                 end_range.end.col -= 1;
                 end_range.start.line = end_range.end.line;
-                end_range.start.col = end_range.end.col - "smodule".len() as u32;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    end_range.start.col = end_range.end.col - const { "smodule".len() as u32 };
+                }
                 cont(end_range, STeXSemanticTokens::DECLARATION);
             }
             Self::MathStructure {
@@ -658,7 +641,7 @@ impl AnnotExt for STeXAnnot {
                     }
                 }
                 for (_, r) in extends {
-                    cont(*r, STeXSemanticTokens::SYMBOL)
+                    cont(*r, STeXSemanticTokens::SYMBOL);
                 }
                 for c in children {
                     c.semantic_tokens(cont);
@@ -1575,15 +1558,16 @@ impl AnnotExt for STeXAnnot {
             v: &[SymbolReference<LSPLineCol>],
             r: StringRange<LSPLineCol>,
         ) -> lsp::CodeActionResponse {
+            use std::fmt::Write;
             let all_strs: SmallVec<_, 2> = v
                 .iter()
                 .map(|u| {
                     let mut ret = u.uri.archive_id().to_string();
                     if let Some(p) = u.uri.path() {
                         ret.push('/');
-                        ret.push_str(&p.to_string());
+                        ret.push_str(p.as_ref());
                     }
-                    ret.push_str(&format!("?{}?{}", u.uri.module_name(), u.uri.name()));
+                    let _ = write!(ret, "?{}?{}", u.uri.module_name(), u.uri.name());
                     ret
                 })
                 .collect();
@@ -1676,7 +1660,7 @@ impl AnnotExt for STeXAnnot {
             }
             Self::SnifySuggestion { range, symbols } => {
                 if range.contains(pos) {
-                    symbols
+                    let mut ret: Vec<lsp::CodeActionOrCommand> = symbols
                         .iter()
                         .map(|(s, needs_usemodule)| {
                             lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
@@ -1699,7 +1683,27 @@ impl AnnotExt for STeXAnnot {
                                 data: None,
                             })
                         })
-                        .collect()
+                        .collect();
+                    ret.push(lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
+                        title: "(ignore)".to_string(),
+                        kind: Some(lsp::CodeActionKind::QUICKFIX), //::QUICKFIX),
+                        diagnostics: None,
+                        edit: None,
+                        command: Some(lsp::Command {
+                            title: "insert".to_string(),
+                            command: "snify/annotate".to_string(),
+                            arguments: Some(vec![
+                                String::new().into(),
+                                false.into(),
+                                url.to_string().into(),
+                                ::serde_json::to_value(*range).expect("wut"),
+                            ]),
+                        }),
+                        is_preferred: None,
+                        disabled: None,
+                        data: None,
+                    }));
+                    ret
                 } else {
                     Vec::new()
                 }

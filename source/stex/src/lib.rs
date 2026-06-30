@@ -12,7 +12,7 @@ use either::Either;
 use eyre::Context;
 use flams_ftml::FTML_CONTENT;
 use flams_math_archives::{
-    Archive, LocalArchive, MathArchive,
+    Archive, FlamsExtension, LocalArchive, MathArchive,
     artifacts::{FileArtifact, FileOrString, FtmlString},
     backend::{AnyBackend, GlobalBackend, LocalBackend},
     build_target,
@@ -20,7 +20,6 @@ use flams_math_archives::{
     manager::ArchiveOrGroup,
     source_format,
 };
-use flams_system::FlamsExtension;
 use flams_utils::vecmap::VecSet;
 use ftml_uris::{ArchiveId, DocumentUri, UriWithArchive, UriWithPath};
 pub use rustex::{OutputCont, RusTeX};

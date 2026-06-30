@@ -577,6 +577,7 @@ impl std::fmt::Display for GetModuleError {
     }
 }
 
+#[allow(unused_variables)]
 pub trait STeXModuleStore {
     const FULL: bool;
     /// # Errors
