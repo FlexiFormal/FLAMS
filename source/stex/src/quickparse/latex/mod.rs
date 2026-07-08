@@ -769,6 +769,8 @@ impl<'a, Pos: StringPosition, T: FromLaTeXToken<'a, Pos>, State: ParserState<'a,
             //let (_, mut args) = s.split_n(len);
             //args.trim_ws();
             d(self, args.trim_start());
+        } else if let Some(d) = self.directives.get(s.trim()) {
+            d(self, "");
         } else {
             self.tokenizer.problem(
                 self.curr_pos(),

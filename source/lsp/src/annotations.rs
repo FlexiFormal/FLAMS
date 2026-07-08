@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use crate::capabilities::STeXSemanticTokens;
 use crate::{
     IsLSPRange, ProgressCallbackClient,
@@ -6,7 +8,7 @@ use crate::{
 use async_lsp::lsp_types as lsp;
 use flams_math_archives::LocalArchive;
 use flams_math_archives::backend::{GlobalBackend, LocalBackend};
-use flams_stex::quickparse::stex::rules::IncludeProblemArg;
+use flams_stex::quickparse::stex::rules::{IncludeProblemArg, SRefOptsA, SRefOptsB};
 use flams_stex::quickparse::{
     latex::ParsedKeyValue,
     stex::{
@@ -17,7 +19,6 @@ use flams_stex::quickparse::{
         },
         structs::{
             InlineMorphAssKind, InlineMorphAssign, ModuleOrStruct, MorphismKind, SymbolReference,
-            SymnameMode,
         },
     },
 };
@@ -74,7 +75,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::MathStructure {
                 uri,
@@ -93,7 +94,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::ConservativeExt {
                 uri,
@@ -112,7 +113,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: extstructure_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::MorphismEnv {
                 full_range,
@@ -131,7 +132,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: env_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::InlineMorphism {
                 full_range,
@@ -175,7 +176,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::Problem {
                 full_range,
@@ -193,7 +194,7 @@ impl AnnotExt for STeXAnnot {
                     selection_range: name_range.into_range(),
                     children: None,
                 },
-                &children,
+                children,
             )),
             Self::Symdecl {
                 uri,
@@ -230,20 +231,8 @@ impl AnnotExt for STeXAnnot {
                 main_name_range,
                 full_range,
                 ..
-            } => Some((
-                lsp::DocumentSymbol {
-                    name: name.to_string(),
-                    detail: None,
-                    kind: lsp::SymbolKind::VARIABLE,
-                    tags: None,
-                    deprecated: None,
-                    range: full_range.into_range(),
-                    selection_range: main_name_range.into_range(),
-                    children: None,
-                },
-                &[],
-            )),
-            Self::Varseq {
+            }
+            | Self::Varseq {
                 name,
                 main_name_range,
                 full_range,
@@ -385,6 +374,7 @@ impl AnnotExt for STeXAnnot {
             | Self::Precondition { .. }
             | Self::Objective { .. }
             | Self::Assign { .. }
+            | Self::SRef { .. }
             | Self::SnifySuggestion { .. } => None,
         }
     }
@@ -409,6 +399,51 @@ impl AnnotExt for STeXAnnot {
                     tooltip: None,
                     data: None,
                 });
+            }
+            Self::SRef {
+                label_range,
+                opt_args,
+                in_opt_args,
+                target_path,
+                in_doc,
+                ..
+            } => {
+                if let Ok(url) = lsp::Url::from_file_path(target_path) {
+                    for o in opt_args {
+                        if let SRefOptsA::File(f) = o {
+                            cont(lsp::DocumentLink {
+                                range: f.val_range.into_range(),
+                                target: Some(url.clone()),
+                                tooltip: None,
+                                data: None,
+                            });
+                            break;
+                        }
+                    }
+                    cont(lsp::DocumentLink {
+                        range: label_range.into_range(),
+                        target: Some(url),
+                        tooltip: None,
+                        data: None,
+                    });
+                }
+                if let Some((_, id)) = in_doc
+                    && let Ok(url) = lsp::Url::from_file_path(id)
+                    && let Some(rng) = in_opt_args.iter().find_map(|a| {
+                        if let SRefOptsB::File(f) = a {
+                            Some(f.val_range)
+                        } else {
+                            None
+                        }
+                    })
+                {
+                    cont(lsp::DocumentLink {
+                        range: rng.into_range(),
+                        target: Some(url),
+                        tooltip: None,
+                        data: None,
+                    });
+                }
             }
             Self::MHGraphics {
                 archive, filepath, ..
@@ -497,6 +532,45 @@ impl AnnotExt for STeXAnnot {
 
     fn semantic_tokens(&self, cont: &mut impl FnMut(StringRange<LSPLineCol>, u32)) {
         match self {
+            Self::SRef {
+                token_range,
+                opt_args,
+                in_opt_args,
+                ..
+            } => {
+                use SRefOptsA as A;
+                use SRefOptsB as B;
+                cont(*token_range, STeXSemanticTokens::REF_MACRO);
+                for o in opt_args {
+                    match o {
+                        A::Archive(a) | A::File(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                        A::Fallback(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                            for e in &a.val {
+                                e.semantic_tokens(cont);
+                            }
+                        }
+                        A::Pre(a) | A::Post(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                    }
+                }
+                for o in in_opt_args {
+                    match o {
+                        B::Archive(a) | B::File(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                        }
+                        B::Title(a) => {
+                            cont(a.key_range, STeXSemanticTokens::KEYWORD);
+                            for e in &a.val {
+                                e.semantic_tokens(cont);
+                            }
+                        }
+                    }
+                }
+            }
             Self::Module {
                 name_range,
                 full_range,
@@ -536,7 +610,10 @@ impl AnnotExt for STeXAnnot {
                 let mut end_range = *full_range;
                 end_range.end.col -= 1;
                 end_range.start.line = end_range.end.line;
-                end_range.start.col = end_range.end.col - "smodule".len() as u32;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    end_range.start.col = end_range.end.col - const { "smodule".len() as u32 };
+                }
                 cont(end_range, STeXSemanticTokens::DECLARATION);
             }
             Self::MathStructure {
@@ -564,7 +641,7 @@ impl AnnotExt for STeXAnnot {
                     }
                 }
                 for (_, r) in extends {
-                    cont(*r, STeXSemanticTokens::SYMBOL)
+                    cont(*r, STeXSemanticTokens::SYMBOL);
                 }
                 for c in children {
                     c.semantic_tokens(cont);
@@ -1424,7 +1501,8 @@ impl AnnotExt for STeXAnnot {
             | Self::Problem { .. }
             | Self::Defnotation { .. }
             | Self::MorphismEnv { .. }
-            | Self::SnifySuggestion { .. } => None,
+            | Self::SnifySuggestion { .. }
+            | Self::SRef { .. } => None,
         }
     }
     fn inlay_hint(&self) -> Option<lsp::InlayHint> {
@@ -1480,15 +1558,16 @@ impl AnnotExt for STeXAnnot {
             v: &[SymbolReference<LSPLineCol>],
             r: StringRange<LSPLineCol>,
         ) -> lsp::CodeActionResponse {
+            use std::fmt::Write;
             let all_strs: SmallVec<_, 2> = v
                 .iter()
                 .map(|u| {
                     let mut ret = u.uri.archive_id().to_string();
                     if let Some(p) = u.uri.path() {
                         ret.push('/');
-                        ret.push_str(&p.to_string());
+                        ret.push_str(p.as_ref());
                     }
-                    ret.push_str(&format!("?{}?{}", u.uri.module_name(), u.uri.name()));
+                    let _ = write!(ret, "?{}?{}", u.uri.module_name(), u.uri.name());
                     ret
                 })
                 .collect();
@@ -1581,7 +1660,7 @@ impl AnnotExt for STeXAnnot {
             }
             Self::SnifySuggestion { range, symbols } => {
                 if range.contains(pos) {
-                    symbols
+                    let mut ret: Vec<lsp::CodeActionOrCommand> = symbols
                         .iter()
                         .map(|(s, needs_usemodule)| {
                             lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
@@ -1604,7 +1683,27 @@ impl AnnotExt for STeXAnnot {
                                 data: None,
                             })
                         })
-                        .collect()
+                        .collect();
+                    ret.push(lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
+                        title: "(ignore)".to_string(),
+                        kind: Some(lsp::CodeActionKind::QUICKFIX), //::QUICKFIX),
+                        diagnostics: None,
+                        edit: None,
+                        command: Some(lsp::Command {
+                            title: "insert".to_string(),
+                            command: "snify/annotate".to_string(),
+                            arguments: Some(vec![
+                                String::new().into(),
+                                false.into(),
+                                url.to_string().into(),
+                                ::serde_json::to_value(*range).expect("wut"),
+                            ]),
+                        }),
+                        is_preferred: None,
+                        disabled: None,
+                        data: None,
+                    }));
+                    ret
                 } else {
                     Vec::new()
                 }
@@ -1634,7 +1733,8 @@ impl AnnotExt for STeXAnnot {
             | Self::Varseq { .. }
             | Self::Defnotation { .. }
             | Self::Definiens { .. }
-            | Self::Assign { .. } => Vec::new(),
+            | Self::Assign { .. }
+            | Self::SRef { .. } => Vec::new(),
         }
     }
 
@@ -2069,7 +2169,8 @@ impl AnnotExt for STeXAnnot {
             | Self::Problem { .. }
             | Self::Definiens { .. }
             | Self::Defnotation { .. }
-            | Self::SnifySuggestion { .. } => None,
+            | Self::SnifySuggestion { .. }
+            | Self::SRef { .. } => None,
         }
     }
 }

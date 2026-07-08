@@ -8,9 +8,9 @@ use flams_utils::{
 use crate::quickparse::stex::DiagnosticLevel;
 
 use super::{
-    rules::{DynEnv, DynMacro},
     AnyEnv, AnyMacro, Environment, EnvironmentResult, FromLaTeXToken, LaTeXParser, Macro,
     MacroResult, ParserState,
+    rules::{DynEnv, DynMacro},
 };
 
 #[allow(clippy::needless_pass_by_value)]
@@ -79,19 +79,19 @@ pub fn macro_dir<
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     args: &'a str,
 ) {
-    if !args.is_empty() {
-        if let Some((m, _)) = args.split_once(' ') {
-            let len = m.len();
-            let (m, mut spec) = args.split_n(len);
-            spec.trim_ws();
-            parser.add_macro_rule(
-                m.trim().as_cow(),
-                Some(AnyMacro::Str(DynMacro {
-                    ptr: do_macro_dir as _,
-                    arg: spec,
-                })),
-            );
-        }
+    if !args.is_empty()
+        && let Some((m, _)) = args.split_once(' ')
+    {
+        let len = m.len();
+        let (m, mut spec) = args.split_n(len);
+        spec.trim_ws();
+        parser.add_macro_rule(
+            m.trim().as_cow(),
+            Some(AnyMacro::Str(DynMacro {
+                ptr: do_macro_dir as _,
+                arg: spec,
+            })),
+        );
     }
 }
 
@@ -136,20 +136,20 @@ pub fn env_dir<
     parser: &mut LaTeXParser<'a, Pos, T, State>,
     args: &'a str,
 ) {
-    if !args.is_empty() {
-        if let Some((m, _)) = args.split_once(' ') {
-            let len = m.len();
-            let (m, mut spec) = args.split_n(len);
-            spec.trim_ws();
-            parser.add_environment_rule(
-                m.as_cow(),
-                Some(AnyEnv::Str(DynEnv {
-                    open: do_env_dir as _,
-                    close: do_env_dir_close as _,
-                    arg: spec,
-                })),
-            );
-        }
+    if !args.is_empty()
+        && let Some((m, _)) = args.split_once(' ')
+    {
+        let len = m.len();
+        let (m, mut spec) = args.split_n(len);
+        spec.trim_ws();
+        parser.add_environment_rule(
+            m.as_cow(),
+            Some(AnyEnv::Str(DynEnv {
+                open: do_env_dir as _,
+                close: do_env_dir_close as _,
+                arg: spec,
+            })),
+        );
     }
 }
 
@@ -165,7 +165,6 @@ fn do_env_dir<
     e: &'b mut Environment<'a, Pos, T>,
     parser: &'c mut LaTeXParser<'a, Pos, T, State>,
 ) {
-    let arg = arg.as_ref();
     do_spec(arg, &mut e.begin, parser);
 }
 
@@ -195,7 +194,7 @@ pub fn nolint<
 }
 
 #[inline]
-pub fn dolint<
+pub const fn dolint<
     'a,
     Pos: StringPosition,
     T: FromLaTeXToken<'a, Pos>,

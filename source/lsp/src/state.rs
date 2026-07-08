@@ -470,7 +470,7 @@ impl LSPState {
         let mut ndocs = crate::HMap::default();
         let verbalizations = VerbalizationTrie::default();
         let mut vlock = verbalizations.lock();
-        let mut state = LSPStore::<true>::new(&mut ndocs, Some(&mut vlock), false);
+        let mut state = LSPStore::<true>::new(&mut ndocs, Some(&mut vlock), &[], false);
         for (p, uri) in iter {
             let p = UrlOrFile::File(p);
             if !state.map.contains_key(&p) {

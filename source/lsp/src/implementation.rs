@@ -27,9 +27,9 @@ use flams_math_archives::{
 use flams_stex::quickparse::stex::{AnnotIter, STeXAnnot, STeXDiagnostic};
 use flams_system::{TokioEngine, backend::backend};
 use flams_utils::{
-    parsing::{SourceParser, StrParser},
+    parsing::{Needle, SourceParser, StrParser},
     prelude::TreeChildIter,
-    sourcerefs::{ByteOffset, LSPLineCol, PositionConverter, StringRange},
+    sourcerefs::{ByteOffset, LSPLineCol, PositionConverter, StringPosition, StringRange},
     unwrap,
 };
 use ftml_ontology::{
@@ -537,7 +537,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
         tracing::info!("LSP: reload");
         state.backend().reset::<TokioEngine>();
         let _ = tokio::task::spawn_blocking(|| {
-            for e in flams_system::iter::<flams_system::FlamsExtension>() {
+            for e in flams_system::iter::<flams_math_archives::FlamsExtension>() {
                 (e.on_reload)();
             }
         });
@@ -596,7 +596,7 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
             if rescan {
                 state.backend().reset::<TokioEngine>();
                 let _ = tokio::task::spawn_blocking(|| {
-                    for e in flams_system::iter::<flams_system::FlamsExtension>() {
+                    for e in flams_system::iter::<flams_math_archives::FlamsExtension>() {
                         (e.on_reload)();
                     }
                 });
@@ -722,7 +722,7 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
                 let r = lsp::PublishDiagnosticsParams {
                     uri: document.uri,
                     diagnostics: a.diagnostics.iter().map(to_diagnostic).collect(),
-                    version: None,
+                    version: Some(document.version),
                 };
                 let _ = client.publish_diagnostics(r);
             }));
@@ -1327,35 +1327,48 @@ fn snify_annotate(
 
     let Ok(range) = serde_json::from_value::<StringRange<LSPLineCol>>(range) else {
         let _ = client.show_message(lsp::ShowMessageParams {
-            message: "Expected document range in argument 1".to_string(),
+            message: "Expected document range in argument 4".to_string(),
             typ: lsp::MessageType::ERROR,
         });
         return;
     };
     let Ok(needs_usemodule) = serde_json::from_value::<bool>(needs_usemodule) else {
         let _ = client.show_message(lsp::ShowMessageParams {
-            message: "Expected lsp uri in argument 2".to_string(),
+            message: "Expected boolean in argument 3".to_string(),
             typ: lsp::MessageType::ERROR,
         });
         return;
     };
     let Ok(url) = serde_json::from_value::<lsp::Url>(doc) else {
         let _ = client.show_message(lsp::ShowMessageParams {
-            message: "Expected lsp uri in argument 3".to_string(),
+            message: "Expected lsp uri in argument 2".to_string(),
             typ: lsp::MessageType::ERROR,
         });
         return;
     };
-    let Ok(uri) = serde_json::from_value::<SymbolUri>(uri) else {
+    let uri = if let serde_json::Value::String(s) = uri {
+        if s.is_empty() {
+            None
+        } else {
+            let Ok(uri) = s.parse::<SymbolUri>() else {
+                let _ = client.show_message(lsp::ShowMessageParams {
+                    message: "Expected symbol uri in argument 1".to_string(),
+                    typ: lsp::MessageType::ERROR,
+                });
+                return;
+            };
+            Some(uri)
+        }
+    } else {
         let _ = client.show_message(lsp::ShowMessageParams {
-            message: "Expected symbol uri in argument 4".to_string(),
+            message: "Expected symbol uri in argument 1".to_string(),
             typ: lsp::MessageType::ERROR,
         });
         return;
     };
 
     tracing::trace!(
-        "Executing snify/annotate on {url}@{range} with {uri}; Needs usemodule:{needs_usemodule}"
+        "Executing snify/annotate on {url}@{range} with {uri:?}; Needs usemodule:{needs_usemodule}"
     );
 
     let urlfile = UrlOrFile::from(url.clone());
@@ -1368,7 +1381,34 @@ fn snify_annotate(
     };
     let edits = doc.with_text(|txt| {
         use crate::IsLSPRange;
+        thread_local! {
+            static NEEDLE:Needle<'static> = Needle::new("% srskip ");
+        }
         let mut ret = Vec::new();
+        let Some(uri) = uri else {
+            let Some(text) = LSPLineCol::get_range(range.start, range.end, txt) else {
+                return Vec::new();
+            };
+            let mut parser = StrParser::<LSPLineCol>::new(txt);
+            let _ = NEEDLE.with(|n| parser.read_until_needle(n));
+            if parser.rest().is_empty() {
+                return vec![lsp::TextEdit {
+                    range: StringRange::into_range(StringRange {
+                        start: parser.pos,
+                        end: parser.pos,
+                    }),
+                    new_text: format!("\n% srskip l:{text}"),
+                }];
+            }
+            let _ = parser.drop_prefix("% srskip ");
+            return vec![lsp::TextEdit {
+                range: StringRange::into_range(StringRange {
+                    start: parser.pos,
+                    end: parser.pos,
+                }),
+                new_text: format!("l:{text}, "),
+            }];
+        };
         if needs_usemodule {
             use std::fmt::Write;
             let mut parser = StrParser::<LSPLineCol>::new(txt);
@@ -1376,9 +1416,9 @@ fn snify_annotate(
             parser.drop_prefix("\\begin{document}");
             let mut insertion = format!("\n  \\usemodule[{}]{{", uri.archive_id());
             if let Some(path) = uri.path() {
-                write!(insertion, "{path}?{}}}", uri.module_name());
+                let _ = write!(insertion, "{path}?{}}}", uri.module_name());
             } else {
-                write!(insertion, "{}}}", uri.module_name());
+                let _ = write!(insertion, "{}}}", uri.module_name());
             }
             ret.push(lsp::TextEdit {
                 range: StringRange::into_range(StringRange {
@@ -1387,7 +1427,7 @@ fn snify_annotate(
                 }),
                 new_text: insertion,
             });
-        };
+        }
         ret.push(lsp::TextEdit {
             range: StringRange::into_range(StringRange {
                 start: range.start,
@@ -1419,12 +1459,14 @@ fn snify_annotate(
     eds.insert(url, edits);
     doc.force_snify
         .store(true, std::sync::atomic::Ordering::Relaxed);
-    let _ = tokio::task::spawn(client.apply_edit(lsp::ApplyWorkspaceEditParams {
-        label: None,
-        edit: lsp::WorkspaceEdit {
-            document_changes: None,
-            change_annotations: None,
-            changes: Some(eds),
+    std::mem::drop(tokio::task::spawn(client.apply_edit(
+        lsp::ApplyWorkspaceEditParams {
+            label: None,
+            edit: lsp::WorkspaceEdit {
+                document_changes: None,
+                change_annotations: None,
+                changes: Some(eds),
+            },
         },
-    }));
+    )));
 }

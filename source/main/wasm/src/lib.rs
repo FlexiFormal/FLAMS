@@ -2,3 +2,6 @@
 pub fn main() {
     flams_main::hydrate()
 }
+
+#[cfg(any(doc, feature = "docs"))]
+pub mod endpoints;

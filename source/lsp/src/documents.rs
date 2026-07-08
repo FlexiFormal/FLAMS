@@ -29,6 +29,7 @@ struct DocumentData {
 pub struct LSPDocument {
     pub(crate) up_to_date: triomphe::Arc<AtomicBool>,
     text: triomphe::Arc<parking_lot::Mutex<LSPText>>,
+    //pub(crate) ignore_verbalizations:triomphe::Arc<parking_lot::Mutex<Vec<(String, Option<StringRange<LSPLineCol>>)>>>,
     pub annotations: STeXParseData,
     data: triomphe::Arc<DocumentData>,
     pub(crate) force_snify: triomphe::Arc<AtomicBool>,
@@ -92,6 +93,7 @@ impl LSPDocument {
             up_to_date: triomphe::Arc::new(AtomicBool::new(false)),
             text: triomphe::Arc::new(parking_lot::Mutex::new(r)),
             data: triomphe::Arc::new(data),
+            //ignore_verbalizations: triomphe::Arc::new(parking_lot::Mutex::new(Vec::new())),
             annotations: STeXParseData::default(),
             force_snify: triomphe::Arc::new(AtomicBool::new(false)),
         }
@@ -177,16 +179,38 @@ impl LSPDocument {
         snify: bool,
         f: impl FnOnce(&STeXParseDataI) -> R,
     ) -> Option<R> {
-        let lock = self.text.lock();
+        let text_lock = self.text.lock();
         let uri = self.data.doc_uri.as_ref()?;
         let path = self.data.path.as_ref()?;
 
         let mut docs = state.documents.write();
         let mut vlock = state.verbalizations.lock();
-        let mut store = LSPStore::<true>::new(&mut docs, Some(&mut vlock), snify);
+        //let ignores = self.ignore_verbalizations.lock();
+        let ignores = if snify {
+            let mut ret = Vec::new();
+            for line in text_lock.text.lines().rev() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() && !trimmed.starts_with('%') {
+                    break;
+                }
+                let Some(line) = trimmed.strip_prefix("% srskip ") else {
+                    continue;
+                };
+                for v in line.split(',') {
+                    let trimmed = v.trim();
+                    if let Some(name) = trimmed.strip_prefix("l:") {
+                        ret.push(name);
+                    }
+                }
+            }
+            ret
+        } else {
+            Vec::new()
+        };
+        let mut store = LSPStore::<true>::new(&mut docs, Some(&mut vlock), &ignores, snify);
         let data = flams_stex::quickparse::stex::quickparse(
             uri,
-            &lock.text,
+            &text_lock.text,
             path,
             &AnyBackend::Global,
             &mut store,
@@ -198,7 +222,7 @@ impl LSPDocument {
         drop(vlock);
         drop(docs);
         //tracing::info!("quickparse took {t}");
-        drop(lock);
+        drop(text_lock);
         /*let path = path.clone();
         let _ = tokio::task::spawn_blocking(move || {
           state.relint_dependents(path);
@@ -230,10 +254,10 @@ impl LSPDocument {
             }
             return Some(f(&lock));
         }
-        let snify = snify
-            || (self
-                .force_snify
-                .swap(false, std::sync::atomic::Ordering::AcqRel));
+        let forced = self
+            .force_snify
+            .swap(false, std::sync::atomic::Ordering::AcqRel);
+        let snify = snify || forced;
         match tokio::task::spawn_blocking(move || self.load_annotations_and(state, snify, f)).await
         {
             Ok(r) => r,

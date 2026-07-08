@@ -7,10 +7,10 @@
 use crate::{
     quickparse::{
         latex::{
+            Environment, KeyValKind, LaTeXParser, Macro, ParsedKeyValue,
             rules::{
                 AnyMacro, DynMacro, EnvironmentResult, EnvironmentRule, MacroResult, MacroRule,
             },
-            Environment, KeyValKind, LaTeXParser, Macro, ParsedKeyValue,
         },
         stex::structs::MorphismKind,
         tokenizer::TeXTokenizer,
@@ -18,30 +18,30 @@ use crate::{
     tex,
 };
 use flams_math_archives::{
-    backend::{GlobalBackend, LocalBackend},
     MathArchive,
+    backend::{GlobalBackend, LocalBackend},
 };
 use flams_utils::parsing::SourceParser;
 use flams_utils::{
-    impossible,
+    CondSerialize, impossible,
     sourcerefs::{LSPLineCol, StringPosition, StringRange},
     vecmap::VecMap,
-    CondSerialize,
 };
 use ftml_ontology::narrative::elements::paragraphs::ParagraphKind;
 use ftml_uris::{
-    ArchiveId, IsNarrativeUri, Language, ModuleUri, SymbolUri, UriName, UriWithArchive, UriWithPath,
+    ArchiveId, DocumentUri, IsNarrativeUri, Language, ModuleUri, SymbolUri, UriName,
+    UriWithArchive, UriWithPath,
 };
 use smallvec::SmallVec;
 use std::{borrow::Cow, path::Path};
 
 use super::{
+    DiagnosticLevel,
     structs::{
         GroupKind, InlineMorphAssKind, InlineMorphAssign, MacroArg, ModuleOrStruct,
         ModuleReference, ModuleRule, ModuleRules, MorphismSpec, STeXGroup, STeXModuleStore,
         STeXParseState, STeXToken, SymbolReference, SymbolRule,
     },
-    DiagnosticLevel,
 };
 
 #[must_use]
@@ -49,7 +49,7 @@ use super::{
 pub fn all_rules<'a, MS: STeXModuleStore>() -> [(
     &'static str,
     MacroRule<'a, LSPLineCol, STeXToken<LSPLineCol>, STeXParseState<'a, LSPLineCol, MS>>,
-); 46] {
+); 47] {
     [
         ("importmodule", importmodule as _),
         ("setmetatheory", setmetatheory as _),
@@ -97,6 +97,7 @@ pub fn all_rules<'a, MS: STeXModuleStore>() -> [(
         ("interpretmod", interpretmod as _),
         ("precondition", precondition as _),
         ("objective", objective as _),
+        ("sref", sref as _),
     ]
 }
 
@@ -792,6 +793,138 @@ macro_rules! optargtype {
   (@DOITER $e:ident $name:ident {$($tks:tt)*} {$fieldname:ident { $tp:ty => $($r:tt)*}; $($rest:tt)* }) => {
     optargtype!(@DOITER $e $name {$($tks)*} { $($rest)* })
   };
+}
+
+optargtype! {parser =>
+    SRefOptsA<T> {
+        {Archive = "archive": str}
+        {File = "file": str}
+        {Fallback = "fallback": T*}
+        {Pre = "pre": ()}
+        {Post = "post": ()}
+    } @ SRefOptsAIter
+}
+optargtype! {parser =>
+    SRefOptsB<T> {
+        {Archive = "archive": str}
+        {File = "file": str}
+        {Title = "title": T*}
+    } @ SRefOptsBIter
+}
+
+stex!(p => sref[args_a:type SRefOptsA<Pos, STeXToken<Pos>>]{label:name}[args_b:type SRefOptsB<Pos, STeXToken<Pos>>] => {
+    let args_a = args_a.unwrap_or_default();
+    let args_b = args_b.unwrap_or_default();
+    let archive = args_a.iter().find_map(|p| if let SRefOptsA::Archive(a) = p {Some(a)} else {None})
+        .and_then(|pair|
+            parse_id(&pair.val,pair.key_range.start,&mut p.tokenizer)
+        );
+    let rel_path: Option<&str> = args_a.iter().find_map(|p|
+        if let SRefOptsA::File(f) = p {Some(&*f.val)} else {None}
+    );
+    let in_archive = args_b.iter().find_map(|p| if let SRefOptsB::Archive(a) = p {Some(a)} else {None})
+        .and_then(|pair|
+        parse_id(&pair.val,pair.key_range.start,&mut p.tokenizer)
+        );
+    let in_rel_path: Option<&str> = args_b.iter().find_map(|p|
+        if let SRefOptsB::File(f) = p {Some(&*f.val)} else {None}
+    );
+
+    let (doc_uri,target_path):(DocumentUri,std::sync::Arc<Path>) = if let Some(rp) = rel_path {
+        if let Some(uri) = parse_doc_ref(p,archive.as_ref(),&rp,sref.token_range.end) {
+            uri
+        } else {
+            return MacroResult::Simple(sref);
+        }
+    } else if let Some(rp) = &p.state.in_path{
+        (p.state.doc_uri.clone(),rp.clone())
+    } else {
+        p.tokenizer
+            .problem(sref.range.start, "file not found", DiagnosticLevel::Error);
+        return MacroResult::Simple(sref);
+    };
+    let target_uri = doc_uri & {
+        if let Ok(l) = label.0.parse::<UriName>() {
+            l
+        } else {
+            p.tokenizer.problem(sref.range.start, format_args!("invalid label name {}",label.0), DiagnosticLevel::Error);
+            return MacroResult::Simple(sref);
+        }
+    };
+    let in_doc_uri = if let Some(rp) = &in_rel_path {
+        if let Some(uri) = parse_doc_ref(p,in_archive.as_ref(),rp,label.1.end) {
+            Some(uri)
+        } else {
+            return MacroResult::Simple(sref);
+        }
+    } else {None};
+    MacroResult::Success(STeXToken::SRef {
+        full_range: sref.range,
+        token_range: sref.token_range,
+        opt_args: args_a,
+        label_range: label.1,
+        target_path,
+        in_opt_args: args_b,
+        target: target_uri,
+        in_doc: in_doc_uri
+    })
+});
+
+fn parse_doc_ref<'a, Pos: StringPosition, MS: STeXModuleStore>(
+    p: &mut crate::quickparse::latex::LaTeXParser<
+        'a,
+        Pos,
+        STeXToken<Pos>,
+        STeXParseState<'a, Pos, MS>,
+    >,
+    archive: Option<&ArchiveId>,
+    relpath: &str,
+    errpos: Pos,
+) -> Option<(DocumentUri, std::sync::Arc<Path>)> {
+    let (archive_uri, mut path) = if let Some(a) = archive {
+        if let Some(uri) = p.state.backend.with_local_archive(a, |a| {
+            a.map(|a| (a.uri().clone(), a.source_dir().join(relpath)))
+        }) {
+            uri
+        } else {
+            p.tokenizer.problem(
+                errpos,
+                format_args!("Unknown archive {a}"),
+                DiagnosticLevel::Error,
+            );
+            return None;
+        }
+    } else if let Some(a) = p.state.archive
+        && let Some(pth) = &p.state.in_path
+    {
+        (a.clone(), {
+            let mut np = &**pth;
+            while !np.ends_with("source") {
+                let Some(par) = np.parent() else {
+                    p.tokenizer
+                        .problem(errpos, "file not found", DiagnosticLevel::Error);
+                    return None;
+                };
+                np = par;
+            }
+            np.join(relpath)
+        })
+    } else {
+        p.tokenizer
+            .problem(errpos, "archive missing", DiagnosticLevel::Error);
+        return None;
+    };
+    path.add_extension("tex");
+    if let Ok(u) = DocumentUri::from_archive_relpath(archive_uri, &format!("{relpath}.tex")) {
+        Some((u, path.into()))
+    } else {
+        p.tokenizer.problem(
+            errpos,
+            format_args!("invalid document path {relpath}"),
+            DiagnosticLevel::Error,
+        );
+        None
+    }
 }
 
 optargtype! {parser =>
@@ -2349,7 +2482,7 @@ fn get_in_morphism<'b, MS: STeXModuleStore>(
                             if s.macroname.as_ref().is_some_and(|n| &**n == name)
                                 || s.uri.uri.name().last() == name =>
                         {
-                            return Some((s, specs))
+                            return Some((s, specs));
                         }
                         _ => (),
                     }
