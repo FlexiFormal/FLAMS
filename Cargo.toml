@@ -55,8 +55,8 @@ debug=true
 [profile.flams-release]
 inherits = "release"
 opt-level = 2
-lto = "thin" # "fat" #
-codegen-units = 16
+lto = "fat" # "thin" # 
+codegen-units = 1
 panic = "unwind"
 
 
