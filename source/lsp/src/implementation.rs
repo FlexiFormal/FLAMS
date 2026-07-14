@@ -155,11 +155,13 @@ impl<T: FLAMSLSPServer> ServerWrapper<T> {
                 "helloworld.tex",
                 include_str!("stex_default.txt"),
             ) {
-                Ok(path) => {
+                Ok(mut path) => {
                     let _ = client.show_message(lsp::ShowMessageParams {
                         typ: lsp::MessageType::INFO,
                         message: format!("Created new archive {archive}"),
                     });
+                    path.push("source");
+                    path.push("helloworld.tex");
                     client.open_file(&path);
                 }
                 Err(e) => {
