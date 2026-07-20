@@ -28,8 +28,9 @@ members = [
     "source/router/vscode-bindings",
     "source/router/flodown",
     # "experiments",
-    "source/ffi", "solver/main","solver/trace"#,"solver/new"
-    #"maintest"
+    "source/ffi", "solver/main","solver/trace",
+    #"solver/new",
+    #"maintest",
 ]
 resolver = "2"
 exclude = [
@@ -196,7 +197,7 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 serde_stacker = "0.1"
 rustc-hash = "2"
 chrono = "0.4"
-oxrdf = "0.2.3"
+oxrdf = "0.3"
 smallvec = { version = "2.0.0-alpha.12" }
 lazy_static = "1.5"
 url = "2"
@@ -258,7 +259,7 @@ thiserror = "2"
 clap = { version = "4.5", features = ["derive"] }
 
 oxigraph = { version = "0.5", default-features = false, features=["rdf-12"] }
-oxiri = "*"
+oxiri = "0.2"
 spargebra = "0.4"
 sparesults = {version="0.3",features=["sparql-12"]}
 oxrdfio = { version = "0.2" }                            #, features = ["async-tokio"] }

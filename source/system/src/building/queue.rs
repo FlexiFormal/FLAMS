@@ -11,7 +11,7 @@ use flams_math_archives::{
     manager::ArchiveOrGroup,
     source_files::{SourceEntry, SourceEntryRef},
     utils::path_ext::RelPath,
-    Archive, LocallyBuilt, MathArchive,
+    Archive, BuildableArchive, LocallyBuilt, MathArchive,
 };
 use flams_utils::{
     change_listener::{ChangeListener, ChangeSender},
@@ -429,14 +429,25 @@ impl Queue {
             backend().with_archives(|archives| {
                 for a in archives {
                     let Archive::Local(archive) = a else { continue };
-                    b.maybe_copy(archive);
-                    if clean {
-                        let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
+                    let matches = match target {
+                        FormatOrTargets::Format(f) => archive.formats().contains(&f),
+                        FormatOrTargets::Targets(targets) => archive
+                            .formats()
+                            .iter()
+                            .flat_map(|fmt| fmt.targets)
+                            .any(|t| targets.contains(t)),
+                    };
+                    if matches {
+                        b.maybe_copy(archive);
+                        if clean {
+                            let _ =
+                                std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
+                        }
                     }
                 }
                 b.load_all();
             });
-        };
+        }
         let mut acc = 0;
         self.0.backend.with_archives(|archives| {
             for a in archives {
@@ -461,13 +472,13 @@ impl Queue {
         acc
     }
 
-    #[instrument(level = "info",
+    #[instrument(level = "debug",
     parent=&self.0.span,
     target = "buildqueue",
     name = "Queueing tasks",
     skip_all
   )]
-    #[deprecated(note = "needs refatoring: assumes LocalArchive everywhere")]
+    #[deprecated(note = "needs refactoring: assumes LocalArchive everywhere")]
     pub fn enqueue_group(
         &self,
         id: &ArchiveId,
@@ -483,28 +494,42 @@ impl Queue {
             None => 0,
             Some(ArchiveOrGroup::Archive(id)) => self.0.backend.with_archive(id, |a| {
                 let Some(archive) = a else { return 0 };
-                if clean {
-                    if let AnyBackend::Sandbox(b) = &self.0.backend {
-                        let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
-                    } else if let Archive::Local(a) = archive {
-                        let _ = std::fs::remove_dir_all(a.out_dir());
-                    }
-                }
                 if let Archive::Local(a) = archive {
-                    a.with_sources(|d| {
-                        let map = &mut *self.0.map.write();
-                        Self::enqueue(
-                            map,
-                            &self.0.backend,
-                            archive,
-                            target,
-                            stale_only,
-                            d.dfs().filter_map(|e| match e {
-                                SourceEntry::Dir(_) => None,
-                                SourceEntry::File(f) => Some(f),
-                            }),
-                        )
-                    })
+                    let matches = match target {
+                        FormatOrTargets::Format(f) => a.formats().contains(&f),
+                        FormatOrTargets::Targets(targets) => a
+                            .formats()
+                            .iter()
+                            .flat_map(|fmt| fmt.targets)
+                            .any(|t| targets.contains(t)),
+                    };
+                    if matches {
+                        if clean {
+                            if let AnyBackend::Sandbox(b) = &self.0.backend {
+                                let _ = std::fs::remove_dir_all(
+                                    b.path_for(archive.id()).join(".flams"),
+                                );
+                            } else if let Archive::Local(a) = archive {
+                                let _ = std::fs::remove_dir_all(a.out_dir());
+                            }
+                        }
+                        a.with_sources(|d| {
+                            let map = &mut *self.0.map.write();
+                            Self::enqueue(
+                                map,
+                                &self.0.backend,
+                                archive,
+                                target,
+                                stale_only,
+                                d.dfs().filter_map(|e| match e {
+                                    SourceEntry::Dir(_) => None,
+                                    SourceEntry::File(f) => Some(f),
+                                }),
+                            )
+                        })
+                    } else {
+                        0
+                    }
                 } else {
                     0
                 }
@@ -518,30 +543,41 @@ impl Queue {
                 }) {
                     ret += self.0.backend.with_archive(id, |a| {
                         let Some(archive) = a else { return 0 };
-
-                        if clean {
-                            if let AnyBackend::Sandbox(b) = &self.0.backend {
-                                let _ = std::fs::remove_dir_all(
-                                    b.path_for(archive.id()).join(".flams"),
-                                );
-                            } else if let Archive::Local(a) = archive {
-                                let _ = std::fs::remove_dir_all(a.out_dir());
-                            }
-                        }
                         if let Archive::Local(a) = archive {
-                            a.with_sources(|d| {
-                                Self::enqueue(
-                                    map,
-                                    &self.0.backend,
-                                    archive,
-                                    target,
-                                    stale_only,
-                                    d.dfs().filter_map(|e| match e {
-                                        SourceEntry::Dir(_) => None,
-                                        SourceEntry::File(f) => Some(f),
-                                    }),
-                                )
-                            })
+                            let matches = match target {
+                                FormatOrTargets::Format(f) => a.formats().contains(&f),
+                                FormatOrTargets::Targets(targets) => a
+                                    .formats()
+                                    .iter()
+                                    .flat_map(|fmt| fmt.targets)
+                                    .any(|t| targets.contains(t)),
+                            };
+                            if matches {
+                                if clean {
+                                    if let AnyBackend::Sandbox(b) = &self.0.backend {
+                                        let _ = std::fs::remove_dir_all(
+                                            b.path_for(archive.id()).join(".flams"),
+                                        );
+                                    } else if let Archive::Local(a) = archive {
+                                        let _ = std::fs::remove_dir_all(a.out_dir());
+                                    }
+                                }
+                                a.with_sources(|d| {
+                                    Self::enqueue(
+                                        map,
+                                        &self.0.backend,
+                                        archive,
+                                        target,
+                                        stale_only,
+                                        d.dfs().filter_map(|e| match e {
+                                            SourceEntry::Dir(_) => None,
+                                            SourceEntry::File(f) => Some(f),
+                                        }),
+                                    )
+                                })
+                            } else {
+                                0
+                            }
                         } else {
                             0
                         }
@@ -558,7 +594,7 @@ impl Queue {
     name = "Queueing tasks",
     skip_all
   )]
-    #[deprecated(note = "needs refatoring: assumes LocalArchive everywhere")]
+    #[deprecated(note = "needs refactoring: assumes LocalArchive everywhere")]
     pub fn enqueue_archive(
         &self,
         id: &ArchiveId,

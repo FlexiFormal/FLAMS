@@ -48,7 +48,7 @@ mod login {
     fn owns(user: &str, queue_name: &str) -> bool {
         queue_name
             .strip_prefix(user)
-            .is_some_and(|rest| rest.as_bytes().iter().all(|b| b.is_ascii_digit()))
+            .is_some_and(|rest| rest.as_bytes().iter().all(u8::is_ascii_digit))
     }
 
     pub trait LoginQueue {
