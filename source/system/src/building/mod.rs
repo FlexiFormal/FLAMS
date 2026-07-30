@@ -105,7 +105,7 @@ impl From<TaskDependency> for Dependency {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BuildTaskId(NonZeroU32);
 impl From<BuildTaskId> for u32 {
     #[inline]

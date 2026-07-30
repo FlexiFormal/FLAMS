@@ -28,7 +28,7 @@ members = [
     #"experiments",
     "source/ffi", "solver/main","solver/trace"#,"solver/new"
     #"maintest"
-]
+, "source/buildsystem"]
 resolver = "2"
 exclude = [
     "experiments",

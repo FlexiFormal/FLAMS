@@ -21,7 +21,11 @@ use flams_utils::{
 use ftml_ontology::utils::{time::Timestamp, RefTree};
 use ftml_uris::{ArchiveId, UriPath, UriWithArchive};
 use parking_lot::RwLock;
-use std::{collections::VecDeque, num::NonZeroU32};
+use petgraph::graph::DiGraph;
+use std::{
+    collections::{HashMap, VecDeque},
+    num::NonZeroU32,
+};
 use tracing::{info, instrument, Instrument};
 
 #[derive(Debug)]
@@ -186,6 +190,19 @@ impl Queue {
             self.run_task(&task, id);
         }
         self.finish();
+    }
+    #[inline]
+    fn run_sync_dupe(&self) {
+        //let mut graph = DiGraph::new();
+        let read = self.0.map.read();
+        //let graph_store = HashMap::new();
+        let reverse_map = read
+            .map
+            .iter()
+            .map(|(k, v)| (v.0.id, (k.0, k.1)))
+            .collect::<HashMap<_, _>>();
+        for i in read.map.values() {}
+        todo!()
     }
 
     #[cfg(feature = "tokio")]

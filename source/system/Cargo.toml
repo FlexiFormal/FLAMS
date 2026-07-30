@@ -81,6 +81,7 @@ futures = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["stream"] }
 async-compression = { workspace = true, optional = true }
 astral-tokio-tar = { workspace = true, optional = true }
+petgraph = "0.8.3"
 
 [lints]
 workspace = true
