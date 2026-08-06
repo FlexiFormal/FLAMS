@@ -67,19 +67,23 @@ impl GlobalBackend {
     pub fn get(&self) -> &'static ArchiveManager {
         &GLOBAL
     }
-    pub fn initialize<A: AsyncEngine>() {
+    pub fn initialize<A: AsyncEngine>(rdf: bool) {
         Self.load(crate::mathhub::mathhubs());
         #[cfg(feature = "rdf")]
         {
-            A::background(|| Self.triple_store().load_archives(&Self.all_archives()));
+            if rdf {
+                A::background(|| Self.triple_store().load_archives(&Self.all_archives()));
+            }
         }
     }
 
-    pub fn reset<A: AsyncEngine>(self) {
+    pub fn reset<A: AsyncEngine>(self, rdf: bool) {
         self.reinit(|_| (), crate::mathhub::mathhubs());
         #[cfg(feature = "rdf")]
         {
-            A::background(|| Self.triple_store().load_archives(&Self.all_archives()));
+            if rdf {
+                A::background(|| Self.triple_store().load_archives(&Self.all_archives()));
+            }
         }
     }
 }

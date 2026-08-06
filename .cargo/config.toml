@@ -17,7 +17,7 @@ rustflags = ["--cfg", "tokio_unstable","--cfg","web_sys_unstable_apis"]
 
 [target.x86_64-unknown-linux-gnu]
 linker="clang"
-rustflags = ["-C","link-arg=-fuse-ld=/usr/bin/mold"]
+rustflags = ["--cfg", "tokio_unstable","-C","link-arg=-fuse-ld=/usr/bin/mold"]
 
 # ---------------------------------------------------------
 

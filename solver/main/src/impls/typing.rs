@@ -28,6 +28,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             sub.debug_short(),
             sup.debug_short()
         );
+
         self.wrap_check(CheckingTask::Subtype(sub, sup), |slf| {
             slf.check_subtype_i(sub, sup)
         })

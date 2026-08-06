@@ -2461,35 +2461,33 @@ fn get_in_morphism<'b, MS: STeXModuleStore>(
     &'b mut VecMap<SymbolReference<LSPLineCol>, MorphismSpec<LSPLineCol>>,
 )> {
     for g in groups.iter_mut().rev() {
-        match &mut g.kind {
-            GroupKind::Morphism {
-                domain,
-                rules,
-                specs,
-            } => {
-                let mut name = name;
-                for (s, r) in &specs.0 {
-                    if r.macroname.as_ref().is_some_and(|n| &**n == name)
-                        || r.new_name.as_ref().is_some_and(|n| n.last() == name)
-                    {
-                        name = s.uri.name().last();
-                        break;
-                    }
+        if let GroupKind::Morphism {
+            domain,
+            rules,
+            specs,
+        } = &mut g.kind
+        {
+            let mut name = name;
+            for (s, r) in &specs.0 {
+                if r.macroname.as_ref().is_some_and(|n| &**n == name)
+                    || r.new_name.as_ref().is_some_and(|n| n.last() == name)
+                {
+                    name = s.uri.name().last();
+                    break;
                 }
-                for r in rules.iter().rev().map(|r| r.rules.iter().rev()).flatten() {
-                    match r {
-                        ModuleRule::Symbol(s) | ModuleRule::Structure { symbol: s, .. }
-                            if s.macroname.as_ref().is_some_and(|n| &**n == name)
-                                || s.uri.uri.name().last() == name =>
-                        {
-                            return Some((s, specs));
-                        }
-                        _ => (),
-                    }
-                }
-                break;
             }
-            _ => (),
+            for r in rules.iter().rev().flat_map(|r| r.rules.iter().rev()) {
+                match r {
+                    ModuleRule::Symbol(s) | ModuleRule::Structure { symbol: s, .. }
+                        if s.macroname.as_ref().is_some_and(|n| &**n == name)
+                            || s.uri.uri.name().as_ref() == name =>
+                    {
+                        return Some((s, specs));
+                    }
+                    _ => (),
+                }
+            }
+            break;
         }
     }
     None
@@ -2532,7 +2530,7 @@ fn set_defined<MS: STeXModuleStore>(
 
 stex!(LSP: p => renamedecl{orig:!name}[name:!name]{macroname:!name} => {
   let (_,mut groups) = p.split();
-  let Some((symbol,specs)) = get_in_morphism(&mut groups.groups, &orig.0) else {
+  let Some((symbol,specs)) = get_in_morphism(groups.groups, &orig.0) else {
     p.tokenizer.problem(renamedecl.range.start, format!("Could not find symbol {} in morphism",orig.0), DiagnosticLevel::Error);
     return MacroResult::Simple(renamedecl);
   };
@@ -2562,7 +2560,7 @@ stex!(LSP: p => renamedecl{orig:!name}[name:!name]{macroname:!name} => {
 
 stex!(LSP: p => assign{orig:!name} => {
   let (_,mut groups) = p.split();
-  let Some((symbol,specs)) = get_in_morphism(&mut groups.groups, &orig.0) else {
+  let Some((symbol,specs)) = get_in_morphism(groups.groups, &orig.0) else {
     p.tokenizer.problem(assign.range.start, format!("Could not find symbol {} in morphism",orig.0), DiagnosticLevel::Error);
     return MacroResult::Simple(assign);
   };
@@ -2604,7 +2602,28 @@ fn setup_morphism<'a, MS: STeXModuleStore>(
     Vec<ModuleRules<LSPLineCol>>,
 )> {
     let archive = archive.and_then(|(a, r)| parse_id(a, pos, &mut p.tokenizer));
-    let (state, groups) = p.split();
+    let (state, mut groups) = p.split();
+
+    let Ok(name) = name.parse::<UriName>() else {
+        p.tokenizer.problem(
+            pos,
+            format!("Invalid module name: {name}"),
+            DiagnosticLevel::Error,
+        );
+        return None;
+    };
+    let _ = state.add_symbol(
+        &mut groups,
+        name.clone(),
+        None,
+        StringRange {
+            start: pos,
+            end: pos,
+        },
+        false,
+        true,
+        0,
+    );
     let Some((mors, rules)) = state.resolve_module_or_struct(&groups, domain, archive) else {
         groups.tokenizer.problem(
             pos,
@@ -2613,17 +2632,10 @@ fn setup_morphism<'a, MS: STeXModuleStore>(
         );
         return None;
     };
+
     let Some((uri, _)) = get_module(p) else {
         p.tokenizer
             .problem(pos, "Not in a module", DiagnosticLevel::Error);
-        return None;
-    };
-    let Ok(name) = name.parse::<UriName>() else {
-        p.tokenizer.problem(
-            pos,
-            format!("Invalid module name: {name}"),
-            DiagnosticLevel::Error,
-        );
         return None;
     };
     Some((uri.clone() | name, mors, rules))
@@ -2651,16 +2663,20 @@ fn elaborate_morphism<'a, MS: STeXModuleStore>(
     let Some((in_module, _)) = get_module(p) else {
         p.tokenizer.problem(
             range.start,
-            format!("Morphism only allowed in module"),
+            "Morphism only allowed in module",
             DiagnosticLevel::Error,
         );
         p.tokenizer.reader.pos = old_end;
         return;
     };
+    let mut dones = Vec::new();
     let (state, mut groups) = p.split();
-    for rls in rules {
+    for rls in &rules {
         for r in rls.rules.iter() {
-            if let ModuleRule::Symbol(s) = r {
+            if let ModuleRule::Symbol(s) = r
+                && !dones.contains(&&s.uri)
+            {
+                dones.push(&s.uri);
                 let (macroname, name, dfed, rng) = if let Some(spec) = specs.remove(&s.uri) {
                     let m = spec.macroname.map_or_else(
                         || if do_macros { s.macroname.clone() } else { None },
@@ -2686,7 +2702,7 @@ fn elaborate_morphism<'a, MS: STeXModuleStore>(
                     .add_symbol(
                         &mut groups,
                         name,
-                        macroname.map(Into::into),
+                        macroname,
                         range,
                         s.has_tp,
                         dfed,
@@ -2696,7 +2712,7 @@ fn elaborate_morphism<'a, MS: STeXModuleStore>(
                 {
                     groups.tokenizer.problem(
                         range.start,
-                        format!("Morphism only allowed in module"),
+                        "Morphism only allowed in module",
                         DiagnosticLevel::Error,
                     );
                 }
@@ -2825,13 +2841,12 @@ fn parse_assignments<'a, MS: STeXModuleStore>(
             start,
             end: p.tokenizer.reader.curr_pos(),
         };
-        let (state, mut groups) = p.split();
-        let Some(symbol) =
-            get_in_morphism(&mut groups.groups, symbol_name).map(|(s, _)| s.uri.clone())
+        let (state, groups) = p.split();
+        let Some(symbol) = get_in_morphism(groups.groups, symbol_name).map(|(s, _)| s.uri.clone())
         else {
             groups.tokenizer.problem(
                 symbol_range.start,
-                format!("Symbol {symbol_name} not found"),
+                format!("Symbol {symbol_name} not found in morphism"),
                 DiagnosticLevel::Error,
             );
             return None;

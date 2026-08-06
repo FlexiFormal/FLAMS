@@ -201,10 +201,13 @@ impl<Split: SplitStrategy> Checker<Split> {
     fn set_hoas(&mut self) {
         self.hoas = HOASSymbols::get(self);
     }
-    pub fn hoas(&self) -> Option<&HOASSymbols> {
+    pub const fn hoas(&self) -> Option<&HOASSymbols> {
         self.hoas.as_ref()
     }
 
+    /// #### Errors
+    /// if a module dependency is missing
+    #[allow(clippy::too_many_lines)]
     pub fn check_document(
         &mut self,
         d: &Document,
@@ -256,10 +259,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                         results.push(CheckResult::Missing(morphism.module.clone()));
                         continue;
                     };
-                    /*m.initialize(&mut |uri| self.get_module_like(uri).map_err(|()| "not found"));
-                    if let Some(r) = self.check_morphism(&m) {
-                        results.extend(r.into_iter());
-                    }*/ // let's not touch morphisms for now
+                    results.extend(self.check_morphism(&m));
                 }
                 DocumentElementRef::VariableDeclaration(v) => {
                     if let Some(r) = self.check_variable(v) {
@@ -339,6 +339,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 _ => (),
             }
         }
+
         Ok((
             DocumentCheckResult {
                 uri: d.uri.clone(),
@@ -468,7 +469,9 @@ impl<Split: SplitStrategy> Checker<Split> {
             let tp = slf
                 .infer_type(sub)
                 .map(|t| slf.subst(slf.revert_prepare(t)));
-            let simp = slf.simplify_full(true, sub).unwrap_or_else(|| sub.clone());
+            let simp = slf
+                .simplify_full(impls::simplify::Expansion::NoNoexpands, sub)
+                .unwrap_or_else(|| sub.clone());
             nt = slf.subst(slf.revert_prepare(simp));
             tp
         });
@@ -873,11 +876,15 @@ impl<Split: SplitStrategy> Checker<Split> {
         self.wrap_none(None, |slf| slf.revert_prepare(t)).1
     }
 
-    fn check_morphism(&mut self, m: &Morphism) -> Option<Vec<CheckResult>> {
+    fn check_morphism(&self, m: &Morphism) -> Vec<CheckResult> {
         let mut ret = Vec::new();
+        let Some(map) = m.elaboration.get_map() else {
+            ret.push(CheckResult::Missing(m.uri.clone().into_module()));
+            return ret;
+        };
         for d in m.declarations() {
             match d {
-                AnyDeclarationRef::Symbol(s) => {
+                AnyDeclarationRef::Symbol(s) if map.values().any(|(u, b)| *b && *u == s.uri) => {
                     // TODO:
                     // - check that a *refined type* is a subtype of the original type's translation
                     // - check that an *assigned definies* is ???? the original definiens
@@ -891,7 +898,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 _ => (),
             }
         }
-        Some(ret)
+        ret
     }
 
     /// #### Errors
@@ -912,6 +919,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         for i in self.context.len() - new..self.context.len() {
             let uri = &self.context[i];
             let m = self.get_module(uri).map_err(|()| uri.clone())?;
+            m.initialize(&mut |uri| self.get_module_like(uri).ok())?;
             self.load_context(&m);
         }
         Ok(())
@@ -967,55 +975,8 @@ impl<Split: SplitStrategy> Checker<Split> {
 
     fn sort(&mut self, modules: Vec<ModuleUri>) -> usize {
         let mut ctx = std::mem::take(&mut self.context);
-        let new = topo_sort(modules, &mut ctx, |uri| self.get_module(uri).ok());
+        let new = Module::topo_sort(modules, &mut ctx, |uri| self.get_module(uri).ok());
         self.context = ctx;
         new
     }
-}
-
-#[allow(clippy::useless_let_if_seq)]
-fn topo_sort(
-    mut new: Vec<ModuleUri>,
-    sorted: &mut Vec<ModuleUri>,
-    get: impl Fn(&ModuleUri) -> Option<Module>,
-) -> usize {
-    let mut added = 0;
-    while let Some(uri) = new.last() {
-        if !uri.is_top() || sorted.contains(uri) {
-            let _ = new.pop();
-            continue;
-        }
-        let Some(m) = get(uri) else {
-            // SAFETY: uris.last() == Some(uri)
-            sorted.push(unsafe { new.pop().unwrap_unchecked() });
-            added += 1;
-            continue;
-        };
-        let curr = new.len();
-        //println!("Sorting {uri}");
-
-        let mut changed = false;
-        if let Some(e) = m.meta_module.as_ref()
-            && !sorted.contains(e)
-        {
-            new.insert(curr, e.clone());
-            changed = true;
-        }
-        for e in m.dfs() {
-            let AnyDeclarationRef::Import { uri, .. } = e else {
-                continue;
-            };
-            if !uri.is_top() || sorted.contains(uri) {
-                continue;
-            }
-            new.insert(curr, uri.clone());
-            changed = true;
-        }
-        if !changed {
-            // SAFETY: uris.last() == Some(uri)
-            sorted.push(unsafe { new.pop().unwrap_unchecked() });
-            added += 1;
-        }
-    }
-    added
 }

@@ -206,7 +206,7 @@ impl LSPState {
                                 end: LSPLineCol::new(ft.line, ft.col),
                             });
                         } else if let Some(dc) = self.documents.read().get(&url) {
-                            let data = match &*dc {
+                            let data = match dc {
                                 DocData::Data(d, _) => d,
                                 DocData::Doc(d) => &d.annotations,
                             };

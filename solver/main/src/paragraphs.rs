@@ -215,6 +215,19 @@ impl<Split: SplitStrategy> Checker<Split> {
                     orig_df.set_presentation(self.revert_prepare(df));
                 }
             }
+        } else if for_symbol.is_some() {
+            return Some(CheckResult::Proof(
+                p.uri.clone(),
+                vec![ProofStepResult::Conclusion {
+                    var: None,
+                    result: ProofStepCheckResult::ProofOnly {
+                        inferred: None,
+                        log: CheckLog::Fail(vec![
+                            "does not establish the theorem.".to_string().into(),
+                        ]),
+                    },
+                }],
+            ));
         }
         Some(CheckResult::Proof(p.uri.clone(), ret))
     }
@@ -361,22 +374,33 @@ impl<Split: SplitStrategy> Checker<Split> {
         let var = var_name.and_then(|vn| self.get_variable(vn).ok());
         if let Some(tm) = yields {
             let (unks, tm) = self.prepare(None, tm.clone());
-            let (b, unks, l) = context.check_inhabitable(self, unks, &tm, block);
-            proof_log = Some(ProofStepCheckResult::GoalOnly {
-                result: TypeCheckResult {
-                    success: b.unwrap_or_default(),
-                    log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
-                },
-            });
+            let (b, nunks, l) = context.check_inhabitable(self, unks.clone(), &tm, block);
             if Some(true) == b {
-                tp = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
-            } else {
-                let tm = hoas.wrap_judg(&tm);
-                let (b, unks, l) = context.check_inhabitable(self, unks, &tm, block);
                 proof_log = Some(ProofStepCheckResult::GoalOnly {
                     result: TypeCheckResult {
                         success: b.unwrap_or_default(),
                         log: CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                    },
+                });
+                tp = Some(self.wrap_none(Some(nunks), |slf| slf.subst(tm)).1);
+            } else {
+                let tm = hoas.wrap_judg(&tm);
+                let (b, unks, l2) = context.check_inhabitable(self, unks, &tm, block);
+                proof_log = Some(ProofStepCheckResult::GoalOnly {
+                    result: TypeCheckResult {
+                        success: b.unwrap_or_default(),
+                        log: if Some(true) == b {
+                            CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t))
+                        } else {
+                            CheckLog::Strategy {
+                                name: "Checking provability".to_string(),
+                                steps: vec![
+                                    CheckLog::from_pre(l, &mut |t| self.revert_prepare(t)),
+                                    CheckLog::from_pre(l2, &mut |t| self.revert_prepare(t)),
+                                ],
+                                success: false,
+                            }
+                        },
                     },
                 });
                 tp = Some(

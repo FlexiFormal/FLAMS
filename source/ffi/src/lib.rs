@@ -60,7 +60,7 @@ pub extern "C" fn initialize() {
         .expect("Failed to initialize Tokio runtime")
         .block_on(async {
             flams_system::settings::Settings::initialize(spec);
-            GlobalBackend::initialize::<flams_system::TokioEngine>();
+            GlobalBackend::initialize::<flams_system::TokioEngine>(false);
         });
 }
 
@@ -183,7 +183,7 @@ pub extern "C" fn reset_global_backend() {
         .build()
         .expect("Failed to initialize Tokio runtime")
         .block_on(async {
-            GlobalBackend.reset::<flams_system::TokioEngine>();
+            GlobalBackend.reset::<flams_system::TokioEngine>(false);
             let _ = tokio::task::spawn_blocking(|| {
                 for e in flams_system::iter::<flams_math_archives::FlamsExtension>() {
                     (e.on_reload)();

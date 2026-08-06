@@ -184,7 +184,7 @@ impl std::hash::Hash for Solvable {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Solutions(pub(crate) rustc_hash::FxHashSet<Solvable>);
 impl Merge for Solutions {
     fn merge(&mut self, other: Self) {

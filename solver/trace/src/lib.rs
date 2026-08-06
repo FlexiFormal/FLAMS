@@ -414,18 +414,28 @@ impl PreCheckLog {
 }
 
 impl CheckLog {
-    pub fn filter_failures(&mut self) {
+    pub fn filter_failures(&mut self, preserve_siblings: bool) {
         let Some(steps) = self.steps_mut() else {
             return;
         };
-        *steps = std::mem::take(steps)
-            .into_iter()
-            .filter(|s| !s.success())
-            .map(|mut s| {
-                s.filter_failures();
-                s
-            })
-            .collect();
+        if preserve_siblings {
+            for s in steps {
+                if s.success() {
+                    s.filter_failures(false);
+                } else {
+                    s.filter_failures(true);
+                }
+            }
+        } else {
+            *steps = std::mem::take(steps)
+                .into_iter()
+                .filter(|s| !s.success())
+                .map(|mut s| {
+                    s.filter_failures(preserve_siblings);
+                    s
+                })
+                .collect();
+        }
     }
     pub const fn steps_mut(&mut self) -> Option<&mut Vec<Self>> {
         match self {
@@ -775,7 +785,10 @@ impl TraceDisplay for &mut std::fmt::Formatter<'_> {
     fn term(&mut self, term: &Term, _: Option<MessageLevel>) -> std::fmt::Result {
         <_ as std::fmt::Debug>::fmt(&term.debug_short(), self)
     }
-    fn string(&mut self, s: &str, _: Option<MessageLevel>) -> std::fmt::Result {
+    fn string(&mut self, s: &str, lvl: Option<MessageLevel>) -> std::fmt::Result {
+        if lvl == Some(MessageLevel::Failure) {
+            self.write_str("[FAILED] ")?;
+        }
         self.write_str(s)
     }
     fn variable(&mut self, var: &Variable, _: Option<MessageLevel>) -> std::fmt::Result {
@@ -946,8 +959,13 @@ impl TraceDisplay for ColorDisplay<'_, '_> {
     fn term(&mut self, term: &Term, _: Option<MessageLevel>) -> std::fmt::Result {
         write!(self.0, "{:?}", term.debug_short().yellow())
     }
-    fn string(&mut self, s: &str, _: Option<MessageLevel>) -> std::fmt::Result {
-        write!(self.0, "{}", s.bright_black())
+    fn string(&mut self, s: &str, lvl: Option<MessageLevel>) -> std::fmt::Result {
+        if lvl == Some(MessageLevel::Failure) {
+            write!(self.0, "{} ", "[FAILED]".red())?;
+            write!(self.0, "{}", s.red())
+        } else {
+            write!(self.0, "{}", s.bright_black())
+        }
     }
     fn variable(&mut self, var: &Variable, _: Option<MessageLevel>) -> std::fmt::Result {
         self.0.write_str(var.name())

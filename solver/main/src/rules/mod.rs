@@ -9,7 +9,13 @@ pub use ftml_solver_trace::{CheckerRule, SizedSolverRule};
 use ftml_uris::SymbolUri;
 
 use crate::{CheckRef, rules::operators::typing, split::SplitStrategy};
-use ftml_ontology::terms::{Argument, Term, termpaths::TermPath};
+use ftml_ontology::{
+    domain::{
+        SharedDeclaration,
+        declarations::{SharedSymbolLike, morphisms::Morphism},
+    },
+    terms::{Argument, Term, termpaths::TermPath},
+};
 use std::{fmt::Debug, ops::ControlFlow};
 
 macro_rules! rules{
@@ -86,7 +92,8 @@ rules! {
         operators::numbers::NumberTypes,
         implicits::ImplicitRule,
         unknowns::UnknownsRule,
-        CommentRule
+        CommentRule,
+        MorphismRule
     ),
     subtyping = SubtypeRule(operators::numbers::NumberTypes,CommentRule),
     checking = CheckingRule(operators::numbers::NumberTypes),
@@ -101,7 +108,8 @@ rules! {
     simplification = SimplificationRule(
         unknowns::UnknownsRule,
         typing::InferredTypeSimplificationRule,
-        CommentRule
+        CommentRule,
+        MorphismRule
     ),
     marker = MarkerRule,
     proof = ProofRule
@@ -293,5 +301,87 @@ impl<Split: SplitStrategy> EqualityRule<Split> for CommentRule {
         let lhs = as_comment(lhs).unwrap_or(lhs);
         let rhs = as_comment(rhs).unwrap_or(rhs);
         checker.check_subtype(lhs, rhs)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MorphismRule;
+impl SizedSolverRule for MorphismRule {
+    fn priority(&self) -> isize {
+        100_000
+    }
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("morphism rule")
+    }
+}
+impl MorphismRule {
+    pub fn is_morphism_appl<'t, Split: SplitStrategy>(
+        t: &'t Term,
+        checker: &mut CheckRef<'_, '_, Split>,
+    ) -> Option<(SharedDeclaration<Morphism>, &'t Term)> {
+        Morphism::unapply(t, &mut |head| {
+            checker
+                .top
+                .get_symbol_like(head, |t| checker.prepare(t, None).1)
+                .ok()
+        })
+    }
+}
+impl<Split: SplitStrategy> InferenceRule<Split> for MorphismRule {
+    fn applicable(&self, term: &Term) -> bool {
+        match term {
+            Term::Application(app) if app.arguments.len() == 1 => {
+                matches!(&app.head, Term::Symbol { .. })
+                    && matches!(app.arguments.first(), Some(Argument::Simple(_)))
+            }
+            _ => false,
+        }
+    }
+    fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
+        let (m, arg) = Self::is_morphism_appl(term, &mut checker)?;
+        let arg_tp = checker.infer_type(arg)?;
+        m.apply(&arg_tp, &mut |s| {
+            checker
+                .top
+                .get_symbol_like(s, |t| checker.prepare(t, None).1)
+                .ok()
+        })
+        .ok()
+        .map(std::borrow::Cow::into_owned)
+    }
+}
+impl<Split: SplitStrategy> SimplificationRule<Split> for MorphismRule {
+    fn applicable(&self, t: &Term) -> bool {
+        match t {
+            Term::Application(app) if app.arguments.len() == 1 => {
+                matches!(&app.head, Term::Symbol { .. })
+                    && matches!(app.arguments.first(), Some(Argument::Simple(_)))
+            }
+            _ => false,
+        }
+    }
+    fn apply(
+        &self,
+        mut checker: CheckRef<'_, '_, Split>,
+        t: &Term,
+    ) -> Result<Term, Option<TermPath>> {
+        tracing::debug!("Morphism? {:?}", t.debug_short());
+        let (m, arg) = Self::is_morphism_appl(t, &mut checker).ok_or(None)?;
+        tracing::debug!("Applying morphism to {:?}", arg.debug_short());
+        m.apply(arg, &mut |s| {
+            checker
+                .top
+                .get_symbol_like(s, |t| checker.prepare(t, None).1)
+                .ok()
+        })
+        .map_or(Err(None), |a| {
+            if *a == *t {
+                //println!("Not applicable: {} to {:?}", m.uri, arg.debug_short());
+                Err(None)
+            } else {
+                tracing::debug!("Result: {:?}", a.debug_short());
+                Ok(a.into_owned())
+            }
+        })
     }
 }

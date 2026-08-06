@@ -5,7 +5,7 @@ mod dependencies;
 mod latex;
 pub mod math;
 pub mod quickparse;
-mod rustex;
+pub mod rustex;
 
 use crate::dependencies::STeXDependency;
 use either::Either;

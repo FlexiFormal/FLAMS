@@ -1830,12 +1830,12 @@ impl<'a, Pos: StringPosition, MS: STeXModuleStore> STeXParseState<'a, Pos, MS> {
                         has_df,
                         argnum,
                     };
-                    if MS::FULL {
-                        if let Some((name, rule)) = rule.as_rule() {
-                            let old = groups.rules.insert(name.clone(), rule);
-                            if let Entry::Vacant(e) = g.inner.macro_rule_changes.entry(name) {
-                                e.insert(old);
-                            }
+                    if MS::FULL
+                        && let Some((name, rule)) = rule.as_rule()
+                    {
+                        let old = groups.rules.insert(name.clone(), rule);
+                        if let Entry::Vacant(e) = g.inner.macro_rule_changes.entry(name) {
+                            e.insert(old);
                         }
                     }
                     g.semantic_rules.push(SemanticRule::Symbol(rule.clone()));

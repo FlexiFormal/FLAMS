@@ -1,6 +1,5 @@
 pub mod files;
 pub mod lsp;
-pub mod settings;
 
 use std::future::IntoFuture;
 
