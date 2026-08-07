@@ -41,6 +41,7 @@ tracing-subscriber = {workspace = true}
 tracing = {workspace = true}
 flams-ftml.workspace = true
 ftml-solver.workspace = true
+tokio.workspace = true
 
 # documentation
 flams-router-dashboard = {workspace=true,optional=true}

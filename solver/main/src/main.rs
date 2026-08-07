@@ -35,7 +35,7 @@ flams_math_archives::source_format!(STEX {
 fn main() {
     let _ = enable_ansi_support::enable_ansi_support();
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_max_level(tracing::Level::DEBUG)
         .init();
     GlobalBackend::initialize::<AllSyncEngine>(false);
     /*let _ = std::thread::Builder::new()
@@ -192,7 +192,7 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=algebra&d=semigroup-exts&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=semilattice&l=en",
         */
-        "http://mathhub.info?a=FTML/math&p=algebra&d=lattice&l=en",
+        //"http://mathhub.info?a=FTML/math&p=algebra&d=lattice&l=en",
         //"http://mathhub.info?a=FTML/math&p=relations&d=algebraic-lattice&l=en",
         /*
         "http://mathhub.info?a=FTML/math&d=relations&l=en",
@@ -229,7 +229,7 @@ fn check_selected() -> usize {
         */
         //"http://mathhub.info?a=FTML/math&p=algebra&d=dual-lattice&l=en",
         //"http://mathhub.info?a=FTML/math&p=relations&d=dual-lattice&l=en",
-        //"http://mathhub.info?a=FTML/math&p=algebra&d=order-lattice&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=order-lattice&l=en",
         //"http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-associative&l=en",
         /*
         "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-commutative&l=en",

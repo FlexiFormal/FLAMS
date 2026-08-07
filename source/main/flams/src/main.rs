@@ -9,6 +9,33 @@ use flams_stex::STEX;
 use flams_system::settings::{BuildQueueSettings, ServerSettings, SettingsSpec};
 use ftml_uris::ArchiveId;
 
+fn in_tokio(f: impl Future<Output = ()>) {
+    let mut rt = tokio::runtime::Builder::new_multi_thread();
+    rt.enable_all();
+    rt.build()
+        .expect("Failed to initialize Tokio runtime")
+        .block_on(async move {
+            tokio::select! {
+            () = f => {},
+            _ = tokio::signal::ctrl_c() => std::process::exit(0)
+            }
+        })
+}
+fn in_tokio_fn(f: impl FnOnce() + Send + 'static) {
+    let mut rt = tokio::runtime::Builder::new_multi_thread();
+    rt.enable_all();
+    rt.build()
+        .expect("Failed to initialize Tokio runtime")
+        .block_on(async move {
+            tokio::select! {
+            r = tokio::task::spawn_blocking(f) => {
+                r.expect("this is a bug");
+            },
+            _ = tokio::signal::ctrl_c() => std::process::exit(0)
+            }
+        })
+}
+
 fn main() {
     let mut cli = Cli::get();
     match cli.command.take() {
@@ -20,8 +47,10 @@ fn main() {
         }) => {
             let mut settings: SettingsSpec = cli.into();
             settings.buildqueue.num_threads = Some(1);
-            flams_system::settings::Settings::initialize(settings);
-            check::check(archive, path, persist, !verbose)
+            in_tokio_fn(move || {
+                flams_system::settings::Settings::initialize(settings);
+                check::check(archive, path, persist, !verbose)
+            });
         }
         None => flams_main::main(cli.into()),
     }
