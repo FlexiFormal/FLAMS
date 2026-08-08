@@ -229,13 +229,15 @@ fn check_selected() -> usize {
         */
         //"http://mathhub.info?a=FTML/math&p=algebra&d=dual-lattice&l=en",
         //"http://mathhub.info?a=FTML/math&p=relations&d=dual-lattice&l=en",
-        "http://mathhub.info?a=FTML/math&p=algebra&d=order-lattice&l=en",
+        //"http://mathhub.info?a=FTML/math&p=algebra&d=order-lattice&l=en",
         //"http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-associative&l=en",
         /*
         "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-commutative&l=en",
         "http://mathhub.info?a=FTML/math&d=algebra&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=group&l=en",
+        "http://mathhub.info?a=FTML/math&p=categories&d=category&l=en",
         */
+        "http://mathhub.info?a=FTML/math&p=categories&d=functor&l=en",
     )
     //}
 }

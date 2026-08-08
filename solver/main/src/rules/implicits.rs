@@ -38,7 +38,7 @@ impl ImplicitExtApp for ApplicationTerm {
         } else if in_prepare_revert {
             None
         } else {
-            panic!("WWWWEEEEIIIIRRRD: {:#?}", self.arguments);
+            //panic!("WWWWEEEEIIIIRRRD: {:#?}", self.arguments);
             None
         }
     }

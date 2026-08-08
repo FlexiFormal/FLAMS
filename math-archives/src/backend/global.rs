@@ -586,7 +586,14 @@ impl ArchiveManager {
         get_not: fn(&SharedDocumentElement<T>) -> DataRef<Notation>,
         //get_ref: impl Fn(&DocDataRef<Notation>) -> Result<Notation, BackendError>,
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)> {
-        let q = crate::sparql!(SELECT DISTINCT ?n WHERE { ?n ulo:notation_for iri. });
+        let iricl = iri.clone();
+        let q = crate::sparql!(SELECT DISTINCT ?n WHERE {
+            { ?n ulo:notation_for iricl. } UNION
+            {
+                iri ulo:generated_by ?o .
+                ?n ulo:notation_for ?o.
+            }
+        });
         self.triple_store()
             .query::<E>(q)
             .expect("Notations query should be valid")
