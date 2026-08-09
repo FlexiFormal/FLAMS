@@ -429,14 +429,15 @@ impl Queue {
             backend().with_archives(|archives| {
                 for a in archives {
                     let Archive::Local(archive) = a else { continue };
-                    let matches = match target {
-                        FormatOrTargets::Format(f) => archive.formats().contains(&f),
-                        FormatOrTargets::Targets(targets) => archive
-                            .formats()
-                            .iter()
-                            .flat_map(|fmt| fmt.targets)
-                            .any(|t| targets.contains(t)),
-                    };
+                    let matches = archive.is_meta()
+                        || (match target {
+                            FormatOrTargets::Format(f) => archive.formats().contains(&f),
+                            FormatOrTargets::Targets(targets) => archive
+                                .formats()
+                                .iter()
+                                .flat_map(|fmt| fmt.targets)
+                                .any(|t| targets.contains(t)),
+                        });
                     if matches {
                         b.maybe_copy(archive);
                         if clean {
