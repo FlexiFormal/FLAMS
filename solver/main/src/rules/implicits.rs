@@ -24,13 +24,13 @@ pub trait ImplicitExtTerm: ImplicitExtBound + ImplicitExtApp {
     fn apply_implicits(self, num: usize, new: impl FnMut(usize) -> Term) -> Self;
 }
 impl ImplicitExtApp for ApplicationTerm {
-    // invariant: return.0 matches Term::Symbol {..}
+    // invariant: return.0 matches Term::Symbol {..} or Term::Field(_)
     fn unapply_implicits(&self, in_prepare_revert: bool) -> Option<(&Term, &[Term])> {
         if !self.head.is(&*ftml_uris::metatheory::APPLY_IMPLICIT) {
             return None;
         }
         if let [
-            Argument::Simple(t @ Term::Symbol { .. }),
+            Argument::Simple(t @ (Term::Symbol { .. } | Term::Field(_))),
             Argument::Sequence(MaybeSequence::Seq(bound)),
         ] = &*self.arguments
         {

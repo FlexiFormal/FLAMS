@@ -93,9 +93,14 @@ rules! {
         implicits::ImplicitRule,
         unknowns::UnknownsRule,
         CommentRule,
-        MorphismRule
+        MorphismRule,
+        super::impls::records::FieldRule
     ),
-    subtyping = SubtypeRule(operators::numbers::NumberTypes,CommentRule),
+    subtyping = SubtypeRule(
+        operators::numbers::NumberTypes,
+        super::impls::records::RecordRule,
+        CommentRule
+    ),
     checking = CheckingRule(operators::numbers::NumberTypes),
     inhabitable = InhabitableRule(sequences::SeqUniverseRule,CommentRule),
     equality = EqualityRule(
@@ -109,7 +114,8 @@ rules! {
         unknowns::UnknownsRule,
         typing::InferredTypeSimplificationRule,
         CommentRule,
-        MorphismRule
+        MorphismRule,
+        super::impls::records::FieldRule
     ),
     marker = MarkerRule,
     proof = ProofRule

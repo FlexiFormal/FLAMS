@@ -918,7 +918,17 @@ impl PiInferenceRule {
         tp: Term,
     ) -> Result<BindingTerm, Term> {
         let Some(nret) = checker.scoped(|checker| {
-            match checker.simplify_until(&tp, |_, t| matches!(t, Term::Bound(_)))? {
+            match checker.simplify_until(&tp, |_, t| {
+                if let Term::Bound(b) = t
+                    && let Term::Symbol { uri, .. } = &b.head
+                {
+                    *uri == *bind_uri
+                        && b.arguments.len() == 2
+                        && matches!(b.arguments.get(1), Some(BoundArgument::Simple(_)))
+                } else {
+                    false
+                }
+            })? {
                 Cow::Borrowed(_) => Some(None),
                 Cow::Owned(tp) => Some(Some(tp)),
             }

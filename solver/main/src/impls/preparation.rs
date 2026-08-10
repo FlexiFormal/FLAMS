@@ -1,6 +1,6 @@
 use crate::{
     CheckRef,
-    impls::solving::Solutions,
+    impls::{records::Record, solving::Solutions},
     rules::implicits::{ImplicitExtApp, ImplicitExtBound, ImplicitExtTerm},
     split::SplitStrategy,
 };
@@ -125,6 +125,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
         })
     }
 
+    /*
     fn push_down_implicits(term: Term) -> Term {
         if let Term::Application(ref app) = term
             && app.head.is(&*ftml_uris::metatheory::APPLY_IMPLICIT)
@@ -162,6 +163,7 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             term
         }
     }
+     */
 
     fn prepare_i(
         &mut self,
@@ -175,6 +177,24 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
             return t;
         }
         match &t {
+            Term::Field(f) => {
+                if let Some(r) = self.scoped(|slf| {
+                    if let Ok(r) = Record::from_term(&f.record, f.record_type.as_ref(), slf)
+                    && let Some(sym) = r.get_type().get_symbol(&f.key)
+                    //&& sym.data.tp.has_checked()
+                    && let Some(Some(vars)) = sym
+                        .data
+                        .tp
+                        .with_checked(|t| Some(t.get_bound_implicits()?.1.len()))
+                    {
+                        Some(t.clone().apply_implicits(vars, |_| slf.new_solvable()))
+                    } else {
+                        None
+                    }
+                }) {
+                    return r;
+                }
+            }
             Term::Symbol { uri, presentation } => {
                 return if let Ok(sym) = self.get_symbol(uri)
                     && sym.data.tp.has_checked()

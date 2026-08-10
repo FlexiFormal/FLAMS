@@ -5,6 +5,7 @@ pub mod equality;
 mod inference;
 pub mod preparation;
 pub mod proving;
+pub mod records;
 pub mod simplify;
 pub mod solving;
 mod typing;

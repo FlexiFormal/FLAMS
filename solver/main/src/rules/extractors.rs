@@ -66,6 +66,7 @@ pub const fn all_rule_extractors<Split: SplitStrategy>() -> &'static [RuleExtrac
         ("inhabitable", inhab),
         ("universe", univ),
         ("subtype", subtp),
+        ("record-universe", record_universe),
         ("complex", super::symbols::parse),
     ]
 }
@@ -105,6 +106,13 @@ pub fn inhab<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) 
         term.clone(),
         false,
     ))));
+}
+
+pub fn record_universe<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {
+    let [term] = params else { return };
+    rules.push_inference(Box::new(crate::impls::records::RecordUniverse(
+        term.clone(),
+    )));
 }
 
 pub fn univ<Split: SplitStrategy>(params: &[Term], rules: &mut RuleSet<Split>) {

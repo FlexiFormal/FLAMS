@@ -234,11 +234,29 @@ impl<Split: SplitStrategy> CheckRef<'_, '_, Split> {
     }
 
     pub(crate) fn get_symbol_type(&mut self, uri: &SymbolUri) -> Option<Term> {
+        let Ok(s) = self.top.get_symbol_like(uri, |t| self.prepare(t, None).1) else {
+            self.failure(format!("Symbol not found: {uri}"));
+            return None;
+        };
+        match s {
+            SharedSymbolLike::Symbol(s) => s.data.tp.checked_or_parsed().map(|(t, _)| t),
+            SharedSymbolLike::MathStructure(_) => {
+                self.top.rules.inference().iter().find_map(|rl| {
+                    rl.as_any()
+                        .downcast_ref::<super::records::RecordUniverse>()
+                        .map(|rl| rl.0.clone())
+                })
+            }
+            _ => None,
+        }
+
+        /*
         let Ok(s) = self.get_symbol(uri) else {
             self.failure(format!("Symbol not found: {uri}"));
             return None;
         };
         s.data.tp.checked_or_parsed().map(|(t, _)| t)
+         */
     }
     pub(crate) fn get_symbol_definiens(&mut self, uri: &SymbolUri) -> Option<Term> {
         let Ok(s) = self.get_symbol(uri) else {

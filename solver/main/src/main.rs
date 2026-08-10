@@ -238,6 +238,7 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=categories&d=category&l=en",
         */
         "http://mathhub.info?a=FTML/math&p=categories&d=functor&l=en",
+        "http://mathhub.info?a=FTML/math&p=categories&d=natural-transformation&l=en",
     )
     //}
 }
@@ -405,7 +406,7 @@ fn check<Split: SplitStrategy>(solver: &mut Checker<Split>, s: &str) {
     //let outfile = Path::new("/home/jazzpirate/work/Software/FlexiFormal/FLAMS/solver/out.txt");
     //let mut outfile = std::fs::File::create(outfile).expect("wut");
 
-    v.filter_failures(true);
+    //v.filter_failures(true);
     v.checks = v
         .checks
         .into_iter()
