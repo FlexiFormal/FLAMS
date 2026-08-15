@@ -547,7 +547,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         either::Left(None)
     }
 
-    fn simplify_one(&mut self, expand: Expansion, term: &'t Term) -> Option<Term> {
+    pub(super) fn simplify_one(&mut self, expand: Expansion, term: &'t Term) -> Option<Term> {
         if term.has_solvable() {
             let nterm = self.subst(term.clone());
             if *term != nterm {
@@ -645,6 +645,15 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             && *nt != *term
         {
             Some(nt.into_owned())
+        } else if let Ok(Some(nt)) = self.simplify_implicit(r)
+            && let Ok(nt) = m.apply(&nt, &mut |s| {
+                self.top
+                    .get_symbol_like(s, |t| self.prepare(t, None).1)
+                    .ok()
+            })
+            && *nt != *term
+        {
+            Some(nt.into_owned())
         } else {
             None
         }
@@ -689,6 +698,15 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                     self.comment("expanded definition");
                 })
             }
+
+            Term::Application(app) if self.top.hoas().is_some_and(|h| h.judgment.as_ref().is_some_and(|j|
+                app.head.is(j)
+            )) && let [Argument::Simple(p)] = &*app.arguments => {
+                self.simplify_one(expand, p).map(|r| Term::Application(ApplicationTerm::new(
+                    app.head.clone(),Box::new([Argument::Simple(r)]),app.presentation.clone()
+                )))
+            }
+
             Term::Application(app) => self.simplify_one(expand, &app.head).map(|nh| {
                 Term::Application(ApplicationTerm::new(
                     nh,

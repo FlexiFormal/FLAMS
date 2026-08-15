@@ -151,7 +151,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 return self.scoped(|slf| slf.congruence(&nlhs, &nrhs));
             }
         }
-        match (lhs, rhs) {
+        let r = match (lhs, rhs) {
             (Term::Application(l), Term::Application(r))
                 if l.arguments.len() == r.arguments.len() =>
             {
@@ -182,11 +182,22 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             (Term::Field(_), Term::Field(_)) => Some(false),
             (Term::Number(a), Term::Number(b)) => Some(a == b),
             _ => self.congruence_cont(lhs, rhs),
+        };
+        if r.is_some() {
+            return r;
         }
+        if let Some(nlhs) = self.simplify_one(super::simplify::Expansion::Full, lhs) {
+            return self.scoped(|slf| slf.congruence(rhs, &nlhs));
+        }
+        if let Some(nrhs) = self.simplify_one(super::simplify::Expansion::Full, rhs) {
+            return self.scoped(|slf| slf.congruence(&nrhs, lhs));
+        }
+        None
     }
 
     fn congruence_cont(&mut self, lhs: &'t Term, rhs: &'t Term) -> Option<bool> {
         self.add_msg(traceref!("shapes don't match: ", lhs, " and ", rhs).into());
+        /*
         // LAST RESORT
         let nlhs = self
             .simplify_full(super::simplify::Expansion::Full, lhs)
@@ -199,6 +210,8 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         } else {
             None
         }
+         */
+        None
         /*
         // todo: preserve logs on recursive fail
         if let Some(lhs) = self.simplify_one(true, lhs) {

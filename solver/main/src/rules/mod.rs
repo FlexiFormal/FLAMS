@@ -110,7 +110,8 @@ rules! {
     ),
     equality = EqualityRule(
         operators::numbers::NumberTypes,
-        CommentRule
+        CommentRule,
+        ProofBarrier
         //sequences::SeqTypeEqRule
     ),
     universe = UniverseRule(sequences::SeqUniverseRule,CommentRule),
@@ -428,5 +429,21 @@ impl<Split: SplitStrategy> InferenceRule<Split> for ProofBarrier {
     }
     fn infer<'t>(&self, _: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
         Self::proof_for(term).cloned()
+    }
+}
+impl<Split: SplitStrategy> EqualityRule<Split> for ProofBarrier {
+    // Proof Irrelevance
+    fn applicable(&self, lhs: &Term, rhs: &Term) -> bool {
+        Self::proof_for(lhs).is_some() && Self::proof_for(rhs).is_some()
+    }
+    fn apply<'t>(
+        &self,
+        mut checker: CheckRef<'t, '_, Split>,
+        lhs: &'t Term,
+        rhs: &'t Term,
+    ) -> Option<bool> {
+        let lhs = Self::proof_for(lhs)?;
+        let rhs = Self::proof_for(rhs)?;
+        Some(checker.check_equality(lhs, rhs) == Some(true))
     }
 }

@@ -454,7 +454,12 @@ impl<Split: SplitStrategy> Checker<Split> {
                     unks = unks2;
                     t
                 });
-                df = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
+                let d = self.wrap_none(Some(unks), |slf| slf.subst(tm)).1;
+                if let Some(tp) = tp.as_ref() {
+                    df = Some(ProofBarrier::apply(d, tp.clone()));
+                } else {
+                    df = Some(d);
+                }
             }
         }
         if df.is_none() {
@@ -470,7 +475,9 @@ impl<Split: SplitStrategy> Checker<Split> {
                         panic!("bug");
                     };
                     let (b, unks, l) = context.check_type(self, unks, &tm, tp, block);
-                    df = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
+                    let d = self.wrap_none(Some(unks), |slf| slf.subst(tm)).1;
+                    df = Some(ProofBarrier::apply(d, tp.clone()));
+
                     proof_log = Some(ProofStepCheckResult::Both {
                         inhabitable: result,
                         matches: Some(TypeCheckResult {
@@ -491,14 +498,25 @@ impl<Split: SplitStrategy> Checker<Split> {
                         unks = unks2;
                         t
                     });
-                    df = Some(self.wrap_none(Some(unks), |slf| slf.subst(tm)).1);
+
+                    let d = self.wrap_none(Some(unks), |slf| slf.subst(tm)).1;
+                    if let Some(tp) = tp.as_ref() {
+                        df = Some(ProofBarrier::apply(d, tp.clone()));
+                    } else {
+                        df = Some(d);
+                    }
                 }
             } else if needs_def && let Some(tp) = tp.as_ref() {
                 let Some(ProofStepCheckResult::GoalOnly { result }) = proof_log.take() else {
                     panic!("bug");
                 };
                 let (r, unks, l) = context.prove(self, Solutions::default(), tp, block);
-                df = r.map(|t| self.wrap_none(Some(unks), |slf| slf.subst(t)).1);
+                df = r.map(|t| {
+                    ProofBarrier::apply(
+                        self.wrap_none(Some(unks), |slf| slf.subst(t)).1,
+                        tp.clone(),
+                    )
+                });
                 proof_log = Some(ProofStepCheckResult::Both {
                     inhabitable: result,
                     matches: Some(TypeCheckResult {
