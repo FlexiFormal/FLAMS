@@ -22,7 +22,7 @@ use ftml_solver::{
         RayonSplit, RayonStrategiesDepth, RayonStrategiesOnly, SingleThreadedSplit, SplitStrategy,
     },
 };
-use ftml_uris::{ArchiveId, DocumentUri};
+use ftml_uris::{ArchiveId, DocumentUri, NamedUri, UriWithArchive, UriWithPath};
 
 flams_math_archives::source_format!(STEX {
     name: "stex",
@@ -35,14 +35,14 @@ flams_math_archives::source_format!(STEX {
 fn main() {
     let _ = enable_ansi_support::enable_ansi_support();
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
+        .with_max_level(tracing::Level::INFO)
         .init();
     GlobalBackend::initialize::<AllSyncEngine>(false);
     /*let _ = std::thread::Builder::new()
     .stack_size(6 * 1024 * 1024)
     .spawn(move || {*/
     //pause();
-    let (i, t) = measure(check_selected); //(check_all); //(check_subterm); //
+    let (i, t) = measure(check_selected); //(topo_sort); //(check_all); //(check_subterm); //
     println!("Checked {i} documents in {t}");
     /*println!(
         "minimal stack: {}",
@@ -53,6 +53,44 @@ fn main() {
     /*    })
     .expect("wut")
     .join();*/
+}
+
+fn topo_sort() -> usize {
+    let alldocs = all_documents(|a| a.as_ref().starts_with("FTML/sqrt2"));
+    let mods = alldocs.iter().flat_map(|d| {
+        GlobalBackend
+            .get_document(d)
+            .expect("wut")
+            .dfs()
+            .filter_map(|d| {
+                if let DocumentElementRef::Module { module, .. } = d {
+                    Some(module.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    });
+    let mut sorted = Vec::new();
+    Module::topo_sort(mods.collect(), &mut sorted, |m| {
+        if let Ok(ModuleLike::Module(m)) = GlobalBackend.get_module(m) {
+            Some(m)
+        } else {
+            panic!("wut")
+        }
+    });
+    let mut ret = 0;
+    for s in sorted {
+        let doc = GlobalBackend.get().with_local_archive(s.archive_id(), |a| {
+            let a = a.expect("wut");
+            a.document_of(s.path(), s.name())
+        });
+        if let Some(s) = doc {
+            ret += 1;
+            println!("\"{s}\",");
+        }
+    }
+    ret
 }
 
 fn check_subterm() -> usize {
@@ -108,7 +146,8 @@ fn check_selected() -> usize {
             }
         }
     check!(
-        /*
+        "http://mathhub.info?a=FTML/meta&d=Judgments&l=en",
+        "http://mathhub.info?a=FTML/meta&d=Metatheory&l=en",
         "http://mathhub.info?a=FTML/math&p=numbers/nat&d=nat&l=en",
         "http://mathhub.info?a=FTML/math&p=sets&d=set&l=en",
         "http://mathhub.info?a=FTML/math&p=numbers/nat&d=natrange&l=en",
@@ -160,7 +199,12 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=forall-elimination&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=exists-introduction&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=exists-elimination&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=equality-reflexive&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=equality-congruence&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs&d=intuitionistic-natural-deduction&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=conj-swap&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=forall-elimination-two-variables&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=forall-implication-elimination&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction&d=tertium-non-datur&l=en",
         "http://mathhub.info?a=FTML/math&p=proofs&d=natural-deduction&l=en",
         "http://mathhub.info?a=FTML/math&d=proofs&l=en",
@@ -191,56 +235,141 @@ fn check_selected() -> usize {
         "http://mathhub.info?a=FTML/math&p=algebra/operations&d=idempotent&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=semigroup-exts&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=semilattice&l=en",
-        */
-        //"http://mathhub.info?a=FTML/math&p=algebra&d=lattice&l=en",
-        //"http://mathhub.info?a=FTML/math&p=relations&d=algebraic-lattice&l=en",
-        /*
-        "http://mathhub.info?a=FTML/math&d=relations&l=en",
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=transitivity-chaining&l=en",
-        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=forall-implication-elimination&l=en",
-        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=forall-elimination-two-variables&l=en",
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-unique&l=en",
-        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=conj-swap&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=lattice&l=en",
         "http://mathhub.info?a=FTML/math&p=relations&d=dual-partial-order&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations&d=dual-lattice&l=en",
         "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=glb-unique&l=en",
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-unique-by-duality&l=en",
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-idempotent&l=en",
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-glb-absorption-1&l=en",
-        */
-        //"http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-glb-absorption-2&l=en",
-        /*
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=glb-idempotent&l=en",
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=glb-commutative&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=transitivity-chaining&l=en",
         "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=glb-associative&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-associative&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-unique&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-commutative&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=glb-commutative&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-idempotent&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=glb-idempotent&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-glb-absorption-1&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-glb-absorption-2&l=en",
+        "http://mathhub.info?a=FTML/math&p=relations&d=algebraic-lattice&l=en",
+        "http://mathhub.info?a=FTML/math&d=relations&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=equality-transitive&l=en",
+        "http://mathhub.info?a=FTML/math&p=proofs/natural-deduction/extensions&d=equality-symmetric&l=en",
         "http://mathhub.info?a=FTML/math&d=math&l=en",
         "http://mathhub.info?a=FTML/math&d=defeq&l=en",
         "http://mathhub.info?a=FTML/math&d=prelude&l=en",
         "http://mathhub.info?a=FTML/math&p=functions&d=pointwise&l=en",
-        "http://mathhub.info?a=FTML/math&p=functions/reals&d=pointwise-order&l=en",
         "http://mathhub.info?a=FTML/math&p=functions/reals&d=pointwise-max&l=en",
+        "http://mathhub.info?a=FTML/math&p=categories&d=category&l=en",
+        "http://mathhub.info?a=FTML/math&p=categories&d=functor&l=en",
+        "http://mathhub.info?a=FTML/math&p=categories&d=natural-transformation&l=en",
+        "http://mathhub.info?a=FTML/math&p=categories&d=Cat&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra/operations&d=unit&l=en",
-        */
-        //"http://mathhub.info?a=FTML/math&p=algebra/operations&d=unit-is-unique&l=en",
-        /*
+        "http://mathhub.info?a=FTML/math&p=algebra/operations&d=unit-is-unique&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=unital&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=monoid&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra/operations&d=inverses&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=operations&l=en",
-        */
-        //"http://mathhub.info?a=FTML/math&p=algebra&d=dual-lattice&l=en",
-        //"http://mathhub.info?a=FTML/math&p=relations&d=dual-lattice&l=en",
-        //"http://mathhub.info?a=FTML/math&p=algebra&d=order-lattice&l=en",
-        //"http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-associative&l=en",
-        /*
-        "http://mathhub.info?a=FTML/math&p=relations/lemmata&d=lub-commutative&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=dual-lattice&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=join-has-lub&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=join-implies-meet&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=meet-implies-join&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=join-has-glb&l=en",
+        "http://mathhub.info?a=FTML/math&p=algebra&d=order-lattice&l=en",
         "http://mathhub.info?a=FTML/math&d=algebra&l=en",
         "http://mathhub.info?a=FTML/math&p=algebra&d=group&l=en",
-        "http://mathhub.info?a=FTML/math&p=categories&d=category&l=en",
-        */
-        "http://mathhub.info?a=FTML/math&p=categories&d=functor&l=en",
-        "http://mathhub.info?a=FTML/math&p=categories&d=natural-transformation&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=numbertheory&d=divisibility&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=numbertheory&d=coprimality&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=rationals&d=rational&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=rationals&d=real-mult-laws&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=rationals&d=rational-square-bridge&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=peano&d=zero-not-successor&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=peano&d=successor-injective&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=peano&d=induction&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=peano&d=add-recursion&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=add-associative&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=add-zero-left&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=add-succ-left&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=add-commutative&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=peano&d=mult-recursion&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=mult-zero-left&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=mult-succ-left&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=mult-commutative&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=distributivity&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=cancellation&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=mult-two-is-doubling&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=two-is-not-one&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=numbertheory&d=parity&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=numbertheory&d=parity-totality&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=numbertheory&d=odd-square-odd&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=even-odd-disjoint&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=numbertheory&d=square-even-implies-even&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=numbertheory&d=coprime-descent&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=rationals&d=rational-square-contradiction&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&d=sqrt2&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=nat-case-split&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&p=arithmetic&d=mult-associative&l=en",
+        "http://mathhub.info?a=FTML/sqrt2&d=all&l=en",
     )
     //}
+}
+
+fn check<Split: SplitStrategy>(solver: &mut Checker<Split>, s: &str) {
+    println!("Checking {s}");
+    let d = GlobalBackend
+        .get_document(&s.parse().expect("uri wut"))
+        .expect("wut");
+    let ((mut v, _), t) = measure(|| solver.check_document(&d).expect("dependency missing"));
+    let failures = count_fails(&v);
+
+    //let mut linewise = EveryLine::new();
+    /*for mut c in v.checks {
+        if let CheckResult::Term { .. } = c {
+            continue;
+        }
+        c.filter_failures();
+        println!("{}", c.colored()); //write!(linewise, "{}", c.colored());
+        if !c.success() {
+            pause(); //break;
+        }
+    }*/
+
+    //let outfile = Path::new("/home/jazzpirate/work/Software/FlexiFormal/FLAMS/solver/out.txt");
+    //let mut outfile = std::fs::File::create(outfile).expect("wut");
+
+    //v.filter_failures(true);
+    v.checks = v
+        .checks
+        .into_iter()
+        .filter(|c| !matches!(c, CheckResult::Term { .. }))
+        /* .map(|mut c| {
+            c.filter_failures();
+            c
+        })*/
+        .collect();
+    for mut c in v.checks {
+        c.filter_failures(true);
+        //writeln!(outfile, "{}", c.display::<()>()).expect("fuck");
+        println!("{}", c.colored());
+        if !c.success() {
+            pause();
+        }
+    }
+    //println!("{}", v.colored());
+    //pause();
+
+    //v.filter_failures();
+    //println!("{}", v.colored());
+    //println!("Checked after {t}");
+
+    /*
+    if failures == 0 {
+        println!("Checked after {t}");
+    } else {
+        //v.filter_failures();
+        println!("{}", v.colored());
+        println!("Checked after {t}");
+        pause();
+    }
+    */
 }
 
 fn check_all() -> usize {
@@ -381,63 +510,6 @@ pub fn all_documents(filter: fn(&ArchiveId) -> bool) -> Vec<DocumentUri> {
         .collect::<Vec<_>>();
     tracing::info!("{} documents", uris.len());
     uris
-}
-
-fn check<Split: SplitStrategy>(solver: &mut Checker<Split>, s: &str) {
-    println!("Checking {s}");
-    let d = GlobalBackend
-        .get_document(&s.parse().expect("uri wut"))
-        .expect("wut");
-    let ((mut v, _), t) = measure(|| solver.check_document(&d).expect("dependency missing"));
-    let failures = count_fails(&v);
-
-    //let mut linewise = EveryLine::new();
-    /*for mut c in v.checks {
-        if let CheckResult::Term { .. } = c {
-            continue;
-        }
-        c.filter_failures();
-        println!("{}", c.colored()); //write!(linewise, "{}", c.colored());
-        if !c.success() {
-            pause(); //break;
-        }
-    }*/
-
-    //let outfile = Path::new("/home/jazzpirate/work/Software/FlexiFormal/FLAMS/solver/out.txt");
-    //let mut outfile = std::fs::File::create(outfile).expect("wut");
-
-    //v.filter_failures(true);
-    v.checks = v
-        .checks
-        .into_iter()
-        .filter(|c| !matches!(c, CheckResult::Term { .. }))
-        /* .map(|mut c| {
-            c.filter_failures();
-            c
-        })*/
-        .collect();
-    for c in v.checks {
-        //writeln!(outfile, "{}", c.display::<()>()).expect("fuck");
-        println!("{}", c.colored());
-        pause();
-    }
-    //println!("{}", v.colored());
-    //pause();
-
-    //v.filter_failures();
-    //println!("{}", v.colored());
-    //println!("Checked after {t}");
-
-    /*
-    if failures == 0 {
-        println!("Checked after {t}");
-    } else {
-        //v.filter_failures();
-        println!("{}", v.colored());
-        println!("Checked after {t}");
-        pause();
-    }
-    */
 }
 
 struct EveryLine(std::io::Stdout, std::io::Stdin);

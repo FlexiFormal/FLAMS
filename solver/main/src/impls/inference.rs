@@ -8,6 +8,7 @@ use crate::{
 impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
     pub fn infer_type(&mut self, t: &'t Term) -> Option<Term> {
         tracing::debug!("Inferring type of {:?}", t.debug_short());
+        //crate::pause();
         let r = self.wrap_check(CheckingTask::Inference(t), |slf| slf.infer_type_i(t));
         if let Some(r) = &r {
             tracing::debug!("Inferred: {:?}", r.debug_short());

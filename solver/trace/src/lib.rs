@@ -541,6 +541,26 @@ tasks! {
 }
 
 #[cfg(feature = "full")]
+impl<'b> PartialEq<CheckingTask<'b>> for CheckingTask<'_> {
+    fn eq(&self, other: &CheckingTask<'b>) -> bool {
+        match (self, other) {
+            (Self::Simplify(t), CheckingTask::Simplify(t2))
+            | (Self::Proving(t), CheckingTask::Proving(t2))
+            | (Self::Inference(t), CheckingTask::Inference(t2))
+            | (Self::Inhabitable(t), CheckingTask::Inhabitable(t2))
+            | (Self::Universe(t), CheckingTask::Universe(t2)) => t.alpha_equal(t2),
+            (Self::VariableInference(v), CheckingTask::VariableInference(v2)) => v == v2,
+            (Self::Subtype(a, b), CheckingTask::Subtype(a2, b2))
+            | (Self::HasType(a, b), CheckingTask::HasType(a2, b2))
+            | (Self::Equality(a, b), CheckingTask::Equality(a2, b2)) => {
+                a.alpha_equal(a2) && b.alpha_equal(b2)
+            }
+            _ => false,
+        }
+    }
+}
+
+#[cfg(feature = "full")]
 impl CheckLog {
     #[must_use]
     pub fn display<D: FmtTraceDisplay>(&self) -> impl std::fmt::Display + use<'_, D> {

@@ -17,8 +17,8 @@ use crate::{
 };
 
 const LOOP_LIMIT: usize = 64;
-const RECURSION_LIMIT: usize = 64;
-const TOTAL_LIMIT: usize = 2048;
+const RECURSION_LIMIT: usize = 128;
+const TOTAL_LIMIT: usize = 4096 * 512;
 
 static NOEXPAND: std::sync::LazyLock<Id> =
     std::sync::LazyLock::new(|| unsafe { "noexpand".parse().unwrap_unchecked() });
@@ -163,6 +163,13 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         recursion_limit: &mut usize,
         total_limit: &mut usize,
     ) -> Option<Term> {
+        if expand == Expansion::Full
+            && let Some(r) = self
+                .judgment_cache
+                .get_simplification(term, self.context.as_ref())
+        {
+            return Some(r);
+        }
         tracing::debug!(
             "Fully Simplifying {:?} (expand:{expand:?})",
             term.debug_short()
@@ -173,12 +180,10 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         true {
             match self.simplify_implicit(term) {
                 Ok(Some(t)) => {
-                    return Some(
-                        self.scoped(|slf| {
-                            slf.simplify_full_i(expand, &t, recursion_limit, total_limit)
-                        })
-                        .unwrap_or(t),
-                    );
+                    let r = self
+                        .scoped(|slf| slf.simplify_full_i(expand, &t, recursion_limit, total_limit))
+                        .unwrap_or(t);
+                    return Some(r);
                 }
                 Ok(None) => (),
                 Err(()) => return None,
@@ -210,6 +215,19 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                         None
                     }
                     Cow::Owned(t) => {
+                        /*if loop_limit >= LOOP_LIMIT {
+                            panic!("LOOP_LIMIT");
+                        }
+                        if *recursion_limit >= RECURSION_LIMIT {
+                            panic!("RECURSION_LIMIT");
+                        }
+                        if *total_limit >= TOTAL_LIMIT {
+                            panic!("TOTAL_LIMIT");
+                        }*/
+                        if expand == Expansion::Full {
+                            self.judgment_cache
+                                .add_simplification(term, &t, self.context.as_ref());
+                        }
                         //println!("  : {:?}", t.debug_short());
                         Some(t)
                     }
@@ -224,16 +242,20 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                         *recursion_limit -= 1;
                         None
                     }
-                    Cow::Owned(t) => {
+                    Cow::Owned(mut t) => {
+                        while let Some(r) = self.scoped(|slf| {
+                            slf.simplify_full_i(expand, &t, recursion_limit, total_limit)
+                        }) {
+                            t = r;
+                        }
                         //println!("  : {:?}", t.debug_short());
-                        let r = Some(
-                            self.scoped(|slf| {
-                                slf.simplify_full_i(expand, &t, recursion_limit, total_limit)
-                            })
-                            .unwrap_or(t),
-                        );
+
+                        if expand == Expansion::Full {
+                            self.judgment_cache
+                                .add_simplification(term, &t, self.context.as_ref());
+                        }
                         *recursion_limit -= 1;
-                        r
+                        Some(t)
                     }
                 };
             }

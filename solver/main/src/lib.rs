@@ -12,7 +12,19 @@ pub mod trace {
 pub mod facts;
 pub mod hoas;
 //pub mod patterns;
+pub mod judgment_cache;
 pub mod utils;
+
+const TRUNCATE_PROOFS: bool = false;
+static DEBUG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn pause() {
+    use std::io::Read;
+    if DEBUG.load(std::sync::atomic::Ordering::Relaxed) {
+        println!("Press Key...");
+        let _ = std::io::stdin().read(&mut [0u8]);
+    }
+}
 
 use crate::{
     context::ContextWrap,
@@ -22,6 +34,7 @@ use crate::{
         proving::ProverState,
         solving::{Solutions, TermExtSolvable, is_solvable_var},
     },
+    judgment_cache::JudgmentCache,
     results::{
         CheckResult, ContentCheckResult, DocumentCheckResult, SymbolCheckResult, TypeCheckResult,
     },
@@ -145,6 +158,7 @@ pub struct CheckRef<'c, 'i, Split: SplitStrategy> {
     pub(crate) top: &'c Checker<Split>,
     pub(crate) context: ContextWrap<'c, 'i>,
     pub(crate) proof_state: &'i ProverState,
+    pub(crate) judgment_cache: JudgmentCache<'c, 'i>,
     pub(crate) solutions: MutableRefList<'i, Solutions>,
     messages: &'i mut SmallVec<CheckLogCow<'c>, 2>,
     pub(crate) cancel: &'i CancelToken<'i, Split::CancelToken>,
@@ -918,7 +932,15 @@ impl<Split: SplitStrategy> Checker<Split> {
         let new = self.sort(m);
         for i in self.context.len() - new..self.context.len() {
             let uri = &self.context[i];
-            let m = self.get_module(uri).map_err(|()| uri.clone())?;
+            let m = match self.get_module(uri).map_err(|()| uri.clone()) {
+                Ok(m) => m,
+                Err(m) => {
+                    if uri.is_top() {
+                        return Err(m);
+                    }
+                    continue;
+                }
+            };
             m.initialize(&mut |uri| self.get_module_like(uri).ok())?;
             self.load_context(&m);
         }

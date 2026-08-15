@@ -293,6 +293,8 @@ rules! {
     }
     pub of_type("oftype") = (sym,rules) => {
         rules.push_preparation(Box::new(typing::SimpleTypeOperatorRule(sym.uri.clone())));
+        rules.push_inference(Box::new(typing::SimpleTypeOperatorRule(sym.uri.clone())));
+        rules.push_simplification(Box::new(typing::SimpleTypeOperatorRule(sym.uri.clone())));
     }
     pub apply = (sym,rules) => {
         rules.push_preparation(Box::new(pi::ApplyRule(sym.uri.clone())));

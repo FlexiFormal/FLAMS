@@ -14,7 +14,7 @@ use ftml_ontology::{
         SharedDeclaration,
         declarations::{SharedSymbolLike, morphisms::Morphism},
     },
-    terms::{Argument, Term, termpaths::TermPath},
+    terms::{Argument, Term, helpers::IntoTerm, termpaths::TermPath},
 };
 use std::{fmt::Debug, ops::ControlFlow};
 
@@ -94,7 +94,8 @@ rules! {
         unknowns::UnknownsRule,
         CommentRule,
         MorphismRule,
-        super::impls::records::FieldRule
+        super::impls::records::FieldRule,
+        ProofBarrier
     ),
     subtyping = SubtypeRule(
         operators::numbers::NumberTypes,
@@ -102,7 +103,11 @@ rules! {
         CommentRule
     ),
     checking = CheckingRule(operators::numbers::NumberTypes),
-    inhabitable = InhabitableRule(sequences::SeqUniverseRule,CommentRule),
+    inhabitable = InhabitableRule(
+        sequences::SeqUniverseRule,
+        super::impls::records::RecordRule,
+        CommentRule,
+    ),
     equality = EqualityRule(
         operators::numbers::NumberTypes,
         CommentRule
@@ -389,5 +394,39 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for MorphismRule {
                 Ok(a.into_owned())
             }
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ProofBarrier;
+impl SizedSolverRule for ProofBarrier {
+    fn priority(&self) -> isize {
+        100_000
+    }
+    fn display(&self) -> Vec<crate::trace::Displayable> {
+        ftml_solver_trace::trace!("proof barrier")
+    }
+}
+impl ProofBarrier {
+    pub fn proof_for(t: &Term) -> Option<&Term> {
+        if let Term::Application(t) = t
+            && let Term::Symbol { uri, .. } = &t.head
+            && *uri == *symbols::PROOF_BARRIER
+            && let [Argument::Simple(_), Argument::Simple(prop)] = &*t.arguments
+        {
+            return Some(prop);
+        }
+        None
+    }
+    pub fn apply(df: Term, tp: Term) -> Term {
+        symbols::PROOF_BARRIER.clone().apply_tms([df, tp])
+    }
+}
+impl<Split: SplitStrategy> InferenceRule<Split> for ProofBarrier {
+    fn applicable(&self, term: &Term) -> bool {
+        Self::proof_for(term).is_some()
+    }
+    fn infer<'t>(&self, _: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
+        Self::proof_for(term).cloned()
     }
 }

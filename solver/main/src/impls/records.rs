@@ -13,7 +13,7 @@ use ftml_uris::{DomainUriRef, Id, ModuleUri, SymbolUri, UriName};
 
 use crate::{
     CheckRef,
-    rules::{InferenceRule, SimplificationRule, SubtypeRule},
+    rules::{InferenceRule, InhabitableRule, SimplificationRule, SubtypeRule},
     split::SplitStrategy,
 };
 
@@ -88,6 +88,15 @@ impl RecordRule {
         }
     }
 }
+impl<Split: SplitStrategy> InhabitableRule<Split> for RecordRule {
+    fn applicable(&self, term: &Term) -> bool {
+        AnyRecordType::may_be(term)
+    }
+    fn apply<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<bool> {
+        AnyRecordType::from_term(term, &mut checker).ok()?;
+        Some(true)
+    }
+}
 impl<Split: SplitStrategy> SubtypeRule<Split> for RecordRule {
     fn applicable(&self, checker: &CheckRef<'_, '_, Split>, sub: &Term, sup: &Term) -> bool {
         AnyRecordType::may_be(sub) && AnyRecordType::may_be(sup)
@@ -119,7 +128,7 @@ impl<Split: SplitStrategy> InferenceRule<Split> for RecordUniverse {
     fn applicable(&self, term: &Term) -> bool {
         AnyRecordType::may_be(term)
     }
-    fn infer<'t>(&self, checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
+    fn infer<'t>(&self, mut checker: CheckRef<'t, '_, Split>, term: &'t Term) -> Option<Term> {
         fn is<Split: SplitStrategy>(checker: &CheckRef<Split>, term: &Term) -> bool {
             match term {
                 Term::Symbol { uri, .. } => {
@@ -144,14 +153,37 @@ impl<Split: SplitStrategy> InferenceRule<Split> for RecordUniverse {
                     let [Argument::Sequence(MaybeSequence::Seq(recs))] = &*app.arguments else {
                         return false;
                     };
-                    // TODO check that morphism do be morphisming
+                    // TODO check that record is well-typed
                     recs.iter().all(|r| is(checker, r))
                 }
                 _ => false,
             }
         }
         if is(&checker, term) {
-            Some(self.0.clone())
+            let r = AnyRecordType::from_term(term, &mut checker).ok()?;
+            if r.is_complete() {
+                match r {
+                    // return the first structure as the type
+                    AnyRecordType::Ext(e)
+                        if e.elems.iter().any(|e| matches!(e, AnyRecordType::Ano(_)))
+                            && e.elems
+                                .iter()
+                                .any(|e| matches!(e, AnyRecordType::Structure(_))) =>
+                    {
+                        let first = e.elems.iter().find_map(|e| {
+                            if let AnyRecordType::Structure(s) = e {
+                                s.rec_type.clone().into_top_symbol()
+                            } else {
+                                None
+                            }
+                        })?;
+                        Some(first.into())
+                    }
+                    _ => Some(self.0.clone()),
+                }
+            } else {
+                Some(self.0.clone())
+            }
         } else {
             None
         }
@@ -213,6 +245,13 @@ pub enum AnyRecordType {
     Ext(RecordExtension),
 }
 impl AnyRecordType {
+    pub fn is_complete(&self) -> bool {
+        match self {
+            Self::Structure(s) => s.is_complete(),
+            Self::Ano(a) => a.is_complete(),
+            Self::Ext(e) => e.is_complete(),
+        }
+    }
     pub fn get_symbol(&self, name: &UriName) -> Option<SharedDeclaration<Symbol>> {
         match self {
             Self::Structure(mt) => mt
@@ -283,10 +322,20 @@ impl AnyRecordType {
     }
 }
 
+struct Field {
+    name: UriName,
+    id: Option<Id>,
+    tp: Option<Term>,
+    df: Option<Term>,
+}
+
 pub struct AnonymousRecord {
-    fields: Vec<(UriName, Option<Id>, Option<Term>, Option<Term>)>,
+    fields: Vec<Field>,
 }
 impl AnonymousRecord {
+    pub fn is_complete(&self) -> bool {
+        self.fields.iter().all(|f| f.df.is_some())
+    }
     pub fn from_app<'t, Split: SplitStrategy>(
         app: &'t ApplicationTerm,
         _: &mut CheckRef<'t, '_, Split>,
@@ -302,20 +351,20 @@ impl AnonymousRecord {
             let Term::Label { name, df, tp } = o else {
                 return Err(None);
             };
-            fields.push((
-                name.clone(),
-                None,
-                tp.as_ref().map(|t| (**t).clone()),
-                df.as_ref().map(|t| (**t).clone()),
-            ));
+            fields.push(Field {
+                name: name.clone(),
+                id: None,
+                tp: tp.as_ref().map(|t| (**t).clone()),
+                df: df.as_ref().map(|t| (**t).clone()),
+            });
         }
         Ok(Self { fields })
     }
 
     pub fn get_def(&self, _: &Term, field: &UriName) -> Option<Term> {
         self.fields.iter().find_map(|f| {
-            if name_fits_i(field, &f.0, f.1.as_ref()) {
-                f.3.clone()
+            if name_fits_i(field, &f.name, f.id.as_ref()) {
+                f.df.clone()
             } else {
                 None
             }
@@ -323,8 +372,8 @@ impl AnonymousRecord {
     }
     pub fn get_tp(&self, _: &Term, field: &UriName) -> Option<Term> {
         self.fields.iter().find_map(|f| {
-            if name_fits_i(field, &f.0, f.1.as_ref()) {
-                f.2.clone()
+            if name_fits_i(field, &f.name, f.id.as_ref()) {
+                f.tp.clone()
             } else {
                 None
             }
@@ -332,10 +381,147 @@ impl AnonymousRecord {
     }
 }
 
+pub struct ModuleType {
+    //term: &'s Term,
+    rec_type: ModuleUri,
+    domain: Vec<ModuleUri>,
+    fields: Vec<SharedDeclaration<Symbol>>,
+}
+impl ModuleType {
+    pub fn is_complete(&self) -> bool {
+        self.fields.iter().all(|f| f.data.df.is_some())
+    }
+    pub fn new<Split: SplitStrategy>(
+        structure: SymbolUri,
+        checker: &mut CheckRef<Split>,
+    ) -> Result<Self, Option<ModuleUri>> {
+        let as_mod = structure.into_module();
+        let mut mods = Vec::new();
+        let mut err = None;
+        ModuleLike::topo_sort(vec![as_mod.clone()], &mut mods, |u| {
+            if let Ok(r) = checker.top.get_module_like(u) {
+                Some(r)
+            } else {
+                err = Some(u.clone());
+                None
+            }
+        });
+        if let Some(err) = err {
+            return Err(Some(err));
+        }
+        let mut fields = Vec::new();
+        let mut domain = Vec::new();
+        for m in mods {
+            domain.push(match m.domain_uri() {
+                DomainUriRef::Module(m) => m.clone(),
+                DomainUriRef::Symbol(s) => s.clone().into_module(),
+            });
+            if let ModuleLike::Morphism(m) = &m {
+                domain.push(m.domain.clone());
+            }
+            for d in m.declarations() {
+                if let AnyDeclarationRef::Symbol(sym) = d {
+                    unsafe {
+                        match &m {
+                            ModuleLike::Module(_) | ModuleLike::Nested(_) => (),
+                            ModuleLike::Structure(m) => fields.push(m.inherit_unsafe(sym)),
+                            ModuleLike::Extension(m) => fields.push(m.inherit_unsafe(sym)),
+                            ModuleLike::Morphism(m) => fields.push(m.inherit_unsafe(sym)),
+                        }
+                    };
+                }
+            }
+        }
+        Ok(Self {
+            rec_type: as_mod,
+            domain,
+            fields,
+        })
+    }
+    fn subst<'t>(&self, record: &Term, tm: &'t Term) -> Cow<'t, Term> {
+        tm.modify(|t| {
+            let Term::Symbol { uri, .. } = t else {
+                return None;
+            };
+            self.fields.iter().find_map(|s| {
+                if s.uri.equivalent(uri) {
+                    // SAFTEY: last names are valie
+                    let name = unsafe { s.uri.name.last().parse().unwrap_unchecked() };
+                    // SAFTEY: self.rec_type is a structure => nested URI
+                    let tp = unsafe { self.rec_type.clone().into_top_symbol().unwrap_unchecked() };
+                    Some(ControlFlow::Break(Term::Field(RecordFieldTerm::new(
+                        record.clone(),
+                        name,
+                        Some(tp.into()),
+                        None,
+                    ))))
+                } else {
+                    None
+                }
+            })
+        })
+    }
+    pub fn get_def(&self, record: &Term, field: &UriName) -> Option<Term> {
+        self.fields
+            .iter()
+            .rev()
+            .find(|f| name_fits(f, field))
+            .and_then(|f| {
+                f.data
+                    .df
+                    .checked_or_parsed()
+                    .map(|(t, _)| self.subst(record, &t).into_owned())
+            })
+    }
+    pub fn get_tp(&self, record: &Term, field: &UriName) -> Option<Term> {
+        self.fields
+            .iter()
+            .rev()
+            .find(|f| name_fits(f, field))
+            .and_then(|f| {
+                f.data
+                    .tp
+                    .checked_or_parsed()
+                    .map(|(t, _)| self.subst(record, &t).into_owned())
+            })
+    }
+}
+
 pub struct RecordExtension {
     elems: Vec<AnyRecordType>,
 }
 impl RecordExtension {
+    pub fn is_complete(&self) -> bool {
+        self.elems.iter().all(|e| match e {
+            AnyRecordType::Structure(s) => s.fields.iter().all(|f| {
+                f.data.df.is_some()
+                    || self.elems.iter().rev().any(|e| match e {
+                        AnyRecordType::Structure(s) => s.fields.iter().any(|e| {
+                            name_fits_i(&f.uri.name, &e.uri.name, e.data.macroname.as_ref())
+                        }),
+                        AnyRecordType::Ano(a) => a.fields.iter().any(|nf| name_fits(f, &nf.name)),
+                        AnyRecordType::Ext(_) => unreachable!("eliminated by construction"),
+                    })
+            }),
+            AnyRecordType::Ano(a) => a.fields.iter().all(|f| {
+                f.df.is_some()
+                    || self.elems.iter().rev().any(|e| match e {
+                        AnyRecordType::Structure(s) => {
+                            s.fields.iter().any(|e| name_fits(e, &f.name))
+                        }
+                        AnyRecordType::Ano(a) => a.fields.iter().any(|nf| {
+                            nf.name == f.name
+                                || nf
+                                    .id
+                                    .as_ref()
+                                    .is_some_and(|id| f.id.as_ref().is_some_and(|f| f == id))
+                        }),
+                        AnyRecordType::Ext(_) => unreachable!("eliminated by construction"),
+                    })
+            }),
+            AnyRecordType::Ext(_) => unreachable!("eliminated by construction"),
+        })
+    }
     pub fn from_app<'t, Split: SplitStrategy>(
         app: &'t ApplicationTerm,
         checker: &mut CheckRef<'t, '_, Split>,
@@ -363,11 +549,11 @@ impl RecordExtension {
                                 }
                             })
                             .flat_map(|m| m.fields.iter().rev())
-                            .find(|s| name_fits(s, &f.0))
+                            .find(|s| name_fits(s, &f.name))
                         {
-                            f.0 = r.uri.name.clone();
+                            f.name = r.uri.name.clone();
                             if let Some(m) = &r.data.macroname {
-                                f.1 = Some(m.clone());
+                                f.id = Some(m.clone());
                             }
                         }
                     }
@@ -459,110 +645,6 @@ impl RecordExtension {
                     }
                 })
         })
-    }
-}
-
-pub struct ModuleType {
-    //term: &'s Term,
-    rec_type: ModuleUri,
-    domain: Vec<ModuleUri>,
-    fields: Vec<SharedDeclaration<Symbol>>,
-}
-impl ModuleType {
-    pub fn new<Split: SplitStrategy>(
-        structure: SymbolUri,
-        checker: &mut CheckRef<Split>,
-    ) -> Result<Self, Option<ModuleUri>> {
-        let as_mod = structure.into_module();
-        let mut mods = Vec::new();
-        let mut err = None;
-        ModuleLike::topo_sort(vec![as_mod.clone()], &mut mods, |u| {
-            match checker.top.get_module_like(u) {
-                Ok(r) => Some(r),
-                Err(()) => {
-                    err = Some(u.clone());
-                    None
-                }
-            }
-        });
-        if let Some(err) = err {
-            return Err(Some(err));
-        }
-        let mut fields = Vec::new();
-        let mut domain = Vec::new();
-        for m in mods {
-            domain.push(match m.domain_uri() {
-                DomainUriRef::Module(m) => m.clone(),
-                DomainUriRef::Symbol(s) => s.clone().into_module(),
-            });
-            if let ModuleLike::Morphism(m) = &m {
-                domain.push(m.domain.clone());
-            }
-            for d in m.declarations() {
-                if let AnyDeclarationRef::Symbol(sym) = d {
-                    unsafe {
-                        match &m {
-                            ModuleLike::Module(_) | ModuleLike::Nested(_) => (),
-                            ModuleLike::Structure(m) => fields.push(m.inherit_unsafe(sym)),
-                            ModuleLike::Extension(m) => fields.push(m.inherit_unsafe(sym)),
-                            ModuleLike::Morphism(m) => fields.push(m.inherit_unsafe(sym)),
-                        }
-                    };
-                }
-            }
-        }
-        Ok(Self {
-            rec_type: as_mod,
-            domain,
-            fields,
-        })
-    }
-    fn subst<'t>(&self, record: &Term, tm: &'t Term) -> Cow<'t, Term> {
-        tm.modify(|t| {
-            let Term::Symbol { uri, .. } = t else {
-                return None;
-            };
-            self.fields.iter().find_map(|s| {
-                if s.uri.equivalent(uri) {
-                    // SAFTEY: last names are valie
-                    let name = unsafe { s.uri.name.last().parse().unwrap_unchecked() };
-                    // SAFTEY: self.rec_type is a structure => nested URI
-                    let tp = unsafe { self.rec_type.clone().into_top_symbol().unwrap_unchecked() };
-                    Some(ControlFlow::Break(Term::Field(RecordFieldTerm::new(
-                        record.clone(),
-                        name,
-                        Some(tp.into()),
-                        None,
-                    ))))
-                } else {
-                    None
-                }
-            })
-        })
-    }
-    pub fn get_def(&self, record: &Term, field: &UriName) -> Option<Term> {
-        self.fields
-            .iter()
-            .rev()
-            .find(|f| name_fits(f, field))
-            .and_then(|f| {
-                f.data
-                    .df
-                    .checked_or_parsed()
-                    .map(|(t, _)| self.subst(record, &t).into_owned())
-            })
-    }
-    pub fn get_tp(&self, record: &Term, field: &UriName) -> Option<Term> {
-        self.fields
-            .iter()
-            .rev()
-            .find(|f| name_fits(f, field))
-            .and_then(|f| {
-                f.data
-                    .tp
-                    .checked_or_parsed()
-                    .map(|(t, _)| self.subst(record, &t).into_owned())
-            })
     }
 }
 

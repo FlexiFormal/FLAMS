@@ -47,7 +47,8 @@ uri! {
     SUBTYPE = "subtype of",
     SIMPLIFY = "simplifies to",
     EQUAL = "equal to",
-    BINDS = "binds"
+    BINDS = "binds",
+    PROOF_BARRIER = "proof barrier"
 }
 
 pub trait GenericJudgment: SizedSolverRule {

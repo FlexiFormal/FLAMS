@@ -3,6 +3,7 @@ use crate::{
     facts::GlobalOrLocal,
     hoas::HOASSymbols,
     impls::solving::{Solutions, TermExtSolvable},
+    rules::ProofBarrier,
     split::SplitStrategy,
 };
 use ftml_ontology::{
@@ -178,7 +179,11 @@ impl<Split: SplitStrategy> Checker<Split> {
         let block = for_symbol.as_ref().map(|sym| &sym.uri);
         for s in &p.steps {
             if let Some(res) = self.proof_step(s, &mut state, block) {
+                let success = res.success();
                 ret.push(res);
+                if !success {
+                    return Some(CheckResult::Proof(p.uri.clone(), ret));
+                }
             }
         }
         if matches!(p.steps.last(), Some(ParagraphStep::ProofConclusion { .. })) {
@@ -192,7 +197,7 @@ impl<Split: SplitStrategy> Checker<Split> {
             let orig_df = &sym.data.df;
             if let Some(tp) = tp {
                 if let Some((orig, _)) = orig_tp.checked_or_parsed() {
-                    let tp = self.bind_implicits(&tp).unwrap_or(tp);
+                    let tp = self.bind_implicits(&tp).unwrap_or(tp.clone());
                     let (b, _, l) = self.check_subtype(None, &tp, &orig);
                     ret.push(ProofStepResult::Conclusion {
                         var: None,
@@ -205,11 +210,12 @@ impl<Split: SplitStrategy> Checker<Split> {
                     });
                 } else {
                     orig_tp.set_checked(tp.clone());
-                    orig_tp.set_presentation(self.revert_prepare(tp));
+                    orig_tp.set_presentation(self.revert_prepare(tp.clone()));
                 }
                 if let Some(df) = df
                     && orig_df.is_none()
                 {
+                    let df = ProofBarrier::apply(df, tp);
                     let df = self.bind_implicits(&df).unwrap_or(df);
                     orig_df.set_checked(df.clone());
                     orig_df.set_presentation(self.revert_prepare(df));
@@ -314,10 +320,21 @@ impl<Split: SplitStrategy> Checker<Split> {
                 */
             } => {
                 let curr = context.context.len();
-                let results = steps
-                    .iter()
-                    .filter_map(|s| self.proof_step(s, context,block))
-                    .collect();
+                let mut results = Vec::with_capacity(steps.len());
+                for s in steps {
+                    if let Some(r) = self.proof_step(s, context, block) {
+                        let success = r.success();
+                        results.push(r);
+                        if !success {
+                            return Some(ProofStepResult::Subproof {
+                                uri: uri.clone(),
+                                var: var_name.clone(),
+                                results,
+                            })
+                        }
+                    }
+                }
+
                 if matches!(steps.last(), Some(ParagraphStep::ProofConclusion { .. })) {
                     context.context.pop();
                 }
@@ -525,6 +542,17 @@ impl<Split: SplitStrategy> Checker<Split> {
         is_assumption: bool,
         block: Option<&SymbolUri>,
     ) -> Option<ProofStepCheckResult> {
+        /*
+        if let Some(vn) = var_name
+            && vn.name().as_ref().ends_with("proof/5.")
+        {
+            println!("HERE: {vn}");
+            crate::DEBUG.store(true, std::sync::atomic::Ordering::Relaxed);
+            print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+            println!("Debug mode on.");
+            crate::pause();
+        } */
+
         let (r, tp, df) = self.step_data_i(
             context,
             self.hoas()?,
