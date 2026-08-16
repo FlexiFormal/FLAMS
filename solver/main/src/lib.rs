@@ -941,7 +941,12 @@ impl<Split: SplitStrategy> Checker<Split> {
                     continue;
                 }
             };
-            m.initialize(&mut |uri| self.get_module_like(uri).ok())?;
+            if let Err(m) = m.initialize(&mut |uri| self.get_module_like(uri).ok()) {
+                if m.is_top() {
+                    return Err(m);
+                }
+                continue;
+            }
             self.load_context(&m);
         }
         Ok(())
