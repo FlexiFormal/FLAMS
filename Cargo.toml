@@ -26,7 +26,7 @@ members = [
     "source/router/login",
     "source/router/search",
     "source/router/vscode-bindings",
-    "source/router/flodown",
+    #"source/router/flodown",
     # "experiments",
     "source/ffi", "solver/main","solver/trace",
     # "solver/new",
@@ -138,7 +138,7 @@ flams-router-login = { path = "source/router/login" }
 flams-router-logging = { path = "source/router/logging" }
 flams-router-search = { path = "source/router/search" }
 flams-router-vscode = { path = "source/router/vscode-bindings" }
-flams-flodown = { path = "source/router/flodown" }
+#flams-flodown = { path = "source/router/flodown" }
 
 # refactor
 flams-math-archives = { path = "math-archives" }
@@ -156,7 +156,7 @@ ulo = { git = "https://github.com/FlexiFormal/FTML" }
 ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 ftml-component-utils = { git = "https://github.com/FlexiFormal/FTML" }
 
-flodown = { git = "https://github.com/FlexiFormal/FloDown" }
+#flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
 #ftml-uris = { path = "../FTML/uris", features = ["interned"] }
 #ftml-ontology = { path = "../FTML/ontology" }
@@ -213,7 +213,7 @@ spliter = "0.1"
 walkdir = "2.5"
 filetime = "0.2"
 regex = "1.10"
-fancy-regex = "0.18"
+fancy-regex = "0.19"
 async-broadcast = "0.7"
 simple-home-dir = "0.5"
 async-trait = "0.1"
@@ -227,13 +227,13 @@ tokio = { version = "1" }                                                   #, f
 tokio-util = { version = "0.7", features = ["compat"] }
 tokio-stream = { version = "0.1" }
 tempfile = { version = "3" }
-phf = { version = "0.13", default-features = false, features = ["macros"] }
+phf = { version = "0.14", default-features = false, features = ["macros"] }
 crossbeam-channel = { version = "0.5" }
 flate2 = { version = "1.0" }
 tar = { version = "0.4" }
 async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 astral-tokio-tar = "0.5.1"
-strum = { version = "0.27", features = ["derive"] }
+strum = { version = "0.28", features = ["derive"] }
 git-url-parse = { version = "0.4" }
 flume = { version = "0.12", features = ["async"] }
 ordered-float = "5"
@@ -250,7 +250,7 @@ tracing-subscriber = { version = "0.3", features = [
 # tracing-appender = "0.2"
 tracing-error = "0.2"
 
-toml = "0.9"
+toml = "1"
 serde_yml = "0.0.12"
 serde-value = "0.7"
 eyre = "0.6"
@@ -259,14 +259,14 @@ thiserror = "2"
 clap = { version = "4.5", features = ["derive"] }
 
 oxigraph = { version = "0.5", default-features = false, features=["rdf-12"] }
-oxiri = "0.2"
+oxiri = "0.2" # oxigraph needs this (currently)
 spargebra = "0.4"
 sparesults = {version="0.3",features=["sparql-12"]}
 oxrdfio = { version = "0.2" }                            #, features = ["async-tokio"] }
 
-sqlx = { version = "0.8", features = ["sqlite", "macros", "runtime-tokio"] }
+sqlx = { version = "0.9", features = ["sqlite", "macros", "runtime-tokio"] }
 libsqlite3-sys = { version = "*", features = ["bundled"] }
-html5ever = "0.38"                                                           # TODO update once html2text updates markup5ever dependency
+html5ever = "0.39"                                                           # TODO update once html2text updates markup5ever dependency
 
 async-lsp = { version = "0.2", features = ["tokio", "async-io"] }
 futures = { version = "0.3" }
@@ -298,7 +298,7 @@ icondata_bi = "0"
 axum = { version = "0.8", features = ["ws"] }
 axum-macros = { version = "0.5" }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+tower-http = { version = "0.7", features = ["fs", "trace", "cors"] }
 tower-sessions = { version = "0.14" } # version required by axum-login :-/
 axum-login = { version = "0.18" }
 http = { version = "1" }
@@ -312,21 +312,21 @@ tracing-wasm = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
 #reqwasm = "0.5"
-gloo-storage = "0.3"
-gloo-timers = "0.3"
+gloo-storage = "0.4"
+gloo-timers = "0.4"
 web-sys = { version = "0.3" }
 #tsify-next = { version = "0.5", features = ["js"] }
 tsify = { version = "0.5", features = ["js"] }
 js-regexp = "0.2"
-wasm-streams = "0.5"
+wasm-streams = "0.5" #something reqwest requires <0.6
 futures-util = "0.3"
 
 # search
 
 #html2text = "0.15"
-tantivy = "0.25"
+tantivy = "0.26"
 simsimd = "6"
-fastembed = "5.8.1"
+fastembed = "6"
 #ort-candle = "0.2.0+0.9"
 ort = { version="2.0.0-rc.11"}#, default-features = false, features = ["alternative-backend"] }
 

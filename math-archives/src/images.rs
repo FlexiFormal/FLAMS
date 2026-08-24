@@ -213,7 +213,7 @@ fn subst_img(
     }
     let mut failed: Option<String> = None;
     let cow = REGEX.with(|regex| {
-        regex.replace_all(&htmlstr, |cap: &fancy_regex::Captures| {
+        regex.replace_all(&htmlstr, |cap: &fancy_regex::Captures<str>| {
             macro_rules! ret {
                 ($name:pat = $e:expr) => {
                     let Some($name) = $e else { ret!() };

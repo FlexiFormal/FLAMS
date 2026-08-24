@@ -86,7 +86,7 @@ pub fn hydrate() {
             .with_target("ftml_backend", lvl)
             .with_target("ftml_ontology", lvl)
             .with_target("ssr_example", lvl)
-            .with_target("flams_flodown", lvl)
+            //.with_target("flams_flodown", lvl)
             .with_target("flams_router_base", lvl)
             .with_target(
                 "leptos_posthoc",

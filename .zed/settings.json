@@ -12,7 +12,7 @@
             "git",
             //"docs",
             "serde",
-            "vectorsearch", //"tantivy", //
+            "tantivy", //"vectorsearch", //
             "ssr", //"hydrate", //
             "img",
           ], // "all"*/
