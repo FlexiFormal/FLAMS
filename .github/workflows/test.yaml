@@ -4,7 +4,7 @@ on:
 
 jobs:
   linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     environment: production
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,11 @@ jobs:
     runs-on: windows-latest
     environment: production
     steps:
+      - name: Enable long paths
+        run: |
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+          git config --system core.longpaths true
+        shell: cmd
       - uses: actions/checkout@v4
       - name: rustups
         run: rustup update && rustup target add x86_64-pc-windows-msvc && rustup target add wasm32-unknown-unknown && rustup toolchain install nightly-x86_64-pc-windows-msvc && rustup component add rust-src --toolchain nightly-x86_64-pc-windows-msvc && rustup default nightly-x86_64-pc-windows-msvc
