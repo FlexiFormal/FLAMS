@@ -24,9 +24,7 @@ ssr = [
     "dep:flams-ftml",
     "dep:flams-math-archives",
     "dep:tokio",
-    "dep:toml",
     "dep:color-eyre",
-    "dep:clap",
     "dep:sqlx",
     "dep:libsqlite3-sys",
     "leptos/ssr",
@@ -145,13 +143,9 @@ tex_engine = { workspace = true, optional = true }
 mime_guess = { workspace = true, optional = true }
 
 tokio = { workspace = true, features = [
-    "full",
-    "rt",
-    "rt-multi-thread",
+    "full","io-uring","parking_lot"
 ], optional = true }
-toml = { workspace = true, optional = true }
 color-eyre = { workspace = true, optional = true }
-clap = { workspace = true, optional = true }
 leptos_axum = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 

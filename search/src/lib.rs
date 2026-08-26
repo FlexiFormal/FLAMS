@@ -226,7 +226,10 @@ impl Searcher {
             let mut ret = Vec::new();
             let iter = if in_documents.is_empty() {
                 searcher
-                    .search(&*query, &tantivy::collector::TopDocs::with_limit(top_num))
+                    .search(
+                        &*query,
+                        &tantivy::collector::TopDocs::with_limit(top_num).order_by_score(),
+                    )
                     .map_err(|e| e.to_string())?
             } else {
                 searcher
@@ -237,7 +240,7 @@ impl Searcher {
                             move |u: &[u8]| {
                                 in_documents.iter().any(|d| u.starts_with(d.as_bytes()))
                             },
-                            tantivy::collector::TopDocs::with_limit(top_num),
+                            tantivy::collector::TopDocs::with_limit(top_num).order_by_score(),
                         ),
                     )
                     .map_err(|e| e.to_string())?
@@ -281,7 +284,7 @@ impl Searcher {
             for (score, a) in searcher
                 .search(
                     &*query,
-                    &tantivy::collector::TopDocs::with_limit(top_num * 3),
+                    &tantivy::collector::TopDocs::with_limit(top_num * 3).order_by_score(),
                 )
                 .map_err(|e| tracing::error!("Search Error A: {e}"))
                 .ok()?

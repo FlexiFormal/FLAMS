@@ -83,7 +83,7 @@ impl AsyncEngine for TokioEngine {
 }
 
 /// #### Panics
-pub fn initialize<A: AsyncEngine>(settings: SettingsSpec) {
+pub fn initialize<A: AsyncEngine>(settings: SettingsSpec, rdf: bool) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
     #[cfg(feature = "rocksdb")]
@@ -130,7 +130,7 @@ pub fn initialize<A: AsyncEngine>(settings: SettingsSpec) {
                 flams_git::gl::GLInstance::global().clone().load(cfg);
             }
         }
-        backend::initialize::<A>();
+        backend::initialize::<A>(rdf);
         QueueManager::initialize(settings.num_threads);
         for e in inventory::iter::<FlamsExtension>() {
             A::background(|| {

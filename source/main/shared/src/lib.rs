@@ -17,8 +17,7 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 pub mod server;
 
 #[cfg(feature = "ssr")]
-pub fn main() {
-    use crate::server::settings;
+pub fn main(settings: flams_utils::settings::SettingsSpec) {
     #[allow(unused_imports)]
     use flams_ftml::FTML;
     #[allow(unused_imports)]
@@ -38,7 +37,7 @@ pub fn main() {
     async fn run(settings: SettingsSpec) {
         let lsp = settings.lsp;
         let _ce = color_eyre::install();
-        flams_system::initialize::<flams_system::TokioEngine>(settings);
+        flams_system::initialize::<flams_system::TokioEngine>(settings, true);
         if lsp {
             let (sender, recv) = tokio::sync::watch::channel(None);
             tokio::select! {
@@ -54,7 +53,6 @@ pub fn main() {
         }
     }
 
-    let settings = settings::get_settings();
     let mut rt = tokio::runtime::Builder::new_multi_thread();
     rt.enable_all();
     if let Some(mb) = settings.stack_size
@@ -88,7 +86,7 @@ pub fn hydrate() {
             .with_target("ftml_backend", lvl)
             .with_target("ftml_ontology", lvl)
             .with_target("ssr_example", lvl)
-            .with_target("flams_flodown", lvl)
+            //.with_target("flams_flodown", lvl)
             .with_target("flams_router_base", lvl)
             .with_target(
                 "leptos_posthoc",
