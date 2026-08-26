@@ -3,13 +3,13 @@ use std::borrow::Cow;
 use ftml_ontology::{
     domain::declarations::symbols::Symbol,
     narrative::{SharedDocumentElement, elements::VariableDeclaration},
-    terms::{Argument, ComponentVar, Term, Variable, helpers::Bound},
+    terms::{Argument, ComponentVar, Term, Variable, helpers::Bound, patterns::Pattern},
 };
 use ftml_uris::{DocumentElementUri, Id, SymbolUri};
 use smallvec::SmallVec;
 
 use crate::{
-    CheckRef, Checker, hoas::HOASSymbols, impls::solving::TermExtSolvable, patterns::Pattern,
+    CheckRef, Checker, hoas::HOASSymbols, impls::solving::TermExtSolvable,
     rules::implicits::ImplicitExtBound, split::SplitStrategy,
 };
 
@@ -273,7 +273,9 @@ impl Fact {
         };
         let mut type_guards = Vec::new();
         let stp = checker
-            .wrap_none(None, |mut slf| slf.simplify_full(true, tp))
+            .wrap_none(None, |mut slf| {
+                slf.simplify_full(crate::impls::simplify::Expansion::Full, tp)
+            })
             .1;
         let mut curr = stp.as_ref().unwrap_or(tp);
         loop {

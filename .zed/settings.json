@@ -12,8 +12,9 @@
             "git",
             //"docs",
             "serde",
-            "vectorsearch", //"tantivy", //
-            "ssr", //"hydrate" //
+            "tantivy", //"vectorsearch", //
+            "ssr", //"hydrate", //
+            "img",
           ], // "all"*/
         },
       },

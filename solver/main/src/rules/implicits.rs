@@ -18,25 +18,27 @@ pub trait ImplicitExtBound {
     fn get_bound_implicits(&self) -> Option<(&Term, &[ComponentVar])>;
 }
 pub trait ImplicitExtApp: Sized {
-    fn unapply_implicits(&self) -> Option<(&Term, &[Term])>;
+    fn unapply_implicits(&self, in_prepare_revert: bool) -> Option<(&Term, &[Term])>;
 }
 pub trait ImplicitExtTerm: ImplicitExtBound + ImplicitExtApp {
     fn apply_implicits(self, num: usize, new: impl FnMut(usize) -> Term) -> Self;
 }
 impl ImplicitExtApp for ApplicationTerm {
-    // invariant: return.0 matches Term::Symbol {..}
-    fn unapply_implicits(&self) -> Option<(&Term, &[Term])> {
+    // invariant: return.0 matches Term::Symbol {..} or Term::Field(_)
+    fn unapply_implicits(&self, in_prepare_revert: bool) -> Option<(&Term, &[Term])> {
         if !self.head.is(&*ftml_uris::metatheory::APPLY_IMPLICIT) {
             return None;
         }
         if let [
-            Argument::Simple(t @ Term::Symbol { .. }),
+            Argument::Simple(t @ (Term::Symbol { .. } | Term::Field(_))),
             Argument::Sequence(MaybeSequence::Seq(bound)),
         ] = &*self.arguments
         {
             Some((t, bound))
+        } else if in_prepare_revert {
+            None
         } else {
-            //println!("WWWWEEEEIIIIRRRD: {:#?}", self.arguments);
+            //panic!("WWWWEEEEIIIIRRRD: {:#?}", self.arguments);
             None
         }
     }
@@ -47,8 +49,8 @@ impl ImplicitExtBound for BindingTerm {
             return None;
         }
         if let [
-            BoundArgument::Simple(body),
             BoundArgument::BoundSeq(MaybeSequence::Seq(impls)),
+            BoundArgument::Simple(body),
         ] = &*self.arguments
         {
             Some((body, impls))
@@ -67,9 +69,9 @@ impl ImplicitExtBound for Term {
     }
 }
 impl ImplicitExtApp for Term {
-    fn unapply_implicits(&self) -> Option<(&Term, &[Term])> {
+    fn unapply_implicits(&self, in_prepare_revert: bool) -> Option<(&Term, &[Term])> {
         if let Self::Application(app) = self {
-            app.unapply_implicits()
+            app.unapply_implicits(in_prepare_revert)
         } else {
             None
         }
@@ -125,14 +127,14 @@ impl<Split: SplitStrategy> SimplificationRule<Split> for ImplicitRule {
  */
 impl<Split: SplitStrategy> InferenceRule<Split> for ImplicitRule {
     fn applicable(&self, term: &Term) -> bool {
-        term.unapply_implicits().is_some()
+        term.unapply_implicits(false).is_some()
     }
     fn infer<'t>(
         &self,
         mut checker: crate::CheckRef<'t, '_, Split>,
         term: &'t Term,
     ) -> Option<Term> {
-        let (body, args) = term.unapply_implicits()?;
+        let (body, args) = term.unapply_implicits(false)?;
         let btp = checker.infer_type(body)?;
         let (tpbody, bounds) = btp.get_bound_implicits()?;
         if bounds.len() != args.len() {
@@ -161,8 +163,8 @@ impl<Split: SplitStrategy> Checker<Split> {
                 Term::Bound(BindingTerm::new(
                     ftml_uris::metatheory::IMPLICIT_BIND.clone().into(),
                     Box::new([
-                        BoundArgument::Simple(t),
                         BoundArgument::BoundSeq(MaybeSequence::Seq(cvs.into_boxed_slice())),
+                        BoundArgument::Simple(t),
                     ]),
                     None,
                 ))
@@ -206,14 +208,15 @@ impl<Split: SplitStrategy> Checker<Split> {
         }
         tracing::trace!("All variables: {allvars:?}");
 
-        let mut counter = 1;
+        //let mut counter = 1;
 
         let mut subst = smallvec::SmallVec::<(&str, Term), 4>::new();
+        let mut dones = smallvec::SmallVec::<&str, 4>::new();
         let mut ret = Vec::new();
         for v in &allvars {
-            if !subst.iter().any(|(var, _)| *var == v.name()) {
-                let name = new_name(counter);
-                counter += 1;
+            if !dones.iter().any(|var| *var == v.name()) {
+                //let name = new_name(counter);
+                //counter += 1;
 
                 let tp = if let Variable::Ref { declaration, .. } = v {
                     let var = self.get_variable(declaration).ok();
@@ -229,9 +232,10 @@ impl<Split: SplitStrategy> Checker<Split> {
                     None
                 };
 
-                subst.push((v.name(), name.clone().into()));
+                dones.push(v.name());
+                //subst.push((v.name(), name.clone().into()));
                 ret.push(ComponentVar {
-                    var: name.into(),
+                    var: v.name_id().into_owned().into(), //name.into(),
                     df: None,
                     tp,
                 });

@@ -2,7 +2,8 @@
 
 use flams_database::UserData;
 use flams_router_base::{LoginState, maybe_lazy};
-use flams_web_utils::components::{Spinner, display_error};
+use flams_web_utils::components::display_error;
+use ftml_component_utils::Spinner;
 use leptos::{either::EitherOf4, prelude::*};
 
 #[component(transparent)]
@@ -47,20 +48,17 @@ pub fn users() -> AnyView {
 }
 
 fn user_table(v: Vec<UserData>) -> impl IntoView {
-    use thaw::{
-        Button, ButtonSize, Table, TableBody, TableCell, TableCellLayout, TableHeader,
-        TableHeaderCell, TableRow,
-    };
+    use ftml_component_utils::{Button, ButtonSize, Table, TableCell, TableHeader, TableRow};
     view! {<Table>
-      <TableHeader><TableRow>
-        <TableHeaderCell>""</TableHeaderCell>
-        <TableHeaderCell>"Id"</TableHeaderCell>
-        <TableHeaderCell>"Username"</TableHeaderCell>
-        <TableHeaderCell>"Name"</TableHeaderCell>
-        <TableHeaderCell>"Email"</TableHeaderCell>
-        <TableHeaderCell>"Admin Access"</TableHeaderCell>
-      </TableRow></TableHeader>
-      <TableBody>{v.into_iter().map(|UserData {id,name,username,email,avatar_url,is_admin}| {
+      <TableHeader slot>
+        <TableCell>""</TableCell>
+        <TableCell>"Id"</TableCell>
+        <TableCell>"Username"</TableCell>
+        <TableCell>"Name"</TableCell>
+        <TableCell>"Email"</TableCell>
+        <TableCell>"Admin Access"</TableCell>
+      </TableHeader>
+      {v.into_iter().map(|UserData {id,name,username,email,avatar_url,is_admin}| {
         let is_admin = RwSignal::new(is_admin);
         let a = ArcAction::new(move |()| async move {
           let nv = !is_admin.get_untracked();
@@ -87,13 +85,13 @@ fn user_table(v: Vec<UserData>) -> impl IntoView {
           }
         };
         view! {<TableRow>
-          <TableCell><TableCellLayout><thaw::Avatar src=avatar_url /></TableCellLayout></TableCell>
-          <TableCell><TableCellLayout>{id}</TableCellLayout></TableCell>
-          <TableCell><TableCellLayout>{username}</TableCellLayout></TableCell>
-          <TableCell><TableCellLayout>{name}</TableCellLayout></TableCell>
-          <TableCell><TableCellLayout>{email}</TableCellLayout></TableCell>
-          <TableCell><TableCellLayout>{f}</TableCellLayout></TableCell>
+          <TableCell><ftml_component_utils::Avatar src=avatar_url /></TableCell>
+          <TableCell>{id}</TableCell>
+          <TableCell>{username}</TableCell>
+          <TableCell>{name}</TableCell>
+          <TableCell>{email}</TableCell>
+          <TableCell>{f}</TableCell>
         </TableRow>}
-      }).collect_view()}</TableBody>
+      }).collect_view()}
     </Table>}
 }

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     CheckRef,
-    impls::{equality::alpha_equal, solving::TermExtSolvable},
+    impls::solving::TermExtSolvable,
     rules::{InhabitableRule, UniverseRule},
     split::SplitStrategy,
     trace::CheckingTask,
@@ -17,6 +17,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             tm.debug_short(),
             tp.debug_short()
         );
+        //crate::pause();
         self.wrap_check(CheckingTask::HasType(tm, tp), |slf| {
             slf.check_type_i(tm, tp)
         })
@@ -28,6 +29,8 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             sub.debug_short(),
             sup.debug_short()
         );
+        //crate::pause();
+
         self.wrap_check(CheckingTask::Subtype(sub, sup), |slf| {
             slf.check_subtype_i(sub, sup)
         })
@@ -66,11 +69,6 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
         //self.cancellable(|slf| {
         Split::strategies(
             self,
-            "Using type inference",
-            |slf| {
-                let subtp = slf.infer_type(tm)?;
-                slf.scoped(|slf| slf.check_subtype(&subtp, tp))
-            },
             "Using checking rules",
             |slf| {
                 if let either::Left(r) = slf.simplify_rules_two(
@@ -102,12 +100,17 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 Split::split(slf, true, rules, |slf, rl| rl.apply(slf, tm, tp))
                 */
             },
+            "Using type inference",
+            |slf| {
+                let subtp = slf.infer_type(tm)?;
+                slf.scoped(|slf| slf.check_subtype(&subtp, tp))
+            },
         )
         //})
     }
 
     pub(crate) fn check_subtype_i(&mut self, sub: &'t Term, sup: &'t Term) -> Option<bool> {
-        if self.alpha_equal(sub, sup) {
+        if sub.alpha_equal(sup) {
             self.comment("trivial");
             tracing::debug!("trivial");
             return Some(true);
@@ -125,7 +128,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
             |slf, rl, sub, sup| rl.applicable(slf, sub, sup),
             |slf, rl, sub, sup| rl.apply(slf, sub, sup),
             |sub, sup| {
-                alpha_equal(sub, sup) || sub.is_solvable().is_some() || sup.is_solvable().is_some()
+                sub.alpha_equal(sup) || sub.is_solvable().is_some() || sup.is_solvable().is_some()
             },
         ) {
             either::Left(opt) => {
@@ -147,7 +150,7 @@ impl<'t, Split: SplitStrategy> CheckRef<'t, '_, Split> {
                 }
             }
             either::Right((sub, sup)) => {
-                if self.alpha_equal(&sub, &sup) {
+                if sub.alpha_equal(&sup) {
                     self.comment("trivial");
                     tracing::debug!("trivial");
                     return Some(true);

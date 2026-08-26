@@ -4,7 +4,9 @@ use ftml_ontology::{
         documents::TocElem,
         elements::{
             DocumentTerm, Notation, ParagraphOrProblemKind, SectionLevel, SlideElement,
-            problems::{ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz},
+            problems::{
+                GradingNote, ProblemFeedbackJson, ProblemResponse, SolutionData, quizzes::Quiz,
+            },
         },
     },
     utils::Css,
@@ -211,7 +213,7 @@ ftml_uris::compfun! {
         let comps = uri?;
         match comps.parse(flams_router_base::uris::get_uri) {
             Ok(uri) => flams_system::backend::backend().get_document_async::<TokioEngine>(&uri).await.map_err(|e| ftml_backend::BackendError::ToDo(e.to_string())),
-            Err(e) => Err(ftml_backend::BackendError::InvalidArgument("URI components".to_string())),
+            Err(e) => Err(ftml_backend::BackendError::InvalidArgument(format!("URI components: {e}"))),
         }
     }
 }
@@ -232,7 +234,7 @@ ftml_uris::compfun! {
         let comps = uri?;
         match comps.parse(flams_router_base::uris::get_uri) {
             Ok(uri) => server::fragment(uri, context).await.map_err(|e| ftml_backend::BackendError::ToDo(e.to_string())),
-            Err(e) => Err(ftml_backend::BackendError::InvalidArgument("URI components".to_string())),
+            Err(e) => Err(ftml_backend::BackendError::InvalidArgument(format!("URI components: {e}"))),
         }
     }
 }
@@ -252,13 +254,6 @@ ftml_uris::compfun! {
     ) -> Result<Vec<(DocumentElementUri, ParagraphOrProblemKind)>, ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>> {
         let uri = uri?.parse(flams_router_base::uris::get_uri)?;
         server::los(uri, problems).await.map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))
-        /*let Result::<SymbolUriComponents, _>::Ok(comps) = uri else {
-            return Err("invalid uri components".to_string().into());
-        };
-        match comps.parse(flams_router_base::uris::get_uri) {
-            Ok(uri) => server::los(uri, problems).await,
-            Err(e) => Err(format!("Invalid uri: {e}").into()),
-        }*/
     }
 }
 
@@ -276,37 +271,8 @@ ftml_uris::compfun! {
     ) -> Result<Vec<(DocumentElementUri, Notation)>, ftml_backend::BackendError<leptos::server_fn::error::ServerFnErrorErr>> {
         let uri = uri?.parse(flams_router_base::uris::get_uri)?;
         server::notations(uri).await.map_err(|e| ftml_backend::BackendError::ToDo(e.to_string()))
-        /*let Result::<UriComponents, _>::Ok(comps) = uri else {
-            return Err("invalid uri components".to_string().into());
-        };
-        match comps.parse(flams_router_base::uris::get_uri) {
-            Ok(uri) => server::notations(uri).await,
-            Err(e) => Err(format!("Invalid uri: {e}").into()),
-        }*/
     }
 }
-/*
-ftml_uris::compfun! {
-    #[server(
-    prefix="/content",
-    endpoint="omdoc",
-    input=server_fn::codec::GetUrl,
-    output=server_fn::codec::Json
-    )]
-    #[allow(clippy::many_single_char_names)]
-    #[allow(clippy::too_many_arguments)]
-    pub async fn omdoc(
-        uri: Uri
-    ) -> Result<(Vec<Css>, OMDoc), ServerFnError<String>> {
-        let Result::<UriComponents, _>::Ok(comps) = uri else {
-            return Err("invalid uri components".to_string().into());
-        };
-        match comps.parse(flams_router_base::uris::get_uri) {
-            Ok(uri) => server::omdoc(uri).await,
-            Err(e) => Err(format!("Invalid uri: {e}").into()),
-        }
-    }
-} */
 
 ftml_uris::compfun! {
     #[server(
@@ -368,14 +334,14 @@ pub async fn grade_enc(
             for resp in resps {
                 let r = if let Some(resp) = resp {
                     sol.check_response(&resp).ok_or_else(|| {
-                        "Response {resp:?} does not match solution {sol:?}".to_string()
+                        format!("Response {resp:?} does not match solution {sol:?}")
                     })?
                 } else {
                     sol.default_feedback()
                 };
                 ri.push(r.to_json());
             }
-            ret.push(ri)
+            ret.push(ri);
         }
         Ok(ret)
     })
@@ -398,14 +364,14 @@ pub async fn grade(
             for resp in resps {
                 let r = if let Some(resp) = resp {
                     sol.check_response(&resp).ok_or_else(|| {
-                        "Response {resp:?} does not match solution {sol:?}".to_string()
+                        format!("Response {resp:?} does not match solution {sol:?}")
                     })?
                 } else {
                     sol.default_feedback()
                 };
                 ri.push(r.to_json());
             }
-            ret.push(ri)
+            ret.push(ri);
         }
         Ok(ret)
     })
@@ -422,9 +388,6 @@ ftml_uris::compfun! {
     pub async fn solution(
         uri: Uri
     ) -> Result<String, ServerFnError<String>> {
-        use ftml_uris::NarrativeUri;
-        use ftml_ontology::utils::Hexable;
-        use flams_web_utils::blocking_server_fn;
         let Result::<UriComponents, _>::Ok(comps) = uri else {
             return Err("invalid uri components".to_string().into());
         };
@@ -432,6 +395,28 @@ ftml_uris::compfun! {
             Ok(Uri::DocumentElement(uri)) => {
                 let s = server::get_solution(&uri).await?;
                 s.to_jstring().ok_or_else(|| "invalid solution".to_string().into())
+            },
+            Ok(u) => Err(format!("Invalid document element uri: {u}").into()),
+            Err(e) => Err(format!("Invalid uri: {e}").into()),
+        }
+    }
+}
+
+ftml_uris::compfun! {
+    #[server(prefix = "/content", endpoint = "gnotes",
+        input=server_fn::codec::GetUrl
+    )]
+    #[allow(clippy::many_single_char_names)]
+    #[allow(clippy::too_many_arguments)]
+    pub async fn gnotes(
+        uri: Uri
+    ) -> Result<Box<[GradingNote]>, ServerFnError<String>> {
+        let Result::<UriComponents, _>::Ok(comps) = uri else {
+            return Err("invalid uri components".to_string().into());
+        };
+        match comps.parse(flams_router_base::uris::get_uri) {
+            Ok(Uri::DocumentElement(uri)) => {
+                server::get_gnotes(&uri).await
             },
             Ok(u) => Err(format!("Invalid document element uri: {u}").into()),
             Err(e) => Err(format!("Invalid uri: {e}").into()),
@@ -471,12 +456,11 @@ mod server {
     use ftml_backend::BackendError;
     use ftml_ontology::{
         narrative::{
-            Narrative,
             documents::TocElem,
             elements::{
                 DocumentElement, LogicalParagraph, Notation, ParagraphOrProblemKind, Problem,
                 Section, SectionLevel, SlideElement,
-                problems::{ProblemData, Solutions, quizzes::Quiz},
+                problems::{GradingNote, Solutions, quizzes::Quiz},
             },
         },
         utils::Css,
@@ -519,7 +503,6 @@ mod server {
         uri: Uri,
         context: Option<NarrativeUri>,
     ) -> Result<(Uri, Box<[Css]>, Box<str>), BackendError<ServerFnErrorErr>> {
-        use ftml_uris::UriKind;
         match &uri {
             Uri::Document(duri) => {
                 let Ok((css, html)) = backend()
@@ -646,91 +629,17 @@ mod server {
                                 String::new().into_boxed_str(),
                             ));
                         };
-                        return Ok((Vec::new().into_boxed_slice(), title.clone()));
-                        // TODO get CSS
-                        /*
-                        backend()
-                            .get_html_fragment_async(uri.document_uri(), *title)
-                            .await
-                            .ok_or_else(|| format!("Error retrieving title").into())
-                             */
+                        Ok((Vec::new().into_boxed_slice(), title.clone()))
                     }
                     DocumentElement::Problem(Problem { data, .. }) => Ok((
                         Vec::new().into_boxed_slice(),
                         data.title.clone().unwrap_or_default(),
                     )),
-                    _ => Err(format!("Narrative element has no title").into()),
+                    _ => Err("Narrative element has no title".to_string().into()),
                 }
             }
         }
     }
-
-    /*
-    pub async fn omdoc(uri: Uri) -> Result<(Vec<Css>, OMDoc), ServerFnError<String>> {
-        let mut css = VecSet::default();
-        match uri {
-            uri @ (Uri::Base(_) | Uri::Archive(_) | Uri::Path(_)) => {
-                Ok((insert_base_url(css.0), OMDoc::Other(uri.to_string())))
-            }
-            Uri::Document(uri) => {
-                let Some(doc) = backend!(get_document!(&uri)) else {
-                    not_found!("Document {uri} not found");
-                };
-                let (css, r) = backend!(backend => {
-                  let r = OMDocDocument::from_document(&doc, backend,&mut css);
-                  (css,r)
-                }{
-                  blocking_server_fn(move || {
-                    let r = OMDocDocument::from_document(&doc, backend,&mut css);
-                    Ok((css,r))
-                  }).await?
-                });
-                Ok((insert_base_url(css.0), r.into()))
-            }
-            Uri::DocumentElement(uri) => {
-                let Some(e): Option<NarrativeReference<DocumentElement<Checked>>> =
-                    backend!(get_document_element!(&uri))
-                else {
-                    not_found!("Document Element {uri} not found");
-                };
-                let (css, r) = backend!(backend => {
-                  let r = OMDocDocumentElement::from_element(e.as_ref(),backend, &mut css);
-                  (css,r)
-                }{
-                  blocking_server_fn(move || {
-                    let r = OMDocDocumentElement::from_element(e.as_ref(),backend,&mut css);
-                    Ok((css,r))
-                  }).await?
-                });
-                let Some(r) = r else {
-                    not_found!("Document Element {uri} not found");
-                };
-                Ok((insert_base_url(css.0), r.into()))
-            }
-            Uri::Module(uri) => {
-                let Some(m) = backend!(get_module!(&uri)) else {
-                    not_found!("Module {uri} not found");
-                };
-                let r = backend!(backend => {
-                  OMDoc::from_module_like(&m, backend)
-                }{
-                  blocking_server_fn(move || {
-                    Ok(OMDoc::from_module_like(&m, backend))
-                  }).await?
-                });
-                Ok((Vec::new(), r))
-            }
-            Uri::Symbol(uri) => {
-                let Some(s): Option<ContentReference<Declaration>> =
-                    backend!(get_declaration!(&uri))
-                else {
-                    not_found!("Declaration {uri} not found");
-                };
-                return Err(format!("TODO: {uri}").into());
-            }
-        }
-    }
-    */
 
     pub async fn get_quiz(uri: DocumentUri) -> Result<Quiz, ServerFnError<String>> {
         let Ok(doc) = backend().get_document_async::<TokioEngine>(&uri).await else {
@@ -812,13 +721,13 @@ mod server {
                     DocumentElement::DocumentReference { target, .. } => {
                         ret.push(SlideElement::Inputref {
                             uri: target.clone(),
-                        })
+                        });
                     }
                     e @ DocumentElement::Section(s) => {
                         let title = s.title.clone();
                         stack.push((
                             std::mem::replace(&mut curr, e.children_lt().unwrap_or(&[]).iter()),
-                            Some(std::mem::replace(&mut ret, Vec::new())),
+                            Some(std::mem::take(&mut ret)),
                             title,
                             Some(s.uri.clone()),
                         ));
@@ -870,15 +779,42 @@ mod server {
         .await
     }
 
+    pub async fn get_gnotes(
+        uri: &DocumentElementUri,
+    ) -> Result<Box<[GradingNote]>, ServerFnError<String>> {
+        use flams_math_archives::backend::LocalBackend;
+        match backend()
+            .get_typed_document_element_async::<TokioEngine, _>(uri)
+            .await
+        {
+            Ok(rf) => {
+                blocking_server_fn(move || {
+                    let e: &Problem = &rf;
+                    Ok(e.data
+                        .gnotes
+                        .iter()
+                        .filter_map(|gn| {
+                            backend()
+                                .get_reference(&gn.with_doc(e.uri.document_uri().clone()))
+                                .ok()
+                        })
+                        .collect())
+                })
+                .await
+            }
+            _ => not_found!("Problem {uri} not found"),
+        }
+    }
+
     pub async fn get_solution(uri: &DocumentElementUri) -> Result<Solutions, String> {
         use flams_math_archives::backend::LocalBackend;
         match backend()
-            .get_typed_document_element_async::<TokioEngine, _>(&uri)
+            .get_typed_document_element_async::<TokioEngine, _>(uri)
             .await
         {
             Ok(rf) => {
                 let sol = match blocking_server_fn(move || {
-                    let e: &Problem = &*rf;
+                    let e: &Problem = &rf;
                     backend()
                         .get_reference(&rf.data.solutions.with_doc(e.uri.document_uri().clone()))
                         .map_err(|e| e.to_string())
@@ -977,7 +913,7 @@ mod server {
         .flatten()
     }
 
-    pub(crate) fn filter_paras(v: Box<[Css]>) -> Box<[Css]> {
+    fn filter_paras(v: Box<[Css]>) -> Box<[Css]> {
         const CSSS: [&str; 11] = [
             "ftml-part",
             "ftml-chapter",

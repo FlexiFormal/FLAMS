@@ -50,8 +50,7 @@ ftml-dom = {workspace = true}
 flodown = {workspace = true}
 dashmap = {workspace = true}
 rustc-hash = {workspace = true}
-thaw = {workspace = true}
-icondata_bi = {workspace = true}
+ftml-component-utils = {workspace = true}
 ftml-backend = {workspace = true}
 
 tokio = { workspace = true, optional = true }

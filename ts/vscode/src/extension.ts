@@ -9,7 +9,9 @@ import {
 import { setup } from "./ts/setup";
 import { Versions } from "./ts/versions";
 import * as language from "vscode-languageclient/node";
-import { FLAMSServer } from "@kwarc/flams";
+//import { FLAMSServer } from "@kwarc/flams";
+//import * as FLAMS from "@flexiformal/ftml-backend";
+import { FLAMSServer} from "./ts/flams";
 import { getSettings, MathHubTreeProvider } from "./ts/mathhub";
 import path from "path";
 import * as fs from "fs";
@@ -123,7 +125,7 @@ export async function launch_local(context: FLAMSPreContext) {
   };
   context.client = new language.LanguageClient(
     "flams",
-    "𝖥𝖫∀𝖬∫ Language Server",
+    //"𝖥𝖫∀𝖬∫ Language Server",
     serverOptions,
     {
       documentSelector: [
@@ -217,7 +219,7 @@ export async function awaitContext(): Promise<FLAMSContext> {
 }
 
 export class FLAMSPreContext {
-  outputChannel: vscode.OutputChannel;
+  outputChannel: vscode.LogOutputChannel;
   vsc: vscode.ExtensionContext;
   versions: Versions = new Versions();
   client: language.LanguageClient | undefined;
@@ -225,7 +227,7 @@ export class FLAMSPreContext {
 
   constructor(context: vscode.ExtensionContext) {
     this.vsc = context;
-    this.outputChannel = vscode.window.createOutputChannel("FLAMS");
+    this.outputChannel = vscode.window.createOutputChannel("FLAMS",{log:true});
     _context = this;
   }
 

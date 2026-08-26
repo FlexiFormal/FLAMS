@@ -127,7 +127,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PrenexRule {
             };
             matches!(
                 b.arguments.get(bound_index),
-                Some(BoundArgument::BoundSeq(MaybeSequence::Seq(_)))
+                Some(BoundArgument::BoundSeq(_))
             )
         } else if let Term::Application(a) = t {
             let Some(seq_index) = sym

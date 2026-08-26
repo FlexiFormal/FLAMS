@@ -10,6 +10,7 @@ workspace = true
 ssr = [
     "leptos/ssr",
     "leptos_router/ssr",
+    "ftml-component-utils/ssr",
     "ftml-components/ssr",
     "ftml-dom/ssr",
     "flams-web-utils/ssr",
@@ -20,6 +21,7 @@ ssr = [
 ]
 hydrate = [
     "leptos/hydrate",
+    "ftml-component-utils/hydrate",
     "ftml-components/hydrate",
     "ftml-dom/hydrate",
     "flams-router-login/hydrate",
@@ -41,6 +43,7 @@ flams-router-base = {workspace = true}
 flams-router-content = { workspace = true }
 flams-utils = { workspace = true }
 ftml-solver-trace = {workspace = true}
+ftml-component-utils = {workspace = true}
 
 flams-system = { workspace = true, optional = true }
 flams-lsp = {workspace = true,optional = true}

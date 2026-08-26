@@ -16,7 +16,7 @@ use crate::{document_file::DocumentFile, utils::errors::BackendError};
 use flams_backend_types::ManagerCacheSize;
 use flams_backend_types::archive_json::{ArchiveIndex, Institution};
 #[cfg(feature = "cached")]
-use ftml_ontology::utils::awaitable::{AsyncCache, MaybeValue};
+use ftml_backend::utils::async_cache::AsyncCache; //, MaybeValue};
 use ftml_ontology::{
     domain::modules::Module,
     utils::{RefTree, TreeChild},
@@ -77,7 +77,7 @@ impl ArchiveManager {
             let mut modules_bytes = 0;
             self.modules.all(|_, v| {
                 num_modules += 1;
-                if let MaybeValue::Done(Ok(m)) = &*v.read() {
+                if let Some(Ok(m)) = v {
                     modules_bytes += m.deep_size_of();
                 }
             });
@@ -87,7 +87,7 @@ impl ArchiveManager {
             #[cfg(feature = "cached")]
             self.documents.all(|_, v| {
                 num_documents += 1;
-                if let MaybeValue::Done(Ok(d)) = &*v.read() {
+                if let Some(Ok(d)) = v {
                     documents_bytes += d.deep_size_of();
                 }
             });
@@ -212,6 +212,7 @@ impl ArchiveManager {
             #[cfg(feature = "rdf")]
             &self.triple_store,
         );
+        drop(tree);
         Ok(())
     }
 
@@ -291,36 +292,12 @@ impl ArchiveManager {
     pub fn index(&self, external_url: &str) -> (Vec<Institution>, Vec<ArchiveIndex>) {
         let tree = self.tree.read();
         if let Some(idx) = (*tree.index.read()).clone() {
-            return match idx {
-                either::Left(r) => r,
-                either::Right(r) => r.recv().expect("this is a bug"),
-            };
+            return idx;
         }
-        let (s, r) = flume::bounded(1);
-        *tree.index.write() = Some(either::Right(r));
         let (is, ars) = tree.load_index(external_url);
-        *tree.index.write() = Some(either::Left((is.clone(), ars.clone())));
-        while s.receiver_count() > 0 {
-            let _ = s.send((is.clone(), ars.clone()));
-        }
+        *tree.index.write() = Some((is.clone(), ars.clone()));
+        drop(tree);
         (is, ars)
-    }
-
-    fn fut1(
-        r: flume::Receiver<(Vec<Institution>, Vec<ArchiveIndex>)>,
-    ) -> impl Future<Output = (Vec<Institution>, Vec<ArchiveIndex>)> + Send {
-        async move { r.recv_async().await.expect("this is a bug") }
-    }
-    fn ft(
-        v: either::Either<
-            (Vec<Institution>, Vec<ArchiveIndex>),
-            flume::Receiver<(Vec<Institution>, Vec<ArchiveIndex>)>,
-        >,
-    ) -> impl Future<Output = (Vec<Institution>, Vec<ArchiveIndex>)> + Send {
-        match v {
-            either::Left(r) => either::Left(std::future::ready(r)),
-            either::Right(r) => either::Right(Self::fut1(r)),
-        }
     }
 
     pub fn index_async<A: AsyncEngine>(
@@ -329,23 +306,18 @@ impl ArchiveManager {
         let tree = crate::backend::GlobalBackend.tree.read();
         let idx = (*tree.index.read()).clone();
         if let Some(idx) = idx {
-            return either::Left(Self::ft(idx));
+            return either::Left(std::future::ready(idx));
         }
-        let (s, r) = flume::bounded(1);
-        *tree.index.write() = Some(either::Right(r));
         drop(tree);
         either::Right(async move {
             let (is, ars) = A::block_on(move || {
                 let tree = crate::backend::GlobalBackend.tree.read();
                 let (is, ars) = tree.load_index(external_url());
-                *tree.index.write() = Some(either::Left((is.clone(), ars.clone())));
+                *tree.index.write() = Some((is.clone(), ars.clone())); //either::Left((is.clone(), ars.clone())));
                 drop(tree);
                 (is, ars)
             })
             .await;
-            while s.receiver_count() > 0 {
-                let _ = s.send_async((is.clone(), ars.clone())).await;
-            }
             (is, ars)
         })
     }
@@ -357,12 +329,29 @@ pub struct ArchiveTree {
     pub top: Vec<ArchiveOrGroup>,
     index: parking_lot::RwLock<
         Option<
-            either::Either<
-                (Vec<Institution>, Vec<ArchiveIndex>),
-                flume::Receiver<(Vec<Institution>, Vec<ArchiveIndex>)>,
-            >,
+            //either::Either<
+            (Vec<Institution>, Vec<ArchiveIndex>),
+            //    flume::Receiver<(Vec<Institution>, Vec<ArchiveIndex>)>,
+            //>,
         >,
     >, //pub index: (Vec<Institution>, Vec<ArchiveIndex>),
+}
+impl ArchiveTree {
+    pub fn with_index<R>(
+        &self,
+        external_url: &str,
+        f: impl FnOnce(&[ArchiveIndex], &[Institution]) -> R,
+    ) -> R {
+        let lock = self.index.read();
+        if let Some((inst, idx)) = &*lock {
+            return f(idx, inst);
+        }
+        drop(lock);
+        let (is, ars) = self.load_index(external_url);
+        let r = f(&ars, &is);
+        *self.index.write() = Some((is, ars));
+        r
+    }
 }
 
 #[derive(Debug)]
