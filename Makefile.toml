@@ -67,7 +67,6 @@ args = [
     "--document-private-items",
 ]
 
-
 [tasks.docs]
 alias = "doc"
 
