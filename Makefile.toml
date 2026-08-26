@@ -73,6 +73,7 @@ alias = "doc"
 [tasks.copy-to-bin]
 workspace = false
 script_runner = "@rust"
+script_runner_args = ["--pkg-path", "./target/rscript"]
 script = '''
 use std::path::Path;
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {

@@ -35,6 +35,7 @@ members = [
 resolver = "2"
 exclude = [
     "experiments",
+    "target/rscript"
     #"web/graphs","test-plugin","tests","thaw",
     #"api", "controller", "core", "main", "ftml", "stex", "web/main", "web/orm"
 ]
@@ -56,7 +57,7 @@ debug=true
 [profile.flams-release]
 inherits = "release"
 opt-level = 2
-lto = "fat" # "thin" # 
+lto = "fat" # "thin" #
 codegen-units = 1
 panic = "unwind"
 
