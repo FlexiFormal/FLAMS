@@ -22,12 +22,17 @@ pub enum ImagePath<'s> {
 impl<'s> ImagePath<'s> {
     #[must_use]
     pub fn to_path(self) -> Option<PathBuf> {
-        match self {
+        let r = match self {
             Self::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p),
             Self::ArchiveRelpath { id, rel_path } => {
                 GlobalBackend.with_local_archive(&id, |a| a.map(|a| a.path().join(&*rel_path)))
             }
             Self::File(p) => Some(p.into()),
+        }?;
+        if r.extension().is_some_and(|r| r == "pdf") {
+            Some(r.with_extension("pdf-rustex.png"))
+        } else {
+            Some(r)
         }
     }
     #[must_use]
