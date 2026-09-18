@@ -30,7 +30,7 @@ members = [
     #"experiments",
     "source/ffi", "solver/main","solver/trace"#,"solver/new"
     #"maintest"
-, "source/buildsystem"]
+, "source/buildsystem"
     #"source/router/flodown",
     # "experiments",
     # "solver/new",
@@ -161,7 +161,7 @@ ulo = { git = "https://github.com/FlexiFormal/FTML" }
 ftml-dom = { git = "https://github.com/FlexiFormal/FTML" }
 ftml-component-utils = { git = "https://github.com/FlexiFormal/FTML" }
 
-#flodown = { git = "https://github.com/FlexiFormal/FloDown" }
+flodown = { git = "https://github.com/FlexiFormal/FloDown" }
 
 #ftml-uris = { path = "../FTML/uris", features = ["interned"] }
 #ftml-ontology = { path = "../FTML/ontology" }

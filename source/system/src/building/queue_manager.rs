@@ -267,6 +267,16 @@ impl QueueManager {
             .get(&QueueId::global())
             .unwrap_or_else(|| unreachable!()))
     }
+
+    /// The semaphore this manager was configured with at `initialize` -
+    /// exposed so callers can drive a `Queue` directly (e.g.
+    /// `Queue::start_by_indegree`) with the same concurrency limit
+    /// `start_queue` itself would use, instead of constructing a separate,
+    /// disconnected one.
+    #[must_use]
+    pub fn threads(&self) -> Semaphore {
+        self.threads.clone()
+    }
 }
 
 #[derive(Debug, Clone)]

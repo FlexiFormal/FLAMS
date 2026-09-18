@@ -24,7 +24,19 @@ impl ftml_backend::FlamsBackend for FtmlBackend {
         true
     }
     fn content_link_url(&self, uri: ftml_uris::UriRef<'_>) -> String {
-        format!("/?uri={}", uri.url_encoded())
+        // `UriRef` doesn't implement `FtmlUri` (only its variants' inner
+        // types do), so `url_encoded` has to be dispatched per-variant here,
+        // mirroring `UriRef`'s own `Display` impl.
+        let encoded = match uri {
+            ftml_uris::UriRef::Base(u) => u.url_encoded().to_string(),
+            ftml_uris::UriRef::Archive(u) => u.url_encoded().to_string(),
+            ftml_uris::UriRef::Path(u) => u.url_encoded().to_string(),
+            ftml_uris::UriRef::Module(u) => u.url_encoded().to_string(),
+            ftml_uris::UriRef::Symbol(u) => u.url_encoded().to_string(),
+            ftml_uris::UriRef::Document(u) => u.url_encoded().to_string(),
+            ftml_uris::UriRef::DocumentElement(u) => u.url_encoded().to_string(),
+        };
+        format!("/?uri={encoded}")
     }
     fn document_link_url(&self, uri: &ftml_uris::DocumentUri) -> String {
         format!("/?uri={}", uri.url_encoded())

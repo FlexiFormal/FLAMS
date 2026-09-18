@@ -10,13 +10,16 @@ use ftml_ontology::utils::time::Eta;
 use ftml_uris::UriWithArchive;
 use parking_lot::RwLock;
 use petgraph::{
-    Direction::{Incoming, Outgoing},
     algo::kosaraju_scc,
     graph::NodeIndex,
+    Direction::{Incoming, Outgoing},
 };
-use std::collections::{HashMap, HashSet, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
-use crate::building::{AtomicTaskState, QueueMessage};
+use crate::building::{
+    graphmap::{self, GraphScope::All},
+    AtomicTaskState, QueueMessage,
+};
 
 use super::{
     graph,
@@ -148,6 +151,22 @@ impl Queue {
     /// most-depended-on still-pending member of each is forced ready - the
     /// same heuristic `buildsystem::scheduler::Scheduler::
     /// unblock_one_cycle_node` uses.
+    ///
+    ///
+    // pub fn mysort(map: &TaskMap, state: &mut RunningQueue) {
+    //     let RunningQueue {
+    //         queue,
+    //         blocked,
+    //         done,
+    //         failed,
+    //         running,
+    //         sccs,
+    //         dep_graph,
+    //         in_degree_store,
+    //         ..
+    //     } = state;
+    //     let (graph, store) = graphmap::build_graph(map, All, &mut dep_graph);
+    // }
     pub fn sort_graph(map: &TaskMap, state: &mut RunningQueue) {
         let RunningQueue {
             queue,
@@ -159,6 +178,13 @@ impl Queue {
         } = state;
 
         let dep_graph = graph::build_graph(map);
+        let dot =
+            petgraph::dot::Dot::with_config(&dep_graph, &[petgraph::dot::Config::EdgeNoLabel]);
+
+        if let Err(e) = std::fs::write("/home/royaleinstein/graph.dot", format!("{dot:?}")) {
+            tracing::warn!("failed to write the dependency to dot file: {e}");
+        };
+
         let by_id: HashMap<BuildTaskId, BuildTask> =
             map.map.values().map(|t| (t.get_id(), t.clone())).collect();
         let mut node_of: HashMap<graph::StepId, NodeIndex> = HashMap::new();
@@ -173,12 +199,10 @@ impl Queue {
                 .is_some_and(|s| s.0.state.get() == TaskState::Done)
         };
         let is_ready = |idx: NodeIndex| {
-            dep_graph
-                .neighbors_directed(idx, Incoming)
-                .all(|dep| {
-                    let (tid, target) = dep_graph[dep];
-                    is_done_step(tid, target)
-                })
+            dep_graph.neighbors_directed(idx, Incoming).all(|dep| {
+                let (tid, target) = dep_graph[dep];
+                is_done_step(tid, target)
+            })
         };
 
         let all_sccs = kosaraju_scc(&dep_graph);

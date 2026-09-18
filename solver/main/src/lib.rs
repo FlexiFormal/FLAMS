@@ -67,6 +67,7 @@ use ftml_solver_trace::CheckLog;
 use ftml_uris::{Id, IsDomainUri, LeafUri, ModuleUri};
 use smallvec::SmallVec;
 use std::marker::PhantomData;
+use tracing::instrument;
 
 pub static DUMMY: std::sync::LazyLock<Id> =
     // SAFETY: "DUMMY" is a valid ID
@@ -77,7 +78,6 @@ flams_math_archives::build_target!(CHECK {
     description: "check the validity of formal/complex expressions",
     run: check
 });
-
 #[allow(clippy::needless_pass_by_value)]
 fn check(task: flams_math_archives::formats::BuildSpec) -> BuildResult {
     let d = match task.backend.get_document(task.uri) {
@@ -91,9 +91,10 @@ fn check(task: flams_math_archives::formats::BuildSpec) -> BuildResult {
             };
         }
     };
+    tracing::info!("started checking the document doc: {}", d.uri.path);
     let mut checker =
         Checker::</*RayonStrategiesDepth<4>*/ SingleThreadedSplit>::new(task.backend.clone());
-    match checker.check_document(&d) {
+    let res = match checker.check_document(&d) {
         Ok((logs, modules)) => {
             let log = logs.to_json();
             BuildResult {
@@ -111,7 +112,9 @@ fn check(task: flams_math_archives::formats::BuildSpec) -> BuildResult {
                 strict: true,
             }]),
         },
-    }
+    };
+    tracing::info!("ended checking the document");
+    res
 }
 
 type BigSet<T> = dashmap::DashSet<T, rustc_hash::FxBuildHasher>;
@@ -234,6 +237,7 @@ impl<Split: SplitStrategy> Checker<Split> {
         );*/
 
         //let mut all = Vec::new();
+        tracing::info!("collecting modules");
         let mut modules = Vec::new();
         let mut results = Vec::new();
         self.documents.insert(d.clone());
@@ -242,6 +246,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 //DocumentElementRef::UseModule { uri: module, .. } => all.push(module.clone()),
                 DocumentElementRef::Module { module, .. } => {
                     //all.push(module.clone());
+                    tracing::info!("doing dfs on modules {}", module);
                     modules.push(module.clone());
                 }
                 _ => (),
@@ -353,7 +358,7 @@ impl<Split: SplitStrategy> Checker<Split> {
                 _ => (),
             }
         }
-
+        tracing::info!("finished checking");
         Ok((
             DocumentCheckResult {
                 uri: d.uri.clone(),

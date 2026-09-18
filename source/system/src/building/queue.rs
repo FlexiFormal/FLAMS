@@ -1,4 +1,8 @@
-use crate::{backend::backend, FlamsExtension};
+use crate::{
+    backend::backend,
+    building::{BuildStep, BuildStepI},
+    FlamsExtension,
+};
 
 use super::{
     queue_manager::{QueueId, Semaphore},
@@ -21,7 +25,11 @@ use flams_utils::{
 use ftml_ontology::utils::{time::Timestamp, RefTree};
 use ftml_uris::{ArchiveId, UriPath, UriWithArchive};
 use parking_lot::RwLock;
-use std::{collections::VecDeque, num::NonZeroU32};
+use petgraph::graph::{DiGraph, NodeIndex};
+use std::{
+    collections::{HashMap, VecDeque},
+    num::NonZeroU32,
+};
 use tracing::{info, instrument, Instrument};
 
 #[derive(Debug)]
@@ -159,21 +167,21 @@ impl Queue {
         let mut running = RunningQueue::new(map.total);
         tracing::info_span!("sorting...").in_scope(|| {
             Self::sort_graph(&map, &mut running);
-            let length_queued = running.queue.len();
-            let length_failed = running.failed.len();
-            let length_blocked = running.blocked.len();
-            let length_done = running.done.iter().len();
-            let length_ = running.running.len();
-            tracing::info!("the total tasks are as follows : {}", map.map.len());
-            tracing::info!(
-                "the total sort in queued : {}, failed : {}, blocked : {}, done : {},running : {}",
-                length_queued,
-                length_failed,
-                length_blocked,
-                length_done,
-                length_
-            );
-            tracing::info!("Done");
+            //     let length_queued = running.queue.len();
+            //     let length_failed = running.failed.len();
+            //     let length_blocked = running.blocked.len();
+            //     let length_done = running.done.iter().len();
+            //     let length_ = running.running.len();
+            //     tracing::info!("the total tasks are as follows : {}", map.map.len());
+            //     tracing::info!(
+            //         "the total sort in queued : {}, failed : {}, blocked : {}, done : {},running : {}",
+            //         length_queued,
+            //         length_failed,
+            //         length_blocked,
+            //         length_done,
+            //         length_
+            //     );
+            //     tracing::info!("Done");
         });
         self.0.sender.lazy_send(|| QueueMessage::Started {
             running: Vec::new(),
@@ -194,6 +202,48 @@ impl Queue {
         }
     }
 
+    /// Same as `start`, but seeds via `Self::sort_by_indegree` (see
+    /// `queue_clone.rs`) instead of `Self::sort_graph`, and - for the
+    /// `Semaphore::Counting`/tokio path - dispatches via
+    /// `Self::get_next_reactive` instead of `get_next_async`. Purely
+    /// additive: exercises both against the real executor
+    /// (`run_task_async`) end-to-end, without touching `start`/
+    /// `run_async` themselves.
+    #[instrument(level = "info",
+    parent=&self.0.span,
+    target = "buildqueue",
+    name = "Running buildqueue (indegree)",
+    skip_all
+  )]
+    pub fn start_by_indegree(&self, sem: Semaphore) {
+        let mut state = self.0.state.write();
+        if matches!(&*state, QueueState::Running(_)) {
+            return;
+        }
+        let map = self.0.map.read();
+        let mut running = RunningQueue::new(map.total);
+        tracing::info_span!("sorting (indegree)...").in_scope(|| {
+            Self::sort_by_indegree(&map, &mut running);
+        });
+        self.0.sender.lazy_send(|| QueueMessage::Started {
+            running: Vec::new(),
+            queue: running.queue.iter().map(BuildTask::as_message).collect(),
+            blocked: Vec::new(),
+            failed: Vec::new(),
+            done: Vec::new(),
+        });
+        *state = QueueState::Running(running);
+        drop(map);
+        drop(state);
+        match sem {
+            Semaphore::Linear => self.run_sync(),
+            #[cfg(feature = "tokio")]
+            Semaphore::Counting { inner: sem, .. } => {
+                tokio::task::spawn(self.clone().run_async_reactive(sem).in_current_span());
+            }
+        }
+    }
+
     #[inline]
     fn run_sync(&self) {
         while let Some((task, id)) = self.get_next() {
@@ -208,6 +258,35 @@ impl Queue {
                 break;
             };
             let Some((task, id)) = self.get_next_async().await else {
+                break;
+            };
+            let selfclone = self.clone();
+            let span = tracing::Span::current();
+            tokio::task::spawn_blocking(move || {
+                span.in_scope(move || selfclone.run_task_async(&task, id, permit));
+            });
+        }
+        loop {
+            if matches!(&*self.0.state.read(),QueueState::Running(RunningQueue{running,..}) if !running.is_empty())
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            } else {
+                break;
+            }
+        }
+        self.finish();
+    }
+
+    /// Same as `run_async`, but dispatches via `Self::get_next_reactive`
+    /// (see `queue_clone.rs`) instead of `get_next_async` - only reachable
+    /// via `start_by_indegree`, `run_async` itself is untouched.
+    #[cfg(feature = "tokio")]
+    async fn run_async_reactive(self, sem: std::sync::Arc<tokio::sync::Semaphore>) {
+        loop {
+            let Ok(permit) = tokio::sync::Semaphore::acquire_owned(sem.clone()).await else {
+                break;
+            };
+            let Some((task, id)) = self.get_next_reactive().await else {
                 break;
             };
             let selfclone = self.clone();
@@ -354,8 +433,12 @@ impl Queue {
                 }
                 if requeue {
                     state.queue.push_front(task.clone());
+                    tracing::info!(target:"buildqueue","done [{}]{{{}}} :: {target}, next pipeline step queued",
+                        task.0.uri.archive_id(), task.0.rel_path);
                 } else {
                     state.done.push(task.clone());
+                    tracing::info!(target:"buildqueue","done [{}]{{{}}} :: {target}, task complete",
+                        task.0.uri.archive_id(), task.0.rel_path);
                 }
                 drop(lock);
 
@@ -402,7 +485,30 @@ impl Queue {
                         eta,
                     });
                 } else {
-                    // TODO: handle dependencies
+                    for i in deps {
+                        match i {
+                            flams_math_archives::formats::TaskDependency::Physical {
+                                task,
+                                strict,
+                            } => {
+                                let map = self.0.map.read();
+                                let task_in_map = map.map.get(&(task.archive, task.rel_path));
+                                if task_in_map.is_some() {
+                                    // here you can report some kind of meaning ful error
+                                    continue;
+                                } else {
+                                    // we create one here and add to the graph in the Queue
+                                    // here its a failure
+                                }
+                            }
+                            flams_math_archives::formats::TaskDependency::Logical {
+                                uri,
+                                strict,
+                            } => {
+                                // here check the modules that are in the backend
+                            }
+                        }
+                    }
                     let mut found = false;
                     for s in task.steps() {
                         if s.0.target == target {
@@ -423,39 +529,9 @@ impl Queue {
                 }
                 drop(lock);
             }
-            Ok(data) => {
-                let mut found = false;
-                let mut requeue = false;
-                for s in task.steps() {
-                    if s.0.target == target {
-                        found = true;
-                        s.0.state.set(TaskState::Done);
-                    } else if found {
-                        s.0.state.set(TaskState::Queued);
-                        requeue = true;
-                        break;
-                    }
-                }
-                if requeue {
-                    state.queue.push_front(task.clone());
-                    tracing::info!(target:"buildqueue","done [{}]{{{}}} :: {target}, next pipeline step queued",
-                        task.0.uri.archive_id(), task.0.rel_path);
-                } else {
-                    state.done.push(task.clone());
-                    tracing::info!(target:"buildqueue","done [{}]{{{}}} :: {target}, task complete",
-                        task.0.uri.archive_id(), task.0.rel_path);
-                }
-                drop(lock);
-
-                self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
-                    id: task.0.id,
-                    target,
-                    eta,
-                });
-            }
         }
     }
-
+    // checks and tries to find the dependency
     fn maybe_restart(&self) {
         let mut state = self.0.state.write();
         if let QueueState::Finished(_) = &mut *state {
@@ -741,6 +817,8 @@ pub struct RunningQueue {
     /// already-running queue) and force a recompute rather than silently
     /// returning a stale decomposition.
     pub(super) sccs: Option<(usize, Vec<Vec<super::graph::StepId>>)>,
+    pub(super) dep_graph: DiGraph<(BuildTaskId, BuildTargetId), bool>,
+    pub(super) in_degree_store: HashMap<(BuildTaskId, BuildTargetId), NodeIndex>,
 }
 impl RunningQueue {
     fn new(total: usize) -> Self {
@@ -752,6 +830,8 @@ impl RunningQueue {
             running: Vec::new(),
             timer: Timer::new(total),
             sccs: None,
+            dep_graph: DiGraph::new(),
+            in_degree_store: HashMap::new(),
         }
     }
 }
