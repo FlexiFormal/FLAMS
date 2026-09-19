@@ -184,11 +184,11 @@ rstest = { version = "0.26" }
 
 # utils
 
-utoipa-swagger-ui = {version="9",features=["vendored","axum"]}
-utoipa = "5"
-utoipa-axum = "0.2"
+#utoipa-swagger-ui = {version="9",features=["vendored","axum"]}
+#utoipa = "5"
+#utoipa-axum = "0.2"
 
-orx-parallel = "3"
+#orx-parallel = "3"
 document-features = "0.2"
 rustc_version = "0.4"
 const-str = "1"
@@ -200,7 +200,7 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 serde_stacker = "0.1"
 rustc-hash = "2"
 chrono = "0.4"
-oxrdf = "0.3"
+#oxrdf = "0.3"
 smallvec = { version = "2.0.0-alpha.12" }
 lazy_static = "1.5"
 url = "2"
@@ -223,8 +223,8 @@ async-trait = "0.1"
 bytesize = "2"
 deepsize = "0.2"
 bincode = { version = "2", features = ["derive", "serde"] }
-postcard = { version = "1.1", features = ["use-std"] }
-lightningcss = { version = "1.0.0-alpha.63", default-features = false }
+#postcard = { version = "1.1", features = ["use-std"] }
+#lightningcss = { version = "1.0.0-alpha.63", default-features = false }
 # cfg-if = "1"
 tokio = { version = "1" }                                                   #, features = ["fs","io-util","sync","test-util","macros","rt"] }
 tokio-util = { version = "0.7", features = ["compat"] }
@@ -232,13 +232,13 @@ tokio-stream = { version = "0.1" }
 tempfile = { version = "3" }
 phf = { version = "0.14", default-features = false, features = ["macros"] }
 crossbeam-channel = { version = "0.5" }
-flate2 = { version = "1.0" }
-tar = { version = "0.4" }
+#flate2 = { version = "1.0" }
+#tar = { version = "0.4" }
 async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 astral-tokio-tar = "0.5.1"
 strum = { version = "0.28", features = ["derive"] }
 git-url-parse = { version = "0.4" }
-flume = { version = "0.12", features = ["async"] }
+#flume = { version = "0.12", features = ["async"] }
 ordered-float = "5"
 
 password-hash = { version = "0.5" }
@@ -254,8 +254,8 @@ tracing-subscriber = { version = "0.3", features = [
 tracing-error = "0.2"
 
 toml = "1"
-serde_yml = "0.0.12"
-serde-value = "0.7"
+#serde_yml = "0.0.12"
+#serde-value = "0.7"
 eyre = "0.6"
 color-eyre = "0.6"
 thiserror = "2"
@@ -308,16 +308,16 @@ http = { version = "1" }
 mime_guess = "2"
 
 # wasm
-wasm-bindgen = "0.2.121"
-js-sys = "0.3"
+wasm-bindgen = "0.2.128"
+#js-sys = "0.3"
 
 tracing-wasm = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1.7"
 #reqwasm = "0.5"
 gloo-storage = "0.4"
-gloo-timers = "0.4"
-web-sys = { version = "0.3" }
+#gloo-timers = "0.4"
+#web-sys = { version = "0.3" }
 #tsify-next = { version = "0.5", features = ["js"] }
 tsify = { version = "0.5", features = ["js"] }
 js-regexp = "0.2"
@@ -329,7 +329,7 @@ futures-util = "0.3"
 #html2text = "0.15"
 tantivy = "0.26"
 simsimd = "6"
-fastembed = "6"
+fastembed = "7"
 #ort-candle = "0.2.0+0.9"
 ort = { version="2.0.0-rc.11"}#, default-features = false, features = ["alternative-backend"] }
 
@@ -338,7 +338,7 @@ radix_trie = "0.3"
 memchr = "2.7"
 arrayvec = "0.7"
 
-ahash = "0.8"
+#ahash = "0.8"
 getrandom = "0.3" # version required by ahash :-/
 
 #[patch.crates-io]
