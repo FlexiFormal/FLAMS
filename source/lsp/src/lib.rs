@@ -2,6 +2,7 @@
 
 pub mod annotations;
 pub mod capabilities;
+pub mod completion;
 pub mod documents;
 mod implementation;
 pub mod state;

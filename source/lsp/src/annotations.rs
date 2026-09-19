@@ -2618,7 +2618,94 @@ impl LSPState {
             .map(|o| o.flatten()),
         )
     }
+    pub fn get_completion(
+        &self,
+        uri: &UrlOrFile,
+        position: lsp::Position,
+        params: lsp::CompletionContext,
+        _: Option<ProgressCallbackClient>,
+    ) -> Option<impl std::future::Future<Output = Option<lsp::CompletionResponse>> + use<>> {
+        let d = self.get(uri)?;
+        let pos = d.get_position(position);
+        let should_traverse = d.with_text(|doc| {
+            let (first, _) = doc.split_at(pos);
+            first.ends_with("\\sn{") || first.ends_with("\\sr{")
+        });
+        let y = d.with_annots(self.clone(), false, move |data| {
+            let mut completion_collect = vec![];
+            if should_traverse {
+                let iter: AnnotIter = data.annotations.iter().into();
+                for e in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
+                    match e {
+                        STeXAnnot::Module {
+                            uri,
+                            name_range,
+                            opts,
+                            sig,
+                            meta_theory,
+                            full_range,
+                            smodule_range,
+                            children,
+                        } => todo!(),
+                        STeXAnnot::MathStructure {
+                            uri,
+                            extends,
+                            name_range,
+                            opts,
+                            full_range,
+                            children,
+                            mathstructure_range,
+                        } => todo!(),
+                        STeXAnnot::ImportModule {
+                            archive_range,
+                            path_range,
+                            module,
+                            token_range,
+                            full_range,
+                        } => todo!(),
+                        STeXAnnot::UseModule {
+                            archive_range,
+                            path_range,
+                            module,
+                            token_range,
+                            full_range,
+                        } => todo!(),
+                        STeXAnnot::Symdecl {
+                            uri,
+                            main_name_range,
+                            parsed_args,
+                            token_range,
+                            full_range,
+                        } => todo!(),
+                        STeXAnnot::TextSymdecl {
+                            uri,
+                            main_name_range,
+                            parsed_args,
+                            token_range,
+                            full_range,
+                        } => todo!(),
+                        STeXAnnot::Symdef {
+                            uri,
+                            main_name_range,
+                            parsed_args,
+                            token_range,
+                            full_range,
+                        } => todo!(),
+                        STeXAnnot::Definiens {
+                            uri,
+                            full_range,
+                            token_range,
+                            name_range,
+                        } => todo!(),
+                        _ => {}
+                    }
+                }
+            }
+            lsp::CompletionResponse::from(completion_collect)
+        });
 
+        Some(y)
+    }
     #[must_use]
     pub fn get_codeaction(
         &self,

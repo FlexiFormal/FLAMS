@@ -869,6 +869,38 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
         })
     }
 
+    //impl_request!(!completion = Completion => (None));
+    fn completion(
+        &mut self,
+        params: lsp::CompletionParams,
+    ) -> Res<Option<lsp::CompletionResponse>> {
+        tracing::trace_span!("completion").in_scope(move || {
+            tracing::trace!(
+                "uri: {},work_done_progress_params: {:?}, position: {:?}",
+                params.text_document_position.text_document.uri,
+                params.work_done_progress_params,
+                params.text_document_position.position
+            );
+
+            let p = params
+                .work_done_progress_params
+                .work_done_token
+                .map(|tk| self.get_progress(tk));
+            self.inner
+                .state()
+                .get_completion(
+                    &params.text_document_position.text_document.uri.into(),
+                    params.text_document_position.position,
+                    params.context.unwrap(),
+                    p,
+                )
+                .map_or_else(
+                    || Box::pin(std::future::ready(Ok(None))) as _,
+                    |f| Box::pin(f.map(Result::Ok)) as _,
+                )
+        })
+    }
+
     // impl_request!(! hover = HoverRequest => (None));
     fn hover(&mut self, params: lsp::HoverParams) -> Res<Option<lsp::Hover>> {
         tracing::trace_span!("hover").in_scope(move || {
@@ -1123,8 +1155,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(formatting = Formatting);
     impl_request!(prepare_type_hierarchy = TypeHierarchyPrepare);
     impl_request!(will_save_wait_until = WillSaveWaitUntil);
-
-    impl_request!(!completion = Completion => (None));
 
     impl_request!(signature_help = SignatureHelpRequest);
     impl_request!(linked_editing_range = LinkedEditingRange);
