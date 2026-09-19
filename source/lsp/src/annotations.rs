@@ -2658,12 +2658,12 @@ impl LSPState {
                         } => {
                             range_collect.push(main_name_range);
                         }
-                        STeXAnnot::Definiens { name_range, .. } => todo!(),
-                        _ => {
+                        STeXAnnot::Definiens { name_range, .. } => {
                             if let Some(x) = name_range {
                                 range_collect.push(&x);
                             }
                         }
+                        _ => {}
                     }
                 }
             }
