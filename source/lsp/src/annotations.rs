@@ -2632,75 +2632,44 @@ impl LSPState {
             first.ends_with("\\sn{") || first.ends_with("\\sr{")
         });
         let y = d.with_annots(self.clone(), false, move |data| {
-            let mut completion_collect = vec![];
+            let mut range_collect = vec![];
             if should_traverse {
                 let iter: AnnotIter = data.annotations.iter().into();
                 for e in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
                     match e {
-                        STeXAnnot::Module {
-                            uri,
-                            name_range,
-                            opts,
-                            sig,
-                            meta_theory,
-                            full_range,
-                            smodule_range,
-                            children,
-                        } => todo!(),
-                        STeXAnnot::MathStructure {
-                            uri,
-                            extends,
-                            name_range,
-                            opts,
-                            full_range,
-                            children,
-                            mathstructure_range,
-                        } => todo!(),
-                        STeXAnnot::ImportModule {
-                            archive_range,
-                            path_range,
-                            module,
-                            token_range,
-                            full_range,
-                        } => todo!(),
-                        STeXAnnot::UseModule {
-                            archive_range,
-                            path_range,
-                            module,
-                            token_range,
-                            full_range,
-                        } => todo!(),
+                        STeXAnnot::Module { name_range, .. } => {
+                            range_collect.push(name_range);
+                        }
+                        STeXAnnot::MathStructure { name_range, .. } => {
+                            range_collect.push(name_range);
+                        }
                         STeXAnnot::Symdecl {
-                            uri,
-                            main_name_range,
-                            parsed_args,
-                            token_range,
-                            full_range,
-                        } => todo!(),
+                            main_name_range, ..
+                        } => {
+                            range_collect.push(main_name_range);
+                        }
                         STeXAnnot::TextSymdecl {
-                            uri,
-                            main_name_range,
-                            parsed_args,
-                            token_range,
-                            full_range,
-                        } => todo!(),
+                            main_name_range, ..
+                        } => {
+                            range_collect.push(main_name_range);
+                        }
                         STeXAnnot::Symdef {
-                            uri,
-                            main_name_range,
-                            parsed_args,
-                            token_range,
-                            full_range,
-                        } => todo!(),
-                        STeXAnnot::Definiens {
-                            uri,
-                            full_range,
-                            token_range,
-                            name_range,
-                        } => todo!(),
-                        _ => {}
+                            main_name_range, ..
+                        } => {
+                            range_collect.push(main_name_range);
+                        }
+                        STeXAnnot::Definiens { name_range, .. } => todo!(),
+                        _ => {
+                            if let Some(x) = name_range {
+                                range_collect.push(&x);
+                            }
+                        }
                     }
                 }
             }
+
+            let mut completion_collect = vec![];
+
             lsp::CompletionResponse::from(completion_collect)
         });
 
