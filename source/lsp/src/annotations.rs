@@ -2861,25 +2861,26 @@ impl LSPState {
                     && self.returns.is_none()
             }
             fn write(self, sym_text: &str, start: LSPLineCol, out: &mut String) {
+                out.push_str("| | |\n| --- | --- |\n");
                 if let Some(m) = self.macro_name {
                     let m = &sym_text[m - start];
-                    let _ = writeln!(out, "*macro*: \\{m}\n");
+                    let _ = writeln!(out, "| *macro* | `\\{m}`|\n");
                 }
                 if let Some(a) = self.args {
                     let a = &sym_text[a - start];
-                    let _ = writeln!(out, "*arguments*: \\{a}\n");
+                    let _ = writeln!(out, "| *arguments* | {a} |\n");
                 }
                 if let Some(r) = self.returns {
-                    let a = &sym_text[r - start];
-                    let _ = writeln!(out, "*returns*: \\{r}\n");
+                    let r = &sym_text[r - start];
+                    let _ = writeln!(out, "| *returns* | `{r}` |\n");
                 }
                 if let Some(t) = self.tp {
                     let t = &sym_text[t - start];
-                    let _ = writeln!(out, "*type*: \\{t}\n");
+                    let _ = writeln!(out, "| *type* | `{t}` |\n");
                 }
                 if let Some(d) = self.df {
                     let d = &sym_text[d - start];
-                    let _ = writeln!(out, "*definiens*: \\{d}\n");
+                    let _ = writeln!(out, "| *definiens* | `{d}` |\n");
                 }
             }
         }
@@ -2935,14 +2936,14 @@ impl LSPState {
                             symbol: Some(uri),
                             parsed_args,
                             children,
-                            name_range: token_range,
+                            full_range,
                             ..
                         }
                         | STeXAnnot::InlineParagraph {
                             symbol: Some(uri),
                             parsed_args,
                             children,
-                            token_range,
+                            full_range,
                             ..
                         } if uri.uri == s.uri => {
                             let mut data = SymbolData::default();
@@ -2958,14 +2959,14 @@ impl LSPState {
                                     _ => (),
                                 }
                             }
-                            return Some((*token_range, Data::Symbol(data)));
+                            return Some((*full_range, Data::Symbol(data)));
                         }
                         STeXAnnot::Symdecl {
                             uri,
                             parsed_args,
                             starred,
                             main_name_range,
-                            token_range,
+                            full_range,
                             ..
                         } if uri.uri == s.uri => {
                             let mut data = SymbolData::default();
@@ -2981,13 +2982,13 @@ impl LSPState {
                                     _ => (),
                                 }
                             }
-                            return Some((*token_range, Data::Symbol(data)));
+                            return Some((*full_range, Data::Symbol(data)));
                         }
                         STeXAnnot::TextSymdecl {
                             uri,
                             parsed_args,
                             main_name_range,
-                            token_range,
+                            full_range,
                             ..
                         } if uri.uri == s.uri => {
                             let mut data = SymbolData::default();
@@ -2999,13 +3000,13 @@ impl LSPState {
                                     _ => (),
                                 }
                             }
-                            return Some((*token_range, Data::Symbol(data)));
+                            return Some((*full_range, Data::Symbol(data)));
                         }
                         STeXAnnot::Symdef {
                             uri,
                             parsed_args,
                             main_name_range,
-                            token_range,
+                            full_range,
                             ..
                         } if uri.uri == s.uri => {
                             let mut data = SymbolData::default();
@@ -3019,7 +3020,7 @@ impl LSPState {
                                     _ => (),
                                 }
                             }
-                            return Some((*token_range, Data::Symbol(data)));
+                            return Some((*full_range, Data::Symbol(data)));
                         }
                         _ => (),
                     }
