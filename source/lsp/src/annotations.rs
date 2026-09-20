@@ -22,6 +22,7 @@ use flams_stex::quickparse::{
         },
     },
 };
+use flams_utils::sourcerefs::{ByteOffset, StringPosition};
 use flams_utils::{
     prelude::TreeChildIter,
     sourcerefs::{LSPLineCol, StringRange},
@@ -43,7 +44,11 @@ trait AnnotExt: Sized {
         pos: LSPLineCol,
     ) -> Option<lsp::GotoDefinitionResponse>;
     fn semantic_tokens(&self, cont: &mut impl FnMut(StringRange<LSPLineCol>, u32));
-    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover>;
+    fn hover(
+        &self,
+        top_archive: Option<&ArchiveUri>,
+        pos: LSPLineCol,
+    ) -> Option<either_of::Either<lsp::Hover, (lsp::Range, SymbolReference<LSPLineCol>)>>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
     fn code_action(&self, pos: LSPLineCol, url: &lsp::Url) -> lsp::CodeActionResponse;
 }
@@ -1281,7 +1286,11 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover> {
+    fn hover(
+        &self,
+        top_archive: Option<&ArchiveUri>,
+        pos: LSPLineCol,
+    ) -> Option<either_of::Either<lsp::Hover, (lsp::Range, SymbolReference<LSPLineCol>)>> {
         fn uriname(pre: &str, d: &impl std::fmt::Display) -> String {
             format!("{pre}<sup>`{d}`</sup>")
         }
@@ -1321,13 +1330,18 @@ impl AnnotExt for STeXAnnot {
                 uri,
                 name_range: Some(range),
                 ..
-            } => Some(lsp::Hover {
-                range: Some(StringRange::into_range(*range)),
-                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                    kind: lsp::MarkupKind::Markdown,
-                    value: uriname("", &uri.first().unwrap_or_else(|| unreachable!()).uri),
-                }),
-            }),
+            } => Some(
+                either_of::Either::Right((
+                    StringRange::into_range(*range),
+                    uri.first().unwrap_or_else(|| unreachable!()).clone(),
+                )), /*lsp::Hover {
+                        range: Some(StringRange::into_range(*range)),
+                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                            kind: lsp::MarkupKind::Markdown,
+                            value: uriname("", &uri.first().unwrap_or_else(|| unreachable!()).uri),
+                        }),
+                    }*/
+            ),
             Self::SemanticMacro {
                 uri,
                 full_range: range,
@@ -1357,13 +1371,15 @@ impl AnnotExt for STeXAnnot {
                 uri,
                 orig_range: range,
                 ..
-            } => Some(lsp::Hover {
-                range: Some(StringRange::into_range(*range)),
-                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                    kind: lsp::MarkupKind::Markdown,
-                    value: uriname("", &uri.uri),
-                }),
-            }),
+            } => Some(
+                either_of::Either::Right((StringRange::into_range(*range), uri.clone())), /*lsp::Hover {
+                                                                                              range: Some(StringRange::into_range(*range)),
+                                                                                              contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                                                                                  kind: lsp::MarkupKind::Markdown,
+                                                                                                  value: uriname("", &uri.uri),
+                                                                                              }),
+                                                                                          }*/
+            ),
             Self::InlineMorphism {
                 domain_range,
                 domain,
@@ -1372,26 +1388,36 @@ impl AnnotExt for STeXAnnot {
             } => {
                 if domain_range.contains(pos) {
                     let uri = match domain {
-                        ModuleOrStruct::Struct(sym) => &sym.uri,
+                        ModuleOrStruct::Struct(sym) => sym,
                         _ => return None,
                     };
-                    return Some(lsp::Hover {
-                        range: Some(StringRange::into_range(*domain_range)),
-                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                            kind: lsp::MarkupKind::Markdown,
-                            value: uriname("", uri),
-                        }),
-                    });
+                    return Some(
+                        either_of::Either::Right((
+                            StringRange::into_range(*domain_range),
+                            uri.clone(),
+                        )), /*lsp::Hover {
+                                range: Some(StringRange::into_range(*domain_range)),
+                                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                    kind: lsp::MarkupKind::Markdown,
+                                    value: uriname("", uri.uri),
+                                }),
+                            }*/
+                    );
                 }
                 for a in assignments {
                     if a.symbol_range.contains(pos) {
-                        return Some(lsp::Hover {
-                            range: Some(StringRange::into_range(a.symbol_range)),
-                            contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                                kind: lsp::MarkupKind::Markdown,
-                                value: uriname("", &a.symbol.uri),
-                            }),
-                        });
+                        return Some(
+                            either_of::Either::Right((
+                                StringRange::into_range(a.symbol_range),
+                                a.symbol.clone(),
+                            )), /*lsp::Hover {
+                                    range: Some(StringRange::into_range(a.symbol_range)),
+                                    contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                        kind: lsp::MarkupKind::Markdown,
+                                        value: uriname("", &a.symbol.uri),
+                                    }),
+                                }*/
+                        );
                     }
                 }
                 None
@@ -1401,22 +1427,24 @@ impl AnnotExt for STeXAnnot {
             }
             | Self::VariableMacro {
                 name, full_range, ..
-            } => Some(lsp::Hover {
+            } => Some(either_of::Either::Left(lsp::Hover {
                 range: Some(StringRange::into_range(*full_range)),
                 contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                     kind: lsp::MarkupKind::Markdown,
                     value: uriname("Variable ", name),
                 }),
-            }),
+            })),
             Self::MathStructure { extends, .. } => extends.iter().find_map(|(s, r)| {
                 if r.contains(pos) {
-                    Some(lsp::Hover {
-                        range: Some(StringRange::into_range(*r)),
-                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                            kind: lsp::MarkupKind::Markdown,
-                            value: uriname("", &s.uri),
-                        }),
-                    })
+                    Some(
+                        either_of::Either::Right((StringRange::into_range(*r), s.clone())), /*lsp::Hover {
+                                                                                                range: Some(StringRange::into_range(*r)),
+                                                                                                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                                                                                    kind: lsp::MarkupKind::Markdown,
+                                                                                                    value: uriname("", &s.uri),
+                                                                                                }),
+                                                                                            }*/
+                    )
                 } else {
                     None
                 }
@@ -1427,16 +1455,21 @@ impl AnnotExt for STeXAnnot {
                         if val_range.contains(pos) {
                             for (s, r) in val {
                                 if r.contains(pos) {
-                                    return Some(lsp::Hover {
-                                        range: Some(StringRange::into_range(*r)),
-                                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                                            kind: lsp::MarkupKind::Markdown,
-                                            value: uriname(
-                                                "",
-                                                &s.first().unwrap_or_else(|| unreachable!()).uri,
-                                            ),
-                                        }),
-                                    });
+                                    return Some(
+                                        either_of::Either::Right((
+                                            StringRange::into_range(*r),
+                                            s.first().unwrap_or_else(|| unreachable!()).clone(),
+                                        )), /*lsp::Hover {
+                                                range: Some(StringRange::into_range(*r)),
+                                                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                                    kind: lsp::MarkupKind::Markdown,
+                                                    value: uriname(
+                                                        "",
+                                                        &s.first().unwrap_or_else(|| unreachable!()).uri,
+                                                    ),
+                                                }),
+                                            }*/
+                                    );
                                 }
                             }
                         }
@@ -1460,13 +1493,13 @@ impl AnnotExt for STeXAnnot {
                 let Some(uri) = uri_from_archive_relpath(a, &filepath.0) else {
                     return None;
                 };
-                Some(lsp::Hover {
+                Some(either_of::Either::Left(lsp::Hover {
                     range: Some(StringRange::into_range(*full_range)),
                     contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                         kind: lsp::MarkupKind::Markdown,
                         value: format!("![img]({uri})"),
                     }),
-                })
+                }))
             }
             Self::Module {
                 uri,
@@ -1478,13 +1511,13 @@ impl AnnotExt for STeXAnnot {
                     start: full_range.start,
                     end: name_range.end,
                 };
-                Some(lsp::Hover {
+                Some(either_of::Either::Left(lsp::Hover {
                     range: Some(StringRange::into_range(range)),
                     contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                         kind: lsp::MarkupKind::Markdown,
                         value: uri.to_string(),
                     }),
-                })
+                }))
             }
             Self::ImportModule { .. }
             | Self::UseModule { .. }
@@ -2608,15 +2641,87 @@ impl LSPState {
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>> + use<>> {
+        fn get_comment(txt: &str, pos: LSPLineCol) -> String {
+            let off = pos.into_other::<ByteOffset>(txt).0;
+            let mut txt = txt[..off].trim_end().lines();
+            let mut ret = Vec::new();
+            while let Some(l) = txt.next_back()
+                && let l = l.trim_start()
+                && l.starts_with("%%")
+            {
+                let l = l[2..].trim();
+                if !l.is_empty() {
+                    ret.push(l);
+                }
+            }
+            ret.reverse();
+            ret.join(" ")
+        }
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let pos = LSPLineCol::new(position.line, position.character);
-        Some(
-            d.with_annots(self.clone(), false, move |data| {
-                at_position(data, pos).and_then(|e| e.hover(da.as_ref(), pos))
+        let slf = self.clone();
+        let fut = d.with_annots(self.clone(), false, move |data| {
+            at_position(data, pos).and_then(|e| e.hover(da.as_ref(), pos))
+        });
+        Some(async move {
+            let o = fut.await.flatten()?;
+            let (range, s) = match o {
+                either_of::Either::Left(a) => return Some(a),
+                either_of::Either::Right((range, s)) => (range, s),
+            };
+            let value = if let Some(fp) = s.filepath.as_ref()
+                && let Ok(url) = lsp::Url::from_file_path(fp)
+            {
+                let url = url.into();
+                let src = if let Some(src) = slf.get(&url) {
+                    Some(src)
+                } else if let Ok(txt) = tokio::fs::read_to_string(fp).await {
+                    slf.insert(url.clone(), txt);
+                    slf.get(&url)
+                } else {
+                    None
+                };
+
+                let doc = if let Some(src) = src {
+                    if let Some(doc) = src.with_text(|txt| {
+                        if txt.is_empty() {
+                            None
+                        } else {
+                            Some(get_comment(txt, s.range.start))
+                        }
+                    }) {
+                        doc
+                    } else if let Some(p) = src.path()
+                        && let Ok(txt) = tokio::fs::read_to_string(p).await
+                    {
+                        let c = get_comment(&txt, s.range.start);
+                        src.set_text(txt);
+                        c
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
+
+                if doc.is_empty() {
+                    format!("<sup>`{}`</sup>", s.uri.name())
+                } else {
+                    format!("<sup>`{}`</sup>\n______________\n{doc}", s.uri.name())
+                }
+            } else {
+                format!("<sup>`{}`</sup>", s.uri.name())
+            };
+
+            Some(lsp::Hover {
+                range: Some(range),
+                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                    kind: lsp::MarkupKind::Markdown,
+                    value,
+                }),
             })
-            .map(|o| o.flatten()),
-        )
+        })
     }
 
     #[must_use]
