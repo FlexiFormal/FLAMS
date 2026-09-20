@@ -1,6 +1,9 @@
 #![allow(clippy::too_many_lines)]
 
+use std::fmt::Write;
+
 use crate::capabilities::STeXSemanticTokens;
+use crate::documents::LSPDocument;
 use crate::{
     IsLSPRange, ProgressCallbackClient,
     state::{DocData, LSPState, UrlOrFile},
@@ -2641,7 +2644,7 @@ impl LSPState {
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>> + use<>> {
-        fn get_comment(txt: &str, pos: LSPLineCol) -> String {
+        fn get_comment(txt: &str, pos: LSPLineCol, out: &mut String) {
             let off = pos.into_other::<ByteOffset>(txt).0;
             let mut txt = txt[..off].trim_end().lines();
             let mut ret = Vec::new();
@@ -2654,8 +2657,13 @@ impl LSPState {
                     ret.push(l);
                 }
             }
-            ret.reverse();
-            ret.join(" ")
+            if !ret.is_empty() {
+                out.push_str("\n_____\n");
+                for s in ret.into_iter().rev() {
+                    out.push_str(s);
+                    out.push(' ');
+                }
+            }
         }
         let d = self.get(uri)?;
         let da = d.archive().cloned();
@@ -2670,7 +2678,8 @@ impl LSPState {
                 either_of::Either::Left(a) => return Some(a),
                 either_of::Either::Right((range, s)) => (range, s),
             };
-            let value = if let Some(fp) = s.filepath.as_ref()
+            let mut ret = format!("<sup>`{}`</sup>", s.uri.name());
+            if let Some(fp) = s.filepath.as_ref()
                 && let Ok(url) = lsp::Url::from_file_path(fp)
             {
                 let url = url.into();
@@ -2683,42 +2692,32 @@ impl LSPState {
                     None
                 };
 
-                let doc = if let Some(src) = src {
-                    if let Some(doc) = src.with_text(|txt| {
+                if let Some(src) = src.as_ref()
+                    && !src.with_text(|txt| {
                         if txt.is_empty() {
-                            None
+                            false
                         } else {
-                            Some(get_comment(txt, s.range.start))
+                            get_comment(txt, s.range.start, &mut ret);
+                            true
                         }
-                    }) {
-                        doc
-                    } else if let Some(p) = src.path()
-                        && let Ok(txt) = tokio::fs::read_to_string(p).await
-                    {
-                        let c = get_comment(&txt, s.range.start);
-                        src.set_text(txt);
-                        c
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                };
-
-                if doc.is_empty() {
-                    format!("<sup>`{}`</sup>", s.uri.name())
-                } else {
-                    format!("<sup>`{}`</sup>\n______________\n{doc}", s.uri.name())
+                    })
+                    && let Some(p) = src.path()
+                    && let Ok(txt) = tokio::fs::read_to_string(p).await
+                {
+                    get_comment(&txt, s.range.start, &mut ret);
+                    src.set_text(txt);
                 }
-            } else {
-                format!("<sup>`{}`</sup>", s.uri.name())
-            };
+
+                if let Some(src) = src {
+                    slf.hover_metadata(src, s, &mut ret).await;
+                }
+            }
 
             Some(lsp::Hover {
                 range: Some(range),
                 contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                     kind: lsp::MarkupKind::Markdown,
-                    value,
+                    value: ret,
                 }),
             })
         })
@@ -2837,6 +2836,209 @@ impl LSPState {
                 data: ret,
             }
         }))
+    }
+
+    async fn hover_metadata(
+        self,
+        src: LSPDocument,
+        s: SymbolReference<LSPLineCol>,
+        out: &mut String,
+    ) {
+        #[derive(Clone, Copy, Default)]
+        struct SymbolData {
+            macro_name: Option<StringRange<LSPLineCol>>,
+            args: Option<StringRange<LSPLineCol>>,
+            tp: Option<StringRange<LSPLineCol>>,
+            df: Option<StringRange<LSPLineCol>>,
+            returns: Option<StringRange<LSPLineCol>>,
+        }
+        impl SymbolData {
+            fn is_empty(self) -> bool {
+                self.macro_name.is_none()
+                    && self.args.is_none()
+                    && self.tp.is_none()
+                    && self.df.is_none()
+                    && self.returns.is_none()
+            }
+            fn write(self, sym_text: &str, start: LSPLineCol, out: &mut String) {
+                if let Some(m) = self.macro_name {
+                    let m = &sym_text[m - start];
+                    let _ = writeln!(out, "*macro*: \\{m}\n");
+                }
+                if let Some(a) = self.args {
+                    let a = &sym_text[a - start];
+                    let _ = writeln!(out, "*arguments*: \\{a}\n");
+                }
+                if let Some(r) = self.returns {
+                    let a = &sym_text[r - start];
+                    let _ = writeln!(out, "*returns*: \\{r}\n");
+                }
+                if let Some(t) = self.tp {
+                    let t = &sym_text[t - start];
+                    let _ = writeln!(out, "*type*: \\{t}\n");
+                }
+                if let Some(d) = self.df {
+                    let d = &sym_text[d - start];
+                    let _ = writeln!(out, "*definiens*: \\{d}\n");
+                }
+            }
+        }
+        struct Assignment {}
+        enum Data {
+            Symbol(SymbolData),
+            Structure {
+                extensions: Vec<SymbolReference<LSPLineCol>>,
+                fields: Vec<SymbolData>,
+            },
+            Morphism(Vec<Assignment>),
+        }
+
+        match src
+            .clone()
+            .with_annots(self, false, move |data| {
+                let iter: AnnotIter = data.annotations.iter().into();
+                for a in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
+                    match a {
+                        STeXAnnot::MathStructure {
+                            uri,
+                            extends,
+                            opts,
+                            children,
+                            ..
+                        } if uri.uri == s.uri => {
+                            // TODO
+                            ()
+                        }
+                        STeXAnnot::MorphismEnv {
+                            uri,
+                            star,
+                            domain,
+                            kind,
+                            children,
+                            ..
+                        } if *uri == s.uri => {
+                            // TODO
+                            ()
+                        }
+                        STeXAnnot::InlineMorphism {
+                            uri,
+                            domain,
+                            domain_range,
+                            kind,
+                            assignments,
+                            ..
+                        } if *uri == s.uri => {
+                            // TODO
+                            ()
+                        }
+                        STeXAnnot::Paragraph {
+                            symbol: Some(uri),
+                            parsed_args,
+                            children,
+                            name_range: token_range,
+                            ..
+                        }
+                        | STeXAnnot::InlineParagraph {
+                            symbol: Some(uri),
+                            parsed_args,
+                            children,
+                            token_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            for l in parsed_args {
+                                match l {
+                                    ParagraphArg::Args(v) => data.args = Some(v.val_range),
+                                    ParagraphArg::Tp(t) => data.tp = Some(t.val_range),
+                                    ParagraphArg::Df(d) => data.df = Some(d.val_range),
+                                    ParagraphArg::Return(r) => data.returns = Some(r.val_range),
+                                    ParagraphArg::MacroName(r) => {
+                                        data.macro_name = Some(r.val_range);
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            return Some((*token_range, Data::Symbol(data)));
+                        }
+                        STeXAnnot::Symdecl {
+                            uri,
+                            parsed_args,
+                            starred,
+                            main_name_range,
+                            token_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            if !starred {
+                                data.macro_name = Some(*main_name_range);
+                            }
+                            for l in parsed_args {
+                                match l {
+                                    SymdeclArg::Args(v) => data.args = Some(v.val_range),
+                                    SymdeclArg::Tp(t) => data.tp = Some(t.val_range),
+                                    SymdeclArg::Df(d) => data.df = Some(d.val_range),
+                                    SymdeclArg::Return(r) => data.returns = Some(r.val_range),
+                                    _ => (),
+                                }
+                            }
+                            return Some((*token_range, Data::Symbol(data)));
+                        }
+                        STeXAnnot::TextSymdecl {
+                            uri,
+                            parsed_args,
+                            main_name_range,
+                            token_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            data.macro_name = Some(*main_name_range);
+                            for l in parsed_args {
+                                match l {
+                                    TextSymdeclArg::Tp(t) => data.tp = Some(t.val_range),
+                                    TextSymdeclArg::Df(d) => data.df = Some(d.val_range),
+                                    _ => (),
+                                }
+                            }
+                            return Some((*token_range, Data::Symbol(data)));
+                        }
+                        STeXAnnot::Symdef {
+                            uri,
+                            parsed_args,
+                            main_name_range,
+                            token_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            data.macro_name = Some(*main_name_range);
+                            for l in parsed_args {
+                                match l {
+                                    SymdefArg::Args(v) => data.args = Some(v.val_range),
+                                    SymdefArg::Tp(t) => data.tp = Some(t.val_range),
+                                    SymdefArg::Df(d) => data.df = Some(d.val_range),
+                                    SymdefArg::Return(r) => data.returns = Some(r.val_range),
+                                    _ => (),
+                                }
+                            }
+                            return Some((*token_range, Data::Symbol(data)));
+                        }
+                        _ => (),
+                    }
+                }
+                None
+            })
+            .await
+            .flatten()
+        {
+            Some((r, Data::Symbol(s))) if !s.is_empty() => src.with_text(|txt| {
+                out.push_str("\n______\n");
+                let StringRange { start, end } = r.into_other::<ByteOffset>(txt);
+                let txt = &txt[start.0..end.0];
+                s.write(txt, r.start, out);
+            }),
+            Some((r, Data::Structure { extensions, fields })) => (),
+            Some((r, Data::Morphism(_))) => (),
+            _ => (),
+        }
     }
 }
 

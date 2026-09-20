@@ -1,3 +1,5 @@
+use crate::sourcerefs::OffsetPosition;
+
 use super::StringPosition;
 
 /// INVARIANT: end >= start
@@ -10,6 +12,23 @@ pub struct StringRange<P: StringPosition> {
 impl<P: StringPosition> std::fmt::Display for StringRange<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}--{}", self.start, self.end)
+    }
+}
+
+impl<P: StringPosition> std::ops::Sub<P> for StringRange<P> {
+    type Output = Self;
+    fn sub(self, rhs: P) -> Self::Output {
+        Self {
+            start: self.start.sub(rhs),
+            end: self.end.sub(rhs),
+        }
+    }
+}
+
+impl<P: StringPosition> std::ops::SubAssign<P> for StringRange<P> {
+    fn sub_assign(&mut self, rhs: P) {
+        self.start.sub_assign(rhs);
+        self.end.sub_assign(rhs);
     }
 }
 
@@ -38,6 +57,16 @@ impl<P: StringPosition> PartialOrd<P> for StringRange<P> {
         } else {
             None
         }
+    }
+}
+
+//impl<P: StringPosition> std::ops::Index<std::ops::RangeFrom<P>>
+
+impl<P: StringPosition> std::ops::Index<StringRange<P>> for str {
+    type Output = str;
+    fn index(&self, index: StringRange<P>) -> &Self::Output {
+        let StringRange { start, end } = index.into_other::<crate::sourcerefs::ByteOffset>(self);
+        &self[start.0..end.0]
     }
 }
 

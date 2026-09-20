@@ -1093,9 +1093,10 @@ stex!(p => symdecl('*'?star){name:!name}[args:type SymdeclArg<Pos,STeXToken<Pos>
       symdecl.range,has_tp,has_df,argnum
     ) {
       MacroResult::Success(STeXToken::Symdecl {
-        uri, main_name_range,
-        full_range:symdecl.range,parsed_args:args,
-        token_range:symdecl.token_range
+          starred:star,
+          uri, main_name_range,
+          full_range:symdecl.range,parsed_args:args,
+          token_range:symdecl.token_range
       })
     } else {
       MacroResult::Simple(symdecl)
