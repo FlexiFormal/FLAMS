@@ -2853,7 +2853,7 @@ impl LSPState {
             returns: Option<StringRange<LSPLineCol>>,
         }
         impl SymbolData {
-            fn is_empty(self) -> bool {
+            const fn is_empty(self) -> bool {
                 self.macro_name.is_none()
                     && self.args.is_none()
                     && self.tp.is_none()
@@ -2864,23 +2864,27 @@ impl LSPState {
                 out.push_str("| | |\n| --- | --- |\n");
                 if let Some(m) = self.macro_name {
                     let m = &sym_text[m - start];
-                    let _ = writeln!(out, "| *macro* | `\\{m}`|\n");
+                    let _ = writeln!(out, "| *macro* | `\\{m}`|");
                 }
                 if let Some(a) = self.args {
+                    //tracing::warn!("Arguments: {sym_text:?} @ {}", a - start);
                     let a = &sym_text[a - start];
-                    let _ = writeln!(out, "| *arguments* | {a} |\n");
+                    let _ = writeln!(out, "| *arguments* | {a} |");
                 }
                 if let Some(r) = self.returns {
+                    //tracing::warn!("Returns: {sym_text:?} @ {}", r - start);
                     let r = &sym_text[r - start];
-                    let _ = writeln!(out, "| *returns* | `{r}` |\n");
+                    let _ = writeln!(out, "| *returns* | `{}` |", r.replace('\n', ""));
                 }
                 if let Some(t) = self.tp {
+                    //tracing::warn!("Type: {sym_text:?} @ {}", t - start);
                     let t = &sym_text[t - start];
-                    let _ = writeln!(out, "| *type* | `{t}` |\n");
+                    let _ = writeln!(out, "| *type* | `{}` |", t.replace('\n', ""));
                 }
                 if let Some(d) = self.df {
+                    //tracing::warn!("Definiens: {sym_text:?} @ {}", d - start);
                     let d = &sym_text[d - start];
-                    let _ = writeln!(out, "| *definiens* | `{d}` |\n");
+                    let _ = writeln!(out, "| *definiens* | `{}` |", d.replace('\n', ""));
                 }
             }
         }
@@ -3032,8 +3036,8 @@ impl LSPState {
         {
             Some((r, Data::Symbol(s))) if !s.is_empty() => src.with_text(|txt| {
                 out.push_str("\n______\n");
-                let StringRange { start, end } = r.into_other::<ByteOffset>(txt);
-                let txt = &txt[start.0..end.0];
+                let start = r.start.into_other::<ByteOffset>(txt);
+                let txt = &txt[start.0..];
                 s.write(txt, r.start, out);
             }),
             Some((r, Data::Structure { extensions, fields })) => (),
