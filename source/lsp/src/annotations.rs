@@ -1,6 +1,9 @@
 #![allow(clippy::too_many_lines)]
 
+use std::fmt::Write;
+
 use crate::capabilities::STeXSemanticTokens;
+use crate::documents::LSPDocument;
 use crate::{
     IsLSPRange, ProgressCallbackClient,
     state::{DocData, LSPState, UrlOrFile},
@@ -22,6 +25,7 @@ use flams_stex::quickparse::{
         },
     },
 };
+use flams_utils::sourcerefs::{ByteOffset, StringPosition};
 use flams_utils::{
     prelude::TreeChildIter,
     sourcerefs::{LSPLineCol, StringRange},
@@ -43,7 +47,11 @@ trait AnnotExt: Sized {
         pos: LSPLineCol,
     ) -> Option<lsp::GotoDefinitionResponse>;
     fn semantic_tokens(&self, cont: &mut impl FnMut(StringRange<LSPLineCol>, u32));
-    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover>;
+    fn hover(
+        &self,
+        top_archive: Option<&ArchiveUri>,
+        pos: LSPLineCol,
+    ) -> Option<either_of::Either<lsp::Hover, (lsp::Range, SymbolReference<LSPLineCol>)>>;
     fn inlay_hint(&self) -> Option<lsp::InlayHint>;
     fn code_action(&self, pos: LSPLineCol, url: &lsp::Url) -> lsp::CodeActionResponse;
 }
@@ -1281,7 +1289,11 @@ impl AnnotExt for STeXAnnot {
         }
     }
 
-    fn hover(&self, top_archive: Option<&ArchiveUri>, pos: LSPLineCol) -> Option<lsp::Hover> {
+    fn hover(
+        &self,
+        top_archive: Option<&ArchiveUri>,
+        pos: LSPLineCol,
+    ) -> Option<either_of::Either<lsp::Hover, (lsp::Range, SymbolReference<LSPLineCol>)>> {
         fn uriname(pre: &str, d: &impl std::fmt::Display) -> String {
             format!("{pre}<sup>`{d}`</sup>")
         }
@@ -1321,13 +1333,18 @@ impl AnnotExt for STeXAnnot {
                 uri,
                 name_range: Some(range),
                 ..
-            } => Some(lsp::Hover {
-                range: Some(StringRange::into_range(*range)),
-                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                    kind: lsp::MarkupKind::Markdown,
-                    value: uriname("", &uri.first().unwrap_or_else(|| unreachable!()).uri),
-                }),
-            }),
+            } => Some(
+                either_of::Either::Right((
+                    StringRange::into_range(*range),
+                    uri.first().unwrap_or_else(|| unreachable!()).clone(),
+                )), /*lsp::Hover {
+                        range: Some(StringRange::into_range(*range)),
+                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                            kind: lsp::MarkupKind::Markdown,
+                            value: uriname("", &uri.first().unwrap_or_else(|| unreachable!()).uri),
+                        }),
+                    }*/
+            ),
             Self::SemanticMacro {
                 uri,
                 full_range: range,
@@ -1357,13 +1374,15 @@ impl AnnotExt for STeXAnnot {
                 uri,
                 orig_range: range,
                 ..
-            } => Some(lsp::Hover {
-                range: Some(StringRange::into_range(*range)),
-                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                    kind: lsp::MarkupKind::Markdown,
-                    value: uriname("", &uri.uri),
-                }),
-            }),
+            } => Some(
+                either_of::Either::Right((StringRange::into_range(*range), uri.clone())), /*lsp::Hover {
+                                                                                              range: Some(StringRange::into_range(*range)),
+                                                                                              contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                                                                                  kind: lsp::MarkupKind::Markdown,
+                                                                                                  value: uriname("", &uri.uri),
+                                                                                              }),
+                                                                                          }*/
+            ),
             Self::InlineMorphism {
                 domain_range,
                 domain,
@@ -1372,26 +1391,36 @@ impl AnnotExt for STeXAnnot {
             } => {
                 if domain_range.contains(pos) {
                     let uri = match domain {
-                        ModuleOrStruct::Struct(sym) => &sym.uri,
+                        ModuleOrStruct::Struct(sym) => sym,
                         _ => return None,
                     };
-                    return Some(lsp::Hover {
-                        range: Some(StringRange::into_range(*domain_range)),
-                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                            kind: lsp::MarkupKind::Markdown,
-                            value: uriname("", uri),
-                        }),
-                    });
+                    return Some(
+                        either_of::Either::Right((
+                            StringRange::into_range(*domain_range),
+                            uri.clone(),
+                        )), /*lsp::Hover {
+                                range: Some(StringRange::into_range(*domain_range)),
+                                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                    kind: lsp::MarkupKind::Markdown,
+                                    value: uriname("", uri.uri),
+                                }),
+                            }*/
+                    );
                 }
                 for a in assignments {
                     if a.symbol_range.contains(pos) {
-                        return Some(lsp::Hover {
-                            range: Some(StringRange::into_range(a.symbol_range)),
-                            contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                                kind: lsp::MarkupKind::Markdown,
-                                value: uriname("", &a.symbol.uri),
-                            }),
-                        });
+                        return Some(
+                            either_of::Either::Right((
+                                StringRange::into_range(a.symbol_range),
+                                a.symbol.clone(),
+                            )), /*lsp::Hover {
+                                    range: Some(StringRange::into_range(a.symbol_range)),
+                                    contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                        kind: lsp::MarkupKind::Markdown,
+                                        value: uriname("", &a.symbol.uri),
+                                    }),
+                                }*/
+                        );
                     }
                 }
                 None
@@ -1401,22 +1430,24 @@ impl AnnotExt for STeXAnnot {
             }
             | Self::VariableMacro {
                 name, full_range, ..
-            } => Some(lsp::Hover {
+            } => Some(either_of::Either::Left(lsp::Hover {
                 range: Some(StringRange::into_range(*full_range)),
                 contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                     kind: lsp::MarkupKind::Markdown,
                     value: uriname("Variable ", name),
                 }),
-            }),
+            })),
             Self::MathStructure { extends, .. } => extends.iter().find_map(|(s, r)| {
                 if r.contains(pos) {
-                    Some(lsp::Hover {
-                        range: Some(StringRange::into_range(*r)),
-                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                            kind: lsp::MarkupKind::Markdown,
-                            value: uriname("", &s.uri),
-                        }),
-                    })
+                    Some(
+                        either_of::Either::Right((StringRange::into_range(*r), s.clone())), /*lsp::Hover {
+                                                                                                range: Some(StringRange::into_range(*r)),
+                                                                                                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                                                                                    kind: lsp::MarkupKind::Markdown,
+                                                                                                    value: uriname("", &s.uri),
+                                                                                                }),
+                                                                                            }*/
+                    )
                 } else {
                     None
                 }
@@ -1427,16 +1458,21 @@ impl AnnotExt for STeXAnnot {
                         if val_range.contains(pos) {
                             for (s, r) in val {
                                 if r.contains(pos) {
-                                    return Some(lsp::Hover {
-                                        range: Some(StringRange::into_range(*r)),
-                                        contents: lsp::HoverContents::Markup(lsp::MarkupContent {
-                                            kind: lsp::MarkupKind::Markdown,
-                                            value: uriname(
-                                                "",
-                                                &s.first().unwrap_or_else(|| unreachable!()).uri,
-                                            ),
-                                        }),
-                                    });
+                                    return Some(
+                                        either_of::Either::Right((
+                                            StringRange::into_range(*r),
+                                            s.first().unwrap_or_else(|| unreachable!()).clone(),
+                                        )), /*lsp::Hover {
+                                                range: Some(StringRange::into_range(*r)),
+                                                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                                                    kind: lsp::MarkupKind::Markdown,
+                                                    value: uriname(
+                                                        "",
+                                                        &s.first().unwrap_or_else(|| unreachable!()).uri,
+                                                    ),
+                                                }),
+                                            }*/
+                                    );
                                 }
                             }
                         }
@@ -1460,13 +1496,13 @@ impl AnnotExt for STeXAnnot {
                 let Some(uri) = uri_from_archive_relpath(a, &filepath.0) else {
                     return None;
                 };
-                Some(lsp::Hover {
+                Some(either_of::Either::Left(lsp::Hover {
                     range: Some(StringRange::into_range(*full_range)),
                     contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                         kind: lsp::MarkupKind::Markdown,
                         value: format!("![img]({uri})"),
                     }),
-                })
+                }))
             }
             Self::Module {
                 uri,
@@ -1478,13 +1514,13 @@ impl AnnotExt for STeXAnnot {
                     start: full_range.start,
                     end: name_range.end,
                 };
-                Some(lsp::Hover {
+                Some(either_of::Either::Left(lsp::Hover {
                     range: Some(StringRange::into_range(range)),
                     contents: lsp::HoverContents::Markup(lsp::MarkupContent {
                         kind: lsp::MarkupKind::Markdown,
                         value: uri.to_string(),
                     }),
-                })
+                }))
             }
             Self::ImportModule { .. }
             | Self::UseModule { .. }
@@ -2608,15 +2644,81 @@ impl LSPState {
         position: lsp::Position,
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>> + use<>> {
+        fn get_comment(txt: &str, pos: LSPLineCol, out: &mut String) {
+            let off = pos.into_other::<ByteOffset>(txt).0;
+            let mut txt = txt[..off].trim_end().lines();
+            let mut ret = Vec::new();
+            while let Some(l) = txt.next_back()
+                && let l = l.trim_start()
+                && l.starts_with("%%")
+            {
+                let l = l[2..].trim();
+                ret.push(l);
+            }
+            if !ret.is_empty() {
+                out.push_str("\n_____\n");
+                for s in ret.into_iter().rev() {
+                    out.push_str(s);
+                    out.push('\n');
+                }
+            }
+        }
         let d = self.get(uri)?;
         let da = d.archive().cloned();
         let pos = LSPLineCol::new(position.line, position.character);
-        Some(
-            d.with_annots(self.clone(), false, move |data| {
-                at_position(data, pos).and_then(|e| e.hover(da.as_ref(), pos))
+        let slf = self.clone();
+        let fut = d.with_annots(self.clone(), false, move |data| {
+            at_position(data, pos).and_then(|e| e.hover(da.as_ref(), pos))
+        });
+        Some(async move {
+            let o = fut.await.flatten()?;
+            let (range, s) = match o {
+                either_of::Either::Left(a) => return Some(a),
+                either_of::Either::Right((range, s)) => (range, s),
+            };
+            let mut ret = format!("<sup>`{}`</sup>", s.uri.name());
+            if let Some(fp) = s.filepath.as_ref()
+                && let Ok(url) = lsp::Url::from_file_path(fp)
+            {
+                let url = url.into();
+                let src = if let Some(src) = slf.get(&url) {
+                    Some(src)
+                } else if let Ok(txt) = tokio::fs::read_to_string(fp).await {
+                    slf.insert(url.clone(), txt);
+                    slf.get(&url)
+                } else {
+                    None
+                };
+
+                if let Some(src) = src.as_ref()
+                    && !src.with_text(|txt| {
+                        if txt.is_empty() {
+                            false
+                        } else {
+                            get_comment(txt, s.range.start, &mut ret);
+                            true
+                        }
+                    })
+                    && let Some(p) = src.path()
+                    && let Ok(txt) = tokio::fs::read_to_string(p).await
+                {
+                    get_comment(&txt, s.range.start, &mut ret);
+                    src.set_text(txt);
+                }
+
+                if let Some(src) = src {
+                    slf.hover_metadata(src, s, &mut ret).await;
+                }
+            }
+
+            Some(lsp::Hover {
+                range: Some(range),
+                contents: lsp::HoverContents::Markup(lsp::MarkupContent {
+                    kind: lsp::MarkupKind::Markdown,
+                    value: ret,
+                }),
             })
-            .map(|o| o.flatten()),
-        )
+        })
     }
 
 
@@ -2792,6 +2894,214 @@ impl LSPState {
                 data: ret,
             }
         }))
+    }
+
+    async fn hover_metadata(
+        self,
+        src: LSPDocument,
+        s: SymbolReference<LSPLineCol>,
+        out: &mut String,
+    ) {
+        #[derive(Clone, Copy, Default)]
+        struct SymbolData {
+            macro_name: Option<StringRange<LSPLineCol>>,
+            args: Option<StringRange<LSPLineCol>>,
+            tp: Option<StringRange<LSPLineCol>>,
+            df: Option<StringRange<LSPLineCol>>,
+            returns: Option<StringRange<LSPLineCol>>,
+        }
+        impl SymbolData {
+            const fn is_empty(self) -> bool {
+                self.macro_name.is_none()
+                    && self.args.is_none()
+                    && self.tp.is_none()
+                    && self.df.is_none()
+                    && self.returns.is_none()
+            }
+            fn write(self, sym_text: &str, start: LSPLineCol, out: &mut String) {
+                out.push_str("| | |\n| --- | --- |\n");
+                if let Some(m) = self.macro_name {
+                    let m = &sym_text[m - start];
+                    let _ = writeln!(out, "| *macro* | `\\{m}`|");
+                }
+                if let Some(a) = self.args {
+                    //tracing::warn!("Arguments: {sym_text:?} @ {}", a - start);
+                    let a = &sym_text[a - start];
+                    let _ = writeln!(out, "| *arguments* | {a} |");
+                }
+                if let Some(r) = self.returns {
+                    //tracing::warn!("Returns: {sym_text:?} @ {}", r - start);
+                    let r = &sym_text[r - start];
+                    let _ = writeln!(out, "| *returns* | `{}` |", r.replace('\n', ""));
+                }
+                if let Some(t) = self.tp {
+                    //tracing::warn!("Type: {sym_text:?} @ {}", t - start);
+                    let t = &sym_text[t - start];
+                    let _ = writeln!(out, "| *type* | `{}` |", t.replace('\n', ""));
+                }
+                if let Some(d) = self.df {
+                    //tracing::warn!("Definiens: {sym_text:?} @ {}", d - start);
+                    let d = &sym_text[d - start];
+                    let _ = writeln!(out, "| *definiens* | `{}` |", d.replace('\n', ""));
+                }
+            }
+        }
+        struct Assignment {}
+        enum Data {
+            Symbol(SymbolData),
+            Structure {
+                extensions: Vec<SymbolReference<LSPLineCol>>,
+                fields: Vec<SymbolData>,
+            },
+            Morphism(Vec<Assignment>),
+        }
+
+        match src
+            .clone()
+            .with_annots(self, false, move |data| {
+                let iter: AnnotIter = data.annotations.iter().into();
+                for a in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
+                    match a {
+                        STeXAnnot::MathStructure {
+                            uri,
+                            extends,
+                            opts,
+                            children,
+                            ..
+                        } if uri.uri == s.uri => {
+                            // TODO
+                            ()
+                        }
+                        STeXAnnot::MorphismEnv {
+                            uri,
+                            star,
+                            domain,
+                            kind,
+                            children,
+                            ..
+                        } if *uri == s.uri => {
+                            // TODO
+                            ()
+                        }
+                        STeXAnnot::InlineMorphism {
+                            uri,
+                            domain,
+                            domain_range,
+                            kind,
+                            assignments,
+                            ..
+                        } if *uri == s.uri => {
+                            // TODO
+                            ()
+                        }
+                        STeXAnnot::Paragraph {
+                            symbol: Some(uri),
+                            parsed_args,
+                            children,
+                            full_range,
+                            ..
+                        }
+                        | STeXAnnot::InlineParagraph {
+                            symbol: Some(uri),
+                            parsed_args,
+                            children,
+                            full_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            for l in parsed_args {
+                                match l {
+                                    ParagraphArg::Args(v) => data.args = Some(v.val_range),
+                                    ParagraphArg::Tp(t) => data.tp = Some(t.val_range),
+                                    ParagraphArg::Df(d) => data.df = Some(d.val_range),
+                                    ParagraphArg::Return(r) => data.returns = Some(r.val_range),
+                                    ParagraphArg::MacroName(r) => {
+                                        data.macro_name = Some(r.val_range);
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            return Some((*full_range, Data::Symbol(data)));
+                        }
+                        STeXAnnot::Symdecl {
+                            uri,
+                            parsed_args,
+                            starred,
+                            main_name_range,
+                            full_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            if !starred {
+                                data.macro_name = Some(*main_name_range);
+                            }
+                            for l in parsed_args {
+                                match l {
+                                    SymdeclArg::Args(v) => data.args = Some(v.val_range),
+                                    SymdeclArg::Tp(t) => data.tp = Some(t.val_range),
+                                    SymdeclArg::Df(d) => data.df = Some(d.val_range),
+                                    SymdeclArg::Return(r) => data.returns = Some(r.val_range),
+                                    _ => (),
+                                }
+                            }
+                            return Some((*full_range, Data::Symbol(data)));
+                        }
+                        STeXAnnot::TextSymdecl {
+                            uri,
+                            parsed_args,
+                            main_name_range,
+                            full_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            data.macro_name = Some(*main_name_range);
+                            for l in parsed_args {
+                                match l {
+                                    TextSymdeclArg::Tp(t) => data.tp = Some(t.val_range),
+                                    TextSymdeclArg::Df(d) => data.df = Some(d.val_range),
+                                    _ => (),
+                                }
+                            }
+                            return Some((*full_range, Data::Symbol(data)));
+                        }
+                        STeXAnnot::Symdef {
+                            uri,
+                            parsed_args,
+                            main_name_range,
+                            full_range,
+                            ..
+                        } if uri.uri == s.uri => {
+                            let mut data = SymbolData::default();
+                            data.macro_name = Some(*main_name_range);
+                            for l in parsed_args {
+                                match l {
+                                    SymdefArg::Args(v) => data.args = Some(v.val_range),
+                                    SymdefArg::Tp(t) => data.tp = Some(t.val_range),
+                                    SymdefArg::Df(d) => data.df = Some(d.val_range),
+                                    SymdefArg::Return(r) => data.returns = Some(r.val_range),
+                                    _ => (),
+                                }
+                            }
+                            return Some((*full_range, Data::Symbol(data)));
+                        }
+                        _ => (),
+                    }
+                }
+                None
+            })
+            .await
+            .flatten()
+        {
+            Some((r, Data::Symbol(s))) if !s.is_empty() => src.with_text(|txt| {
+                out.push_str("\n______\n");
+                let start = r.start.into_other::<ByteOffset>(txt);
+                let txt = &txt[start.0..];
+                s.write(txt, r.start, out);
+            }),
+            Some((r, Data::Structure { extensions, fields })) => (),
+            Some((r, Data::Morphism(_))) => (),
+            _ => (),
+        }
     }
 }
 
