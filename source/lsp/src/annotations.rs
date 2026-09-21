@@ -2618,6 +2618,10 @@ impl LSPState {
             .map(|o| o.flatten()),
         )
     }
+
+
+    
+
     pub fn get_completion(
         &self,
         uri: &UrlOrFile,
