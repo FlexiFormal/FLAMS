@@ -2653,15 +2653,13 @@ impl LSPState {
                 && l.starts_with("%%")
             {
                 let l = l[2..].trim();
-                if !l.is_empty() {
-                    ret.push(l);
-                }
+                ret.push(l);
             }
             if !ret.is_empty() {
                 out.push_str("\n_____\n");
                 for s in ret.into_iter().rev() {
                     out.push_str(s);
-                    out.push(' ');
+                    out.push('\n');
                 }
             }
         }
