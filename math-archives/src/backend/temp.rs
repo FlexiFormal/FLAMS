@@ -198,7 +198,7 @@ impl LocalBackend for TemporaryBackend {
             || self.inner.parent.get_html_body(d),
             |html| {
                 Ok((
-                    html.css.clone(),
+                    super::replace_css(html.css.clone()),
                     html.html[html.body.start..html.body.end]
                         .to_string()
                         .into_boxed_str(),
@@ -221,7 +221,7 @@ impl LocalBackend for TemporaryBackend {
     {
         if let Some(html) = self.inner.html.get(uri) {
             return Box::pin(std::future::ready(Ok((
-                html.css.clone(),
+                super::replace_css(html.css.clone()),
                 html.html[html.body.start..html.body.end]
                     .to_string()
                     .into_boxed_str(),
@@ -235,7 +235,7 @@ impl LocalBackend for TemporaryBackend {
             || self.inner.parent.get_html_body_inner(d),
             |html| {
                 Ok((
-                    html.css.clone(),
+                    super::replace_css(html.css.clone()),
                     html.html[html.body.start + html.inner_offset..html.body.end - "</body>".len()]
                         .to_string()
                         .into_boxed_str(),
@@ -258,7 +258,7 @@ impl LocalBackend for TemporaryBackend {
     {
         if let Some(html) = self.inner.html.get(uri) {
             return Box::pin(std::future::ready(Ok((
-                html.css.clone(),
+                super::replace_css(html.css.clone()),
                 html.html[html.body.start + html.inner_offset..html.body.end - "</body>".len()]
                     .to_string()
                     .into_boxed_str(),
@@ -283,7 +283,7 @@ impl LocalBackend for TemporaryBackend {
             || self.inner.parent.get_html_fragment(d, range),
             |html| {
                 Ok((
-                    html.css.clone(),
+                    super::replace_css(html.css.clone()),
                     html.html[range.start..range.end]
                         .to_string()
                         .into_boxed_str(),
@@ -304,7 +304,7 @@ impl LocalBackend for TemporaryBackend {
     > {
         if let Some(html) = self.inner.html.get(uri) {
             return Box::pin(std::future::ready(Ok((
-                html.css.clone(),
+                super::replace_css(html.css.clone()),
                 html.html[html.body.start + html.inner_offset..html.body.end]
                     .to_string()
                     .into_boxed_str(),

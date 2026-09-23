@@ -32,12 +32,17 @@ pub struct SettingsSpec {
     pub stack_size: Option<u8>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub remotes: rustc_hash::FxHashMap<Box<str>, url::Url>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub fonts: rustc_hash::FxHashMap<Box<str>, Box<str>>,
 }
 impl Add for SettingsSpec {
     type Output = Self;
     fn add(mut self, rhs: Self) -> Self::Output {
         for (k, v) in rhs.remotes {
             self.remotes.insert(k, v);
+        }
+        for (k, v) in rhs.fonts {
+            self.fonts.insert(k, v);
         }
         Self {
             mathhubs: if self.mathhubs.is_empty() {
@@ -57,6 +62,7 @@ impl Add for SettingsSpec {
             gitlab: self.gitlab + rhs.gitlab,
             lsp: self.lsp || rhs.lsp,
             remotes: self.remotes,
+            fonts: self.fonts,
         }
     }
 }
@@ -64,6 +70,9 @@ impl AddAssign for SettingsSpec {
     fn add_assign(&mut self, rhs: Self) {
         for (k, v) in rhs.remotes {
             self.remotes.insert(k, v);
+        }
+        for (k, v) in rhs.fonts {
+            self.fonts.insert(k, v);
         }
         if self.mathhubs.is_empty() {
             self.mathhubs = rhs.mathhubs;
@@ -156,6 +165,7 @@ impl SettingsSpec {
             },
             lsp: false,
             remotes: rustc_hash::FxHashMap::default(),
+            fonts: rustc_hash::FxHashMap::default(),
         }
     }
 }

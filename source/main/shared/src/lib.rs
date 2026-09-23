@@ -17,6 +17,7 @@ compile_error!("exactly one of the features \"ssr\" or \"hydrate\" must be enabl
 pub mod server;
 
 #[cfg(feature = "ssr")]
+/// #### Panics
 pub fn main(settings: flams_utils::settings::SettingsSpec) {
     #[allow(unused_imports)]
     use flams_ftml::FTML;
@@ -29,7 +30,7 @@ pub fn main(settings: flams_utils::settings::SettingsSpec) {
     use flams_system::settings::SettingsSpec;
     fn exit() {
         flams_system::building::queue_manager::QueueManager::clear();
-        let _ = flams_system::settings::Settings::get().close();
+        flams_system::settings::Settings::get().close();
         std::process::exit(0)
     }
 

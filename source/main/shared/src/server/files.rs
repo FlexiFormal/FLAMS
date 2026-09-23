@@ -43,6 +43,7 @@ impl axum::response::IntoResponse for Img {
 }
 
 //#[axum::debug_handler]
+/// #### Errors
 pub async fn img_handler(
     uri: http::Uri,
     // axum::extract::State(ServerState { images, .. }): axum::extract::State<ServerState>,
