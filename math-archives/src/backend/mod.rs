@@ -49,7 +49,6 @@ pub(crate) fn replace_css(mut css: Box<[Css]>) -> Box<[Css]> {
                 && let Some(new) = fonts.get(url)
             {
                 *url = format!("srv:/fonts/{new}").into_boxed_str();
-                println!("REPLACED: {url}");
             }
         }
     }
