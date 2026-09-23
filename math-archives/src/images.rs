@@ -45,10 +45,27 @@ impl<'s> ImagePath<'s> {
                 .ok()
                 .map(|v| (v.into_boxed_slice(), ext))
         } else {
-            let img = image::ImageReader::open(path).ok()?.decode().ok()?;
+            let img = match image::ImageReader::open(path) {
+                Ok(img) => img,
+                Err(e) => {
+                    tracing::error!("Failed to open {}: {e}", path.display());
+                    return None;
+                }
+            };
+            let img = match img.decode() {
+                Ok(img) => img,
+                Err(e) => {
+                    tracing::error!("Failed to decode image {}: {e}", path.display());
+                    return None;
+                }
+            };
             let mut v = Vec::<u8>::new();
-            img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
-                .ok()?;
+            if let Err(e) =
+                img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
+            {
+                tracing::error!("Failed to encode {} to .webp: {e}", path.display());
+                return None;
+            }
             Some((v.into_boxed_slice(), "webp"))
         }
     }
