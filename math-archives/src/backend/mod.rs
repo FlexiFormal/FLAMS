@@ -31,6 +31,31 @@ pub use sandbox::*;
 use std::path::Path;
 pub use temp::*;
 
+static SETTINGS: std::sync::LazyLock<
+    std::sync::Arc<
+        parking_lot::RwLock<Option<fn() -> &'static rustc_hash::FxHashMap<Box<str>, Box<str>>>>,
+    >,
+> = std::sync::LazyLock::new(|| std::sync::Arc::new(parking_lot::RwLock::new(None)));
+pub fn set_fonts(get: fn() -> &'static rustc_hash::FxHashMap<Box<str>, Box<str>>) {
+    *SETTINGS.write() = Some(get);
+}
+
+pub(crate) fn replace_css(mut css: Box<[Css]>) -> Box<[Css]> {
+    let fonts = *SETTINGS.read();
+    if let Some(fonts) = fonts {
+        let fonts = fonts();
+        for c in &mut css {
+            if let Css::Link(url) = c
+                && let Some(new) = fonts.get(url)
+            {
+                *url = format!("srv:/fonts/{new}").into_boxed_str();
+                println!("REPLACED: {url}");
+            }
+        }
+    }
+    css
+}
+
 pub trait LocalBackend: Send + Sync {
     type ArchiveIter<'a>: IntoIterator<Item = &'a Archive>
     where

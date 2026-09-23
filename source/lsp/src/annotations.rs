@@ -2646,9 +2646,9 @@ impl LSPState {
     ) -> Option<impl std::future::Future<Output = Option<lsp::Hover>> + use<>> {
         fn get_comment(txt: &str, pos: LSPLineCol, out: &mut String) {
             let off = pos.into_other::<ByteOffset>(txt).0;
-            let mut txt = txt[..off].trim_end().lines();
+            let mut lines = txt[..off].trim_end().lines();
             let mut ret = Vec::new();
-            while let Some(l) = txt.next_back()
+            while let Some(l) = lines.next_back()
                 && let l = l.trim_start()
                 && l.starts_with("%%")
             {

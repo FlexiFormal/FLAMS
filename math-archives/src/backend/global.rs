@@ -199,7 +199,7 @@ impl LocalBackend for ArchiveManager {
                 docfile
                     .get_html_body()
                     .map_err(Into::into)
-                    .map(|s| (docfile.get_css(), s))
+                    .map(|s| (super::replace_css(docfile.get_css()), s))
             },
             |o| todo!(),
         )
@@ -221,7 +221,7 @@ impl LocalBackend for ArchiveManager {
                     docfile
                         .get_html_body()
                         .map_err(Into::into)
-                        .map(|s| (docfile.get_css(), s))
+                        .map(|s| (super::replace_css(docfile.get_css()), s))
                 })
             },
             |o| std::future::ready(todo!()),
@@ -238,7 +238,7 @@ impl LocalBackend for ArchiveManager {
                 docfile
                     .get_html_body_inner()
                     .map_err(Into::into)
-                    .map(|s| (docfile.get_css(), s))
+                    .map(|s| (super::replace_css(docfile.get_css()), s))
             },
             |o| todo!(),
         )
@@ -260,7 +260,7 @@ impl LocalBackend for ArchiveManager {
                     docfile
                         .get_html_body_inner()
                         .map_err(Into::into)
-                        .map(|s| (docfile.get_css(), s))
+                        .map(|s| (super::replace_css(docfile.get_css()), s))
                 })
             },
             |o| std::future::ready(todo!()),
@@ -278,7 +278,7 @@ impl LocalBackend for ArchiveManager {
                 docfile
                     .get_html_range(range)
                     .map_err(Into::into)
-                    .map(|s| (docfile.get_css(), s))
+                    .map(|s| (super::replace_css(docfile.get_css()), s))
             },
             |o| todo!(),
         )
@@ -298,7 +298,7 @@ impl LocalBackend for ArchiveManager {
                     docfile
                         .get_html_range(range)
                         .map_err(Into::into)
-                        .map(|s| (docfile.get_css(), s))
+                        .map(|s| (super::replace_css(docfile.get_css()), s))
                 })
             },
             |o| std::future::ready(todo!()),
@@ -610,54 +610,4 @@ impl ArchiveManager {
                     .map(|n| (uri, n))
             })
     }
-
-    /*
-    #[cfg(feature = "rdf")]
-    fn do_notations<E: AsyncEngine>(
-        &self,
-        iri: ulo::rdf_types::NamedNode,
-    ) -> impl Iterator<Item = (DocumentElementUri, Notation)> {
-        let q = crate::sparql!(SELECT DISTINCT ?n WHERE { ?n ulo:notation_for iri. });
-        self.triple_store()
-            .query::<E>(q)
-            .expect("Notations query should be valid")
-            .into_uris::<DocumentElementUri>()
-            .filter_map(|uri| {
-                use ftml_ontology::narrative::elements::notations::NotationReference;
-                //tracing::warn!("Found {uri}");
-                let notation = self
-                    .get_typed_document_element::<NotationReference>(&uri)
-                    .ok()?;
-                //tracing::warn!("Found {notation:?}");
-                self.get_reference(&notation.notation.with_doc(uri.document.clone()))
-                    .map_err(|e| tracing::error!("Error getting notation {uri}: {e}"))
-                    .ok()
-                    .map(|n| (uri, n))
-            })
-    }
-
-    #[cfg(feature = "rdf")]
-    fn do_var_notations<E: AsyncEngine>(
-        &self,
-        iri: ulo::rdf_types::NamedNode,
-    ) -> impl Iterator<Item = (DocumentElementUri, Notation)> {
-        let q = crate::sparql!(SELECT DISTINCT ?n WHERE { ?n ulo:notation_for iri. });
-        self.triple_store()
-            .query::<E>(q)
-            .expect("Notations query should be valid")
-            .into_uris::<DocumentElementUri>()
-            .filter_map(|uri| {
-                use ftml_ontology::narrative::elements::notations::VariableNotationReference;
-                //tracing::warn!("Found {uri}");
-                let notation = self
-                    .get_typed_document_element::<VariableNotationReference>(&uri)
-                    .ok()?;
-                //tracing::warn!("Found {notation:?}");
-                self.get_reference(&notation.notation.with_doc(uri.document.clone()))
-                    .map_err(|e| tracing::error!("Error getting variable notation {uri}: {e}"))
-                    .ok()
-                    .map(|n| (uri, n))
-            })
-    }
-     */
 }

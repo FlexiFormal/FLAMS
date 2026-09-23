@@ -9,7 +9,7 @@ name = "flams"
 path="src/main.rs"
 
 [lints]
-workspace=true
+workspace = true
 
 [features]
 docs = [

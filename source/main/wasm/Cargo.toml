@@ -9,7 +9,7 @@ name = "flams"
 crate-type = ["cdylib", "rlib"]
 
 [lints]
-workspace=true
+workspace = true
 
 [features]
 docs = [
