@@ -25,7 +25,6 @@ pub mod queue_manager;
 pub use queue::QueueName;
 pub mod graphmap;
 pub mod queue_again;
-#[cfg(feature = "tokio")]
 pub mod queue_clone;
 pub mod queueing;
 pub(crate) static BUILD_QUEUE_SPAN: std::sync::LazyLock<tracing::Span> = std::sync::LazyLock::new(

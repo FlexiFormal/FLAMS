@@ -143,7 +143,7 @@ pub fn capabilities() -> lsp::ServerCapabilities {
         })),
         completion_provider: Some(CompletionOptions {
             resolve_provider: Some(true),
-            trigger_characters: None,
+            trigger_characters: Some(vec!["{".into()]),
             all_commit_characters: None,
             work_done_progress_options: lsp::WorkDoneProgressOptions {
                 work_done_progress: Some(true),

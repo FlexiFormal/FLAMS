@@ -1,14 +1,18 @@
 #![allow(clippy::too_many_lines)]
 
 use std::fmt::Write;
+use std::str::FromStr;
 
 use crate::capabilities::STeXSemanticTokens;
+use crate::completion::completionctx::get_token_completion;
 use crate::documents::LSPDocument;
 use crate::{
     IsLSPRange, ProgressCallbackClient,
     state::{DocData, LSPState, UrlOrFile},
 };
-use async_lsp::lsp_types as lsp;
+use async_lsp::lsp_types::{
+    self as lsp, CodeActionTriggerKind, CompletionItem, CompletionTriggerKind,
+};
 use flams_math_archives::LocalArchive;
 use flams_math_archives::backend::{GlobalBackend, LocalBackend};
 use flams_stex::quickparse::stex::rules::{IncludeProblemArg, SRefOptsA, SRefOptsB};
@@ -2721,9 +2725,6 @@ impl LSPState {
         })
     }
 
-
-    
-
     pub fn get_completion(
         &self,
         uri: &UrlOrFile,
@@ -2731,52 +2732,79 @@ impl LSPState {
         params: lsp::CompletionContext,
         _: Option<ProgressCallbackClient>,
     ) -> Option<impl std::future::Future<Output = Option<lsp::CompletionResponse>> + use<>> {
+        // todays goal is to implement just collecting symdecl, vardef, symdef, and etc macro invocation
         let d = self.get(uri)?;
         let pos = d.get_position(position);
         let should_traverse = d.with_text(|doc| {
             let (first, _) = doc.split_at(pos);
-            first.ends_with("\\sn{") || first.ends_with("\\sr{")
-        });
-        let y = d.with_annots(self.clone(), false, move |data| {
-            let mut range_collect = vec![];
-            if should_traverse {
-                let iter: AnnotIter = data.annotations.iter().into();
-                for e in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
-                    match e {
-                        STeXAnnot::Module { name_range, .. } => {
-                            range_collect.push(name_range);
-                        }
-                        STeXAnnot::MathStructure { name_range, .. } => {
-                            range_collect.push(name_range);
-                        }
-                        STeXAnnot::Symdecl {
-                            main_name_range, ..
-                        } => {
-                            range_collect.push(main_name_range);
-                        }
-                        STeXAnnot::TextSymdecl {
-                            main_name_range, ..
-                        } => {
-                            range_collect.push(main_name_range);
-                        }
-                        STeXAnnot::Symdef {
-                            main_name_range, ..
-                        } => {
-                            range_collect.push(main_name_range);
-                        }
-                        STeXAnnot::Definiens { name_range, .. } => {
-                            if let Some(x) = name_range {
-                                range_collect.push(&x);
-                            }
-                        }
-                        _ => {}
+            let (is_triggered, trig_char) = params.trigger_character.map_or_else(
+                || (false, "".into()),
+                |c| {
+                    if c == "{" || c == "\\" {
+                        (true, c)
+                    } else {
+                        (false, c)
                     }
+                },
+            );
+            let tokens = get_token_completion(first, '{');
+            tokens.is_some()
+        });
+        if !should_traverse {
+            return None;
+        }
+
+        let y = d.clone().with_annots(self.clone(), false, move |data| {
+            let mut range_collect = vec![];
+            let iter: AnnotIter = data.annotations.iter().into();
+            for e in <AnnotIter as TreeChildIter<STeXAnnot>>::dfs(iter) {
+                match e {
+                    STeXAnnot::Module { name_range, .. }
+                    | STeXAnnot::MathStructure { name_range, .. } => {
+                        range_collect.push(name_range.clone());
+                    }
+                    STeXAnnot::Symdecl {
+                        main_name_range, ..
+                    }
+                    | STeXAnnot::TextSymdecl {
+                        main_name_range, ..
+                    }
+                    | STeXAnnot::Symdef {
+                        main_name_range, ..
+                    } => {
+                        range_collect.push(main_name_range.clone());
+                    }
+                    STeXAnnot::Definiens { name_range, .. } => {
+                        if let Some(x) = name_range {
+                            range_collect.push(x.clone());
+                        }
+                    }
+                    STeXAnnot::UseModule {
+                        archive_range,
+                        path_range,
+                        module,
+                        token_range,
+                        full_range,
+                    } => {
+                        if let Some(path) = module.full_path {
+                            let url = UrlOrFile::File(path);
+                            if let Some(doc2) = self.get(&url) {}
+                        }
+                    }
+                    _ => {}
                 }
             }
-
-            let mut completion_collect = vec![];
-
-            lsp::CompletionResponse::from(completion_collect)
+            let ans: Vec<_> = d.with_text(|doc| {
+                range_collect
+                    .iter()
+                    .filter_map(|x| {
+                        LSPLineCol::get_range(x.start, x.end, &doc).map(|x| {
+                            CompletionItem::new_simple(String::from_str(x).unwrap(), "".into())
+                        })
+                    })
+                    .collect()
+            });
+            lsp::CompletionResponse::from(ans)
         });
 
         Some(y)

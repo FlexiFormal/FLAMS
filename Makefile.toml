@@ -141,6 +141,18 @@ args = ["leptos", "build"]
 # dependencies = ["db"]
 # dependencies = ["build-viewer","copy-viewer","db"]
 
+# Fast native-only build of just the `flams` binary (LSP server + plain
+# HTTP mode) -- skips cargo-leptos entirely, so no wasm client
+# build/bundle, no db/copy-to-bin steps. Uses the `flams-dev` profile
+# (non-LTO opt-level 0 dev build) instead of `flams-release`'s fat-LTO
+# one. Run the resulting binary directly from
+# target/flams-dev/flams -- e.g. `--lsp` for LSP-over-stdio testing, or
+# `-m <mathhub-dir> --port <port>` for a plain HTTP server.
+[tasks.lsp-dev]
+workspace = false
+command = "cargo"
+args = ["build", "-p", "flams", "--profile", "flams-dev"]
+
 [tasks.watch]
 workspace = false
 install_crate = "cargo-leptos"

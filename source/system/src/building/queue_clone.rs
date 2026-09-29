@@ -66,27 +66,31 @@ impl Queue {
             in_degree_store,
             ..
         } = state;
-
-        let store = graphmap::build_graph(map, GraphScope::All, dep_graph, in_degree_store);
-
+        // this first builds the graph
+        graphmap::build_graph(map, GraphScope::All, dep_graph, in_degree_store);
+        // we need a buildtaskid to buildtask map
         let by_id: HashMap<BuildTaskId, BuildTask> =
             map.map.values().map(|t| (t.get_id(), t.clone())).collect();
-
+        // this is helper function to get ready tasks from the graph
         let is_ready = |idx: NodeIndex| dep_graph.neighbors_directed(idx, Incoming).count() == 0;
 
         let mut forced_ready: HashSet<NodeIndex> = HashSet::new();
+        // why we checking the in_degree_store here ?
         if !in_degree_store.is_empty() && !in_degree_store.values().any(|&idx| is_ready(idx)) {
             tracing::info!(
                 target: "buildqueue",
                 "sort_by_indegree: nothing naturally ready ({} steps) - running kosaraju_scc to break a cycle",
                 in_degree_store.len()
             );
+
+            // why are we doing the done_ids here ? because the assumption is that i want to filter
             let done_ids: HashSet<BuildTaskId> = done.iter().map(BuildTask::get_id).collect();
             let filtered = NodeFiltered::from_fn(&*dep_graph, |idx: NodeIndex| {
                 !done_ids.contains(&dep_graph[idx].0)
             });
+
             let all_sccs = kosaraju_scc(&filtered);
-            for scc in &all_sccs {
+            for scc in all_sccs.iter().rev() {
                 if scc.len() < 2 || scc.iter().any(|&n| is_ready(n)) {
                     continue;
                 }
@@ -122,16 +126,15 @@ impl Queue {
                 blocked.push(task.clone());
             }
         }
-        // This is reduntant
-        // for task in map.map.values() {
-        //     if task
-        //         .steps()
-        //         .iter()
-        //         .all(|s| s.state.get() == TaskState::Done)
-        //     {
-        //         done.push(task.clone());
-        //     }
-        // }
+        for task in map.map.values() {
+            if task
+                .steps()
+                .iter()
+                .all(|s| s.state.get() == TaskState::Done)
+            {
+                done.push(task.clone());
+            }
+        }
 
         tracing::info!(
             target: "buildqueue",

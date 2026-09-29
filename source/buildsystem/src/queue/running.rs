@@ -13,7 +13,7 @@ pub struct RunningQueue {
     pub(crate) done: Vec<BuildTask>,
     pub(super) failed: Vec<BuildTask>,
     pub(crate) running: Vec<BuildTask>,
-    timer: Timer,
+    pub(crate) timer: Timer,
     /// Cached `kosaraju_scc` result from `sort_graph`/`get_next_i_graph`'s
     /// cycle-breaking fallback, keyed by the stable `StepId` rather than
     /// `NodeIndex` - `graph::build_graph` returns a fresh `DiGraph` on every
@@ -50,7 +50,7 @@ pub struct FinishedQueue {
 }
 
 #[derive(Debug)]
-struct Timer {
+pub struct Timer {
     started: Timestamp,
     steps: usize,
     done: usize,
@@ -64,7 +64,7 @@ impl Timer {
         }
     }
     #[allow(clippy::cast_precision_loss)]
-    fn update(&mut self, dones: u8) -> Eta {
+    pub fn update(&mut self, dones: u8) -> Eta {
         self.done += dones as usize;
         let avg = self.started.since_now() * (1.0 / (self.done as f64));
         let time_left = avg * ((self.steps - self.done) as f64);

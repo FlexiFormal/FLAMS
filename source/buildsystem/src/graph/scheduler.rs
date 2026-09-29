@@ -41,6 +41,14 @@ impl<'a> Scheduler<'a> {
         }
     }
     // this initialized the queue
+    //  So first assumption is how do you do state management tasks ?
+    //  at first all queues are empty
+    //  Queue[...] -> Ready tasks -> what ever runs the tasks  takes tasks from this queue
+    //  Blocked[...]
+    //  Running [...]
+    //  Failed [...]
+    //  Done [...]
+    //
     pub fn init(queue: &'a mut RunningQueue, map: &'a TaskMap) -> Self {
         let mut scheduler = Self::new(queue, map);
         let mut node_map = HashMap::new();
@@ -48,20 +56,26 @@ impl<'a> Scheduler<'a> {
         while let Ok(x) = scheduler.get_next_maybe() {
             let k = scheduler.reverse_map.get(&x.0).expect("impossible");
             let taks = scheduler.map.map.get(k).unwrap();
-            taks.get_step(x.1)
-                .expect("not possible")
-                .state
-                .set(TaskState::Queued);
+            for i in taks.steps() {
+                if i.target != x.1 {
+                    i.state.set(TaskState::Blocked);
+                } else {
+                    i.state.set(TaskState::Queued);
+                }
+            }
             scheduler.queue.queue.push_back(taks.clone());
         }
         for i in map.map.values() {
             if !scheduler.queue.queue.contains(i) {
+                i.steps()
+                    .iter()
+                    .for_each(|b| b.state.set(TaskState::Blocked));
                 scheduler.queue.blocked.push(i.clone());
             }
         }
         scheduler
     }
-
+    // build the graph or poulate the graph
     fn build_graph(
         &mut self,
         scope: GraphScope,

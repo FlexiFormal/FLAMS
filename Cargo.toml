@@ -128,6 +128,7 @@ flams-git = { path = "source/git" }
 flams-web-utils = { path = "source/web-utils" }
 ftml-solver = { path = "solver/main" }
 ftml-solver-trace = { path = "solver/trace" }
+flams-buildsystem = {path = "source/buildsystem"}
 
 flams-main = { path = "source/main/shared" }
 

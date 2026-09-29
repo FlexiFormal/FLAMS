@@ -3,11 +3,22 @@ name = "buildsystem"
 version = "0.1.0"
 edition = "2024"
 
+
 [dependencies]
 petgraph = "0.8.3"
 tracing.workspace = true
 tracing-subscriber.workspace = true
-tokio = { workspace = true, features = ["sync", "rt"] }
+tokio = { workspace = true, optional = true,features = ["sync", "rt"] }
+flams-utils = { workspace = true, features = ["rayon", "async", "serde"] }
+ftml-uris = { workspace = true, features = ["rdf", "serde"] }
+serde = { workspace = true }
+flams-math-archives = { workspace = true, features = ["rdf"] }
+either = {workspace = true}
+eyre = {workspace = true}
+ftml-ontology = { workspace = true, features = ["rdf", "serde"] }
+
+[features]
+tokio = ["dep:tokio", "flams-utils/tokio"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

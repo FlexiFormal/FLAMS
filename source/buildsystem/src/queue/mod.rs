@@ -19,6 +19,7 @@ use crate::{
 pub mod entry;
 pub mod queueid;
 pub mod running;
+pub mod taskrun;
 
 #[derive(Debug)]
 pub enum QueueState {

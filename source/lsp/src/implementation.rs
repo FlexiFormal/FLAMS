@@ -870,6 +870,18 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     }
 
     //impl_request!(!completion = Completion => (None));
+
+    impl_request!(completion_item_resolve = ResolveCompletionItem);
+
+    fn completion_item_resolve(
+        &mut self,
+        params: lsp::CompletionItem,
+    ) -> Res<Option<lsp::CompletionItem>> {
+        tracing::trace_span!("completion resolve").in_scope(move || {});
+        // this should be implemented
+        todo!()
+    }
+
     fn completion(
         &mut self,
         params: lsp::CompletionParams,
@@ -1293,7 +1305,6 @@ impl<T: FLAMSLSPServer> LanguageServer for ServerWrapper<T> {
     impl_request!(subtypes = TypeHierarchySubtypes);
 
     // completionItem/
-    impl_request!(completion_item_resolve = ResolveCompletionItem);
 
     // codeAction/
     //impl_request!(code_action_resolve = CodeActionResolveRequest);

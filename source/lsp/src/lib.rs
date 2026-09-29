@@ -9,6 +9,7 @@ pub mod state;
 pub mod verbalizations;
 #[cfg(feature = "ws")]
 pub mod ws;
+pub mod test;
 
 //use dashmap::Entry;
 pub(crate) use std::collections::hash_map::Entry;
