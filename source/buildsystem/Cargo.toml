@@ -8,7 +8,7 @@ edition = "2024"
 petgraph = "0.8.3"
 tracing.workspace = true
 tracing-subscriber.workspace = true
-tokio = { workspace = true, optional = true,features = ["sync", "rt"] }
+tokio = { workspace = true, optional = true, features = ["sync", "rt", "time"] }
 flams-utils = { workspace = true, features = ["rayon", "async", "serde"] }
 ftml-uris = { workspace = true, features = ["rdf", "serde"] }
 serde = { workspace = true }
@@ -22,6 +22,7 @@ tokio = ["dep:tokio", "flams-utils/tokio"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+generator = { path = "../../../generator" }
 
 [lints]
 workspace = true

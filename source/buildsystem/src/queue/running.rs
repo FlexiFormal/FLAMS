@@ -28,7 +28,7 @@ pub struct RunningQueue {
     pub(super) in_degree_store: HashMap<(BuildTaskId, BuildTargetId), NodeIndex>,
 }
 impl RunningQueue {
-    fn new(total: usize) -> Self {
+    pub fn new(total: usize) -> Self {
         Self {
             queue: VecDeque::new(),
             failed: Vec::new(),

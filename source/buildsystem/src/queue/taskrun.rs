@@ -21,7 +21,7 @@ use crate::{
 
 impl Queue {
     // finish function just cleans the failed queue and done queue properly
-    fn finish(&self) {
+    pub fn finish(&self) {
         let state = &mut *self.0.state.write();
         let QueueState::Running(RunningQueue { done, failed, .. }) = &mut *state else {
             unreachable!()
@@ -80,7 +80,7 @@ impl Queue {
 
     #[cfg(feature = "tokio")]
     #[inline]
-    fn run_task_async(
+    pub fn run_task_async(
         &self,
         task: &BuildTask,
         target: BuildTargetId,

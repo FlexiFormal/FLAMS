@@ -207,8 +207,15 @@ impl<'a> Scheduler<'a> {
                         .set(TaskState::Queued);
                     self.queue.queue.push_back(r);
                 }
+                if let Some(x) = self.queue.queue.iter().find(|tk| tk.get_id() == t.0) {
+                    x.get_step(t.1)
+                        .expect("impossible")
+                        .state
+                        .set(TaskState::Queued);
+                }
             }
             Err(AllDone) => {
+                println!("All done");
                 // TODO here we just log saying everything ran
             }
             // TODO How do we filter ?

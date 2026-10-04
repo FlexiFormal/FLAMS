@@ -18,7 +18,10 @@ use crate::{
 
 pub mod entry;
 pub mod queueid;
+pub mod queuelogic;
+pub mod queue_consumer;
 pub mod running;
+pub mod scheduler_integration;
 pub mod taskrun;
 
 #[derive(Debug)]
