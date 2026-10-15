@@ -2676,7 +2676,7 @@ impl LSPState {
                 either_of::Either::Left(a) => return Some(a),
                 either_of::Either::Right((range, s)) => (range, s),
             };
-            let mut ret = format!("<sup>`{}`</sup>", s.uri.name());
+            let mut ret = format!("<sup>`{}`</sup>", s.uri);
             if let Some(fp) = s.filepath.as_ref()
                 && let Ok(url) = lsp::Url::from_file_path(fp)
             {
