@@ -331,7 +331,7 @@ tantivy = "0.26"
 simsimd = "6"
 fastembed = "7"
 #ort-candle = "0.2.0+0.9"
-ort = { version="2.0.0-rc.13",, default-features = false, features = [
+ort = { version="2.0.0-rc.13", default-features = false, features = [
     "std",
     "ndarray",
     "tracing",
