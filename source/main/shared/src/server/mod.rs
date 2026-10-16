@@ -1,7 +1,7 @@
 pub mod files;
 pub mod lsp;
 
-use std::future::IntoFuture;
+use std::{future::IntoFuture, str::FromStr};
 
 use axum::{
     Router,
@@ -19,7 +19,7 @@ use http::{StatusCode, Uri};
 use leptos::prelude::*;
 use leptos_axum::{LeptosRoutes, generate_route_list};
 use leptos_meta::HashedStylesheet;
-use tower::ServiceBuilder;
+use tower::{ServiceBuilder, ServiceExt};
 use tower_sessions::{Expiry, MemoryStore};
 use tracing::{Instrument, instrument};
 
@@ -28,12 +28,8 @@ use flams_router_dashboard::{
     ws::{self, WebSocketServer},
 };
 
-lazy_static::lazy_static! {
-    static ref SERVER_SPAN:tracing::Span = {
-        //println!("Here!");
-        tracing::info_span!(target:"server",parent:None,"server")
-    };
-}
+static SERVER_SPAN: std::sync::LazyLock<tracing::Span> =
+    std::sync::LazyLock::new(|| tracing::info_span!(target:"server",parent:None,"server"));
 
 #[inline]
 pub async fn run(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
@@ -123,7 +119,7 @@ async fn run_i(port_channel: Option<tokio::sync::watch::Sender<Option<u16>>>) {
         )
         .leptos_routes_with_handler(
             routes,
-            axum::routing::get(|a, b, c| routes_handler(a, b, c)), //.in_current_span()),
+            axum::routing::get(routes_handler), //.in_current_span()),
         )
         .route("/img", axum::routing::get(files::img_handler))
         .route("/doc", axum::routing::get(files::doc_handler))
@@ -226,11 +222,51 @@ async fn server_fn_handle(
 }
 
 async fn file_and_error_handler(
-    mut uri: Uri,
-    extract::State(state): extract::State<ServerState>,
+    uri: Uri,
+    state: extract::State<ServerState>,
     request: http::Request<axum::body::Body>,
 ) -> axum::response::Response {
-    (leptos_axum::file_and_error_handler(shell))(uri, extract::State(state), request).await
+    if uri.path().contains("fonts/") {
+        use axum::http::header::ACCEPT_ENCODING;
+        let root = format!("{}/../fonts", &*state.0.options.site_root);
+        let mut parts = uri.into_parts();
+        parts.path_and_query = Some(
+            http::uri::PathAndQuery::from_str({
+                let old = parts.path_and_query.as_ref().expect("unreachable").as_str();
+                let i = old.find("fonts/").expect("unreachable");
+                &old[i + "fonts".len()..]
+            })
+            .expect("unreachable"),
+        );
+        let uri = http::uri::Uri::from_parts(parts).expect("valid");
+
+        let headers = request.headers();
+        let req = http::Request::builder().uri(uri);
+
+        let req = match headers.get(ACCEPT_ENCODING) {
+            Some(value) => req.header(ACCEPT_ENCODING, value),
+            None => req,
+        };
+
+        let req = req.body(axum::body::Body::empty()).unwrap();
+        // `ServeDir` implements `tower::Service` so we can call it with `tower::ServiceExt::oneshot`
+        // This path is relative to the cargo root
+        match tower_http::services::ServeDir::new(root)
+            .precompressed_gzip()
+            .precompressed_br()
+            .oneshot(req)
+            .await
+        {
+            Ok(res) => res.into_response(),
+            Err(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Something went wrong: {err}"),
+            )
+                .into_response(),
+        }
+    } else {
+        (leptos_axum::file_and_error_handler(shell))(uri, state, request).await
+    }
     /*
     let r = leptos_axum::file_and_error_handler(shell);
     if uri.path().ends_with("flams_bg.wasm") {
