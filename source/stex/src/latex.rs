@@ -127,6 +127,7 @@ fn run_command<
         process = process.env(k, v);
     }
     match process
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
