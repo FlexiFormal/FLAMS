@@ -9,7 +9,7 @@ workspace = true
 [features]
 ssr = [
     "leptos/ssr",
-    "thaw/ssr",
+    "ftml-component-utils/ssr",
     "ftml-dom/ssr",
     "flams-web-utils/ssr",
     "flams-router-base/ssr",
@@ -24,7 +24,7 @@ ssr = [
 ]
 hydrate = [
     "leptos/hydrate",
-    "thaw/hydrate",
+    "ftml-component-utils/hydrate",
     "ftml-dom/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
@@ -40,6 +40,7 @@ ftml-ontology = { workspace = true, features = ["serde"] }
 flams-backend-types = { workspace = true, features = ["serde"] }
 ftml-dom = { workspace = true }
 ftml-components = { workspace = true }
+ftml-component-utils = {workspace = true}
 
 flams-utils = { workspace = true }
 flams-web-utils = { workspace = true }
@@ -54,11 +55,8 @@ flams-git = { workspace = true, features = ["git2"], optional = true }
 
 leptos = { workspace = true }
 leptos_router = { workspace = true }
-thaw = { workspace = true }
 serde = { workspace = true }
 either = { workspace = true }
-icondata_ai = { workspace = true }
-icondata_bi = { workspace = true }
 urlencoding = { workspace = true }
 
 futures = { workspace = true, optional = true }

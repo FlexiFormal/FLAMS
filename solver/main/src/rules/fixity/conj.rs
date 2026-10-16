@@ -1,12 +1,9 @@
 use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    CheckRef,
+    rules::{MarkerRule, PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
-use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
-    terms::{ApplicationTerm, Argument, MaybeSequence, Term},
-};
+use ftml_ontology::terms::{ApplicationTerm, Argument, MaybeSequence, Term};
 use ftml_uris::SymbolUri;
 use std::ops::ControlFlow;
 
@@ -17,41 +14,7 @@ impl SizedSolverRule for IsConjunctionRule {
         ftml_solver_trace::trace!(&self.0, "is a conjunction")
     }
 }
-impl std::fmt::Display for IsConjunctionRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} is a conjunction", self.0)
-    }
-}
-impl<Split: SplitStrategy> PreparationRule<Split> for IsConjunctionRule {
-    fn applicable(&self, _: &Term, _: either::Either<&Symbol, &VariableDeclaration>) -> bool {
-        false
-    }
-    fn apply(
-        &self,
-        _: &RuleSet<Split>,
-        t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-        _: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
-    ) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(t)
-    }
-
-    fn applicable_revert(
-        &self,
-        _: &Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
-        false
-    }
-    fn revert(
-        &self,
-        _: &RuleSet<Split>,
-        t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(t)
-    }
-}
+impl<Split: SplitStrategy> MarkerRule<Split> for IsConjunctionRule {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConjunctiveRule(pub SymbolUri);
@@ -69,22 +32,31 @@ impl std::fmt::Display for ConjunctiveRule {
     }
 }
 impl<Split: SplitStrategy> PreparationRule<Split> for ConjunctiveRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         super::is_sequence_binary(&self.0, t, head).is_some()
     }
     fn apply(
         &self,
-        rules: &RuleSet<Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         let Some((app, args, index)) = super::is_sequence_binary(&self.0, &t, head) else {
             return ControlFlow::Continue(t);
         };
-        let Some(conj): Option<&IsConjunctionRule> = rules
-            .preparation()
+        let Some(conj): Option<&IsConjunctionRule> = checker
+            .rules()
+            .marker()
             .iter()
+            .rev()
             .find_map(|rl| rl.as_any().downcast_ref())
         else {
             return ControlFlow::Continue(t);
@@ -128,19 +100,10 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ConjunctiveRule {
         ControlFlow::Continue(t)
     }
 
-    fn applicable_revert(
-        &self,
-        _: &Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
+    fn applicable_revert(&self, _: &CheckRef<'_, '_, Split>, _: &Term) -> bool {
         false
     }
-    fn revert(
-        &self,
-        _: &RuleSet<Split>,
-        t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
+    fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
         ControlFlow::Continue(t)
     }
 }
@@ -161,22 +124,31 @@ impl std::fmt::Display for PairwiseConjunctiveRule {
     }
 }
 impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
-    fn applicable(&self, t: &Term, head: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        let Some(head) = checker.get_head(t) else {
+            return false;
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         super::is_sequence_binary(&self.0, t, head).is_some()
     }
     fn apply(
         &self,
-        rules: &RuleSet<Split>,
+        checker: &mut CheckRef<'_, '_, Split>,
         t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
+        let Some(head) = checker.get_head(&t) else {
+            return ControlFlow::Continue(t);
+        };
+        let head = head.as_ref().map_either(|e| &**e, |e| &**e);
         let Some((app, args, index)) = super::is_sequence_binary(&self.0, &t, head) else {
             return ControlFlow::Continue(t);
         };
-        let Some(conj): Option<&IsConjunctionRule> = rules
-            .preparation()
+        let Some(conj): Option<&IsConjunctionRule> = checker
+            .rules()
+            .marker()
             .iter()
+            .rev()
             .find_map(|rl| rl.as_any().downcast_ref())
         else {
             return ControlFlow::Continue(t);
@@ -190,6 +162,7 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
         if args.len() < 2 {
             return ControlFlow::Continue(t);
         }
+        //tracing::debug!("In: {:?}", t.debug_short());
         let mut conjuncts = (0..args.len() - 1).map(|i| {
             let (a, b) = (&args[i], &args[i + 1]);
             Term::Application(ApplicationTerm::new(
@@ -224,21 +197,13 @@ impl<Split: SplitStrategy> PreparationRule<Split> for PairwiseConjunctiveRule {
                     .unwrap_unchecked()
             }
         };
+        //tracing::debug!("Out: {:?}", t.debug_short());
         ControlFlow::Continue(t)
     }
-    fn applicable_revert(
-        &self,
-        _: &Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
-        false
+    fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        super::bin::BinLRule::app_rev(&self.0, checker, t)
     }
-    fn revert(
-        &self,
-        _: &RuleSet<Split>,
-        t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(t)
+    fn revert(&self, checker: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
+        super::bin::BinLRule::rev(&self.0, checker, t)
     }
 }

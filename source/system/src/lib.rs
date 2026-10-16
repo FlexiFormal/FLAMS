@@ -8,6 +8,7 @@ pub mod building;
 #[cfg(feature = "tokio")]
 pub mod logging;
 pub mod settings;
+pub use flams_math_archives::FlamsExtension;
 
 pub fn span_capture<R>(f: impl FnOnce() -> R) -> (String, R) {
     use tracing_subscriber::{fmt, layer::SubscriberExt};
@@ -34,7 +35,12 @@ pub fn span_capture<R>(f: impl FnOnce() -> R) -> (String, R) {
     }
     let buffer = Buffer(std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new())));
     let bufcl = buffer.clone();
-    let sub = tracing_subscriber::registry().with(fmt::layer().with_writer(bufcl).with_ansi(false));
+    let sub = tracing_subscriber::registry().with(
+        fmt::layer()
+            .with_writer(bufcl)
+            .with_ansi(false)
+            .with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+    );
     let ret = tracing::subscriber::with_default(sub, f);
     let s = buffer
         .0
@@ -48,21 +54,12 @@ pub fn span_capture<R>(f: impl FnOnce() -> R) -> (String, R) {
 pub mod zip;
 
 use building::queue_manager::QueueManager;
-use flams_math_archives::{
-    artifacts::Artifact, backend::AnyBackend, utils::AsyncEngine, LocalArchive,
-};
-use ftml_uris::{DocumentUri, UriPath};
+use flams_math_archives::{utils::AsyncEngine, LocalArchive};
 use settings::SettingsSpec;
 
 pub use inventory::iter;
 pub use inventory::submit as register_exension;
-
-pub struct FlamsExtension {
-    pub name: &'static str,
-    pub on_start: fn(),
-    pub on_build_result: fn(&AnyBackend, &DocumentUri, &UriPath, &dyn Artifact),
-    pub on_reload: fn(),
-}
+use tracing_subscriber::Layer;
 
 #[cfg(feature = "tokio")]
 pub struct TokioEngine;
@@ -85,10 +82,8 @@ impl AsyncEngine for TokioEngine {
     }
 }
 
-inventory::collect!(FlamsExtension);
-
 /// #### Panics
-pub fn initialize<A: AsyncEngine>(settings: SettingsSpec) {
+pub fn initialize<A: AsyncEngine>(settings: SettingsSpec, rdf: bool) {
     settings::Settings::initialize(settings);
     let settings = settings::Settings::get();
     #[cfg(feature = "rocksdb")]
@@ -135,7 +130,7 @@ pub fn initialize<A: AsyncEngine>(settings: SettingsSpec) {
                 flams_git::gl::GLInstance::global().clone().load(cfg);
             }
         }
-        backend::initialize::<A>();
+        backend::initialize::<A>(rdf);
         QueueManager::initialize(settings.num_threads);
         for e in inventory::iter::<FlamsExtension>() {
             A::background(|| {

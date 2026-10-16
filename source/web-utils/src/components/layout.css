@@ -1,0 +1,23 @@
+.flams-layout,
+.flams-layout-with-sider {
+    position: relative;
+    display: grid;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    & > * {
+        min-height: 0;
+    }
+}
+.flams-layout {
+    grid-template-rows: auto 1fr auto;
+}
+.flams-layout-with-sider {
+    grid-template-columns: auto 1fr;
+}
+
+.flams-layout-sider {
+    position: relative;
+    overflow: visible;
+    margin-right: 10px;
+}

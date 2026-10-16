@@ -10,7 +10,6 @@ workspace = true
 [features]
 ssr = [
     "leptos/ssr",
-    "thaw/ssr",
     "flams-router-base/ssr",
     "flams-web-utils/ssr",
     "flams-git/git2",
@@ -21,7 +20,6 @@ ssr = [
 ]
 hydrate = [
     "leptos/hydrate",
-    "thaw/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
 ]
@@ -45,7 +43,6 @@ flams-router-buildqueue-base = { workspace = true, optional = true, features = [
 
 leptos = { workspace = true }
 #leptos_router = { workspace = true }
-thaw = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true, optional = true }

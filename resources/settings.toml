@@ -1,4 +1,4 @@
-# debug = true
+# debug = false
 # log_dir = "~/.flams/log"
 # temp_dir = "~/.flams/tmp"
 # embedding_dir = "~/.flams/embedding"
@@ -21,3 +21,6 @@
 # app_id = "APP_ID"
 # app_secret = "APP_SECRET"
 # redirect_url = "http://localhost:3000"
+
+[remotes]
+mathhub = "https://mathhub.info"

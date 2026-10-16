@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [lints]
 workspace = true
@@ -26,6 +26,7 @@ serde = [
     "ftml-ontology/serde",
     "ftml-uris/serde",
     "chrono/serde",
+    "ulo?/serde"
 ]
 ## rdf
 rdf = ["dep:ulo","ftml-ontology/rdf","ftml-uris/rdf"]

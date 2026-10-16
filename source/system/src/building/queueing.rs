@@ -6,9 +6,12 @@ use flams_math_archives::{
     Archive, MathArchive,
 };
 use flams_utils::{triomphe::Arc, vecmap::VecSet};
+use ftml_ontology::utils::time::Eta;
 use ftml_uris::UriWithArchive;
 use parking_lot::RwLock;
 use std::collections::hash_map::Entry;
+
+use crate::building::{AtomicTaskState, QueueMessage};
 
 use super::{
     queue::{Queue, QueueState, RunningQueue, TaskMap},
@@ -32,12 +35,12 @@ impl Queue {
             for t in &tasks {
                 let mut has_failed = false;
                 let Some(step) = t.steps().iter().find(|s| {
-                    let state = s.0.state.read();
-                    if *state == TaskState::Failed {
+                    let state = s.0.state.get();
+                    if state == TaskState::Failed {
                         has_failed = true;
                         return false;
                     }
-                    !matches!(*state, TaskState::Done)
+                    !matches!(state, TaskState::Done)
                 }) else {
                     if has_failed {
                         failed.push(t.clone());
@@ -50,12 +53,12 @@ impl Queue {
                 for d in step.0.requires.read().iter() {
                     match d {
                         Dependency::Resolved { task, strict, step } if *strict || weak => {
-                            match *task
+                            match task
                                 .get_step(*step)
                                 .unwrap_or_else(|| unreachable!())
                                 .0
                                 .state
-                                .read()
+                                .get()
                             {
                                 TaskState::Done
                                 | TaskState::Queued
@@ -81,9 +84,9 @@ impl Queue {
                 for s in t.steps() {
                     if s == step {
                         found = true;
-                        *s.0.state.write() = newstate;
+                        s.0.state.set(newstate);
                     } else if found {
-                        *s.0.state.write() = TaskState::Blocked;
+                        s.0.state.set(TaskState::Blocked);
                     }
                 }
                 match newstate {
@@ -93,21 +96,14 @@ impl Queue {
                 }
             }
             if changed {
-                tasks.retain(|t| {
-                    t.steps()
-                        .iter()
-                        .any(|s| *s.0.state.read() == TaskState::None)
-                });
+                tasks.retain(|t| t.steps().iter().any(|s| s.0.state.get() == TaskState::None));
             } else if weak {
                 weak = false;
             } else {
                 let tasks = std::mem::take(&mut tasks);
                 for t in tasks {
                     for s in t.steps() {
-                        let mut s = s.0.state.write();
-                        if *s == TaskState::None {
-                            *s = TaskState::Blocked;
-                        }
+                        s.0.state.set_if_is(TaskState::None, TaskState::Blocked);
                     }
                     blocked.push(t);
                 }
@@ -117,61 +113,110 @@ impl Queue {
 
     pub(super) fn get_next(&self) -> Option<(BuildTask, BuildTargetId)> {
         loop {
-            let mut state = self.0.state.write();
-            let QueueState::Running(RunningQueue {
-                queue,
-                blocked,
-                running,
-                ..
-            }) = &mut *state
-            else {
+            match self.get_next_i() {
+                Ok(r) => return r,
+                Err(()) => std::thread::sleep(std::time::Duration::from_millis(100)),
+            }
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    pub(super) async fn get_next_async(&self) -> Option<(BuildTask, BuildTargetId)> {
+        loop {
+            match self.get_next_i() {
+                Ok(r) => return r,
+                Err(()) => tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+            }
+        }
+    }
+
+    fn get_next_i(&self) -> Result<Option<(BuildTask, BuildTargetId)>, ()> {
+        let mut state = self.0.state.write();
+        let QueueState::Running(RunningQueue {
+            queue,
+            blocked,
+            running,
+            failed,
+            ..
+        }) = &mut *state
+        else {
+            unreachable!()
+        };
+        if queue.is_empty() && blocked.is_empty() && running.is_empty() {
+            return Ok(None);
+        }
+        if let Some((i, target)) = queue
+            .iter()
+            .enumerate()
+            .find_map(|(next, e)| Self::can_be_next(e).map(|t| (next, t)))
+        {
+            let Some(task) = queue.remove(i) else {
                 unreachable!()
             };
-            if queue.is_empty() && blocked.is_empty() && running.is_empty() {
-                return None;
-            }
-            if let Some((i, target)) = queue
+            task.get_step(target)
+                .unwrap_or_else(|| unreachable!())
+                .0
+                .state
+                .set(TaskState::Running);
+            running.push(task.clone());
+            return Ok(Some((task, target)));
+        }
+        if !running.is_empty() {
+            drop(state);
+            Err(())
+            //std::thread::sleep(std::time::Duration::from_secs(1));
+        } else if !blocked.is_empty() {
+            if let Some((i, target)) = blocked
                 .iter()
                 .enumerate()
                 .find_map(|(next, e)| Self::can_be_next(e).map(|t| (next, t)))
             {
-                let Some(task) = queue.remove(i) else {
-                    unreachable!()
-                };
-                *task
-                    .get_step(target)
+                let task = blocked.remove(i);
+                for s in task.steps() {
+                    s.0.state.set_if_is(TaskState::Blocked, TaskState::Queued);
+                }
+                task.get_step(target)
                     .unwrap_or_else(|| unreachable!())
                     .0
                     .state
-                    .write() = TaskState::Running;
+                    .set(TaskState::Running);
                 running.push(task.clone());
-                return Some((task, target));
+                return Ok(Some((task, target)));
             }
-            if !running.is_empty() {
-                drop(state);
-                std::thread::sleep(std::time::Duration::from_secs(1));
-            } else if !blocked.is_empty() {
-                todo!()
-            } else {
-                todo!()
+            while let Some(t) = blocked.pop() {
+                for s in t.steps() {
+                    let state = s.0.state.get();
+                    if state != TaskState::Done {
+                        s.0.state.set(TaskState::Failed);
+                    }
+                }
+                self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
+                    id: t.0.id,
+                    target: t.steps().last().expect("???").0.target,
+                    eta: Eta::default(),
+                });
+                failed.push(t);
             }
+            Ok(None)
+        } else {
+            Ok(None)
         }
     }
 
     fn can_be_next(e: &BuildTask) -> Option<BuildTargetId> {
         let step =
-            e.0.steps
-                .iter()
-                .find(|step| *step.0.state.read() == TaskState::Queued)?;
+            e.0.steps.iter().find(|step| {
+                matches!(step.0.state.get(), TaskState::Queued | TaskState::Blocked)
+            })?;
         for d in &step.0.requires.read().0 {
             if let Dependency::Resolved { task, step, strict } = d {
                 if *strict
-                    && *task
+                    && task
                         .get_step(*step)
                         .unwrap_or_else(|| unreachable!())
                         .0
                         .state
-                        .read()
+                        .get()
                         == TaskState::Running
                 {
                     return None;
@@ -214,7 +259,7 @@ impl Queue {
                         .map(|t| {
                             BuildStep(Arc::new(BuildStepI {
                                 target: *t,
-                                state: RwLock::new(TaskState::None),
+                                state: AtomicTaskState::new(TaskState::None),
                                 //yields:RwLock::new(Vec::new()),
                                 requires: RwLock::new(VecSet::default()),
                                 dependents: RwLock::new(Vec::new()),
@@ -244,7 +289,7 @@ impl Queue {
                 Entry::Occupied(o) => {
                     count += 1;
                     for s in o.get().steps() {
-                        *s.0.state.write() = TaskState::None;
+                        s.0.state.set(TaskState::None);
                     }
                     continue;
                 }

@@ -82,6 +82,7 @@ impl GitLabOAuth {
                 .query_async(&client)
                 .await?;
         let mut vs = self.1 .0.projects.lock();
+        vs.clear();
         for p in &r {
             if !vs.contains(&p.id) {
                 vs.insert(super::ProjectWithId {

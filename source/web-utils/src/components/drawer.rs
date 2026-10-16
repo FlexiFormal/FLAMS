@@ -41,7 +41,7 @@ pub fn Drawer(
     #[prop(optional)] size: DrawerSize,
     mut children: ChildrenFnMut,
 ) -> impl IntoView {
-    use thaw::{
+    use ftml_component_utils::{
         Button, ButtonAppearance, DrawerBody, DrawerHeader, DrawerHeaderTitle,
         DrawerHeaderTitleAction, DrawerPosition, OverlayDrawer,
     };

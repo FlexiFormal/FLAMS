@@ -63,7 +63,7 @@ fn ArchivesAndGroups(groups: Vec<ArchiveGroupData>, archives: Vec<ArchiveData>) 
 fn group(a: ArchiveGroupData) -> AnyView {
     let id = a.id.clone();
     let header = view!(
-      <thaw::Icon icon=icondata_bi::BiLibraryRegular/>" "
+      <ftml_component_utils::icons::LibraryIcon/>" "
       {a.id.last().to_string()}
       {a.summary.map(badge)}
       {dialog(move |signal| if signal.get() {
@@ -94,7 +94,7 @@ fn group(a: ArchiveGroupData) -> AnyView {
 fn archive(a: ArchiveData) -> AnyView {
     let id = a.id.clone();
     let header = view!(
-      <thaw::Icon icon=icondata_bi::BiBookSolid/>" "
+      <ftml_component_utils::icons::ClosedBookIcon/>" "
       {a.id.last().to_string()}
       {a.summary.map(badge)}
       {dialog(move |signal| if signal.get() {
@@ -134,7 +134,7 @@ fn dir(archive: ArchiveId, d: DirectoryData) -> AnyView {
     let id = archive.clone();
     let rel_path = d.rel_path.clone();
     let header = view!(
-      <thaw::Icon icon=icondata_bi::BiFolderRegular/>" "
+      <ftml_component_utils::icons::FolderIcon/>" "
       {pathstr}
       {d.summary.map(badge)}
       {dialog(move |signal| if signal.get() {
@@ -168,7 +168,7 @@ fn dir(archive: ArchiveId, d: DirectoryData) -> AnyView {
 
 fn file(archive: ArchiveId, f: FileData) -> AnyView {
     use flams_web_utils::components::{Drawer, Header, Trigger};
-    use thaw::{Button, ButtonAppearance};
+    use ftml_component_utils::{Button, ButtonAppearance};
 
     let link = format!("/?a={archive}&rp={}", f.rel_path);
     let button = format!("[{archive}]/{}", f.rel_path);
@@ -177,11 +177,11 @@ fn file(archive: ArchiveId, f: FileData) -> AnyView {
         rp: f.rel_path.clone(),
     };
 
-    let pathstr = unwrap!(f.rel_path.split('/').last()).to_string();
+    let pathstr = unwrap!(f.rel_path.split('/').next_back()).to_string();
     let header = view!(
       <Drawer lazy=true>
         <Trigger slot>
-          <thaw::Icon icon=icondata_bi::BiFileRegular/>" "
+          <ftml_component_utils::icons::FileIcon/>" "
           {pathstr}
         </Trigger>
         <Header slot><a href=link target="_blank">
@@ -209,7 +209,7 @@ fn file(archive: ArchiveId, f: FileData) -> AnyView {
 }
 
 fn badge(state: crate::FileStateSummary) -> AnyView {
-    use thaw::{Badge, BadgeAppearance, BadgeColor};
+    use ftml_component_utils::{Badge, BadgeAppearance, BadgeColor};
     view! {
       {if state.new == 0 {None} else {Some(view!(
         " "<Badge class="flams-mathhub-badge" appearance=BadgeAppearance::Outline color=BadgeColor::Success>{state.new}</Badge>
@@ -226,7 +226,7 @@ fn badge(state: crate::FileStateSummary) -> AnyView {
 fn dialog<V: IntoView + 'static>(
     children: impl Fn(RwSignal<bool>) -> V + Send + Clone + 'static,
 ) -> AnyView {
-    use thaw::{Dialog, DialogBody, DialogContent, DialogSurface, Icon};
+    use ftml_component_utils::{Dialog, DialogBody, DialogContent, DialogSurface};
     let clicked = RwSignal::new(false);
     (move || {
         if matches!(
@@ -239,7 +239,7 @@ fn dialog<V: IntoView + 'static>(
               {children}
               </DialogContent></DialogBody></DialogSurface></Dialog>
               <span on:click=move |_| {clicked.set(true)} style="cursor: help;">
-                <Icon icon=icondata_ai::AiInfoCircleOutlined/>
+                "🛈"
               </span>
             })
         } else {
@@ -255,16 +255,16 @@ fn modal(
     states: FileStates,
     format: Option<String>,
 ) -> AnyView {
-    use thaw::{
-        Button, ButtonSize, Caption1Strong, Card, CardHeader, CardHeaderAction, Divider, Table,
+    use ftml_component_utils::{
+        Block, BoldCaption, Button, ButtonSize, Divider, Header, HeaderRight, Table, TableCell,
+        TableHeader, TableRow,
     };
-    inject_css("flams-filecard", include_str!("filecards.css"));
     let do_clean = path.is_none();
     let title = path.as_ref().map_or_else(
         || {
             archive
                 .as_ref()
-                .map_or_else(|| "All Archives".to_string(), |a| a.to_string())
+                .map_or_else(|| "All Archives".to_string(), ArchiveId::to_string)
         },
         |path| format!("[{}]{path}", archive.as_ref().expect("unreachable")),
     );
@@ -295,52 +295,48 @@ fn modal(
         }
     };
     view! {
-      <div class="flams-treeview-file-card"><Card>
-          <CardHeader>
-            <Caption1Strong>{title}</Caption1Strong>
-            <CardHeaderAction slot>{format.map(|f| {
-              let f2 = f.clone();
-              let f3 = f.clone();
-              view!{
-                <Button size=ButtonSize::Small on_click=move |_|
-                  {act.dispatch((FormatOrTarget::Format(f.clone()),true,false));}
-                >"stale"</Button>
-                <Button size=ButtonSize::Small on_click=move |_|
-                  {act.dispatch((FormatOrTarget::Format(f2.clone()),false,false));}
-                >"all"</Button>
-                {clean_btn(f3)}
-              }
-            })}</CardHeaderAction>
-          </CardHeader>
+      <div style="text-align:left"><Block>
+        <HeaderRight slot>{format.map(|f| {
+            let f2 = f.clone();
+            let f3 = f.clone();
+            view!{
+            <Button size=ButtonSize::Small on_click=move |_|
+                {act.dispatch((FormatOrTarget::Format(f.clone()),true,false));}
+            >"stale"</Button>
+            <Button size=ButtonSize::Small on_click=move |_|
+                {act.dispatch((FormatOrTarget::Format(f2.clone()),false,false));}
+            >"all"</Button>
+            {clean_btn(f3)}
+            }
+        })}</HeaderRight>
+          <Header slot>
+            <BoldCaption>{title}</BoldCaption>
+          </Header>
           <Divider/>
           {select_queue(queue_id)}
           <Table>
-              <thead>
-                  <tr>
-                    <td><Caption1Strong>{if targets {"Target"} else {"Format"}}</Caption1Strong></td>
-                    <td><Caption1Strong>"New"</Caption1Strong></td>
-                    <td><Caption1Strong>"Stale"</Caption1Strong></td>
-                    <td><Caption1Strong>"Up to date"</Caption1Strong></td>
-                    <td><Caption1Strong>"Last built"</Caption1Strong></td>
-                    <td><Caption1Strong>"Last changed"</Caption1Strong></td>
-                    <td><Caption1Strong>"Build"</Caption1Strong></td>
-                  </tr>
-              </thead>
-              <tbody>
-              {states.0.iter().map(|(name,summary)| {
-                let name = name.clone();
+              <TableHeader slot>
+                    <TableCell><BoldCaption>{if targets {"Target"} else {"Format"}}</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"New"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Stale"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Up to date"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Last built"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Last changed"</BoldCaption></TableCell>
+                    <TableCell><BoldCaption>"Build"</BoldCaption></TableCell>
+              </TableHeader>
+              {states.0.into_iter().map(|(name,summary)| {
                 let fmt1 = name.clone();
                 let fmt2 = name.clone();
                 let fmt3 = name.clone();
                 view!{
-                  <tr>
-                    <td><Caption1Strong>{name}</Caption1Strong></td>
-                    <td>{summary.new}</td>
-                    <td>{summary.stale}</td>
-                    <td>{summary.up_to_date}</td>
-                    <td>{if summary.last_built == Timestamp::zero() {"(Never)".to_string()} else {summary.last_built.to_string()}}</td>
-                    <td>{if summary.last_changed == Timestamp::zero() {"(Never)".to_string()} else {summary.last_changed.to_string()}}</td>
-                    <td><div>
+                  <TableRow>
+                    <TableCell><BoldCaption>{name}</BoldCaption></TableCell>
+                    <TableCell>{summary.new}</TableCell>
+                    <TableCell>{summary.stale}</TableCell>
+                    <TableCell>{summary.up_to_date}</TableCell>
+                    <TableCell>{if summary.last_built == Timestamp::zero() {"(Never)".to_string()} else {summary.last_built.to_string()}}</TableCell>
+                    <TableCell>{if summary.last_changed == Timestamp::zero() {"(Never)".to_string()} else {summary.last_changed.to_string()}}</TableCell>
+                    <TableCell><div style="display:flex;flex-direction:column;">
                       <Button size=ButtonSize::Small on_click=move |_|
                         {act.dispatch((if targets {todo!()} else {
                           FormatOrTarget::Format(fmt1.clone())
@@ -352,13 +348,12 @@ fn modal(
                         },false,false));}
                       >"all"</Button>
                       {clean_btn(fmt3)}
-                    </div></td>
-                  </tr>
+                    </div></TableCell>
+                  </TableRow>
                 }
             }).collect_view()}
-              </tbody>
-          </Table>
-
-      </Card></div>
+        </Table>
+          </Block>
+          </div>
     }.into_any()
 }

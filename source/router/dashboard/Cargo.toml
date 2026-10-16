@@ -9,7 +9,7 @@ workspace = true
 [features]
 ssr = [
     "leptos/ssr",
-    "thaw/ssr",
+    "ftml-component-utils/ssr",
     "flams-web-utils/ssr",
     "dep:flams-system",
     "dep:flams-git",
@@ -30,12 +30,12 @@ ssr = [
     "flams-router-login/ssr",
     "flams-router-vscode/ssr",
     "flams-router-search/ssr",
-    "flams-flodown/ssr",
+    #"flams-flodown/ssr",
     "dep:flams-search"
 ]
 hydrate = [
     "leptos/hydrate",
-    "thaw/hydrate",
+    "ftml-component-utils/hydrate",
     "ftml-components/hydrate",
     "flams-web-utils/hydrate",
     "flams-router-base/hydrate",
@@ -49,7 +49,7 @@ hydrate = [
     "flams-router-login/hydrate",
     "flams-router-vscode/hydrate",
     "flams-router-search/hydrate",
-    "flams-flodown/hydrate",
+    #"flams-flodown/hydrate",
 ]
 docs-only = []
 vectorsearch = ["flams-router-search/vectorsearch"] #,"flams-search/vectorsearch"]
@@ -76,7 +76,7 @@ flams-router-git-components = { workspace = true }
 flams-router-login = { workspace = true }
 flams-router-vscode = { workspace = true }
 flams-router-search = { workspace = true }
-flams-flodown = { workspace = true }
+#flams-flodown = { workspace = true }
 flams-system = { workspace = true, optional = true, features = ["tokio"] }
 flams-git = { workspace = true, optional = true, features = ["gitlab"] }
 flams-search = { workspace = true, optional = true }
@@ -84,9 +84,8 @@ flams-search = { workspace = true, optional = true }
 leptos = { workspace = true }
 leptos_router = { workspace = true }
 leptos_meta = { workspace = true }
-thaw = { workspace = true }
+ftml-component-utils = {workspace = true}
 tracing = { workspace = true }
-icondata_ai = { workspace = true }
 icondata_bi = { workspace = true }
 bytesize = {workspace = true}
 serde = { workspace = true }

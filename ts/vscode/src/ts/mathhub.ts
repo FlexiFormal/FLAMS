@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { getContext, FLAMSContext, awaitContext } from '../extension';
-import * as FLAMS from '@kwarc/flams';
+import {FLAMSServer,Base} from './flams';
 import path from 'path';
 import * as fs from 'fs';
 import { Commands } from './commands';
 
-type FLAMSServer = FLAMS.FLAMSServer;
+//type FLAMSServer = FLAMS.FLAMSServer;
 
 export interface Settings {
   mathhubs: string[],
@@ -312,7 +312,7 @@ class ArchiveGroup extends vscode.TreeItem {
   parent:ArchiveGroup|undefined;
   children:(ArchiveGroup | Archive)[];
   downloadable=false;
-  constructor(group:FLAMS.ArchiveGroup,lr:LRB,parent?:ArchiveGroup) {
+  constructor(group:Base.ArchiveGroupData,lr:LRB,parent?:ArchiveGroup) {
     const name = group.id.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid archive group name");
@@ -342,7 +342,7 @@ class Archive extends vscode.TreeItem {
   local:boolean;
   parent:ArchiveGroup|undefined;
   downloadable:boolean;
-  constructor(archive:FLAMS.Archive,local:boolean,downloadable:boolean,parent?:ArchiveGroup,mhs?:string[]) {
+  constructor(archive:Base.ArchiveData,local:boolean,downloadable:boolean,parent?:ArchiveGroup,mhs?:string[]) {
     const name = archive.id.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid archive name");
@@ -374,7 +374,7 @@ class Dir extends vscode.TreeItem {
   archive:Archive;
   rel_path:string;
 
-  constructor(archive:Archive,dir:FLAMS.Directory) {
+  constructor(archive:Archive,dir:Base.DirectoryData) {
     const name = dir.rel_path.split("/").pop();
     if (!name) {
       throw new Error("𝖥𝖫∀𝖬∫: Invalid directory name");
@@ -398,7 +398,7 @@ class Dir extends vscode.TreeItem {
 class File extends vscode.TreeItem {
   archive:Archive;
   rel_path:string;
-  constructor(archive:Archive,file:FLAMS.File) {
+  constructor(archive:Archive,file:Base.FileData) {
     const name = path.basename(file.rel_path);
     super(name,vscode.TreeItemCollapsibleState.None);
     this.archive = archive;

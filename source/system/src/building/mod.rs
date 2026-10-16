@@ -1,4 +1,5 @@
 use std::{
+    hint::unreachable_unchecked,
     num::NonZeroU32,
     path::{Path, PathBuf},
     str::FromStr,
@@ -32,13 +33,46 @@ mod tests;
 pub use queue::Queue;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[repr(u8)]
 pub enum TaskState {
-    Running,
-    Queued,
-    Blocked,
-    Done,
-    Failed,
-    None,
+    Running = 0,
+    Queued = 1,
+    Blocked = 2,
+    Done = 3,
+    Failed = 4,
+    None = 5,
+}
+#[derive(Debug)]
+pub struct AtomicTaskState(std::sync::atomic::AtomicU8);
+impl AtomicTaskState {
+    pub fn new(state: TaskState) -> Self {
+        Self(std::sync::atomic::AtomicU8::new(state as _))
+    }
+    pub fn set_if_is(&self, if_is: TaskState, state: TaskState) {
+        self.0.compare_exchange(
+            if_is as _,
+            state as _,
+            std::sync::atomic::Ordering::Release,
+            std::sync::atomic::Ordering::Acquire,
+        );
+    }
+    pub fn get(&self) -> TaskState {
+        let b = self.0.load(std::sync::atomic::Ordering::Acquire);
+        match b {
+            0 => TaskState::Running,
+            1 => TaskState::Queued,
+            2 => TaskState::Blocked,
+            3 => TaskState::Done,
+            4 => TaskState::Failed,
+            5 => TaskState::None,
+            // SAFETY: impossible b< construction
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+    pub fn set(&self, state: TaskState) {
+        self.0
+            .store(state as _, std::sync::atomic::Ordering::Release);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -180,7 +214,7 @@ impl BuildTask {
             steps: self
                 .steps()
                 .iter()
-                .map(|s| (s.0.target, *s.0.state.read()))
+                .map(|s| (s.0.target, s.0.state.get()))
                 .collect(),
         }
     }
@@ -190,7 +224,7 @@ impl BuildTask {
 struct BuildStepI {
     //task:std::sync::Weak<BuildTaskI>,
     target: BuildTargetId,
-    state: RwLock<TaskState>,
+    state: AtomicTaskState,
     //yields:RwLock<Vec<ModuleUri>>,
     requires: RwLock<VecSet<Dependency>>,
     dependents: RwLock<Vec<(BuildTaskId, BuildTargetId)>>,
@@ -301,6 +335,11 @@ pub enum QueueMessage {
         eta: Eta,
     },
     TaskFailed {
+        id: BuildTaskId,
+        target: BuildTargetId,
+        eta: Eta,
+    },
+    TaskBlocked {
         id: BuildTaskId,
         target: BuildTargetId,
         eta: Eta,

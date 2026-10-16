@@ -1,7 +1,8 @@
 use std::future::Future;
 
-use crate::components::{display_error, Spinner};
+use crate::components::display_error;
 use flams_utils::parking_lot;
+use ftml_component_utils::Spinner;
 use leptos::{
     either::{Either, EitherOf3},
     prelude::*,

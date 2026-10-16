@@ -15,7 +15,8 @@ use flams_router_git_base::{
     server_fns::{clone_to_queue, get_archives, get_branches, update_from_branch},
 };
 use flams_utils::vecmap::VecMap;
-use flams_web_utils::components::{Spinner, display_error};
+use flams_web_utils::components::display_error;
+use ftml_component_utils::Spinner;
 use ftml_uris::ArchiveId;
 use leptos::{
     either::{Either, EitherOf4},
@@ -136,7 +137,7 @@ fn do_projects(
     vec: Vec<(flams_backend_types::git::Project, ArchiveId, GitState)>,
 ) -> impl IntoView {
     use flams_web_utils::components::{Header, Leaf, Subtree, Tree};
-    use thaw::Caption1Strong;
+    use ftml_component_utils::BoldCaption;
     fn inner_tree(tree: ProjectTree) -> impl IntoView {
         tree.children.into_iter().map(|c| match c {
         Either::Left(project) => Either::Left(view!{<Leaf><div>{move || project.state.with(|state| {
@@ -166,7 +167,7 @@ fn do_projects(
     }
 
     view! {
-      <Caption1Strong>"Archives on GitLab"</Caption1Strong>
+      <BoldCaption>"Archives on GitLab"</BoldCaption>
       {move || {get_queues.get(); select_queue(queue)}}
       <Tree>{inner_tree(tree)}</Tree>
     }
@@ -182,7 +183,7 @@ fn managed(
     git_url: String,
     and_then: RwSignal<GitState>,
 ) -> impl IntoView + use<> {
-    use thaw::{Button, ButtonSize, Combobox, ComboboxOption};
+    use ftml_component_utils::{Button, ButtonSize, Combobox, ComboboxOption};
     match state {
         GitState::Queued { commit, .. } => leptos::either::EitherOf3::A(view! {
           {path}
@@ -267,7 +268,7 @@ fn unmanaged(
     path: String,
     git_url: String,
 ) -> impl IntoView {
-    use thaw::{Button, ButtonSize, Combobox, ComboboxOption};
+    use ftml_component_utils::{Button, ButtonSize, Combobox, ComboboxOption};
     let r = Resource::new(
         || (),
         move |()| async move {
@@ -285,10 +286,10 @@ fn unmanaged(
     );
     view! {
       <span style="color:grey">{path}" (unmanaged) "</span>
-      <Suspense fallback=|| view!(<flams_web_utils::components::Spinner/>)>{move ||
+      <Suspense fallback=|| view!(<Spinner/>)>{move ||
         match r.get() {
           Some(Err(e)) => leptos::either::EitherOf3::B(flams_web_utils::components::display_error(e.to_string().into())),
-          None => leptos::either::EitherOf3::C(view!(<flams_web_utils::components::Spinner/>)),
+          None => leptos::either::EitherOf3::C(view!(<Spinner/>)),
           Some(Ok((branches,has_release))) => leptos::either::EitherOf3::A({
             let first = branches.first().map(|f| f.name.clone()).unwrap_or_default();
             let branch = RwSignal::new(first.clone());

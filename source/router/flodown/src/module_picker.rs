@@ -25,7 +25,7 @@ fn archives_and_groups(
 
 fn group(a: ArchiveGroupData, sig: RwSignal<rustc_hash::FxHashSet<ModuleUri>>) -> AnyView {
     let header = view!(
-      <thaw::Icon icon=icondata_bi::BiLibraryRegular/>" "
+      <ftml_component_utils::icons::LibraryIcon/>" "
       {a.id.last().to_string()}
     );
     let id = a.id;
@@ -46,7 +46,7 @@ fn group(a: ArchiveGroupData, sig: RwSignal<rustc_hash::FxHashSet<ModuleUri>>) -
 
 fn archive(a: ArchiveData, sig: RwSignal<rustc_hash::FxHashSet<ModuleUri>>) -> AnyView {
     let header = view!(
-      <thaw::Icon icon=icondata_bi::BiBookSolid/>" "
+      <ftml_component_utils::icons::ClosedBookIcon/>" "
       {a.id.last().to_string()}
     );
     let id = a.id;
@@ -84,7 +84,7 @@ fn dir(
 ) -> AnyView {
     let pathstr = unsafe { d.rel_path.split('/').last().unwrap_unchecked() }.to_string();
     let header = view!(
-      <thaw::Icon icon=icondata_bi::BiFolderRegular/>" "
+      <ftml_component_utils::icons::FolderIcon/>" "
       {pathstr}
     );
     let id = archive.clone();
@@ -109,7 +109,7 @@ fn dir(
 }
 
 fn module(uri: ModuleUri, sig: RwSignal<rustc_hash::FxHashSet<ModuleUri>>) -> AnyView {
-    use thaw::Checkbox;
+    use ftml_component_utils::Checkbox;
     let name = uri.name().last().to_string();
     let selected = RwSignal::new(false);
     let uricl = uri.clone();

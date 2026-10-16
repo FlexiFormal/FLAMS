@@ -1,10 +1,9 @@
 use crate::{
-    rules::{PreparationRule, RuleSet, SizedSolverRule},
+    CheckRef,
+    rules::{PreparationRule, SizedSolverRule},
     split::SplitStrategy,
 };
 use ftml_ontology::{
-    domain::declarations::symbols::Symbol,
-    narrative::elements::VariableDeclaration,
     terms::{ApplicationTerm, BindingTerm, Term},
     utils::Permutation,
 };
@@ -18,7 +17,7 @@ pub struct ReorderRule {
 }
 impl SizedSolverRule for ReorderRule {
     fn priority(&self) -> isize {
-        100
+        100_000
     }
     fn display(&self) -> Vec<crate::trace::Displayable> {
         ftml_solver_trace::trace!(
@@ -34,7 +33,7 @@ impl std::fmt::Display for ReorderRule {
 }
 
 impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
-    fn applicable(&self, t: &Term, _: either::Either<&Symbol, &VariableDeclaration>) -> bool {
+    fn applicable(&self, _: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
         match t {
             Term::Application(a) => {
                 matches!(&a.head,Term::Symbol { uri, .. } if *uri == self.symbol)
@@ -49,9 +48,8 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
     }
     fn apply(
         &self,
-        _: &RuleSet<Split>,
+        _: &mut CheckRef<'_, '_, Split>,
         t: Term,
-        _: either::Either<&Symbol, &VariableDeclaration>,
         path: Option<(&mut smallvec::SmallVec<u8, 16>, usize)>,
     ) -> ControlFlow<Term, Term> {
         if let Some(i) = path.and_then(|(v, i)| {
@@ -61,7 +59,8 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
             *i = self.reorder.of(*i).unwrap_or(*i);
         }
 
-        ControlFlow::Continue(match t {
+        //tracing::debug!("Reordering {:?}", t.debug_short());
+        let r = match t {
             Term::Application(app) => Term::Application(ApplicationTerm::new(
                 app.head.clone(),
                 // SAFETY: applicable checks `arguments.len() == self.reorder.len()`
@@ -83,22 +82,16 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
                 app.presentation.clone(),
             )),
             t => t,
-        })
+        };
+        //tracing::debug!("Result: {:?}", r.debug_short());
+        ControlFlow::Continue(r)
     }
-    fn applicable_revert(
-        &self,
-        t: &Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> bool {
-        <Self as PreparationRule<Split>>::applicable(self, t, head)
+    fn applicable_revert(&self, checker: &CheckRef<'_, '_, Split>, t: &Term) -> bool {
+        <Self as PreparationRule<Split>>::applicable(self, checker, t)
     }
-    fn revert(
-        &self,
-        rules: &RuleSet<Split>,
-        t: Term,
-        head: either::Either<&Symbol, &VariableDeclaration>,
-    ) -> ControlFlow<Term, Term> {
-        ControlFlow::Continue(match t {
+    fn revert(&self, _: &CheckRef<'_, '_, Split>, t: Term) -> ControlFlow<Term, Term> {
+        //tracing::debug!("Reverting Reordering {:?}", t.debug_short());
+        let r = match t {
             Term::Application(app) => Term::Application(ApplicationTerm::new(
                 app.head.clone(),
                 // SAFETY: applicable checks `arguments.len() == self.reorder.len()`
@@ -120,6 +113,8 @@ impl<Split: SplitStrategy> PreparationRule<Split> for ReorderRule {
                 app.presentation.clone(),
             )),
             t => t,
-        })
+        };
+        //tracing::debug!("Result: {:?}", r.debug_short());
+        ControlFlow::Continue(r)
     }
 }

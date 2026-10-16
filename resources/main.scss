@@ -1,35 +1,10 @@
-/*
-@import "./components/treeview";
-@import "./components/loglist";
-*/
-
-.flams-main {
-    height:calc(100vh - 67px);
-    top:67px!important;
-}
-
-.flams-header {
-    width:100vw;
-    height: 67px;
-    text-align: center;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    .thaw-grid-item {
-      align-content: center;
-    }
-}
-
 .flams-menu {
     border-right: var(--strokeWidthThickest) double var(--colorNeutralStroke1);
-    min-width: 120px !important;
-    width:120px;
-    height: 100%;
+    height:100%;
 }
 
 .flams-menu-inner {
-    width:120px;
+    width:125px;
 }
 
 body { margin: 0}
@@ -43,7 +18,7 @@ body { margin: 0}
 .flams-user-menu-trigger{
     width:fit-content;
     margin-left:auto;
-} 
+}
 .flams-user-menu {
     margin-left:-60px;
     width:160px;

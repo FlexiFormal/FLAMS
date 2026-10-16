@@ -12,6 +12,7 @@ pub mod components;
 
 use flams_router_base::maybe_lazy;
 use flams_utils::unwrap;
+use ftml_component_utils::Spinner;
 use ftml_dom::utils::css::inject_css;
 pub use leptos::prelude::*;
 
@@ -67,7 +68,7 @@ maybe_lazy!(
                                 </div>
                             )),
                             Some(_) => EitherOf3::B("ERROR"),
-                            None => EitherOf3::C(view!(<flams_web_utils::components::Spinner/>)),
+                            None => EitherOf3::C(view!(<Spinner/>)),
                         }
                     }
                     </Suspense></LoginProvider>
@@ -100,7 +101,7 @@ pub fn VSCodeWrap() -> impl IntoView {
                             </div>
                         )),
                         Some(_) => EitherOf3::B("ERROR"),
-                        None => EitherOf3::C(view!(<flams_web_utils::components::Spinner/>)),
+                        None => EitherOf3::C(view!(<Spinner/>)),
                     }
                 }
                 </Suspense></LoginProvider>

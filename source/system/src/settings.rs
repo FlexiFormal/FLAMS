@@ -31,6 +31,7 @@ pub struct Settings {
     pub gitlab_app_secret: Option<Box<str>>,
     pub gitlab_redirect_url: Option<Box<str>>,
     pub lsp: bool,
+    pub remotes: rustc_hash::FxHashMap<Box<str>, url::Url>,
 }
 impl Debug for Settings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -39,6 +40,9 @@ impl Debug for Settings {
 }
 
 impl Settings {
+    pub const fn remotes(&self) -> &rustc_hash::FxHashMap<Box<str>, url::Url> {
+        &self.remotes
+    }
     #[inline]
     pub fn mathhubs(&self) -> &'static [&'static Path] {
         flams_math_archives::mathhub::mathhubs()
@@ -48,9 +52,8 @@ impl Settings {
     }
     #[allow(clippy::missing_panics_doc)]
     pub fn initialize(settings: SettingsSpec) {
-        SETTINGS
-            .set(settings.into())
-            .expect("Error initializing settings");
+        let settings: Self = settings.into();
+        SETTINGS.set(settings).expect("Error initializing settings");
     }
 
     #[allow(clippy::missing_panics_doc)]
@@ -125,6 +128,7 @@ impl Settings {
                 redirect_url: self.gitlab_redirect_url.clone(),
             },
             lsp: self.lsp,
+            remotes: self.remotes.clone(),
         };
         spec
     }
@@ -200,6 +204,7 @@ impl From<SettingsSpec> for Settings {
             gitlab_app_id: spec.gitlab.app_id,
             gitlab_app_secret: spec.gitlab.app_secret,
             gitlab_redirect_url: spec.gitlab.redirect_url,
+            remotes: spec.remotes,
         }
     }
 }

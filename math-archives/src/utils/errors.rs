@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 
-use ftml_uris::errors::UriParseError;
+use ftml_uris::{ArchiveUri, errors::UriParseError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
     #[error("element not found")]
-    NotFound(ftml_uris::UriKind),
+    NotFound(ftml_uris::Uri),
     #[error("archive not found")]
-    ArchiveNotFound,
+    ArchiveNotFound(ArchiveUri),
     #[error("{0}")]
-    Channel(#[from] ftml_ontology::utils::awaitable::ChannelError),
+    Cache(#[from] ftml_backend::utils::async_cache::CacheError),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("decoding error: {0}")]
@@ -20,9 +20,9 @@ pub enum BackendError {
 impl Clone for BackendError {
     fn clone(&self) -> Self {
         match self {
-            Self::NotFound(k) => Self::NotFound(*k),
-            Self::ArchiveNotFound => Self::ArchiveNotFound,
-            Self::Channel(e) => Self::Channel(*e),
+            Self::NotFound(k) => Self::NotFound(k.clone()),
+            Self::ArchiveNotFound(uri) => Self::ArchiveNotFound(uri.clone()),
+            Self::Cache(e) => Self::Cache(*e),
             Self::Io(err) => Self::Io(clone_io(err)),
             Self::Decode(e) => Self::Decode(clone_bincode(e)),
             Self::OutOfRangeError(a, b) => Self::OutOfRangeError(*a, *b),
@@ -33,9 +33,7 @@ impl<E: std::fmt::Debug> From<BackendError> for ftml_backend::BackendError<E> {
     fn from(value: BackendError) -> Self {
         match value {
             BackendError::NotFound(u) => ftml_backend::BackendError::NotFound(u),
-            BackendError::ArchiveNotFound => {
-                ftml_backend::BackendError::NotFound(ftml_uris::UriKind::Archive)
-            }
+            BackendError::ArchiveNotFound(uri) => ftml_backend::BackendError::NotFound(uri.into()),
             _ => ftml_backend::BackendError::ToDo(value.to_string()),
         }
     }
@@ -45,7 +43,7 @@ impl<E: std::fmt::Debug> From<BackendError> for ftml_backend::BackendError<E> {
 impl From<ReadError> for BackendError {
     fn from(value: ReadError) -> Self {
         match value {
-            ReadError::Channel(c) => Self::Channel(c),
+            ReadError::Cache(c) => Self::Cache(c),
             ReadError::Decode(e) => Self::Decode(e),
             ReadError::Io(e) => Self::Io(e),
             ReadError::NumberOfFields { .. } => panic!("{value} -- this is a bug"),
@@ -149,14 +147,14 @@ pub enum ReadError {
     #[error("decoding error: {0}")]
     Decode(#[from] bincode::error::DecodeError),
     #[error("internal channel error: {0}")]
-    Channel(#[from] ftml_ontology::utils::awaitable::ChannelError),
+    Cache(#[from] ftml_backend::utils::async_cache::CacheError),
 }
 impl Clone for ReadError {
     fn clone(&self) -> Self {
         match self {
             Self::Io(err) => Self::Io(clone_io(err)),
             Self::Decode(bc) => Self::Decode(clone_bincode(bc)),
-            Self::Channel(e) => Self::Channel(*e),
+            Self::Cache(e) => Self::Cache(*e),
             Self::NumberOfFields { max, index } => Self::NumberOfFields {
                 max: *max,
                 index: *index,

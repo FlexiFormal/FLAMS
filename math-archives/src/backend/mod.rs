@@ -5,7 +5,7 @@ mod temp;
 use crate::{
     Archive, BackendError, BuildableArchive, LocalArchive, MathArchive,
     artifacts::{Artifact, FileOrString},
-    formats::BuildTargetId,
+    formats::{BuildTarget, BuildTargetId},
     manager::ArchiveOrGroup,
     utils::{
         AsyncEngine,
@@ -14,11 +14,7 @@ use crate::{
     },
 };
 use ftml_ontology::{
-    domain::{
-        SharedDeclaration,
-        declarations::IsDeclaration,
-        modules::{Module, ModuleLike},
-    },
+    domain::{SharedDeclaration, declarations::IsDeclaration, modules::ModuleLike},
     narrative::{
         DocDataRef, DocumentRange, SharedDocumentElement,
         documents::Document,
@@ -139,12 +135,12 @@ pub trait LocalBackend: Send + Sync {
             let m = self.get_module(uri.module_uri())?;
             return m
                 .get_as(uri.name())
-                .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol));
+                .ok_or_else(|| BackendError::NotFound(uri.clone().into()));
         }
         let uri = uri.clone().simple_module();
         let m = self.get_module(uri.module_uri())?;
         m.get_as(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::Symbol))
+            .ok_or(BackendError::NotFound(uri.into()))
     }
 
     /// # Errors
@@ -167,7 +163,7 @@ pub trait LocalBackend: Send + Sync {
     {
         let d = self.get_document(uri.document_uri())?;
         d.get(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     /// # Errors
@@ -180,7 +176,7 @@ pub trait LocalBackend: Send + Sync {
     {
         let d = self.get_document_async::<A>(uri.document_uri()).await?;
         d.get(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     /// # Errors
@@ -193,7 +189,7 @@ pub trait LocalBackend: Send + Sync {
     {
         let d = self.get_document(uri.document_uri())?;
         d.get_as(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     /// # Errors
@@ -206,7 +202,7 @@ pub trait LocalBackend: Send + Sync {
     {
         let d = self.get_document_async::<A>(uri.document_uri()).await?;
         d.get_as(uri.name())
-            .ok_or(BackendError::NotFound(ftml_uris::UriKind::DocumentElement))
+            .ok_or_else(|| BackendError::NotFound(uri.clone().into()))
     }
 
     fn uri_of(&self, p: &Path) -> Option<DocumentUri>
@@ -298,6 +294,14 @@ pub trait LocalBackend: Send + Sync {
     ) -> impl Iterator<Item = (DocumentElementUri, Notation)>
     where
         Self: Sized;
+
+    #[cfg(feature = "img")]
+    fn export_html(&self, uri: &DocumentUri, to: &Path) -> Result<(), String>
+    where
+        Self: Sized,
+    {
+        crate::images::html_export(uri, to, self)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -357,6 +361,11 @@ impl LocalBackend for AnyBackend {
         from: BuildTargetId,
         result: Option<Box<dyn Artifact>>,
     ) -> std::result::Result<(), ArtifactSaveError> {
+        if let Some(rp) = rel_path
+            && let Some(res) = result.as_ref()
+        {
+            save_top(self, in_doc, rp, &**res);
+        }
         match self {
             Self::Global => GlobalBackend.save(in_doc, rel_path, log, from, result),
             Self::Temp(b) => b.save(in_doc, rel_path, log, from, result),
@@ -564,7 +573,11 @@ impl LocalBackend for AnyBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_notations::<E>(uri)
+        match self {
+            Self::Temp(b) => either::Left(b.get_notations::<E>(uri)),
+            _ => either::Right(GlobalBackend.get_notations::<E>(uri)),
+        }
+        //GlobalBackend.get_notations::<E>(uri)
     }
 
     #[cfg(feature = "rdf")]
@@ -581,6 +594,15 @@ impl LocalBackend for AnyBackend {
     where
         Self: Sized,
     {
-        GlobalBackend.get_var_notations::<E>(uri)
+        match self {
+            Self::Temp(b) => either::Left(b.get_var_notations::<E>(uri)),
+            _ => either::Right(GlobalBackend.get_var_notations::<E>(uri)),
+        }
+    }
+}
+
+fn save_top(slf: &AnyBackend, uri: &DocumentUri, rel_path: &UriPath, result: &dyn Artifact) {
+    for e in inventory::iter::<crate::FlamsExtension>() {
+        (e.on_build_result)(slf, uri, rel_path, result);
     }
 }

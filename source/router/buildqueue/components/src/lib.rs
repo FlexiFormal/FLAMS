@@ -13,10 +13,11 @@ use flams_router_base::{maybe_lazy, ws};
 #[cfg(feature = "hydrate")]
 use flams_router_buildqueue_base::server_fns::get_log;
 use flams_router_buildqueue_base::{QueueInfo, RepoInfo, server_fns};
-use flams_router_checks::{DocumentCheckResult, ResultExt};
+use flams_router_content::checks::{DocumentCheckResult, ResultExt};
 use flams_router_git_base::server_fns::{get_new_commits, update_from_branch};
 use flams_utils::vecmap::VecMap;
 use flams_web_utils::components::wait_and_then_fn;
+use ftml_component_utils::{Collapsible, Header, LazyCollapsible};
 use ftml_dom::utils::css::inject_css;
 use ftml_ontology::utils::time::{Delta, Eta};
 use ftml_uris::{ArchiveId, DocumentUri};
@@ -49,7 +50,6 @@ impl Entry {
     #[cfg(feature = "hydrate")]
     fn as_view(&self) -> AnyView {
         use flams_router_base::vscode_link;
-        use flams_web_utils::components::{Collapsible, Header};
 
         let vscode = vscode_link(&self.archive, &self.rel_path);
 
@@ -127,7 +127,6 @@ pub enum TaskState {
 impl TaskState {
     #[cfg(feature = "hydrate")]
     fn into_view(self, t: String, archive: &ArchiveId, rel_path: &str) -> AnyView {
-        use flams_web_utils::components::{Header, LazyCollapsible};
         match self {
             Self::Running => view! {<i style="color:yellow">{t}" (Running)"</i>}.into_any(),
             Self::Queued | Self::Blocked | Self::None => {
@@ -179,14 +178,17 @@ impl TaskState {
     }
 }
 
-fn do_log(s: either::Either<String, DocumentCheckResult>) -> AnyView {
-    use thaw::Scrollbar;
+fn do_log(s: either::Either<String, String>) -> AnyView {
+    use ftml_component_utils::Scrollbar;
     view! {<Scrollbar style="max-height: 160px;max-width:80vw;border:2px solid black;padding:5px;">{
         match s {
             either::Left(s) => leptos::either::Either::Left(view!{
                 <pre style="width:fit-content;font-size:smaller;">{s}</pre>
             }),
-            either::Right(v) => leptos::either::Either::Right(v.render())
+            either::Right(v) => leptos::either::Either::Right({
+                ftml_solver_trace::results::DocumentCheckResult::from_json(&v)
+                    .map_or_else(|_| view!{<pre>{v}</pre>}.into_any(),|e| e.render())
+            })
         }
     }</Scrollbar>}
     .into_any()
@@ -235,6 +237,11 @@ pub enum QueueMessage {
         target: String,
         eta: Eta,
     },
+    TaskBlocked {
+        id: u32,
+        target: String,
+        eta: Eta,
+    },
 }
 #[cfg(feature = "ssr")]
 impl From<flams_system::building::QueueMessage> for QueueMessage {
@@ -273,6 +280,11 @@ impl From<flams_system::building::QueueMessage> for QueueMessage {
                 target: target.to_string(),
                 eta,
             },
+            QueueMessage::TaskBlocked { id, target, eta } => Self::TaskBlocked {
+                id: id.into(),
+                target: target.to_string(),
+                eta,
+            },
         }
     }
 }
@@ -283,8 +295,8 @@ maybe_lazy!(QueuesTop = queues_top());
 
 //#[component]
 pub fn queues_top() -> AnyView {
-    use flams_web_utils::components::Spinner;
-    use thaw::{Divider, Layout, Tab, TabList};
+    use flams_web_utils::components::{Layout, LayoutHeader};
+    use ftml_component_utils::{Divider, Spinner, Tab, TabList};
 
     let update = UpdateQueues(RwSignal::new(()));
     provide_context(update);
@@ -299,10 +311,8 @@ pub fn queues_top() -> AnyView {
                     return view!(<div>"(No running queues)"</div>).into_any();
                 }
                 let queues = AllQueues::new(v);
-                if let Some(id) = id() {
-                    if let Ok(id) = id.parse() {
-                        queues.selected.update_untracked(|v| *v = id);
-                    }
+                if let Some(id) = params.read_untracked().get("queue") && let Ok(id) = id.parse() {
+                    queues.selected.update_untracked(|v| *v = id);
                 }
                 provide_context(queues);
                 let selected_value = RwSignal::new(queues.selected.get_untracked().to_string());
@@ -314,40 +324,44 @@ pub fn queues_top() -> AnyView {
                         queues.selected.set(value);
                     }
                 });
-                inject_css(
-                    "flams-fullscreen",
-                    ".flams-fullscreen { width:100%; height:calc(100% - 44px - 21px) }",
-                );
-                view! {
-                  <TabList selected_value>
-                    <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
-                      <Tab value=i.to_string()>{
-                        queues.queue_names.get().get(&i).unwrap_or_else(|| unreachable!()).clone()
-                      }</Tab>
-                    }/>
-                  </TabList>
-                  <div style="margin:10px"><Divider/></div>
-                  <Layout class="flams-fullscreen">{move || {
-                    let curr = queues.selected.get();
-                    queues.show.update_untracked(|v| *v = false);
-                    QueueSocket::run(queues);
-                    move || view! {
-                      <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
-                        let ls = *queues.queues.get_untracked().get(&curr).unwrap_or_else(|| unreachable!());
-                        move || match ls.get() {
-                          QueueData::Idle(v) => {
-                              idle(curr,v)
-                          },
-                          QueueData::Running(r) => {
-                              running(curr,r)
-                          },
-                          QueueData::Finished(failed,done) => finished(curr,failed,done),
-                          QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                view! {<Layout>
+                    <LayoutHeader slot>
+                        <TabList selected_value>
+                            <For each=move || queues.queues.get() key=|e| e.0 children=move |(i,_)| view!{
+                            <Tab value=i.to_string()>{
+                                queues.queue_names.with_untracked(|m| m.get(&i).cloned()).unwrap_or_else(|| unreachable!())
+                            }</Tab>
+                            }/>
+                        </TabList>
+                        <div style="margin:10px"><Divider/></div>
+                    </LayoutHeader>
+                    {move || {
+                        //let curr = queues.selected.get();
+                        queues.show.update_untracked(|v| *v = false);
+                        QueueSocket::run(queues);
+                        move || view! {
+                        <Show when=move || queues.show.get() fallback=|| view!(<Spinner/>)>{
+                            let ls = move || {
+                                let curr = queues.selected.get();
+                                (curr,queues.queues.with(|m| m.get(&curr).copied()).unwrap_or_else(|| unreachable!()))
+                            };
+                            move || {
+                                let (curr,ls) = ls();
+                                match ls.get() {
+                                    QueueData::Idle(v) => {
+                                        idle(curr,v)
+                                    },
+                                    QueueData::Running(r) => {
+                                        running(curr,r)
+                                    },
+                                    QueueData::Finished(failed,done) => finished(curr,failed,done),
+                                    QueueData::Empty => view!(<div>"Other"</div>).into_any()
+                                }
+                            }
+                        }</Show>
                         }
-                      }</Show>
-                    }
-                  }}</Layout>
-                }.into_any()
+                    }}
+                </Layout>}.into_any()
             })
         }) as _)
     }).into_any()
@@ -355,11 +369,7 @@ pub fn queues_top() -> AnyView {
 
 #[allow(clippy::too_many_lines)]
 fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
-    use flams_web_utils::components::{Collapsible, Header};
-    use thaw::{
-        Caption1Strong, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell,
-        TableRow,
-    };
+    use ftml_component_utils::{BoldCaption, Table, TableCell, TableHeader, TableRow};
     if matches!(LoginState::get(), LoginState::NoAccounts) {
         return ().into_any();
     }
@@ -377,19 +387,19 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
     let style = if allowed { "" } else { "color:gray;" };
     inject_css("flams-repo-table", include_str!("repo-table.css"));
     view! {<div style="margin-left:45px;width:fit-content;"><Collapsible>
-          <Header slot><Caption1Strong>"Archives"</Caption1Strong></Header>
+          <Header slot><BoldCaption>"Archives"</BoldCaption></Header>
           <Table class="flams-repo-table">
-            <TableHeader><TableRow>
-              <TableHeaderCell><Caption1Strong>"Archive"</Caption1Strong></TableHeaderCell>
-              <TableHeaderCell><Caption1Strong>"Branch"</Caption1Strong></TableHeaderCell>
-              <TableHeaderCell><Caption1Strong>"Commit"</Caption1Strong></TableHeaderCell>
-            </TableRow></TableHeader>
-            <TableBody>{
+            <TableHeader slot>
+              <TableCell><BoldCaption>"Archive"</BoldCaption></TableCell>
+              <TableCell><BoldCaption>"Branch"</BoldCaption></TableCell>
+              <TableCell><BoldCaption>"Commit"</BoldCaption></TableCell>
+            </TableHeader>
+            {
               repos.into_iter().map(|d| match d {
                 RepoInfo::Copy(id) => leptos::either::Either::Left(view!{
                   <TableRow>
-                    <TableCell><TableCellLayout><span style=style>{id.to_string()}</span></TableCellLayout></TableCell>
-                    <TableCell><TableCellLayout>"(Copied from MathHub)"</TableCellLayout></TableCell>
+                    <TableCell><span style=style>{id.to_string()}</span></TableCell>
+                    <TableCell>"(Copied from MathHub)"</TableCell>
                   </TableRow>
                 }),
                 RepoInfo::Git{id,branch,commit,remote/*,updates */} => leptos::either::Either::Right({
@@ -404,14 +414,14 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
                   let idstr = id.to_string();
                   view!{
                     <TableRow>
-                      <TableCell><TableCellLayout><span style=style>{idstr}</span></TableCellLayout></TableCell>
-                      <TableCell><TableCellLayout>{branch}</TableCellLayout></TableCell>
-                      <TableCell><TableCellLayout>
+                      <TableCell><span style=style>{idstr}</span></TableCell>
+                      <TableCell>{branch}</TableCell>
+                      <TableCell>
                         {commit.id[..8].to_string()}" at "{commit.created_at.to_string()}" by "{commit.author_name}
                         {if allowed {Some(move || updates.with(|up| {
                           let Some(up) = up else {
                             let aid = id.clone();
-                            let toaster = thaw::ToasterInjection::expect_context();
+                            let toaster = ftml_component_utils::toasts::ToasterInjection::expect_context();
                             let get_updates = Action::new(move |()| {
                               let id = aid.clone();
                               async move {
@@ -431,7 +441,7 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
                           let updates = up.clone();
 
                           leptos::either::EitherOf3::C({
-                            use thaw::{Button,ButtonSize,Combobox,ComboboxOption};
+                            use ftml_component_utils::{Button,ButtonSize,Combobox,ComboboxOption};
                             let first = updates.first().map(|(name,_)| name.clone()).unwrap_or_default();
                             let branch = RwSignal::new(first.clone());
                             let _ = Effect::new(move || if branch.with(String::is_empty) {
@@ -466,19 +476,19 @@ fn repos(queue_id: NonZeroU32, allowed: bool) -> AnyView {
                             }
                           })
                         }))} else {None}}
-                      </TableCellLayout></TableCell>
+                      </TableCell>
                     </TableRow>
                   }
                 }),
               }).collect_view()
-            }</TableBody>
+            }
           </Table>
         </Collapsible></div>
     }.into_any()
 }
 
 fn delete_action(id: NonZeroU32) -> Action<(), ()> {
-    use thaw::ToasterInjection;
+    use ftml_component_utils::toasts::ToasterInjection;
     let update: UpdateQueues = expect_context();
     let toaster = ToasterInjection::expect_context();
     Action::new(move |()| async move {
@@ -490,7 +500,7 @@ fn delete_action(id: NonZeroU32) -> Action<(), ()> {
 }
 
 fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
-    use thaw::Button;
+    use ftml_component_utils::Button;
     let act = Action::<(), Result<(), ServerFnError<String>>>::new(move |()| {
         flams_router_buildqueue_base::server_fns::run(id)
     });
@@ -509,8 +519,7 @@ fn idle(id: NonZeroU32, ls: RwSignal<Vec<Entry>>) -> AnyView {
 }
 
 fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
-    use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use thaw::{Button, Layout};
+    use ftml_component_utils::{AnchorMenu, AnchorMenuEntry, Button};
     let del = delete_action(id);
     let RunningQueue {
         running,
@@ -521,15 +530,15 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
         eta,
     } = queue;
     view! {
-      <div style="position:fixed;right:20px;z-index:5"><Anchor>
-          <AnchorLink href="#running"><Header slot>"Running"</Header></AnchorLink>
-          <AnchorLink href="#queued"><Header slot>"Queued"</Header></AnchorLink>
-          <AnchorLink href="#blocked"><Header slot>"Blocked"</Header></AnchorLink>
-          <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
-          <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
-      </Anchor></div>
+      <div style="position:fixed;right:20px;z-index:5"><AnchorMenu>
+          <AnchorMenuEntry href="#running">"Running"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#queued">"Queued"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#blocked">"Blocked"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#failed">"Failed"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#finished">"Finished"</AnchorMenuEntry>
+      </AnchorMenu></div>
       {repos(id,false)}
-      <Layout content_style="text-align:left;">
+      <div style="text-align:left;">
           {eta.into_view()}
           <div style="width:100%"><div style="position:fixed;right:20px">
               <Button on_click=move |_| {del.dispatch(());}>"Abort and Delete"</Button>
@@ -544,13 +553,12 @@ fn running(id: NonZeroU32, queue: RunningQueue) -> AnyView {
           <ul style="margin-left:30px"><For each=move || failed.get() key=|e| e.id children=|e| e.as_view()/></ul>
           <h3 id="finished">"Finished ("{move || done.with(Vec::len)}")"</h3>
           <ul style="margin-left:30px"><For each=move || done.get() key=|e| e.id children=|e| e.as_view()/></ul>
-      </Layout>
+      </div>
     }.into_any()
 }
 
 fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
-    use flams_web_utils::components::{Anchor, AnchorLink, Header};
-    use thaw::{Button, Layout};
+    use ftml_component_utils::{AnchorMenu, AnchorMenuEntry, Button};
     let requeue = Action::new(move |()| flams_router_buildqueue_base::server_fns::requeue(id));
     let num_failed = failed.len();
     let num_done = done.len();
@@ -563,12 +571,12 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
           {migrate_button(id,num_failed)}
           <Button on_click=move |_| {del.dispatch(());}>"Delete"</Button>
       </div></div>
-      <div style="position:fixed;right:20px;z-index:5"><Anchor>
-          <AnchorLink href="#failed"><Header slot>"Failed"</Header></AnchorLink>
-          <AnchorLink href="#finished"><Header slot>"Finished"</Header></AnchorLink>
-      </Anchor></div>
+      <div style="position:fixed;right:20px;z-index:5"><AnchorMenu>
+          <AnchorMenuEntry href="#failed">"Failed"</AnchorMenuEntry>
+          <AnchorMenuEntry href="#finished">"Finished"</AnchorMenuEntry>
+      </AnchorMenu></div>
       {repos(id,true)}
-      <Layout content_style="text-align:left;">
+      <div style="text-align:left;">
           <h3 id="failed">"Failed ("{num_failed}")"</h3>
           <ul style="margin-left:30px">{
             failed.iter().map(Entry::as_view).collect_view()
@@ -577,14 +585,16 @@ fn finished(id: NonZeroU32, failed: Vec<Entry>, done: Vec<Entry>) -> AnyView {
           <ul style="margin-left:30px">{
             done.iter().map(Entry::as_view).collect_view()
           }</ul>
-      </Layout>
+      </div>
     }
     .into_any()
 }
 
 fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
+    use ftml_component_utils::{
+        BoldCaption, Button, Dialog, DialogBody, DialogContent, DialogSurface, Divider,
+    };
     use leptos::either::EitherOf3;
-    use thaw::{Button, Caption1Strong, Dialog, DialogBody, DialogContent, DialogSurface, Divider};
     if matches!(LoginState::get(), LoginState::NoAccounts) {
         return ().into_any();
     }
@@ -606,7 +616,7 @@ fn migrate_button(id: NonZeroU32, num_failed: usize) -> AnyView {
         view! {
           <Button on_click=move |_| {clicked.set(true);}>"Migrate"</Button>
           <Dialog open=clicked><DialogSurface><DialogBody><DialogContent>
-            <Caption1Strong><span style="color:red">WARNING</span></Caption1Strong>
+            <BoldCaption><span style="color:red">WARNING</span></BoldCaption>
             <Divider/>
             <p>{num_failed}" jobs have failed to build!"<br/>"Migrate anyway?"</p>
             <div>
@@ -761,16 +771,37 @@ impl QueueSocket {
                 eta: WrappedEta(RwSignal::new(Eta::default())),
             })),
             QueueMessage::Finished { failed, done } => queue.set(QueueData::Finished(failed, done)),
-            QueueMessage::TaskStarted { id, target } => queue.with_untracked(|queue| {
-                if let QueueData::Running(RunningQueue { queue, running, .. }) = queue {
+            QueueMessage::TaskStarted { id, mut target } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    queue,
+                    running,
+                    blocked,
+                    ..
+                }) = queue
+                {
+                    let mut worked = false;
                     queue.update(|v| {
                         let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
                             return;
                         };
+                        worked = true;
                         let e = v.remove(i);
-                        e.steps.update(|m| m.insert(target, TaskState::Running));
+                        e.steps
+                            .update(|m| m.insert(std::mem::take(&mut target), TaskState::Running));
                         running.update(|running| running.push(e));
                     });
+                    if !worked {
+                        blocked.update(|v| {
+                            let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id)
+                            else {
+                                return;
+                            };
+                            worked = true;
+                            let e = v.remove(i);
+                            e.steps.update(|m| m.insert(target, TaskState::Running));
+                            running.update(|running| running.push(e));
+                        });
+                    }
                 }
             }),
             QueueMessage::TaskSuccess { id, target, eta } => queue.with_untracked(|queue| {
@@ -816,6 +847,25 @@ impl QueueSocket {
                         let e = v.remove(i);
                         e.steps.update(|m| m.insert(target, TaskState::Failed));
                         failed.update(|v| v.push(e));
+                    });
+                }
+            }),
+            QueueMessage::TaskBlocked { id, target, eta } => queue.with_untracked(|queue| {
+                if let QueueData::Running(RunningQueue {
+                    running,
+                    blocked,
+                    eta: etasignal,
+                    ..
+                }) = queue
+                {
+                    etasignal.0.set(eta);
+                    running.update(|v| {
+                        let Some((i, _)) = v.iter().enumerate().find(|(_, e)| e.id == id) else {
+                            return;
+                        };
+                        let e = v.remove(i);
+                        e.steps.update(|m| m.insert(target, TaskState::Blocked));
+                        blocked.update(|v| v.push(e));
                     });
                 }
             }),
@@ -885,7 +935,7 @@ struct WrappedEta(RwSignal<ftml_ontology::utils::time::Eta>);
 #[allow(clippy::cast_precision_loss)]
 impl WrappedEta {
     fn into_view(self) -> impl IntoView {
-        use thaw::ProgressBar;
+        use ftml_component_utils::ProgressBar;
         inject_css(
             "flams-eta",
             r"

@@ -5,12 +5,13 @@ use super::{
     BuildTask, BuildTaskId, Eta, QueueMessage, TaskRef, TaskState,
 };
 use flams_math_archives::{
+    artifacts::FileOrString,
     backend::{AnyBackend, LocalBackend},
     formats::{BuildResult, BuildTargetId, FormatOrTargets},
     manager::ArchiveOrGroup,
     source_files::{SourceEntry, SourceEntryRef},
     utils::path_ext::RelPath,
-    Archive, LocallyBuilt, MathArchive,
+    Archive, BuildableArchive, LocallyBuilt, MathArchive,
 };
 use flams_utils::{
     change_listener::{ChangeListener, ChangeSender},
@@ -73,7 +74,7 @@ pub(super) struct QueueI {
     pub id: QueueId,
     span: tracing::Span,
     pub(super) map: RwLock<TaskMap>,
-    sender: ChangeSender<QueueMessage>,
+    pub(super) sender: ChangeSender<QueueMessage>,
     pub(super) state: RwLock<QueueState>,
 }
 
@@ -193,7 +194,7 @@ impl Queue {
             let Ok(permit) = tokio::sync::Semaphore::acquire_owned(sem.clone()).await else {
                 break;
             };
-            let Some((task, id)) = self.get_next() else {
+            let Some((task, id)) = self.get_next_async().await else {
                 break;
             };
             let selfclone = self.clone();
@@ -246,7 +247,7 @@ impl Queue {
         map.map.clear();
         for t in failed {
             for s in &t.0.steps {
-                *s.0.state.write() = TaskState::None;
+                s.0.state.set(TaskState::None);
             }
             map.map.insert(
                 (t.archive().archive_id().clone(), t.0.rel_path.clone()),
@@ -306,43 +307,32 @@ impl Queue {
         state.running.retain(|t| t != task);
         let eta = state.timer.update(1);
 
-        match result {
-            Err(_deps) => {
-                // TODO: handle dependencies
-                let mut found = false;
-                for s in task.steps() {
-                    if s.0.target == target {
-                        found = true;
-                    }
-                    if found {
-                        *s.0.state.write() = TaskState::Failed;
-                    }
-                }
-                state.failed.push(task.clone());
-                drop(lock);
+        let (mut err, res) = match result {
+            Ok(res) => (None, res),
+            Err(e) => (Some(e), None),
+        };
 
-                let _ = self.0.backend.save(
-                    task.document_uri(),
-                    Some(task.rel_path()),
-                    log,
-                    target,
-                    None,
-                );
-                self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
-                    id: task.0.id,
-                    target,
-                    eta,
-                });
+        if let Err(e) =
+            self.0
+                .backend
+                .save(task.document_uri(), Some(task.rel_path()), log, target, res)
+        {
+            tracing::error!("Error saving build result: {e}");
+            if err.is_none() {
+                err = Some(Vec::new());
             }
-            Ok(data) => {
+        }
+
+        match err {
+            None => {
                 let mut found = false;
                 let mut requeue = false;
                 for s in task.steps() {
                     if s.0.target == target {
                         found = true;
-                        *s.0.state.write() = TaskState::Done;
+                        s.0.state.set(TaskState::Done);
                     } else if found {
-                        *s.0.state.write() = TaskState::Queued;
+                        s.0.state.set(TaskState::Queued);
                         requeue = true;
                         break;
                     }
@@ -353,30 +343,66 @@ impl Queue {
                     state.done.push(task.clone());
                 }
                 drop(lock);
-                if let Some(data) = data.as_ref() {
-                    for e in inventory::iter::<FlamsExtension>() {
-                        (e.on_build_result)(
-                            &self.0.backend,
-                            task.document_uri(),
-                            task.rel_path(),
-                            &**data,
-                        );
-                    }
-                }
-
-                let _ = self.0.backend.save(
-                    task.document_uri(),
-                    Some(task.rel_path()),
-                    log,
-                    target,
-                    data,
-                );
 
                 self.0.sender.lazy_send(|| QueueMessage::TaskSuccess {
                     id: task.0.id,
                     target,
                     eta,
                 });
+            }
+            Some(deps) => {
+                /*
+                let mut block = false;
+                for d in deps {
+                    match d {
+                        flams_math_archives::formats::TaskDependency::Physical { task, strict } => {
+                            if state.running.iter().chain(state.blocked.iter()).any(|t| task.archive == t.archive().id && task.rel_path == *t.rel_path() && t.get_step(task.target).is_some()) {
+                                block = true;
+                            }
+                        }
+                        flams_math_archives::formats::TaskDependency::Logical { uri, strict } => {
+                            self.backend().with_local_archive(uri.archive_id(), |a| if let Some(a) = a {
+                                a.do
+                            })
+                        }
+
+                    }
+                } */
+                let mut found = false;
+                if deps.is_empty() || state.queue.is_empty() {
+                    for s in task.steps() {
+                        if s.0.target == target {
+                            found = true;
+                        }
+                        if found {
+                            s.0.state.set(TaskState::Failed);
+                        }
+                    }
+                    state.failed.push(task.clone());
+                    self.0.sender.lazy_send(|| QueueMessage::TaskFailed {
+                        id: task.0.id,
+                        target,
+                        eta,
+                    });
+                } else {
+                    // TODO: handle dependencies
+                    let mut found = false;
+                    for s in task.steps() {
+                        if s.0.target == target {
+                            found = true;
+                        }
+                        if found {
+                            s.0.state.set(TaskState::Blocked);
+                        }
+                    }
+                    state.blocked.push(task.clone());
+                    self.0.sender.lazy_send(|| QueueMessage::TaskBlocked {
+                        id: task.0.id,
+                        target,
+                        eta,
+                    });
+                }
+                drop(lock);
             }
         }
     }
@@ -403,14 +429,26 @@ impl Queue {
             backend().with_archives(|archives| {
                 for a in archives {
                     let Archive::Local(archive) = a else { continue };
-                    b.maybe_copy(archive);
-                    if clean {
-                        let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
+                    let matches = archive.is_meta()
+                        || (match target {
+                            FormatOrTargets::Format(f) => archive.formats().contains(&f),
+                            FormatOrTargets::Targets(targets) => archive
+                                .formats()
+                                .iter()
+                                .flat_map(|fmt| fmt.targets)
+                                .any(|t| targets.contains(t)),
+                        });
+                    if matches {
+                        b.maybe_copy(archive);
+                        if clean {
+                            let _ =
+                                std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
+                        }
                     }
                 }
                 b.load_all();
             });
-        };
+        }
         let mut acc = 0;
         self.0.backend.with_archives(|archives| {
             for a in archives {
@@ -435,13 +473,13 @@ impl Queue {
         acc
     }
 
-    #[instrument(level = "info",
+    #[instrument(level = "debug",
     parent=&self.0.span,
     target = "buildqueue",
     name = "Queueing tasks",
     skip_all
   )]
-    #[deprecated(note = "needs refatoring: assumes LocalArchive everywhere")]
+    #[deprecated(note = "needs refactoring: assumes LocalArchive everywhere")]
     pub fn enqueue_group(
         &self,
         id: &ArchiveId,
@@ -457,28 +495,42 @@ impl Queue {
             None => 0,
             Some(ArchiveOrGroup::Archive(id)) => self.0.backend.with_archive(id, |a| {
                 let Some(archive) = a else { return 0 };
-                if clean {
-                    if let AnyBackend::Sandbox(b) = &self.0.backend {
-                        let _ = std::fs::remove_dir_all(b.path_for(archive.id()).join(".flams"));
-                    } else if let Archive::Local(a) = archive {
-                        let _ = std::fs::remove_dir_all(a.out_dir());
-                    }
-                }
                 if let Archive::Local(a) = archive {
-                    a.with_sources(|d| {
-                        let map = &mut *self.0.map.write();
-                        Self::enqueue(
-                            map,
-                            &self.0.backend,
-                            archive,
-                            target,
-                            stale_only,
-                            d.dfs().filter_map(|e| match e {
-                                SourceEntry::Dir(_) => None,
-                                SourceEntry::File(f) => Some(f),
-                            }),
-                        )
-                    })
+                    let matches = match target {
+                        FormatOrTargets::Format(f) => a.formats().contains(&f),
+                        FormatOrTargets::Targets(targets) => a
+                            .formats()
+                            .iter()
+                            .flat_map(|fmt| fmt.targets)
+                            .any(|t| targets.contains(t)),
+                    };
+                    if matches {
+                        if clean {
+                            if let AnyBackend::Sandbox(b) = &self.0.backend {
+                                let _ = std::fs::remove_dir_all(
+                                    b.path_for(archive.id()).join(".flams"),
+                                );
+                            } else if let Archive::Local(a) = archive {
+                                let _ = std::fs::remove_dir_all(a.out_dir());
+                            }
+                        }
+                        a.with_sources(|d| {
+                            let map = &mut *self.0.map.write();
+                            Self::enqueue(
+                                map,
+                                &self.0.backend,
+                                archive,
+                                target,
+                                stale_only,
+                                d.dfs().filter_map(|e| match e {
+                                    SourceEntry::Dir(_) => None,
+                                    SourceEntry::File(f) => Some(f),
+                                }),
+                            )
+                        })
+                    } else {
+                        0
+                    }
                 } else {
                     0
                 }
@@ -492,30 +544,41 @@ impl Queue {
                 }) {
                     ret += self.0.backend.with_archive(id, |a| {
                         let Some(archive) = a else { return 0 };
-
-                        if clean {
-                            if let AnyBackend::Sandbox(b) = &self.0.backend {
-                                let _ = std::fs::remove_dir_all(
-                                    b.path_for(archive.id()).join(".flams"),
-                                );
-                            } else if let Archive::Local(a) = archive {
-                                let _ = std::fs::remove_dir_all(a.out_dir());
-                            }
-                        }
                         if let Archive::Local(a) = archive {
-                            a.with_sources(|d| {
-                                Self::enqueue(
-                                    map,
-                                    &self.0.backend,
-                                    archive,
-                                    target,
-                                    stale_only,
-                                    d.dfs().filter_map(|e| match e {
-                                        SourceEntry::Dir(_) => None,
-                                        SourceEntry::File(f) => Some(f),
-                                    }),
-                                )
-                            })
+                            let matches = match target {
+                                FormatOrTargets::Format(f) => a.formats().contains(&f),
+                                FormatOrTargets::Targets(targets) => a
+                                    .formats()
+                                    .iter()
+                                    .flat_map(|fmt| fmt.targets)
+                                    .any(|t| targets.contains(t)),
+                            };
+                            if matches {
+                                if clean {
+                                    if let AnyBackend::Sandbox(b) = &self.0.backend {
+                                        let _ = std::fs::remove_dir_all(
+                                            b.path_for(archive.id()).join(".flams"),
+                                        );
+                                    } else if let Archive::Local(a) = archive {
+                                        let _ = std::fs::remove_dir_all(a.out_dir());
+                                    }
+                                }
+                                a.with_sources(|d| {
+                                    Self::enqueue(
+                                        map,
+                                        &self.0.backend,
+                                        archive,
+                                        target,
+                                        stale_only,
+                                        d.dfs().filter_map(|e| match e {
+                                            SourceEntry::Dir(_) => None,
+                                            SourceEntry::File(f) => Some(f),
+                                        }),
+                                    )
+                                })
+                            } else {
+                                0
+                            }
                         } else {
                             0
                         }
@@ -532,7 +595,7 @@ impl Queue {
     name = "Queueing tasks",
     skip_all
   )]
-    #[deprecated(note = "needs refatoring: assumes LocalArchive everywhere")]
+    #[deprecated(note = "needs refactoring: assumes LocalArchive everywhere")]
     pub fn enqueue_archive(
         &self,
         id: &ArchiveId,
