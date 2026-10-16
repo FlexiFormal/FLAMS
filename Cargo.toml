@@ -331,7 +331,14 @@ tantivy = "0.26"
 simsimd = "6"
 fastembed = "7"
 #ort-candle = "0.2.0+0.9"
-ort = { version="2.0.0-rc.11"}#, default-features = false, features = ["alternative-backend"] }
+ort = { version="2.0.0-rc.13",, default-features = false, features = [
+    "std",
+    "ndarray",
+    "tracing",
+    "download-binaries",
+    "tls-native",
+    "api-27",
+]}#, default-features = false, features = ["alternative-backend"] }
 
 waken_snowball = "0.1"
 radix_trie = "0.3"
