@@ -176,6 +176,7 @@ pub enum STeXAnnot {
         parsed_args: Vec<SymdeclArg<LSPLineCol, Self>>,
         token_range: StringRange<LSPLineCol>,
         full_range: StringRange<LSPLineCol>,
+        starred: bool,
     },
     #[allow(clippy::type_complexity)]
     TextSymdecl {
@@ -608,11 +609,13 @@ impl STeXAnnot {
                     token_range,
                     full_range,
                     parsed_args,
+                    starred,
                 } => v.push(Self::Symdecl {
                     uri,
                     main_name_range,
                     token_range,
                     full_range,
+                    starred,
                     parsed_args: cont!(parsed_args),
                 }),
                 STeXToken::TextSymdecl {

@@ -32,6 +32,7 @@ pub struct Settings {
     pub gitlab_redirect_url: Option<Box<str>>,
     pub lsp: bool,
     pub remotes: rustc_hash::FxHashMap<Box<str>, url::Url>,
+    pub fonts: rustc_hash::FxHashMap<Box<str>, Box<str>>,
 }
 impl Debug for Settings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -52,6 +53,7 @@ impl Settings {
     }
     #[allow(clippy::missing_panics_doc)]
     pub fn initialize(settings: SettingsSpec) {
+        flams_math_archives::backend::set_fonts(|| &Self::get().fonts);
         let settings: Self = settings.into();
         SETTINGS.set(settings).expect("Error initializing settings");
     }
@@ -129,6 +131,7 @@ impl Settings {
             },
             lsp: self.lsp,
             remotes: self.remotes.clone(),
+            fonts: self.fonts.clone(),
         };
         spec
     }
@@ -205,6 +208,7 @@ impl From<SettingsSpec> for Settings {
             gitlab_app_secret: spec.gitlab.app_secret,
             gitlab_redirect_url: spec.gitlab.redirect_url,
             remotes: spec.remotes,
+            fonts: spec.fonts,
         }
     }
 }

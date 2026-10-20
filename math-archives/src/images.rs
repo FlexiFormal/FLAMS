@@ -22,12 +22,17 @@ pub enum ImagePath<'s> {
 impl<'s> ImagePath<'s> {
     #[must_use]
     pub fn to_path(self) -> Option<PathBuf> {
-        match self {
+        let r = match self {
             Self::Kpse(p) => tex_engine::engine::filesystem::kpathsea::KPATHSEA.which(p),
             Self::ArchiveRelpath { id, rel_path } => {
                 GlobalBackend.with_local_archive(&id, |a| a.map(|a| a.path().join(&*rel_path)))
             }
             Self::File(p) => Some(p.into()),
+        }?;
+        if r.extension().is_some_and(|r| r == "pdf") {
+            Some(r.with_extension("pdf-rustex.png"))
+        } else {
+            Some(r)
         }
     }
     #[must_use]
@@ -40,10 +45,27 @@ impl<'s> ImagePath<'s> {
                 .ok()
                 .map(|v| (v.into_boxed_slice(), ext))
         } else {
-            let img = image::ImageReader::open(path).ok()?.decode().ok()?;
+            let img = match image::ImageReader::open(path) {
+                Ok(img) => img,
+                Err(e) => {
+                    tracing::error!("Failed to open {}: {e}", path.display());
+                    return None;
+                }
+            };
+            let img = match img.decode() {
+                Ok(img) => img,
+                Err(e) => {
+                    tracing::error!("Failed to decode image {}: {e}", path.display());
+                    return None;
+                }
+            };
             let mut v = Vec::<u8>::new();
-            img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
-                .ok()?;
+            if let Err(e) =
+                img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut v))
+            {
+                tracing::error!("Failed to encode {} to .webp: {e}", path.display());
+                return None;
+            }
             Some((v.into_boxed_slice(), "webp"))
         }
     }

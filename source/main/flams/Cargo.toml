@@ -8,6 +8,9 @@ description = "𝖥𝖫∀𝖬∫ - Flexiformal Annotation Management System"
 name = "flams"
 path="src/main.rs"
 
+[lints]
+workspace = true
+
 [features]
 docs = [
     "dep:flams-router-dashboard",

@@ -182,6 +182,7 @@ pub enum STeXToken<Pos: StringPosition> {
         full_range: StringRange<Pos>,
         parsed_args: Vec<SymdeclArg<Pos, Self>>,
         token_range: StringRange<Pos>,
+        starred: bool,
     },
     #[allow(clippy::type_complexity)]
     TextSymdecl {

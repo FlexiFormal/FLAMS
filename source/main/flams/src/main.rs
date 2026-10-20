@@ -19,7 +19,7 @@ fn in_tokio(f: impl Future<Output = ()>) {
             () = f => {},
             _ = tokio::signal::ctrl_c() => std::process::exit(0)
             }
-        })
+        });
 }
 fn in_tokio_fn(f: impl FnOnce() + Send + 'static) {
     let mut rt = tokio::runtime::Builder::new_multi_thread();
@@ -33,7 +33,7 @@ fn in_tokio_fn(f: impl FnOnce() + Send + 'static) {
             },
             _ = tokio::signal::ctrl_c() => std::process::exit(0)
             }
-        })
+        });
 }
 
 fn main() {
@@ -49,7 +49,7 @@ fn main() {
             settings.buildqueue.num_threads = Some(1);
             in_tokio_fn(move || {
                 flams_system::settings::Settings::initialize(settings);
-                check::check(archive, path, persist, !verbose)
+                check::check(archive, path, persist, !verbose);
             });
         }
         None => flams_main::main(cli.into()),
@@ -157,6 +157,7 @@ enum Commands {
     },
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<Cli> for SettingsSpec {
     fn from(cli: Cli) -> Self {
         fn from_file(cfg_file: &Path) -> SettingsSpec {
@@ -220,6 +221,7 @@ impl From<Cli> for (Option<PathBuf>, SettingsSpec) {
             },
             lsp: cli.lsp,
             remotes: std::collections::HashMap::default(),
+            fonts: std::collections::HashMap::default(),
         };
         (cli.config_file, settings)
     }
