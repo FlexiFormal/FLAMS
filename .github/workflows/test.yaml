@@ -4,7 +4,7 @@ on:
 
 jobs:
   linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
