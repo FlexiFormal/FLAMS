@@ -35,6 +35,7 @@ clap = { workspace = true }
 toml = { workspace = true }
 flams-utils = {workspace = true}
 ftml-uris = {workspace=true}
+mimalloc.workspace = true
 
 # checking
 flams-math-archives = {workspace=true}
@@ -49,3 +50,6 @@ tokio.workspace = true
 # documentation
 flams-router-dashboard = {workspace=true,optional=true}
 ftml-ontology = {workspace=true,optional=true}
+
+[target.'cfg(not(windows))'.dependencies]
+mimalloc = { workspace = true, features = ["override"] }
