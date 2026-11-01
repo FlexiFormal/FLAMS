@@ -203,7 +203,7 @@ serde_stacker = "0.1"
 rustc-hash = "2"
 chrono = "0.4"
 #oxrdf = "0.3"
-smallvec = { version = "2.0.0-alpha.12" }
+smallvec = { version = "=2.0.0-beta.2" }
 lazy_static = "1.5"
 url = "2"
 either = "1"
