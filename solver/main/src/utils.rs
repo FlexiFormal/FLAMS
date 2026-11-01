@@ -68,6 +68,7 @@ impl<T> std::ops::Deref for RefList<'_, T> {
         &self.elem
     }
 }
+
 impl<T> From<T> for RefList<'_, T> {
     fn from(value: T) -> Self {
         Self {

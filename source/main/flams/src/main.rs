@@ -2,6 +2,9 @@ mod check;
 #[cfg(any(doc, feature = "docs"))]
 pub mod endpoints;
 
+#[global_allocator]
+static A: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use std::path::{Path, PathBuf};
 
 #[allow(unused_imports)]
