@@ -73,7 +73,7 @@ impl Embedder {
             || Err("No model".to_string()),
             |lock| {
                 let mut model = lock.lock();
-                model.embed(texts, None).map_or_else(
+                model.embed(texts, Some(32)).map_or_else(
                     |e| Err(format!("Error embedding texts: {e}")),
                     |r| {
                         Ok(r.into_iter()
@@ -111,9 +111,15 @@ pub(crate) static MODEL: std::sync::LazyLock<Option<parking_lot::Mutex<fastembed
                 );
 
             match fastembed::TextEmbedding::try_new(
-                fastembed::InitOptions::new(fastembed::EmbeddingModel::ParaphraseMLMiniLML12V2Q)
-                    .with_show_download_progress(false)
-                    .with_cache_dir(model_path),
+                fastembed::TextInitOptions::new(
+                    fastembed::EmbeddingModel::ParaphraseMLMiniLML12V2Q,
+                )
+                .with_show_download_progress(false)
+                .with_cache_dir(model_path)
+                .with_max_length(512)
+                .with_execution_providers(vec![
+                    ort::ep::CPU::default().with_arena_allocator(false).build(),
+                ]),
             ) {
                 Ok(m) => {
                     tracing::info!("Model initialized");
@@ -142,7 +148,10 @@ pub struct Searcher {
 
 #[cfg(feature = "vectorsearch")]
 pub struct Searcher {
-    index: parking_lot::RwLock<Vec<SearchIndex>>,
+    index: parking_lot::RwLock<(
+        Vec<crate::index::SearchEntry>,
+        Vec<flams_backend_types::search::Embedding>,
+    )>,
 }
 
 impl Searcher {
@@ -154,8 +163,12 @@ impl Searcher {
 
     #[cfg(feature = "vectorsearch")]
     pub fn size(&self) -> (usize, usize) {
-        let slf = self.index.read();
-        (slf.len(), slf.len() * std::mem::size_of::<SearchIndex>())
+        let inner = self.index.read();
+        (
+            inner.0.len(),
+            (inner.0.len() * std::mem::size_of::<crate::index::SearchEntry>())
+                + (inner.1.len() * std::mem::size_of::<flams_backend_types::search::Embedding>()),
+        )
     }
 
     #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
@@ -187,10 +200,11 @@ impl Searcher {
     #[inline]
     const fn new() -> Self {
         Self {
-            index: parking_lot::RwLock::new(Vec::new()),
+            index: parking_lot::RwLock::new((Vec::new(), Vec::new())),
         }
     }
 
+    /*
     #[cfg(feature = "vectorsearch")]
     #[inline]
     pub fn add_one(&self, index: SearchIndex) {
@@ -202,6 +216,7 @@ impl Searcher {
     pub fn add(&self, iter: impl IntoIterator<Item = SearchIndex>) {
         self.index.write().extend(iter);
     }
+    */
 
     #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
     pub fn query(
@@ -332,8 +347,8 @@ impl Searcher {
         let mut ret: Vec<(f32, SymbolUri, DocumentElementUri)> =
             Vec::with_capacity(if num_results == 0 { 1 } else { num_results + 1 });
         let searcher = self.index.read();
-        for par in searcher.iter().filter(|e| {
-            if let SearchIndex::Paragraph {
+        for par in searcher.0.iter().filter(|e| {
+            if let crate::index::SearchEntry::Paragraph {
                 definition_like: true,
                 fors,
                 ..
@@ -345,7 +360,7 @@ impl Searcher {
                 false
             }
         }) {
-            let SearchIndex::Paragraph {
+            let crate::index::SearchEntry::Paragraph {
                 title,
                 fors,
                 body,
@@ -359,8 +374,8 @@ impl Searcher {
                     unreachable_unchecked()
                 }
             };
-            let title_score = title.as_ref().map(|t| (t % &query) as f32);
-            let body_score = (body % &query) as f32;
+            let title_score = title.map(|t| (&searcher.1[t as usize] % &query) as f32);
+            let body_score = (&searcher.1[*body as usize] % &query) as f32;
             let neg_score = ordered_float::OrderedFloat(
                 -title_score.map_or(body_score, |t| t.mul_add(2.0, body_score) / 3.0),
             );
@@ -395,6 +410,7 @@ impl Searcher {
         opts: FragmentQueryFilter,
         num_results: usize,
     ) -> Result<Vec<(f32, SearchResult)>, String> {
+        use crate::index::SearchEntry as SE;
         // SAFETY: invariant: input.len() == output.len()
         let query = unsafe { crate::Embedder::embed([s])?.pop().unwrap_unchecked() };
         let top_num = if num_results == 0 {
@@ -405,11 +421,12 @@ impl Searcher {
         let mut ret: Vec<(f32, SearchResult)> =
             Vec::with_capacity(if num_results == 0 { 1 } else { num_results + 1 });
         let searcher = self.index.read();
-        for e in searcher.iter().filter(|e| filter(&opts, e)) {
+        for e in searcher.0.iter().filter(|e| filter(&opts, e)) {
+            #[allow(clippy::branches_sharing_code)]
             match e {
-                SearchIndex::Document { uri, title, body } => {
-                    let title_score = title.as_ref().map(|t| (t % &query) as f32);
-                    let body_score = (body % &query) as f32;
+                SE::Document { uri, title, body } => {
+                    let title_score = title.map(|t| (&searcher.1[t as usize] % &query) as f32);
+                    let body_score = (&searcher.1[*body as usize] % &query) as f32;
                     let neg_score = ordered_float::OrderedFloat(
                         -title_score.map_or(body_score, |t| t.mul_add(2.0, body_score) / 3.0),
                     );
@@ -421,7 +438,7 @@ impl Searcher {
                         let _ = ret.pop();
                     }
                 }
-                SearchIndex::Paragraph {
+                SE::Paragraph {
                     uri,
                     kind,
                     definition_like,
@@ -429,8 +446,8 @@ impl Searcher {
                     fors,
                     body,
                 } => {
-                    let title_score = title.as_ref().map(|t| (t % &query) as f32);
-                    let body_score = (body % &query) as f32;
+                    let title_score = title.map(|t| (&searcher.1[t as usize] % &query) as f32);
+                    let body_score = (&searcher.1[*body as usize] % &query) as f32;
                     let neg_score = ordered_float::OrderedFloat(
                         -title_score.map_or(body_score, |t| t.mul_add(2.0, body_score) / 3.0),
                     );
@@ -531,63 +548,156 @@ impl Artifact for IndexFile {
 fn initialize() {
     #[cfg(feature = "vectorsearch")]
     SPAN.in_scope(|| {
+        static BLOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
         use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
         let _ = std::thread::spawn(|| {
             std::sync::LazyLock::force(&MODEL);
         });
-        let mut index = SEARCHER.index.write();
+        let block = BLOCK.lock();
+        //let mut index = SEARCHER.index.write();
         let nidx = tracing::info_span!("Loading search indices").in_scope(move || {
-            GlobalBackend
+            let files = GlobalBackend
                 .all_archives()
                 .par_iter()
                 .filter_map(|a| match a {
                     Archive::Local(a) => Some(a),
                     Archive::Ext(_, _) => None,
                 })
-                .flat_map(|a| {
+                .flat_map_iter(|a| {
                     let out = a.out_dir();
-                    if out.exists() && out.is_dir() {
-                        Some(
-                            walkdir::WalkDir::new(out)
-                                .into_iter()
-                                .filter_map(Result::ok)
-                                .filter(|entry| entry.file_name() == "vectorsearch")
-                                .filter_map(|e| {
-                                    let Ok(f) = std::fs::File::open(e.path()) else {
-                                        tracing::error!(
-                                            "error reading file {}",
-                                            e.path().display()
-                                        );
-                                        return None;
-                                    };
-                                    let file = std::io::BufReader::new(f);
-
-                                    let Ok(v): Result<Vec<SearchIndex>, _> =
-                                        bincode::decode_from_reader(
-                                            file,
-                                            bincode::config::standard(),
-                                        )
-                                    else {
-                                        tracing::error!(
-                                            "error deserializing file {}",
-                                            e.path().display()
-                                        );
-                                        return None;
-                                    };
-                                    Some(v)
-                                })
-                                .collect::<Vec<_>>(),
-                        )
-                    } else {
-                        None
+                    if !out.exists() || !out.is_dir() {
+                        return None;
                     }
+                    Some(
+                        walkdir::WalkDir::new(out)
+                            .into_iter()
+                            .filter_map(Result::ok)
+                            .filter(|entry| entry.file_name() == "vectorsearch")
+                            .filter_map(|e| {
+                                let Ok(f) = std::fs::File::open(e.path()) else {
+                                    tracing::error!("error reading file {}", e.path().display());
+                                    return None;
+                                };
+                                let file = std::io::BufReader::new(f);
+
+                                let Ok(v): Result<Vec<SearchIndex>, _> =
+                                    bincode::decode_from_reader(file, bincode::config::standard())
+                                else {
+                                    tracing::error!(
+                                        "error deserializing file {}",
+                                        e.path().display()
+                                    );
+                                    return None;
+                                };
+                                Some(v)
+                            })
+                            .collect::<Vec<_>>(),
+                    )
                 })
-                .flatten()
-                .flatten()
-                .collect::<Vec<_>>()
+                .collect_vec_list();
+            let (num, num_vecs) =
+                files
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .flatten()
+                    .fold((0, 0), |(num, nv), e| match e {
+                        SearchIndex::Document { title, .. }
+                        | SearchIndex::Paragraph { title, .. } => {
+                            (num + 1, nv + 1 + usize::from(title.is_some()))
+                        }
+                    });
+            let mut metadata = Vec::with_capacity(num);
+            let mut embeddings = Vec::with_capacity(num_vecs);
+            for e in files.into_iter().flatten().flatten().flatten() {
+                match e {
+                    SearchIndex::Document { uri, title, body } => {
+                        let body_idx = embeddings.len() as u32;
+                        embeddings.push(body);
+                        let title = title.map(|t| {
+                            embeddings.push(t);
+                            body_idx + 1
+                        });
+                        metadata.push(crate::index::SearchEntry::Document {
+                            uri,
+                            title,
+                            body: body_idx,
+                        });
+                    }
+                    SearchIndex::Paragraph {
+                        uri,
+                        kind,
+                        definition_like,
+                        title,
+                        fors,
+                        body,
+                    } => {
+                        let body_idx = embeddings.len() as u32;
+                        embeddings.push(body);
+                        let title = title.map(|t| {
+                            embeddings.push(t);
+                            body_idx + 1
+                        });
+                        metadata.push(crate::index::SearchEntry::Paragraph {
+                            uri,
+                            kind,
+                            definition_like,
+                            fors,
+                            title,
+                            body: body_idx,
+                        });
+                    }
+                }
+            }
+            (metadata, embeddings)
+            /*
+            .flat_map(|a| {
+                let out = a.out_dir();
+                if out.exists() && out.is_dir() {
+                    Some(
+                        walkdir::WalkDir::new(out)
+                            .into_iter()
+                            .filter_map(Result::ok)
+                            .filter(|entry| entry.file_name() == "vectorsearch")
+                            .filter_map(|e| {
+                                let Ok(f) = std::fs::File::open(e.path()) else {
+                                    tracing::error!(
+                                        "error reading file {}",
+                                        e.path().display()
+                                    );
+                                    return None;
+                                };
+                                let file = std::io::BufReader::new(f);
+
+                                let Ok(v): Result<Vec<SearchIndex>, _> =
+                                    bincode::decode_from_reader(
+                                        file,
+                                        bincode::config::standard(),
+                                    )
+                                else {
+                                    tracing::error!(
+                                        "error deserializing file {}",
+                                        e.path().display()
+                                    );
+                                    return None;
+                                };
+                                Some(v)
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .flatten()
+            .collect::<Vec<_>>()
+             */
         });
-        *index = nidx;
+        let old = std::mem::replace(&mut *SEARCHER.index.write(), nidx);
+        drop(block);
+        drop(old);
     });
 
     #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
@@ -659,16 +769,17 @@ fn initialize() {
 }
 
 #[cfg(feature = "vectorsearch")]
-fn filter(cplx: &FragmentQueryFilter, idx: &SearchIndex) -> bool {
+fn filter(cplx: &FragmentQueryFilter, idx: &crate::index::SearchEntry) -> bool {
+    use crate::index::SearchEntry as SE;
     use flams_backend_types::search::SearchResultKind;
     use ftml_uris::IsNarrativeUri;
 
     match idx {
-        SearchIndex::Document { uri, .. } => {
+        SE::Document { uri, .. } => {
             cplx.flags.allow_documents()
                 && (cplx.languages.is_empty() || cplx.languages.contains(&uri.language))
         }
-        SearchIndex::Paragraph {
+        SE::Paragraph {
             definition_like: true,
             uri,
             ..
@@ -676,7 +787,7 @@ fn filter(cplx: &FragmentQueryFilter, idx: &SearchIndex) -> bool {
             cplx.flags.allow_definitions()
                 && (cplx.languages.is_empty() || cplx.languages.contains(&uri.language()))
         }
-        SearchIndex::Paragraph {
+        SE::Paragraph {
             kind: SearchResultKind::Assertion,
             uri,
             ..
@@ -684,7 +795,7 @@ fn filter(cplx: &FragmentQueryFilter, idx: &SearchIndex) -> bool {
             cplx.flags.allow_assertions()
                 && (cplx.languages.is_empty() || cplx.languages.contains(&uri.language()))
         }
-        SearchIndex::Paragraph {
+        SE::Paragraph {
             kind: SearchResultKind::Example,
             uri,
             ..
@@ -692,7 +803,7 @@ fn filter(cplx: &FragmentQueryFilter, idx: &SearchIndex) -> bool {
             cplx.flags.allow_examples()
                 && (cplx.languages.is_empty() || cplx.languages.contains(&uri.language()))
         }
-        SearchIndex::Paragraph {
+        SE::Paragraph {
             kind: SearchResultKind::Paragraph,
             uri,
             ..
@@ -700,7 +811,7 @@ fn filter(cplx: &FragmentQueryFilter, idx: &SearchIndex) -> bool {
             cplx.flags.allow_paragraphs()
                 && (cplx.languages.is_empty() || cplx.languages.contains(&uri.language()))
         }
-        SearchIndex::Paragraph {
+        SE::Paragraph {
             kind: SearchResultKind::Problem,
             uri,
             ..
@@ -708,6 +819,6 @@ fn filter(cplx: &FragmentQueryFilter, idx: &SearchIndex) -> bool {
             cplx.flags.allow_problems()
                 && (cplx.languages.is_empty() || cplx.languages.contains(&uri.language()))
         }
-        SearchIndex::Paragraph { .. } => false,
+        SE::Paragraph { .. } => false,
     }
 }

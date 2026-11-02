@@ -117,6 +117,23 @@ pub enum SearchIndex {
     },
 }
 
+#[cfg(feature = "vectorsearch")]
+pub(crate) enum SearchEntry {
+    Document {
+        uri: DocumentUri,
+        title: Option<u32>,
+        body: u32,
+    },
+    Paragraph {
+        uri: DocumentElementUri,
+        kind: SearchResultKind,
+        definition_like: bool,
+        title: Option<u32>,
+        fors: Vec<SymbolUri>,
+        body: u32,
+    },
+}
+
 #[cfg(all(feature = "tantivy", not(feature = "vectorsearch")))]
 pub fn index_document(doc: &Document, html: &str) -> Vec<SearchIndex> {
     let elems = doc.dfs().filter_map(|e| {
